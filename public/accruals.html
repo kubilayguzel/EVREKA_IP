@@ -1,0 +1,1165 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IP Manager - Tahakkuk Yönetimi</title>
+    <style>
+        /* Shared styles are now loaded via layout-loader,
+           but if you have page-specific overrides or additions,
+           keep them here. */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333; display: flex; }
+        
+        .page-wrapper { flex-grow: 1; display: flex; flex-direction: column; height: 100vh; overflow-y: auto; background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%); }
+        .main-container { width: 100%; padding: 30px; margin: 0; }
+        
+        .page-header { background: rgba(255, 255, 255, 0.95); padding: 30px; border-radius: 20px; margin-bottom: 30px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1); }
+        .page-title { font-size: 2em; color: #1e3c72; margin-bottom: 10px; }
+        .page-subtitle { color: #666; font-size: 1.1em; }
+        
+        .accruals-container { background: rgba(255, 255, 255, 0.95); border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); overflow: hidden; }
+        .accruals-header { padding: 20px 30px; border-bottom: 1px solid #e1e8ed; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;}
+        .filter-group { display: flex; gap: 10px; align-items: center; }
+        .filter-label { font-weight: 500; }
+        .filter-select { padding: 8px 12px; border-radius: 8px; border: 1px solid #ccc; }
+        
+        .accruals-table { width: 100%; border-collapse: collapse; }
+        .accruals-table th, .accruals-table td { padding: 15px; text-align: left; border-bottom: 1px solid #f0f0f0; }
+        .accruals-table th { background: #f8f9fa; font-weight: 600; }
+        
+        .status-badge { padding: 4px 10px; border-radius: 12px; font-size: 0.8em; font-weight: 500; color: white; text-align: center; }
+        .status-paid { background-color: #28a745; }
+        .status-unpaid { background-color: #dc3545; }
+        .status-partially-paid { background-color: #ff8c00; } /* Yeni: Kısmen Ödendi durumu */
+        
+        .action-btn { background: #007bff; color: white; border: none; padding: 8px 12px; border-radius: 6px; cursor: pointer; margin-left: 5px; transition: all 0.3s ease; }
+        .action-btn.unpaid { background-color: #dc3545; }
+        .action-btn:disabled { background-color: #6c757d; cursor: not-allowed; opacity: 0.7; }
+        /* Düzenleme butonu stili */
+        .action-btn.edit-btn { background-color: #ffc107; color: #212529; }
+        .action-btn.edit-btn:hover { background-color: #e0a800; }
+        /* Görüntüle butonu stili */
+        .action-btn.view-btn { background-color: #17a2b8; }
+        .action-btn.view-btn:hover { background-color: #138496; }
+        /* Sil butonu stili */
+        .action-btn.delete-btn { background-color: #dc3545; }
+        .action-btn.delete-btn:hover { background-color: #c82333; }
+
+
+        .loading { text-align: center; padding: 50px; }
+        .no-records { text-align: center; padding: 50px; color: #666; }
+        
+        .modal { display: none; position: fixed; z-index: 1002; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.6); align-items: center; justify-content: center; }
+        .modal.show { display: flex; }
+        .modal-content { background-color: #fefefe; margin: auto; padding: 30px; border: 1px solid #888; width: 90%; max-width: 1250px; border-radius: 20px; animation-name: animatetop; animation-duration: 0.4s; max-height: 90vh; overflow-y: auto; }
+        /* Düzenleme ve Ödendi İşaretle modalları için max-width */
+        #editAccrualModal .modal-content, #markPaidModal .modal-content, #viewAccrualDetailModal .modal-content { max-width: 1250px; }
+        @keyframes animatetop { from {top: -300px; opacity: 0} to {top: 0; opacity: 1} }
+        .close-modal-btn { color: #aaa; float: right; font-size: 28px; font-weight: bold; cursor: pointer; }
+        .modal-title { font-size: 1.5em; color: #1e3c72; margin-bottom: 20px;}
+        .modal-detail-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px 25px; }
+        .modal-detail-item { margin-bottom: 10px; }
+        .modal-detail-label { font-weight: 600; color: #333; margin-bottom: 5px; font-size: 0.9em; }
+        .modal-detail-value { color: #555; word-break: break-word; font-size: 0.95em; }
+        .modal-detail-value.long-text { white-space: pre-wrap; background-color: #f8f9fa; padding: 8px; border-radius: 6px; }
+        .modal-detail-section-title { grid-column: 1 / -1; font-size: 1.1em; color: #1e3c72; margin-top: 20px; margin-bottom: 15px; padding-bottom: 5px; border-bottom: 1px dashed #e1e8ed; }
+        .task-history { margin-top: 20px; padding-top: 20px; border-top: 1px solid #e1e8ed; max-height: 250px; overflow-y: auto; }
+        .task-history-item { padding: 8px 0; border-bottom: 1px dashed #eee; }
+        .task-history-item:last-child { border-bottom: none; }
+        .task-history-description { font-size: 0.9em; color: #333; font-weight: 600; }
+        .task-history-meta { font-size: 0.8em; color: #666; margin-top: 4px; }
+        .related-accrual-item { background: #f8f9fa; padding: 10px; border-radius: 8px; margin-bottom: 8px; font-size: 0.9em; border-left: 3px solid #1e3c72; }
+        
+        /* Modal form elemanları için stiller (task-management.html'den alınmıştır) */
+        .form-input, .form-select, .form-textarea {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e1e8ed;
+            border-radius: 10px;
+            font-size: 1em;
+            transition: all 0.3s ease;
+            background: white;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .form-group { margin-bottom: 15px; } /* Modal form grupları için */
+        .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px 25px; } /* Modal form gridi için */
+
+        .input-with-currency { display: flex; gap: 10px; }
+        .input-with-currency .form-input { flex-grow: 1; }
+        .currency-select {
+            padding: 12px 8px;
+            border: 2px solid #e1e8ed;
+            border-radius: 10px;
+            background-color: #f8f9fa;
+            font-weight: bold;
+        }
+        .checkbox-label {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            cursor: pointer;
+            font-weight: 500;
+        }
+        .checkbox-label input {
+            width: 18px;
+            height: 18px;
+        }
+        .total-amount-display {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #1e3c72;
+            text-align: right;
+            margin-top: 10px;
+            padding: 12px 15px;
+            background-color: #f0f4f8;
+            border-radius: 10px;
+        }
+        .search-results-list { max-height: 150px; overflow-y: auto; border: 1px solid #ccc; border-radius: 8px; margin-top: 5px; }
+        .search-result-item { padding: 10px; cursor: pointer; border-bottom: 1px solid #eee; }
+        .search-result-item:hover { background-color: #f0f4f8; }
+        .no-results-message { text-align: center; color: #999; padding: 15px; }
+        .search-result-display { background: #e9f5ff; border: 1px solid #bde0fe; padding: 10px; border-radius: 8px; margin-top: 10px; }
+
+        /* Dosya yükleme alanı (modal içinde kullanılacak) */
+        .file-upload-area-modal {
+            border: 2px dashed #e1e8ed;
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-top: 15px;
+        }
+        .file-upload-area-modal:hover {
+            border-color: #1e3c72;
+            background: #f0f4f8;
+        }
+        .file-list-modal {
+            margin-top: 10px;
+        }
+        .file-item-modal {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 12px;
+            background: #f8f9fa;
+            border-radius: 6px;
+            margin-bottom: 5px;
+            font-size: 0.9em;
+        }
+        .remove-file-modal {
+            background: #ff6b6b;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            font-size: 0.8em;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .btn-primary { background: #1e3c72; color: white; } /* Asıl primary butonu */
+        .btn-primary:hover { background: #2a5298; transform: translateY(-1px); }
+        .btn-secondary { background: #6c757d; color: white; }
+        .btn-secondary:hover { background: #5a6268; transform: translateY(-1px); }
+
+    </style>
+</head>
+<body>
+    <div id="layout-placeholder"></div>
+    <div id="sidebar-container"></div>
+    <div class="page-wrapper">
+        <main class="main-container">
+            <section class="page-header">
+                <h1 class="page-title">Tahakkuk Yönetimi</h1>
+                <p class="page-subtitle">Tüm finansal tahakkukları ve ödeme durumlarını buradan takip edin.</p>
+            </section>
+    
+            <div class="accruals-container">
+                <div class="accruals-header">
+                    <div class="filter-group">
+                        <label class="filter-label" for="statusFilter">Duruma Göre Filtrele:</label>
+                        <select id="statusFilter" class="filter-select">
+                            <option value="all">Tümü</option>
+                            <option value="unpaid">Ödenmedi</option>
+                            <option value="paid">Ödendi</option>
+                            <option value="partially_paid">Kısmen Ödendi</option> </select>
+                    </div>
+                    <div class="filter-group" id="bulkActions" style="display: none;">
+                        <button id="bulkMarkPaidBtn" class="action-btn">Seçilenleri Ödendi İşaretle</button>
+                        <button id="bulkMarkUnpaidBtn" class="action-btn unpaid">Seçilenleri Ödenmedi İşaretle</button>
+                    </div>
+                </div>
+                <div class="table-container">
+                    <table class="accruals-table">
+                        <thead>
+                            <tr>
+                                <th><input type="checkbox" id="selectAllCheckbox"></th>
+                                <th>Tahakkuk ID</th>
+                                <th>Durum</th>
+                                <th>İlgili İş</th>
+                                <th>Resmi Ücret</th>
+                                <th>Hizmet Bedeli</th>
+                                <th>Toplam Tutar (KDV Dahil)</th>
+                                <th>Kalan Tutar</th> <th>İşlemler</th>
+                            </tr>
+                        </thead>
+                        <tbody id="accrualsTableBody"></tbody>
+                    </table>
+                 <div id="loadingIndicator" class="loading">Yükleniyor...</div>
+                 <div id="noRecordsMessage" class="no-records">Henüz tahakkuk kaydı bulunmamaktadır.</div>
+            </div>
+        </div>
+    </main>
+
+    <div id="taskDetailModal" class="modal">
+        <div class="modal-content">
+            <span class="close-modal-btn" id="closeTaskDetailModal">&times;</span>
+            <h3 class="modal-title" id="modalTaskTitle">İş Detayı</h3>
+            <div id="modalBody" class="modal-body-content">
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="editAccrualModal">
+        <div class="modal-content">
+            <span class="close-modal-btn" id="closeEditAccrualModal">&times;</span>
+            <h3 class="modal-title">Tahakkuku Düzenle</h3>
+            <form id="editAccrualForm" onsubmit="return false;">
+                <input type="hidden" id="editAccrualId">
+                <div class="modal-body-content">
+                    <div class="form-group">
+                        <label for="editAccrualTaskTitleDisplay" class="form-label">İlgili İş</label>
+                        <input type="text" id="editAccrualTaskTitleDisplay" class="form-input" readonly>
+                    </div>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="editOfficialFee" class="form-label">Resmi Ücret</label>
+                            <div class="input-with-currency">
+                                <input type="number" id="editOfficialFee" class="form-input" placeholder="0.00" step="0.01">
+                                <select id="editOfficialFeeCurrency" class="currency-select">
+                                    <option value="TRY">TL</option>
+                                    <option value="EUR">EUR</option>
+                                    <option value="USD">USD</option>
+                                    <option value="CHF">CHF</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="editServiceFee" class="form-label">Hizmet Bedeli</label>
+                            <div class="input-with-currency">
+                                <input type="number" id="editServiceFee" class="form-input" placeholder="0.00" step="0.01">
+                                <select id="editServiceFeeCurrency" class="currency-select">
+                                    <option value="TRY">TL</option>
+                                    <option value="EUR">EUR</option>
+                                    <option value="USD">USD</option>
+                                    <option value="CHF">CHF</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="editVatRate" class="form-label">KDV Oranı (%)</label>
+                        <input type="number" id="editVatRate" class="form-input" value="20">
+                    </div>
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="editApplyVatToOfficialFee">
+                            Resmi Ücrete KDV Uygula
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Toplam Tutar</label>
+                        <div id="editTotalAmountDisplay" class="total-amount-display">0.00 TRY</div>
+                    </div>
+                    <div class="form-group">
+                        <label for="editTpInvoicePartySearch" class="form-label">Türk Patent Faturası Tarafı</label>
+                        <input type="text" id="editTpInvoicePartySearch" class="form-input" placeholder="Fatura tarafı arayın...">
+                        <div id="editTpInvoicePartyResults" class="search-results-list"></div>
+                        <div id="editSelectedTpInvoicePartyDisplay" class="search-result-display" style="display:none;"></div>
+                    </div>
+                    <div class="form-group">
+                        <label for="editServiceInvoicePartySearch" class="form-label">Hizmet Faturası Tarafı</label>
+                        <input type="text" id="editServiceInvoicePartySearch" class="form-input" placeholder="Fatura tarafı arayın...">
+                        <div id="editServiceInvoicePartyResults" class="search-results-list"></div>
+                        <div id="editSelectedServiceInvoicePartyDisplay" class="search-result-display" style="display:none;"></div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" id="cancelEditAccrualBtn">İptal</button>
+                    <button type="button" class="btn btn-primary" id="saveAccrualChangesBtn">Değişiklikleri Kaydet</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="modal" id="markPaidModal">
+        <div class="modal-content">
+            <span class="close-modal-btn" id="closeMarkPaidModal">&times;</span>
+            <h3 class="modal-title">Tahakkukları Ödendi İşaretle</h3>
+            <div class="modal-body-content">
+                <p><strong id="paidAccrualCount">0</strong> adet tahakkuk için ödeme bilgisi giriliyor.</p>
+                <div id="singleAccrualTotalAmountDisplay" class="form-group" style="display: none;">
+                    <label class="form-label">Tahakkuk Toplam Tutarı</label>
+                    <div class="total-amount-display" id="displayAccrualTotalAmount">0.00 TRY</div>
+                </div>
+                <div class="form-group" style="margin-top: 20px;">
+                    <label for="paymentDate" class="form-label">Ödeme Tarihi</label>
+                    <input type="date" id="paymentDate" class="form-input">
+                </div>
+                <div class="form-group" id="remainingAmountGroup" style="display: none;">
+                    <label for="remainingAmount" class="form-label">Kalan Tutar</label>
+                    <input type="number" id="remainingAmount" class="form-input" placeholder="0.00" step="0.01">
+                </div>
+                <div class="form-group">
+                    <label for="paymentReceiptFile" class="form-label">Ödeme Dekontu (Opsiyonel)</label>
+                    <div class="file-upload-area-modal" id="paymentReceiptFileUploadArea">
+                        <div>Dosyayı buraya sürükleyin veya tıklayın</div>
+                        <input type="file" id="paymentReceiptFile" multiple hidden accept=".pdf,.doc,.docx,.jpg,.jpeg,.png">
+                    </div>
+                    <div class="file-list-modal" id="paymentReceiptFileList"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" id="cancelMarkPaidBtn">İptal</button>
+                <button type="button" class="btn btn-primary" id="confirmMarkPaidBtn">Onayla</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="viewAccrualDetailModal">
+    <div class="modal-content">
+        <span class="close-modal-btn" id="closeViewAccrualDetailModal">&times;</span>
+        <h3 class="modal-title" id="viewAccrualTitle">Tahakkuk Detayı</h3>
+        <div class="modal-body-content">
+            <div class="modal-detail-grid">
+                <div class="modal-detail-item"><div class="modal-detail-label">Tahakkuk ID</div><div class="modal-detail-value" id="viewAccrualId"></div></div>
+                <div class="modal-detail-item"><div class="modal-detail-label">Durum</div><div class="modal-detail-value" id="viewAccrualStatus"></div></div>
+                
+                <div class="modal-detail-item full-width"><div class="modal-detail-label">İlgili İş</div><div class="modal-detail-value" id="viewAccrualRelatedTask"></div></div>
+                
+                <div class="modal-detail-item"><div class="modal-detail-label">Resmi Ücret</div><div class="modal-detail-value" id="viewAccrualOfficialFee"></div></div>
+                <div class="modal-detail-item"><div class="modal-detail-label">Hizmet Bedeli</div><div class="modal-detail-value" id="viewAccrualServiceFee"></div></div>
+                
+                <div class="modal-detail-item"><div class="modal-detail-label">KDV Oranı</div><div class="modal-detail-value" id="viewAccrualVatRate"></div></div>
+                <div class="modal-detail-item"><div class="modal-detail-label">Resmi Ücrete KDV Uygula</div><div class="modal-detail-value" id="viewAccrualApplyVatToOfficial"></div></div>
+                
+                <div class="modal-detail-item"><div class="modal-detail-label">Toplam Tutar</div><div class="modal-detail-value" id="viewAccrualTotalAmount"></div></div>
+                <div class="modal-detail-item"><div class="modal-detail-label">Kalan Tutar</div><div class="modal-detail-value" id="viewAccrualRemainingAmount"></div></div> <div class="modal-detail-item full-width"><div class="modal-detail-label">Türk Patent Faturası Tarafı</div><div class="modal-detail-value" id="viewAccrualTpInvoiceParty"></div></div>
+                <div class="modal-detail-item full-width"><div class="modal-detail-label">Hizmet Faturası Tarafı</div><div class="modal-detail-value" id="viewAccrualServiceInvoiceParty"></div></div>
+                
+                <div class="modal-detail-item"><div class="modal-detail-label">Oluşturulma Tarihi</div><div class="modal-detail-value" id="viewAccrualCreatedAt"></div></div>
+                <div class="modal-detail-item"><div class="modal-detail-label">Ödeme Tarihi</div><div class="modal-detail-value" id="viewAccrualPaymentDate"></div></div>
+                
+                <h4 class="modal-detail-section-title">Belgeler</h4>
+                <div class="modal-detail-item full-width" id="viewAccrualFiles">
+                    <ul class="document-list" id="viewAccrualDocumentList">
+                        <li style="text-align: center; color: #666; padding: 10px;">Henüz belge yok.</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+    <script type="module">
+    import { authService, accrualService, taskService, ipRecordsService, personService, auth, generateUUID } from './firebase-config.js';
+    import { showNotification, formatFileSize, readFileAsDataURL } from './utils.js';
+    import { loadSharedLayout } from './js/layout-loader.js';
+
+    document.addEventListener('DOMContentLoaded', async () => {
+        await loadSharedLayout({ activeMenuLink: 'accruals.html' });
+
+        class AccrualsModule {
+            constructor() {
+                this.currentUser = null;
+                this.allAccruals = [];
+                this.allTasks = [];
+                this.allIpRecords = [];
+                this.allPersons = [];
+                this.selectedAccruals = new Set();
+                this.currentEditAccrual = null;
+                this.editSelectedTpInvoiceParty = null;
+                this.editSelectedServiceInvoiceParty = null;
+                this.uploadedPaymentReceipts = []; 
+            }
+
+            async init() {
+                this.currentUser = authService.getCurrentUser();
+                
+                if (!this.currentUser) {
+                    console.error('DEBUG: currentUser bulunamadı, ancak layout-loader yönlendirmedi.');
+                    window.location.href = 'index.html'; 
+                    return;
+                }
+
+                await this.loadAllData();
+                this.setupEventListeners();
+            }
+
+            setupEventListeners() {
+                document.getElementById('statusFilter').addEventListener('change', (e) => this.renderTable(e.target.value));
+                document.getElementById('selectAllCheckbox').addEventListener('change', (e) => this.toggleSelectAll(e.target.checked));
+                
+                document.getElementById('accrualsTableBody').addEventListener('change', (e) => {
+                    if (e.target.classList.contains('row-checkbox')) {
+                        this.updateSelection(e.target.dataset.id, e.target.checked);
+                    }
+                });
+
+                document.getElementById('accrualsTableBody').addEventListener('click', (e) => {
+                    if (e.target.classList.contains('task-detail-link')) {
+                        e.preventDefault();
+                        const taskId = e.target.dataset.taskId;
+                        this.showTaskDetailModal(taskId);
+                    } else if (e.target.classList.contains('action-btn')) {
+                        e.preventDefault();
+                        const accrualId = e.target.dataset.id;
+                        if (e.target.classList.contains('edit-btn')) {
+                            this.showEditAccrualModal(accrualId);
+                        } else if (e.target.classList.contains('view-btn')) {
+                            this.showViewAccrualDetailModal(accrualId);
+                        } else if (e.target.classList.contains('delete-btn')) {
+                            this.deleteAccrual(accrualId);
+                        }
+                    }
+                });
+
+                document.getElementById('closeTaskDetailModal').addEventListener('click', () => this.closeModal('taskDetailModal'));
+                
+                document.getElementById('bulkMarkPaidBtn').addEventListener('click', () => this.showMarkPaidModal());
+                document.getElementById('bulkMarkUnpaidBtn').addEventListener('click', () => this.handleBulkUpdate('unpaid'));
+
+                document.getElementById('closeEditAccrualModal').addEventListener('click', () => this.closeModal('editAccrualModal'));
+                document.getElementById('cancelEditAccrualBtn').addEventListener('click', () => this.closeModal('editAccrualModal'));
+                document.getElementById('saveAccrualChangesBtn').addEventListener('click', () => this.handleSaveAccrualChanges());
+
+                ['editOfficialFee', 'editServiceFee', 'editVatRate', 'editApplyVatToOfficialFee'].forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) el.addEventListener('input', () => this.calculateEditTotalAmount());
+                });
+                document.getElementById('editTpInvoicePartySearch').addEventListener('input', e => this.searchPersons(e.target.value, 'editTpInvoiceParty'));
+                document.getElementById('editServiceInvoicePartySearch').addEventListener('input', e => this.searchPersons(e.target.value, 'editServiceInvoiceParty'));
+
+                document.getElementById('closeMarkPaidModal').addEventListener('click', () => this.closeModal('markPaidModal'));
+                document.getElementById('cancelMarkPaidBtn').addEventListener('click', () => this.closeModal('markPaidModal'));
+                document.getElementById('confirmMarkPaidBtn').addEventListener('click', () => this.handleBulkUpdate('paid'));
+                
+                document.getElementById('remainingAmount').addEventListener('input', () => {
+                    const remainingAmountInput = parseFloat(document.getElementById('remainingAmount').value) || 0;
+                    const displayAccrualTotalAmount = parseFloat(document.getElementById('displayAccrualTotalAmount').textContent.replace(/[^\d.,]/g, '').replace('.', '').replace(',', '.')) || 0;
+                    
+                    if (remainingAmountInput > displayAccrualTotalAmount) {
+                        showNotification("Kalan Tutar, Toplam Tutar'dan büyük olamaz.", 'error');
+                        document.getElementById('remainingAmount').value = displayAccrualTotalAmount;
+                    }
+                });
+
+                document.getElementById('paymentDate').valueAsDate = new Date();
+                document.getElementById('paymentReceiptFile').addEventListener('change', (e) => this.handlePaymentReceiptUpload(e.target.files));
+                document.getElementById('paymentReceiptFileUploadArea').addEventListener('click', () => document.getElementById('paymentReceiptFile').click());
+                const paymentReceiptFileUploadArea = document.getElementById('paymentReceiptFileUploadArea');
+                if (paymentReceiptFileUploadArea) {
+                    paymentReceiptFileUploadArea.addEventListener('dragover', (e) => { e.preventDefault(); paymentReceiptFileUploadArea.style.borderColor = '#1e3c72'; paymentReceiptFileUploadArea.style.background = '#f0f4f8'; });
+                    paymentReceiptFileUploadArea.addEventListener('dragleave', (e) => { e.preventDefault(); paymentReceiptFileUploadArea.style.borderColor = '#e1e8ed'; paymentReceiptFileUploadArea.style.background = 'transparent'; });
+                    paymentReceiptFileUploadArea.addEventListener('drop', (e) => { e.preventDefault(); paymentReceiptFileUploadArea.style.borderColor = '#e1e8ed'; paymentReceiptFileUploadArea.style.background = 'transparent'; this.handlePaymentReceiptUpload(e.dataTransfer.files); });
+                }
+
+                document.getElementById('closeViewAccrualDetailModal').addEventListener('click', () => this.closeModal('viewAccrualDetailModal'));
+            }
+            
+            async loadAllData() {
+                document.getElementById('loadingIndicator').style.display = 'block';
+                try {
+                    const [accrualsResult, tasksResult, ipRecordsResult, personsResult] = await Promise.all([
+                        accrualService.getAccruals(),
+                        taskService.getAllTasks(),
+                        ipRecordsService.getRecords(),
+                        personService.getPersons()
+                    ]);
+
+                    this.allAccruals = accrualsResult.success ? accrualsResult.data : [];
+                    this.allTasks = tasksResult.success ? tasksResult.data : [];
+                    this.allIpRecords = ipRecordsResult.success ? ipRecordsResult.data : [];
+                    this.allPersons = personsResult.success ? personsResult.data : [];
+                    
+                    this.renderTable();
+
+                } catch (error) {
+                    showNotification('Veriler yüklenirken bir hata oluştu: ' + error.message, 'error');
+                } finally {
+                    document.getElementById('loadingIndicator').style.display = 'none';
+                }
+            }
+
+            renderTable(filter = 'all') {
+                const tableBody = document.getElementById('accrualsTableBody');
+                const noRecordsMessage = document.getElementById('noRecordsMessage');
+                tableBody.innerHTML = '';
+
+                const filteredAccruals = this.allAccruals.filter(acc => filter === 'all' || acc.status === filter);
+
+                if (filteredAccruals.length === 0) {
+                    noRecordsMessage.style.display = 'block';
+                    return;
+                }
+                noRecordsMessage.style.display = 'none';
+
+                const currencyFormatter = (amount, currency) => {
+                    try {
+                        return new Intl.NumberFormat('tr-TR', { style: 'currency', currency: currency || 'TRY' }).format(amount);
+                    } catch (e) {
+                        return new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY' }).format(amount);
+                    }
+                };
+                
+                const formatFee = (feeData) => {
+                    if (typeof feeData === 'object' && feeData !== null && feeData.currency) {
+                        return { amount: feeData.amount || 0, currency: feeData.currency };
+                    }
+                    if (typeof feeData === 'number') {
+                        return { amount: feeData, currency: 'TRY' };
+                    }
+                    return { amount: 0, currency: 'TRY' };
+                };
+
+                filteredAccruals.forEach(accrual => {
+                    const row = document.createElement('tr');
+                    let statusText, statusClass;
+                    if (accrual.status === 'paid') {
+                        statusText = 'Ödendi';
+                        statusClass = 'status-paid';
+                    } else if (accrual.status === 'unpaid') {
+                        statusText = 'Ödenmedi';
+                        statusClass = 'status-unpaid';
+                    } else if (accrual.status === 'partially_paid') {
+                        statusText = 'Kısmen Ödendi';
+                        statusClass = 'status-partially-paid';
+                    } else {
+                        statusText = 'Bilinmiyor';
+                        statusClass = '';
+                    }
+                    
+                    const officialFee = formatFee(accrual.officialFee);
+                    const serviceFee = formatFee(accrual.serviceFee);
+                    const isSelected = this.selectedAccruals.has(accrual.id);
+
+                    const isPaid = accrual.status === 'paid';
+                    const editButtonDisabled = isPaid ? 'disabled' : '';
+
+                    const relatedTaskDisplay = accrual.taskTitle ? `${accrual.taskTitle} (${accrual.taskId})` : (accrual.taskId || 'İş Detayı');
+
+                    row.innerHTML = `
+                        <td><input type="checkbox" class="row-checkbox" data-id="${accrual.id}" ${isSelected ? 'checked' : ''}></td>
+                        <td><small>${accrual.id.substring(0, 8)}...</small></td>
+                        <td><span class="status-badge ${statusClass}">${statusText}</span></td>
+                        <td><a href="#" class="task-detail-link" data-task-id="${accrual.taskId}">${relatedTaskDisplay}</a></td>
+                        <td>${currencyFormatter(officialFee.amount, officialFee.currency)}</td>
+                        <td>${currencyFormatter(serviceFee.amount, serviceFee.currency)}</td>
+                        <td>${currencyFormatter(accrual.totalAmount || 0, accrual.totalAmountCurrency || 'TRY')}</td>
+                        <td>${currencyFormatter(accrual.remainingAmount !== undefined ? accrual.remainingAmount : accrual.totalAmount || 0, accrual.totalAmountCurrency || 'TRY')}</td> <td>
+                            <button class="action-btn view-btn" data-id="${accrual.id}">Görüntüle</button>
+                            <button class="action-btn edit-btn" data-id="${accrual.id}" ${editButtonDisabled}>Düzenle</button>
+                            <button class="action-btn delete-btn" data-id="${accrual.id}">Sil</button> </td>
+                    `;
+                    tableBody.appendChild(row);
+                });
+            }
+
+            async deleteAccrual(accrualId) {
+                if (confirm('Bu tahakkuku silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.')) {
+                    try {
+                        const result = await accrualService.deleteAccrual(accrualId);
+                        if (result.success) {
+                            showNotification('Tahakkuk başarıyla silindi.', 'success');
+                            this.selectedAccruals.delete(accrualId);
+                            this.updateBulkActionsVisibility();
+                            await this.loadAllData();
+                        } else {
+                            showNotification('Tahakkuk silinirken hata oluştu: ' + result.error, 'error');
+                        }
+                    } catch (error) {
+                        showNotification('Tahakkuk silinirken beklenmeyen bir hata oluştu.', 'error');
+                        console.error('Tahakkuk silme hatası:', error);
+                    }
+                }
+            }
+
+            toggleSelectAll(checked) {
+                const checkboxes = document.querySelectorAll('.row-checkbox');
+                checkboxes.forEach(checkbox => {
+                    checkbox.checked = checked;
+                    this.updateSelection(checkbox.dataset.id, checked);
+                });
+            }
+
+            updateSelection(accrualId, isSelected) {
+                if (isSelected) {
+                    this.selectedAccruals.add(accrualId);
+                } else {
+                    this.selectedAccruals.delete(accrualId);
+                }
+                this.updateBulkActionsVisibility();
+            }
+
+            updateBulkActionsVisibility() {
+                const bulkActions = document.getElementById('bulkActions');
+                bulkActions.style.display = this.selectedAccruals.size > 0 ? 'flex' : 'none';
+            }
+
+            async handleBulkUpdate(newStatus) {
+                if (this.selectedAccruals.size === 0) {
+                    showNotification('Lütfen en az bir tahakkuk seçin.', 'error');
+                    return;
+                }
+
+                if (newStatus === 'paid') {
+                    const paymentDate = document.getElementById('paymentDate').value;
+                    const remainingAmountInput = parseFloat(document.getElementById('remainingAmount').value);
+                    let accrualTotalAmount = 0;
+                    let selectedAccrual = null;
+
+                    if (this.selectedAccruals.size === 1) {
+                        selectedAccrual = this.allAccruals.find(acc => acc.id === Array.from(this.selectedAccruals)[0]);
+                        accrualTotalAmount = selectedAccrual?.totalAmount || 0;
+                    }
+                    
+                    if (!paymentDate) {
+                        showNotification('Lütfen ödeme tarihini girin.', 'error');
+                        return;
+                    }
+
+                    let confirmMessage;
+                    let targetStatusForSingleAccrual = 'paid';
+                    let finalRemainingAmount = 0;
+
+                    if (this.selectedAccruals.size === 1) {
+                        if (remainingAmountInput > 0 && remainingAmountInput < accrualTotalAmount) {
+                            confirmMessage = `Seçilen tahakkuku "Kısmen Ödendi" olarak işaretlemek istediğinizden emin misiniz? Kalan Tutar: ${new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY' }).format(remainingAmountInput)}`;
+                            targetStatusForSingleAccrual = 'partially_paid';
+                            finalRemainingAmount = remainingAmountInput;
+                        } else if (remainingAmountInput === 0) {
+                            confirmMessage = `Seçilen tahakkuku "Ödendi" olarak işaretlemek istediğinizden emin misiniz?`;
+                            targetStatusForSingleAccrual = 'paid';
+                            finalRemainingAmount = 0;
+                        } else if (remainingAmountInput >= accrualTotalAmount && accrualTotalAmount > 0) {
+                             showNotification("Kalan Tutar, Toplam Tutar'dan büyük veya eşit olamaz (Tam Ödeme için 0 girin).", 'error');
+                             return;
+                         } else {
+                             confirmMessage = `Seçilen tahakkuku "Ödendi" olarak işaretlemek istediğinizden emin misiniz?`;
+                             targetStatusForSingleAccrual = 'paid';
+                             finalRemainingAmount = 0;
+                         }
+                    } else {
+                        confirmMessage = `${this.selectedAccruals.size} adet tahakkuku "Ödendi" olarak işaretlemek istediğinizden emin misiniz?`;
+                        targetStatusForSingleAccrual = 'paid';
+                        finalRemainingAmount = 0;
+                    }
+                    
+                    if (confirm(confirmMessage)) {
+                        const promises = Array.from(this.selectedAccruals).map(async (id) => {
+                            let updates = { paymentDate: paymentDate };
+                            let currentAccrual = this.allAccruals.find(acc => acc.id === id);
+
+                            if (this.selectedAccruals.size === 1) {
+                                updates.status = targetStatusForSingleAccrual;
+                                updates.remainingAmount = finalRemainingAmount;
+                            } else {
+                                updates.status = 'paid';
+                                updates.remainingAmount = 0;
+                            }
+
+                            if (this.uploadedPaymentReceipts.length > 0) {
+                                let currentFiles = currentAccrual ? (currentAccrual.files || []) : [];
+
+                                const newPaymentReceipts = this.uploadedPaymentReceipts.map(file => ({
+                                    ...file,
+                                    documentDesignation: 'Ödeme Dekontu'
+                                }));
+                                const filteredExistingFiles = currentFiles.filter(file => file.documentDesignation !== 'Ödeme Dekontu');
+                                updates.files = [...filteredExistingFiles, ...newPaymentReceipts];
+                            }
+                            return accrualService.updateAccrual(id, updates);
+                        });
+                        const results = await Promise.all(promises);
+                        const failed = results.filter(r => !r.success);
+
+                        if (failed.length > 0) {
+                            showNotification(`${failed.length} adet tahakkuk güncellenirken hata oluştu.`, 'error');
+                        } else {
+                            showNotification('Seçili tüm tahakkuklar başarıyla güncellendi!', 'success');
+                        }
+                        this.closeModal('markPaidModal');
+                    }
+                } else if (newStatus === 'unpaid') {
+                    const statusText = 'Ödenmedi';
+                    if (confirm(`${this.selectedAccruals.size} adet tahakkuku "${statusText}" olarak işaretlemek istediğinizden emin misiniz?`)) {
+                        const promises = Array.from(this.selectedAccruals).map(async (id) => {
+                            const currentAccrual = this.allAccruals.find(acc => acc.id === id);
+                            let updatedFiles = (currentAccrual.files || []).filter(file => file.documentDesignation !== 'Ödeme Dekontu');
+                            
+                            const newRemainingAmount = currentAccrual.totalAmount; 
+
+                            return accrualService.updateAccrual(id, { status: newStatus, files: updatedFiles, paymentDate: null, remainingAmount: newRemainingAmount });
+                        });
+                        const results = await Promise.all(promises);
+                        const failed = results.filter(r => !r.success);
+
+                        if (failed.length > 0) {
+                            showNotification(`${failed.length} adet tahakkuk güncellenirken hata oluştu.`, 'error');
+                        } else {
+                            showNotification('Seçili tüm tahakkuklar başarıyla güncellendi!', 'success');
+                        }
+                    }
+                }
+                
+                this.selectedAccruals.clear();
+                document.getElementById('selectAllCheckbox').checked = false;
+                this.updateBulkActionsVisibility();
+                await this.loadAllData();
+            }
+            cleanHistoryAction(action) {
+                if (action.includes('İş güncellendi. Değişen alanlar:')) {
+                    return 'İş güncellendi';
+                }
+                if (action.includes('İş oluşturuldu')) return 'İş oluşturuldu';
+                if (action.includes('İş silindi')) return 'İş silindi';
+                if (action.includes('İş tamamlandı')) return 'İş tamamlandı';
+                if (action.includes('İş yeniden atandı')) return 'İş yeniden atandı';
+                if (action.includes('Durum değişti')) return 'Durum değiştirildi';
+                
+                return action.length > 50 ? action.substring(0, 50) + '...' : action;
+            }
+            showTaskDetailModal(taskId) {
+                const task = this.allTasks.find(t => t.id === taskId);
+                if (!task) {
+                    showNotification('İlgili iş bulunamadı.', 'error');
+                    return;
+                }
+
+                const modal = document.getElementById('taskDetailModal');
+                const modalBody = document.getElementById('modalBody');
+                
+                const ipRecord = this.allIpRecords.find(r => r.id === task.relatedIpRecordId);
+                const relatedParty = task.details?.relatedParty?.id ? this.allPersons.find(p => p.id === task.details.relatedParty.id) : null;
+                const relatedAccruals = this.allAccruals.filter(acc => acc.taskId === taskId);
+
+                document.getElementById('modalTaskTitle').textContent = `İş Detayı: ${task.title}`;
+
+                const taskTypeParts = task.taskType ? task.taskType.split('_') : [];
+                const mainType = taskTypeParts[0] || '';
+                const specificType = taskTypeParts.slice(1).join(' ').replace(/\b\w/g, l => l.toUpperCase());
+
+                const renderField = (label, value) => value ? `<div class="modal-detail-item"><div class="modal-detail-label">${label}</div><div class="modal-detail-value">${value}</div></div>` : '';
+                                              
+                let accrualsHtml = '';
+                if(relatedAccruals.length > 0) {
+                    accrualsHtml = relatedAccruals.map(acc => {
+                        let statusText, statusClass;
+                        if (acc.status === 'paid') {
+                            statusText = 'Ödendi';
+                            statusClass = 'status-paid';
+                        } else if (acc.status === 'unpaid') {
+                            statusText = 'Ödenmedi';
+                            statusClass = 'status-unpaid';
+                        } else if (acc.status === 'partially_paid') {
+                            statusText = 'Kısmen Ödendi';
+                            statusClass = 'status-partially-paid';
+                        } else {
+                            statusText = 'Bilinmiyor';
+                            statusClass = '';
+                        }
+                        const totalAmountText = new Intl.NumberFormat('tr-TR', { 
+                            style: 'currency', 
+                            currency: acc.totalAmountCurrency || 'TRY' 
+                        }).format(acc.totalAmount || 0);
+                        
+                        const remainingAmountText = acc.remainingAmount !== undefined ? new Intl.NumberFormat('tr-TR', { 
+                            style: 'currency', 
+                            currency: acc.totalAmountCurrency || 'TRY' 
+                        }).format(acc.remainingAmount || 0) : '-';
+
+                        return `<div class="related-accrual-item">
+                            <div class="accrual-info">
+                                <strong>ID:</strong> ${acc.id.substring(0,8)}... | 
+                                <strong>Durum:</strong> <span class="status-badge ${statusClass}">${statusText}</span> | 
+                                <strong>Tutar:</strong> ${totalAmountText}
+                                ${acc.remainingAmount !== undefined ? ` | <strong>Kalan Tutar:</strong> ${remainingAmountText}` : ''}
+                                ${acc.paymentDate ? ` | <strong>Ödeme Tarihi:</strong> ${new Date(acc.paymentDate).toLocaleDateString('tr-TR')}` : ''}
+                            </div>
+                        </div>`;
+                    }).join('');
+                } else {
+                    accrualsHtml = '<p style="color: #666; font-style: italic;">Bu işe ait tahakkuk bulunmuyor.</p>';
+                }
+              
+                let historyHtml = '<p>İşlem geçmişi bulunmuyor.</p>';
+                if(task.history && task.history.length > 0) {
+                    historyHtml = [...task.history].sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp)).map(entry => 
+                        `<div class="task-history-item">
+                            <div class="task-history-description">${this.cleanHistoryAction(entry.action)}</div>
+                            <div class="task-history-meta">${new Date(entry.timestamp).toLocaleString('tr-TR')} by ${entry.userEmail}</div>
+                        </div>`
+                    ).join('');
+                }
+
+                modalBody.innerHTML = `
+                    <div class="modal-detail-grid">
+                        ${renderField('İş Başlığı', task.title)}
+                        ${renderField('Atanan Kişi', task.assignedTo_email)}
+                        ${renderField('İş Türü', `${mainType.charAt(0).toUpperCase() + mainType.slice(1)} - ${specificType}`)}
+                        ${renderField('Bitiş Tarihi', task.dueDate ? new Date(task.dueDate).toLocaleDateString('tr-TR') : '-')}
+                        ${renderField('Öncelik', task.priority)}
+                        ${renderField('İlgili Portföy Kaydı', ipRecord ? ipRecord.title : 'Bulunamadı')}
+                        ${renderField('İlgili Taraf', relatedParty ? relatedParty.name : '')}
+                        <div class="modal-detail-item full-width">
+                            <div class="modal-detail-label">Açıklama</div>
+                            <div class="modal-detail-value long-text">${task.description || '-'}</div>
+                        </div>
+                        <h4 class="modal-detail-section-title">İlişkili Tahakkuklar</h4>
+                        <div class="related-accruals-section">${accrualsHtml}</div>
+                        <h4 class="modal-detail-section-title">İşlem Geçmişi</h4>
+                        <div class="task-history">${historyHtml}</div>
+                    </div>
+                `;
+                modal.classList.add('show');
+            }
+
+            showEditAccrualModal(accrualId) {
+                const accrual = this.allAccruals.find(a => a.id === accrualId);
+                if (!accrual) {
+                    showNotification('Düzenlenecek tahakkuk bulunamadı.', 'error');
+                    return;
+                }
+
+                this.currentEditAccrual = { ...accrual }; 
+                
+                document.getElementById('editAccrualId').value = accrual.id;
+                document.getElementById('editAccrualTaskTitleDisplay').value = accrual.taskTitle || accrual.taskId || 'N/A';
+
+                document.getElementById('editOfficialFee').value = accrual.officialFee?.amount || 0;
+                document.getElementById('editOfficialFeeCurrency').value = accrual.officialFee?.currency || 'TRY';
+                document.getElementById('editServiceFee').value = accrual.serviceFee?.amount || 0;
+                document.getElementById('editServiceFeeCurrency').value = accrual.serviceFee?.currency || 'TRY';
+                document.getElementById('editVatRate').value = accrual.vatRate || 0;
+                document.getElementById('editApplyVatToOfficialFee').checked = accrual.applyVatToOfficialFee !== undefined ? accrual.applyVatToOfficialFee : true;
+
+                this.editSelectedTpInvoiceParty = accrual.tpInvoiceParty || null;
+                this.editSelectedServiceInvoiceParty = accrual.serviceInvoiceParty || null;
+                
+                document.getElementById('editTpInvoicePartySearch').value = this.editSelectedTpInvoiceParty ? this.editSelectedTpInvoiceParty.name : '';
+                document.getElementById('editServiceInvoicePartySearch').value = this.editSelectedServiceInvoiceParty ? this.editSelectedServiceInvoiceParty.name : '';
+
+                this.updateEditSelectedPartyDisplay('editSelectedTpInvoicePartyDisplay', this.editSelectedTpInvoiceParty);
+                this.updateEditSelectedPartyDisplay('editSelectedServiceInvoicePartyDisplay', this.editSelectedServiceInvoiceParty);
+
+                this.calculateEditTotalAmount();
+
+                document.getElementById('editAccrualModal').classList.add('show');
+            }
+
+            updateEditSelectedPartyDisplay(elementId, party) {
+                const display = document.getElementById(elementId);
+                if (party) {
+                    display.innerHTML = `<p><b>Seçilen:</b> ${party.name}</p>`;
+                    display.style.display = 'block';
+                } else {
+                    display.style.display = 'none';
+                }
+            }
+
+            calculateEditTotalAmount() {
+                const officialFee = parseFloat(document.getElementById('editOfficialFee').value) || 0;
+                const serviceFee = parseFloat(document.getElementById('editServiceFee').value) || 0;
+                const vatRate = parseFloat(document.getElementById('editVatRate').value) || 0;
+                const applyVatToOfficial = document.getElementById('editApplyVatToOfficialFee').checked;
+
+                let total;
+                if (applyVatToOfficial) {
+                    total = (officialFee + serviceFee) * (1 + vatRate / 100);
+                } else {
+                    total = officialFee + (serviceFee * (1 + vatRate / 100));
+                }
+                document.getElementById('editTotalAmountDisplay').textContent = new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY' }).format(total);
+            }
+
+            async handleSaveAccrualChanges() {
+                const accrualId = document.getElementById('editAccrualId').value;
+                const officialFee = parseFloat(document.getElementById('editOfficialFee').value) || 0;
+                const serviceFee = parseFloat(document.getElementById('editServiceFee').value) || 0;
+
+                if (officialFee <= 0 && serviceFee <= 0) {
+                    showNotification("Lütfen en az bir ücret girin.", 'error');
+                    return;
+                }
+
+                const vatRate = parseFloat(document.getElementById('editVatRate').value) || 0;
+                const applyVatToOfficial = document.getElementById('editApplyVatToOfficialFee').checked;
+                let totalAmount;
+                if (applyVatToOfficial) {
+                    totalAmount = (officialFee + serviceFee) * (1 + vatRate / 100);
+                } else {
+                    totalAmount = officialFee + (serviceFee * (1 + vatRate / 100));
+                }
+
+                const updates = {
+                    officialFee: {
+                        amount: officialFee,
+                        currency: document.getElementById('editOfficialFeeCurrency').value
+                    },
+                    serviceFee: {
+                        amount: serviceFee,
+                        currency: document.getElementById('editServiceFeeCurrency').value
+                    },
+                    vatRate,
+                    applyVatToOfficialFee: applyVatToOfficial,
+                    totalAmount,
+                    totalAmountCurrency: 'TRY',
+                    remainingAmount: this.currentEditAccrual.remainingAmount !== undefined ? this.currentEditAccrual.remainingAmount : totalAmount,
+                    tpInvoiceParty: this.editSelectedTpInvoiceParty ? { id: this.editSelectedTpInvoiceParty.id, name: this.editSelectedTpInvoiceParty.name } : null,
+                    serviceInvoiceParty: this.editSelectedServiceInvoiceParty ? { id: this.editSelectedServiceInvoiceParty.id, name: this.editSelectedServiceInvoiceParty.name } : null,
+                };
+
+                try {
+                    const result = await accrualService.updateAccrual(accrualId, updates);
+                    if (result.success) {
+                        showNotification('Tahakkuk başarıyla güncellendi!', 'success');
+                        this.closeModal('editAccrualModal');
+                        await this.loadAllData();
+                    } else {
+                        throw new Error(result.error);
+                    }
+                } catch (error) {
+                    showNotification('Tahakkuk güncellenirken hata oluştu: ' + error.message, 'error');
+                }
+            }
+
+            searchPersons(query, target) {
+                const resultsContainerId = {
+                    'tpInvoiceParty': 'tpInvoicePartyResults',
+                    'serviceInvoiceParty': 'serviceInvoicePartyResults',
+                    'editTpInvoiceParty': 'editTpInvoicePartyResults',
+                    'editServiceInvoiceParty': 'editServiceInvoicePartyResults'
+                }[target];
+
+                const container = document.getElementById(resultsContainerId);
+                if (!container) return;
+                container.innerHTML = '';
+                if (query.length < 2) { container.innerHTML = ''; return; }
+                
+                const filtered = this.allPersons.filter(p => p.name.toLowerCase().includes(query.toLowerCase()));
+                if (filtered.length === 0) { container.innerHTML = '<p class="no-results-message">Kişi bulunamadı.</p>'; return; }
+
+                filtered.forEach(p => {
+                    const item = document.createElement('div');
+                    item.className = 'search-result-item';
+                    item.dataset.id = p.id;
+                    item.innerHTML = `<div><b>${p.name}</b><br><small>${p.email || '-'}</small></div>`;
+                    item.addEventListener('click', () => this.selectPerson(p, target));
+                    container.appendChild(item);
+                });
+            }
+
+            selectPerson(person, target) {
+                const displayId = {
+                    'tpInvoiceParty': 'selectedTpInvoicePartyDisplay',
+                    'serviceInvoiceParty': 'selectedServiceInvoicePartyDisplay',
+                    'editTpInvoiceParty': 'editSelectedTpInvoicePartyDisplay',
+                    'editServiceInvoiceParty': 'editSelectedServiceInvoicePartyDisplay'
+                }[target];
+
+                const inputId = {
+                    'tpInvoiceParty': 'tpInvoicePartySearch',
+                    'serviceInvoiceParty': 'serviceInvoicePartySearch',
+                    'editTpInvoiceParty': 'editTpInvoicePartySearch',
+                    'editServiceInvoiceParty': 'editServiceInvoicePartySearch'
+                }[target];
+
+                const resultsId = {
+                    'tpInvoiceParty': 'tpInvoicePartyResults',
+                    'serviceInvoiceParty': 'serviceInvoicePartyResults',
+                    'editTpInvoiceParty': 'editTpInvoicePartyResults',
+                    'editServiceInvoiceParty': 'editServiceInvoicePartyResults'
+                }[target];
+                
+                if(target === 'tpInvoiceParty') this.selectedTpInvoiceParty = person;
+                else if(target === 'serviceInvoiceParty') this.selectedServiceInvoiceParty = person;
+                else if(target === 'editTpInvoiceParty') this.editSelectedTpInvoiceParty = person;
+                else if(target === 'editServiceInvoiceParty') this.editSelectedServiceInvoiceParty = person;
+
+                const display = document.getElementById(displayId);
+                display.innerHTML = `<p><b>Seçilen:</b> ${person.name}</p>`;
+                display.style.display = 'block';
+
+                document.getElementById(resultsId).innerHTML = '';
+                document.getElementById(inputId).value = person.name;
+            }
+
+            closeModal(modalId) {
+                document.getElementById(modalId).classList.remove('show');
+                if (modalId === 'taskDetailModal') { /* mevcut modal'ı resetle */ }
+                if (modalId === 'editAccrualModal') {
+                    document.getElementById('editAccrualForm').reset();
+                    this.currentEditAccrual = null;
+                    this.editSelectedTpInvoiceParty = null;
+                    this.editSelectedServiceInvoiceParty = null;
+                    document.getElementById('editSelectedTpInvoicePartyDisplay').style.display = 'none';
+                    document.getElementById('editSelectedServiceInvoicePartyDisplay').style.display = 'none';
+                }
+                if (modalId === 'markPaidModal') {
+                    document.getElementById('paymentDate').valueAsDate = new Date();
+                    document.getElementById('remainingAmount').value = '';
+                    document.getElementById('singleAccrualTotalAmountDisplay').style.display = 'none';
+                    document.getElementById('remainingAmountGroup').style.display = 'none';
+                    this.uploadedPaymentReceipts = [];
+                    document.getElementById('paymentReceiptFileList').innerHTML = '';
+                }
+                if (modalId === 'viewAccrualDetailModal') { /* Görüntüleme modalı için özel bir resetleme gerekmez */ }
+            }
+
+            showMarkPaidModal() {
+                if (this.selectedAccruals.size === 0) {
+                    showNotification('Lütfen ödendi olarak işaretlemek istediğiniz tahakkukları seçin.', 'error');
+                    return;
+                }
+                document.getElementById('paidAccrualCount').textContent = this.selectedAccruals.size;
+                
+                if (this.selectedAccruals.size === 1) {
+                    const selectedAccrualId = Array.from(this.selectedAccruals)[0];
+                    const selectedAccrual = this.allAccruals.find(acc => acc.id === selectedAccrualId);
+                    if (selectedAccrual) {
+                        document.getElementById('displayAccrualTotalAmount').textContent = new Intl.NumberFormat('tr-TR', { style: 'currency', currency: selectedAccrual.totalAmountCurrency || 'TRY' }).format(selectedAccrual.totalAmount || 0);
+                        document.getElementById('singleAccrualTotalAmountDisplay').style.display = 'block';
+                        document.getElementById('remainingAmountGroup').style.display = 'block';
+                        
+                        // Kalan Tutar alanını varsayılan olarak 0 yap
+                        document.getElementById('remainingAmount').value = 0; 
+                    }
+                } else {
+                    document.getElementById('singleAccrualTotalAmountDisplay').style.display = 'none';
+                    document.getElementById('remainingAmountGroup').style.display = 'none';
+                    document.getElementById('remainingAmount').value = '';
+                }
+
+                document.getElementById('markPaidModal').classList.add('show');
+            }
+
+            handlePaymentReceiptUpload(files) {
+                for (const file of files) {
+                    if (file.size > 5 * 1024 * 1024) {
+                        showNotification(`"${file.name}" dosyası 5MB'tan büyük. Lütfen daha küçük bir dosya yükleyin.`, 'error');
+                        continue;
+                    }
+                    const allowedTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'image/jpeg', 'image/png'];
+                    if (!allowedTypes.includes(file.type)) {
+                        showNotification(`"${file.name}" dosyası desteklenmeyen bir formattadır. Sadece PDF, DOC, JPG, PNG yükleyebilirsiniz.`, 'error');
+                        continue;
+                    }
+                    
+                    if (this.uploadedPaymentReceipts.some(f => f.name === file.name && f.size === file.size)) {
+                        showNotification(`"${file.name}" adlı dosya zaten eklenmiş.`, 'info');
+                        continue;
+                    }
+
+                    readFileAsDataURL(file).then(dataUrl => {
+                        this.uploadedPaymentReceipts.push({
+                            id: generateUUID(),
+                            name: file.name,
+                            size: file.size,
+                            type: file.type,
+                            content: dataUrl,
+                            uploadedAt: new Date().toISOString(),
+                            documentDesignation: 'Ödeme Dekontu'
+                        });
+                        this.renderPaymentReceiptFileList();
+                    }).catch(error => {
+                        console.error("Dosya okuma hatası:", error);
+                        showNotification(`"${file.name}" dosyası okunamadı.`, 'error');
+                    });
+                }
+            }
+
+            renderPaymentReceiptFileList() {
+                const fileList = document.getElementById('paymentReceiptFileList');
+                fileList.innerHTML = '';
+                this.uploadedPaymentReceipts.forEach(file => {
+                    const fileItem = document.createElement('div');
+                    fileItem.className = 'file-item-modal';
+                    fileItem.innerHTML = `<span>${file.name} (${formatFileSize(file.size)})</span><button type="button" class="remove-file-modal" data-id="${file.id}">&times;</button>`;
+                    fileItem.querySelector('.remove-file-modal').addEventListener('click', (e) => {
+                        this.uploadedPaymentReceipts = this.uploadedPaymentReceipts.filter(f => f.id !== e.target.dataset.id);
+                        this.renderPaymentReceiptFileList();
+                    });
+                    fileList.appendChild(fileItem);
+                });
+            }
+            
+            showViewAccrualDetailModal(accrualId) {
+                const accrual = this.allAccruals.find(a => a.id === accrualId);
+                if (!accrual) {
+                    showNotification('Tahakkuk bulunamadı.', 'error');
+                    return;
+                }
+
+                const modal = document.getElementById('viewAccrualDetailModal');
+                
+                document.getElementById('viewAccrualTitle').textContent = `Tahakkuk Detayı: ${accrual.id.substring(0,8)}...`;
+                document.getElementById('viewAccrualId').textContent = accrual.id;
+                
+                let statusText, statusClass;
+                if (accrual.status === 'paid') {
+                    statusText = 'Ödendi';
+                    statusClass = 'status-paid';
+                } else if (accrual.status === 'unpaid') {
+                    statusText = 'Ödenmedi';
+                    statusClass = 'status-unpaid';
+                } else if (accrual.status === 'partially_paid') {
+                    statusText = 'Kısmen Ödendi';
+                    statusClass = 'status-partially-paid';
+                } else {
+                    statusText = 'Bilinmiyor';
+                    statusClass = '';
+                }
+                document.getElementById('viewAccrualStatus').innerHTML = `<span class="status-badge ${statusClass}">${statusText}</span>`;
+                
+                document.getElementById('viewAccrualRelatedTask').textContent = accrual.taskTitle || accrual.taskId || 'N/A';
+                
+                const currencyFormatter = (amount, currency) => new Intl.NumberFormat('tr-TR', { style: 'currency', currency: currency || 'TRY' }).format(amount);
+
+                document.getElementById('viewAccrualOfficialFee').textContent = currencyFormatter(accrual.officialFee?.amount || 0, accrual.officialFee?.currency);
+                document.getElementById('viewAccrualServiceFee').textContent = currencyFormatter(accrual.serviceFee?.amount || 0, accrual.serviceFee?.currency);
+                document.getElementById('viewAccrualVatRate').textContent = (accrual.vatRate || 0) + '%';
+                document.getElementById('viewAccrualApplyVatToOfficial').textContent = (accrual.applyVatToOfficialFee !== undefined ? accrual.applyVatToOfficialFee : true) ? 'Evet' : 'Hayır';
+                document.getElementById('viewAccrualTotalAmount').textContent = currencyFormatter(accrual.totalAmount || 0, accrual.totalAmountCurrency || 'TRY');
+                document.getElementById('viewAccrualRemainingAmount').textContent = currencyFormatter(accrual.remainingAmount !== undefined ? accrual.remainingAmount : accrual.totalAmount || 0, accrual.totalAmountCurrency || 'TRY');
+                
+                document.getElementById('viewAccrualTpInvoiceParty').textContent = accrual.tpInvoiceParty?.name || '-';
+                document.getElementById('viewAccrualServiceInvoiceParty').textContent = accrual.serviceInvoiceParty?.name || '-';
+                document.getElementById('viewAccrualCreatedAt').textContent = accrual.createdAt ? new Date(accrual.createdAt).toLocaleString('tr-TR') : '-';
+                document.getElementById('viewAccrualPaymentDate').textContent = accrual.paymentDate ? new Date(accrual.paymentDate).toLocaleDateString('tr-TR') : '-';
+
+                const documentListUl = document.getElementById('viewAccrualDocumentList');
+                documentListUl.innerHTML = '';
+                if (accrual.files && accrual.files.length > 0) {
+                    accrual.files.forEach(file => {
+                        const listItem = document.createElement('li');
+                        listItem.innerHTML = `<a href="${file.content}" download="${file.name}">📄 ${file.name} (${formatFileSize(file.size)}) - ${file.documentDesignation || 'Belge'}</a>`;
+                        documentListUl.appendChild(listItem);
+                    });
+                } else {
+                    documentListUl.innerHTML = '<li style="text-align: center; color: #666; padding: 10px;">Henüz belge yok.</li>';
+                }
+
+                modal.classList.add('show');
+            }
+        }
+
+        const module = new AccrualsModule();
+        module.init();
+    });
+</script>
+<script type="module" src="js/layout-loader.js"></script>
+</body>
+</html>
