@@ -105,7 +105,7 @@ export async function loadSharedLayout(options = {}) {
         placeholder.innerHTML = await response.text();
         const user = authService.getCurrentUser();
             if (!user && window.top === window) {
-                window.location.href = 'index.html';
+                window.location.href = '../index.html';
                 return;
             }
 
