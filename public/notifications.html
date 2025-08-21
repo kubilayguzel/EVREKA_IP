@@ -1,0 +1,1210 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Müvekkil Bildirimleri</title>
+  <link rel="stylesheet" href="css/shared-styles.css">
+  <style>
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color:#333; display:flex; }
+    .page-wrapper { flex-grow:1; display:flex; flex-direction:column; height:100vh; overflow-y:auto; background:linear-gradient(135deg,#f5f7fa 0%,#c3cfe2 100%); }
+    .main-container { width:100%; padding:30px; margin:0; }
+    .page-header { background:rgba(255,255,255,0.95); padding:30px; border-radius:20px; margin-bottom:30px; box-shadow:0 10px 30px rgba(0,0,0,0.1); }
+    .page-title { font-size:2em; color:#1e3c72; margin-bottom:10px; }
+    .page-subtitle { color:#666; font-size:1.1em; }
+    .tasks-container { background:rgba(255,255,255,0.95); border-radius:20px; box-shadow:0 10px 30px rgba(0,0,0,0.1); overflow:hidden; }
+    .tasks-table { width:100%; border-collapse:collapse; }
+    .tasks-table th,.tasks-table td { padding:15px; text-align:left; border-bottom:1px solid #f0f0f0; vertical-align:top; }
+    .tasks-table th { background:#f8f9fa; font-weight:600; }
+    .status-badge { padding:5px 10px; border-radius:12px; color:white; font-weight:500; font-size:0.9em; }
+    .status-sent{ background-color:#28a745 } .status-failed{ background-color:#dc3545 } .status-pending{ background-color:#6c757d }
+    .status-badge.missing-info{ background-color:#fd7e14; color:#000 }
+    .missing-info{ background-color:#ffe5c0 }
+    .missing-field{ display:inline-block; background-color:#fd7e14; color:#000; padding:2px 8px; border-radius:8px; font-size:0.85em; }
+    .action-btn{ background:#007bff; color:white; border:none; padding:8px 12px; border-radius:6px; cursor:pointer; margin-left:5px; transition:all .3s ease; }
+    .action-btn:hover{ opacity:.9 }
+    .loading{ text-align:center; padding:50px } .no-records{ text-align:center; padding:50px; color:#666 }
+    #paginationContainer{ margin:12px 0 4px }
+    /* Modal */
+    .modal{ position:fixed; inset:0; background:rgba(0,0,0,0.6); display:none; align-items:center; justify-content:center; z-index:9999 }
+    .modal-content{ background:#fff; padding:20px; width:720px; max-width:95vw; border-radius:12px; box-shadow:0 0 20px rgba(0,0,0,.2) }
+    .modal-content-lg{ background:#fff; padding:20px; width:960px; max-width:95vw; border-radius:12px; box-shadow:0 0 24px rgba(0,0,0,.25); display:flex; flex-direction:column }
+    .modal-header{ display:flex; align-items:center; justify-content:space-between; margin-bottom:8px }
+    .modal-title{ margin:0; font-size:1.25rem } .close-modal-btn,.close{ background:transparent; border:0; font-size:28px; line-height:1; cursor:pointer }
+    .modal-body{ max-height:70vh; overflow:auto } .modal-footer{ display:flex; gap:8px; justify-content:flex-end; margin-top:10px }
+    .recipient-badges .badge{ display:inline-block; padding:4px 8px; border-radius:12px; font-size:12px; margin:2px 4px 0 0 }
+    .badge-to{ background:#0d6efd; color:#fff } .badge-cc{ background:#17a2b8; color:#fff } .badge-empty{ background:#e9ecef; color:#555 }
+    .link{ color:#0d6efd; text-decoration:underline; cursor:pointer }
+    .action-btn-remind { background:#f59f00 !important; }
+    .action-btn-remind:hover { background:#e67700 !important; }
+  </style>
+
+  <style>
+    /* Progress Overlay */
+    #progressOverlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.35);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 10000;
+    }
+    #progressOverlay .box {
+      background: #fff;
+      padding: 20px 24px;
+      border-radius: 12px;
+      min-width: 260px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      align-items: center;
+    }
+    .progressbar {
+      width: 100%;
+      height: 6px;
+      background: #eee;
+      border-radius: 999px;
+      overflow: hidden;
+    }
+    .progressbar .bar {
+      width: 0%;
+      height: 100%;
+      background: linear-gradient(90deg, #0d6efd, #20c997);
+      animation: progress-indeterminate 1.4s infinite;
+    }
+    @keyframes progress-indeterminate {
+      0% { transform: translateX(-100%); width: 40%; }
+      50% { transform: translateX(30%); width: 60%; }
+      100% { transform: translateX(100%); width: 40%; }
+    }
+  </style>
+
+</head>
+<body>
+  <div id="notification-container" style="position:fixed; top:20px; right:20px; z-index:9999;"></div>
+  <div id="layout-placeholder"></div>
+
+  <div class="page-wrapper">
+    <main class="main-container">
+      <section class="page-header">
+        <h1 class="page-title">Müvekkil Bildirimleri</h1>
+        <p class="page-subtitle">Müvekkillere gönderilen bildirimleri buradan takip edebilirsiniz.</p>
+      </section>
+
+      <div class="tasks-container">
+        <div id="loader" class="loading">Yükleniyor...</div>
+        <div id="error" class="no-records" style="display:none;"></div>
+
+        <div class="table-container">
+          <table class="tasks-table">
+            <thead>
+              <tr>
+                <th>Durum</th>
+                <th>Müvekkil</th>
+                <th>Konu</th>
+                <th>Başvuru No</th>
+                <th>Tür</th>
+                <th>Evrak</th>
+                <th>Son Tarih</th>  
+                <th>Son Hatırlatma</th> 
+                <th>Gönderim Tarihi</th>
+                <th>İşlem</th>
+              </tr>
+            </thead>
+            <tbody id="notifications-table-body"></tbody>
+          </table>
+          <div id="paginationContainer"></div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Düzenleme Modal -->
+  <div id="notification-modal" class="modal">
+    <div class="modal-content-lg">
+      <div class="modal-header">
+        <h2 class="modal-title">Bildirimi Düzenle</h2>
+        <button id="close-modal" class="close-modal-btn" aria-label="Kapat">&times;</button>
+      </div>
+      <div class="modal-body">
+        <label for="modal-subject" class="form-label">Konu</label>
+        <input type="text" id="modal-subject" class="form-input" />
+
+        <div id="mailRecipientsBlock" style="margin:12px 0;">
+          <div style="margin-bottom:6px; font-weight:600;">Alıcılar</div>
+          <div class="d-flex" style="gap:16px; flex-wrap:wrap;">
+            <div style="min-width:240px; flex:1;">
+              <small class="text-muted d-block" style="margin-bottom:4px;">To</small>
+              <div id="modal-to" class="recipient-badges"></div>
+              <input id="modal-to-input" class="form-input" placeholder="E-posta ekle ve Enter’a bas" style="margin-top:6px;">
+            </div>
+            <div style="min-width:240px; flex:1;">
+              <small class="text-muted d-block" style="margin-bottom:4px;">CC</small>
+              <div id="modal-cc" class="recipient-badges"></div>
+              <input id="modal-cc-input" class="form-input" placeholder="E-posta ekle ve Enter’a bas" style="margin-top:6px;">
+            </div>
+          </div>
+        </div>
+
+        <label for="modal-body" class="form-label">İçerik</label>
+        <textarea id="modal-body"></textarea>
+      </div>
+      <div class="modal-footer">
+        <button id="save-draft" class="action-btn" style="background:#6c757d">Taslak Kaydet</button>
+        <button id="close-modal-btn" class="action-btn" style="background:#adb5bd">Kapat</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Eksik Bilgi Modal (basit) -->
+  <div id="missing-info-modal" class="modal">
+    <div class="modal-content">
+      <button id="mi-close" class="close" aria-label="Kapat">&times;</button>
+      <h3>Eksik Bilgiler</h3>
+      <p>Bu bildirim şu anda <b>gönderilmeye hazır değil</b>. Lütfen aşağıdaki eksikleri tamamlayın.</p>
+      <div style="margin:8px 0;">
+        <strong>Portföy Başvuru No:</strong>
+        <span id="mi-application-no">—</span>
+      </div>
+      <div style="margin:8px 0;">
+        <strong>Eksik Alanlar:</strong>
+        <ul id="mi-missing-list" style="margin:6px 0;"></ul>
+      </div>
+      <div class="modal-footer">
+        <button id="mi-edit" class="action-btn">Bildirimi Düzenle</button>
+        <button id="mi-close-btn" class="action-btn" style="background:#6c757d">Kapat</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TinyMCE (external) -->
+  <script src="https://cdn.tiny.cloud/1/uecky9tx0nvoenpj0odjyue9swj52q3sz49i62c745240d99/tinymce/6/tinymce.min.js" referrerpolicy="origin"></script>
+
+  <!-- Main module -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js";
+    import {
+      getFirestore, collection, query, orderBy, onSnapshot,
+      doc, getDoc, updateDoc, serverTimestamp,
+      collectionGroup, where, getDocs, documentId, limit 
+    } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore.js";
+    import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-functions.js";
+    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-auth.js";
+    import { loadSharedLayout } from "./js/layout-loader.js";
+    import Pagination from "./js/pagination.js";
+
+    // Firebase
+    const firebaseConfig = {
+      apiKey: "AIzaSyDbdqfiVbobnl1BtyiWxhD4bfIcREw8ZRc",
+      authDomain: "ip-manager-production-aab4b.firebaseapp.com",
+      projectId: "ip-manager-production-aab4b",
+      storageBucket: "ip-manager-production-aab4b.appspot.com",
+      messagingSenderId: "594650169512",
+      appId: "1:594650169512:web:43496005e063a40511829d"
+    };
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const functions = getFunctions(app, "europe-west1");
+    const auth = getAuth(app);
+    const sendEmail = httpsCallable(functions, "sendEmailNotificationV2");
+
+    // DOM
+    const tableBody = document.getElementById("notifications-table-body");
+    tableBody.replaceChildren(); 
+    const loader = document.getElementById("loader");
+    const errorDiv = document.getElementById("error");
+
+    // Pagination
+    let pagination;
+    let notificationsData = [];
+    let __isRendering = false;
+    let __renderTicket = 0;
+    let __rerenderPending = false;
+
+    // ---------- Helpers: recipients ----------
+    function normalize(v) {
+      if (!v) return null;
+      if (Array.isArray(v)) return v.filter(Boolean).map(x => String(x).trim()).filter(Boolean);
+      if (typeof v === "string") return v.split(/[;,]\s*/).filter(Boolean);
+      return null;
+    }
+    function getToCcFromNotification(n) {
+      const to = normalize(n?.toList) || normalize(n?.toRecipients) || normalize(n?.recipientTo) || normalize(n?.to) || normalize(n?.recipientEmail);
+      const cc = normalize(n?.ccList) || normalize(n?.ccRecipients) || normalize(n?.recipientCc) || normalize(n?.cc);
+      return { toList: to || [], ccList: cc || [] };
+    }
+
+    // ---------- Resolve ipRecord, supporting associatedTransactionId ----------
+async function resolveIpRecordId(notification) {
+  
+  // Önce notification'da ipRecordId var mı kontrol et
+  if (notification.ipRecordId) {
+    return notification.ipRecordId;
+  }
+
+  // clientId varsa onu kullanarak ipRecord bul
+  if (notification.clientId) {
+    try {
+      // *** DOĞRU SORGU - applicants.id field'ını kontrol et ***
+      const ipRecordsQuery = query(
+        collection(db, "ipRecords"),
+        where("applicants", "array-contains-any", [
+          { id: notification.clientId },
+          { id: notification.clientId, name: "ANADOLU EFES" },
+          { id: notification.clientId, email: "axxc@afes.com" }
+        ])
+      );
+      
+      const ipRecordsSnap = await getDocs(ipRecordsQuery);
+           
+      if (!ipRecordsSnap.empty) {
+        const firstIpRecord = ipRecordsSnap.docs[0];
+        return firstIpRecord.id;
+      } else {
+        
+        // ALTERNATİF: Tüm ipRecords'ları çek ve manuel filtrele
+        const allIpRecordsSnap = await getDocs(collection(db, "ipRecords"));
+        
+        for (const ipDoc of allIpRecordsSnap.docs) {
+          const ipData = ipDoc.data();
+          if (ipData.applicants && Array.isArray(ipData.applicants)) {
+            for (const applicant of ipData.applicants) {
+              if (applicant.id === notification.clientId) {
+                return ipDoc.id;
+              }
+            }
+          }
+        }
+      }
+    } catch (error) {
+    }
+  }
+
+  // sourceDocumentId varsa
+  if (notification.sourceDocumentId) {
+    try {
+      const docRef = await getDoc(doc(db, "unindexed_pdfs", notification.sourceDocumentId));
+      if (docRef.exists()) {
+        const docData = docRef.data();
+      
+        if (docData.ipRecordId) {
+          return docData.ipRecordId;
+        }
+        if (docData.relatedIpRecordId) {
+          return docData.relatedIpRecordId;
+        }
+        if (docData.ipRecordRefId) {
+          return docData.ipRecordRefId;
+        }
+        
+      } else {
+      }
+    } catch (error) {
+    }
+  }
+
+  return null;
+}
+
+async function getDocFromDb(collection, id) {
+  try {
+    const docSnap = await getDoc(doc(db, collection, id));
+    return docSnap.exists() ? docSnap.data() : null;
+  } catch (error) {
+    return null;
+  }
+}
+async function getDocumentInfo(notification) {
+  try {
+    if (!notification.sourceDocumentId) return { fileName: '-', fileUrl: null };
+    const docData = await getDocFromDb("unindexed_pdfs", notification.sourceDocumentId);
+    return docData ? 
+      { fileName: docData.fileName || '-', fileUrl: docData.fileUrl || null } :
+      { fileName: '-', fileUrl: null };
+  } catch (error) {
+    return { fileName: '-', fileUrl: null };
+  }
+}
+// gg/aa/yyyy formatı için küçük yardımcı
+function formatDateSlashTR(input) {
+  if (!input) return '-';
+  let d;
+  if (typeof input.toDate === 'function') d = input.toDate(); // Firestore Timestamp
+  else if (input instanceof Date) d = input;
+  else if (typeof input === 'number') d = new Date(input);
+  else return '-';
+
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const yyyy = d.getFullYear();
+  return `${dd}/${mm}/${yyyy}`;
+}
+
+function formatDateDDMMYYYY(d) {
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const yyyy = d.getFullYear();
+  return `${dd}/${mm}/${yyyy}`;
+}
+
+// associatedTransactionId == tasks.relatedIpRecordId eşleşmesine göre officialDueDate alır
+async function resolveDeliveryDate(notification) {
+  try {
+    
+    // 1. Önce direkt associatedTransactionId var mı kontrol et
+    let txId = notification?.associatedTransactionId;
+    
+    // 2. Yoksa sourceDocumentId üzerinden al
+    if (!txId && notification?.sourceDocumentId) {
+      
+      try {
+        const docData = await getDocFromDb("unindexed_pdfs", notification.sourceDocumentId);
+        if (docData?.associatedTransactionId) {
+          txId = docData.associatedTransactionId;
+        } else {
+        }
+      } catch (error) {
+        console.error('unindexed_pdfs sorgu hatası:', error);
+      }
+    }
+    
+    if (!txId) {
+      return '-';
+    }
+
+    const q = query(collection(db, 'tasks'), where('transactionId', '==', txId));
+    const snap = await getDocs(q);
+    
+    
+    if (snap.empty) {
+      return '-';
+    }
+
+    // İlk kaydın officialDueDate (Timestamp) alanını al
+    let ts = null;
+    snap.forEach(doc => { 
+      if (!ts) {
+        const data = doc.data();
+        ts = data?.officialDueDate || null;
+      }
+    });
+    
+    if (!ts || typeof ts.toDate !== 'function') {
+      return '-';
+    }
+
+    const formatted = formatDateSlashTR(ts.toDate());
+    return formatted;
+    
+  } catch (err) {
+    return '-';
+  }
+}
+
+async function resolveApplicationNo(notification) {
+  try {
+    // Önce notification'da applicationNo var mı kontrol et
+    if (notification.applicationNo) return notification.applicationNo;
+
+    // ipRecordId'yi güvenli şekilde al
+    let ipRecordId = await resolveIpRecordId(notification);
+    if (!ipRecordId) return '-';
+
+    // ipRecord'dan application number'ı al
+    const recSnap = await getDoc(doc(db, "ipRecords", ipRecordId));
+    if (!recSnap.exists()) return '-';
+    
+    const recData = recSnap.data();
+    return recData.applicationNumber || 
+           recData.applicationNo || 
+           recData.appNo || 
+           recData.details?.brandInfo?.applicationNo || '-';
+  } catch (error) {
+    return '-';
+  }
+}
+async function resolveApplicantName(notification) {
+  
+  try {
+    // ipRecordId'yi güvenli şekilde al
+    let ipRecordId = await resolveIpRecordId(notification);
+    
+    if (!ipRecordId) {
+      return '-';
+    }
+
+    // ipRecord'dan applicants'ı al
+    const recSnap = await getDoc(doc(db, "ipRecords", ipRecordId));
+    
+    if (!recSnap.exists()) {
+      return '-';
+    }
+    
+    const recData = recSnap.data();
+    
+    const applicants = Array.isArray(recData.applicants) ? recData.applicants : [];
+    
+    if (applicants.length === 0) {
+      return '-';
+    }
+    
+    const names = [];
+    for (const applicant of applicants) {
+      
+      if (applicant?.name) { 
+        names.push(applicant.name);
+        continue; 
+      }
+      
+      if (applicant?.id) {
+        try {
+          const personSnap = await getDoc(doc(db, "persons", applicant.id));
+          if (personSnap.exists()) {
+            const personData = personSnap.data();
+            if (personData.name) {
+              names.push(personData.name);
+            } else if (personData.companyName) {
+              names.push(personData.companyName);
+            }
+          } else {
+          }
+        } catch (error) {
+        }
+      }
+    }
+    
+    const result = names.length ? names.join(", ") : '-';
+    return result;
+  } catch (error) {
+    return '-';
+  }
+}
+
+async function resolveType(notification) {
+  try {
+    // Önce notification.type kontrolü
+    if (notification.type !== undefined) return String(notification.type);
+
+    // sourceDocumentId üzerinden transaction type'ını bul
+    if (notification.sourceDocumentId) {
+      try {
+        const docRef = await getDoc(doc(db, "unindexed_pdfs", notification.sourceDocumentId));
+        if (docRef.exists()) {
+          const docData = docRef.data();
+          
+          if (docData.associatedTransactionId && docData.ipRecordId) {
+            const transactionDoc = await getDoc(doc(db, "ipRecords", docData.ipRecordId, "transactions", docData.associatedTransactionId));
+            if (transactionDoc.exists()) {
+              const transactionData = transactionDoc.data();
+              if (transactionData.type) return String(transactionData.type);
+            }
+          }
+        }
+      } catch (error) {
+        console.warn('Transaction type query error:', error);
+      }
+    }
+
+    // ipRecordId varsa mainProcessType'ını al
+    let ipRecordId = await resolveIpRecordId(notification);
+    if (ipRecordId) {
+      try {
+        const ipRecordDoc = await getDoc(doc(db, "ipRecords", ipRecordId));
+        if (ipRecordDoc.exists()) {
+          const ipData = ipRecordDoc.data();
+          if (ipData.mainProcessType) return String(ipData.mainProcessType);
+        }
+      } catch (error) {
+        console.warn('IP record type query error:', error);
+      }
+    }
+
+    return '-';
+  } catch (error) {
+    console.error('resolveType error:', error);
+    return '-';
+  }
+}
+
+async function resolveDocumentInfo(notification) {
+  try {
+    if (!notification?.sourceDocumentId) return { fileName:"-", fileUrl:null };
+
+    // 1) unindexed_pdfs'te dene
+    let d = await getDoc(doc(db, "unindexed_pdfs", notification.sourceDocumentId));
+    if (d.exists()) {
+      const x = d.data() || {};
+      return { fileName: x.fileName || "-", fileUrl: x.fileUrl || null };
+    }
+
+    // 2) indexed_documents'te dene ve eşleşen unindexed_pdfs'i bul
+    const idx = await getDoc(doc(db, "indexed_documents", notification.sourceDocumentId));
+    if (idx.exists()) {
+      const ix = idx.data() || {};
+      const q = await getDocs(query(
+        collection(db, "unindexed_pdfs"),
+        where("evrakNo", "==", ix.etebsEvrakNo || null),
+        where("userId", "==", ix.userId || null),
+        limit(1)
+      ));
+      if (!q.empty) {
+        const ux = q.docs[0].data() || {};
+        return { fileName: ux.fileName || "-", fileUrl: ux.fileUrl || null };
+      }
+    }
+
+    return { fileName:"-", fileUrl:null };
+  } catch (e) {
+    console.warn('resolveDocumentInfo fallback error:', e);
+    return { fileName:"-", fileUrl:null };
+  }
+}
+
+    // ---------- Modals ----------
+    function showMissingInfo(notification) {
+      const modal = document.getElementById("missing-info-modal");
+      const list = document.getElementById("mi-missing-list");
+      list.innerHTML = "";
+      const fields = Array.isArray(notification?.missingFields) ? notification.missingFields : [];
+      if (fields.length) {
+        for (const f of fields) {
+          const li = document.createElement("li");
+          li.textContent = String(f);
+          list.appendChild(li);
+        }
+      } else {
+        const li = document.createElement("li");
+        li.textContent = "Detaylı bilgi mevcut değil.";
+        list.appendChild(li);
+      }
+      // application no
+      resolveApplicationNo(notification).then(no => {
+        document.getElementById("mi-application-no").textContent = no || "—";
+      });
+      modal.style.display = "flex";
+      document.getElementById("mi-close").onclick = () => modal.style.display = "none";
+      document.getElementById("mi-close-btn").onclick = () => modal.style.display = "none";
+      document.getElementById("mi-edit").onclick = () => { modal.style.display = "none"; openModal(notification); };
+    }
+
+    function openModal(notification) {
+      const subjectInput = document.getElementById("modal-subject");
+      subjectInput.value = notification.subject || "";
+      if (tinymce.get("modal-body")) tinymce.get("modal-body").remove();
+      tinymce.init({
+        selector: "#modal-body",
+        height: 400,
+        menubar: false,
+        plugins: "link lists",
+        toolbar: "undo redo | bold italic underline | bullist numlist | link",
+        branding: false,
+        language: "tr",
+        setup: (editor) => {
+          editor.on("init", () => {
+            let html = notification.body || "";
+            const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+            if (bodyMatch) html = bodyMatch[1];
+            editor.setContent(html);
+            document.getElementById("notification-modal").style.display = "flex";
+          });
+        }
+      });
+
+      const { toList, ccList } = getToCcFromNotification(notification);
+      const toEl = document.getElementById("modal-to");
+      const ccEl = document.getElementById("modal-cc");
+      const renderBadges = (arr, kind) => {
+        if (!arr || arr.length === 0) return `<span class="badge badge-empty">—</span>`;
+        const cls = kind === "To" ? "badge-to" : "badge-cc";
+        return arr.map(e => `<span class="badge ${cls}">${e}</span>`).join(" ");
+      };
+      toEl.innerHTML = renderBadges(toList, "To");
+      ccEl.innerHTML = renderBadges(ccList, "CC");
+
+
+      // ==== Chip editor ====
+      const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+      let currentTo = [...toList];
+      let currentCc = [...ccList];
+
+      const toInput = document.getElementById('modal-to-input');
+      const ccInput = document.getElementById('modal-cc-input');
+
+      function renderChips() {
+        const chip = (addr, cls) =>
+          `<span class="badge ${cls}" data-email="${addr}">${addr} <span class="x" style="margin-left:6px;cursor:pointer;">×</span></span>`;
+        toEl.innerHTML = currentTo.length ? currentTo.map(a => chip(a, "badge-to")).join(" ") : `<span class="badge badge-empty">—</span>`;
+        ccEl.innerHTML = currentCc.length ? currentCc.map(a => chip(a, "badge-cc")).join(" ") : `<span class="badge badge-empty">—</span>`;
+
+        // remove handlers
+        toEl.querySelectorAll('.badge .x').forEach(x => x.onclick = () => {
+          const v = x.parentElement.getAttribute('data-email'); currentTo = currentTo.filter(e => e !== v); renderChips();
+        });
+        ccEl.querySelectorAll('.badge .x').forEach(x => x.onclick = () => {
+          const v = x.parentElement.getAttribute('data-email'); currentCc = currentCc.filter(e => e !== v); renderChips();
+        });
+      }
+
+      function tryAdd(list, value) {
+        const v = String(value || '').trim();
+        if (!v || !emailRe.test(v)) return false;
+        if (!list.includes(v)) list.push(v);
+        return true;
+      }
+
+      [toInput, ccInput].forEach((inp, idx) => {
+        inp.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ',' || e.key === ';') {
+            e.preventDefault();
+            const ok = idx === 0 ? tryAdd(currentTo, inp.value) : tryAdd(currentCc, inp.value);
+            if (ok) { inp.value = ''; renderChips(); }
+          }
+          if (e.key === 'Backspace' && !inp.value) {
+            // hızlı silme: son chip
+            if (idx === 0 && currentTo.length) { currentTo.pop(); renderChips(); }
+            if (idx === 1 && currentCc.length) { currentCc.pop(); renderChips(); }
+          }
+        });
+      });
+
+      renderChips();
+
+      // Taslak kaydederken bu dizileri de kullanacağız:
+      
+  document.getElementById("save-draft").onclick = (() => {
+  let inflight = false;
+  return async () => {
+    if (inflight) return;
+    inflight = true;
+    const id = document.getElementById("save-draft").dataset.id;
+    const subject = document.getElementById("modal-subject").value.trim();
+    const body = tinymce.get("modal-body").getContent();
+    try {
+      __overlay.show('Taslak kaydediliyor…');
+      const { toList, ccList } = collectModalRecipients();
+      await updateDoc(doc(db, "mail_notifications", id), {
+        subject,
+        body,
+        isDraft: true,
+        updatedAt: serverTimestamp(),
+        toList,
+        ccList
+      });
+      alert("Taslak kaydedildi!");
+      document.getElementById("notification-modal").style.display = "none";
+    } catch (err) {
+      console.error(err);
+      alert("Taslak kaydedilemedi.");
+    } finally {
+      __overlay.hide();
+      inflight = false;
+    }
+  };
+})();
+      // ==== /Chip editor ====
+      (async () => {
+      const modalBodyEl = document.querySelector('#notification-modal .modal-body');
+      // "İçerik" etiketini bulup onun ÖNÜNE yerleştireceğiz
+      const contentLabel = modalBodyEl.querySelector('label[for="modal-body"]');
+
+      // Tek seferlik ipucu alanı oluştur
+      let hintEl = document.getElementById('attachment-hint');
+      if (!hintEl) {
+        hintEl = document.createElement('div');
+        hintEl.id = 'attachment-hint';
+        hintEl.style.margin = '8px 0 12px';
+        hintEl.style.fontSize = '12px';
+        hintEl.style.color = '#6c757d';
+        // İçerik etiketinden önce göster
+        modalBodyEl.insertBefore(hintEl, contentLabel);
+      }
+
+      // Belge bilgisini getir ve doldur
+      const docInfo = await resolveDocumentInfo(notification);
+      hintEl.innerHTML = docInfo.fileUrl
+        ? `Ek Kaynağı: <a href="${docInfo.fileUrl}" target="_blank" rel="noopener">${docInfo.fileName}</a>`
+        : `Ek Kaynağı: -`;
+    })();
+
+      document.getElementById("save-draft").dataset.id = notification.id;
+      ["close-modal", "close-modal-btn"].forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.onclick = () => {
+          document.getElementById("notification-modal").style.display = "none";
+          document.getElementById("modal-subject").value = "";
+          if (tinymce.get("modal-body")) tinymce.get("modal-body").remove();
+        };
+      });
+    }
+  
+function collectModalRecipients() {
+  const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+  const pillEmails = (sel) =>
+    Array.from(document.querySelectorAll(sel))
+      .map(el => el.getAttribute('data-email'))
+      .filter(Boolean);
+
+  const toChips = pillEmails('#modal-to .badge[data-email]');
+  const ccChips = pillEmails('#modal-cc .badge[data-email]');
+
+  const toInput = document.getElementById('modal-to-input');
+  const ccInput = document.getElementById('modal-cc-input');
+
+  const maybe = (v) => {
+    const s = String(v || '').trim();
+    return s && emailRe.test(s) ? [s] : [];
+  };
+
+  // Enter’a basılmadan kalan yazıyı da dahil et
+  const extraTo = maybe(toInput?.value);
+  const extraCc = maybe(ccInput?.value);
+
+  const uniq = (arr) => Array.from(new Set(arr));
+
+  return {
+    toList: uniq([ ...toChips, ...extraTo ]),
+    ccList: uniq([ ...ccChips, ...extraCc ]),
+  };
+}
+
+// ---------- Firestore listener ----------
+let notificationsUnsub = null;
+function startNotificationListener() {
+      const qy = query(collection(db, "mail_notifications"), orderBy("createdAt", "asc"));
+      notificationsUnsub && notificationsUnsub();
+    notificationsUnsub = onSnapshot(qy, async (snapshot) => {
+        loader.style.display = "none";
+        if (snapshot.empty) {
+          notificationsData = [];
+          tableBody.innerHTML = '<tr><td colspan="10" class="no-records">Gösterilecek bildirim bulunamadı.</td></tr>';
+          if (pagination) pagination.update(0);
+          return;
+        }
+        notificationsData = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+        if (!pagination) {
+          pagination = new Pagination({
+            containerId: "paginationContainer",
+            itemsPerPage: 20,
+            maxVisiblePages: 7,
+            onPageChange: renderCurrentPage,
+            showFirstLast: true,
+            showPrevNext: true,
+            showPageInfo: true,
+            showItemsPerPageSelector: true
+          });
+        }
+        pagination.update(notificationsData.length);
+        await renderCurrentPage();
+      }, (error) => {
+        loader.style.display = "none";
+        errorDiv.style.display = "block";
+        errorDiv.textContent = "Bildirimler yüklenirken bir hata oluştu.";
+        console.error(error);
+      });
+    }
+
+    onAuthStateChanged(auth, (user) => {
+      if (user) {
+        loadSharedLayout({ activeMenuLink: "notifications.html" });
+        startNotificationListener();
+      } else {
+        loader.textContent = "Bu sayfayı görmek için giriş yapmalısınız.";
+      }
+    });
+  async function getApplicantName(notification) {
+  try {
+    // Hızlı kontroller
+    if (notification.applicant?.name) return notification.applicant.name;
+    if (notification.applicantName) return notification.applicantName;
+
+    // clientId varsa direkt kullan
+    if (notification.clientId) {
+      const clientData = await getDocFromDb("persons", notification.clientId);
+      if (clientData) return clientData.name || clientData.companyName || '-';
+    }
+
+    // ipRecordId üzerinden
+    if (notification.ipRecordId) {
+      const ipData = await getDocFromDb("ipRecords", notification.ipRecordId);
+      if (ipData?.applicants?.length > 0) {
+        const firstApplicant = ipData.applicants[0];
+        if (firstApplicant.name) return firstApplicant.name;
+        if (firstApplicant.id) {
+          const personData = await getDocFromDb("persons", firstApplicant.id);
+          if (personData) return personData.name || personData.companyName || '-';
+        }
+      }
+    }
+
+    // sourceDocumentId üzerinden
+    if (notification.sourceDocumentId) {
+      const docData = await getDocFromDb("unindexed_pdfs", notification.sourceDocumentId);
+      if (docData?.ipRecordId) {
+        const ipData = await getDocFromDb("ipRecords", docData.ipRecordId);
+        if (ipData?.applicants?.length > 0) {
+          const firstApplicant = ipData.applicants[0];
+          if (firstApplicant.name) return firstApplicant.name;
+          if (firstApplicant.id) {
+            const personData = await getDocFromDb("persons", firstApplicant.id);
+            if (personData) return personData.name || personData.companyName || '-';
+          }
+        }
+      }
+    }
+
+    return '-';
+  } catch (error) {
+    console.error('getApplicantName error:', error);
+    return '-';
+  }
+}
+    // ---------- Render ----------
+// notifications.html dosyanızda mevcut renderCurrentPage fonksiyonunu tamamen şununla değiştirin:
+async function renderCurrentPage() {
+  if (!pagination) return;
+
+  // Re-entrant guard
+  if (__isRendering) { __rerenderPending = true; return; }
+  __isRendering = true;
+  const myTicket = ++__renderTicket;
+
+  const slice = pagination.getCurrentPageData(notificationsData || []);
+
+  if (!slice.length) {
+    tableBody.innerHTML = '<tr><td colspan="10" class="no-records">Gösterilecek bildirim bulunamadı.</td></tr>';
+    __isRendering = false;
+    if (__rerenderPending) { __rerenderPending = false; renderCurrentPage(); }
+    return;
+  }
+
+  // Tüm satırları hafızada, paralel asenkron hesaplayın
+  const rows = await Promise.all(slice.map(async (notification) => {
+    const tr = document.createElement('tr');
+
+    const statusClass = notification.status === 'sent' ? 'status-sent'
+      : notification.status === 'failed' ? 'status-failed'
+      : notification.status === 'missing_info' ? 'missing-info'
+      : 'status-pending';
+
+    const subjectCell = notification.subject
+      ? notification.subject
+      : '<span class="missing-field">Konu Eksik</span>';
+
+    const [
+  applicantName,
+  applicationNoText,
+  typeText,
+  docInfo,
+  deliveryDateText
+] = await Promise.all([
+  (async () => {
+    if (notification.applicantName) return notification.applicantName;
+    try { return await resolveApplicantName(notification); } catch { return '-'; }
+  })(),
+  (async () => {
+    if (notification.applicationNo) return notification.applicationNo;
+    try { return await resolveApplicationNo(notification); } catch { return '-'; }
+  })(),
+  (async () => {
+    try {
+      let rawType = '';
+      if (notification.type) rawType = String(notification.type);
+      else if (notification.notificationType) rawType = String(notification.notificationType);
+      else rawType = await resolveType(notification);
+
+      const map = {
+        trademark: 'Marka', marka: 'Marka',
+        patent: 'Patent',
+        design: 'Tasarım', tasarim: 'Tasarım',
+        litigation: 'Dava', dava: 'Dava',
+        objection: 'İtiraz', itiraz: 'İtiraz'
+      };
+      return map[rawType.toLowerCase?.() || ''] || rawType || '-';
+    } catch {
+      const fallback = String(notification.type || notification.notificationType || '');
+      const map = {
+        trademark: 'Marka', marka: 'Marka',
+        patent: 'Patent',
+        design: 'Tasarım', tasarim: 'Tasarım',
+        litigation: 'Dava', dava: 'Dava',
+        objection: 'İtiraz', itiraz: 'İtiraz'
+      };
+      return map[fallback.toLowerCase?.()] || fallback || '-';
+    }
+  })(),
+  // Senkron ise direkt değer döner; async ise promise — ikisini de Promise.all çözer.
+  getDocumentInfo(notification),
+  (async () => {
+    try { return await resolveDeliveryDate(notification); } catch { return '-'; }
+  })()
+]);
+
+    const fileCellHtml = (docInfo && docInfo.fileUrl)
+      ? `<a class="link" href="${docInfo.fileUrl}" target="_blank" rel="noopener">${docInfo.fileName}</a>`
+      : (docInfo?.fileName || '-');
+
+    const sentAtText = (notification.sentAt && typeof notification.sentAt.toDate === 'function')
+      ? notification.sentAt.toDate().toLocaleString('tr-TR') : '-';
+
+    const lastReminderText = (notification.lastReminderAt && typeof notification.lastReminderAt.toDate === 'function')
+      ? notification.lastReminderAt.toDate().toLocaleString('tr-TR') : '-';
+
+    tr.innerHTML = `
+      <td><span class="status-badge ${statusClass}">${notification.status || '-'}</span></td>
+      <td>${applicantName || '-'}</td>
+      <td>${subjectCell}</td>
+      <td>${applicationNoText || '-'}</td>
+      <td>${typeText || '-'}</td>
+      <td>${fileCellHtml}</td>
+      <td>${deliveryDateText || '-'}</td>
+      <td>${lastReminderText}</td>
+      <td>${sentAtText}</td>
+      <td class="actions-cell"></td>
+    `;
+
+    const actionCell = tr.querySelector('.actions-cell');
+    actionCell.innerHTML = '';
+
+    const editButton = document.createElement('button');
+    editButton.className = 'action-btn';
+    editButton.textContent = 'Düzenle';
+    editButton.dataset.id = notification.id;
+    editButton.addEventListener('click', () => openModal(notification));
+    actionCell.appendChild(editButton);
+
+    if (notification.status === 'missing_info') {
+      const missingBtn = document.createElement('button');
+      missingBtn.className = 'action-btn';
+      missingBtn.textContent = 'Eksik Bilgileri Göster';
+      missingBtn.dataset.id = notification.id;
+      missingBtn.addEventListener('click', () => showMissingInfo(notification));
+      actionCell.appendChild(missingBtn);
+    } else if (notification.status === 'sent') {
+      const remindBtn = document.createElement('button');
+      remindBtn.className = 'action-btn action-btn-remind';
+      remindBtn.textContent = 'Hatırlat';
+      remindBtn.dataset.id = notification.id;
+      remindBtn.addEventListener('click', (e) => sendReminderWithUI(e, notification));
+      actionCell.appendChild(remindBtn);
+    } else {
+      const sendBtn = document.createElement('button');
+      sendBtn.className = 'action-btn';
+      sendBtn.textContent = (notification.status === 'failed') ? 'Tekrar Gönder' : 'Gönder';
+      sendBtn.dataset.id = notification.id;
+      sendBtn.addEventListener('click', (e) => sendNotificationWithUI(e, notification));
+      actionCell.appendChild(sendBtn);
+    }
+
+    return tr;
+  }));
+
+  // Daha yeni bir render başladıysa DOM'a dokunma
+  if (myTicket !== __renderTicket) {
+    __isRendering = false;
+    if (__rerenderPending) { __rerenderPending = false; renderCurrentPage(); }
+    return;
+  }
+
+  // Atomik DOM güncelleme
+  const frag = document.createDocumentFragment();
+  rows.forEach(tr => frag.appendChild(tr));
+  tableBody.replaceChildren(frag);
+
+  __isRendering = false;
+  if (__rerenderPending) { __rerenderPending = false; renderCurrentPage(); }
+}
+
+    // ---------- Global exposures ----------
+    try { globalThis.openModal = openModal; } catch (e) {}
+    try { globalThis.showMissingInfo = showMissingInfo; } catch (e) {}
+    if (typeof globalThis.sendNotification !== "function") {
+      globalThis.sendNotification = async function(notification) {
+        try {
+          await sendEmail({ notificationId: notification.id });
+        } catch (e) {
+          console.error("sendNotification fallback error:", e);
+          alert("Gönderim sırasında bir hata oluştu.");
+        }
+      };
+    }
+
+if (typeof globalThis.sendReminder !== "function") {
+  globalThis.sendReminder = async function(notification) {
+    try {
+      const user = auth.currentUser;
+      if (!user) { alert("Giriş yapmalısınız."); return; }
+
+      // Eğer modal açıkken düzenlendi ise o anki başlık/içeriği topla
+      let overrideSubject = null;
+      let overrideBody = null;
+      const modalEl = document.getElementById('notification-modal');
+      const isModalOpen = modalEl && getComputedStyle(modalEl).display !== 'none';
+
+      if (isModalOpen) {
+        overrideSubject = document.getElementById('modal-subject')?.value?.trim() || null;
+        // TinyMCE varsa içeriği al
+        overrideBody = (window.tinymce && tinymce.get('modal-body'))
+          ? (tinymce.get('modal-body').getContent() || '').trim()
+          : (document.getElementById('modal-body')?.value || '').trim();
+        if (!overrideBody) overrideBody = null;
+      }
+
+      // (Opsiyonel) taslak meta güncelle
+      await updateDoc(doc(db, "mail_notifications", notification.id), {
+        updatedAt: serverTimestamp()
+      });
+
+      // Mode: 'reminder' + override’lar
+      await sendEmail({
+        notificationId: notification.id,
+        userEmail: user.email,
+        mode: 'reminder',
+        overrideSubject,
+        overrideBody
+      });
+
+      alert("Hatırlatma e-postası gönderim sırasına alındı.");
+    } catch (e) {
+      console.error("sendReminder error:", e);
+      alert("Hatırlatma gönderilemedi.");
+    }
+  };
+}
+
+// resolveDocumentInfo fonksiyonunu global yap
+window.resolveDocumentInfo = resolveDocumentInfo;
+globalThis.resolveDocumentInfo = resolveDocumentInfo;
+
+// Debug için global notificationsData erişimi
+Object.defineProperty(window, 'debugNotificationsData', {
+  get: () => notificationsData,
+  enumerable: true
+});
+const __sendBtn = document.getElementById("send-notification");
+if (__sendBtn) {
+  __sendBtn.addEventListener("click", async () => {
+    const id = __sendBtn.dataset.id; // aynı elemana ikinci kez DOM'dan bakmana gerek yok
+    const subject = document.getElementById("modal-subject").value.trim();
+    const body = tinymce.get("modal-body").getContent();
+    const user = auth.currentUser;
+
+    if (!user) { alert("Giriş yapmalısınız."); return; }
+    if (!confirm("Bu e-postayı göndermek istediğinize emin misiniz?")) return;
+
+    // DEBUG: Ek kontrolü (opsiyonel)
+    const notification = notificationsData.find(n => n.id === id);
+    if (notification?.sourceDocumentId) {
+      try {
+        const docInfo = await resolveDocumentInfo(notification);
+        if (docInfo.fileName === '-' || !docInfo.fileUrl) {
+          console.warn('⚠️ [DEBUG] Ek bilgisi eksik, backend\'de ek gönderilmeyebilir!');
+        }
+      } catch (err) {
+        console.error('❌ [DEBUG] resolveDocumentInfo error:', err);
+      }
+    } else {
+      console.warn('⚠️ [DEBUG] sourceDocumentId eksik!');
+    }
+
+    try {
+      // 🔴 En önemlisi: Modalden TO/CC’yi topla ve DOKÜMANA YAZ
+      const { toList, ccList } = collectModalRecipients();
+
+      await updateDoc(doc(db, "mail_notifications", id), {
+        subject,
+        body,
+        isDraft: false,
+        status: "pending",
+        missingFields: [],
+        updatedAt: serverTimestamp(),
+        sentBy: (user.email || user.uid),
+        // Alıcılar:
+        toList,
+        ccList,
+        recipientTo: toList,
+        recipientCc: ccList,
+        toRecipients: toList,
+        ccRecipients: ccList
+      });
+
+      // RAM’i de güncel tut (modal tekrar açıldığında doğru görünsün)
+      const notif = notificationsData.find(n => n.id === id);
+      if (notif) {
+        notif.subject = subject;
+        notif.body = body;
+        notif.toList = toList;
+        notif.ccList = ccList;
+        notif.isDraft = false;
+        notif.status = "pending";
+      }
+
+      // Artık dokümanda en güncel TO/CC var → backend buradan okuyacak
+      await sendEmail({ notificationId: id, userEmail: user.email });
+
+      alert("E-posta gönderim sırasına alındı!");
+      document.getElementById("notification-modal").style.display = "none";
+    } catch (err) {
+      console.error('❌ [DEBUG] Gönderim hatası:', err);
+      alert("Gönderim sırasında bir hata oluştu.");
+    }
+  });
+}
+  </script>
+  <div id="progressOverlay" role="status" aria-live="polite">
+    <div class="box">
+      <div id="progressMessage">İşlem yapılıyor…</div>
+      <div class="progressbar"><div class="bar"></div></div>
+    </div>
+  </div>
+<script>
+  // Progress overlay helpers (self-contained)
+  const __overlay = {
+    el: null, msgEl: null,
+    init() {
+      this.el = document.getElementById('progressOverlay');
+      this.msgEl = document.getElementById('progressMessage');
+    },
+    show(message='İşlem yapılıyor…') {
+      if (!this.el) this.init();
+      if (this.msgEl) this.msgEl.textContent = message;
+      if (this.el) this.el.style.display = 'flex';
+      document.querySelectorAll('.actions-cell .action-btn').forEach(b => b.disabled = true);
+    },
+    hide() {
+      if (!this.el) this.init();
+      if (this.el) this.el.style.display = 'none';
+      document.querySelectorAll('.actions-cell .action-btn').forEach(b => b.disabled = false);
+    }
+  };
+
+  async function sendNotificationWithUI(e, notification) {
+    const btn = e && e.currentTarget ? e.currentTarget : null;
+    try {
+      if (btn) btn.disabled = true;
+      __overlay.show('E-posta gönderiliyor…');
+      await sendNotification(notification);
+    } finally {
+      __overlay.hide();
+      if (btn) btn.disabled = false;
+    }
+  }
+  async function sendReminderWithUI(e, notification) {
+    const btn = e && e.currentTarget ? e.currentTarget : null;
+    try {
+      if (btn) btn.disabled = true;
+      __overlay.show('Hatırlatma gönderiliyor…');
+      await sendReminder(notification);
+    } finally {
+      __overlay.hide();
+      if (btn) btn.disabled = false;
+    }
+  }
+</script>
+
+</body>
+</html>
