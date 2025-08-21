@@ -184,52 +184,35 @@ function extractApplicantAddress(rec){
 function renderGoodsList(rec){
   if (!goodsContainer) return;
 
-  const goods = rec?.details?.brandInfo?.goodsAndServices || rec.goodsAndServices || [];
-  const nice = Array.isArray(rec.niceClasses) ? rec.niceClasses.map(x => String(x)) : [];
+  const gsbc = rec?.goodsAndServicesByClass;
+  let arr = [];
 
-  const groups = new Map();
-
-  if (Array.isArray(goods)){
-    goods.forEach(item => {
-      if (typeof item === 'string'){
-        // "[12] açıklama" desenini ayıkla
-        const m = item.match(/^\s*\[(\d{1,3})\]\s*(.*)$/);
-        if (m){
-          const cls = m[1], text = m[2] || '';
-          groups.set(cls, [...(groups.get(cls)||[]), text]);
-        } else {
-          groups.set('Genel', [...(groups.get('Genel')||[]), item]);
-        }
-      } else if (item && typeof item === 'object'){
-        const cls = String(item.class || item.cls || item.nice || '');
-        const text = item.text || item.description || JSON.stringify(item);
-        groups.set(cls || 'Genel', [...(groups.get(cls || 'Genel')||[]), text]);
-      }
-    });
+  if (Array.isArray(gsbc)) {
+    arr = gsbc;
+  } else if (typeof gsbc === 'object' && gsbc !== null) {
+    arr = Object.values(gsbc);
   }
 
-  // Nice sınıfları var ama içerik yoksa boş grup olarak aç
-  nice.forEach(cls => { if (!groups.has(String(cls))) groups.set(String(cls), []); });
-
-  if (groups.size === 0){
+  if (!arr.length){
     goodsContainer.innerHTML = '<div class="text-muted">Eşya listesi yok.</div>';
     return;
   }
 
-  goodsContainer.innerHTML = Array.from(groups.entries())
-    .sort((a,b)=> a[0].localeCompare(b[0],'tr',{numeric:true}))
-    .map(([cls, items]) => `
-      <div class="goods-group">
-        <div class="goods-class">Nice ${cls}</div>
-        ${items.length
-          ? `<ul class="goods-items">${items.map(t => `<li>${t}</li>`).join('')}</ul>`
-          : `<div class="text-muted">Bu sınıf için tanım yok.</div>`}
-      </div>
-    `).join('');
+  goodsContainer.innerHTML = arr
+    .sort((a,b)=> Number(a.classNo) - Number(b.classNo))
+    .map(entry => {
+      const classNo = entry.classNo || '—';
+      const items = Array.isArray(entry.items) ? entry.items : [];
+      return `
+        <div class="goods-group">
+          <div class="goods-class">Nice ${classNo}</div>
+          ${items.length
+            ? `<ul class="goods-items">${items.map(t => `<li>${t}</li>`).join('')}</ul>`
+            : `<div class="text-muted">Bu sınıf için tanım yok.</div>`}
+        </div>
+      `;
+    }).join('');
 }
-
-
-
 
 function renderDocuments(docs){
   const arr = Array.isArray(docs) ? docs : [];
