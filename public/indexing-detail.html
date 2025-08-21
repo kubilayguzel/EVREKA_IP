@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF İndeksleme - IP Yönetim Sistemi</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css"/>
+    <link rel="stylesheet" href="./css/shared-styles.css"/>
+    <style>
+        /* portfolio-detail.html'den alınan stiller */
+        :root{ --card-radius: 16px; }
+        .card { border-radius: var(--card-radius); }
+        .shadow-sm { box-shadow: 0 10px 24px rgba(0,0,0,0.08) !important; }
+        .badge-soft { background:#eef2ff; color:#4e5cf2; font-weight:600; padding:.35rem .55rem; }
+        .table thead th { background:#f8f9fa; }
+        .kv-item .label{ font-weight:600; font-size:.9em; color:#555; margin-bottom:4px; }
+        .kv-item .value{ background:#f8f9fa; border:1px solid #eee; border-radius:8px; padding:8px 10px; }
+
+        /* HERO */
+        .hero{ display:flex; gap:24px; align-items:flex-start; }
+        .hero-img-wrap{ flex:0 0 auto; max-width:360px; }
+        .hero-img{ width:100%; height:auto; border-radius:12px; border:1px solid #eee; background:#fff; }
+        .hero-meta{ flex:1; min-width:300px; }
+        .hero-meta h4{ color:#1e3c72; }
+        .kv-grid{ display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:12px 20px; }
+
+        /* indexing-detail'e özel stiller */
+        .main-container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+        .pdf-viewer-section { background: white; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); overflow: hidden; height: calc(100vh - 140px); }
+        .pdf-viewer-header { background: linear-gradient(45deg, #1e3c72, #2a5298); color: white; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; }
+        
+        /* Ortak başlık stili ve kart başlığı stili */
+        .form-section-title, .card-title-style {
+            font-size: 1.3rem;
+            font-weight: 600;
+            color: #1e3c72;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #e1e8ed;
+        }
+        .card-header-styled {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 20px;
+        }
+        .card-title-text {
+            font-size: 1.3rem;
+            font-weight: 600;
+            color: #1e3c72;
+            margin-bottom: 0;
+        }
+
+        .pdf-title { font-size: 1.1rem; font-weight: 600; margin: 0; }
+        .pdf-actions-header { display: flex; gap: 10px; }
+        .btn-header { background: rgba(255,255,255,0.2); color: white; border: none; padding: 8px 12px; border-radius: 6px; font-size: 0.9rem; cursor: pointer; transition: all 0.2s ease; }
+        .btn-header:hover { background: rgba(255,255,255,0.3); }
+        .pdf-viewer { width: 100%; height: calc(100% - 60px); border: none; background: #f5f5f5; }
+        
+        .step-title { font-size: 1.1rem; font-weight: 600; color: #1e3c72; margin-bottom: 15px; display: flex; align-items: center; gap: 10px; }
+        .step-number { background: #1e3c72; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.9rem; font-weight: 600; }
+        .form-group { margin-bottom: 20px; }
+        .form-label { display: block; margin-bottom: 8px; font-weight: 500; color: #333; }
+        .form-input, .form-select {
+            width: 100%;
+            padding: 12px 15px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            line-height: 1.2;
+        }
+        .form-input:focus, .form-select:focus { outline: none; border-color: #007bff; box-shadow: 0 0 0 2px rgba(0,123,255,0.25); }
+        .search-container { position: relative; }
+        .search-results { position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #ddd; border-radius: 6px; max-height: 200px; overflow-y: auto; z-index: 1000; display: none; }
+        .search-result-item { padding: 10px; cursor: pointer; border-bottom: 1px solid #eee; }
+        .search-result-item:hover { background: #f8f9fa; }
+        .search-result-item:last-child { border-bottom: none; }
+        .transactions-list { 
+            border: 2px solid #e3f2fd; 
+            border-radius: 8px;
+            max-height: 300px;
+            overflow-y: auto;
+            background: #f8f9fa;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+        }
+        .transaction-item { 
+            padding: 15px; 
+            border-bottom: 1px solid #e1e8ed; 
+            cursor: pointer; 
+            transition: all 0.2s ease; 
+        }
+        .transaction-item:hover { 
+            background: #eaf6fc; 
+        }
+        .transaction-item.selected { 
+            background: #e3f2fd; 
+            border-color: #2196f3; 
+        }
+        .transaction-item:last-child { border-bottom: none; }
+        .child-transaction-inputs { border: 1px solid #e1e8ed; border-radius: 8px; padding: 20px; background: #f8f9fa; margin-top: 15px; }
+        .btn { padding: 10px 20px; border: none; border-radius: 6px; font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.2s ease; }
+        .btn-primary { background: #007bff; color: white; }
+        .btn-primary:hover { background: #0056b3; }
+        .btn-primary:disabled { background: #6c757d; cursor: not-allowed; }
+        .btn-secondary { background: #6c757d; color: white; }
+        .btn-secondary:hover { background: #545b62; }
+        .btn-sm { padding: 6px 12px; font-size: 12px; }
+        .text-muted { color: #6c757d; font-style: italic; }
+        @media (max-width: 1200px) { .pdf-viewer-section { height: 60vh; } }
+        @media (max-width: 768px) { .main-container { padding: 10px; } .pdf-viewer-header { padding: 12px 15px; } }
+        .badge { display:inline-flex; align-items:center; gap:6px; padding:.35rem .6rem; border-radius:999px; }
+        .badge-light { background:#f8f9fa; color:#212529; }
+        .border { border:1px solid #dee2e6; }
+        .mr-1 { margin-right:.25rem; } .mb-1{ margin-bottom:.25rem; }
+        .close { background:none; border:none; font-size:16px; line-height:1; cursor:pointer; }
+        .card-bg-light { background: #f8f9fa; }
+
+        /* Yeni eklenen stiller */
+        .selected-item {
+            background-color: #e2f0ff;
+            border: 1px solid #a7d9ff;
+            border-radius: 0.25rem;
+            padding: 8px 12px;
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.95rem;
+            color: #343a40;
+        }
+
+        .remove-selected-item-btn {
+            background: none;
+            border: none;
+            color: #dc3545;
+            font-size: 1.2rem;
+            cursor: pointer;
+            padding: 0 5px;
+            transition: color 0.2s ease;
+        }
+        #nice-class-modal {
+            z-index: 1055 !important;
+        }
+
+        #nice-class-modal.show {
+            display: flex !important;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #nice-class-modal .modal-dialog {
+            margin: 1.75rem auto;
+            max-width: 800px;
+            width: 90%;
+        }
+
+        #nice-class-modal .modal-content {
+            position: relative;
+            background-color: #fff;
+            background-clip: padding-box;
+            border: 1px solid rgba(0,0,0,.2);
+            border-radius: 0.375rem;
+            box-shadow: 0 0.5rem 1rem rgba(0,0,0,.15);
+            pointer-events: auto;
+        }
+
+        /* Modal backdrop için */
+        .modal-backdrop {
+            z-index: 1040 !important;
+            background-color: rgba(0,0,0,0.5);
+        }
+
+        #nice-modal-backdrop {
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: 1040;
+            width: 100vw;
+            height: 100vh;
+            background-color: rgba(0,0,0,0.5);
+        }
+
+        /* Modal açık olduğunda body scroll'ını engelle */
+        body.modal-open {
+            overflow: hidden;
+            padding-right: 0 !important;
+        }
+
+        /* Modal içindeki scroll alanları için */
+        #available-nice-classes,
+        #selected-nice-classes-in-modal {
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #dee2e6;
+            border-radius: 0.25rem;
+        }
+
+        /* List group item'lar için hover efekti */
+        #available-nice-classes .list-group-item:hover {
+            background-color: #f8f9fa;
+            cursor: pointer;
+        }
+
+        /* Seçilen sınıflar için card stil */
+        #selected-nice-classes-in-modal .card {
+            margin-bottom: 0.5rem;
+            border: 1px solid #dee2e6;
+        }
+
+        #selected-nice-classes-in-modal .card:last-child {
+            margin-bottom: 0;
+        }
+
+        /* Modal animasyonları */
+        #nice-class-modal.fade {
+            transition: opacity 0.15s linear;
+        }
+
+        #nice-class-modal.fade:not(.show) {
+            opacity: 0;
+        }
+
+        #nice-class-modal.fade.show {
+            opacity: 1;
+        }
+
+        /* Responsive düzenlemeler */
+        @media (max-width: 768px) {
+            #nice-class-modal .modal-dialog {
+                margin: 1rem;
+                width: calc(100% - 2rem);
+            }
+            
+            #nice-class-modal .modal-body .row {
+                flex-direction: column;
+            }
+            
+            #nice-class-modal .modal-body .col-md-5,
+            #nice-class-modal .modal-body .col-md-7 {
+                flex: 0 0 100%;
+                max-width: 100%;
+                margin-bottom: 1rem;
+            }
+        }
+        .fixed-bottom-right {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 1000;
+        }
+    #registry-status {
+    min-height: 45px;   /* kutunun yüksekliği */
+    font-size: 14px;    /* yazı boyutu biraz büyüsün */
+    padding: 8px 10px;  /* iç boşluk */
+}
+    </style>
+</head>
+<body>
+    <div id="notification-container" class="notification-container"></div>
+    <div id="layout-placeholder"></div>
+    
+    <div class="page-wrapper">
+        <main class="main-container">
+
+            <div class="pdf-viewer-section">
+                <div class="pdf-viewer-header">
+                    <h3 class="pdf-title" id="pdfTitle">PDF Yükleniyor...</h3>
+                    <div class="pdf-actions-header">
+                        <button class="btn-header" onclick="document.getElementById('pdfViewer').requestFullscreen()">🔍 Tam Ekran</button>
+                        <button class="btn-header" id="downloadPdfBtn">📥 İndir</button>
+                        <button class="btn-header" id="openNewTabBtn">🔗 Yeni Sekmede Aç</button>
+                    </div>
+                </div>
+                <iframe id="pdfViewer" class="pdf-viewer" src=""></iframe>
+            </div>
+
+            <div class="card shadow-sm card-bg-light" style="margin-top: 20px; padding: 25px;">
+                <h2 class="form-section-title">PDF İndeksleme</h2>
+                <form id="indexingForm">
+                    <div id="recordSection" class="form-group">
+                        <label class="form-label">Dosya Seçimi</label>
+                        <div class="search-container">
+                            <input type="text" id="recordSearchInput" class="form-input" placeholder="Portföy kayıtlarında ara (uygulama no, başlık, vb.)...">
+                            <div id="searchResultsContainer" class="search-results"></div>
+                        </div>
+                        <div id="selectedRecordDisplay" style="margin-top: 15px;"></div>
+                    </div>
+
+                    <div id="transactionSection" class="child-transaction-inputs form-group" style="display: none;">
+                        <div class="step-title">
+                            <span class="step-number">1</span>
+                            Ana İşlem Seçimi
+                        </div>
+                        <div id="transactionsList" class="transactions-list">
+                            <p class="text-muted">Lütfen önce bir kayıt seçin.</p>
+                        </div>
+                    </div>
+
+                    <div id="childTransactionInputs" class="child-transaction-inputs" style="display: none;">
+                        <div class="step-title">
+                            <span class="step-number">2</span>
+                            Alt İşlem Detayları
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label" for="childTransactionType">Alt İşlem Türü <span style="color: red;">*</span></label>
+                            <select id="childTransactionType" class="form-select">
+                                <option value="" disabled selected>Alt işlem türü seçin...</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label" for="deliveryDate">Tebliğ Tarihi</label>
+                            <input type="date" id="deliveryDate" class="form-input">
+                        </div>
+                    </div>
+
+                    <div class="form-group" style="margin-top: 30px;">
+                        </div>
+                </form>
+            </div>
+
+            <section id="portfolio-hero-nice-module" style="display:none; margin-top:20px;">
+              <div>
+                <div class="mb-3">
+                  <div class="card shadow-sm card-bg-light">
+                    <div class="card-header card-header-styled">
+                      <h2 class="card-title-text" style="margin-bottom:0;">Sicil Bilgileri</h2>
+                    </div>
+                    <div class="card-body">
+                      <div class="row">
+                        <div class="col-md-6 form-group">
+                            <label>Durum</label>
+                            <select id="registry-status" class="form-control form-select"></select>
+                        </div>
+                        <div class="col-md-6 form-group">
+                            <label>Başvuru Tarihi</label>
+                            <input id="registry-application-date" type="date" class="form-control form-input">
+                        </div>
+                        <div class="col-md-6 form-group">
+                            <label>Tescil No</label>
+                            <input id="registry-registration-no" type="text" class="form-control form-input">
+                        </div>
+                        <div class="col-md-6 form-group">
+                            <label>Tescil Tarihi</label>
+                            <input id="registry-registration-date" type="date" class="form-control form-input">
+                        </div>
+                        <div class="col-md-6 form-group">
+                            <label>Yenileme Tarihi</label>
+                            <input id="registry-renewal-date" type="date" class="form-control form-input">
+                        </div>
+                        <div class="col-12 mt-3">
+                            <div class="form-row align-items-end mb-3">
+                                <div class="form-group col-md-5">
+                                    <label>Bülten No</label>
+                                    <input id="bulletin-no-input" type="text" class="form-control form-input">
+                                </div>
+                                <div class="form-group col-md-5">
+                                    <label>Bülten Tarihi</label>
+                                    <input id="bulletin-date-input" type="date" class="form-control form-input">
+                                </div>
+                                <div class="form-group col-md-2">
+                                    <button type="button" id="btn-add-bulletin" class="btn btn-sm btn-primary">Ekle</button>
+                                </div>
+                            </div>
+                            <div id="bulletin-list" class="list-group">
+                                </div>
+                        </div>
+                      </div>
+                      <div id="registry-feedback" class="mt-2"></div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="mb-3">
+                  <div class="card shadow-sm card-bg-light">
+                    <div class="card-header card-header-styled">
+                      <h2 class="card-title-text" style="margin-bottom:0;">Nice Sınıfları & Eşya Listesi</h2>
+                      <div>
+                        <button id="btn-add-nice-modal" class="btn btn-sm btn-outline-primary">Sınıf Ekle</button>
+                      </div>
+                    </div>
+                    <div class="card-body">
+                      <div id="nice-classes-chips" class="mb-2"></div>
+                      <div id="nice-classes-accordion"></div>
+                      <div id="gs-feedback" class="mt-2"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+            
+            <div id="global-save-container" class="fixed-bottom-right">
+                <button id="btn-save-all" class="btn btn-primary" disabled>PDF Dokümanını ve Verileri Kaydet / Güncelle</button>
+                <div id="global-feedback" class="mt-2 text-right"></div>
+            </div>
+        </main>
+    </div>
+
+    <div id="nice-class-modal" class="modal fade" tabindex="-1" role="dialog" aria-labelledby="niceClassModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="niceClassModalLabel">Nice Sınıfı Ekle</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="card shadow-sm mb-3">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h6 class="mb-0">Seçilen Sınıflar & Eşya Listeleri</h6>
+                            <button type="button" class="btn btn-sm btn-outline-danger" id="nice-modal-clear-all">Tümünü Temizle</button>
+                        </div>
+                        <div class="card-body">
+                            <div id="selected-nice-classes-in-modal" style="max-height: 200px; overflow-y: auto;">
+                                <div class="text-muted text-center p-3">Lütfen aşağıdaki sınıflardan birini seçin.</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card shadow-sm mb-3">
+                        <div class="card-header">
+                            <h6 class="mb-0">Mevcut Olmayan Sınıflar (1-45)</h6>
+                        </div>
+                        <div class="card-body">
+                            <div id="available-nice-classes" class="list-group list-group-horizontal-sm" style="overflow-x: auto; flex-wrap: nowrap;">
+                                </div>
+                        </div>
+                    </div>
+
+                    <div class="card shadow-sm">
+                        <div class="card-header">
+                            <h6 class="mb-0">Eşya Listesi Düzenleme</h6>
+                        </div>
+                        <div class="card-body">
+                            <div id="nice-modal-item-editor">
+                                <div class="text-muted text-center p-3">Düzenlemek için bir sınıf seçin.</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">İptal</button>
+                    <button type="button" class="btn btn-primary" id="btn-save-nice-modal">Kaydet</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+    window.showModal = function(selector) {
+        if (window.$) {
+            $(selector).modal('show');
+        } else {
+            const modalElement = document.querySelector(selector);
+            if (modalElement) {
+                const myModal = new bootstrap.Modal(modalElement);
+                myModal.show();
+            }
+        }
+    };
+    window.hideModal = function(selector) {
+        if (window.$) {
+            $(selector).modal('hide');
+        } else {
+            const modalElement = document.querySelector(selector);
+            if (modalElement) {
+                const myModal = new bootstrap.Modal(modalElement);
+                myModal.hide();
+            }
+        }
+    };
+    </script>
+    <script type="module" src="./js/indexing-portfolioupdate.js"></script>
+    <script type="module" src="./js/indexing-detail-module.js"></script>
+    <script type="module" src="./js/layout-loader.js"></script>
+    <script type="module" src="./firebase-config.js"></script>
+
+    <script type="module">
+        import { IndexingDetailModule } from './js/indexing-detail-module.js';
+        import { loadSharedLayout } from './js/layout-loader.js';
+
+        document.addEventListener('DOMContentLoaded', () => {
+            window.indexingDetailModule = new IndexingDetailModule();
+            loadSharedLayout({ activeMenuLink: 'bulk-indexing-page.html' });
+
+            const kickoff = () => {
+                const rec = window.indexingDetailModule?.matchedRecord;
+                if (rec?.id && window.IndexingPortfolioUpdate?.init) {
+                    window.IndexingPortfolioUpdate.init({ ipRecordId: rec.id });
+                    const sec = document.getElementById('portfolio-hero-nice-module');
+                    if (sec) sec.style.display = 'block';
+                    return;
+                }
+                setTimeout(kickoff, 400);
+            };
+            kickoff();
+        });
+    </script>
+</body>
+</html>
