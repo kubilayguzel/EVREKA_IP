@@ -317,9 +317,8 @@
             ipRecordsService, // Bu import burada kullanılmıyor, kaldırılabilir veya gelecekteki kullanım için bırakılabilir.
             createDemoData,
             auth
-        } from './firebase-config.js';
-        import { showNotification, showFieldError, clearAllFieldErrors } from './utils.js'; // utils.js eklendi
-
+        } from './public/firebase-config.js';
+        import { showNotification, showFieldError, clearAllFieldErrors } from './public/utils.js'; // utils.js eklendi
         // UI Controller Class
         class AuthController {
             constructor() {
