@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>IP Manager - Marka İzleme Listesi</title>
+  <link rel="stylesheet" href="css/shared-styles.css"/>
+  <style>
+    body {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        color: #333;
+        display: flex;
+        min-height: 100vh;
+        margin: 0;
+    }
+    .page-wrapper {
+        flex-grow: 1;
+        display: flex;
+        flex-direction: column;
+        overflow-y: auto;
+        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+        box-sizing: border-box;
+    }
+    .main-container {
+        width: 100%;
+        padding: 30px;
+        margin: 0;
+        box-sizing: border-box;
+        flex-shrink: 0;
+    }
+    .page-header { 
+        background: rgba(255, 255, 255, 0.95); 
+        padding: 30px; 
+        border-radius: 20px; 
+        margin-bottom: 30px; 
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1); 
+    }
+    .page-title { 
+        font-size: 2em; 
+        color: #1e3c72; 
+        margin-bottom: 10px; 
+    }
+    .page-subtitle { 
+        color: #666; 
+        font-size: 1.1em; 
+    }
+
+    .monitoring-controls {
+        background: rgba(255, 255, 255, 0.95);
+        padding: 15px 30px;
+        border-radius: 20px;
+        box-shadow: 0 5px 15px rgba(0,0,0,0.05);
+        margin-bottom: 20px;
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 15px;
+        position: relative;
+        z-index: 2;
+    }
+    .monitoring-controls .filter-group {
+        display: none;
+    }
+    .monitoring-controls .btn-selected-action {
+        background-color: #007bff;
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 0.9em;
+        font-weight: 600;
+        transition: all 0.3s ease;
+    }
+    .monitoring-controls .btn-selected-action:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(0, 123, 255, 0.2);
+    }
+    .monitoring-controls .btn-selected-action:disabled {
+        background-color: #cccccc;
+        cursor: not-allowed;
+        box-shadow: none;
+        transform: none;
+    }
+
+    /* Filtre Bölümü Stilleri */
+    .filter-section {
+        background: rgba(255,255,255,0.95);
+        padding: 20px;
+        border-radius: 10px;
+        margin-bottom: 20px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        animation: fadeIn 0.3s ease-in;
+    }
+    
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(-10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    
+    .filter-controls {
+        display: flex;
+        gap: 15px;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+    
+    .filter-group {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+    }
+    
+    .filter-group.search {
+        flex: 1;
+        min-width: 200px;
+    }
+    
+    .filter-label {
+        font-size: 0.9em;
+        color: #666;
+        font-weight: 500;
+    }
+    
+    .filter-input, .filter-select {
+        padding: 8px 12px;
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        font-size: 14px;
+        transition: all 0.2s ease;
+    }
+    
+    .filter-input:focus, .filter-select:focus {
+        outline: none;
+        border-color: #007bff;
+        box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+    }
+    
+    .filter-input.search {
+        width: 100%;
+    }
+    
+    .filter-select {
+        min-width: 120px;
+    }
+    
+    .clear-filters-btn {
+        padding: 8px 16px;
+        background: #6c757d;
+        color: white;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 14px;
+        transition: all 0.2s ease;
+        align-self: flex-end;
+    }
+    
+    .clear-filters-btn:hover {
+        background: #5a6268;
+        transform: translateY(-1px);
+    }
+
+    .accruals-container {
+        background: rgba(255,255,255,0.95);
+        border-radius: 20px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        overflow: hidden;
+    }
+    .accruals-table {
+        width: 100%;
+        border-collapse: collapse;
+        table-layout: fixed;
+    }
+    .accruals-table th,
+    .accruals-table td {
+        padding: 15px;
+        text-align: left;
+        border-bottom: 1px solid #f0f0f0;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .accruals-table th {
+        background: #f8f9fa;
+        font-weight: 600;
+    }
+
+    /* KOLON GENİŞLİKLERİ */
+    .accruals-table th:first-child,
+    .accruals-table td:first-child {
+        width: 40px;
+        text-align: center;
+        padding-left: 5px;
+        padding-right: 5px;
+    }
+    .accruals-table th:nth-child(2),
+    .accruals-table td:nth-child(2) {
+        width: 100px;
+        text-align: center;
+    }
+    .accruals-table th:nth-child(3),
+    .accruals-table td:nth-child(3) {
+        width: 200px;
+    }
+    .accruals-table th:nth-child(4),
+    .accruals-table td:nth-child(4) {
+        width: 150px;
+    }
+    .accruals-table th:nth-child(5),
+    .accruals-table td:nth-child(5) {
+        width: 120px;
+    }
+    .accruals-table th:nth-child(6),
+    .accruals-table td:nth-child(6) {
+        width: 100px;
+    }
+    .accruals-table th:nth-child(7),
+    .accruals-table td:nth-child(7) {
+        width: 120px;
+    }
+    .accruals-table th:nth-child(8),
+    .accruals-table td:nth-child(8) {
+        width: 120px;
+    }
+
+    .trademark-image-thumbnail {
+        width: 50px;
+        height: 50px;
+        object-fit: contain;
+        border-radius: 5px;
+        vertical-align: middle;
+        line-height: 0;
+        font-size: 0;
+    }
+
+    .status-badge {
+        display: inline-block;
+        padding: 5px 10px;
+        border-radius: 5px;
+        font-size: 0.8em;
+        font-weight: 600;
+        color: white;
+        text-transform: uppercase;
+        line-height: 1;
+    }
+    .status-badge.application { background-color: #007bff; }
+    .status-badge.registered { background-color: #28a745; }
+    .status-badge.rejected { background-color: #dc3545; }
+    .status-badge.pending { background-color: #ffc107; color: #333; }
+    .status-badge.objection { background-color: #6f42c1; }
+    .status-badge.litigation { background-color: #fd7e14; }
+
+    .nice-class-badge {
+        display: inline-block;
+        background: #e9ecef;
+        color: #495057;
+        padding: 2px 8px;
+        border-radius: 12px;
+        font-size: 0.8em;
+        margin-right: 4px;
+        margin-bottom: 2px;
+    }
+
+    .loading, .no-records {
+        text-align: center;
+        padding: 30px;
+        color: #666;
+    }
+    .error-message {
+        text-align: center;
+        padding: 30px;
+        color: #dc3545;
+        background-color: #f8d7da;
+        border: 1px solid #f5c6cb;
+        border-radius: 5px;
+        margin: 20px 0;
+    }
+  </style>
+</head>
+<body>
+<div id="notification-container" style="position: fixed; top: 20px; right: 20px; z-index: 9999;"></div>
+  <div id="layout-placeholder"></div>
+  <div class="page-wrapper">
+    <main class="main-container">
+      <section class="page-header">
+        <h1 class="page-title">📊 Marka İzleme Listesi</h1>
+        <p class="page-subtitle">İzleme listenizdeki markalar burada listelenir.</p>
+      </section>
+
+      <div class="monitoring-controls">
+        <button type="button" class="btn-selected-action" id="removeSelectedBtn" disabled>
+          Seçileni Kaldır (<span id="selectedCount">0</span>)
+        </button>
+      </div>
+
+      <div id="filterSection" class="filter-section" style="display: none;">
+        <div class="filter-controls">
+          <div class="filter-group search">
+            <label class="filter-label">Arama</label>
+            <input type="text" id="searchFilter" class="filter-input search" placeholder="Marka adı, sahip veya başvuru no ile ara...">
+          </div>
+          <div class="filter-group">
+            <label class="filter-label">Durum</label>
+            <select id="statusFilter" class="filter-select">
+              <option value="all">Tüm Durumlar</option>
+              <option value="application">Başvuru</option>
+              <option value="registered">Tescilli</option>
+              <option value="rejected">Reddedildi</option>
+              <option value="pending">Beklemede</option>
+              <option value="objection">İtiraz</option>
+              <option value="litigation">Dava</option>
+            </select>
+          </div>
+          <div class="filter-group">
+            <label class="filter-label">Nice Sınıfı</label>
+            <input type="text" id="niceClassFilter" class="filter-input" placeholder="35, 42..." style="width: 120px;">
+          </div>
+          <div class="filter-group">
+            <label class="filter-label">Sahip</label>
+            <input type="text" id="ownerFilter" class="filter-input" placeholder="Şirket adı..." style="width: 150px;">
+          </div>
+          <button type="button" id="clearFilters" class="clear-filters-btn">Temizle</button>
+        </div>
+      </div>
+
+      <div class="accruals-container">
+        <div id="monitoringTableContainer">
+          <div class="loading">Yükleniyor...</div>
+        </div>
+      </div>
+
+      <div id="paginationContainer"></div>
+    </main>
+  </div>
+
+<script type="module">
+    import Pagination from './js/pagination.js'; // <- DIŞARIDAN İÇERİ AKTARILDI
+    import { loadSharedLayout } from './js/layout-loader.js';
+    import { monitoringService, personService } from './firebase-config.js';
+    import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+    import { showNotification } from './utils.js';
+
+    // Global değişkenler
+    const auth = getAuth();
+    let selectedMonitoringItems = new Set();
+    let allPersons = [];
+    let pagination = null;
+    let allMonitoringData = [];
+    let filteredData = [];
+    let currentFilters = {
+        search: '',
+        status: 'all',
+        niceClass: '',
+        owner: ''
+    };
+
+    // Pagination'ı başlat
+    function initializePagination() {
+        pagination = new Pagination({
+            containerId: 'paginationContainer',
+            itemsPerPage: 20,
+            maxVisiblePages: 5,
+            showFirstLast: true,
+            showPrevNext: true,
+            showPageInfo: true,
+            showItemsPerPageSelector: true,
+            itemsPerPageOptions: [10, 20, 50, 100],
+            onPageChange: (page, itemsPerPage) => {
+                renderCurrentPage();
+                selectedMonitoringItems.clear();
+                updateSelectedButtonState();
+                
+                document.querySelector('.accruals-container').scrollIntoView({ 
+                    behavior: 'smooth', 
+                    block: 'start' 
+                });
+            }
+        });
+    }
+
+    // Filtreleri kur
+    function setupFilters() {
+        const filterSection = document.getElementById('filterSection');
+        
+        const searchInput = document.getElementById('searchFilter');
+        const statusSelect = document.getElementById('statusFilter');
+        const niceClassInput = document.getElementById('niceClassFilter');
+        const ownerInput = document.getElementById('ownerFilter');
+        const clearButton = document.getElementById('clearFilters');
+        
+        const debounce = (func, wait) => {
+            let timeout;
+            return function executedFunction(...args) {
+                const later = () => {
+                    clearTimeout(timeout);
+                    func(...args);
+                };
+                clearTimeout(timeout);
+                timeout = setTimeout(later, wait);
+            };
+        };
+
+        const applyFiltersDebounced = debounce(() => {
+            currentFilters.search = searchInput?.value || '';
+            currentFilters.status = statusSelect?.value || 'all';
+            currentFilters.niceClass = niceClassInput?.value || '';
+            currentFilters.owner = ownerInput?.value || '';
+            
+            applyFilters();
+        }, 300);
+
+        if (searchInput) searchInput.addEventListener('input', applyFiltersDebounced);
+        if (statusSelect) statusSelect.addEventListener('change', applyFiltersDebounced);
+        if (niceClassInput) niceClassInput.addEventListener('input', applyFiltersDebounced);
+        if (ownerInput) ownerInput.addEventListener('input', applyFiltersDebounced);
+        
+        if (clearButton) {
+            clearButton.addEventListener('click', () => {
+                if (searchInput) searchInput.value = '';
+                if (statusSelect) statusSelect.value = 'all';
+                if (niceClassInput) niceClassInput.value = '';
+                if (ownerInput) ownerInput.value = '';
+                
+                currentFilters = { search: '', status: 'all', niceClass: '', owner: '' };
+                
+                applyFilters();
+            });
+        }
+    }
+
+    // Filtreleri uygula
+    function applyFilters() {
+        filteredData = allMonitoringData.filter(item => {
+            if (currentFilters.search) {
+                const searchTerm = currentFilters.search.toLowerCase();
+                const markName = (item.title || item.markName || '').toLowerCase();
+                const owner = getOwnerNames(item).toLowerCase();
+                const applicationNo = (item.applicationNumber || item.applicationNo || '').toLowerCase();
+                
+                if (!markName.includes(searchTerm) && !owner.includes(searchTerm) && !applicationNo.includes(searchTerm)) {
+                    return false;
+                }
+            }
+            
+            if (currentFilters.status !== 'all') {
+                const itemStatus = getStatusInTurkish(item.status).value || 'unknown';
+                if (itemStatus !== currentFilters.status) return false;
+            }
+            
+            if (currentFilters.niceClass) {
+                const itemClasses = Array.isArray(item.niceClass) ? item.niceClass.join(' ') : (item.niceClass || '').toString();
+                if (!itemClasses.toLowerCase().includes(currentFilters.niceClass.toLowerCase())) return false;
+            }
+            
+            if (currentFilters.owner) {
+                const ownerName = getOwnerNames(item).toLowerCase();
+                if (!ownerName.includes(currentFilters.owner.toLowerCase())) return false;
+            }
+            
+            return true;
+        });
+        
+        if (pagination) pagination.update(filteredData.length, 1);
+        
+        renderCurrentPage();
+    }
+
+    // Mevcut sayfadaki veriyi render et
+    function renderCurrentPage() {
+        const container = document.getElementById('monitoringTableContainer');
+        if (!container) return;
+        
+        selectedMonitoringItems.clear();
+        updateSelectedButtonState();
+
+        const currentPageData = pagination ? pagination.getCurrentPageData(filteredData) : filteredData;
+        
+        if (currentPageData.length === 0) {
+            const hasFilters = currentFilters.search || currentFilters.status !== 'all' || 
+                              currentFilters.niceClass || currentFilters.owner;
+            container.innerHTML = `<div class="no-records">${hasFilters ? 'Filtreleme kriterlerinize uygun kayıt bulunamadı.' : 'İzleme listeniz boş.'}</div>`;
+            return;
+        }
+        
+        let html = `<table class="accruals-table"><thead><tr>
+                        <th><input type="checkbox" id="headerSelectAllCheckbox" /></th>
+                        <th>Görsel</th>
+                        <th>Marka Adı</th>
+                        <th>Sahip</th>
+                        <th>Başvuru No</th>
+                        <th>Başvuru Tarihi</th>
+                        <th>Nice Sınıfı</th>
+                        <th>Durum</th>
+                    </tr></thead><tbody>`;
+
+        currentPageData.forEach(r => {
+            const isSelected = selectedMonitoringItems.has(r.id) ? 'checked' : '';
+            const trademarkImageHtml = r.trademarkImage && typeof r.trademarkImage === 'string' && r.trademarkImage.startsWith('data:image')
+                ? `<img src="${r.trademarkImage}" alt="Marka Görseli" class="trademark-image-thumbnail">`
+                : '-';
+            
+            const statusInfo = getStatusInTurkish(r.status);
+            const ownerNames = getOwnerNames(r);
+            const niceClassesHtml = Array.isArray(r.niceClass) 
+                ? r.niceClass.map(cls => `<span class="nice-class-badge">${cls}</span>`).join(' ')
+                : (r.niceClass || '-');
+
+            html += `<tr data-id="${r.id}">
+                        <td><input type="checkbox" class="row-checkbox" data-id="${r.id}" ${isSelected}></td>
+                        <td>${trademarkImageHtml}</td>
+                        <td style="font-weight: 500;">${r.title || r.markName || '-'}</td>
+                        <td>${ownerNames}</td>
+                        <td>${r.applicationNumber || r.applicationNo || '-'}</td>
+                        <td>${formatTurkishDate(r.applicationDate)}</td>
+                        <td>${niceClassesHtml}</td>
+                        <td><span class="status-badge ${statusInfo.class}">${statusInfo.text}</span></td>
+                    </tr>`;
+        });
+
+        html += `</tbody></table>`;
+        container.innerHTML = html;
+
+        const headerCheckbox = document.getElementById('headerSelectAllCheckbox');
+        if (headerCheckbox) {
+            headerCheckbox.addEventListener('change', (e) => {
+                const checkboxes = container.querySelectorAll('.row-checkbox');
+                checkboxes.forEach(checkbox => {
+                    checkbox.checked = e.target.checked;
+                    if (e.target.checked) selectedMonitoringItems.add(checkbox.dataset.id);
+                    else selectedMonitoringItems.delete(checkbox.dataset.id);
+                });
+                updateSelectedButtonState();
+            });
+        }
+    }
+
+    // Yardımcı fonksiyonlar
+    const getStatusInTurkish = (status) => {
+        switch (status) {
+            case 'application': return { text: 'Başvuru', class: 'application', value: 'application' };
+            case 'registered': return { text: 'Tescilli', class: 'registered', value: 'registered' };
+            case 'rejected': return { text: 'Reddedildi', class: 'rejected', value: 'rejected' };
+            case 'pending': return { text: 'Beklemede', class: 'pending', value: 'pending' };
+            case 'objection': return { text: 'İtiraz', class: 'objection', value: 'objection' };
+            case 'litigation': return { text: 'Dava', class: 'litigation', value: 'litigation' };
+            default: return { text: 'İzleniyor', class: '', value: 'unknown' };
+        }
+    };
+
+    const formatTurkishDate = (dateString) => {
+        if (!dateString) return '-';
+        try {
+            const date = new Date(dateString);
+            if (isNaN(date.getTime())) return dateString;
+            return date.toLocaleDateString('tr-TR');
+        } catch (e) {
+            return dateString;
+        }
+    };
+
+    const getOwnerNames = (item) => {
+        try {
+            if (item.owners && Array.isArray(item.owners)) {
+                return item.owners.map(owner => {
+                    if (typeof owner === 'object' && owner.id) {
+                        const match = allPersons.find(p => p.id === owner.id);
+                        return match ? match.name : `ID:${owner.id} (Bulunamadı)`;
+                    }
+                    return String(owner.name || owner);
+                }).join(', ');
+            } else if (typeof item.owners === 'string') {
+                return item.owners;
+            }
+        } catch (error) {
+            return 'Hata: ' + error.message;
+        }
+        return '-';
+    };
+
+    const renderMonitoringTable = (data, userUid) => {
+        allMonitoringData = data || [];
+        const filterSection = document.getElementById('filterSection');
+        if (filterSection && allMonitoringData.length > 0) {
+            filterSection.style.display = 'block';
+        }
+        applyFilters();
+    };
+
+    const updateSelectedButtonState = () => {
+        const selectedCountSpan = document.getElementById('selectedCount');
+        const removeSelectedBtn = document.getElementById('removeSelectedBtn');
+        
+        if (selectedCountSpan) selectedCountSpan.textContent = selectedMonitoringItems.size;
+        if (removeSelectedBtn) removeSelectedBtn.disabled = selectedMonitoringItems.size === 0;
+
+        const headerCheckbox = document.getElementById('headerSelectAllCheckbox');
+        if (headerCheckbox) {
+            const allVisibleRows = document.querySelectorAll('#monitoringTableContainer .row-checkbox');
+            headerCheckbox.checked = allVisibleRows.length > 0 && Array.from(allVisibleRows).every(cb => cb.checked);
+        }
+    };
+
+    document.addEventListener('DOMContentLoaded', async () => {
+        try {
+            initializePagination();
+            setupFilters();
+            await loadSharedLayout({ activeMenuLink: 'monitoring-trademarks.html' });
+            
+            const personsResult = await personService.getPersons();
+            if (personsResult.success) allPersons = personsResult.data || [];
+            else console.warn('Kişiler yüklenirken hata:', personsResult.error);
+
+            const container = document.getElementById('monitoringTableContainer');
+            const removeSelectedBtn = document.getElementById('removeSelectedBtn');
+
+            onAuthStateChanged(auth, async (user) => {
+                if (!user) {
+                    container.innerHTML = '<div class="no-records">Giriş yapmalısınız.</div>';
+                    return;
+                }
+
+                container.innerHTML = '<div class="loading">İzleme listeniz yükleniyor...</div>';
+                
+                try {
+                    const { success, data, error } = await monitoringService.getMonitoringItems(user.uid);
+                    if (success) {
+                        selectedMonitoringItems.clear();
+                        renderMonitoringTable(data, user.uid);
+                        updateSelectedButtonState();
+                    } else {
+                        container.innerHTML = `<div class="error-message">İzleme listeniz yüklenirken bir hata oluştu: ${error}</div>`;
+                    }
+                } catch (error) {
+                    container.innerHTML = '<div class="error-message">İzleme listeniz yüklenirken beklenmeyen bir hata oluştu.</div>';
+                }
+            });
+
+            container.addEventListener('change', (e) => {
+                if (e.target.classList.contains('row-checkbox')) {
+                    const id = e.target.dataset.id;
+                    if (e.target.checked) selectedMonitoringItems.add(id);
+                    else selectedMonitoringItems.delete(id);
+                    updateSelectedButtonState();
+                }
+            });
+
+            removeSelectedBtn.addEventListener('click', async () => {
+                if (selectedMonitoringItems.size === 0) return;
+                if (!confirm(`Seçilen ${selectedMonitoringItems.size} kaydı kaldırmak istediğinizden emin misiniz?`)) return;
+
+                const user = auth.currentUser;
+                if (!user) { showNotification('Giriş yapmalısınız.', 'error'); return; }
+
+                let successfulRemovals = 0, failedRemovals = 0;
+                container.innerHTML = '<div class="loading">Seçili kayıtlar kaldırılıyor...</div>';
+
+                for (const id of Array.from(selectedMonitoringItems)) {
+                    try {
+                        const res = await monitoringService.removeMonitoringItem(id);
+                        if (res.success) successfulRemovals++;
+                        else failedRemovals++;
+                    } catch (error) {
+                        failedRemovals++;
+                    }
+                }
+
+                try {
+                    const { success, data } = await monitoringService.getMonitoringItems();
+                    if (success) renderMonitoringTable(data);
+                    else container.innerHTML = '<div class="error-message">Liste güncellenirken hata oluştu.</div>';
+                } catch (error) {
+                    container.innerHTML = '<div class="error-message">Liste güncellenirken beklenmeyen bir hata oluştu.</div>';
+                }
+
+                if (successfulRemovals > 0) showNotification(`${successfulRemovals} kayıt başarıyla kaldırıldı.`, 'success');
+                if (failedRemovals > 0) showNotification(`${failedRemovals} kayıt kaldırılamadı.`, 'error');
+            });
+
+        } catch (error) {
+            console.error('Sayfa başlatma hatası:', error);
+            const container = document.getElementById('monitoringTableContainer');
+            if (container) container.innerHTML = '<div class="error-message">Sayfa yüklenirken bir hata oluştu.</div>';
+        }
+    });
+</script>
+</body>
+</html>
