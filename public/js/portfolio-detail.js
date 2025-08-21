@@ -86,13 +86,21 @@ function fmtDateTime(ts){
   }catch{ return {d:String(ts), t:'-'}; }
 }
 
+function extractNiceFromGsbc(gsbc) {
+  if (!gsbc) return [];
+  if (Array.isArray(gsbc)) return gsbc.map(x => String(x.classNo)).filter(Boolean);
+  if (typeof gsbc === 'object') return Object.values(gsbc).map(x => String(x.classNo)).filter(Boolean);
+  return [];
+}
+
 function renderHero(rec){
   const imgSrc = (rec.type === 'trademark') ? (rec.brandImageUrl || rec.details?.brandInfo?.brandImage) : null;
   const title = rec.title || rec.brandText || '—';
   if (heroTitleEl) heroTitleEl.textContent = title;
 
-  const niceValue = (rec.niceClass ?? (Array.isArray(rec.niceClasses) ? rec.niceClasses.join(', ') : (rec.niceClasses || '')));
-  // Özet alanlar
+  const niceClasses = extractNiceFromGsbc(rec.goodsAndServicesByClass);
+  const niceValue = niceClasses.length ? niceClasses.join(' / ') : '—';
+
   const kv = [
     ['Başvuru No', rec.applicationNumber],
     ['Tür', rec.type],
@@ -101,7 +109,8 @@ function renderHero(rec){
     ['Tescil No', rec.registrationNumber],
     ['Tescil Tarihi', fmtDate(rec.registrationDate)],
     ['Yenileme Tarihi', fmtDate(rec.renewalDate)],
-    ['Nice', niceValue]];
+    ['Nice', niceValue]
+  ];
 
   if (heroKv){
     heroKv.innerHTML = kv.map(([label,val]) => `
