@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IP Manager - Marka Bülten İzleme</title>
+    <style>
+        /* MEVCUt CSS YAPISI KORUNDU - SADECE BENZEMEZ/BENZER BUTON STİLLERİ EKLENDİ */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333; display: flex; }
+        .page-wrapper { flex-grow: 1; display: flex; flex-direction: column; height: 100vh; overflow-y: auto; background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%); }
+        .main-container { width: 100%; padding: 30px; margin: 0; }
+        .page-header { background: rgba(255, 255, 255, 0.95); padding: 30px; border-radius: 20px; margin-bottom: 30px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1); }
+        .page-title { font-size: 2em; color: #1e3c72; margin-bottom: 10px; }
+        .page-subtitle { color: #666; font-size: 1.1em; }
+        .monitoring-container, .results-container { background: rgba(255, 255, 255, 0.95); border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); overflow: hidden; margin-bottom: 30px; }
+        .monitoring-header, .results-header { padding: 20px 30px; border-bottom: 1px solid #e1e8ed; }
+        .monitoring-header h3, .results-header h3 { color: #1e3c72; margin-bottom: 20px; font-size: 1.3em; }
+        .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px 25px; }
+        .form-group { margin-bottom: 15px; }
+        .form-label { display: block; margin-bottom: 8px; font-weight: 600; color: #333; }
+        .form-input, .form-select { width: 100%; padding: 12px 15px; border: 2px solid #e1e8ed; border-radius: 10px; font-size: 1em; }
+        .btn { padding: 12px 24px; border: none; border-radius: 10px; cursor: pointer; font-size: 1em; font-weight: 600; transition: all 0.2s ease-in-out; }
+        .btn:disabled { background-color: #cccccc !important; color: #666 !important; cursor: not-allowed; transform: none !important; box-shadow: none !important; }
+        .btn-primary { background: #1e3c72; color: white; }
+        .btn-primary:hover:not(:disabled) { background: #2a5298; transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        .btn-secondary { background: #6c757d; color: white; }
+        .btn-warning { background-color: #ffc107; color: #212529; }
+        .btn-warning:hover:not(:disabled) { background-color: #e0a800; transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        .results-table { width: 100%; border-collapse: collapse; }
+        .results-table th, .results-table td { padding: 15px; text-align: left; border-bottom: 1px solid #f0f0f0; }
+        .results-table th { background: #f8f9fa; font-weight: 600; }
+        
+        .nice-class-badge { display: inline-block; padding: 4px 8px; border-radius: 8px; font-size: 0.8em; background-color: #e2e3e5; color: #333; margin-right: 4px; }
+        .nice-class-badge.match { background-color: #28a745; color: white; font-weight: bold; }
+        .loading, .no-records { text-align: center; padding: 50px; color: #666; }
+        .info-message { text-align: center; padding: 10px; font-size: 0.9em; background-color: #e2f3ff; color: #004085; border-radius: 8px; margin: 10px 20px; }
+        .button-group { display: flex; gap: 10px; justify-content: flex-end; }
+
+        /* YENİ EKLENDİ: Accruals.html'den alınan buton tasarımları */
+        .action-btn { 
+            background: #007bff; 
+            color: white; 
+            border: none; 
+            padding: 8px 12px; 
+            border-radius: 6px; 
+            cursor: pointer; 
+            margin-right: 5px; 
+            transition: all 0.3s ease; 
+            font-size: 12px;
+            font-weight: 500;
+        }
+        
+        .action-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .action-btn:disabled { 
+            background-color: #cccccc !important; 
+            color: #666 !important; 
+            cursor: not-allowed; 
+            opacity: 0.7; 
+            transform: none;
+            box-shadow: none;
+        }
+
+        /* Benzemez/Benzer buton stilleri - accruals.html tasarımı */
+        .action-btn.not-similar {
+            background-color: #dc3545;
+            color: white;
+        }
+        
+        .action-btn.not-similar:hover {
+            background-color: #c82333;
+        }
+
+        .action-btn.similar {
+            background-color: #28a745;
+            color: white;
+        }
+        
+        .action-btn.similar:hover {
+            background-color: #218838;
+        }
+
+        /* Görüntüle butonu stili */
+        .action-btn.view-btn { 
+            background-color: #17a2b8; 
+        }
+        
+        .action-btn.view-btn:hover { 
+            background-color: #138496; 
+        }
+
+        /* Buton grubu - butonları yanyana hizalar */
+        .btn-group {
+            display: flex;
+            gap: 5px;
+            align-items: center;
+        }
+
+        /* Grup başlık stilleri */
+        .group-header {
+            background-color: #f8f9fa !important;
+            font-weight: bold;
+            border-bottom: 2px solid #dee2e6 !important;
+        }
+
+        .group-header td {
+            padding: 15px !important;
+            color: #495057;
+        }
+        
+        /* B.Ş. Select Box stili - create-task.html'den esinlenerek */
+        .bs-select { 
+            width: 90px; 
+            padding: 8px 12px; /* Daha kompakt */
+            border: 2px solid #e1e8ed; 
+            border-radius: 8px; /* Yuvarlak köşeler */
+            font-size: 0.9em; /* Daha küçük font */
+            background: white;
+            transition: all 0.3s ease;
+        }
+        .bs-select:focus {
+            outline: none;
+            border-color: #1e3c72;
+            box-shadow: 0 0 0 3px rgba(30, 60, 114, 0.1);
+        }
+
+        .note-input { width: 100%; padding: 5px; border-radius: 5px; border: 1px solid #ccc; }
+        .note-cell { cursor: pointer; position: relative; }
+        .note-input { width: 100%; box-sizing: border-box; }
+        .note-placeholder { color: #888; font-style: italic; }
+        
+        /* --- Kolon Genişlik Override --- */
+
+        /* Sıra No (1. kolon) */
+        .results-table th:nth-child(1),
+        .results-table td:nth-child(1) {
+            width: 60px !important;
+            max-width: 60px !important;
+            text-align: center;
+        }
+
+        /* Başvuru No (2. kolon) */
+        .results-table th:nth-child(2),
+        .results-table td:nth-child(2) {
+            width: 120px !important;
+            max-width: 120px !important;
+        }
+
+        /* Marka Adı (3. kolon) */
+        .results-table th:nth-child(3),
+        .results-table td:nth-child(3) {
+            width: 250px !important;
+            max-width: 250px !important;
+        }
+
+        /* Sahip (4. kolon) - GENİŞLETİLDİ */
+        .results-table th:nth-child(4),
+        .results-table td:nth-child(4) {
+            width: 300px !important;
+            max-width: 300px !important;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        /* Nice Sınıfı (5. kolon) - GENİŞLETİLDİ */
+        .results-table th:nth-child(5),
+        .results-table td:nth-child(5) {
+            width: 200px !important;
+            max-width: 200px !important;
+        }
+
+        /* Benzerlik (6. kolon) */
+        .results-table th:nth-child(6),
+        .results-table td:nth-child(6) {
+            width: 80px !important;
+            max-width: 80px !important;
+            text-align: center;
+        }
+
+        /* Karar (7. kolon) */
+        .results-table th:nth-child(7),
+        .results-table td:nth-child(7) {
+            width: 120px !important; /* Daha dar bir genişlik */
+            max-width: 120px !important;
+            text-align: center; /* Butonların ortalanması için */
+        }
+
+        /* B.Ş (8. kolon) */
+        .results-table th:nth-child(8),
+        .results-table td:nth-child(8) {
+            width: 90px !important;
+            max-width: 90px !important;
+        }
+
+        /* Not (9. kolon) */
+        .results-table th:nth-child(9),
+        .results-table td:nth-child(9) {
+            width: 150px !important; /* Not alanı için biraz daha geniş */
+            max-width: 150px !important;
+        }
+
+        /* Not hücresindeki placeholder ve ikon için stil */
+        .note-cell-content {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            cursor: pointer;
+            /* Taşmayı yönetmek için */
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 100%; /* Sütun genişliğini aşmaması için */
+        }
+        .note-icon {
+            font-size: 1.1em;
+            color: #666;
+            flex-shrink: 0; /* İkonun küçülmemesi için */
+        }
+        .note-placeholder {
+            color: #888;
+            font-style: italic;
+            flex-grow: 1; /* Not metninin kalan alanı doldurması için */
+            white-space: nowrap; /* Metnin tek satırda kalmasını sağlar */
+            overflow: hidden; /* Taşmayı gizler */
+            text-overflow: ellipsis; /* Taşma durumunda üç nokta gösterir */
+        }
+        .note-text {
+            flex-grow: 1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .note-input-modal { /* Modal içindeki textarea */
+            display: block;
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            box-sizing: border-box;
+            margin-top: 10px;
+            min-height: 80px;
+            resize: vertical; /* Sadece dikeyde boyutlandırmaya izin ver */
+        }
+        /* Modal Stilleri - Eğer shared-styles.css'inizde benzerleri varsa bunları adapte edin */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 10000; /* Diğer modalların üstünde olması için */
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.4);
+            align-items: center;
+            justify-content: center;
+        }
+        .modal.show { display: flex; }
+        .modal-content {
+            background-color: #fefefe;
+            padding: 30px;
+            border: 1px solid #888;
+            width: 90%;
+            max-width: 500px; /* Not modalı için daha dar */
+            border-radius: 12px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            animation-name: animatetop;
+            animation-duration: 0.4s;
+        }
+        @keyframes animatetop {
+            from {top: -300px; opacity: 0}
+            to {top: 0; opacity: 1}
+        }
+        .close-modal-btn {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .modal-title {
+            font-size: 1.3em;
+            color: #1e3c72;
+            margin-bottom: 20px;
+        }
+        .modal-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 20px;
+            padding-top: 15px;
+            border-top: 1px solid #eee;
+        }
+        .btn-save { /* Örnek buton stili */
+            background-color: #28a745;
+            color: white;
+            padding: 8px 15px;
+            border-radius: 5px;
+            border: none;
+            cursor: pointer;
+        }
+        .btn-cancel { /* Örnek buton stili */
+            background-color: #6c757d;
+            color: white;
+            padding: 8px 15px;
+            border-radius: 5px;
+            border: none;
+            cursor: pointer;
+        }
+        /* Monitoring listesindeki marka adlarını sola yaslamak için */
+        #monitoringListBody td:nth-child(1) {
+            text-align: left; /* Sola yasla */
+        }
+
+        /* Bülten seçim kutusu için özel stiller */
+        .form-select option[data-source="registered"] {
+            background-color: #e8f5e8;
+            color: #2d5a2d;
+            font-weight: 500;
+        }
+
+        .form-select option[data-source="searchOnly"] {
+            background-color: #fff3cd;
+            color: #856404;
+            font-style: italic;
+        }
+
+        /* Bilgi mesajları için geliştirilmiş stiller */
+        .info-message {
+            padding: 12px 16px;
+            border-radius: 6px;
+            margin: 10px 0;
+            border-left: 4px solid;
+            font-size: 14px;
+            line-height: 1.4;
+        }
+
+        .info-message.success {
+            background-color: #d4edda;
+            color: #155724;
+            border-left-color: #28a745;
+        }
+
+        .info-message.info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+            border-left-color: #17a2b8;
+        }
+
+        .info-message.warning {
+            background-color: #fff3cd;
+            color: #856404;
+            border-left-color: #ffc107;
+        }
+
+        .info-message.error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border-left-color: #dc3545;
+        }
+
+        .info-message strong {
+            font-weight: 600;
+            margin-right: 4px;
+        }
+
+        /* Buton durumları için tooltip ekleme */
+        .btn[disabled] {
+            cursor: not-allowed;
+            opacity: 0.6;
+            position: relative;
+        }
+
+        .btn[disabled]:hover::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #333;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            white-space: nowrap;
+            z-index: 1000;
+            margin-bottom: 5px;
+        }
+
+        .btn[disabled]:hover::before {
+            content: '';
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            border: 5px solid transparent;
+            border-top-color: #333;
+            z-index: 1000;
+            margin-bottom: -5px;
+        }
+    </style>
+</head>
+<body>
+    <div id="layout-placeholder"></div>
+    <div class="page-wrapper">
+        <main class="main-container">
+            <section class="page-header">
+                <h1 class="page-title">Marka Bülten İzleme</h1>
+                <p class="page-subtitle">Marka bültenlerini takip edin ve yeni başvuruları izleyin.</p>
+            </section>
+    
+            <div class="monitoring-container">
+                <div class="monitoring-header">
+                    <h3>Arama Kriterleri</h3>
+                    <div class="search-section">
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label for="ownerSearch" class="form-label">Sahip</label>
+                                <input type="text" id="ownerSearch" class="form-input" placeholder="Sahip adına göre filtrele">
+                            </div>
+                            <div class="form-group">
+                                <label for="niceClassSearch" class="form-label">Nice Sınıfı</label>
+                                <input type="text" id="niceClassSearch" class="form-input" placeholder="Nice sınıfına göre filtrele">
+                            </div>
+                            <div class="form-group">
+                                <label for="bulletinSelect" class="form-label">Bülten</label>
+                                <select id="bulletinSelect" class="form-select">
+                                    <option value="">Bülten seçin...</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="button-group" style="margin-top: 20px;">
+                            <button id="startSearchBtn" class="btn btn-primary" disabled>🔍 Arama Başlat</button>
+                            <button id="researchBtn" class="btn btn-secondary" disabled>🔄 Yeniden Ara</button>
+                            <button id="clearFiltersBtn" class="btn btn-warning">🗑️ Filtreleri Temizle</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div style="padding: 0 30px 30px;">
+                    <h4 style="margin-bottom: 15px; color: #1e3c72;">İzlenen Markalar <span id="monitoringCount" style="background: #e2f3ff; padding: 2px 8px; border-radius: 12px; font-size: 0.8em;">0</span></h4>
+                    <div style="overflow-x: auto;">
+                        <table class="results-table">
+                            <thead>
+                                <tr>
+                                    <th>Marka Adı</th>
+                                    <th>Başvuru No</th>
+                                    <th>Sahip</th>
+                                    <th>Nice Sınıfı</th>
+                                    <th>Başvuru Tarihi</th>
+                                </tr>
+                            </thead>
+                            <tbody id="monitoringListBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+    
+            <div class="results-container">
+                <div class="results-header">
+                    <h3>Arama Sonuçları</h3>
+                    <button id="btnGenerateReport" class="btn btn-primary">Rapor Oluştur</button>
+                </div>
+                <div id="infoMessageContainer"></div>
+                <div style="overflow-x: auto;">
+                    <table class="results-table">
+                        <thead>
+                            <tr>
+                                <th>Sıra No</th>
+                                <th>Başvuru No</th>
+                                <th>Marka Adı</th>
+                                <th>Sahip</th>
+                                <th>Nice Sınıfı</th>
+                                <th>Benzerlik</th>
+                                <th>Karar</th> 
+                                <th>B.Ş</th>
+                                <th>Not</th>
+                            </tr>
+                        </thead>
+                        <tbody id="resultsTableBody"></tbody>
+                    </table>
+                    <div id="loadingIndicator" class="loading" style="display: none;"></div>
+                    <div id="noRecordsMessage" class="no-records" style="display: none;"></div>
+                </div>
+                <div id="paginationContainer"></div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Not Modal -->
+    <div id="noteModal" class="modal">
+        <div class="modal-content">
+            <span class="close-modal-btn" id="closeNoteModal">&times;</span>
+            <h3 class="modal-title">Not Ekle/Düzenle</h3>
+            <textarea id="noteInputModal" class="note-input-modal" placeholder="Notunuzu buraya girin..."></textarea>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-cancel" id="cancelNoteBtn">Vazgeç</button>
+                <button type="button" class="btn btn-save" id="saveNoteBtn">Kaydet</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript modülleri -->
+    <script type="module" src="js/trademark-similarity-search.js"></script>
+    <script type="module">
+    import { generateSimilarityReport } from './index.js';
+    window.generateSimilarityReport = generateSimilarityReport; // globalde erişilebilir
+</script>
+
+</body>
+</html>
