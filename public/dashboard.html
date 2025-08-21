@@ -207,9 +207,9 @@
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script type="module">
-        import { authService, ipRecordsService, accrualService, auth } from './firebase-config.js';
-        import { showNotification } from './utils.js'; // showNotification utils.js'ten geliyor
-        import { loadSharedLayout } from './js/layout-loader.js';
+        import { authService, ipRecordsService, accrualService, auth } from './public/firebase-config.js';
+        import { showNotification } from './public/utils.js'; // showNotification utils.js'ten geliyor
+        import { loadSharedLayout } from './public/js/layout-loader.js';
 
         document.addEventListener('DOMContentLoaded', async function() {
             // Ortak layout'u yükle ve bu sayfanın aktif linkini belirt
