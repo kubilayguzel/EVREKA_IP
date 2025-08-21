@@ -225,7 +225,7 @@
 
                 async init() {
                     this.currentUser = authService.getCurrentUser();
-                    if (!this.currentUser) { window.location.href = 'index.html'; return; }
+                    if (!this.currentUser) { window.location.href = '../index.html'; return; }
                     await this.loadDashboardData();
                 }
 
@@ -467,7 +467,7 @@
                         dashboard.init();
                     }
                 } else {
-                    window.location.href = 'index.html'; 
+                    window.location.href = '../index.html'; 
                 }
             });
         });
