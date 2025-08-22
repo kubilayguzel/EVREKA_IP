@@ -633,25 +633,33 @@ setupBaseFormListeners() {
            ${needsRelatedParty ? `
             <div class="form-section">
                 <h3 class="section-title">3. ${partyLabel}</h3>
-                <div class="form-group full-width">
+                    <div class="form-group full-width">
                     <label for="personSearchInput" class="form-label">Sistemdeki Kişilerden Ara</label>
-                    <div style="display: flex; gap: 10px;">
-                    <input type="text" id="personSearchInput" class="form-input" placeholder="Aramak için en az 2 karakter...">
-                    <button type="button" id="addNewPersonBtn" class="btn-small btn-add-person"><span>&#x2795;</span> Yeni Kişi</button>
+
+                    <div class="d-flex" style="gap:10px; align-items:flex-start;">
+                        <!-- input + sonuç listesi AYNI WRAPPER içinde -->
+                        <div class="search-input-wrapper" style="flex:1; position:relative;">
+                        <input type="text" id="personSearchInput" class="form-input" placeholder="Aramak için en az 2 karakter...">
+                        <div id="personSearchResults" class="search-results-list" style="display:none;"></div>
+                        </div>
+
+                        <button type="button" id="addNewPersonBtn" class="btn-small btn-add-person">
+                        <span>&#x2795;</span> Yeni Kişi
+                        </button>
                     </div>
-                    <div id="personSearchResults" class="search-results-list"></div>
+
                     <div class="form-group full-width mt-2">
-                    <label class="form-label">Seçilen Taraflar
-                        <span class="badge badge-light ml-2" id="relatedPartyCount">0</span>
-                    </label>
-                    <div id="relatedPartyList" class="selected-items-list">
+                        <label class="form-label">
+                        Seçilen Taraflar <span class="badge badge-light ml-2" id="relatedPartyCount">0</span>
+                        </label>
+                        <div id="relatedPartyList" class="selected-items-list">
                         <div class="empty-state">
-                        <i class="fas fa-user-friends fa-3x text-muted mb-3"></i>
-                        <p class="text-muted">Henüz taraf eklenmedi.</p>
+                            <i class="fas fa-user-friends fa-3x text-muted mb-3"></i>
+                            <p class="text-muted">Henüz taraf eklenmedi.</p>
+                        </div>
                         </div>
                     </div>
                     </div>
-            </div>
             ` : ''}
 
             ${specificFieldsHtml} <div class="form-section">
