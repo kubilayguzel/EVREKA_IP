@@ -338,7 +338,10 @@ async initIpRecordSearchSelector() {
     results.innerHTML = '';
     input.value = '';
     this.checkFormCompleteness();
+    // Yalnızca portföy kaydı seçildiyse (gerçek IP record id'si varsa) parent/transaction vb. kontrolleri yap
+    if (this.searchSource === 'portfolio' && this.selectedIpRecord?.id) {
     this.handleIpRecordChange(this.selectedIpRecord.id);
+    }
   });
 
   if (clearBtn) {
