@@ -284,6 +284,147 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333
     .modal-backdrop.show {
         z-index: 1050 !important;
     }
+    <style>
+/* ——— Nice paneli kompakt görünüm ——— */
+.nice-classification-container {
+  --nc-radius: 10px;
+  --nc-border: 1px solid #e6e9ee;
+  --nc-muted: #6b7280;
+  --nc-bg: #fff;
+}
+
+/* Sol panel (sınıf listesi) ve sağ panel (seçilenler) */
+.nice-classification-container .classification-panel,
+.nice-classification-container .selected-classes-panel {
+  border: var(--nc-border);
+  border-radius: var(--nc-radius);
+  background: var(--nc-bg);
+  box-shadow: none !important;
+}
+
+/* Başlık şeritleri */
+.nice-classification-container .panel-header {
+  padding: 10px 12px;
+  border-bottom: var(--nc-border);
+  background: #f8fafc !important;
+}
+.nice-classification-container .panel-header h5 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* Arama alanı */
+.nice-classification-container .search-section { padding: 10px 12px; }
+.nice-classification-container .search-section .form-control {
+  height: 36px;
+  font-size: 13px;
+}
+
+/* Sınıf başlık satırları (accordion header) */
+#niceClassificationList .class-header {
+  padding: 8px 12px !important;
+  border-top: var(--nc-border);
+  background: #fff !important;
+}
+#niceClassificationList .class-header .class-title {
+  font-size: 13px;
+  color: #111827;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#niceClassificationList .class-header .class-badge,
+#niceClassificationList .class-header .toggle-icon {
+  opacity: .8;
+}
+
+/* Alt sınıf satırları */
+#niceClassificationList .subclass-item {
+  padding: 8px 12px !important;
+  border-top: 1px dashed #eef1f5;
+  line-height: 1.35;
+  font-size: 13px;
+}
+#niceClassificationList .subclass-item .subclass-text {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;        /* 2 satırda kısalt */
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Sağ panel: Seçilenler */
+.nice-classification-container .scrollable-list {
+  padding: 12px;
+  max-height: 600px;            /* biraz daha kısa ve kompakt */
+}
+#selectedNiceClasses .selected-item,
+#selectedNiceClasses .selected-class-item,
+#selectedNiceClasses .card {    /* farklı olası sınıf isimlerini kapsa */
+  border: var(--nc-border) !important;
+  border-left: 3px solid #3b82f6 !important;
+  border-radius: 8px !important;
+  box-shadow: none !important;
+  background: #fff !important;
+  padding: 10px 12px !important;
+  margin-bottom: 10px !important;
+}
+#selectedNiceClasses .selected-item .title,
+#selectedNiceClasses .selected-class-title {
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+#selectedNiceClasses .selected-item .desc,
+#selectedNiceClasses .selected-class-desc {
+  font-size: 12px;
+  color: var(--nc-muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;        /* 3 satırda kısalt */
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Sağ paneldeki sil (x) butonlarını ikon-odaklı ve küçük yap */
+#selectedNiceClasses .btn,
+#selectedNiceClasses .btn-sm,
+#selectedNiceClasses .remove-btn {
+  padding: 4px 8px !important;
+  height: 28px;
+  line-height: 1;
+  border-radius: 6px;
+}
+
+/* “Tümünü Temizle” bloğu */
+.nice-classification-container .btn-outline-danger,
+.nice-classification-container .btn-danger {
+  height: 34px;
+  padding: 6px 12px;
+}
+
+/* Özel Mal/Hizmet kutusu */
+.nice-classification-container .custom-class-frame {
+  border: var(--nc-border);
+  border-radius: var(--nc-radius);
+  background: #fff;
+  box-shadow: none;
+}
+.nice-classification-container #customClassInput {
+  min-height: 70px;
+  font-size: 13px;
+}
+
+/* Genel tipografi ve aralıklar */
+.nice-classification-container .text-muted { color: var(--nc-muted) !important; }
+.nice-classification-container .mb-3 { margin-bottom: 12px !important; }
+.nice-classification-container .mt-3 { margin-top: 12px !important; }
+
+/* Daha dar ekranlarda sağ panel üstten başlasın */
+@media (max-width: 1199px){
+  .nice-classification-container .col-lg-4 { margin-top: 14px; }
+}
+</style>
+
 </style>
 </head>
 <body>
