@@ -1,7 +1,7 @@
 // js/portfolio-detail.js
 import { loadSharedLayout } from './layout-loader.js';
 import { ipRecordsService, transactionTypeService, auth, db, storage } from '../firebase-config.js';
-import { formatFileSize } from '../utils.js';
+import { formatFileSize, STATUSES } from '../utils.js';
 import { doc, getDoc, collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { ref, uploadBytes, getDownloadURL, deleteObject, getStorage } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
@@ -69,6 +69,11 @@ function fmtDate(d) {
     return dt.toLocaleDateString('tr-TR');
   } catch { return String(d); }
 }
+function getStatusText(ipType, statusValue) {
+  const list = (STATUSES?.[ipType] || []);
+  const m = list.find(s => s.value === statusValue);
+  return m ? m.text : (statusValue ?? '-');
+}
 function fmtDateTime(ts){
   try{
     if(!ts) return {d:'-', t:'-'};
@@ -104,7 +109,7 @@ function renderHero(rec){
   const kv = [
     ['Başvuru No', rec.applicationNumber],
     ['Tür', rec.type],
-    ['Durum', rec.status],
+    ['Durum', getStatusText(rec.type, rec.status)],
     ['Başvuru Tarihi', fmtDate(rec.applicationDate)],
     ['Tescil No', rec.registrationNumber],
     ['Tescil Tarihi', fmtDate(rec.registrationDate)],
