@@ -625,23 +625,11 @@ export const createMailNotificationOnDocumentIndexV2 = onDocumentCreated(
     const snap = event.data;
     const newDocument = snap.data();
     const docId = event.params.docId;
-
-    console.log(`Yeni belge algılandı: ${docId}`, newDocument);
-
     const db = admin.firestore();
-    const missingFields = [];
-    let rule = null;
-    let template = null;
 
-    // Bildirim temel alanları
-    let subject = "";
-    let body = "";
+    console.log(`📄 Yeni belge algılandı: ${docId}`, newDocument);
 
-    // Alıcı listeleri
-    let toRecipients = [];
-    let ccRecipients = [];
-
-    // personsRelated.responsible/notify anahtarları için normalize
+    // --- Yardımcılar ---
     const normalizeType = (t) => {
       const s = String(t || "").toLowerCase();
       if (["marka", "trademark"].includes(s)) return "marka";
@@ -651,156 +639,172 @@ export const createMailNotificationOnDocumentIndexV2 = onDocumentCreated(
       if (["muhasebe", "finance", "accounting"].includes(s)) return "muhasebe";
       return s || "marka";
     };
-    const categoryKey = normalizeType(newDocument.mainProcessType || "marka");
-    const notificationType = categoryKey;
 
-    try {
-      // 1) Kural & Şablon
-      const rulesSnapshot = await db
-        .collection("template_rules")
-        .where("sourceType", "==", "document")
-        .where("mainProcessType", "==", newDocument.mainProcessType || "marka")
-        .where("subProcessType", "==", newDocument.subProcessType || null)
-        .limit(1)
-        .get();
+    const dedupe = (arr) => Array.from(new Set((arr || []).filter(Boolean).map(x => String(x).trim())));
 
-      if (rulesSnapshot.empty) {
-        console.warn("Kural bulunamadı (template_rules).");
-        missingFields.push("templateRule");
-      } else {
-        rule = rulesSnapshot.docs[0].data();
-        const templateSnapshot = await db.collection("mail_templates").doc(rule.templateId).get();
-        if (!templateSnapshot.exists) {
-          console.warn(`Şablon bulunamadı: ${rule.templateId}`);
-          missingFields.push("mailTemplate");
-        } else {
-          template = templateSnapshot.data();
+    const findRecipientsFromPersonsRelated = async (personIds, categoryKey) => {
+      const to = [];
+      const cc = [];
+      if (!Array.isArray(personIds) || personIds.length === 0) return { to, cc };
+
+      try {
+        // "in" sorgusu 10 id ile sınırlıdır; 10'dan fazla ise parça parça sorgula
+        const chunks = [];
+        for (let i = 0; i < personIds.length; i += 10) {
+          chunks.push(personIds.slice(i, i + 10));
         }
-      }
-
-      // 2) Önce personsRelated(clientId) → alıcı tespiti
-      const clientId = newDocument.clientId || null;
-      if (!clientId) {
-        console.warn("clientId eksik.");
-        missingFields.push("clientId");
-      } else {
-        try {
-          const prSnap = await db.collection("personsRelated")
-            .where("personId", "==", clientId)
+        for (const chunk of chunks) {
+          const prSnap = await db
+            .collection("personsRelated")
+            .where("personId", "in", chunk)
             .get();
 
-          console.log("personsRelated eşleşme sayısı:", prSnap.size);
-
-          prSnap.forEach(d => {
+          prSnap.forEach((d) => {
             const pr = d.data();
             const email = (pr.email || "").trim();
             const isResp = pr?.responsible?.[categoryKey] === true;
             const n = pr?.notify?.[categoryKey] || {};
             if (!email || !isResp) return;
-            if (n?.to === true) toRecipients.push(email);
-            if (n?.cc === true) ccRecipients.push(email);
+            if (n?.to === true) to.push(email);
+            if (n?.cc === true) cc.push(email);
           });
-        } catch (e) {
-          console.warn("personsRelated sorgusu hata:", e);
         }
+      } catch (e) {
+        console.warn("personsRelated sorgusu hata:", e);
       }
 
-      // 3) Gerekirse applicants fallback için IP kaydı bul (yalnızca recipients fallback amacıyla)
-      let ipRecordId = null;
-      let ipRecordData = null;
+      return { to: dedupe(to), cc: dedupe(cc) };
+    };
 
-      if (clientId) {
-        try {
-          // Tercihen applicantsIds varsa
-          const ipByApplicantsIds = await db.collection("ipRecords")
-            .where("applicantsIds", "array-contains", clientId)
-            .limit(1)
-            .get();
-          if (!ipByApplicantsIds.empty) {
-            ipRecordId = ipByApplicantsIds.docs[0].id;
-            ipRecordData = ipByApplicantsIds.docs[0].data();
-          }
-        } catch (e) {
-          console.warn("ipRecords/applicantsIds sorgusu hata:", e);
+    // --- Başlangıç değerleri ---
+    const categoryKey = normalizeType(newDocument.mainProcessType || "marka");
+    const notificationType = categoryKey;
+
+    let toRecipients = [];
+    let ccRecipients = [];
+    let subject = "";
+    let body = "";
+    const missingFields = []; // sadece "recipients", "subject", "body" gibi gönderimi engelleyenler eklenecek
+
+    try {
+      // 1) Kural & Şablon (bulunamazsa bile fallback içerik oluşturacağız)
+      let template = null;
+      try {
+        const rulesSnapshot = await db
+          .collection("template_rules")
+          .where("sourceType", "==", "document")
+          .where("mainProcessType", "==", newDocument.mainProcessType || "marka")
+          .where("subProcessType", "==", newDocument.subProcessType || null)
+          .limit(1)
+          .get();
+
+        if (!rulesSnapshot.empty) {
+          const rule = rulesSnapshot.docs[0].data();
+          const templateSnapshot = await db.collection("mail_templates").doc(rule.templateId).get();
+          if (templateSnapshot.exists) template = templateSnapshot.data();
+          else console.warn(`⚠️ Şablon bulunamadı: ${rule.templateId}`);
+        } else {
+          console.warn("⚠️ Kural bulunamadı (template_rules).");
         }
+      } catch (e) {
+        console.warn("Kural/şablon ararken hata:", e);
       }
 
-      // 4) Eğer PR’dan alıcı çıkmadıysa → applicants fallback
-      if (toRecipients.length === 0 && ccRecipients.length === 0) {
-        console.log("⚠️ PR’dan alıcı çıkmadı; applicants fallback deneniyor.");
-        const rec = await getRecipientsByApplicantIds(
-          ipRecordData?.applicants || (clientId ? [{ id: clientId }] : []),
-          categoryKey
-        );
-        toRecipients = rec.to || [];
-        ccRecipients = rec.cc || [];
-        if (toRecipients.length === 0 && ccRecipients.length === 0) {
-          console.warn("Gönderim için alıcı bulunamadı.");
-          missingFields.push("recipients");
+      // 2) ALICILAR — ÖNCE taskOwner, SONRA applicants (clientId) fallback
+      // Bu fonksiyon "indexed_documents" için çalışıyor; tipik olarak "clientId" mevcut.
+      // Eğer dokümanda taskOwnerIds varsa önce onları kullan.
+      const taskOwnerIds =
+        (Array.isArray(newDocument.taskOwner) && newDocument.taskOwner) ||
+        (Array.isArray(newDocument.taskOwnerIds) && newDocument.taskOwnerIds) ||
+        [];
+
+      if (taskOwnerIds.length > 0) {
+        console.log("🎯 Öncelik: taskOwner -> personsRelated", taskOwnerIds);
+        const fromOwners = await findRecipientsFromPersonsRelated(taskOwnerIds, categoryKey);
+        toRecipients = fromOwners.to;
+        ccRecipients = fromOwners.cc;
+      }
+
+      // Eğer taskOwner’dan alıcı çıkmadıysa → applicants (clientId) üzerinden dene
+      const clientId = newDocument.clientId || null;
+      if ((toRecipients.length + ccRecipients.length) === 0 && clientId) {
+        console.log("↪️ taskOwner’dan alıcı çıkmadı; applicants (clientId) fallback deneniyor:", clientId);
+        const fromApplicantsPR = await findRecipientsFromPersonsRelated([clientId], categoryKey);
+        toRecipients = fromApplicantsPR.to;
+        ccRecipients = fromApplicantsPR.cc;
+
+        // Hâlâ yoksa getRecipientsByApplicantIds ile son kez dene
+        if ((toRecipients.length + ccRecipients.length) === 0) {
+          // Eğer ipRecord.applicants yoksa sentetik applicants [{id: clientId}]
+          const rec = await getRecipientsByApplicantIds([{ id: clientId }], categoryKey);
+          toRecipients = rec?.to || [];
+          ccRecipients = rec?.cc || [];
         }
       }
 
       console.log("📧 FINAL RECIPIENTS", { toRecipients, ccRecipients });
 
-      // 5) Şablon + yer tutucu doldurma (client/owner aramıyoruz; güvenli varsayılanlar)
-      const safeClientName =
-        newDocument.clientName ||
-        newDocument.ownerName ||
-        "Bilinmeyen Müvekkil";
-
-      const applicationNo =
-        newDocument.applicationNumber ||
-        newDocument.applicationNo ||
-        newDocument.appNo ||
-        ipRecordData?.applicationNumber ||
-        "";
-
+      // 3) ŞABLON/İÇERİK — Şablon yoksa da boş bırakma (missing_info olmasın diye fallback oluştur)
       if (template) {
         subject = String(template.subject || "");
         body = String(template.body || "");
 
+        const applicationNo =
+          newDocument.applicationNumber ||
+          newDocument.applicationNo ||
+          newDocument.appNo ||
+          "";
+
         const parameters = {
           ...newDocument,
-          muvekkil_adi: safeClientName,
+          muvekkil_adi: newDocument.clientName || newDocument.ownerName || "Değerli Müvekkil",
           basvuru_no: applicationNo,
         };
 
         subject = subject.replace(/{{\s*([\w.]+)\s*}}/g, (_, k) => parameters[k] ?? "");
         body    = body.replace(/{{\s*([\w.]+)\s*}}/g, (_, k) => parameters[k] ?? "");
       } else {
-        subject = "Eksik Bilgi: Bildirim Taslağı";
-        body =
-          "Bu bildirim oluşturuldu ancak gönderim için eksik bilgiler mevcut. Lütfen tamamlayın.";
+        // Temel fallback içerik
+        subject = `[${notificationType.toUpperCase()}] Yeni Evrak`;
+        body = [
+          `Merhaba,`,
+          ``,
+          `Sistemimize yeni bir evrak eklendi.`,
+          `Evrak No / Başvuru No: ${newDocument.applicationNumber || newDocument.applicationNo || newDocument.appNo || "-"}`,
+          ``,
+          `Saygılarımızla`
+        ].join("\n");
       }
 
-      // 6) STATUS — SADE KURAL:
-      //    recipients yoksa veya subject/body boşsa => missing_info, aksi halde pending.
+      // 4) STATUS — SADE KURAL: sadece alıcı + içerik
       if (!subject?.trim()) missingFields.push("subject");
       if (!body?.trim())    missingFields.push("body");
 
       const hasRecipients = (toRecipients.length + ccRecipients.length) > 0;
-      const status = (!hasRecipients || missingFields.includes("subject") || missingFields.includes("body"))
-        ? "missing_info"
-        : "pending";
+      const hasContent    = !missingFields.includes("subject") && !missingFields.includes("body");
+      const status        = (hasRecipients && hasContent) ? "pending" : "missing_info";
 
-      // 7) Bildirim dokümanı (UI filtre alanları dahil)
+      if (!hasRecipients) missingFields.push("recipients");
+
+      // 5) Firestore’a yaz — UI filtreleriyle uyumlu alanlar
       const notificationDoc = {
-        toList: toRecipients,
-        ccList: ccRecipients,
-        clientId: clientId || null,                // yalnız gösterim için; statüyü etkilemez
+        toList: dedupe(toRecipients),
+        ccList: dedupe(ccRecipients),
+
+        clientId: newDocument.clientId || null, // sadece gösterim/filtre için; statüyü etkilemez
         subject,
         body,
-        status,                                     // "pending" ya da "missing_info"
+        status,                 // "pending" veya "missing_info"
         mode: "draft",
         isDraft: true,
 
         sourceDocumentId: docId,
-        relatedIpRecordId: ipRecordId || null,
+        relatedIpRecordId: newDocument.relatedIpRecordId || null,
         associatedTaskId: null,
         associatedTransactionId: null,
 
-        templateId: rule?.templateId || null,
-        notificationType,                           // "marka" vb.
+        templateId: template ? (template.id || template.templateId || null) : null,
+        notificationType,       // "marka" vb.
         source: "document_index",
         missingFields,
 
