@@ -181,7 +181,8 @@ async initIpRecordSearchSelector() {
 
     results.innerHTML = items.slice(0, 50).map(r => {
       // Kaynağa göre alan eşlemesi
-      const id    = r.id || r.recordId || r.docId || r._id || r.uid || '';
+      const id    = r.id || r.recordId || r.docId || r._id || r.uid
+             || r.applicationNo || r.applicationNumber || '';
       const appNo = this.searchSource === 'bulletin'
         ? (r.applicationNo || '')
         : (r.applicationNo || r.applicationNumber || r.appNo || r.fileNo || r.registrationNo || '');
@@ -291,8 +292,9 @@ async initIpRecordSearchSelector() {
         : basePool.filter(r => String(r.recordOwnerType || '').toLowerCase() === 'self');
     }
 
-    const rec  = pool.find(x => (x.id || x.recordId || x.docId || x._id || x.uid) === id) || {};
-
+    const rec  = pool.find(x =>
+    (x.id || x.recordId || x.docId || x._id || x.uid || x.applicationNo || x.applicationNumber) === id
+    ) || {};
     const title = (this.searchSource === 'bulletin')
       ? (rec.markName || 'Başlık yok')
       : (rec.title || rec.name || rec.markName || rec.applicationTitle || 'Başlık yok');
@@ -306,7 +308,13 @@ async initIpRecordSearchSelector() {
       ? (rec.imagePath || '')
       : (rec.brandImageUrl || rec.markImageUrl || rec.brandSampleUrl || rec.markSampleUrl || rec.imageUrl || rec.brandSamplePath || '');
 
-    this.selectedIpRecord = { id: rec.id || id, title, ownerName: owner, applicationNo: appNo, source: this.searchSource };
+     this.selectedIpRecord = {
+        id: rec.id || id,
+        title,
+        ownerName: owner,
+        applicationNo: appNo,
+        source: this.searchSource
+        };
 
     selectedBox.style.display = 'block';
     selectedLabel.innerHTML = `${appNo ? `<strong>${appNo}</strong> — ` : ''}${title}`;
