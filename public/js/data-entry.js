@@ -209,7 +209,7 @@ class DataEntryModule {
                                     '<option value="Garanti Markası">Garanti Markası</option>' +
                                     '<option value="Ortak Marka">Ortak Marka</option>' +
                                 '</select>' +
-                                '</div>';
+                                '</div>'+
                             '<div class="form-group full-width">' +
                                 '<label for="brandDescription" class="form-label">Marka Açıklaması</label>' +
                                 '<textarea id="brandDescription" class="form-textarea" rows="3" placeholder="Marka hakkında açıklama girin"></textarea>' +
