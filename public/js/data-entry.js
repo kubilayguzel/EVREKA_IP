@@ -4,6 +4,7 @@ import { personService, ipRecordsService, storage } from '../firebase-config.js'
 import { ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
 import { loadSharedLayout, openPersonModal, ensurePersonModal } from './layout-loader.js';
 import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { STATUSES } from '../utils.js';
 
 class DataEntryModule {
     constructor() {
@@ -166,6 +167,49 @@ class DataEntryModule {
                                 '<label for="renewalDate" class="form-label">Yenileme Tarihi</label>' +
                                 '<input type="date" id="renewalDate" class="form-input">' +
                             '</div>' +
+                            '<div class="form-group">' +
+                                '<label for="trademarkStatus" class="form-label">Durum</label>' +
+                                '<select id="trademarkStatus" class="form-select"></select>' +
+                                '</div>' +
+
+                                // BÜLTEN NO & TARİHİ (yanyana istersen grid/couple wrap ile stillersin)
+                                '<div class="form-row">' +
+
+                                '<div class="form-group col-md-6">' +
+                                    '<label for="bulletinNo" class="form-label">Bülten No</label>' +
+                                    '<input id="bulletinNo" type="text" class="form-input" placeholder="Örn. 1">' +
+                                '</div>' +
+
+                                '<div class="form-group col-md-6">' +
+                                    '<label for="bulletinDate" class="form-label">Bülten Tarihi</label>' +
+                                    '<input id="bulletinDate" type="date" class="form-input">' +
+                                '</div>' +
+
+                                '</div>' +
+
+                                // MARKA TİPİ
+                                '<div class="form-group">' +
+                                '<label for="brandType" class="form-label">Marka Tipi</label>' +
+                                '<select id="brandType" class="form-select">' +
+                                    '<option value="Şekil + Kelime" selected>Şekil + Kelime</option>' +
+                                    '<option value="Kelime">Kelime</option>' +
+                                    '<option value="Şekil">Şekil</option>' +
+                                    '<option value="Üç Boyutlu">Üç Boyutlu</option>' +
+                                    '<option value="Renk">Renk</option>' +
+                                    '<option value="Ses">Ses</option>' +
+                                    '<option value="Hareket">Hareket</option>' +
+                                '</select>' +
+                                '</div>' +
+
+                                // MARKA TÜRÜ
+                                '<div class="form-group">' +
+                                '<label for="brandCategory" class="form-label">Marka Türü</label>' +
+                                '<select id="brandCategory" class="form-select">' +
+                                    '<option value="Ticaret/Hizmet Markası" selected>Ticaret/Hizmet Markası</option>' +
+                                    '<option value="Garanti Markası">Garanti Markası</option>' +
+                                    '<option value="Ortak Marka">Ortak Marka</option>' +
+                                '</select>' +
+                                '</div>';
                             '<div class="form-group full-width">' +
                                 '<label for="brandDescription" class="form-label">Marka Açıklaması</label>' +
                                 '<textarea id="brandDescription" class="form-textarea" rows="3" placeholder="Marka hakkında açıklama girin"></textarea>' +
@@ -352,6 +396,17 @@ class DataEntryModule {
             '</div>';
 
         this.dynamicFormContainer.innerHTML = html;
+        
+        // Durum select'ini STATUSES.trademark ile doldur
+        const stSel = document.getElementById('trademarkStatus');
+        if (stSel) {
+        stSel.innerHTML = STATUSES.trademark
+            .map(s => `<option value="${s.value}">${s.text}</option>`)
+            .join('');
+        // Varsayılan olarak "filed"
+        if (!stSel.value) stSel.value = 'filed';
+        }
+
         this.setupDynamicFormListeners();
         this.setupBrandExampleUploader();
         this.setupClearClassesButton(); // Temizle butonu setup'ını ekle
@@ -947,6 +1002,17 @@ populateFormFields(recordData) {
             // ✅ Açıklama ana seviyeden
             const description = document.getElementById('brandDescription');
             if (description) description.value = recordData.description || '';
+            
+            const b0 = Array.isArray(recordData.bulletins) ? recordData.bulletins[0] : null;
+            const bNo = document.getElementById('bulletinNo');
+            const bDt = document.getElementById('bulletinDate');
+            if (b0) {
+                if (bNo) bNo.value = b0.bulletinNo || '';
+                if (bDt) bDt.value = b0.bulletinDate || '';
+            } else {
+                if (bNo) bNo.value = '';
+                if (bDt) bDt.value = '';
+            }
 
             // ✅ Marka görseli - brandImageUrl ana seviyede
             const brandImageUrl = this.uploadedBrandImage || null;
@@ -1211,7 +1277,7 @@ const dataToSave = {
   title: brandText,
   type: 'trademark',
   portfoyStatus: 'active',
-  status: 'filed',
+  status: document.getElementById('trademarkStatus')?.value || 'filed',
   recordOwnerType: this.recordOwnerTypeSelect.value,
   
   // Başvuru bilgileri
@@ -1227,24 +1293,27 @@ const dataToSave = {
   description: description || null,
   
   // Ana seviyeye taşınan alanlar
-  brandType: document.getElementById('brandType')?.value || null, // data-entry.html'de yok ama create-task.js'de var
-  brandCategory: document.getElementById('brandCategory')?.value || null, // data-entry.html'de yok ama create-task.js'de var
-  consentRequest: document.querySelector('input[name="consentRequest"]:checked')?.value || null, // data-entry.html'de yok ama create-task.js'de var
-  coverLetterRequest: document.querySelector('input[name="coverLetterRequest"]:checked')?.value || null, // data-entry.html'de yok ama create-task.js'de var
-  nonLatinAlphabet: document.getElementById('nonLatinAlphabet')?.value || null, // data-entry.html'de yok ama create-task.js'de var
+  brandType: document.getElementById('brandType')?.value || 'Şekil + Kelime',
+  brandCategory: document.getElementById('brandCategory')?.value || 'Ticaret/Hizmet Markası',
+  consentRequest: document.querySelector('input[name="consentRequest"]:checked')?.value || null,
+  coverLetterRequest: document.querySelector('input[name="coverLetterRequest"]:checked')?.value || null,
+  nonLatinAlphabet: document.getElementById('nonLatinAlphabet')?.value || null,
   goodsAndServicesByClass: goodsAndServicesByClass,
+
+  // 📌 Bülten alanları
+  bulletins: (() => {
+    const no = document.getElementById('bulletinNo')?.value?.trim();
+    const dt = document.getElementById('bulletinDate')?.value?.trim();
+    return (no || dt) ? [{ bulletinNo: no || null, bulletinDate: dt || null }] : [];
+  })(),
   
   // Ana seviye
   applicants: this.selectedApplicants.map(p => ({ id: p.id, name: p.name, email: p.email || null })),
   priorities: this.priorities,
   
-  // `goodsAndServices` alanını tamamen kaldırıyoruz
-  // `details` alanını tamamen kaldırıyoruz
-  
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString()
 };
-    // Kaydet
 // Kaydet
 let result;
 if (this.editingRecordId) {
