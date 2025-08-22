@@ -1211,7 +1211,7 @@ const dataToSave = {
   title: brandText,
   type: 'trademark',
   portfoyStatus: 'active',
-  status: 'başvuru',
+  status: 'filed',
   recordOwnerType: this.recordOwnerTypeSelect.value,
   
   // Başvuru bilgileri
