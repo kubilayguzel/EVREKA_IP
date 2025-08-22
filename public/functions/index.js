@@ -1044,58 +1044,62 @@ export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
       // 2) İlgili IP kaydı
       const ipRecordSnap = await db.collection("ipRecords").doc(after.relatedIpRecordId).get();
       if (!ipRecordSnap.exists) {
-        console.error(`Hata: relatedIpRecordId (${after.relatedIpRecordId}) bulunamadı!`);
-        return null;
+        console.error(`relatedIpRecordId (${after.relatedIpRecordId}) bulunamadı`);
+        return null; // bu gerçekten fatal
       }
       const ipRecord = ipRecordSnap.data();
 
       // 3) ALICI BELİRLEME — ÖNCE taskOwner, sonra fallback applicants
-      const notificationType = "marka"; // epats task tamamlanması için varsayılan
       const ownerIds = Array.isArray(after.taskOwner) ? after.taskOwner.filter(Boolean) : [];
       let toRecipients = [];
       let ccRecipients = [];
       let missingFields = [];
-      let usedSource = "taskOwner";
+      let usedSource = null;
+
+      // EPATS dokümanı için kategori anahtarı:
+      const categoryKey = "marka";
 
       if (ownerIds.length > 0) {
-        console.log("🎯 Öncelik: taskOwner ID'leri", ownerIds);
+        usedSource = "taskOwner";
+        console.log("🎯 taskOwner ID'leri:", ownerIds);
 
-        // personsRelated’da eşleşme var mı kontrol et (eksik bilgi durumunu saptamak için)
-        let hasOwnerPR = false;
+        // personsRelated'ı doğrudan tara – helper'a güvenme
+        let prDocs = [];
         try {
           const prSnap = await db.collection("personsRelated")
             .where("personId", "in", ownerIds)
             .get();
-          hasOwnerPR = !prSnap.empty;
-          console.log(`personsRelated eşleşme var mı?: ${hasOwnerPR}`);
+          prDocs = prSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+          console.log(`personsRelated eşleşme sayısı: ${prDocs.length}`);
         } catch (e) {
-          console.warn("personsRelated aramasında hata:", e);
+          console.warn("personsRelated sorgusu hata:", e);
         }
 
-        // getRecipientsByApplicantIds, verilen id’leri personsRelated üzerinden işler
-        const syntheticApplicants = ownerIds.map(id => ({ id }));
-        const fromOwners = await getRecipientsByApplicantIds(syntheticApplicants, notificationType);
-        toRecipients = fromOwners.to || [];
-        ccRecipients = fromOwners.cc || [];
-
-        // taskOwner var ama personsRelated’da kayıt yoksa missing_info olarak düş
-        if (!hasOwnerPR) {
+        if (prDocs.length === 0) {
           missingFields.push("personsRelated_for_taskOwner");
+        } else {
+          for (const pr of prDocs) {
+            const isResp = pr?.responsible?.[categoryKey] === true;
+            const n = pr?.notify?.[categoryKey] || {};
+            const useTo = n?.to === true;
+            const useCc = n?.cc === true;
+
+            const email = (pr.email || "").trim();
+            // (İsterseniz: persons/{personId} dok'undan email fallback’i ekleyebiliriz.)
+
+            if (!email) continue;
+            if (isResp && useTo)  toRecipients.push(email);
+            if (isResp && useCc)  ccRecipients.push(email);
+          }
         }
 
-        // taskOwner’dan alıcı çıkmadıysa fallback’e geç
         if (toRecipients.length === 0 && ccRecipients.length === 0) {
-          console.log("⚠️ taskOwner üzerinden alıcı bulunamadı, applicants fallback'e geçiliyor.");
-          usedSource = "applicants_fallback";
-          const fromApplicants = await getRecipientsByApplicantIds(ipRecord.applicants || [], notificationType);
-          toRecipients = fromApplicants.to || [];
-          ccRecipients = fromApplicants.cc || [];
+          missingFields.push("recipients_from_taskOwner");
         }
       } else {
-        // taskOwner yok → mevcut davranış (applicants)
+        // taskOwner yoksa mevcut applicants akışı
         usedSource = "applicants";
-        console.log("ℹ️ taskOwner alanı yok; applicants üstünden alıcı belirleniyor.");
-        const fromApplicants = await getRecipientsByApplicantIds(ipRecord.applicants || [], notificationType);
+        const fromApplicants = await getRecipientsByApplicantIds(ipRecord.applicants || [], categoryKey);
         toRecipients = fromApplicants.to || [];
         ccRecipients = fromApplicants.cc || [];
       }
