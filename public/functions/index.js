@@ -1058,6 +1058,7 @@ export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
 
       // EPATS dokümanı için kategori anahtarı:
       const categoryKey = "marka";
+      const notificationType = categoryKey;
 
       if (ownerIds.length > 0) {
         usedSource = "taskOwner";
@@ -1109,7 +1110,7 @@ export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
       // 4) Müvekkil (client) bilgisi
       const primaryOwnerId = ipRecord.owners?.[0]?.id || null;
       if (!primaryOwnerId) {
-        console.error("IP kaydına atanmış birincil hak sahibi bulunamadı.");
+        console.warn("IP kaydına atanmış birincil hak sahibi bulunamadı.");
         missingFields.push("primaryOwner");
       }
       let client = null;
