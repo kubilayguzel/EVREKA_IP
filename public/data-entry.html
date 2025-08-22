@@ -579,16 +579,19 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333
 
 /* Arama sonuçları listesi için stil */
 .search-results-list {
-    max-height: 200px;
-    overflow-y: auto;
-    border: 1px solid #ced4da;
-    border-top: none;
-    border-bottom-left-radius: 0.25rem;
-    border-bottom-right-radius: 0.25rem;
-    background-color: #fff;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-    position: relative;
-    z-index: 1000;
+  position: absolute;        /* relative → absolute */
+  top: calc(100% + 4px);     /* input'un hemen altı */
+  left: 0;
+  right: 0;
+  z-index: 1050;             /* modallerin altında kalmasın */
+  max-height: 240px;         /* istersen biraz artır */
+  overflow-y: auto;
+  border: 1px solid #ced4da;
+  border-top: none;
+  border-bottom-left-radius: .25rem;
+  border-bottom-right-radius: .25rem;
+  background-color: #fff;
+  box-shadow: 0 2px 8px rgba(0,0,0,.08);
 }
 
 .search-result-item {
