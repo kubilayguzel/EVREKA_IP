@@ -2418,20 +2418,9 @@ async handleFormSubmit(e) {
     const ownerIds = (Array.isArray(this.selectedRelatedParties) ? this.selectedRelatedParties : [])
         .map(p => String(p.id))
         .filter(Boolean);
-
     taskData.taskOwner = ownerIds; // ⭐ Tasks koleksiyonunda saklanacak alan
-
-    // (İsteğe bağlı) tetikleyici için meta'ya da ayna yap
-    const isOpponentTx = txIdStr === TASK_IDS.KARARA_ITIRAZ
-                        || txIdStr === TASK_IDS.ITIRAZ_YAYIN
-                        || txIdStr === TASK_IDS.YAYIMA_ITIRAZIN_YENIDEN_INCELENMESI;
-
-    taskData.meta = Object.assign({}, taskData.meta, {
-        involvedPartyIds: ownerIds,
-        involvedPartyRole: isOpponentTx ? 'opponent' : 'requester'
-    });
     }
-    
+
     // --- İtiraz sahibi (opponent) yazımı: IDs 7, 19, 20 ---
     const tIdStr = String(selectedTransactionType?.id || '');
     const objectionTypeIds = new Set(['7', '19', '20']);
