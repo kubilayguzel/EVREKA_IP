@@ -122,23 +122,19 @@ function removeSelectedClass(key) {
 
 // ANA SINIF SEÇİMİ FONKSİYONLARI
 function selectWholeClass(classNumber) {
-    const classData = allNiceData.find(c => c.classNumber === parseInt(classNumber));
-    if (!classData) return;
+  const classData = allNiceData.find(c => c.classNumber === parseInt(classNumber));
+  if (!classData) return;
 
-    const mainClassCode = `${classNumber}-main`;
-    selectItem(mainClassCode, classNumber, classData.classTitle);
+  // SADECE ALT SINIFLAR:
+  classData.subClasses.forEach((sc, index) => {
+    const code = `${classNumber}-${index + 1}`;
+    selectItem(code, classNumber, sc.subClassDescription);
+  });
 
-    classData.subClasses.forEach((sc, index) => {
-        const code = `${classNumber}-${index + 1}`;
-        selectItem(code, classNumber, sc.subClassDescription);
-    });
-
-    const collapseElement = document.getElementById(`subclasses-${classNumber}`);
-    if (collapseElement) {
-        collapseElement.classList.add('show');
-    }
-    const header = document.querySelector(`.class-header[data-id="${classNumber}"]`);
-    if (header) header.classList.add('expanded');
+  const collapseElement = document.getElementById(`subclasses-${classNumber}`);
+  if (collapseElement) collapseElement.classList.add('show');
+  const header = document.querySelector(`.class-header[data-id="${classNumber}"]`);
+  if (header) header.classList.add('expanded');
 }
 
 function deselectWholeClass(classNumber) {
@@ -155,62 +151,55 @@ function deselectWholeClass(classNumber) {
 }
 
 function isClassFullySelected(classNumber) {
-    const classData = allNiceData.find(c => c.classNumber === parseInt(classNumber));
-    if (!classData) return false;
+  const classData = allNiceData.find(c => c.classNumber === parseInt(classNumber));
+  if (!classData) return false;
 
-    const mainClassCode = `${classNumber}-main`;
-    const isMainSelected = selectedClasses[mainClassCode];
-    
-    const selectedSubCount = classData.subClasses.filter((sc, index) => {
-        const code = `${classNumber}-${index + 1}`;
-        return selectedClasses[code];
-    }).length;
-    
-    const allSubClassesSelected = selectedSubCount === classData.subClasses.length && classData.subClasses.length > 0;
-    
-    return isMainSelected || allSubClassesSelected;
+  const selectedSubCount = classData.subClasses.filter((sc, index) => {
+    const code = `${classNumber}-${index + 1}`;
+    return selectedClasses[code];
+  }).length;
+
+  return selectedSubCount === classData.subClasses.length && classData.subClasses.length > 0;
 }
 
 function updateVisualStates() {
-    allNiceData.forEach(cls => {
-        const classNumber = cls.classNumber;
-        const mainClassCode = `${classNumber}-main`;
+  allNiceData.forEach(cls => {
+    const classNumber = cls.classNumber;
 
-        const isMainSelected = selectedClasses[mainClassCode];
-        const selectedSubCount = cls.subClasses.filter((sc, index) => {
-            const code = `${classNumber}-${index + 1}`;
-            return selectedClasses[code];
-        }).length;
+    const selectedSubCount = cls.subClasses.filter((sc, index) => {
+      const code = `${classNumber}-${index + 1}`;
+      return selectedClasses[code];
+    }).length;
 
-        const allSubClassesSelected = selectedSubCount === cls.subClasses.length && cls.subClasses.length > 0;
-        const someSubClassesSelected = selectedSubCount > 0;
+    const allSubClassesSelected = selectedSubCount === cls.subClasses.length && cls.subClasses.length > 0;
+    const someSubClassesSelected = selectedSubCount > 0;
 
-        const headerElement = document.querySelector(`.class-header[data-id="${classNumber}"]`);
-        const accordionElement = document.getElementById(`subclasses-${classNumber}`);
+    const headerElement = document.querySelector(`.class-header[data-id="${classNumber}"]`);
+    const accordionElement = document.getElementById(`subclasses-${classNumber}`);
 
-        if (headerElement) {
-            headerElement.classList.remove('selected', 'partially-selected', 'fully-selected');
+    if (headerElement) {
+      headerElement.classList.remove('selected', 'partially-selected', 'fully-selected');
 
-            if (isMainSelected || allSubClassesSelected) {
-                headerElement.classList.add('selected', 'fully-selected');
-                if (accordionElement) accordionElement.classList.add('show');
-            } else if (someSubClassesSelected) {
-                headerElement.classList.add('selected', 'partially-selected');
-                if (accordionElement) accordionElement.classList.add('show');
-            } else {
-                if (accordionElement) accordionElement.classList.remove('show');
-                headerElement.classList.remove('expanded');
-            }
-        }
+      if (allSubClassesSelected) {
+        headerElement.classList.add('selected', 'fully-selected');
+        if (accordionElement) accordionElement.classList.add('show');
+      } else if (someSubClassesSelected) {
+        headerElement.classList.add('selected', 'partially-selected');
+        if (accordionElement) accordionElement.classList.add('show');
+      } else {
+        if (accordionElement) accordionElement.classList.remove('show');
+        headerElement.classList.remove('expanded');
+      }
+    }
 
-        cls.subClasses.forEach((sc, index) => {
-            const code = `${classNumber}-${index + 1}`;
-            const subElement = document.querySelector(`[data-code="${code}"]`);
-            if (subElement) {
-                subElement.classList.toggle('selected', !!selectedClasses[code]);
-            }
-        });
-    });
+    cls.subClasses.forEach((sc, index) => {
+      const code = `${classNumber}-${index + 1}`;
+      const subElement = document.querySelector(`[data-code="${code}"]`);
+      if (subElement) {
+        subElement.classList.toggle('selected', !!selectedClasses[code]);
+      }
+    });
+  });
 }
 
 // 35-5 MODAL FONKSİYONLARI
