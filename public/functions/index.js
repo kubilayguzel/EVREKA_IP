@@ -1141,27 +1141,45 @@ export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
       }
 
       // 7) Bildirim kaydı
-      await db.collection("mail_notifications").add({
-        toList: toRecipients,
-        ccList: ccRecipients,
-        clientId: primaryOwnerId || null,
-        subject,
-        body,
-        status,
-        missingFields,
-        sourceTaskId: taskId,
-        source: usedSource,                 // debug için
-        notificationType: notificationType, // 'marka'
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp()
-      });
+      const notificationDoc = {
+      toList: toRecipients,
+      ccList: ccRecipients,
+      clientId: primaryOwnerId || null,
+      subject,
+      body,
+      status,                         // "pending" veya "missing_info"
+      mode: "draft",                  // bazı listeler bunu arıyor
+      isDraft: true,                  // bazı listeler bunu arıyor
 
-      console.log("--> BAŞARILI: Bildirim 'mail_notifications' koleksiyonuna eklendi.");
-      return null;
+      // İlişkilendirme alanları (liste/join için kritik)
+      relatedIpRecordId: after.relatedIpRecordId || null,
+      associatedTaskId: taskId,
+      associatedTransactionId: after.relatedTransactionId || after.transactionId || null,
+
+      // Tanımsal / diagnostic
+      templateId: rule.templateId,    // kuraldan geliyor
+      notificationType,               // "marka"
+      source: usedSource,             // "taskOwner" | "applicants"
+      missingFields,                  // eksikler için
+
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    };
+
+    console.log("📥 mail_notifications.add input:", {
+    ...notificationDoc,
+    createdAt: "[serverTimestamp]",
+    updatedAt: "[serverTimestamp]"
+    });
+    const ref = await db.collection("mail_notifications").add(notificationDoc);
+    console.log("✅ Bildirim oluşturuldu:", { id: ref.id });
+
+    console.log("--> BAŞARILI: Bildirim 'mail_notifications' koleksiyonuna eklendi.");
+    return null;
 
     } catch (err) {
-      console.error("HATA: Bildirim oluşturulurken hata:", err);
-      return null;
+    console.error("HATA: Bildirim oluşturulurken hata:", err);
+    return null;
     }
   }
 );
