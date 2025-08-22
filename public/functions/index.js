@@ -991,116 +991,175 @@ console.log("📧 ccRecipients.length:", Array.from(ccRecipients).length);
         }
     }
 );
-
 export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
-    {
-        document: "tasks/{taskId}",
-        region: 'europe-west1'
-    },
-    async (event) => {
-        const change = event.data;
-        const taskId = event.params.taskId;
-        console.log(`--- FONKSİYON TETİKLENDİ: tasks/${taskId} ---`);
+  {
+    document: "tasks/{taskId}",
+    region: "europe-west1"
+  },
+  async (event) => {
+    const change = event.data;
+    const taskId = event.params.taskId;
+    console.log(`--- FONKSİYON TETİKLENDİ: tasks/${taskId} ---`);
 
-        const taskDataBefore = change.before.data();
-        const taskDataAfter = change.after.data();
+    const before = change.before.data();
+    const after  = change.after.data();
 
-        const isStatusChangedToCompleted = taskDataBefore.status !== "completed" && taskDataAfter.status === "completed";
+    const isStatusChangedToCompleted =
+      before.status !== "completed" && after.status === "completed";
 
-        const epatsDoc = taskDataAfter.details?.epatsDocument || null;
-        const hasEpatsData = !!epatsDoc;
+    const epatsDoc = after.details?.epatsDocument || null;
+    const hasEpatsData = !!epatsDoc;
 
-        const wasPreviouslyNotCompleted = taskDataBefore.status !== "completed";
+    console.log(`Durum 'completed' oldu mu?: ${isStatusChangedToCompleted}`);
+    console.log(`EPATS dokümanı var mı?: ${hasEpatsData}`);
 
-        console.log(`Durum 'completed' olarak mı değişti?: ${isStatusChangedToCompleted}`);
-        console.log(`EPATS dokümanı var mı?: ${hasEpatsData}`);
-        console.log(`Önceki durum 'completed' değil miydi?: ${wasPreviouslyNotCompleted}`);
-
-        if (isStatusChangedToCompleted && hasEpatsData && wasPreviouslyNotCompleted) {
-            console.log("--> KOŞULLAR SAĞLANDI. Bildirim oluşturma işlemi başlıyor.");
-
-            try {
-                const rulesSnapshot = await db.collection("template_rules")
-                    .where("sourceType", "==", "task_completion_epats")
-                    .limit(1)
-                    .get();
-
-                if (rulesSnapshot.empty) {
-                    console.error("HATA: 'task_completion_epats' için bir kural bulunamadı!");
-                    return null;
-                }
-                const rule = rulesSnapshot.docs[0].data();
-                console.log(`Kural bulundu. Şablon ID: ${rule.templateId}`);
-
-                const templateSnapshot = await db.collection("mail_templates").doc(rule.templateId).get();
-                if (!templateSnapshot.exists) {
-                    console.error(`Hata: ${rule.templateId} ID'li mail şablonu bulunamadı!`);
-                    return null;
-                }
-                const template = templateSnapshot.data();
-
-                const ipRecordSnapshot = await db.collection("ipRecords").doc(taskDataAfter.relatedIpRecordId).get();
-                if (!ipRecordSnapshot.exists) {
-                    console.error(`Hata: Görevle ilişkili IP kaydı (${taskDataAfter.relatedIpRecordId}) bulunamadı!`);
-                    return null;
-                }
-                const ipRecord = ipRecordSnapshot.data();
-
-                // **GÜNCELLENDİ** İlgili IP Record'daki applicants'ları al ve alıcıları belirle
-                const recipients = await getRecipientsByApplicantIds(ipRecord.applicants || [], 'marka'); // Varsayılan olarak 'marka' bildirimi
-                const toRecipients = recipients.to;
-                const ccRecipients = recipients.cc;
-
-                const primaryOwnerId = ipRecord.owners?.[0]?.id;
-                if (!primaryOwnerId) {
-                    console.error('IP kaydına atanmış birincil hak sahibi bulunamadı.');
-                    return null;
-                }
-                const clientSnapshot = await db.collection("persons").doc(primaryOwnerId).get();
-                const client = clientSnapshot.data();
-
-                const parameters = {
-                    muvekkil_adi: client?.name || "Bilinmeyen Müvekkil",
-                    is_basligi: taskDataAfter.title,
-                    epats_evrak_no: epatsDoc.turkpatentEvrakNo || "",
-                    basvuru_no: ipRecord.applicationNumber || "",
-                };
-
-                let subject = template.subject.replace(/{{(.*?)}}/g, (match, p1) => parameters[p1.trim()] || match);
-                let body = template.body.replace(/{{(.*?)}}/g, (match, p1) => parameters[p1.trim()] || match);
-
-                const missingFields = [];
-                let status = "pending";
-                if (toRecipients.length === 0 && ccRecipients.length === 0) {
-                    status = "missing_info";
-                    missingFields.push('recipients');
-                }
-
-                await db.collection("mail_notifications").add({
-                    toList: toRecipients,             // ✅ En basit alan adı
-                    ccList: ccRecipients,             // ✅ En basit alan adı
-                    clientId: primaryOwnerId,
-                    subject: subject,
-                    body: body,
-                    status: status,
-                    missingFields: missingFields,
-                    sourceTaskId: taskId,
-                    notificationType: 'marka',
-                    createdAt: admin.firestore.FieldValue.serverTimestamp(),
-                });
-
-                console.log("--> BAŞARILI: Bildirim 'mail_notifications' koleksiyonuna eklendi.");
-                return null;
-
-            } catch (error) {
-                console.error("HATA: Bildirim oluşturulurken hata:", error);
-                return null;
-            }
-        } else {
-            console.log("--> KOŞULLAR SAĞLANMADI. Fonksiyon sonlandırılıyor.");
-            return null;
-        }
+    if (!(isStatusChangedToCompleted && hasEpatsData)) {
+      console.log("--> KOŞULLAR SAĞLANMADI. Fonksiyon sonlandırılıyor.");
+      return null;
     }
+
+    console.log("--> KOŞULLAR SAĞLANDI. Bildirim oluşturma akışı başlıyor.");
+
+    try {
+      // 1) Kural & Şablon
+      const rulesSnapshot = await db.collection("template_rules")
+        .where("sourceType", "==", "task_completion_epats")
+        .limit(1)
+        .get();
+
+      if (rulesSnapshot.empty) {
+        console.error("HATA: 'task_completion_epats' için kural bulunamadı!");
+        return null;
+      }
+      const rule = rulesSnapshot.docs[0].data();
+      console.log(`Kural bulundu. Şablon ID: ${rule.templateId}`);
+
+      const templateSnapshot = await db.collection("mail_templates").doc(rule.templateId).get();
+      if (!templateSnapshot.exists) {
+        console.error(`Hata: ${rule.templateId} ID'li mail şablonu bulunamadı!`);
+        return null;
+      }
+      const template = templateSnapshot.data();
+
+      // 2) İlgili IP kaydı
+      const ipRecordSnap = await db.collection("ipRecords").doc(after.relatedIpRecordId).get();
+      if (!ipRecordSnap.exists) {
+        console.error(`Hata: relatedIpRecordId (${after.relatedIpRecordId}) bulunamadı!`);
+        return null;
+      }
+      const ipRecord = ipRecordSnap.data();
+
+      // 3) ALICI BELİRLEME — ÖNCE taskOwner, sonra fallback applicants
+      const notificationType = "marka"; // epats task tamamlanması için varsayılan
+      const ownerIds = Array.isArray(after.taskOwner) ? after.taskOwner.filter(Boolean) : [];
+      let toRecipients = [];
+      let ccRecipients = [];
+      let missingFields = [];
+      let usedSource = "taskOwner";
+
+      if (ownerIds.length > 0) {
+        console.log("🎯 Öncelik: taskOwner ID'leri", ownerIds);
+
+        // personsRelated’da eşleşme var mı kontrol et (eksik bilgi durumunu saptamak için)
+        let hasOwnerPR = false;
+        try {
+          const prSnap = await db.collection("personsRelated")
+            .where("personId", "in", ownerIds)
+            .get();
+          hasOwnerPR = !prSnap.empty;
+          console.log(`personsRelated eşleşme var mı?: ${hasOwnerPR}`);
+        } catch (e) {
+          console.warn("personsRelated aramasında hata:", e);
+        }
+
+        // getRecipientsByApplicantIds, verilen id’leri personsRelated üzerinden işler
+        const syntheticApplicants = ownerIds.map(id => ({ id }));
+        const fromOwners = await getRecipientsByApplicantIds(syntheticApplicants, notificationType);
+        toRecipients = fromOwners.to || [];
+        ccRecipients = fromOwners.cc || [];
+
+        // taskOwner var ama personsRelated’da kayıt yoksa missing_info olarak düş
+        if (!hasOwnerPR) {
+          missingFields.push("personsRelated_for_taskOwner");
+        }
+
+        // taskOwner’dan alıcı çıkmadıysa fallback’e geç
+        if (toRecipients.length === 0 && ccRecipients.length === 0) {
+          console.log("⚠️ taskOwner üzerinden alıcı bulunamadı, applicants fallback'e geçiliyor.");
+          usedSource = "applicants_fallback";
+          const fromApplicants = await getRecipientsByApplicantIds(ipRecord.applicants || [], notificationType);
+          toRecipients = fromApplicants.to || [];
+          ccRecipients = fromApplicants.cc || [];
+        }
+      } else {
+        // taskOwner yok → mevcut davranış (applicants)
+        usedSource = "applicants";
+        console.log("ℹ️ taskOwner alanı yok; applicants üstünden alıcı belirleniyor.");
+        const fromApplicants = await getRecipientsByApplicantIds(ipRecord.applicants || [], notificationType);
+        toRecipients = fromApplicants.to || [];
+        ccRecipients = fromApplicants.cc || [];
+      }
+
+      console.log("📧 FINAL RECIPIENTS", { usedSource, toRecipients, ccRecipients });
+
+      // 4) Müvekkil (client) bilgisi
+      const primaryOwnerId = ipRecord.owners?.[0]?.id || null;
+      if (!primaryOwnerId) {
+        console.error("IP kaydına atanmış birincil hak sahibi bulunamadı.");
+        missingFields.push("primaryOwner");
+      }
+      let client = null;
+      if (primaryOwnerId) {
+        const clientSnap = await db.collection("persons").doc(primaryOwnerId).get();
+        if (clientSnap.exists) client = clientSnap.data();
+      }
+
+      // 5) Şablon yer tutucuları
+      const parameters = {
+        muvekkil_adi: client?.name || "Bilinmeyen Müvekkil",
+        is_basligi: after.title || "",
+        epats_evrak_no: epatsDoc?.turkpatentEvrakNo || "",
+        basvuru_no: ipRecord.applicationNumber || ""
+      };
+
+      let subject = String(template.subject || "").replace(/{{(.*?)}}/g, (m, k) => parameters[k.trim()] ?? m);
+      let body    = String(template.body || "").replace(/{{(.*?)}}/g,    (m, k) => parameters[k.trim()] ?? m);
+
+      // 6) Durum belirleme
+      let status = "pending";
+      if ((toRecipients.length === 0 && ccRecipients.length === 0)) {
+        status = "missing_info";
+        if (!missingFields.includes("recipients")) missingFields.push("recipients");
+      }
+      if (!client) {
+        status = "missing_info";
+        if (!missingFields.includes("client")) missingFields.push("client");
+      }
+
+      // 7) Bildirim kaydı
+      await db.collection("mail_notifications").add({
+        toList: toRecipients,
+        ccList: ccRecipients,
+        clientId: primaryOwnerId || null,
+        subject,
+        body,
+        status,
+        missingFields,
+        sourceTaskId: taskId,
+        source: usedSource,                 // debug için
+        notificationType: notificationType, // 'marka'
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+
+      console.log("--> BAŞARILI: Bildirim 'mail_notifications' koleksiyonuna eklendi.");
+      return null;
+
+    } catch (err) {
+      console.error("HATA: Bildirim oluşturulurken hata:", err);
+      return null;
+    }
+  }
 );
 
 // =========================================================
