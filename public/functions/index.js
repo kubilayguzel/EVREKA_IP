@@ -616,150 +616,262 @@ export const cleanupEtebsLogsV2 = onSchedule(
 // =========================================================
 //              FIRESTORE TRIGGER FONKSİYONLARI (v2)
 // =========================================================
-
 export const createMailNotificationOnDocumentIndexV2 = onDocumentCreated(
-    {
-        document: "indexed_documents/{docId}",
-        region: 'europe-west1'
-    },
-    async (event) => {
-        const snap = event.data;
-        const newDocument = snap.data();
-        const docId = event.params.docId;
+  {
+    document: "indexed_documents/{docId}",
+    region: "europe-west1",
+  },
+  async (event) => {
+    const snap = event.data;
+    const newDocument = snap.data();
+    const docId = event.params.docId;
 
-        console.log(`Yeni belge algılandı: ${docId}`, newDocument);
+    console.log(`Yeni belge algılandı: ${docId}`, newDocument);
 
-        const db = admin.firestore();
-        let missingFields = [];
-        let rule = null;
-        let template = null;
-        let client = null; // İlk muvekkil bilgisi
-        let subject = "";
-        let body = "";
-        let status = "pending";
+    const db = admin.firestore();
+    const missingFields = [];
+    let rule = null;
+    let template = null;
 
-        // **GÜNCELLENDİ** Yeni alıcı listeleri
-        let toRecipients = [];
-        let ccRecipients = [];
-        let notificationType = newDocument.mainProcessType; // Örneğin 'marka'
+    // Bildirim temel alanları
+    let subject = "";
+    let body = "";
+    let status = "pending";
 
-        try {
-            // İlgili IP Record'u bulma - bu fonksiyonun dokümanında `relatedIpRecordId` olmadığından
-            // `clientId` üzerinden `applicants` dizisini içeren IP Record'u arıyoruz.
-            const ipRecordSnapshot = await db.collection("ipRecords")
-                .where("applicants", "array-contains", { id: newDocument.clientId })
-                .limit(1)
-                .get();
+    // Alıcı listeleri
+    let toRecipients = [];
+    let ccRecipients = [];
 
-            let ipRecordData = null;
-            if (!ipRecordSnapshot.empty) {
-                ipRecordData = ipRecordSnapshot.docs[0].data();
-            } else {
-                console.warn(`clientId (${newDocument.clientId}) için IP kaydı bulunamadı.`);
-                missingFields.push("ipRecord");
-            }
+    // Kategori anahtarı (personsRelated.responsible/notify için)
+    const normalizeType = (t) => {
+      const s = String(t || "").toLowerCase();
+      if (["marka", "trademark"].includes(s)) return "marka";
+      if (["patent"].includes(s)) return "patent";
+      if (["tasarim", "design", "tasarım"].includes(s)) return "tasarim";
+      if (["dava", "litigation"].includes(s)) return "dava";
+      if (["muhasebe", "finance", "accounting"].includes(s)) return "muhasebe";
+      return s || "marka";
+    };
+    const categoryKey = normalizeType(newDocument.mainProcessType || "marka");
+    const notificationType = categoryKey;
 
-            // Alıcı listelerini belirleme
-            const recipients = await getRecipientsByApplicantIds(ipRecordData?.applicants || [], notificationType);
-            toRecipients = recipients.to;
-            ccRecipients = recipients.cc;
+    try {
+      // 1) Kurala ve şablona bak
+      const rulesSnapshot = await db
+        .collection("template_rules")
+        .where("sourceType", "==", "document")
+        .where("mainProcessType", "==", newDocument.mainProcessType || "marka")
+        .where("subProcessType", "==", newDocument.subProcessType || null)
+        .limit(1)
+        .get();
 
-            if (toRecipients.length === 0 && ccRecipients.length === 0) {
-                console.warn("Gönderim için alıcı bulunamadı.");
-                missingFields.push("recipients");
-            }
+      if (rulesSnapshot.empty) {
+        console.warn("Kural bulunamadı (template_rules).");
+        missingFields.push("templateRule");
+      } else {
+        rule = rulesSnapshot.docs[0].data();
+      }
 
-            // Müşteri bilgisi (ilk alıcı veya varsa clientId'den)
-            if (newDocument.clientId) {
-                const clientSnapshot = await db.collection("persons").doc(newDocument.clientId).get();
-                if (!clientSnapshot.exists) {
-                    console.warn(`Müvekkil bulunamadı: ${newDocument.clientId}`);
-                    missingFields.push("client");
-                } else {
-                    client = clientSnapshot.data();
-                }
-            } else {
-                console.warn("clientId eksik.");
-                missingFields.push("clientId");
-            }
-            
-            const rulesSnapshot = await db.collection("template_rules")
-                .where("sourceType", "==", "document")
-                .where("mainProcessType", "==", newDocument.mainProcessType)
-                .where("subProcessType", "==", newDocument.subProcessType)
-                .limit(1)
-                .get();
-
-            if (rulesSnapshot.empty) {
-                console.warn("Kural bulunamadı.");
-                missingFields.push("templateRule");
-            } else {
-                rule = rulesSnapshot.docs[0].data();
-            }
-
-            if (rule) {
-                const templateSnapshot = await db.collection("mail_templates").doc(rule.templateId).get();
-                if (!templateSnapshot.exists) {
-                    console.warn(`Şablon bulunamadı: ${rule.templateId}`);
-                    missingFields.push("mailTemplate");
-                } else {
-                    template = templateSnapshot.data();
-                }
-            }
-
-
-            if (template && client) {
-                subject = template.subject;
-                body = template.body;
-
-                const parameters = { ...client, ...newDocument };
-
-                for (const key in parameters) {
-                    const placeholder = new RegExp(`{{${key}}}`, "g");
-                    subject = subject.replace(placeholder, parameters[key]);
-                    body = body.replace(placeholder, parameters[key]);
-                }
-
-                if (!subject) {
-                    missingFields.push("subject");
-                }
-                if (!body) {
-                    missingFields.push("body");
-                }
-            } else {
-                subject = "Eksik Bilgi: Bildirim Tamamlanamadı";
-                body = "Bu bildirim oluşturuldu ancak gönderim için eksik bilgiler mevcut. Lütfen tamamlayın.";
-            }
-
-            if (missingFields.length > 0 || toRecipients.length === 0) {
-                status = "missing_info";
-            }
-
-            const notificationData = {
-                // **GÜNCELLENDİ**
-                recipientTo: toRecipients,
-                recipientCc: Array.from(ccRecipients),
-                clientId: newDocument.clientId || null,
-                subject: subject,
-                body: body,
-                status: status,
-                missingFields: missingFields,
-                sourceDocumentId: docId,
-                notificationType: notificationType,
-                createdAt: admin.firestore.FieldValue.serverTimestamp(),
-                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-            };
-
-            await db.collection("mail_notifications").add(notificationData);
-            console.log(`Mail bildirimi '${status}' olarak oluşturuldu.`);
-
-            return null;
-
-        } catch (error) {
-            console.error("Mail bildirimi oluşturulurken hata:", error);
-            return null;
+      if (rule) {
+        const templateSnapshot = await db
+          .collection("mail_templates")
+          .doc(rule.templateId)
+          .get();
+        if (!templateSnapshot.exists) {
+          console.warn(`Şablon bulunamadı: ${rule.templateId}`);
+          missingFields.push("mailTemplate");
+        } else {
+          template = templateSnapshot.data();
         }
+      }
+
+      // 2) Önce personsRelated (clientId) üzerinden ALICI tespiti
+      const clientId = newDocument.clientId || null;
+      if (!clientId) {
+        console.warn("clientId eksik.");
+        missingFields.push("clientId");
+      } else {
+        try {
+          const prSnap = await db
+            .collection("personsRelated")
+            .where("personId", "==", clientId)
+            .get();
+
+          console.log("personsRelated eşleşme sayısı:", prSnap.size);
+
+          prSnap.forEach((d) => {
+            const pr = d.data();
+            const email = (pr.email || "").trim();
+            const isResp = pr?.responsible?.[categoryKey] === true;
+            const n = pr?.notify?.[categoryKey] || {};
+            if (!email || !isResp) return;
+            if (n?.to === true) toRecipients.push(email);
+            if (n?.cc === true) ccRecipients.push(email);
+          });
+        } catch (e) {
+          console.warn("personsRelated sorgusu hata:", e);
+        }
+      }
+
+      // 3) IP kaydı bulma (ilgili alanları doldurmak ve gerekirse recipients fallback için)
+      let ipRecordId = null;
+      let ipRecordData = null;
+
+      // a) applicantsIds alanı varsa (önerilen)
+      if (clientId) {
+        try {
+          const ipByApplicantsIds = await db
+            .collection("ipRecords")
+            .where("applicantsIds", "array-contains", clientId)
+            .limit(1)
+            .get();
+          if (!ipByApplicantsIds.empty) {
+            ipRecordId = ipByApplicantsIds.docs[0].id;
+            ipRecordData = ipByApplicantsIds.docs[0].data();
+          }
+        } catch (e) {
+          console.warn("ipRecords/applicantsIds sorgusu hata:", e);
+        }
+      }
+
+      // b) applicationNumber ile (belgede varsa)
+      if (!ipRecordData) {
+        const appNo =
+          newDocument.applicationNumber ||
+          newDocument.applicationNo ||
+          newDocument.appNo ||
+          null;
+        if (appNo) {
+          try {
+            const ipByAppNo = await db
+              .collection("ipRecords")
+              .where("applicationNumber", "==", appNo)
+              .limit(1)
+              .get();
+            if (!ipByAppNo.empty) {
+              ipRecordId = ipByAppNo.docs[0].id;
+              ipRecordData = ipByAppNo.docs[0].data();
+            }
+          } catch (e) {
+            console.warn("ipRecords/applicationNumber sorgusu hata:", e);
+          }
+        }
+      }
+
+      if (!ipRecordData) {
+        console.warn("IP kaydı bulunamadı (bu kritik değil, fallback’ler var).");
+        // missingFields.push("ipRecord"); // İstersen işaretleyebilirsin ama zorunlu değil
+      }
+
+      // 4) Eğer personsRelated’dan alıcı çıkmadıysa → applicants fallback
+      if (toRecipients.length === 0 && ccRecipients.length === 0) {
+        console.log("⚠️ PR’dan alıcı çıkmadı; applicants fallback deneniyor.");
+        const rec = await getRecipientsByApplicantIds(
+          ipRecordData?.applicants || (clientId ? [{ id: clientId }] : []),
+          categoryKey
+        );
+        toRecipients = rec.to || [];
+        ccRecipients = rec.cc || [];
+        if (toRecipients.length === 0 && ccRecipients.length === 0) {
+          console.warn("Gönderim için alıcı bulunamadı.");
+          missingFields.push("recipients");
+        }
+      }
+
+      console.log("📧 FINAL RECIPIENTS", { toRecipients, ccRecipients });
+
+      // 5) Client/Owner tespiti (owners → clientId fallback)
+      const ownerFromIp = ipRecordData?.owners?.[0]?.id || null;
+      const primaryOwnerId = ownerFromIp || clientId || null;
+
+      let client = null;
+      if (primaryOwnerId) {
+        const clientSnap = await db.collection("persons").doc(primaryOwnerId).get();
+        if (clientSnap.exists) {
+          client = clientSnap.data();
+        } else {
+          console.warn("persons/{primaryOwnerId} bulunamadı.");
+          missingFields.push("client");
+        }
+      } else {
+        console.warn("primaryOwner tespit edilemedi.");
+        missingFields.push("primaryOwner");
+      }
+
+      // 6) Şablon + yer tutucu doldurma
+      if (template && client) {
+        subject = String(template.subject || "");
+        body = String(template.body || "");
+
+        const applicationNo =
+          ipRecordData?.applicationNumber ||
+          newDocument.applicationNumber ||
+          newDocument.applicationNo ||
+          newDocument.appNo ||
+          "";
+
+        const parameters = {
+          ...newDocument,
+          ...client,
+          basvuru_no: applicationNo,
+        };
+
+        // {{key}} yer tutucuları değiştir
+        subject = subject.replace(/{{\s*([\w.]+)\s*}}/g, (_, k) => parameters[k] ?? "");
+        body = body.replace(/{{\s*([\w.]+)\s*}}/g, (_, k) => parameters[k] ?? "");
+      } else {
+        subject = "Eksik Bilgi: Bildirim Taslağı";
+        body =
+          "Bu bildirim oluşturuldu ancak gönderim için eksik bilgiler mevcut. Lütfen tamamlayın.";
+      }
+
+      // 7) Status (en sonda, tüm tespitlerden sonra)
+      if (missingFields.length > 0 || toRecipients.length === 0) {
+        status = "missing_info";
+      } else {
+        status = "pending";
+      }
+
+      // 8) Bildirim dokümanı (UI filtrelerine uyumlu alanlar)
+      const notificationDoc = {
+        toList: toRecipients,
+        ccList: ccRecipients,
+        clientId: primaryOwnerId || null,
+        subject,
+        body,
+        status, // "pending" veya "missing_info"
+        mode: "draft",
+        isDraft: true,
+
+        sourceDocumentId: docId,
+        relatedIpRecordId: ipRecordId || null,
+        associatedTaskId: null,
+        associatedTransactionId: null,
+
+        templateId: rule?.templateId || null,
+        notificationType, // "marka" vb.
+        source: "document_index", // debug amaçlı
+        missingFields,
+
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      };
+
+      console.log("📥 mail_notifications.add input:", {
+        ...notificationDoc,
+        createdAt: "[serverTimestamp]",
+        updatedAt: "[serverTimestamp]",
+      });
+
+      const ref = await db.collection("mail_notifications").add(notificationDoc);
+      console.log(`✅ Mail bildirimi '${status}' olarak oluşturuldu.`, { id: ref.id });
+
+      return null;
+    } catch (error) {
+      console.error("Mail bildirimi oluşturulurken hata:", error);
+      return null;
     }
+  }
 );
 
 export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
@@ -1019,6 +1131,7 @@ export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
     }
 
     console.log("--> KOŞULLAR SAĞLANDI. Bildirim oluşturma akışı başlıyor.");
+    const categoryKey = "marka";
 
     try {
       // 1) Kural & Şablon
