@@ -2410,6 +2410,28 @@ async handleFormSubmit(e) {
         relatedIpRecordTitle: this.selectedIpRecord ? this.selectedIpRecord.title : taskTitle,
         details: {}
     };
+
+    // -- İlgili taraf gerektiren işlem tiplerinde taskOwner yaz --
+    const txIdStr = String(selectedTransactionType?.id || '');
+    if (RELATED_PARTY_REQUIRED.has(txIdStr)) {
+    // State'ten seçilen kişi(ler)
+    const ownerIds = (Array.isArray(this.selectedRelatedParties) ? this.selectedRelatedParties : [])
+        .map(p => String(p.id))
+        .filter(Boolean);
+
+    taskData.taskOwner = ownerIds; // ⭐ Tasks koleksiyonunda saklanacak alan
+
+    // (İsteğe bağlı) tetikleyici için meta'ya da ayna yap
+    const isOpponentTx = txIdStr === TASK_IDS.KARARA_ITIRAZ
+                        || txIdStr === TASK_IDS.ITIRAZ_YAYIN
+                        || txIdStr === TASK_IDS.YAYIMA_ITIRAZIN_YENIDEN_INCELENMESI;
+
+    taskData.meta = Object.assign({}, taskData.meta, {
+        involvedPartyIds: ownerIds,
+        involvedPartyRole: isOpponentTx ? 'opponent' : 'requester'
+    });
+    }
+    
     // --- İtiraz sahibi (opponent) yazımı: IDs 7, 19, 20 ---
     const tIdStr = String(selectedTransactionType?.id || '');
     const objectionTypeIds = new Set(['7', '19', '20']);
