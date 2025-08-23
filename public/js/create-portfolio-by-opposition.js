@@ -2,6 +2,7 @@
 // Yayına İtiraz işi oluşturulduğunda otomatik 3.taraf portföy kaydı oluşturma
 
 import { getFirestore, doc, getDoc, addDoc, collection, query, where, getDocs, updateDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+import { ipRecordsService } from '../firebase-config.js';
 
 class PortfolioByOppositionCreator {
     constructor() {
@@ -301,23 +302,43 @@ class PortfolioByOppositionCreator {
      */
     async createPortfolioRecord(portfolioData) {
         try {
-            if (!this.db) {
-                return { success: false, error: 'Firebase bağlantısı bulunamadı' };
-            }
-
-            // İpRecordsService üzerinden duplikasyon kontrolü ile kayıt oluştur
-            const result = await window.ipRecordsService.createRecordFromOpposition(portfolioData);
+            console.log('🔄 Portföy kaydı oluşturuluyor (duplikasyon kontrolü ile)...', {
+                applicationNumber: portfolioData.applicationNumber,
+                markName: portfolioData.brandText || portfolioData.title,
+                createdFrom: portfolioData.createdFrom
+            });
+            
+            // ipRecordsService üzerinden duplikasyon kontrolü ile kayıt oluştur
+            const result = await ipRecordsService.createRecordFromOpposition(portfolioData);
             
             if (result.success) {
-                console.log('✅ Portföy kaydı oluşturuldu:', result.id);
+                console.log('✅ Portföy kaydı işlem sonucu:', {
+                    id: result.id,
+                    isExistingRecord: result.isExistingRecord || false,
+                    message: result.message
+                });
+                
                 return {
                     success: true,
                     recordId: result.id,
                     isExistingRecord: result.isExistingRecord || false,
+                    message: result.message || 'Kayıt oluşturuldu',
                     data: portfolioData
                 };
             } else {
-                return result; // Hata mesajını aynen döndür
+                console.error('❌ Portföy kaydı oluşturulamadı:', {
+                    error: result.error,
+                    isDuplicate: result.isDuplicate,
+                    existingRecordId: result.existingRecordId
+                });
+                
+                return {
+                    success: false,
+                    error: result.error,
+                    isDuplicate: result.isDuplicate || false,
+                    existingRecordId: result.existingRecordId || null,
+                    existingRecordType: result.existingRecordType || null
+                };
             }
 
         } catch (error) {
