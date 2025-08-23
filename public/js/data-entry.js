@@ -1379,7 +1379,7 @@ if ((this.editingRecordId && result?.success) || (!this.editingRecordId && (resu
   const msg = this.editingRecordId
     ? 'Marka portföy kaydı başarıyla güncellendi!'
     : (isExisting
-        ? 'Bu başvuru zaten kayıtlıydı; mevcut kayıt kullanıldı.'
+        ? 'Bu başvuru zaten kayıtlıydı; mevcut verilerle yeni bir başvuru oluşturulmadı. Başvuru numarasını lütfen kontrol edin.'
         : 'Marka portföy kaydı başarıyla oluşturuldu!');
 
   alert(msg);
