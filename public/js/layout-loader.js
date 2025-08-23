@@ -201,10 +201,8 @@ function renderMenu(container, userRole) { // currentPage parametresi kaldırıl
         }
     });
 }
-
 function setupMenuInteractions(currentPage) {
     // 1. Accordion başlıklarına tıklama olay dinleyicilerini ekle
-    // Bu kısım, accordionların tıklama ile açılıp kapanmasını sağlar.
     document.querySelectorAll('.accordion-header').forEach(header => {
         header.addEventListener('click', () => {
             const content = header.nextElementSibling;
@@ -225,7 +223,6 @@ function setupMenuInteractions(currentPage) {
     // 2. Aktif sayfanın menüsünü vurgula
     highlightActiveMenu(currentPage);
 }
-
 function highlightActiveMenu(currentPage) {
     // Tüm aktif sınıfları temizle
     document.querySelectorAll('.sidebar-nav-item, .accordion-content a').forEach(link => {
@@ -238,14 +235,18 @@ function highlightActiveMenu(currentPage) {
 
     document.querySelectorAll('.sidebar-nav-item, .accordion-content a').forEach(link => {
         const href = link.getAttribute('href');
-        if (href && href === currentPage) {
-            link.classList.add('active');
-            activeLink = link;
-            
-            // Eğer accordion içindeyse, parent accordion'ı bul
-            const accordion = link.closest('.accordion');
-            if (accordion) {
-                parentAccordion = accordion;
+        // Sadece dosya adı ile karşılaştır
+        if (href) {
+            const fileName = href.split('/').pop(); // Sadece dosya adını al
+            if (fileName === currentPage) {
+                link.classList.add('active');
+                activeLink = link;
+                
+                // Eğer accordion içindeyse, parent accordion'ı bul
+                const accordion = link.closest('.accordion');
+                if (accordion) {
+                    parentAccordion = accordion;
+                }
             }
         }
     });
@@ -258,9 +259,7 @@ function highlightActiveMenu(currentPage) {
         accordionHeader.classList.add('active');
         accordionContent.style.maxHeight = accordionContent.scrollHeight + 'px';
     }
-    
 }
-
 // === [ORTAK KİŞİ MODALİ] ====================================================
 
 // Sayfaya bir defa modal ve stil enjekte et
