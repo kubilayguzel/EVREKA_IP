@@ -1105,43 +1105,43 @@ export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
     };
 
    const getCcFromEvrekaListByTransactionType = async (txTypeRaw) => {
-  try {
-    const emails = new Set();
-    if (txTypeRaw === null || txTypeRaw === undefined) return [];
+    try {
+      const emails = new Set();
+      if (txTypeRaw === null || txTypeRaw === undefined) return [];
 
-    const txTypeNum = parseInt(txTypeRaw, 10);
-    if (Number.isNaN(txTypeNum)) return [];
+      const txTypeNum = parseInt(txTypeRaw, 10);
+      if (Number.isNaN(txTypeNum)) return [];
 
-    // 1) transactionTypes array'inde number arama
-    const numberQuery = await db.collection("evrekaMailCCList")
-      .where("transactionTypes", "array-contains", txTypeNum)
-      .get();
-    
-    numberQuery.forEach(doc => {
-      const data = doc.data();
-      if (data.email && typeof data.email === 'string') {
-        emails.add(data.email.trim());
-      }
-    });
+      // 1) transactionTypes array'inde number arama
+      const numberQuery = await db.collection("evrekaMailCCList")
+        .where("transactionTypes", "array-contains", txTypeNum)
+        .get();
+      
+      numberQuery.forEach(doc => {
+        const data = doc.data();
+        if (data.email && typeof data.email === 'string') {
+          emails.add(data.email.trim());
+        }
+      });
 
-    // 2) transactionTypes array'inde "All" string değeri olanları ekle
-    const allQuery = await db.collection("evrekaMailCCList")
-      .where("transactionTypes", "array-contains", "All")
-      .get();
-    
-    allQuery.forEach(doc => {
-      const data = doc.data();
-      if (data.email && typeof data.email === 'string') {
-        emails.add(data.email.trim());
-      }
-    });
+      // 2) transactionTypes array'inde "All" string değeri olanları ekle
+      const allQuery = await db.collection("evrekaMailCCList")
+        .where("transactionTypes", "array-contains", "All")
+        .get();
+      
+      allQuery.forEach(doc => {
+        const data = doc.data();
+        if (data.email && typeof data.email === 'string') {
+          emails.add(data.email.trim());
+        }
+      });
 
-    return Array.from(emails);
-  } catch (err) {
-    console.warn("⚠️ [CC] evrekaMailCCList read error:", err?.message || err);
-    return [];
-  }
-};
+      return Array.from(emails);
+    } catch (err) {
+      console.warn("⚠️ [CC] evrekaMailCCList read error:", err?.message || err);
+      return [];
+    }
+  };
     // 2) Şablon
     let template = null;
     let templateId = null;
