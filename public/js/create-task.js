@@ -2745,7 +2745,7 @@ async handleFormSubmit(e) {
                 return;
             }
         } else {
-            console.log('🔄 Yayına itiraz işi: Portföye işlem ekleme atlandı, otomatik 3.taraf portföy oluşturulacak');
+        console.log('🔄 Yayına itiraz işi: portföy oluşturma/ilişkilendirme otomatik yürütülecek');
         }
 
         // ✅ Yayına itiraz işleri için otomatik 3.taraf portföy oluşturma
@@ -2756,18 +2756,33 @@ async handleFormSubmit(e) {
                     specificTaskType: selectedTransactionType.id,
                     selectedIpRecord: this.selectedIpRecord
                 });
-            
-            if (oppositionResult.success && oppositionResult.recordId) {
-                console.log('✅ Otomatik 3.taraf portföy kaydı oluşturuldu:', oppositionResult.recordId);
-                alert('İş başarıyla oluşturuldu!\n\nYayına itiraz işi olduğu için otomatik olarak 3.taraf portföy kaydı da oluşturuldu.');
-            } else if (!oppositionResult.success && oppositionResult.error !== 'Yayına itiraz işi değil') {
-                console.warn('⚠️ 3.taraf portföy kaydı oluşturulamadı:', oppositionResult.error);
-                alert('İş başarıyla oluşturuldu!\n\nAncak 3.taraf portföy kaydı oluşturulurken bir hata oluştu: ' + oppositionResult.error);
-            } else {
-                alert('İş başarıyla oluşturuldu!');
-            }
-        } else {
-            alert('İş başarıyla oluşturuldu!');
+                if (oppositionResult.success && oppositionResult.recordId) {
+                if (oppositionResult.isExistingRecord) {
+                    console.log('ℹ️ Otomatik 3.taraf portföy: mevcut kayıt kullanıldı:', oppositionResult.recordId);
+                    alert(
+                    'İş başarıyla oluşturuldu!\n\n' +
+                    'Yayına itiraz işi olduğu için mevcut 3.taraf portföy kaydı kullanıldı (ID: ' +
+                    oppositionResult.recordId + ').' +
+                    (oppositionResult.message ? '\n\nNot: ' + oppositionResult.message : '')
+                    );
+                } else {
+                    console.log('✅ Otomatik 3.taraf portföy kaydı oluşturuldu:', oppositionResult.recordId);
+                    alert(
+                    'İş başarıyla oluşturuldu!\n\n' +
+                    'Yayına itiraz işi olduğu için otomatik olarak 3.taraf portföy kaydı OLUŞTURULDU (ID: ' +
+                    oppositionResult.recordId + ').' +
+                    (oppositionResult.message ? '\n\nNot: ' + oppositionResult.message : '')
+                    );
+                }
+                } else if (!oppositionResult.success && oppositionResult.error !== 'Yayına itiraz işi değil') {
+                console.warn('⚠️ 3.taraf portföy kaydı işlemi başarısız:', oppositionResult.error);
+                alert(
+                    'İş başarıyla oluşturuldu!\n\n' +
+                    'Ancak 3.taraf portföy kaydı oluşturulurken bir hata oluştu: ' + oppositionResult.error
+                );
+                }
+                } else {
+                    alert('İş başarıyla oluşturuldu!');
         }
         
         window.location.href = 'task-management.html';
