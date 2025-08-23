@@ -1568,9 +1568,9 @@ async function getCcFromEvrekaListByTransactionType(txType) {
       });
     }
 
-    // 2) transactionTypes array'inde "All" string değeri olanları ekle
+    // 2) transactionTypes = "All" string değeri olanları ekle (== ile)
     const allSnap = await db.collection("evrekaMailCCList")
-      .where("transactionTypes", "array-contains", "All")
+      .where("transactionTypes", "==", "All")
       .get();
     console.log(`🔍 [EVREKA-CC] "All" query sonuç: ${allSnap.size} docs`);
     
