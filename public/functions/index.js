@@ -1065,18 +1065,22 @@ export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
   },
   async (event) => {
     const change = event.data;
+    if (!change || !change.before || !change.after) return null;
+
     const before = change.before.data() || {};
     const after  = change.after.data() || {};
     const taskId = event.params.taskId;
-    const db = admin.firestore();
 
-    // 1) Trigger koşulu: status -> completed + EPATS dokümanı var
+    const db = admin.firestore();
+    const dedupe = (arr) => Array.from(new Set((arr || []).filter(Boolean).map(s => String(s).trim())));
+
+    // --- 1) Tetikleme koşulu: completed & EPATS dokümanı var
     const becameCompleted = before.status !== "completed" && after.status === "completed";
     const epatsDoc = after?.details?.epatsDocument || null;
     if (!(becameCompleted && epatsDoc)) return null;
 
-    // 2) Kural & Şablon (epats task tamamlanma)
-    const categoryKey = "marka"; // personsRelated.responsible/notify için
+    // --- 2) Kural & Şablon
+    const categoryKey = "marka"; // personsRelated.responsible/notify anahtarı
     let template = null;
     let templateId = null;
     let hasTemplate = false;
@@ -1090,126 +1094,153 @@ export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
 
       if (!rulesSnap.empty) {
         const rule = rulesSnap.docs[0].data();
-        templateId = rule.templateId || null;
+        templateId = rule?.templateId || null;
 
-        const tSnap = await db.collection("mail_templates").doc(rule.templateId).get();
-        if (tSnap.exists) {
-          template = tSnap.data();
-          hasTemplate = true;
+        if (templateId) {
+          const tSnap = await db.collection("mail_templates").doc(templateId).get();
+          if (tSnap.exists) {
+            template = tSnap.data();
+            hasTemplate = true;
+          }
         }
+      } else {
+        console.warn("⚠️ template_rules bulunamadı (sourceType=task_completion_epats).");
       }
     } catch (e) {
-      console.warn("template_rules/mail_templates sorgusu hata:", e);
+      console.warn("⚠️ template_rules/mail_templates sorgu hatası:", e);
     }
 
-    // 3) İlgili IP kaydı (yalnız parametre/bağlantı için)
-    let ipRecord = null;
-    if (after.relatedIpRecordId) {
-      try {
-        const ipSnap = await db.collection("ipRecords").doc(after.relatedIpRecordId).get();
-        if (ipSnap.exists) ipRecord = ipSnap.data();
-      } catch (e) {
-        console.warn("ipRecords/{id} okunamadı:", e);
-      }
-    }
-
-    // 4) Alıcı belirleme — ÖNCE taskOwner, varsa applicants'a ASLA geçme
+    // --- 3) TO/CC — ÖNCE taskOwner -> personsRelated
     const ownerIds = Array.isArray(after.taskOwner) ? after.taskOwner.filter(Boolean) : [];
     let toRecipients = [];
     let ccRecipients = [];
-    let usedSource = null;
-
-    const dedupe = (arr) =>
-      Array.from(new Set((arr || []).filter(Boolean).map((x) => String(x).trim())));
 
     const findRecipientsFromPersonsRelated = async (personIds) => {
       const to = [];
       const cc = [];
       if (!Array.isArray(personIds) || personIds.length === 0) return { to, cc };
 
-      // Firestore 'in' limiti (<=10) için parçala
+      // Firestore 'in' limiti: 10
       const chunks = [];
       for (let i = 0; i < personIds.length; i += 10) chunks.push(personIds.slice(i, i + 10));
 
       for (const chunk of chunks) {
-        const prSnap = await db
-          .collection("personsRelated")
+        const prSnap = await db.collection("personsRelated")
           .where("personId", "in", chunk)
           .get();
 
-        prSnap.forEach((d) => {
+        prSnap.forEach(d => {
           const pr = d.data();
           const email = (pr.email || "").trim();
           const isResp = pr?.responsible?.[categoryKey] === true;
           const n = pr?.notify?.[categoryKey] || {};
           if (!email || !isResp) return;
-          if (n?.to === true) to.push(email);
-          if (n?.cc === true) cc.push(email);
+          if (n?.to  === true) to.push(email);
+          if (n?.cc  === true) cc.push(email);
         });
       }
       return { to: dedupe(to), cc: dedupe(cc) };
     };
 
+    let usedSource = "taskOwner";
     if (ownerIds.length > 0) {
-      usedSource = "taskOwner";
       const r = await findRecipientsFromPersonsRelated(ownerIds);
       toRecipients = r.to;
       ccRecipients = r.cc;
-      // *** ÖNEMLİ: taskOwner varsa applicants'a FALLBACK YAPMIYORUZ. ***
     } else {
-      usedSource = "applicants";
-      // Applicants üzerinden mevcut helper ile alıcı çıkar
-      const rec = await getRecipientsByApplicantIds(ipRecord?.applicants || [], categoryKey);
-      toRecipients = dedupe(rec?.to || []);
-      ccRecipients = dedupe(rec?.cc || []);
+      // TaskOwner yoksa: applicants’a düşmek istemiyorsanız bu bloğu boş bırakın.
+      usedSource = "none";
     }
 
-    // 5) Şablon içeriği (şablon yoksa boş bırak → missing_info tetiklensin)
+    // --- 4) evrekaMailCCList → transactionType'a göre ekstra CC ekle
+    // Öncelik: relatedIpRecordId/relatedTransactionId → transactions/{id}.type
+    // Fallback: taskType
+    let txTypeForCc = null;
+    try {
+      const relatedIpId = after.relatedIpRecordId || null;
+      const relatedTxId = after.relatedTransactionId || after.transactionId || null;
+
+      if (relatedIpId && relatedTxId) {
+        const txSnap = await db.collection("ipRecords")
+          .doc(relatedIpId)
+          .collection("transactions")
+          .doc(relatedTxId)
+          .get();
+
+        if (txSnap.exists) {
+          txTypeForCc = txSnap.data()?.type ?? null;
+        }
+      }
+
+      if (txTypeForCc == null && after.taskType) {
+        txTypeForCc = after.taskType; // sayısal/string olabilir
+      }
+
+      if (txTypeForCc != null) {
+        const extraCc = await getCcFromEvrekaListByTransactionType(txTypeForCc);
+        ccRecipients = dedupe([...(ccRecipients || []), ...(extraCc || [])]);
+      } else {
+        console.warn("⚠️ transactionType tespit edilemedi; evrekaMailCCList eklenmedi.");
+      }
+    } catch (e) {
+      console.warn("⚠️ evrekaMailCCList CC genişletme hatası:", e);
+    }
+
+    // --- 5) Şablon içeriği
     let subject = "";
     let body = "";
+
     if (hasTemplate) {
       subject = String(template.subject || "");
       body    = String(template.body || "");
 
       const parameters = {
-        muvekkil_adi: "Bilinmeyen Müvekkil", // primary owner KULLANMIYORUZ
+        muvekkil_adi: "Bilinmeyen Müvekkil", // primary owner kullanılmıyor
         is_basligi: after.title || "",
         epats_evrak_no: epatsDoc?.turkpatentEvrakNo || "",
-        basvuru_no: ipRecord?.applicationNumber || "",
+        basvuru_no: after?.relatedIpRecordTitle || "", // eldeki en görünür bilgi
       };
 
       subject = subject.replace(/{{\s*([\w.]+)\s*}}/g, (_, k) => parameters[k] ?? "");
       body    = body.replace(/{{\s*([\w.]+)\s*}}/g, (_, k) => parameters[k] ?? "");
     }
 
-    // 6) Status & eksikler — SADE KURAL
+    // --- 6) Status & eksikler (yalnızca gönderime engel olanlar)
     const coreMissing = [];
     if ((toRecipients.length + ccRecipients.length) === 0) coreMissing.push("recipients");
     if (!hasTemplate) coreMissing.push("mailTemplate");
-    // (İstersen konu/gövde boşsa da eksik saymak için aç: )
-    // if (!subject?.trim()) coreMissing.push("subject");
-    // if (!body?.trim())    coreMissing.push("body");
 
     const status = coreMissing.length ? "missing_info" : "pending";
 
-    // 7) Bildirimi yaz
+    // --- 7) EPATS ek ipuçları (göndericide eklemek için)
+    const epatsAttachment = {
+      storagePath: epatsDoc?.storagePath || null,
+      downloadURL: epatsDoc?.downloadURL || null,
+      fileName:    epatsDoc?.name || "epats.pdf",
+    };
+
+    // --- 8) Bildirimi yaz
     const notificationDoc = {
-      toList: toRecipients,
-      ccList: ccRecipients,
+      toList: dedupe(toRecipients),
+      ccList: dedupe(ccRecipients),
+
       subject,
       body,
-      status,                      // "pending" | "missing_info"
-      missingFields: coreMissing,  // SADECE: "recipients" ve/veya "mailTemplate"
+      status,                         // "pending" | "missing_info"
+      missingFields: coreMissing,     // sadece recipients/mailTemplate
       mode: "draft",
       isDraft: true,
 
       relatedIpRecordId: after.relatedIpRecordId || null,
-      associatedTaskId: taskId,
+      associatedTaskId:  taskId,
       associatedTransactionId: after.relatedTransactionId || after.transactionId || null,
 
       templateId: templateId || null,
-      notificationType: categoryKey, // "marka"
-      source: usedSource,            // "taskOwner" | "applicants"
+      notificationType: categoryKey,  // "marka"
+      source: usedSource,             // "taskOwner" | "none"
+
+      // Ek ipuçları - buildNotificationAttachments bu alanları kullanabilir
+      epatsAttachment,
 
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -1222,7 +1253,7 @@ export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
     });
 
     await db.collection("mail_notifications").add(notificationDoc);
-    console.log("✅ Bildirim oluşturuldu.");
+    console.log("✅ Bildirim oluşturuldu (createUniversalNotificationOnTaskCompleteV2).");
 
     return null;
   }
