@@ -653,7 +653,7 @@ function bindEvents() {
         </div>`;
       }
       // 🔁 yönlendir
-      window.location.href = 'https://kubilayguzel.github.io/ip-manager-test/bulk-indexing-page.html';
+      window.location.href = 'bulk-indexing-page.html';
 
     } catch (e) {
       console.error(e);
