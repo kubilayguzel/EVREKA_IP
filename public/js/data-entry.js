@@ -1315,16 +1315,31 @@ const dataToSave = {
   updatedAt: new Date().toISOString()
 };
 // Kaydet
+// Kaydet
 let result;
+let usedId = null;
+let isExisting = false;
+
+// 1) update mi create mi?
 if (this.editingRecordId) {
+  // GÜNCELLEME
   result = await ipRecordsService.updateRecord(this.editingRecordId, dataToSave);
+  usedId = this.editingRecordId;
 } else {
-  result = await ipRecordsService.createRecord(dataToSave);
+  // YENİ KAYIT (Data Entry bağlamı)
+  result = await ipRecordsService.createRecordFromDataEntry(dataToSave);
+  usedId = result?.id || result?.existingRecordId || null;
+  isExisting = !!(result?.isExistingRecord || result?.isDuplicate);
 }
 
-if (result.success) {
-  // ✅ SADECE portföy kaydı ve yeni oluşturma ise
-  if (dataToSave.recordOwnerType === 'self' && !this.editingRecordId) {
+// 2) başarı kriteri:
+// - update: result.success
+// - create: result.success || isExisting (mevcut kayıt kullanıldı)
+if ((this.editingRecordId && result?.success) || (!this.editingRecordId && (result?.success || isExisting))) {
+  // ✅ SADECE yeni kayıt ise ve recordOwnerType 'self' ise transaction ekle
+  const shouldAddTransaction = !this.editingRecordId && !isExisting && dataToSave.recordOwnerType === 'self';
+
+  if (shouldAddTransaction) {
     // ipType -> code
     const CODE_BY_IP = {
       trademark: 'TRADEMARK_APPLICATION',
@@ -1333,7 +1348,7 @@ if (result.success) {
     };
     const targetCode = CODE_BY_IP[dataToSave.ipType || 'trademark'];
 
-    // 1) code -> id çöz (tercihen servisle)
+    // 1) code -> id çöz (önce servis)
     let txTypeId = null;
     try {
       const res = await transactionTypeService.getTransactionTypes();
@@ -1351,7 +1366,7 @@ if (result.success) {
     }
 
     // 3) Transaction’u **ID** ile yaz
-    await ipRecordsService.addTransactionToRecord(result.id, {
+    await ipRecordsService.addTransactionToRecord(String(usedId), {
       type: String(txTypeId),               // ✅ ID
       transactionTypeId: String(txTypeId),  // ✅ güvenlik için
       description: 'Başvuru işlemi.',
@@ -1360,13 +1375,19 @@ if (result.success) {
     });
   }
 
-  alert('Marka portföy kaydı başarıyla ' + (this.editingRecordId ? 'güncellendi' : 'oluşturuldu') + '!');
+  // 3) kullanıcıya mesaj
+  const msg = this.editingRecordId
+    ? 'Marka portföy kaydı başarıyla güncellendi!'
+    : (isExisting
+        ? 'Bu başvuru zaten kayıtlıydı; mevcut kayıt kullanıldı.'
+        : 'Marka portföy kaydı başarıyla oluşturuldu!');
+
+  alert(msg);
   window.location.href = 'portfolio.html';
 } else {
-  throw new Error(result.error);
+  alert('Portföy kaydı oluşturulamadı: ' + (result?.error || 'Bilinmeyen hata'));
 }
 }
-
 // Patent için
 async savePatentPortfolio(portfolioData) {
     const patentTitle = document.getElementById('patentTitle').value.trim();
@@ -1410,7 +1431,7 @@ async savePatentPortfolio(portfolioData) {
         updatedAt: new Date().toISOString()
     };
 
-    const result = await ipRecordsService.createRecord(dataToSave);
+    const result = await ipRecordsService.createRecordFromDataEntry(dataToSave);
     if (result.success) {
         if (dataToSave.recordOwnerType === 'self' && !this.editingRecordId) {
         // ipType'a göre code belirle
@@ -1524,7 +1545,7 @@ async saveDesignPortfolio(portfolioData) {
         updatedAt: new Date().toISOString()
     };
 
-    const result = await ipRecordsService.createRecord(dataToSave);
+    const result = await ipRecordsService.createRecordFromDataEntry(dataToSave);
     if (result.success) {
         alert('Tasarım portföy kaydı başarıyla oluşturuldu!');
         window.location.href = 'portfolio.html';
