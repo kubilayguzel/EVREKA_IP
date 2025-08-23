@@ -1104,32 +1104,51 @@ export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
       return await findRecipientsFromPersonsRelated(ids);
     };
 
-    const getCcFromEvrekaListByTransactionType = async (txType) => {
+    const getCcFromEvrekaListByTransactionType = async (txTypeRaw) => {
       try {
         const emails = new Set();
+        if (txTypeRaw === null || txTypeRaw === undefined) return [];
 
-        // 1) Doc id = txType
-        const byId = await db.collection("evrekaMailCCList").doc(String(txType)).get();
+        const txTypeStr = String(txTypeRaw).trim();
+        const txTypeNum = Number.isFinite(Number(txTypeRaw)) ? Number(txTypeRaw) : null;
+
+        // 1) Doc id = txTypeStr
+        const byId = await db.collection("evrekaMailCCList").doc(txTypeStr).get();
         if (byId.exists) {
           for (const e of (byId.data()?.emails || [])) emails.add(String(e).trim());
         }
 
-        // 2) transactionTypes array-contains
-        const q = await db.collection("evrekaMailCCList")
-          .where("transactionTypes", "array-contains", txType)
+        // 2) array-contains (string)
+        const qStr = await db.collection("evrekaMailCCList")
+          .where("transactionTypes", "array-contains", txTypeStr)
           .get();
-        q.forEach(doc => {
+        qStr.forEach(doc => {
           for (const e of (doc.data()?.emails || [])) emails.add(String(e).trim());
         });
 
-        // 3) fallback: "default" / "all"
+        // 3) array-contains (number) — eğer numeric ise
+        if (txTypeNum !== null) {
+          const qNum = await db.collection("evrekaMailCCList")
+            .where("transactionTypes", "array-contains", txTypeNum)
+            .get();
+          qNum.forEach(doc => {
+            for (const e of (doc.data()?.emails || [])) emails.add(String(e).trim());
+          });
+        }
+
+        // 4) fallback default
         if (emails.size === 0) {
           const def = await db.collection("evrekaMailCCList").doc("default").get();
           if (def.exists) for (const e of (def.data()?.emails || [])) emails.add(String(e).trim());
         }
 
+        console.log("📫 [CC] evrekaMailCCList", {
+          txTypeRaw, txTypeStr, txTypeNum,
+          picked: Array.from(emails)
+        });
         return Array.from(emails);
-      } catch {
+      } catch (err) {
+        console.warn("⚠️ [CC] evrekaMailCCList read error:", err?.message || err);
         return [];
       }
     };
@@ -1191,31 +1210,36 @@ export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
     }
 
     // 5) evrekaMailCCList → transactionType'a göre CC genişlet
-    try {
       let txTypeForCc = null;
-      const relatedIpId = after.relatedIpRecordId || null;
-      const relatedTxId = after.relatedTransactionId || after.transactionId || null;
+        try {
+          const relatedIpId = after.relatedIpRecordId || null;
+          const relatedTxId = after.relatedTransactionId || after.transactionId || null;
 
-      if (relatedIpId && relatedTxId) {
-        const txSnap = await db.collection("ipRecords")
-          .doc(relatedIpId)
-          .collection("transactions")
-          .doc(relatedTxId)
-          .get();
-        if (txSnap.exists) txTypeForCc = txSnap.data()?.type ?? null;
-      }
+          if (relatedIpId && relatedTxId) {
+            const txSnap = await db.collection("ipRecords")
+              .doc(relatedIpId)
+              .collection("transactions")
+              .doc(relatedTxId)
+              .get();
+            if (txSnap.exists) txTypeForCc = txSnap.data()?.type ?? null;
+          }
 
-      if (txTypeForCc == null && after.taskType) {
-        txTypeForCc = after.taskType;
-      }
+          if (txTypeForCc == null && after.taskType != null) {
+            txTypeForCc = after.taskType;
+          }
 
-      if (txTypeForCc != null) {
-        const extra = await getCcFromEvrekaListByTransactionType(txTypeForCc);
-        ccRecipients = dedupe([...(ccRecipients || []), ...(extra || [])]);
-      }
-    } catch (e) {
-      console.warn("evrekaMailCCList CC genişletme hata:", e?.message || e);
-    }
+          console.log("🔎 [CC] txTypeForCc:", txTypeForCc);
+
+          if (txTypeForCc != null) {
+            const extra = await getCcFromEvrekaListByTransactionType(txTypeForCc);
+            console.log("➕ [CC] from evrekaMailCCList:", extra);
+            ccRecipients = dedupe([...(ccRecipients || []), ...(extra || [])]);
+          } else {
+            console.log("ℹ️ [CC] txTypeForCc bulunamadı; evrekaMailCCList eklenmedi.");
+          }
+        } catch (e) {
+          console.warn("⚠️ [CC] evrekaMailCCList genişletme hata:", e?.message || e);
+        }
 
     // 6) Şablon içeriği
     let subject = "";
