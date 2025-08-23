@@ -29,69 +29,90 @@ class PortfolioByOppositionCreator {
      * @param {string} transactionId - İtiraz işinin ID'si
      * @returns {Object} Oluşturulan portföy kaydı bilgisi
      */
-    async createThirdPartyPortfolioFromBulletin(bulletinRecordId, transactionId) {
-        try {
-            console.log('🔄 3.taraf portföy kaydı oluşturuluyor...', { bulletinRecordId, transactionId });
+async createThirdPartyPortfolioFromBulletin(bulletinRecordId, transactionId) {
+  try {
+    console.log('🔄 3.taraf portföy kaydı oluşturuluyor...', { bulletinRecordId, transactionId });
 
-            // 1. Bulletin kaydını al
-            const bulletinData = await this.getBulletinRecord(bulletinRecordId);
-            if (!bulletinData.success) {
-                return { success: false, error: bulletinData.error };
-            }
-
-        let bulletinDate = null;
-        try {
-            if (bulletinData.data.bulletinId) {
-                const bulletinRef = doc(this.db, 'trademarkBulletins', bulletinData.data.bulletinId);
-                const bulletinSnap = await getDoc(bulletinRef);
-                if (bulletinSnap.exists()) {
-                    bulletinDate = bulletinSnap.data().bulletinDate || null;
-                }
-            }
-        } catch (err) {
-            console.warn('⚠️ Bulletin tarihi alınamadı:', err);
-        }
-
-        // 2. Bulletin verisini portföy formatına dönüştür
-        const portfolioData = this.mapBulletinToPortfolio(bulletinData.data, transactionId, bulletinDate);
-
-            // 3. Portföy kaydını oluştur
-            const result = await this.createPortfolioRecord(portfolioData);
-
-            if (!result.success) {
-                return { success: false, error: result.error };
-            }
-
-            // 4. ✅ Task'ın relatedIpRecordId'sini yeni oluşturulan 3.taraf portföy ID'si ile güncelle
-            const taskUpdateResult = await this.updateTaskWithNewPortfolioRecord(transactionId, result.recordId, portfolioData.title);
-
-            if (!taskUpdateResult.success) {
-                console.warn('⚠️ Task güncellenirken hata oluştu:', taskUpdateResult.error);
-                // Portföy kaydı oluşturuldu ama task güncellenemedi - bu durumu kullanıcıya bildir
-                return {
-                    success: true,
-                    recordId: result.recordId,
-                    message: '3.taraf portföy kaydı oluşturuldu ancak iş relatedIpRecordId güncellenirken hata oluştu',
-                    warning: taskUpdateResult.error
-                };
-            }
-
-            console.log('✅ 3.taraf portföy kaydı başarıyla oluşturuldu ve task relatedIpRecordId güncellendi:', result.recordId);
-            return {
-                success: true,
-                recordId: result.recordId,
-                message: '3.taraf portföy kaydı başarıyla oluşturuldu ve iş relatedIpRecordId güncellendi'
-            };
-
-        } catch (error) {
-            console.error('❌ 3.taraf portföy kaydı oluşturma hatası:', error);
-            return { 
-                success: false, 
-                error: `Portföy kaydı oluşturulamadı: ${error.message}` 
-            };
-        }
+    // 1) Bulletin kaydını al
+    const bulletinData = await this.getBulletinRecord(bulletinRecordId);
+    if (!bulletinData.success) {
+      return { success: false, error: bulletinData.error };
     }
 
+    // Bulletin tarihi (opsiyonel)
+    let bulletinDate = null;
+    try {
+      if (bulletinData.data.bulletinId) {
+        const bulletinRef = doc(this.db, 'trademarkBulletins', bulletinData.data.bulletinId);
+        const bulletinSnap = await getDoc(bulletinRef);
+        if (bulletinSnap.exists()) {
+          bulletinDate = bulletinSnap.data().bulletinDate || null;
+        }
+      }
+    } catch (err) {
+      console.warn('⚠️ Bulletin tarihi alınamadı:', err);
+    }
+
+    // 2) Bulletin → Portföy formatına dönüştür
+    const portfolioData = this.mapBulletinToPortfolio(bulletinData.data, transactionId, bulletinDate);
+
+    // 3) Portföy kaydını oluştur / duplikasyonda mevcut kaydı döndür
+    //    (ipRecordsService tarafı { success, recordId, isExistingRecord } döndürmeli)
+    const result = await this.createPortfolioRecord(portfolioData);
+    if (!result.success) {
+      return { success: false, error: result.error };
+    }
+
+    // result.isExistingRecord yoksa eski anahtarlar için de kontrol et
+    const already = !!(result.isExistingRecord || result.isDuplicate);
+
+    // 4) Task'ın relatedIpRecordId'sini (mevcut ya da yeni) portföy ID'si ile güncelle
+    const taskUpdate = await this.updateTaskWithNewPortfolioRecord(
+      transactionId,
+      result.recordId,
+      portfolioData.title
+    );
+
+    if (!taskUpdate.success) {
+      console.warn('⚠️ Task güncellenirken hata oluştu:', taskUpdate.error);
+      return {
+        success: true,
+        recordId: result.recordId,
+        isExistingRecord: already,
+        message: (already
+          ? 'Mevcut 3.taraf portföy kaydı ilişkilendirildi ancak iş güncellenirken uyarı oluştu.'
+          : '3.taraf portföy kaydı oluşturuldu ancak iş güncellenirken uyarı oluştu.'),
+        warning: taskUpdate.error
+      };
+    }
+
+    // 5) Log + kullanıcı mesajı için anlamlı dönüş
+    if (already) {
+      console.log('ℹ️ 3.taraf portföy: MEVCUT KAYIT İLİŞKİLENDİRİLDİ ve task güncellendi:', result.recordId);
+      return {
+        success: true,
+        recordId: result.recordId,
+        isExistingRecord: true,
+        message: 'Mevcut 3.taraf portföy kaydı ilişkilendirildi ve iş relatedIpRecordId güncellendi.'
+      };
+    } else {
+      console.log('✅ 3.taraf portföy KAYDI OLUŞTURULDU ve task güncellendi:', result.recordId);
+      return {
+        success: true,
+        recordId: result.recordId,
+        isExistingRecord: false,
+        message: '3.taraf portföy kaydı oluşturuldu ve iş relatedIpRecordId güncellendi.'
+      };
+    }
+
+  } catch (error) {
+    console.error('❌ 3.taraf portföy kaydı oluşturma hatası:', error);
+    return {
+      success: false,
+      error: `Portföy kaydı oluşturulamadı: ${error.message}`
+    };
+  }
+}
     /**
      * ✅ YENİ METOD: Task'ın relatedIpRecordId'sini yeni oluşturulan 3.taraf portföy ID'si ile günceller
      * @param {string} taskId - Güncellenecek task'ın ID'si
@@ -137,42 +158,48 @@ class PortfolioByOppositionCreator {
      * @param {Object} transactionData - İş verisi
      * @returns {Promise<Object>} İşlem sonucu
      */
-    async handleTransactionCreated(transactionData) {
-        try {
-            console.log('🔍 İş oluşturuldu, yayına itiraz kontrolü yapılıyor...');
+async handleTransactionCreated(transactionData) {
+  try {
+    console.log('🔍 İş oluşturuldu, yayına itiraz kontrolü yapılıyor...');
 
-            // Yayına itiraz işi mi kontrol et
-            if (!this.isPublicationOpposition(transactionData.specificTaskType)) {
-                console.log('ℹ️ Bu iş yayına itiraz değil, portföy oluşturulmayacak');
-                return { success: true, message: 'Yayına itiraz işi değil' };
-            }
-
-            // Seçilen bulletin kaydı var mı kontrol et
-            if (!transactionData.selectedIpRecord || !transactionData.selectedIpRecord.id) {
-                console.warn('⚠️ Seçilen bulletin kaydı bulunamadı');
-                return { 
-                    success: false, 
-                    error: 'Yayına itiraz için bulletin kaydı seçilmeli' 
-                };
-            }
-
-            // 3.taraf portföy kaydı oluştur ve task'ı güncelle
-            const result = await this.createThirdPartyPortfolioFromBulletin(
-                transactionData.selectedIpRecord.id,
-                transactionData.id
-            );
-
-            return result;
-
-        } catch (error) {
-            console.error('❌ İş oluşturulma sonrası işlem hatası:', error);
-            return { 
-                success: false, 
-                error: `Otomatik portföy oluşturma hatası: ${error.message}` 
-            };
-        }
+    // Yayına itiraz değilse otomasyon yok
+    if (!this.isPublicationOpposition(transactionData.specificTaskType)) {
+      console.log('ℹ️ Bu iş yayına itiraz değil, portföy oluşturulmayacak');
+      return { success: true, message: 'Yayına itiraz işi değil' };
     }
 
+    // Bulletin kaydı gerekli
+    if (!transactionData.selectedIpRecord || !transactionData.selectedIpRecord.id) {
+      console.warn('⚠️ Seçilen bulletin kaydı bulunamadı');
+      return {
+        success: false,
+        error: 'Yayına itiraz için bulletin kaydı seçilmeli'
+      };
+    }
+
+    // 3.taraf portföy oluştur/ilişkilendir
+    const res = await this.createThirdPartyPortfolioFromBulletin(
+      transactionData.selectedIpRecord.id,
+      transactionData.id
+    );
+
+    // 🔁 Bayrak ve id'yi üst katmana garanti taşı
+    return {
+      success: res?.success === true,
+      recordId: res?.recordId || res?.id || null,
+      isExistingRecord: !!res?.isExistingRecord,
+      message: res?.message || '',
+      error: res?.error || null
+    };
+
+  } catch (error) {
+    console.error('❌ İş oluşturulma sonrası işlem hatası:', error);
+    return {
+      success: false,
+      error: `Otomatik portföy oluşturma hatası: ${error.message}`
+    };
+  }
+}
     /**
      * Bulletin kaydını Firestore'dan alır
      * @param {string} bulletinRecordId - Bulletin kayıt ID'si
