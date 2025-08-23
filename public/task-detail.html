@@ -6,8 +6,6 @@
     <title>IP Manager - İş Detayı</title>
     <style>
         /* Bu sayfaya özel stiller */
-        /* Genel body, page-wrapper, main-container stilleri shared-styles.css'ten gelecektir. */
-        /* Sadece bu sayfaya özgü ve çakışmayan stilleri burada tutun */
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333; display: flex; }
         .page-wrapper { flex-grow: 1; display: flex; flex-direction: column; height: 100vh; overflow-y: auto; background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%); }
         .main-container { width: 100%; padding: 30px; margin: 0; }
@@ -16,13 +14,23 @@
         .page-header { background: rgba(255, 255, 255, 0.95); padding: 30px; border-radius: 20px; margin-bottom: 30px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1); }
         .page-title { font-size: 2em; color: #1e3c72; margin-bottom: 10px; }
         .page-subtitle { color: #666; font-size: 1.1em; }
-        
-        .task-detail-container {
+
+        /* YENİ: Her bir bölüm için kart stili */
+        .section-card {
             background: rgba(255, 255, 255, 0.95);
             padding: 30px;
             border-radius: 20px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            margin-bottom: 25px;
         }
+        
+        .task-detail-container {
+            /* Bu ana kapsayıcı artık sadece bölümleri sarmalar */
+            padding: 0; 
+            background: none; 
+            box-shadow: none; 
+        }
+
         .section-title {
             font-size: 1.3em;
             color: #1e3c72;
@@ -33,19 +41,6 @@
             justify-content: space-between;
             align-items: center;
         }
-
-        /* Yeni eklenen bölümler için form-section stili */
-        .form-section {
-            padding-top: 25px; /* Üstten boşluk */
-            margin-top: 25px; /* Üstten marjin */
-            border-top: 1px solid #e1e8ed; /* Üstten çizgi */
-        }
-        .form-section:first-of-type { /* İlk form-section için üst boşluk ve çizgi olmasın */
-            padding-top: 0;
-            margin-top: 0;
-            border-top: none;
-        }
-
 
         .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; }
         .form-group { margin-bottom: 25px; display: flex; flex-direction: column; }
@@ -186,7 +181,8 @@
             font-size: 0.85em;
             margin-top: 4px;
         }
-
+        
+        /* YENİ: Tek tip dosya yükleme alanı stili */
         .file-upload-area {
             border: 2px dashed #a8dadc;
             border-radius: 12px;
@@ -296,66 +292,50 @@
             
             <div class="task-detail-container">
                 <form id="taskDetailForm">
-                    <h3 class="section-title">Genel Bilgiler</h3>
-                    <div class="form-grid">
-                        <div class="form-group"><label for="taskTitle" class="form-label">İş Başlığı:</label><input type="text" id="taskTitle" class="form-input" required></div>
-                        <div class="form-group"><label for="taskTypeDisplay" class="form-label">İş Tipi:</label><input type="text" id="taskTypeDisplay" class="form-input" readonly></div>
-                        <div class="form-group"><label for="taskPriority" class="form-label">Öncelik:</label><select id="taskPriority" class="form-select"><option value="low">Düşük</option><option value="medium">Orta</option><option value="high">Yüksek</option></select></div>
-                        <div class="form-group"><label for="taskStatus" class="form-label">Durum:</label><select id="taskStatus" class="form-select"></select></div>
-                        <div class="form-group"><label for="assignedTo" class="form-label">Atanan Kullanıcı:</label><select id="assignedTo" class="form-select"></select></div>
-                        <div class="form-group"><label for="taskDueDate" class="form-label">Operasyonel Son Tarih:</label><input type="date" id="taskDueDate" class="form-input"></div>
-                        <!-- YENİ EKLENEN KISIM: Tebliğ Tarihi -->
-                        <div class="form-group"><label for="deliveryDate" class="form-label">Tebliğ Tarihi:</label><input type="date" id="deliveryDate" name="deliveryDate" class="form-input"></div>
-                    </div>
-
-                    <h3 class="section-title">İlgili Varlık ve Taraf</h3>
-                    <div class="form-group full-width">
-                        <label for="relatedIpRecordSearch" class="form-label">İlgili IP Kaydı:</label>
-                        <input type="text" id="relatedIpRecordSearch" class="form-input" placeholder="Başlık veya Başvuru Numarası Ara...">
-                        <div id="relatedIpRecordSearchResults" class="search-results-list"></div>
-                        <div id="selectedIpRecordDisplay" class="search-result-display" style="display:none;"></div>
-                    </div>
-                    <div class="form-group full-width">
-                        <label for="relatedPartySearch" class="form-label">İlgili Taraf (Opsiyonel):</label>
-                        <div style="display: flex; gap: 10px;">
-                            <input type="text" id="relatedPartySearch" class="form-input" placeholder="Kişi adı veya e-posta ara...">
-                            <button type="button" id="addNewRelatedPartyBtn" class="btn-add-item">Yeni Kişi</button>
+                    <div class="section-card">
+                        <h3 class="section-title">Genel Bilgiler</h3>
+                        <div class="form-grid">
+                            <div class="form-group"><label for="taskTitle" class="form-label">İş Başlığı:</label><input type="text" id="taskTitle" class="form-input" required></div>
+                            <div class="form-group"><label for="taskTypeDisplay" class="form-label">İş Tipi:</label><input type="text" id="taskTypeDisplay" class="form-input" readonly></div>
+                            <div class="form-group"><label for="taskPriority" class="form-label">Öncelik:</label><select id="taskPriority" class="form-select"><option value="low">Düşük</option><option value="medium">Orta</option><option value="high">Yüksek</option></select></div>
+                            <div class="form-group"><label for="taskStatus" class="form-label">Durum:</label><select id="taskStatus" class="form-select"></select></div>
+                            <div class="form-group"><label for="assignedTo" class="form-label">Atanan Kullanıcı:</label><select id="assignedTo" class="form-select"></select></div>
+                            <div class="form-group"><label for="taskDueDate" class="form-label">Operasyonel Son Tarih:</label><input type="date" id="taskDueDate" class="form-input"></div>
+                            <div class="form-group"><label for="deliveryDate" class="form-label">Tebliğ Tarihi:</label><input type="date" id="deliveryDate" name="deliveryDate" class="form-input"></div>
                         </div>
-                        <div id="relatedPartySearchResults" class="search-results-list"></div>
-                        <div id="selectedRelatedPartyDisplay" class="search-result-display" style="display:none;"></div>
+                    </div>
+                    
+                    <div class="section-card">
+                        <h3 class="section-title">İlgili Varlık ve Taraf</h3>
+                        <div class="form-group full-width">
+                            <label for="relatedIpRecordSearch" class="form-label">İlgili IP Kaydı:</label>
+                            <input type="text" id="relatedIpRecordSearch" class="form-input" placeholder="Başlık veya Başvuru Numarası Ara...">
+                            <div id="relatedIpRecordSearchResults" class="search-results-list"></div>
+                            <div id="selectedIpRecordDisplay" class="search-result-display" style="display:none;"></div>
+                        </div>
+                        <div class="form-group full-width">
+                            <label for="relatedPartySearch" class="form-label">İlgili Taraf (Opsiyonel):</label>
+                            <div style="display: flex; gap: 10px;">
+                                <input type="text" id="relatedPartySearch" class="form-input" placeholder="Kişi adı veya e-posta ara...">
+                                <button type="button" id="addNewRelatedPartyBtn" class="btn-add-item">Yeni Kişi</button>
+                            </div>
+                            <div id="relatedPartySearchResults" class="search-results-list"></div>
+                            <div id="selectedRelatedPartyDisplay" class="search-result-display" style="display:none;"></div>
+                        </div>
+                        <div class="form-group full-width">
+                            <label for="taskDescription" class="form-label">Açıklama:</label>
+                            <textarea id="taskDescription" class="form-textarea"></textarea>
+                        </div>
                     </div>
 
-                    <div class="form-group full-width">
-                        <label for="taskDescription" class="form-label">Açıklama:</label>
-                        <textarea id="taskDescription" class="form-textarea"></textarea>
-                    </div>
-                    <div id="tabContentAccruals" class="form-section">
+                    <div class="section-card">
                         <h3 class="section-title">Tahakkuklar</h3>
                         <div id="accrualsList">
-                        <div id="accrualsContainer" class="accruals-grid"></div>
-                        <div class="accrual-card" style="display:none;"> 
-                            <div class="accrual-row">
-                            <span class="label">Açıklama:</span>
-                            <span class="value">Tasarım ücret ödemesi</span>
+                            <div id="accrualsContainer" class="accruals-grid"></div>
                             </div>
-                            <div class="accrual-row">
-                            <span class="label">Tutar:</span>
-                            <span class="value">3.500 ₺</span>
-                            </div>
-                            <div class="accrual-row">
-                            <span class="label">Durum:</span>
-                            <span class="value">Ödendi</span>
-                            </div>
-                            <div class="accrual-row">
-                            <span class="label">Oluşturulma:</span>
-                            <span class="value">20.06.2025</span>
-                            </div>
-                            <button type="button" class="edit-accrual-btn">Düzenle</button>
-                        </div>
-                        </div>
                     </div>
 
-                    <div id="tabContentDocuments" class="form-section">
+                    <div class="section-card">
                         <h3 class="section-title">Belgeler</h3>
                         <div class="file-upload-area" id="fileUploadArea">
                             <input type="file" id="fileInput" multiple hidden>
@@ -367,7 +347,8 @@
                             <p style="text-align: center; color: #666; padding: 20px;">Bu işe ait belge bulunmamaktadır.</p>
                         </div>
                     </div>
-                    <div class="form-section" style="margin-top: 30px;">
+
+                    <div class="section-card">
                         <h3 class="section-title">EPATS Evrakı</h3>
                         <div class="form-group">
                             <label for="turkpatentEvrakNo" class="form-label">TURKPATENT Evrak No:</label>
@@ -376,22 +357,22 @@
                         <div class="file-upload-area" id="epatsFileUploadArea">
                             <input type="file" id="epatsFileInput" hidden accept=".pdf,.doc,.docx,.jpg,.jpeg,.png">
                             <div class="upload-icon">📄</div>
-                            <div>EPATS Evrakını Yüklemek İçin Tıklayın veya Sürükleyin</div>
+                            <div class="upload-text">EPATS Evrakını Yüklemek İçin Tıklayın veya Sürükleyin</div>
                         </div>
-                        <div class="file-list-container" id="epatsFileListContainer">
-                            </div>
+                        <div class="file-list-container" id="epatsFileListContainer"></div>
+                        <div class="form-group" style="margin-top: 20px;">
+                            <label for="epatsDocumentDate" class="form-label">İşlem Tarihi</label>
+                            <input type="date" id="epatsDocumentDate" class="form-input">
+                        </div>
                     </div>
-                    <div class="form-group">
-                    <label for="epatsDocumentDate" class="form-label">İşlem Tarihi</label>
-                    <input type="date" id="epatsDocumentDate" class="form-input">
-                    </div>
-                    <div id="tabContentHistory" class="form-section">
+
+                    <div class="section-card">
                         <h3 class="section-title">İşlem Geçmişi</h3>
                         <div id="historyList" class="history-list">
                             <p style="text-align: center; color: #666; padding: 20px;">İşlem geçmişi bulunmamaktadır.</p>
                         </div>
                     </div>
-
+                    
                     <div class="form-actions">
                         <button type="button" class="btn btn-secondary" id="cancelEditBtn">İptal</button>
                         <button type="submit" class="btn btn-primary" id="saveTaskChangesBtn">Değişiklikleri Kaydet</button>
@@ -402,125 +383,11 @@
     </div>
 
     <div id="accrualModal" class="modal">
-        <div class="modal-content">
-            <span class="close-modal-btn" id="closeAccrualModal">&times;</span>
-            <h3 class="modal-title" id="accrualModalTitle">Yeni Tahakkuk Ekle</h3>
-            <form id="accrualForm">
-                <input type="hidden" id="accrualId">
-                <div class="form-grid">
-                    <div class="form-group full-width">
-                        <label for="accrualTaskTitleDisplay" class="form-label">İlgili İş</label>
-                        <input type="text" id="accrualTaskTitleDisplay" class="form-input" readonly>
-                    </div>
-                    <div class="form-group">
-                        <label for="officialFee" class="form-label">Resmi Ücret</label>
-                        <div class="input-with-currency">
-                            <input type="number" id="officialFee" class="form-input" placeholder="0.00" step="0.01">
-                            <select id="officialFeeCurrency" class="currency-select">
-                                <option value="TRY">TL</option>
-                                <option value="EUR">EUR</option>
-                                <option value="USD">USD</option>
-                                <option value="CHF">CHF</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <label for="serviceFee" class="form-label">Hizmet Bedeli</label>
-                        <div class="input-with-currency">
-                            <input type="number" id="serviceFee" class="form-input" placeholder="0.00" step="0.01">
-                            <select id="serviceFeeCurrency" class="currency-select">
-                                <option value="TRY">TL</option>
-                                <option value="EUR">EUR</option>
-                                <option value="USD">USD</option>
-                                <option value="CHF">CHF</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <label for="vatRate" class="form-label">KDV Oranı (%)</label>
-                        <input type="number" id="vatRate" class="form-input" value="20">
-                    </div>
-                    <div class="form-group">
-                        <label class="checkbox-label">
-                            <input type="checkbox" id="applyVatToOfficialFee" checked>
-                            Resmi Ücrete KDV Uygula
-                        </label>
-                    </div>
-                    <div class="form-group full-width">
-                        <label class="form-label">Toplam Tutar</label>
-                        <div id="totalAmountDisplay" class="total-amount-display">0.00 TRY</div>
-                    </div>
-                    <div class="form-group full-width">
-                        <label for="tpInvoicePartySearch" class="form-label">Türk Patent Faturası Tarafı</label>
-                        <input type="text" id="tpInvoicePartySearch" class="form-input" placeholder="Fatura tarafı arayın...">
-                        <div id="tpInvoicePartySearchResults" class="search-results-list"></div>
-                        <div id="selectedTpInvoicePartyDisplay" class="search-result-display" style="display:none;"></div>
-                    </div>
-                    <div class="form-group full-width">
-                        <label for="serviceInvoicePartySearch" class="form-label">Hizmet Faturası Tarafı</label>
-                        <input type="text" id="serviceInvoicePartySearch" class="form-input" placeholder="Fatura tarafı arayın...">
-                        <div id="serviceInvoicePartySearchResults" class="search-results-list"></div>
-                        <div id="selectedServiceInvoicePartyDisplay" class="search-result-display" style="display:none;"></div>
-                    </div>
-                    <div class="form-group full-width">
-                        <label for="paymentDate" class="form-label">Ödeme Tarihi (Opsiyonel)</label>
-                        <input type="date" id="paymentDate" class="form-input">
-                    </div>
-                    <div class="form-group full-width">
-                        <label for="paymentReceiptFile" class="form-label">Ödeme Dekontu (Opsiyonel)</label>
-                        <div class="file-upload-area" id="paymentReceiptFileUploadArea">
-                            <div>Dosyayı buraya sürükleyin veya tıklayın</div>
-                            <input type="file" id="paymentReceiptFile" multiple hidden accept=".pdf,.doc,.docx,.jpg,.jpeg,.png">
-                        </div>
-                        <div class="file-list-container" id="paymentReceiptFileList"></div>
-                    </div>
-                </div>
-                <div class="form-actions">
-                    <button type="button" class="btn btn-secondary" id="cancelAccrualBtn">İptal</button>
-                    <button type="submit" class="btn btn-primary" id="saveAccrualBtn">Kaydet</button>
-                </div>
-            </form>
         </div>
-    </div>
 
     <div class="modal" id="addPersonModal">
-        <div class="modal-content">
-            <span class="close-modal-btn" id="closeAddPersonModal">&times;</span>
-            <h3 class="modal-title">Yeni Kişi Ekle</h3>
-            <form id="personForm">
-                <div class="form-group">
-                    <label class="form-label" for="personName">Ad Soyad *</label>
-                    <input type="text" id="personName" class="form-input" required>
-                </div>
-                <div class="form-group">
-                    <label class="form-label" for="personEmail">E-posta</label>
-                    <input type="email" id="personEmail" class="form-input">
-                </div>
-                <div class="form-group">
-                    <label class="form-label" for="personPhone">Telefon</label>
-                    <input type="tel" id="personPhone" class="form-input">
-                </div>
-                <div class="form-group">
-                    <label class="form-label" for="personType">Kişi Türü *</label>
-                    <select id="personType" class="form-select" required>
-                        <option value="">Seçiniz</option>
-                        <option value="individual">Bireysel</option>
-                        <option value="company">Şirket</option>
-                        <option value="institution">Kurum</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label class="form-label" for="personAddress">Adres</label>
-                    <textarea id="personAddress" class="form-input" rows="3"></textarea>
-                </div>
-                <div class="form-actions">
-                    <button type="button" class="btn btn-secondary" id="cancelPersonBtn">İptal</button>
-                    <button type="button" class="btn btn-primary" id="savePersonBtn">Kaydet</button>
-                </div>
-            </form>
         </div>
-    </div>
-
+    
 <script type="module">
     import { authService, taskService, ipRecordsService, personService, accrualService, auth, generateUUID, documentDesignationTranslations, transactionTypeService,firebaseServices } from './firebase-config.js';
     import { showNotification, formatFileSize, readFileAsDataURL, TASK_STATUSES, TURKEY_HOLIDAYS, addMonthsToDate, isWeekend, isHoliday, findNextWorkingDay } from './utils.js';
