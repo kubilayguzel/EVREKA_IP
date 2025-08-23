@@ -2745,7 +2745,7 @@ async handleFormSubmit(e) {
                 return;
             }
         } else {
-        console.log('🔄 Yayına itiraz işi: portföy oluşturma/ilişkilendirme otomatik yürütülecek');
+            console.log('🔄 Yayına itiraz işi: Portföye işlem ekleme atlandı, otomatik 3.taraf portföy oluşturulacak');
         }
 
         // ✅ Yayına itiraz işleri için otomatik 3.taraf portföy oluşturma
