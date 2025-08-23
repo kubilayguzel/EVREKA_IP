@@ -1103,45 +1103,6 @@ export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
       const ids = (Array.isArray(applicants) ? applicants : []).map(a => a?.id).filter(Boolean);
       return await findRecipientsFromPersonsRelated(ids);
     };
-
-   const getCcFromEvrekaListByTransactionType = async (txTypeRaw) => {
-    try {
-      const emails = new Set();
-      if (txTypeRaw === null || txTypeRaw === undefined) return [];
-
-      const txTypeNum = parseInt(txTypeRaw, 10);
-      if (Number.isNaN(txTypeNum)) return [];
-
-      // 1) transactionTypes array'inde number arama
-      const numberQuery = await db.collection("evrekaMailCCList")
-        .where("transactionTypes", "array-contains", txTypeNum)
-        .get();
-      
-      numberQuery.forEach(doc => {
-        const data = doc.data();
-        if (data.email && typeof data.email === 'string') {
-          emails.add(data.email.trim());
-        }
-      });
-
-      // 2) transactionTypes array'inde "All" string değeri olanları ekle
-      const allQuery = await db.collection("evrekaMailCCList")
-        .where("transactionTypes", "array-contains", "All")
-        .get();
-      
-      allQuery.forEach(doc => {
-        const data = doc.data();
-        if (data.email && typeof data.email === 'string') {
-          emails.add(data.email.trim());
-        }
-      });
-
-      return Array.from(emails);
-    } catch (err) {
-      console.warn("⚠️ [CC] evrekaMailCCList read error:", err?.message || err);
-      return [];
-    }
-  };
     // 2) Şablon
     let template = null;
     let templateId = null;
@@ -1588,17 +1549,7 @@ async function getCcFromEvrekaListByTransactionType(txType) {
   const emails = new Set();
 
   try {
-    // "All" olanlar
-    const allSnap = await db.collection("evrekaMailCCList")
-      .where("transactionTypes", "==", "All")
-      .get();
-    allSnap.forEach(d => {
-      const e = (d.data()?.email || "").trim();
-      if (e) emails.add(e);
-    });
-
-    // Sayısal type ise array-contains ile ara
-    // (txType string gelse bile sayıysa parse ediyoruz)
+    // 1) transactionTypes array'inde number arama
     const n = typeof txType === "number" ? txType : parseInt(txType, 10);
     if (!Number.isNaN(n)) {
       const arrSnap = await db.collection("evrekaMailCCList")
@@ -1609,13 +1560,21 @@ async function getCcFromEvrekaListByTransactionType(txType) {
         if (e) emails.add(e);
       });
     }
+
+    // 2) transactionTypes array'inde "All" string değeri olanları ekle
+    const allSnap = await db.collection("evrekaMailCCList")
+      .where("transactionTypes", "array-contains", "All")
+      .get();
+    allSnap.forEach(d => {
+      const e = (d.data()?.email || "").trim();
+      if (e) emails.add(e);
+    });
   } catch (err) {
     console.error("❌ evrekaMailCCList sorgu hatası:", err);
   }
 
   return Array.from(emails);
 }
-
 async function downloadWithStream(file, destination) {
   await pipeline(file.createReadStream(), fs.createWriteStream(destination));
 }
