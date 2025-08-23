@@ -1189,57 +1189,71 @@ export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
         console.warn("ipRecords/{id} okuma hata:", e?.message || e);
       }
     }
-
     // 4) Alıcılar — Önce taskOwner; varsa applicants'a geçme
     const ownerIds = Array.isArray(after.taskOwner) ? after.taskOwner.filter(Boolean) : [];
     let toRecipients = [];
-    let ccRecipients = [];
+    let ccRecipients = []; // Bu Array olarak kalabilir ama işlemler düzeltilmeli
     let usedSource = null;
 
     if (ownerIds.length > 0) {
       usedSource = "taskOwner";
       const r = await findRecipientsFromPersonsRelated(ownerIds);
       toRecipients = r.to;
-      ccRecipients = r.cc;
+      ccRecipients = r.cc; // İlk CC'ler
       // taskOwner varsa applicants fallback YAPMAYIZ
     } else {
       usedSource = "applicants_fallback";
       const r = await getRecipientsByApplicantIdsLocal(ipRecord?.applicants || []);
       toRecipients = r.to;
-      ccRecipients = r.cc;
+      ccRecipients = r.cc; // İlk CC'ler
     }
 
     // 5) evrekaMailCCList → transactionType'a göre CC genişlet
-      let txTypeForCc = null;
-        try {
-          const relatedIpId = after.relatedIpRecordId || null;
-          const relatedTxId = after.relatedTransactionId || after.transactionId || null;
+    let txTypeForCc = null;
+    try {
+      const relatedIpId = after.relatedIpRecordId || null;
+      const relatedTxId = after.relatedTransactionId || after.transactionId || null;
 
-          if (relatedIpId && relatedTxId) {
-            const txSnap = await db.collection("ipRecords")
-              .doc(relatedIpId)
-              .collection("transactions")
-              .doc(relatedTxId)
-              .get();
-            if (txSnap.exists) txTypeForCc = txSnap.data()?.type ?? null;
-          }
+      if (relatedIpId && relatedTxId) {
+        const txSnap = await db.collection("ipRecords")
+          .doc(relatedIpId)
+          .collection("transactions")
+          .doc(relatedTxId)
+          .get();
+        if (txSnap.exists) txTypeForCc = txSnap.data()?.type ?? null;
+      }
 
-          if (txTypeForCc == null && after.taskType != null) {
-            txTypeForCc = after.taskType;
-          }
+      if (txTypeForCc == null && after.taskType != null) {
+        txTypeForCc = after.taskType;
+      }
 
-          console.log("🔎 [CC] txTypeForCc:", txTypeForCc);
+      console.log("🔎 [CC] txTypeForCc:", txTypeForCc);
 
-          if (txTypeForCc != null) {
-            const extra = await getCcFromEvrekaListByTransactionType(txTypeForCc);
-            console.log("➕ [CC] from evrekaMailCCList:", extra);
-            ccRecipients = dedupe([...(ccRecipients || []), ...(extra || [])]);
-          } else {
-            console.log("ℹ️ [CC] txTypeForCc bulunamadı; evrekaMailCCList eklenmedi.");
-          }
-        } catch (e) {
-          console.warn("⚠️ [CC] evrekaMailCCList genişletme hata:", e?.message || e);
-        }
+      if (txTypeForCc != null) {
+        const extra = await getCcFromEvrekaListByTransactionType(txTypeForCc);
+        console.log("➕ [CC] from evrekaMailCCList:", extra);
+        
+        // SORUN BURADA: ccRecipients'i yeniden assign etmek yerine, mevcut CC'lerle birleştirmeliyiz
+        // ❌ Yanlış: ccRecipients = dedupe([...(ccRecipients || []), ...(extra || [])]);
+        
+        // ✅ Doğru: Mevcut CC'lerle evrekaMailCCList'ten gelenleri birleştir
+        const allCcEmails = [...(ccRecipients || []), ...(extra || [])];
+        ccRecipients = dedupe(allCcEmails);
+        
+        console.log("✅ [CC] Final ccRecipients after merge:", ccRecipients);
+      } else {
+        console.log("ℹ️ [CC] txTypeForCc bulunamadı; evrekaMailCCList eklenmedi.");
+      }
+    } catch (e) {
+      console.warn("⚠️ [CC] evrekaMailCCList genişletme hata:", e?.message || e);
+    }
+
+    // Debug logları - bu logların çıktısını kontrol edin
+    console.log("🔍 DEBUG - Final recipients before saving:");
+    console.log("📧 toRecipients:", toRecipients);
+    console.log("📧 ccRecipients:", ccRecipients);
+    console.log("📊 toRecipients.length:", toRecipients.length);
+    console.log("📊 ccRecipients.length:", ccRecipients.length);
 
     // 6) Şablon içeriği
     let subject = "";
