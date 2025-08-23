@@ -562,6 +562,77 @@ async function resolveDocumentInfo(notification) {
   }
 }
 
+    // ---------- Attachment helper (unified: task->EPATS + unindexed_pdfs) ----------
+async function getAttachmentPreviews(notification) {
+  // Returns array of { fileName, fileUrl } items for UI display.
+  const previews = [];
+
+  const safeName = (name, defaultName = "ek.pdf") =>
+    String(name || defaultName).replace(/[^\w.\-]+/g, "_").slice(0, 100);
+
+  // A) Task -> EPATS (createUniversalNotificationOnTaskCompleteV2)
+  if (notification?.associatedTaskId) {
+    try {
+      const tSnap = await getDoc(doc(db, "tasks", notification.associatedTaskId));
+      if (tSnap.exists()) {
+        const epats = (tSnap.data()?.details || {}).epatsDocument || null;
+        if (epats) {
+          const fileUrl = epats.downloadURL || epats.downloadUrl || epats.fileUrl || null;
+          const fileName = safeName(epats.name, "epats.pdf");
+          previews.push({ fileName, fileUrl: fileUrl || null });
+        }
+      }
+    } catch (e) {
+      console.warn("getAttachmentPreviews task EPATS error:", e);
+    }
+  }
+
+  // B) unindexed_pdfs (createMailNotificationOnDocumentStatusChangeV2)
+  if (notification?.sourceDocumentId) {
+    try {
+      const u = await getDoc(doc(db, "unindexed_pdfs", notification.sourceDocumentId));
+      if (u.exists()) {
+        const d = u.data() || {};
+        const fileName = safeName(d.fileName, "document.pdf");
+        const fileUrl  = d.fileUrl || d.downloadURL || null;
+        // avoid duplicates by url
+        if (!previews.some(p => p.fileUrl && fileUrl && p.fileUrl === fileUrl)) {
+          previews.push({ fileName, fileUrl });
+        }
+      } else {
+        // Optional: indexed_documents -> find matching unindexed_pdfs by (evrakNo, userId)
+        try {
+          const idx = await getDoc(doc(db, "indexed_documents", notification.sourceDocumentId));
+          if (idx.exists()) {
+            const ix = idx.data() || {};
+            const qy = query(
+              collection(db, "unindexed_pdfs"),
+              where("evrakNo", "==", ix.etebsEvrakNo || null),
+              where("userId", "==", ix.userId || null),
+              limit(1)
+            );
+            const snap = await getDocs(qy);
+            if (!snap.empty) {
+              const ux = snap.docs[0].data() || {};
+              const fileName = safeName(ux.fileName, "document.pdf");
+              const fileUrl  = ux.fileUrl || ux.downloadURL || null;
+              if (!previews.some(p => p.fileUrl && fileUrl && p.fileUrl === fileUrl)) {
+                previews.push({ fileName, fileUrl });
+              }
+            }
+          }
+        } catch (e) {
+          console.warn("getAttachmentPreviews indexed fallback error:", e);
+        }
+      }
+    } catch (e) {
+      console.warn("getAttachmentPreviews unindexed_pdfs error:", e);
+    }
+  }
+
+  return previews;
+}
+
     // ---------- Modals ----------
     function showMissingInfo(notification) {
       const modal = document.getElementById("missing-info-modal");
@@ -722,14 +793,21 @@ async function resolveDocumentInfo(notification) {
         modalBodyEl.insertBefore(hintEl, contentLabel);
       }
 
-      // Belge bilgisini getir ve doldur
-      const docInfo = await resolveDocumentInfo(notification);
-      hintEl.innerHTML = docInfo.fileUrl
-        ? `Ek Kaynağı: <a href="${docInfo.fileUrl}" target="_blank" rel="noopener">${docInfo.fileName}</a>`
-        : `Ek Kaynağı: -`;
+      
+      // Belge bilgisini getir ve doldur (çok-kaynaklı)
+      const previews = await getAttachmentPreviews(notification);
+      if (Array.isArray(previews) && previews.length) {
+        const links = previews.map(p => p.fileUrl
+          ? `<a href="${p.fileUrl}" target="_blank" rel="noopener">${p.fileName}</a>`
+          : `${p.fileName || '-'}`
+        ).join(" | ");
+        hintEl.innerHTML = `Ek Kaynağı: ${links}`;
+      } else {
+        hintEl.innerHTML = `Ek Kaynağı: -`;
+      }
     })();
 
-      document.getElementById("save-draft").dataset.id = notification.id;
+document.getElementById("save-draft").dataset.id = notification.id;
       ["close-modal", "close-modal-btn"].forEach(id => {
         const el = document.getElementById(id);
         if (!el) return;
@@ -938,15 +1016,21 @@ async function renderCurrentPage() {
     }
   })(),
   // Senkron ise direkt değer döner; async ise promise — ikisini de Promise.all çözer.
-  getDocumentInfo(notification),
+  getAttachmentPreviews(notification),
   (async () => {
     try { return await resolveDeliveryDate(notification); } catch { return '-'; }
   })()
 ]);
 
-    const fileCellHtml = (docInfo && docInfo.fileUrl)
-      ? `<a class="link" href="${docInfo.fileUrl}" target="_blank" rel="noopener">${docInfo.fileName}</a>`
-      : (docInfo?.fileName || '-');
+    
+    const previews = docInfo; // array from getAttachmentPreviews
+    const fileCellHtml = (Array.isArray(previews) && previews.length)
+      ? previews.map(p => p.fileUrl
+          ? `<a class="link" href="${p.fileUrl}" target="_blank" rel="noopener">${p.fileName}</a>`
+          : `${p.fileName || '-'}`
+        ).join("<br>")
+      : '-';
+
 
     const sentAtText = (notification.sentAt && typeof notification.sentAt.toDate === 'function')
       ? notification.sentAt.toDate().toLocaleString('tr-TR') : '-';
@@ -1077,8 +1161,8 @@ if (typeof globalThis.sendReminder !== "function") {
 }
 
 // resolveDocumentInfo fonksiyonunu global yap
-window.resolveDocumentInfo = resolveDocumentInfo;
-globalThis.resolveDocumentInfo = resolveDocumentInfo;
+window.getAttachmentPreviews = getAttachmentPreviews;
+globalThis.getAttachmentPreviews = getAttachmentPreviews;
 
 // Debug için global notificationsData erişimi
 Object.defineProperty(window, 'debugNotificationsData', {
@@ -1096,22 +1180,19 @@ if (__sendBtn) {
     if (!user) { alert("Giriş yapmalısınız."); return; }
     if (!confirm("Bu e-postayı göndermek istediğinize emin misiniz?")) return;
 
-    // DEBUG: Ek kontrolü (opsiyonel)
+    
+    // DEBUG: Ek kontrolü (çok-kaynaklı)
     const notification = notificationsData.find(n => n.id === id);
-    if (notification?.sourceDocumentId) {
-      try {
-        const docInfo = await resolveDocumentInfo(notification);
-        if (docInfo.fileName === '-' || !docInfo.fileUrl) {
-          console.warn('⚠️ [DEBUG] Ek bilgisi eksik, backend\'de ek gönderilmeyebilir!');
-        }
-      } catch (err) {
-        console.error('❌ [DEBUG] resolveDocumentInfo error:', err);
+    try {
+      const previews = await getAttachmentPreviews(notification);
+      if (!Array.isArray(previews) || previews.length === 0) {
+        console.warn('⚠️ [DEBUG] Ek önizlemesi bulunamadı; backend ek üretemeyebilir.');
       }
-    } else {
-      console.warn('⚠️ [DEBUG] sourceDocumentId eksik!');
+    } catch (err) {
+      console.error('❌ [DEBUG] getAttachmentPreviews error:', err);
     }
 
-    try {
+try {
       // 🔴 En önemlisi: Modalden TO/CC’yi topla ve DOKÜMANA YAZ
       const { toList, ccList } = collectModalRecipients();
 
