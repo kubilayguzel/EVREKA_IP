@@ -150,7 +150,7 @@
         cursor: pointer;
         font-weight: 500;
     }
-        .search-results-list { max-height: 200px; overflow-y: auto; border: 1px solid #ccc; border-radius: 8px; margin-top: 5px; }
+        .search-results-list { max-height: 200px; overflow-y: auto; border: 1px solid #ccc; border-radius: 8-px; margin-top: 5px; }
         .search-result-item { padding: 10px; cursor: pointer; border-bottom: 1px solid #eee; }
         .search-result-item:hover { background-color: #f0f0f0; }
         
@@ -606,7 +606,6 @@
                 }
 
                 try {
-                    // Veri yükleme sırası değiştirildi
                     await this.loadAllData();
                     await this.loadTaskData();
                     this.populateAssignedToDropdown();
@@ -751,6 +750,13 @@
                             content.innerHTML = `<p><b>Seçilen Varlık:</b> ${this.selectedRelatedIpRecord.title}</p>`;
                             display.style.display = 'flex';
                             document.getElementById('relatedIpRecordSearch').value = '';
+
+// Initialize documents list and render on page load
+this.currentTaskDocuments = Array.isArray(this.currentTask?.documents) ? [...this.currentTask.documents] : [];
+if (typeof this.renderDocuments === 'function') {
+  this.renderDocuments();
+}
+
                         }
                     } else {
                         document.getElementById('selectedIpRecordDisplay').style.display = 'none';
@@ -758,9 +764,10 @@
                         this.selectedRelatedIpRecord = null;
                     }
 
-                    // İlgili Taraf - taskOwner'dan çekiliyor
-                    if (task.taskOwner) {
-                        this.selectedRelatedParty = this.allPersons.find(p => p.id === task.taskOwner);
+                    // İlgili Taraf - taskOwner (array ya da string)
+                    const ownerId = Array.isArray(task.taskOwner) ? task.taskOwner[0] : task.taskOwner;
+                    if (ownerId) {
+                        this.selectedRelatedParty = this.allPersons.find(p => String(p.id) === String(ownerId));
                         if (this.selectedRelatedParty) {
                             const display = document.getElementById('selectedRelatedPartyDisplay');
                             const content = document.querySelector('#selectedRelatedPartyDisplay .search-result-display-content');
@@ -895,10 +902,8 @@
                 const epatsFileInput = document.getElementById('epatsFileInput');
                 if(epatsFileUploadArea) epatsFileUploadArea.addEventListener('click', () => epatsFileInput.click());
                 if(epatsFileInput) epatsFileInput.addEventListener('change', (e) => this.handleEpatsDocumentUpload(e.target.files[0]));
-                
                 this.setupDocumentUploadListeners();
                 this.setupAccrualContainerListeners();
-
                 document.getElementById('deliveryDate').addEventListener('change', async (e) => {
                     await this.recalculateOfficialAndOperationalDueDates();
                 });
@@ -933,15 +938,20 @@
 
             async handleEpatsDocumentUpload(file) {
                 if (!file) return;
+
                 const taskStatusSelect = document.getElementById('taskStatus');
                 if (taskStatusSelect) {
                     this.statusBeforeEpatsUpload = taskStatusSelect.value;
                 }
+
                 const uniqueFileId = generateUUID();
                 const storagePath = `epats_documents/${uniqueFileId}_${file.name}`;
                 const storageRef = firebaseServices.storageRef(firebaseServices.storage, storagePath);
+
                 await uploadBytes(storageRef, file);
+
                 const downloadURL = await getDownloadURL(storageRef);
+
                 this.uploadedEpatsFile = {
                     id: uniqueFileId,
                     name: file.name,
@@ -951,7 +961,9 @@
                     downloadURL: downloadURL,
                     uploadedAt: new Date().toISOString()
                 };
+
                 this.renderEpatsDocument();
+
                 if (taskStatusSelect && taskStatusSelect.value === 'completed') {
                     taskStatusSelect.value = this.statusBeforeEpatsUpload || 'open';
                 }
@@ -960,6 +972,7 @@
             renderEpatsDocument() {
                 const container = document.getElementById('epatsFileListContainer');
                 container.innerHTML = '';
+
                 if (this.uploadedEpatsFile) {
                     const file = this.uploadedEpatsFile;
                     const fileItem = document.createElement('div');
@@ -986,6 +999,7 @@
             removeEpatsDocument() {
                 this.uploadedEpatsFile = null;
                 this.renderEpatsDocument();
+
                 const taskStatusSelect = document.getElementById('taskStatus');
                 if (taskStatusSelect) {
                     taskStatusSelect.value = this.statusBeforeEpatsUpload || this.currentTask.details?.statusBeforeEpatsUpload || 'open';
@@ -996,23 +1010,29 @@
             setupDocumentUploadListeners() {
                 const fileUploadArea = document.getElementById('fileUploadArea');
                 const fileInput = document.getElementById('fileInput');
-                const epatsFileUploadArea = document.getElementById('epatsFileUploadArea');
-                const epatsFileInput = document.getElementById('epatsFileInput');
                 
                 if (fileUploadArea && fileInput) {
                     fileUploadArea.addEventListener('click', () => fileInput.click());
                     fileInput.addEventListener('change', (e) => this.handleTaskDocumentsUpload(e.target.files));
-                    fileUploadArea.addEventListener('dragover', (e) => { e.preventDefault(); fileUploadArea.style.borderColor = '#457b9d'; fileUploadArea.style.background = '#e0f2f7'; });
-                    fileUploadArea.addEventListener('dragleave', (e) => { e.preventDefault(); fileUploadArea.style.borderColor = '#a8dadc'; fileUploadArea.style.background = '#f1faee'; });
-                    fileUploadArea.addEventListener('drop', (e) => { e.preventDefault(); fileUploadArea.style.borderColor = '#a8dadc'; fileUploadArea.style.background = '#f1faee'; this.handleTaskDocumentsUpload(e.dataTransfer.files); });
-                }
-                
-                if (epatsFileUploadArea && epatsFileInput) {
-                    epatsFileUploadArea.addEventListener('click', () => epatsFileInput.click());
-                    epatsFileInput.addEventListener('change', (e) => this.handleEpatsDocumentUpload(e.target.files[0]));
-                    epatsFileUploadArea.addEventListener('dragover', (e) => { e.preventDefault(); epatsFileUploadArea.style.borderColor = '#457b9d'; epatsFileUploadArea.style.background = '#e0f2f7'; });
-                    epatsFileUploadArea.addEventListener('dragleave', (e) => { e.preventDefault(); epatsFileUploadArea.style.borderColor = '#a8dadc'; epatsFileUploadArea.style.background = '#f1faee'; });
-                    epatsFileUploadArea.addEventListener('drop', (e) => { e.preventDefault(); epatsFileUploadArea.style.borderColor = '#a8dadc'; epatsFileUploadArea.style.background = '#f1faee'; this.handleEpatsDocumentUpload(e.dataTransfer.files[0]); });
+                    
+                    fileUploadArea.addEventListener('dragover', (e) => {
+                        e.preventDefault();
+                        fileUploadArea.style.borderColor = '#457b9d';
+                        fileUploadArea.style.background = '#e0f2f7';
+                    });
+                    
+                    fileUploadArea.addEventListener('dragleave', (e) => {
+                        e.preventDefault();
+                        fileUploadArea.style.borderColor = '#a8dadc';
+                        fileUploadArea.style.background = '#f1faee';
+                    });
+                    
+                    fileUploadArea.addEventListener('drop', (e) => {
+                        e.preventDefault();
+                        fileUploadArea.style.borderColor = '#a8dadc';
+                        fileUploadArea.style.background = '#f1faee';
+                        this.handleTaskDocumentsUpload(e.dataTransfer.files);
+                    });
                 }
             }
 
@@ -1047,8 +1067,10 @@
                 const parts = deliveryDateStr.split('-');
                 const deliveryDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
                 deliveryDate.setHours(0, 0, 0, 0);
+
                 console.log('DEBUG: Güncellenen Tebliğ Tarihi:', this.formatDateToYYYYMMDD(deliveryDate));
                 console.log('DEBUG: Task triggeringTransactionType:', this.currentTask.triggeringTransactionType);
+
                 let duePeriod = null;
                 let sourceOfDuePeriod = 'unknown';
                 if (this.currentTask.officialDueDateDetails && this.currentTask.officialDueDateDetails.periodMonths !== undefined && this.currentTask.officialDueDateDetails.periodMonths !== null) {
@@ -1069,6 +1091,7 @@
                     console.log('DEBUG: triggeringTransactionType alanı yok - bu eski bir task olabilir');
                 }
                 console.log('DEBUG: Final duePeriod:', duePeriod, 'Kaynak:', sourceOfDuePeriod);
+
                 if (duePeriod === null || duePeriod === undefined) {
                     console.log('DEBUG: duePeriod bulunamadı, sadece tebliğ tarihi güncelleniyor.');
                     this.calculatedOfficialDueDate = this.currentTask.officialDueDate || null;
@@ -1128,12 +1151,9 @@
                     assignedTo_email: this.allUsers.find(u => u.id === form.assignedTo.value)?.email || '',
                     deliveryDate: form.deliveryDate.value || null,
                     updatedAt: new Date().toISOString(),
+                    details: { ...this.currentTask.details },
                     documents: this.currentTaskDocuments
                 };
-                
-                // İlgili taraf (taskOwner) güncellendi. Eğer kaldırılmışsa null olacak.
-                updatedTaskData.taskOwner = this.selectedRelatedParty ? this.selectedRelatedParty.id : null;
-
                 const evrakNo = document.getElementById('turkpatentEvrakNo')?.value?.trim() || '';
                 const docDate = document.getElementById('epatsDocumentDate')?.value || '';
                 const hasPdf = !!this.uploadedEpatsFile;
@@ -1147,14 +1167,14 @@
                 }
                 console.log('🔧 DEBUG: Ayarlanan status:', updatedTaskData.status);
                 if (this.uploadedEpatsFile) {
-                    updatedTaskData.details = { ...updatedTaskData.details, epatsDocument: {
+                    updatedTaskData.details.epatsDocument = {
                         ...this.uploadedEpatsFile,
                         turkpatentEvrakNo: evrakNo,
                         documentDate: docDate ? new Date(docDate).toISOString() : null
-                    }};
+                    };
                     console.log('🔧 DEBUG: EPATS document oluşturuldu');
                 } else {
-                    updatedTaskData.details = { ...updatedTaskData.details, epatsDocument: null };
+                    updatedTaskData.details.epatsDocument = null;
                     console.log('🔧 DEBUG: EPATS document null yapıldı');
                 }
                 if (this.uploadedEpatsFile && this.statusBeforeEpatsUpload) {
@@ -1278,9 +1298,21 @@
             }
 
             searchPersons(query, targetField) {
-                const resultsContainerId = 'relatedPartySearchResults';
-                const inputId = 'relatedPartySearch';
-                const displayId = 'selectedRelatedPartyDisplay';
+                const resultsContainerId = {
+                    'relatedParty': 'relatedPartySearchResults',
+                    'tpInvoiceParty': 'tpInvoicePartySearchResults',
+                    'serviceInvoiceParty': 'serviceInvoicePartySearchResults'
+                }[targetField];
+                const inputId = {
+                    'relatedParty': 'relatedPartySearch',
+                    'tpInvoiceParty': 'tpInvoicePartySearch',
+                    'serviceInvoiceParty': 'serviceInvoicePartySearch'
+                }[targetField];
+                const displayId = {
+                    'relatedParty': 'selectedRelatedPartyDisplay',
+                    'tpInvoiceParty': 'selectedTpInvoicePartyDisplay',
+                    'serviceInvoiceParty': 'selectedServiceInvoicePartyDisplay'
+                }[targetField];
 
                 const resultsContainer = document.getElementById(resultsContainerId);
                 resultsContainer.innerHTML = '';
@@ -1298,7 +1330,7 @@
                     item.dataset.id = p.id;
                     item.innerHTML = `<div><b>${p.name}</b><br><small>${p.email || '-'}</small></div>`;
                     item.addEventListener('click', () => {
-                        this.selectPerson(p, 'relatedParty');
+                        this.selectPerson(p, targetField);
                         resultsContainer.innerHTML = '';
                         resultsContainer.style.display = 'none';
                         document.getElementById(inputId).value = p.name;
@@ -1308,16 +1340,27 @@
             }
 
             selectPerson(person, targetField) {
-                const displayId = 'selectedRelatedPartyDisplay';
-                const displayContentId = '#selectedRelatedPartyDisplay .search-result-display-content';
+                const displayId = {
+                    'relatedParty': 'selectedRelatedPartyDisplay',
+                    'tpInvoiceParty': 'selectedTpInvoicePartyDisplay',
+                    'serviceInvoiceParty': 'selectedServiceInvoicePartyDisplay'
+                }[targetField];
                 
-                this.selectedRelatedParty = person;
+                const displayContentId = {
+                    'relatedParty': '#selectedRelatedPartyDisplay .search-result-display-content',
+                    'tpInvoiceParty': '#selectedTpInvoicePartyDisplay .search-result-display-content',
+                    'serviceInvoiceParty': '#selectedServiceInvoicePartyDisplay .search-result-display-content'
+                }[targetField];
+                
+                if (targetField === 'relatedParty') this.selectedRelatedParty = person;
+                else if (targetField === 'tpInvoiceParty') this.selectedTpInvoiceParty = person;
+                else if (targetField === 'serviceInvoiceParty') this.selectedServiceInvoiceParty = person;
 
                 const display = document.getElementById(displayId);
                 const content = document.querySelector(displayContentId);
                 content.innerHTML = `<p><b>Seçilen:</b> ${person.name}</p>`;
                 display.style.display = 'flex';
-                document.getElementById('relatedPartySearch').value = '';
+                document.getElementById(displayId.replace('selected', 'related')).value = '';
             }
             
             removeSelectedRelatedParty() {
@@ -1763,6 +1806,45 @@
         taskDetailModule.init();
         window.taskDetailModule = taskDetailModule;
     });
+
+function setupDropZone(areaId, inputId, onFiles) {
+  try {
+    const area  = document.getElementById(areaId);
+    const input = document.getElementById(inputId);
+    if (!area || !input) return;
+    area.addEventListener('click', () => input.click());
+    area.addEventListener('dragover', function(e){ e.preventDefault(); area.classList.add('dragover'); });
+    area.addEventListener('dragleave', function(){ area.classList.remove('dragover'); });
+    area.addEventListener('drop', function(e){
+      e.preventDefault();
+      area.classList.remove('dragover');
+      if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) {
+        onFiles(e.dataTransfer.files);
+      }
+    });
+    input.addEventListener('change', function(e){
+      const files = e.target && e.target.files;
+      if (files && files.length) onFiles(files);
+    });
+  } catch (err) {
+    console.warn('setupDropZone init failed:', err);
+  }
+}
+document.addEventListener('DOMContentLoaded', function(){
+  try {
+    if (typeof setupDropZone === 'function') {
+      var pageInstance = window.page || window.taskPage || window.detailPage || window.TaskDetailPageInstance;
+      if (pageInstance) {
+        if (document.getElementById('fileUploadArea') && document.getElementById('fileInput') && typeof pageInstance.handleTaskDocumentsUpload === 'function') {
+          setupDropZone('fileUploadArea', 'fileInput', function(files){ pageInstance.handleTaskDocumentsUpload(files); });
+        }
+        if (document.getElementById('epatsFileUploadArea') && document.getElementById('epatsFileInput') && typeof pageInstance.handleEpatsUpload === 'function') {
+          setupDropZone('epatsFileUploadArea', 'epatsFileInput', function(files){ if (files && files.length) pageInstance.handleEpatsUpload(files[0]); });
+        }
+      }
+    }
+  } catch (e) { console.warn('dropzone boot failed:', e); }
+});
 </script>
 </body>
 </html>
