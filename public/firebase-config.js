@@ -266,10 +266,10 @@ export const ipRecordsService = {
                     if (isFromOpposition) {
                         console.log("✅ İtiraz sonucu - mevcut kayıt kullanılacak, yeni kayıt oluşturulmayacak");
                         return {
-                            success: true,
-                            id: existingId,
-                            isExistingRecord: true,
-                            message: "İtiraz işi için mevcut kayıt kullanıldı, yeni kayıt oluşturulmadı"
+                        success: true,
+                        id: existingId,               // bulunan kaydın id'si
+                        isExistingRecord: true,
+                        message: `Bu başvuru numarası (${applicationNumber}) zaten kayıtlı; mevcut kayıt kullanıldı.`
                         };
                     }
                     
