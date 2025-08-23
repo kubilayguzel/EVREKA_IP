@@ -305,16 +305,20 @@ class PortfolioByOppositionCreator {
                 return { success: false, error: 'Firebase bağlantısı bulunamadı' };
             }
 
-            // ipRecords koleksiyonuna yeni kayıt ekle
-            const docRef = await addDoc(collection(this.db, 'ipRecords'), portfolioData);
+            // İpRecordsService üzerinden duplikasyon kontrolü ile kayıt oluştur
+            const result = await window.ipRecordsService.createRecordFromOpposition(portfolioData);
             
-            console.log('✅ Portföy kaydı oluşturuldu:', docRef.id);
-            
-            return {
-                success: true,
-                recordId: docRef.id,
-                data: portfolioData
-            };
+            if (result.success) {
+                console.log('✅ Portföy kaydı oluşturuldu:', result.id);
+                return {
+                    success: true,
+                    recordId: result.id,
+                    isExistingRecord: result.isExistingRecord || false,
+                    data: portfolioData
+                };
+            } else {
+                return result; // Hata mesajını aynen döndür
+            }
 
         } catch (error) {
             console.error('❌ Portföy kaydı kaydetme hatası:', error);
@@ -324,7 +328,6 @@ class PortfolioByOppositionCreator {
             };
         }
     }
-
     /**
      * Yayına itiraz işi türü kontrolü - Hem ID hem de alias'a göre kontrol
      * @param {string} transactionTypeId - İşlem türü ID'si
