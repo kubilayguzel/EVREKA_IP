@@ -1104,54 +1104,154 @@ export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
       return await findRecipientsFromPersonsRelated(ids);
     };
 
-    const getCcFromEvrekaListByTransactionType = async (txTypeRaw) => {
-      try {
-        const emails = new Set();
-        if (txTypeRaw === null || txTypeRaw === undefined) return [];
+const getCcFromEvrekaListByTransactionType = async (txTypeRaw) => {
+  try {
+    const emails = new Set();
+    if (txTypeRaw === null || txTypeRaw === undefined) return [];
 
-        const txTypeStr = String(txTypeRaw).trim();
-        const txTypeNum = Number.isFinite(Number(txTypeRaw)) ? Number(txTypeRaw) : null;
+    console.log("🔍 [DEBUG] getCcFromEvrekaListByTransactionType başlangıç:", { txTypeRaw, type: typeof txTypeRaw });
 
-        // 1) Doc id = txTypeStr
-        const byId = await db.collection("evrekaMailCCList").doc(txTypeStr).get();
-        if (byId.exists) {
-          for (const e of (byId.data()?.emails || [])) emails.add(String(e).trim());
+    // String ve numeric versiyonları hazırla
+    const txTypeStr = String(txTypeRaw).trim();
+    const txTypeNum = parseInt(txTypeRaw, 10);
+    const isValidNumber = !Number.isNaN(txTypeNum);
+
+    console.log("🔍 [DEBUG] Parsed values:", { txTypeStr, txTypeNum, isValidNumber });
+
+    // 1) Doc id = txTypeStr (document ID olarak string)
+    try {
+      const byId = await db.collection("evrekaMailCCList").doc(txTypeStr).get();
+      if (byId.exists()) {
+        console.log("✅ [DEBUG] Doc ID ile bulundu:", txTypeStr);
+        const data = byId.data();
+        // Hem email (string) hem emails (array) destekle
+        if (data.email && typeof data.email === 'string') {
+          emails.add(data.email.trim());
         }
-
-        // 2) array-contains (string)
-        const qStr = await db.collection("evrekaMailCCList")
-          .where("transactionTypes", "array-contains", txTypeStr)
-          .get();
-        qStr.forEach(doc => {
-          for (const e of (doc.data()?.emails || [])) emails.add(String(e).trim());
-        });
-
-        // 3) array-contains (number) — eğer numeric ise
-        if (txTypeNum !== null) {
-          const qNum = await db.collection("evrekaMailCCList")
-            .where("transactionTypes", "array-contains", txTypeNum)
-            .get();
-          qNum.forEach(doc => {
-            for (const e of (doc.data()?.emails || [])) emails.add(String(e).trim());
+        if (Array.isArray(data.emails)) {
+          data.emails.forEach(e => {
+            if (e && typeof e === 'string') emails.add(e.trim());
           });
         }
-
-        // 4) fallback default
-        if (emails.size === 0) {
-          const def = await db.collection("evrekaMailCCList").doc("default").get();
-          if (def.exists) for (const e of (def.data()?.emails || [])) emails.add(String(e).trim());
-        }
-
-        console.log("📫 [CC] evrekaMailCCList", {
-          txTypeRaw, txTypeStr, txTypeNum,
-          picked: Array.from(emails)
-        });
-        return Array.from(emails);
-      } catch (err) {
-        console.warn("⚠️ [CC] evrekaMailCCList read error:", err?.message || err);
-        return [];
       }
-    };
+    } catch (e) {
+      console.warn("⚠️ [DEBUG] Doc ID sorgusu hata:", e.message);
+    }
+
+    // 2) array-contains (string) - transactionTypes array'inde string arama
+    try {
+      const qStr = await db.collection("evrekaMailCCList")
+        .where("transactionTypes", "array-contains", txTypeStr)
+        .get();
+      
+      console.log(`🔍 [DEBUG] String array-contains sorgusu: ${qStr.size} sonuç`);
+      
+      qStr.forEach(doc => {
+        console.log("✅ [DEBUG] String match bulundu:", doc.id, doc.data());
+        const data = doc.data();
+        // Hem email (string) hem emails (array) destekle
+        if (data.email && typeof data.email === 'string') {
+          emails.add(data.email.trim());
+        }
+        if (Array.isArray(data.emails)) {
+          data.emails.forEach(e => {
+            if (e && typeof e === 'string') emails.add(e.trim());
+          });
+        }
+      });
+    } catch (e) {
+      console.warn("⚠️ [DEBUG] String array-contains hata:", e.message);
+    }
+
+    // 3) array-contains (number) - transactionTypes array'inde number arama
+    if (isValidNumber) {
+      try {
+        const qNum = await db.collection("evrekaMailCCList")
+          .where("transactionTypes", "array-contains", txTypeNum)
+          .get();
+        
+        console.log(`🔍 [DEBUG] Number array-contains sorgusu: ${qNum.size} sonuç`);
+        
+        qNum.forEach(doc => {
+          console.log("✅ [DEBUG] Number match bulundu:", doc.id, doc.data());
+          const data = doc.data();
+          // Hem email (string) hem emails (array) destekle
+          if (data.email && typeof data.email === 'string') {
+            emails.add(data.email.trim());
+          }
+          if (Array.isArray(data.emails)) {
+            data.emails.forEach(e => {
+              if (e && typeof e === 'string') emails.add(e.trim());
+            });
+          }
+        });
+      } catch (e) {
+        console.warn("⚠️ [DEBUG] Number array-contains hata:", e.message);
+      }
+    }
+
+    // 4) "All" değeri kontrolü
+    try {
+      const allSnap = await db.collection("evrekaMailCCList")
+        .where("transactionTypes", "==", "All")
+        .get();
+      
+      console.log(`🔍 [DEBUG] "All" sorgusu: ${allSnap.size} sonuç`);
+      
+      allSnap.forEach(doc => {
+        console.log("✅ [DEBUG] All match bulundu:", doc.id, doc.data());
+        const data = doc.data();
+        if (data.email && typeof data.email === 'string') {
+          emails.add(data.email.trim());
+        }
+        if (Array.isArray(data.emails)) {
+          data.emails.forEach(e => {
+            if (e && typeof e === 'string') emails.add(e.trim());
+          });
+        }
+      });
+    } catch (e) {
+      console.warn("⚠️ [DEBUG] All sorgusu hata:", e.message);
+    }
+
+    // 5) Fallback default - eğer hiçbir match yoksa
+    if (emails.size === 0) {
+      try {
+        console.log("🔍 [DEBUG] Fallback default aranıyor...");
+        const def = await db.collection("evrekaMailCCList").doc("default").get();
+        if (def.exists()) {
+          console.log("✅ [DEBUG] Default bulundu:", def.data());
+          const data = def.data();
+          if (data.email && typeof data.email === 'string') {
+            emails.add(data.email.trim());
+          }
+          if (Array.isArray(data.emails)) {
+            data.emails.forEach(e => {
+              if (e && typeof e === 'string') emails.add(e.trim());
+            });
+          }
+        }
+      } catch (e) {
+        console.warn("⚠️ [DEBUG] Default sorgusu hata:", e.message);
+      }
+    }
+
+    const result = Array.from(emails);
+    console.log("📫 [CC] evrekaMailCCList FINAL RESULT:", {
+      txTypeRaw, 
+      txTypeStr, 
+      txTypeNum,
+      isValidNumber,
+      picked: result,
+      count: result.length
+    });
+    
+    return result;
+  } catch (err) {
+    console.warn("⚠️ [CC] evrekaMailCCList read error:", err?.message || err);
+    return [];
+  }
+};
 
     // 2) Şablon
     let template = null;
