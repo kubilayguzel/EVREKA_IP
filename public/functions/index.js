@@ -1124,9 +1124,9 @@ export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
           }
         });
 
-        // 2) transactionTypes "all" olanları ekle
+        // 2) transactionTypes array'inde "all" string değeri olanları ekle
         const allQuery = await db.collection("evrekaMailCCList")
-          .where("transactionTypes", "==", "all")
+          .where("transactionTypes", "array-contains", "all")
           .get();
         
         allQuery.forEach(doc => {
