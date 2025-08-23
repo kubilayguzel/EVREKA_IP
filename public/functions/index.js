@@ -1546,17 +1546,24 @@ async function getRecipientsByApplicantIds(applicants, notificationType = 'marka
  * @returns {Promise<string[]>}
  */
 async function getCcFromEvrekaListByTransactionType(txType) {
+  console.log("🔍 [EVREKA-CC] Fonksiyon çağrıldı:", { txType, type: typeof txType });
+  
   const emails = new Set();
 
   try {
     // 1) transactionTypes array'inde number arama
     const n = typeof txType === "number" ? txType : parseInt(txType, 10);
+    console.log("🔍 [EVREKA-CC] Parsed number:", { n, isValid: !Number.isNaN(n) });
+    
     if (!Number.isNaN(n)) {
       const arrSnap = await db.collection("evrekaMailCCList")
         .where("transactionTypes", "array-contains", n)
         .get();
+      console.log(`🔍 [EVREKA-CC] Number query sonuç: ${arrSnap.size} docs`);
+      
       arrSnap.forEach(d => {
         const e = (d.data()?.email || "").trim();
+        console.log(`✅ [EVREKA-CC] Number match: ${d.id} -> ${e}`);
         if (e) emails.add(e);
       });
     }
@@ -1565,15 +1572,21 @@ async function getCcFromEvrekaListByTransactionType(txType) {
     const allSnap = await db.collection("evrekaMailCCList")
       .where("transactionTypes", "array-contains", "All")
       .get();
+    console.log(`🔍 [EVREKA-CC] "All" query sonuç: ${allSnap.size} docs`);
+    
     allSnap.forEach(d => {
       const e = (d.data()?.email || "").trim();
+      console.log(`✅ [EVREKA-CC] "All" match: ${d.id} -> ${e}`);
       if (e) emails.add(e);
     });
-  } catch (err) {
-    console.error("❌ evrekaMailCCList sorgu hatası:", err);
-  }
 
-  return Array.from(emails);
+    const result = Array.from(emails);
+    console.log("🎯 [EVREKA-CC] Final result:", result);
+    return result;
+  } catch (err) {
+    console.error("❌ [EVREKA-CC] evrekaMailCCList sorgu hatası:", err);
+    return [];
+  }
 }
 async function downloadWithStream(file, destination) {
   await pipeline(file.createReadStream(), fs.createWriteStream(destination));
