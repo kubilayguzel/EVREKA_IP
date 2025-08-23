@@ -220,17 +220,104 @@ export const authService = {
 export const ipRecordsService = {
     async createRecord(recordData) {
         try {
+            // 1. applicationNumber varsa duplikasyon kontrolü yap
+            if (recordData.applicationNumber && recordData.applicationNumber.trim()) {
+                const applicationNumber = recordData.applicationNumber.trim();
+                
+                // Aynı applicationNumber ile mevcut kayıt kontrolü
+                const duplicateQuery = query(
+                    collection(db, "ipRecords"),
+                    where("applicationNumber", "==", applicationNumber)
+                );
+                
+                const duplicateSnapshot = await getDocs(duplicateQuery);
+                
+                if (!duplicateSnapshot.empty) {
+                    const existingRecord = duplicateSnapshot.docs[0].data();
+                    const existingId = duplicateSnapshot.docs[0].id;
+                    const existingOwnerType = existingRecord.recordOwnerType;
+                    
+                    console.log("🔍 Duplikasyon kontrolü:", {
+                        applicationNumber,
+                        newRecordType: recordData.recordOwnerType,
+                        existingRecordType: existingOwnerType,
+                        existingId,
+                        createdFrom: recordData.createdFrom
+                    });
+                    
+                    // KURAL 1: DATA ENTRY üzerinden kayıt (self veya third_party farketmez)
+                    const isFromDataEntry = recordData.createdFrom === 'data_entry' || 
+                                        !recordData.createdFrom; // Default olarak data entry kabul et
+                    
+                    if (isFromDataEntry) {
+                        return { 
+                            success: false, 
+                            error: `Bu başvuru numarası (${applicationNumber}) ile zaten bir kayıt mevcut. Duplikasyon önlemek için kayıt oluşturulamadı.`,
+                            isDuplicate: true,
+                            existingRecordId: existingId,
+                            existingRecordType: existingOwnerType
+                        };
+                    }
+                    
+                    // KURAL 2: İTİRAZ SONUCU oluşan 3. taraf kaydı
+                    const isFromOpposition = recordData.createdFrom === 'opposition_automation' || 
+                                        recordData.createdFrom === 'bulletin_record';
+                    
+                    if (isFromOpposition) {
+                        console.log("✅ İtiraz sonucu - mevcut kayıt kullanılacak, yeni kayıt oluşturulmayacak");
+                        return {
+                            success: true,
+                            id: existingId,
+                            isExistingRecord: true,
+                            message: "İtiraz işi için mevcut kayıt kullanıldı, yeni kayıt oluşturulmadı"
+                        };
+                    }
+                    
+                    // KURAL 3: Bilinmeyen durumlar için güvenli yaklaşım (duplikasyonu engelle)
+                    return { 
+                        success: false, 
+                        error: `Bu başvuru numarası (${applicationNumber}) ile zaten bir kayıt mevcut.`,
+                        isDuplicate: true,
+                        existingRecordId: existingId,
+                        existingRecordType: existingOwnerType
+                    };
+                }
+            }
+            
+            // 2. Duplikasyon yoksa normal kayıt oluştur
             const docRef = await addDoc(collection(db, "ipRecords"), {
                 ...recordData,
                 createdAt: serverTimestamp(),
                 updatedAt: serverTimestamp(),
             });
-            console.log("Yeni IP kaydı başarıyla oluşturuldu, ID:", docRef.id);
+            
+            console.log("✅ Yeni IP kaydı başarıyla oluşturuldu, ID:", docRef.id);
             return { success: true, id: docRef.id };
+            
         } catch (error) {
-            console.error("IP kaydı oluşturulurken hata:", error);
+            console.error("❌ IP kaydı oluşturulurken hata:", error);
             return { success: false, error: error.message };
         }
+    },
+
+    // Data Entry için özel metod (açık context ile)
+    async createRecordFromDataEntry(recordData) {
+        const recordDataWithContext = {
+            ...recordData,
+            createdFrom: 'data_entry'
+        };
+        
+        return await this.createRecord(recordDataWithContext);
+    },
+
+    // İtiraz işi için özel metod (açık context ile)
+    async createRecordFromOpposition(recordData) {
+        const recordDataWithContext = {
+            ...recordData,
+            createdFrom: 'opposition_automation'
+        };
+        
+        return await this.createRecord(recordDataWithContext);
     },
     async addRecord(record) {
         if (!isFirebaseAvailable) return { success: false, error: "Firebase kullanılamıyor." };
