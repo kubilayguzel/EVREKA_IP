@@ -15,7 +15,6 @@
         .page-title { font-size: 2em; color: #1e3c72; margin-bottom: 10px; }
         .page-subtitle { color: #666; font-size: 1.1em; }
 
-        /* YENİ: Her bir bölüm için kart stili */
         .section-card {
             background: rgba(255, 255, 255, 0.95);
             padding: 30px;
@@ -25,7 +24,6 @@
         }
         
         .task-detail-container {
-            /* Bu ana kapsayıcı artık sadece bölümleri sarmalar */
             padding: 0; 
             background: none; 
             box-shadow: none; 
@@ -155,8 +153,40 @@
         .search-results-list { max-height: 200px; overflow-y: auto; border: 1px solid #ccc; border-radius: 8px; margin-top: 5px; }
         .search-result-item { padding: 10px; cursor: pointer; border-bottom: 1px solid #eee; }
         .search-result-item:hover { background-color: #f0f0f0; }
-        .search-result-display { background: #e9f5ff; border: 1px solid #bde0fe; padding: 15px; border-radius: 8px; margin-top: 10px; display: flex; gap: 15px; align-items: center;}
         
+        /* KARTLARDAKİ SEÇİLİ ÖĞE GÖRÜNÜMÜNÜ DÜZENLEME */
+        .search-result-display { 
+            background: #e9f5ff; 
+            border: 1px solid #bde0fe; 
+            padding: 15px; 
+            border-radius: 8px; 
+            margin-top: 10px; 
+            display: flex; 
+            justify-content: space-between; /* Öğe ve kaldır butonu arasına boşluk bırakır */
+            align-items: center;
+            gap: 15px; 
+        }
+        .search-result-display-content {
+            flex-grow: 1;
+        }
+        .remove-item-btn {
+            background: #ff6b6b;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            font-size: 1.2em;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .remove-item-btn:hover {
+            background: #ff5252;
+        }
+
         .history-list {
             max-height: none;
             overflow-y: visible;
@@ -182,7 +212,6 @@
             margin-top: 4px;
         }
         
-        /* YENİ: Tek tip dosya yükleme alanı stili */
         .file-upload-area {
             border: 2px dashed #a8dadc;
             border-radius: 12px;
@@ -311,7 +340,10 @@
                             <label for="relatedIpRecordSearch" class="form-label">İlgili IP Kaydı:</label>
                             <input type="text" id="relatedIpRecordSearch" class="form-input" placeholder="Başlık veya Başvuru Numarası Ara...">
                             <div id="relatedIpRecordSearchResults" class="search-results-list"></div>
-                            <div id="selectedIpRecordDisplay" class="search-result-display" style="display:none;"></div>
+                            <div id="selectedIpRecordDisplay" class="search-result-display" style="display:none;">
+                                <div class="search-result-display-content"></div>
+                                <button type="button" class="remove-item-btn" id="removeIpRecordBtn">&times;</button>
+                            </div>
                         </div>
                         <div class="form-group full-width">
                             <label for="relatedPartySearch" class="form-label">İlgili Taraf (Opsiyonel):</label>
@@ -320,7 +352,10 @@
                                 <button type="button" id="addNewRelatedPartyBtn" class="btn-add-item">Yeni Kişi</button>
                             </div>
                             <div id="relatedPartySearchResults" class="search-results-list"></div>
-                            <div id="selectedRelatedPartyDisplay" class="search-result-display" style="display:none;"></div>
+                            <div id="selectedRelatedPartyDisplay" class="search-result-display" style="display:none;">
+                                <div class="search-result-display-content"></div>
+                                <button type="button" class="remove-item-btn" id="removeRelatedPartyBtn">&times;</button>
+                            </div>
                         </div>
                         <div class="form-group full-width">
                             <label for="taskDescription" class="form-label">Açıklama:</label>
@@ -383,11 +418,125 @@
     </div>
 
     <div id="accrualModal" class="modal">
+        <div class="modal-content">
+            <span class="close-modal-btn" id="closeAccrualModal">&times;</span>
+            <h3 class="modal-title" id="accrualModalTitle">Yeni Tahakkuk Ekle</h3>
+            <form id="accrualForm">
+                <input type="hidden" id="accrualId">
+                <div class="form-grid">
+                    <div class="form-group full-width">
+                        <label for="accrualTaskTitleDisplay" class="form-label">İlgili İş</label>
+                        <input type="text" id="accrualTaskTitleDisplay" class="form-input" readonly>
+                    </div>
+                    <div class="form-group">
+                        <label for="officialFee" class="form-label">Resmi Ücret</label>
+                        <div class="input-with-currency">
+                            <input type="number" id="officialFee" class="form-input" placeholder="0.00" step="0.01">
+                            <select id="officialFeeCurrency" class="currency-select">
+                                <option value="TRY">TL</option>
+                                <option value="EUR">EUR</option>
+                                <option value="USD">USD</option>
+                                <option value="CHF">CHF</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="serviceFee" class="form-label">Hizmet Bedeli</label>
+                        <div class="input-with-currency">
+                            <input type="number" id="serviceFee" class="form-input" placeholder="0.00" step="0.01">
+                            <select id="serviceFeeCurrency" class="currency-select">
+                                <option value="TRY">TL</option>
+                                <option value="EUR">EUR</option>
+                                <option value="USD">USD</option>
+                                <option value="CHF">CHF</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="vatRate" class="form-label">KDV Oranı (%)</label>
+                        <input type="number" id="vatRate" class="form-input" value="20">
+                    </div>
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="applyVatToOfficialFee" checked>
+                            Resmi Ücrete KDV Uygula
+                        </label>
+                    </div>
+                    <div class="form-group full-width">
+                        <label class="form-label">Toplam Tutar</label>
+                        <div id="totalAmountDisplay" class="total-amount-display">0.00 TRY</div>
+                    </div>
+                    <div class="form-group full-width">
+                        <label for="tpInvoicePartySearch" class="form-label">Türk Patent Faturası Tarafı</label>
+                        <input type="text" id="tpInvoicePartySearch" class="form-input" placeholder="Fatura tarafı arayın...">
+                        <div id="tpInvoicePartySearchResults" class="search-results-list"></div>
+                        <div id="selectedTpInvoicePartyDisplay" class="search-result-display" style="display:none;"></div>
+                    </div>
+                    <div class="form-group full-width">
+                        <label for="serviceInvoicePartySearch" class="form-label">Hizmet Faturası Tarafı</label>
+                        <input type="text" id="serviceInvoicePartySearch" class="form-input" placeholder="Fatura tarafı arayın...">
+                        <div id="serviceInvoicePartySearchResults" class="search-results-list"></div>
+                        <div id="selectedServiceInvoicePartyDisplay" class="search-result-display" style="display:none;"></div>
+                    </div>
+                    <div class="form-group full-width">
+                        <label for="paymentDate" class="form-label">Ödeme Tarihi (Opsiyonel)</label>
+                        <input type="date" id="paymentDate" class="form-input">
+                    </div>
+                    <div class="form-group full-width">
+                        <label for="paymentReceiptFile" class="form-label">Ödeme Dekontu (Opsiyonel)</label>
+                        <div class="file-upload-area" id="paymentReceiptFileUploadArea">
+                            <div>Dosyayı buraya sürükleyin veya tıklayın</div>
+                            <input type="file" id="paymentReceiptFile" multiple hidden accept=".pdf,.doc,.docx,.jpg,.jpeg,.png">
+                        </div>
+                        <div class="file-list-container" id="paymentReceiptFileList"></div>
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" id="cancelAccrualBtn">İptal</button>
+                    <button type="submit" class="btn btn-primary" id="saveAccrualBtn">Kaydet</button>
+                </div>
+            </form>
         </div>
+    </div>
 
     <div class="modal" id="addPersonModal">
+        <div class="modal-content">
+            <span class="close-modal-btn" id="closeAddPersonModal">&times;</span>
+            <h3 class="modal-title">Yeni Kişi Ekle</h3>
+            <form id="personForm">
+                <div class="form-group">
+                    <label class="form-label" for="personName">Ad Soyad *</label>
+                    <input type="text" id="personName" class="form-input" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="personEmail">E-posta</label>
+                    <input type="email" id="personEmail" class="form-input">
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="personPhone">Telefon</label>
+                    <input type="tel" id="personPhone" class="form-input">
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="personType">Kişi Türü *</label>
+                    <select id="personType" class="form-select" required>
+                        <option value="">Seçiniz</option>
+                        <option value="individual">Bireysel</option>
+                        <option value="company">Şirket</option>
+                        <option value="institution">Kurum</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="personAddress">Adres</label>
+                    <textarea id="personAddress" class="form-input" rows="3"></textarea>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" id="cancelPersonBtn">İptal</button>
+                    <button type="button" class="btn btn-primary" id="savePersonBtn">Kaydet</button>
+                </div>
+            </form>
         </div>
-    
+    </div>
+
 <script type="module">
     import { authService, taskService, ipRecordsService, personService, accrualService, auth, generateUUID, documentDesignationTranslations, transactionTypeService,firebaseServices } from './firebase-config.js';
     import { showNotification, formatFileSize, readFileAsDataURL, TASK_STATUSES, TURKEY_HOLIDAYS, addMonthsToDate, isWeekend, isHoliday, findNextWorkingDay } from './utils.js';
@@ -421,28 +570,20 @@
                 this.statusBeforeEpatsUpload = null;
             }
 
-            // YENİ YARDIMCI FONKSİYON: Tarihleri YYYY-MM-DD formatına dönüştürür (yerel saat diliminde)
             formatDateToYYYYMMDD(date) {
                 if (!date) return null;
-                // Eğer date bir Firestore Timestamp objesiyse, önce Date objesine çevir
                 let actualDate = date;
                 if (typeof date === 'object' && date.toDate) {
                     actualDate = date.toDate();
                 } else if (typeof date === 'string') {
-                    // String ise, ISO formatında bekleyelim veya Date objesine dönüştürelim
-                    // toISOString().slice(0, 10) gibi bir string ise doğrudan kullanılabilir
-                    // Ama new Date(string) ile oluşturup yerel bileşenleri alırsak daha güvenli olur
                     actualDate = new Date(date);
                 }
-
-                // Hatalı tarih objelerini elemek için kontrol
                 if (isNaN(actualDate.getTime())) {
                     console.warn('Geçersiz tarih objesi formatDateToYYYYMMDD içinde:', date);
                     return null;
                 }
-
                 const year = actualDate.getFullYear();
-                const month = String(actualDate.getMonth() + 1).padStart(2, '0'); // Ay 0'dan başladığı için +1
+                const month = String(actualDate.getMonth() + 1).padStart(2, '0');
                 const day = String(actualDate.getDate()).padStart(2, '0');
                 return `${year}-${month}-${day}`;
             }
@@ -582,8 +723,6 @@
                 this.renderAccruals();
             }
 
-        // task-management.html ve task-detail.html'de fillTaskForm() fonksiyonunu şu şekilde değiştirin:
-
                 fillTaskForm() {
                     const task = this.currentTask;
                     
@@ -591,8 +730,7 @@
                     document.getElementById('taskDescription').value = task.description || '';
                     document.getElementById('taskPriority').value = task.priority || 'medium';
                     
-                    // Dropdown'ı doldur ve mevcut durumu seçili yap
-                    this.populateStatusDropdown(task.status); // 'task.status' parametre olarak gönderiliyor
+                    this.populateStatusDropdown(task.status);
                     
                     document.getElementById('assignedTo').value = task.assignedTo_uid || '';
                     document.getElementById('taskDueDate').value = this.formatDateToYYYYMMDD(task.dueDate) || '';
@@ -603,75 +741,72 @@
                     const specificType = taskTypeParts.slice(1).join(' ').replace(/\b\w/g, l => l.toUpperCase());
                     document.getElementById('taskTypeDisplay').value = `${mainType.charAt(0).toUpperCase() + mainType.slice(1)} - ${specificType}`;
 
+                    // İlgili IP Kaydı
                     if (task.relatedIpRecordId) {
                         this.selectedRelatedIpRecord = this.allIpRecords.find(rec => rec.id === task.relatedIpRecordId);
                         if (this.selectedRelatedIpRecord) {
                             const display = document.getElementById('selectedIpRecordDisplay');
-                            display.innerHTML = `<p><b>Seçilen Varlık:</b> ${this.selectedRelatedIpRecord.title}</p>`;
+                            const content = document.querySelector('#selectedIpRecordDisplay .search-result-display-content');
+                            content.innerHTML = `<p><b>Seçilen Varlık:</b> ${this.selectedRelatedIpRecord.title}</p>`;
                             display.style.display = 'flex';
                             document.getElementById('relatedIpRecordSearch').value = '';
                         }
                     } else {
                         document.getElementById('selectedIpRecordDisplay').style.display = 'none';
                         document.getElementById('relatedIpRecordSearch').value = '';
+                        this.selectedRelatedIpRecord = null;
                     }
 
+                    // İlgili Taraf
                     if (task.details?.relatedParty?.id) {
                         this.selectedRelatedParty = this.allPersons.find(p => p.id === task.details.relatedParty.id);
                         if (this.selectedRelatedParty) {
                             const display = document.getElementById('selectedRelatedPartyDisplay');
-                            display.innerHTML = `<p><b>Seçilen Taraf:</b> ${this.selectedRelatedParty.name}</p>`;
+                            const content = document.querySelector('#selectedRelatedPartyDisplay .search-result-display-content');
+                            content.innerHTML = `<p><b>Seçilen Taraf:</b> ${this.selectedRelatedParty.name}</p>`;
                             display.style.display = 'flex';
                             document.getElementById('relatedPartySearch').value = '';
                         }
                     } else {
                         document.getElementById('selectedRelatedPartyDisplay').style.display = 'none';
                         document.getElementById('relatedPartySearch').value = '';
+                        this.selectedRelatedParty = null;
                     }
+
                     if (task.details?.epatsDocument) {
                         document.getElementById('turkpatentEvrakNo').value = task.details.epatsDocument.turkpatentEvrakNo || '';
                         this.uploadedEpatsFile = task.details.epatsDocument;
-                        // YENİ: Saklanmış önceki durumu da yükle
                         this.statusBeforeEpatsUpload = task.details.statusBeforeEpatsUpload || null;
                         this.renderEpatsDocument();
-                        // EPATS işlem tarihi varsa input’a bas
-                    if (task.details.epatsDocument.documentDate) {
-                    const v = task.details.epatsDocument.documentDate;
-                    document.getElementById('epatsDocumentDate').value = (typeof v === 'string')
-                        ? v.slice(0, 10)
-                        : this.formatDateToYYYYMMDD(v);
-                    }
+                        if (task.details.epatsDocument.documentDate) {
+                            const v = task.details.epatsDocument.documentDate;
+                            document.getElementById('epatsDocumentDate').value = (typeof v === 'string')
+                                ? v.slice(0, 10)
+                                : this.formatDateToYYYYMMDD(v);
+                        }
                     }
                 }
 
-                populateStatusDropdown(currentStatus) { // 'currentStatus' parametresini alıyor
-                    // İkinci çağrıyı engelle
+                populateStatusDropdown(currentStatus) {
                     if (this.statusDropdownPopulated) {
-                        // Dropdown zaten doldurulmuşsa, sadece doğru değeri seç
                         document.getElementById('taskStatus').value = currentStatus;
                         return;
                     }
-                    
                     const statusSelect = document.getElementById('taskStatus');
-                    if (!statusSelect) {
-                        return;
-                    }
-                    
+                    if (!statusSelect) { return; }
                     statusSelect.innerHTML = '';
-                    
                     TASK_STATUSES.forEach(status => {
                         const option = document.createElement('option');
                         option.value = status.value;
                         option.textContent = status.text;
-                        // Parametre olarak gelen 'currentStatus' ile karşılaştır
                         if (currentStatus === status.value) {
                             option.selected = true;
                         }
                         statusSelect.appendChild(option);
                     });
-                    
                     this.statusDropdownPopulated = true;
                 }
+
             populateAssignedToDropdown() {
                 const assignedToSelect = document.getElementById('assignedTo');
                 assignedToSelect.innerHTML = '';
@@ -690,12 +825,10 @@
                 if (taskForm) {
                     taskForm.addEventListener('submit', (e) => this.handleTaskUpdate(e));
                 }
-
                 const saveBtn = document.getElementById('saveTaskChangesBtn');
                 if (saveBtn) {
                     saveBtn.addEventListener('click', (e) => this.handleTaskUpdate(e));
                 }
-
                 const cancelBtn = document.getElementById('cancelEditBtn');
                 if (cancelBtn) {
                     cancelBtn.addEventListener('click', () => {
@@ -704,12 +837,10 @@
                         }
                     });
                 }
-
                 const ipRecordSearch = document.getElementById('relatedIpRecordSearch');
                 if (ipRecordSearch) {
                     ipRecordSearch.addEventListener('input', (e) => this.searchIpRecords(e.target.value));
                 }
-
                 const ipRecordResults = document.getElementById('relatedIpRecordSearchResults');
                 if (ipRecordResults) {
                     ipRecordResults.addEventListener('click', (e) => {
@@ -719,27 +850,22 @@
                         }
                     });
                 }
-
                 const relatedPartySearch = document.getElementById('relatedPartySearch');
                 if (relatedPartySearch) {
                     relatedPartySearch.addEventListener('input', (e) => this.searchPersons(e.target.value, 'relatedParty'));
                 }
-
                 const addPersonBtn = document.getElementById('addNewRelatedPartyBtn');
                 if (addPersonBtn) {
                     addPersonBtn.addEventListener('click', () => this.showAddPersonModal());
                 }
-
                 const closeAccrualBtn = document.getElementById('closeAccrualModal');
                 if (closeAccrualBtn) {
                     closeAccrualBtn.addEventListener('click', () => this.closeAccrualModal());
                 }
-
                 const cancelAccrualBtn = document.getElementById('cancelAccrualBtn');
                 if (cancelAccrualBtn) {
                     cancelAccrualBtn.addEventListener('click', () => this.closeAccrualModal());
                 }
-
                 const accrualForm = document.getElementById('accrualForm');
                 if (accrualForm) {
                     accrualForm.addEventListener('submit', (e) => this.handleAccrualSubmit(e));
@@ -752,35 +878,32 @@
                         el.addEventListener('change', () => this.calculateTotalAmount());
                     }
                 });
-
                 const closePersonModal = document.getElementById('closeAddPersonModal');
                 if (closePersonModal) {
                     closePersonModal.addEventListener('click', () => this.hideAddPersonModal());
                 }
-
                 const cancelPersonBtn = document.getElementById('cancelPersonBtn');
                 if (cancelPersonBtn) {
                     cancelPersonBtn.addEventListener('click', () => this.hideAddPersonModal());
                 }
-
                 const savePersonBtn = document.getElementById('savePersonBtn');
                 if (savePersonBtn) {
                     savePersonBtn.addEventListener('click', () => this.saveNewPerson());
                 }
-                // EPATS Evrakı Yükleme Alanı
                 const epatsFileUploadArea = document.getElementById('epatsFileUploadArea');
                 const epatsFileInput = document.getElementById('epatsFileInput');
                 if(epatsFileUploadArea) epatsFileUploadArea.addEventListener('click', () => epatsFileInput.click());
                 if(epatsFileInput) epatsFileInput.addEventListener('change', (e) => this.handleEpatsDocumentUpload(e.target.files[0]));
-
                 this.setupDocumentUploadListeners();
                 this.setupAccrualContainerListeners();
-
-                // TEBLİĞ TARİHİ DEĞİŞİKLİK DİNLEYİCİSİ
                 document.getElementById('deliveryDate').addEventListener('change', async (e) => {
                     await this.recalculateOfficialAndOperationalDueDates();
                 });
-
+                
+                // YENİ EKLEMELER: Kaldırma butonları
+                document.getElementById('removeIpRecordBtn').addEventListener('click', () => this.removeSelectedIpRecord());
+                document.getElementById('removeRelatedPartyBtn').addEventListener('click', () => this.removeSelectedRelatedParty());
+                
                 console.log('DEBUG: Event listener\'lar başarıyla ayarlandı');
             }
 
@@ -792,7 +915,9 @@
                     'cancelAccrualBtn',
                     'closeAddPersonModal',
                     'cancelPersonBtn',
-                    'savePersonBtn'
+                    'savePersonBtn',
+                    'removeIpRecordBtn', // Yeni eklenen
+                    'removeRelatedPartyBtn' // Yeni eklenen
                 ];
                 
                 elementIds.forEach(id => {
@@ -804,28 +929,22 @@
                 });
             }
 
-            // TaskDetailModule sınıfının içine herhangi bir yere ekleyebilirsiniz
         async handleEpatsDocumentUpload(file) {
             if (!file) return;
 
-            // Eğer statusBeforeEpatsUpload'u kaydetmek istiyorsanız aynen bırakın
             const taskStatusSelect = document.getElementById('taskStatus');
             if (taskStatusSelect) {
                 this.statusBeforeEpatsUpload = taskStatusSelect.value;
             }
 
-            // Benzersiz bir dosya yolu oluştur
             const uniqueFileId = generateUUID();
             const storagePath = `epats_documents/${uniqueFileId}_${file.name}`;
             const storageRef = firebaseServices.storageRef(firebaseServices.storage, storagePath);
 
-            // Storage'a yükle
             await uploadBytes(storageRef, file);
 
-            // Download URL al
             const downloadURL = await getDownloadURL(storageRef);
 
-            // Firestore'a kaydedilecek metadata
             this.uploadedEpatsFile = {
                 id: uniqueFileId,
                 name: file.name,
@@ -838,7 +957,6 @@
 
             this.renderEpatsDocument();
 
-            // Otomatik completed yapma. Eğer o anda completed seçiliyse geri al:
             if (taskStatusSelect && taskStatusSelect.value === 'completed') {
                 taskStatusSelect.value = this.statusBeforeEpatsUpload || 'open';
             }
@@ -876,12 +994,8 @@
 
                 const taskStatusSelect = document.getElementById('taskStatus');
                 if (taskStatusSelect) {
-                    // Önce saklanan `statusBeforeEpatsUpload` değişkenini kullan.
-                    // Eğer bu boşsa (sayfa yenilendiği için olabilir), veritabanından gelen `currentTask` içindeki saklanmış duruma bak.
-                    // O da yoksa, varsayılan olarak 'open' durumuna dön.
                     taskStatusSelect.value = this.statusBeforeEpatsUpload || this.currentTask.details?.statusBeforeEpatsUpload || 'open';
                 }
-                // Geçici durumu temizle
                 this.statusBeforeEpatsUpload = null;
             }
 
@@ -920,12 +1034,9 @@
                     accrualsContainer.addEventListener('click', (e) => {
                         const target = e.target.closest('.action-btn');
                         if (!target) return;
-                        
                         e.preventDefault();
                         const accrualId = target.dataset.id;
-                        
                         console.log('DEBUG: Tahakkuk butonuna tıklandı:', target.className, 'ID:', accrualId);
-                        
                         if (target.classList.contains('edit-accrual-btn')) {
                             console.log('DEBUG: Tahakkuk düzenleme modalı açılıyor');
                             this.showAccrualModal('edit', accrualId);
@@ -947,7 +1058,6 @@ async recalculateOfficialAndOperationalDueDates() {
         return;
     }
     
-    // Tarih stringini yerel saat diliminde doğru Date objesine çevir
     const parts = deliveryDateStr.split('-');
     const deliveryDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
     deliveryDate.setHours(0, 0, 0, 0);
@@ -958,17 +1068,13 @@ async recalculateOfficialAndOperationalDueDates() {
     let duePeriod = null;
     let sourceOfDuePeriod = 'unknown';
 
-    // *** 1. Öncelik: Mevcut officialDueDateDetails.periodMonths ***
     if (this.currentTask.officialDueDateDetails && 
         this.currentTask.officialDueDateDetails.periodMonths !== undefined && 
         this.currentTask.officialDueDateDetails.periodMonths !== null) {
-        
         duePeriod = this.currentTask.officialDueDateDetails.periodMonths;
         sourceOfDuePeriod = 'mevcut officialDueDateDetails.periodMonths';
         console.log('DEBUG: Mevcut officialDueDateDetails.periodMonths kullanılıyor:', duePeriod);
     }
-    
-    // *** 2. Öncelik: Tetikleyici alt işlem tipi ID'si ***
     else if (this.currentTask.triggeringTransactionType) {
         console.log('DEBUG: triggeringTransactionType bulundu:', this.currentTask.triggeringTransactionType);
         
@@ -976,7 +1082,6 @@ async recalculateOfficialAndOperationalDueDates() {
         if (triggeringTransactionType && 
             triggeringTransactionType.duePeriod !== undefined && 
             triggeringTransactionType.duePeriod !== null) {
-            
             duePeriod = triggeringTransactionType.duePeriod;
             sourceOfDuePeriod = `tetikleyici alt işlem tipi ${this.currentTask.triggeringTransactionType} (${triggeringTransactionType.name})`;
             console.log('DEBUG: Tetikleyici alt işlem tipinin duePeriod bulundu:', duePeriod);
@@ -989,40 +1094,30 @@ async recalculateOfficialAndOperationalDueDates() {
     
     console.log('DEBUG: Final duePeriod:', duePeriod, 'Kaynak:', sourceOfDuePeriod);
 
-    // *** duePeriod YOKSA SADECE TEBLİĞ TARİHİNİ GÜNCELLE ***
     if (duePeriod === null || duePeriod === undefined) {
         console.log('DEBUG: duePeriod bulunamadı, sadece tebliğ tarihi güncelleniyor.');
-        
-        // Mevcut resmi/operasyonel tarihleri koru
         this.calculatedOfficialDueDate = this.currentTask.officialDueDate || null;
         this.calculatedOperationalDueDate = this.currentTask.dueDate ? new Date(this.currentTask.dueDate) : null;
-        
-        // officialDueDateDetails'i güncelle - sadece tebliğ tarihini değiştir
         this.calculatedOfficialDueDateDetails = {
-            initialDeliveryDate: deliveryDateStr, // Sadece bu güncellenir
+            initialDeliveryDate: deliveryDateStr,
             periodMonths: this.currentTask.officialDueDateDetails?.periodMonths || null,
             originalCalculatedDate: this.currentTask.officialDueDateDetails?.originalCalculatedDate || null,
             finalOfficialDueDate: this.currentTask.officialDueDateDetails?.finalOfficialDueDate || null,
             finalOperationalDueDate: this.currentTask.officialDueDateDetails?.finalOperationalDueDate || null,
             adjustments: this.currentTask.officialDueDateDetails?.adjustments || []
         };
-        
         showNotification('Tebliğ tarihi güncellendi. Tetikleyici alt işlem bilgisi olmadığı için resmi tarihler yeniden hesaplanmadı.', 'info');
         return;
     }
 
-    // *** TETİKLEYİCİ ALT İŞLEM TİPİNİN DUEPERIOD'U İLE TARİH HESAPLAMASI ***
     console.log('DEBUG: Tetikleyici alt işlem tipinin duePeriod\'u ile tarih hesaplaması yapılıyor...', duePeriod, 'ay');
     
     const originalCalculatedOfficialDate = addMonthsToDate(deliveryDate, duePeriod);
     console.log('DEBUG: duePeriod (' + duePeriod + ' ay) eklendikten sonraki orijinal tarih:', this.formatDateToYYYYMMDD(originalCalculatedOfficialDate));
-    
     const finalOfficialDueDate = findNextWorkingDay(originalCalculatedOfficialDate, TURKEY_HOLIDAYS);
     console.log('DEBUG: Hafta sonu/tatil sonrası Resmi Son Tarih:', this.formatDateToYYYYMMDD(finalOfficialDueDate));
-
     const threeDaysBeforeOfficial = new Date(finalOfficialDueDate);
     threeDaysBeforeOfficial.setDate(finalOfficialDueDate.getDate() - 3);
-    
     let tempOperationalDueDate = new Date(threeDaysBeforeOfficial);
     tempOperationalDueDate.setHours(0,0,0,0);
 
@@ -1031,11 +1126,8 @@ async recalculateOfficialAndOperationalDueDates() {
     }
     const finalOperationalDueDate = tempOperationalDueDate;
     console.log('DEBUG: Hesaplanan Operasyonel Son Tarih:', this.formatDateToYYYYMMDD(finalOperationalDueDate));
-
     this.calculatedOfficialDueDate = finalOfficialDueDate;
     this.calculatedOperationalDueDate = finalOperationalDueDate;
-    
-    // officialDueDateDetails'i oluştur/güncelle
     this.calculatedOfficialDueDateDetails = {
         initialDeliveryDate: deliveryDateStr,
         periodMonths: duePeriod,
@@ -1044,21 +1136,17 @@ async recalculateOfficialAndOperationalDueDates() {
         finalOperationalDueDate: this.formatDateToYYYYMMDD(finalOperationalDueDate),
         adjustments: this.currentTask.officialDueDateDetails?.adjustments || []
     };
-
     console.log('DEBUG: Tarih hesaplaması tamamlandı - Kaynak:', sourceOfDuePeriod);
     showNotification(`Tebliğ tarihi güncellendi ve resmi/operasyonel son tarihler yeniden hesaplandı. (${duePeriod} ay duePeriod kullanıldı)`, 'success');
 }
 
 async handleTaskUpdate(e) {
     e.preventDefault();
-    
     console.log('🔧 DEBUG: handleTaskUpdate başlatıldı');
-
     if (this.uploadedEpatsFile && !document.getElementById('turkpatentEvrakNo').value.trim()) {
         showNotification('EPATS Evrakı yüklendiğinde TURKPATENT Evrak No alanı zorunludur.', 'error');
         return;
     }
-    
     const form = document.getElementById('taskDetailForm');
     const updatedTaskData = {
         title: form.taskTitle.value,
@@ -1070,33 +1158,18 @@ async handleTaskUpdate(e) {
         updatedAt: new Date().toISOString(),
         details: { ...this.currentTask.details }
     };
-
-    // EPATS bilgilerini kontrol et
     const evrakNo = document.getElementById('turkpatentEvrakNo')?.value?.trim() || '';
     const docDate = document.getElementById('epatsDocumentDate')?.value || '';
     const hasPdf = !!this.uploadedEpatsFile;
-
-    console.log('🔧 DEBUG: EPATS kontrol değerleri:', {
-        hasPdf,
-        evrakNo,
-        docDate
-    });
-
-    // ** OTOMATİK STATUS LOGİC **
-    // Eğer EPATS üçlüsü tamsa (PDF + Evrak No + İşlem Tarihi) → completed
-    // Değilse → önceki duruma dön (statusBeforeEpatsUpload) veya open
+    console.log('🔧 DEBUG: EPATS kontrol değerleri:', { hasPdf, evrakNo, docDate });
     if (hasPdf && evrakNo && docDate) {
         console.log('✅ DEBUG: EPATS üçlüsü tam - Status otomatik completed yapılıyor');
         updatedTaskData.status = 'completed';
     } else {
         console.log('⚠️ DEBUG: EPATS üçlüsü eksik - Status önceki duruma döndürülüyor');
-        // EPATS bilgileri eksikse önceki duruma dön
         updatedTaskData.status = this.statusBeforeEpatsUpload || 'open';
     }
-
     console.log('🔧 DEBUG: Ayarlanan status:', updatedTaskData.status);
-
-    // EPATS document oluştur
     if (this.uploadedEpatsFile) {
         updatedTaskData.details.epatsDocument = {
             ...this.uploadedEpatsFile,
@@ -1108,26 +1181,19 @@ async handleTaskUpdate(e) {
         updatedTaskData.details.epatsDocument = null;
         console.log('🔧 DEBUG: EPATS document null yapıldı');
     }
-    
-    // StatusBeforeEpatsUpload logic
     if (this.uploadedEpatsFile && this.statusBeforeEpatsUpload) {
         updatedTaskData.details.statusBeforeEpatsUpload = this.statusBeforeEpatsUpload;
     } else if (!this.uploadedEpatsFile && this.currentTask.details?.epatsDocument) {
         updatedTaskData.details.statusBeforeEpatsUpload = null; 
     }
-
-    // Delivery date logic (aynı kalabilir)
     const currentTaskDeliveryDateFormatted = this.currentTask.deliveryDate ? 
         this.formatDateToYYYYMMDD(this.currentTask.deliveryDate) : null;
-
     const isDeliveryDateChanged = form.deliveryDate.value !== currentTaskDeliveryDateFormatted;
     const isOfficialDueDatePreviouslyEmpty = !this.currentTask.officialDueDate && form.deliveryDate.value;
-
     if ((isDeliveryDateChanged || isOfficialDueDatePreviouslyEmpty) && this.calculatedOfficialDueDate) {
         let confirmation = true;
         const existingOfficialDueDateFormatted = this.currentTask.officialDueDate ?
             this.formatDateToYYYYMMDD(new Date(this.currentTask.officialDueDate)) : null;
-
         if (existingOfficialDueDateFormatted && existingOfficialDueDateFormatted !== this.formatDateToYYYYMMDD(this.calculatedOfficialDueDate)) {
             confirmation = confirm(
                 `Mevcut resmi son tarih: ${existingOfficialDueDateFormatted}\n` +
@@ -1135,7 +1201,6 @@ async handleTaskUpdate(e) {
                 `Resmi son tarihi güncellemek istiyor musunuz?`
             );
         }
-
         if (confirmation) {
             updatedTaskData.officialDueDate = this.calculatedOfficialDueDate.toISOString();
             updatedTaskData.officialDueDateDetails = this.calculatedOfficialDueDateDetails;
@@ -1153,25 +1218,10 @@ async handleTaskUpdate(e) {
         else if(this.currentTask.dueDate) updatedTaskData.dueDate = this.currentTask.dueDate; 
         else updatedTaskData.dueDate = null;
     }
-
-    // Related IP Record
-    if (this.selectedRelatedIpRecord) {
-        updatedTaskData.relatedIpRecordId = this.selectedRelatedIpRecord.id;
-        updatedTaskData.relatedIpRecordTitle = this.selectedRelatedIpRecord.title;
-    } else if (this.currentTask && this.currentTask.relatedIpRecordId) {
-        updatedTaskData.relatedIpRecordId = this.currentTask.relatedIpRecordId;
-        updatedTaskData.relatedIpRecordTitle = this.currentTask.relatedIpRecordTitle;
-    } else {
-        updatedTaskData.relatedIpRecordId = null;
-        updatedTaskData.relatedIpRecordTitle = null;
-    }
-
-    // Related Party
-    if (this.selectedRelatedParty) {
-        updatedTaskData.details.relatedParty = { id: this.selectedRelatedParty.id, name: this.selectedRelatedParty.name };
-    } else {
-        updatedTaskData.details.relatedParty = null;
-    }
+    updatedTaskData.relatedIpRecordId = this.selectedRelatedIpRecord ? this.selectedRelatedIpRecord.id : null;
+    updatedTaskData.relatedIpRecordTitle = this.selectedRelatedIpRecord ? this.selectedRelatedIpRecord.title : null;
+    updatedTaskData.details.relatedParty = this.selectedRelatedParty ? 
+        { id: this.selectedRelatedParty.id, name: this.selectedRelatedParty.name } : null;
     
     console.log('🔧 DEBUG: Final updatedTaskData:', JSON.stringify(updatedTaskData, null, 2));
     
@@ -1183,15 +1233,11 @@ async handleTaskUpdate(e) {
         
         if (result.success) {
             console.log('✅ DEBUG: Task başarıyla güncellendi!');
-            
-            // Status değişikliğini bildir
             if (updatedTaskData.status === 'completed') {
                 showNotification('İş tamamlandı olarak işaretlendi!', 'success');
             } else {
                 showNotification('İş başarıyla güncellendi!', 'success');
             }
-            
-            // Sayfayı yenile
             setTimeout(() => {
                 console.log('🔧 DEBUG: Sayfa yenileniyor...');
                 window.location.reload();
@@ -1213,26 +1259,23 @@ async handleTaskUpdate(e) {
                     searchResultsContainer.innerHTML = '<p class="no-results-message">Aramak için en az 3 karakter girin.</p>';
                     return; 
                 }
-                
                 const lowerQuery = query.toLowerCase();
                 const filtered = this.allIpRecords.filter(record =>
                     record.title.toLowerCase().includes(lowerQuery) ||
                     (record.applicationNumber && record.applicationNumber.toLowerCase().includes(lowerQuery)) ||
                     (record.registrationNumber && record.registrationNumber.toLowerCase().includes(lowerQuery))
                 );
-
                 if (filtered.length === 0) {
                     searchResultsContainer.innerHTML = '<p class="no-results-message">Kayıt bulunamadı.</p>';
                     return;
                 }
-
                 filtered.forEach(record => {
                     const item = document.createElement('div');
                     item.className = 'search-result-item';
                     item.dataset.id = record.id;
                     item.textContent = `${record.title} (${record.applicationNumber || record.registrationNumber || 'N/A'})`;
                     item.addEventListener('click', () => {
-                        this.selectIpRecord(record);
+                        this.selectIpRecord(this.allIpRecords.find(rec => rec.id === target.dataset.id));
                         searchResultsContainer.innerHTML = '';
                         searchResultsContainer.style.display = 'none';
                     });
@@ -1244,9 +1287,18 @@ async handleTaskUpdate(e) {
             selectIpRecord(record) {
                 this.selectedRelatedIpRecord = record;
                 const display = document.getElementById('selectedIpRecordDisplay');
-                display.innerHTML = `<p><b>Seçilen Varlık:</b> ${record.title}</p>`;
+                const content = document.querySelector('#selectedIpRecordDisplay .search-result-display-content');
+                content.innerHTML = `<p><b>Seçilen Varlık:</b> ${record.title}</p>`;
                 display.style.display = 'flex';
                 document.getElementById('relatedIpRecordSearch').value = '';
+                document.getElementById('relatedIpRecordSearchResults').style.display = 'none';
+            }
+            
+            removeSelectedIpRecord() {
+                this.selectedRelatedIpRecord = null;
+                document.getElementById('selectedIpRecordDisplay').style.display = 'none';
+                document.getElementById('relatedIpRecordSearch').value = '';
+                document.getElementById('relatedIpRecordSearchResults').innerHTML = '';
             }
 
             searchPersons(query, targetField) {
@@ -1273,11 +1325,9 @@ async handleTaskUpdate(e) {
                     resultsContainer.style.display = 'block';
                     return; 
                 }
-                
                 const filtered = this.allPersons.filter(p => p.name.toLowerCase().includes(query.toLowerCase()));
                 if (filtered.length === 0) { resultsContainer.innerHTML = '<p class="no-results-message">Kişi bulunamadı.</p>'; return; }
                 resultsContainer.style.display = 'block';
-
                 filtered.forEach(p => {
                     const item = document.createElement('div');
                     item.className = 'search-result-item';
@@ -1300,13 +1350,28 @@ async handleTaskUpdate(e) {
                     'serviceInvoiceParty': 'selectedServiceInvoicePartyDisplay'
                 }[targetField];
                 
+                const displayContentId = {
+                    'relatedParty': '#selectedRelatedPartyDisplay .search-result-display-content',
+                    'tpInvoiceParty': '#selectedTpInvoicePartyDisplay .search-result-display-content',
+                    'serviceInvoiceParty': '#selectedServiceInvoicePartyDisplay .search-result-display-content'
+                }[targetField];
+                
                 if (targetField === 'relatedParty') this.selectedRelatedParty = person;
                 else if (targetField === 'tpInvoiceParty') this.selectedTpInvoiceParty = person;
                 else if (targetField === 'serviceInvoiceParty') this.selectedServiceInvoiceParty = person;
 
                 const display = document.getElementById(displayId);
-                display.innerHTML = `<p><b>Seçilen:</b> ${person.name}</p>`;
+                const content = document.querySelector(displayContentId);
+                content.innerHTML = `<p><b>Seçilen:</b> ${person.name}</p>`;
                 display.style.display = 'flex';
+                document.getElementById(displayId.replace('selected', 'related')).value = '';
+            }
+            
+            removeSelectedRelatedParty() {
+                this.selectedRelatedParty = null;
+                document.getElementById('selectedRelatedPartyDisplay').style.display = 'none';
+                document.getElementById('relatedPartySearch').value = '';
+                document.getElementById('relatedPartySearchResults').innerHTML = '';
             }
 
             showAddPersonModal() {
@@ -1329,7 +1394,6 @@ async handleTaskUpdate(e) {
                     phone: document.getElementById('personPhone').value.trim(),
                     address: document.getElementById('personAddress').value.trim()
                 };
-
                 try {
                     const result = await personService.addPerson(personData);
                     if (result.success) {
@@ -1347,19 +1411,15 @@ async handleTaskUpdate(e) {
             renderAccruals() {
                 const container = document.getElementById('accrualsContainer');
                 container.innerHTML = '';
-
                 if (!Array.isArray(this.currentAccruals) || this.currentAccruals.length === 0) {
                     container.innerHTML = '<p>Henüz tahakkuk bulunmuyor.</p>';
                     return;
                 } 
-
                 this.currentAccruals.forEach(accrual => {
                     const accrualElement = document.createElement('div');
                     accrualElement.classList.add('accrual-card');
-
                     const statusText = accrual.status === 'paid' ? 'Ödendi' : 'Ödenmedi';
                     const statusClass = accrual.status === 'paid' ? 'status-paid' : 'status-unpaid';
-
                     const currencyFormatter = (amount, currency) => {
                         try {
                             return new Intl.NumberFormat('tr-TR', { style: 'currency', currency: currency || 'TRY' }).format(amount);
@@ -1395,36 +1455,27 @@ async handleTaskUpdate(e) {
                     showNotification('Veriler henüz yüklenmedi, lütfen bekleyin.', 'warning');
                     return;
                 }
-
                 console.log('DEBUG: Modal açılıyor, mode:', mode, 'accrualId:', accrualId);
-
                 const modal = document.getElementById('accrualModal');
                 const form = document.getElementById('accrualForm');
-                
                 this.resetAccrualModal();
-
                 if (mode === 'edit' && accrualId) {
                     const accrual = this.currentAccruals.find(a => a.id === accrualId);
                     if (!accrual) {
                         showNotification('Düzenlenecek tahakkuk bulunamadı.', 'error');
                         return;
                     }
-                    
                     console.log('DEBUG: Tahakkuk düzenleme modunda, accrual:', accrual.id);
-                    
                     document.getElementById('accrualModalTitle').textContent = 'Tahakkuku Düzenle';
                     document.getElementById('saveAccrualBtn').textContent = 'Değişiklikleri Kaydet';
-                    
                     this.populateAccrualModal(accrual);
                 } else {
                     document.getElementById('accrualModalTitle').textContent = 'Yeni Tahakkuk Ekle';
                     document.getElementById('saveAccrualBtn').textContent = 'Tahakkuk Ekle';
                     document.getElementById('accrualTaskTitleDisplay').value = this.currentTask.title;
                 }
-
                 modal.classList.add('show');
                 document.body.classList.add('modal-open');
-                
                 console.log('DEBUG: Modal başarıyla açıldı');
             }
 
@@ -1433,18 +1484,15 @@ async handleTaskUpdate(e) {
                 if (form) {
                     form.reset();
                 }
-                
                 document.getElementById('accrualId').value = '';
                 document.getElementById('totalAmountDisplay').textContent = '0.00 TRY';
                 document.getElementById('selectedTpInvoicePartyDisplay').style.display = 'none';
                 document.getElementById('selectedServiceInvoicePartyDisplay').style.display = 'none';
                 document.getElementById('tpInvoicePartySearch').value = '';
                 document.getElementById('serviceInvoicePartySearch').value = '';
-                
                 this.uploadedAccrualReceipts = [];
                 this.selectedTpInvoiceParty = null;
                 this.selectedServiceInvoiceParty = null;
-                
                 const fileList = document.getElementById('paymentReceiptFileList');
                 if (fileList) {
                     fileList.innerHTML = '';
@@ -1460,22 +1508,18 @@ async handleTaskUpdate(e) {
                 document.getElementById('serviceFeeCurrency').value = accrual.serviceFee?.currency || 'TRY';
                 document.getElementById('vatRate').value = accrual.vatRate || 0;
                 document.getElementById('applyVatToOfficialFee').checked = accrual.applyVatToOfficialFee !== undefined ? accrual.applyVatToOfficialFee : true;
-
                 this.selectedTpInvoiceParty = accrual.tpInvoiceParty || null;
                 this.selectedServiceInvoiceParty = accrual.serviceInvoiceParty || null;
-                
                 if (this.selectedTpInvoiceParty) {
                     document.getElementById('tpInvoicePartySearch').value = this.selectedTpInvoiceParty.name;
                     document.getElementById('selectedTpInvoicePartyDisplay').style.display = 'flex';
                     document.getElementById('selectedTpInvoicePartyDisplay').innerHTML = `<p>${this.selectedTpInvoiceParty.name}</p>`;
                 }
-                
                 if (this.selectedServiceInvoiceParty) {
                     document.getElementById('serviceInvoicePartySearch').value = this.selectedServiceInvoiceParty.name;
                     document.getElementById('selectedServiceInvoicePartyDisplay').style.display = 'flex';
                     document.getElementById('selectedServiceInvoicePartyDisplay').innerHTML = `<p>${this.selectedServiceInvoiceParty.name}</p>`;
                 }
-
                 this.calculateTotalAmount();
             }
 
@@ -1484,14 +1528,12 @@ async handleTaskUpdate(e) {
                 const serviceFee = parseFloat(document.getElementById('serviceFee').value) || 0;
                 const vatRate = parseFloat(document.getElementById('vatRate').value) || 0;
                 const applyVatToOfficial = document.getElementById('applyVatToOfficialFee').checked;
-
                 let total;
                 if (applyVatToOfficial) {
                     total = (officialFee + serviceFee) * (1 + vatRate / 100);
                 } else {
                     total = officialFee + (serviceFee * (1 + vatRate / 100));
                 }
-
                 const display = document.getElementById('totalAmountDisplay');
                 if (display) {
                     display.textContent = new Intl.NumberFormat('tr-TR', { 
@@ -1499,7 +1541,6 @@ async handleTaskUpdate(e) {
                         currency: 'TRY' 
                     }).format(total);
                 }
-
                 return total;
             }
 
@@ -1507,9 +1548,7 @@ async handleTaskUpdate(e) {
                 const modal = document.getElementById('accrualModal');
                 modal.classList.remove('show');
                 document.body.classList.remove('modal-open');
-                
                 this.resetAccrualModal();
-                
                 console.log('DEBUG: Modal kapatıldı');
             }
 
@@ -1518,7 +1557,6 @@ async handleTaskUpdate(e) {
                 const serviceFee = parseFloat(document.getElementById('serviceFee').value) || 0;
                 const vatRate = parseFloat(document.getElementById('vatRate').value) || 0;
                 const applyVatToOfficial = document.getElementById('applyVatToOfficialFee').checked;
-                
                 let total;
                 if (applyVatToOfficial) {
                     total = (officialFee + serviceFee) * (1 + vatRate / 100);
@@ -1539,12 +1577,10 @@ async handleTaskUpdate(e) {
                         showNotification(`"${file.name}" desteklenmeyen bir formattadır.`, 'error');
                         continue;
                     }
-                    
                     if (this.uploadedAccrualReceipts.some(f => f.name === file.name && f.size === file.size)) {
                         showNotification(`"${file.name}" zaten eklenmiş.`, 'info');
                         continue;
                     }
-
                     readFileAsDataURL(file).then(dataUrl => {
                         this.uploadedAccrualReceipts.push({
                             id: generateUUID(),
@@ -1583,12 +1619,10 @@ async handleTaskUpdate(e) {
                 const accrualId = document.getElementById('accrualId').value;
                 const officialFee = parseFloat(document.getElementById('officialFee').value) || 0;
                 const serviceFee = parseFloat(document.getElementById('serviceFee').value) || 0;
-
                 if (officialFee <= 0 && serviceFee <= 0) {
                     showNotification("Lütfen en az bir ücret girin.", 'error');
                     return;
                 }
-
                 const vatRate = parseFloat(document.getElementById('vatRate').value) || 0;
                 const applyVatToOfficial = document.getElementById('applyVatToOfficialFee').checked;
                 let totalAmount;
@@ -1598,7 +1632,6 @@ async handleTaskUpdate(e) {
                     total = officialFee + (serviceFee * (1 + vatRate / 100));
                 }
                 const paymentDate = document.getElementById('paymentDate').value;
-
                 const accrualData = {
                     taskId: this.taskId,
                     taskTitle: this.currentTask.title,
@@ -1619,9 +1652,7 @@ async handleTaskUpdate(e) {
                     paymentDate: paymentDate || null,
                     status: paymentDate ? 'paid' : 'unpaid'
                 };
-                
                 accrualData.files = this.uploadedAccrualReceipts;
-
                 try {
                     let result;
                     if (accrualId) {
@@ -1630,7 +1661,6 @@ async handleTaskUpdate(e) {
                         console.log("DEBUG: Yeni tahakkuk ekleniyor:", accrualData);
                         result = await accrualService.addAccrual(accrualData);
                     }
-                    
                     if (result.success) {
                         showNotification('Tahakkuk başarıyla kaydedildi!', 'success');
                         this.closeAccrualModal();
@@ -1655,12 +1685,10 @@ async handleTaskUpdate(e) {
                         showNotification(`"${file.name}" desteklenmeyen bir formattadır.`, 'error');
                         continue;
                     }
-                    
                     if (this.currentTaskDocuments.some(d => d.name === file.name && d.size === file.size)) {
                         showNotification(`"${file.name}" zaten eklenmiş.`, 'info');
                         continue;
                     }
-
                     readFileAsDataURL(file).then(dataUrl => {
                         this.currentTaskDocuments.push({
                             id: generateUUID(),
@@ -1683,16 +1711,13 @@ async handleTaskUpdate(e) {
             renderDocuments() {
                 const fileListContainer = document.getElementById('fileListContainer');
                 fileListContainer.innerHTML = '';
-
                 if (this.currentTaskDocuments.length === 0) {
                     fileListContainer.innerHTML = '<p style="text-align: center; color: #666; padding: 20px;">Bu işe ait belge bulunmamaktadır.</p>';
                     return;
                 }
-
                 this.currentTaskDocuments.forEach(doc => {
                     const fileItem = document.createElement('div');
                     fileItem.classList.add('file-item');
-                    
                     let optionsHtml = '';
                     for (const key in documentDesignationTranslations) {
                         if (documentDesignationTranslations.hasOwnProperty(key)) {
@@ -1701,7 +1726,6 @@ async handleTaskUpdate(e) {
                             optionsHtml += `<option value="${value}" ${selected}>${value}</option>`;
                         }
                     }
-
                     fileItem.innerHTML = `
                         <div class="file-info">
                             <span class="file-icon">📄</span>
@@ -1759,27 +1783,21 @@ async handleTaskUpdate(e) {
                 if (action.includes('İş tamamlandı')) return 'İş tamamlandı';
                 if (action.includes('İş yeniden atandı')) return 'İş yeniden atandı';
                 if (action.includes('Durum değişti')) return 'Durum değiştirildi';
-                
                 return action.length > 50 ? action.substring(0, 50) + '...' : action;
             }
             renderHistory() {
                 const historyList = document.getElementById('historyList');
                 historyList.innerHTML = '';
-                
                 const history = this.currentTask.history || [];
                 if (history.length === 0) {
                     historyList.innerHTML = '<p>İşlem geçmişi bulunmamaktadır.</p>';
                     return;
                 }
-
                 const sortedHistory = [...history].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-
                 sortedHistory.forEach(item => {
                     const historyItem = document.createElement('div');
                     historyItem.classList.add('history-item');
-                    
                     const actionClass = item.action.length > 100 ? 'history-item-action long-text' : 'history-item-action';
-                    
                     historyItem.innerHTML = `
                         <div class="${actionClass}">${this.cleanHistoryAction(item.action)}</div>
                         <div class="history-item-meta">${new Date(item.timestamp).toLocaleString('tr-TR')} by ${item.userEmail}</div>
@@ -1788,7 +1806,6 @@ async handleTaskUpdate(e) {
                 });
             }
         }
-
         const taskDetailModule = new TaskDetailModule();
         taskDetailModule.init();
         window.taskDetailModule = taskDetailModule;
