@@ -281,130 +281,112 @@ export const validateEtebsTokenV2 = onRequest(
         });
     }
 );
-//       Storage'taki PDF dosyasını bulup Nodemailer'a eklenti (attachment) olarak vermek.
-// functions/index.js dosyasındaki buildNotificationAttachments fonksiyonunu bu şekilde güncelleyin:
+// Storage'taki PDF dosyasını bulup Nodemailer'a eklenti (attachment) olarak vermek.
 
 async function buildNotificationAttachments(db, notificationData) {
   const result = { attachments: [], footerItems: [] };
+  const MAX_BYTES = 20 * 1024 * 1024; // 20MB
+  const bucket = admin.storage().bucket();
 
-  console.log('🔍 [DEBUG] buildNotificationAttachments başladı');
-  console.log('📄 [DEBUG] sourceDocumentId:', notificationData.sourceDocumentId);
+  const safeName = (name, def = "epats.pdf") =>
+    String(name || def).replace(/[^\w.\-]+/g, "_").slice(0, 100);
+
+  const pathFromDownloadURL = (url) => {
+    try {
+      const u = new URL(url);
+      const m = u.pathname.match(/\/o\/(.+?)(?:\?|$)/);
+      return m ? decodeURIComponent(m[1]) : null;
+    } catch {
+      return null;
+    }
+  };
+
+  console.log("🔍 [DEBUG] buildNotificationAttachments (TASK-ONLY) başladı");
+  console.log("🧩 [DEBUG] associatedTaskId:", notificationData?.associatedTaskId);
+
+  // 1) Sadece task üzerinden EPATS dokümanı ara
+  const taskId = notificationData?.associatedTaskId;
+  if (!taskId) {
+    console.log("❌ [DEBUG] associatedTaskId yok; eklenecek dosya bulunamadı.");
+    return result;
+  }
+
+  let epats = null;
+  try {
+    const tSnap = await db.collection("tasks").doc(taskId).get();
+    if (tSnap.exists) {
+      epats = tSnap.data()?.details?.epatsDocument || null;
+    }
+  } catch (e) {
+    console.warn("⚠️ [DEBUG] task okuma hatası:", e?.message || e);
+  }
+
+  if (!epats) {
+    console.log("❌ [DEBUG] Task içinde EPATS dokümanı yok.");
+    return result;
+  }
+
+  // 2) EPATS meta'sını işle
+  let filePath = epats?.storagePath || null;
+  const fileUrl  = epats?.downloadURL || null;
+  const fileName = safeName(epats?.name, "epats.pdf");
+
+  if (!filePath && fileUrl) {
+    filePath = pathFromDownloadURL(fileUrl);
+    console.log("🔧 [DEBUG] URL’den path türetildi:", filePath);
+  }
+
+  if (!filePath && !fileUrl) {
+    console.log("❌ [DEBUG] EPATS meta’sında path/url yok.");
+    return result;
+  }
+
+  // 3) Storage'dan indir (büyükse footer link olarak ekle)
+  if (!filePath) {
+    // Sadece URL varsa ve path çıkarılamadıysa link olarak ekle
+    result.footerItems.push(
+      `<a href="${fileUrl}" target="_blank" rel="noopener">${fileName}</a>`
+    );
+    console.log("📎 [DEBUG] Path yok; footer link eklendi.");
+    return result;
+  }
 
   try {
-    if (!notificationData?.sourceDocumentId) {
-      console.log('❌ [DEBUG] sourceDocumentId eksik!');
-      return result;
-    }
+    console.log("📏 [DEBUG] Storage metadata alınıyor…", filePath);
+    const [metadata] = await bucket.file(filePath).getMetadata();
+    const sizeBytes = Number(metadata.size || 0);
+    const sizeMB = (sizeBytes / 1024 / 1024).toFixed(2);
+    console.log("📐 [DEBUG] Boyut:", sizeMB, "MB");
 
-    let filePath = null;
-    let fileName = null;
-    let accessibleUrl = null;
-
-    // 1) unindexed_pdfs'ten veri al
-    const unindexedSnap = await db.collection('unindexed_pdfs')
-      .doc(notificationData.sourceDocumentId)
-      .get();
-
-    if (unindexedSnap.exists) {
-      const d = unindexedSnap.data() || {};
-      filePath = d.filePath || null;
-      fileName = d.fileName || 'document.pdf';
-      accessibleUrl = d.fileUrl || null;
-      
-      console.log('✅ [DEBUG] unindexed_pdfs bulundu:', {
-        hasFilePath: !!filePath,
-        hasFileUrl: !!accessibleUrl,
-        fileName: fileName
-      });
-
-      // 🔧 YENİ: filePath yoksa fileUrl'den çıkar
-      if (!filePath && accessibleUrl) {
-        console.log('🔧 [DEBUG] filePath eksik, fileUrl\'den çıkarılıyor...');
-        try {
-          // fileUrl'den Storage path'ini çıkar
-          const urlObj = new URL(accessibleUrl);
-          const pathMatch = urlObj.pathname.match(/\/o\/(.+?)(?:\?|$)/);
-          if (pathMatch) {
-            filePath = decodeURIComponent(pathMatch[1]);
-            console.log('✅ [DEBUG] filePath URL\'den çıkarıldı:', filePath);
-          } else {
-            console.log('❌ [DEBUG] URL\'den path çıkarılamadı');
-          }
-        } catch (urlError) {
-          console.warn('⚠️ [DEBUG] URL parse hatası:', urlError.message);
-        }
+    if (sizeBytes > MAX_BYTES) {
+      console.log("📦 [DEBUG] Dosya büyük; footer link olarak eklenecek.");
+      if (fileUrl) {
+        result.footerItems.push(
+          `<a href="${fileUrl}" target="_blank" rel="noopener">${fileName}</a>`
+        );
+      } else {
+        result.footerItems.push(fileName);
       }
-    } else {
-      console.log('❌ [DEBUG] unindexed_pdfs dokümanı bulunamadı');
-      // indexed_documents fallback kodu burada...
       return result;
     }
 
-    if (!filePath) {
-      console.log('🔴 [DEBUG] SORUN: filePath hala bulunamadı!');
-      console.log('🔍 [DEBUG] Mevcut veriler:', {
-        fileName: fileName,
-        hasFileUrl: !!accessibleUrl,
-        fileUrl: accessibleUrl ? accessibleUrl.substring(0, 100) + '...' : null
-      });
-      return result;
+    console.log("📥 [DEBUG] Dosya indiriliyor ve ekleniyor…");
+    const [buffer] = await bucket.file(filePath).download();
+    result.attachments.push({
+      filename: fileName,
+      content: buffer,
+      contentType: "application/pdf",
+    });
+    console.log("✅ [DEBUG] Attachment eklendi:", fileName);
+    return result;
+  } catch (e) {
+    console.error("❌ [DEBUG] Storage erişim hatası:", e?.message || e);
+    if (fileUrl) {
+      // Son çare: link olarak ekle
+      result.footerItems.push(
+        `<a href="${fileUrl}" target="_blank" rel="noopener">${fileName}</a>`
+      );
     }
-
-    console.log('📁 [DEBUG] filePath bulundu:', filePath);
-
-    const bucket = admin.storage().bucket();
-
-    // Storage dosya kontrolü
-    try {
-      console.log('📏 [DEBUG] Storage dosya kontrol ediliyor...');
-      const [metadata] = await bucket.file(filePath).getMetadata();
-      const sizeBytes = Number(metadata.size || 0);
-      const MAX_BYTES = 20 * 1024 * 1024; // 20 MB
-      
-      console.log('📐 [DEBUG] Dosya boyutu:', {
-        sizeBytes: sizeBytes,
-        sizeMB: (sizeBytes / 1024 / 1024).toFixed(2),
-        willBeAttachment: sizeBytes <= MAX_BYTES
-      });
-
-      const safeName = String(fileName || 'document.pdf')
-        .replace(/[^\w.\-]+/g, '_')
-        .slice(0, 100);
-
-      if (sizeBytes > MAX_BYTES) {
-        console.log('📦 [DEBUG] Dosya çok büyük, footer link ekleniyor');
-        if (accessibleUrl) {
-          result.footerItems.push(`<a href="${accessibleUrl}" target="_blank" rel="noopener">${safeName}</a>`);
-        } else {
-          result.footerItems.push(safeName);
-        }
-        return result;
-      }
-
-      // Dosyayı indir ve attachment olarak ekle
-      console.log('📎 [DEBUG] Dosya indiriliyor ve attachment ekleniyor...');
-      const [buffer] = await bucket.file(filePath).download();
-      result.attachments.push({
-        filename: safeName,
-        content: buffer,
-        contentType: 'application/pdf'
-      });
-
-      console.log('✅ [DEBUG] Attachment başarıyla eklendi:', {
-        filename: safeName,
-        bufferSize: buffer.length
-      });
-
-      return result;
-
-    } catch (storageError) {
-      console.error('❌ [DEBUG] Storage dosya hatası:', storageError.message);
-      console.log('🔍 [DEBUG] Denenen filePath:', filePath);
-      return result;
-    }
-
-  } catch (err) {
-    console.error('❌ [DEBUG] buildNotificationAttachments genel hata:', err);
     return result;
   }
 }
