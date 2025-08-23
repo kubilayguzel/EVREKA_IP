@@ -1670,40 +1670,48 @@ if (typeof this.renderDocuments === 'function') {
                 }
             }
          
-            handleTaskDocumentsUpload(files) {
-                for (const file of files) {
-                    if (file.size > 10 * 1024 * 1024) {
-                        showNotification(`"${file.name}" dosyası çok büyük (Max 10MB).`, 'error');
-                        continue;
-                    }
-                    const allowedTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'image/jpeg', 'image/png'];
-                    if (!allowedTypes.includes(file.type)) {
-                        showNotification(`"${file.name}" desteklenmeyen bir formattadır.`, 'error');
-                        continue;
-                    }
-                    if (this.currentTaskDocuments.some(d => d.name === file.name && d.size === file.size)) {
-                        showNotification(`"${file.name}" zaten eklenmiş.`, 'info');
-                        continue;
-                    }
-                    readFileAsDataURL(file).then(dataUrl => {
-                        this.currentTaskDocuments.push({
-                            id: generateUUID(),
-                            name: file.name,
-                            size: file.size,
-                            type: file.type,
-                            content: dataUrl,
-                            uploadedAt: new Date().toISOString(),
-                            documentDesignation: 'Diğer'
-                        });
-                        this.renderDocuments();
-                    }).catch(error => {
-                        console.error("Dosya okuma hatası:", error);
-                        showNotification(`"${file.name}" okunamadı.`, 'error');
-                    });
+            async handleTaskDocumentsUpload(files) {
+            const toAppend = [];
+            for (const file of files) {
+                // Boyut / tür kontrolleri
+                if (file.size > 10 * 1024 * 1024) {
+                showNotification(`"${file.name}" dosyası çok büyük (Max 10MB).`, 'error');
+                continue;
                 }
-                this.saveDocumentsToTask();
+                const allowedTypes = ['application/pdf','application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document','image/jpeg','image/png'];
+                if (!allowedTypes.includes(file.type)) {
+                showNotification(`"${file.name}" desteklenmeyen bir formattadır.`, 'error');
+                continue;
+                }
+                if (this.currentTaskDocuments.some(d => d.name === file.name && d.size === file.size)) {
+                showNotification(`"${file.name}" zaten eklenmiş.`, 'info');
+                continue;
+                }
+
+                // İçeriği bekleyerek oku
+                const dataUrl = await new Promise((resolve, reject) => {
+                const r = new FileReader();
+                r.onload = () => resolve(r.result);
+                r.onerror = reject;
+                r.readAsDataURL(file);
+                });
+
+                toAppend.push({
+                id: (crypto?.randomUUID?.() || `${Date.now()}_${Math.random().toString(36).slice(2)}`),
+                name: file.name,
+                size: file.size,
+                type: file.type,
+                content: dataUrl,
+                uploadedAt: new Date().toISOString(),
+                documentDesignation: 'Diğer',
+                });
             }
 
+            if (toAppend.length === 0) return;
+            this.currentTaskDocuments = [...(this.currentTaskDocuments || []), ...toAppend];
+            this.renderDocuments();
+            await this.saveDocumentsToTask();   // <-- yalnızca okuma bittikten sonra
+            }
             renderDocuments() {
                 const fileListContainer = document.getElementById('fileListContainer');
                 fileListContainer.innerHTML = '';
@@ -1758,17 +1766,22 @@ if (typeof this.renderDocuments === 'function') {
             }
 
             async saveDocumentsToTask() {
-                try {
-                    const result = await taskService.updateTask(this.taskId, { documents: this.currentTaskDocuments });
-                    if (result.success) {
-                        showNotification('Belgeler başarıyla güncellendi.', 'success');
-                        await this.loadTaskData();
-                    } else {
-                        throw new Error(result.error);
-                    }
-                } catch (error) {
-                    showNotification('Belgeler güncellenirken hata oluştu: ' + error.message, 'error');
-                }
+            try {
+                const docs = Array.isArray(this.currentTaskDocuments) ? this.currentTaskDocuments : [];
+                const result = await taskService.updateTask(this.taskId, { documents: docs });
+                if (!result.success) throw new Error(result.error || 'Güncelleme başarısız');
+
+                // Yerel state’i eşitle ve ekranda tut
+                this.currentTask = this.currentTask || {};
+                this.currentTask.documents = [...docs];
+                this.renderDocuments();
+                showNotification('Belgeler başarıyla güncellendi.', 'success');
+
+                // İsterseniz, kısa bir gecikmeyle arka planda tekrar yükleyebilirsiniz:
+                // setTimeout(() => this.loadTaskData().catch(()=>{}), 500);
+            } catch (error) {
+                showNotification('Belgeler güncellenirken hata oluştu: ' + error.message, 'error');
+            }
             }
             cleanHistoryAction(action) {
                 if (action.includes('İş güncellendi. Değişen alanlar:')) {
