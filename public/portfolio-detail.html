@@ -206,6 +206,11 @@
             <div class="hero-meta">
               <h4 id="heroTitle" class="mb-3"></h4>
               <div id="heroKv" class="kv-grid"></div>
+              <div class="mt-2">
+                <button id="tpQueryBtn" class="btn btn-sm btn-outline-secondary">
+                  TÜRKPATENT’te Sorgula
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -305,6 +310,22 @@
       </div>
     </main>
   </div>
+    <script>
+    document.getElementById('tpQueryBtn')?.addEventListener('click', () => {
+      // TODO: Burayı uygulamanızdaki gerçek alanla değiştirin:
+      const applicationNo =
+        window.currentRecord?.applicationNumber ||
+        (document.querySelector('#heroKv')?.textContent.match(/\b\d{2}\.\d{3}\.\d{3}\b/) || [])[0];
+
+      if (!applicationNo) {
+        alert('Başvuru numarası bulunamadı.');
+        return;
+      }
+      // Yeni pencerede statik sayfayı aç (o sayfa Cloud Function’ı çağırır)
+      const url = `/tp-sorgu?type=application&no=${encodeURIComponent(applicationNo)}`;
+      window.open(url, '_blank', 'noopener,noreferrer');
+    });
+  </script>
   <script type="module" src="./js/layout-loader.js"></script>
   <script type="module" src="./firebase-config.js"></script>
   <script type="module" src="./js/portfolio-detail.js"></script>
