@@ -105,7 +105,6 @@ const corsOptions = {
     credentials: true,
     optionsSuccessStatus: 200
 };
-const corsHandler = cors(corsOptions);
 
 // SMTP transporter configuration
 const transporter = nodemailer.createTransport({
@@ -259,9 +258,6 @@ function setCorsHeaders(res, origin) {
 }
 
 import puppeteer from 'puppeteer';
-import { onRequest } from 'firebase-functions/v2/https';
-import puppeteer from 'puppeteer';
-
 export const tpQueryV2 = onRequest(
   { region: 'europe-west1', timeoutSeconds: 180, memory: '1GiB' },
   async (req, res) => {
