@@ -330,6 +330,7 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333
   position: relative !important;
   z-index: auto !important;
 
+}
 /* Dropdown açıkken parent container'ın overflow'unu düzelt */
 .section-card:has(.search-results-list[style*="block"]),
 .card-content-wrapper:has(.search-results-list[style*="block"]) {
@@ -367,6 +368,21 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333
     }
     
     
+
+/* === OVERRIDE: Kart ve iç container arası mesafe === */
+.section-card {
+  padding: 24px !important; /* Kartın genel iç boşluğu */
+}
+
+.section-card .card-content-wrapper {
+  margin: 18px !important; /* Karttan ~0.5 cm içeride olsun */
+  border-radius: 14px;
+}
+
+.section-card[data-wrapped] {
+  padding: 12px !important; /* wrapper varken fazla boşluk olmasın */
+}
+
 </style>
 <style>
     /* Task Detail dosyasından alınan özel stiller */
@@ -486,6 +502,7 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333
   position: relative !important;
   z-index: auto !important;
 
+}
 /* Arama dropdown'u görünürken ilgili kartı üste al */
 .section-card:has(#ipRecordSearchResults[style*="block"]),
 .section-card:has(.search-results-list[style*="block"]),
