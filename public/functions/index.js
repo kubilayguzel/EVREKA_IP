@@ -310,15 +310,22 @@ export const tpQueryV2 = onRequest({ region: 'europe-west1', timeoutSeconds: 180
     let browser;
     try {
       const isGet = req.method === 'GET';
-      const { type = 'application', number } = isGet ? req.query : (req.body || {});
-      if (!number) return res.status(400).json({ ok: false, error: 'number gerekli' });
+      const raw = isGet ? (req.query || {}) : (req.body || {});
+      // Sadece başvuru numarasıyla arıyoruz. Eski uyumluluk için "number" ve "no" da destekleniyor.
+      const applicationNumber = String(
+        raw.applicationNumber || raw.number || raw.no || ''
+      ).trim();
+
+      if (!applicationNumber) {
+        return res.status(400).json({ ok: false, error: 'applicationNumber gerekli' });
+      }
 
       // Sparticuz Chromium ile başlat
       browser = await puppeteer.launch({
         executablePath: await chromium.executablePath(),
         args: chromium.args,
         headless: chromium.headless,
-        defaultViewport: { width: 1366, height: 768 }
+        defaultViewport: { width: 1366, height: 768 },
       });
 
       const page = await browser.newPage();
@@ -336,31 +343,49 @@ export const tpQueryV2 = onRequest({ region: 'europe-west1', timeoutSeconds: 180
         timeout: 60000,
       });
 
-      // Açılıştaki duyuru/çerez modalını kapat
+      // Açılıştaki uyarı/çerez pencerelerini kapat
       await closeAnnounceModals(page);
 
-      // "Dosya Takibi" sekmesini tıkla
+      // "Dosya Takibi" sekmesini tıkla ve aktif olmasını bekle
       await page.waitForSelector('button[role="tab"], .MuiTab-root', { timeout: 30000 });
       await page.evaluate(() => {
         const tabs = Array.from(document.querySelectorAll('button[role="tab"], .MuiTab-root'));
         const btn = tabs.find(b => /Dosya Takibi/i.test(b.textContent || ''));
         btn?.click();
       });
+      await page.waitForFunction(() => {
+        const tab = Array.from(document.querySelectorAll('button[role="tab"], .MuiTab-root'))
+          .find(b => /Dosya Takibi/i.test(b.textContent || ''));
+        const active = tab && (tab.getAttribute('aria-selected') === 'true' || tab.classList.contains('Mui-selected'));
+        const inputs = document.querySelectorAll('input.MuiInputBase-input, input.MuiInput-input, input[placeholder]');
+        return !!active && inputs.length >= 1;
+      }, { timeout: 10000 }).catch(() => {});
+      await page.waitForTimeout(300);
 
-      // Alan belirle
-      const fieldSelector =
-        ({
-          application: 'input[placeholder="Başvuru Numarası"]',
-          document: 'input[placeholder="Evrak Numarası"]',
-          registration: 'input[placeholder="Tescil Numarası"]',
-          intl: 'input[placeholder="Uluslararası Tescil Numarası"]',
-        }[String(type).toLowerCase()]) || 'input[placeholder="Başvuru Numarası"]';
+      // Başvuru Numarası alanını bul (sağlam seçim)
+      let fieldEl = await page.evaluateHandle(() => {
+        // 1) placeholder metniyle
+        const byPh = Array.from(document.querySelectorAll('input'))
+          .find(i => /Başvuru\s*Numarası/i.test((i.getAttribute('placeholder') || '').trim()));
+        if (byPh) return byPh;
 
-      await page.waitForSelector(fieldSelector, { timeout: 30000 });
-      await page.focus(fieldSelector);
-      await page.keyboard.type(String(number), { delay: 25 });
+        // 2) En olası ilk input (Dosya Takibi formunda ilk alan başvuru numarası)
+        const inputs = document.querySelectorAll('input.MuiInputBase-input, input.MuiInput-input, input[placeholder]');
+        return inputs[0] || null;
+      });
 
-      // "Sorgula"
+      if (!fieldEl || !(await fieldEl.asElement())) {
+        throw new Error('Form alanı bulunamadı (Başvuru Numarası).');
+      }
+
+      // Alanı temizle + başvuru numarasını yaz
+      try {
+        await fieldEl.click({ clickCount: 3 });
+        await fieldEl.press('Backspace');
+      } catch {}
+      await fieldEl.type(applicationNumber, { delay: 25 });
+
+      // "Sorgula" butonuna bas
       await page.evaluate(() => {
         const btns = Array.from(document.querySelectorAll('button'));
         const q = btns.find(b => /Sorgula/i.test(b.textContent || ''));
@@ -384,7 +409,7 @@ export const tpQueryV2 = onRequest({ region: 'europe-west1', timeoutSeconds: 180
         html = await page.$eval('#search-results', el => el.innerHTML);
       } catch { html = ''; }
 
-      // Ekran görüntüsü: önce sadece sonuç kutusu, yoksa sayfanın tek karesi
+      // Ekran görüntüsü: mümkünse sadece sonuç kutusu
       let screenshot = '';
       try {
         const resultsHandle = await page.$('#search-results');
@@ -406,6 +431,7 @@ export const tpQueryV2 = onRequest({ region: 'europe-west1', timeoutSeconds: 180
     }
   }
 );
+
 // Health Check Function (v2 sözdizimi)
 export const etebsProxyHealthV2 = onRequest(
     {
