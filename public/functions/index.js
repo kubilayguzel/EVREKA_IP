@@ -245,6 +245,17 @@ export const etebsProxyV2 = onRequest(
 import chromium from '@sparticuz/chromium';
 import puppeteer from 'puppeteer-core';
 
+const USER_AGENTS = [
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:122.0) Gecko/20100101 Firefox/122.0',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
+];
+
+// Rate limiting için Map
+const lastRequestMap = new Map();
+
 chromium.setHeadlessMode = true;
 chromium.setGraphicsMode = false;
 
@@ -504,7 +515,17 @@ if (hasCaptcha) {
     await page.waitForTimeout(200);
     
     // Yeni değeri yaz
-    await input.type(applicationNumber, { delay: 50 });
+    await input.click({ clickCount: 3 });
+    await page.keyboard.press('Delete');
+    await sleep(300);
+
+    for (const char of applicationNumber) {
+      await page.keyboard.type(char);
+      await sleep(Math.random() * 100 + 50); // 50-150ms arası rastgele gecikme
+    }
+
+    // Input'un focus kaybetmemesi için
+    await sleep(500);
     
     // Değerin yazıldığını doğrula
     const typedValue = await input.evaluate(el => el.value);
@@ -671,6 +692,30 @@ export const tpQueryV2 = onRequest(
     if (req.method === 'OPTIONS') return res.status(204).send('');
     if (!['GET','POST'].includes(req.method)) return res.status(405).json({ ok:false, error:'Method not allowed' });
 
+    // ⬇️ BURAYA EKLEYİN ⬇️
+    // Rate Limiting Check
+    const clientKey = req.ip || 'default';
+    const now = Date.now();
+    const lastRequest = lastRequestMap.get(clientKey) || 0;
+    const timeDiff = now - lastRequest;
+    const minInterval = 300000; // 5 dakika = 300000ms
+
+    if (timeDiff < minInterval) {
+      const remainingTime = Math.ceil((minInterval - timeDiff) / 1000);
+      logger.warn('rate_limit_hit', { clientKey, remainingTime });
+      
+      return res.status(429).json({
+        ok: false,
+        error: 'RATE_LIMIT',
+        message: `Çok sık sorgu yapıyorsunuz. ${Math.ceil(remainingTime/60)} dakika ${remainingTime%60} saniye bekleyin.`,
+        retryAfter: remainingTime
+      });
+    }
+
+    // Rate limit kaydet
+    lastRequestMap.set(clientKey, now);
+    // ⬆️ BURAYA KADAR EKLEYİN ⬆️
+
     const rid = Math.random().toString(36).slice(2,8) + '-' + Date.now();
     const steps = []; const net = { responses: [], fails: [] };
     let browser, page;
@@ -680,24 +725,71 @@ export const tpQueryV2 = onRequest(
       const applicationNumber = String(raw.applicationNumber || raw.number || raw.no || '').trim();
       if (!applicationNumber) return res.status(400).json({ ok:false, error:'applicationNumber gerekli' });
 
-      logger.info('tpQueryV2.start', { rid, applicationNumber });
+      logger.info('tpQueryV2.start', { rid, applicationNumber, clientKey });
+
+      // ⬇️ Browser başlatma kısmını değiştirin ⬇️
+      // Random User Agent seç
+      const randomUA = USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
+      
       browser = await puppeteer.launch({
         executablePath: await chromium.executablePath(),
         headless: chromium.headless,
-        args: [...chromium.args, '--no-sandbox','--disable-setuid-sandbox','--disable-dev-shm-usage','--disable-gpu'],
+        args: [
+          ...chromium.args, 
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-dev-shm-usage',
+          '--disable-gpu',
+          '--disable-web-security',
+          '--disable-blink-features=AutomationControlled', // WebDriver gizleme
+          '--disable-extensions',
+          '--no-first-run',
+          '--disable-default-browser-check'
+        ],
         defaultViewport: { width: 1366, height: 900 },
       });
 
       page = await browser.newPage();
       await enableLightMode(page);
-      await page.setExtraHTTPHeaders({ 'Accept-Language': 'tr-TR,tr;q=0.9,en-US;q=0.8' });
-      await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122 Safari/537.36');
+      
+      // Random User Agent kullan
+      await page.setUserAgent(randomUA);
+      
+      // Extra headers - daha human-like
+      await page.setExtraHTTPHeaders({ 
+        'Accept-Language': 'tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Connection': 'keep-alive',
+        'Upgrade-Insecure-Requests': '1'
+      });
+
+      // WebDriver property'sini gizle
+      await page.evaluateOnNewDocument(() => {
+        delete Object.getPrototypeOf(navigator).webdriver;
+        
+        Object.defineProperty(navigator, 'plugins', {
+          get: () => [1, 2, 3, 4, 5]
+        });
+        
+        Object.defineProperty(navigator, 'languages', {
+          get: () => ['tr-TR', 'tr', 'en-US', 'en']
+        });
+      });
+
       page.setDefaultNavigationTimeout(120000);
       page.setDefaultTimeout(120000);
 
+      logger.info('browser_setup', { rid, userAgent: randomUA });
+      // ⬆️ Browser değişikliği sonu ⬆️
+
+      // ... geri kalan kod aynı kalacak
       await withStep('goto', page, rid, steps, async () => {
         await page.goto(URL, { waitUntil:'domcontentloaded', timeout: 60000 });
       });
+
+      // Human-like delay ekleyin
+      await sleep(Math.random() * 2000 + 1000); // 1-3 saniye rastgele bekleme
 
       await withStep('closeOverlays', page, rid, steps, async () => {
         await closeOverlays(page, steps, rid);
@@ -711,14 +803,15 @@ export const tpQueryV2 = onRequest(
         return await queryByApplicationNumber(page, applicationNumber, net, steps, rid);
       });
 
-      logger.info('tpQueryV2.success', { rid, htmlLen: (html||'').length, usedInputSelector, xhr200: net.responses.filter(r=>r.status===200).length });
+      logger.info('tpQueryV2.success', { rid, htmlLen: (html||'').length, usedInputSelector });
       return res.json({ ok:true, rid, usedInputSelector, html, screenshot, steps, net });
 
     } catch (err) {
       const message = String(err?.message || err);
       const step = err?.__step__ || 'unknown';
       const shot = err?.__screenshot__ || '';
-      logger.error('tpQueryV2.fail', { rid, step, message });
+      
+      logger.error('tpQueryV2.fail', { rid, step, message, clientKey });
       return res.status(500).json({ ok:false, rid, step, message, steps, screenshot: shot, net });
     } finally {
       try { await browser?.close(); } catch(e){ logger.error('browser.close.error', { rid, e:String(e) }); }
