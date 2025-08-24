@@ -313,7 +313,6 @@ export const tpQueryV2 = onRequest({ region: 'europe-west1', timeoutSeconds: 180
     try {
       const isGet = req.method === 'GET';
       const raw = isGet ? (req.query || {}) : (req.body || {});
-      // Yalnızca başvuru numarası ile arıyoruz (geriye dönük: number / no)
       const applicationNumber = String(
         raw.applicationNumber || raw.number || raw.no || ''
       ).trim();
@@ -322,7 +321,6 @@ export const tpQueryV2 = onRequest({ region: 'europe-west1', timeoutSeconds: 180
         return res.status(400).json({ ok: false, error: 'applicationNumber gerekli' });
       }
 
-      // Sparticuz Chromium + puppeteer-core
       browser = await puppeteer.launch({
         executablePath: await chromium.executablePath(),
         args: chromium.args,
@@ -331,24 +329,21 @@ export const tpQueryV2 = onRequest({ region: 'europe-west1', timeoutSeconds: 180
       });
 
       const page = await browser.newPage();
-
-      // Hafif mod + TR başlıklar + UA
       await enableLightMode(page);
       await page.setExtraHTTPHeaders({ 'Accept-Language': 'tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7' });
       await page.setUserAgent(
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
       );
 
-      // Sayfaya git
-      await page.goto('https://www.turkpatent.gov.tr/arastirma-yap?form=trademark', {
+      // non-www kullanalım
+      await page.goto('https://turkpatent.gov.tr/arastirma-yap?form=trademark', {
         waitUntil: 'domcontentloaded',
         timeout: 60000,
       });
 
-      // Açılış modalları kapat
       await closeAnnounceModals(page);
 
-      // "Dosya Takibi" sekmesini tıkla ve aktif olmasını bekle
+      // "Dosya Takibi" sekmesini etkinleştir
       await page.waitForSelector('button[role="tab"], .MuiTab-root', { timeout: 30000 });
       await page.evaluate(() => {
         const tabs = Array.from(document.querySelectorAll('button[role="tab"], .MuiTab-root'));
@@ -358,67 +353,60 @@ export const tpQueryV2 = onRequest({ region: 'europe-west1', timeoutSeconds: 180
       await page.waitForFunction(() => {
         const tab = Array.from(document.querySelectorAll('button[role="tab"], .MuiTab-root'))
           .find(b => /Dosya Takibi/i.test(b.textContent || ''));
-        const active = tab && (tab.getAttribute('aria-selected') === 'true' || tab.classList.contains('Mui-selected'));
-        const inputs = document.querySelectorAll('input.MuiInputBase-input, input.MuiInput-input, input[placeholder]');
-        return !!active && inputs.length >= 1;
+        return !!tab && (tab.getAttribute('aria-selected') === 'true' || tab.classList.contains('Mui-selected'));
       }, { timeout: 10000 }).catch(() => {});
-      await sleep(300); // <-- waitForTimeout yerine
+      await sleep(300);
 
-      // Başvuru Numarası alanını bul (placeholder + fallback)
+      // Alanı bul (placeholder + fallback)
       let fieldEl = await page.evaluateHandle(() => {
         const byPh = Array.from(document.querySelectorAll('input'))
           .find(i => /Başvuru\s*Numarası/i.test((i.getAttribute('placeholder') || '').trim()));
         if (byPh) return byPh;
-
-        // Fallback: formdaki ilk input
         const inputs = document.querySelectorAll('input.MuiInputBase-input, input.MuiInput-input, input[placeholder]');
         return inputs[0] || null;
       });
-
       if (!fieldEl || !(await fieldEl.asElement())) {
         throw new Error('Form alanı bulunamadı (Başvuru Numarası).');
       }
 
-      // Alanı temizle + başvuru numarasını yaz
-      try {
-        await fieldEl.click({ clickCount: 3 });
-        await fieldEl.press('Backspace');
-      } catch {}
+      try { await fieldEl.click({ clickCount: 3 }); await fieldEl.press('Backspace'); } catch {}
       await fieldEl.type(applicationNumber, { delay: 25 });
 
-      // "Sorgula" butonuna bas
+      // Sorgula
       await page.evaluate(() => {
         const btns = Array.from(document.querySelectorAll('button'));
         const q = btns.find(b => /Sorgula/i.test(b.textContent || ''));
         q?.click();
       });
 
-      // Sonuçları bekle
-      await sleep(300); // <-- waitForTimeout yerine
-      await page.waitForSelector('#search-results', { timeout: 60000 });
-      await page.waitForFunction(
-        () => {
-          const el = document.querySelector('#search-results');
-          return !!el && (el.textContent || '').trim().length > 0;
-        },
-        { timeout: 60000 }
-      );
+      // Sonuç container’ı için sağlam selector seti
+      const RESULTS_SEL =
+        '#search-results, div[id*="search-results"], div[id*="searchresults"], div[id*="result-list"], div[id*="results"]';
 
-      // HTML'i çek
-      let html = '';
-      try {
-        html = await page.$eval('#search-results', el => el.innerHTML);
-      } catch { html = ''; }
+      // önce element oluşsun
+      await page.waitForFunction((sel) => !!document.querySelector(sel), { timeout: 60000 }, RESULTS_SEL);
 
-      // Görüntü: mümkünse sadece sonuç kutusu
+      // sonra içerik dolsun ve spinner kaybolsun
+      await page.waitForFunction((sel) => {
+        const el = document.querySelector(sel);
+        if (!el) return false;
+        const hasSpinner = !!el.querySelector('.MuiCircularProgress-root,[role="progressbar"]');
+        const txt = (el.textContent || '').trim();
+        return !hasSpinner && txt.length > 0;
+      }, { timeout: 60000 }, RESULTS_SEL);
+
+      // HTML
+      const html = await page.evaluate((sel) => {
+        const el = document.querySelector(sel);
+        return el ? el.innerHTML : '';
+      }, RESULTS_SEL);
+
+      // Ekran görüntüsü (önce sadece sonuç alanı, yoksa tüm sayfa)
       let screenshot = '';
       try {
-        const resultsHandle = await page.$('#search-results');
-        if (resultsHandle) {
-          screenshot = await resultsHandle.screenshot({ type: 'png', encoding: 'base64' });
-        } else {
-          screenshot = await page.screenshot({ type: 'png', encoding: 'base64', fullPage: false });
-        }
+        const handle = await page.$(RESULTS_SEL);
+        if (handle) screenshot = await handle.screenshot({ type: 'png', encoding: 'base64' });
+        else screenshot = await page.screenshot({ type: 'png', encoding: 'base64', fullPage: false });
       } catch {
         screenshot = await page.screenshot({ type: 'png', encoding: 'base64', fullPage: false });
       }
