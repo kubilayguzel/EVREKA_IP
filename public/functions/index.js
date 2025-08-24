@@ -324,7 +324,7 @@ export const tpQueryV2 = onRequest({ region: 'europe-west1', timeoutSeconds: 180
       browser = await puppeteer.launch({
         executablePath: await chromium.executablePath(),
         args: chromium.args,
-        headless: chromium.headless,
+        headless: false,
         defaultViewport: { width: 1366, height: 768 },
       });
 
