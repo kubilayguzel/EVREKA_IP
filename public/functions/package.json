@@ -31,7 +31,8 @@
     "node-unrar-js": "^2.0.2",
     "nodemailer": "^7.0.5",
     "p-limit": "^6.2.0",
-    "unrar-promise": "^2.0.1"
+    "unrar-promise": "^2.0.1",
+    "puppeteer": "^22.7.1"  
   },
   "devDependencies": {
     "firebase-functions-test": "^3.1.0"
