@@ -241,67 +241,171 @@ export const etebsProxyV2 = onRequest(
         });
     }
 );
+// functions/index.js (veya ilgili dosyanız)
+import { onRequest } from 'firebase-functions/v2/https';
+import chromium from '@sparticuz/chromium';
+import puppeteer from 'puppeteer-core';
 
-// Sadece header set eden yardımcı (middleware değil!)
-function setCorsHeaders(res, origin) {
-  if (ALLOWED_ORIGINS.has(origin)) res.set('Access-Control-Allow-Origin', origin);
-  res.set('Vary', 'Origin');
-  res.set('Access-Control-Allow-Headers', 'Content-Type');
+// Chromium ayarları (CF v2 uyumlu)
+chromium.setHeadlessMode = true;
+chromium.setGraphicsMode = false;
+
+// === Yardımcılar ===
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+function setCorsHeaders(res, origin = '*') {
+  res.set('Access-Control-Allow-Origin', origin || '*');
   res.set('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+  res.set('Access-Control-Allow-Headers', 'Content-Type,Authorization');
 }
-// (B) — Modal/uyarı/çerez pencerelerini kapat
-async function closeAnnounceModals(page) {
+
+async function enableLightMode(page) {
   try {
-    // 1) Kapat/Tamam/Devam/Kabul vb. yazan düğmeler
-    await page.evaluate(() => {
-      const clickIf = (regex) => {
-        const btn = Array.from(document.querySelectorAll('button, a'))
-          .find(b => regex.test((b.textContent || '').trim()));
-        btn?.click();
-        return !!btn;
-      };
-      // en yaygın metinler
-      clickIf(/kapat|tamam|devam|anladım|kabul/i);
-    });
-
-    // 2) X ikonlu butonlar
-    await page.evaluate(() => {
-      const xBtns = document.querySelectorAll(
-        'button[aria-label="Close"], .MuiIconButton-root[aria-label="close"], .close, .modal-close'
-      );
-      xBtns.forEach(el => el instanceof HTMLElement && el.click());
-    });
-
-    // 3) Kapanmayan backdrop/overlay’i zorla kaldır
-    await page.evaluate(() => {
-      document.querySelectorAll('.MuiDialog-root, .MuiBackdrop-root, .modal, .dialog')
-        .forEach(el => el.remove());
-    });
-
-    // 4) Bir an animasyon bekle
-    await new Promise(r => setTimeout(r, 400));
+    await page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: 'light' }]);
   } catch {}
 }
 
-// (C) — Ağır kaynakları engelle (hafıza ve hız için)
-async function enableLightMode(page) {
-  await page.setRequestInterception(true);
-  page.on('request', req => {
-    const t = req.resourceType();
-    // CSS bırakıyoruz; görüntü / medya / font ağır.
-    if (t === 'image' || t === 'media' || t === 'font') req.abort();
-    else req.continue();
-  });
+async function closeAnnounceModals(page, steps) {
+  const selectors = [
+    '#onetrust-accept-btn-handler',
+    '.ot-sdk-container .ot-pc-refuse-all-handler',
+    '.cookiebar .close',
+    '.btn-close',
+    'button:has-text("Kabul Et")',
+    'button:has-text("Tamam")',
+    'button:has-text("Anladım")',
+  ];
+  for (const sel of selectors) {
+    try {
+      const el = await page.$(sel);
+      if (el) {
+        await el.click().catch(() => {});
+        steps.push({ step: 'closeAnnounceModals.click', selector: sel });
+        await sleep(200);
+      }
+    } catch {}
+  }
 }
 
-import chromium from '@sparticuz/chromium';
-import puppeteer from 'puppeteer-core';
-chromium.setHeadlessMode = true;
-chromium.setGraphicsMode = false;
-// Küçük bekleme helper'ı (Puppeteer v22+ için)
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// Görünürlük kontrolü
+async function isVisible(handle) {
+  if (!handle) return false;
+  const box = await handle.boundingBox();
+  return !!box && box.width > 0 && box.height > 0;
+}
 
-export const tpQueryV2 = onRequest({ region: 'europe-west1', timeoutSeconds: 180, memory: '2GiB' },
+// Sayfadaki ya da iframelerdeki bir selector'ü bulup handle + scope(frame/page) döndürür
+async function findInAllFrames(page, selectors, steps, { visibleOnly = true } = {}) {
+  const frames = [page.mainFrame(), ...page.frames()];
+  for (const frame of frames) {
+    for (const sel of selectors) {
+      try {
+        const h = await frame.$(sel);
+        if (!h) continue;
+        if (!visibleOnly || (await isVisible(h))) {
+          steps.push({ step: 'findInAllFrames.found', frameUrl: frame.url(), selector: sel });
+          return { scope: frame, handle: h, selector: sel };
+        }
+      } catch {}
+    }
+  }
+  steps.push({ step: 'findInAllFrames.notFound', tried: selectors });
+  return { scope: page, handle: null, selector: null };
+}
+
+// Placeholder / innerText’le input yakala (frame içinde çalışır)
+async function findApplicationNumberInput(scope, steps) {
+  // 1) Doğrudan selector listesi
+  const direct = [
+    'input[placeholder*="Başvuru"]',
+    'input[placeholder*="Başvuru Numar"]',
+    'input[placeholder*="Başvuru No"]',
+    'input[name="dosyaTakipNo"]',
+    'input#dosyaTakipNo',
+    'input[name*="application"]',
+    'input.MuiInputBase-input',
+    'input.MuiInput-input',
+  ];
+  for (const sel of direct) {
+    try {
+      const h = await scope.$(sel);
+      if (h && (await isVisible(h))) {
+        steps.push({ step: 'findInput.direct', selector: sel });
+        return { handle: h, selector: sel };
+      }
+    } catch {}
+  }
+
+  // 2) Tüm inputları gezip placeholder metnine göre eşle
+  try {
+    const h = await scope.evaluateHandle(() => {
+      const cand = Array.from(document.querySelectorAll('input')).find((i) => {
+        const ph = (i.getAttribute('placeholder') || '').toLowerCase();
+        const name = (i.getAttribute('name') || '').toLowerCase();
+        const id = (i.getAttribute('id') || '').toLowerCase();
+        const txt = [ph, name, id].join(' ');
+        return (
+          (ph && (ph.includes('başvuru') || ph.includes('numara') || ph.includes('dosya'))) ||
+          name.includes('application') ||
+          id.includes('dosya') ||
+          id.includes('takip')
+        );
+      });
+      return cand || null;
+    });
+    if (h && (await isVisible(h))) {
+      steps.push({ step: 'findInput.placeholderMatch' });
+      return { handle: h, selector: '<placeholderMatch>' };
+    }
+  } catch {}
+
+  steps.push({ step: 'findInput.notFound' });
+  return { handle: null, selector: null };
+}
+
+async function clickQueryButton(scope, steps) {
+  // Önce yaygın buton selector’leri
+  const btnSelectors = [
+    'button[type="submit"]',
+    '#sorgula',
+    'button:has-text("Sorgula")',
+    'button:has-text("Ara")',
+    'button.MuiButton-root',
+  ];
+  for (const sel of btnSelectors) {
+    try {
+      const h = await scope.$(sel);
+      if (h && (await isVisible(h))) {
+        await h.click();
+        steps.push({ step: 'clickQueryButton.selector', selector: sel });
+        return true;
+      }
+    } catch {}
+  }
+
+  // Bulamadıysak metinle ara
+  try {
+    const clicked = await scope.evaluate(() => {
+      const btns = Array.from(document.querySelectorAll('button'));
+      const b = btns.find((b) => /Sorgula|Ara/i.test(b.textContent || ''));
+      if (b) {
+        (b).click();
+        return true;
+      }
+      return false;
+    });
+    if (clicked) {
+      steps.push({ step: 'clickQueryButton.textMatch' });
+      return true;
+    }
+  } catch {}
+
+  steps.push({ step: 'clickQueryButton.notFound' });
+  return false;
+}
+
+export const tpQueryV2 = onRequest(
+  { region: 'europe-west1', timeoutSeconds: 180, memory: '2GiB' },
   async (req, res) => {
     const origin = req.headers.origin || '';
     setCorsHeaders(res, origin);
@@ -309,112 +413,232 @@ export const tpQueryV2 = onRequest({ region: 'europe-west1', timeoutSeconds: 180
     if (req.method !== 'POST' && req.method !== 'GET')
       return res.status(405).json({ ok: false, error: 'Method not allowed' });
 
+    const steps = []; // adım adım debug log
     let browser;
+
     try {
       const isGet = req.method === 'GET';
       const raw = isGet ? (req.query || {}) : (req.body || {});
-      const applicationNumber = String(
-        raw.applicationNumber || raw.number || raw.no || ''
-      ).trim();
+      const applicationNumber = String(raw.applicationNumber || raw.number || raw.no || '').trim();
+      if (!applicationNumber) return res.status(400).json({ ok: false, error: 'applicationNumber gerekli' });
 
-      if (!applicationNumber) {
-        return res.status(400).json({ ok: false, error: 'applicationNumber gerekli' });
-      }
+      steps.push({ step: 'input', applicationNumber });
 
       browser = await puppeteer.launch({
         executablePath: await chromium.executablePath(),
-        args: chromium.args,
-        headless: false,
-        defaultViewport: { width: 1366, height: 768 },
+        headless: chromium.headless, // Functions ortamında headless olmalı
+        args: [
+          ...chromium.args,
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-dev-shm-usage',
+          '--disable-gpu',
+        ],
+        defaultViewport: { width: 1366, height: 900 },
       });
 
       const page = await browser.newPage();
       await enableLightMode(page);
-      await page.setExtraHTTPHeaders({ 'Accept-Language': 'tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7' });
+      await page.setExtraHTTPHeaders({ 'Accept-Language': 'tr-TR,tr;q=0.9,en-US;q=0.8' });
       await page.setUserAgent(
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
+      );
+      page.setDefaultNavigationTimeout(120000);
+      page.setDefaultTimeout(120000);
+
+      // Ağ logları (hangi endpoint’te beklediğimizi görmek için)
+      let last200 = null;
+      page.on('response', async (resp) => {
+        try {
+          if (resp.ok()) {
+            last200 = { url: resp.url(), status: resp.status(), ts: Date.now() };
+          }
+        } catch {}
+      });
+
+      // 1) Sayfaya git
+      const url = 'https://turkpatent.gov.tr/arastirma-yap?form=trademark';
+      steps.push({ step: 'goto.start', url });
+      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
+      steps.push({ step: 'goto.done' });
+
+      // 2) KVKK / cookie banner kapat
+      await closeAnnounceModals(page, steps);
+
+      // 3) "Dosya Takibi" sekmesi varsa tıkla (yoksa sorun değil; bazı görünümlerde default olabilir)
+      try {
+        await page.waitForSelector('button[role="tab"], .MuiTab-root', { timeout: 5000 });
+        const clicked = await page.evaluate(() => {
+          const tabs = Array.from(document.querySelectorAll('button[role="tab"], .MuiTab-root'));
+          const btn = tabs.find((b) => /Dosya Takibi/i.test(b.textContent || ''));
+          if (btn) {
+            (btn).click();
+            return true;
+          }
+          return false;
+        });
+        steps.push({ step: 'tab.clickAttempt', clicked });
+        if (clicked) {
+          await page.waitForFunction(() => {
+            const tab = Array.from(document.querySelectorAll('button[role="tab"], .MuiTab-root')).find((b) =>
+              /Dosya Takibi/i.test(b.textContent || '')
+            );
+            return !!tab && (tab.getAttribute('aria-selected') === 'true' || tab.classList.contains('Mui-selected'));
+          }, { timeout: 10000 }).catch(() => {});
+          await sleep(300);
+          steps.push({ step: 'tab.activated' });
+        }
+      } catch {
+        steps.push({ step: 'tab.notFound' });
+      }
+
+      // 4) Input’u bul (sayfa+iframe’ler)
+      const inputSearchSelectors = [
+        'input[placeholder*="Başvuru"]',
+        'input[placeholder*="Başvuru Numar"]',
+        'input[placeholder*="Başvuru No"]',
+        'input[name="dosyaTakipNo"]',
+        'input#dosyaTakipNo',
+        'input[name*="application"]',
+        'input.MuiInputBase-input',
+        'input.MuiInput-input',
+      ];
+
+      // Önce selector’lerle hızlı tarama
+      let { scope, handle: inputHandle, selector: matchedInputSelector } = await findInAllFrames(
+        page,
+        inputSearchSelectors,
+        steps,
+        { visibleOnly: true }
       );
 
-      // non-www kullanalım
-      await page.goto('https://turkpatent.gov.tr/arastirma-yap?form=trademark', {
-        waitUntil: 'domcontentloaded',
-        timeout: 60000,
-      });
-
-      await closeAnnounceModals(page);
-
-      // "Dosya Takibi" sekmesini etkinleştir
-      await page.waitForSelector('button[role="tab"], .MuiTab-root', { timeout: 30000 });
-      await page.evaluate(() => {
-        const tabs = Array.from(document.querySelectorAll('button[role="tab"], .MuiTab-root'));
-        const btn = tabs.find(b => /Dosya Takibi/i.test(b.textContent || ''));
-        btn?.click();
-      });
-      await page.waitForFunction(() => {
-        const tab = Array.from(document.querySelectorAll('button[role="tab"], .MuiTab-root'))
-          .find(b => /Dosya Takibi/i.test(b.textContent || ''));
-        return !!tab && (tab.getAttribute('aria-selected') === 'true' || tab.classList.contains('Mui-selected'));
-      }, { timeout: 10000 }).catch(() => {});
-      await sleep(300);
-
-      // Alanı bul (placeholder + fallback)
-      let fieldEl = await page.evaluateHandle(() => {
-        const byPh = Array.from(document.querySelectorAll('input'))
-          .find(i => /Başvuru\s*Numarası/i.test((i.getAttribute('placeholder') || '').trim()));
-        if (byPh) return byPh;
-        const inputs = document.querySelectorAll('input.MuiInputBase-input, input.MuiInput-input, input[placeholder]');
-        return inputs[0] || null;
-      });
-      if (!fieldEl || !(await fieldEl.asElement())) {
-        throw new Error('Form alanı bulunamadı (Başvuru Numarası).');
+      // Bulamazsak placeholder metni ile dene
+      if (!inputHandle) {
+        // Tüm frame’lerde metin taraması
+        const frames = [page.mainFrame(), ...page.frames()];
+        for (const f of frames) {
+          const r = await findApplicationNumberInput(f, steps);
+          if (r.handle) {
+            scope = f;
+            inputHandle = r.handle;
+            matchedInputSelector = r.selector;
+            break;
+          }
+        }
       }
 
-      try { await fieldEl.click({ clickCount: 3 }); await fieldEl.press('Backspace'); } catch {}
-      await fieldEl.type(applicationNumber, { delay: 25 });
+      if (!inputHandle) {
+        // Hata öncesi ekran görüntüsü
+        let shot = '';
+        try {
+          shot = await page.screenshot({ type: 'png', encoding: 'base64', fullPage: true });
+        } catch {}
+        steps.push({ step: 'error.noInput' });
+        return res.status(500).json({
+          ok: false,
+          error: 'Form alanı bulunamadı (Başvuru Numarası).',
+          steps,
+          screenshot: shot,
+          last200,
+        });
+      }
 
-      // Sorgula
-      await page.evaluate(() => {
-        const btns = Array.from(document.querySelectorAll('button'));
-        const q = btns.find(b => /Sorgula/i.test(b.textContent || ''));
-        q?.click();
-      });
+      // 5) Numarayı yaz
+      try { await inputHandle.click({ clickCount: 3 }); } catch {}
+      try { await inputHandle.press('Backspace'); } catch {}
+      await inputHandle.type(applicationNumber, { delay: 25 });
+      steps.push({ step: 'typed.applicationNumber', matchedInputSelector });
 
-      // Sonuç container’ı için sağlam selector seti
+      // 6) SORGULA
+      const clicked = await clickQueryButton(scope, steps);
+      if (!clicked) {
+        // Enter fallback
+        try { await scope.keyboard.press('Enter'); steps.push({ step: 'pressEnter.fallback' }); } catch {}
+      }
+
+      // 7) Navigation + XHR beraber bekle
+      let xhrOk = false;
+      const xhrWait = page
+        .waitForResponse(
+          (r) =>
+            /sorgu|search|query|dosya|trademark/i.test(r.url()) &&
+            r.status() === 200,
+          { timeout: 60000 }
+        )
+        .then((r) => {
+          xhrOk = true;
+          steps.push({ step: 'waitForResponse.ok', url: r.url(), status: r.status() });
+        })
+        .catch(() => steps.push({ step: 'waitForResponse.timeout' }));
+
+      const navWait = page
+        .waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 60000 })
+        .then(() => steps.push({ step: 'waitForNavigation.ok' }))
+        .catch(() => steps.push({ step: 'waitForNavigation.timeout' }));
+
+      await Promise.race([Promise.allSettled([xhrWait, navWait]), sleep(65000)]);
+
+      // 8) Sonuç konteynerlerini ara
       const RESULTS_SEL =
-        '#search-results, div[id*="search-results"], div[id*="searchresults"], div[id*="result-list"], div[id*="results"]';
+        '#search-results, div[id*="search-results"], div[id*="searchresults"], div[id*="result-list"], div[id*="results"], .MuiDataGrid-virtualScroller, table';
 
-      // önce element oluşsun
-      await page.waitForFunction((sel) => !!document.querySelector(sel), { timeout: 60000 }, RESULTS_SEL);
+      // Önce element oluşsun
+      let resultsHandle = null;
+      try {
+        await page.waitForFunction((sel) => !!document.querySelector(sel), { timeout: 60000 }, RESULTS_SEL);
+        resultsHandle = await page.$(RESULTS_SEL);
+        steps.push({ step: 'results.containerFound', selector: RESULTS_SEL });
+      } catch {
+        steps.push({ step: 'results.containerNotFound' });
+      }
 
-      // sonra içerik dolsun ve spinner kaybolsun
-      await page.waitForFunction((sel) => {
-        const el = document.querySelector(sel);
-        if (!el) return false;
-        const hasSpinner = !!el.querySelector('.MuiCircularProgress-root,[role="progressbar"]');
-        const txt = (el.textContent || '').trim();
-        return !hasSpinner && txt.length > 0;
-      }, { timeout: 60000 }, RESULTS_SEL);
+      // Spinner kaybolup içerik dolsun
+      if (resultsHandle) {
+        try {
+          await page.waitForFunction(
+            (sel) => {
+              const el = document.querySelector(sel);
+              if (!el) return false;
+              const hasSpinner = !!el.querySelector('.MuiCircularProgress-root,[role="progressbar"]');
+              const txt = (el.textContent || '').trim();
+              return !hasSpinner && txt.length > 0;
+            },
+            { timeout: 60000 },
+            RESULTS_SEL
+          );
+          steps.push({ step: 'results.contentReady' });
+        } catch {
+          steps.push({ step: 'results.contentTimeout' });
+        }
+      }
 
-      // HTML
+      // 9) HTML ve ekran görüntüsü
       const html = await page.evaluate((sel) => {
         const el = document.querySelector(sel);
-        return el ? el.innerHTML : '';
+        return el ? el.innerHTML : document.body.innerHTML; // fallback
       }, RESULTS_SEL);
 
-      // Ekran görüntüsü (önce sadece sonuç alanı, yoksa tüm sayfa)
       let screenshot = '';
       try {
-        const handle = await page.$(RESULTS_SEL);
-        if (handle) screenshot = await handle.screenshot({ type: 'png', encoding: 'base64' });
-        else screenshot = await page.screenshot({ type: 'png', encoding: 'base64', fullPage: false });
+        const h = await page.$(RESULTS_SEL);
+        if (h) screenshot = await h.screenshot({ type: 'png', encoding: 'base64' });
+        else screenshot = await page.screenshot({ type: 'png', encoding: 'base64', fullPage: true });
       } catch {
-        screenshot = await page.screenshot({ type: 'png', encoding: 'base64', fullPage: false });
+        try { screenshot = await page.screenshot({ type: 'png', encoding: 'base64', fullPage: true }); } catch {}
       }
 
-      return res.json({ ok: true, html, screenshot });
+      return res.json({ ok: true, html, screenshot, steps, last200, usedInputSelector: matchedInputSelector });
     } catch (err) {
+      let failShot = '';
+      try { if (browser?.pages) { const p = (await browser.pages?.())[0]; if (p) failShot = await p.screenshot({ type: 'png', encoding: 'base64', fullPage: true }); } } catch {}
       console.error('tpQueryV2 error:', err);
-      return res.status(500).json({ ok: false, error: 'Automation failed', message: String(err?.message || err) });
+      return res.status(500).json({
+        ok: false,
+        error: 'Automation failed',
+        message: String(err?.message || err),
+        steps,
+        screenshot: failShot,
+      });
     } finally {
       try { await browser?.close(); } catch (e) { console.error('browser close error:', e); }
     }
