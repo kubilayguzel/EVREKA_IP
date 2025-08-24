@@ -296,7 +296,7 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333
                 <h1 class="page-title">Yeni İş Oluştur</h1>
                 <p class="page-subtitle">Oluşturmak istediğiniz işin türünü ve tipini seçerek devam edin.</p>
             </section>
-              <div class="form-container">
+            <div class="form-container">
                 <form id="createTaskForm" onsubmit="return false;">
 
                     <div class="card mb-4">
@@ -329,57 +329,77 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333
                         <div class="card-header bg-primary text-white">
                             <h5 class="card-title mb-0">2. İşleme Konu Varlık</h5>
                         </div>
-                        <div class="card-body" id="conditionalFieldsContainer">
-                            </div>
+                        <div class="card-body">
+                            <p class="text-muted">Başlık, dosya no, başvuru no, sahip adı...</p>
+                        </div>
                     </div>
                     
-                    <div class="card mb-4" id="relatedPartyCard" style="display:none;">
+                    <div class="card mb-4">
                         <div class="card-header bg-primary text-white">
                             <h5 class="card-title mb-0">3. İlgili Taraf</h5>
                         </div>
                         <div class="card-body">
-                            </div>
+                            <p>İlgili taraf bilgileri buraya gelecek.</p>
+                        </div>
                     </div>
 
-                    <div class="card mb-4" id="goodsServicesSection" style="display:none;">
+                    <div class="card mb-4">
                         <div class="card-header bg-primary text-white">
-                            <h5 class="card-title mb-0">Mal ve Hizmet Sınıfları</h5>
+                            <h5 class="card-title mb-0">Tahakkuk Bilgileri</h5>
                         </div>
                         <div class="card-body">
-                            <p class="text-muted mb-4">Nice Classification sistemi kullanılarak mal ve hizmet sınıflarınızı seçin. Birden fazla sınıf seçebilirsiniz.</p>
-                            <div class="nice-classification-container">
-                                <div class="row">
-                                    <div class="col-lg-8">
-                                        </div>
-                                    <div class="col-lg-4 d-flex flex-column">
-                                        </div>
+                            <div class="row">
+                                <div class="col-md-6 form-group">
+                                    <label for="officialFee" class="form-label">Resmi Ücret</label>
+                                    <input type="text" id="officialFee" class="form-input">
+                                </div>
+                                <div class="col-md-6 form-group">
+                                    <label for="serviceFee" class="form-label">Hizmet Bedeli</label>
+                                    <input type="text" id="serviceFee" class="form-input">
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    <div class="card mb-4" id="invoicingCard" style="display:none;">
+                    <div class="card mb-4">
                         <div class="card-header bg-primary text-white">
-                            <h5 class="card-title mb-0">Tahakkuk Bilgileri</h5>
+                            <h5 class="card-title mb-0">İş Detayları ve Atama</h5>
                         </div>
                         <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-6 form-group">
+                                    <label for="priority" class="form-label">Öncelik</label>
+                                    <select id="priority" class="form-select">
+                                        <option>Düşük</option>
+                                        <option>Orta</option>
+                                        <option>Yüksek</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6 form-group">
+                                    <label for="assignee" class="form-label">Atanacak Kullanıcı</label>
+                                    <select id="assignee" class="form-select">
+                                        <option>Seçiniz...</option>
+                                    </select>
+                                </div>
                             </div>
+                        </div>
                     </div>
 
-                    <div class="card mb-4" id="taskDetailsCard" style="display:none;">
-                        <div class="card-header bg-primary text-white">
-                            <h5 class="card-title mb-0">İş Detayları</h5>
-                        </div>
-                        <div class="card-body">
+                    <div class="form-section" id="goodsServicesSection" style="display:none;">
+                        <h3 class="section-title">
+                            <i class="fas fa-list-ul mr-2"></i>
+                            Mal ve Hizmet Sınıfları
+                        </h3>
+                        <p class="text-muted mb-4">Nice Classification sistemi kullanılarak mal ve hizmet sınıflarınızı seçin. Birden fazla sınıf seçebilirsiniz.</p>
+                    
+                        <div class="nice-classification-container">
+                            <div class="row">
+                                <div class="col-lg-8">
+                                    </div>
+                                <div class="col-lg-4 d-flex flex-column">
+                                    </div>
                             </div>
-                    </div>
-
-                    <div class="card mb-4" id="assignmentCard" style="display:none;">
-                        <div class="card-header bg-primary text-white">
-                            <h5 class="card-title mb-0">Atama</h5>
                         </div>
-                        <div class="card-body">
-                            </div>
                     </div>
 
                     <div class="form-actions mt-4">
