@@ -311,18 +311,19 @@
       </div>
     </main>
   </div>
-    <script>
+  <script>
     document.getElementById('tpQueryBtn')?.addEventListener('click', () => {
-      // TODO: Burayı uygulamanızdaki gerçek alanla değiştirin:
+      // Önce currentRecord'u dene; yoksa ekrandaki metinden yakalamaya çalış
+      const text = document.querySelector('#heroKv')?.textContent || '';
+      const match = text.match(/\b\d{2}\.\d{3}\.\d{3}\b|\b\d{4}\/\d+\b/); // 12.345.678 veya 2025/5
       const applicationNo =
-        window.currentRecord?.applicationNumber ||
-        (document.querySelector('#heroKv')?.textContent.match(/\b\d{2}\.\d{3}\.\d{3}\b/) || [])[0];
+        (window.currentRecord?.applicationNumber || '').trim() ||
+        (match ? match[0] : '');
 
       if (!applicationNo) {
         alert('Başvuru numarası bulunamadı.');
         return;
       }
-      // Yeni pencerede statik sayfayı aç (o sayfa Cloud Function’ı çağırır)
       const url = `/tp-sorgu?type=application&no=${encodeURIComponent(applicationNo)}`;
       window.open(url, '_blank', 'noopener,noreferrer');
     });
