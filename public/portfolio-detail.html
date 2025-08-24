@@ -313,18 +313,20 @@
   </div>
   <script>
     document.getElementById('tpQueryBtn')?.addEventListener('click', () => {
-      // Önce currentRecord'u dene; yoksa ekrandaki metinden yakalamaya çalış
       const text = document.querySelector('#heroKv')?.textContent || '';
-      const match = text.match(/\b\d{2}\.\d{3}\.\d{3}\b|\b\d{4}\/\d+\b/); // 12.345.678 veya 2025/5
+      const match = text.match(/\b\d{2}\.\d{3}\.\d{3}\b|\b\d{4}\/\d+\b/);
       const applicationNo =
         (window.currentRecord?.applicationNumber || '').trim() ||
         (match ? match[0] : '');
+      if (!applicationNo) return alert('Başvuru numarası bulunamadı.');
 
-      if (!applicationNo) {
-        alert('Başvuru numarası bulunamadı.');
-        return;
-      }
-      window.open(`/tp-sorgu?type=application&no=${encodeURIComponent(applicationNo)}`, '_blank', 'noopener,noreferrer');
+      // Mutlak Firebase Hosting URL'si: her yerden doğru yere gider
+      const BASE = 'https://ip-manager-production-aab4b.web.app';
+      window.open(
+        `${BASE}/tp-sorgu?type=application&no=${encodeURIComponent(applicationNo)}`,
+        '_blank',
+        'noopener,noreferrer'
+      );
     });
   </script>
   <script type="module" src="./js/layout-loader.js"></script>
