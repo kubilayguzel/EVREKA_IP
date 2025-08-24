@@ -330,11 +330,16 @@ async function activateDosyaTakibiTab(page, steps, rid) {
 }
 
 /** Inputa yaz + sorgula (XHR/nav beklemeleri dahil) */
+// Başında: import * as logger from 'firebase-functions/logger' kullandığından emin ol.
 async function queryByApplicationNumber(page, applicationNumber, net, steps, rid) {
-// --- network izleme ---
+  // küçük yardımcı
+  const isVisible = async (h) => { try { const b = await h.boundingBox(); return !!b && b.width > 0 && b.height > 0; } catch { return false; } };
+  const t = () => Date.now();
+
+  // --- Network izleme (sadece bu çağrı için basit kayıt) ---
   page.on('response', (resp) => {
     const u = resp.url();
-    if (/turkpatent|arastirma|query|sorgu|search|trademark/i.test(u)) {
+    if (/turkpatent|arastirma|query|sorgu|search|trademark|dosya/i.test(u)) {
       net.responses.push({ url: u, status: resp.status() });
       logger.info('NET.RESP', { rid, status: resp.status(), url: u });
     }
@@ -344,7 +349,25 @@ async function queryByApplicationNumber(page, applicationNumber, net, steps, rid
     logger.warn('NET.FAIL', { rid, url: reqi.url(), err: reqi.failure()?.errorText });
   });
 
-  // 1) "Başvuru Numarası" inputunu bul
+  // (Opsiyonel) "Dosya Takibi" sekmesini aktif et
+  try {
+    const clicked = await page.evaluate(() => {
+      const els = Array.from(document.querySelectorAll('button, a, [role="tab"], .MuiTab-root, .nav-link'));
+      const el = els.find(e => /dosya\s*takib/i.test((e.textContent || '').toLowerCase()));
+      if (el) { (el).click(); return true; }
+      return false;
+    });
+    if (clicked) {
+      await page.waitForFunction(() => {
+        const els = Array.from(document.querySelectorAll('[role="tab"].Mui-selected, .MuiTab-root.Mui-selected'));
+        return els.some(e => /dosya\s*takib/i.test((e.textContent || '').toLowerCase()));
+      }, { timeout: 8000 }).catch(() => {});
+      await page.waitForTimeout(250);
+      steps.push({ t: t(), step: 'tab.dosyaTakibi.activated' });
+    }
+  } catch {}
+
+  // --- 1) "Başvuru Numarası" inputunu bul ---
   const inputSelectors = [
     'input[placeholder*="Başvuru Numarası"]',
     'input[placeholder*="Başvuru"]',
@@ -356,18 +379,24 @@ async function queryByApplicationNumber(page, applicationNumber, net, steps, rid
   ];
   let input = null, usedInputSelector = null;
   for (const sel of inputSelectors) {
-    const h = await page.$(sel).catch(()=>null);
-    if (h && await h.isIntersectingViewport().catch(()=>true)) { input = h; usedInputSelector = sel; break; }
+    const h = await page.$(sel).catch(() => null);
+    if (h && await isVisible(h)) { input = h; usedInputSelector = sel; break; }
   }
   if (!input) throw new Error('Başvuru Numarası inputu bulunamadı');
 
-  // 2) Görünür yap + gerçek klavye ile yaz (React eventlerini tetikler)
+  // --- 2) Görünür yap + gerçek klavye ile yaz ---
   await input.evaluate(el => el.scrollIntoView({ block: 'center' }));
-  await input.click({ clickCount: 3 }).catch(()=>{});
-  await page.keyboard.press('Backspace').catch(()=>{});
-  await page.type(usedInputSelector, applicationNumber, { delay: 30 });
+  try { await input.click({ clickCount: 3 }); } catch {}
+  try { await page.keyboard.press('Backspace'); } catch {}
+  // React/MUI'nin onChange zinciri için gerçek typing
+  await page.type(usedInputSelector, applicationNumber, { delay: 25 });
 
-  // 3) Yazıldı mı? (doğrula; boşsa programatik fallback)
+  // Ek: blur/focus ile state'i kesinleştir
+  try { await input.evaluate(el => el.blur()); } catch {}
+  await page.waitForTimeout(50);
+  try { await input.evaluate(el => el.focus()); } catch {}
+
+  // Doğrulama; boş kalırsa programatik set + input/change
   let typedVal = await input.evaluate(el => el.value);
   if (!typedVal) {
     typedVal = await input.evaluate((el, val) => {
@@ -377,63 +406,91 @@ async function queryByApplicationNumber(page, applicationNumber, net, steps, rid
       return el.value;
     }, applicationNumber);
   }
-  steps.push({ t: Date.now(), step: 'input.typed', usedInputSelector, typedVal });
+  steps.push({ t: t(), step: 'input.typed', usedInputSelector, typedVal });
   logger.info('input.typed', { rid, usedInputSelector, typedVal });
 
-  // 4) SORGULA (buton → metin → form submit → Enter sıralı fallback)
+  // --- 3) SORGULA (buton → metin → form submit → Enter) ---
+  let usedButtonSelector = null;
+  let btnDisabled = null;
   let clicked = false;
-  const btnSelectors = ['button[type="submit"]', '.MuiButton-root', '#sorgula'];
-  for (const sel of btnSelectors) {
-    const b = await page.$(sel).catch(()=>null);
-    if (b) {
-      const disabled = await b.evaluate(el => el.disabled || el.getAttribute('aria-disabled')==='true');
-      logger.info('sorgula.button', { rid, sel, disabled });
-      if (!disabled) { await b.click().catch(()=>{}); clicked = true; break; }
+
+  const buttonSelectors = ['button[type="submit"]', '#sorgula', '.MuiButton-root'];
+  for (const sel of buttonSelectors) {
+    const b = await page.$(sel).catch(() => null);
+    if (b && await isVisible(b)) {
+      btnDisabled = await b.evaluate(el => el.disabled || el.getAttribute?.('aria-disabled') === 'true');
+      steps.push({ t: t(), step: 'button.state', sel, disabled: btnDisabled });
+      if (!btnDisabled) {
+        await b.click().catch(() => {});
+        usedButtonSelector = sel;
+        clicked = true;
+        break;
+      }
     }
   }
   if (!clicked) {
     clicked = await page.evaluate(() => {
-      const cands = Array.from(document.querySelectorAll('button,[role="button"],.MuiButton-root'));
-      const b = cands.find(x => /sorgula|ara|sorgu/i.test((x.textContent||'').toLowerCase()));
-      if (b && !b.disabled && b.getAttribute('aria-disabled')!=='true') { b.click(); return true; }
+      const cands = Array.from(document.querySelectorAll('button, [role="button"], .MuiButton-root'));
+      const b = cands.find(x => /sorgula|ara|sorgu/i.test((x.textContent || '').toLowerCase()));
+      if (b && !b.disabled && b.getAttribute('aria-disabled') !== 'true') { (b).click(); return true; }
       return false;
-    }).catch(()=>false);
+    }).catch(() => false);
+    if (clicked) usedButtonSelector = '<textMatch>';
   }
   if (!clicked) {
-    await page.evaluate(() => document.querySelector('form')?.requestSubmit?.()).catch(()=>{});
-    await page.keyboard.press('Enter').catch(()=>{});
+    await page.evaluate(() => document.querySelector('form')?.requestSubmit?.()).catch(() => {});
+    await page.keyboard.press('Enter').catch(() => {});
+    usedButtonSelector = usedButtonSelector || '<fallback>';
   }
-  steps.push({ t: Date.now(), step: 'click.sorgula', via: clicked ? 'button' : 'fallback' });
-  logger.info('click.sorgula', { rid, via: clicked ? 'button' : 'fallback' });
+  steps.push({ t: t(), step: 'click.sorgula', via: usedButtonSelector });
+  logger.info('click.sorgula', { rid, via: usedButtonSelector });
 
-  // 5) reCAPTCHA kontrol
-  const hasCaptcha = await page.$('iframe[src*="recaptcha"], .g-recaptcha').then(Boolean).catch(()=>false);
-  if (hasCaptcha) { steps.push({ t: Date.now(), step: 'captcha.detected' }); logger.warn('captcha.detected', { rid }); }
+  // --- 4) reCAPTCHA var mı? ---
+  const hasCaptcha = await page.$('iframe[src*="recaptcha"], .g-recaptcha').then(Boolean).catch(() => false);
+  if (hasCaptcha) { steps.push({ t: t(), step: 'captcha.detected' }); logger.warn('captcha.detected', { rid }); }
 
-  // 6) XHR/nav/GUI bekleme
-  const xhrOk = page.waitForResponse(
-    r => /query|sorgu|search|arastir|dosya|marka/i.test(r.url()) && r.status()===200, { timeout: 60000 }
-  ).catch(()=>null);
-  const resultsSel = '.MuiDataGrid-virtualScroller, #search-results, [id*="result"], table';
-  const uiOk = page.waitForFunction(sel => !!document.querySelector(sel), { timeout: 60000 }, resultsSel).catch(()=>null);
-  await Promise.race([Promise.allSettled([xhrOk, uiOk]), new Promise(r => setTimeout(r, 65000))]);
+  // --- 5) XHR / NAV bekleme (ikisi de kabul) ---
+  const xhrWait = page.waitForResponse(
+    r => /query|sorgu|search|arastir|dosya|trademark/i.test(r.url()) && r.status() === 200,
+    { timeout: 60000 }
+  ).catch(() => null);
+  const navWait = page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 60000 }).catch(() => null);
+  await Promise.race([Promise.allSettled([xhrWait, navWait]), new Promise(r => setTimeout(r, 65000))]);
 
-  // 7) HTML + screenshot döndür
+  // --- 6) Sonuç konteyneri + spinner bitti mi? ---
+  const RESULTS_SEL = [
+    '.MuiDataGrid-virtualScroller',
+    'div[id*="result"]',
+    '#search-results',
+    'table'
+  ].join(',');
+
+  await page.waitForFunction(sel => !!document.querySelector(sel), { timeout: 60000 }, RESULTS_SEL).catch(() => {});
+  await page.waitForFunction(sel => {
+    const el = document.querySelector(sel);
+    if (!el) return false;
+    const spin = el.querySelector('.MuiCircularProgress-root,[role="progressbar"]');
+    const txt = (el.textContent || '').trim();
+    return !spin && txt.length > 0;
+  }, { timeout: 60000 }, RESULTS_SEL).catch(() => {});
+
+  // --- 7) HTML + screenshot ---
   const html = await page.evaluate(sel => {
     const el = document.querySelector(sel);
     return el ? el.innerHTML : document.body.innerHTML;
-  }, resultsSel);
+  }, RESULTS_SEL);
 
   let screenshot = '';
   try {
-    const el = await page.$(resultsSel);
+    const el = await page.$(RESULTS_SEL);
     screenshot = el
-      ? await el.screenshot({ type:'png', encoding:'base64' })
-      : await page.screenshot({ type:'png', encoding:'base64', fullPage:true });
+      ? await el.screenshot({ type: 'png', encoding: 'base64' })
+      : await page.screenshot({ type: 'png', encoding: 'base64', fullPage: true });
   } catch {}
 
-  return { html, screenshot, usedInputSelector, hasCaptcha };
+  return { html, screenshot, usedInputSelector, usedButtonSelector, btnDisabled, typedVal, hasCaptcha };
 }
+
 export const tpQueryV2 = onRequest(
   { region: 'europe-west1', timeoutSeconds: 180, memory: '2GiB' },
   async (req, res) => {
