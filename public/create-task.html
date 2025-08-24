@@ -284,8 +284,6 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333
     .modal-backdrop.show {
         z-index: 1050 !important;
     }
-    
-    
 </style>
 </head>
 <body>
@@ -321,7 +319,34 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333
                         </div>
                     </div>
 
-                    <div id="conditionalFieldsContainer"></div>
+                    <div class="form-section" id="assetSection" style="display:none;">
+                        <h3 class="section-title">2. İşleme Konu Varlık</h3>
+                        <div class="form-group">
+                            <label for="assetSearch" class="form-label">Portföyde Ara</label>
+                            <div class="input-group">
+                                <div class="input-group-prepend">
+                                    <span class="input-group-text"><i class="fas fa-search"></i></span>
+                                </div>
+                                <input type="text" id="assetSearch" class="form-control" placeholder="Marka / Patent / Tasarım Adı veya Numarası ile arayın...">
+                            </div>
+                             <div id="selectedAsset" class="selected-items-list mt-2" style="display: none;"></div>
+                        </div>
+                    </div>
+
+                    <div class="form-section" id="relatedPartySection" style="display:none;">
+                        <h3 class="section-title">3. İlgili Taraf</h3>
+                        <div class="form-group">
+                            <label for="relatedPartySearch" class="form-label">İlgili Tarafı Seçin</label>
+                            <div class="input-group">
+                                 <div class="input-group-prepend">
+                                    <span class="input-group-text"><i class="fas fa-user-tie"></i></span>
+                                </div>
+                                <input type="text" id="relatedPartySearch" class="form-control" placeholder="Müvekkil veya Karşı Taraf Adı ile arayın...">
+                            </div>
+                            <div id="selectedParty" class="selected-items-list mt-2" style="display: none;"></div>
+                        </div>
+                    </div>
+
                     <div class="form-section" id="goodsServicesSection" style="display:none;">
                         <h3 class="section-title">
                             <i class="fas fa-list-ul mr-2"></i>
@@ -428,6 +453,72 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333
                             </div>
                         </div>
                     </div>
+
+                    <div class="form-section" id="billingSection" style="display:none;">
+                        <h3 class="section-title">4. Tahakkuk Bilgileri</h3>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label for="serviceFee" class="form-label">Hizmet Bedeli</label>
+                                <input type="number" id="serviceFee" class="form-input" placeholder="0.00">
+                            </div>
+                            <div class="form-group">
+                                <label for="currency" class="form-label">Para Birimi</label>
+                                <select id="currency" class="form-select">
+                                    <option value="TRY">Türk Lirası (TRY)</option>
+                                    <option value="USD">Amerikan Doları (USD)</option>
+                                    <option value="EUR">Euro (EUR)</option>
+                                </select>
+                            </div>
+                             <div class="form-group full-width">
+                                 <label for="billingNotes" class="form-label">Tahakkuk Notları</label>
+                                 <textarea id="billingNotes" class="form-textarea" rows="3" placeholder="Fatura veya tahakkuk ile ilgili özel notlar..."></textarea>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-section" id="detailsSection" style="display:none;">
+                        <h3 class="section-title">5. İş Detayları</h3>
+                        <div class="form-grid">
+                            <div class="form-group full-width">
+                                <label for="taskTitle" class="form-label">İş Başlığı</label>
+                                <input type="text" id="taskTitle" class="form-input" placeholder="Örn: Marka Tescil Başvurusu">
+                            </div>
+                            <div class="form-group full-width">
+                                <label for="taskDescription" class="form-label">Açıklama</label>
+                                <textarea id="taskDescription" class="form-textarea" rows="4" placeholder="İş ile ilgili detaylı açıklamalar..."></textarea>
+                            </div>
+                            <div class="form-group">
+                                <label for="dueDate" class="form-label">Bitiş Tarihi</label>
+                                <input type="date" id="dueDate" class="form-input">
+                            </div>
+                             <div class="form-group">
+                                <label for="priority" class="form-label">Öncelik</label>
+                                <select id="priority" class="form-select">
+                                    <option value="low">Düşük</option>
+                                    <option value="medium" selected>Normal</option>
+                                    <option value="high">Yüksek</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-section" id="assignmentSection" style="display:none;">
+                        <h3 class="section-title">6. Atama</h3>
+                        <div class="form-group">
+                            <label for="assignee" class="form-label">İşi Ata</label>
+                            <select id="assignee" class="form-select">
+                                <option value="">Seçiniz...</option>
+                                <option value="user1">Kullanıcı A</option>
+                                <option value="user2">Kullanıcı B</option>
+                                <option value="user3">Kullanıcı C</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-secondary">İptal</button>
+                        <button type="submit" class="btn btn-primary" id="submitTaskBtn">İşi Oluştur</button>
+                    </div>
                 </form>
             </div>
         </main>
@@ -442,7 +533,6 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333
     <script type="module" src="./js/create-portfolio-by-opposition.js"></script>
 </body>
 
-<!-- Modal for selecting parent transaction -->
 <div class="modal fade" id="selectParentModal" tabindex="-1" aria-labelledby="selectParentModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
@@ -455,8 +545,7 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333
             <div class="modal-body">
                 <p>İlgili portföyde birden fazla açık itiraz işlemi bulundu. Lütfen geri çekilecek olanı seçin.</p>
                 <ul id="parentListContainer" class="list-group">
-                    <!-- Parent transactions will be listed here -->
-                </ul>
+                    </ul>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-dismiss="modal">İptal</button>
@@ -464,10 +553,6 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333
         </div>
     </div>
 </div>
-
-<!-- Modal for adding a new person -->
-<!-- ensurePersonModal fonksiyonu bu modalın HTML'ini otomatik olarak oluşturur
- bu nedenle HTML'de tekrar eklemeye gerek yoktur. -->
 
 <style>
     #parentListContainer .list-group-item {
