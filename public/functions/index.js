@@ -298,6 +298,8 @@ import chromium from '@sparticuz/chromium';
 import puppeteer from 'puppeteer-core';
 chromium.setHeadlessMode = true;
 chromium.setGraphicsMode = false;
+// Küçük bekleme helper'ı (Puppeteer v22+ için)
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 export const tpQueryV2 = onRequest({ region: 'europe-west1', timeoutSeconds: 180, memory: '2GiB' },
   async (req, res) => {
@@ -311,7 +313,7 @@ export const tpQueryV2 = onRequest({ region: 'europe-west1', timeoutSeconds: 180
     try {
       const isGet = req.method === 'GET';
       const raw = isGet ? (req.query || {}) : (req.body || {});
-      // Sadece başvuru numarasıyla arıyoruz. Eski uyumluluk için "number" ve "no" da destekleniyor.
+      // Yalnızca başvuru numarası ile arıyoruz (geriye dönük: number / no)
       const applicationNumber = String(
         raw.applicationNumber || raw.number || raw.no || ''
       ).trim();
@@ -320,7 +322,7 @@ export const tpQueryV2 = onRequest({ region: 'europe-west1', timeoutSeconds: 180
         return res.status(400).json({ ok: false, error: 'applicationNumber gerekli' });
       }
 
-      // Sparticuz Chromium ile başlat
+      // Sparticuz Chromium + puppeteer-core
       browser = await puppeteer.launch({
         executablePath: await chromium.executablePath(),
         args: chromium.args,
@@ -343,7 +345,7 @@ export const tpQueryV2 = onRequest({ region: 'europe-west1', timeoutSeconds: 180
         timeout: 60000,
       });
 
-      // Açılıştaki uyarı/çerez pencerelerini kapat
+      // Açılış modalları kapat
       await closeAnnounceModals(page);
 
       // "Dosya Takibi" sekmesini tıkla ve aktif olmasını bekle
@@ -360,16 +362,15 @@ export const tpQueryV2 = onRequest({ region: 'europe-west1', timeoutSeconds: 180
         const inputs = document.querySelectorAll('input.MuiInputBase-input, input.MuiInput-input, input[placeholder]');
         return !!active && inputs.length >= 1;
       }, { timeout: 10000 }).catch(() => {});
-      await page.waitForTimeout(300);
+      await sleep(300); // <-- waitForTimeout yerine
 
-      // Başvuru Numarası alanını bul (sağlam seçim)
+      // Başvuru Numarası alanını bul (placeholder + fallback)
       let fieldEl = await page.evaluateHandle(() => {
-        // 1) placeholder metniyle
         const byPh = Array.from(document.querySelectorAll('input'))
           .find(i => /Başvuru\s*Numarası/i.test((i.getAttribute('placeholder') || '').trim()));
         if (byPh) return byPh;
 
-        // 2) En olası ilk input (Dosya Takibi formunda ilk alan başvuru numarası)
+        // Fallback: formdaki ilk input
         const inputs = document.querySelectorAll('input.MuiInputBase-input, input.MuiInput-input, input[placeholder]');
         return inputs[0] || null;
       });
@@ -392,8 +393,8 @@ export const tpQueryV2 = onRequest({ region: 'europe-west1', timeoutSeconds: 180
         q?.click();
       });
 
-      // Kısa nefes + sonuçları bekle
-      await page.waitForTimeout(300);
+      // Sonuçları bekle
+      await sleep(300); // <-- waitForTimeout yerine
       await page.waitForSelector('#search-results', { timeout: 60000 });
       await page.waitForFunction(
         () => {
@@ -403,13 +404,13 @@ export const tpQueryV2 = onRequest({ region: 'europe-west1', timeoutSeconds: 180
         { timeout: 60000 }
       );
 
-      // HTML'i güvenli çek
+      // HTML'i çek
       let html = '';
       try {
         html = await page.$eval('#search-results', el => el.innerHTML);
       } catch { html = ''; }
 
-      // Ekran görüntüsü: mümkünse sadece sonuç kutusu
+      // Görüntü: mümkünse sadece sonuç kutusu
       let screenshot = '';
       try {
         const resultsHandle = await page.$('#search-results');
