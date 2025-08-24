@@ -226,7 +226,89 @@ export const etebsProxyV2 = onRequest(
         });
     }
 );
+import puppeteer from 'puppeteer';
 
+export const tpQueryV2 = onRequest(
+  {
+    region: 'europe-west1',
+    timeoutSeconds: 180,
+    memory: '1GiB',
+  },
+  async (req, res) => {
+    return corsHandler(req, res, async () => {
+      try {
+        // İstekten parametreleri al
+        const isGet = req.method === 'GET';
+        const { type = 'application', number } = isGet ? req.query : (req.body || {});
+        if (!number) {
+          return res.status(400).json({ ok: false, error: 'number gerekli' });
+        }
+
+        const browser = await puppeteer.launch({
+          headless: 'new',
+          args: ['--no-sandbox', '--disable-setuid-sandbox'],
+        });
+        const page = await browser.newPage();
+
+        // Marka formu + Dosya Takibi sekmesi
+        await page.goto('https://www.turkpatent.gov.tr/arastirma-yap?form=trademark', {
+          waitUntil: 'networkidle2',
+          timeout: 60000,
+        });
+
+        // "Dosya Takibi" sekmesini tıkla (gerekirse)
+        await page.evaluate(() => {
+          const tabs = Array.from(document.querySelectorAll('button[role="tab"], .MuiTab-root'));
+          const btn = tabs.find(b => /Dosya Takibi/i.test(b.textContent || ''));
+          btn?.click();
+        });
+
+        // Hangi alana yazacağımızı seçelim
+        const fieldSelector =
+          {
+            application: 'input[placeholder="Başvuru Numarası"]',
+            document: 'input[placeholder="Evrak Numarası"]',
+            registration: 'input[placeholder="Tescil Numarası"]',
+            intl: 'input[placeholder="Uluslararası Tescil Numarası"]',
+          }[String(type).toLowerCase()] || 'input[placeholder="Başvuru Numarası"]';
+
+        await page.waitForSelector(fieldSelector, { timeout: 30000 });
+        await page.type(fieldSelector, String(number), { delay: 25 });
+
+        // "Sorgula" butonunu bulup tıkla
+        await page.evaluate(() => {
+          const btns = Array.from(document.querySelectorAll('button'));
+          const q = btns.find(b => /Sorgula/i.test(b.textContent || ''));
+          q?.click();
+        });
+
+        // Sonuç alanı dolana kadar bekle
+        await page.waitForSelector('#search-results', { timeout: 60000 });
+        await page.waitForFunction(
+          () => {
+            const el = document.querySelector('#search-results');
+            return el && el.textContent && el.textContent.trim().length > 0;
+          },
+          { timeout: 60000 }
+        );
+
+        // HTML ve küçük ekran görüntüsü döndür
+        const html = await page.evaluate(() => {
+          const el = document.querySelector('#search-results');
+          return el ? el.innerHTML : '';
+        });
+        const screenshot = await page.screenshot({ type: 'png', encoding: 'base64', fullPage: false });
+
+        await browser.close();
+        return res.json({ ok: true, html, screenshot });
+      } catch (err) {
+        console.error('tpQueryV2 error:', err);
+        try { await browser?.close(); } catch {}
+        return res.status(500).json({ ok: false, error: 'Automation failed', message: String(err?.message || err) });
+      }
+    });
+  }
+);
 // Health Check Function (v2 sözdizimi)
 export const etebsProxyHealthV2 = onRequest(
     {
