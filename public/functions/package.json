@@ -11,9 +11,7 @@
     "deploy": "firebase deploy --only functions",
     "logs": "firebase functions:log"
   },
-  "engines": {
-    "node": "20"
-  },
+  "engines": { "node": "20" },
   "main": "index.js",
   "dependencies": {
     "@google-cloud/pubsub": "^5.1.0",
@@ -31,7 +29,10 @@
     "node-unrar-js": "^2.0.2",
     "nodemailer": "^7.0.5",
     "p-limit": "^6.2.0",
-    "puppeteer": "22.15.0",
+
+    "@sparticuz/chromium": "^126.0.0",
+    "puppeteer-core": "^22.15.0",
+
     "unrar-promise": "^2.0.1"
   },
   "devDependencies": {
