@@ -2823,3 +2823,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     console.log('✅ CreateTask başarıyla initialize edildi');
 });
+document.addEventListener('DOMContentLoaded', function() {
+    const cards = document.querySelectorAll('.section-card');
+    
+    cards.forEach(card => {
+        const content = card.innerHTML;
+        card.innerHTML = `<div class="card-content-wrapper">${content}</div>`;
+    });
+});
