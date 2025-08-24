@@ -331,12 +331,12 @@ async function activateDosyaTakibiTab(page, steps, rid) {
 
 /** Inputa yaz + sorgula (XHR/nav beklemeleri dahil) */
 // Başında: import * as logger from 'firebase-functions/logger' kullandığından emin ol.
+// import * as logger from 'firebase-functions/logger' üstte olmalı
 async function queryByApplicationNumber(page, applicationNumber, net, steps, rid) {
-  // küçük yardımcı
   const isVisible = async (h) => { try { const b = await h.boundingBox(); return !!b && b.width > 0 && b.height > 0; } catch { return false; } };
   const t = () => Date.now();
 
-  // --- Network izleme (sadece bu çağrı için basit kayıt) ---
+  // Network izleme
   page.on('response', (resp) => {
     const u = resp.url();
     if (/turkpatent|arastirma|query|sorgu|search|trademark|dosya/i.test(u)) {
@@ -349,7 +349,7 @@ async function queryByApplicationNumber(page, applicationNumber, net, steps, rid
     logger.warn('NET.FAIL', { rid, url: reqi.url(), err: reqi.failure()?.errorText });
   });
 
-  // (Opsiyonel) "Dosya Takibi" sekmesini aktif et
+  // Sekme: Dosya Takibi (varsa)
   try {
     const clicked = await page.evaluate(() => {
       const els = Array.from(document.querySelectorAll('button, a, [role="tab"], .MuiTab-root, .nav-link'));
@@ -362,12 +362,12 @@ async function queryByApplicationNumber(page, applicationNumber, net, steps, rid
         const els = Array.from(document.querySelectorAll('[role="tab"].Mui-selected, .MuiTab-root.Mui-selected'));
         return els.some(e => /dosya\s*takib/i.test((e.textContent || '').toLowerCase()));
       }, { timeout: 8000 }).catch(() => {});
-      await page.waitForTimeout(250);
+      await sleep(250);
       steps.push({ t: t(), step: 'tab.dosyaTakibi.activated' });
     }
   } catch {}
 
-  // --- 1) "Başvuru Numarası" inputunu bul ---
+  // 1) Input’u bul
   const inputSelectors = [
     'input[placeholder*="Başvuru Numarası"]',
     'input[placeholder*="Başvuru"]',
@@ -384,19 +384,18 @@ async function queryByApplicationNumber(page, applicationNumber, net, steps, rid
   }
   if (!input) throw new Error('Başvuru Numarası inputu bulunamadı');
 
-  // --- 2) Görünür yap + gerçek klavye ile yaz ---
+  // 2) Görünür yap + gerçek klavye ile yaz
   await input.evaluate(el => el.scrollIntoView({ block: 'center' }));
   try { await input.click({ clickCount: 3 }); } catch {}
   try { await page.keyboard.press('Backspace'); } catch {}
-  // React/MUI'nin onChange zinciri için gerçek typing
   await page.type(usedInputSelector, applicationNumber, { delay: 25 });
 
-  // Ek: blur/focus ile state'i kesinleştir
+  // blur/focus ile state’i kesinleştir
   try { await input.evaluate(el => el.blur()); } catch {}
-  await page.waitForTimeout(50);
+  await sleep(50);                      // <— burada waitForTimeout yerine sleep
   try { await input.evaluate(el => el.focus()); } catch {}
 
-  // Doğrulama; boş kalırsa programatik set + input/change
+  // doğrulama + fallback (input/change dispatch)
   let typedVal = await input.evaluate(el => el.value);
   if (!typedVal) {
     typedVal = await input.evaluate((el, val) => {
@@ -409,7 +408,7 @@ async function queryByApplicationNumber(page, applicationNumber, net, steps, rid
   steps.push({ t: t(), step: 'input.typed', usedInputSelector, typedVal });
   logger.info('input.typed', { rid, usedInputSelector, typedVal });
 
-  // --- 3) SORGULA (buton → metin → form submit → Enter) ---
+  // 3) SORGULA (buton → metin → form submit → Enter)
   let usedButtonSelector = null;
   let btnDisabled = null;
   let clicked = false;
@@ -420,12 +419,7 @@ async function queryByApplicationNumber(page, applicationNumber, net, steps, rid
     if (b && await isVisible(b)) {
       btnDisabled = await b.evaluate(el => el.disabled || el.getAttribute?.('aria-disabled') === 'true');
       steps.push({ t: t(), step: 'button.state', sel, disabled: btnDisabled });
-      if (!btnDisabled) {
-        await b.click().catch(() => {});
-        usedButtonSelector = sel;
-        clicked = true;
-        break;
-      }
+      if (!btnDisabled) { await b.click().catch(() => {}); usedButtonSelector = sel; clicked = true; break; }
     }
   }
   if (!clicked) {
@@ -445,11 +439,11 @@ async function queryByApplicationNumber(page, applicationNumber, net, steps, rid
   steps.push({ t: t(), step: 'click.sorgula', via: usedButtonSelector });
   logger.info('click.sorgula', { rid, via: usedButtonSelector });
 
-  // --- 4) reCAPTCHA var mı? ---
+  // 4) reCAPTCHA var mı?
   const hasCaptcha = await page.$('iframe[src*="recaptcha"], .g-recaptcha').then(Boolean).catch(() => false);
   if (hasCaptcha) { steps.push({ t: t(), step: 'captcha.detected' }); logger.warn('captcha.detected', { rid }); }
 
-  // --- 5) XHR / NAV bekleme (ikisi de kabul) ---
+  // 5) XHR/NAV bekleme
   const xhrWait = page.waitForResponse(
     r => /query|sorgu|search|arastir|dosya|trademark/i.test(r.url()) && r.status() === 200,
     { timeout: 60000 }
@@ -457,24 +451,16 @@ async function queryByApplicationNumber(page, applicationNumber, net, steps, rid
   const navWait = page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 60000 }).catch(() => null);
   await Promise.race([Promise.allSettled([xhrWait, navWait]), new Promise(r => setTimeout(r, 65000))]);
 
-  // --- 6) Sonuç konteyneri + spinner bitti mi? ---
-  const RESULTS_SEL = [
-    '.MuiDataGrid-virtualScroller',
-    'div[id*="result"]',
-    '#search-results',
-    'table'
-  ].join(',');
-
+  // 6) Sonuç
+  const RESULTS_SEL = ['.MuiDataGrid-virtualScroller','div[id*="result"]','#search-results','table'].join(',');
   await page.waitForFunction(sel => !!document.querySelector(sel), { timeout: 60000 }, RESULTS_SEL).catch(() => {});
   await page.waitForFunction(sel => {
-    const el = document.querySelector(sel);
-    if (!el) return false;
+    const el = document.querySelector(sel); if (!el) return false;
     const spin = el.querySelector('.MuiCircularProgress-root,[role="progressbar"]');
     const txt = (el.textContent || '').trim();
     return !spin && txt.length > 0;
   }, { timeout: 60000 }, RESULTS_SEL).catch(() => {});
 
-  // --- 7) HTML + screenshot ---
   const html = await page.evaluate(sel => {
     const el = document.querySelector(sel);
     return el ? el.innerHTML : document.body.innerHTML;
