@@ -249,14 +249,57 @@ function setCorsHeaders(res, origin) {
   res.set('Access-Control-Allow-Headers', 'Content-Type');
   res.set('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
 }
+// (B) — Modal/uyarı/çerez pencerelerini kapat
+async function closeAnnounceModals(page) {
+  try {
+    // 1) Kapat/Tamam/Devam/Kabul vb. yazan düğmeler
+    await page.evaluate(() => {
+      const clickIf = (regex) => {
+        const btn = Array.from(document.querySelectorAll('button, a'))
+          .find(b => regex.test((b.textContent || '').trim()));
+        btn?.click();
+        return !!btn;
+      };
+      // en yaygın metinler
+      clickIf(/kapat|tamam|devam|anladım|kabul/i);
+    });
+
+    // 2) X ikonlu butonlar
+    await page.evaluate(() => {
+      const xBtns = document.querySelectorAll(
+        'button[aria-label="Close"], .MuiIconButton-root[aria-label="close"], .close, .modal-close'
+      );
+      xBtns.forEach(el => el instanceof HTMLElement && el.click());
+    });
+
+    // 3) Kapanmayan backdrop/overlay’i zorla kaldır
+    await page.evaluate(() => {
+      document.querySelectorAll('.MuiDialog-root, .MuiBackdrop-root, .modal, .dialog')
+        .forEach(el => el.remove());
+    });
+
+    // 4) Bir an animasyon bekle
+    await new Promise(r => setTimeout(r, 400));
+  } catch {}
+}
+
+// (C) — Ağır kaynakları engelle (hafıza ve hız için)
+async function enableLightMode(page) {
+  await page.setRequestInterception(true);
+  page.on('request', req => {
+    const t = req.resourceType();
+    // CSS bırakıyoruz; görüntü / medya / font ağır.
+    if (t === 'image' || t === 'media' || t === 'font') req.abort();
+    else req.continue();
+  });
+}
 
 import chromium from '@sparticuz/chromium';
 import puppeteer from 'puppeteer-core';
 chromium.setHeadlessMode = true;
 chromium.setGraphicsMode = false;
 
-export const tpQueryV2 = onRequest(
-  { region: 'europe-west1', timeoutSeconds: 180, memory: '1GiB' },
+export const tpQueryV2 = onRequest({ region: 'europe-west1', timeoutSeconds: 180, memory: '2GiB' },
   async (req, res) => {
     const origin = req.headers.origin || '';
     setCorsHeaders(res, origin);
@@ -279,16 +322,22 @@ export const tpQueryV2 = onRequest(
       });
 
       const page = await browser.newPage();
+
+      // Hafif mod + TR başlıklar + UA
+      await enableLightMode(page);
+      await page.setExtraHTTPHeaders({ 'Accept-Language': 'tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7' });
       await page.setUserAgent(
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
       );
-      await page.setExtraHTTPHeaders({ 'Accept-Language': 'tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7' });
 
       // Sayfaya git
-      await page.goto('https://turkpatent.gov.tr/arastirma-yap?form=trademark', {
+      await page.goto('https://www.turkpatent.gov.tr/arastirma-yap?form=trademark', {
         waitUntil: 'domcontentloaded',
         timeout: 60000,
       });
+
+      // Açılıştaki duyuru/çerez modalını kapat
+      await closeAnnounceModals(page);
 
       // "Dosya Takibi" sekmesini tıkla
       await page.waitForSelector('button[role="tab"], .MuiTab-root', { timeout: 30000 });
@@ -318,7 +367,8 @@ export const tpQueryV2 = onRequest(
         q?.click();
       });
 
-      // Sonuçları bekle
+      // Kısa nefes + sonuçları bekle
+      await page.waitForTimeout(300);
       await page.waitForSelector('#search-results', { timeout: 60000 });
       await page.waitForFunction(
         () => {
@@ -328,8 +378,24 @@ export const tpQueryV2 = onRequest(
         { timeout: 60000 }
       );
 
-      const html = await page.$eval('#search-results', el => el.innerHTML);
-      const screenshot = await page.screenshot({ type: 'png', encoding: 'base64', fullPage: false });
+      // HTML'i güvenli çek
+      let html = '';
+      try {
+        html = await page.$eval('#search-results', el => el.innerHTML);
+      } catch { html = ''; }
+
+      // Ekran görüntüsü: önce sadece sonuç kutusu, yoksa sayfanın tek karesi
+      let screenshot = '';
+      try {
+        const resultsHandle = await page.$('#search-results');
+        if (resultsHandle) {
+          screenshot = await resultsHandle.screenshot({ type: 'png', encoding: 'base64' });
+        } else {
+          screenshot = await page.screenshot({ type: 'png', encoding: 'base64', fullPage: false });
+        }
+      } catch {
+        screenshot = await page.screenshot({ type: 'png', encoding: 'base64', fullPage: false });
+      }
 
       return res.json({ ok: true, html, screenshot });
     } catch (err) {
