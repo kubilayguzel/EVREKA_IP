@@ -456,6 +456,12 @@ async function loadRecord(){
       return;
     }
     currentData = res.data;
+    // Bu kaydı butonun ulaşabileceği global alana da verelim:
+    window.currentRecord = {
+      applicationNumber: (currentData?.applicationNumber || '').trim(),
+      ipType: currentData?.ipType || 'trademark'
+    };
+
 
     // HERO
     renderHero(currentData);
