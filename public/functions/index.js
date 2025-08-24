@@ -360,18 +360,29 @@ async function queryByApplicationNumber(page, applicationNumber, net, steps, rid
   // CAPTCHA kontrolü daha erken yap
   await sleep(2000); // Sayfanın yüklenmesi için bekle
   
-const hasCaptcha = await page.evaluate(() => {
-  const captchaElements = [
-    'iframe[src*="recaptcha"]',
-    '.g-recaptcha',
-    '#recaptcha',
-    '[data-sitekey]'
-  ];
-  return captchaElements.some(sel => {
-    const el = document.querySelector(sel);
-    return el && el.offsetParent !== null; // Görünür mü kontrol et
+const hasCaptcha = await page.$('iframe[src*="recaptcha"], .g-recaptcha').then(Boolean).catch(() => false);
+if (hasCaptcha) { 
+  steps.push({ t: t(), step: 'captcha.detected' }); 
+  logger.warn('captcha.detected', { rid });
+  
+  // Screenshot al
+  let screenshot = '';
+  try {
+    screenshot = await page.screenshot({ type: 'png', encoding: 'base64', fullPage: true });
+  } catch(e) {}
+  
+  // 423 status ile CAPTCHA yanıtı döndür
+  return res.status(423).json({ 
+    ok: false, 
+    rid, 
+    error: 'CAPTCHA_DETECTED',
+    message: 'CAPTCHA tespit edildi - Manuel müdahale gerekli',
+    screenshot, 
+    steps, 
+    net,
+    retryAfter: 300 // 5 dakika sonra tekrar dene
   });
-});
+}
 
 if (hasCaptcha) { 
   steps.push({ t: t(), step: 'captcha.detected' }); 
