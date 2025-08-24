@@ -426,6 +426,27 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333
         background-color: #f0f4f8;
         border-radius: 10px;
     }
+    /* Kart içerik wrapper'ı için gölge */
+        .card-content-wrapper {
+        background: #ffffff;
+        padding: 20px;
+        border-radius: 12px;
+        box-shadow: 0 6px 20px rgba(0,0,0,0.08), 
+                    0 2px 8px rgba(0,0,0,0.04);
+        border: 1px solid rgba(0,0,0,0.02);
+        transition: all 0.3s ease;
+        }
+
+        .card-content-wrapper:hover {
+        box-shadow: 0 10px 30px rgba(0,0,0,0.12), 
+                    0 4px 12px rgba(0,0,0,0.06);
+        transform: translateY(-1px);
+        }
+
+        /* Kartın kendi gölgesini hafiflet */
+        .section-card {
+        box-shadow: none !important;
+}
 </style>
 </head>
 <body>
