@@ -242,7 +242,6 @@ export const etebsProxyV2 = onRequest(
     }
 );
 // functions/index.js (veya ilgili dosyanız)
-import { onRequest } from 'firebase-functions/v2/https';
 import chromium from '@sparticuz/chromium';
 import puppeteer from 'puppeteer-core';
 
