@@ -332,7 +332,6 @@ async function activateDosyaTakibiTab(page, steps, rid) {
 /** Inputa yaz + sorgula (XHR/nav beklemeleri dahil) */
 // Başında: import * as logger from 'firebase-functions/logger' kullandığından emin ol.
 // import * as logger from 'firebase-functions/logger' üstte olmalı
-const URL = 'https://turkpatent.gov.tr/arastirma-yap?form=trademark&tab=dosya-takibi';
 async function queryByApplicationNumber(page, applicationNumber, net, steps, rid) {
   const isVisible = async (h) => { 
     try { 
