@@ -462,7 +462,6 @@ async function loadRecord(){
       ipType: currentData?.ipType || 'trademark'
     };
 
-
     // HERO
     renderHero(currentData);
 
@@ -578,3 +577,443 @@ docsTbody?.addEventListener('click', async (ev) => {
     alert('Belge kaldırılamadı.');
   }
 });
+// portfolio-detail.js içinde eklenecek kod
+
+class PortfolioTurkpatentIntegration {
+    constructor() {
+        this.popupWindow = null;
+        this.automationInProgress = false;
+    }
+
+    // Ana entegrasyon fonksiyonu
+    async queryTurkpatent(applicationNumber, method = 'popup') {
+        if (!applicationNumber) {
+            this.showError('Başvuru numarası bulunamadı!');
+            return;
+        }
+
+        switch (method) {
+            case 'popup':
+                return this.openWithAutomation(applicationNumber);
+            case 'api':
+                return this.queryWithCloudFunction(applicationNumber);
+            case 'both':
+                return this.queryBothMethods(applicationNumber);
+            default:
+                return this.openWithAutomation(applicationNumber);
+        }
+    }
+
+    // Yöntem 1: Popup + JavaScript Otomasyonu
+    async openWithAutomation(applicationNumber) {
+        if (this.automationInProgress) {
+            this.showInfo('Zaten bir sorgu devam ediyor...');
+            return;
+        }
+
+        this.automationInProgress = true;
+        this.showLoadingIndicator('TÜRKPATENT açılıyor...');
+
+        try {
+            const turkpatentUrl = 'https://www.turkpatent.gov.tr/arastirma-yap?form=trademark';
+            this.popupWindow = window.open(
+                turkpatentUrl, 
+                'turkpatent_query', 
+                'width=1200,height=800,scrollbars=yes,resizable=yes,location=yes'
+            );
+
+            if (!this.popupWindow) {
+                throw new Error('Popup engelleyici aktif! Lütfen bu site için popup\'ları etkinleştirin.');
+            }
+
+            // Popup kapandığında temizlik yap
+            const checkClosed = setInterval(() => {
+                if (this.popupWindow.closed) {
+                    clearInterval(checkClosed);
+                    this.automationInProgress = false;
+                    this.hideLoadingIndicator();
+                }
+            }, 1000);
+
+            // Sayfa yüklenme kontrolü
+            let loadAttempts = 0;
+            const maxAttempts = 30; // 30 saniye timeout
+
+            const waitForLoad = () => {
+                loadAttempts++;
+                
+                if (loadAttempts > maxAttempts) {
+                    this.hideLoadingIndicator();
+                    this.showError('Sayfa yükleme timeout. Lütfen manuel olarak doldurun.');
+                    return;
+                }
+
+                try {
+                    // Popup'ın document'ine erişmeye çalış
+                    if (this.popupWindow.document.readyState === 'complete') {
+                        this.showLoadingIndicator('Form otomatik dolduruluyor...');
+                        setTimeout(() => {
+                            this.startAutomation(applicationNumber);
+                        }, 2000);
+                    } else {
+                        setTimeout(waitForLoad, 1000);
+                    }
+                } catch (error) {
+                    // Cross-origin hatası - normal davranış
+                    setTimeout(waitForLoad, 1000);
+                }
+            };
+
+            waitForLoad();
+
+        } catch (error) {
+            this.automationInProgress = false;
+            this.hideLoadingIndicator();
+            this.showError(error.message);
+        }
+    }
+
+    // Otomatik form doldurma
+    async startAutomation(applicationNumber) {
+        if (!this.popupWindow || this.popupWindow.closed) {
+            this.hideLoadingIndicator();
+            return;
+        }
+
+        try {
+            const doc = this.popupWindow.document;
+            
+            // 1. Dosya Takibi sekmesini aktif et
+            await this.activateFileTrackingTab(doc);
+            
+            // 2. Başvuru numarasını doldur
+            await this.fillApplicationNumber(doc, applicationNumber);
+            
+            // 3. Sorgula butonuna bas
+            await this.clickSearchButton(doc);
+            
+            this.hideLoadingIndicator();
+            this.showSuccess('Form başarıyla dolduruldu! Sonuçlar yükleniyor...');
+            
+        } catch (error) {
+            this.hideLoadingIndicator();
+            this.showError('Otomatik form doldurma başarısız: ' + error.message);
+            console.error('Automation error:', error);
+        }
+    }
+
+    async activateFileTrackingTab(doc) {
+        return new Promise((resolve, reject) => {
+            let attempts = 0;
+            const maxAttempts = 20;
+
+            const findAndClickTab = () => {
+                attempts++;
+                
+                if (attempts > maxAttempts) {
+                    reject(new Error('Dosya Takibi sekmesi bulunamadı'));
+                    return;
+                }
+
+                const tabs = doc.querySelectorAll('button[role="tab"], .MuiTab-root, button');
+                const fileTrackingTab = Array.from(tabs).find(tab => 
+                    /Dosya\s*Takibi/i.test(tab.textContent || tab.innerText || '')
+                );
+                
+                if (fileTrackingTab && fileTrackingTab.click) {
+                    fileTrackingTab.click();
+                    console.log('Dosya Takibi sekmesi tıklandı');
+                    setTimeout(resolve, 1500); // Tab değişimi için bekle
+                } else {
+                    setTimeout(findAndClickTab, 500);
+                }
+            };
+
+            findAndClickTab();
+        });
+    }
+
+    async fillApplicationNumber(doc, applicationNumber) {
+        return new Promise((resolve, reject) => {
+            let attempts = 0;
+            const maxAttempts = 20;
+
+            const findAndFillInput = () => {
+                attempts++;
+                
+                if (attempts > maxAttempts) {
+                    reject(new Error('Başvuru numarası alanı bulunamadı'));
+                    return;
+                }
+
+                const inputs = doc.querySelectorAll('input');
+                let targetInput = Array.from(inputs).find(input => {
+                    const placeholder = input.getAttribute('placeholder') || '';
+                    const label = input.getAttribute('aria-label') || '';
+                    return /Başvuru.*Numarası/i.test(placeholder + ' ' + label);
+                });
+
+                // Fallback: İlk görünen input'u kullan
+                if (!targetInput) {
+                    targetInput = Array.from(inputs).find(input => 
+                        input.type === 'text' && input.offsetParent !== null
+                    );
+                }
+                
+                if (targetInput) {
+                    targetInput.focus();
+                    targetInput.value = '';
+                    targetInput.value = applicationNumber;
+                    
+                    // React/Modern framework event'lerini tetikle
+                    const events = ['input', 'change', 'keyup'];
+                    events.forEach(eventType => {
+                        const event = new Event(eventType, { bubbles: true });
+                        targetInput.dispatchEvent(event);
+                    });
+                    
+                    console.log('Başvuru numarası dolduruldu:', applicationNumber);
+                    setTimeout(resolve, 800);
+                } else {
+                    setTimeout(findAndFillInput, 500);
+                }
+            };
+
+            findAndFillInput();
+        });
+    }
+
+    async clickSearchButton(doc) {
+        return new Promise((resolve, reject) => {
+            let attempts = 0;
+            const maxAttempts = 15;
+
+            const findAndClickButton = () => {
+                attempts++;
+                
+                if (attempts > maxAttempts) {
+                    reject(new Error('Sorgula butonu bulunamadı'));
+                    return;
+                }
+
+                const buttons = doc.querySelectorAll('button, input[type="submit"], input[type="button"]');
+                const searchButton = Array.from(buttons).find(btn => {
+                    const text = btn.textContent || btn.innerText || btn.value || '';
+                    return /Sorgula|Ara|Search/i.test(text) && !btn.disabled;
+                });
+                
+                if (searchButton) {
+                    searchButton.click();
+                    console.log('Sorgula butonu tıklandı');
+                    resolve();
+                } else {
+                    setTimeout(findAndClickButton, 500);
+                }
+            };
+
+            findAndClickButton();
+        });
+    }
+
+    // Yöntem 2: Cloud Function ile sorgu
+    async queryWithCloudFunction(applicationNumber) {
+        this.showLoadingIndicator('TÜRKPATENT sorgulanıyor...');
+
+        try {
+            const response = await fetch('https://europe-west1-ip-manager-production-aab4b.cloudfunctions.net/tpQueryV2', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ applicationNumber })
+            });
+
+            const data = await response.json();
+            
+            if (data.ok) {
+                this.showResults(data.html, data.screenshot, applicationNumber);
+            } else {
+                throw new Error(data.error || 'Sorgu başarısız');
+            }
+        } catch (error) {
+            this.showError('Sorgu hatası: ' + error.message);
+        } finally {
+            this.hideLoadingIndicator();
+        }
+    }
+
+    // Yöntem 3: Her iki yöntemi birden kullan
+    async queryBothMethods(applicationNumber) {
+        const userChoice = confirm(
+            'Nasıl sorgulamak istiyorsunuz?\n\n' +
+            'TAMAM: Yeni pencerede otomatik sorgu (önerilen)\n' +
+            'İPTAL: Robot ile arka plan sorgulama'
+        );
+
+        if (userChoice) {
+            return this.openWithAutomation(applicationNumber);
+        } else {
+            return this.queryWithCloudFunction(applicationNumber);
+        }
+    }
+
+    // UI Helper fonksiyonları
+    showLoadingIndicator(message) {
+        const indicator = document.getElementById('turkpatent-loading') || 
+                         this.createLoadingIndicator();
+        indicator.querySelector('.loading-message').textContent = message;
+        indicator.style.display = 'flex';
+    }
+
+    hideLoadingIndicator() {
+        const indicator = document.getElementById('turkpatent-loading');
+        if (indicator) {
+            indicator.style.display = 'none';
+        }
+    }
+
+    createLoadingIndicator() {
+        const div = document.createElement('div');
+        div.id = 'turkpatent-loading';
+        div.innerHTML = `
+            <div style="
+                position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+                background: rgba(0,0,0,0.5); display: flex; align-items: center;
+                justify-content: center; z-index: 10000;
+            ">
+                <div style="
+                    background: white; padding: 30px; border-radius: 10px;
+                    text-align: center; box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+                ">
+                    <div class="loading-spinner" style="
+                        width: 40px; height: 40px; border: 4px solid #f3f3f3;
+                        border-top: 4px solid #3498db; border-radius: 50%;
+                        animation: spin 1s linear infinite; margin: 0 auto 20px auto;
+                    "></div>
+                    <div class="loading-message">Yükleniyor...</div>
+                </div>
+            </div>
+            <style>
+                @keyframes spin {
+                    0% { transform: rotate(0deg); }
+                    100% { transform: rotate(360deg); }
+                }
+            </style>
+        `;
+        document.body.appendChild(div);
+        return div;
+    }
+
+    showSuccess(message) {
+        this.showNotification(message, 'success');
+    }
+
+    showError(message) {
+        this.showNotification(message, 'error');
+    }
+
+    showInfo(message) {
+        this.showNotification(message, 'info');
+    }
+
+    showNotification(message, type) {
+        // Mevcut notification sistemini kullan veya basit alert
+        if (typeof showNotification === 'function') {
+            showNotification(message, type);
+        } else {
+            alert(message);
+        }
+    }
+
+    showResults(html, screenshot, applicationNumber) {
+        // Sonuçları modal veya yeni sekme olarak göster
+        const modal = this.createResultModal();
+        modal.querySelector('.modal-title').textContent = `TÜRKPATENT Sorgu Sonuçları - ${applicationNumber}`;
+        modal.querySelector('.modal-body').innerHTML = html;
+        modal.style.display = 'block';
+    }
+
+    createResultModal() {
+        let modal = document.getElementById('turkpatent-result-modal');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'turkpatent-result-modal';
+            modal.innerHTML = `
+                <div class="modal-content" style="max-width: 90vw; max-height: 90vh; overflow: auto;">
+                    <div class="modal-header">
+                        <h5 class="modal-title">TÜRKPATENT Sorgu Sonuçları</h5>
+                        <button class="close" onclick="this.closest('.modal').style.display='none'">&times;</button>
+                    </div>
+                    <div class="modal-body"></div>
+                </div>
+            `;
+            modal.className = 'modal';
+            modal.style.cssText = `
+                position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+                background: rgba(0,0,0,0.5); display: none; align-items: center;
+                justify-content: center; z-index: 10001;
+            `;
+            document.body.appendChild(modal);
+        }
+        return modal;
+    }
+}
+
+// Global instance
+const turkpatentIntegration = new PortfolioTurkpatentIntegration();
+
+// Portfolio detay sayfasında kullanım
+function addTurkpatentButtons(portfolioData) {
+    const container = document.querySelector('.portfolio-actions') || 
+                     document.querySelector('.card-footer') ||
+                     document.querySelector('.action-buttons');
+    
+    if (!container || !portfolioData.applicationNumber) return;
+
+    // Ana buton
+    const mainButton = document.createElement('button');
+    mainButton.className = 'btn btn-outline-primary me-2';
+    mainButton.innerHTML = '<i class="fas fa-external-link-alt"></i> TÜRKPATENT Sorgula';
+    mainButton.onclick = () => turkpatentIntegration.queryTurkpatent(
+        portfolioData.applicationNumber, 
+        'both' // Kullanıcı seçimi yapar
+    );
+
+    // Dropdown menu (opsiyonel - gelişmiş kullanıcılar için)
+    const dropdown = document.createElement('div');
+    dropdown.className = 'btn-group';
+    dropdown.innerHTML = `
+        <button type="button" class="btn btn-sm btn-outline-secondary dropdown-toggle" 
+                data-bs-toggle="dropdown" aria-expanded="false">
+            Sorgu Seçenekleri
+        </button>
+        <ul class="dropdown-menu">
+            <li><a class="dropdown-item" href="#" onclick="turkpatentIntegration.queryTurkpatent('${portfolioData.applicationNumber}', 'popup')">
+                <i class="fas fa-window-restore"></i> Yeni Pencere (Otomatik)
+            </a></li>
+            <li><a class="dropdown-item" href="#" onclick="turkpatentIntegration.queryTurkpatent('${portfolioData.applicationNumber}', 'api')">
+                <i class="fas fa-robot"></i> Robot Sorgu (Arka Plan)
+            </a></li>
+            <li><hr class="dropdown-divider"></li>
+            <li><a class="dropdown-item" href="https://www.turkpatent.gov.tr/arastirma-yap?form=trademark" target="_blank">
+                <i class="fas fa-link"></i> Manuel Sorgu (Direkt Git)
+            </a></li>
+        </ul>
+    `;
+
+    container.appendChild(mainButton);
+    container.appendChild(dropdown);
+}
+
+// Portfolio detay sayfası yüklendiğinde otomatik çalıştır
+document.addEventListener('DOMContentLoaded', function() {
+    // Portfolio verisi sayfada mevcutsa butonları ekle
+    if (typeof portfolioData !== 'undefined' && portfolioData.applicationNumber) {
+        setTimeout(() => {
+            addTurkpatentButtons(portfolioData);
+        }, 1000);
+    }
+});
+
+// Export işlevleri
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { PortfolioTurkpatentIntegration, turkpatentIntegration };
+}
