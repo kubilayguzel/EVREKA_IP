@@ -258,49 +258,46 @@ function setCorsHeaders(res, origin) {
 }
 
 import puppeteer from 'puppeteer';
+import chromium from '@sparticuz/chromium';
+chromium.setHeadlessMode = true;
+chromium.setGraphicsMode = false;
+
 export const tpQueryV2 = onRequest(
   { region: 'europe-west1', timeoutSeconds: 180, memory: '1GiB' },
   async (req, res) => {
-    // --- CORS ---
     const origin = req.headers.origin || '';
     setCorsHeaders(res, origin);
     if (req.method === 'OPTIONS') return res.status(204).send('');
-    if (req.method !== 'POST' && req.method !== 'GET') {
+    if (req.method !== 'POST' && req.method !== 'GET')
       return res.status(405).json({ ok: false, error: 'Method not allowed' });
-    }
 
-    let browser; // try dışına aldık
+    let browser;
     try {
-      // Parametreler
       const isGet = req.method === 'GET';
       const { type = 'application', number } = isGet ? req.query : (req.body || {});
       if (!number) return res.status(400).json({ ok: false, error: 'number gerekli' });
 
-      // Puppeteer (GCF uyumlu flag'ler)
+      // Sparticuz Chromium ile başlat
       browser = await puppeteer.launch({
-        headless: true, // 'new' da olur; true daha stabil
-        args: [
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
-          '--disable-dev-shm-usage',
-          '--no-zygote',
-          '--single-process'
-        ],
+        executablePath: await chromium.executablePath(),
+        args: chromium.args,
+        headless: chromium.headless,
+        defaultViewport: { width: 1366, height: 768 }
       });
+
       const page = await browser.newPage();
       await page.setUserAgent(
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
       );
       await page.setExtraHTTPHeaders({ 'Accept-Language': 'tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7' });
-      await page.setViewport({ width: 1366, height: 768 });
 
-      // Siteye git
+      // Sayfaya git
       await page.goto('https://turkpatent.gov.tr/arastirma-yap?form=trademark', {
         waitUntil: 'domcontentloaded',
         timeout: 60000,
       });
 
-      // "Dosya Takibi" sekmesi
+      // "Dosya Takibi" sekmesini tıkla
       await page.waitForSelector('button[role="tab"], .MuiTab-root', { timeout: 30000 });
       await page.evaluate(() => {
         const tabs = Array.from(document.querySelectorAll('button[role="tab"], .MuiTab-root'));
@@ -308,7 +305,7 @@ export const tpQueryV2 = onRequest(
         btn?.click();
       });
 
-      // Hangi alan?
+      // Alan belirle
       const fieldSelector =
         ({
           application: 'input[placeholder="Başvuru Numarası"]',
@@ -338,7 +335,6 @@ export const tpQueryV2 = onRequest(
         { timeout: 60000 }
       );
 
-      // Çıktılar
       const html = await page.$eval('#search-results', el => el.innerHTML);
       const screenshot = await page.screenshot({ type: 'png', encoding: 'base64', fullPage: false });
 
