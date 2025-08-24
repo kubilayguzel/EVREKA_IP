@@ -637,7 +637,7 @@ setupBaseFormListeners() {
         }
         
         container.innerHTML = `
-            <div class="form-section">
+            <div class="section-card" id="card-asset">
             <h3 class="section-title">2. İşleme Konu Varlık</h3>
 
             <div class="form-group full-width">
@@ -664,12 +664,11 @@ setupBaseFormListeners() {
                 </div>
             </div>
             </div>
-           ${needsRelatedParty ? `
-            <div class="form-section">
-                <h3 class="section-title">3. ${partyLabel}</h3>
+             ${needsRelatedParty ? `
+                <div class="section-card d-none" id="relatedPartySection">
+                  <h3 class="section-title" id="relatedPartyTitle">3. ${partyLabel}</h3>
                     <div class="form-group full-width">
                     <label for="personSearchInput" class="form-label">Sistemdeki Kişilerden Ara</label>
-
                     <div class="d-flex" style="gap:10px; align-items:flex-start;">
                         <!-- input + sonuç listesi AYNI WRAPPER içinde -->
                         <div class="search-input-wrapper" style="flex:1; position:relative;">
@@ -696,7 +695,7 @@ setupBaseFormListeners() {
                     </div>
             ` : ''}
 
-            ${specificFieldsHtml} <div class="form-section">
+            ${specificFieldsHtml} <div class="section-card" id="card-accrual">
                 <h3 class="section-title">Tahakkuk Bilgileri</h3>
                 <div class="form-grid">
                     <div class="form-group">
@@ -781,6 +780,7 @@ setupBaseFormListeners() {
         this.updateRelatedPartySectionVisibility(selectedTaskTypeObj);
         this.renderSelectedRelatedParties();
         this.setupDynamicFormListeners();
+        this.setupAccrualTabListeners();
         this.populateAssignedToDropdown();
         this.setupBaseFormListeners();
         this.updateButtonsAndTabs();
