@@ -6,7 +6,15 @@
     <title>IP Manager - Yeni İş Oluştur</title>
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
-    <style>
+<style>
+/* --- Varsayılan Kart Değerleri --- */
+:root{
+  --card-radius:20px;
+  --card-shadow: 0 12px 32px rgba(0,0,0,.12), 0 2px 8px rgba(0,0,0,.06);
+  --card-border: 1px solid rgba(0,0,0,.06);
+  --card-bg:#fff;
+}
+
 /* Genel Reset */
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333; display: flex; }
@@ -23,62 +31,54 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333
 .form-section { border-bottom: 1px solid #e1e8ed; padding-bottom: 25px; margin-bottom: 25px; }
 .form-section:last-child { border-bottom: none; }
 
-/* Task Detail dosyasından alınan özel stil - Kart */
+/* Base kart (Task Detail'den) — temel görünüm */
 .section-card {
-    background: #ffffff; /* Beyaz arka plan */
-    padding: 30px;
-    border-radius: 20px;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-    margin-bottom: 25px;
+  background: #ffffff;
+  padding: 30px;
+  border-radius: 20px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+  margin-bottom: 25px;
 }
-/* Kartların gölgesini ve ayrımını her yerde garanti et */
+
+/* >>> Kartların gölgesini ve ayrımını HER YERDE garanti et (üstteki base'i override eder) */
 #conditionalFieldsContainer > .section-card,
+.form-container > .section-card,
 .section-card{
-  background: var(--card-bg);
-  border-radius: var(--card-radius);
-  border: var(--card-border);
-  box-shadow: var(--card-shadow);
+  background: var(--card-bg) !important;
+  border-radius: var(--card-radius) !important;
+  border: var(--card-border) !important;
+  box-shadow: var(--card-shadow) !important;
   position: relative;
   margin-bottom: 24px;
 }
-:root{
-  --card-radius:20px;
-  --card-shadow: 0 10px 30px rgba(0,0,0,.10), 0 2px 6px rgba(0,0,0,.05);
-  --card-border: 1px solid rgba(0,0,0,.06);
-  --card-bg:#fff;
-}
-/* Kart gölgeleri kesilmesin */
-.form-container,
-#conditionalFieldsContainer{ overflow: visible; }
 
-/* Eski düz bölümler varsa etkisiz kalsın (opsiyonel) */
+/* Kart gölgeleri hiçbir kapsayıcıda kesilmesin */
+.main-container,
+.form-container,
+#conditionalFieldsContainer{ overflow: visible !important; }
+
+/* Eski düz bölümler varsa etkisiz kalsın */
 .form-section{
   background: transparent !important;
   border: 0 !important;
   box-shadow: none !important;
 }
 
-/* Kartlar üst üste geldiğinde gölge “kaybolmasın” */
-.section-card + .section-card {
-  margin-top: 25px;
-}
+/* Kartlar üst üste geldiğinde gölge kaybolmasın */
+.section-card + .section-card { margin-top: 25px; }
 
-/* Eski bölüm çizgilerini nötralize et (varsa) */
-.form-section {
-  border: 0;
-  box-shadow: none;
-  background: transparent;
-}
+/* Eski bölüm çizgilerini nötralize et (ek güvence) */
+.form-section { border: 0; box-shadow: none; background: transparent; }
 
 .section-title {
-    font-size: 1.3em;
-    color: #1e3c72;
-    margin-bottom: 20px;
-    padding-bottom: 10px;
-    border-bottom: 1px solid #e1e8ed;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
+  font-size: 1.3em;
+  color: #1e3c72;
+  margin-bottom: 20px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #e1e8ed;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 25px; }
 .form-group { position: relative; display: flex; flex-direction: column; }
@@ -104,7 +104,7 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333
 .search-section { background: #f8f9fa; padding: 15px 20px; border-bottom: 1px solid #dee2e6; }
 .scrollable-list { flex: 1; overflow-y: auto; }
 
-/* Liste ve Öğeler */
+/* Liste ve Öğeler (Nice) */
 .class-item { border-bottom: 1px solid #f1f3f4; }
 .class-header { display: flex; justify-content: space-between; align-items: center; padding: 12px 20px; cursor: pointer; transition: .3s; background: #fff; }
 .class-header:hover { background: #f8f9fa; }
@@ -161,272 +161,127 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333
   .class-35-5-modal .row { flex-direction: column; }
 }
 /* Ana sınıf seçili değil (varsayılan) -> beyaz */
-.class-header {
-    background: white;
-}
-
+.class-header { background: white; }
 /* En az 1 alt sınıf seçili ama hepsi değil -> sarı */
-.class-header.partially-selected {
-    background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
-    border-left: 4px solid #ffc107;
-}
-
+.class-header.partially-selected { background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%); border-left: 4px solid #ffc107; }
 /* Tüm alt sınıflar veya ana sınıf seçili -> yeşil */
-.class-header.fully-selected {
-    background: linear-gradient(135deg, #e8f5e8 0%, #d4edda 100%);
-    border-left: 4px solid #28a745;
+.class-header.fully-selected { background: linear-gradient(135deg, #e8f5e8 0%, #d4edda 100%); border-left: 4px solid #28a745; }
+/* Tik butonu */
+.select-class-btn{
+  background:#6c757d; color:#fff; border-radius:50%; width:30px; height:30px; display:flex; align-items:center; justify-content:center; transition:.3s;
 }
+.select-class-btn:hover{ background:#5a6268; transform:scale(1.1); }
+.class-header.fully-selected .select-class-btn { background:#28a745; }
+.class-header.partially-selected .select-class-btn { background:#ffc107; color:#333; }
 
-/* Tik butonu varsayılan gri */
-.select-class-btn {
-    background: #6c757d;
-    color: white;
-    border-radius: 50%;
-    width: 30px;
-    height: 30px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.3s ease;
-}
-.select-class-btn:hover { background: #5a6268; transform: scale(1.1); }
-
-/* Duruma göre tik rengi değişsin */
-.class-header.fully-selected .select-class-btn { background: #28a745; }
-.class-header.partially-selected .select-class-btn { background: #ffc107; color: #333; }
-.custom-class-wrapper {
-    margin-top: 20px;
-    background: #fff5f5;
-    border: 1px solid #feb2b2;
-    border-radius: 8px;
-    padding: 15px;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+.custom-class-wrapper{
+  margin-top:20px; background:#fff5f5; border:1px solid #feb2b2; border-radius:8px; padding:15px; box-shadow:0 2px 6px rgba(0,0,0,0.05);
 }
 /* 99. sınıf özel panel stili */
-.custom-class-frame {
-        margin-top: 20px;
-        background: #fff5f5;
-        border: 1px solid #feb2b2;
-        border-radius: 8px;
-        padding: 15px;
-        box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+.custom-class-frame{ margin-top:20px; background:#fff5f5; border:1px solid #feb2b2; border-radius:8px; padding:15px; box-shadow:0 2px 6px rgba(0,0,0,0.05); }
+.custom-class-frame .custom-class-section{ margin:0; }
+
+.card.border-danger{ box-shadow:0 4px 12px rgba(0,0,0,0.1); }
+.custom-class-section textarea#customClassInput{ height:80px !important; resize:vertical; }
+
+/* Tab içeriğini belirginleştiren kart */
+.tab-content-card{
+  padding:1.5rem; border:1px solid #dee2e6; border-top:none; border-bottom-left-radius:.25rem; border-bottom-right-radius:.25rem; background:#fff; box-shadow:0 .5rem 1rem rgba(0,0,0,.05);
 }
-
-.custom-class-frame .custom-class-section {
-    margin: 0;
+/* Marka görseli alanı */
+.brand-upload-frame{
+  border:2px dashed #a0a7b0; border-radius:.5rem; background:#f8f9fa; padding:1rem; transition: background-color .2s, border-color .2s;
 }
-.card.border-danger {
-    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+.brand-upload-frame:hover{ background:#e9ecef; border-color:#6c757d; }
+
+/* Tab başlıkları */
+#myTaskTabs .nav-link{ font-weight:600; font-size:1.1rem; color:#495057; }
+#myTaskTabs .nav-link.active{ color:#1e3c72; background:#fff; border-color:#dee2e6 #dee2e6 #fff; }
+
+/* Seçilen öğeler listesi */
+.selected-items-list{
+  min-height:100px; border:1px dashed #ced4da; border-radius:.25rem; padding:10px; background:#f8f9fa; overflow-y:auto; max-height:300px;
 }
-.custom-class-section textarea#customClassInput {
-    height: 80px !important; /* veya ihtiyaca göre 60px-100px arası */
-    resize: vertical;
+.selected-item{
+  background:#e2f0ff; border:1px solid #a7d9ff; border-radius:.25rem; padding:8px 12px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; font-size:.95rem; color:#343a40;
 }
-    /* Tab içeriğini daha belirgin hale getiren kart stili */
-    .tab-content-card {
-        padding: 1.5rem;
-        border: 1px solid #dee2e6;
-        border-top: none;
-        border-bottom-left-radius: 0.25rem;
-        border-bottom-right-radius: 0.25rem;
-        background-color: #fff;
-        box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.05);
-    }
-
-    /* Marka görseli yükleme alanını çerçeve içine alan stil */
-    .brand-upload-frame {
-        border: 2px dashed #a0a7b0;
-        border-radius: 0.5rem;
-        background-color: #f8f9fa;
-        padding: 1rem;
-        transition: background-color 0.2s ease, border-color 0.2s ease;
-    }
-
-    .brand-upload-frame:hover {
-        background-color: #e9ecef;
-        border-color: #6c757d;
-    }
-    
-    /* Tab başlıklarını daha belirgin hale getiren stil */
-    #myTaskTabs .nav-link {
-        font-weight: 600; /* Yazıyı daha kalın yapar */
-        font-size: 1.1rem; /* Yazı boyutunu artırır */
-        color: #495057; /* Pasif tabların rengini ayarlar */
-    }
-    
-    #myTaskTabs .nav-link.active {
-        color: #1e3c72; /* Aktif tabın rengini maviye çevirir */
-        background-color: #fff; /* Aktif tabın arka plan rengini beyaz yapar */
-        border-color: #dee2e6 #dee2e6 #fff; /* Alt kenar çizgisi olmadan daha belirgin bir görünüm sağlar */
-    }
-
-    /* Seçilen öğeler listesi için genel stil */
-    .selected-items-list {
-        min-height: 100px; /* En azından boşken de bir alanı olsun */
-        border: 1px dashed #ced4da;
-        border-radius: 0.25rem;
-        padding: 10px;
-        background-color: #f8f9fa;
-        overflow-y: auto;
-        max-height: 300px; /* Çok fazla öğe olduğunda kaydırma çubuğu çıksın */
-    }
-
-    /* Seçilen her bir öğe için stil */
-    .selected-item {
-        background-color: #e2f0ff; /* Açık mavi arka plan */
-        border: 1px solid #a7d9ff; /* Mavi kenarlık */
-        border-radius: 0.25rem;
-        padding: 8px 12px;
-        margin-bottom: 8px;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        font-size: 0.95rem;
-        color: #343a40;
-    }
-
-    .selected-item .remove-selected-item-btn {
-        background: none;
-        border: none;
-        color: #dc3545; /* Kırmızı renk */
-        font-size: 1.2rem;
-        cursor: pointer;
-        padding: 0 5px;
-        transition: color 0.2s ease;
-    }
-
-    .selected-item .remove-selected-item-btn:hover {
-        color: #c82333;
-    }
-
-    /* Arama sonuçları listesi için stil */
-.search-results-list {
-    position: absolute;
-    top: 100%; /* Input'un hemen altında */
-    left: 0;
-    right: 0;
-    max-height: 200px;
-    overflow-y: auto;
-    border: 1px solid #ced4da;
-    border-top: none;
-    border-bottom-left-radius: 0.25rem;
-    border-bottom-right-radius: 0.25rem;
-    background-color: #fff;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-    z-index: 1000;
+.selected-item .remove-selected-item-btn{
+  background:none; border:none; color:#dc3545; font-size:1.2rem; cursor:pointer; padding:0 5px; transition: color .2s;
 }
+.selected-item .remove-selected-item-btn:hover{ color:#c82333; }
 
-    .search-result-item {
-        padding: 10px 15px;
-        cursor: pointer;
-        border-bottom: 1px solid #eee;
-        transition: background-color 0.2s ease;
-    }
+/* Arama sonuçları listesi */
+.search-results-list{
+  position:absolute; top:100%; left:0; right:0; max-height:200px; overflow-y:auto; border:1px solid #ced4da; border-top:none; border-bottom-left-radius:.25rem; border-bottom-right-radius:.25rem; background:#fff; box-shadow:0 2px 4px rgba(0,0,0,0.05); z-index:1000;
+}
+.search-result-item{ padding:10px 15px; cursor:pointer; border-bottom:1px solid #eee; transition: background-color .2s; }
+.search-result-item:hover{ background:#f0f0f0; }
+.search-result-item:last-child{ border-bottom:none; }
+.no-results-message{ padding:15px; color:#6c757d; text-align:center; }
 
-    .search-result-item:hover {
-        background-color: #f0f0f0;
-    }
-
-    .search-result-item:last-child {
-        border-bottom: none;
-    }
-
-    .no-results-message {
-        padding: 15px;
-        color: #6c757d;
-        text-align: center;
-    }
-    .modal {
-        z-index: 1055 !important;
-    }
-
-    .modal-backdrop.show {
-        z-index: 1050 !important;
-    }
-    
-    
+/* Bootstrap modal z-index düzeltmesi */
+.modal{ z-index:1055 !important; }
+.modal-backdrop.show{ z-index:1050 !important; }
 </style>
+
 <style>
-    /* Task Detail dosyasından alınan özel stiller */
-    .section-card {
-        background: #ffffff;
-        padding: 30px;
-        border-radius: 20px;
-        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-        margin-bottom: 25px;
-    }
-    
-    .section-title {
-        font-size: 1.3em;
-        color: #1e3c72;
-        margin-bottom: 20px;
-        padding-bottom: 10px;
-        border-bottom: 1px solid #e1e8ed;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-    }
+/* Task Detail dosyasından alınan özel stiller */
+/* NOT: Buradaki .section-card tanımı kaldırıldı/ince ayarlandı ki üstteki "garanti" kuralı gölgeyi bozmasın. */
+.section-card{
+  /* Gölge/border BASE yukarıda !important ile verildi. Burada sadece spacing'e dokunalım. */
+  padding: 30px;
+  border-radius: 20px;
+  margin-bottom: 25px;
+}
 
-    .form-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-        gap: 20px;
-    }
-    .form-group.full-width {
-        grid-column: 1 / -1;
-    }
-    .search-result-display { 
-        background: #e9f5ff; 
-        border: 1px solid #bde0fe; 
-        padding: 15px; 
-        border-radius: 8px; 
-        margin-top: 10px; 
-        display: flex; 
-        justify-content: space-between;
-        align-items: center;
-        gap: 15px; 
-    }
-    .search-result-display-content {
-        flex-grow: 1;
-    }
-    .remove-item-btn {
-        background: #ff6b6b;
-        color: white;
-        border: none;
-        border-radius: 50%;
-        width: 30px;
-        height: 30px;
-        font-size: 1.2em;
-        cursor: pointer;
-        transition: background-color 0.3s ease;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
-    .remove-item-btn:hover {
-        background: #ff5252;
-    }
-    
-    .input-with-currency { display: flex; gap: 10px; }
-    .input-with-currency .form-input { flex-grow: 1; }
-    .currency-select {
-        padding: 12px 8px;
-        border: 2px solid #e1e8ed;
-        border-radius: 10px;
-        background-color: #f8f9fa;
-        font-weight: bold;
-    }
-    .total-amount-display {
-        font-size: 1.2em;
-        font-weight: bold;
-        color: #1e3c72;
-        text-align: right;
-        margin-top: 10px;
-        padding: 12px 15px;
-        background-color: #f0f4f8;
-        border-radius: 10px;
-    }
+.section-title {
+  font-size: 1.3em;
+  color: #1e3c72;
+  margin-bottom: 20px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #e1e8ed;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* Responsive grid ayarları */
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 20px;
+}
+.form-group.full-width { grid-column: 1 / -1; }
+
+/* Fatura seçimi özet görünümü */
+.search-result-display { 
+  background: #e9f5ff; 
+  border: 1px solid #bde0fe; 
+  padding: 15px; 
+  border-radius: 8px; 
+  margin-top: 10px; 
+  display: flex; 
+  justify-content: space-between;
+  align-items: center;
+  gap: 15px; 
+}
+.search-result-display-content { flex-grow: 1; }
+
+.remove-item-btn {
+  background: #ff6b6b; color: #fff; border: none; border-radius: 50%; width: 30px; height: 30px; font-size: 1.2em; cursor: pointer; transition: .3s; display:flex; align-items:center; justify-content:center;
+}
+.remove-item-btn:hover { background: #ff5252; }
+
+.input-with-currency { display: flex; gap: 10px; }
+.input-with-currency .form-input { flex-grow: 1; }
+.currency-select {
+  padding: 12px 8px; border: 2px solid #e1e8ed; border-radius: 10px; background:#f8f9fa; font-weight: bold;
+}
+.total-amount-display{
+  font-size: 1.2em; font-weight: bold; color:#1e3c72; text-align:right; margin-top:10px; padding:12px 15px; background:#f0f4f8; border-radius:10px;
+}
 </style>
+
 </head>
 <body>
     <div id="layout-placeholder"></div>
