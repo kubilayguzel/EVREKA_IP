@@ -296,98 +296,99 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333
                 <h1 class="page-title">Yeni İş Oluştur</h1>
                 <p class="page-subtitle">Oluşturmak istediğiniz işin türünü ve tipini seçerek devam edin.</p>
             </section>
-              <div class="form-container">
-                <form id="createTaskForm" onsubmit="return false;">
+            
+        <div class="form-container">
+            <form id="createTaskForm" onsubmit="return false;">
 
-                    <div class="card mb-4">
-                        <div class="card-header bg-primary text-white">
-                            <h5 class="card-title mb-0">1. İş Tipi Seçimi</h5>
-                        </div>
-                        <div class="card-body">
-                            <div class="form-grid">
-                                <div class="form-group">
-                                    <label for="mainIpType" class="form-label">İşin Ana Türü</label>
-                                    <select id="mainIpType" class="form-select">
-                                        <option value="">Seçiniz...</option>
-                                        <option value="patent">Patent</option>
-                                        <option value="trademark">Marka</option>
-                                        <option value="design">Tasarım</option>
-                                        <option value="litigation">Dava</option>
-                                    </select>
-                                </div>
-                                <div class="form-group">
-                                    <label for="specificTaskType" class="form-label">Spesifik İş Tipi</label>
-                                    <select id="specificTaskType" class="form-select" disabled>
-                                        <option value="">Önce İşin Ana Türünü Seçin</option>
-                                    </select>
-                                </div>
+                <div class="card mb-4">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="card-title mb-0">1. İş Tipi Seçimi</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label for="mainIpType" class="form-label">İşin Ana Türü</label>
+                                <select id="mainIpType" class="form-select">
+                                    <option value="">Seçiniz...</option>
+                                    <option value="patent">Patent</option>
+                                    <option value="trademark">Marka</option>
+                                    <option value="design">Tasarım</option>
+                                    <option value="litigation">Dava</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="specificTaskType" class="form-label">Spesifik İş Tipi</label>
+                                <select id="specificTaskType" class="form-select" disabled>
+                                    <option value="">Önce İşin Ana Türünü Seçin</option>
+                                </select>
                             </div>
                         </div>
                     </div>
+                </div>
 
-                    <div class="card mb-4">
-                        <div class="card-header bg-primary text-white">
-                            <h5 class="card-title mb-0">2. İşleme Konu Varlık</h5>
-                        </div>
-                        <div class="card-body" id="conditionalFieldsContainer">
-                            </div>
+                <div class="card mb-4">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="card-title mb-0">2. İşleme Konu Varlık</h5>
                     </div>
-                    
-                    <div class="card mb-4" id="relatedPartyCard" style="display:none;">
-                        <div class="card-header bg-primary text-white">
-                            <h5 class="card-title mb-0">3. İlgili Taraf</h5>
+                    <div class="card-body" id="conditionalFieldsContainer">
                         </div>
-                        <div class="card-body">
-                            </div>
+                </div>
+                
+                <div class="card mb-4" id="relatedPartyCard" style="display:none;">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="card-title mb-0">3. İlgili Taraf</h5>
                     </div>
+                    <div class="card-body">
+                        </div>
+                </div>
 
-                    <div class="card mb-4" id="goodsServicesSection" style="display:none;">
-                        <div class="card-header bg-primary text-white">
-                            <h5 class="card-title mb-0">Mal ve Hizmet Sınıfları</h5>
-                        </div>
-                        <div class="card-body">
-                            <p class="text-muted mb-4">Nice Classification sistemi kullanılarak mal ve hizmet sınıflarınızı seçin. Birden fazla sınıf seçebilirsiniz.</p>
-                            <div class="nice-classification-container">
-                                <div class="row">
-                                    <div class="col-lg-8">
-                                        </div>
-                                    <div class="col-lg-4 d-flex flex-column">
-                                        </div>
-                                </div>
+                <div class="card mb-4" id="goodsServicesSection" style="display:none;">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="card-title mb-0">Mal ve Hizmet Sınıfları</h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted mb-4">Nice Classification sistemi kullanılarak mal ve hizmet sınıflarınızı seçin. Birden fazla sınıf seçebilirsiniz.</p>
+                        <div class="nice-classification-container">
+                            <div class="row">
+                                <div class="col-lg-8">
+                                    </div>
+                                <div class="col-lg-4 d-flex flex-column">
+                                    </div>
                             </div>
                         </div>
                     </div>
+                </div>
 
-                    <div class="card mb-4" id="invoicingCard" style="display:none;">
-                        <div class="card-header bg-primary text-white">
-                            <h5 class="card-title mb-0">Tahakkuk Bilgileri</h5>
+                <div class="card mb-4" id="invoicingCard" style="display:none;">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="card-title mb-0">Tahakkuk Bilgileri</h5>
+                    </div>
+                    <div class="card-body">
                         </div>
-                        <div class="card-body">
-                            </div>
-                    </div>
+                </div>
 
-                    <div class="card mb-4" id="taskDetailsCard" style="display:none;">
-                        <div class="card-header bg-primary text-white">
-                            <h5 class="card-title mb-0">İş Detayları</h5>
+                <div class="card mb-4" id="taskDetailsCard" style="display:none;">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="card-title mb-0">İş Detayları</h5>
+                    </div>
+                    <div class="card-body">
                         </div>
-                        <div class="card-body">
-                            </div>
-                    </div>
+                </div>
 
-                    <div class="card mb-4" id="assignmentCard" style="display:none;">
-                        <div class="card-header bg-primary text-white">
-                            <h5 class="card-title mb-0">Atama</h5>
+                <div class="card mb-4" id="assignmentCard" style="display:none;">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="card-title mb-0">Atama</h5>
+                    </div>
+                    <div class="card-body">
                         </div>
-                        <div class="card-body">
-                            </div>
-                    </div>
+                </div>
 
-                    <div class="form-actions mt-4">
-                        <button type="button" class="btn btn-secondary">İptal</button>
-                        <button type="submit" class="btn btn-primary">İşi Oluştur</button>
-                    </div>
-                </form>
-            </div>
+                <div class="form-actions mt-4">
+                    <button type="button" class="btn btn-secondary">İptal</button>
+                    <button type="submit" class="btn btn-primary">İşi Oluştur</button>
+                </div>
+            </form>
+        </div>
         </main>
     </div>
 
