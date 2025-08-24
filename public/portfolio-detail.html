@@ -324,8 +324,7 @@
         alert('Başvuru numarası bulunamadı.');
         return;
       }
-      const url = `/tp-sorgu?type=application&no=${encodeURIComponent(applicationNo)}`;
-      window.open(url, '_blank', 'noopener,noreferrer');
+      window.open(`/tp-sorgu?type=application&no=${encodeURIComponent(applicationNo)}`, '_blank', 'noopener,noreferrer');
     });
   </script>
   <script type="module" src="./js/layout-loader.js"></script>
