@@ -2824,7 +2824,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     console.log('✅ CreateTask başarıyla initialize edildi');
 });
 // CreateTaskModule class'ını initialize et// CreateTaskModule class'ını initialize et
-// CreateTaskModule class'ını initialize et
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('🚀 DOM Content Loaded - CreateTask initialize ediliyor...');
     
@@ -2841,59 +2840,67 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Initialize et
     await createTaskInstance.init();
     
-    // Basit kart wrapper fonksiyonu
-    function wrapAllCards() {
+    // DOM-Safe kart wrapper fonksiyonu - EVENT LISTENER'LARI KORUR
+    function wrapCardsWithoutBreakingEvents() {
         const cards = document.querySelectorAll('.section-card:not([data-wrapped])');
         console.log(`🔍 ${cards.length} adet wrapper eklenmemiş kart bulundu`);
         
         cards.forEach((card, index) => {
-            const content = card.innerHTML;
-            card.innerHTML = `<div class="card-content-wrapper">${content}</div>`;
-            card.setAttribute('data-wrapped', 'true');
-            console.log(`✅ Kart ${index + 1} wrapper ile sarıldı`);
-        });
-        
-        // Event listener'ları düzelt
-        setTimeout(() => {
-            // Ana iş türü seçimi
-            const mainIpType = document.getElementById('mainIpType');
-            if (mainIpType && !mainIpType.dataset.fixed) {
-                mainIpType.removeEventListener('change', createTaskInstance.handleMainTypeChange);
-                mainIpType.addEventListener('change', (e) => createTaskInstance.handleMainTypeChange(e));
-                mainIpType.dataset.fixed = 'true';
-            }
+            // Mevcut içerikleri al ama DOM elementlerini koru
+            const children = Array.from(card.children);
             
-            // Spesifik iş tipi seçimi
-            const specificTaskType = document.getElementById('specificTaskType');
-            if (specificTaskType && !specificTaskType.dataset.fixed) {
-                specificTaskType.removeEventListener('change', createTaskInstance.handleSpecificTypeChange);
-                specificTaskType.addEventListener('change', (e) => createTaskInstance.handleSpecificTypeChange(e));
-                specificTaskType.dataset.fixed = 'true';
-            }
-        }, 100);
+            // Yeni wrapper div oluştur
+            const wrapper = document.createElement('div');
+            wrapper.className = 'card-content-wrapper';
+            
+            // Tüm çocuk elementleri wrapper'a taşı (event listener'lar korunur)
+            children.forEach(child => {
+                wrapper.appendChild(child);
+            });
+            
+            // Wrapper'ı karta ekle
+            card.appendChild(wrapper);
+            card.setAttribute('data-wrapped', 'true');
+            
+            console.log(`✅ Kart ${index + 1} wrapper ile sarıldı (DOM-safe)`);
+        });
     }
     
     // İlk yüklemede kartları sar
     setTimeout(() => {
-        wrapAllCards();
+        wrapCardsWithoutBreakingEvents();
     }, 500);
     
-    // Spesifik iş tipi değiştiğinde tekrar sar
-    setTimeout(() => {
+    // İş tipi değiştiğinde tekrar sar
+    const setupChangeListener = () => {
         const specificTaskType = document.getElementById('specificTaskType');
-        if (specificTaskType) {
+        if (specificTaskType && !specificTaskType.dataset.changeListenerAdded) {
             specificTaskType.addEventListener('change', () => {
-                console.log('🔄 İş tipi değişti, kartları yeniden sarıyor');
+                console.log('🔄 İş tipi değişti, yeni kartları sarıyor');
                 setTimeout(() => {
-                    wrapAllCards();
+                    wrapCardsWithoutBreakingEvents();
                 }, 500);
             });
+            specificTaskType.dataset.changeListenerAdded = 'true';
         }
-    }, 600);
+    };
     
-    // Global test fonksiyonu
-    window.wrapAllCards = wrapAllCards;
+    setTimeout(setupChangeListener, 600);
+    
+    // Global test fonksiyonları
+    window.wrapCardsWithoutBreakingEvents = wrapCardsWithoutBreakingEvents;
+    window.testEventListeners = function() {
+        const ipSearch = document.getElementById('ipRecordSearch');
+        const personSearch = document.getElementById('personSearchInput');
+        
+        console.log('Event listener test:', {
+            ipSearch: ipSearch ? 'Bulundu' : 'Bulunamadı',
+            personSearch: personSearch ? 'Bulundu' : 'Bulunamadı',
+            ipSearchListeners: ipSearch ? getEventListeners(ipSearch) : 'N/A',
+            personSearchListeners: personSearch ? getEventListeners(personSearch) : 'N/A'
+        });
+    };
     
     console.log('✅ CreateTask başarıyla initialize edildi');
-    console.log('💡 Test için konsola: window.wrapAllCards() yazabilirsiniz');
+    console.log('💡 Test fonksiyonları: window.wrapCardsWithoutBreakingEvents() ve window.testEventListeners()');
 });
