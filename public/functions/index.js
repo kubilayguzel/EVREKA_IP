@@ -332,151 +332,325 @@ async function activateDosyaTakibiTab(page, steps, rid) {
 /** Inputa yaz + sorgula (XHR/nav beklemeleri dahil) */
 // Başında: import * as logger from 'firebase-functions/logger' kullandığından emin ol.
 // import * as logger from 'firebase-functions/logger' üstte olmalı
+const URL = 'https://turkpatent.gov.tr/arastirma-yap?form=trademark&tab=dosya-takibi';
 async function queryByApplicationNumber(page, applicationNumber, net, steps, rid) {
-  const isVisible = async (h) => { try { const b = await h.boundingBox(); return !!b && b.width > 0 && b.height > 0; } catch { return false; } };
+  const isVisible = async (h) => { 
+    try { 
+      const b = await h.boundingBox(); 
+      return !!b && b.width > 0 && b.height > 0; 
+    } catch { 
+      return false; 
+    } 
+  };
   const t = () => Date.now();
 
-  // Network izleme
+  // Network izleme - daha kapsamlı
   page.on('response', (resp) => {
     const u = resp.url();
-    if (/turkpatent|arastirma|query|sorgu|search|trademark|dosya/i.test(u)) {
-      net.responses.push({ url: u, status: resp.status() });
-      logger.info('NET.RESP', { rid, status: resp.status(), url: u });
+    if (/turkpatent|arastirma|query|sorgu|search|trademark|dosya|api/i.test(u)) {
+      net.responses.push({ url: u, status: resp.status(), type: resp.request().resourceType() });
+      logger.info('NET.RESP', { rid, status: resp.status(), url: u, type: resp.request().resourceType() });
     }
   });
+  
   page.on('requestfailed', (reqi) => {
-    net.fails.push({ url: reqi.url(), err: reqi.failure()?.errorText });
-    logger.warn('NET.FAIL', { rid, url: reqi.url(), err: reqi.failure()?.errorText });
+    const errorText = reqi.failure()?.errorText;
+    net.fails.push({ url: reqi.url(), err: errorText });
+    logger.warn('NET.FAIL', { rid, url: reqi.url(), err: errorText });
   });
 
-  // Sekme: Dosya Takibi (varsa)
-  try {
-    const clicked = await page.evaluate(() => {
-      const els = Array.from(document.querySelectorAll('button, a, [role="tab"], .MuiTab-root, .nav-link'));
-      const el = els.find(e => /dosya\s*takib/i.test((e.textContent || '').toLowerCase()));
-      if (el) { (el).click(); return true; }
-      return false;
-    });
-    if (clicked) {
-      await page.waitForFunction(() => {
-        const els = Array.from(document.querySelectorAll('[role="tab"].Mui-selected, .MuiTab-root.Mui-selected'));
-        return els.some(e => /dosya\s*takib/i.test((e.textContent || '').toLowerCase()));
-      }, { timeout: 8000 }).catch(() => {});
-      await sleep(250);
-      steps.push({ t: t(), step: 'tab.dosyaTakibi.activated' });
-    }
-  } catch {}
+  // CAPTCHA kontrolü daha erken yap
+  await sleep(2000); // Sayfanın yüklenmesi için bekle
+  
+  const hasCaptcha = await page.evaluate(() => {
+    const captchaElements = [
+      'iframe[src*="recaptcha"]',
+      '.g-recaptcha',
+      '#recaptcha',
+      '[data-sitekey]',
+      '.captcha'
+    ];
+    return captchaElements.some(sel => document.querySelector(sel));
+  });
 
-  // 1) Input’u bul
-  const inputSelectors = [
-    'input[placeholder*="Başvuru Numarası"]',
-    'input[placeholder*="Başvuru"]',
-    'input[name*="basvuru"]',
-    'input[name*="dosya"]',
-    'input#dosyaTakipNo',
-    'input.MuiInputBase-input',
-    'input.MuiInput-input'
+  if (hasCaptcha) {
+    steps.push({ t: t(), step: 'captcha.detected' });
+    logger.warn('captcha.detected', { rid });
+    throw new Error('CAPTCHA tespit edildi - manuel müdahale gerekli');
+  }
+
+  // Dosya Takibi sekmesini aktifleştir - daha agresif yaklaşım
+  let tabActivated = false;
+  const tabSelectors = [
+    'button:contains("Dosya Takibi")',
+    'a:contains("Dosya Takibi")',
+    '[role="tab"]:contains("Dosya Takibi")',
+    '.MuiTab-root:contains("Dosya Takibi")'
   ];
+
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const clicked = await page.evaluate(() => {
+        const texts = ['dosya takib', 'dosya takip', 'file tracking'];
+        const elements = Array.from(document.querySelectorAll('button, a, [role="tab"], .MuiTab-root, .nav-link, .tab'));
+        
+        for (const text of texts) {
+          const el = elements.find(e => 
+            (e.textContent || '').toLowerCase().includes(text.toLowerCase())
+          );
+          if (el && el.offsetParent !== null) { // Görünür olup olmadığını kontrol et
+            el.click();
+            return true;
+          }
+        }
+        return false;
+      });
+
+      if (clicked) {
+        await page.waitForTimeout(1500); // Tab değişimi için bekle
+        tabActivated = true;
+        steps.push({ t: t(), step: 'tab.dosyaTakibi.activated', attempt });
+        break;
+      }
+    } catch (e) {
+      logger.warn('tab activation attempt failed', { rid, attempt, error: e.message });
+    }
+    
+    if (attempt < 2) await sleep(1000);
+  }
+
+  // Input alanını bul - daha geniş selector listesi
+  const inputSelectors = [
+    'input[placeholder*="Başvuru"]',
+    'input[placeholder*="başvuru"]',
+    'input[placeholder*="Numarası"]',
+    'input[placeholder*="numarası"]',
+    'input[name*="basvuru"]',
+    'input[name*="başvuru"]',
+    'input[name*="dosya"]',
+    'input[name*="application"]',
+    'input[id*="dosya"]',
+    'input[id*="basvuru"]',
+    'input[id*="takip"]',
+    'input.MuiInputBase-input',
+    'input.MuiInput-input',
+    'input[type="text"]:not([style*="display: none"])',
+    '.MuiFormControl-root input',
+    '.form-control',
+    'input:visible' // Görünür olan inputları hedefle
+  ];
+
   let input = null, usedInputSelector = null;
+  
   for (const sel of inputSelectors) {
-    const h = await page.$(sel).catch(() => null);
-    if (h && await isVisible(h)) { input = h; usedInputSelector = sel; break; }
-  }
-  if (!input) throw new Error('Başvuru Numarası inputu bulunamadı');
-
-  // 2) Görünür yap + gerçek klavye ile yaz
-  await input.evaluate(el => el.scrollIntoView({ block: 'center' }));
-  try { await input.click({ clickCount: 3 }); } catch {}
-  try { await page.keyboard.press('Backspace'); } catch {}
-  await page.type(usedInputSelector, applicationNumber, { delay: 25 });
-
-  // blur/focus ile state’i kesinleştir
-  try { await input.evaluate(el => el.blur()); } catch {}
-  await sleep(50);                      // <— burada waitForTimeout yerine sleep
-  try { await input.evaluate(el => el.focus()); } catch {}
-
-  // doğrulama + fallback (input/change dispatch)
-  let typedVal = await input.evaluate(el => el.value);
-  if (!typedVal) {
-    typedVal = await input.evaluate((el, val) => {
-      el.value = val;
-      el.dispatchEvent(new InputEvent('input', { bubbles: true }));
-      el.dispatchEvent(new Event('change', { bubbles: true }));
-      return el.value;
-    }, applicationNumber);
-  }
-  steps.push({ t: t(), step: 'input.typed', usedInputSelector, typedVal });
-  logger.info('input.typed', { rid, usedInputSelector, typedVal });
-
-  // 3) SORGULA (buton → metin → form submit → Enter)
-  let usedButtonSelector = null;
-  let btnDisabled = null;
-  let clicked = false;
-
-  const buttonSelectors = ['button[type="submit"]', '#sorgula', '.MuiButton-root'];
-  for (const sel of buttonSelectors) {
-    const b = await page.$(sel).catch(() => null);
-    if (b && await isVisible(b)) {
-      btnDisabled = await b.evaluate(el => el.disabled || el.getAttribute?.('aria-disabled') === 'true');
-      steps.push({ t: t(), step: 'button.state', sel, disabled: btnDisabled });
-      if (!btnDisabled) { await b.click().catch(() => {}); usedButtonSelector = sel; clicked = true; break; }
+    try {
+      const elements = await page.$$(sel);
+      for (const el of elements) {
+        if (await isVisible(el)) {
+          // Input'un gerçekten text input olduğunu ve etkin olduğunu kontrol et
+          const inputType = await el.evaluate(e => e.type);
+          const isDisabled = await el.evaluate(e => e.disabled);
+          
+          if (inputType === 'text' && !isDisabled) {
+            input = el;
+            usedInputSelector = sel;
+            break;
+          }
+        }
+      }
+      if (input) break;
+    } catch (e) {
+      continue;
     }
   }
-  if (!clicked) {
-    clicked = await page.evaluate(() => {
-      const cands = Array.from(document.querySelectorAll('button, [role="button"], .MuiButton-root'));
-      const b = cands.find(x => /sorgula|ara|sorgu/i.test((x.textContent || '').toLowerCase()));
-      if (b && !b.disabled && b.getAttribute('aria-disabled') !== 'true') { (b).click(); return true; }
-      return false;
-    }).catch(() => false);
-    if (clicked) usedButtonSelector = '<textMatch>';
+
+  if (!input) {
+    // Son çare: tüm text input'ları listele
+    const allInputs = await page.evaluate(() => {
+      const inputs = Array.from(document.querySelectorAll('input[type="text"], input:not([type])'));
+      return inputs.map(inp => ({
+        id: inp.id,
+        name: inp.name,
+        placeholder: inp.placeholder,
+        className: inp.className,
+        visible: inp.offsetParent !== null
+      }));
+    });
+    
+    logger.error('input not found', { rid, availableInputs: allInputs });
+    throw new Error('Başvuru numarası input alanı bulunamadı');
   }
-  if (!clicked) {
-    await page.evaluate(() => document.querySelector('form')?.requestSubmit?.()).catch(() => {});
-    await page.keyboard.press('Enter').catch(() => {});
-    usedButtonSelector = usedButtonSelector || '<fallback>';
+
+  // Input'a yazım işlemi - daha güvenilir yaklaşım
+  try {
+    await input.scrollIntoView({ block: 'center' });
+    await page.waitForTimeout(500);
+    
+    // Mevcut değeri temizle
+    await input.click({ clickCount: 3 });
+    await page.keyboard.press('Delete');
+    await page.waitForTimeout(200);
+    
+    // Yeni değeri yaz
+    await input.type(applicationNumber, { delay: 50 });
+    
+    // Değerin yazıldığını doğrula
+    const typedValue = await input.evaluate(el => el.value);
+    if (typedValue !== applicationNumber) {
+      logger.warn('input value mismatch', { rid, expected: applicationNumber, actual: typedValue });
+    }
+    
+    steps.push({ t: t(), step: 'input.typed', value: typedValue });
+    
+  } catch (e) {
+    logger.error('input typing failed', { rid, error: e.message });
+    throw new Error('Input alanına yazım başarısız');
   }
-  steps.push({ t: t(), step: 'click.sorgula', via: usedButtonSelector });
-  logger.info('click.sorgula', { rid, via: usedButtonSelector });
 
-  // 4) reCAPTCHA var mı?
-  const hasCaptcha = await page.$('iframe[src*="recaptcha"], .g-recaptcha').then(Boolean).catch(() => false);
-  if (hasCaptcha) { steps.push({ t: t(), step: 'captcha.detected' }); logger.warn('captcha.detected', { rid }); }
+  // Sorgula butonunu bul ve tıkla - genişletilmiş selectors
+  const buttonSelectors = [
+    'button:contains("Sorgula")',
+    'button:contains("Ara")', 
+    'button:contains("Search")',
+    'input[type="submit"]',
+    'button[type="submit"]',
+    '.btn-primary',
+    '.search-btn',
+    '.query-btn',
+    'button.MuiButton-containedPrimary',
+    'button.MuiButton-root'
+  ];
 
-  // 5) XHR/NAV bekleme
-  const xhrWait = page.waitForResponse(
-    r => /query|sorgu|search|arastir|dosya|trademark/i.test(r.url()) && r.status() === 200,
-    { timeout: 60000 }
-  ).catch(() => null);
-  const navWait = page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 60000 }).catch(() => null);
-  await Promise.race([Promise.allSettled([xhrWait, navWait]), new Promise(r => setTimeout(r, 65000))]);
+  let button = null, usedButtonSelector = null;
+  
+  for (const sel of buttonSelectors) {
+    try {
+      if (sel.includes(':contains(')) {
+        // jQuery-style selector için özel handler
+        const buttonText = sel.match(/:contains\("([^"]+)"\)/)[1];
+        button = await page.evaluateHandle((text) => {
+          const buttons = Array.from(document.querySelectorAll('button, input[type="submit"]'));
+          return buttons.find(btn => 
+            btn.textContent.toLowerCase().includes(text.toLowerCase()) &&
+            btn.offsetParent !== null && 
+            !btn.disabled
+          );
+        }, buttonText);
+        
+        if (button.asElement()) {
+          usedButtonSelector = sel;
+          break;
+        }
+      } else {
+        const elements = await page.$$(sel);
+        for (const el of elements) {
+          if (await isVisible(el)) {
+            const isDisabled = await el.evaluate(e => e.disabled);
+            if (!isDisabled) {
+              button = el;
+              usedButtonSelector = sel;
+              break;
+            }
+          }
+        }
+      }
+      if (button) break;
+    } catch (e) {
+      continue;
+    }
+  }
 
-  // 6) Sonuç
-  const RESULTS_SEL = ['.MuiDataGrid-virtualScroller','div[id*="result"]','#search-results','table'].join(',');
-  await page.waitForFunction(sel => !!document.querySelector(sel), { timeout: 60000 }, RESULTS_SEL).catch(() => {});
-  await page.waitForFunction(sel => {
-    const el = document.querySelector(sel); if (!el) return false;
-    const spin = el.querySelector('.MuiCircularProgress-root,[role="progressbar"]');
-    const txt = (el.textContent || '').trim();
-    return !spin && txt.length > 0;
-  }, { timeout: 60000 }, RESULTS_SEL).catch(() => {});
+  if (!button) {
+    throw new Error('Sorgula butonu bulunamadı');
+  }
 
-  const html = await page.evaluate(sel => {
-    const el = document.querySelector(sel);
-    return el ? el.innerHTML : document.body.innerHTML;
-  }, RESULTS_SEL);
+  // Butona tıkla ve response bekle
+  try {
+    const responsePromise = page.waitForResponse(
+      response => {
+        const url = response.url();
+        return (
+          /query|sorgu|search|arastir|dosya|trademark|api/i.test(url) && 
+          response.status() === 200 &&
+          response.request().method() === 'POST'
+        );
+      },
+      { timeout: 30000 }
+    );
 
+    await button.click();
+    steps.push({ t: t(), step: 'button.clicked', selector: usedButtonSelector });
+    
+    // Response'u bekle
+    const response = await responsePromise.catch(() => null);
+    if (response) {
+      logger.info('query response received', { rid, url: response.url(), status: response.status() });
+    }
+    
+  } catch (e) {
+    logger.warn('button click or response wait failed', { rid, error: e.message });
+  }
+
+  // Sonuç alanının yüklenmesini bekle
+  await page.waitForTimeout(3000);
+  
+  const resultsSelectors = [
+    '.MuiDataGrid-virtualScroller',
+    'div[id*="result"]',
+    '#search-results',
+    'table.MuiTable-root',
+    '.results-container',
+    '.search-results',
+    '.data-grid'
+  ];
+
+  let resultsElement = null;
+  for (const sel of resultsSelectors) {
+    const el = await page.$(sel);
+    if (el && await isVisible(el)) {
+      resultsElement = el;
+      break;
+    }
+  }
+
+  // HTML'i al
+  let html = '';
+  if (resultsElement) {
+    html = await resultsElement.evaluate(el => el.innerHTML);
+  } else {
+    // Sonuç alanı bulunamazsa, body'nin tamamını al
+    html = await page.evaluate(() => document.body.innerHTML);
+  }
+
+  // Screenshot al
   let screenshot = '';
   try {
-    const el = await page.$(RESULTS_SEL);
-    screenshot = el
-      ? await el.screenshot({ type: 'png', encoding: 'base64' })
-      : await page.screenshot({ type: 'png', encoding: 'base64', fullPage: true });
-  } catch {}
+    if (resultsElement) {
+      screenshot = await resultsElement.screenshot({ 
+        type: 'png', 
+        encoding: 'base64',
+        fullPage: false 
+      });
+    } else {
+      screenshot = await page.screenshot({ 
+        type: 'png', 
+        encoding: 'base64', 
+        fullPage: true 
+      });
+    }
+  } catch (e) {
+    logger.warn('screenshot failed', { rid, error: e.message });
+  }
 
-  return { html, screenshot, usedInputSelector, usedButtonSelector, btnDisabled, typedVal, hasCaptcha };
+  return { 
+    html, 
+    screenshot, 
+    usedInputSelector, 
+    usedButtonSelector, 
+    tabActivated,
+    hasCaptcha: false 
+  };
 }
-
 export const tpQueryV2 = onRequest(
   { region: 'europe-west1', timeoutSeconds: 180, memory: '2GiB' },
   async (req, res) => {
@@ -537,6 +711,128 @@ export const tpQueryV2 = onRequest(
     } finally {
       try { await browser?.close(); } catch(e){ logger.error('browser.close.error', { rid, e:String(e) }); }
       logger.info('tpQueryV2.end', { rid });
+    }
+  }
+);
+export const tpQueryV3 = onRequest(
+  { 
+    region: 'europe-west1', 
+    timeoutSeconds: 300, // 5 dakika timeout
+    memory: '2GiB' 
+  },
+  async (req, res) => {
+    const origin = req.headers.origin || '*';
+    setCorsHeaders(res, origin);
+    
+    if (req.method === 'OPTIONS') return res.status(204).send('');
+    if (!['GET','POST'].includes(req.method)) {
+      return res.status(405).json({ ok: false, error: 'Method not allowed' });
+    }
+
+    const rid = Math.random().toString(36).slice(2,8) + '-' + Date.now();
+    const steps = [];
+    const net = { responses: [], fails: [] };
+    let browser, page;
+
+    try {
+      const raw = req.method === 'GET' ? (req.query || {}) : (req.body || {});
+      const applicationNumber = String(raw.applicationNumber || raw.number || raw.no || '').trim();
+      
+      if (!applicationNumber) {
+        return res.status(400).json({ ok: false, error: 'applicationNumber gerekli' });
+      }
+
+      logger.info('tpQueryV3.start', { rid, applicationNumber });
+
+      // Browser başlat - daha fazla seçenek
+      browser = await puppeteer.launch({
+        executablePath: await chromium.executablePath(),
+        headless: chromium.headless,
+        args: [
+          ...chromium.args,
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-dev-shm-usage',
+          '--disable-gpu',
+          '--disable-web-security',
+          '--disable-features=VizDisplayCompositor',
+          '--disable-extensions',
+          '--disable-plugins',
+          '--disable-images', // Performans için resimleri devre dışı bırak
+          '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
+        ],
+        defaultViewport: { width: 1366, height: 900 },
+      });
+
+      page = await browser.newPage();
+      
+      // Extra headers
+      await page.setExtraHTTPHeaders({
+        'Accept-Language': 'tr-TR,tr;q=0.9,en-US;q=0.8',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8'
+      });
+      
+      page.setDefaultNavigationTimeout(120000);
+      page.setDefaultTimeout(120000);
+
+      // Sayfaya git
+      await withStep('goto', page, rid, steps, async () => {
+        await page.goto(URL, { 
+          waitUntil: 'domcontentloaded', 
+          timeout: 60000 
+        });
+      });
+
+      // Overlay'leri kapat
+      await withStep('closeOverlays', page, rid, steps, async () => {
+        await closeOverlays(page, steps, rid);
+      });
+
+      // Sorgu yap
+      const result = await withStep('query', page, rid, steps, async () => {
+        return await queryByApplicationNumber(page, applicationNumber, net, steps, rid);
+      });
+
+      logger.info('tpQueryV3.success', { 
+        rid, 
+        htmlLen: (result.html || '').length,
+        usedInputSelector: result.usedInputSelector,
+        usedButtonSelector: result.usedButtonSelector,
+        tabActivated: result.tabActivated
+      });
+
+      return res.json({ 
+        ok: true, 
+        rid, 
+        ...result,
+        steps, 
+        net 
+      });
+
+    } catch (err) {
+      const message = String(err?.message || err);
+      const step = err?.__step__ || 'unknown';
+      const shot = err?.__screenshot__ || '';
+      
+      logger.error('tpQueryV3.fail', { rid, step, message });
+      
+      return res.status(500).json({ 
+        ok: false, 
+        rid, 
+        step, 
+        message, 
+        steps, 
+        screenshot: shot, 
+        net 
+      });
+      
+    } finally {
+      try { 
+        await browser?.close(); 
+      } catch (e) { 
+        logger.error('browser.close.error', { rid, e: String(e) }); 
+      }
+      logger.info('tpQueryV3.end', { rid });
     }
   }
 );
