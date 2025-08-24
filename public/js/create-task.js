@@ -751,7 +751,7 @@ setupBaseFormListeners() {
                 </div>
             </div>
 
-            <div class="form-section">
+            <div class="section-card" id="card-job">
                 <h3 class="section-title">İş Detayları ve Atama</h3>
                 <div class="form-grid">
                     <div class="form-group">
