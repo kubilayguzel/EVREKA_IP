@@ -477,6 +477,23 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333
   box-shadow: var(--card-shadow) !important;
   padding: 30px; /* Normal padding */
 }
+
+/* Kartların sabit z-index'ini kaldır (stacking context problemi) */
+.section-card,
+.card-content-wrapper {
+  position: relative !important;
+  z-index: auto !important; /* önce 1 idi */
+}
+
+/* Arama dropdown'u görünürken ilgili kartı üste al */
+.section-card:has(#ipRecordSearchResults[style*="block"]),
+.section-card:has(.search-results-list[style*="block"]),
+.section-card:has(#personSearchResults[style*="block"]),
+.section-card:has(#ipRecordSearch:focus),
+.section-card:has(#personSearch:focus) {
+  z-index: 100 !important;
+  overflow: visible !important;
+}
 </style>
 </head>
 <body>
