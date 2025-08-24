@@ -1349,40 +1349,6 @@ if (typeof this.renderDocuments === 'function') {
                 document.getElementById('relatedPartySearchResults').innerHTML = '';
             }
 
-            showAddPersonModal() {
-                document.getElementById('addPersonModal').classList.add('show');
-                document.getElementById('personForm').reset();
-            }
-            
-            hideAddPersonModal() {
-                document.getElementById('addPersonModal').classList.remove('show');
-            }
-
-            async saveNewPerson() {
-                const name = document.getElementById('personName').value.trim();
-                const type = document.getElementById('personType').value;
-                if (!name || !type) { showNotification('Ad Soyad ve Kişi Türü zorunludur.', 'error'); return; }
-                
-                const personData = {
-                    name, type,
-                    email: document.getElementById('personEmail').value.trim(),
-                    phone: document.getElementById('personPhone').value.trim(),
-                    address: document.getElementById('personAddress').value.trim()
-                };
-                try {
-                    const result = await personService.addPerson(personData);
-                    if (result.success) {
-                        showNotification('Yeni kişi başarıyla eklendi.', 'success');
-                        this.allPersons.push({ ...result.data });
-                        this.hideAddPersonModal();
-                    } else {
-                        showNotification('Hata: ' + result.error, 'error');
-                    }
-                } catch (error) {
-                    showNotification("Kişi kaydedilirken beklenmeyen bir hata oluştu.", 'error');
-                }
-            }
-
             renderAccruals() {
                 const container = document.getElementById('accrualsContainer');
                 container.innerHTML = '';
