@@ -578,34 +578,61 @@ setupBaseFormListeners() {
         }
     }
     async handleMainTypeChange(e) {
-        const mainType = e.target.value;
-        const specificTypeSelect = document.getElementById('specificTaskType');
-        const conditionalFieldsContainer = document.getElementById('conditionalFieldsContainer');
+    const mainType = e?.target?.value || '';
+
+    // Güvenli DOM seçimleri
+    const specificTypeSelect = document.getElementById('specificTaskType');
+    const conditionalFieldsContainer = document.getElementById('conditionalFieldsContainer');
+    const saveTaskBtn = document.getElementById('saveTaskBtn');
+
+    // "Kaydet"i şimdilik pasifleştir
+    if (saveTaskBtn) saveTaskBtn.disabled = true;
+
+    // Container yoksa hata fırlatma — sadece uyar ve devam et
+    if (conditionalFieldsContainer) {
         conditionalFieldsContainer.innerHTML = '';
-        const saveTaskBtn = document.getElementById('saveTaskBtn');
-        if (saveTaskBtn) saveTaskBtn.disabled = true;
-        specificTypeSelect.innerHTML = '<option value="">Önce İşin Ana Türünü Seçin</option>';
-        if (mainType) {
-            specificTypeSelect.innerHTML = '<option value="">Seçiniz...</option>';
-            const filteredTransactionTypes = this.allTransactionTypes.filter(type => {
-                const isParentAndMatchesIpType = (type.hierarchy === 'parent' && type.ipType === mainType);
-                const isTopLevelChildAndMatchesIpType = (
-                    type.hierarchy === 'child' &&
-                    type.isTopLevelSelectable &&
-                    (type.applicableToMainType.includes(mainType) || type.applicableToMainType.includes('all'))
-                );
-                return isParentAndMatchesIpType || isTopLevelChildAndMatchesIpType;
-            });
-            filteredTransactionTypes.sort((a, b) => (a.order || 999) - (b.order || 999));
-            filteredTransactionTypes.forEach(type => {
-                specificTypeSelect.innerHTML += `<option value="${type.id}">${type.alias || type.name}</option>`;
-            });
-            specificTypeSelect.disabled = false;
-        } else {
-            specificTypeSelect.disabled = true;
-        }
+    } else {
+        console.warn('[CreateTask] conditionalFieldsContainer bulunamadı; alan temizlenemedi.');
     }
 
+    // specificTypeSelect yoksa da sessizce çık
+    if (!specificTypeSelect) {
+        console.warn('[CreateTask] specificTaskType select bulunamadı.');
+        return;
+    }
+
+    // Varsayılan seçenek
+    specificTypeSelect.innerHTML = '<option value="">Önce İşin Ana Türünü Seçin</option>';
+
+    if (mainType) {
+        // Filtrelenmiş seçenekleri yükle
+        specificTypeSelect.innerHTML = '<option value="">Seçiniz...</option>';
+
+        const filteredTransactionTypes = (this.allTransactionTypes || []).filter(type => {
+        const isParentAndMatchesIpType =
+            (type.hierarchy === 'parent' && type.ipType === mainType);
+
+        const isTopLevelChildAndMatchesIpType =
+            (type.hierarchy === 'child' &&
+            type.isTopLevelSelectable &&
+            (Array.isArray(type.applicableToMainType) &&
+            (type.applicableToMainType.includes(mainType) ||
+            type.applicableToMainType.includes('all'))));
+
+        return isParentAndMatchesIpType || isTopLevelChildAndMatchesIpType;
+        });
+
+        filteredTransactionTypes
+        .sort((a, b) => (a.order || 999) - (b.order || 999))
+        .forEach(type => {
+            specificTypeSelect.innerHTML += `<option value="${type.id}">${type.alias || type.name}</option>`;
+        });
+
+        specificTypeSelect.disabled = false;
+    } else {
+        specificTypeSelect.disabled = true;
+    }
+    }
       renderBaseForm(container, taskTypeName, taskTypeId) {
         const taskIdStr = asId(taskTypeId);
         const needsRelatedParty = RELATED_PARTY_REQUIRED.has(taskIdStr);
