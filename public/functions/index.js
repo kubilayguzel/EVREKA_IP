@@ -250,8 +250,7 @@ chromium.setGraphicsMode = false;
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 const now = () => Date.now();
-const URL = 'https://turkpatent.gov.tr/arastirma-yap?form=trademark';
-
+const URL = 'https://www.turkpatent.gov.tr/tr/arastirma-yap?form=trademark';
 function setCorsHeaders(res, origin='*') {
   res.set('Access-Control-Allow-Origin', origin || '*');
   res.set('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
@@ -361,22 +360,25 @@ async function queryByApplicationNumber(page, applicationNumber, net, steps, rid
   // CAPTCHA kontrolü daha erken yap
   await sleep(2000); // Sayfanın yüklenmesi için bekle
   
-  const hasCaptcha = await page.evaluate(() => {
-    const captchaElements = [
-      'iframe[src*="recaptcha"]',
-      '.g-recaptcha',
-      '#recaptcha',
-      '[data-sitekey]',
-      '.captcha'
-    ];
-    return captchaElements.some(sel => document.querySelector(sel));
+const hasCaptcha = await page.evaluate(() => {
+  const captchaElements = [
+    'iframe[src*="recaptcha"]',
+    '.g-recaptcha',
+    '#recaptcha',
+    '[data-sitekey]'
+  ];
+  return captchaElements.some(sel => {
+    const el = document.querySelector(sel);
+    return el && el.offsetParent !== null; // Görünür mü kontrol et
   });
+});
 
-  if (hasCaptcha) {
-    steps.push({ t: t(), step: 'captcha.detected' });
-    logger.warn('captcha.detected', { rid });
-    throw new Error('CAPTCHA tespit edildi - manuel müdahale gerekli');
-  }
+if (hasCaptcha) { 
+  steps.push({ t: t(), step: 'captcha.detected' }); 
+  logger.warn('captcha.detected', { rid }); 
+  // CAPTCHA varsa 2 dakika bekle ve tekrar dene
+  await sleep(120000);
+}
 
   // Dosya Takibi sekmesini aktifleştir - daha agresif yaklaşım
   let tabActivated = false;
