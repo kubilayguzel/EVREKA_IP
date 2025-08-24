@@ -248,199 +248,195 @@ import puppeteer from 'puppeteer-core';
 chromium.setHeadlessMode = true;
 chromium.setGraphicsMode = false;
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 const now = () => Date.now();
+const URL = 'https://turkpatent.gov.tr/arastirma-yap?form=trademark';
 
-function setCorsHeaders(res, origin = '*') {
+function setCorsHeaders(res, origin='*') {
   res.set('Access-Control-Allow-Origin', origin || '*');
   res.set('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
   res.set('Access-Control-Allow-Headers', 'Content-Type,Authorization');
 }
 
-async function enableLightMode(page) {
-  try { await page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: 'light' }]); } catch {}
-}
+async function enableLightMode(page){ try{
+  await page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: 'light' }]);
+}catch{}}
 
-async function closeAnnounceModals(page, log, rid) {
-  const sels = [
-    '#onetrust-accept-btn-handler',
-    '.ot-sdk-container .ot-pc-refuse-all-handler',
-    '.cookiebar .close',
-    '.btn-close',
-    'button:has-text("Kabul Et")',
-    'button:has-text("Tamam")',
-    'button:has-text("Anladım")',
-  ];
-  for (const sel of sels) {
-    try {
-      const h = await page.$(sel);
-      if (h) { await h.click().catch(()=>{}); log.push({ t: now(), step: 'cookie.close', sel }); logger.info('cookie.close', { rid, sel }); await sleep(150); }
-    } catch {}
-  }
-}
-
-async function isVisible(h) {
-  if (!h) return false;
-  const box = await h.boundingBox();
-  return !!box && box.width > 0 && box.height > 0;
-}
-
-async function findInAllFrames(page, selectors, log, rid) {
-  const frames = [page.mainFrame(), ...page.frames()];
-  for (const frame of frames) {
-    for (const sel of selectors) {
-      try {
-        const h = await frame.$(sel);
-        if (h && (await isVisible(h))) {
-          log.push({ t: now(), step: 'findInAllFrames.found', sel, frame: frame.url() });
-          logger.info('findInAllFrames.found', { rid, sel, frame: frame.url() });
-          return { scope: frame, handle: h, selector: sel };
-        }
-      } catch {}
-    }
-  }
-  log.push({ t: now(), step: 'findInAllFrames.notFound', tried: selectors });
-  logger.warn('findInAllFrames.notFound', { rid, tried: selectors });
-  return { scope: page, handle: null, selector: null };
-}
-
-async function findApplicationNumberInput(scope, log, rid) {
-  // 1) Direkt selector’ler
-  const direct = [
-    'input[placeholder*="Başvuru"]',
-    'input[placeholder*="Başvuru Numar"]',
-    'input[placeholder*="Başvuru No"]',
-    'input[name="dosyaTakipNo"]',
-    'input#dosyaTakipNo',
-    'input[name*="application"]',
-    'input.MuiInputBase-input',
-    'input.MuiInput-input',
-  ];
-  for (const sel of direct) {
-    try {
-      const h = await scope.$(sel);
-      if (h && (await isVisible(h))) {
-        log.push({ t: now(), step: 'findInput.direct', sel });
-        logger.info('findInput.direct', { rid, sel });
-        return { handle: h, selector: sel };
-      }
-    } catch {}
-  }
-
-  // 2) Placeholder/name/id dokusu
-  try {
-    const h = await scope.evaluateHandle(() => {
-      const cand = Array.from(document.querySelectorAll('input')).find((i) => {
-        const ph = (i.getAttribute('placeholder') || '').toLowerCase();
-        const name = (i.getAttribute('name') || '').toLowerCase();
-        const id = (i.getAttribute('id') || '').toLowerCase();
-        const txt = `${ph} ${name} ${id}`;
-        return (
-          (ph && (ph.includes('başvuru') || ph.includes('numara') || ph.includes('dosya'))) ||
-          name.includes('application') ||
-          id.includes('dosya') || id.includes('takip')
-        );
-      });
-      return cand || null;
-    });
-    if (h && (await isVisible(h))) {
-      log.push({ t: now(), step: 'findInput.placeholderMatch' });
-      logger.info('findInput.placeholderMatch', { rid });
-      return { handle: h, selector: '<placeholderMatch>' };
-    }
-  } catch {}
-
-  log.push({ t: now(), step: 'findInput.notFound' });
-  logger.error('findInput.notFound', { rid });
-  return { handle: null, selector: null };
-}
-
-async function clickQueryButton(scope, log, rid) {
-  const btnSel = [
-    'button[type="submit"]',
-    '#sorgula',
-    'button:has-text("Sorgula")',
-    'button:has-text("Ara")',
-    'button.MuiButton-root',
-  ];
-  for (const sel of btnSel) {
-    try {
-      const h = await scope.$(sel);
-      if (h && (await isVisible(h))) {
-        await h.click();
-        log.push({ t: now(), step: 'clickQueryButton.selector', sel });
-        logger.info('clickQueryButton.selector', { rid, sel });
-        return true;
-      }
-    } catch {}
-  }
-  const clicked = await scope.evaluate(() => {
-    const btns = Array.from(document.querySelectorAll('button'));
-    const b = btns.find((b) => /Sorgula|Ara/i.test(b.textContent || ''));
-    if (b) { (b).click(); return true; }
-    return false;
-  }).catch(()=>false);
-  if (clicked) {
-    log.push({ t: now(), step: 'clickQueryButton.textMatch' });
-    logger.info('clickQueryButton.textMatch', { rid });
-    return true;
-  }
-  log.push({ t: now(), step: 'clickQueryButton.notFound' });
-  logger.error('clickQueryButton.notFound', { rid });
-  return false;
-}
-
-// Adım sarmalayıcı: süre, hata, screenshot
-async function withStep(name, page, rid, log, fn) {
-  const start = now();
-  logger.info(`STEP.start:${name}`, { rid });
-  log.push({ t: start, step: `start:${name}` });
+async function withStep(name, page, rid, steps, fn) {
+  const t0 = now(); steps.push({ t:t0, step:`start:${name}` }); logger.info(`STEP.start:${name}`, { rid });
   try {
     const out = await fn();
-    const end = now();
-    logger.info(`STEP.end:${name}`, { rid, ms: end - start });
-    log.push({ t: end, step: `end:${name}`, ms: end - start });
+    const t1 = now(); steps.push({ t:t1, step:`end:${name}`, ms:t1-t0 }); logger.info(`STEP.end:${name}`, { rid, ms:t1-t0 });
     return out;
   } catch (err) {
-    let shot = '';
-    try { shot = await page.screenshot({ type: 'png', encoding: 'base64', fullPage: true }); } catch {}
-    const end = now();
-    logger.error(`STEP.fail:${name}`, { rid, ms: end - start, error: String(err?.message || err) });
-    log.push({ t: end, step: `fail:${name}`, ms: end - start, error: String(err?.message || err), screenshot: !!shot });
+    let shot=''; try{ shot = await page.screenshot({ type:'png', encoding:'base64', fullPage:true }); }catch{}
+    const t1 = now(); steps.push({ t:t1, step:`fail:${name}`, ms:t1-t0, error:String(err?.message||err), screenshot:!!shot });
+    logger.error(`STEP.fail:${name}`, { rid, ms:t1-t0, error:String(err?.message||err) });
     throw Object.assign(err, { __step__: name, __screenshot__: shot });
   }
+}
+
+/** DUYURU modalı + cookie banner kapatma */
+async function closeOverlays(page, steps, rid) {
+  // 1) DUYURU (kapat/Devamı/×)
+  const closed = await page.evaluate(() => {
+    const byText = (texts) => {
+      const btns = Array.from(document.querySelectorAll('button, a[role="button"], .btn, .btn-close, .close'));
+      for (const t of texts) {
+        const el = btns.find(b => (b.textContent||'').trim().toLowerCase().includes(t));
+        if (el) { (el).click(); return `clicked:${t}`; }
+      }
+      return '';
+    };
+    // önce ×
+    const x = document.querySelector('.btn-close, button[aria-label="Close"], .modal [class*="close"]');
+    if (x) { (x).dispatchEvent(new MouseEvent('click', { bubbles:true })); return 'clicked:x'; }
+    // sonra metin
+    return byText(['devam', 'kapat', 'tamam', 'anladım']);
+  });
+  if (closed) { steps.push({ t:now(), step:'overlay.duyuru.closed', how:closed }); logger.info('overlay.duyuru.closed', { rid, how:closed }); }
+  await sleep(150);
+
+  // 2) cookie/kvkk (OneTrust ve muadilleri)
+  const cookieSels = [
+    '#onetrust-accept-btn-handler',
+    '.ot-pc-refuse-all-handler',
+    '.ot-sdk-container [aria-label="Close"]',
+    '.cookiebar .close',
+    'button.cookie-accept'
+  ];
+  for (const sel of cookieSels) {
+    const h = await page.$(sel).catch(()=>null);
+    if (h) { await h.click().catch(()=>{}); steps.push({ t:now(), step:'overlay.cookie.closed', sel }); logger.info('overlay.cookie.closed', { rid, sel }); await sleep(100); }
+  }
+}
+
+/** Sekme: DOSYA TAKİBİ */
+async function activateDosyaTakibiTab(page, steps, rid) {
+  const clicked = await page.evaluate(() => {
+    const els = Array.from(document.querySelectorAll('button, a, [role="tab"], .MuiTab-root, .nav-link'));
+    const el = els.find(e => /dosya\s*takib/i.test((e.textContent||'').toLowerCase()));
+    if (el) { (el).click(); return true; }
+    return false;
+  });
+  steps.push({ t:now(), step:'tab.dosyaTakibi.click', clicked });
+  logger.info('tab.dosyaTakibi.click', { rid, clicked });
+  // aktif olmasını bekle (aria-selected veya class değişimi)
+  await page.waitForFunction(() => {
+    const els = Array.from(document.querySelectorAll('[role="tab"].Mui-selected, .MuiTab-root.Mui-selected'));
+    return els.some(e => /dosya\s*takib/i.test((e.textContent||'').toLowerCase()));
+  }, { timeout: 8000 }).catch(()=>{});
+  await sleep(250);
+}
+
+/** Inputa yaz + sorgula (XHR/nav beklemeleri dahil) */
+async function queryByApplicationNumber(page, applicationNumber, net, steps, rid) {
+  // Network izleme
+  page.on('response', (resp) => {
+    const u = resp.url();
+    if (/turkpatent|arastirma|marka|query|sorgu|search/i.test(u)) {
+      net.responses.push({ url:u, status:resp.status() });
+      logger.info('NET.RESP', { rid, status: resp.status(), url: u });
+    }
+  });
+  page.on('requestfailed', (reqi) => {
+    net.fails.push({ url: reqi.url(), err: reqi.failure()?.errorText });
+    logger.warn('NET.FAIL', { rid, url: reqi.url(), err: reqi.failure()?.errorText });
+  });
+
+  // Input’u bul
+  const inputSelectors = [
+    'input[placeholder*="Başvuru Numarası"]',
+    'input[placeholder*="Başvuru"]',
+    'input[name*="basvuru"]',
+    'input[name*="dosya"]',
+    'input#dosyaTakipNo',
+    'input.MuiInputBase-input',
+    'input.MuiInput-input'
+  ];
+  let inputHandle = null;
+  for (const sel of inputSelectors) {
+    const h = await page.$(sel).catch(()=>null);
+    if (h) { inputHandle = h; steps.push({ t:now(), step:'input.found', sel }); logger.info('input.found', { rid, sel }); break; }
+  }
+  if (!inputHandle) throw new Error('Başvuru Numarası inputu bulunamadı');
+
+  try { await inputHandle.click({ clickCount: 3 }); } catch {}
+  try { await inputHandle.press('Backspace'); } catch {}
+  await inputHandle.type(applicationNumber, { delay: 15 });
+  steps.push({ t:now(), step:'input.typed', len: applicationNumber.length });
+
+  // SORGULA
+  const clicked = await page.evaluate(() => {
+    const btns = Array.from(document.querySelectorAll('button, [role="button"], .MuiButton-root'));
+    const b = btns.find(x => /sorgula|ara|sorgu/i.test((x.textContent||'').toLowerCase()));
+    if (b) { (b).click(); return true; }
+    return false;
+  });
+  if (!clicked) { try { await page.keyboard.press('Enter'); steps.push({ t:now(), step:'enter.fallback' }); } catch {} }
+  else { steps.push({ t:now(), step:'click.sorgula' }); }
+
+  // Beklemeler (XHR/nav)
+  const xhr = page.waitForResponse(r =>
+    /query|sorgu|search|arastir|dosya|trademark/i.test(r.url()) && r.status() === 200, { timeout: 60000 }
+  ).catch(()=>null);
+  const nav = page.waitForNavigation({ waitUntil:'domcontentloaded', timeout:60000 }).catch(()=>null);
+  await Promise.race([Promise.allSettled([xhr, nav]), sleep(65000)]);
+
+  // Sonuç alanı
+  const RESULTS_SEL = [
+    '.MuiDataGrid-virtualScroller',
+    'div[id*="result"]',
+    '#search-results',
+    'table'
+  ].join(',');
+
+  await page.waitForFunction(sel => !!document.querySelector(sel), { timeout: 60000 }, RESULTS_SEL).catch(()=>{});
+  await page.waitForFunction(sel => {
+    const el = document.querySelector(sel); if (!el) return false;
+    const spin = el.querySelector('.MuiCircularProgress-root,[role="progressbar"]');
+    const txt = (el.textContent||'').trim();
+    return !spin && txt.length > 0;
+  }, { timeout: 60000 }, RESULTS_SEL).catch(()=>{});
+
+  const html = await page.evaluate(sel => {
+    const el = document.querySelector(sel);
+    return el ? el.innerHTML : document.body.innerHTML;
+  }, RESULTS_SEL);
+
+  let screenshot = '';
+  try {
+    const h = await page.$(RESULTS_SEL);
+    screenshot = h
+      ? await h.screenshot({ type:'png', encoding:'base64' })
+      : await page.screenshot({ type:'png', encoding:'base64', fullPage:true });
+  } catch {}
+
+  return { html, screenshot, usedInputSelector: inputSelectors.find(Boolean) };
 }
 
 export const tpQueryV2 = onRequest(
   { region: 'europe-west1', timeoutSeconds: 180, memory: '2GiB' },
   async (req, res) => {
-    const origin = req.headers.origin || '';
+    const origin = req.headers.origin || '*';
     setCorsHeaders(res, origin);
     if (req.method === 'OPTIONS') return res.status(204).send('');
-    if (req.method !== 'POST' && req.method !== 'GET')
-      return res.status(405).json({ ok: false, error: 'Method not allowed' });
+    if (!['GET','POST'].includes(req.method)) return res.status(405).json({ ok:false, error:'Method not allowed' });
 
-    const rid = (Math.random().toString(36).slice(2, 8) + '-' + Date.now()); // log korelasyonu
-    const steps = [];
-    const net = { responses: [], fails: [] };
+    const rid = Math.random().toString(36).slice(2,8) + '-' + Date.now();
+    const steps = []; const net = { responses: [], fails: [] };
     let browser, page;
 
     try {
-      const isGet = req.method === 'GET';
-      const raw = isGet ? (req.query || {}) : (req.body || {});
+      const raw = req.method === 'GET' ? (req.query || {}) : (req.body || {});
       const applicationNumber = String(raw.applicationNumber || raw.number || raw.no || '').trim();
-      if (!applicationNumber) return res.status(400).json({ ok: false, error: 'applicationNumber gerekli' });
+      if (!applicationNumber) return res.status(400).json({ ok:false, error:'applicationNumber gerekli' });
 
-      logger.info('tpQueryV2.start', { rid, method: req.method, applicationNumber });
-      steps.push({ t: now(), step: 'request.start', rid, applicationNumber });
-
+      logger.info('tpQueryV2.start', { rid, applicationNumber });
       browser = await puppeteer.launch({
         executablePath: await chromium.executablePath(),
         headless: chromium.headless,
-        args: [
-          ...chromium.args,
-          '--no-sandbox','--disable-setuid-sandbox','--disable-dev-shm-usage','--disable-gpu'
-        ],
+        args: [...chromium.args, '--no-sandbox','--disable-setuid-sandbox','--disable-dev-shm-usage','--disable-gpu'],
         defaultViewport: { width: 1366, height: 900 },
       });
 
@@ -451,129 +447,33 @@ export const tpQueryV2 = onRequest(
       page.setDefaultNavigationTimeout(120000);
       page.setDefaultTimeout(120000);
 
-      // Browser console ve network’ü sunucu loguna aynala
-      page.on('console', (msg) => logger.info('BROWSER.CONSOLE', { rid, type: msg.type(), text: msg.text() }));
-      page.on('pageerror', (err) => logger.error('BROWSER.PAGEERROR', { rid, error: String(err?.message || err) }));
-      page.on('response', (resp) => {
-        const u = resp.url();
-        if (/turkpatent|arastirma|marka|search|sorgu/i.test(u)) {
-          net.responses.push({ url: u, status: resp.status() });
-          logger.info('NET.RESP', { rid, status: resp.status(), url: u });
-        }
-      });
-      page.on('requestfailed', (reqi) => {
-        net.fails.push({ url: reqi.url(), err: reqi.failure()?.errorText });
-        logger.warn('NET.FAIL', { rid, url: reqi.url(), err: reqi.failure()?.errorText });
-      });
-
-      const url = 'https://turkpatent.gov.tr/arastirma-yap?form=trademark';
-
       await withStep('goto', page, rid, steps, async () => {
-        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
+        await page.goto(URL, { waitUntil:'domcontentloaded', timeout: 60000 });
       });
 
-      await withStep('closeModals', page, rid, steps, async () => {
-        await closeAnnounceModals(page, steps, rid);
+      await withStep('closeOverlays', page, rid, steps, async () => {
+        await closeOverlays(page, steps, rid);
       });
 
-      // Dosya Takibi sekmesi (varsa)
-      await withStep('activateTab', page, rid, steps, async () => {
-        try {
-          await page.waitForSelector('button[role="tab"], .MuiTab-root', { timeout: 5000 });
-          const clicked = await page.evaluate(() => {
-            const tabs = Array.from(document.querySelectorAll('button[role="tab"], .MuiTab-root'));
-            const btn = tabs.find((b) => /Dosya Takibi/i.test(b.textContent || ''));
-            if (btn) { (btn).click(); return true; }
-            return false;
-          });
-          if (clicked) {
-            await page.waitForFunction(() => {
-              const tab = Array.from(document.querySelectorAll('button[role="tab"], .MuiTab-root'))
-                .find((b) => /Dosya Takibi/i.test(b.textContent || ''));
-              return !!tab && (tab.getAttribute('aria-selected') === 'true' || tab.classList.contains('Mui-selected'));
-            }, { timeout: 10000 }).catch(()=>{});
-            await sleep(250);
-          }
-        } catch {}
+      await withStep('activateDosyaTakibiTab', page, rid, steps, async () => {
+        await activateDosyaTakibiTab(page, steps, rid);
       });
 
-      // Input’u bul
-      let scope = page, inputHandle = null, usedInputSelector = null;
-      await withStep('findInput', page, rid, steps, async () => {
-        const primarySels = [
-          'input[placeholder*="Başvuru"]',
-          'input[placeholder*="Başvuru Numar"]',
-          'input[placeholder*="Başvuru No"]',
-          'input[name="dosyaTakipNo"]',
-          'input#dosyaTakipNo',
-          'input[name*="application"]',
-          'input.MuiInputBase-input',
-          'input.MuiInput-input',
-        ];
-        let r = await findInAllFrames(page, primarySels, steps, rid);
-        scope = r.scope; inputHandle = r.handle; usedInputSelector = r.selector;
-
-        if (!inputHandle) {
-          const frames = [page.mainFrame(), ...page.frames()];
-          for (const f of frames) {
-            const rr = await findApplicationNumberInput(f, steps, rid);
-            if (rr.handle) { scope = f; inputHandle = rr.handle; usedInputSelector = rr.selector; break; }
-          }
-        }
-        if (!inputHandle) throw new Error('Başvuru Numarası inputu bulunamadı');
+      const { html, screenshot, usedInputSelector } = await withStep('query', page, rid, steps, async () => {
+        return await queryByApplicationNumber(page, applicationNumber, net, steps, rid);
       });
 
-      // Numarayı yaz
-      await withStep('typeNumber', page, rid, steps, async () => {
-        try { await inputHandle.click({ clickCount: 3 }); } catch {}
-        try { await inputHandle.press('Backspace'); } catch {}
-        await inputHandle.type(applicationNumber, { delay: 20 });
-      });
+      logger.info('tpQueryV2.success', { rid, htmlLen: (html||'').length, usedInputSelector, xhr200: net.responses.filter(r=>r.status===200).length });
+      return res.json({ ok:true, rid, usedInputSelector, html, screenshot, steps, net });
 
-      // Sorgula
-      await withStep('clickQuery', page, rid, steps, async () => {
-        const ok = await clickQueryButton(scope, steps, rid);
-        if (!ok) { try { await scope.keyboard.press('Enter'); logger.info('pressEnter.fallback', { rid }); } catch {} }
-      });
-
-      // Navigation + XHR beklemeleri birlikte
-      await withStep('waitResults', page, rid, steps, async () => {
-        const xhr = page.waitForResponse(
-          r => /sorgu|search|query|dosya|trademark/i.test(r.url()) && r.status() === 200,
-          { timeout: 60000 }
-        ).catch(()=>null);
-        const nav = page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 60000 }).catch(()=>null);
-        await Promise.race([Promise.allSettled([xhr, nav]), sleep(65000)]);
-      });
-
-      // Sonuç alanı
-      const RESULTS_SEL =
-        '#search-results, div[id*="search-results"], div[id*="searchresults"], div[id*="result-list"], div[id*="results"], .MuiDataGrid-virtualScroller, table';
-
-      let html = '', screenshot = '';
-      await withStep('grabResults', page, rid, steps, async () => {
-        await page.waitForFunction((sel) => !!document.querySelector(sel), { timeout: 60000 }, RESULTS_SEL).catch(()=>{});
-        html = await page.evaluate((sel) => {
-          const el = document.querySelector(sel);
-          return el ? el.innerHTML : document.body.innerHTML;
-        }, RESULTS_SEL);
-        try {
-          const h = await page.$(RESULTS_SEL);
-          if (h) screenshot = await h.screenshot({ type: 'png', encoding: 'base64' });
-          else screenshot = await page.screenshot({ type: 'png', encoding: 'base64', fullPage: true });
-        } catch {}
-      });
-
-      logger.info('tpQueryV2.success', { rid, htmlLen: (html||'').length, usedInputSelector, netCount: net.responses.length });
-      return res.json({ ok: true, rid, usedInputSelector, html, screenshot, steps, net });
     } catch (err) {
       const message = String(err?.message || err);
       const step = err?.__step__ || 'unknown';
       const shot = err?.__screenshot__ || '';
       logger.error('tpQueryV2.fail', { rid, step, message });
-      return res.status(500).json({ ok: false, rid, step, message, steps, screenshot: shot, net });
+      return res.status(500).json({ ok:false, rid, step, message, steps, screenshot: shot, net });
     } finally {
-      try { await browser?.close(); } catch (e) { logger.error('browser.close.error', { rid, e: String(e) }); }
+      try { await browser?.close(); } catch(e){ logger.error('browser.close.error', { rid, e:String(e) }); }
       logger.info('tpQueryV2.end', { rid });
     }
   }
