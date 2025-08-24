@@ -31,6 +31,28 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
     margin-bottom: 25px;
 }
+/* Kartların gölgesini ve ayrımını her yerde garanti et */
+.form-container > .section-card,
+#conditionalFieldsContainer > .section-card {
+  background: #fff;
+  border-radius: 20px;
+  box-shadow: 0 10px 30px rgba(0,0,0,.10) !important;
+  margin-bottom: 25px;
+  position: relative;           /* stacking-context güvence */
+  z-index: 0;                   /* üstteki header/kapsayıcı gölgeleri bastırmasın */
+}
+
+/* Kartlar üst üste geldiğinde gölge “kaybolmasın” */
+.section-card + .section-card {
+  margin-top: 25px;
+}
+
+/* Eski bölüm çizgilerini nötralize et (varsa) */
+.form-section {
+  border: 0;
+  box-shadow: none;
+  background: transparent;
+}
 
 .section-title {
     font-size: 1.3em;
