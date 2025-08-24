@@ -243,20 +243,19 @@ export const etebsProxyV2 = onRequest(
     }
 );
 
+// İZİN VERİLEN ORIGIN’LER
 const ALLOWED = new Set([
   'https://ip-manager-production-aab4b.web.app',
   'https://ip-manager-production-aab4b.firebaseapp.com',
   'http://localhost:5000'
 ]);
 
-function corsHandler(req, res, next) {
-  const origin = req.headers.origin;
+// Sadece header set eden yardımcı (middleware değil!)
+function setCorsHeaders(res, origin) {
   if (ALLOWED.has(origin)) res.set('Access-Control-Allow-Origin', origin);
   res.set('Vary', 'Origin');
   res.set('Access-Control-Allow-Headers', 'Content-Type');
-  res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  if (req.method === 'OPTIONS') return res.status(204).send('');
-  return next();
+  res.set('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
 }
 
 import puppeteer from 'puppeteer';
