@@ -262,11 +262,11 @@ import puppeteer from 'puppeteer-core';
 chromium.setHeadlessMode = true;
 chromium.setGraphicsMode = false;
 
-browser = await puppeteer.launch({
+const browser = await puppeteer.launch({
   executablePath: await chromium.executablePath(),
   args: chromium.args,
   headless: chromium.headless,
-  defaultViewport: { width: 1366, height: 768 }
+  defaultViewport: { width: 1366, height: 768 },
 });
 
 export const tpQueryV2 = onRequest(
