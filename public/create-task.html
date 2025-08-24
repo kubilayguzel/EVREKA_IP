@@ -426,26 +426,33 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333
         background-color: #f0f4f8;
         border-radius: 10px;
     }
-    /* Kart içerik wrapper'ı için gölge */
-        .card-content-wrapper {
-        background: #ffffff;
-        padding: 20px;
-        border-radius: 12px;
-        box-shadow: 0 6px 20px rgba(0,0,0,0.08), 
-                    0 2px 8px rgba(0,0,0,0.04);
-        border: 1px solid rgba(0,0,0,0.02);
-        transition: all 0.3s ease;
-        }
+/* Kart içerik wrapper'ı için gölge */
+.card-content-wrapper {
+  background: #ffffff;
+  padding: 20px;
+  border-radius: 12px;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.08), 
+              0 2px 8px rgba(0,0,0,0.04);
+  border: 1px solid rgba(0,0,0,0.02);
+  transition: all 0.3s ease;
+}
 
-        .card-content-wrapper:hover {
-        box-shadow: 0 10px 30px rgba(0,0,0,0.12), 
-                    0 4px 12px rgba(0,0,0,0.06);
-        transform: translateY(-1px);
-        }
+.card-content-wrapper:hover {
+  box-shadow: 0 10px 30px rgba(0,0,0,0.12), 
+              0 4px 12px rgba(0,0,0,0.06);
+  transform: translateY(-1px);
+}
 
-        /* Kartın kendi gölgesini hafiflet */
-        .section-card {
-        box-shadow: none !important;
+/* Kartın kendi gölgesini sadece wrapper varsa kaldır */
+.section-card[data-wrapped] {
+  box-shadow: none !important;
+  padding: 15px; /* Daha az padding çünkü wrapper zaten padding veriyor */
+}
+
+/* Wrapper yoksa kartın kendi gölgesini koru */
+.section-card:not([data-wrapped]) {
+  box-shadow: var(--card-shadow) !important;
+  padding: 30px; /* Normal padding */
 }
 </style>
 </head>
