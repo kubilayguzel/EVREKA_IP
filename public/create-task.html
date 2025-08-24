@@ -17,10 +17,31 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333
 .page-header { background: rgba(255,255,255,0.95); padding: 30px; border-radius: 20px; margin-bottom: 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
 .page-title { font-size: 2em; color: #1e3c72; margin-bottom: 10px; }
 .page-subtitle { color: #666; font-size: 1.1em; }
-.form-container { background: rgba(255,255,255,0.95); padding: 40px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
+
+/* Form ve Kart Yapısı */
+.form-container { background: none; box-shadow: none; padding: 0; }
 .form-section { border-bottom: 1px solid #e1e8ed; padding-bottom: 25px; margin-bottom: 25px; }
 .form-section:last-child { border-bottom: none; }
-.section-title { font-size: 1.3em; color: #1e3c72; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
+
+/* Task Detail dosyasından alınan özel stil - Kart */
+.section-card {
+    background: rgba(255, 255, 255, 0.95);
+    padding: 30px;
+    border-radius: 20px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+    margin-bottom: 25px;
+}
+
+.section-title {
+    font-size: 1.3em;
+    color: #1e3c72;
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #e1e8ed;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
 .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 25px; }
 .form-group { position: relative; display: flex; flex-direction: column; }
 .form-group.full-width { grid-column: 1 / -1; }
@@ -378,7 +399,7 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333
                 <p class="page-subtitle">Oluşturmak istediğiniz işin türünü ve tipini seçerek devam edin.</p>
             </section>
             
-            <div class="form-container" style="background: none; box-shadow: none;">
+            <div class="form-container">
                 <form id="createTaskForm" onsubmit="return false;">
                     
                     <div class="section-card">
