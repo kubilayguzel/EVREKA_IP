@@ -251,7 +251,7 @@ const ALLOWED = new Set([
 
 // Sadece header set eden yardımcı (middleware değil!)
 function setCorsHeaders(res, origin) {
-  if (ALLOWED.has(origin)) res.set('Access-Control-Allow-Origin', origin);
+  if (ALLOWED_ORIGINS.has(origin)) res.set('Access-Control-Allow-Origin', origin);
   res.set('Vary', 'Origin');
   res.set('Access-Control-Allow-Headers', 'Content-Type');
   res.set('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
@@ -261,100 +261,96 @@ import puppeteer from 'puppeteer';
 export const tpQueryV2 = onRequest(
   { region: 'europe-west1', timeoutSeconds: 180, memory: '1GiB' },
   async (req, res) => {
+    // --- CORS ---
     const origin = req.headers.origin || '';
     setCorsHeaders(res, origin);
-
-    // Preflight
-    if (req.method === 'OPTIONS') {
-      return res.status(204).send('');
-    }
-
+    if (req.method === 'OPTIONS') return res.status(204).send('');
     if (req.method !== 'POST' && req.method !== 'GET') {
       return res.status(405).json({ ok: false, error: 'Method not allowed' });
     }
 
-    let browser; // dışarıda tanımla ki catch/finally içinde kapatabilelim
+    let browser; // try dışına aldık
     try {
-      // Parametreleri al
+      // Parametreler
       const isGet = req.method === 'GET';
       const { type = 'application', number } = isGet ? req.query : (req.body || {});
-      if (!number) {
-        return res.status(400).json({ ok: false, error: 'number gerekli' });
-      }
+      if (!number) return res.status(400).json({ ok: false, error: 'number gerekli' });
 
+      // Puppeteer (GCF uyumlu flag'ler)
       browser = await puppeteer.launch({
-        headless: 'new',
-        args: ['--no-sandbox', '--disable-setuid-sandbox'],
+        headless: true, // 'new' da olur; true daha stabil
+        args: [
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-dev-shm-usage',
+          '--no-zygote',
+          '--single-process'
+        ],
       });
       const page = await browser.newPage();
+      await page.setUserAgent(
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      );
+      await page.setExtraHTTPHeaders({ 'Accept-Language': 'tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7' });
+      await page.setViewport({ width: 1366, height: 768 });
 
-      // Marka formu + Dosya Takibi sekmesi
+      // Siteye git
       await page.goto('https://turkpatent.gov.tr/arastirma-yap?form=trademark', {
-        waitUntil: 'networkidle2',
+        waitUntil: 'domcontentloaded',
         timeout: 60000,
       });
 
-      // "Dosya Takibi" sekmesini tıkla
+      // "Dosya Takibi" sekmesi
+      await page.waitForSelector('button[role="tab"], .MuiTab-root', { timeout: 30000 });
       await page.evaluate(() => {
         const tabs = Array.from(document.querySelectorAll('button[role="tab"], .MuiTab-root'));
         const btn = tabs.find(b => /Dosya Takibi/i.test(b.textContent || ''));
         btn?.click();
       });
 
-      // Alan seç
+      // Hangi alan?
       const fieldSelector =
-        {
+        ({
           application: 'input[placeholder="Başvuru Numarası"]',
           document: 'input[placeholder="Evrak Numarası"]',
           registration: 'input[placeholder="Tescil Numarası"]',
           intl: 'input[placeholder="Uluslararası Tescil Numarası"]',
-        }[String(type).toLowerCase()] || 'input[placeholder="Başvuru Numarası"]';
+        }[String(type).toLowerCase()]) || 'input[placeholder="Başvuru Numarası"]';
 
       await page.waitForSelector(fieldSelector, { timeout: 30000 });
-      await page.type(fieldSelector, String(number), { delay: 25 });
+      await page.focus(fieldSelector);
+      await page.keyboard.type(String(number), { delay: 25 });
 
-      // "Sorgula" butonu
+      // "Sorgula"
       await page.evaluate(() => {
         const btns = Array.from(document.querySelectorAll('button'));
         const q = btns.find(b => /Sorgula/i.test(b.textContent || ''));
         q?.click();
       });
 
-      // Sonuç alanını bekle
+      // Sonuçları bekle
       await page.waitForSelector('#search-results', { timeout: 60000 });
       await page.waitForFunction(
         () => {
           const el = document.querySelector('#search-results');
-          return el && el.textContent && el.textContent.trim().length > 0;
+          return !!el && (el.textContent || '').trim().length > 0;
         },
         { timeout: 60000 }
       );
 
-      // HTML + screenshot
-      const html = await page.evaluate(() => {
-        const el = document.querySelector('#search-results');
-        return el ? el.innerHTML : '';
-      });
-      const screenshot = await page.screenshot({
-        type: 'png',
-        encoding: 'base64',
-        fullPage: false,
-      });
+      // Çıktılar
+      const html = await page.$eval('#search-results', el => el.innerHTML);
+      const screenshot = await page.screenshot({ type: 'png', encoding: 'base64', fullPage: false });
 
       return res.json({ ok: true, html, screenshot });
     } catch (err) {
       console.error('tpQueryV2 error:', err);
-      return res.status(500).json({
-        ok: false,
-        error: 'Automation failed',
-        message: String(err?.message || err),
-      });
+      return res.status(500).json({ ok: false, error: 'Automation failed', message: String(err?.message || err) });
     } finally {
-      try { await browser?.close(); } catch {}
+      try { await browser?.close(); } catch (e) { console.error('browser close error:', e); }
     }
   }
 );
-
 // Health Check Function (v2 sözdizimi)
 export const etebsProxyHealthV2 = onRequest(
     {
