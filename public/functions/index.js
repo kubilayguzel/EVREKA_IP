@@ -257,10 +257,17 @@ function setCorsHeaders(res, origin) {
   res.set('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
 }
 
-import puppeteer from 'puppeteer';
 import chromium from '@sparticuz/chromium';
+import puppeteer from 'puppeteer-core';
 chromium.setHeadlessMode = true;
 chromium.setGraphicsMode = false;
+
+browser = await puppeteer.launch({
+  executablePath: await chromium.executablePath(),
+  args: chromium.args,
+  headless: chromium.headless,
+  defaultViewport: { width: 1366, height: 768 }
+});
 
 export const tpQueryV2 = onRequest(
   { region: 'europe-west1', timeoutSeconds: 180, memory: '1GiB' },
