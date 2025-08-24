@@ -659,10 +659,10 @@ class PortfolioTurkpatentIntegration {
 
                 try {
                     if (this.popupWindow.document.readyState === 'complete') {
-                        this.showLoadingIndicator('Form otomatik dolduruluyor...');
+                        this.showLoadingIndicator('Modallar kapatılıyor...');
                         setTimeout(() => {
                             this.startAutomation(applicationNumber);
-                        }, 2000);
+                        }, 3000); // 3 saniye bekle - modal için daha uzun süre
                     } else {
                         setTimeout(waitForLoad, 1000);
                     }
@@ -690,8 +690,17 @@ class PortfolioTurkpatentIntegration {
         try {
             const doc = this.popupWindow.document;
             
+            // ÖNEMLİ: İlk önce modalları kapat
+            console.log('🔄 Modallar kapatılıyor...');
+            await this.closeAnnounceModals(doc);
+            
+            console.log('🔄 Dosya Takibi sekmesi açılıyor...');
             await this.activateFileTrackingTab(doc);
+            
+            console.log('🔄 Başvuru numarası dolduruluyor...');
             await this.fillApplicationNumber(doc, applicationNumber);
+            
+            console.log('🔄 Sorgula butonu tıklanıyor...');
             await this.clickSearchButton(doc);
             
             this.hideLoadingIndicator();
@@ -702,6 +711,86 @@ class PortfolioTurkpatentIntegration {
             this.showError('Otomatik form doldurma başarısız: ' + error.message);
             console.error('Automation error:', error);
         }
+    }
+
+    // Modal kapatma fonksiyonu
+    async closeAnnounceModals(doc) {
+        return new Promise((resolve) => {
+            let attempts = 0;
+            const maxAttempts = 10;
+
+            const tryCloseModals = () => {
+                attempts++;
+                
+                try {
+                    // 1) "Devam" butonunu ara ve tıkla
+                    const continueButtons = doc.querySelectorAll('button, a, span, div');
+                    const continueBtn = Array.from(continueButtons).find(btn => {
+                        const text = (btn.textContent || btn.innerText || '').trim();
+                        return /devam|tamam|kapat|anladım|kabul|close/i.test(text);
+                    });
+                    
+                    if (continueBtn && continueBtn.click) {
+                        console.log('✅ Modal kapatma butonu bulundu ve tıklandı:', continueBtn.textContent);
+                        continueBtn.click();
+                        setTimeout(resolve, 1500); // Modal kapanması için bekle
+                        return;
+                    }
+
+                    // 2) X butonunu ara
+                    const closeButtons = doc.querySelectorAll('[aria-label="close"], [aria-label="Close"], .close, .modal-close, button[title*="kapat"], button[title*="Close"]');
+                    if (closeButtons.length > 0) {
+                        console.log('✅ X butonu bulundu:', closeButtons[0]);
+                        closeButtons[0].click();
+                        setTimeout(resolve, 1500);
+                        return;
+                    }
+
+                    // 3) Overlay/backdrop'e tıkla
+                    const overlays = doc.querySelectorAll('.MuiBackdrop-root, .modal-backdrop, .overlay, [role="presentation"]');
+                    if (overlays.length > 0) {
+                        console.log('✅ Overlay bulundu, tıklanıyor');
+                        overlays[0].click();
+                        setTimeout(resolve, 1500);
+                        return;
+                    }
+
+                    // 4) ESC tuşu gönder
+                    const event = new KeyboardEvent('keydown', {
+                        key: 'Escape',
+                        code: 'Escape',
+                        keyCode: 27,
+                        which: 27,
+                        bubbles: true
+                    });
+                    doc.dispatchEvent(event);
+                    console.log('⌨️ ESC tuşu gönderildi');
+
+                    // 5) Modal/dialog elementlerini zorla kaldır
+                    const modals = doc.querySelectorAll('.MuiDialog-root, .modal, .dialog, [role="dialog"], [role="alertdialog"]');
+                    if (modals.length > 0) {
+                        console.log('🗑️ Modallar zorla kaldırılıyor:', modals.length);
+                        modals.forEach(modal => {
+                            if (modal.remove) modal.remove();
+                        });
+                    }
+
+                } catch (error) {
+                    console.log('⚠️ Modal kapatma hatası:', error.message);
+                }
+
+                // Maksimum deneme sayısına ulaştık
+                if (attempts >= maxAttempts) {
+                    console.log('⏰ Modal kapatma timeout, devam ediliyor...');
+                    resolve();
+                } else {
+                    // Tekrar dene
+                    setTimeout(tryCloseModals, 800);
+                }
+            };
+
+            tryCloseModals();
+        });
     }
 
     async activateFileTrackingTab(doc) {
