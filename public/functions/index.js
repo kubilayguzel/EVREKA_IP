@@ -242,13 +242,6 @@ export const etebsProxyV2 = onRequest(
     }
 );
 
-// İZİN VERİLEN ORIGIN’LER
-const ALLOWED = new Set([
-  'https://ip-manager-production-aab4b.web.app',
-  'https://ip-manager-production-aab4b.firebaseapp.com',
-  'http://localhost:5000'
-]);
-
 // Sadece header set eden yardımcı (middleware değil!)
 function setCorsHeaders(res, origin) {
   if (ALLOWED_ORIGINS.has(origin)) res.set('Access-Control-Allow-Origin', origin);
@@ -261,13 +254,6 @@ import chromium from '@sparticuz/chromium';
 import puppeteer from 'puppeteer-core';
 chromium.setHeadlessMode = true;
 chromium.setGraphicsMode = false;
-
-const browser = await puppeteer.launch({
-  executablePath: await chromium.executablePath(),
-  args: chromium.args,
-  headless: chromium.headless,
-  defaultViewport: { width: 1366, height: 768 },
-});
 
 export const tpQueryV2 = onRequest(
   { region: 'europe-west1', timeoutSeconds: 180, memory: '1GiB' },
