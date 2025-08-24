@@ -499,53 +499,16 @@
         </div>
     </div>
 
-    <div class="modal" id="addPersonModal">
-        <div class="modal-content">
-            <span class="close-modal-btn" id="closeAddPersonModal">&times;</span>
-            <h3 class="modal-title">Yeni Kişi Ekle</h3>
-            <form id="personForm">
-                <div class="form-group">
-                    <label class="form-label" for="personName">Ad Soyad *</label>
-                    <input type="text" id="personName" class="form-input" required>
-                </div>
-                <div class="form-group">
-                    <label class="form-label" for="personEmail">E-posta</label>
-                    <input type="email" id="personEmail" class="form-input">
-                </div>
-                <div class="form-group">
-                    <label class="form-label" for="personPhone">Telefon</label>
-                    <input type="tel" id="personPhone" class="form-input">
-                </div>
-                <div class="form-group">
-                    <label class="form-label" for="personType">Kişi Türü *</label>
-                    <select id="personType" class="form-select" required>
-                        <option value="">Seçiniz</option>
-                        <option value="individual">Bireysel</option>
-                        <option value="company">Şirket</option>
-                        <option value="institution">Kurum</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label class="form-label" for="personAddress">Adres</label>
-                    <textarea id="personAddress" class="form-input" rows="3"></textarea>
-                </div>
-                <div class="form-actions">
-                    <button type="button" class="btn btn-secondary" id="cancelPersonBtn">İptal</button>
-                    <button type="button" class="btn btn-primary" id="savePersonBtn">Kaydet</button>
-                </div>
-            </form>
-        </div>
-    </div>
 
 <script type="module">
     import { authService, taskService, ipRecordsService, personService, accrualService, auth, generateUUID, documentDesignationTranslations, transactionTypeService,firebaseServices } from './firebase-config.js';
     import { showNotification, formatFileSize, readFileAsDataURL, TASK_STATUSES, TURKEY_HOLIDAYS, addMonthsToDate, isWeekend, isHoliday, findNextWorkingDay } from './utils.js';
-    import { loadSharedLayout } from './js/layout-loader.js';
+    import { loadSharedLayout, ensurePersonModal, openPersonModal } from './js/layout-loader.js';
     import { getStorage, ref, uploadBytes, getDownloadURL } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js';
 
     document.addEventListener('DOMContentLoaded', async () => {
         await loadSharedLayout({ activeMenuLink: 'task-management.html' });
-
+        ensurePersonModal();
         class TaskDetailModule {
             constructor() {
                 this.taskId = null;
@@ -864,8 +827,35 @@ if (typeof this.renderDocuments === 'function') {
                 }
                 const addPersonBtn = document.getElementById('addNewRelatedPartyBtn');
                 if (addPersonBtn) {
-                    addPersonBtn.addEventListener('click', () => this.showAddPersonModal());
+                addPersonBtn.addEventListener('click', () => {
+                    // create-task ile aynı: modalı aç ve geri dönüşte kişiyi işle
+                    openPersonModal((newPerson) => {
+                    // kişiler dizini güncelle
+                    this.allPersons = this.allPersons || [];
+                    this.allPersons.push(newPerson);
+
+                    // task-detail tek kişi seçiyor: owner olarak ata + UI'ı güncelle
+                    this.selectedRelatedParty = {
+                        id: newPerson.id,
+                        name: newPerson.name,
+                        email: newPerson.email || '',
+                        phone: newPerson.phone || ''
+                    };
+
+                    // kartı güncelle
+                    const display = document.getElementById('selectedRelatedPartyDisplay');
+                    const content  = document.querySelector('#selectedRelatedPartyDisplay .search-result-display-content');
+                    if (display && content) {
+                        content.innerHTML = `<p><b>Seçilen İlgili Taraf:</b> ${this.selectedRelatedParty.name}
+                        <small class="text-muted">${this.selectedRelatedParty.email || ''}</small></p>`;
+                        display.style.display = 'flex';
+                    }
+                    const search = document.getElementById('relatedPartySearch');
+                    if (search) search.value = '';
+                    });
+                });
                 }
+
                 const closeAccrualBtn = document.getElementById('closeAccrualModal');
                 if (closeAccrualBtn) {
                     closeAccrualBtn.addEventListener('click', () => this.closeAccrualModal());
@@ -886,18 +876,7 @@ if (typeof this.renderDocuments === 'function') {
                         el.addEventListener('change', () => this.calculateTotalAmount());
                     }
                 });
-                const closePersonModal = document.getElementById('closeAddPersonModal');
-                if (closePersonModal) {
-                    closePersonModal.addEventListener('click', () => this.hideAddPersonModal());
-                }
-                const cancelPersonBtn = document.getElementById('cancelPersonBtn');
-                if (cancelPersonBtn) {
-                    cancelPersonBtn.addEventListener('click', () => this.hideAddPersonModal());
-                }
-                const savePersonBtn = document.getElementById('savePersonBtn');
-                if (savePersonBtn) {
-                    savePersonBtn.addEventListener('click', () => this.saveNewPerson());
-                }
+
                 const epatsFileUploadArea = document.getElementById('epatsFileUploadArea');
                 const epatsFileInput = document.getElementById('epatsFileInput');
                 if(epatsFileUploadArea) epatsFileUploadArea.addEventListener('click', () => epatsFileInput.click());
