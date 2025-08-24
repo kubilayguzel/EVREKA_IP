@@ -2823,11 +2823,87 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     console.log('✅ CreateTask başarıyla initialize edildi');
 });
-document.addEventListener('DOMContentLoaded', function() {
-    const cards = document.querySelectorAll('.section-card');
+// CreateTaskModule class'ını initialize et
+document.addEventListener('DOMContentLoaded', async () => {
+    console.log('🚀 DOM Content Loaded - CreateTask initialize ediliyor...');
     
-    cards.forEach(card => {
-        const content = card.innerHTML;
-        card.innerHTML = `<div class="card-content-wrapper">${content}</div>`;
+    // Shared layout'u yükle
+    await loadSharedLayout({ activeMenuLink: 'create-task.html' });
+    
+    ensurePersonModal();
+    // CreateTask instance'ını oluştur ve initialize et
+    const createTaskInstance = new CreateTaskModule();
+    
+    // Global erişim için (debugging amaçlı)
+    window.createTaskInstance = createTaskInstance;
+    
+    // Initialize et
+    await createTaskInstance.init();
+    
+    // Kart wrapper fonksiyonu
+    function wrapCardsWithContentWrapper() {
+        const cards = document.querySelectorAll('.section-card');
+        cards.forEach(card => {
+            // Eğer zaten wrapper eklenmiş ise skip et
+            if (card.querySelector('.card-content-wrapper')) {
+                return;
+            }
+            
+            const content = card.innerHTML;
+            card.innerHTML = `<div class="card-content-wrapper">${content}</div>`;
+        });
+    }
+    
+    // İlk yüklemede mevcut kartları sar
+    wrapCardsWithContentWrapper();
+    
+    // MutationObserver ile yeni eklenen kartları izle
+    const observer = new MutationObserver(function(mutations) {
+        let shouldRerun = false;
+        
+        mutations.forEach(function(mutation) {
+            if (mutation.type === 'childList') {
+                // Yeni .section-card eklendi mi kontrol et
+                mutation.addedNodes.forEach(function(node) {
+                    if (node.nodeType === 1) { // Element node
+                        if (node.classList && node.classList.contains('section-card')) {
+                            shouldRerun = true;
+                        }
+                        // İçinde .section-card var mı kontrol et
+                        else if (node.querySelectorAll) {
+                            const innerCards = node.querySelectorAll('.section-card');
+                            if (innerCards.length > 0) {
+                                shouldRerun = true;
+                            }
+                        }
+                    }
+                });
+            }
+        });
+        
+        if (shouldRerun) {
+            console.log('🔄 Yeni kartlar algılandı, wrapper ekleniyor...');
+            setTimeout(wrapCardsWithContentWrapper, 100); // Kısa bir delay ile
+        }
     });
+    
+    // conditionalFieldsContainer'ı ve form-container'ı izle
+    const conditionalContainer = document.getElementById('conditionalFieldsContainer');
+    const formContainer = document.querySelector('.form-container');
+    
+    if (conditionalContainer) {
+        observer.observe(conditionalContainer, {
+            childList: true,
+            subtree: true
+        });
+    }
+    
+    if (formContainer) {
+        observer.observe(formContainer, {
+            childList: true,
+            subtree: true
+        });
+    }
+    
+    console.log('✅ CreateTask başarıyla initialize edildi');
 });
