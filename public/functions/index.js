@@ -242,15 +242,15 @@ export const etebsProxyV2 = onRequest(
     }
 );
 // functions/index.js (veya ilgili dosyanız)
+import * as logger from 'firebase-functions/logger';
 import chromium from '@sparticuz/chromium';
 import puppeteer from 'puppeteer-core';
 
-// Chromium ayarları (CF v2 uyumlu)
 chromium.setHeadlessMode = true;
 chromium.setGraphicsMode = false;
 
-// === Yardımcılar ===
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const now = () => Date.now();
 
 function setCorsHeaders(res, origin = '*') {
   res.set('Access-Control-Allow-Origin', origin || '*');
@@ -259,13 +259,11 @@ function setCorsHeaders(res, origin = '*') {
 }
 
 async function enableLightMode(page) {
-  try {
-    await page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: 'light' }]);
-  } catch {}
+  try { await page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: 'light' }]); } catch {}
 }
 
-async function closeAnnounceModals(page, steps) {
-  const selectors = [
+async function closeAnnounceModals(page, log, rid) {
+  const sels = [
     '#onetrust-accept-btn-handler',
     '.ot-sdk-container .ot-pc-refuse-all-handler',
     '.cookiebar .close',
@@ -274,47 +272,41 @@ async function closeAnnounceModals(page, steps) {
     'button:has-text("Tamam")',
     'button:has-text("Anladım")',
   ];
-  for (const sel of selectors) {
+  for (const sel of sels) {
     try {
-      const el = await page.$(sel);
-      if (el) {
-        await el.click().catch(() => {});
-        steps.push({ step: 'closeAnnounceModals.click', selector: sel });
-        await sleep(200);
-      }
+      const h = await page.$(sel);
+      if (h) { await h.click().catch(()=>{}); log.push({ t: now(), step: 'cookie.close', sel }); logger.info('cookie.close', { rid, sel }); await sleep(150); }
     } catch {}
   }
 }
 
-// Görünürlük kontrolü
-async function isVisible(handle) {
-  if (!handle) return false;
-  const box = await handle.boundingBox();
+async function isVisible(h) {
+  if (!h) return false;
+  const box = await h.boundingBox();
   return !!box && box.width > 0 && box.height > 0;
 }
 
-// Sayfadaki ya da iframelerdeki bir selector'ü bulup handle + scope(frame/page) döndürür
-async function findInAllFrames(page, selectors, steps, { visibleOnly = true } = {}) {
+async function findInAllFrames(page, selectors, log, rid) {
   const frames = [page.mainFrame(), ...page.frames()];
   for (const frame of frames) {
     for (const sel of selectors) {
       try {
         const h = await frame.$(sel);
-        if (!h) continue;
-        if (!visibleOnly || (await isVisible(h))) {
-          steps.push({ step: 'findInAllFrames.found', frameUrl: frame.url(), selector: sel });
+        if (h && (await isVisible(h))) {
+          log.push({ t: now(), step: 'findInAllFrames.found', sel, frame: frame.url() });
+          logger.info('findInAllFrames.found', { rid, sel, frame: frame.url() });
           return { scope: frame, handle: h, selector: sel };
         }
       } catch {}
     }
   }
-  steps.push({ step: 'findInAllFrames.notFound', tried: selectors });
+  log.push({ t: now(), step: 'findInAllFrames.notFound', tried: selectors });
+  logger.warn('findInAllFrames.notFound', { rid, tried: selectors });
   return { scope: page, handle: null, selector: null };
 }
 
-// Placeholder / innerText’le input yakala (frame içinde çalışır)
-async function findApplicationNumberInput(scope, steps) {
-  // 1) Doğrudan selector listesi
+async function findApplicationNumberInput(scope, log, rid) {
+  // 1) Direkt selector’ler
   const direct = [
     'input[placeholder*="Başvuru"]',
     'input[placeholder*="Başvuru Numar"]',
@@ -329,78 +321,95 @@ async function findApplicationNumberInput(scope, steps) {
     try {
       const h = await scope.$(sel);
       if (h && (await isVisible(h))) {
-        steps.push({ step: 'findInput.direct', selector: sel });
+        log.push({ t: now(), step: 'findInput.direct', sel });
+        logger.info('findInput.direct', { rid, sel });
         return { handle: h, selector: sel };
       }
     } catch {}
   }
 
-  // 2) Tüm inputları gezip placeholder metnine göre eşle
+  // 2) Placeholder/name/id dokusu
   try {
     const h = await scope.evaluateHandle(() => {
       const cand = Array.from(document.querySelectorAll('input')).find((i) => {
         const ph = (i.getAttribute('placeholder') || '').toLowerCase();
         const name = (i.getAttribute('name') || '').toLowerCase();
         const id = (i.getAttribute('id') || '').toLowerCase();
-        const txt = [ph, name, id].join(' ');
+        const txt = `${ph} ${name} ${id}`;
         return (
           (ph && (ph.includes('başvuru') || ph.includes('numara') || ph.includes('dosya'))) ||
           name.includes('application') ||
-          id.includes('dosya') ||
-          id.includes('takip')
+          id.includes('dosya') || id.includes('takip')
         );
       });
       return cand || null;
     });
     if (h && (await isVisible(h))) {
-      steps.push({ step: 'findInput.placeholderMatch' });
+      log.push({ t: now(), step: 'findInput.placeholderMatch' });
+      logger.info('findInput.placeholderMatch', { rid });
       return { handle: h, selector: '<placeholderMatch>' };
     }
   } catch {}
 
-  steps.push({ step: 'findInput.notFound' });
+  log.push({ t: now(), step: 'findInput.notFound' });
+  logger.error('findInput.notFound', { rid });
   return { handle: null, selector: null };
 }
 
-async function clickQueryButton(scope, steps) {
-  // Önce yaygın buton selector’leri
-  const btnSelectors = [
+async function clickQueryButton(scope, log, rid) {
+  const btnSel = [
     'button[type="submit"]',
     '#sorgula',
     'button:has-text("Sorgula")',
     'button:has-text("Ara")',
     'button.MuiButton-root',
   ];
-  for (const sel of btnSelectors) {
+  for (const sel of btnSel) {
     try {
       const h = await scope.$(sel);
       if (h && (await isVisible(h))) {
         await h.click();
-        steps.push({ step: 'clickQueryButton.selector', selector: sel });
+        log.push({ t: now(), step: 'clickQueryButton.selector', sel });
+        logger.info('clickQueryButton.selector', { rid, sel });
         return true;
       }
     } catch {}
   }
-
-  // Bulamadıysak metinle ara
-  try {
-    const clicked = await scope.evaluate(() => {
-      const btns = Array.from(document.querySelectorAll('button'));
-      const b = btns.find((b) => /Sorgula|Ara/i.test(b.textContent || ''));
-      if (b) {
-        (b).click();
-        return true;
-      }
-      return false;
-    });
-    if (clicked) {
-      steps.push({ step: 'clickQueryButton.textMatch' });
-      return true;
-    }
-  } catch {}
-
-  steps.push({ step: 'clickQueryButton.notFound' });
+  const clicked = await scope.evaluate(() => {
+    const btns = Array.from(document.querySelectorAll('button'));
+    const b = btns.find((b) => /Sorgula|Ara/i.test(b.textContent || ''));
+    if (b) { (b).click(); return true; }
+    return false;
+  }).catch(()=>false);
+  if (clicked) {
+    log.push({ t: now(), step: 'clickQueryButton.textMatch' });
+    logger.info('clickQueryButton.textMatch', { rid });
+    return true;
+  }
+  log.push({ t: now(), step: 'clickQueryButton.notFound' });
+  logger.error('clickQueryButton.notFound', { rid });
   return false;
+}
+
+// Adım sarmalayıcı: süre, hata, screenshot
+async function withStep(name, page, rid, log, fn) {
+  const start = now();
+  logger.info(`STEP.start:${name}`, { rid });
+  log.push({ t: start, step: `start:${name}` });
+  try {
+    const out = await fn();
+    const end = now();
+    logger.info(`STEP.end:${name}`, { rid, ms: end - start });
+    log.push({ t: end, step: `end:${name}`, ms: end - start });
+    return out;
+  } catch (err) {
+    let shot = '';
+    try { shot = await page.screenshot({ type: 'png', encoding: 'base64', fullPage: true }); } catch {}
+    const end = now();
+    logger.error(`STEP.fail:${name}`, { rid, ms: end - start, error: String(err?.message || err) });
+    log.push({ t: end, step: `fail:${name}`, ms: end - start, error: String(err?.message || err), screenshot: !!shot });
+    throw Object.assign(err, { __step__: name, __screenshot__: shot });
+  }
 }
 
 export const tpQueryV2 = onRequest(
@@ -412,8 +421,10 @@ export const tpQueryV2 = onRequest(
     if (req.method !== 'POST' && req.method !== 'GET')
       return res.status(405).json({ ok: false, error: 'Method not allowed' });
 
-    const steps = []; // adım adım debug log
-    let browser;
+    const rid = (Math.random().toString(36).slice(2, 8) + '-' + Date.now()); // log korelasyonu
+    const steps = [];
+    const net = { responses: [], fails: [] };
+    let browser, page;
 
     try {
       const isGet = req.method === 'GET';
@@ -421,229 +432,153 @@ export const tpQueryV2 = onRequest(
       const applicationNumber = String(raw.applicationNumber || raw.number || raw.no || '').trim();
       if (!applicationNumber) return res.status(400).json({ ok: false, error: 'applicationNumber gerekli' });
 
-      steps.push({ step: 'input', applicationNumber });
+      logger.info('tpQueryV2.start', { rid, method: req.method, applicationNumber });
+      steps.push({ t: now(), step: 'request.start', rid, applicationNumber });
 
       browser = await puppeteer.launch({
         executablePath: await chromium.executablePath(),
-        headless: chromium.headless, // Functions ortamında headless olmalı
+        headless: chromium.headless,
         args: [
           ...chromium.args,
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
-          '--disable-dev-shm-usage',
-          '--disable-gpu',
+          '--no-sandbox','--disable-setuid-sandbox','--disable-dev-shm-usage','--disable-gpu'
         ],
         defaultViewport: { width: 1366, height: 900 },
       });
 
-      const page = await browser.newPage();
+      page = await browser.newPage();
       await enableLightMode(page);
       await page.setExtraHTTPHeaders({ 'Accept-Language': 'tr-TR,tr;q=0.9,en-US;q=0.8' });
-      await page.setUserAgent(
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
-      );
+      await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122 Safari/537.36');
       page.setDefaultNavigationTimeout(120000);
       page.setDefaultTimeout(120000);
 
-      // Ağ logları (hangi endpoint’te beklediğimizi görmek için)
-      let last200 = null;
-      page.on('response', async (resp) => {
+      // Browser console ve network’ü sunucu loguna aynala
+      page.on('console', (msg) => logger.info('BROWSER.CONSOLE', { rid, type: msg.type(), text: msg.text() }));
+      page.on('pageerror', (err) => logger.error('BROWSER.PAGEERROR', { rid, error: String(err?.message || err) }));
+      page.on('response', (resp) => {
+        const u = resp.url();
+        if (/turkpatent|arastirma|marka|search|sorgu/i.test(u)) {
+          net.responses.push({ url: u, status: resp.status() });
+          logger.info('NET.RESP', { rid, status: resp.status(), url: u });
+        }
+      });
+      page.on('requestfailed', (reqi) => {
+        net.fails.push({ url: reqi.url(), err: reqi.failure()?.errorText });
+        logger.warn('NET.FAIL', { rid, url: reqi.url(), err: reqi.failure()?.errorText });
+      });
+
+      const url = 'https://turkpatent.gov.tr/arastirma-yap?form=trademark';
+
+      await withStep('goto', page, rid, steps, async () => {
+        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
+      });
+
+      await withStep('closeModals', page, rid, steps, async () => {
+        await closeAnnounceModals(page, steps, rid);
+      });
+
+      // Dosya Takibi sekmesi (varsa)
+      await withStep('activateTab', page, rid, steps, async () => {
         try {
-          if (resp.ok()) {
-            last200 = { url: resp.url(), status: resp.status(), ts: Date.now() };
+          await page.waitForSelector('button[role="tab"], .MuiTab-root', { timeout: 5000 });
+          const clicked = await page.evaluate(() => {
+            const tabs = Array.from(document.querySelectorAll('button[role="tab"], .MuiTab-root'));
+            const btn = tabs.find((b) => /Dosya Takibi/i.test(b.textContent || ''));
+            if (btn) { (btn).click(); return true; }
+            return false;
+          });
+          if (clicked) {
+            await page.waitForFunction(() => {
+              const tab = Array.from(document.querySelectorAll('button[role="tab"], .MuiTab-root'))
+                .find((b) => /Dosya Takibi/i.test(b.textContent || ''));
+              return !!tab && (tab.getAttribute('aria-selected') === 'true' || tab.classList.contains('Mui-selected'));
+            }, { timeout: 10000 }).catch(()=>{});
+            await sleep(250);
           }
         } catch {}
       });
 
-      // 1) Sayfaya git
-      const url = 'https://turkpatent.gov.tr/arastirma-yap?form=trademark';
-      steps.push({ step: 'goto.start', url });
-      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
-      steps.push({ step: 'goto.done' });
+      // Input’u bul
+      let scope = page, inputHandle = null, usedInputSelector = null;
+      await withStep('findInput', page, rid, steps, async () => {
+        const primarySels = [
+          'input[placeholder*="Başvuru"]',
+          'input[placeholder*="Başvuru Numar"]',
+          'input[placeholder*="Başvuru No"]',
+          'input[name="dosyaTakipNo"]',
+          'input#dosyaTakipNo',
+          'input[name*="application"]',
+          'input.MuiInputBase-input',
+          'input.MuiInput-input',
+        ];
+        let r = await findInAllFrames(page, primarySels, steps, rid);
+        scope = r.scope; inputHandle = r.handle; usedInputSelector = r.selector;
 
-      // 2) KVKK / cookie banner kapat
-      await closeAnnounceModals(page, steps);
-
-      // 3) "Dosya Takibi" sekmesi varsa tıkla (yoksa sorun değil; bazı görünümlerde default olabilir)
-      try {
-        await page.waitForSelector('button[role="tab"], .MuiTab-root', { timeout: 5000 });
-        const clicked = await page.evaluate(() => {
-          const tabs = Array.from(document.querySelectorAll('button[role="tab"], .MuiTab-root'));
-          const btn = tabs.find((b) => /Dosya Takibi/i.test(b.textContent || ''));
-          if (btn) {
-            (btn).click();
-            return true;
-          }
-          return false;
-        });
-        steps.push({ step: 'tab.clickAttempt', clicked });
-        if (clicked) {
-          await page.waitForFunction(() => {
-            const tab = Array.from(document.querySelectorAll('button[role="tab"], .MuiTab-root')).find((b) =>
-              /Dosya Takibi/i.test(b.textContent || '')
-            );
-            return !!tab && (tab.getAttribute('aria-selected') === 'true' || tab.classList.contains('Mui-selected'));
-          }, { timeout: 10000 }).catch(() => {});
-          await sleep(300);
-          steps.push({ step: 'tab.activated' });
-        }
-      } catch {
-        steps.push({ step: 'tab.notFound' });
-      }
-
-      // 4) Input’u bul (sayfa+iframe’ler)
-      const inputSearchSelectors = [
-        'input[placeholder*="Başvuru"]',
-        'input[placeholder*="Başvuru Numar"]',
-        'input[placeholder*="Başvuru No"]',
-        'input[name="dosyaTakipNo"]',
-        'input#dosyaTakipNo',
-        'input[name*="application"]',
-        'input.MuiInputBase-input',
-        'input.MuiInput-input',
-      ];
-
-      // Önce selector’lerle hızlı tarama
-      let { scope, handle: inputHandle, selector: matchedInputSelector } = await findInAllFrames(
-        page,
-        inputSearchSelectors,
-        steps,
-        { visibleOnly: true }
-      );
-
-      // Bulamazsak placeholder metni ile dene
-      if (!inputHandle) {
-        // Tüm frame’lerde metin taraması
-        const frames = [page.mainFrame(), ...page.frames()];
-        for (const f of frames) {
-          const r = await findApplicationNumberInput(f, steps);
-          if (r.handle) {
-            scope = f;
-            inputHandle = r.handle;
-            matchedInputSelector = r.selector;
-            break;
+        if (!inputHandle) {
+          const frames = [page.mainFrame(), ...page.frames()];
+          for (const f of frames) {
+            const rr = await findApplicationNumberInput(f, steps, rid);
+            if (rr.handle) { scope = f; inputHandle = rr.handle; usedInputSelector = rr.selector; break; }
           }
         }
-      }
+        if (!inputHandle) throw new Error('Başvuru Numarası inputu bulunamadı');
+      });
 
-      if (!inputHandle) {
-        // Hata öncesi ekran görüntüsü
-        let shot = '';
-        try {
-          shot = await page.screenshot({ type: 'png', encoding: 'base64', fullPage: true });
-        } catch {}
-        steps.push({ step: 'error.noInput' });
-        return res.status(500).json({
-          ok: false,
-          error: 'Form alanı bulunamadı (Başvuru Numarası).',
-          steps,
-          screenshot: shot,
-          last200,
-        });
-      }
+      // Numarayı yaz
+      await withStep('typeNumber', page, rid, steps, async () => {
+        try { await inputHandle.click({ clickCount: 3 }); } catch {}
+        try { await inputHandle.press('Backspace'); } catch {}
+        await inputHandle.type(applicationNumber, { delay: 20 });
+      });
 
-      // 5) Numarayı yaz
-      try { await inputHandle.click({ clickCount: 3 }); } catch {}
-      try { await inputHandle.press('Backspace'); } catch {}
-      await inputHandle.type(applicationNumber, { delay: 25 });
-      steps.push({ step: 'typed.applicationNumber', matchedInputSelector });
+      // Sorgula
+      await withStep('clickQuery', page, rid, steps, async () => {
+        const ok = await clickQueryButton(scope, steps, rid);
+        if (!ok) { try { await scope.keyboard.press('Enter'); logger.info('pressEnter.fallback', { rid }); } catch {} }
+      });
 
-      // 6) SORGULA
-      const clicked = await clickQueryButton(scope, steps);
-      if (!clicked) {
-        // Enter fallback
-        try { await scope.keyboard.press('Enter'); steps.push({ step: 'pressEnter.fallback' }); } catch {}
-      }
-
-      // 7) Navigation + XHR beraber bekle
-      let xhrOk = false;
-      const xhrWait = page
-        .waitForResponse(
-          (r) =>
-            /sorgu|search|query|dosya|trademark/i.test(r.url()) &&
-            r.status() === 200,
+      // Navigation + XHR beklemeleri birlikte
+      await withStep('waitResults', page, rid, steps, async () => {
+        const xhr = page.waitForResponse(
+          r => /sorgu|search|query|dosya|trademark/i.test(r.url()) && r.status() === 200,
           { timeout: 60000 }
-        )
-        .then((r) => {
-          xhrOk = true;
-          steps.push({ step: 'waitForResponse.ok', url: r.url(), status: r.status() });
-        })
-        .catch(() => steps.push({ step: 'waitForResponse.timeout' }));
+        ).catch(()=>null);
+        const nav = page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 60000 }).catch(()=>null);
+        await Promise.race([Promise.allSettled([xhr, nav]), sleep(65000)]);
+      });
 
-      const navWait = page
-        .waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 60000 })
-        .then(() => steps.push({ step: 'waitForNavigation.ok' }))
-        .catch(() => steps.push({ step: 'waitForNavigation.timeout' }));
-
-      await Promise.race([Promise.allSettled([xhrWait, navWait]), sleep(65000)]);
-
-      // 8) Sonuç konteynerlerini ara
+      // Sonuç alanı
       const RESULTS_SEL =
         '#search-results, div[id*="search-results"], div[id*="searchresults"], div[id*="result-list"], div[id*="results"], .MuiDataGrid-virtualScroller, table';
 
-      // Önce element oluşsun
-      let resultsHandle = null;
-      try {
-        await page.waitForFunction((sel) => !!document.querySelector(sel), { timeout: 60000 }, RESULTS_SEL);
-        resultsHandle = await page.$(RESULTS_SEL);
-        steps.push({ step: 'results.containerFound', selector: RESULTS_SEL });
-      } catch {
-        steps.push({ step: 'results.containerNotFound' });
-      }
-
-      // Spinner kaybolup içerik dolsun
-      if (resultsHandle) {
+      let html = '', screenshot = '';
+      await withStep('grabResults', page, rid, steps, async () => {
+        await page.waitForFunction((sel) => !!document.querySelector(sel), { timeout: 60000 }, RESULTS_SEL).catch(()=>{});
+        html = await page.evaluate((sel) => {
+          const el = document.querySelector(sel);
+          return el ? el.innerHTML : document.body.innerHTML;
+        }, RESULTS_SEL);
         try {
-          await page.waitForFunction(
-            (sel) => {
-              const el = document.querySelector(sel);
-              if (!el) return false;
-              const hasSpinner = !!el.querySelector('.MuiCircularProgress-root,[role="progressbar"]');
-              const txt = (el.textContent || '').trim();
-              return !hasSpinner && txt.length > 0;
-            },
-            { timeout: 60000 },
-            RESULTS_SEL
-          );
-          steps.push({ step: 'results.contentReady' });
-        } catch {
-          steps.push({ step: 'results.contentTimeout' });
-        }
-      }
-
-      // 9) HTML ve ekran görüntüsü
-      const html = await page.evaluate((sel) => {
-        const el = document.querySelector(sel);
-        return el ? el.innerHTML : document.body.innerHTML; // fallback
-      }, RESULTS_SEL);
-
-      let screenshot = '';
-      try {
-        const h = await page.$(RESULTS_SEL);
-        if (h) screenshot = await h.screenshot({ type: 'png', encoding: 'base64' });
-        else screenshot = await page.screenshot({ type: 'png', encoding: 'base64', fullPage: true });
-      } catch {
-        try { screenshot = await page.screenshot({ type: 'png', encoding: 'base64', fullPage: true }); } catch {}
-      }
-
-      return res.json({ ok: true, html, screenshot, steps, last200, usedInputSelector: matchedInputSelector });
-    } catch (err) {
-      let failShot = '';
-      try { if (browser?.pages) { const p = (await browser.pages?.())[0]; if (p) failShot = await p.screenshot({ type: 'png', encoding: 'base64', fullPage: true }); } } catch {}
-      console.error('tpQueryV2 error:', err);
-      return res.status(500).json({
-        ok: false,
-        error: 'Automation failed',
-        message: String(err?.message || err),
-        steps,
-        screenshot: failShot,
+          const h = await page.$(RESULTS_SEL);
+          if (h) screenshot = await h.screenshot({ type: 'png', encoding: 'base64' });
+          else screenshot = await page.screenshot({ type: 'png', encoding: 'base64', fullPage: true });
+        } catch {}
       });
+
+      logger.info('tpQueryV2.success', { rid, htmlLen: (html||'').length, usedInputSelector, netCount: net.responses.length });
+      return res.json({ ok: true, rid, usedInputSelector, html, screenshot, steps, net });
+    } catch (err) {
+      const message = String(err?.message || err);
+      const step = err?.__step__ || 'unknown';
+      const shot = err?.__screenshot__ || '';
+      logger.error('tpQueryV2.fail', { rid, step, message });
+      return res.status(500).json({ ok: false, rid, step, message, steps, screenshot: shot, net });
     } finally {
-      try { await browser?.close(); } catch (e) { console.error('browser close error:', e); }
+      try { await browser?.close(); } catch (e) { logger.error('browser.close.error', { rid, e: String(e) }); }
+      logger.info('tpQueryV2.end', { rid });
     }
   }
 );
-
 // Health Check Function (v2 sözdizimi)
 export const etebsProxyHealthV2 = onRequest(
     {
