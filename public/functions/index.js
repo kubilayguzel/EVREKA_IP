@@ -115,6 +115,22 @@ const transporter = nodemailer.createTransport({
     pass: "rqvl tpbm vkmu lmxi"
   }
 });
+// --- CORS allowlist --- //
+const ALLOWED_ORIGINS = new Set([
+  'https://ip-manager-production-aab4b.web.app',
+  'https://ip-manager-production-aab4b.firebaseapp.com',
+  'http://localhost:5000',
+]);
+
+function setCors(res, origin) {
+  if (ALLOWED_ORIGINS.has(origin)) {
+    res.set('Access-Control-Allow-Origin', origin);
+  }
+  res.set('Vary', 'Origin');
+  res.set('Access-Control-Allow-Headers', 'Content-Type');
+  res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+}
+
 
 // =========================================================
 //              HTTPS FONKSİYONLARI (v2)
@@ -226,89 +242,124 @@ export const etebsProxyV2 = onRequest(
         });
     }
 );
+
+const ALLOWED = new Set([
+  'https://ip-manager-production-aab4b.web.app',
+  'https://ip-manager-production-aab4b.firebaseapp.com',
+  'http://localhost:5000'
+]);
+
+function corsHandler(req, res, next) {
+  const origin = req.headers.origin;
+  if (ALLOWED.has(origin)) res.set('Access-Control-Allow-Origin', origin);
+  res.set('Vary', 'Origin');
+  res.set('Access-Control-Allow-Headers', 'Content-Type');
+  res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  if (req.method === 'OPTIONS') return res.status(204).send('');
+  return next();
+}
+
+import puppeteer from 'puppeteer';
+import { onRequest } from 'firebase-functions/v2/https';
 import puppeteer from 'puppeteer';
 
 export const tpQueryV2 = onRequest(
-  {
-    region: 'europe-west1',
-    timeoutSeconds: 180,
-    memory: '1GiB',
-  },
+  { region: 'europe-west1', timeoutSeconds: 180, memory: '1GiB' },
   async (req, res) => {
-    return corsHandler(req, res, async () => {
-      try {
-        // İstekten parametreleri al
-        const isGet = req.method === 'GET';
-        const { type = 'application', number } = isGet ? req.query : (req.body || {});
-        if (!number) {
-          return res.status(400).json({ ok: false, error: 'number gerekli' });
-        }
+    const origin = req.headers.origin || '';
+    setCorsHeaders(res, origin);
 
-        const browser = await puppeteer.launch({
-          headless: 'new',
-          args: ['--no-sandbox', '--disable-setuid-sandbox'],
-        });
-        const page = await browser.newPage();
+    // Preflight
+    if (req.method === 'OPTIONS') {
+      return res.status(204).send('');
+    }
 
-        // Marka formu + Dosya Takibi sekmesi
-        await page.goto('https://www.turkpatent.gov.tr/arastirma-yap?form=trademark', {
-          waitUntil: 'networkidle2',
-          timeout: 60000,
-        });
+    if (req.method !== 'POST' && req.method !== 'GET') {
+      return res.status(405).json({ ok: false, error: 'Method not allowed' });
+    }
 
-        // "Dosya Takibi" sekmesini tıkla (gerekirse)
-        await page.evaluate(() => {
-          const tabs = Array.from(document.querySelectorAll('button[role="tab"], .MuiTab-root'));
-          const btn = tabs.find(b => /Dosya Takibi/i.test(b.textContent || ''));
-          btn?.click();
-        });
-
-        // Hangi alana yazacağımızı seçelim
-        const fieldSelector =
-          {
-            application: 'input[placeholder="Başvuru Numarası"]',
-            document: 'input[placeholder="Evrak Numarası"]',
-            registration: 'input[placeholder="Tescil Numarası"]',
-            intl: 'input[placeholder="Uluslararası Tescil Numarası"]',
-          }[String(type).toLowerCase()] || 'input[placeholder="Başvuru Numarası"]';
-
-        await page.waitForSelector(fieldSelector, { timeout: 30000 });
-        await page.type(fieldSelector, String(number), { delay: 25 });
-
-        // "Sorgula" butonunu bulup tıkla
-        await page.evaluate(() => {
-          const btns = Array.from(document.querySelectorAll('button'));
-          const q = btns.find(b => /Sorgula/i.test(b.textContent || ''));
-          q?.click();
-        });
-
-        // Sonuç alanı dolana kadar bekle
-        await page.waitForSelector('#search-results', { timeout: 60000 });
-        await page.waitForFunction(
-          () => {
-            const el = document.querySelector('#search-results');
-            return el && el.textContent && el.textContent.trim().length > 0;
-          },
-          { timeout: 60000 }
-        );
-
-        // HTML ve küçük ekran görüntüsü döndür
-        const html = await page.evaluate(() => {
-          const el = document.querySelector('#search-results');
-          return el ? el.innerHTML : '';
-        });
-        const screenshot = await page.screenshot({ type: 'png', encoding: 'base64', fullPage: false });
-
-        await browser.close();
-        return res.json({ ok: true, html, screenshot });
-      } catch (err) {
-        console.error('tpQueryV2 error:', err);
-        try { await browser?.close(); } catch {}
-        return res.status(500).json({ ok: false, error: 'Automation failed', message: String(err?.message || err) });
+    let browser; // dışarıda tanımla ki catch/finally içinde kapatabilelim
+    try {
+      // Parametreleri al
+      const isGet = req.method === 'GET';
+      const { type = 'application', number } = isGet ? req.query : (req.body || {});
+      if (!number) {
+        return res.status(400).json({ ok: false, error: 'number gerekli' });
       }
-    });
+
+      browser = await puppeteer.launch({
+        headless: 'new',
+        args: ['--no-sandbox', '--disable-setuid-sandbox'],
+      });
+      const page = await browser.newPage();
+
+      // Marka formu + Dosya Takibi sekmesi
+      await page.goto('https://turkpatent.gov.tr/arastirma-yap?form=trademark', {
+        waitUntil: 'networkidle2',
+        timeout: 60000,
+      });
+
+      // "Dosya Takibi" sekmesini tıkla
+      await page.evaluate(() => {
+        const tabs = Array.from(document.querySelectorAll('button[role="tab"], .MuiTab-root'));
+        const btn = tabs.find(b => /Dosya Takibi/i.test(b.textContent || ''));
+        btn?.click();
+      });
+
+      // Alan seç
+      const fieldSelector =
+        {
+          application: 'input[placeholder="Başvuru Numarası"]',
+          document: 'input[placeholder="Evrak Numarası"]',
+          registration: 'input[placeholder="Tescil Numarası"]',
+          intl: 'input[placeholder="Uluslararası Tescil Numarası"]',
+        }[String(type).toLowerCase()] || 'input[placeholder="Başvuru Numarası"]';
+
+      await page.waitForSelector(fieldSelector, { timeout: 30000 });
+      await page.type(fieldSelector, String(number), { delay: 25 });
+
+      // "Sorgula" butonu
+      await page.evaluate(() => {
+        const btns = Array.from(document.querySelectorAll('button'));
+        const q = btns.find(b => /Sorgula/i.test(b.textContent || ''));
+        q?.click();
+      });
+
+      // Sonuç alanını bekle
+      await page.waitForSelector('#search-results', { timeout: 60000 });
+      await page.waitForFunction(
+        () => {
+          const el = document.querySelector('#search-results');
+          return el && el.textContent && el.textContent.trim().length > 0;
+        },
+        { timeout: 60000 }
+      );
+
+      // HTML + screenshot
+      const html = await page.evaluate(() => {
+        const el = document.querySelector('#search-results');
+        return el ? el.innerHTML : '';
+      });
+      const screenshot = await page.screenshot({
+        type: 'png',
+        encoding: 'base64',
+        fullPage: false,
+      });
+
+      return res.json({ ok: true, html, screenshot });
+    } catch (err) {
+      console.error('tpQueryV2 error:', err);
+      return res.status(500).json({
+        ok: false,
+        error: 'Automation failed',
+        message: String(err?.message || err),
+      });
+    } finally {
+      try { await browser?.close(); } catch {}
+    }
   }
 );
+
 // Health Check Function (v2 sözdizimi)
 export const etebsProxyHealthV2 = onRequest(
     {
