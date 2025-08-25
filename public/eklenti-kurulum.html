@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Evreka IP Sorgu Yardımcısı Kurulumu</title>
+  <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css"/>
+  <link rel="stylesheet" href="./css/shared-styles.css"/>
+  <style>
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+    .install-card {
+      max-width: 600px;
+      width: 100%;
+      background: #fff;
+      border-radius: 16px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+      border: none;
+      text-align: center;
+      padding: 40px 30px;
+    }
+    .install-card h2 {
+      color: #1e3c72;
+      font-weight: 700;
+      margin-bottom: 15px;
+    }
+    .install-card p {
+      color: #555;
+      font-size: 1.1rem;
+      margin-bottom: 30px;
+    }
+    .install-button {
+      font-size: 1.2rem;
+      font-weight: 600;
+      padding: 12px 30px;
+      border-radius: 8px;
+      background-color: #28a745; /* Yeşil - Güven rengi */
+      border-color: #28a745;
+      color: #fff;
+      transition: all 0.3s ease;
+    }
+    .install-button:hover {
+      background-color: #218838;
+      border-color: #1e7e34;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3);
+    }
+    .info-list {
+      text-align: left;
+      margin-top: 40px;
+      color: #666;
+      font-size: 0.9rem;
+    }
+    .info-list li {
+      margin-bottom: 10px;
+      padding-left: 25px;
+      position: relative;
+    }
+    .info-list li::before {
+      content: '✓';
+      color: #28a745;
+      font-weight: bold;
+      position: absolute;
+      left: 0;
+      top: 2px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="install-card">
+    <img src="https://path/to/your/logo.svg" alt="Evreka IP Logo" width="80" class="mb-4">
+    <h2>Yardımcı Eklenti Kurulumu Gerekli</h2>
+    <p>
+      TÜRKPATENT sitesinden anlık ve otomatik sorgulama yapabilmek için
+      tarayıcınıza **"Evreka IP Sorgu Yardımcısı"** eklentisini güvenle kurmanız gerekmektedir.
+    </p>
+
+    <a id="installLink" href="BURAYA_CHROME_WEB_MAGAZASI_LINKI_GELECEK" class="btn btn-success install-button" target="_blank">
+      Chrome Web Mağazası'ndan Güvenle Yükle
+    </a>
+
+    <ul class="info-list">
+      <li>Eklenti, sadece TÜRKPATENT sitesinde çalışmak üzere tasarlanmıştır.</li>
+      <li>Kurulum tek tıkla tamamlanır ve güncellemeler otomatiktir.</li>
+      <li>Kişisel verilerinize veya tarama geçmişinize asla erişmez.</li>
+    </ul>
+  </div>
+
+  <script>
+    // Kullanıcı bu sayfaya geldiğinde, linkin boş olmadığını kontrol edelim.
+    const installLink = document.getElementById('installLink');
+    if (installLink.href.includes('BURAYA_CHROME_WEB_MAGAZASI_LINKI_GELECEK')) {
+        installLink.textContent = 'Kurulum Linki Henüz Ayarlanmadı';
+        installLink.classList.remove('btn-success');
+        installLink.classList.add('btn-secondary');
+        installLink.style.pointerEvents = 'none';
+    }
+  </script>
+
+</body>
+</html>
