@@ -1,0 +1,27 @@
+{
+  "manifest_version": 3,
+  "name": "Evreka IP Sorgu Yardımcısı",
+  "version": "1.0",
+  "description": "Evreka IP uygulamasından TÜRKPATENT üzerinde otomatik sorgulama yapar.",
+  "permissions": [
+    "tabs"
+  ],
+  "host_permissions": [
+    "*://arastirma.turkpatent.gov.tr/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["*://arastirma.turkpatent.gov.tr/tr/marka/arama*"],
+      "js": ["content_script.js"]
+    }
+  ],
+  "externally_connectable": {
+    "matches": [
+      "http://localhost:*/*",
+      "https://ip-manager-production-aab4b.web.app/*"
+    ]
+  }
+}
