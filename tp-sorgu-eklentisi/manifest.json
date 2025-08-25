@@ -8,6 +8,8 @@
   ],
   "host_permissions": [
     "*://arastirma.turkpatent.gov.tr/*"
+    "*https://www.turkpatent.gov.tr/arastirma-yap?form=trademark/*"
+    
   ],
   "background": {
     "service_worker": "background.js"
