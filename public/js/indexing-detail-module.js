@@ -29,8 +29,8 @@ import {
 const UNINDEXED_PDFS_COLLECTION = 'unindexed_pdfs';
 
 // Selcan'ın bilgileri
-const SELCAN_UID = '5GD0KCpyeVUneDJq4pP0yxZEP6r1';
-const SELCAN_EMAIL = 'selcan@gmail.com';
+const SELCAN_UID = 'NLEZpWsYlKUCeq2bZlbHNV8XypL2';
+const SELCAN_EMAIL = 'selcanakoglu@evrekapatent.com';
 
 export class IndexingDetailModule {
     constructor() {
