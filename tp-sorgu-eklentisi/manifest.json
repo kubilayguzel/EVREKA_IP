@@ -9,8 +9,7 @@
   "host_permissions": [
     "*://arastirma.turkpatent.gov.tr/*",
     "*://www.turkpatent.gov.tr/*",
-    "https://kubilayguzel.github.io/*"
-    
+       
   ],
   "background": {
     "service_worker": "background.js"
@@ -24,7 +23,8 @@
   "externally_connectable": {
     "matches": [
       "http://localhost:*/*",
-      "https://ip-manager-production-aab4b.web.app/*"
+      "https://ip-manager-production-aab4b.web.app/*",
+    "https://kubilayguzel.github.io/*"
     ]
   }
 }
