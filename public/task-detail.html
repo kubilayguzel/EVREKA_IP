@@ -1805,47 +1805,6 @@ document.addEventListener('DOMContentLoaded', function(){
 });
 
 </script>
-<script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
-  import { getFirestore, doc, writeBatch, Timestamp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
-
-  const app = initializeApp(firebaseConfig);
-  const db = getFirestore(app);
-
-  async function seedTaskAssignments() {
-    try {
-      // JSON dosyası dashboard.html’in bir üstünde olduğu için ../ kullanıyoruz
-      const res = await fetch("../taskAssignments.json");
-      if (!res.ok) throw new Error("JSON dosyası bulunamadı: " + res.status);
-      const data = await res.json();
-
-      const chunkSize = 400; // Firestore batch limiti
-      for (let i = 0; i < data.length; i += chunkSize) {
-        const batch = writeBatch(db);
-        const slice = data.slice(i, i + chunkSize);
-
-        slice.forEach(item => {
-          const ref = doc(db, "taskAssignments", String(item.transactionTypeId));
-          batch.set(ref, {
-            ...item,
-            assigneeIds: Array.isArray(item.assigneeIds) ? item.assigneeIds : [item.assigneeIds],
-            updatedAt: Timestamp.fromDate(new Date(item.updatedAt))
-          });
-        });
-
-        await batch.commit();
-        console.log(`✔ ${i + slice.length}/${data.length} kayıt Firestore'a yazıldı`);
-      }
-
-      console.log("🎉 taskAssignments yükleme tamamlandı");
-    } catch (err) {
-      console.error("❌ Hata:", err);
-    }
-  }
-
-  seedTaskAssignments();
-</script>
-
 
 </body>
 </html>
