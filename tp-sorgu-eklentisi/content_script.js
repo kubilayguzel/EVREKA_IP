@@ -1,6 +1,5 @@
 // background.js'den gelecek mesajları dinle
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  // Gelen mesajın bizim beklediğimiz 'AUTO_FILL' tipinde olup olmadığını kontrol et.
   if (request.type === 'AUTO_FILL' && request.data) {
     const basvuruNo = request.data;
     console.log(`Otomatik doldurma komutu alındı: ${basvuruNo}`);
@@ -16,21 +15,32 @@ function runAutomation(basvuruNo) {
     return;
   }
 
-  // Bu sayfadaki 'Başvuru Numarası' alanı farklı bir yapıya sahip olabilir.
-  // Geliştirici araçları ile doğru seçiciyi bulmak gerekebilir.
-  // Varsayılan olarak bir ID veya name attribute'u arayalım.
-  const applicationNoInput = document.querySelector('#basvuruNo'); // Örnek ID, gerekirse değiştirilmeli
-  const searchButton = document.querySelector('#sorgula'); // Örnek ID, gerekirse değiştirilmeli
+  // DOĞRU SEÇİCİLER:
+  // TÜRKPATENT'in "Marka Araştırma" formundaki "Başvuru Numarası" alanının seçicisi
+  const applicationNoInput = document.querySelector('input[name="trademark.applicationNumber"]');
+  
+  // Formun içindeki "Ara" butonunun seçicisi
+  const searchButton = document.querySelector('button.btn-primary[type="submit"]');
 
   if (applicationNoInput && searchButton) {
-    console.log(`Başvuru Numarası bulundu: ${basvuruNo}. Forma yazılıyor...`);
+    console.log(`Başvuru Numarası alanı bulundu. Değer yazılıyor: ${basvuruNo}`);
+    
+    // Değeri alana yaz
     applicationNoInput.value = basvuruNo;
 
-    console.log('Sorgula butonuna tıklanıyor...');
+    console.log('Ara butonuna tıklanıyor...');
+
+    // Arama butonuna tıkla
     searchButton.click();
+
   } else {
-    console.error('TÜRKPATENT sayfasında başvuru numarası alanı veya sorgula butonu bulunamadı.');
-    if(!applicationNoInput) console.error("Input alanı bulunamadı. Seçici: '#basvuruNo'");
-    if(!searchButton) console.error("Buton bulunamadı. Seçici: '#sorgula'");
+    // Eğer elemanlar bulunamazsa, bu hata ayıklama için çok önemlidir.
+    console.error('TÜRKPATENT sayfasında form elemanları bulunamadı. Sitenin yapısı değişmiş olabilir.');
+    if (!applicationNoInput) {
+      console.error("Başvuru Numarası alanı bulunamadı. Kontrol edilen seçici: 'input[name=\"trademark.applicationNumber\"]'");
+    }
+    if (!searchButton) {
+      console.error("Ara butonu bulunamadı. Kontrol edilen seçici: 'button.btn-primary[type=\"submit\"]'");
+    }
   }
 }
