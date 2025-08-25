@@ -1,118 +1,124 @@
 // =============================
-// Evreka IP - Turkpatent Otomasyon Content Script
+// Evreka IP - Turkpatent Otomasyon (hızlı sürüm)
 // =============================
 
-// Durum yönetimi
-let automationState = 'IDLE'; // IDLE, WAITING_FOR_MODAL, WAITING_FOR_TAB, WAITING_FOR_FORM, DONE
 let targetBasvuruNo = null;
-let mainInterval = null;
 
-// background.js'den mesaj dinle
+// background.js'den komutu al
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.type === 'AUTO_FILL' && request.data) {
-    console.log('[Evreka Eklenti] BAŞLAT -> Başvuru No:', request.data);
     targetBasvuruNo = request.data;
-    automationState = 'WAITING_FOR_MODAL';
-
-    if (mainInterval) clearInterval(mainInterval);
-    mainInterval = setInterval(runAutomationSequence, 1000);
-
+    runAutomation().catch(err => console.error('[Evreka Eklenti] Hata:', err));
     sendResponse({ status: 'OK' });
   }
   return true;
 });
 
-// Yardımcılar
-function clickIfVisible(el) {
-  try {
-    if (!el) return false;
-    const rect = el.getBoundingClientRect();
-    if (rect.width > 0 && rect.height > 0) {
-      el.click();
-      return true;
-    }
-  } catch (e) {}
+// -------------- Yardımcılar --------------
+function waitFor(selector, { root = document, timeout = 7000, test = null } = {}) {
+  return new Promise((resolve, reject) => {
+    // Hemen var mı?
+    let el = root.querySelector(selector);
+    if (el && (!test || test(el))) return resolve(el);
+
+    // Observer ile hızlı yakala
+    const obs = new MutationObserver(() => {
+      el = root.querySelector(selector);
+      if (el && (!test || test(el))) {
+        obs.disconnect();
+        resolve(el);
+      }
+    });
+    obs.observe(root, { childList: true, subtree: true, attributes: true });
+
+    // Emniyet timeout
+    const to = setTimeout(() => {
+      obs.disconnect();
+      reject(new Error(`waitFor timeout: ${selector}`));
+    }, timeout);
+
+    // Resolve olunca timeout temizlensin
+    const _resolve = (v) => { clearTimeout(to); resolve(v); };
+  });
+}
+
+function click(el) {
+  if (!el) return false;
+  const rect = el.getBoundingClientRect();
+  if (rect.width > 0 && rect.height > 0) {
+    el.click();
+    return true;
+  }
   return false;
 }
 
-function findButtonByText(text) {
-  const xpath = `//button[normalize-space()="${text}"] | //*/span[normalize-space()="${text}"]/ancestor::button[1]`;
-  const r = document.evaluate(xpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
-  return r.singleNodeValue;
+function findButtonByTextFast(text) {
+  // Çok hızlı text yakalama (span->button da dahil)
+  const btns = document.querySelectorAll('button');
+  for (const b of btns) {
+    if ((b.textContent || '').trim().includes(text)) return b;
+    const spanBtn = b.querySelector('span');
+    if (spanBtn && (spanBtn.textContent || '').trim().includes(text)) return b;
+  }
+  return null;
 }
 
-// Ana akış
-function runAutomationSequence() {
-  console.log('[STEP]', automationState);
+// -------------- Ana akış --------------
+async function runAutomation() {
+  console.log('[Evreka Eklenti] Otomasyon başladı. Başvuru No:', targetBasvuruNo);
 
-  // 1) MODAL KAPATMA
-  if (automationState === 'WAITING_FOR_MODAL') {
-    // Klasik Material-UI modal
-    const modal = document.querySelector('[role="dialog"], .MuiDialog-root, .MuiModal-root');
-    const closeBtn = modal?.querySelector('button, .close');
+  // 1) Modal/popup kapat (anında yakala)
+  try {
+    // a) “Dolandırıcılık Hakkında” popup
+    const fraudClose = await waitFor('.jss84 .jss92', { timeout: 1500 });
+    click(fraudClose);
+    console.log('[Evreka Eklenti] Dolandırıcılık popup kapatıldı.');
+  } catch { /* görünmediyse sorun değil */ }
 
-    // Dolandırıcılık popup (senin verdiğin HTML: .jss84 + .jss92)
-    const fraudPopup = document.querySelector('.jss84');
-    const fraudClose = fraudPopup?.querySelector('.jss92');
-
-    console.log('Modal:', modal, 'CloseBtn:', closeBtn, 'FraudClose:', fraudClose);
-
-    if (closeBtn) {
-      closeBtn.click();
-      console.log('[Evreka Eklenti] Klasik modal kapatıldı.');
-    } else if (fraudClose) {
-      fraudClose.click();
-      console.log('[Evreka Eklenti] Dolandırıcılık popup kapatıldı.');
-    } else {
-      console.log('[Evreka Eklenti] Modal bulunamadı, devam ediliyor.');
+  try {
+    // b) Klasik MUI dialog/overlay (varsa)
+    const anyDialog = await waitFor('[role="dialog"], .MuiDialog-root, .MuiModal-root, .modal', { timeout: 800 });
+    const closeCandidate = anyDialog.querySelector('button[aria-label="Close"], button[aria-label="Kapat"], .close') || anyDialog.querySelector('button');
+    if (closeCandidate) {
+      click(closeCandidate);
+      console.log('[Evreka Eklenti] MUI modal kapatıldı.');
     }
+  } catch { /* yoksa geç */ }
 
-    automationState = 'WAITING_FOR_TAB';
+  // 2) “Dosya Takibi” sekmesine geç
+  let tabBtn = findButtonByTextFast('Dosya Takibi');
+  if (!tabBtn) {
+    tabBtn = await waitFor('button[role="tab"]', {
+      timeout: 4000,
+      test: (el) => (el.textContent || '').includes('Dosya Takibi')
+    });
+  }
+  if (tabBtn.getAttribute('aria-selected') !== 'true') {
+    click(tabBtn);
+    console.log('[Evreka Eklenti] "Dosya Takibi" sekmesine tıklandı.');
+  } else {
+    console.log('[Evreka Eklenti] "Dosya Takibi" zaten aktif.');
   }
 
-  // 2) "Dosya Takibi" sekmesine geçiş
-  else if (automationState === 'WAITING_FOR_TAB') {
-    const tabBtn = Array.from(document.querySelectorAll('button[role="tab"]'))
-      .find(btn => btn.textContent.includes('Dosya Takibi'));
-    console.log('Tab button:', tabBtn);
-
-    if (tabBtn) {
-      if (tabBtn.getAttribute('aria-selected') !== 'true') {
-        tabBtn.click();
-        console.log('[Evreka Eklenti] "Dosya Takibi" sekmesine tıklandı.');
-      } else {
-        console.log('[Evreka Eklenti] "Dosya Takibi" sekmesi zaten aktif.');
-      }
-      automationState = 'WAITING_FOR_FORM';
-    } else {
-      console.log('[Evreka Eklenti] Sekme bulunamadı, bekleniyor...');
-    }
+  // 3) Formu doldur + Sorgula
+  const input = await waitFor('input[placeholder="Başvuru Numarası"]', { timeout: 4000 });
+  // Sorgula butonu çok hızlı değişebildiği için önce hızlı tara, yoksa bekle
+  let sorgulaBtn = findButtonByTextFast('Sorgula');
+  if (!sorgulaBtn) {
+    sorgulaBtn = await waitFor('button', {
+      timeout: 3000,
+      test: (el) => (el.textContent || '').includes('Sorgula')
+    });
   }
 
-  // 3) Form doldurma ve sorgulama
-  else if (automationState === 'WAITING_FOR_FORM') {
-    const input = document.querySelector('input[placeholder="Başvuru Numarası"]');
-    const sorgulaBtn = Array.from(document.querySelectorAll('button'))
-      .find(btn => btn.textContent.includes('Sorgula'));
-    console.log('Input:', input, 'Button:', sorgulaBtn);
+  // Değer yaz (React controlled için event’ler)
+  input.focus();
+  input.value = targetBasvuruNo;
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  input.dispatchEvent(new Event('change', { bubbles: true }));
+  console.log('[Evreka Eklenti] Başvuru No yazıldı:', targetBasvuruNo);
 
-    if (input && sorgulaBtn) {
-      input.focus();
-      input.value = targetBasvuruNo;
-
-      // React controlled input'larda gerekli
-      input.dispatchEvent(new Event('input', { bubbles: true }));
-      input.dispatchEvent(new Event('change', { bubbles: true }));
-
-      console.log('[Evreka Eklenti] Başvuru No yazıldı:', targetBasvuruNo);
-      clickIfVisible(sorgulaBtn);
-      console.log('[Evreka Eklenti] Sorgula butonuna tıklandı.');
-
-      automationState = 'DONE';
-      clearInterval(mainInterval);
-      console.log('[Evreka Eklenti] OTOMASYON TAMAMLANDI.');
-    } else {
-      console.log('[Evreka Eklenti] Form bekleniyor...');
-    }
-  }
+  // Tıkla
+  click(sorgulaBtn);
+  console.log('[Evreka Eklenti] Sorgula butonuna tıklandı. ✔');
 }
