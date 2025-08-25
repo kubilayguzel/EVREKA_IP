@@ -16,7 +16,7 @@
   },
   "content_scripts": [
     {
-      "matches": ["*://arastirma.turkpatent.gov.tr/tr/marka/arama*"],
+      "matches": ["*://www.turkpatent.gov.tr/arastirma-yap*"],
       "js": ["content_script.js"]
     }
   ],
