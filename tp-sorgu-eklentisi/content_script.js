@@ -1,99 +1,118 @@
-// OTOMASYON DURUM YÖNETİCİSİ
-let automationState = 'IDLE'; // Durumlar: IDLE, WAITING_FOR_MODAL, WAITING_FOR_TAB, WAITING_FOR_FORM, DONE
-let targetBasvuruNo = null;
-let mainInterval = null; // Ana otomasyon döngümüzü tutacak değişken
-let retryCount = 0; // Bir adımda takılıp kalmasını önlemek için sayaç
+// =============================
+// Evreka IP - Turkpatent Otomasyon Content Script
+// =============================
 
-// background.js'den gelen ana komutu dinle
+// Durum yönetimi
+let automationState = 'IDLE'; // IDLE, WAITING_FOR_MODAL, WAITING_FOR_TAB, WAITING_FOR_FORM, DONE
+let targetBasvuruNo = null;
+let mainInterval = null;
+
+// background.js'den mesaj dinle
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    if (request.type === 'AUTO_FILL' && request.data) {
-        console.log('[Evreka Eklenti] BAŞLAT: Otomasyon komutu alındı. Başvuru No:', request.data);
-        targetBasvuruNo = request.data;
-        automationState = 'WAITING_FOR_MODAL'; // Otomasyonu ilk adımla başlat
-        retryCount = 0;
-        
-        // Olası eski bir döngüyü temizle
-        if (mainInterval) clearInterval(mainInterval);
-        
-        // Ana otomasyon döngüsünü başlat (yarım saniyede bir kontrol et)
-        mainInterval = setInterval(runAutomationSequence, 500);
-        
-        sendResponse({ status: 'OK', message: 'Komut alındı, otomasyon döngüsü başlatıldı.' });
-    }
-    return true;
+  if (request.type === 'AUTO_FILL' && request.data) {
+    console.log('[Evreka Eklenti] BAŞLAT -> Başvuru No:', request.data);
+    targetBasvuruNo = request.data;
+    automationState = 'WAITING_FOR_MODAL';
+
+    if (mainInterval) clearInterval(mainInterval);
+    mainInterval = setInterval(runAutomationSequence, 1000);
+
+    sendResponse({ status: 'OK' });
+  }
+  return true;
 });
 
-// Her yarım saniyede bir çalışarak doğru adımı tetikleyecek ana fonksiyon
+// Yardımcılar
+function clickIfVisible(el) {
+  try {
+    if (!el) return false;
+    const rect = el.getBoundingClientRect();
+    if (rect.width > 0 && rect.height > 0) {
+      el.click();
+      return true;
+    }
+  } catch (e) {}
+  return false;
+}
+
+function findButtonByText(text) {
+  const xpath = `//button[normalize-space()="${text}"] | //*/span[normalize-space()="${text}"]/ancestor::button[1]`;
+  const r = document.evaluate(xpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
+  return r.singleNodeValue;
+}
+
+// Ana akış
 function runAutomationSequence() {
-    // 30 denemeden sonra (15 saniye) hala bir adımda takılıysa, dur.
-    retryCount++;
-    if (retryCount > 30) {
-        console.error('[Evreka Eklenti] HATA: Otomasyon 15 saniye içinde bir adımı tamamlayamadı ve durduruldu. Sayfa yapısı değişmiş olabilir.');
-        automationState = 'DONE';
-    }
-    
-    if (automationState === 'IDLE' || automationState === 'DONE') {
-        if (mainInterval) clearInterval(mainInterval);
-        return;
-    }
+  console.log('[STEP]', automationState);
 
-    // --- 1. ADIM: MODALI BEKLE VE "X" İLE KAPAT ---
-    if (automationState === 'WAITING_FOR_MODAL') {
-        // Bootstrap modalının standart "X" kapatma butonu
-        const modalCloseButton = document.querySelector('button.close[data-dismiss="modal"]');
-        if (modalCloseButton) {
-            console.log('[Evreka Eklenti] 1. ADIM BAŞARILI: Modal bulundu, "X" ile kapatılıyor.');
-            modalCloseButton.click();
-            automationState = 'WAITING_FOR_TAB'; // Sonraki adıma geç
-            retryCount = 0; // Sayacı sıfırla
-        } else {
-            console.log('[Evreka Eklenti] 1. ADIM BEKLEMEDE: Modal bekleniyor veya zaten kapalı...');
-            // Eğer belirli bir süre sonra modal hiç görünmezse, bu adımı atla
-             if (retryCount > 4) { // 2 saniye sonra modal yoksa, olmadığını varsay
-                console.log('[Evreka Eklenti] 1. ADIM BİLGİ: Modal bulunamadı, bu adım atlanıyor.');
-                automationState = 'WAITING_FOR_TAB';
-                retryCount = 0;
-            }
-        }
+  // 1) MODAL KAPATMA
+  if (automationState === 'WAITING_FOR_MODAL') {
+    // Klasik Material-UI modal
+    const modal = document.querySelector('[role="dialog"], .MuiDialog-root, .MuiModal-root');
+    const closeBtn = modal?.querySelector('button, .close');
+
+    // Dolandırıcılık popup (senin verdiğin HTML: .jss84 + .jss92)
+    const fraudPopup = document.querySelector('.jss84');
+    const fraudClose = fraudPopup?.querySelector('.jss92');
+
+    console.log('Modal:', modal, 'CloseBtn:', closeBtn, 'FraudClose:', fraudClose);
+
+    if (closeBtn) {
+      closeBtn.click();
+      console.log('[Evreka Eklenti] Klasik modal kapatıldı.');
+    } else if (fraudClose) {
+      fraudClose.click();
+      console.log('[Evreka Eklenti] Dolandırıcılık popup kapatıldı.');
+    } else {
+      console.log('[Evreka Eklenti] Modal bulunamadı, devam ediliyor.');
     }
 
-    // --- 2. ADIM: "DOSYA TAKİBİ" SEKMESİNİ BEKLE VE TIKLA ---
-    if (automationState === 'WAITING_FOR_TAB') {
-        const dosyaTakibiTab = document.querySelector('a[data-toggle="tab"][href="#dosyaTakip"]');
-        if (dosyaTakibiTab) {
-            if (dosyaTakibiTab.classList.contains('active')) {
-                console.log('[Evreka Eklenti] 2. ADIM BİLGİ: "Dosya Takibi" sekmesi zaten aktif.');
-                automationState = 'WAITING_FOR_FORM';
-                retryCount = 0;
-            } else {
-                console.log('[Evreka Eklenti] 2. ADIM BAŞARILI: "Dosya Takibi" sekmesi bulundu, tıklanıyor.');
-                dosyaTakibiTab.click();
-                automationState = 'WAITING_FOR_FORM';
-                retryCount = 0;
-            }
-        } else {
-             console.log('[Evreka Eklenti] 2. ADIM BEKLEMEDE: "Dosya Takibi" sekmesi bekleniyor...');
-        }
+    automationState = 'WAITING_FOR_TAB';
+  }
+
+  // 2) "Dosya Takibi" sekmesine geçiş
+  else if (automationState === 'WAITING_FOR_TAB') {
+    const tabBtn = Array.from(document.querySelectorAll('button[role="tab"]'))
+      .find(btn => btn.textContent.includes('Dosya Takibi'));
+    console.log('Tab button:', tabBtn);
+
+    if (tabBtn) {
+      if (tabBtn.getAttribute('aria-selected') !== 'true') {
+        tabBtn.click();
+        console.log('[Evreka Eklenti] "Dosya Takibi" sekmesine tıklandı.');
+      } else {
+        console.log('[Evreka Eklenti] "Dosya Takibi" sekmesi zaten aktif.');
+      }
+      automationState = 'WAITING_FOR_FORM';
+    } else {
+      console.log('[Evreka Eklenti] Sekme bulunamadı, bekleniyor...');
     }
+  }
 
-    // --- 3. ADIM: FORMU BEKLE, DOLDUR VE GÖNDER ---
-    if (automationState === 'WAITING_FOR_FORM') {
-        const applicationNoInput = document.querySelector('#dosyaTakip input[name="fileNumber"]');
-        const searchButton = document.querySelector('#dosyaTakip button.btn-primary[type="submit"]');
+  // 3) Form doldurma ve sorgulama
+  else if (automationState === 'WAITING_FOR_FORM') {
+    const input = document.querySelector('input[placeholder="Başvuru Numarası"]');
+    const sorgulaBtn = Array.from(document.querySelectorAll('button'))
+      .find(btn => btn.textContent.includes('Sorgula'));
+    console.log('Input:', input, 'Button:', sorgulaBtn);
 
-        if (applicationNoInput && searchButton) {
-            console.log(`[Evreka Eklenti] 3. ADIM BAŞARILI: Form bulundu. Değer yazılıyor: ${targetBasvuruNo}`);
-            applicationNoInput.value = targetBasvuruNo;
+    if (input && sorgulaBtn) {
+      input.focus();
+      input.value = targetBasvuruNo;
 
-            console.log('[Evreka Eklenti] SON ADIM: Sorgula butonuna tıklanıyor.');
-            searchButton.click();
+      // React controlled input'larda gerekli
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.dispatchEvent(new Event('change', { bubbles: true }));
 
-            // --- OTOMASYONU BİTİR ---
-            console.log('[Evreka Eklenti] TAMAMLANDI: Otomasyon başarıyla bitti.');
-            automationState = 'DONE';
-            if (mainInterval) clearInterval(mainInterval);
-        } else {
-             console.log('[Evreka Eklenti] 3. ADIM BEKLEMEDE: Form elemanları bekleniyor...');
-        }
+      console.log('[Evreka Eklenti] Başvuru No yazıldı:', targetBasvuruNo);
+      clickIfVisible(sorgulaBtn);
+      console.log('[Evreka Eklenti] Sorgula butonuna tıklandı.');
+
+      automationState = 'DONE';
+      clearInterval(mainInterval);
+      console.log('[Evreka Eklenti] OTOMASYON TAMAMLANDI.');
+    } else {
+      console.log('[Evreka Eklenti] Form bekleniyor...');
     }
+  }
 }
