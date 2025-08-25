@@ -450,9 +450,10 @@
     </div>
 
     <script type="module">
-        import { authService, taskService, ipRecordsService, accrualService, personService, auth, transactionTypeService } from './firebase-config.js';
+        import { db, taskService, ipRecordsService, accrualService, personService, auth, transactionTypeService } from './firebase-config.js';
         import { showNotification } from './utils.js'; // showNotification utils.js'ten geliyor
         import { loadSharedLayout } from './js/layout-loader.js';
+        import { doc, getDoc, arrayUnion } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
         document.addEventListener('DOMContentLoaded', async () => {
             await loadSharedLayout({ activeMenuLink: 'triggered-tasks.html' }); // Güncellendi
@@ -660,6 +661,36 @@
                     
                     return action.length > 50 ? action.substring(0, 50) + '...' : action;
                 }
+
+                async resolveAssigneeByTaskType(taskTypeId) {
+                // taskAssignments/{transactionTypeId} dokümanını oku
+                const ruleSnap = await getDoc(doc(db, 'taskAssignments', String(taskTypeId)));
+                if (!ruleSnap.exists()) {
+                    return { uid: null, email: null, reason: 'rule_not_found' };
+                }
+
+                const rule = ruleSnap.data() || {};
+                const assigneeIds = Array.isArray(rule.assigneeIds) ? rule.assigneeIds : [];
+
+                if (!assigneeIds.length) {
+                    return { uid: null, email: null, reason: 'empty_assignee_list' };
+                }
+
+                // Basit sürüm: ilk kişiye ata (assignmentType: "all" olsa bile tek kişi alanı kullanıyoruz)
+                const uid = String(assigneeIds[0] || '');
+                let email = null;
+
+                // (İsteğe bağlı) e-postayı da yazmak istersen, users/{uid} oku:
+                try {
+                    const userSnap = await getDoc(doc(db, 'users', uid));
+                    if (userSnap.exists()) {
+                    const u = userSnap.data() || {};
+                    email = u.email || null;
+                    }
+                } catch (_) { /* email zorunlu değil */ }
+
+                return { uid, email, reason: 'ok' };
+}
                 showTaskDetailModal(taskId) {
                     const task = this.allTasks.find(t => t.id === taskId);
                     if (!task) {
@@ -922,86 +953,58 @@
                     document.getElementById('changeTriggeredTaskStatusModal').classList.add('show');
                 }
 
-                handleUpdateTriggeredTaskStatus = async () => {
-                    if (!this.currentTaskForStatusChange) {
-                        showNotification('Durumu değiştirilecek görev bilgisi bulunamadı.', 'error');
-                        return;
-                    }
+                async handleUpdateTriggeredTaskStatus() {
+                if (!this.currentTaskForStatusChange) return;
 
-                    const newStatusSelected = document.getElementById('newTriggeredTaskStatus').value;
-                    const taskToUpdate = this.currentTaskForStatusChange;
-                    let finalUpdateData = {}; // Firestore'a gönderilecek son veri objesi
-                    let historyAction = `Durum değişti: ${taskToUpdate.status} -> ${newStatusSelected}`;
+                const taskToUpdate = this.currentTaskForStatusChange;     // { id, taskType, status, ... }
+                const newStatusSelected = String(document.getElementById('newTriggeredTaskStatus').value || '');
+                const updates = {};
+                let historyAction = `Durum değişti: ${taskToUpdate.status} -> ${newStatusSelected}`;
 
-                    // Firebase SDK'sından doğru importları kullandığınızdan emin olun
-                    // firebase-config.js dosyanızda 'doc' ve 'getDoc' import edilmiş olmalı
-                    const { doc, getDoc, arrayUnion } = window.firebase.firestore;
-
-
+                try {
                     if (newStatusSelected === 'client_approval_opened') {
-                        // *** ANA MANTIK: İŞİ AÇ VE YENİDEN ATA ***
-                        finalUpdateData.status = 'open'; // 1. Durumu 'open' olarak değiştir
-                        historyAction = `İş müvekkil tarafından onaylandı ve durumu "Açık" olarak güncellendi.`;
+                    // 1) Görevi aç
+                    updates.status = 'open';
+                    historyAction = 'İş müvekkil tarafından onaylandı, durum "Açık" olarak güncellendi.';
 
-                        try {
-                            // 2. taskAssignments'tan kuralı bul
-                            const assignmentRuleRef = doc(db, 'taskAssignments', taskToUpdate.taskType);
-                            const ruleDoc = await getDoc(assignmentRuleRef);
-
-                            if (ruleDoc.exists()) {
-                                const rule = ruleDoc.data();
-                                if (rule.assigneeIds && rule.assigneeIds.length > 0) {
-                                    const newAssigneeId = rule.assigneeIds[0]; // Kuraldaki ilk kişiyi al
-                                    finalUpdateData.assignedTo_uid = newAssigneeId;
-                                    
-                                    // Log mesajını daha açıklayıcı hale getir
-                                    historyAction += ` Kurala göre otomatik olarak ${newAssigneeId} ID'li kullanıcıya atandı.`;
-
-                                } else {
-                                    // Kural var ama atanacak kimse yok, tanımsız bırak (atanmamış)
-                                    finalUpdateData.assignedTo_uid = null;
-                                }
-                            } else {
-                                // Bu iş tipi için atama kuralı yok, tanımsız bırak (atanmamış)
-                                finalUpdateData.assignedTo_uid = null;
-                                showNotification('Bu iş tipi için atama kuralı bulunamadı, görev "atanmamış" olarak açıldı.', 'warning');
-                            }
-
-                        } catch (error) {
-                            console.error('Atama kuralı getirilirken hata:', error);
-                            showNotification('Atama kuralı kontrol edilirken bir hata oluştu: ' + error.message, 'error');
-                            return; // Hata durumunda işlemi durdur
-                        }
-
+                    // 2) Kurala göre atama
+                    const { uid, email, reason } = await this.resolveAssigneeByTaskType(taskToUpdate.taskType);
+                    if (uid) {
+                        updates.assignedTo_uid = uid;
+                        if (email) updates.assignedTo_email = email; // opsiyonel
+                        historyAction += ` Kurala göre otomatik olarak ${uid} kullanıcısına atandı.`;
                     } else {
-                        // Diğer durum değişiklikleri (client_approval_closed vb.) için sadece status güncellenir
-                        finalUpdateData.status = newStatusSelected;
+                        // Kural yoksa ya da liste boşsa görev "atanmamış" açılır
+                        updates.assignedTo_uid = null;
+                        updates.assignedTo_email = null;
+                        if (reason === 'rule_not_found') {
+                        historyAction += ' Bu iş tipi için atama kuralı bulunamadı; görev atanmadı.';
+                        } else {
+                        historyAction += ' Atama listesi boş; görev atanmadı.';
+                        }
+                    }
+                    } else {
+                    // Diğer durumlar: olduğu gibi yaz
+                    updates.status = newStatusSelected;
                     }
 
-                    try {
-                        // Geçmişe (history) log ekle
-                        const historyEntry = {
-                            action: historyAction,
-                            timestamp: new Date().toISOString(),
-                            userEmail: this.currentUser.email
-                        };
-                        // 'history' alanının arrayUnion ile güncellenmesi, mevcut geçmişi korur.
-                        // taskService.updateTask fonksiyonunuzun arrayUnion desteklediğinden emin olun.
-                        // Desteklemiyorsa, önce task'ı okuyup history'yi manuel birleştirmeniz gerekir.
-                        finalUpdateData.history = arrayUnion(historyEntry);
+                    // 3) Özel history kaydı (mevcut geçmişi koruyarak ekler)
+                    updates.history = arrayUnion({
+                    action: historyAction,
+                    timestamp: new Date().toISOString(),
+                    userEmail: this.currentUser?.email || ''
+                    });
 
-                        // Firestore'da görevi güncelle
-                        await taskService.updateTask(taskToUpdate.id, finalUpdateData);
-                        showNotification('Görev başarıyla güncellendi!', 'success');
+                    // 4) Firestore güncelle
+                    await taskService.updateTask(taskToUpdate.id, updates);
 
-                    } catch (error) {
-                        console.error('Görev güncellenirken hata:', error);
-                        showNotification('Görev güncellenirken bir hata oluştu: ' + error.message, 'error');
-                        return;
-                    }
-
+                    // 5) UI
                     this.closeModal('changeTriggeredTaskStatusModal');
-                    await this.loadAllData(); // Sayfayı ve verileri yenile
+                    await this.loadAllData();
+                } catch (err) {
+                    console.error('Durum güncellenirken hata:', err);
+                    showNotification('Durum güncellenirken hata: ' + err.message, 'error');
+                }
                 }
  closeModal(modalId) {
     document.getElementById(modalId).classList.remove('show');
