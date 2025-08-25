@@ -922,126 +922,87 @@
                     document.getElementById('changeTriggeredTaskStatusModal').classList.add('show');
                 }
 
-            handleUpdateTriggeredTaskStatus = async () => {
-                if (!this.currentTaskForStatusChange) {
-                    showNotification('Durumu değiştirilecek görev bilgisi bulunamadı.', 'error');
-                    return;
-                }
+                handleUpdateTriggeredTaskStatus = async () => {
+                    if (!this.currentTaskForStatusChange) {
+                        showNotification('Durumu değiştirilecek görev bilgisi bulunamadı.', 'error');
+                        return;
+                    }
 
-                const newStatus = document.getElementById('newTriggeredTaskStatus').value;
-                let updatedStatus = newStatus;
+                    const newStatusSelected = document.getElementById('newTriggeredTaskStatus').value;
+                    const taskToUpdate = this.currentTaskForStatusChange;
+                    let finalUpdateData = {}; // Firestore'a gönderilecek son veri objesi
+                    let historyAction = `Durum değişti: ${taskToUpdate.status} -> ${newStatusSelected}`;
 
-                // Eğer Müvekkil Onayı - Açıldı seçildiyse
-                if (newStatus === 'client_approval_opened') {
-                    updatedStatus = 'open'; // Veritabanında 'open' olarak tutulacak
+                    // Firebase SDK'sından doğru importları kullandığınızdan emin olun
+                    // firebase-config.js dosyanızda 'doc' ve 'getDoc' import edilmiş olmalı
+                    const { doc, getDoc, arrayUnion } = window.firebase.firestore;
 
-                    try {
-                        // 1️⃣ Önce status güncelle
-                        await taskService.updateTask(this.currentTaskForStatusChange.id, { status: updatedStatus });
-                        showNotification('Görev durumu başarıyla güncellendi!', 'success');
 
-                        // 2️⃣ Transaction işlemini başlat
-                        const selectedTransactionType = this.allTransactionTypes.find(
-                            t => t.id === this.currentTaskForStatusChange.taskType
-                        );
+                    if (newStatusSelected === 'client_approval_opened') {
+                        // *** ANA MANTIK: İŞİ AÇ VE YENİDEN ATA ***
+                        finalUpdateData.status = 'open'; // 1. Durumu 'open' olarak değiştir
+                        historyAction = `İş müvekkil tarafından onaylandı ve durumu "Açık" olarak güncellendi.`;
 
-                        if (!selectedTransactionType) {
-                            showNotification('İşlem tipi bulunamadı, transaction eklenemedi.', 'error');
-                            return;
-                        }
+                        try {
+                            // 2. taskAssignments'tan kuralı bul
+                            const assignmentRuleRef = doc(db, 'taskAssignments', taskToUpdate.taskType);
+                            const ruleDoc = await getDoc(assignmentRuleRef);
 
-                        if (selectedTransactionType.hierarchy === 'parent') {
-                            // Parent transaction yarat
-                            const transactionData = {
-                                type: selectedTransactionType.id,
-                                description: `${selectedTransactionType.name} işlemi.`,
-                                parentId: null,
-                                transactionHierarchy: "parent"
-                            };
-                            const addResult = await ipRecordsService.addTransactionToRecord(
-                                this.currentTaskForStatusChange.relatedIpRecordId,
-                                transactionData
-                            );
+                            if (ruleDoc.exists()) {
+                                const rule = ruleDoc.data();
+                                if (rule.assigneeIds && rule.assigneeIds.length > 0) {
+                                    const newAssigneeId = rule.assigneeIds[0]; // Kuraldaki ilk kişiyi al
+                                    finalUpdateData.assignedTo_uid = newAssigneeId;
+                                    
+                                    // Log mesajını daha açıklayıcı hale getir
+                                    historyAction += ` Kurala göre otomatik olarak ${newAssigneeId} ID'li kullanıcıya atandı.`;
 
-                            if (addResult.success) {
-                                showNotification('İlgili parent işlem başarıyla oluşturuldu!', 'success');
-                            } else {
-                                showNotification('Parent işlem kaydedilemedi: ' + addResult.error, 'error');
-                            }
-
-                        } else if (
-                            selectedTransactionType.hierarchy === 'child' &&
-                            selectedTransactionType.isTopLevelSelectable
-                        ) {
-                            // Child transaction ise parent araması yap
-                            const recordTransactionsResult = await ipRecordsService.getRecordTransactions(
-                                this.currentTaskForStatusChange.relatedIpRecordId
-                            );
-
-                            if (!recordTransactionsResult.success) {
-                                showNotification('Portföy işlemleri yüklenemedi: ' + recordTransactionsResult.error, 'error');
-                                return;
-                            }
-
-                            const existingTransactions = recordTransactionsResult.data || [];
-                            const suitableParents = existingTransactions.filter(parentTransaction => {
-                            if (parentTransaction.transactionHierarchy !== "parent") return false;
-
-                            const parentTransactionType = this.allTransactionTypes.find(t => t.id === parentTransaction.type);
-                            
-                            return parentTransactionType?.allowedChildTypes?.includes(selectedTransactionType.id);
-                            });
-
-                            const childTransactionData = {
-                                type: selectedTransactionType.id,
-                                description: `${selectedTransactionType.name} alt işlemi.`,
-                                // parentId ve hierarchy birazdan belirlenecek
-                            };
-
-                            if (suitableParents.length === 0) {
-                                showNotification(`Bu alt işlem için uygun ana işlem bulunamadı. Lütfen önce ilgili ana işlemi oluşturun.`, 'warning');
-                                return;
-                            } else if (suitableParents.length === 1) {
-                                childTransactionData.parentId = suitableParents[0].id;
-                                childTransactionData.transactionHierarchy = "child";
-                                const addResult = await ipRecordsService.addTransactionToRecord(
-                                    this.currentTaskForStatusChange.relatedIpRecordId,
-                                    childTransactionData
-                                );
-
-                                if (addResult.success) {
-                                    showNotification('Alt işlem başarıyla oluşturuldu!', 'success');
                                 } else {
-                                    showNotification('Alt işlem kaydedilemedi: ' + addResult.error, 'error');
+                                    // Kural var ama atanacak kimse yok, tanımsız bırak (atanmamış)
+                                    finalUpdateData.assignedTo_uid = null;
                                 }
                             } else {
-                                // Birden fazla parent varsa modal aç
-                                this.showParentSelectionModal(suitableParents, childTransactionData);
+                                // Bu iş tipi için atama kuralı yok, tanımsız bırak (atanmamış)
+                                finalUpdateData.assignedTo_uid = null;
+                                showNotification('Bu iş tipi için atama kuralı bulunamadı, görev "atanmamış" olarak açıldı.', 'warning');
                             }
+
+                        } catch (error) {
+                            console.error('Atama kuralı getirilirken hata:', error);
+                            showNotification('Atama kuralı kontrol edilirken bir hata oluştu: ' + error.message, 'error');
+                            return; // Hata durumunda işlemi durdur
                         }
 
-                        this.closeModal('changeTriggeredTaskStatusModal');
-                        await this.loadAllData();
-
-                    } catch (error) {
-                        console.error('Görev güncelleme veya işlem oluşturma hatası:', error);
-                        showNotification('Bir hata oluştu: ' + error.message, 'error');
+                    } else {
+                        // Diğer durum değişiklikleri (client_approval_closed vb.) için sadece status güncellenir
+                        finalUpdateData.status = newStatusSelected;
                     }
 
-                } else {
-                    // Müvekkil Onayı - Açıldı dışındaki status güncellemeleri
                     try {
-                        await taskService.updateTask(this.currentTaskForStatusChange.id, { status: updatedStatus });
-                        showNotification('Görev durumu başarıyla güncellendi!', 'success');
-                        this.closeModal('changeTriggeredTaskStatusModal');
-                        await this.loadAllData();
-                    } catch (error) {
-                        console.error('Durum güncelleme hatası:', error);
-                        showNotification('Görev durumu güncellenirken hata oluştu: ' + error.message, 'error');
-                    }
-                }
-            }
+                        // Geçmişe (history) log ekle
+                        const historyEntry = {
+                            action: historyAction,
+                            timestamp: new Date().toISOString(),
+                            userEmail: this.currentUser.email
+                        };
+                        // 'history' alanının arrayUnion ile güncellenmesi, mevcut geçmişi korur.
+                        // taskService.updateTask fonksiyonunuzun arrayUnion desteklediğinden emin olun.
+                        // Desteklemiyorsa, önce task'ı okuyup history'yi manuel birleştirmeniz gerekir.
+                        finalUpdateData.history = arrayUnion(historyEntry);
 
+                        // Firestore'da görevi güncelle
+                        await taskService.updateTask(taskToUpdate.id, finalUpdateData);
+                        showNotification('Görev başarıyla güncellendi!', 'success');
+
+                    } catch (error) {
+                        console.error('Görev güncellenirken hata:', error);
+                        showNotification('Görev güncellenirken bir hata oluştu: ' + error.message, 'error');
+                        return;
+                    }
+
+                    this.closeModal('changeTriggeredTaskStatusModal');
+                    await this.loadAllData(); // Sayfayı ve verileri yenile
+                }
  closeModal(modalId) {
     document.getElementById(modalId).classList.remove('show');
     if (modalId === 'taskDetailModal') { /* mevcut modal'ı resetle */ }
