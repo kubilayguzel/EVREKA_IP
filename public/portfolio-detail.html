@@ -338,38 +338,57 @@
   <script type="module" src="./js/layout-loader.js"></script>
   <script type="module" src="./firebase-config.js"></script>
   <script type="module" src="./js/portfolio-detail.js"></script>
-  <script type="module">
-  import { getFirestore, doc, writeBatch, Timestamp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
-  import { app } from "./firebase-config.js"; // 🔥 dikkat: dosya adı firebase-config.js
+<script type="module" src="./firebase-config.js"></script>
+<script type="module">
+  // 🔧 Versiyonları firebase-config.js ile AYNI tut (10.7.1)
+  import { getApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+  import { getFirestore, doc, writeBatch, Timestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-  const db = getFirestore(app);
+  // ✅ firebase-config.js zaten initializeApp yaptı → mevcut app'i al
+  const app = getApp();
+  const db  = getFirestore(app);
 
-  async function seedTaskAssignments() {
-    const res = await fetch("../taskAssignments.json"); // eğer public'in kökünde ise
-    const data = await res.json();
-
-    const chunkSize = 400;
-    for (let i = 0; i < data.length; i += chunkSize) {
-      const batch = writeBatch(db);
-      const slice = data.slice(i, i + chunkSize);
-
-      slice.forEach(item => {
-        const ref = doc(db, "taskAssignments", String(item.transactionTypeId));
-        batch.set(ref, {
-          ...item,
-          assigneeIds: Array.isArray(item.assigneeIds) ? item.assigneeIds : [item.assigneeIds],
-          updatedAt: Timestamp.fromDate(new Date(item.updatedAt))
-        });
-      });
-
-      await batch.commit();
-      console.log(`✔ ${i + slice.length}/${data.length} kayıt Firestore'a yazıldı`);
-    }
-
-    console.log("🎉 taskAssignments seeding tamamlandı");
+  // İsteğe bağlı: sadece ?seed=1 ile çalışsın
+  const params = new URLSearchParams(location.search);
+  if (!params.has("seed")) {
+    console.log("Seed atlandı. Çalıştırmak için URL sonuna ?seed=1 ekleyin.");
+  } else {
+    await seedTaskAssignments();
   }
 
-  seedTaskAssignments();
+  async function seedTaskAssignments() {
+    try {
+      // JSON aynı klasörde ise:
+      const res = await fetch("./taskAssignments.json"); 
+      if (!res.ok) throw new Error("JSON bulunamadı: " + res.status);
+      const data = await res.json();
+
+      const chunkSize = 400; // Firestore batch güvenli sınır
+      for (let i = 0; i < data.length; i += chunkSize) {
+        const batch = writeBatch(db);
+        const slice = data.slice(i, i + chunkSize);
+
+        slice.forEach(item => {
+          const ref = doc(db, "taskAssignments", String(item.transactionTypeId));
+          batch.set(ref, {
+            ...item,
+            // tek ID gelse bile array'e çevir
+            assigneeIds: Array.isArray(item.assigneeIds) ? item.assigneeIds : [item.assigneeIds],
+            // ISO string'i Timestamp'e çevir
+            updatedAt: Timestamp.fromDate(new Date(item.updatedAt))
+          });
+        });
+
+        await batch.commit();
+        console.log(`✔ ${i + slice.length}/${data.length} yazıldı`);
+      }
+
+      console.log("🎉 taskAssignments seeding tamam");
+    } catch (err) {
+      console.error("❌ Seed hatası:", err);
+      alert("Seed hatası: " + err.message);
+    }
+  }
 </script>
 
 </body>
