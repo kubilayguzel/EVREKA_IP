@@ -1,43 +1,36 @@
-// Bu fonksiyon, sayfa yüklendiğinde ve otomasyonu çalıştırmaya hazır olduğunda tetiklenir.
-function runAutomation() {
-  // 1. URL'den 'autoQuery' parametresini oku.
-  const params = new URLSearchParams(window.location.search);
-  const basvuruNo = params.get('autoQuery');
+// background.js'den gelecek mesajları dinle
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  // Gelen mesajın bizim beklediğimiz 'AUTO_FILL' tipinde olup olmadığını kontrol et.
+  if (request.type === 'AUTO_FILL' && request.data) {
+    const basvuruNo = request.data;
+    console.log(`Otomatik doldurma komutu alındı: ${basvuruNo}`);
+    runAutomation(basvuruNo);
+    sendResponse({ status: 'OK', message: 'Veri alındı ve forma yazıldı.' });
+  }
+  return true;
+});
 
-  // Eğer URL'de bizim gönderdiğimiz parametre yoksa, hiçbir şey yapma.
+function runAutomation(basvuruNo) {
   if (!basvuruNo) {
-    console.log('Otomatik sorgulama için parametre bulunamadı.');
+    console.log('Otomatik sorgulama için başvuru no bulunamadı.');
     return;
   }
 
-  // 2. TÜRKPATENT sayfasındaki ilgili form elemanlarını bul.
-  // ÖNEMLİ: Bu ID'ler ve seçiciler TÜRKPATENT sitesi değiştikçe güncellenmelidir.
-  // Şu anki (Ağustos 2025) yapıya göre bu seçiciler doğrudur.
-  const applicationNoInput = document.querySelector('input[name="applicationNumber"]');
-  const searchButton = document.querySelector('button[type="submit"].search-button');
+  // Bu sayfadaki 'Başvuru Numarası' alanı farklı bir yapıya sahip olabilir.
+  // Geliştirici araçları ile doğru seçiciyi bulmak gerekebilir.
+  // Varsayılan olarak bir ID veya name attribute'u arayalım.
+  const applicationNoInput = document.querySelector('#basvuruNo'); // Örnek ID, gerekirse değiştirilmeli
+  const searchButton = document.querySelector('#sorgula'); // Örnek ID, gerekirse değiştirilmeli
 
-  // 3. Elemanların sayfada bulunduğundan emin ol.
   if (applicationNoInput && searchButton) {
     console.log(`Başvuru Numarası bulundu: ${basvuruNo}. Forma yazılıyor...`);
-    
-    // 4. Başvuru numarasını ilgili alana yaz.
     applicationNoInput.value = basvuruNo;
 
     console.log('Sorgula butonuna tıklanıyor...');
-    
-    // 5. "Ara" butonuna tıkla.
     searchButton.click();
   } else {
-    // Eğer elemanlar bulunamazsa, bu bir hatadır. Konsola bilgi yazdır.
-    console.error('TÜRKPATENT sayfasında başvuru numarası alanı veya arama butonu bulunamadı. Sitenin yapısı değişmiş olabilir.');
+    console.error('TÜRKPATENT sayfasında başvuru numarası alanı veya sorgula butonu bulunamadı.');
+    if(!applicationNoInput) console.error("Input alanı bulunamadı. Seçici: '#basvuruNo'");
+    if(!searchButton) console.error("Buton bulunamadı. Seçici: '#sorgula'");
   }
-}
-
-// Sayfanın tamamen yüklenmesini beklemek her zaman daha güvenilirdir.
-// 'DOMContentLoaded' genellikle yeterlidir, ancak bazen tüm script'lerin yüklenmesi için 'load' daha garantidir.
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', runAutomation);
-} else {
-  // Sayfa zaten yüklenmişse doğrudan çalıştır.
-  runAutomation();
 }
