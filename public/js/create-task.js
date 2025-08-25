@@ -361,23 +361,86 @@ async initIpRecordSearchSelector() {
     if (!results.contains(e.target) && e.target !== input) results.style.display = 'none';
   });
 }
-
-
-    populateAssignedToDropdown() {
+async updateAssignedToDropdown(taskTypeId) {
         const assignedToSelect = document.getElementById('assignedTo');
         if (!assignedToSelect) {
+            console.error('"assignedTo" dropdown elementi bulunamadı.');
             return;
         }
 
-        assignedToSelect.innerHTML = '<option value="">Seçiniz...</option>';
+        // Dropdown'ı başlangıç durumuna getir
+        assignedToSelect.innerHTML = '<option value="">Yükleniyor...</option>';
+        assignedToSelect.disabled = true;
 
-        this.allUsers.forEach(user => {
-            const option = document.createElement('option');
-            option.value = user.id;
-            option.textContent = user.displayName || user.email;
-            assignedToSelect.appendChild(option);
-        });
+        if (!taskTypeId) {
+            assignedToSelect.innerHTML = '<option value="">Önce İş Tipi Seçin</option>';
+            return;
+        }
+
+        try {
+            // 1. Firestore'dan atama kuralını çek
+            const ruleDocRef = doc(db, 'taskAssignments', taskTypeId);
+            const ruleDocSnap = await getDoc(ruleDocRef);
+
+            let ruleData = null;
+            if (ruleDocSnap.exists()) {
+                ruleData = ruleDocSnap.data();
+            }
+
+            // 2. Kurala göre dropdown'ı doldur
+            if (ruleData && ruleData.assigneeIds && ruleData.assigneeIds.length > 0) {
+                // Kural bulundu ve atanacak kişiler var
+                const assignedUserIds = ruleData.assigneeIds;
+                
+                // Atanacak kullanıcıların tam bilgilerini allUsers listesinden bul
+                const usersInRule = this.allUsers.filter(user => assignedUserIds.includes(user.id));
+
+                assignedToSelect.innerHTML = '<option value="">Seçiniz...</option>';
+                usersInRule.forEach(user => {
+                    const option = document.createElement('option');
+                    option.value = user.id;
+                    option.textContent = user.displayName || user.email;
+                    assignedToSelect.appendChild(option);
+                });
+
+                // Eğer sadece 1 kişi varsa, onu otomatik seç
+                if (usersInRule.length === 1) {
+                    assignedToSelect.value = usersInRule[0].id;
+                }
+
+                // Kural override'a izin vermiyorsa dropdown'ı kilitle
+                if (ruleData.allowManualOverride === false) {
+                    assignedToSelect.disabled = true;
+                } else {
+                    assignedToSelect.disabled = false;
+                }
+
+            } else {
+                // Kural bulunamadı, tüm kullanıcıları listele (eski davranış)
+                assignedToSelect.innerHTML = '<option value="">Seçiniz...</option>';
+                this.allUsers.forEach(user => {
+                    const option = document.createElement('option');
+                    option.value = user.id;
+                    option.textContent = user.displayName || user.email;
+                    assignedToSelect.appendChild(option);
+                });
+                assignedToSelect.disabled = false;
+            }
+
+        } catch (error) {
+            console.error("Atama kuralı getirilirken hata oluştu:", error);
+            // Hata durumunda yine de tüm kullanıcıları listele
+            assignedToSelect.innerHTML = '<option value="">Hata oluştu, tümü listeleniyor...</option>';
+            this.allUsers.forEach(user => {
+                const option = document.createElement('option');
+                option.value = user.id;
+                option.textContent = user.displayName || user.email;
+                assignedToSelect.appendChild(option);
+            });
+            assignedToSelect.disabled = false;
+        }
     }
+
   _onPersonCreated(newPerson, target) {
     this.allPersons = this.allPersons || [];
     this.allPersons.push(newPerson);
@@ -388,8 +451,6 @@ async initIpRecordSearchSelector() {
     }
     console.log('✅ Yeni kişi eklendi:', newPerson);
   }
-
-
 
     setupEventListeners() {
         if (this._eventsBound) return;
@@ -475,7 +536,6 @@ setupBaseFormListeners() {
 }
 
     setupAccrualTabListeners() {
-        this.populateAssignedToDropdown();
         this.calculateTotalAmount();
         
         const officialFeeInput = document.getElementById('officialFee');
@@ -784,7 +844,6 @@ setupBaseFormListeners() {
         this.renderSelectedRelatedParties();
         this.setupDynamicFormListeners();
         this.setupAccrualTabListeners();
-        this.populateAssignedToDropdown();
         this.setupBaseFormListeners();
         this.updateButtonsAndTabs();
         this.checkFormCompleteness();
@@ -985,60 +1044,43 @@ async handleSpecificTypeChange(e) {
     const taskTypeId = e.target.value;
     const selectedTaskType = this.allTransactionTypes.find(t => t.id === taskTypeId);
     const tIdStr = String(selectedTaskType?.id ?? '');
-    this.isWithdrawalTask = (tIdStr === '21' || tIdStr === '8'); // 21: Yayına İtirazı Geri Çekme, 8: Karara İtirazı Geri Çekme
+    this.isWithdrawalTask = (tIdStr === '21' || tIdStr === '8');
     console.log('🔄 İş tipi değişti:', {
-        taskTypeId: tIdStr, 
+        taskTypeId: tIdStr,
         isWithdrawalTask: this.isWithdrawalTask,
         taskName: selectedTaskType?.alias || selectedTaskType?.name
     });
-    // — INSERT #1 — seçime göre arama kaynağı + ilgili taraf görünürlüğü
-        try {
-        // Eğer TASK_IDS sabitini kullanıyorsan:
+
+    try {
         const tIdStr = String(selectedTaskType?.id ?? '');
         this.searchSource = (tIdStr === TASK_IDS.ITIRAZ_YAYIN) ? 'bulletin' : 'portfolio';
-
-        // İlgili taraf (Devir/Lisans/Birleşme/… ve 19-20) görünürlük/başlık
         this.updateRelatedPartySectionVisibility(selectedTaskType);
-        } catch (e) {
+    } catch (e) {
         console.warn('Tip sonrası görünürlük/arama kaynağı ayarlanamadı:', e);
-        }
+    }
 
     const container = document.getElementById('conditionalFieldsContainer');
     if (!container) return;
 
-    // ✅ ID BAZLI KONTROL - Çok daha güvenilir!
-    // Yayına İtiraz tiplerinin ID'leri (Firebase'den gelen veriler)
-    const YAYIN_ITIRAZ_IDS = [
-        '20',  // Yayına İtiraz (ana tip)
-        'trademark_publication_objection',  // Eğer başka formatta ID varsa
-        // Gerekirse başka ID'ler de eklenebilir
-    ];
-    
-    const isYayinaItiraz = selectedTaskType?.ipType === 'trademark' && 
-                          YAYIN_ITIRAZ_IDS.includes(selectedTaskType.id);
-    
+    const YAYIN_ITIRAZ_IDS = ['20', 'trademark_publication_objection'];
+    const isYayinaItiraz = selectedTaskType?.ipType === 'trademark' && YAYIN_ITIRAZ_IDS.includes(selectedTaskType.id);
     this.searchSource = isYayinaItiraz ? 'bulletin' : 'portfolio';
-    
-    console.log('[TYPE-ID-BASED]', { 
+
+    console.log('[TYPE-ID-BASED]', {
         id: selectedTaskType?.id,
         alias: selectedTaskType?.alias,
-        ipType: selectedTaskType?.ipType, 
+        ipType: selectedTaskType?.ipType,
         isYayinaItiraz,
-        searchSource: this.searchSource 
+        searchSource: this.searchSource
     });
 
-    // Aynı seçim tekrar geldiyse ve içerik zaten varsa atla
-    const sig = selectedTaskType ? 
-        `${selectedTaskType.id}::${selectedTaskType.alias || selectedTaskType.name || ''}` : '';
+    const sig = selectedTaskType ? `${selectedTaskType.id}::${selectedTaskType.alias || selectedTaskType.name || ''}` : '';
     if (this._lastRenderSig === sig && container.childElementCount > 0) return;
 
-    // Re-entrancy guard
     if (this._rendering) return;
     this._rendering = true;
 
-    // Önceki form-actions düğmelerini temizle
     document.querySelectorAll('.form-actions').forEach(el => el.remove());
-
     container.innerHTML = '';
     this.resetSelections();
 
@@ -1047,29 +1089,33 @@ async handleSpecificTypeChange(e) {
 
     if (!selectedTaskType) {
         this._rendering = false;
+        // İş tipi seçimi kaldırıldığında dropdown'ı da temizle
+        await this.updateAssignedToDropdown(null);
         return;
     }
 
-    // Marka başvurusu için özel form
     if (selectedTaskType.alias === 'Başvuru' && selectedTaskType.ipType === 'trademark') {
         this.renderTrademarkApplicationForm(container);
     } else {
         this.renderBaseForm(container, selectedTaskType.alias || selectedTaskType.name, selectedTaskType.id);
     }
 
-    // Arama kaynağına göre veri yükle
+    // === YENİ MANTIĞIN ENTEGRASYONU ===
+    // Form render edildikten sonra atama dropdown'ını kurala göre doldur.
+    await this.updateAssignedToDropdown(taskTypeId);
+    // ===================================
+
     if (this.searchSource === 'bulletin') {
         await this.loadBulletinRecordsOnce();
         console.log('📚 Bulletin records loaded:', this.allBulletinRecords?.length || 0);
     }
 
-    // Arama kutusunu başlat
     await this.initIpRecordSearchSelector();
-    // — INSERT #2 — DOM çizimi sonrası görünürlüğü bir kez daha sabitle
+
     try {
-    const tIdStr = String(document.getElementById('specificTaskType')?.value || '');
-    const selected = this.allTransactionTypes.find(t => String(t.id) === tIdStr);
-    this.updateRelatedPartySectionVisibility(selected);
+        const tIdStr = String(document.getElementById('specificTaskType')?.value || '');
+        const selected = this.allTransactionTypes.find(t => String(t.id) === tIdStr);
+        this.updateRelatedPartySectionVisibility(selected);
     } catch (e) {}
 
     this.updateButtonsAndTabs();
