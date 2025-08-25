@@ -491,7 +491,7 @@ const firebaseConfig = {
   const db = getFirestore(app);
 
   async function seedTaskAssignments() {
-    const res = await fetch("/taskAssignments.json");
+    const res = await fetch("../taskAssignments.json");
     const data = await res.json();
 
     const chunkSize = 400; // Firestore batch limiti güvenli sınır
