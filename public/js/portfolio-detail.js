@@ -609,10 +609,11 @@ if (tpQueryBtn) {
         (response) => {
           // 4. Eklentiden yanıt gelip gelmediğini kontrol et.
           if (chrome.runtime.lastError) {
-            console.error(chrome.runtime.lastError.message);
-            alert('Sorgulama yardımcısı eklentisi kurulu değil veya etkin değil. Lütfen eklentiyi kurun veya güncelleyin.');
-            // İleride buraya eklenti kurulum sayfasının linkini ekleyebilirsiniz.
-            // window.open('eklenti-kurulum-sayfasi.html', '_blank');
+              console.error(chrome.runtime.lastError.message);
+              // Kullanıcıya nedenini açıklayıp kurulum sayfasına yönlendir.
+              if (confirm("TÜRKPATENT'ten anlık ve otomatik sorgulama yapabilmek için 'Evreka IP Sorgu Yardımcısı' eklentisini kurmalısınız. Kurulum sayfasına gitmek ister misiniz?")) {
+                  window.open('eklenti-kurulum.html', '_blank');
+              }
           } else {
             console.log('Eklentiden gelen yanıt:', response.status);
           }
