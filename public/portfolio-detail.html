@@ -359,7 +359,7 @@
   async function seedTaskAssignments() {
     try {
       // JSON aynı klasörde ise:
-      const res = await fetch("./taskAssignments.json"); 
+      const res = await fetch("../taskAssignments.json"); 
       if (!res.ok) throw new Error("JSON bulunamadı: " + res.status);
       const data = await res.json();
 
