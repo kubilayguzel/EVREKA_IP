@@ -577,4 +577,50 @@ docsTbody?.addEventListener('click', async (ev) => {
     alert('Belge kaldırılamadı.');
   }
 });
+// ===================================================================
+// YENİ EKLENEN KOD: TÜRKPATENT SORGULAMA BUTONU İÇİN EKLENTİ İLETİŞİMİ
+// ===================================================================
+
+// Butonu DOM'dan seç
+const tpQueryBtn = document.getElementById('tpQueryBtn');
+
+// Buton varsa ve tıklandığında çalışacak fonksiyonu tanımla
+if (tpQueryBtn) {
+  tpQueryBtn.addEventListener('click', () => {
+    // 1. Başvuru numarasını daha önce oluşturduğumuz global değişkenden alıyoruz.
+    const applicationNo = (window.currentRecord?.applicationNumber || '').trim();
+    if (!applicationNo) {
+      alert('Başvuru numarası bulunamadı.');
+      return;
+    }
+
+    // Geliştirme aşamasında bu ID'yi tarayıcınızın Eklentiler sayfasından öğrenebilirsiniz.
+    const eklentiID = 'kmdlgghljcoanmckgnpibhklfpnkalci'; // <--- BİR ÖNCEKİ ADIMDAKİ GİBİ GÜNCELLEYİN
+
+    // 2. Tarayıcıda 'chrome.runtime.sendMessage' fonksiyonunun varlığını kontrol et.
+    if (typeof chrome !== 'undefined' && chrome.runtime && eklentiID) {
+      // 3. Eklentiye mesaj gönder.
+      chrome.runtime.sendMessage(
+        eklentiID,
+        {
+          type: 'SORGULA',
+          data: applicationNo
+        },
+        (response) => {
+          // 4. Eklentiden yanıt gelip gelmediğini kontrol et.
+          if (chrome.runtime.lastError) {
+            console.error(chrome.runtime.lastError.message);
+            alert('Sorgulama yardımcısı eklentisi kurulu değil veya etkin değil. Lütfen eklentiyi kurun veya güncelleyin.');
+            // İleride buraya eklenti kurulum sayfasının linkini ekleyebilirsiniz.
+            // window.open('eklenti-kurulum-sayfasi.html', '_blank');
+          } else {
+            console.log('Eklentiden gelen yanıt:', response.status);
+          }
+        }
+      );
+    } else {
+      alert('Bu özellik için Chrome tabanlı bir tarayıcı ve yardımcı eklenti gereklidir.');
+    }
+  });
+}
 
