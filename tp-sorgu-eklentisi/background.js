@@ -1,28 +1,30 @@
-// Web sitenizden (externally_connectable ile izin verilen) bir mesaj geldiğinde bu fonksiyon çalışır.
+// Web sitenizden gelen mesajları dinle
 chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => {
-  // Gelen mesajın bizim beklediğimiz 'SORGULA' tipinde olup olmadığını kontrol et.
   if (request.type === 'SORGULA' && request.data) {
     const basvuruNo = request.data;
-    
-    // YENİ VE DOĞRU URL HEDEFİ
     const targetUrl = "https://www.turkpatent.gov.tr/arastirma-yap?form=trademark";
 
-    // Yeni bir sekmede hedef URL'yi aç.
+    // Yeni bir sekme oluştur
     chrome.tabs.create({ url: targetUrl }, (newTab) => {
-      // Sekme oluşturulduktan sonra, content script'e veriyi göndermek için bir mesaj yolluyoruz.
-      // Bu yöntem, URL'ye parametre eklemekten daha güvenilirdir.
-      setTimeout(() => { // Sayfanın yüklenmeye başlaması için küçük bir gecikme
-        chrome.tabs.sendMessage(newTab.id, {
-          type: 'AUTO_FILL',
-          data: basvuruNo
-        });
-      }, 1000); // 1 saniye bekle
+      // Bu yeni sekmenin yüklenmesini dinlemek için bir olay dinleyici ekle
+      const listener = (tabId, changeInfo, tab) => {
+        // Eğer güncellenen sekme bizim oluşturduğumuz sekme ise VE yüklenmesi tamamlandıysa
+        if (tabId === newTab.id && changeInfo.status === 'complete') {
+          // Mesajı şimdi, yani sayfa tamamen hazır olduğunda gönder
+          chrome.tabs.sendMessage(tabId, {
+            type: 'AUTO_FILL',
+            data: basvuruNo
+          });
+          // İşi bittiği için bu dinleyiciyi bellekten kaldır
+          chrome.tabs.onUpdated.removeListener(listener);
+        }
+      };
+      
+      // Sekme güncelleme olaylarını dinlemeye başla
+      chrome.tabs.onUpdated.addListener(listener);
     });
 
-    // Web sitenize işlemin başladığına dair bir yanıt gönder.
-    sendResponse({ status: 'OK', message: 'Sorgulama sekmesi açıldı ve veri gönderildi.' });
+    sendResponse({ status: 'OK', message: 'Sorgulama sekmesi oluşturuldu ve yüklenmesi bekleniyor.' });
   }
-  
-  // Asenkron bir yanıt gönderileceğini belirtmek için true döndür.
   return true; 
 });
