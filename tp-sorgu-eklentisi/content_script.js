@@ -4,11 +4,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     const basvuruNo = request.data;
     console.log(`Otomatik doldurma komutu alındı: ${basvuruNo}`);
     
-    // Sayfanın tamamen hazır olduğundan emin olmak için küçük bir gecikme ekleyelim
-    // Bu, modal gibi elementlerin yüklenmesine zaman tanır.
+    // Sayfanın ve sekmelerin tam olarak yüklenmesi için biraz bekleyelim.
     setTimeout(() => {
       runAutomation(basvuruNo);
-    }, 1000); // 1 saniye bekle
+    }, 1500); // Bekleme süresini 1.5 saniyeye çıkardım, modalın animasyonunu atlatmak için daha güvenli.
 
     sendResponse({ status: 'OK', message: 'Veri alındı ve otomasyon başlatıldı.' });
   }
@@ -21,46 +20,35 @@ function runAutomation(basvuruNo) {
     return;
   }
 
-  // --- YENİ ADIM 1: DUYURU MODALINI KAPATMA ---
-  // Modal'daki "Devam" butonunu bulup tıklayalım.
-  const modalButton = document.querySelector('button.btn.btn-primary.w-100');
-  if (modalButton && modalButton.textContent.trim() === 'Devam') {
-    console.log('Duyuru modalı bulundu ve "Devam" butonuna tıklanıyor...');
-    modalButton.click();
+  // --- 1. ADIM: "DOSYA TAKİBİ" SEKMESİNE TIKLAMA ---
+  // Modalı tamamen görmezden gelip doğrudan doğru sekmeyi hedefliyoruz.
+  const dosyaTakibiTab = document.querySelector('a[data-toggle="tab"][href="#dosyaTakip"]');
+  
+  if (dosyaTakibiTab) {
+    console.log('"Dosya Takibi" sekmesine tıklanıyor...');
+    dosyaTakibiTab.click();
   } else {
-    console.log('Duyuru modalı bulunamadı veya zaten kapalı.');
+    console.error('"Dosya Takibi" sekmesi bulunamadı. Sayfa yapısı değişmiş olabilir.');
+    return; // Sekme bulunamazsa devam etme.
   }
 
-  // Modal kapandıktan sonra diğer işlemlerin yapılması için kısa bir bekleme süresi daha ekleyelim.
+  // --- 2. ADIM: FORMU DOLDURMA VE GÖNDERME ---
+  // Sekme içeriğinin yüklenmesi için kısa bir bekleme süresi çok önemlidir.
   setTimeout(() => {
-    // --- YENİ ADIM 2: "DOSYA TAKİBİ" SEKMESİNE TIKLAMA ---
-    const dosyaTakibiTab = document.querySelector('a[data-toggle="tab"][href="#dosyaTakip"]');
-    if (dosyaTakibiTab) {
-      console.log('"Dosya Takibi" sekmesine tıklanıyor...');
-      dosyaTakibiTab.click();
+    // "Dosya Takibi" sekmesindeki doğru input ve butonu bulalım.
+    const applicationNoInput = document.querySelector('#dosyaTakip input[name="fileNumber"]');
+    const searchButton = document.querySelector('#dosyaTakip button.btn-primary[type="submit"]');
+
+    if (applicationNoInput && searchButton) {
+      console.log(`Başvuru Numarası alanı bulundu. Değer yazılıyor: ${basvuruNo}`);
+      applicationNoInput.value = basvuruNo;
+
+      console.log('Sorgula butonuna tıklanıyor...');
+      searchButton.click();
     } else {
-      console.error('"Dosya Takibi" sekmesi bulunamadı.');
-      return; // Sekme bulunamazsa devam etmenin anlamı yok.
+      console.error('Dosya Takibi sekmesinde form elemanları bulunamadı.');
+      if (!applicationNoInput) console.error("Input alanı bulunamadı. Seçici: '#dosyaTakip input[name=\"fileNumber\"]'");
+      if (!searchButton) console.error("Buton bulunamadı. Seçici: '#dosyaTakip button.btn-primary[type=\"submit\"]'");
     }
-
-    // Sekme değiştikten sonra içeriğin yüklenmesi için bir bekleme daha...
-    setTimeout(() => {
-      // --- YENİ ADIM 3: FORMU DOLDURMA VE GÖNDERME ---
-      // "Dosya Takibi" sekmesindeki doğru input ve butonu bulalım.
-      const applicationNoInput = document.querySelector('#dosyaTakip input[name="fileNumber"]');
-      const searchButton = document.querySelector('#dosyaTakip button.btn-primary[type="submit"]');
-
-      if (applicationNoInput && searchButton) {
-        console.log(`Başvuru Numarası alanı bulundu. Değer yazılıyor: ${basvuruNo}`);
-        applicationNoInput.value = basvuruNo;
-
-        console.log('Sorgula butonuna tıklanıyor...');
-        searchButton.click();
-      } else {
-        console.error('Dosya Takibi sekmesinde form elemanları bulunamadı.');
-        if (!applicationNoInput) console.error("Input alanı bulunamadı. Seçici: '#dosyaTakip input[name=\"fileNumber\"]'");
-        if (!searchButton) console.error("Buton bulunamadı. Seçici: '#dosyaTakip button.btn-primary[type=\"submit\"]'");
-      }
-    }, 500); // 0.5 saniye bekle
-  }, 500); // 0.5 saniye bekle
+  }, 500); // Sekme değiştikten sonra 0.5 saniye bekle.
 }
