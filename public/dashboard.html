@@ -472,6 +472,50 @@
             });
         });
     </script>
+    <script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
+  import { getFirestore, doc, writeBatch, Timestamp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
+
+  // Senin firebase-config.js içindeki config değerlerini buraya koy
+const firebaseConfig = {
+  apiKey: "AIzaSyDbdqfiVbobnl1BtyiWxhD4bfIcREw8ZRc",
+  authDomain: "ip-manager-production-aab4b.firebaseapp.com",
+  projectId: "ip-manager-production-aab4b",
+  storageBucket: "ip-manager-production-aab4b.firebasestorage.app",
+  messagingSenderId: "594650169512",
+  appId: "1:594650169512:web:43496005e063a40511829d",
+  measurementId: "G-QY1P3ZCMC4"
+};
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+
+  async function seedTaskAssignments() {
+    const res = await fetch("/taskAssignments.json");
+    const data = await res.json();
+
+    const chunkSize = 400; // Firestore batch limiti güvenli sınır
+    for (let i = 0; i < data.length; i += chunkSize) {
+      const batch = writeBatch(db);
+      const slice = data.slice(i, i + chunkSize);
+
+      slice.forEach(item => {
+        const ref = doc(db, "taskAssignments", String(item.transactionTypeId));
+        batch.set(ref, {
+          ...item,
+          updatedAt: Timestamp.fromDate(new Date(item.updatedAt))
+        });
+      });
+
+      await batch.commit();
+      console.log(`✔ ${i + slice.length}/${data.length} kayıt eklendi`);
+    }
+
+    console.log("🎉 taskAssignments seeding tamamlandı");
+  }
+
+  seedTaskAssignments().catch(err => console.error("❌ Hata:", err));
+</script>
 
 </body>
 </html>
