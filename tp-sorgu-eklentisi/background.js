@@ -4,18 +4,23 @@ chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => 
   if (request.type === 'SORGULA' && request.data) {
     const basvuruNo = request.data;
     
-    // TÜRKPATENT'in arama sayfasının URL'si
-    const baseUrl = "https://arastirma.turkpatent.gov.tr/tr/marka/arama";
-
-    // Content script'imizin okuyabilmesi için başvuru numarasını URL'ye bir parametre olarak ekliyoruz.
-    // Örn: .../arama?autoQuery=2012-14517&source=EvrekaIP
-    const targetUrl = `${baseUrl}?autoQuery=${encodeURIComponent(basvuruNo)}&source=EvrekaIP`;
+    // YENİ VE DOĞRU URL HEDEFİ
+    const targetUrl = "https://www.turkpatent.gov.tr/arastirma-yap?form=trademark";
 
     // Yeni bir sekmede hedef URL'yi aç.
-    chrome.tabs.create({ url: targetUrl });
+    chrome.tabs.create({ url: targetUrl }, (newTab) => {
+      // Sekme oluşturulduktan sonra, content script'e veriyi göndermek için bir mesaj yolluyoruz.
+      // Bu yöntem, URL'ye parametre eklemekten daha güvenilirdir.
+      setTimeout(() => { // Sayfanın yüklenmeye başlaması için küçük bir gecikme
+        chrome.tabs.sendMessage(newTab.id, {
+          type: 'AUTO_FILL',
+          data: basvuruNo
+        });
+      }, 1000); // 1 saniye bekle
+    });
 
-    // Web sitenize işlemin başladığına dair bir yanıt gönder. (Bu isteğe bağlıdır ama iyi bir pratiktir)
-    sendResponse({ status: 'OK', message: 'Sorgulama sekmesi açıldı.' });
+    // Web sitenize işlemin başladığına dair bir yanıt gönder.
+    sendResponse({ status: 'OK', message: 'Sorgulama sekmesi açıldı ve veri gönderildi.' });
   }
   
   // Asenkron bir yanıt gönderileceğini belirtmek için true döndür.
