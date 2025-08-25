@@ -311,24 +311,51 @@
       </div>
     </main>
   </div>
-  <script>
-    document.getElementById('tpQueryBtn')?.addEventListener('click', () => {
-      const text = document.querySelector('#heroKv')?.textContent || '';
-      const match = text.match(/\b\d{2}\.\d{3}\.\d{3}\b|\b\d{4}\/\d+\b/);
-      const applicationNo =
-        (window.currentRecord?.applicationNumber || '').trim() ||
-        (match ? match[0] : '');
-      if (!applicationNo) return alert('Başvuru numarası bulunamadı.');
+<script>
+  document.getElementById('tpQueryBtn')?.addEventListener('click', () => {
+    // 1. Başvuru numarasını önceki gibi alıyoruz.
+    const applicationNo = (window.currentRecord?.applicationNumber || '').trim();
+    if (!applicationNo) {
+      alert('Başvuru numarası bulunamadı.');
+      return;
+    }
+    
+    // ÖNEMLİ: Bu ID, eklentiniz Chrome mağazasına yüklendiğinde alacağınız
+    // benzersiz kimliktir. Şimdilik test için boş bırakabiliriz veya geçici bir değer verebiliriz.
+    // Mağazaya yükledikten sonra burayı GÜNCELLEMELİSİNİZ.
+    // Geliştirme aşamasında bu ID'yi tarayıcınızın Eklentiler sayfasından öğrenebilirsiniz.
+    const eklentiID = 'BURAYA_EKLENTINIZIN_IDSI_GELECEK'; // <--- BU KISIM GÜNCELLENECEK
 
-      // Mutlak Firebase Hosting URL'si: her yerden doğru yere gider
-      const BASE = 'https://ip-manager-production-aab4b.web.app';
-      window.open(
-        `${BASE}/tp-sorgu?type=application&no=${encodeURIComponent(applicationNo)}`,
-        '_blank',
-        'noopener,noreferrer'
+    // 2. Tarayıcıda 'chrome.runtime.sendMessage' fonksiyonunun varlığını kontrol et.
+    // Bu, kodun sadece Chrome tabanlı tarayıcılarda çalışmasını sağlar ve hata vermesini önler.
+    if (typeof chrome !== 'undefined' && chrome.runtime) {
+      // 3. Eklentiye mesaj gönder.
+      chrome.runtime.sendMessage(
+        eklentiID, 
+        { 
+          type: 'SORGULA', 
+          data: applicationNo 
+        }, 
+        (response) => {
+          // 4. Eklentiden yanıt gelip gelmediğini kontrol et.
+          if (chrome.runtime.lastError) {
+            // Eğer bir hata varsa, bu genellikle eklentinin kurulu olmadığı anlamına gelir.
+            console.error(chrome.runtime.lastError.message);
+            alert('Sorgulama yardımcısı eklentisi kurulu değil veya etkin değil. Lütfen eklentiyi kurun.');
+            // Kullanıcıyı eklentiyi kurabileceği bir sayfaya yönlendirebilirsiniz.
+            // window.open('eklenti-kurulum-sayfasi.html', '_blank');
+          } else {
+            // Eklentiden başarılı bir yanıt geldiyse.
+            console.log('Eklentiden gelen yanıt:', response.status);
+          }
+        }
       );
-    });
-  </script>
+    } else {
+      // Chrome tabanlı bir tarayıcıda değilse veya bir sorun varsa.
+      alert('Bu özellik için Chrome tabanlı bir tarayıcı ve yardımcı eklenti gereklidir.');
+    }
+  });
+</script>
   <script type="module" src="./js/layout-loader.js"></script>
   <script type="module" src="./firebase-config.js"></script>
   <script type="module" src="./js/portfolio-detail.js"></script>
