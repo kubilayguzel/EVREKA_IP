@@ -8,7 +8,8 @@
   ],
   "host_permissions": [
     "*://arastirma.turkpatent.gov.tr/*",
-    "*://www.turkpatent.gov.tr/*"
+    "*://www.turkpatent.gov.tr/*",
+    "https://kubilayguzel.github.io/*"
     
   ],
   "background": {
