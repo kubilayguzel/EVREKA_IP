@@ -271,70 +271,41 @@
     }
   
 
-/* Brand card for larger company logo on login page */
-.brand-card {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  margin: 20px auto 10px auto;
-  padding: 16px 20px;
-  background: rgba(255,255,255,0.95);
-  border-radius: 16px;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.08);
-  width: min(420px, 90%);
-}
-.brand-card .brand-logo { max-width: 100%; height: auto; display: block; }
-.app-title { font-size: 2rem; font-weight: 700; text-align: center; color: #333; margin-top: 6px; }
-
-
-.brand-card .brand-logo {
-  max-width: 50% !important; /* yarı büyüklük */
-  height: auto;
-}
-body {
-  background: linear-gradient(135deg, #e6f9f0 0%, #d4f5ec 100%) !important;
-}
-
-
+/* ===== Custom Login Tweaks ===== */
 :root {
   --brand-green: #00a878;
   --brand-green-700: #00956d;
   --brand-green-800: #007e5b;
 }
-
-.brand-card .brand-logo {
-  max-width: 65% !important; /* biraz büyütüldü */
-  height: auto;
+/* Background: light green gradient */
+body {
+  background: linear-gradient(135deg, #e6f9f0 0%, #d4f5ec 100%) !important;
 }
-
-/* Ana buton rengi (maviden yeşile) */
-.auth-btn {
-  background-color: var(--brand-green) !important;
-  color: #fff !important;
-  border: none !important;
+.brand-card {
+  display: flex; justify-content: center; align-items: center;
+  margin: 20px auto 10px auto; padding: 16px 20px;
+  background: rgba(255,255,255,0.95);
+  border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+  width: min(420px, 90%);
 }
+.brand-card .brand-logo { max-width: 65% !important; height: auto; display: block; }
+.app-title { font-size: 2rem; font-weight: 700; text-align: center; color: #333; margin-top: 6px; }
+/* Buttons -> green */
+.auth-btn { background-color: var(--brand-green) !important; color: #fff !important; border: none !important; }
 .auth-btn:hover { background-color: var(--brand-green-700) !important; }
 .auth-btn:active { background-color: var(--brand-green-800) !important; }
 .auth-btn:disabled { opacity: .7; cursor: not-allowed; }
-
-/* Aktif tab rengi */
-.tabs .tab.active {
-  background-color: var(--brand-green) !important;
-  color: #fff !important;
-  border-color: transparent !important;
-}
-
-/* Pasif tab hover iyileştirme */
-.tabs .tab:hover {
-  background-color: rgba(0,168,120,0.08) !important;
-}
+/* Tabs */
+.tabs .tab.active { background-color: var(--brand-green) !important; color: #fff !important; border-color: transparent !important; }
+.tabs .tab:hover { background-color: rgba(0,168,120,0.08) !important; }
 </style>
 </head>
 <body>
 <div class="firebase-status" id="firebaseStatus">🔄 Firebase bağlanıyor...</div>
 <!-- Notification Container - User Management tarzında -->
+
 <div class="auth-container">
-<div class="brand-card"><img alt="Evreka Logo" class="brand-logo" onerror="this.onerror=null;this.src='evreka-logo.png.png';" src="evreka-logo.png"/></div><div class="logo-section">
+<div class="brand-card"><img alt="Evreka Logo" class="brand-logo" onerror="this.onerror=null;this.src='evreka-logo.png';" src="evreka-logo.png.png"/></div><div class="logo-section">
 <div class="app-title">IP Manager</div>
 <div class="subtitle">Fikri Mülkiyet Yönetim Sistemi</div>
 </div>
@@ -347,12 +318,12 @@ body {
 <form id="signinForm">
 <div class="form-group">
 <label class="form-label" for="signin-email">E-posta Adresi</label>
-<input class="form-input" id="signin-email" required="" type="email"/>
+<input autocomplete="username" class="form-input" id="signin-email" required="" type="email"/>
 <div class="error-message" id="signin-email-error"></div>
 </div>
 <div class="form-group">
 <label class="form-label" for="signin-password">Şifre</label>
-<input class="form-input" id="signin-password" required="" type="password"/>
+<input autocomplete="current-password" class="form-input" id="signin-password" required="" type="password"/>
 <div class="error-message" id="signin-password-error"></div>
 </div>
 <div class="helper-links">
@@ -374,12 +345,12 @@ body {
 </div>
 <div class="form-group">
 <label class="form-label" for="signup-email">E-posta Adresi</label>
-<input class="form-input" id="signup-email" required="" type="email"/>
+<input autocomplete="username" class="form-input" id="signup-email" required="" type="email"/>
 <div class="error-message" id="signup-email-error"></div>
 </div>
 <div class="form-group">
 <label class="form-label" for="signup-password">Şifre (min. 6 karakter)</label>
-<input class="form-input" id="signup-password" minlength="6" required="" type="password"/>
+<input autocomplete="new-password" class="form-input" id="signup-password" minlength="6" required="" type="password"/>
 <div class="error-message" id="signup-password-error"></div>
 </div>
 <button class="auth-btn" id="signupBtn" type="submit">
@@ -527,8 +498,8 @@ import { sendPasswordResetEmail, sendEmailVerification, updateProfile } from 'ht
         }
       }
 
-      \1
-      // Bildirim: işlem başlıyor
+      async handleSignUp() {
+          
       showNotification('Hesap oluşturuluyor, lütfen bekleyin...', 'info', 5000);
 const name = document.getElementById('signup-name').value.trim();
           const email = document.getElementById('signup-email').value.trim();
