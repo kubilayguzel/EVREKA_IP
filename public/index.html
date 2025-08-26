@@ -14,7 +14,7 @@
     
     body {
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      background: #ffffff !important;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       min-height: 100vh;
       display: flex;
       align-items: center;
@@ -288,23 +288,24 @@ body{ background:linear-gradient(135deg,var(--bg1) 0%, var(--bg2) 100%) !importa
 
 body { background: #ffffff !important; }
 
-/* Ensure notifications stack vertically and don't overlap */
-.notification-container{ position:fixed; top:24px; right:24px; z-index:3000; display:flex; flex-direction:column; gap:10px; }
+/* Stack notifications vertically; no overlap */
+.notification-container { position: fixed; top: 24px; right: 24px; z-index: 3000; display: flex; flex-direction: column; gap: 10px; }
+/* Brand inline logo inside card */
+.brand-inline { display:flex; justify-content:center; margin: 6px 0 6px; }
+.brand-inline .brand-inline-mark { height: 28px; width: auto; display:block; opacity: .95; }
 
-/* Force green buttons and active tabs */
-:root{ --brand-green:#00a878; --brand-green-700:#00956d; --brand-green-800:#007e5b; }
-.auth-btn{ background-color: var(--brand-green) !important; color:#fff !important; border:none !important; }
-.auth-btn:hover{ background-color: var(--brand-green-700) !important; }
-.auth-btn:active{ background-color: var(--brand-green-800) !important; }
-.tabs .tab.active{ background-color: var(--brand-green) !important; color:#fff !important; border-color: transparent !important; }
-.tabs .tab:hover{ background-color: rgba(0,168,120,.08) !important; }
+:root { --brand-green: #00a878; }
+.auth-btn { background-color: var(--brand-green) !important; color: #fff !important; border: none !important; transition: none !important; }
+.auth-btn:hover, .auth-btn:active { background-color: var(--brand-green) !important; }
+.tabs .tab.active { background-color: var(--brand-green) !important; color: #fff !important; border-color: transparent !important; }
+.tabs .tab:hover { background-color: rgba(0,168,120,0.08) !important; }
 </style>
 </head>
 <body>
 <div class="firebase-status" id="firebaseStatus">🔄 Firebase bağlanıyor...</div>
 <!-- Notification Container - User Management tarzında -->
 <div class="auth-container">
-<div class="logo-section">
+<div class="logo-section"><div class="brand-inline"><img alt="EVREKA" class="brand-inline-mark" src="evreka-logo.png"/></div>
 <div class="app-title">IP Manager</div>
 <div class="subtitle">Fikri Mülkiyet Yönetim Sistemi</div>
 </div>
@@ -485,12 +486,12 @@ import { showNotification, showFieldError, clearAllFieldErrors } from './utils.j
           if (result.success) {
             console.log('🟢 Sign in successful, auth state will handle navigation');
           } else {
-            showNotification(result.error || 'Giriş başarısız.', 'error');
+            showNotification(result.error || 'Giriş başarısız.', 'error', 10000);
           }
           // onAuthStateChanged gerekli aksiyonları alacak
         } catch (err) {
           console.error('Final sign in error catch:', err);
-          showNotification('Giriş sırasında beklenmeyen bir hata oluştu.', 'error');
+          showNotification('Giriş sırasında beklenmeyen bir hata oluştu.', 'error', 10000);
         } finally {
           this.setLoading('signin', false);
         }
@@ -516,24 +517,23 @@ import { showNotification, showFieldError, clearAllFieldErrors } from './utils.j
 
                       try {
                           await sendEmailVerification(user);
-                          showNotification('Doğrulama e-postası gönderildi. Lütfen e-postanızı doğrulayıp giriş yapın.', 'success', 15000);
-setTimeout(() => { const nc=document.getElementById('notification-container'); if(!nc||nc.querySelectorAll('.notification').length===0){ alert('Doğrulama e-postası gönderildi. Lütfen e-postanızı doğrulayın.'); } }, 1200);
+                          showNotification('Doğrulama e-postası gönderildi. Lütfen e-postanızı doğrulayıp giriş yapın.', 'success', 10000);
                       } catch (ve) {
                           console.error('sendEmailVerification error:', ve);
-                          showNotification('Doğrulama e-postası gönderilemedi. Daha sonra tekrar deneyin.', 'error');
+                          showNotification('Doğrulama e-postası gönderilemedi. Daha sonra tekrar deneyin.', 'error', 10000);
                       }
                       await authService.signOut();
                       this.switchTab('signin');
                   } else {
-                      showNotification('Hesap oluşturuldu. Lütfen e-postanızı doğrulayın ve giriş yapın.', 'success', 15000);
+                      showNotification('Hesap oluşturuldu. Lütfen e-postanızı doğrulayın ve giriş yapın.', 'success', 10000);
                       this.switchTab('signin');
                   }
               } else {
-                  showNotification(result.error || 'Kayıt başarısız.', 'error', 10000);
+                  showNotification(result.error || 'Kayıt başarısız.', 'error', 8000);
               }
           } catch (err) {
               console.error('Final sign up error catch:', err);
-              showNotification('Kayıt sırasında beklenmeyen bir hata oluştu.', 'error', 10000);
+              showNotification('Kayıt sırasında beklenmeyen bir hata oluştu.', 'error', 8000);
           } finally {
               this.setLoading('signup', false);
               sessionStorage.removeItem('signup_flow');
@@ -543,7 +543,7 @@ setTimeout(() => { const nc=document.getElementById('notification-container'); i
       async handlePasswordReset() {
         const email = prompt('Şifre sıfırlama için e-posta adresinizi girin:');
         if (!email || !this.isValidEmail(email)) {
-          showNotification('Geçerli bir e-posta adresi girin.', 'error');
+          showNotification('Geçerli bir e-posta adresi girin.', 'error', 10000);
           return;
         }
 
@@ -555,7 +555,7 @@ setTimeout(() => { const nc=document.getElementById('notification-container'); i
           let msg = 'İşlem gerçekleştirilemedi.';
           if (err?.code === 'auth/user-not-found') msg = 'Bu e-posta ile kullanıcı bulunamadı.';
           else if (err?.code === 'auth/invalid-email') msg = 'Geçersiz e-posta adresi.';
-          showNotification(msg, 'error');
+          showNotification(msg, 'error', 10000);
         }
       }
 
@@ -607,6 +607,33 @@ document.addEventListener('DOMContentLoaded', () => {
       try { showNotification('Hesap oluşturuluyor, lütfen bekleyin...', 'info', 3000); } catch (e) {}
     });
   }
-});</script>
+});
+
+// Sticky verification info: if another toast replaces it immediately, show an alert fallback
+document.addEventListener('DOMContentLoaded', () => {
+  const nc = document.getElementById('notification-container');
+  if (!nc) return;
+  const VERIF_PART = 'Doğrulama e-postası gönderildi';
+  const obs = new MutationObserver((mutations) => {
+    for (const m of mutations) {
+      for (const node of m.addedNodes) {
+        if (node && node.nodeType === 1) {
+          const text = (node.textContent || '').trim();
+          if (text.includes(VERIF_PART)) {
+            setTimeout(() => {
+              // if it's gone or hidden very quickly, alert as fallback
+              const stillThere = document.body.contains(node) && node.offsetParent !== null;
+              if (!stillThere) {
+                alert('Doğrulama e-postası gönderildi. Lütfen e-postanızı doğrulayın.');
+              }
+            }, 1800);
+          }
+        }
+      }
+    }
+  });
+  obs.observe(nc, { childList: true });
+});
+</script>
 <div class="notification-container" id="notification-container"></div></body>
-</html>  
+</html> 
