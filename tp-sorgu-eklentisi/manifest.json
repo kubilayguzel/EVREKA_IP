@@ -3,9 +3,8 @@
   "name": "Evreka IP Sorgu Yardımcısı",
   "version": "1.0",
   "description": "Evreka IP uygulamasından TÜRKPATENT üzerinde otomatik sorgulama yapar.",
-  "permissions": [
-    "tabs"
-  ],
+  "permissions": [],
+  
   "host_permissions": [
     "*://arastirma.turkpatent.gov.tr/*",
     "*://www.turkpatent.gov.tr/*"
