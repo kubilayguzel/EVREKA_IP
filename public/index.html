@@ -277,7 +277,7 @@
                   const user = auth.currentUser;
                   if (user) {
                       // Ad-soyad bilgisini kaydetmek için user.updateProfile'ı kullanın.
-                      await user.updateProfile({ displayName: name }); // <-- BURASI EKLENMELİ
+                      await updateProfile(user, { displayName: name });
 
                       try {
                           await sendEmailVerification(user);
