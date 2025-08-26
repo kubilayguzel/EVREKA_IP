@@ -13,15 +13,14 @@
     }
     
     body {
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: #333;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        background: #ffffff; /* Arka planı tamamen beyaz yap */
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
     }
-    
+        
     .auth-container {
       background: rgba(255, 255, 255, 0.95);
       padding: 40px;
@@ -290,9 +289,9 @@
 <body>
 <div class="firebase-status" id="firebaseStatus">🔄 Firebase bağlanıyor...</div>
 <!-- Notification Container - User Management tarzında -->
-<div class="notification-container" id="notification-container"></div>
+
 <div class="auth-container">
-<div class="brand-card"><picture><source srcset="evreka-logo.png" type="image/png"/><img alt="Evreka Logo" class="brand-logo" src="evreka-logo.png.png"/></picture></div><div class="logo-section">
+<div class="brand-card"><img alt="Evreka Logo" class="brand-logo" onerror="this.onerror=null;this.src='evreka-logo.png.png';" src="evreka-logo.png"/></div><div class="logo-section">
 <div class="app-title">IP Manager</div>
 <div class="subtitle">Fikri Mülkiyet Yönetim Sistemi</div>
 </div>
@@ -587,5 +586,5 @@ import { sendPasswordResetEmail, sendEmailVerification, updateProfile } from 'ht
     });
 
   </script>
-</body>
+<div class="notification-container" id="notification-container"></div></body>
 </html>
