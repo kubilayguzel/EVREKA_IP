@@ -26,8 +26,14 @@ import { auth } from 'firebase-functions/v1';
 import { getAuth } from 'firebase-admin/auth';                          // Admin SDK (modüler)
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';    // Admin SDK (modüler)
 
+// Initialize Firebase Admin
+if (!admin.apps.length) {
+  admin.initializeApp();
+}
 
 const adminAuth = admin.auth();
+const adminDb = admin.firestore(); 
+
 const secretClient = new SecretManagerServiceClient();
 
 // 🔐 SA_MAILER_KEY'i Secret Manager'dan çek
@@ -3409,7 +3415,7 @@ export const adminUpsertUser = onCall({ region: "europe-west1" }, async (req) =>
 });
 
 export const onAuthUserCreate = auth.user().onCreate(async (user) => {
- 
+  
   await db.collection('users').doc(user.uid).set({
     email: user.email || '',
     displayName: user.displayName || '',
