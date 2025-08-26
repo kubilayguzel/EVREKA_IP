@@ -13,14 +13,15 @@
     }
     
     body {
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        background: #ffffff; /* Arka planı tamamen beyaz yap */
-        min-height: 100vh;
-        display: flex;
-        align-items: center;
-        justify-content: center;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #333;
     }
-        
+    
     .auth-container {
       background: rgba(255, 255, 255, 0.95);
       padding: 40px;
@@ -284,12 +285,20 @@
 }
 .brand-card .brand-logo { max-width: 100%; height: auto; display: block; }
 .app-title { font-size: 2rem; font-weight: 700; text-align: center; color: #333; margin-top: 6px; }
+
+
+.brand-card .brand-logo {
+  max-width: 50% !important; /* yarı büyüklük */
+  height: auto;
+}
+body {
+  background: linear-gradient(135deg, #e6f9f0 0%, #d4f5ec 100%) !important;
+}
 </style>
 </head>
 <body>
 <div class="firebase-status" id="firebaseStatus">🔄 Firebase bağlanıyor...</div>
 <!-- Notification Container - User Management tarzında -->
-
 <div class="auth-container">
 <div class="brand-card"><img alt="Evreka Logo" class="brand-logo" onerror="this.onerror=null;this.src='evreka-logo.png.png';" src="evreka-logo.png"/></div><div class="logo-section">
 <div class="app-title">IP Manager</div>
