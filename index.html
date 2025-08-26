@@ -128,9 +128,9 @@
   </div>
 
   <script type="module">
-    import { authService, auth } from './public/firebase-config.js';
-    import { sendPasswordResetEmail, sendEmailVerification } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
-    import { showNotification, showFieldError, clearAllFieldErrors } from './public/utils.js';
+  import { authService, auth } from './public/firebase-config.js';
+  import { sendPasswordResetEmail, sendEmailVerification, updateProfile } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+  import { showNotification, showFieldError, clearAllFieldErrors } from './public/utils.js';
 
     class AuthController {
       constructor() {
@@ -260,7 +260,7 @@
           this.setLoading('signin', false);
         }
       }
-      
+
       async handleSignUp() {
           const name = document.getElementById('signup-name').value.trim();
           const email = document.getElementById('signup-email').value.trim();
