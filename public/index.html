@@ -528,11 +528,12 @@
   </div>
 
   <!-- Mevcut JavaScript kodlarınız buraya gelecek -->
-  <script src="public/js/firebase-config.js"></script>
-  <script src="public/js/notification.js"></script>
-  <script src="public/js/auth.js"></script>
 
-  <script>
+    <script type="module">
+  import { authService, auth } from './firebase-config.js';
+  import { sendPasswordResetEmail, sendEmailVerification, updateProfile } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+  import { showNotification, showFieldError, clearAllFieldErrors } from './utils.js';
+
     // Tab switching functionality
     document.querySelectorAll('.tab').forEach(tab => {
       tab.addEventListener('click', () => {
