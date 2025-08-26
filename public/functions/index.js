@@ -3309,29 +3309,39 @@ function canManageUsers(req) {
     hasAuth: !!req.auth,
     uid: req.auth?.uid,
     email: req.auth?.token?.email,
-    role: req.auth?.token?.role
+    role: req.auth?.token?.role,
+    allClaims: req.auth?.token
   });
   
   if (!req.auth) return false;
   
-  // Geçici: Sizin UID'iniz için bypass
-  const yourUID = 'wH6MFM3jrYShxWDPkjr0Lbuj61F2'; // LocalStorage'dan aldığımız UID
-  if (req.auth.uid === yourUID) {
-    console.log('✅ Admin UID bypass for:', yourUID);
+  // Normal kontroller
+  const claims = req.auth.token;
+  const role = claims?.role;
+  const email = claims?.email;
+  const uid = req.auth.uid;
+  
+  // 1. Süper admin claim kontrolü
+  if (role === 'superadmin') {
+    console.log('✅ Access granted via superadmin role');
     return true;
   }
   
-  // Normal kontroller
-  const role = req.auth.token?.role;
-  if (role === 'superadmin') return true;
+  // 2. Specific UID kontrolü (backup)
+  if (uid === 'wH6MFM3jrYShxWDPkjr0Lbuj61F2') {
+    console.log('✅ Access granted via specific UID');
+    return true;
+  }
   
-  // E-posta bazlı kontrol
-  const email = req.auth.token?.email;
-  if (email && email.includes('@evrekapatent.com')) return true;
+  // 3. E-posta kontrolü (backup)
+  if (email && email.includes('@evrekapatent.com')) {
+    console.log('✅ Access granted via company email');
+    return true;
+  }
   
+  console.log('❌ Access denied');
   return false;
 }
-
 
 // === Kullanıcı Oluştur/Güncelle (Auth + Firestore senkron) ===
 export const adminUpsertUser = onCall({ region: "europe-west1" }, async (req) => {
