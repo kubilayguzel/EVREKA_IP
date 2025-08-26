@@ -48,7 +48,7 @@
     }
     .firebase-status.connected{background:#d4edda;color:#155724}
     .firebase-status.error{background:#f8d7da;color:#721c24}
-    .helper-links{display:flex;justify-content:flex-end;margin-top:-10px;margin-bottom:20px}
+    .helper-links{display:flex;justify-content:flex-end;margin-top:-10px;margin-bottom:20px;gap:12px}
     .link-btn{
       background:none;border:none;color:#1e3c72;cursor:pointer;font-size:.9em;text-decoration:underline;padding:0
     }
@@ -129,7 +129,7 @@
 
   <script type="module">
     import { authService, auth } from './firebase-config.js';
-    import { sendPasswordResetEmail } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+    import { sendPasswordResetEmail, sendEmailVerification } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
     import { showNotification, showFieldError, clearAllFieldErrors } from './utils.js';
 
     class AuthController {
@@ -187,6 +187,9 @@
             };
             localStorage.setItem('currentUser', JSON.stringify(userData));
             console.log('💾 User data saved to localStorage:', userData);
+
+            // Not: Doğrulama zorunluluğu koymak istersen burada kontrol edebilirsin:
+            // if (!user.emailVerified) { ... sendEmailVerification(user) + signOut ... }
 
             showNotification('Giriş başarılı! Dashboard\'a yönlendiriliyorsunuz...', 'success');
 
@@ -263,8 +266,24 @@
         try {
           const result = await authService.signUp(email, password, name, 'user');
           if (result.success) {
-            showNotification('Hesap oluşturuldu! Giriş yapılıyor...', 'success');
-            // Firebase bağlıysa onAuthStateChanged yönlendirecek
+            // E-posta doğrulama gönder
+            const u = auth.currentUser;
+            if (u) {
+              try {
+                await sendEmailVerification(u);
+                showNotification('Doğrulama e-postası gönderildi. Lütfen e-postanızı doğruladıktan sonra giriş yapın.', 'success');
+              } catch (ve) {
+                console.error('sendEmailVerification error:', ve);
+                showNotification('Doğrulama e-postası gönderilemedi. Daha sonra tekrar deneyin.', 'error');
+              }
+              // Oturumu kapatıp Giriş sekmesine dön
+              await authService.signOut();
+              this.switchTab('signin');
+            } else {
+              // Nadir durum: auth.currentUser yok
+              showNotification('Hesap oluşturuldu. Lütfen e-postanızı doğrulayın ve giriş yapın.', 'success');
+              this.switchTab('signin');
+            }
           } else {
             showNotification(result.error || 'Kayıt başarısız.', 'error');
           }
