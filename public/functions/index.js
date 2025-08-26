@@ -3406,18 +3406,28 @@ export const adminUpsertUser = onCall({ region: "europe-west1" }, async (req) =>
   };
 });
 
-export const onAuthUserCreate = auth.user().onCreate(async (user) => {
+export const onAuthUserCreate = functions.auth.user().onCreate(async (user) => {
   const db = getFirestore();
-  
-  await db.collection('users').doc(user.uid).set({
-    email: user.email || '',
-    displayName: user.displayName || '',
-    role: 'user',                         // default rol
-    disabled: !!user.disabled,
-    createdAt: FieldValue.serverTimestamp(),
+  const ref = db.collection("users").doc(user.uid);
+
+  const up = {
     updatedAt: FieldValue.serverTimestamp(),
-    _source: 'auth.user().onCreate'       // V1 source
-  }, { merge: true });
+  };
+  if (user.email)       up.email       = user.email;
+  if (user.displayName) up.displayName = user.displayName;
+  if (typeof user.disabled === "boolean") up.disabled = user.disabled;
+
+  const snap = await ref.get();
+  if (!snap.exists) {
+    await ref.set({
+      role: "user",
+      createdAt: FieldValue.serverTimestamp(),
+      ...up,
+      _source: "auth.onCreate(v1)",
+    }, { merge: true });
+  } else {
+    await ref.set(up, { merge: true });
+  }
 });
 
 export const onAuthUserDelete = auth.user().onDelete(async (user) => {
@@ -3433,23 +3443,31 @@ export const adminDeleteUser = onCall({ region: "europe-west1" }, async (req) =>
   const uid = strip(req.data?.uid);
   if (!uid) throw new HttpsError("invalid-argument", "uid zorunlu.");
 
-  // Kendi hesabını silme koruması
   const callerUid = req.auth?.uid;
   if (uid === callerUid) {
     throw new HttpsError("failed-precondition", "Kendi hesabınızı silemezsiniz.");
   }
 
-  // 1) Auth'tan sil
-  await adminAuth.deleteUser(uid);
+  // 1) Auth'tan sil – hataları kontrollü map et
+  try {
+    await adminAuth.deleteUser(uid);
+  } catch (e) {
+    if (e?.code === "auth/user-not-found") {
+      // Auth'ta yoksa bile Firestore'u temizleyip OK dönelim
+      await db.collection("users").doc(uid).delete().catch(() => {});
+      return { ok: true, uid, note: "auth user not found; firestore cleaned" };
+    }
+    throw new HttpsError("internal", "Auth delete failed: " + (e?.message || e));
+  }
 
-  // 2) Firestore profilini sil (trigger varsa zaten otomatik de olur)
+  // 2) Firestore profilini sil (yoksa sorun değil)
   await db.collection("users").doc(uid).delete().catch(() => {});
 
-  // 3) (Opsiyonel) Atanmış işleri boşaltmak istersen, burada yapabilirsin
-  // const snap = await db.collection('tasks').where('assignedTo_uid', '==', uid).get();
-  // const batch = db.bulkWriter();
-  // snap.forEach(docSnap => batch.update(docSnap.ref, { assignedTo_uid: null, assignedTo_email: null }));
-  // await batch.close();
+  // 3) (opsiyonel) Bu kullanıcıya atanmış işleri boşaltmak istiyorsan burada yap
+  // const qs = await db.collection('tasks').where('assignedTo_uid', '==', uid).get();
+  // const w = db.bulkWriter();
+  // qs.forEach(d => w.update(d.ref, { assignedTo_uid: null, assignedTo_email: null }));
+  // await w.close();
 
   return { ok: true, uid };
 });
