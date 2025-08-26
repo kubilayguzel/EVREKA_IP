@@ -3293,3 +3293,139 @@ function createTableDataCell(text) {
 function sanitizeFileName(fileName) {
   return fileName.replace(/[<>:"/\\|?*]/g, '_').substring(0, 100);
 }
+
+// KULLANICI VE ADMIN YÖNETİMİ //
+
+export const adminUpsertUser = onCall({ region: "europe-west1" }, async (req) => {
+  // Basit yetki: domain veya custom claim 'admin' kontrolü (ihtiyaca göre sıkılaştır)
+  const callerEmail = (req.auth?.token?.email || "").toLowerCase();
+  if (!callerEmail.endsWith("@evrekapatent.com") && req.auth?.token?.role !== "admin") {
+    throw new HttpsError("permission-denied", "Yetkisiz istek.");
+  }
+
+  const strip = (s) => String(s ?? "").trim().replace(/^["'\s]+|["'\s]+$/g, "");
+  const uidInput      = strip(req.data?.uid);                   // Edit modunda gelebilir
+  const emailInput    = strip(req.data?.email).toLowerCase();   // Create veya mevcut email
+  const newEmailInput = strip(req.data?.newEmail).toLowerCase();// Email değişiklik isteği
+  const displayName   = strip(req.data?.displayName);
+  const role          = strip(req.data?.role || "user");
+  const password      = String(req.data?.password || "");       // boş olabilir (reset tercih edilebilir)
+  const disabledFlag  = req.data?.disabled;                     // true/false/undefined
+
+  if (!uidInput && !emailInput) throw new HttpsError("invalid-argument", "uid veya email zorunlu.");
+  if (!displayName) throw new HttpsError("invalid-argument", "displayName zorunlu.");
+
+  const auth = getAuth();
+  const db = getFirestore();
+
+  // 1) Kullanıcıyı bul ya da oluştur
+  let userRecord = null;
+  let existed = true;
+  try {
+    userRecord = uidInput ? await auth.getUser(uidInput) : await auth.getUserByEmail(emailInput);
+  } catch (e) {
+    if (e?.code === "auth/user-not-found") existed = false;
+    else throw new HttpsError("internal", `Kullanıcı sorgulanamadı: ${e?.message || e}`);
+  }
+
+  if (!existed) {
+    const createParams = { email: emailInput, displayName };
+    if (password) createParams.password = password;
+    userRecord = await auth.createUser(createParams);
+  }
+
+  // 2) Auth güncelleme parametrelerini hazırla
+  const updateParams = {};
+  if (displayName && displayName !== userRecord.displayName) updateParams.displayName = displayName;
+  if (typeof disabledFlag === "boolean" && disabledFlag !== userRecord.disabled) updateParams.disabled = disabledFlag;
+  if (password) updateParams.password = password;
+
+  // Email değişikliği
+  const targetEmail = newEmailInput || emailInput || userRecord.email || "";
+  if (targetEmail && targetEmail !== userRecord.email) {
+    // Çakışma kontrolü
+    try {
+      const other = await auth.getUserByEmail(targetEmail);
+      if (other.uid !== userRecord.uid) throw new HttpsError("already-exists", "Bu e-posta başka bir kullanıcıda kayıtlı.");
+    } catch (e) {
+      if (e?.code !== "auth/user-not-found") throw new HttpsError("internal", `Email kontrolü başarısız: ${e?.message || e}`);
+    }
+    updateParams.email = targetEmail;
+  }
+
+  // 3) Auth güncelle
+  if (Object.keys(updateParams).length > 0) {
+    userRecord = await auth.updateUser(userRecord.uid, updateParams);
+  }
+
+  // 4) Custom claims (rol)
+  if (role) await auth.setCustomUserClaims(userRecord.uid, { role });
+
+  // 5) Firestore profilini upsert et
+  const userDocRef = db.collection("users").doc(userRecord.uid);
+  const baseData = {
+    email: userRecord.email,
+    displayName: userRecord.displayName || displayName,
+    role,
+    disabled: !!userRecord.disabled,
+    updatedAt: FieldValue.serverTimestamp(),
+  };
+  if (!existed) baseData.createdAt = FieldValue.serverTimestamp();
+  await userDocRef.set(baseData, { merge: true });
+
+  return { uid: userRecord.uid, email: userRecord.email, existed, role, disabled: !!userRecord.disabled };
+});
+export const onAuthUserCreate = auth.user().onCreate(async (user) => {
+  const db = getFirestore();
+  const ref = db.collection("users").doc(user.uid);
+  await ref.set({
+    email: user.email || "",
+    displayName: user.displayName || "",
+    role: "user",                  // default rol
+    disabled: !!user.disabled,
+    createdAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+    _source: "auth.onCreate"       // izleme amaçlı
+  }, { merge: true });
+});
+
+export const onAuthUserDelete = auth.user().onDelete(async (user) => {
+  const db = getFirestore();
+  await db.collection("users").doc(user.uid).delete().catch(() => {});
+});
+export const adminDeleteUser = onCall({ region: "europe-west1" }, async (req) => {
+  const callerEmail = (req.auth?.token?.email || "").toLowerCase();
+  const callerUid   = req.auth?.uid || "";
+
+  // Basit yetki kontrolü (istersen claim 'admin' de zorunlu kıl)
+  if (!callerEmail.endsWith("@evrekapatent.com") && req.auth?.token?.role !== "admin") {
+    throw new HttpsError("permission-denied", "Yetkisiz istek.");
+  }
+
+  const uid = String(req.data?.uid || "").trim();
+  if (!uid) throw new HttpsError("invalid-argument", "uid zorunlu.");
+
+  // Kendini silmeyi engelle (güvenli tercih)
+  if (uid === callerUid) {
+    throw new HttpsError("failed-precondition", "Kendi hesabınızı bu yöntemle silemezsiniz.");
+  }
+
+  const auth = getAuth();
+  const db   = getFirestore();
+
+  // 1) Auth'tan sil
+  await auth.deleteUser(uid);
+
+  // 2) Firestore profilini de sil (onAuthUserDelete trigger’ı da varsa, bu sadece hızlandırır)
+  try {
+    await db.collection("users").doc(uid).delete();
+  } catch (_) { /* yoksa sorun değil */ }
+
+  // (Opsiyonel) Bu kullanıcıya atanmış işleri boşaltmak istersen:
+  // const snap = await db.collection("tasks").where("assignedTo_uid","==",uid).limit(500).get();
+  // const batch = db.bulkWriter();
+  // snap.forEach(docSnap => batch.update(docSnap.ref, { assignedTo_uid: null, assignedTo_email: null }));
+  // await batch.close();
+
+  return { ok: true, uid };
+});
