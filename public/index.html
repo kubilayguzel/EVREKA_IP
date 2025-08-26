@@ -361,18 +361,12 @@ body {
 </div>
 </div>
 <script type="module">
-  import { authService, auth } from './firebase-config.js';
-  
+import { authService, auth } from './firebase-config.js';
 import { showNotification, showFieldError, clearAllFieldErrors } from './utils.js';
 import { sendPasswordResetEmail, sendEmailVerification, updateProfile } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
 
     // User Management sayfasındaki notification sistemini kopyala
     
-
-    
-
-    
-
     class AuthController {
       constructor() {
         this.currentTab = 'signin';
