@@ -299,10 +299,6 @@ body { background: #ffffff !important; }
 .auth-btn:hover, .auth-btn:active { background-color: var(--brand-green) !important; }
 .tabs .tab.active { background-color: var(--brand-green) !important; color: #fff !important; border-color: transparent !important; }
 .tabs .tab:hover { background-color: rgba(0,168,120,0.08) !important; }
-
-body{ background:#ffffff !important; }
-
-.brand-inline{display:flex;justify-content:center;margin:6px 0}.brand-inline .brand-inline-mark{height:28px;width:auto;display:block;opacity:.95}
 </style>
 </head>
 <body>
@@ -521,7 +517,9 @@ import { showNotification, showFieldError, clearAllFieldErrors } from './utils.j
 
                       try {
                           await sendEmailVerification(user);
-                          showNotification('Doğrulama e-postası gönderildi. Lütfen e-postanızı doğrulayıp giriş yapın.', 'success', 10000);
+                          
+            sessionStorage.setItem('toast_verif_sent','1');
+showNotification('Doğrulama e-postası gönderildi. Lütfen e-postanızı doğrulayıp giriş yapın.', 'success', 10000);
                       } catch (ve) {
                           console.error('sendEmailVerification error:', ve);
                           showNotification('Doğrulama e-postası gönderilemedi. Daha sonra tekrar deneyin.', 'error', 10000);
@@ -637,6 +635,19 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
   obs.observe(nc, { childList: true });
+});
+
+
+// Persist verification toast across reloads (e.g., after signOut redirect)
+document.addEventListener('DOMContentLoaded', () => {
+  try {
+    if (sessionStorage.getItem('toast_verif_sent') === '1') {
+      sessionStorage.removeItem('toast_verif_sent');
+      showNotification('Doğrulama e-postası gönderildi. Lütfen e-postanızı doğrulayıp giriş yapın.', 'success', 15000);
+    }
+  } catch (e) {
+    alert('Doğrulama e-postası gönderildi. Lütfen e-postanızı doğrulayın.');
+  }
 });
 </script>
 <div class="notification-container" id="notification-container"></div></body>
