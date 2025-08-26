@@ -25,7 +25,13 @@ import { google } from "googleapis";
 import { auth } from 'firebase-functions/v1';
 import { getAuth } from 'firebase-admin/auth';                          // Admin SDK (modüler)
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';    // Admin SDK (modüler)
-import * as functions from 'firebase-functions';
+
+// Initialize Firebase Admin
+if (!admin.apps.length) {
+  admin.initializeApp();
+}
+const adminAuth = admin.auth();
+const db = admin.firestore();
 
 const secretClient = new SecretManagerServiceClient();
 
@@ -3406,36 +3412,22 @@ export const adminUpsertUser = onCall({ region: "europe-west1" }, async (req) =>
     disabled: !!userRecord.disabled,
   };
 });
-export const onAuthUserCreate = functions.auth.user().onCreate(async (user) => {
-  const db  = getFirestore();
-  const ref = db.collection('users').doc(user.uid);
 
-  // Boş değerlerle mevcut alanları EZME!
-  const up = {
+export const onAuthUserCreate = auth.user().onCreate(async (user) => {
+  const db = getFirestore();
+  
+  await db.collection('users').doc(user.uid).set({
+    email: user.email || '',
+    displayName: user.displayName || '',
+    role: 'user',                         // default rol
+    disabled: !!user.disabled,
+    createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
-  };
-  if (user.email)       up.email       = user.email;
-  if (user.displayName) up.displayName = user.displayName;
-  if (typeof user.disabled === 'boolean') up.disabled = !!user.disabled;
-
-  const snap = await ref.get();
-
-  if (!snap.exists) {
-    // İlk oluşturulma: default role + createdAt
-    await ref.set({
-      role: 'user',
-      createdAt: FieldValue.serverTimestamp(),
-      ...up,
-      _source: 'auth.onCreate(v1)',
-    }, { merge: true });
-  } else {
-    // Doküman zaten varsa sadece dolu alanları merge et
-    await ref.set(up, { merge: true });
-  }
+    _source: 'auth.user().onCreate'       // V1 source
+  }, { merge: true });
 });
 
 export const onAuthUserDelete = auth.user().onDelete(async (user) => {
-  const db = getFirestore();
   await db.collection('users').doc(user.uid).delete().catch(() => {});
 });
 
