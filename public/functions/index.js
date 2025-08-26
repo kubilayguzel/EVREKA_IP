@@ -3302,15 +3302,16 @@ function sanitizeFileName(fileName) {
 
 // KULLANICI VE ADMIN YÖNETİMİ //
 
-const canManageUsers = (ctx) => {
-  if (!ctx.auth) return false;
-  const email = (ctx.auth.token?.email || "").toLowerCase();
-  const role  = ctx.auth.token?.role;
-  // İzin politikası: admin/superadmin claim veya şirket domain'i
-  if (role === "admin" || role === "superadmin") return true;
-  if (email.endsWith("@evrekapatent.com")) return true; // İstersen kaldır/sıkılaştır
-  return false;
-};
+const strip = (s) => String(s ?? '').trim().replace(/^["'\s]+|["'\s]+$/g, '');
+
+function canManageUsers(req) {
+  if (!req.auth) return false;
+  
+  // Check if user has superadmin role
+  const claims = req.auth.token;
+  return claims?.role === 'superadmin';
+}
+
 
 // === Kullanıcı Oluştur/Güncelle (Auth + Firestore senkron) ===
 export const adminUpsertUser = onCall({ region: "europe-west1" }, async (req) => {
@@ -3426,15 +3427,6 @@ export const onAuthUserDelete = auth.user().onDelete(async (user) => {
   await adminDb.collection('users').doc(user.uid).delete().catch(() => {});
 });
 
-const strip = (s) => String(s ?? '').trim().replace(/^["'\s]+|["'\s]+$/g, '');
-
-function canManageUsers(req) {
-  if (!req.auth) return false;
-  
-  // Check if user has superadmin role
-  const claims = req.auth.token;
-  return claims?.role === 'superadmin';
-}
 
 export const adminDeleteUser = onCall({ region: "europe-west1" }, async (req) => {
   if (!canManageUsers(req)) {
