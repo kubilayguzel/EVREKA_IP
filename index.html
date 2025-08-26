@@ -260,48 +260,51 @@
           this.setLoading('signin', false);
         }
       }
-async handleSignUp() {
-    const name = document.getElementById('signup-name').value.trim();
-    const email = document.getElementById('signup-email').value.trim();
-    const password = document.getElementById('signup-password').value;
+      
+      async handleSignUp() {
+          const name = document.getElementById('signup-name').value.trim();
+          const email = document.getElementById('signup-email').value.trim();
+          const password = document.getElementById('signup-password').value;
 
-    if (!this.validateSignUp(name, email, password)) return;
+          if (!this.validateSignUp(name, email, password)) return;
 
-    this.setLoading('signup', true);
-    sessionStorage.setItem('signup_flow', '1');
+          this.setLoading('signup', true);
+          sessionStorage.setItem('signup_flow', '1');
 
-    try {
-        const result = await authService.signUp(email, password, name, 'user');
-        if (result.success) {
-            const user = auth.currentUser;
-            if (user) {
-                // Ad-soyad bilgisini kaydetmek için user.updateProfile'ı kullanın.
-                await user.updateProfile({ displayName: name }); // <-- BURASI EKLENMELİ
+          try {
+              const result = await authService.signUp(email, password, name, 'user');
+              if (result.success) {
+                  const user = auth.currentUser;
+                  if (user) {
+                      // Ad-soyad bilgisini kaydetmek için updateProfile fonksiyonunu kullanın.
+                      // Bu fonksiyon, ilk parametre olarak auth nesnesini, ikinci parametre olarak ise
+                      // güncellenecek user nesnesini alır.
+                      await updateProfile(user, { displayName: name }); // <-- BURASI DÜZELTİLDİ
 
-                try {
-                    await sendEmailVerification(user);
-                    showNotification('Doğrulama e-postası gönderildi. Lütfen e-postanızı doğrulayıp giriş yapın.', 'success');
-                } catch (ve) {
-                    console.error('sendEmailVerification error:', ve);
-                    showNotification('Doğrulama e-postası gönderilemedi. Daha sonra tekrar deneyin.', 'error');
-                }
-                await authService.signOut();
-                this.switchTab('signin');
-            } else {
-                showNotification('Hesap oluşturuldu. Lütfen e-postanızı doğrulayın ve giriş yapın.', 'success');
-                this.switchTab('signin');
-            }
-        } else {
-            showNotification(result.error || 'Kayıt başarısız.', 'error');
-        }
-    } catch (err) {
-        console.error('Final sign up error catch:', err);
-        showNotification('Kayıt sırasında beklenmeyen bir hata oluştu.', 'error');
-    } finally {
-        sessionStorage.removeItem('signup_flow');
-        this.setLoading('signup', false);
-    }
-}
+                      try {
+                          await sendEmailVerification(user);
+                          showNotification('Doğrulama e-postası gönderildi. Lütfen e-postanızı doğrulayıp giriş yapın.', 'success');
+                      } catch (ve) {
+                          console.error('sendEmailVerification error:', ve);
+                          showNotification('Doğrulama e-postası gönderilemedi. Daha sonra tekrar deneyin.', 'error');
+                      }
+                      await authService.signOut();
+                      this.switchTab('signin');
+                  } else {
+                      showNotification('Hesap oluşturuldu. Lütfen e-postanızı doğrulayın ve giriş yapın.', 'success');
+                      this.switchTab('signin');
+                  }
+              } else {
+                  showNotification(result.error || 'Kayıt başarısız.', 'error');
+              }
+          } catch (err) {
+              console.error('Final sign up error catch:', err);
+              showNotification('Kayıt sırasında beklenmeyen bir hata oluştu.', 'error');
+          } finally {
+              sessionStorage.removeItem('signup_flow');
+              this.setLoading('signup', false);
+          }
+      }
       async handlePasswordReset() {
         const email = document.getElementById('signin-email').value.trim();
         if (!email) {
