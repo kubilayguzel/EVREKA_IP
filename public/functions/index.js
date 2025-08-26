@@ -25,6 +25,7 @@ import { google } from "googleapis";
 import { auth } from 'firebase-functions/v1';
 import { getAuth } from 'firebase-admin/auth';                          // Admin SDK (modüler)
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';    // Admin SDK (modüler)
+import * as functions from 'firebase-functions';
 
 const secretClient = new SecretManagerServiceClient();
 
@@ -3405,27 +3406,30 @@ export const adminUpsertUser = onCall({ region: "europe-west1" }, async (req) =>
     disabled: !!userRecord.disabled,
   };
 });
-
 export const onAuthUserCreate = functions.auth.user().onCreate(async (user) => {
-  const db = getFirestore();
-  const ref = db.collection("users").doc(user.uid);
+  const db  = getFirestore();
+  const ref = db.collection('users').doc(user.uid);
 
+  // Boş değerlerle mevcut alanları EZME!
   const up = {
     updatedAt: FieldValue.serverTimestamp(),
   };
   if (user.email)       up.email       = user.email;
   if (user.displayName) up.displayName = user.displayName;
-  if (typeof user.disabled === "boolean") up.disabled = user.disabled;
+  if (typeof user.disabled === 'boolean') up.disabled = !!user.disabled;
 
   const snap = await ref.get();
+
   if (!snap.exists) {
+    // İlk oluşturulma: default role + createdAt
     await ref.set({
-      role: "user",
+      role: 'user',
       createdAt: FieldValue.serverTimestamp(),
       ...up,
-      _source: "auth.onCreate(v1)",
+      _source: 'auth.onCreate(v1)',
     }, { merge: true });
   } else {
+    // Doküman zaten varsa sadece dolu alanları merge et
     await ref.set(up, { merge: true });
   }
 });
