@@ -3414,8 +3414,7 @@ export const adminUpsertUser = onCall({ region: "europe-west1" }, async (req) =>
 });
 
 export const onAuthUserCreate = auth.user().onCreate(async (user) => {
-  const db = getFirestore();
-  
+ 
   await db.collection('users').doc(user.uid).set({
     email: user.email || '',
     displayName: user.displayName || '',
