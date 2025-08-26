@@ -14,7 +14,7 @@
     
     body {
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: #ffffff !important;
       min-height: 100vh;
       display: flex;
       align-items: center;
@@ -285,14 +285,26 @@ body{ background:linear-gradient(135deg,var(--bg1) 0%, var(--bg2) 100%) !importa
 .tabs .tab:hover{ background-color:rgba(0,168,120,.08) !important; }
 /* stacked notifications at top-right */
 .notification-container{ position:fixed; top:24px; right:24px; z-index:3000; display:flex; flex-direction:column; gap:10px; }
+
+body { background: #ffffff !important; }
+
+/* Ensure notifications stack vertically and don't overlap */
+.notification-container{ position:fixed; top:24px; right:24px; z-index:3000; display:flex; flex-direction:column; gap:10px; }
+
+/* Force green buttons and active tabs */
+:root{ --brand-green:#00a878; --brand-green-700:#00956d; --brand-green-800:#007e5b; }
+.auth-btn{ background-color: var(--brand-green) !important; color:#fff !important; border:none !important; }
+.auth-btn:hover{ background-color: var(--brand-green-700) !important; }
+.auth-btn:active{ background-color: var(--brand-green-800) !important; }
+.tabs .tab.active{ background-color: var(--brand-green) !important; color:#fff !important; border-color: transparent !important; }
+.tabs .tab:hover{ background-color: rgba(0,168,120,.08) !important; }
 </style>
 </head>
 <body>
 <div class="firebase-status" id="firebaseStatus">🔄 Firebase bağlanıyor...</div>
 <!-- Notification Container - User Management tarzında -->
-
 <div class="auth-container">
-<div class="brand-header"><div class="brand-inner"><img alt="EVREKA" class="brand-mark" onerror="this.onerror=null;this.src='evreka-logo.png.png';" src="evreka-logo.png"/><div class="brand-text">EVREKA</div></div></div><div class="logo-section">
+<div class="logo-section">
 <div class="app-title">IP Manager</div>
 <div class="subtitle">Fikri Mülkiyet Yönetim Sistemi</div>
 </div>
@@ -504,7 +516,8 @@ import { showNotification, showFieldError, clearAllFieldErrors } from './utils.j
 
                       try {
                           await sendEmailVerification(user);
-                          showNotification('Doğrulama e-postası gönderildi. Lütfen e-postanızı doğrulayıp giriş yapın.', 'success', 10000);
+                          showNotification('Doğrulama e-postası gönderildi. Lütfen e-postanızı doğrulayıp giriş yapın.', 'success', 15000);
+setTimeout(() => { const nc=document.getElementById('notification-container'); if(!nc||nc.querySelectorAll('.notification').length===0){ alert('Doğrulama e-postası gönderildi. Lütfen e-postanızı doğrulayın.'); } }, 1200);
                       } catch (ve) {
                           console.error('sendEmailVerification error:', ve);
                           showNotification('Doğrulama e-postası gönderilemedi. Daha sonra tekrar deneyin.', 'error');
@@ -512,15 +525,15 @@ import { showNotification, showFieldError, clearAllFieldErrors } from './utils.j
                       await authService.signOut();
                       this.switchTab('signin');
                   } else {
-                      showNotification('Hesap oluşturuldu. Lütfen e-postanızı doğrulayın ve giriş yapın.', 'success', 10000);
+                      showNotification('Hesap oluşturuldu. Lütfen e-postanızı doğrulayın ve giriş yapın.', 'success', 15000);
                       this.switchTab('signin');
                   }
               } else {
-                  showNotification(result.error || 'Kayıt başarısız.', 'error', 8000);
+                  showNotification(result.error || 'Kayıt başarısız.', 'error', 10000);
               }
           } catch (err) {
               console.error('Final sign up error catch:', err);
-              showNotification('Kayıt sırasında beklenmeyen bir hata oluştu.', 'error', 8000);
+              showNotification('Kayıt sırasında beklenmeyen bir hata oluştu.', 'error', 10000);
           } finally {
               this.setLoading('signup', false);
               sessionStorage.removeItem('signup_flow');
@@ -594,7 +607,6 @@ document.addEventListener('DOMContentLoaded', () => {
       try { showNotification('Hesap oluşturuluyor, lütfen bekleyin...', 'info', 3000); } catch (e) {}
     });
   }
-});
-</script>
+});</script>
 <div class="notification-container" id="notification-container"></div></body>
 </html> 
