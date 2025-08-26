@@ -365,7 +365,7 @@ body{ background:linear-gradient(135deg,var(--bg-soft) 0%, var(--bg-soft-2) 100%
 </form>
 </div>
 </div>
-<script type="module">\1
+<script type="module">
 import { showNotification, showFieldError, clearAllFieldErrors } from './utils.js';
 import { sendPasswordResetEmail, sendEmailVerification, updateProfile } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
 
@@ -647,8 +647,6 @@ import { sendPasswordResetEmail, sendEmailVerification, updateProfile } from 'ht
     document.addEventListener('DOMContentLoaded', () => {
       new AuthController();
     });
-
-  \n
 // Kayıt işlemi başladığında kısa bilgi bildirimi
 document.addEventListener('DOMContentLoaded', () => {
   const signupForm = document.getElementById('signupForm');
