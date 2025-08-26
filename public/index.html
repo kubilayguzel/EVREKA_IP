@@ -335,29 +335,33 @@
           sessionStorage.setItem('signup_flow', '1');
 
           try {
-              const result = await authService.signUp(email, password, name, 'user');
-              if (result.success) {
-                  const user = auth.currentUser;
-                  if (user) {
-                      // Ad-soyad bilgisini kaydetmek için user.updateProfile'ı kullanın.
-                      await updateProfile(user, { displayName: name });
+            const result = await authService.signUp(email, password, name, 'user');
+            if (result.success) {
+                const user = auth.currentUser;
+                if (user) {
+                    await updateProfile(user, { displayName: name });
 
-                      try {
-                          await sendEmailVerification(user);
-                          showNotification('Doğrulama e-postası gönderildi. Lütfen e-postanızı doğrulayıp giriş yapın.', 'success');
-                      } catch (ve) {
-                          console.error('sendEmailVerification error:', ve);
-                          showNotification('Doğrulama e-postası gönderilemedi. Daha sonra tekrar deneyin.', 'error');
-                      }
-                      await authService.signOut();
-                      this.switchTab('signin');
-                  } else {
-                      showNotification('Hesap oluşturuldu. Lütfen e-postanızı doğrulayın ve giriş yapın.', 'success');
-                      this.switchTab('signin');
-                  }
-              } else {
-                  showNotification(result.error || 'Kayıt başarısız.', 'error');
-              }
+                    try {
+                        await sendEmailVerification(user);
+                        showNotification('Doğrulama e-postası gönderildi. Lütfen e-postanızı doğrulayıp giriş yapın.', 'success');
+                    } catch (ve) {
+                        console.error('sendEmailVerification error:', ve);
+                        showNotification('Doğrulama e-postası gönderilemedi. Daha sonra tekrar deneyin.', 'error');
+                    }
+
+                    // Bildirimin görünmesi için 2 saniye beklet
+                    setTimeout(async () => {
+                        await authService.signOut();
+                        this.switchTab('signin');
+                    }, 2000); // 2000 ms = 2 saniye
+                } else {
+                    showNotification('Hesap oluşturuldu. Lütfen e-postanızı doğrulayın ve giriş yapın.', 'success');
+                    this.switchTab('signin');
+                }
+            } else {
+                showNotification(result.error || 'Kayıt başarısız.', 'error');
+            }
+
           } catch (err) {
               console.error('Final sign up error catch:', err);
               showNotification('Kayıt sırasında beklenmeyen bir hata oluştu.', 'error');
