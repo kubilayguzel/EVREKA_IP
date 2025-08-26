@@ -294,6 +294,40 @@
 body {
   background: linear-gradient(135deg, #e6f9f0 0%, #d4f5ec 100%) !important;
 }
+
+
+:root {
+  --brand-green: #00a878;
+  --brand-green-700: #00956d;
+  --brand-green-800: #007e5b;
+}
+
+.brand-card .brand-logo {
+  max-width: 65% !important; /* biraz büyütüldü */
+  height: auto;
+}
+
+/* Ana buton rengi (maviden yeşile) */
+.auth-btn {
+  background-color: var(--brand-green) !important;
+  color: #fff !important;
+  border: none !important;
+}
+.auth-btn:hover { background-color: var(--brand-green-700) !important; }
+.auth-btn:active { background-color: var(--brand-green-800) !important; }
+.auth-btn:disabled { opacity: .7; cursor: not-allowed; }
+
+/* Aktif tab rengi */
+.tabs .tab.active {
+  background-color: var(--brand-green) !important;
+  color: #fff !important;
+  border-color: transparent !important;
+}
+
+/* Pasif tab hover iyileştirme */
+.tabs .tab:hover {
+  background-color: rgba(0,168,120,0.08) !important;
+}
 </style>
 </head>
 <body>
@@ -493,8 +527,10 @@ import { sendPasswordResetEmail, sendEmailVerification, updateProfile } from 'ht
         }
       }
 
-      async handleSignUp() {
-          const name = document.getElementById('signup-name').value.trim();
+      \1
+      // Bildirim: işlem başlıyor
+      showNotification('Hesap oluşturuluyor, lütfen bekleyin...', 'info', 5000);
+const name = document.getElementById('signup-name').value.trim();
           const email = document.getElementById('signup-email').value.trim();
           const password = document.getElementById('signup-password').value;
 
@@ -513,7 +549,7 @@ import { sendPasswordResetEmail, sendEmailVerification, updateProfile } from 'ht
 
                       try {
                           await sendEmailVerification(user);
-                          showNotification('Doğrulama e-postası gönderildi. Lütfen e-postanızı doğrulayıp giriş yapın.', 'success');
+                          showNotification('Doğrulama e-postası gönderildi. Lütfen e-postanızı doğrulayıp giriş yapın.', 'success', 6000);
                       } catch (ve) {
                           console.error('sendEmailVerification error:', ve);
                           showNotification('Doğrulama e-postası gönderilemedi. Daha sonra tekrar deneyin.', 'error');
@@ -521,15 +557,15 @@ import { sendPasswordResetEmail, sendEmailVerification, updateProfile } from 'ht
                       await authService.signOut();
                       this.switchTab('signin');
                   } else {
-                      showNotification('Hesap oluşturuldu. Lütfen e-postanızı doğrulayın ve giriş yapın.', 'success');
+                      showNotification('Hesap oluşturuldu. Lütfen e-postanızı doğrulayın ve giriş yapın.', 'success', 6000);
                       this.switchTab('signin');
                   }
               } else {
-                  showNotification(result.error || 'Kayıt başarısız.', 'error');
+                  showNotification(result.error || 'Kayıt başarısız.', 'error', 6000);
               }
           } catch (err) {
               console.error('Final sign up error catch:', err);
-              showNotification('Kayıt sırasında beklenmeyen bir hata oluştu.', 'error');
+              showNotification('Kayıt sırasında beklenmeyen bir hata oluştu.', 'error', 6000);
           } finally {
               this.setLoading('signup', false);
               sessionStorage.removeItem('signup_flow');
