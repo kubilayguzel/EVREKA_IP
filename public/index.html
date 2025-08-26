@@ -1,24 +1,26 @@
 <!DOCTYPE html>
+
 <html lang="tr">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Giriş - IP Manager</title>
-  <style>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Giriş - IP Manager</title><link href="./css/shared-styles.css" rel="stylesheet"/>
+<style>
     * {
       margin: 0;
       padding: 0;
       box-sizing: border-box;
     }
-
-body {
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background: #ffffff; /* Arka planı tamamen beyaz yap */
-    min-height: 100vh;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
+    
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #333;
+    }
     
     .auth-container {
       background: rgba(255, 255, 255, 0.95);
@@ -231,18 +233,7 @@ body {
     }
     
     /* NOTIFICATION STYLES - User Management sayfasından alınmış */
-    .notification-container {
-        position: fixed;
-        top: 80px; /* Firebase status'un altında */
-        right: 20px;
-        z-index: 1000;
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
-        pointer-events: none;
-    }
-
-    .notification {
+.notification {
         background-color: #fff;
         color: #333;
         padding: 15px 20px;
@@ -260,185 +251,114 @@ body {
         transition: transform 0.4s cubic-bezier(0.68, -0.55, 0.27, 1.55), border-color 0.4s ease;
         transform: translateX(120%);
     }
-
-    .notification.show {
-        transform: translateX(0);
-    }
-
-    /* Türlere göre renk ataması */
-    .notification.success {
-        border-color: #28a745;
-    }
-
-    .notification.error {
+/* Türlere göre renk ataması */
+.notification.error {
         border-color: #dc3545;
     }
-
-    .notification.warning {
-        border-color: #ffc107;
-    }
-
-    .notification-icon {
+.notification-icon {
         font-size: 1.5em;
         font-weight: bold;
         line-height: 1;
     }
-
-    .notification.success .notification-icon { color: #28a745; }
-    .notification.error .notification-icon { color: #dc3545; }
-    .notification.warning .notification-icon { color: #ffc107; }
-
-    .notification-message {
+.notification.error .notification-icon { color: #dc3545; }
+.notification-message {
         flex-grow: 1;
         font-size: 0.95em;
         line-height: 1.4;
     }
-
-    .notification-close-btn {
-        background: none;
-        border: none;
-        font-size: 1.2em;
-        color: #aaa;
-        cursor: pointer;
-        transition: color 0.2s ease;
-    }
-
-    .notification-close-btn:hover {
+.notification-close-btn:hover {
         color: #555;
     }
-  </style>
+  
+
+/* Brand card for larger company logo on login page */
+.brand-card {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: 20px auto 10px auto;
+  padding: 16px 20px;
+  background: rgba(255,255,255,0.95);
+  border-radius: 16px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+  width: min(420px, 90%);
+}
+.brand-card .brand-logo { max-width: 100%; height: auto; display: block; }
+.app-title { font-size: 2rem; font-weight: 700; text-align: center; color: #333; margin-top: 6px; }
+</style>
 </head>
 <body>
-  <div id="firebaseStatus" class="firebase-status">🔄 Firebase bağlanıyor...</div>
-
-  <!-- Notification Container - User Management tarzında -->
-  <div id="notification-container" class="notification-container"></div>
-
-  <div class="auth-container">
-    <div class="logo-section">
-      <div class="logo">
-        <img src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgdmlld0JveD0iMCAwIDEwMCAxMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHg9IjEwIiB5PSIxMCIgd2lkdGg9IjgiIGhlaWdodD0iNDAiIHJ4PSIyIiBmaWxsPSIjNkJCNjQyIi8+CjxyZWN0IHg9IjI1IiB5PSI1IiB3aWR0aD0iOCIgaGVpZ2h0PSI1MCIgcng9IjIiIGZpbGw9IiM2QkI2NDIiLz4KPHJlY3QgeD0iNDAiIHk9IjE1IiB3aWR0aD0iOCIgaGVpZ2h0PSIzNSIgcng9IjIiIGZpbGw9IiM2QkI2NDIiLz4KPHBhdGggZD0iTTEwIDc1TDU2IDc1TDU2IDgwTDE1IDgwQzEyLjIzODYgODAgMTAgNzcuNzYxNCAxMCA3NVoiIGZpbGw9IiM1NDlBMzYiLz4KPHRleHQgeD0iNTAiIHk9IjkyIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjNkJCNjQyIiBmb250LWZhbWlseT0iQXJpYWwsIHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTIiIGZvbnQtd2VpZ2h0PSJib2xkIj5ldnJla2E8L3RleHQ+Cjwvc3ZnPg==" alt="Evreka Logo" class="logo-icon">
-        IP Manager
-      </div>
-      <div class="subtitle">Fikri Mülkiyet Yönetim Sistemi</div>
-    </div>
-
-    <div class="tabs">
-      <div class="tab active" data-tab="signin">Giriş Yap</div>
-      <div class="tab" data-tab="signup">Kayıt Ol</div>
-    </div>
-
-    <!-- Sign In -->
-    <div class="form-section active" id="signin-section">
-      <form id="signinForm">
-        <div class="form-group">
-          <label class="form-label" for="signin-email">E-posta Adresi</label>
-          <input type="email" id="signin-email" class="form-input" required />
-          <div class="error-message" id="signin-email-error"></div>
-        </div>
-
-        <div class="form-group">
-          <label class="form-label" for="signin-password">Şifre</label>
-          <input type="password" id="signin-password" class="form-input" required />
-          <div class="error-message" id="signin-password-error"></div>
-        </div>
-
-        <div class="helper-links">
-          <button type="button" class="link-btn" id="forgotPasswordBtn">Şifremi Unuttum</button>
-        </div>
-
-        <button type="submit" class="auth-btn" id="signinBtn">
-          <span id="signinText">Giriş Yap</span>
-          <span class="loading" id="signinLoading"></span>
-        </button>
-      </form>
-    </div>
-
-    <!-- Sign Up -->
-    <div class="form-section" id="signup-section">
-      <form id="signupForm">
-        <div class="form-group">
-          <label class="form-label" for="signup-name">Ad Soyad</label>
-          <input type="text" id="signup-name" class="form-input" required />
-          <div class="error-message" id="signup-name-error"></div>
-        </div>
-
-        <div class="form-group">
-          <label class="form-label" for="signup-email">E-posta Adresi</label>
-          <input type="email" id="signup-email" class="form-input" required />
-          <div class="error-message" id="signup-email-error"></div>
-        </div>
-
-        <div class="form-group">
-          <label class="form-label" for="signup-password">Şifre (min. 6 karakter)</label>
-          <input type="password" id="signup-password" class="form-input" required minlength="6" />
-          <div class="error-message" id="signup-password-error"></div>
-        </div>
-
-        <button type="submit" class="auth-btn" id="signupBtn">
-          <span id="signupText">Kayıt Ol</span>
-          <span class="loading" id="signupLoading"></span>
-        </button>
-      </form>
-    </div>
-  </div>
-
-  <script type="module">
+<div class="firebase-status" id="firebaseStatus">🔄 Firebase bağlanıyor...</div>
+<!-- Notification Container - User Management tarzında -->
+<div class="notification-container" id="notification-container"></div>
+<div class="auth-container">
+<div class="brand-card"><picture><source srcset="evreka-logo.png" type="image/png"/><img alt="Evreka Logo" class="brand-logo" src="evreka-logo.png.png"/></picture></div><div class="logo-section">
+<div class="app-title">IP Manager</div>
+<div class="subtitle">Fikri Mülkiyet Yönetim Sistemi</div>
+</div>
+<div class="tabs">
+<div class="tab active" data-tab="signin">Giriş Yap</div>
+<div class="tab" data-tab="signup">Kayıt Ol</div>
+</div>
+<!-- Sign In -->
+<div class="form-section active" id="signin-section">
+<form id="signinForm">
+<div class="form-group">
+<label class="form-label" for="signin-email">E-posta Adresi</label>
+<input class="form-input" id="signin-email" required="" type="email"/>
+<div class="error-message" id="signin-email-error"></div>
+</div>
+<div class="form-group">
+<label class="form-label" for="signin-password">Şifre</label>
+<input class="form-input" id="signin-password" required="" type="password"/>
+<div class="error-message" id="signin-password-error"></div>
+</div>
+<div class="helper-links">
+<button class="link-btn" id="forgotPasswordBtn" type="button">Şifremi Unuttum</button>
+</div>
+<button class="auth-btn" id="signinBtn" type="submit">
+<span id="signinText">Giriş Yap</span>
+<span class="loading" id="signinLoading"></span>
+</button>
+</form>
+</div>
+<!-- Sign Up -->
+<div class="form-section" id="signup-section">
+<form id="signupForm">
+<div class="form-group">
+<label class="form-label" for="signup-name">Ad Soyad</label>
+<input class="form-input" id="signup-name" required="" type="text"/>
+<div class="error-message" id="signup-name-error"></div>
+</div>
+<div class="form-group">
+<label class="form-label" for="signup-email">E-posta Adresi</label>
+<input class="form-input" id="signup-email" required="" type="email"/>
+<div class="error-message" id="signup-email-error"></div>
+</div>
+<div class="form-group">
+<label class="form-label" for="signup-password">Şifre (min. 6 karakter)</label>
+<input class="form-input" id="signup-password" minlength="6" required="" type="password"/>
+<div class="error-message" id="signup-password-error"></div>
+</div>
+<button class="auth-btn" id="signupBtn" type="submit">
+<span id="signupText">Kayıt Ol</span>
+<span class="loading" id="signupLoading"></span>
+</button>
+</form>
+</div>
+</div>
+<script type="module">
   import { authService, auth } from './firebase-config.js';
-  import { sendPasswordResetEmail, sendEmailVerification, updateProfile } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+  
+import { showNotification, showFieldError, clearAllFieldErrors } from './utils.js';
+import { sendPasswordResetEmail, sendEmailVerification, updateProfile } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
 
     // User Management sayfasındaki notification sistemini kopyala
-    function showNotification(message, type = 'success', duration = 4000) {
-      const container = document.getElementById('notification-container');
-      if (!container) return;
+    
 
-      const notification = document.createElement('div');
-      notification.className = `notification ${type}`;
-      
-      const iconMap = {
-        success: '✅',
-        error: '❌',
-        warning: '⚠️'
-      };
+    
 
-      notification.innerHTML = `
-        <span class="notification-icon">${iconMap[type] || '✅'}</span>
-        <span class="notification-message">${message}</span>
-        <button class="notification-close-btn" onclick="this.parentElement.remove()">&times;</button>
-      `;
-
-      container.appendChild(notification);
-
-      // Animasyon için setTimeout
-      setTimeout(() => notification.classList.add('show'), 10);
-
-      // Otomatik kaldırma
-      setTimeout(() => {
-        notification.classList.remove('show');
-        setTimeout(() => notification.remove(), 400);
-      }, duration);
-    }
-
-    function showFieldError(fieldId, message) {
-      const field = document.getElementById(fieldId);
-      const errorEl = document.getElementById(fieldId + '-error');
-      
-      if (field) field.classList.add('error');
-      if (errorEl) {
-        errorEl.textContent = message;
-        errorEl.classList.add('show');
-      }
-    }
-
-    function clearAllFieldErrors() {
-      document.querySelectorAll('.form-input').forEach(input => {
-        input.classList.remove('error');
-      });
-      document.querySelectorAll('.error-message').forEach(error => {
-        error.classList.remove('show');
-        error.textContent = '';
-      });
-    }
+    
 
     class AuthController {
       constructor() {
