@@ -9,13 +9,23 @@ export function showNotification(message, type = 'info', duration = 3000) {
         return;
     }
 
+    // Sticky: Kritik mesajları minimum 15 sn göster
+    const STICKY_PARTS = [
+        'Doğrulama e-postası gönderildi',
+        'Hesap oluşturuldu'
+    ];
+    let effectiveDuration = duration;
+    if (STICKY_PARTS.some(p => (message || '').includes(p))) {
+        if (!effectiveDuration || effectiveDuration < 15000) effectiveDuration = 15000;
+    }
+
     const notificationItem = document.createElement('div');
     notificationItem.classList.add('notification-item', `notification-${type}`);
     notificationItem.textContent = message;
 
     const closeBtn = document.createElement('button');
     closeBtn.classList.add('notification-close-btn');
-    closeBtn.innerHTML = '&times;'; // 'x' icon
+    closeBtn.innerHTML = '&times;'; // '×'
     closeBtn.onclick = () => {
         notificationItem.classList.add('hide');
         notificationItem.addEventListener('transitionend', () => notificationItem.remove());
@@ -24,12 +34,19 @@ export function showNotification(message, type = 'info', duration = 3000) {
     notificationItem.appendChild(closeBtn);
     container.appendChild(notificationItem);
 
+    // Fallback: Eğer eleman 2 sn içinde DOM'dan kaldırılmışsa alert göster
+    setTimeout(() => {
+        if (!document.body.contains(notificationItem)) {
+            alert(message);
+        }
+    }, 2000);
+
     // Otomatik olarak kaybolma
-    if (duration > 0) {
+    if (effectiveDuration > 0) {
         setTimeout(() => {
             notificationItem.classList.add('hide');
             notificationItem.addEventListener('transitionend', () => notificationItem.remove());
-        }, duration);
+        }, effectiveDuration);
     }
 }
 
