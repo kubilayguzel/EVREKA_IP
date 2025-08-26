@@ -211,7 +211,7 @@
 
           setTimeout(() => {
             console.log('🚀 Redirecting to dashboard...');
-            window.location.href = 'dashboard.html';
+            window.location.href = 'public/dashboard.html';
           }, 1200);
         });
       }
@@ -386,7 +386,7 @@
         await authService.signOut();
         window.location.href = 'index.html';
       },
-      forceDashboard: () => { window.location.href = 'dashboard.html'; }
+      forceDashboard: () => { window.location.href = 'public/dashboard.html'; }
     };
 
     console.log('🚀 Firebase Auth module loaded!');
