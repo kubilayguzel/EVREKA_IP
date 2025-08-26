@@ -22,6 +22,9 @@ import { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
          WidthType, AlignmentType, HeadingLevel, PageBreak } from 'docx';
 import { SecretManagerServiceClient } from "@google-cloud/secret-manager";
 import { google } from "googleapis";
+import { auth as functionsAuth } from 'firebase-functions/v2';          // Auth trigger'ları için
+import { getAuth } from 'firebase-admin/auth';                          // Admin SDK (modüler)
+import { getFirestore, FieldValue } from 'firebase-admin/firestore';    // Admin SDK (modüler)
 
 const secretClient = new SecretManagerServiceClient();
 
@@ -3375,7 +3378,7 @@ export const adminUpsertUser = onCall({ region: "europe-west1" }, async (req) =>
 
   return { uid: userRecord.uid, email: userRecord.email, existed, role, disabled: !!userRecord.disabled };
 });
-export const onAuthUserCreate = auth.user().onCreate(async (user) => {
+export const onAuthUserCreate = functionsAuth.user().onCreate(async (user) => {
   const db = getFirestore();
   const ref = db.collection("users").doc(user.uid);
   await ref.set({
@@ -3389,7 +3392,7 @@ export const onAuthUserCreate = auth.user().onCreate(async (user) => {
   }, { merge: true });
 });
 
-export const onAuthUserDelete = auth.user().onDelete(async (user) => {
+export const onAuthUserDelete = functionsAuth.user().onDelete(async (user) => {
   const db = getFirestore();
   await db.collection("users").doc(user.uid).delete().catch(() => {});
 });
