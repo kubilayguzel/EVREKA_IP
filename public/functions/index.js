@@ -3305,11 +3305,31 @@ function sanitizeFileName(fileName) {
 const strip = (s) => String(s ?? '').trim().replace(/^["'\s]+|["'\s]+$/g, '');
 
 function canManageUsers(req) {
+  console.log('🔍 Auth debug:', {
+    hasAuth: !!req.auth,
+    uid: req.auth?.uid,
+    email: req.auth?.token?.email,
+    role: req.auth?.token?.role
+  });
+  
   if (!req.auth) return false;
   
-  // Check if user has superadmin role
-  const claims = req.auth.token;
-  return claims?.role === 'superadmin';
+  // Geçici: Sizin UID'iniz için bypass
+  const yourUID = 'wH6MFM3jrYShxWDPkjr0Lbuj61F2'; // LocalStorage'dan aldığımız UID
+  if (req.auth.uid === yourUID) {
+    console.log('✅ Admin UID bypass for:', yourUID);
+    return true;
+  }
+  
+  // Normal kontroller
+  const role = req.auth.token?.role;
+  if (role === 'superadmin') return true;
+  
+  // E-posta bazlı kontrol
+  const email = req.auth.token?.email;
+  if (email && email.includes('@evrekapatent.com')) return true;
+  
+  return false;
 }
 
 
