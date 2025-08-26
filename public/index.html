@@ -14,29 +14,29 @@
     .auth-container{
       background:rgba(255,255,255,.95);padding:40px;border-radius:20px;
       box-shadow:0 20px 40px rgba(0,0,0,.1);backdrop-filter:blur(10px);
-      width:100%;max-width:420px;position:relative
+      width:100%;max-width:400px;position:relative
     }
     .logo-section{text-align:center;margin-bottom:40px}
-    .logo{font-size:2.2em;font-weight:800;color:#1e3c72;letter-spacing:.3px}
-    .subtitle{color:#666;font-size:1.05em;margin-top:6px}
+    .logo{font-size:2.5em;font-weight:bold;color:#1e3c72}
+    .subtitle{color:#666;font-size:1.1em}
     .tabs{display:flex;margin:30px 0;background:#f8f9fa;border-radius:10px;padding:5px}
-    .tab{flex:1;padding:10px;text-align:center;border-radius:8px;cursor:pointer;transition:.2s;font-weight:600}
+    .tab{flex:1;padding:10px;text-align:center;border-radius:8px;cursor:pointer;transition:.3s;font-weight:500}
     .tab.active{background:#1e3c72;color:#fff}
     .form-section{display:none}
     .form-section.active{display:block}
-    .form-group{margin-bottom:18px}
-    .form-label{display:block;margin-bottom:8px;color:#333;font-weight:600}
+    .form-group{margin-bottom:25px}
+    .form-label{display:block;margin-bottom:8px;color:#333;font-weight:500}
     .form-input{
-      width:100%;padding:14px;border:2px solid #e1e8ed;border-radius:10px;font-size:1em;transition:.15s;background:#fff
+      width:100%;padding:15px;border:2px solid #e1e8ed;border-radius:10px;font-size:1em;transition:.3s;background:#fff
     }
     .form-input:focus{outline:none;border-color:#1e3c72;box-shadow:0 0 0 3px rgba(30,60,114,.1)}
     .form-input.error{border-color:#ff6b6b}
     .error-message{color:#ff6b6b;font-size:.9em;margin-top:5px;display:none}
     .auth-btn{
-      width:100%;padding:14px;background:linear-gradient(45deg,#1e3c72,#2a5298);color:#fff;border:none;border-radius:10px;
-      font-size:1.05em;font-weight:700;cursor:pointer;transition:.2s;margin-top:6px;position:relative
+      width:100%;padding:15px;background:linear-gradient(45deg,#1e3c72,#2a5298);color:#fff;border:none;border-radius:10px;
+      font-size:1.1em;font-weight:600;cursor:pointer;transition:.3s;margin-bottom:20px;position:relative
     }
-    .auth-btn:hover{transform:translateY(-1px);box-shadow:0 10px 25px rgba(30,60,114,.25)}
+    .auth-btn:hover{transform:translateY(-2px);box-shadow:0 10px 25px rgba(30,60,114,.3)}
     .auth-btn:disabled{opacity:.7;cursor:not-allowed;transform:none}
     .loading{
       display:none;position:absolute;right:15px;top:50%;transform:translateY(-50%);
@@ -44,17 +44,17 @@
     }
     @keyframes spin{to{transform:translateY(-50%) rotate(360deg)}}
     .firebase-status{
-      position:fixed;top:20px;right:20px;padding:10px 15px;border-radius:20px;font-size:.8em;font-weight:700;z-index:1000
+      position:fixed;top:20px;right:20px;padding:10px 15px;border-radius:20px;font-size:.8em;font-weight:600;z-index:1000
     }
     .firebase-status.connected{background:#d4edda;color:#155724}
     .firebase-status.error{background:#f8d7da;color:#721c24}
-    .helper-links{display:flex;justify-content:flex-end;margin-top:-6px;margin-bottom:14px;gap:12px}
+    .helper-links{display:flex;justify-content:flex-end;margin-top:-10px;margin-bottom:20px;gap:12px}
     .link-btn{
       background:none;border:none;color:#1e3c72;cursor:pointer;font-size:.9em;text-decoration:underline;padding:0
     }
     @media (max-width:480px){
-      .auth-container{margin:20px;padding:30px 24px}
-      .logo{font-size:1.8em}
+      .auth-container{margin:20px;padding:30px 25px}
+      .logo{font-size:2em}
     }
   </style>
 </head>
@@ -77,13 +77,13 @@
       <form id="signinForm">
         <div class="form-group">
           <label class="form-label" for="signin-email">E-posta Adresi</label>
-          <input type="email" id="signin-email" class="form-input" required autocomplete="email"/>
+          <input type="email" id="signin-email" class="form-input" required />
           <div class="error-message" id="signin-email-error"></div>
         </div>
 
         <div class="form-group">
           <label class="form-label" for="signin-password">Şifre</label>
-          <input type="password" id="signin-password" class="form-input" required autocomplete="current-password"/>
+          <input type="password" id="signin-password" class="form-input" required />
           <div class="error-message" id="signin-password-error"></div>
         </div>
 
@@ -103,19 +103,19 @@
       <form id="signupForm">
         <div class="form-group">
           <label class="form-label" for="signup-name">Ad Soyad</label>
-          <input type="text" id="signup-name" class="form-input" required autocomplete="name"/>
+          <input type="text" id="signup-name" class="form-input" required />
           <div class="error-message" id="signup-name-error"></div>
         </div>
 
         <div class="form-group">
           <label class="form-label" for="signup-email">E-posta Adresi</label>
-          <input type="email" id="signup-email" class="form-input" required autocomplete="email"/>
+          <input type="email" id="signup-email" class="form-input" required />
           <div class="error-message" id="signup-email-error"></div>
         </div>
 
         <div class="form-group">
           <label class="form-label" for="signup-password">Şifre (min. 6 karakter)</label>
-          <input type="password" id="signup-password" class="form-input" required minlength="6" autocomplete="new-password"/>
+          <input type="password" id="signup-password" class="form-input" required minlength="6" />
           <div class="error-message" id="signup-password-error"></div>
         </div>
 
@@ -132,16 +132,6 @@
     import { sendPasswordResetEmail, sendEmailVerification } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
     import { showNotification, showFieldError, clearAllFieldErrors } from './utils.js';
 
-    // TR dilini sabitle
-    auth.languageCode = 'tr';
-
-    // E-posta aksiyon URL'si: doğrulama ve reset linkleri buraya yönlensin
-    const ACTION_URL = `${location.origin}/auth-action.html`;
-    const actionCodeSettings = {
-      url: ACTION_URL,
-      handleCodeInApp: false
-    };
-
     class AuthController {
       constructor() {
         this.currentTab = 'signin';
@@ -152,23 +142,30 @@
         this.setupEventListeners();
         this.setupAuthStateListener();
         this.checkFirebaseConnectionStatus();
+        console.log('🔐 Auth Controller initialized');
       }
 
       setupEventListeners() {
+        // Tab switching
         document.querySelectorAll('.tab').forEach(tab => {
-          tab.addEventListener('click', (e) => this.switchTab(e.target.dataset.tab));
+          tab.addEventListener('click', (e) => {
+            this.switchTab(e.target.dataset.tab);
+          });
         });
 
+        // Sign in
         document.getElementById('signinForm').addEventListener('submit', (e) => {
           e.preventDefault();
           this.handleSignIn();
         });
 
+        // Sign up
         document.getElementById('signupForm').addEventListener('submit', (e) => {
           e.preventDefault();
           this.handleSignUp();
         });
 
+        // Forgot password
         document.getElementById('forgotPasswordBtn').addEventListener('click', () => {
           this.handlePasswordReset();
         });
@@ -176,11 +173,20 @@
 
       setupAuthStateListener() {
         auth.onAuthStateChanged(async (user) => {
-          if (!user) return;
+          if (!user) {
+            console.log('ℹ️ No authenticated Firebase user.');
+            return;
+          }
 
+          // Eğer kayıt akışı sürüyorsa ve kullanıcı henüz doğrulanmadıysa:
           const inSignupFlow = sessionStorage.getItem('signup_flow') === '1';
-          if (inSignupFlow && !user.emailVerified) return;
+          if (inSignupFlow && !user.emailVerified) {
+            // Kayıt akışında "Giriş başarılı..." mesajını bastırıyoruz.
+            console.log('🟡 Signup flow in progress, suppressing success notification.');
+            return; // Bildirim ve yönlendirme YOK
+          }
 
+          // Genel doğrulama koruması (opsiyonel ama tavsiye):
           if (!inSignupFlow && !user.emailVerified) {
             showNotification('Lütfen e-posta adresinizi doğrulayın. Doğrulama e-postası az önce gönderilmiş olabilir.', 'warning');
             try { await authService.signOut(); } catch {}
@@ -188,6 +194,7 @@
             return;
           }
 
+          // Rolü al ve localStorage'a yaz
           const role = await authService.getUserRole(user.uid);
           const userData = {
             uid: user.uid,
@@ -197,9 +204,15 @@
             isSuperAdmin: role === 'superadmin'
           };
           localStorage.setItem('currentUser', JSON.stringify(userData));
+          console.log('💾 User data saved to localStorage:', userData);
 
+          // Başarılı giriş bildirimi ve yönlendirme (yalnızca doğrulanmış hesaplar için)
           showNotification('Giriş başarılı! Dashboard\'a yönlendiriliyorsunuz...', 'success');
-          setTimeout(() => window.location.href = 'dashboard.html', 1200);
+
+          setTimeout(() => {
+            console.log('🚀 Redirecting to dashboard...');
+            window.location.href = 'dashboard.html';
+          }, 1200);
         });
       }
 
@@ -229,16 +242,19 @@
       async handleSignIn() {
         const email = document.getElementById('signin-email').value.trim();
         const password = document.getElementById('signin-password').value;
+
         if (!this.validateSignIn(email, password)) return;
 
         this.setLoading('signin', true);
+
         try {
           const result = await authService.signIn(email, password);
           if (!result?.success) {
             showNotification(result?.error || 'Giriş başarısız.', 'error');
           }
+          // onAuthStateChanged gerekli aksiyonları alacak
         } catch (err) {
-          console.error('Sign in error:', err);
+          console.error('Final sign in error catch:', err);
           showNotification('Giriş sırasında beklenmeyen bir hata oluştu.', 'error');
         } finally {
           this.setLoading('signin', false);
@@ -249,23 +265,27 @@
         const name = document.getElementById('signup-name').value.trim();
         const email = document.getElementById('signup-email').value.trim();
         const password = document.getElementById('signup-password').value;
+
         if (!this.validateSignUp(name, email, password)) return;
 
         this.setLoading('signup', true);
+        // ➜ Kayıt akışı bayrağı: onAuthStateChanged ilk tetiklenecek olursa mesajı bastırıyoruz.
         sessionStorage.setItem('signup_flow','1');
 
         try {
           const result = await authService.signUp(email, password, name, 'user');
           if (result.success) {
+            // E-posta doğrulama gönder
             const u = auth.currentUser;
             if (u) {
               try {
-                await sendEmailVerification(u, actionCodeSettings);
+                await sendEmailVerification(u);
                 showNotification('Doğrulama e-postası gönderildi. Lütfen e-postanızı doğrulayıp giriş yapın.', 'success');
               } catch (ve) {
                 console.error('sendEmailVerification error:', ve);
                 showNotification('Doğrulama e-postası gönderilemedi. Daha sonra tekrar deneyin.', 'error');
               }
+              // Oturumu kapatıp Giriş sekmesine dön
               await authService.signOut();
               this.switchTab('signin');
             } else {
@@ -276,9 +296,10 @@
             showNotification(result.error || 'Kayıt başarısız.', 'error');
           }
         } catch (err) {
-          console.error('Sign up error:', err);
+          console.error('Final sign up error catch:', err);
           showNotification('Kayıt sırasında beklenmeyen bir hata oluştu.', 'error');
         } finally {
+          // Kayıt akış bayrağını temizle
           sessionStorage.removeItem('signup_flow');
           this.setLoading('signup', false);
         }
@@ -286,11 +307,17 @@
 
       async handlePasswordReset() {
         const email = document.getElementById('signin-email').value.trim();
-        if (!email) { showFieldError('signin-email', 'Önce e-posta adresinizi girin'); return; }
-        if (!this.isValidEmail(email)) { showFieldError('signin-email', 'Geçerli bir e-posta girin'); return; }
+        if (!email) {
+          showFieldError('signin-email', 'Önce e-posta adresinizi girin');
+          return;
+        }
+        if (!this.isValidEmail(email)) {
+          showFieldError('signin-email', 'Geçerli bir e-posta girin');
+          return;
+        }
 
         try {
-          await sendPasswordResetEmail(auth, email.toLowerCase(), { url: ACTION_URL, handleCodeInApp: false });
+          await sendPasswordResetEmail(auth, email.toLowerCase());
           showNotification('Şifre sıfırlama e-postası gönderildi. Gelen kutunuzu kontrol edin.', 'success');
         } catch (err) {
           console.error('Password reset error:', err);
@@ -336,8 +363,33 @@
     }
 
     document.addEventListener('DOMContentLoaded', () => new AuthController());
-  </script>
 
-  <div id="notification-container" class="notification-container"></div>
+    // Dev yardımcıları (sadece alan doldurur)
+    window.testAuth = {
+      fillDemoSignIn: () => {
+        document.getElementById('signin-email').value = 'demo@ipmanager.com';
+        document.getElementById('signin-password').value = 'demo123';
+        clearAllFieldErrors();
+      },
+      fillAdminSignIn: () => {
+        document.getElementById('signin-email').value = 'admin@ipmanager.com';
+        document.getElementById('signin-password').value = 'admin123';
+        clearAllFieldErrors();
+      },
+      fillSuperAdminSignIn: () => {
+        document.getElementById('signin-email').value = 'superadmin@ipmanager.com';
+        document.getElementById('signin-password').value = 'superadmin123';
+        clearAllFieldErrors();
+      },
+      signOut: async () => {
+        console.log('Attempting sign out...');
+        await authService.signOut();
+        window.location.href = 'index.html';
+      },
+      forceDashboard: () => { window.location.href = 'dashboard.html'; }
+    };
+
+    console.log('🚀 Firebase Auth module loaded!');
+  </script>
 </body>
 </html>
