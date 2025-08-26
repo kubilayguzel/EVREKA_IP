@@ -128,9 +128,9 @@
   </div>
 
   <script type="module">
-    import { authService, auth } from './firebase-config.js';
+    import { authService, auth } from './public/firebase-config.js';
     import { sendPasswordResetEmail, sendEmailVerification } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
-    import { showNotification, showFieldError, clearAllFieldErrors } from './utils.js';
+    import { showNotification, showFieldError, clearAllFieldErrors } from './puclic/utils.js';
 
     class AuthController {
       constructor() {
@@ -173,37 +173,46 @@
 
       setupAuthStateListener() {
         auth.onAuthStateChanged(async (user) => {
-          if (user) {
-            console.log('✅ User authenticated by Firebase:', user.email);
-
-            // Rolü al ve localStorage'a yaz
-            const role = await authService.getUserRole(user.uid);
-            const userData = {
-              uid: user.uid,
-              email: user.email,
-              displayName: user.displayName,
-              role: role || 'user',
-              isSuperAdmin: role === 'superadmin'
-            };
-            localStorage.setItem('currentUser', JSON.stringify(userData));
-            console.log('💾 User data saved to localStorage:', userData);
-
-            // Not: Doğrulama zorunluluğu koymak istersen burada kontrol edebilirsin:
-            // if (!user.emailVerified) { ... sendEmailVerification(user) + signOut ... }
-
-            showNotification('Giriş başarılı! Dashboard\'a yönlendiriliyorsunuz...', 'success');
-
-            setTimeout(() => {
-              console.log('🚀 Redirecting to dashboard...');
-              window.location.href = 'dashboard.html';
-            }, 1200);
-          } else {
+          if (!user) {
             console.log('ℹ️ No authenticated Firebase user.');
-            const localUser = authService.getCurrentUser();
-            if (localUser?.uid) {
-              console.log('⚠️ Local user exists but Firebase not authenticated. Staying on login.');
-            }
+            return;
           }
+
+          // Eğer kayıt akışı sürüyorsa ve kullanıcı henüz doğrulanmadıysa:
+          const inSignupFlow = sessionStorage.getItem('signup_flow') === '1';
+          if (inSignupFlow && !user.emailVerified) {
+            // Kayıt akışında "Giriş başarılı..." mesajını bastırıyoruz.
+            console.log('🟡 Signup flow in progress, suppressing success notification.');
+            return; // Bildirim ve yönlendirme YOK
+          }
+
+          // Genel doğrulama koruması (opsiyonel ama tavsiye):
+          if (!inSignupFlow && !user.emailVerified) {
+            showNotification('Lütfen e-posta adresinizi doğrulayın. Doğrulama e-postası az önce gönderilmiş olabilir.', 'warning');
+            try { await authService.signOut(); } catch {}
+            this.switchTab('signin');
+            return;
+          }
+
+          // Rolü al ve localStorage'a yaz
+          const role = await authService.getUserRole(user.uid);
+          const userData = {
+            uid: user.uid,
+            email: user.email,
+            displayName: user.displayName,
+            role: role || 'user',
+            isSuperAdmin: role === 'superadmin'
+          };
+          localStorage.setItem('currentUser', JSON.stringify(userData));
+          console.log('💾 User data saved to localStorage:', userData);
+
+          // Başarılı giriş bildirimi ve yönlendirme (yalnızca doğrulanmış hesaplar için)
+          showNotification('Giriş başarılı! Dashboard\'a yönlendiriliyorsunuz...', 'success');
+
+          setTimeout(() => {
+            console.log('🚀 Redirecting to dashboard...');
+            window.location.href = 'dashboard.html';
+          }, 1200);
         });
       }
 
@@ -240,12 +249,10 @@
 
         try {
           const result = await authService.signIn(email, password);
-          if (result.success) {
-            console.log('✅ Sign in process successful');
-            // onAuthStateChanged yönlendirecek
-          } else {
-            showNotification(result.error || 'Giriş başarısız.', 'error');
+          if (!result?.success) {
+            showNotification(result?.error || 'Giriş başarısız.', 'error');
           }
+          // onAuthStateChanged gerekli aksiyonları alacak
         } catch (err) {
           console.error('Final sign in error catch:', err);
           showNotification('Giriş sırasında beklenmeyen bir hata oluştu.', 'error');
@@ -262,6 +269,8 @@
         if (!this.validateSignUp(name, email, password)) return;
 
         this.setLoading('signup', true);
+        // ➜ Kayıt akışı bayrağı: onAuthStateChanged ilk tetiklenecek olursa mesajı bastırıyoruz.
+        sessionStorage.setItem('signup_flow','1');
 
         try {
           const result = await authService.signUp(email, password, name, 'user');
@@ -271,7 +280,7 @@
             if (u) {
               try {
                 await sendEmailVerification(u);
-                showNotification('Doğrulama e-postası gönderildi. Lütfen e-postanızı doğruladıktan sonra giriş yapın.', 'success');
+                showNotification('Doğrulama e-postası gönderildi. Lütfen e-postanızı doğrulayıp giriş yapın.', 'success');
               } catch (ve) {
                 console.error('sendEmailVerification error:', ve);
                 showNotification('Doğrulama e-postası gönderilemedi. Daha sonra tekrar deneyin.', 'error');
@@ -280,7 +289,6 @@
               await authService.signOut();
               this.switchTab('signin');
             } else {
-              // Nadir durum: auth.currentUser yok
               showNotification('Hesap oluşturuldu. Lütfen e-postanızı doğrulayın ve giriş yapın.', 'success');
               this.switchTab('signin');
             }
@@ -291,6 +299,8 @@
           console.error('Final sign up error catch:', err);
           showNotification('Kayıt sırasında beklenmeyen bir hata oluştu.', 'error');
         } finally {
+          // Kayıt akış bayrağını temizle
+          sessionStorage.removeItem('signup_flow');
           this.setLoading('signup', false);
         }
       }
