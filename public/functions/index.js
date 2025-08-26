@@ -3441,16 +3441,37 @@ export const adminUpsertUser = onCall({ region: "europe-west1" }, async (req) =>
 });
 
 export const onAuthUserCreate = auth.user().onCreate(async (user) => {
+  // displayName boş olursa email'den fallback oluştur
+  let displayName = user.displayName;
+  
+  if (!displayName || displayName.trim() === '') {
+    if (user.email) {
+      // Email'den kullanıcı adını çıkar (@ işaretinden önceki kısım)
+      displayName = user.email.split('@')[0];
+      // Nokta ve alt çizgileri boşlukla değiştir, ilk harfleri büyük yap
+      displayName = displayName
+        .replace(/[._]/g, ' ')
+        .split(' ')
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(' ');
+    } else {
+      displayName = 'Kullanıcı';
+    }
+  }
+  
+  console.log(`🆔 Creating user profile: ${user.uid}, email: ${user.email}, displayName: "${displayName}"`);
   
   await adminDb.collection('users').doc(user.uid).set({
     email: user.email || '',
-    displayName: user.displayName || '',
-    role: 'user',                         // default rol
+    displayName: displayName,  // Artık boş olmayacak
+    role: 'user',              // default rol
     disabled: !!user.disabled,
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
-    _source: 'auth.user().onCreate'       // V1 source
+    _source: 'auth.user().onCreate'
   }, { merge: true });
+  
+  console.log(`✅ User profile created successfully for ${user.uid}`);
 });
 
 export const onAuthUserDelete = auth.user().onDelete(async (user) => {
