@@ -22,7 +22,7 @@ import { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
          WidthType, AlignmentType, HeadingLevel, PageBreak } from 'docx';
 import { SecretManagerServiceClient } from "@google-cloud/secret-manager";
 import { google } from "googleapis";
-import { onUserCreated, onUserDeleted } from 'firebase-functions/v2/identity';
+import { auth } from 'firebase-functions/v1';
 import { getAuth } from 'firebase-admin/auth';                          // Admin SDK (modüler)
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';    // Admin SDK (modüler)
 
@@ -3406,10 +3406,9 @@ export const adminUpsertUser = onCall({ region: "europe-west1" }, async (req) =>
   };
 });
 
-export const onAuthUserCreate = onUserCreated(async (event) => {
-  const user = event.data; // v2 identity event payload
+export const onAuthUserCreate = auth.user().onCreate(async (user) => {
   const db = getFirestore();
-
+  
   await db.collection('users').doc(user.uid).set({
     email: user.email || '',
     displayName: user.displayName || '',
@@ -3417,12 +3416,11 @@ export const onAuthUserCreate = onUserCreated(async (event) => {
     disabled: !!user.disabled,
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
-    _source: 'identity.onUserCreated'
+    _source: 'auth.user().onCreate'       // V1 source
   }, { merge: true });
 });
 
-export const onAuthUserDelete = onUserDeleted(async (event) => {
-  const user = event.data;
+export const onAuthUserDelete = auth.user().onDelete(async (user) => {
   const db = getFirestore();
   await db.collection('users').doc(user.uid).delete().catch(() => {});
 });
