@@ -260,51 +260,48 @@
           this.setLoading('signin', false);
         }
       }
+async handleSignUp() {
+    const name = document.getElementById('signup-name').value.trim();
+    const email = document.getElementById('signup-email').value.trim();
+    const password = document.getElementById('signup-password').value;
 
-      async handleSignUp() {
-        const name = document.getElementById('signup-name').value.trim();
-        const email = document.getElementById('signup-email').value.trim();
-        const password = document.getElementById('signup-password').value;
+    if (!this.validateSignUp(name, email, password)) return;
 
-        if (!this.validateSignUp(name, email, password)) return;
+    this.setLoading('signup', true);
+    sessionStorage.setItem('signup_flow', '1');
 
-        this.setLoading('signup', true);
-        // ➜ Kayıt akışı bayrağı: onAuthStateChanged ilk tetiklenecek olursa mesajı bastırıyoruz.
-        sessionStorage.setItem('signup_flow','1');
+    try {
+        const result = await authService.signUp(email, password, name, 'user');
+        if (result.success) {
+            const user = auth.currentUser;
+            if (user) {
+                // Ad-soyad bilgisini kaydetmek için user.updateProfile'ı kullanın.
+                await user.updateProfile({ displayName: name }); // <-- BURASI EKLENMELİ
 
-        try {
-          const result = await authService.signUp(email, password, name, 'user');
-          if (result.success) {
-            // E-posta doğrulama gönder
-            const u = auth.currentUser;
-            if (u) {
-              try {
-                await sendEmailVerification(u);
-                showNotification('Doğrulama e-postası gönderildi. Lütfen e-postanızı doğrulayıp giriş yapın.', 'success');
-              } catch (ve) {
-                console.error('sendEmailVerification error:', ve);
-                showNotification('Doğrulama e-postası gönderilemedi. Daha sonra tekrar deneyin.', 'error');
-              }
-              // Oturumu kapatıp Giriş sekmesine dön
-              await authService.signOut();
-              this.switchTab('signin');
+                try {
+                    await sendEmailVerification(user);
+                    showNotification('Doğrulama e-postası gönderildi. Lütfen e-postanızı doğrulayıp giriş yapın.', 'success');
+                } catch (ve) {
+                    console.error('sendEmailVerification error:', ve);
+                    showNotification('Doğrulama e-postası gönderilemedi. Daha sonra tekrar deneyin.', 'error');
+                }
+                await authService.signOut();
+                this.switchTab('signin');
             } else {
-              showNotification('Hesap oluşturuldu. Lütfen e-postanızı doğrulayın ve giriş yapın.', 'success');
-              this.switchTab('signin');
+                showNotification('Hesap oluşturuldu. Lütfen e-postanızı doğrulayın ve giriş yapın.', 'success');
+                this.switchTab('signin');
             }
-          } else {
+        } else {
             showNotification(result.error || 'Kayıt başarısız.', 'error');
-          }
-        } catch (err) {
-          console.error('Final sign up error catch:', err);
-          showNotification('Kayıt sırasında beklenmeyen bir hata oluştu.', 'error');
-        } finally {
-          // Kayıt akış bayrağını temizle
-          sessionStorage.removeItem('signup_flow');
-          this.setLoading('signup', false);
         }
-      }
-
+    } catch (err) {
+        console.error('Final sign up error catch:', err);
+        showNotification('Kayıt sırasında beklenmeyen bir hata oluştu.', 'error');
+    } finally {
+        sessionStorage.removeItem('signup_flow');
+        this.setLoading('signup', false);
+    }
+}
       async handlePasswordReset() {
         const email = document.getElementById('signin-email').value.trim();
         if (!email) {
@@ -391,5 +388,6 @@
 
     console.log('🚀 Firebase Auth module loaded!');
   </script>
+  <div id="notification-container" class="notification-container"></div>
 </body>
 </html>
