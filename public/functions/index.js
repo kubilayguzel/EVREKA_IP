@@ -22,7 +22,7 @@ import { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
          WidthType, AlignmentType, HeadingLevel, PageBreak } from 'docx';
 import { SecretManagerServiceClient } from "@google-cloud/secret-manager";
 import { google } from "googleapis";
-import { auth as functionsAuth } from 'firebase-functions/v2';          // Auth trigger'ları için
+import { onUserCreated, onUserDeleted } from 'firebase-functions/v2/identity';
 import { getAuth } from 'firebase-admin/auth';                          // Admin SDK (modüler)
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';    // Admin SDK (modüler)
 
@@ -3299,133 +3299,156 @@ function sanitizeFileName(fileName) {
 
 // KULLANICI VE ADMIN YÖNETİMİ //
 
+const canManageUsers = (ctx) => {
+  if (!ctx.auth) return false;
+  const email = (ctx.auth.token?.email || "").toLowerCase();
+  const role  = ctx.auth.token?.role;
+  // İzin politikası: admin/superadmin claim veya şirket domain'i
+  if (role === "admin" || role === "superadmin") return true;
+  if (email.endsWith("@evrekapatent.com")) return true; // İstersen kaldır/sıkılaştır
+  return false;
+};
+
+// === Kullanıcı Oluştur/Güncelle (Auth + Firestore senkron) ===
 export const adminUpsertUser = onCall({ region: "europe-west1" }, async (req) => {
-  // Basit yetki: domain veya custom claim 'admin' kontrolü (ihtiyaca göre sıkılaştır)
-  const callerEmail = (req.auth?.token?.email || "").toLowerCase();
-  if (!callerEmail.endsWith("@evrekapatent.com") && req.auth?.token?.role !== "admin") {
+  if (!canManageUsers(req)) {
     throw new HttpsError("permission-denied", "Yetkisiz istek.");
   }
 
-  const strip = (s) => String(s ?? "").trim().replace(/^["'\s]+|["'\s]+$/g, "");
-  const uidInput      = strip(req.data?.uid);                   // Edit modunda gelebilir
-  const emailInput    = strip(req.data?.email).toLowerCase();   // Create veya mevcut email
-  const newEmailInput = strip(req.data?.newEmail).toLowerCase();// Email değişiklik isteği
+  const uidInput      = strip(req.data?.uid);
+  const emailInput    = strip(req.data?.email).toLowerCase();
+  const newEmailInput = strip(req.data?.newEmail).toLowerCase();   // opsiyonel
   const displayName   = strip(req.data?.displayName);
   const role          = strip(req.data?.role || "user");
-  const password      = String(req.data?.password || "");       // boş olabilir (reset tercih edilebilir)
-  const disabledFlag  = req.data?.disabled;                     // true/false/undefined
+  const password      = String(req.data?.password || "");          // opsiyonel
+  const disabledFlag  = req.data?.disabled;                         // opsiyonel (true/false)
 
-  if (!uidInput && !emailInput) throw new HttpsError("invalid-argument", "uid veya email zorunlu.");
-  if (!displayName) throw new HttpsError("invalid-argument", "displayName zorunlu.");
+  if (!uidInput && !emailInput) {
+    throw new HttpsError("invalid-argument", "uid veya email zorunlu.");
+  }
+  if (!displayName) {
+    throw new HttpsError("invalid-argument", "displayName zorunlu.");
+  }
 
-  const auth = getAuth();
-  const db = getFirestore();
-
-  // 1) Kullanıcıyı bul ya da oluştur
-  let userRecord = null;
+  // 1) Kullanıcıyı bul (uid veya email) — yoksa oluştur
+  let userRecord;
   let existed = true;
   try {
-    userRecord = uidInput ? await auth.getUser(uidInput) : await auth.getUserByEmail(emailInput);
+    userRecord = uidInput
+      ? await adminAuth.getUser(uidInput)
+      : await adminAuth.getUserByEmail(emailInput);
   } catch (e) {
-    if (e?.code === "auth/user-not-found") existed = false;
-    else throw new HttpsError("internal", `Kullanıcı sorgulanamadı: ${e?.message || e}`);
+    if (e?.code === "auth/user-not-found") {
+      existed = false;
+    } else {
+      throw new HttpsError("internal", `Kullanıcı sorgulanamadı: ${e?.message || e}`);
+    }
   }
 
   if (!existed) {
     const createParams = { email: emailInput, displayName };
     if (password) createParams.password = password;
-    userRecord = await auth.createUser(createParams);
+    userRecord = await adminAuth.createUser(createParams);
   }
 
-  // 2) Auth güncelleme parametrelerini hazırla
+  // 2) Güncelleme parametreleri
   const updateParams = {};
   if (displayName && displayName !== userRecord.displayName) updateParams.displayName = displayName;
   if (typeof disabledFlag === "boolean" && disabledFlag !== userRecord.disabled) updateParams.disabled = disabledFlag;
   if (password) updateParams.password = password;
 
-  // Email değişikliği
+  // E-posta değişikliği (çakışma kontrolü ile)
   const targetEmail = newEmailInput || emailInput || userRecord.email || "";
   if (targetEmail && targetEmail !== userRecord.email) {
-    // Çakışma kontrolü
     try {
-      const other = await auth.getUserByEmail(targetEmail);
-      if (other.uid !== userRecord.uid) throw new HttpsError("already-exists", "Bu e-posta başka bir kullanıcıda kayıtlı.");
+      const other = await adminAuth.getUserByEmail(targetEmail);
+      if (other.uid !== userRecord.uid) {
+        throw new HttpsError("already-exists", "Bu e-posta başka bir kullanıcıda kayıtlı.");
+      }
     } catch (e) {
-      if (e?.code !== "auth/user-not-found") throw new HttpsError("internal", `Email kontrolü başarısız: ${e?.message || e}`);
+      if (e?.code !== "auth/user-not-found") {
+        throw new HttpsError("internal", `E-posta kontrolü başarısız: ${e?.message || e}`);
+      }
+      // user-not-found ise hedef e-posta kullanılabilir demektir
     }
     updateParams.email = targetEmail;
   }
 
   // 3) Auth güncelle
-  if (Object.keys(updateParams).length > 0) {
-    userRecord = await auth.updateUser(userRecord.uid, updateParams);
+  if (Object.keys(updateParams).length) {
+    userRecord = await adminAuth.updateUser(userRecord.uid, updateParams);
   }
 
   // 4) Custom claims (rol)
-  if (role) await auth.setCustomUserClaims(userRecord.uid, { role });
+  if (role) {
+    await adminAuth.setCustomUserClaims(userRecord.uid, { role });
+  }
 
   // 5) Firestore profilini upsert et
-  const userDocRef = db.collection("users").doc(userRecord.uid);
-  const baseData = {
+  await db.collection("users").doc(userRecord.uid).set(
+    {
+      email: userRecord.email,
+      displayName: userRecord.displayName || displayName,
+      role,
+      disabled: !!userRecord.disabled,
+      updatedAt: FieldValue.serverTimestamp(),
+      ...(existed ? {} : { createdAt: FieldValue.serverTimestamp() }),
+    },
+    { merge: true }
+  );
+
+  return {
+    uid: userRecord.uid,
     email: userRecord.email,
-    displayName: userRecord.displayName || displayName,
+    existed,
     role,
     disabled: !!userRecord.disabled,
-    updatedAt: FieldValue.serverTimestamp(),
   };
-  if (!existed) baseData.createdAt = FieldValue.serverTimestamp();
-  await userDocRef.set(baseData, { merge: true });
-
-  return { uid: userRecord.uid, email: userRecord.email, existed, role, disabled: !!userRecord.disabled };
 });
-export const onAuthUserCreate = functionsAuth.user().onCreate(async (user) => {
+
+export const onAuthUserCreate = onUserCreated(async (event) => {
+  const user = event.data; // v2 identity event payload
   const db = getFirestore();
-  const ref = db.collection("users").doc(user.uid);
-  await ref.set({
-    email: user.email || "",
-    displayName: user.displayName || "",
-    role: "user",                  // default rol
+
+  await db.collection('users').doc(user.uid).set({
+    email: user.email || '',
+    displayName: user.displayName || '',
+    role: 'user',                         // default rol
     disabled: !!user.disabled,
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
-    _source: "auth.onCreate"       // izleme amaçlı
+    _source: 'identity.onUserCreated'
   }, { merge: true });
 });
 
-export const onAuthUserDelete = functionsAuth.user().onDelete(async (user) => {
+export const onAuthUserDelete = onUserDeleted(async (event) => {
+  const user = event.data;
   const db = getFirestore();
-  await db.collection("users").doc(user.uid).delete().catch(() => {});
+  await db.collection('users').doc(user.uid).delete().catch(() => {});
 });
-export const adminDeleteUser = onCall({ region: "europe-west1" }, async (req) => {
-  const callerEmail = (req.auth?.token?.email || "").toLowerCase();
-  const callerUid   = req.auth?.uid || "";
 
-  // Basit yetki kontrolü (istersen claim 'admin' de zorunlu kıl)
-  if (!callerEmail.endsWith("@evrekapatent.com") && req.auth?.token?.role !== "admin") {
+export const adminDeleteUser = onCall({ region: "europe-west1" }, async (req) => {
+  if (!canManageUsers(req)) {
     throw new HttpsError("permission-denied", "Yetkisiz istek.");
   }
 
-  const uid = String(req.data?.uid || "").trim();
+  const uid = strip(req.data?.uid);
   if (!uid) throw new HttpsError("invalid-argument", "uid zorunlu.");
 
-  // Kendini silmeyi engelle (güvenli tercih)
+  // Kendi hesabını silme koruması
+  const callerUid = req.auth?.uid;
   if (uid === callerUid) {
-    throw new HttpsError("failed-precondition", "Kendi hesabınızı bu yöntemle silemezsiniz.");
+    throw new HttpsError("failed-precondition", "Kendi hesabınızı silemezsiniz.");
   }
 
-  const auth = getAuth();
-  const db   = getFirestore();
-
   // 1) Auth'tan sil
-  await auth.deleteUser(uid);
+  await adminAuth.deleteUser(uid);
 
-  // 2) Firestore profilini de sil (onAuthUserDelete trigger’ı da varsa, bu sadece hızlandırır)
-  try {
-    await db.collection("users").doc(uid).delete();
-  } catch (_) { /* yoksa sorun değil */ }
+  // 2) Firestore profilini sil (trigger varsa zaten otomatik de olur)
+  await db.collection("users").doc(uid).delete().catch(() => {});
 
-  // (Opsiyonel) Bu kullanıcıya atanmış işleri boşaltmak istersen:
-  // const snap = await db.collection("tasks").where("assignedTo_uid","==",uid).limit(500).get();
+  // 3) (Opsiyonel) Atanmış işleri boşaltmak istersen, burada yapabilirsin
+  // const snap = await db.collection('tasks').where('assignedTo_uid', '==', uid).get();
   // const batch = db.bulkWriter();
   // snap.forEach(docSnap => batch.update(docSnap.ref, { assignedTo_uid: null, assignedTo_email: null }));
   // await batch.close();
