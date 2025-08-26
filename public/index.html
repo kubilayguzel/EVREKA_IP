@@ -6,368 +6,291 @@
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
 <title>Giriş - IP Manager</title><link href="./css/shared-styles.css" rel="stylesheet"/>
 <style>
-/* Reset and basic styles */
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-
-body {
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #333;
-}
-
-/* Auth Container */
-.auth-container {
-  background: rgba(255, 255, 255, 0.95);
-  padding: 40px;
-  border-radius: 20px;
-  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
-  width: 100%;
-  max-width: 420px;
-  backdrop-filter: blur(10px);
-}
-
-/* Logo and Title Section */
-.logo-section {
-  text-align: center;
-  margin-bottom: 30px;
-}
-
-.logo {
-  font-size: 2.5em;
-  font-weight: 700;
-  color: #1e3c72;
-  margin-bottom: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 15px;
-}
-
-.logo-icon {
-  width: 50px;
-  height: 50px;
-  background: white;
-  border-radius: 8px;
-  padding: 8px;
-  object-fit: contain;
-  display: block;
-}
-
-.subtitle {
-  color: #666;
-  font-size: 1.1em;
-  font-weight: 500;
-}
-
-/* Tabs */
-.tabs {
-  display: flex;
-  margin-bottom: 30px;
-  background: #f8f9fa;
-  border-radius: 12px;
-  padding: 5px;
-}
-
-.tab {
-  flex: 1;
-  padding: 12px 20px;
-  text-align: center;
-  cursor: pointer;
-  border-radius: 8px;
-  font-weight: 600;
-  color: #666;
-  transition: all 0.3s ease;
-}
-
-.tab.active {
-  background: linear-gradient(45deg, #1e3c72, #2a5298);
-  color: #fff;
-}
-
-/* Form Sections */
-.form-section {
-  display: none;
-}
-
-.form-section.active {
-  display: block;
-}
-
-.form-group {
-  margin-bottom: 20px;
-}
-
-.form-label {
-  display: block;
-  margin-bottom: 8px;
-  font-weight: 600;
-  color: #333;
-}
-
-.form-input {
-  width: 100%;
-  padding: 15px;
-  border: 2px solid #e9ecef;
-  border-radius: 10px;
-  font-size: 1em;
-  transition: all 0.3s ease;
-}
-
-.form-input:focus {
-  outline: none;
-  border-color: #1e3c72;
-  box-shadow: 0 0 0 3px rgba(30, 60, 114, 0.1);
-}
-
-.error-message {
-  color: #dc3545;
-  font-size: 0.85em;
-  margin-top: 5px;
-  display: none;
-}
-
-.error-message.show {
-  display: block;
-}
-
-.form-input.error {
-  border-color: #dc3545;
-}
-
-/* Buttons */
-.auth-btn {
-  width: 100%;
-  padding: 15px;
-  background: linear-gradient(45deg, #1e3c72, #2a5298);
-  color: #fff;
-  border: none;
-  border-radius: 10px;
-  font-size: 1.1em;
-  font-weight: 600;
-  cursor: pointer;
-  transition: 0.3s;
-  margin-bottom: 20px;
-  position: relative;
-}
-
-.auth-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 10px 25px rgba(30, 60, 114, 0.3);
-}
-
-.auth-btn:disabled {
-  opacity: 0.7;
-  cursor: not-allowed;
-  transform: none;
-}
-
-.loading {
-  display: none;
-  position: absolute;
-  right: 15px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 20px;
-  height: 20px;
-  border: 2px solid #fff;
-  border-radius: 50%;
-  border-top-color: transparent;
-  animation: spin 1s ease-in-out infinite;
-}
-
-@keyframes spin {
-  to {
-    transform: translateY(-50%) rotate(360deg);
-  }
-}
-
-.firebase-status {
-  position: fixed;
-  top: 20px;
-  right: 20px;
-  padding: 10px 15px;
-  border-radius: 20px;
-  font-size: 0.8em;
-  font-weight: 600;
-  z-index: 1000;
-}
-
-.firebase-status.connected {
-  background: #d4edda;
-  color: #155724;
-}
-
-.firebase-status.error {
-  background: #f8d7da;
-  color: #721c24;
-}
-
-.helper-links {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: -10px;
-  margin-bottom: 20px;
-  gap: 12px;
-}
-
-.link-btn {
-  background: none;
-  border: none;
-  color: #1e3c72;
-  cursor: pointer;
-  font-size: 0.9em;
-  text-decoration: underline;
-  padding: 0;
-}
-
-/* Responsive */
-@media (max-width: 480px) {
-  .auth-container {
-    margin: 20px;
-    padding: 30px 25px;
-  }
-  .logo {
-    font-size: 2em;
-  }
-}
-
-/* NOTIFICATION STYLES */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #333;
+    }
+    
+    .auth-container {
+      background: rgba(255, 255, 255, 0.95);
+      padding: 40px;
+      border-radius: 20px;
+      box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
+      width: 100%;
+      max-width: 420px;
+      backdrop-filter: blur(10px);
+    }
+    
+    .logo-section {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+    
+    .logo {
+      font-size: 2.5em;
+      font-weight: 700;
+      color: #1e3c72;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 15px;
+    }
+    
+    .logo-icon {
+      width: 50px;
+      height: 50px;
+      background: white;
+      border-radius: 8px;
+      padding: 8px;
+      object-fit: contain; /* Oranını koruyarak sığdırır */
+      display: block;
+    }
+    
+    .subtitle {
+      color: #666;
+      font-size: 1.1em;
+      font-weight: 500;
+    }
+    
+    .tabs {
+      display: flex;
+      margin-bottom: 30px;
+      background: #f8f9fa;
+      border-radius: 12px;
+      padding: 5px;
+    }
+    
+    .tab {
+      flex: 1;
+      padding: 12px 20px;
+      text-align: center;
+      cursor: pointer;
+      border-radius: 8px;
+      font-weight: 600;
+      color: #666;
+      transition: all 0.3s ease;
+    }
+    
+    .tab.active {
+      background: linear-gradient(45deg, #1e3c72, #2a5298);
+      color: #fff;
+    }
+    
+    .form-section {
+      display: none;
+    }
+    
+    .form-section.active {
+      display: block;
+    }
+    
+    .form-group {
+      margin-bottom: 20px;
+    }
+    
+    .form-label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 600;
+      color: #333;
+    }
+    
+    .form-input {
+      width: 100%;
+      padding: 15px;
+      border: 2px solid #e9ecef;
+      border-radius: 10px;
+      font-size: 1em;
+      transition: all 0.3s ease;
+    }
+    
+    .form-input:focus {
+      outline: none;
+      border-color: #1e3c72;
+      box-shadow: 0 0 0 3px rgba(30, 60, 114, 0.1);
+    }
+    
+    .error-message {
+      color: #dc3545;
+      font-size: 0.85em;
+      margin-top: 5px;
+      display: none;
+    }
+    
+    .error-message.show {
+      display: block;
+    }
+    
+    .form-input.error {
+      border-color: #dc3545;
+    }
+    
+    .auth-btn {
+      width: 100%;
+      padding: 15px;
+      background: linear-gradient(45deg, #1e3c72, #2a5298);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      font-size: 1.1em;
+      font-weight: 600;
+      cursor: pointer;
+      transition: 0.3s;
+      margin-bottom: 20px;
+      position: relative;
+    }
+    
+    .auth-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 25px rgba(30, 60, 114, 0.3);
+    }
+    
+    .auth-btn:disabled {
+      opacity: 0.7;
+      cursor: not-allowed;
+      transform: none;
+    }
+    
+    .loading {
+      display: none;
+      position: absolute;
+      right: 15px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 20px;
+      height: 20px;
+      border: 2px solid #fff;
+      border-radius: 50%;
+      border-top-color: transparent;
+      animation: spin 1s ease-in-out infinite;
+    }
+    
+    @keyframes spin {
+      to {
+        transform: translateY(-50%) rotate(360deg);
+      }
+    }
+    
+    .firebase-status {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      padding: 10px 15px;
+      border-radius: 20px;
+      font-size: 0.8em;
+      font-weight: 600;
+      z-index: 1000;
+    }
+    
+    .firebase-status.connected {
+      background: #d4edda;
+      color: #155724;
+    }
+    
+    .firebase-status.error {
+      background: #f8d7da;
+      color: #721c24;
+    }
+    
+    .helper-links {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: -10px;
+      margin-bottom: 20px;
+      gap: 12px;
+    }
+    
+    .link-btn {
+      background: none;
+      border: none;
+      color: #1e3c72;
+      cursor: pointer;
+      font-size: 0.9em;
+      text-decoration: underline;
+      padding: 0;
+    }
+    
+    @media (max-width: 480px) {
+      .auth-container {
+        margin: 20px;
+        padding: 30px 25px;
+      }
+      .logo {
+        font-size: 2em;
+      }
+    }
+    
+    /* NOTIFICATION STYLES - User Management sayfasından alınmış */
 .notification {
-  background-color: #fff;
-  color: #333;
-  padding: 15px 20px;
-  border-radius: 10px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  display: flex;
-  align-items: center;
-  gap: 15px;
-  min-width: 250px;
-  max-width: 350px;
-  pointer-events: auto;
-  border-left: 5px solid;
-  transition: transform 0.4s cubic-bezier(0.68, -0.55, 0.27, 1.55), border-color 0.4s ease;
-  transform: translateX(120%);
-}
+        background-color: #fff;
+        color: #333;
+        padding: 15px 20px;
+        border-radius: 10px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        min-width: 250px;
+        max-width: 350px;
+        pointer-events: auto;
 
+        /* Yeni eklenen çerçeve stili */
+        border-left: 5px solid;
+        transition: transform 0.4s cubic-bezier(0.68, -0.55, 0.27, 1.55), border-color 0.4s ease;
+        transform: translateX(120%);
+    }
+/* Türlere göre renk ataması */
 .notification.error {
-  border-color: #dc3545;
-}
-
+        border-color: #dc3545;
+    }
 .notification-icon {
-  font-size: 1.5em;
-  font-weight: bold;
-  line-height: 1;
-}
-
-.notification.error .notification-icon {
-  color: #dc3545;
-}
-
+        font-size: 1.5em;
+        font-weight: bold;
+        line-height: 1;
+    }
+.notification.error .notification-icon { color: #dc3545; }
 .notification-message {
-  flex-grow: 1;
-  font-size: 0.95em;
-  line-height: 1.4;
-}
-
+        flex-grow: 1;
+        font-size: 0.95em;
+        line-height: 1.4;
+    }
 .notification-close-btn:hover {
-  color: #555;
-}
-
-/* ===== EVREKA Login Polishing (New Styles) ===== */
-:root {
-  --brand-green: #00a878;
-  --brand-green-700: #00956d;
-  --brand-green-800: #007e5b;
-  --bg1: #e9fbf4;
-  --bg2: #d9f7ef;
-}
-
-body {
-  background: linear-gradient(135deg, var(--bg1) 0%, var(--bg2) 100%) !important;
-}
-
-.brand-header {
-  width: 100%;
-  display: flex;
-  justify-content: center;
-  margin: 24px 0 -8px 0;
-}
-
-.brand-inner {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  background: rgba(255, 255, 255, 0.85);
-  border-radius: 16px;
-  padding: 10px 16px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
-}
-
-.brand-mark {
-  height: 28px;
-  width: auto;
-  display: block;
-}
-
-.brand-text {
-  font-weight: 700;
-  letter-spacing: .5px;
-  color: #0f5132;
-}
-
-.app-title {
-  font-size: 2rem;
-  font-weight: 800;
-  text-align: center;
-  color: #263238;
-  margin-top: 8px;
-}
-
-.auth-btn {
-  background-color: var(--brand-green) !important;
-  color: #fff !important;
-  border: none !important;
-}
-
-.auth-btn:hover {
-  background-color: var(--brand-green-700) !important;
-}
-
-.auth-btn:active {
-  background-color: var(--brand-green-800) !important;
-}
-
-.tabs .tab.active {
-  background-color: var(--brand-green) !important;
-  color: #fff !important;
-  border-color: transparent !important;
-}
-
-.tabs .tab:hover {
-  background-color: rgba(0, 168, 120, .08) !important;
-}
-
+        color: #555;
+    }
+  
+/* ===== EVREKA Login Polishing ===== */
+:root{ --brand-green:#00a878; --brand-green-700:#00956d; --brand-green-800:#007e5b; --bg1:#e9fbf4; --bg2:#d9f7ef; }
+body{ background:linear-gradient(135deg,var(--bg1) 0%, var(--bg2) 100%) !important; }
+.brand-header{ width:100%; display:flex; justify-content:center; margin:24px 0 -8px 0; }
+.brand-inner{ display:flex; align-items:center; gap:12px; background:rgba(255,255,255,0.85); border-radius:16px; padding:10px 16px; box-shadow:0 10px 30px rgba(0,0,0,.08); }
+.brand-mark{ height:28px; width:auto; display:block; }
+.brand-text{ font-weight:700; letter-spacing:.5px; color:#0f5132; }
+.app-title{ font-size:2rem; font-weight:800; text-align:center; color:#263238; margin-top:8px; }
+.auth-btn{ background-color:var(--brand-green) !important; color:#fff !important; border:none !important; }
+.auth-btn:hover{ background-color:var(--brand-green-700) !important; }
+.auth-btn:active{ background-color:var(--brand-green-800) !important; }
+.tabs .tab.active{ background-color:var(--brand-green) !important; color:#fff !important; border-color:transparent !important; }
+.tabs .tab:hover{ background-color:rgba(0,168,120,.08) !important; }
 /* stacked notifications at top-right */
-.notification-container {
-  position: fixed;
-  top: 24px;
-  right: 24px;
-  z-index: 3000;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
+.notification-container{ position:fixed; top:24px; right:24px; z-index:3000; display:flex; flex-direction:column; gap:10px; }
 </style>
 </head>
 <body>
 <div class="firebase-status" id="firebaseStatus">🔄 Firebase bağlanıyor...</div>
+<!-- Notification Container - User Management tarzında -->
+
 <div class="auth-container">
 <div class="brand-header"><div class="brand-inner"><img alt="EVREKA" class="brand-mark" onerror="this.onerror=null;this.src='evreka-logo.png.png';" src="evreka-logo.png"/><div class="brand-text">EVREKA</div></div></div><div class="logo-section">
 <div class="app-title">IP Manager</div>
@@ -377,6 +300,7 @@ body {
 <div class="tab active" data-tab="signin">Giriş Yap</div>
 <div class="tab" data-tab="signup">Kayıt Ol</div>
 </div>
+<!-- Sign In -->
 <div class="form-section active" id="signin-section">
 <form id="signinForm">
 <div class="form-group">
@@ -398,6 +322,7 @@ body {
 </button>
 </form>
 </div>
+<!-- Sign Up -->
 <div class="form-section" id="signup-section">
 <form id="signupForm">
 <div class="form-group">
