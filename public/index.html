@@ -1,148 +1,321 @@
 <!DOCTYPE html>
 <html lang="tr">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>IP Manager - Giriş</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Giriş - IP Manager</title>
   <style>
-    *{margin:0;padding:0;box-sizing:border-box}
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
     body {
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        background: #ffffff; /* Arka planı tamamen beyaz yap */
-        min-height: 100vh;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #333;
+    }
+    
+    .auth-container {
+      background: rgba(255, 255, 255, 0.95);
+      padding: 40px;
+      border-radius: 20px;
+      box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
+      width: 100%;
+      max-width: 420px;
+      backdrop-filter: blur(10px);
+    }
+    
+    .logo-section {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+    
+    .logo {
+      font-size: 2.5em;
+      font-weight: 700;
+      color: #1e3c72;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 15px;
+    }
+    
+    .logo-icon {
+      width: 50px;
+      height: 50px;
+    }
+    
+    .subtitle {
+      color: #666;
+      font-size: 1.1em;
+      font-weight: 500;
+    }
+    
+    .tabs {
+      display: flex;
+      margin-bottom: 30px;
+      background: #f8f9fa;
+      border-radius: 12px;
+      padding: 5px;
+    }
+    
+    .tab {
+      flex: 1;
+      padding: 12px 20px;
+      text-align: center;
+      cursor: pointer;
+      border-radius: 8px;
+      font-weight: 600;
+      color: #666;
+      transition: all 0.3s ease;
+    }
+    
+    .tab.active {
+      background: linear-gradient(45deg, #1e3c72, #2a5298);
+      color: #fff;
+    }
+    
+    .form-section {
+      display: none;
+    }
+    
+    .form-section.active {
+      display: block;
+    }
+    
+    .form-group {
+      margin-bottom: 20px;
+    }
+    
+    .form-label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 600;
+      color: #333;
+    }
+    
+    .form-input {
+      width: 100%;
+      padding: 15px;
+      border: 2px solid #e9ecef;
+      border-radius: 10px;
+      font-size: 1em;
+      transition: all 0.3s ease;
+    }
+    
+    .form-input:focus {
+      outline: none;
+      border-color: #1e3c72;
+      box-shadow: 0 0 0 3px rgba(30, 60, 114, 0.1);
+    }
+    
+    .error-message {
+      color: #dc3545;
+      font-size: 0.85em;
+      margin-top: 5px;
+      display: none;
+    }
+    
+    .error-message.show {
+      display: block;
+    }
+    
+    .form-input.error {
+      border-color: #dc3545;
+    }
+    
+    .auth-btn {
+      width: 100%;
+      padding: 15px;
+      background: linear-gradient(45deg, #1e3c72, #2a5298);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      font-size: 1.1em;
+      font-weight: 600;
+      cursor: pointer;
+      transition: 0.3s;
+      margin-bottom: 20px;
+      position: relative;
+    }
+    
+    .auth-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 25px rgba(30, 60, 114, 0.3);
+    }
+    
+    .auth-btn:disabled {
+      opacity: 0.7;
+      cursor: not-allowed;
+      transform: none;
+    }
+    
+    .loading {
+      display: none;
+      position: absolute;
+      right: 15px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 20px;
+      height: 20px;
+      border: 2px solid #fff;
+      border-radius: 50%;
+      border-top-color: transparent;
+      animation: spin 1s ease-in-out infinite;
+    }
+    
+    @keyframes spin {
+      to {
+        transform: translateY(-50%) rotate(360deg);
+      }
+    }
+    
+    .firebase-status {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      padding: 10px 15px;
+      border-radius: 20px;
+      font-size: 0.8em;
+      font-weight: 600;
+      z-index: 1000;
+    }
+    
+    .firebase-status.connected {
+      background: #d4edda;
+      color: #155724;
+    }
+    
+    .firebase-status.error {
+      background: #f8d7da;
+      color: #721c24;
+    }
+    
+    .helper-links {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: -10px;
+      margin-bottom: 20px;
+      gap: 12px;
+    }
+    
+    .link-btn {
+      background: none;
+      border: none;
+      color: #1e3c72;
+      cursor: pointer;
+      font-size: 0.9em;
+      text-decoration: underline;
+      padding: 0;
+    }
+    
+    @media (max-width: 480px) {
+      .auth-container {
+        margin: 20px;
+        padding: 30px 25px;
+      }
+      .logo {
+        font-size: 2em;
+      }
+    }
+    
+    /* NOTIFICATION STYLES - User Management sayfasından alınmış */
+    .notification-container {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 1000;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        pointer-events: none;
+    }
+
+    .notification {
+        background-color: #fff;
+        color: #333;
+        padding: 15px 20px;
+        border-radius: 10px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
         display: flex;
         align-items: center;
-        justify-content: center;
+        gap: 15px;
+        min-width: 250px;
+        max-width: 350px;
+        pointer-events: auto;
+
+        /* Yeni eklenen çerçeve stili */
+        border-left: 5px solid;
+        transition: transform 0.4s cubic-bezier(0.68, -0.55, 0.27, 1.55), border-color 0.4s ease;
+        transform: translateX(120%);
     }
-    .auth-container{
-      background:rgba(255,255,255,.95);padding:40px;border-radius:20px;
-      box-shadow:0 20px 40px rgba(0,0,0,.1);backdrop-filter:blur(10px);
-      width:100%;max-width:400px;position:relative
+
+    .notification.show {
+        transform: translateX(0);
     }
-    .logo-section{text-align:center;margin-bottom:40px}
-    .logo{font-size:2.5em;font-weight:bold;color:#1e3c72}
-    .subtitle{color:#666;font-size:1.1em}
-    .tabs{display:flex;margin:30px 0;background:#f8f9fa;border-radius:10px;padding:5px}
-    .tab{flex:1;padding:10px;text-align:center;border-radius:8px;cursor:pointer;transition:.3s;font-weight:500}
-    .tab.active{background:#1e3c72;color:#fff}
-    .form-section{display:none}
-    .form-section.active{display:block}
-    .form-group{margin-bottom:25px}
-    .form-label{display:block;margin-bottom:8px;color:#333;font-weight:500}
-    .form-input{
-      width:100%;padding:15px;border:2px solid #e1e8ed;border-radius:10px;font-size:1em;transition:.3s;background:#fff
+
+    /* Türlere göre renk ataması */
+    .notification.success {
+        border-color: #28a745;
     }
-    .form-input:focus{outline:none;border-color:#1e3c72;box-shadow:0 0 0 3px rgba(30,60,114,.1)}
-    .form-input.error{border-color:#ff6b6b}
-    .error-message{color:#ff6b6b;font-size:.9em;margin-top:5px;display:none}
-    .auth-btn{
-      width:100%;padding:15px;background:linear-gradient(45deg,#1e3c72,#2a5298);color:#fff;border:none;border-radius:10px;
-      font-size:1.1em;font-weight:600;cursor:pointer;transition:.3s;margin-bottom:20px;position:relative
+
+    .notification.error {
+        border-color: #dc3545;
     }
-    .auth-btn:hover{transform:translateY(-2px);box-shadow:0 10px 25px rgba(30,60,114,.3)}
-    .auth-btn:disabled{opacity:.7;cursor:not-allowed;transform:none}
-    .loading{
-      display:none;position:absolute;right:15px;top:50%;transform:translateY(-50%);
-      width:20px;height:20px;border:2px solid #fff;border-radius:50%;border-top-color:transparent;animation:spin 1s ease-in-out infinite
+
+    .notification.warning {
+        border-color: #ffc107;
     }
-    @keyframes spin{to{transform:translateY(-50%) rotate(360deg)}}
-    .firebase-status{
-      position:fixed;top:20px;right:20px;padding:10px 15px;border-radius:20px;font-size:.8em;font-weight:600;z-index:1000
+
+    .notification-icon {
+        font-size: 1.5em;
+        font-weight: bold;
+        line-height: 1;
     }
-    .firebase-status.connected{background:#d4edda;color:#155724}
-    .firebase-status.error{background:#f8d7da;color:#721c24}
-    .helper-links{display:flex;justify-content:flex-end;margin-top:-10px;margin-bottom:20px;gap:12px}
-    .link-btn{
-      background:none;border:none;color:#1e3c72;cursor:pointer;font-size:.9em;text-decoration:underline;padding:0
+
+    .notification.success .notification-icon { color: #28a745; }
+    .notification.error .notification-icon { color: #dc3545; }
+    .notification.warning .notification-icon { color: #ffc107; }
+
+    .notification-message {
+        flex-grow: 1;
+        font-size: 0.95em;
+        line-height: 1.4;
     }
-    @media (max-width:480px){
-      .auth-container{margin:20px;padding:30px 25px}
-      .logo{font-size:2em}
+
+    .notification-close-btn {
+        background: none;
+        border: none;
+        font-size: 1.2em;
+        color: #aaa;
+        cursor: pointer;
+        transition: color 0.2s ease;
     }
-/* NOTIFICATION STYLES */
-.notification-container {
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    z-index: 1000;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    pointer-events: none;
-}
 
-.notification {
-    background-color: #fff;
-    color: #333;
-    padding: 15px 20px;
-    border-radius: 10px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-    display: flex;
-    align-items: center;
-    gap: 15px;
-    min-width: 250px;
-    max-width: 350px;
-    pointer-events: auto;
-
-    /* Yeni eklenen çerçeve stili */
-    border-left: 5px solid;
-    transition: transform 0.4s cubic-bezier(0.68, -0.55, 0.27, 1.55), border-color 0.4s ease;
-    transform: translateX(120%);
-}
-
-.notification.show {
-    transform: translateX(0);
-}
-
-/* Türlere göre renk ataması */
-.notification.success {
-    border-color: #28a745;
-}
-
-.notification.error {
-    border-color: #dc3545;
-}
-
-.notification.warning {
-    border-color: #ffc107;
-}
-
-.notification-icon {
-    font-size: 1.5em;
-    font-weight: bold;
-    line-height: 1;
-}
-
-.notification.success .notification-icon { color: #28a745; }
-.notification.error .notification-icon { color: #dc3545; }
-.notification.warning .notification-icon { color: #ffc107; }
-
-.notification-message {
-    flex-grow: 1;
-    font-size: 0.95em;
-    line-height: 1.4;
-}
-
-.notification-close-btn {
-    background: none;
-    border: none;
-    font-size: 1.2em;
-    color: #aaa;
-    cursor: pointer;
-    transition: color 0.2s ease;
-}
-
-.notification-close-btn:hover {
-    color: #555;
-}
+    .notification-close-btn:hover {
+        color: #555;
+    }
   </style>
 </head>
 <body>
   <div id="firebaseStatus" class="firebase-status">🔄 Firebase bağlanıyor...</div>
 
+  <!-- Notification Container - User Management tarzında -->
+  <div id="notification-container" class="notification-container"></div>
+
   <div class="auth-container">
     <div class="logo-section">
-      <div class="logo">🔥 IP Manager</div>
+      <div class="logo">
+        <img src="evreka-logo.png" alt="Evreka Logo" class="logo-icon">
+        IP Manager
+      </div>
       <div class="subtitle">Fikri Mülkiyet Yönetim Sistemi</div>
     </div>
 
@@ -209,7 +382,59 @@
   <script type="module">
   import { authService, auth } from './firebase-config.js';
   import { sendPasswordResetEmail, sendEmailVerification, updateProfile } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
-  import { showNotification, showFieldError, clearAllFieldErrors } from './utils.js';
+
+    // User Management sayfasındaki notification sistemini kopyala
+    function showNotification(message, type = 'success', duration = 4000) {
+      const container = document.getElementById('notification-container');
+      if (!container) return;
+
+      const notification = document.createElement('div');
+      notification.className = `notification ${type}`;
+      
+      const iconMap = {
+        success: '✅',
+        error: '❌',
+        warning: '⚠️'
+      };
+
+      notification.innerHTML = `
+        <span class="notification-icon">${iconMap[type] || '✅'}</span>
+        <span class="notification-message">${message}</span>
+        <button class="notification-close-btn" onclick="this.parentElement.remove()">&times;</button>
+      `;
+
+      container.appendChild(notification);
+
+      // Animasyon için setTimeout
+      setTimeout(() => notification.classList.add('show'), 10);
+
+      // Otomatik kaldırma
+      setTimeout(() => {
+        notification.classList.remove('show');
+        setTimeout(() => notification.remove(), 400);
+      }, duration);
+    }
+
+    function showFieldError(fieldId, message) {
+      const field = document.getElementById(fieldId);
+      const errorEl = document.getElementById(fieldId + '-error');
+      
+      if (field) field.classList.add('error');
+      if (errorEl) {
+        errorEl.textContent = message;
+        errorEl.classList.add('show');
+      }
+    }
+
+    function clearAllFieldErrors() {
+      document.querySelectorAll('.form-input').forEach(input => {
+        input.classList.remove('error');
+      });
+      document.querySelectorAll('.error-message').forEach(error => {
+        error.classList.remove('show');
+        error.textContent = '';
+      });
+    }
 
     class AuthController {
       constructor() {
@@ -268,54 +493,48 @@
           // Genel doğrulama koruması (opsiyonel ama tavsiye):
           if (!inSignupFlow && !user.emailVerified) {
             showNotification('Lütfen e-posta adresinizi doğrulayın. Doğrulama e-postası az önce gönderilmiş olabilir.', 'warning');
-            try { await authService.signOut(); } catch {}
-            this.switchTab('signin');
+            await authService.signOut();
             return;
           }
 
-          // Rolü al ve localStorage'a yaz
-          const role = await authService.getUserRole(user.uid);
-          const userData = {
-            uid: user.uid,
-            email: user.email,
-            displayName: user.displayName,
-            role: role || 'user',
-            isSuperAdmin: role === 'superadmin'
-          };
-          localStorage.setItem('currentUser', JSON.stringify(userData));
-          console.log('💾 User data saved to localStorage:', userData);
-
-          // Başarılı giriş bildirimi ve yönlendirme (yalnızca doğrulanmış hesaplar için)
-          showNotification('Giriş başarılı! Dashboard\'a yönlendiriliyorsunuz...', 'success');
-
+          // Kullanıcı doğrulanmış ve kayıt akışında değil → Portfolio'ya git
+          sessionStorage.removeItem('signup_flow');
+          showNotification('Giriş başarılı! Yönlendiriliyorsunuz...', 'success');
           setTimeout(() => {
-            console.log('🚀 Redirecting to dashboard...');
-            window.location.href = 'dashboard.html';
-          }, 1200);
+            window.location.href = 'portfolio.html';
+          }, 1000);
         });
       }
 
-      checkFirebaseConnectionStatus() {
-        const statusDiv = document.getElementById('firebaseStatus');
-        if (authService.isFirebaseAvailable) {
-          statusDiv.textContent = '🔥 Firebase Bağlı';
-          statusDiv.className = 'firebase-status connected';
-        } else {
-          statusDiv.textContent = '❌ Firebase Bağlantı Hatası (Yerel Mod)';
-          statusDiv.className = 'firebase-status error';
-        }
-        setTimeout(() => { statusDiv.style.display = 'none'; }, 3000);
-      }
-
       switchTab(tabName) {
-        document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
-        document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
+        if (tabName === this.currentTab) return;
 
-        document.querySelectorAll('.form-section').forEach(s => s.classList.remove('active'));
-        document.getElementById(`${tabName}-section`).classList.add('active');
+        // Tab butonlarını güncelle
+        document.querySelectorAll('.tab').forEach(tab => {
+          tab.classList.toggle('active', tab.dataset.tab === tabName);
+        });
+
+        // Form bölümlerini güncelle
+        document.querySelectorAll('.form-section').forEach(section => {
+          section.classList.toggle('active', section.id === `${tabName}-section`);
+        });
 
         this.currentTab = tabName;
         clearAllFieldErrors();
+      }
+
+      checkFirebaseConnectionStatus() {
+        const statusEl = document.getElementById('firebaseStatus');
+        if (!statusEl) return;
+
+        if (authService.isFirebaseAvailable) {
+          statusEl.textContent = '✅ Firebase bağlandı';
+          statusEl.className = 'firebase-status connected';
+          setTimeout(() => statusEl.style.display = 'none', 2000);
+        } else {
+          statusEl.textContent = '❌ Firebase bağlanamadı';
+          statusEl.className = 'firebase-status error';
+        }
       }
 
       async handleSignIn() {
@@ -328,8 +547,10 @@
 
         try {
           const result = await authService.signIn(email, password);
-          if (!result?.success) {
-            showNotification(result?.error || 'Giriş başarısız.', 'error');
+          if (result.success) {
+            console.log('🟢 Sign in successful, auth state will handle navigation');
+          } else {
+            showNotification(result.error || 'Giriş başarısız.', 'error');
           }
           // onAuthStateChanged gerekli aksiyonları alacak
         } catch (err) {
@@ -351,54 +572,47 @@
           sessionStorage.setItem('signup_flow', '1');
 
           try {
-            const result = await authService.signUp(email, password, name, 'user');
-            if (result.success) {
-                const user = auth.currentUser;
-                if (user) {
-                    await updateProfile(user, { displayName: name });
+              const result = await authService.signUp(email, password, name, 'user');
+              if (result.success) {
+                  const user = auth.currentUser;
+                  if (user) {
+                      // Ad-soyad bilgisini Firebase Auth'a kaydet
+                      await updateProfile(user, { displayName: name });
 
-                    try {
-                        await sendEmailVerification(user);
-                        showNotification('Doğrulama e-postası gönderildi. Lütfen e-postanızı doğrulayıp giriş yapın.', 'success');
-                    } catch (ve) {
-                        console.error('sendEmailVerification error:', ve);
-                        showNotification('Doğrulama e-postası gönderilemedi. Daha sonra tekrar deneyin.', 'error');
-                    }
-
-                    // Bildirimin görünmesi için 2 saniye beklet
-                    setTimeout(async () => {
-                        await authService.signOut();
-                        this.switchTab('signin');
-                    }, 2000); // 2000 ms = 2 saniye
-                } else {
-                    showNotification('Hesap oluşturuldu. Lütfen e-postanızı doğrulayın ve giriş yapın.', 'success');
-                    this.switchTab('signin');
-                }
-            } else {
-                showNotification(result.error || 'Kayıt başarısız.', 'error');
-            }
-
+                      try {
+                          await sendEmailVerification(user);
+                          showNotification('Doğrulama e-postası gönderildi. Lütfen e-postanızı doğrulayıp giriş yapın.', 'success');
+                      } catch (ve) {
+                          console.error('sendEmailVerification error:', ve);
+                          showNotification('Doğrulama e-postası gönderilemedi. Daha sonra tekrar deneyin.', 'error');
+                      }
+                      await authService.signOut();
+                      this.switchTab('signin');
+                  } else {
+                      showNotification('Hesap oluşturuldu. Lütfen e-postanızı doğrulayın ve giriş yapın.', 'success');
+                      this.switchTab('signin');
+                  }
+              } else {
+                  showNotification(result.error || 'Kayıt başarısız.', 'error');
+              }
           } catch (err) {
               console.error('Final sign up error catch:', err);
               showNotification('Kayıt sırasında beklenmeyen bir hata oluştu.', 'error');
           } finally {
-              sessionStorage.removeItem('signup_flow');
               this.setLoading('signup', false);
+              sessionStorage.removeItem('signup_flow');
           }
       }
+
       async handlePasswordReset() {
-        const email = document.getElementById('signin-email').value.trim();
-        if (!email) {
-          showFieldError('signin-email', 'Önce e-posta adresinizi girin');
-          return;
-        }
-        if (!this.isValidEmail(email)) {
-          showFieldError('signin-email', 'Geçerli bir e-posta girin');
+        const email = prompt('Şifre sıfırlama için e-posta adresinizi girin:');
+        if (!email || !this.isValidEmail(email)) {
+          showNotification('Geçerli bir e-posta adresi girin.', 'error');
           return;
         }
 
         try {
-          await sendPasswordResetEmail(auth, email.toLowerCase());
+          await sendPasswordResetEmail(auth, email);
           showNotification('Şifre sıfırlama e-postası gönderildi. Gelen kutunuzu kontrol edin.', 'success');
         } catch (err) {
           console.error('Password reset error:', err);
@@ -443,35 +657,11 @@
       }
     }
 
-    document.addEventListener('DOMContentLoaded', () => new AuthController());
+    // Initialize when DOM is ready
+    document.addEventListener('DOMContentLoaded', () => {
+      new AuthController();
+    });
 
-    // Dev yardımcıları (sadece alan doldurur)
-    window.testAuth = {
-      fillDemoSignIn: () => {
-        document.getElementById('signin-email').value = 'demo@ipmanager.com';
-        document.getElementById('signin-password').value = 'demo123';
-        clearAllFieldErrors();
-      },
-      fillAdminSignIn: () => {
-        document.getElementById('signin-email').value = 'admin@ipmanager.com';
-        document.getElementById('signin-password').value = 'admin123';
-        clearAllFieldErrors();
-      },
-      fillSuperAdminSignIn: () => {
-        document.getElementById('signin-email').value = 'superadmin@ipmanager.com';
-        document.getElementById('signin-password').value = 'superadmin123';
-        clearAllFieldErrors();
-      },
-      signOut: async () => {
-        console.log('Attempting sign out...');
-        await authService.signOut();
-        window.location.href = 'index.html';
-      },
-      forceDashboard: () => { window.location.href = 'dashboard.html'; }
-    };
-
-    console.log('🚀 Firebase Auth module loaded!');
   </script>
-  <div id="notification-container" class="notification-container"></div>
 </body>
 </html>
