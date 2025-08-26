@@ -270,38 +270,20 @@
         color: #555;
     }
   
-/* ===== EVREKA Brand-First Login ===== */
-:root{
-  --brand-green:#00a878;
-  --brand-green-700:#00956d;
-  --brand-green-800:#007e5b;
-  --bg-soft:#e9fbf4;
-  --bg-soft-2:#d9f7ef;
-}
-body{ background:linear-gradient(135deg,var(--bg-soft) 0%, var(--bg-soft-2) 100%) !important; }
-.brand-header{
-  width:100%;
-  display:flex; justify-content:center;
-  margin:24px 0 -8px 0;
-}
-.brand-inner{
-  display:flex; align-items:center; gap:12px;
-  background: rgba(255,255,255,0.85);
-  border-radius:16px; padding:10px 16px;
-  box-shadow:0 10px 30px rgba(0,0,0,.08);
-}
+/* ===== EVREKA Login Polishing ===== */
+:root{ --brand-green:#00a878; --brand-green-700:#00956d; --brand-green-800:#007e5b; --bg1:#e9fbf4; --bg2:#d9f7ef; }
+body{ background:linear-gradient(135deg,var(--bg1) 0%, var(--bg2) 100%) !important; }
+.brand-header{ width:100%; display:flex; justify-content:center; margin:24px 0 -8px 0; }
+.brand-inner{ display:flex; align-items:center; gap:12px; background:rgba(255,255,255,0.85); border-radius:16px; padding:10px 16px; box-shadow:0 10px 30px rgba(0,0,0,.08); }
 .brand-mark{ height:28px; width:auto; display:block; }
 .brand-text{ font-weight:700; letter-spacing:.5px; color:#0f5132; }
 .app-title{ font-size:2rem; font-weight:800; text-align:center; color:#263238; margin-top:8px; }
-
-/* Buttons / Tabs */
 .auth-btn{ background-color:var(--brand-green) !important; color:#fff !important; border:none !important; }
 .auth-btn:hover{ background-color:var(--brand-green-700) !important; }
 .auth-btn:active{ background-color:var(--brand-green-800) !important; }
 .tabs .tab.active{ background-color:var(--brand-green) !important; color:#fff !important; border-color:transparent !important; }
 .tabs .tab:hover{ background-color:rgba(0,168,120,.08) !important; }
-
-/* Notifications: stacked */
+/* stacked notifications at top-right */
 .notification-container{ position:fixed; top:24px; right:24px; z-index:3000; display:flex; flex-direction:column; gap:10px; }
 </style>
 </head>
@@ -310,7 +292,7 @@ body{ background:linear-gradient(135deg,var(--bg-soft) 0%, var(--bg-soft-2) 100%
 <!-- Notification Container - User Management tarzında -->
 
 <div class="auth-container">
-<div class="brand-header"><div class="brand-inner"><img alt="EVREKA" class="brand-mark" src="evreka-logo.png"/><div class="brand-text">EVREKA</div></div></div><div class="logo-section">
+<div class="brand-header"><div class="brand-inner"><img alt="EVREKA" class="brand-mark" onerror="this.onerror=null;this.src='evreka-logo.png.png';" src="evreka-logo.png"/><div class="brand-text">EVREKA</div></div></div><div class="logo-section">
 <div class="app-title">IP Manager</div>
 <div class="subtitle">Fikri Mülkiyet Yönetim Sistemi</div>
 </div>
@@ -366,61 +348,16 @@ body{ background:linear-gradient(135deg,var(--bg-soft) 0%, var(--bg-soft-2) 100%
 </div>
 </div>
 <script type="module">
+  import { authService, auth } from './firebase-config.js';
 import { showNotification, showFieldError, clearAllFieldErrors } from './utils.js';
-import { sendPasswordResetEmail, sendEmailVerification, updateProfile } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+  import { sendPasswordResetEmail, sendEmailVerification, updateProfile } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
 
     // User Management sayfasındaki notification sistemini kopyala
-    function showNotification(message, type = 'success', duration = 4000) {
-      const container = document.getElementById('notification-container');
-      if (!container) return;
+    
 
-      const notification = document.createElement('div');
-      notification.className = `notification ${type}`;
-      
-      const iconMap = {
-        success: '✅',
-        error: '❌',
-        warning: '⚠️'
-      };
+    
 
-      notification.innerHTML = `
-        <span class="notification-icon">${iconMap[type] || '✅'}</span>
-        <span class="notification-message">${message}</span>
-        <button class="notification-close-btn" onclick="this.parentElement.remove()">&times;</button>
-      `;
-
-      container.appendChild(notification);
-
-      // Animasyon için setTimeout
-      setTimeout(() => notification.classList.add('show'), 10);
-
-      // Otomatik kaldırma
-      setTimeout(() => {
-        notification.classList.remove('show');
-        setTimeout(() => notification.remove(), 400);
-      }, duration);
-    }
-
-    function showFieldError(fieldId, message) {
-      const field = document.getElementById(fieldId);
-      const errorEl = document.getElementById(fieldId + '-error');
-      
-      if (field) field.classList.add('error');
-      if (errorEl) {
-        errorEl.textContent = message;
-        errorEl.classList.add('show');
-      }
-    }
-
-    function clearAllFieldErrors() {
-      document.querySelectorAll('.form-input').forEach(input => {
-        input.classList.remove('error');
-      });
-      document.querySelectorAll('.error-message').forEach(error => {
-        error.classList.remove('show');
-        error.textContent = '';
-      });
-    }
+    
 
     class AuthController {
       constructor() {
@@ -647,6 +584,8 @@ import { sendPasswordResetEmail, sendEmailVerification, updateProfile } from 'ht
     document.addEventListener('DOMContentLoaded', () => {
       new AuthController();
     });
+
+
 // Kayıt işlemi başladığında kısa bilgi bildirimi
 document.addEventListener('DOMContentLoaded', () => {
   const signupForm = document.getElementById('signupForm');
