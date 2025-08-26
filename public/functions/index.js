@@ -26,13 +26,8 @@ import { auth } from 'firebase-functions/v1';
 import { getAuth } from 'firebase-admin/auth';                          // Admin SDK (modüler)
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';    // Admin SDK (modüler)
 
-// Initialize Firebase Admin
-if (!admin.apps.length) {
-  admin.initializeApp();
-}
-const adminAuth = admin.auth();
-const db = admin.firestore();
 
+const adminAuth = admin.auth();
 const secretClient = new SecretManagerServiceClient();
 
 // 🔐 SA_MAILER_KEY'i Secret Manager'dan çek
