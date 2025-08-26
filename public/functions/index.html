@@ -381,7 +381,7 @@
                         
                         setTimeout(() => {
                             console.log('🚀 Redirecting to dashboard...');
-                            window.location.href = 'dashboard.html';
+                            window.location.href = '../dashboard.html';
                         }, 1500);
                     } else {
                         console.log('ℹ️ User is not authenticated by Firebase.');
@@ -473,7 +473,7 @@
                             await createDemoData();
                             // Firebase bağlı değilse manuel yönlendirme
                             if (!authService.isFirebaseAvailable) {
-                                window.location.href = 'dashboard.html';
+                                window.location.href = '../dashboard.html';
                             }
                             // Firebase bağlıysa onAuthStateChanged zaten yönlendirecek
                         }, 2000);
@@ -506,7 +506,7 @@
                         setTimeout(async () => {
                             await createDemoData(); 
                             if (!authService.isFirebaseAvailable) {
-                                window.location.href = 'dashboard.html';
+                                window.location.href = '../dashboard.html';
                             }
                         }, 2000);
                     } else {
@@ -643,11 +643,11 @@
             signOut: async () => { 
                 console.log('Attempting sign out...');
                 await authService.signOut(); 
-                window.location.href = 'index.html'; 
+                window.location.href = '../index.html'; 
                 console.log('User signed out.');
             },
             forceDashboard: () => {
-                window.location.href = 'dashboard.html';
+                window.location.href = '../dashboard.html';
             }
         };
 
