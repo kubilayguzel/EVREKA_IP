@@ -100,7 +100,6 @@ async function sendViaGmailAsUser(userEmail, mailOptions) {
 if (!admin.apps.length) {
   admin.initializeApp();
 }
-const db = admin.firestore();
 const pubsubClient = new PubSub(); // pubsubClient'ı burada tanımlayın
 
 // ********************************************************************************
@@ -363,7 +362,7 @@ async function buildNotificationAttachments(db, notificationData) {
     const taskId = notificationData?.associatedTaskId;
     if (taskId) {
       try {
-        const t = await db.collection("tasks").doc(taskId).get();
+        const t = await adminDb.collection("tasks").doc(taskId).get();
         const ep = t.exists ? (t.data()?.details?.epatsDocument || null) : null;
         if (ep) {
           let storagePath = ep.storagePath || pathFromURL(ep.downloadURL || ep.fileUrl);
@@ -383,7 +382,7 @@ async function buildNotificationAttachments(db, notificationData) {
     const docId = notificationData?.sourceDocumentId;
     if (docId) {
       try {
-        const u = await db.collection("unindexed_pdfs").doc(docId).get();
+        const u = await adminDb.collection("unindexed_pdfs").doc(docId).get();
         if (u.exists) {
           const d = u.data() || {};
           let storagePath = d.filePath || pathFromURL(d.fileUrl || d.downloadURL);
@@ -585,12 +584,11 @@ export const cleanupEtebsLogsV2 = onSchedule(
     async (event) => {
         console.log('🧹 ETEBS logs cleanup started');
 
-        const db = admin.firestore();
         const thirtyDaysAgo = new Date();
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
         try {
-            const oldLogs = await db.collection('etebs_logs')
+            const oldLogs = await adminDb.collection('etebs_logs')
                 .where('timestamp', '<', thirtyDaysAgo)
                 .limit(500)
                 .get();
@@ -623,7 +621,6 @@ export const createMailNotificationOnDocumentIndexV2 = onDocumentCreated(
     const snap = event.data;
     const newDocument = snap.data();
     const docId = event.params.docId;
-    const db = admin.firestore();
 
     console.log(`📄 Yeni belge algılandı: ${docId}`, newDocument);
 
@@ -698,7 +695,7 @@ export const createMailNotificationOnDocumentIndexV2 = onDocumentCreated(
 
         if (!rulesSnapshot.empty) {
           const rule = rulesSnapshot.docs[0].data();
-          const templateSnapshot = await db.collection("mail_templates").doc(rule.templateId).get();
+          const templateSnapshot = await adminDb.collection("mail_templates").doc(rule.templateId).get();
           if (templateSnapshot.exists) template = templateSnapshot.data();
           else console.warn(`⚠️ Şablon bulunamadı: ${rule.templateId}`);
         } else {
@@ -824,7 +821,7 @@ export const createMailNotificationOnDocumentIndexV2 = onDocumentCreated(
         updatedAt: "[serverTimestamp]",
       });
 
-      const ref = await db.collection("mail_notifications").add(notificationDoc);
+      const ref = await adminDb.collection("mail_notifications").add(notificationDoc);
       console.log(`✅ Mail bildirimi '${status}' olarak oluşturuldu.`, { id: ref.id });
 
       return null;
@@ -857,7 +854,6 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
         if (before.status !== 'indexed' && after.status === 'indexed') {
             console.log(`Belge indexlendi: ${docId}`, after);
 
-            const db = admin.firestore();
             let rule = null;
             let template = null;
             let client = null;
@@ -871,7 +867,7 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
             const associatedTransactionId = after.associatedTransactionId;
             if (associatedTransactionId) {
                 try {
-                    const ipRecordsSnapshot = await db.collection("ipRecords").get();            
+                    const ipRecordsSnapshot = await adminDb.collection("ipRecords").get();            
                     for (const ipDoc of ipRecordsSnapshot.docs) {
                         const transactionRef = db.collection("ipRecords").doc(ipDoc.id).collection("transactions").doc(associatedTransactionId);
                         const transactionDoc = await transactionRef.get();
@@ -888,7 +884,7 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
                         applicants = ipRecordData.applicants || [];
                         if (applicants.length > 0) {
                             const primaryApplicantId = applicants[0].id;
-                            const clientSnapshot = await db.collection("persons").doc(primaryApplicantId).get();
+                            const clientSnapshot = await adminDb.collection("persons").doc(primaryApplicantId).get();
                             if (clientSnapshot.exists) {
                                 client = clientSnapshot.data();
                             }
@@ -914,13 +910,13 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
             }
 
             if (!client && after.clientId) {
-                const clientSnapshot = await db.collection("persons").doc(after.clientId).get();
+                const clientSnapshot = await adminDb.collection("persons").doc(after.clientId).get();
                 if (clientSnapshot.exists) {
                     client = clientSnapshot.data();
                 }
             }
 
-            const rulesSnapshot = await db.collection("template_rules")
+            const rulesSnapshot = await adminDb.collection("template_rules")
                 .where("sourceType", "==", "document")
                 .where("mainProcessType", "==", after.mainProcessType)
                 .where("subProcessType", "==", after.subProcessType)
@@ -929,7 +925,7 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
 
             if (!rulesSnapshot.empty) {
                 rule = rulesSnapshot.docs[0].data();
-                const templateSnapshot = await db.collection("mail_templates").doc(rule.templateId).get();
+                const templateSnapshot = await adminDb.collection("mail_templates").doc(rule.templateId).get();
                 if (templateSnapshot.exists) {
                     template = templateSnapshot.data();
                 }
@@ -983,7 +979,7 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
                 updatedAt: admin.firestore.FieldValue.serverTimestamp(),
             };
 
-            await db.collection("mail_notifications").add(notificationData);
+            await adminDb.collection("mail_notifications").add(notificationData);
             console.log(`Mail bildirimi '${finalStatus}' olarak oluşturuldu ve ${DEFAULT_ASSIGNEE_EMAIL} kullanıcısına atandı.`);
             return null;
 
@@ -1006,7 +1002,6 @@ export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
     const before = change.before.data() || {};
     const after  = change.after.data() || {};
     const taskId = event.params.taskId;
-    const db = admin.firestore();
 
     const becameCompleted = before.status !== "completed" && after.status === "completed";
     const epatsDoc = after?.details?.epatsDocument || null;
@@ -1021,7 +1016,7 @@ export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
       const chunks = [];
       for (let i = 0; i < personIds.length; i += 10) chunks.push(personIds.slice(i, i + 10));
       for (const chunk of chunks) {
-        const prSnap = await db.collection("personsRelated").where("personId", "in", chunk).get();
+        const prSnap = await adminDb.collection("personsRelated").where("personId", "in", chunk).get();
         prSnap.forEach((d) => {
           const pr = d.data();
           const email = (pr.email || "").trim();
@@ -1043,12 +1038,12 @@ export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
 
     let template = null, templateId = null, hasTemplate = false;
     try {
-      const rulesSnap = await db.collection("template_rules").where("sourceType", "==", "task_completion_epats").limit(1).get();
+      const rulesSnap = await adminDb.collection("template_rules").where("sourceType", "==", "task_completion_epats").limit(1).get();
       if (!rulesSnap.empty) {
         const rule = rulesSnap.docs[0].data();
         templateId = rule?.templateId || null;
         if (templateId) {
-          const tSnap = await db.collection("mail_templates").doc(templateId).get();
+          const tSnap = await adminDb.collection("mail_templates").doc(templateId).get();
           if (tSnap.exists) {
             template = tSnap.data();
             hasTemplate = true;
@@ -1062,7 +1057,7 @@ export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
     let ipRecord = null;
     if (after.relatedIpRecordId) {
       try {
-        const ipSnap = await db.collection("ipRecords").doc(after.relatedIpRecordId).get();
+        const ipSnap = await adminDb.collection("ipRecords").doc(after.relatedIpRecordId).get();
         if (ipSnap.exists) ipRecord = ipSnap.data();
       } catch (e) {
         console.warn("IP kaydı okunurken hata:", e?.message || e);
@@ -1089,7 +1084,7 @@ export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
       const relatedIpId = after.relatedIpRecordId || null;
       const relatedTxId = after.relatedTransactionId || after.transactionId || null;
       if (relatedIpId && relatedTxId) {
-        const txSnap = await db.collection("ipRecords").doc(relatedIpId).collection("transactions").doc(relatedTxId).get();
+        const txSnap = await adminDb.collection("ipRecords").doc(relatedIpId).collection("transactions").doc(relatedTxId).get();
         if (txSnap.exists) txTypeForCc = txSnap.data()?.type ?? null;
       }
       if (txTypeForCc == null && after.taskType != null) {
@@ -1156,7 +1151,7 @@ export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     };
 
-    await db.collection("mail_notifications").add(notificationDoc);
+    await adminDb.collection("mail_notifications").add(notificationDoc);
     console.log(`Bildirim '${finalStatus}' olarak oluşturuldu ve ${DEFAULT_ASSIGNEE_EMAIL} kullanıcısına atandı.`);
 
     return null;
@@ -1211,7 +1206,7 @@ export const processTrademarkBulletinUploadV3 = onObjectFinalized(
       const bulletinNo = (content.match(/NO\s*=\s*(.*)/) || [])[1]?.trim() || "Unknown";
       const bulletinDate = (content.match(/DATE\s*=\s*(.*)/) || [])[1]?.trim() || "Unknown";
 
-      const bulletinRef = await db.collection("trademarkBulletins").add({
+      const bulletinRef = await adminDb.collection("trademarkBulletins").add({
         bulletinNo,
         bulletinDate,
         type: "marka",
@@ -1338,7 +1333,7 @@ async function getRecipientsByApplicantIds(applicants, notificationType = 'marka
 
   try {
     // TÜM personsRelated kayıtlarını bul (applicant'lara ait olan)
-    const prQuery = await db.collection("personsRelated")
+    const prQuery = await adminDb.collection("personsRelated")
       .where("personId", "in", applicantIds)
       .get();
 
@@ -1371,7 +1366,7 @@ async function getRecipientsByApplicantIds(applicants, notificationType = 'marka
       if (!personEmail) {
         // persons koleksiyonundan email al
         try {
-          const personSnap = await db.collection("persons").doc(personId).get();
+          const personSnap = await adminDb.collection("persons").doc(personId).get();
           if (personSnap.exists) {
             const person = personSnap.data() || {};
             personEmail = (person.email || '').trim();
@@ -1446,7 +1441,7 @@ async function getCcFromEvrekaListByTransactionType(txType) {
     console.log("🔍 [EVREKA-CC] Parsed number:", { n, isValid: !Number.isNaN(n) });
     
     if (!Number.isNaN(n)) {
-      const arrSnap = await db.collection("evrekaMailCCList")
+      const arrSnap = await adminDb.collection("evrekaMailCCList")
         .where("transactionTypes", "array-contains", n)
         .get();
       console.log(`🔍 [EVREKA-CC] Number query sonuç: ${arrSnap.size} docs`);
@@ -1459,7 +1454,7 @@ async function getCcFromEvrekaListByTransactionType(txType) {
     }
 
     // 2) transactionTypes = "All" string değeri olanları ekle (== ile)
-    const allSnap = await db.collection("evrekaMailCCList")
+    const allSnap = await adminDb.collection("evrekaMailCCList")
       .where("transactionTypes", "==", "All")
       .get();
     console.log(`🔍 [EVREKA-CC] "All" query sonuç: ${allSnap.size} docs`);
@@ -2479,7 +2474,7 @@ export const performTrademarkSimilaritySearch = onCall(
       let bulletinRecordsSnapshot;
 
       // Önce bulletinId olarak direkt ara
-      bulletinRecordsSnapshot = await db.collection('trademarkBulletinRecords')
+      bulletinRecordsSnapshot = await adminDb.collection('trademarkBulletinRecords')
         .where('bulletinId', '==', selectedBulletinId)
         .get();
 
@@ -2491,14 +2486,14 @@ export const performTrademarkSimilaritySearch = onCall(
           selectedBulletinNo = selectedBulletinId.split('_')[0];
         }
 
-        const bulletinDoc = await db.collection('trademarkBulletins')
+        const bulletinDoc = await adminDb.collection('trademarkBulletins')
           .where('bulletinNo', '==', selectedBulletinNo)
           .limit(1)
           .get();
 
         if (!bulletinDoc.empty) {
           const bulletinIdFromNo = bulletinDoc.docs[0].id;
-          bulletinRecordsSnapshot = await db.collection('trademarkBulletinRecords')
+          bulletinRecordsSnapshot = await adminDb.collection('trademarkBulletinRecords')
             .where('bulletinId', '==', bulletinIdFromNo)
             .get();
         }
@@ -3393,7 +3388,7 @@ export const adminUpsertUser = onCall({ region: "europe-west1" }, async (req) =>
   }
 
   // 5) Firestore profilini upsert et
-  await db.collection("users").doc(userRecord.uid).set(
+  await adminDb.collection("users").doc(userRecord.uid).set(
     {
       email: userRecord.email,
       displayName: userRecord.displayName || displayName,
@@ -3416,7 +3411,7 @@ export const adminUpsertUser = onCall({ region: "europe-west1" }, async (req) =>
 
 export const onAuthUserCreate = auth.user().onCreate(async (user) => {
   
-  await db.collection('users').doc(user.uid).set({
+  await adminDb.collection('users').doc(user.uid).set({
     email: user.email || '',
     displayName: user.displayName || '',
     role: 'user',                         // default rol
@@ -3428,8 +3423,18 @@ export const onAuthUserCreate = auth.user().onCreate(async (user) => {
 });
 
 export const onAuthUserDelete = auth.user().onDelete(async (user) => {
-  await db.collection('users').doc(user.uid).delete().catch(() => {});
+  await adminDb.collection('users').doc(user.uid).delete().catch(() => {});
 });
+
+const strip = (s) => String(s ?? '').trim().replace(/^["'\s]+|["'\s]+$/g, '');
+
+function canManageUsers(req) {
+  if (!req.auth) return false;
+  
+  // Check if user has superadmin role
+  const claims = req.auth.token;
+  return claims?.role === 'superadmin';
+}
 
 export const adminDeleteUser = onCall({ region: "europe-west1" }, async (req) => {
   if (!canManageUsers(req)) {
@@ -3450,17 +3455,17 @@ export const adminDeleteUser = onCall({ region: "europe-west1" }, async (req) =>
   } catch (e) {
     if (e?.code === "auth/user-not-found") {
       // Auth'ta yoksa bile Firestore'u temizleyip OK dönelim
-      await db.collection("users").doc(uid).delete().catch(() => {});
+      await adminDb.collection("users").doc(uid).delete().catch(() => {});
       return { ok: true, uid, note: "auth user not found; firestore cleaned" };
     }
     throw new HttpsError("internal", "Auth delete failed: " + (e?.message || e));
   }
 
   // 2) Firestore profilini sil (yoksa sorun değil)
-  await db.collection("users").doc(uid).delete().catch(() => {});
+  await adminDb.collection("users").doc(uid).delete().catch(() => {});
 
   // 3) (opsiyonel) Bu kullanıcıya atanmış işleri boşaltmak istiyorsan burada yap
-  // const qs = await db.collection('tasks').where('assignedTo_uid', '==', uid).get();
+  // const qs = await adminDb.collection('tasks').where('assignedTo_uid', '==', uid).get();
   // const w = db.bulkWriter();
   // qs.forEach(d => w.update(d.ref, { assignedTo_uid: null, assignedTo_email: null }));
   // await w.close();
