@@ -292,13 +292,15 @@
     </div>
 </div>
     <script type="module">
-        import { authService, auth, db} from './firebase-config.js';
-        import { createUserWithEmailAndPassword } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+        import { authService, auth, db, app} from './firebase-config.js';
+        import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-functions.js';
         import { collection, getDocs, doc, updateDoc, deleteDoc, setDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
         import { showNotification } from './utils.js';
-        import { loadSharedLayout } from './js/layout-loader.js'; // layout-loader.js eklendi
-        import { updateProfile } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+        import { loadSharedLayout } from './js/layout-loader.js';
 
+        const functions = getFunctions(app, 'europe-west1');
+        const upsertUser = httpsCallable(functions, 'adminUpsertUser');
+        const strip = (s) => String(s ?? '').trim().replace(/^["'\s]+|["'\s]+$/g, '');
 
         document.addEventListener('DOMContentLoaded', async () => {
             // Ortak layout'u yükle ve bu sayfanın aktif linkini belirt
@@ -403,16 +405,30 @@
 
                     // 🔄 Rol değişimi dinleyicileri
                     document.querySelectorAll('.role-select').forEach(select => {
-                        select.addEventListener('change', async (e) => {
-                            const userId = e.target.dataset.userId;
-                            const newRole = e.target.value;
-                            try {
-                                await updateDoc(doc(db, 'users', userId), { role: newRole });
-                                showNotification('Kullanıcı rolü başarıyla güncellendi', 'success');
-                            } catch (error) {
-                                showNotification('Rol güncellenemedi: ' + error.message, 'error');
-                            }
+                    select.addEventListener('change', async (e) => {
+                        const userId  = e.target.dataset.userId;
+                        const newRole = e.target.value;
+
+                        // Mevcut kullanıcının email ve displayName bilgilerini al
+                        const u = this.allUsers.find(x => x.id === userId);
+                        if (!u) { showNotification('Kullanıcı bulunamadı.', 'error'); return; }
+
+                        try {
+                        // Auth custom-claims + Firestore /users dokümanını TEK NOKTADAN güncelle
+                        const { data } = await upsertUser({
+                            uid: userId,
+                            displayName: u.displayName || '',
+                            email: (u.email || '').toLowerCase(),
+                            role: newRole
                         });
+
+                        showNotification('Kullanıcı rolü başarıyla güncellendi.', 'success');
+                        } catch (error) {
+                        showNotification('Rol güncellenemedi: ' + (error.message || error.code), 'error');
+                        // Hata olursa seçimi eski hâline al
+                        e.target.value = u.role || 'user';
+                        }
+                    });
                     });
                 }
 
@@ -501,74 +517,56 @@
                         return;
                     }
                     
-                    // Yeni kullanıcı için şifre kontrolü
-                    if (!userId && (!userPassword || userPassword.length < 6)) {
-                        console.error("❌ Şifre geçersiz!");
-                        showNotification('Yeni kullanıcı için en az 6 karakterli bir şifre girin.', 'error');
-                        userPasswordEl?.focus();
-                        return;
+                    if (!userId && userPassword && userPassword.length > 0 && userPassword.length < 6) {
+                    console.error("❌ Şifre geçersiz!");
+                    showNotification('Yeni kullanıcı için şifre en az 6 karakter olmalı (ya da boş bırakın).', 'error');
+                    userPasswordEl?.focus();
+                    return;
                     }
-                    
+
                     console.log("✅ Tüm validasyonlar geçti, işlem başlıyor...");
-                    
+
                     try {
-                        if (userId) {
-                            console.log("🔄 Mevcut kullanıcı güncelleniyor...");
-                            const userRef = doc(db, 'users', userId);
-                            await updateDoc(userRef, {
-                                displayName: userName,
-                                role: userRole,
-                                updatedAt: new Date().toISOString()
-                            });
-                            console.log("✅ Kullanıcı güncellendi");
-                            showNotification('Kullanıcı başarıyla güncellendi!', 'success');
-                        } else {
-                            console.log("➕ Yeni kullanıcı oluşturuluyor...");
-                            
-                            const userCredential = await createUserWithEmailAndPassword(auth, userEmail, userPassword);
-                            const firebaseUser = userCredential.user;
-                            console.log("✅ Firebase Auth kullanıcısı oluşturuldu:", firebaseUser.uid);
-                            
-                            const setRoleResult = await authService.setUserRole(firebaseUser.uid, userEmail, userName, userRole);
-                            
-                            if (!setRoleResult.success) {
-                                throw new Error('Kullanıcı rolü atanamadı: ' + setRoleResult.error);
-                            }
-                            
-                            console.log("✅ Kullanıcı rolü ve profili ayarlandı");
-                            showNotification('Yeni kullanıcı başarıyla eklendi!', 'success');
-                        }
-                        
-                        console.log("🎯 İşlem tamamlandı, modal kapatılıyor ve liste yenileniyor...");
-                        this.closeUserModal();
-                        await this.loadUsers();
-                        
+                    // Formdan gelen değerleri temizleyip payload hazırlıyoruz
+                    const payload = {
+                        uid: userId || '',                               // düzenleme ise uid gönder
+                        email: strip(userEmail).toLowerCase(),           // oluşturma / mevcut e-posta
+                        displayName: strip(userName),
+                        role: strip(userRole),
+                        // disabled: true/false // (opsiyonel) checkbox kullanıyorsan ekle
+                    };
+
+                    // (Opsiyonel) UI'da yeni e-posta alanı varsa:
+                    const newEmailEl = document.getElementById('newEmail');
+                    if (newEmailEl && newEmailEl.value) {
+                        payload.newEmail = strip(newEmailEl.value).toLowerCase();
+                    }
+
+                    // (Opsiyonel) devre dışı bırakma checkbox’ı varsa:
+                    const disabledEl = document.getElementById('userDisabledCheckbox');
+                    if (disabledEl) payload.disabled = !!disabledEl.checked;
+
+                    // Şifre verildiyse gönder; verilmediyse dokunmayız
+                    if (userPassword && userPassword.length >= 6) {
+                        payload.password = userPassword;
+                    }
+
+                    // Tek çağrıyla Auth + Firestore senkron güncellenir
+                    const { data } = await upsertUser(payload);
+
+                    showNotification(
+                        (data.existed ? 'Kullanıcı güncellendi' : 'Yeni kullanıcı oluşturuldu') + ` (UID: ${data.uid})`,
+                        'success'
+                    );
+
+                    console.log("🎯 İşlem tamamlandı, modal kapatılıyor ve liste yenileniyor...");
+                    this.closeUserModal();
+                    await this.loadUsers();
+
                     } catch (error) {
-                        console.error('❌ Kullanıcı işlemi hatası:', error);
-                        let errorMessage = 'İşlem sırasında hata oluştu: ';
-                        
-                        if (error.code) {
-                            switch (error.code) {
-                                case 'auth/email-already-in-use':
-                                    errorMessage = 'Bu e-posta adresi zaten kullanımda.';
-                                    break;
-                                case 'auth/invalid-email':
-                                    errorMessage = 'Geçersiz e-posta adresi formatı.';
-                                    break;
-                                case 'auth/weak-password':
-                                    errorMessage = 'Şifre çok zayıf. En az 6 karakter olmalı.';
-                                    break;
-                                case 'auth/network-request-failed':
-                                    errorMessage = 'Ağ bağlantısı hatası. İnternet bağlantınızı kontrol edin.';
-                                    break;
-                                default:
-                                    errorMessage += error.message;
-                            }
-                        } else {
-                            errorMessage += error.message;
-                        }
-                        
-                        showNotification(errorMessage, 'error');
+                    console.error('❌ Kullanıcı işlemi hatası:', error);
+                    const errorMessage = error?.message || error?.code || 'Bilinmeyen hata';
+                    showNotification(errorMessage, 'error');
                     }
                 }
                 async deleteUser(userId) {
