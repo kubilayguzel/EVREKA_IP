@@ -14,7 +14,7 @@
     
     body {
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: #ffffff !important;
       min-height: 100vh;
       display: flex;
       align-items: center;
@@ -299,13 +299,45 @@ body { background: #ffffff !important; }
 .auth-btn:hover, .auth-btn:active { background-color: var(--brand-green) !important; }
 .tabs .tab.active { background-color: var(--brand-green) !important; color: #fff !important; border-color: transparent !important; }
 .tabs .tab:hover { background-color: rgba(0,168,120,0.08) !important; }
+
+body { background: #ffffff !important; }
+
+/* === Brand card above login === */
+.brand-card {
+  display:flex; justify-content:center; align-items:center;
+  margin: 18px auto 8px; padding: 20px 24px;
+  width: min(640px, 94%);
+  background:#fff; border:1px solid #ECEFF1; border-radius:22px;
+  box-shadow:0 14px 34px rgba(0,0,0,0.08);
+}
+.brand-card-inner { display:flex; align-items:center; gap:16px; }
+.brand-card .brand-logo { height:72px; width:auto; display:block; }
+.brand-card .brand-sub { font-weight:800; letter-spacing:.6px; color:#0f5132; font-size:22px; }
+@media (min-width: 768px){
+  .brand-card { padding:24px 30px; }
+  .brand-card .brand-logo { height:84px; }
+  .brand-card .brand-sub { font-size:24px; }
+}
+
+/* Ensure notifications stack and stay visible */
+.notification-container{ position:fixed; top:24px; right:24px; z-index:999999; display:flex; flex-direction:column; gap:10px; }
+
+/* Keep green theme */
+:root{ --brand-green:#00a878; }
+.auth-btn{ background-color:var(--brand-green) !important; color:#fff !important; border:none !important; transition:none !important; }
+.auth-btn:hover, .auth-btn:active{ background-color:var(--brand-green) !important; }
+.tabs .tab.active{ background-color:var(--brand-green) !important; color:#fff !important; border-color:transparent !important; }
+.tabs .tab:hover{ background-color:rgba(0,168,120,.08) !important; }
+
+/* Input focus polish */
+.form-input:focus{ outline:none !important; box-shadow:0 0 0 3px rgba(0,168,120,0.16); border-color:#A7E8D5; }
 </style>
 </head>
 <body>
 <div class="firebase-status" id="firebaseStatus">🔄 Firebase bağlanıyor...</div>
 <!-- Notification Container - User Management tarzında -->
-<div class="auth-container">
-<div class="logo-section"><div class="brand-inline"><img alt="EVREKA" class="brand-inline-mark" src="evreka-logo.png"/></div>
+<div class="brand-card"><div class="brand-card-inner"><img alt="EVREKA" class="brand-logo" src="evreka-logo.png"/><div class="brand-sub">EVREKA</div></div></div><div class="auth-container">
+<div class="logo-section">
 <div class="app-title">IP Manager</div>
 <div class="subtitle">Fikri Mülkiyet Yönetim Sistemi</div>
 </div>
