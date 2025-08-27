@@ -14,7 +14,7 @@
     
     body {
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      background: #ffffff !important;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       min-height: 100vh;
       display: flex;
       align-items: center;
@@ -300,43 +300,39 @@ body { background: #ffffff !important; }
 .tabs .tab.active { background-color: var(--brand-green) !important; color: #fff !important; border-color: transparent !important; }
 .tabs .tab:hover { background-color: rgba(0,168,120,0.08) !important; }
 
-body { background: #ffffff !important; }
+/* Center login area */
+body { min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+.login-stack { display: flex; flex-direction: column; align-items: center; gap: 16px; }
 
-/* === Brand card above login === */
-.brand-card {
-  display:flex; justify-content:center; align-items:center;
-  margin: 18px auto 8px; padding: 20px 24px;
-  width: min(640px, 94%);
-  background:#fff; border:1px solid #ECEFF1; border-radius:22px;
-  box-shadow:0 14px 34px rgba(0,0,0,0.08);
-}
-.brand-card-inner { display:flex; align-items:center; gap:16px; }
-.brand-card .brand-logo { height:72px; width:auto; display:block; }
-.brand-card .brand-sub { font-weight:800; letter-spacing:.6px; color:#0f5132; font-size:22px; }
-@media (min-width: 768px){
-  .brand-card { padding:24px 30px; }
-  .brand-card .brand-logo { height:84px; }
-  .brand-card .brand-sub { font-size:24px; }
-}
+/* Large brand card above login */
+.brand-card { display:flex; justify-content:center; align-items:center; background:#fff; border:1px solid #ECEFF1;
+  border-radius: 22px; box-shadow: 0 14px 34px rgba(0,0,0,0.08); padding: 28px 36px; width: min(720px, 94%); }
+.brand-card-inner { display:flex; align-items:center; gap: 16px; }
+.brand-card .brand-logo { height: 144px; width: auto; display: block; } /* ~2-3x bigger */
 
-/* Ensure notifications stack and stay visible */
-.notification-container{ position:fixed; top:24px; right:24px; z-index:999999; display:flex; flex-direction:column; gap:10px; }
+/* Notifications stack */
+.notification-container { position: fixed; top: 24px; right: 24px; z-index: 999999; display: flex; flex-direction: column; gap: 10px; }
 
-/* Keep green theme */
-:root{ --brand-green:#00a878; }
-.auth-btn{ background-color:var(--brand-green) !important; color:#fff !important; border:none !important; transition:none !important; }
-.auth-btn:hover, .auth-btn:active{ background-color:var(--brand-green) !important; }
-.tabs .tab.active{ background-color:var(--brand-green) !important; color:#fff !important; border-color:transparent !important; }
-.tabs .tab:hover{ background-color:rgba(0,168,120,.08) !important; }
+/* Static green buttons (no transitions) */
+:root { --brand-green:#00a878; }
+.auth-btn { background-color: var(--brand-green) !important; color: #fff !important; border:none !important; transition: none !important; }
+.auth-btn:hover, .auth-btn:active { background-color: var(--brand-green) !important; }
+.tabs .tab.active { background-color: var(--brand-green) !important; color:#fff !important; border-color: transparent !important; }
+.tabs .tab:hover { background-color: rgba(0,168,120,.08) !important; }
 
-/* Input focus polish */
-.form-input:focus{ outline:none !important; box-shadow:0 0 0 3px rgba(0,168,120,0.16); border-color:#A7E8D5; }
+/* Password toggle */
+.pw-wrap { position: relative; }
+.pw-toggle { position:absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; 
+  color: #607D8B; font-weight: 600; cursor: pointer; padding: 6px; line-height: 1; }
+.pw-toggle::before { content: '👁'; font-size: 16px; }
+.pw-toggle.active::before { content: '🙈'; }
+.form-input[type="password"], .form-input[type="text"] { padding-right: 44px; }
 </style>
 </head>
 <body>
 <div class="firebase-status" id="firebaseStatus">🔄 Firebase bağlanıyor...</div>
 <!-- Notification Container - User Management tarzında -->
-<div class="brand-card"><div class="brand-card-inner"><img alt="EVREKA" class="brand-logo" src="evreka-logo.png"/><div class="brand-sub">EVREKA</div></div></div><div class="auth-container">
+<div class="login-stack"><div class="brand-card"><div class="brand-card-inner"><img alt="Evreka logo" class="brand-logo" src="evreka-logo.png"/></div></div><div class="auth-container">
 <div class="logo-section">
 <div class="app-title">IP Manager</div>
 <div class="subtitle">Fikri Mülkiyet Yönetim Sistemi</div>
@@ -353,11 +349,11 @@ body { background: #ffffff !important; }
 <input autocomplete="username" class="form-input" id="signin-email" required="" type="email"/>
 <div class="error-message" id="signin-email-error"></div>
 </div>
-<div class="form-group">
+<div class="form-group pw-wrap">
 <label class="form-label" for="signin-password">Şifre</label>
 <input autocomplete="current-password" class="form-input" id="signin-password" required="" type="password"/>
 <div class="error-message" id="signin-password-error"></div>
-</div>
+<button aria-label="Şifreyi göster/gizle" class="pw-toggle" data-target="signin-password" type="button"></button></div>
 <div class="helper-links">
 <button class="link-btn" id="forgotPasswordBtn" type="button">Şifremi Unuttum</button>
 </div>
@@ -380,18 +376,18 @@ body { background: #ffffff !important; }
 <input autocomplete="username" class="form-input" id="signup-email" required="" type="email"/>
 <div class="error-message" id="signup-email-error"></div>
 </div>
-<div class="form-group">
+<div class="form-group pw-wrap">
 <label class="form-label" for="signup-password">Şifre (min. 6 karakter)</label>
 <input autocomplete="new-password" class="form-input" id="signup-password" minlength="6" required="" type="password"/>
 <div class="error-message" id="signup-password-error"></div>
-</div>
+<button aria-label="Şifreyi göster/gizle" class="pw-toggle" data-target="signup-password" type="button"></button></div>
 <button class="auth-btn" id="signupBtn" type="submit">
 <span id="signupText">Kayıt Ol</span>
 <span class="loading" id="signupLoading"></span>
 </button>
 </form>
 </div>
-</div>
+</div></div>
 <script type="module">
   import { authService, auth } from './firebase-config.js';
 import { showNotification, showFieldError, clearAllFieldErrors } from './utils.js';
@@ -680,6 +676,22 @@ document.addEventListener('DOMContentLoaded', () => {
   } catch (e) {
     alert('Doğrulama e-postası gönderildi. Lütfen e-postanızı doğrulayın.');
   }
+});
+
+
+// Password show/hide toggles
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('.pw-toggle').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.getAttribute('data-target');
+      const input = document.getElementById(id);
+      if (!input) return;
+      const isHidden = input.getAttribute('type') === 'password';
+      input.setAttribute('type', isHidden ? 'text' : 'password');
+      btn.classList.toggle('active', isHidden);
+      btn.setAttribute('aria-pressed', isHidden ? 'true' : 'false');
+    });
+  });
 });
 </script>
 <div class="notification-container" id="notification-container"></div></body>
