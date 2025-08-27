@@ -740,7 +740,9 @@
                     
                     this.populateStatusDropdown(task.status);
                     
-                    document.getElementById('assignedTo').value = task.assignedTo_uid || '';
+                    const assignedUser = this.allUsers.find(u => u.id === task.assignedTo_uid);
+                    const assignedDisplayName = assignedUser ? (assignedUser.displayName || assignedUser.email) : 'Atama yapılmamış';
+                    document.getElementById('assignedToDisplay').value = assignedDisplayName;
                     document.getElementById('taskDueDate').value = this.formatDateToYYYYMMDD(task.dueDate) || '';
                     document.getElementById('deliveryDate').value = this.formatDateToYYYYMMDD(task.deliveryDate) || '';
 
@@ -822,17 +824,6 @@ if (typeof this.renderDocuments === 'function') {
                     });
                     this.statusDropdownPopulated = true;
                 }
-
-            populateAssignedToDropdown() {
-                const assignedToSelect = document.getElementById('assignedTo');
-                assignedToSelect.innerHTML = '';
-                this.allUsers.forEach(user => {
-                    const option = document.createElement('option');
-                    option.value = user.id;
-                    option.textContent = user.displayName || user.email;
-                    assignedToSelect.appendChild(option);
-                });
-            }
 
             setupEventListeners() {
                 this.removeExistingListeners();
