@@ -328,7 +328,6 @@
                             <div class="form-group"><label for="taskTypeDisplay" class="form-label">İş Tipi:</label><input type="text" id="taskTypeDisplay" class="form-input" readonly></div>
                             <div class="form-group"><label for="taskPriority" class="form-label">Öncelik:</label><select id="taskPriority" class="form-select"><option value="low">Düşük</option><option value="medium">Orta</option><option value="high">Yüksek</option></select></div>
                             <div class="form-group"><label for="taskStatus" class="form-label">Durum:</label><select id="taskStatus" class="form-select"></select></div>
-                            <div class="form-group"><label for="assignedTo" class="form-label">Atanan Kullanıcı:</label><select id="assignedTo" class="form-select"></select></div>
                             <div class="form-group"><label for="taskDueDate" class="form-label">Operasyonel Son Tarih:</label><input type="date" id="taskDueDate" class="form-input"></div>
                             <div class="form-group"><label for="deliveryDate" class="form-label">Tebliğ Tarihi:</label><input type="date" id="deliveryDate" name="deliveryDate" class="form-input"></div>
                         </div>
@@ -1132,8 +1131,8 @@ if (typeof this.renderDocuments === 'function') {
                     title: form.taskTitle.value,
                     description: form.taskDescription.value,
                     priority: form.taskPriority.value,
-                    assignedTo_uid: form.assignedTo.value,
-                    assignedTo_email: this.allUsers.find(u => u.id === form.assignedTo.value)?.email || '',
+                    assignedTo_uid: this.currentTask.assignedTo_uid,
+                    assignedTo_email: this.currentTask.assignedTo_email,
                     deliveryDate: form.deliveryDate.value || null,
                     updatedAt: new Date().toISOString(),
                     details: { ...this.currentTask.details },
