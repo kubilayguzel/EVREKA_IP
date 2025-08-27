@@ -300,19 +300,26 @@ body { background: #ffffff !important; }
 .tabs .tab.active { background-color: var(--brand-green) !important; color: #fff !important; border-color: transparent !important; }
 .tabs .tab:hover { background-color: rgba(0,168,120,0.08) !important; }
 
-/* Center the login layout */
-html, body { height: 100%; }
-body { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: #fff; }
-.login-stack { display: flex; flex-direction: column; gap: 16px; align-items: center; }
-/* Keep brand card same width as login card (420px max by existing styles) */
-.brand-card { width: 100%; max-width: 420px; margin: 0 auto; }
+/* Logo card placed UNDER the login card */
+.brand-card{
+  background: rgba(255,255,255,0.95);
+  padding: 16px 20px;
+  border-radius: 16px;
+  box-shadow: 0 12px 30px rgba(0,0,0,0.08);
+  width: 100%;
+  max-width: 420px;
+  margin: 16px auto 0;
+  display: flex; justify-content: center; align-items: center;
+}
+.brand-card-inner{ display:flex; align-items:center; justify-content:center; }
+.brand-card .brand-logo{ height: 48px; width:auto; display:block; }
 </style>
 </head>
 <body>
 <div class="firebase-status" id="firebaseStatus">🔄 Firebase bağlanıyor...</div>
 <!-- Notification Container - User Management tarzında -->
-<div class="login-stack"><div class="auth-container">
-<div class="logo-section"><div class="brand-inline"><img alt="EVREKA" class="brand-inline-mark" src="evreka-logo.png"/></div>
+<div class="auth-container">
+<div class="logo-section">
 <div class="app-title">IP Manager</div>
 <div class="subtitle">Fikri Mülkiyet Yönetim Sistemi</div>
 </div>
@@ -366,7 +373,7 @@ body { min-height: 100vh; display: flex; align-items: center; justify-content: c
 </button>
 </form>
 </div>
-</div></div>
+</div><div class="brand-card"><div class="brand-card-inner"><img alt="Evreka logo" class="brand-logo" src="evreka-logo.png"/></div></div>
 <script type="module">
   import { authService, auth } from './firebase-config.js';
 import { showNotification, showFieldError, clearAllFieldErrors } from './utils.js';
