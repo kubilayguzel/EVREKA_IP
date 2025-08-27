@@ -32,8 +32,8 @@ if (!admin.apps.length) {
 }
 
 const adminAuth = admin.auth();
-const adminDb = admin.firestore(); 
-
+const adminDb = admin.firestore();
+const db        = adminDb;
 const secretClient = new SecretManagerServiceClient();
 
 // 🔐 SA_MAILER_KEY'i Secret Manager'dan çek
