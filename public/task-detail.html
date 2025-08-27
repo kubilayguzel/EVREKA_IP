@@ -285,7 +285,7 @@
     import { resolveApprovalStateAssignee } from './js/indexing-detail-module.js';
 
     document.addEventListener('DOMContentLoaded', async () => {
-        await loadSharedLayout();
+    await loadSharedLayout({ activeMenuLink: 'task-detail.html' });
         ensurePersonModal();
         class TaskDetailModule {
             constructor() {
