@@ -494,7 +494,7 @@
                 }
 
                 init() {
-                    authService.auth.onAuthStateChanged(async (user) => {
+                    auth.onAuthStateChanged(async (user) => {
                         if (user) {
                             this.currentUser = user;
                             await this.loadAllData();
