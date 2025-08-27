@@ -13,7 +13,7 @@ async function initializeFirebase() {
     console.log('🔥 Firebase initialize ediliyor...');
     
     // Firebase config modülünü import et
-    const firebaseModule = await import('/ip-manager-test/firebase-config.js');
+    const firebaseModule = await import('../firebase-config.js');
     
     // Storage'ı app instance ile initialize et
     storage = getStorage(firebaseModule.app);
