@@ -373,6 +373,10 @@
                             <div class="form-group"><label for="taskPriority" class="form-label">Öncelik:</label><select id="taskPriority" class="form-select"><option value="low">Düşük</option><option value="medium">Orta</option><option value="high">Yüksek</option></select></div>
                             <div class="form-group"><label for="taskStatus" class="form-label">Durum:</label><select id="taskStatus" class="form-select"></select></div>
                         </div>
+                        <div class="form-group">
+                            <label for="assignedToDisplay" class="form-label">Atanan Kişi:</label>
+                            <input type="text" id="assignedToDisplay" class="form-input" readonly>
+                        </div>
                         <div class="form-grid">
                             <div class="form-group"><label for="taskDueDate" class="form-label">Operasyonel Son Tarih:</label><input type="date" id="taskDueDate" class="form-input"></div>
                             <div class="form-group"><label for="deliveryDate" class="form-label">Tebliğ Tarihi:</label><input type="date" id="deliveryDate" name="deliveryDate" class="form-input"></div>
@@ -616,7 +620,6 @@
                 try {
                     await this.loadAllData();
                     await this.loadTaskData();
-                    this.populateAssignedToDropdown();
                     this.setupEventListeners();
                     
                     console.log('DEBUG: Tüm veriler başarıyla yüklendi, sayfa hazır.');
