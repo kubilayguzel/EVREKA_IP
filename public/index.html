@@ -308,7 +308,7 @@ body { min-height: 100vh; display: flex; align-items: center; justify-content: c
 .brand-card { display:flex; justify-content:center; align-items:center; background:#fff; border:1px solid #ECEFF1;
   border-radius: 22px; box-shadow: 0 14px 34px rgba(0,0,0,0.08); padding: 28px 36px; width: min(720px, 94%); }
 .brand-card-inner { display:flex; align-items:center; gap: 16px; }
-.brand-card .brand-logo { height: 144px; width: auto; display: block; } /* ~2-3x bigger */
+.brand-card .brand-logo { height: 96px; width: auto; display: block; } /* ~2-3x bigger */
 
 /* Notifications stack */
 .notification-container { position: fixed; top: 24px; right: 24px; z-index: 999999; display: flex; flex-direction: column; gap: 10px; }
@@ -327,6 +327,11 @@ body { min-height: 100vh; display: flex; align-items: center; justify-content: c
 .pw-toggle::before { content: '👁'; font-size: 16px; }
 .pw-toggle.active::before { content: '🙈'; }
 .form-input[type="password"], .form-input[type="text"] { padding-right: 44px; }
+
+/* Wider login card */
+.auth-container, .auth-card { width: min(640px, 96%); }
+.login-stack { gap: 20px; }
+.brand-card { padding: 24px 30px; }
 </style>
 </head>
 <body>
@@ -334,7 +339,7 @@ body { min-height: 100vh; display: flex; align-items: center; justify-content: c
 <!-- Notification Container - User Management tarzında -->
 <div class="login-stack"><div class="brand-card"><div class="brand-card-inner"><img alt="Evreka logo" class="brand-logo" src="evreka-logo.png"/></div></div><div class="auth-container">
 <div class="logo-section">
-<div class="app-title">IP Manager</div>
+<div class="app-title">EVREKA / IP Manager</div>
 <div class="subtitle">Fikri Mülkiyet Yönetim Sistemi</div>
 </div>
 <div class="tabs">
@@ -695,4 +700,4 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 </script>
 <div class="notification-container" id="notification-container"></div></body>
-</html>  
+</html> 
