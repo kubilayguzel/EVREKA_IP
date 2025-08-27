@@ -32,6 +32,29 @@ const UNINDEXED_PDFS_COLLECTION = 'unindexed_pdfs';
 const SELCAN_UID = 'Mkmq2sc0T6XTIg1weZyp5AGZ0YG3';
 const SELCAN_EMAIL = 'selcanakoglu@evrekapatent.com';
 
+// --- Onay bekleyen iş için atanacak kullanıcıyı kuraldan çöz ---
+async function resolveApprovalStateAssignee() {
+  try {
+    // taskAssignments/approval dokümanı: { approvalStateAssigneeIds: ["uid1","uid2", ...] }
+    const ruleRef  = doc(firebaseServices.db, 'taskAssignments', 'approval');
+    const ruleSnap = await getDoc(ruleRef);
+    if (!ruleSnap.exists()) return { uid: null, email: null, reason: 'rule_not_found' };
+
+    const ids = ruleSnap.data()?.approvalStateAssigneeIds;
+    const uid = Array.isArray(ids) ? ids.find(v => typeof v === 'string' && v.trim()) : null;
+    if (!uid) return { uid: null, email: null, reason: 'empty_list' };
+
+    // users/{uid} içinden email oku (koleksiyon ismi sende farklıysa burayı uyarlay)
+    const userSnap = await getDoc(doc(firebaseServices.db, 'users', uid));
+    const email = userSnap.exists() ? (userSnap.data().email || null) : null;
+
+    return { uid, email, reason: 'ok' };
+  } catch (err) {
+    console.warn('[resolveApprovalStateAssignee] failed:', err?.message || err);
+    return { uid: null, email: null, reason: 'error' };
+  }
+}
+
 export class IndexingDetailModule {
     constructor() {
         this.currentUser = authService.getCurrentUser();
@@ -794,6 +817,15 @@ async handleIndexing(opts = {}) { try {
                 } else {
                     console.warn("⚠️ deliveryDate geçersiz, son tarihler hesaplanmayacak.", deliveryDate);
                 }
+                
+                // Varsayılan: Selcan (fallback)
+                let assigned = { uid: SELCAN_UID, email: SELCAN_EMAIL };
+
+                // Yalnızca "Müvekkil Onayı Bekliyor" durumunda kuraldan kullanıcı çöz
+                if (childTransactionType.taskTriggered) {
+                const r = await resolveApprovalStateAssignee();
+                if (r?.uid) assigned = r; // kural bulunduysa onu kullan
+                }
 
                 const taskData = {
                     title: `${childTransactionType.alias || childTransactionType.name} - ${this.matchedRecord.title}`,
@@ -806,8 +838,8 @@ async handleIndexing(opts = {}) { try {
                     dueDate: taskDueDate,
                     officialDueDate: officialDueDate,
                     officialDueDateDetails: officialDueDateDetails,
-                    assignedTo_uid: SELCAN_UID,
-                    assignedTo_email: SELCAN_EMAIL,
+                    assignedTo_uid: assigned.uid,
+                    assignedTo_email: assigned.email,
                     priority: 'normal',
                     status: 'awaiting_client_approval',
                     createdAt: new Date(),
