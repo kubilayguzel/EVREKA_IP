@@ -819,6 +819,7 @@ async handleIndexing(opts = {}) { try {
                 }
                 // indexing-detail-module.js dosyasında düzeltilmesi gereken bölüm
 
+                // ✅ YENİ DOĞRU KOD:
                 let assigned = { uid: SELCAN_UID, email: SELCAN_EMAIL };
                 try {
                     // childTransactionType.taskTriggered kullan - bu taskType'ı temsil ediyor
@@ -880,7 +881,7 @@ async handleIndexing(opts = {}) { try {
                     createdAt: new Date(),
                     createdBy: this.currentUser.uid,
                     taskType: childTransactionType.taskTriggered // ✅ Bu doğru - taskAssignments ID'si olacak
-                };               
+                };
 
                 const taskResult = await taskService.createTask(taskData);
                 if (taskResult.success) {
