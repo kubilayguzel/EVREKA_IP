@@ -332,14 +332,28 @@ body { min-height: 100vh; display: flex; align-items: center; justify-content: c
 .auth-container, .auth-card { width: min(640px, 96%); }
 .login-stack { gap: 20px; }
 .brand-card { padding: 24px 30px; }
+
+/* === Widen login card by ~50% and match brand card width === */
+.auth-container, .auth-card { width: min(960px, 96%) !important; }
+.brand-card { width: min(960px, 96%) !important; }
+
+/* === Typography scaling for larger login card === */
+.auth-container, .auth-card { font-size: 1.2rem; } /* base text ~18px */
+.auth-container h1, .auth-card h1, .app-title { font-size: 2.25rem !important; line-height: 1.2; }
+.tabs .tab, .form-label { font-size: 1rem !important; }
+.form-input { font-size: 1.0625rem !important; padding: 14px 16px !important; }
+.auth-btn { font-size: 1.0625rem !important; padding: 14px 20px !important; }
+
+/* Keep spacing balanced */
+.login-stack { gap: 22px !important; }
 </style>
 </head>
 <body>
 <div class="firebase-status" id="firebaseStatus">🔄 Firebase bağlanıyor...</div>
 <!-- Notification Container - User Management tarzında -->
-<div class="login-stack"><div class="brand-card"><div class="brand-card-inner"><img alt="Evreka logo" class="brand-logo" src="evreka-logo.png"/></div></div><div class="auth-container">
+<div class="login-stack"><div class="auth-container">
 <div class="logo-section">
-<div class="app-title">EVREKA / IP Manager</div>
+<div class="app-title">IP Manager</div>
 <div class="subtitle">Fikri Mülkiyet Yönetim Sistemi</div>
 </div>
 <div class="tabs">
@@ -392,7 +406,7 @@ body { min-height: 100vh; display: flex; align-items: center; justify-content: c
 </button>
 </form>
 </div>
-</div></div>
+</div><div class="brand-card"><div class="brand-card-inner"><img alt="Evreka logo" class="brand-logo" src="evreka-logo.png"/></div></div></div>
 <script type="module">
   import { authService, auth } from './firebase-config.js';
 import { showNotification, showFieldError, clearAllFieldErrors } from './utils.js';
