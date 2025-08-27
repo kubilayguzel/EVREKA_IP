@@ -1767,84 +1767,152 @@ function getContentType(filePath) {
 }
 
 // BÜLTEN SİLME 
-
 export const deleteBulletinV2 = onCall(
-  { timeoutSeconds: 540, memory: "1GiB", region: "europe-west1" },
+  { timeoutSeconds: 60, memory: "1GiB", region: "europe-west1" },
   async (request) => {
-    console.log('🔥 Bülten silme başladı');
-
-    const { bulletinId } = request.data;
-    if (!bulletinId) {
-      throw new HttpsError('invalid-argument', 'BulletinId gerekli.');
-    }
-
     try {
-      // === 1. Bülten dokümanını al ===
-      const bulletinDoc = await admin.firestore().collection('trademarkBulletins').doc(bulletinId).get();
-      if (!bulletinDoc.exists) {
-        throw new HttpsError('not-found', 'Bülten bulunamadı.');
+      const { bulletinId } = request.data;
+      if (!bulletinId) {
+        throw new HttpsError('invalid-argument', 'BulletinId gerekli.');
       }
 
-      const bulletinData = bulletinDoc.data();
-      const bulletinNo = bulletinData.bulletinNo;
-      console.log(`📋 Silinecek bülten: ${bulletinNo}`);
+      // İşlem durumu için benzersiz ID oluştur
+      const operationId = `delete_${bulletinId}_${Date.now()}`;
+      
+      // İşlem durumunu kaydet
+      const statusRef = db.collection('operationStatus').doc(operationId);
+      await statusRef.set({
+        operationId,
+        bulletinId,
+        status: 'started',
+        message: 'Silme işlemi başlatıldı...',
+        progress: 0,
+        startTime: admin.firestore.FieldValue.serverTimestamp(),
+        userId: request.auth?.uid
+      });
 
-      // === 2. İlişkili trademarkBulletinRecords silme ===
-      let totalDeleted = 0;
-      const recordsQuery = admin.firestore().collection('trademarkBulletinRecords').where('bulletinId', '==', bulletinId);
-      let snapshot = await recordsQuery.limit(500).get();
-
-      while (!snapshot.empty) {
-        const batch = admin.firestore().batch();
-        snapshot.docs.forEach(doc => batch.delete(doc.ref));
-        await batch.commit();
-        totalDeleted += snapshot.size;
-        console.log(`✅ ${totalDeleted} kayıt silindi (toplam)`);
-        snapshot = await recordsQuery.limit(500).get();
-      }
-
-      // === 3. Storage görsellerini sil ===
-      const storage = admin.storage().bucket();
-      const prefix = `bulletins/trademark_${bulletinNo}_images/`;
-      let [files] = await storage.getFiles({ prefix });
-      let totalImagesDeleted = 0;
-      const chunkSize = 200;
-
-      while (files.length > 0) {
-        const chunk = files.splice(0, chunkSize);
-        await Promise.all(
-          chunk.map(file =>
-            file.delete().catch(err =>
-              console.warn(`⚠️ ${file.name} silinemedi: ${err.message}`)
-            )
-          )
-        );
-        totalImagesDeleted += chunk.length;
-        console.log(`🖼️ ${totalImagesDeleted} görsel silindi (toplam)`);
-
-        if (files.length === 0) {
-          [files] = await storage.getFiles({ prefix });
-        }
-      }
-
-      // === 4. Ana bülten dokümanını sil ===
-      await bulletinDoc.ref.delete();
-      console.log('✅ Ana bülten silindi');
+      // Hemen operationId döndür (kullanıcı beklemez)
+      // Silme işlemini arka planda başlat
+      setImmediate(async () => {
+        await performBulletinDeletion(bulletinId, operationId);
+      });
 
       return {
         success: true,
-        bulletinNo,
-        recordsDeleted: totalDeleted,
-        imagesDeleted: totalImagesDeleted,
-        message: `Bülten ${bulletinNo} ve ${totalImagesDeleted} görsel başarıyla silindi (${totalDeleted} kayıt)`
+        operationId,
+        message: 'Silme işlemi başlatıldı. İlerleme durumunu takip edebilirsiniz.'
       };
-
+      
     } catch (error) {
-      console.error('❌ Silme hatası:', error);
-      throw new HttpsError('internal', error.message || 'Bülten silinirken hata oluştu.');
+      console.error('❌ deleteBulletinV2 error:', error);
+      return { success: false, error: error.message };
     }
   }
 );
+
+// Gerçek silme işlemini yapan fonksiyon
+async function performBulletinDeletion(bulletinId, operationId) {
+  const statusRef = db.collection('operationStatus').doc(operationId);
+  
+  try {
+    console.log(`🔥 Gerçek silme işlemi başladı: ${bulletinId}`);
+    
+    // === 1. Bülten dokümanını al ===
+    const bulletinDoc = await db.collection('trademarkBulletins').doc(bulletinId).get();
+    if (!bulletinDoc.exists) {
+      throw new Error('Bülten bulunamadı.');
+    }
+
+    const bulletinData = bulletinDoc.data();
+    const bulletinNo = bulletinData.bulletinNo;
+    console.log(`📋 Silinecek bülten: ${bulletinNo}`);
+
+    await statusRef.update({
+      status: 'in_progress',
+      message: `Bülten ${bulletinNo} kayıtları siliniyor...`,
+      progress: 10
+    });
+
+    // === 2. İlişkili trademarkBulletinRecords silme ===
+    let totalRecordsDeleted = 0;
+    const recordsQuery = db.collection('trademarkBulletinRecords').where('bulletinId', '==', bulletinId);
+    let snapshot = await recordsQuery.limit(500).get();
+
+    while (!snapshot.empty) {
+      const batch = db.batch();
+      snapshot.docs.forEach(doc => batch.delete(doc.ref));
+      await batch.commit();
+      totalRecordsDeleted += snapshot.size;
+      
+      console.log(`✅ ${totalRecordsDeleted} kayıt silindi`);
+      
+      // İlerlemeyi güncelle
+      await statusRef.update({
+        message: `${totalRecordsDeleted} kayıt silindi...`,
+        progress: Math.min(30 + (totalRecordsDeleted / 100), 80)
+      });
+      
+      snapshot = await recordsQuery.limit(500).get();
+    }
+
+    await statusRef.update({
+      message: 'Storage dosyaları siliniyor...',
+      progress: 85
+    });
+
+    // === 3. Storage'dan görselleri sil ===
+    let totalImagesDeleted = 0;
+    try {
+      const bucket = admin.storage().bucket();
+      const folderPrefix = `trademark_images/${bulletinNo}/`;
+      const [files] = await bucket.getFiles({ prefix: folderPrefix });
+      
+      console.log(`🖼️ ${files.length} görsel dosyası bulundu`);
+      
+      if (files.length > 0) {
+        for (const file of files) {
+          try {
+            await file.delete();
+            totalImagesDeleted++;
+          } catch (delError) {
+            console.warn(`⚠️ Dosya silinemedi: ${file.name}`, delError.message);
+          }
+        }
+      }
+    } catch (storageError) {
+      console.warn('⚠️ Storage silme hatası:', storageError.message);
+    }
+
+    await statusRef.update({
+      message: 'Ana bülten kaydı siliniyor...',
+      progress: 95
+    });
+
+    // === 4. Ana bülten dokümanını sil ===
+    await bulletinDoc.ref.delete();
+    
+    // === 5. Başarı durumunu güncelle ===
+    await statusRef.update({
+      status: 'completed',
+      message: `Bülten ${bulletinNo} başarıyla silindi! Kayıtlar: ${totalRecordsDeleted}, Görseller: ${totalImagesDeleted}`,
+      progress: 100,
+      endTime: admin.firestore.FieldValue.serverTimestamp(),
+      recordsDeleted: totalRecordsDeleted,
+      imagesDeleted: totalImagesDeleted
+    });
+
+    console.log(`🎉 Bülten ${bulletinNo} başarıyla silindi!`);
+    
+  } catch (error) {
+    console.error('❌ Silme işlemi hatası:', error);
+    
+    await statusRef.update({
+      status: 'error',
+      message: `Hata: ${error.message}`,
+      endTime: admin.firestore.FieldValue.serverTimestamp()
+    });
+  }
+}
 
 // Bu modüllerin functions/ altında da bulunması veya fonksiyon içine taşınması gerekecek.
 // Şimdilik varsayımsal olarak import edeceğiz ve deployment sırasında düzenleme gerekebilir.
