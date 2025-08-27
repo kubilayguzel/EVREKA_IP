@@ -296,31 +296,57 @@
             width: 18px;
             height: 18px;
         }
+/* Modal Stilleri */
 .modal {
-    display: none !important;
-    position: fixed;
+    display: none; /* Varsayılan olarak gizle */
+    position: fixed; /* Ekranda sabit kal */
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
-    background-color: rgba(0, 0, 0, 0.6);
+    background: rgba(0, 0, 0, 0.6); /* Yarı saydam siyah arka plan */
     align-items: center;
     justify-content: center;
-    z-index: 1050;
-    overflow-y: auto;
+    z-index: 1002; /* Diğer her şeyin üstünde */
+    overflow-y: auto; /* İçerik taşarsa kaydırma çubuğu */
+    padding: 20px;
 }
+
+.modal.show {
+    display: flex; /* JavaScript ile görünür hale getir */
+}
+
 .modal-content {
-    position: relative;
+    background: white;
+    padding: 30px;
+    border-radius: 20px;
+    max-width: 1250px;
+    width: 100%;
+    max-height: 90vh; /* Ekran yüksekliğinin %90'ı */
+    overflow-y: auto;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+    transform: translateY(0); /* Animasyon başlangıcı */
+    transition: transform 0.3s ease-out;
 }
+
+.modal.show .modal-content {
+    transform: translateY(0);
+}
+
 .close-modal-btn {
-    position: absolute;
-    top: 10px;
-    right: 15px;
-    font-size: 24px;
-    font-weight: bold;
-    color: #333;
+    background: none;
+    border: none;
+    font-size: 1.5em;
     cursor: pointer;
-    z-index: 10;
+    color: #666;
+    padding: 5px;
+    border-radius: 50%;
+    transition: all 0.3s ease;
+    float: right;
+}
+
+.close-modal-btn:hover {
+    background: #f0f0f0;
 }
     </style>
 </head>
