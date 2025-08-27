@@ -299,48 +299,13 @@ body { background: #ffffff !important; }
 .auth-btn:hover, .auth-btn:active { background-color: var(--brand-green) !important; }
 .tabs .tab.active { background-color: var(--brand-green) !important; color: #fff !important; border-color: transparent !important; }
 .tabs .tab:hover { background-color: rgba(0,168,120,0.08) !important; }
-
-/* === Polished EVREKA brand card above login === */
-.brand-card {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  margin: 18px auto 8px auto;
-  padding: 18px 22px;
-  width: min(560px, 92%);
-  background: #fff;
-  border: 1px solid #ECEFF1;
-  border-radius: 20px;
-  box-shadow: 0 12px 28px rgba(0,0,0,0.08);
-}
-.brand-card-inner { display: flex; align-items: center; gap: 14px; }
-.brand-card .brand-logo { display: block; height: 56px; width: auto; }
-.brand-card .brand-sub { font-weight: 800; letter-spacing: .6px; color: #0f5132; font-size: 20px; }
-@media (min-width: 768px) {
-  .brand-card { padding: 22px 28px; }
-  .brand-card .brand-logo { height: 64px; }
-  .brand-card .brand-sub { font-size: 22px; }
-}
-
-/* Notification stacking (no overlap) */
-.notification-container { position: fixed; top: 24px; right: 24px; z-index: 999999; display: flex; flex-direction: column; gap: 10px; }
-
-/* Green theme (static color) */
-:root { --brand-green: #00a878; }
-.auth-btn { background-color: var(--brand-green) !important; color: #fff !important; border: none !important; transition: none !important; }
-.auth-btn:hover, .auth-btn:active { background-color: var(--brand-green) !important; }
-.tabs .tab.active { background-color: var(--brand-green) !important; color: #fff !important; border-color: transparent !important; }
-.tabs .tab:hover { background-color: rgba(0,168,120,0.08) !important; }
-
-/* Input focus polish */
-.form-input:focus { outline: none !important; box-shadow: 0 0 0 3px rgba(0,168,120,0.16); border-color: #A7E8D5; }
 </style>
 </head>
 <body>
 <div class="firebase-status" id="firebaseStatus">🔄 Firebase bağlanıyor...</div>
 <!-- Notification Container - User Management tarzında -->
 <div class="auth-container">
-<div class="brand-card"><div class="brand-card-inner"><img alt="EVREKA" class="brand-logo" src="evreka-logo.png"/><div class="brand-sub">EVREKA</div></div></div><div class="logo-section">
+<div class="logo-section"><div class="brand-inline"><img alt="EVREKA" class="brand-inline-mark" src="evreka-logo.png"/></div>
 <div class="app-title">IP Manager</div>
 <div class="subtitle">Fikri Mülkiyet Yönetim Sistemi</div>
 </div>
@@ -552,7 +517,9 @@ import { showNotification, showFieldError, clearAllFieldErrors } from './utils.j
 
                       try {
                           await sendEmailVerification(user);
-                          showNotification('Doğrulama e-postası gönderildi. Lütfen e-postanızı doğrulayıp giriş yapın.', 'success', 10000);
+                          
+            sessionStorage.setItem('toast_verif_sent','1');
+showNotification('Doğrulama e-postası gönderildi. Lütfen e-postanızı doğrulayıp giriş yapın.', 'success', 10000);
                       } catch (ve) {
                           console.error('sendEmailVerification error:', ve);
                           showNotification('Doğrulama e-postası gönderilemedi. Daha sonra tekrar deneyin.', 'error', 10000);
@@ -668,6 +635,20 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
   obs.observe(nc, { childList: true });
-});</script>
+});
+
+
+// Persist verification toast across reloads (e.g., after signOut redirect)
+document.addEventListener('DOMContentLoaded', () => {
+  try {
+    if (sessionStorage.getItem('toast_verif_sent') === '1') {
+      sessionStorage.removeItem('toast_verif_sent');
+      showNotification('Doğrulama e-postası gönderildi. Lütfen e-postanızı doğrulayıp giriş yapın.', 'success', 15000);
+    }
+  } catch (e) {
+    alert('Doğrulama e-postası gönderildi. Lütfen e-postanızı doğrulayın.');
+  }
+});
+</script>
 <div class="notification-container" id="notification-container"></div></body>
 </html> 
