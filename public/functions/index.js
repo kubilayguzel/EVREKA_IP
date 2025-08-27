@@ -782,7 +782,7 @@ export const createMailNotificationOnDocumentIndexV2 = onDocumentCreated(
       if (!hasRecipients) missingFields.push("recipients");
 
       // 5) Firestore’a yaz — UI filtreleriyle uyumlu alanlar
-      const selcanUserId = "NLEZpWsYlKUCeq2bZlbHNV8XypL2"; // <<< BURAYA SELCAN'IN GERÇEK ID'SİNİ YAPIŞTIRIN
+      const selcanUserId = "Mkmq2sc0T6XTIg1weZyp5AGZ0YG3"; // <<< BURAYA SELCAN'IN GERÇEK ID'SİNİ YAPIŞTIRIN
       const selcanUserEmail = "selcanakoglu@evrekapatent.com"; // <<< BURAYA SELCAN'IN E-POSTA ADRESİNİ YAZIN
 
       const finalStatus = (hasRecipients && hasContent) ? "awaiting_client_approval" : "missing_info";
