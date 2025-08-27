@@ -817,7 +817,8 @@ async handleIndexing(opts = {}) { try {
                 } else {
                     console.warn("⚠️ deliveryDate geçersiz, son tarihler hesaplanmayacak.", deliveryDate);
                 }
-                
+                // indexing-detail-module.js dosyasında düzeltilmesi gereken bölüm
+
                 let assigned = { uid: SELCAN_UID, email: SELCAN_EMAIL };
                 try {
                     // childTransactionType.taskTriggered kullan - bu taskType'ı temsil ediyor
@@ -830,12 +831,12 @@ async handleIndexing(opts = {}) { try {
                             const rule = ruleSnap.data() || {};
                             console.log('📋 taskAssignments kuralı bulundu:', rule);
                             
-                            // approvalStateAssigneeIds değil, assigneeIds alanını kullan
-                            const assigneeIds = Array.isArray(rule.assigneeIds) ? rule.assigneeIds : [];
+                            // ⭐ ONAY DURUMU İÇİN approvalStateAssigneeIds KULLAN
+                            const approvalAssigneeIds = Array.isArray(rule.approvalStateAssigneeIds) ? rule.approvalStateAssigneeIds : [];
                             
-                            if (assigneeIds.length > 0) {
-                                const uid = String(assigneeIds[0]); // İlk kişiye ata
-                                console.log('👤 Atanan UID:', uid);
+                            if (approvalAssigneeIds.length > 0) {
+                                const uid = String(approvalAssigneeIds[0]); // İlk kişiye ata
+                                console.log('👤 Onay durumu için atanan UID:', uid);
                                 
                                 // users koleksiyonundan email bilgisini al
                                 const userSnap = await getDoc(doc(firebaseServices.db, 'users', uid));
@@ -843,12 +844,12 @@ async handleIndexing(opts = {}) { try {
                                     const userData = userSnap.data() || {};
                                     const email = userData.email || null;
                                     assigned = { uid, email };
-                                    console.log('✅ Atama başarılı:', assigned);
+                                    console.log('✅ Onay durumu ataması başarılı:', assigned);
                                 } else {
                                     console.warn('⚠️ Kullanıcı bulunamadı, varsayılana dönülüyor');
                                 }
                             } else {
-                                console.warn('⚠️ assigneeIds listesi boş, varsayılana dönülüyor');
+                                console.warn('⚠️ approvalStateAssigneeIds listesi boş, varsayılana dönülüyor');
                             }
                         } else {
                             console.warn('⚠️ taskAssignments kuralı bulunamadı, varsayılana dönülüyor. Aranan ID:', taskTypeId);
@@ -878,8 +879,8 @@ async handleIndexing(opts = {}) { try {
                     status: 'awaiting_client_approval',
                     createdAt: new Date(),
                     createdBy: this.currentUser.uid,
-                    taskType: childTransactionType.taskTriggered // ✅ Bu doğru
-                };
+                    taskType: childTransactionType.taskTriggered // ✅ Bu doğru - taskAssignments ID'si olacak
+                };               
 
                 const taskResult = await taskService.createTask(taskData);
                 if (taskResult.success) {
