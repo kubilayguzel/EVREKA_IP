@@ -346,6 +346,10 @@ body { min-height: 100vh; display: flex; align-items: center; justify-content: c
 
 /* Keep spacing balanced */
 .login-stack { gap: 22px !important; }
+
+/* Inline size adjustments for larger login card */
+.form-input { font-size: 1.0625rem !important; padding: 14px 16px !important; }
+.auth-btn { font-size: 1.0625rem !important; padding: 14px 20px !important; }
 </style>
 <style>
 /* === Strong override: enlarge login card & match brand card width === */
@@ -366,9 +370,9 @@ body { min-height: 100vh; display: flex; align-items: center; justify-content: c
 <body>
 <div class="firebase-status" id="firebaseStatus">🔄 Firebase bağlanıyor...</div>
 <!-- Notification Container - User Management tarzında -->
-<div class="login-stack"><div class="auth-container">
+<div class="login-stack"><div class="auth-container" style="width:96%;max-width:960px;margin-left:auto;margin-right:auto;font-size:18px;">
 <div class="logo-section">
-<div class="app-title">IP Manager</div>
+<div class="app-title" style="font-size:2.25rem;line-height:1.2;">IP Manager</div>
 <div class="subtitle">Fikri Mülkiyet Yönetim Sistemi</div>
 </div>
 <div class="tabs">
@@ -421,14 +425,19 @@ body { min-height: 100vh; display: flex; align-items: center; justify-content: c
 </button>
 </form>
 </div>
-</div><div class="brand-card"><div class="brand-card-inner"><img alt="Evreka logo" class="brand-logo" src="evreka-logo.png"/></div></div></div>
+</div><div class="brand-card" style="width:96%;max-width:960px;margin-left:auto;margin-right:auto;"><div class="brand-card-inner"><img alt="Evreka logo" class="brand-logo" src="evreka-logo.png"/></div></div></div>
 <script type="module">
   import { authService, auth } from './firebase-config.js';
-  import { showNotification, showFieldError, clearAllFieldErrors } from './utils.js';
+import { showNotification, showFieldError, clearAllFieldErrors } from './utils.js';
   import { sendPasswordResetEmail, sendEmailVerification, updateProfile } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
 
     // User Management sayfasındaki notification sistemini kopyala
     
+
+    
+
+    
+
     class AuthController {
       constructor() {
         this.currentTab = 'signin';
@@ -706,6 +715,7 @@ document.addEventListener('DOMContentLoaded', () => {
     alert('Doğrulama e-postası gönderildi. Lütfen e-postanızı doğrulayın.');
   }
 });
+
 
 // Password show/hide toggles
 document.addEventListener('DOMContentLoaded', () => {
