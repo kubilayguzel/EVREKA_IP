@@ -820,19 +820,47 @@ async handleIndexing(opts = {}) { try {
                 
                 let assigned = { uid: SELCAN_UID, email: SELCAN_EMAIL };
                 try {
-                const ruleSnap = await getDoc(doc(firebaseServices.db, 'taskAssignments', childTypeId));
-                if (ruleSnap.exists()) {
-                    const ids = ruleSnap.data()?.approvalStateAssigneeIds;
-                    const uid = Array.isArray(ids) ? ids.find(v => typeof v === 'string' && v.trim()) : null;
-                    if (uid) {
-                    const userSnap = await getDoc(doc(firebaseServices.db, 'users', uid));
-                    const email = userSnap.exists() ? (userSnap.data().email || null) : null;
-                    assigned = { uid, email };
+                    // childTransactionType.taskTriggered kullan - bu taskType'ı temsil ediyor
+                    const taskTypeId = childTransactionType.taskTriggered;
+                    console.log('🔍 taskAssignments araması: taskTypeId =', taskTypeId);
+                    
+                    if (taskTypeId) {
+                        const ruleSnap = await getDoc(doc(firebaseServices.db, 'taskAssignments', String(taskTypeId)));
+                        if (ruleSnap.exists()) {
+                            const rule = ruleSnap.data() || {};
+                            console.log('📋 taskAssignments kuralı bulundu:', rule);
+                            
+                            // approvalStateAssigneeIds değil, assigneeIds alanını kullan
+                            const assigneeIds = Array.isArray(rule.assigneeIds) ? rule.assigneeIds : [];
+                            
+                            if (assigneeIds.length > 0) {
+                                const uid = String(assigneeIds[0]); // İlk kişiye ata
+                                console.log('👤 Atanan UID:', uid);
+                                
+                                // users koleksiyonundan email bilgisini al
+                                const userSnap = await getDoc(doc(firebaseServices.db, 'users', uid));
+                                if (userSnap.exists()) {
+                                    const userData = userSnap.data() || {};
+                                    const email = userData.email || null;
+                                    assigned = { uid, email };
+                                    console.log('✅ Atama başarılı:', assigned);
+                                } else {
+                                    console.warn('⚠️ Kullanıcı bulunamadı, varsayılana dönülüyor');
+                                }
+                            } else {
+                                console.warn('⚠️ assigneeIds listesi boş, varsayılana dönülüyor');
+                            }
+                        } else {
+                            console.warn('⚠️ taskAssignments kuralı bulunamadı, varsayılana dönülüyor. Aranan ID:', taskTypeId);
+                        }
+                    } else {
+                        console.warn('⚠️ taskTypeId boş, varsayılana dönülüyor');
                     }
-                }
                 } catch (err) {
-                console.warn('[resolveApprovalStateAssignee] fallback to Selcan:', err?.message || err);
+                    console.warn('❌ Atama kuralı çözümlenirken hata, varsayılana dönülüyor:', err?.message || err);
                 }
+
+                // taskData oluştururken taskType doğru şekilde ayarlanıyor
                 const taskData = {
                     title: `${childTransactionType.alias || childTransactionType.name} - ${this.matchedRecord.title}`,
                     description: `${this.matchedRecord.title} için ${childTransactionType.alias || childTransactionType.name} işlemi`,
@@ -850,7 +878,7 @@ async handleIndexing(opts = {}) { try {
                     status: 'awaiting_client_approval',
                     createdAt: new Date(),
                     createdBy: this.currentUser.uid,
-                    taskType: childTransactionType.taskTriggered
+                    taskType: childTransactionType.taskTriggered // ✅ Bu doğru
                 };
 
                 const taskResult = await taskService.createTask(taskData);
