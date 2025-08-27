@@ -995,4 +995,4 @@ async handleIndexing(opts = {}) { try {
     try { showNotification('İndeksleme sırasında hata: ' + (error?.message || error), 'error'); } catch(e) {}
     }
 }
-}
+} 
