@@ -553,16 +553,19 @@
                     document.getElementById('createMyTaskServiceInvoicePartySearch').addEventListener('input', e => this.searchPersonsForCreateMyTaskAccrual(e.target.value, 'createMyTaskServiceInvoiceParty'));
                 }
 
-                async loadAllData() {
-                    document.getElementById('loadingIndicator').style.display = 'block';
+                    async loadAllData() {
+                        document.getElementById('loadingIndicator').style.display = 'block';
+                        try {
+                    // Super admin kontrolünü token claim'lerinden yap
+                    let isSuper = false;
                     try {
-                        let tasksResult;
-                        if (authService.isSuperAdmin()) {
-                            tasksResult = await taskService.getAllTasks();
-                        } else {
-                            tasksResult = await taskService.getTasksForUser(this.currentUser.uid);
-                        }
-
+                    const token = await this.currentUser.getIdTokenResult();
+                    isSuper = !!(token.claims && token.claims.superAdmin);
+                    } catch (_) {}
+                    
+                    const tasksResult = isSuper
+                    ? await taskService.getAllTasks()
+                    : await taskService.getTasksForUser(this.currentUser.uid);
                         const [ipRecordsResult, personsResult, transactionTypesResult] = await Promise.all([ // transactionTypesResult eklendi
                             ipRecordsService.getRecords(),
                             personService.getPersons(),
@@ -1015,8 +1018,8 @@
         this.currentTaskForAccrual = null;
         this.createMyTaskSelectedTpInvoiceParty = null;
         this.createMyTaskSelectedServiceInvoiceParty = null;
-        document.getElementById('createMyTaskTpInvoicePartyDisplay').style.display = 'none';
-        document.getElementById('createMyTaskServiceInvoicePartyDisplay').style.display = 'none';
+        document.getElementById('createMyTaskSelectedTpInvoicePartyDisplay').style.display = 'none';
+        document.getElementById('createMyTaskSelectedServiceInvoicePartyDisplay').style.display = 'none';
         document.getElementById('createMyTaskTpInvoicePartySearch').value = '';
         document.getElementById('createMyTaskServiceInvoicePartySearch').value = '';
         document.getElementById('createMyTaskTotalAmountDisplay').textContent = '0.00 TRY';
