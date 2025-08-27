@@ -63,7 +63,7 @@ body {
 
 .sidebar-nav {
     flex-grow: 1;
-    overflow-y: auto; /* İçerik taşarsa kaydırma çubuğu */
+    overflow-y: hidden; /* İçerik taşarsa kaydırma çubuğu */
     padding: 20px 0;
 }
 
