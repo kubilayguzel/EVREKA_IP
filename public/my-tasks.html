@@ -567,7 +567,13 @@
                             transactionTypeService.getTransactionTypes() // Tüm transaction tiplerini çek
                         ]);
 
-                        this.allTasks = tasksResult.success ? tasksResult.data : [];
+                        this.allTasks = tasksResult.success
+                        ? tasksResult.data.filter(task => 
+                            task.status !== 'awaiting_client_approval' &&
+                            task.status !== 'client_approval_closed' &&
+                            task.status !== 'client_no_response_closed'
+                        )
+                        : [];
                         this.allIpRecords = ipRecordsResult.success ? ipRecordsResult.data : [];
                         this.allPersons = personsResult.success ? personsResult.data : [];
                         this.allAccruals = accrualsResult.success ? accrualsResult.data : [];
@@ -585,10 +591,10 @@
                     const statusFilterSelect = document.getElementById('statusFilter');
                     statusFilterSelect.innerHTML = '<option value="all">Tümü</option>';
                     
-                    const relevantStatuses = [
-                        'open', 'in-progress', 'completed', 'pending', 'cancelled', 'on-hold', 'awaiting-approval',
-                        'awaiting_client_approval', 'client_approval_opened', 'client_approval_closed', 'client_no_response_closed'
-                    ];
+                const relevantStatuses = [
+                    'open', 'in-progress', 'completed', 'pending', 'cancelled', 'on-hold', 'awaiting-approval',
+                    'client_approval_opened'
+                ];
 
                     relevantStatuses.forEach(statusValue => {
                         const option = document.createElement('option');
