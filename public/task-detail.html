@@ -505,6 +505,7 @@
     import { showNotification, formatFileSize, readFileAsDataURL, TASK_STATUSES, TURKEY_HOLIDAYS, addMonthsToDate, isWeekend, isHoliday, findNextWorkingDay } from './utils.js';
     import { loadSharedLayout, ensurePersonModal, openPersonModal } from './js/layout-loader.js';
     import { getStorage, ref, uploadBytes, getDownloadURL } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js';
+    import { resolveApprovalStateAssignee } from './js/indexing-detail-module.js';
 
     document.addEventListener('DOMContentLoaded', async () => {
         await loadSharedLayout({ activeMenuLink: 'task-management.html' });
@@ -1117,10 +1118,15 @@ if (typeof this.renderDocuments === 'function') {
             async handleTaskUpdate(e) {
                 e.preventDefault();
                 console.log('🔧 DEBUG: handleTaskUpdate başlatıldı');
+                
+                // Formdan alınan güncel durum değeri
+                const updatedStatus = document.getElementById('status').value;
+
                 if (this.uploadedEpatsFile && !document.getElementById('turkpatentEvrakNo').value.trim()) {
                     showNotification('EPATS Evrakı yüklendiğinde TURKPATENT Evrak No alanı zorunludur.', 'error');
                     return;
                 }
+
                 const form = document.getElementById('taskDetailForm');
                 const updatedTaskData = {
                     title: form.taskTitle.value,
@@ -1133,10 +1139,30 @@ if (typeof this.renderDocuments === 'function') {
                     details: { ...this.currentTask.details },
                     documents: this.currentTaskDocuments
                 };
+
+                // YENİ EKLENEN KISIM: Durum 'awaiting_client_approval' olarak değiştiğinde atamayı güncelle
+                if (updatedStatus === 'awaiting_client_approval' && this.currentTask.status !== 'awaiting_client_approval') {
+                    try {
+                        const assigned = await resolveApprovalStateAssignee();
+                        if (assigned.uid) {
+                            updatedTaskData.assignedTo_uid = assigned.uid;
+                            updatedTaskData.assignedTo_email = assigned.email;
+                            showNotification(`İşin durumu 'Müvekkil Onayı Bekliyor' olarak güncellendi. İş otomatik olarak ${assigned.email} adresine atandı.`, 'info');
+                        } else {
+                            showNotification('İş durumu güncellendi ancak atama kuralı bulunamadı. Lütfen manuel atama yapın.', 'warning');
+                        }
+                    } catch (error) {
+                        console.error('Atama hatası:', error);
+                        showNotification('Atama sırasında bir hata oluştu.', 'error');
+                    }
+                }
+
                 const evrakNo = document.getElementById('turkpatentEvrakNo')?.value?.trim() || '';
                 const docDate = document.getElementById('epatsDocumentDate')?.value || '';
                 const hasPdf = !!this.uploadedEpatsFile;
+
                 console.log('🔧 DEBUG: EPATS kontrol değerleri:', { hasPdf, evrakNo, docDate });
+
                 if (hasPdf && evrakNo && docDate) {
                     console.log('✅ DEBUG: EPATS üçlüsü tam - Status otomatik completed yapılıyor');
                     updatedTaskData.status = 'completed';
@@ -1144,8 +1170,10 @@ if (typeof this.renderDocuments === 'function') {
                     console.log('⚠️ DEBUG: EPATS üçlüsü eksik - Status önceki duruma döndürülüyor');
                     updatedTaskData.status = this.statusBeforeEpatsUpload || 'open';
                 }
+                
                 console.log('🔧 DEBUG: Ayarlanan status:', updatedTaskData.status);
-                if (this.uploadedEpatsFile) {
+
+                if (hasPdf) {
                     updatedTaskData.details.epatsDocument = {
                         ...this.uploadedEpatsFile,
                         turkpatentEvrakNo: evrakNo,
@@ -1156,19 +1184,23 @@ if (typeof this.renderDocuments === 'function') {
                     updatedTaskData.details.epatsDocument = null;
                     console.log('🔧 DEBUG: EPATS document null yapıldı');
                 }
+
                 if (this.uploadedEpatsFile && this.statusBeforeEpatsUpload) {
                     updatedTaskData.details.statusBeforeEpatsUpload = this.statusBeforeEpatsUpload;
                 } else if (!this.uploadedEpatsFile && this.currentTask.details?.epatsDocument) {
-                    updatedTaskData.details.statusBeforeEpatsUpload = null; 
+                    updatedTaskData.details.statusBeforeEpatsUpload = null;
                 }
+
                 const currentTaskDeliveryDateFormatted = this.currentTask.deliveryDate ? 
                     this.formatDateToYYYYMMDD(this.currentTask.deliveryDate) : null;
                 const isDeliveryDateChanged = form.deliveryDate.value !== currentTaskDeliveryDateFormatted;
                 const isOfficialDueDatePreviouslyEmpty = !this.currentTask.officialDueDate && form.deliveryDate.value;
+
                 if ((isDeliveryDateChanged || isOfficialDueDatePreviouslyEmpty) && this.calculatedOfficialDueDate) {
                     let confirmation = true;
                     const existingOfficialDueDateFormatted = this.currentTask.officialDueDate ?
                         this.formatDateToYYYYMMDD(new Date(this.currentTask.officialDueDate)) : null;
+                        
                     if (existingOfficialDueDateFormatted && existingOfficialDueDateFormatted !== this.formatDateToYYYYMMDD(this.calculatedOfficialDueDate)) {
                         confirmation = confirm(
                             `Mevcut resmi son tarih: ${existingOfficialDueDateFormatted}\n` +
@@ -1176,6 +1208,7 @@ if (typeof this.renderDocuments === 'function') {
                             `Resmi son tarihi güncellemek istiyor musunuz?`
                         );
                     }
+                    
                     if (confirmation) {
                         updatedTaskData.officialDueDate = this.calculatedOfficialDueDate.toISOString();
                         updatedTaskData.officialDueDateDetails = this.calculatedOfficialDueDateDetails;
@@ -1183,16 +1216,18 @@ if (typeof this.renderDocuments === 'function') {
                     } else {
                         if(this.currentTask.officialDueDate) updatedTaskData.officialDueDate = this.currentTask.officialDueDate;
                         if(this.currentTask.officialDueDateDetails) updatedTaskData.officialDueDateDetails = this.currentTask.officialDueDateDetails;
-                        if(this.currentTask.dueDate) updatedTaskData.dueDate = this.currentTask.dueDate; 
-                        else updatedTaskData.dueDate = null; 
+                        if(form.taskDueDate?.value) updatedTaskData.dueDate = form.taskDueDate.value;
+                        else if(this.currentTask.dueDate) updatedTaskData.dueDate = this.currentTask.dueDate;
+                        else updatedTaskData.dueDate = null;
                     }
                 } else {
                     if(this.currentTask.officialDueDate) updatedTaskData.officialDueDate = this.currentTask.officialDueDate;
                     if(this.currentTask.officialDueDateDetails) updatedTaskData.officialDueDateDetails = this.currentTask.officialDueDateDetails;
-                    if(form.taskDueDate?.value) updatedTaskData.dueDate = form.taskDueDate.value; 
-                    else if(this.currentTask.dueDate) updatedTaskData.dueDate = this.currentTask.dueDate; 
+                    if(form.taskDueDate?.value) updatedTaskData.dueDate = form.taskDueDate.value;
+                    else if(this.currentTask.dueDate) updatedTaskData.dueDate = this.currentTask.dueDate;
                     else updatedTaskData.dueDate = null;
                 }
+                
                 updatedTaskData.relatedIpRecordId = this.selectedRelatedIpRecord ? this.selectedRelatedIpRecord.id : null;
                 updatedTaskData.relatedIpRecordTitle = this.selectedRelatedIpRecord ? this.selectedRelatedIpRecord.title : null;
                 updatedTaskData.details.relatedParty = this.selectedRelatedParty ? 
@@ -1226,6 +1261,7 @@ if (typeof this.renderDocuments === 'function') {
                     showNotification(`Güncelleme hatası: ${error.message}`, 'error');
                 }
             }
+
             searchIpRecords(query) {
                 const searchResultsContainer = document.getElementById('relatedIpRecordSearchResults');
                 searchResultsContainer.innerHTML = '';
