@@ -33,7 +33,7 @@ const SELCAN_UID = 'Mkmq2sc0T6XTIg1weZyp5AGZ0YG3';
 const SELCAN_EMAIL = 'selcanakoglu@evrekapatent.com';
 
 // --- Onay bekleyen iş için atanacak kullanıcıyı kuraldan çöz ---
-async function resolveApprovalStateAssignee() {
+export async function resolveApprovalStateAssignee() {
   try {
     // taskAssignments/approval dokümanı: { approvalStateAssigneeIds: ["uid1","uid2", ...] }
     const ruleRef  = doc(firebaseServices.db, 'taskAssignments', 'approval');
