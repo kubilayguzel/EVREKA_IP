@@ -1158,7 +1158,7 @@ if (typeof this.renderDocuments === 'function') {
                 console.log('🔧 DEBUG: handleTaskUpdate başlatıldı');
                 
                 // Formdan alınan güncel durum değeri
-                const updatedStatus = document.getElementById('status').value;
+                const updatedStatus = document.getElementById('taskStatus').value;
 
                 if (this.uploadedEpatsFile && !document.getElementById('turkpatentEvrakNo').value.trim()) {
                     showNotification('EPATS Evrakı yüklendiğinde TURKPATENT Evrak No alanı zorunludur.', 'error');
