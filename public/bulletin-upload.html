@@ -355,96 +355,118 @@ setTimeout(async () => {
             document.getElementById('deleteProgressDetails').textContent = details;
         }
 
-        // 🔥 YENİ BACKEND DELETE FONKSİYONU - REGION FIX
-        window.deleteTrademarkBulletin = async function(bulletinId, bulletinNo) {
-            const userConfirmed = confirm(
-                `⚠️ "${bulletinNo}" numaralı bülteni silmek istediğinizden emin misiniz?\n\n` +
-                `Bu işlem geri alınamaz ve şunları silecek:\n` +
-                `• Ana bülten kaydı\n` +
-                `• Tüm marka kayıtları\n` +
-                `• Tüm görsel dosyalar\n\n` +
-                `İşlem 30-90 saniye sürecek (backend'de hızlı silme).`
-            );
-            
-            if (!userConfirmed) {
-                return;
-            }
-            
-            try {
-                console.log(`🗑️ Backend silme fonksiyonu çağrılıyor: ${bulletinNo}`);
-                
-                // Progress göster
-                showDeleteProgress();
-                updateDeleteProgress(10, 'Backend silme işlemi başlatılıyor...', 'Cloud Function çağrılıyor');
-                
-                // Backend fonksiyonunu çağır
-                const deleteBulletinFunction = httpsCallable(functions, 'deleteBulletinV2');
-                
-                updateDeleteProgress(20, 'Cloud Function çalışıyor...', 'Bu işlem 30-90 saniye sürebilir');
-                
-                console.log('📞 Function çağrılıyor...');
-                const startTime = performance.now();
-                
-                const result = await deleteBulletinFunction({ bulletinId });
-                const data = result.data;
-                
-                const duration = Math.round((performance.now() - startTime) / 1000);
-                console.log('🎉 Backend silme sonucu:', data);
-                console.log(`⏱️ İşlem süresi: ${duration} saniye`);
-                
-                if (data.success) {
-                    // Başarılı sonuç
-                    updateDeleteProgress(100, 'Silme işlemi tamamlandı!', 
-                        `✅ Bülten ${data.bulletinNo} başarıyla silindi!`);
-                    
-                    setTimeout(() => {
-                        hideDeleteProgress();
-                        
-                        // Detaylı sonuç bildirimi
-                        const hasErrors = data.errors && data.errors.length > 0;
-                        const successMessage = `🎉 Bülten ${data.bulletinNo} başarıyla silindi!
-• Ana bülten: ✅
-• Kayıtlar: ${data.recordsDeleted}/${data.totalRecords} ✅  
-• Görseller: ${data.imagesDeleted}/${data.totalImages} ${data.imagesDeleted === data.totalImages ? '✅' : '⚠️'}
-${hasErrors ? '\n⚠️ Uyarılar: ' + data.errors.join(', ') : ''}
+    // 🔥 YENİ BACKEND DELETE FONKSİYONU - REGION FIX
 
-⚡ İşlem süresi: ${duration} saniye (backend silme)`;
-                        
-                        showNotification(
-                            successMessage, 
-                            hasErrors ? 'warning' : 'success', 
-                            hasErrors ? 10000 : 8000
-                        );
-                        
-                        // Tabloyu yenile
-                        console.log('🔄 Tablo yenileniyor...');
-                        loadTrademarkBulletins();
-                    }, 2000);
-                    
-                } else {
-                    // Hata durumu
-                    throw new Error(data.error || 'Bilinmeyen backend hatası');
-                }
-                
-            } catch (error) {
-                console.error('❌ Backend silme hatası:', error);
-                console.error('❌ Error details:', error);
-                
+    window.deleteTrademarkBulletin = async function(bulletinId, bulletinNo) {
+    const userConfirmed = confirm(
+        `⚠️ "${bulletinNo}" numaralı bülteni silmek istediğinizden emin misiniz?\n\n` +
+        `Bu işlem geri alınamaz ve şunları silecek:\n` +
+        `• Ana bülten kaydı\n` +
+        `• Tüm marka kayıtları\n` +
+        `• Tüm görsel dosyalar\n\n` +
+        `İşlem arka planda devam edecek ve ilerlemeyi takip edebilirsiniz.`
+    );
+    
+    if (!userConfirmed) {
+        return;
+    }
+    
+    try {
+        console.log(`🗑️ Asenkron silme işlemi başlatılıyor: ${bulletinNo}`);
+        
+        showDeleteProgress();
+        updateDeleteProgress(10, 'Silme işlemi başlatılıyor...', 'Cloud Function çağrılıyor');
+        
+        const deleteBulletinFunction = httpsCallable(functions, 'deleteBulletinV2');
+        const result = await deleteBulletinFunction({ bulletinId });
+        const data = result.data;
+        
+        if (data.success) {
+            const operationId = data.operationId;
+            console.log('✅ Silme işlemi başlatıldı, operationId:', operationId);
+            
+            updateDeleteProgress(20, 'İşlem başlatıldı', 'İlerleme takip ediliyor...');
+            
+            // İlerleme takibi başlat
+            monitorDeletionProgress(operationId, bulletinNo);
+            
+        } else {
+            throw new Error(data.error || 'Silme işlemi başlatılamadı');
+        }
+        
+    } catch (error) {
+        console.error('❌ Silme başlatma hatası:', error);
+        hideDeleteProgress();
+        showNotification(`❌ Silme işlemi başlatılamadı: ${error.message}`, 'error', 10000);
+    }
+};
+
+    // İlerleme takip fonksiyonu ekleyin
+    function monitorDeletionProgress(operationId, bulletinNo) {
+    const { onSnapshot, doc } = window.firestoreModules || {};
+    
+    if (!onSnapshot || !doc) {
+        console.error('❌ Firestore modülleri bulunamadı');
+        hideDeleteProgress();
+        return;
+    }
+    
+    console.log('👀 İlerleme takibi başlatıldı:', operationId);
+    
+    const statusRef = doc(db, 'operationStatus', operationId);
+    
+    const unsubscribe = onSnapshot(statusRef, (docSnap) => {
+        if (!docSnap.exists()) {
+            console.log('⏳ İşlem durumu henüz hazır değil...');
+            return;
+        }
+        
+        const data = docSnap.data();
+        const { status, message, progress, recordsDeleted, imagesDeleted } = data;
+        
+        console.log('📊 İlerleme güncellendi:', { status, message, progress });
+        
+        // Progress bar güncelle
+        updateDeleteProgress(
+            progress || 0, 
+            message || 'İşlem devam ediyor...', 
+            `Durum: ${status}`
+        );
+        
+        if (status === 'completed') {
+            console.log('🎉 Silme işlemi tamamlandı!');
+            
+            setTimeout(() => {
                 hideDeleteProgress();
                 
-                showNotification(
-                    `❌ Backend silme hatası: ${error.message}\n\n` +
-                    `Fonksiyon deploy edildi mi?\n` +
-                    `Console logs: firebase functions:log --only deleteBulletinV2`, 
-                    'error', 
-                    15000
-                );
-            }
-        };
-        
-        // İlk yükleme
-        await loadTrademarkBulletins();
-        
+                const successMessage = `🎉 Bülten ${bulletinNo} başarıyla silindi!\n` +
+                    `• Kayıtlar: ${recordsDeleted || 0} ✅\n` +
+                    `• Görseller: ${imagesDeleted || 0} ✅`;
+                
+                showNotification(successMessage, 'success', 8000);
+                
+                // Tabloyu yenile
+                loadTrademarkBulletins();
+            }, 2000);
+            
+            unsubscribe(); // Listener'ı kapat
+            
+        } else if (status === 'error') {
+            console.error('❌ Silme işlemi hatası:', message);
+            
+            hideDeleteProgress();
+            showNotification(`❌ Silme işlemi hatası: ${message}`, 'error', 10000);
+            
+            unsubscribe();
+        }
+    }, (error) => {
+        console.error('❌ İlerleme takip hatası:', error);
+        hideDeleteProgress();
+        showNotification('❌ İlerleme takibi hatası: ' + error.message, 'error');
+    });
+}
+    // İlk yükleme
+    await loadTrademarkBulletins();     
     } catch (error) {
         console.error('❌ Script hatası:', error);
         
