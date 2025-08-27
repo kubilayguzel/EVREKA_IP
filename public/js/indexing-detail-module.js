@@ -818,15 +818,21 @@ async handleIndexing(opts = {}) { try {
                     console.warn("⚠️ deliveryDate geçersiz, son tarihler hesaplanmayacak.", deliveryDate);
                 }
                 
-                // Varsayılan: Selcan (fallback)
                 let assigned = { uid: SELCAN_UID, email: SELCAN_EMAIL };
-
-                // Yalnızca "Müvekkil Onayı Bekliyor" durumunda kuraldan kullanıcı çöz
-                if (childTransactionType.taskTriggered) {
-                const r = await resolveApprovalStateAssignee();
-                if (r?.uid) assigned = r; // kural bulunduysa onu kullan
+                try {
+                const ruleSnap = await getDoc(doc(firebaseServices.db, 'taskAssignments', 'approval'));
+                if (ruleSnap.exists()) {
+                    const ids = ruleSnap.data()?.approvalStateAssigneeIds;  // <<== DİKKAT: alan adı bu
+                    const uid = Array.isArray(ids) ? ids.find(v => typeof v === 'string' && v.trim()) : null;
+                    if (uid) {
+                    const userSnap = await getDoc(doc(firebaseServices.db, 'users', uid));
+                    const email = userSnap.exists() ? (userSnap.data().email || null) : null;
+                    assigned = { uid, email };
+                    }
                 }
-
+                } catch (err) {
+                console.warn('[resolveApprovalStateAssignee] fallback to Selcan:', err?.message || err);
+                }
                 const taskData = {
                     title: `${childTransactionType.alias || childTransactionType.name} - ${this.matchedRecord.title}`,
                     description: `${this.matchedRecord.title} için ${childTransactionType.alias || childTransactionType.name} işlemi`,
