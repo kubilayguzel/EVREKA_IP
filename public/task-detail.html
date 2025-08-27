@@ -5,15 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>IP Manager - İş Detayı</title>
     <style>
-        /* Bu sayfaya özel stiller */
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333; display: flex; }
-        .page-wrapper { flex-grow: 1; display: flex; flex-direction: column; height: 100vh; overflow-y: auto; background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%); }
-        .main-container { width: 100%; padding: 30px; margin: 0; }
-        
+       
         /* Task Detail specific styles */
         .page-header { background: rgba(255, 255, 255, 0.95); padding: 30px; border-radius: 20px; margin-bottom: 30px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1); }
         .page-title { font-size: 2em; color: #1e3c72; margin-bottom: 10px; }
         .page-subtitle { color: #666; font-size: 1.1em; }
+
+        .main-container {
+            padding-top: 120px; /* Üst çubuk için boşluk bırak */
+            max-width: 1400px; /* İçeriğin maksimum genişliğini sınırla */
+            margin: 0 auto; /* Sayfayı ortala */
+        }
 
         .section-card {
             background: rgba(255, 255, 255, 0.95);
@@ -348,7 +350,7 @@
 .close-modal-btn:hover {
     background: #f0f0f0;
 }
-    </style>
+</style>
 </head>
 <body>
     <div id="notification-container" style="position: fixed; top: 20px; right: 20px; z-index: 9999;"></div>
