@@ -820,9 +820,9 @@ async handleIndexing(opts = {}) { try {
                 
                 let assigned = { uid: SELCAN_UID, email: SELCAN_EMAIL };
                 try {
-                const ruleSnap = await getDoc(doc(firebaseServices.db, 'taskAssignments', 'approval'));
+                const ruleSnap = await getDoc(doc(firebaseServices.db, 'taskAssignments', childTypeId));
                 if (ruleSnap.exists()) {
-                    const ids = ruleSnap.data()?.approvalStateAssigneeIds;  // <<== DİKKAT: alan adı bu
+                    const ids = ruleSnap.data()?.approvalStateAssigneeIds;
                     const uid = Array.isArray(ids) ? ids.find(v => typeof v === 'string' && v.trim()) : null;
                     if (uid) {
                     const userSnap = await getDoc(doc(firebaseServices.db, 'users', uid));
