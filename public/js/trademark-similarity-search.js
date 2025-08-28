@@ -217,29 +217,139 @@ function applyMonitoringListFilters() {
 
 function renderMonitoringList() {
     const tbody = document.getElementById('monitoringListBody');
-    tbody.innerHTML = filteredMonitoringTrademarks.length === 0 
-        ? '<tr><td colspan="5" class="no-records">Filtreye uygun izlenecek marka bulunamadı.</td></tr>'
-        : filteredMonitoringTrademarks.map(tm => `
+    
+    if (filteredMonitoringTrademarks.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="no-records">Filtreye uygun izlenecek marka bulunamadı.</td></tr>';
+        return;
+    }
+    
+    tbody.innerHTML = filteredMonitoringTrademarks.map(tm => {
+        // Marka görseli
+        const imgSrc = tm.brandImageUrl || tm.details?.brandInfo?.brandImage || '';
+        let brandImgCell = '';
+        if (imgSrc) {
+            brandImgCell = `<div class="trademark-image-wrapper"><img class="trademark-image-thumbnail" src="${imgSrc}" alt="Marka Görseli"></div>`;
+        } else {
+            brandImgCell = '<div class="no-image-placeholder">🏷️</div>';
+        }
+        
+        return `
             <tr>
-                <td style="text-align: left;">${tm.title || tm.markName || '-'}</td>
+                <td style="text-align: left;">${tm.title || tm.markName || tm.brandText || '-'}</td>
+                <td>${brandImgCell}</td>
                 <td>${tm.applicationNumber || '-'}</td>
                 <td>${getOwnerNames(tm)}</td>
-                <td>${Array.isArray(tm.niceClass) ? tm.niceClass.join(', ') : (tm.niceClass || '-')}</td>
-                <td>${tm.applicationDate || '-'}</td>
-            </tr>`).join('');
+                <td>${getNiceClassNumbers(tm)}</td>
+                <td>${getApplicationDateFormatted(tm)}</td>
+            </tr>`;
+    }).join('');
+    
+    // Hover efektini kurulum
+    setupImageHoverEffect();
+}
+
+function getApplicationDateFormatted(item) {
+    if (item.applicationDate) {
+        // String format kontrolü (2025-08-01)
+        if (typeof item.applicationDate === 'string') {
+            const date = new Date(item.applicationDate);
+            if (!isNaN(date.getTime())) {
+                return date.toLocaleDateString('tr-TR');
+            }
+        }
+        
+        // Firestore Timestamp kontrolü
+        if (item.applicationDate.toDate && typeof item.applicationDate.toDate === 'function') {
+            return item.applicationDate.toDate().toLocaleDateString('tr-TR');
+        }
+    }
+    
+    return '-';
 }
 
 function getOwnerNames(item) {
+    // Öncelikle applicants array'ini kontrol et (Firestore'daki yapı)
+    if (item.applicants && Array.isArray(item.applicants)) {
+        return item.applicants.map(applicant => {
+            if (applicant.name) return applicant.name;
+            return 'Bilinmeyen Sahip';
+        }).filter(Boolean).join(', ');
+    }
+    
+    // Eski owners yapısı (geriye uyumluluk için)
     if (item.owners && Array.isArray(item.owners)) {
         return item.owners.map(owner => {
             if (owner.name) return owner.name;
             const person = allPersons.find(p => p.id === owner.id);
             return person ? person.name : 'Bilinmeyen Sahip';
         }).filter(Boolean).join(', ');
-    } else if (typeof item.holders === 'string') {
+    } 
+    
+    // String olarak holders
+    if (typeof item.holders === 'string') {
         return item.holders;
     }
+    
     return '-';
+}
+
+function getNiceClassNumbers(item) {
+    if (item.goodsAndServicesByClass && Array.isArray(item.goodsAndServicesByClass)) {
+        const classNumbers = item.goodsAndServicesByClass
+            .map(classItem => classItem.classNo)
+            .filter(classNo => classNo !== null && classNo !== undefined)
+            .sort((a, b) => Number(a) - Number(b)) // Sayısal sıralama
+            .join(', ');
+        
+        return classNumbers || '-';
+    }
+    
+    return '-';
+}
+
+function setupImageHoverEffect() {
+    const tbody = document.getElementById('monitoringListBody');
+    let hoverElement = null;
+
+    // Önceki event listener'ları temizle
+    if (tbody._imageHoverSetup) return;
+    tbody._imageHoverSetup = true;
+
+    tbody.addEventListener('mouseover', (e) => {
+        const thumbnail = e.target.closest('.trademark-image-thumbnail');
+        if (!thumbnail) return;
+
+        // Daha önce oluşturulan elementi temizle
+        if (hoverElement) {
+            hoverElement.remove();
+        }
+
+        // Yeni büyük resmi oluştur
+        hoverElement = document.createElement('img');
+        hoverElement.src = thumbnail.src;
+        hoverElement.alt = thumbnail.alt;
+        hoverElement.classList.add('trademark-image-hover-full');
+        document.body.appendChild(hoverElement);
+
+        // Görünür yap
+        setTimeout(() => {
+            if (hoverElement) {
+                hoverElement.style.display = 'block';
+            }
+        }, 10);
+    });
+
+    tbody.addEventListener('mouseout', (e) => {
+        const thumbnail = e.target.closest('.trademark-image-thumbnail');
+        if (!thumbnail) return;
+        
+        // Büyük resmi gizle ve kaldır
+        if (hoverElement) {
+            hoverElement.style.display = 'none';
+            hoverElement.remove();
+            hoverElement = null;
+        }
+    });
 }
 
 // ✅ Cache kontrol problemini debug etmek için checkCacheAndToggleButtonStates fonksiyonunu güncelleyin:
