@@ -569,8 +569,32 @@ class DataEntryModule {
                 console.error('❌ clearAllSelectedClasses fonksiyonu bulunamadı.');
             }
         });
+        this.initializeDatePickers();
     }
+    // Yeni metod: Tarih seçicileri başlatma
+    initializeDatePickers() {
+        // Takvim işlevselliği eklemek istediğiniz tüm ID'leri buraya ekleyin
+        const dateFields = [
+            'applicationDate',
+            'registrationDate',
+            'renewalDate',
+            'bulletinDate',
+            'priorityDate',
+            // Diğer tarih alanlarını buraya ekleyebilirsiniz
+        ];
 
+        dateFields.forEach(fieldId => {
+            const element = document.getElementById(fieldId);
+            if (element) {
+                flatpickr(element, {
+                    dateFormat: "Y-m-d",      // Yıl-Ay-Gün formatı
+                    allowInput: true,         // Manuel girişe izin ver
+                    clickOpens: true,         // Giriş alanına tıklama takvimi açar
+                    locale: "tr"              // Türkçe dil desteği
+                });
+            }
+        });
+    }
     handleTabChange(targetTab) {
         if (targetTab === '#goods-services' && !this.isNiceInitialized) {
             console.log('🔄 Nice Classification başlatılıyor...');
