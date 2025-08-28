@@ -508,12 +508,21 @@ class DataEntryModule {
         const addApplicantBtn = document.getElementById('addApplicantBtn');
         if (addApplicantBtn) {
             addApplicantBtn.addEventListener('click', () => {
+                // openPersonModal fonksiyonuna, yeni kişi kaydedildiğinde
+                // çalışacak bir callback fonksiyonu gönderiyoruz.
                 openPersonModal((newPerson) => {
-                    if (typeof this.addApplicant === 'function') {
-                        this.addApplicant(newPerson);
-                    } else if (typeof window !== 'undefined' && typeof window.addApplicant === 'function') {
-                        window.addApplicant(newPerson);
-                    }
+                    // Callback çağrıldığında, yeni kişiyi
+                    // ana kişi listemize (allPersons) ekliyoruz.
+                    this.allPersons.push(newPerson);
+
+                    // Ardından, bu kişiyi başvuru sahipleri listesine ekliyoruz.
+                    this.addSelectedPerson(newPerson, 'applicant');
+
+                    // Modalı kapat
+                    this.hideAddPersonModal();
+
+                    // Konsol çıktısı
+                    console.log('✅ Yeni kişi eklendi:', newPerson);
                 });
             });
         }
