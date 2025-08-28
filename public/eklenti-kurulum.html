@@ -44,12 +44,30 @@
       border-color: #28a745;
       color: #fff;
       transition: all 0.3s ease;
+      text-decoration: none;
+      display: inline-block;
     }
     .install-button:hover {
       background-color: #218838;
       border-color: #1e7e34;
       transform: translateY(-2px);
       box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3);
+      color: #fff;
+      text-decoration: none;
+    }
+    .install-button.disabled {
+      background-color: #6c757d;
+      border-color: #6c757d;
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
+    }
+    .install-button.disabled:hover {
+      background-color: #6c757d;
+      border-color: #6c757d;
+      transform: none;
+      box-shadow: none;
+      color: #fff;
     }
     .info-list {
       text-align: left;
@@ -70,6 +88,15 @@
       left: 0;
       top: 2px;
     }
+    .warning-note {
+      background-color: #fff3cd;
+      border: 1px solid #ffeaa7;
+      color: #856404;
+      padding: 15px;
+      border-radius: 8px;
+      margin-top: 20px;
+      font-size: 0.9rem;
+    }
   </style>
 </head>
 <body>
@@ -79,12 +106,28 @@
     <h2>Yardımcı Eklenti Kurulumu Gerekli</h2>
     <p>
       TÜRKPATENT sitesinden anlık ve otomatik sorgulama yapabilmek için
-      tarayıcınıza **"Evreka IP Sorgu Yardımcısı"** eklentisini güvenle kurmanız gerekmektedir.
+      tarayıcınıza <strong>"Evreka IP Sorgu Yardımcısı"</strong> eklentisini güvenle kurmanız gerekmektedir.
     </p>
 
-    <a id="installLink" href="https://chromewebstore.google.com/detail/evreka-ip-sorgu-yard%C4%B1mc%C4%B1s/bbcpnpgglakoagjakgigmgjpdpiigpah" class="btn btn-success install-button" target="_blank">
-      Chrome Web Mağazası'ndan Güvenle Yükle
-    </a>
+    <div id="installSection">
+      <!-- Gerçek Chrome Web Store linki mevcut değilse bu gösterilir -->
+      <div id="comingSoonSection">
+        <a href="#" class="install-button disabled" id="disabledButton">
+          Eklenti Yakında Chrome Web Mağazası'nda
+        </a>
+        <div class="warning-note">
+          <strong>Geliştirme Aşamasında:</strong> Bu eklenti henüz Chrome Web Mağazası'nda yayınlanmamıştır. 
+          Şu anda geliştirme sürecinde olup, yakında kullanıcılarımızın hizmetine sunulacaktır.
+        </div>
+      </div>
+
+      <!-- Gerçek Chrome Web Store linki varsa bu gösterilir -->
+      <div id="installReadySection" style="display: none;">
+        <a id="installLink" href="" class="install-button" target="_blank">
+          Chrome Web Mağazası'ndan Güvenle Yükle
+        </a>
+      </div>
+    </div>
 
     <ul class="info-list">
       <li>Eklenti, sadece TÜRKPATENT sitesinde çalışmak üzere tasarlanmıştır.</li>
@@ -94,14 +137,30 @@
   </div>
 
   <script>
-    // Kullanıcı bu sayfaya geldiğinde, linkin boş olmadığını kontrol edelim.
-    const installLink = document.getElementById('installLink');
-    if (installLink.href.includes('https://chromewebstore.google.com/detail/evreka-ip-sorgu-yard%C4%B1mc%C4%B1s/bbcpnpgglakoagjakgigmgjpdpiigpah')) {
-        installLink.textContent = 'Kurulum Linki Henüz Ayarlanmadı';
-        installLink.classList.remove('btn-success');
-        installLink.classList.add('btn-secondary');
-        installLink.style.pointerEvents = 'none';
-    }
+    // Chrome Web Store linki
+    const CHROME_STORE_URL = 'https://chromewebstore.google.com/detail/bbcpnpgglakoagjakgigmgjpdpiigpah?utm_source=item-share-cb';
+    
+    // Sayfa yüklendiğinde durumu kontrol et
+    document.addEventListener('DOMContentLoaded', function() {
+      const installLink = document.getElementById('installLink');
+      const comingSoonSection = document.getElementById('comingSoonSection');
+      const installReadySection = document.getElementById('installReadySection');
+      
+      // Eğer gerçek Chrome Web Store linki varsa
+      if (CHROME_STORE_URL && CHROME_STORE_URL.startsWith('https://chrome.google.com/webstore/') || 
+          CHROME_STORE_URL.startsWith('https://chromewebstore.google.com/')) {
+        
+        // Kurulum bölümünü göster
+        installLink.href = CHROME_STORE_URL;
+        comingSoonSection.style.display = 'none';
+        installReadySection.style.display = 'block';
+        
+      } else {
+        // "Yakında gelecek" bölümünü göster
+        comingSoonSection.style.display = 'block';
+        installReadySection.style.display = 'none';
+      }
+    });
   </script>
 
 </body>
