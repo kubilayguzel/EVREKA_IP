@@ -117,12 +117,15 @@ export async function loadSharedLayout(options = {}) {
             console.log('✅ Layout cache\'e kaydedildi');
         }
 
-        placeholder.innerHTML = await response.text();
+        // Layout'u DOM'a ekle
+        placeholder.innerHTML = layoutHTML;
+        
+        // Kullanıcı bilgilerini güncelle
         const user = authService.getCurrentUser();
-            if (!user && window.top === window) {
-                window.location.href = '../index.html';
-                return;
-            }
+        if (!user && window.top === window) {
+            window.location.href = '../index.html';
+            return;
+        }
 
         const userRole = user.role || 'user';
         
@@ -141,7 +144,7 @@ export async function loadSharedLayout(options = {}) {
 
         const sidebarNav = document.querySelector('.sidebar-nav');
         if(sidebarNav) {
-            renderMenu(sidebarNav, userRole); // activeMenuLink parametresi renderMenu'den kaldırıldı
+            renderMenu(sidebarNav, userRole);
         } else {
             console.error('Sidebar navigation container (.sidebar-nav) not found in layout.');
         }
@@ -151,7 +154,6 @@ export async function loadSharedLayout(options = {}) {
 
         const currentPath = window.location.pathname.split('/').pop();
         setupMenuInteractions(currentPath);
-
 
     } catch (error) {
         console.error('Error loading shared layout:', error);
