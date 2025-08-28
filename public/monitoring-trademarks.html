@@ -278,6 +278,125 @@
         border-radius: 5px;
         margin: 20px 0;
     }
+
+    /* Nice Sınıf Badge Stilleri */
+.nice-class-badge {
+    background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+    color: #1565c0;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 500;
+    border: 1px solid #90caf9;
+    display: inline-block;
+    margin: 2px;
+    min-width: 25px;
+    text-align: center;
+}
+
+.nice-class-badge.match {
+    background: linear-gradient(135deg, #c8e6c9 0%, #a5d6a7 100%);
+    color: #2e7d32;
+    border-color: #66bb6a;
+}
+
+/* Marka Görseli Stilleri */
+.trademark-image-thumbnail {
+    width: 50px;
+    height: 50px;
+    object-fit: contain;
+    border-radius: 4px;
+    border: 1px solid #ddd;
+    background: white;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.trademark-image-thumbnail:hover {
+    transform: scale(1.1);
+    border-color: #1e3c72;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+
+/* Eksik alan uyarı stilleri */
+.missing-field {
+    color: #dc3545;
+    font-style: italic;
+    font-size: 12px;
+}
+
+.missing-field::before {
+    content: "⚠️ ";
+}
+
+/* Sahip hücresi için */
+.owner-cell {
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Durum badge'leri */
+.status-badge {
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 500;
+}
+
+.status-badge.application {
+    background: #fff3cd;
+    color: #856404;
+    border: 1px solid #ffeaa7;
+}
+
+.status-badge.registered {
+    background: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+
+.status-badge.rejected {
+    background: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+
+.status-badge.pending {
+    background: #d1ecf1;
+    color: #0c5460;
+    border: 1px solid #bee5eb;
+}
+
+.status-badge.objection {
+    background: #ffeeba;
+    color: #533f03;
+    border: 1px solid #ffeaa7;
+}
+
+.status-badge.litigation {
+    background: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+
+/* Tablo responsive düzenleme */
+@media (max-width: 768px) {
+    .accruals-table {
+        font-size: 12px;
+    }
+    
+    .trademark-image-thumbnail {
+        width: 40px;
+        height: 40px;
+    }
+    
+    .nice-class-badge {
+        font-size: 10px;
+        padding: 2px 6px;
+    }
+}
   </style>
 </head>
 <body>
@@ -498,15 +617,42 @@
 
         currentPageData.forEach(r => {
             const isSelected = selectedMonitoringItems.has(r.id) ? 'checked' : '';
-            const trademarkImageHtml = r.trademarkImage && typeof r.trademarkImage === 'string' && r.trademarkImage.startsWith('data:image')
-                ? `<img src="${r.trademarkImage}" alt="Marka Görseli" class="trademark-image-thumbnail">`
-                : '-';
+            const trademarkImageHtml = r.brandImageUrl && r.brandImageUrl.trim() !== ''
+                ? `<img src="${r.brandImageUrl}" alt="Marka Görseli" class="trademark-image-thumbnail" 
+                        style="width: 50px; height: 50px; object-fit: contain; border-radius: 4px; border: 1px solid #ddd;"
+                        onerror="this.style.display='none'; this.nextElementSibling.style.display='inline';">
+                <span style="display:none; color:#999; font-size:11px;">🖼️ Görsel yok</span>`
+                : '<span style="color:#999; font-size:11px;">🖼️ Görsel yok</span>';
             
             const statusInfo = getStatusInTurkish(r.status);
             const ownerNames = getOwnerNames(r);
-            const niceClassesHtml = Array.isArray(r.niceClass) 
-                ? r.niceClass.map(cls => `<span class="nice-class-badge">${cls}</span>`).join(' ')
-                : (r.niceClass || '-');
+            const niceClassesHtml = (() => {
+                const classes = [];
+                
+                // goodsAndServicesByClass array'inden nice sınıflarını çıkar
+                if (r.goodsAndServicesByClass && Array.isArray(r.goodsAndServicesByClass)) {
+                    r.goodsAndServicesByClass.forEach(classItem => {
+                        if (classItem.classNo !== null && classItem.classNo !== undefined) {
+                            const classNo = String(classItem.classNo);
+                            if (!classes.includes(classNo)) {
+                                classes.push(classNo);
+                            }
+                        }
+                    });
+                }
+                
+                // Sınıfları sırala ve badge olarak göster
+                if (classes.length > 0) {
+                    return classes
+                        .map(cls => parseInt(cls))
+                        .filter(cls => !isNaN(cls))
+                        .sort((a, b) => a - b)
+                        .map(cls => `<span class="nice-class-badge">${cls}</span>`)
+                        .join(' ');
+                }
+                
+                return '-';
+            })();
 
             html += `<tr data-id="${r.id}">
                         <td><input type="checkbox" class="row-checkbox" data-id="${r.id}" ${isSelected}></td>
@@ -561,25 +707,39 @@
         }
     };
 
-    const getOwnerNames = (item) => {
-        try {
-            if (item.owners && Array.isArray(item.owners)) {
-                return item.owners.map(owner => {
-                    if (typeof owner === 'object' && owner.id) {
-                        const match = allPersons.find(p => p.id === owner.id);
-                        return match ? match.name : `ID:${owner.id} (Bulunamadı)`;
-                    }
-                    return String(owner.name || owner);
-                }).join(', ');
-            } else if (typeof item.owners === 'string') {
-                return item.owners;
-            }
-        } catch (error) {
-            return 'Hata: ' + error.message;
+   const getOwnerNames = (item) => {
+    try {
+        // ÖNCE: Firebase'deki asıl yapı - applicants array
+        if (item.applicants && Array.isArray(item.applicants) && item.applicants.length > 0) {
+            return item.applicants
+                .map(applicant => applicant.name || 'Bilinmeyen Sahip')
+                .filter(name => name && name.trim() !== '')
+                .join(', ');
         }
-        return '-';
-    };
-
+        
+        // SONRA: Eski owners yapısı (geriye uyumluluk için)
+        if (item.owners && Array.isArray(item.owners)) {
+            return item.owners.map(owner => {
+                if (typeof owner === 'object' && owner.id) {
+                    const match = allPersons.find(p => p.id === owner.id);
+                    return match ? match.name : `ID:${owner.id} (Bulunamadı)`;
+                }
+                return String(owner.name || owner);
+            }).join(', ');
+        } else if (typeof item.owners === 'string') {
+            return item.owners;
+        }
+        
+        // owner string alanı varsa
+        if (item.owner && typeof item.owner === 'string' && item.owner.trim() !== '') {
+            return item.owner;
+        }
+    } catch (error) {
+        console.error('❌ getOwnerNames hatası:', error);
+        return 'Hata: ' + error.message;
+    }
+    return '-';
+};
     const renderMonitoringTable = (data, userUid) => {
         allMonitoringData = data || [];
         const filterSection = document.getElementById('filterSection');
