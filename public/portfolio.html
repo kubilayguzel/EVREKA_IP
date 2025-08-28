@@ -91,6 +91,23 @@
         .trademark-image-wrapper { position: relative; display: inline-block; overflow: visible; height: 50px; width: 50px; z-index: 1; }
         .trademark-image-thumbnail { width: 100%; height: 100%; object-fit: contain; border-radius: 5px; vertical-align: middle; transition: transform 0.5s cubic-bezier(0.23, 1, 0.32, 1), box-shadow 0.5s ease-out, border 0.5s ease-out; cursor: pointer; }
         .trademark-image-wrapper:hover .trademark-image-thumbnail { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%) scale(0.8); z-index: 9999; box-shadow: 0 5px 15px rgba(0, 0, 0, 0.4); border: 2px solid #1e3c72; background-color: white; padding: 2px; max-width: 300px; max-height: 300px; width: auto; height: auto; }
+        .trademark-image-hover-full {
+        display: none; /* Varsayılan olarak gizli */
+        position: fixed; /* Ekranın ortasına sabitlemek için bu doğru bir yaklaşım */
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%) scale(1);
+        z-index: 9999;
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.4);
+        border: 2px solid #1e3c72;
+        background-color: white;
+        padding: 2px;
+        max-width: 80vw;
+        max-height: 80vh;
+        width: auto;
+        height: auto;
+        transition: transform 0.3s ease-out, opacity 0.3s ease-out;
+    }        
         .action-btn { background: #007bff; color: white; border: none; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-size: 0.9em; transition: all 0.3s ease; margin-right: 5px; }
         .action-btn:last-child { margin-right: 0; }
         .action-btn:hover { opacity: 0.9; }
@@ -767,44 +784,46 @@ renderCurrentPage() {
     });
     tableBody.appendChild(frag);
 }
-    setupImageHoverEffect() {
-        const tableBody = document.getElementById('portfolioTableBody');
-        let hoverElement = null;
+// ... PortfolioModule sınıfının içinde ...
 
-        tableBody.addEventListener('mouseover', (e) => {
-            const thumbnail = e.target.closest('.trademark-image-thumbnail');
-            if (!thumbnail) return;
+setupImageHoverEffect() {
+    const tableBody = document.getElementById('portfolioTableBody');
+    let hoverElement = null;
 
-            // Daha önce oluşturulan elementi temizle
-            if (hoverElement) {
-                hoverElement.remove();
-            }
+    tableBody.addEventListener('mouseover', (e) => {
+        const thumbnail = e.target.closest('.trademark-image-thumbnail');
+        if (!thumbnail) return;
 
-            // Yeni büyük resmi oluştur
-            hoverElement = document.createElement('img');
-            hoverElement.src = thumbnail.src;
-            hoverElement.alt = thumbnail.alt;
-            hoverElement.classList.add('trademark-image-hover-full');
-            document.body.appendChild(hoverElement);
+        // Daha önce oluşturulan elementi temizle
+        if (hoverElement) {
+            hoverElement.remove();
+        }
 
-            // Görünür yap
-            setTimeout(() => {
-                hoverElement.style.display = 'block';
-            }, 10);
-        });
+        // Yeni büyük resmi oluştur
+        hoverElement = document.createElement('img');
+        hoverElement.src = thumbnail.src;
+        hoverElement.alt = thumbnail.alt;
+        hoverElement.classList.add('trademark-image-hover-full');
+        document.body.appendChild(hoverElement);
 
-        tableBody.addEventListener('mouseout', (e) => {
-            const thumbnail = e.target.closest('.trademark-image-thumbnail');
-            if (!thumbnail) return;
-            
-            // Büyük resmi gizle ve kaldır
-            if (hoverElement) {
-                hoverElement.style.display = 'none';
-                hoverElement.remove();
-                hoverElement = null;
-            }
-        });
-    }
+        // Görünür yap
+        setTimeout(() => {
+            hoverElement.style.display = 'block';
+        }, 10);
+    });
+
+    tableBody.addEventListener('mouseout', (e) => {
+        const thumbnail = e.target.closest('.trademark-image-thumbnail');
+        if (!thumbnail) return;
+        
+        // Büyük resmi gizle ve kaldır
+        if (hoverElement) {
+            hoverElement.style.display = 'none';
+            hoverElement.remove();
+            hoverElement = null;
+        }
+    });
+}
             applyFiltersAndSort() {
             const globalSearchTerm = (document.getElementById('searchBar').value || '').toLowerCase();
             
