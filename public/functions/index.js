@@ -2434,26 +2434,32 @@ function calculateSimilarityScoreInternal(hitMarkName, searchMarkName, hitApplic
     })();
     logger.log(`   - Prefix Score (len 3): ${prefixScore.toFixed(2)}`);
 
-    // 6. Kelime Bazında En Yüksek Benzerlik Skoru
-    const maxWordScore = (() => {
+    // 6. Kelime Bazında En Yüksek Benzerlik Skoru + Eşleşen Kelime Çifti
+    const { maxWordScore, maxWordPair } = (() => {
         const s1 = cleanedSearchName;
         const s2 = cleanedHitName;
-        if (!s1 || !s2) return 0.0;
+        if (!s1 || !s2) return { maxWordScore: 0.0, maxWordPair: null };
 
         const words1 = s1.split(' ').filter(w => w.length > 0);
         const words2 = s2.split(' ').filter(w => w.length > 0);
 
-        if (words1.length === 0 && words2.length === 0) return 1.0;
-        if (words1.length === 0 || words2.length === 0) return 0.0;
+        if (words1.length === 0 && words2.length === 0) return { maxWordScore: 1.0, maxWordPair: null };
+        if (words1.length === 0 || words2.length === 0) return { maxWordScore: 0.0, maxWordPair: null };
 
         let maxSim = 0.0;
+        let pair = null;
         for (const w1 of words1) {
             for (const w2 of words2) {
-                maxSim = Math.max(maxSim, levenshteinSimilarity(w1, w2));
+                const sim = levenshteinSimilarity(w1, w2);
+                if (sim > maxSim) {
+                    maxSim = sim;
+                    pair = [w1, w2];
+                }
             }
         }
-        return maxSim;
+        return { maxWordScore: maxSim, maxWordPair: pair };
     })();
+
     logger.log(`   - Max Word Score: ${maxWordScore.toFixed(2)}`);
 
     // Yeni: Konumsal Tam Eşleşme Skoru (örn: ilk 3 karakter tam eşleşiyorsa)
@@ -2466,22 +2472,34 @@ function calculateSimilarityScoreInternal(hitMarkName, searchMarkName, hitApplic
         const len = Math.min(s1.length, s2.length, 3);
         if (len === 0) return 0.0; // Karşılaştırılacak karakter yok
 
+        // Tüm karakterleri kontrol et - HEPSİ eşleşmeli
         for (let i = 0; i < len; i++) {
-            if (s1[i] === s2[i]) {
-                return 1.0; // İlk 'len' karakterlerin hepsi tam eşleşiyor
+            if (s1[i] !== s2[i]) {  // ✅ DÜZELTME: Farklı karakter bulduğunda
+                return 0.0;          // ✅ DÜZELTME: 0.0 döndür ve çık
             }
         }
-        return 0.0; // İlk 'len' karakterlerde uyumsuzluk bulundu
+        return 1.0; // ✅ DÜZELTME: Sadece TÜM karakterler eşleşirse 1.0 döndür
     })();
     logger.log(`   - Positional Exact Match Score (first 3 chars): ${positionalExactMatchScore.toFixed(2)}`);
 
     // ======== YENİ KURAL: Yüksek Kelime Benzerliği Kontrolü ve Önceliklendirme ========
+
     const HIGH_WORD_SIMILARITY_THRESHOLD = 0.70;
 
+    // Eşleşen en iyi kelime çifti tam eşleşmeyse uzunluğunu kontrol et
+    const exactWordLen =
+        (maxWordPair && maxWordPair[0] === maxWordPair[1]) ? maxWordPair[0].length : 0;
+
     if (maxWordScore >= HIGH_WORD_SIMILARITY_THRESHOLD) {
-        logger.log(`   *** Yüksek kelime bazında benzerlik tespit edildi (${(maxWordScore * 100).toFixed(0)}%), doğrudan skor olarak kullanılıyor. ***`);
-        // Her iki skoru da döndür, finalScore maxWordScore olsun
-        return { finalScore: maxWordScore, positionalExactMatchScore: positionalExactMatchScore };
+        // Eğer tam kelime eşleşmesi ile 1.0 elde edildiyse ve bu kelime 2 karakterden kısaysa
+        // erken dönüşü engelle (tek harfli "a" gibi durumlar %100 yapmasın)
+        if (maxWordScore === 1.0 && exactWordLen < 2) {
+            logger.log(`   *** Tam kelime eşleşmesi tek/çok kısa kelime ile (len=${exactWordLen}) bulundu; erken dönüş iptal edildi. ***`);
+            // Erken dönme, alttaki karma skorlamaya devam
+        } else {
+            logger.log(`   *** Yüksek kelime bazında benzerlik tespit edildi (maxWordScore=${(maxWordScore*100).toFixed(0)}%). Erken dönüş uygulanıyor. ***`);
+            return { finalScore: maxWordScore, positionalExactMatchScore: positionalExactMatchScore };
+        }
     }
     
     // ======== İsim Benzerliği Alt Toplamı Hesaplama (%95 Ağırlık) ========
