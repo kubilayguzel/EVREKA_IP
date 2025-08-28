@@ -14,6 +14,7 @@ let monitoringTrademarks = [];
 let filteredMonitoringTrademarks = [];
 let allPersons = [];
 let pagination;
+let monitoringPagination;
 let currentNoteModalData = {};
 
 const startSearchBtn = document.getElementById('startSearchBtn');
@@ -45,9 +46,30 @@ function initializePagination() {
     });
 }
 
+// Monitoring pagination'ını başlat
+function initializeMonitoringPagination() {
+    monitoringPagination = new Pagination({
+        containerId: 'monitoringPaginationContainer', // Yeni container ID
+        itemsPerPage: 5,
+        maxVisiblePages: 5,
+        showFirstLast: true,
+        showPrevNext: true,
+        showPageInfo: true,
+        showItemsPerPageSelector: true,
+        itemsPerPageOptions: [5, 10, 20, 50],
+        onPageChange: (page, itemsPerPage) => {
+            renderMonitoringListPaginated();
+            // Sayfa değiştiğinde tabloya scroll
+            document.getElementById('monitoringListBody').scrollIntoView({ 
+                behavior: 'smooth', 
+                block: 'start' 
+            });
+        }
+    });
+}
+
 async function loadInitialData() {
-    console.log(">>> loadInitialData başladı");
-    
+   
     await loadSharedLayout({ activeMenuLink: 'trademark-similarity-search.html' });
     
     const personsResult = await personService.getPersons();
@@ -63,7 +85,7 @@ async function loadInitialData() {
     filteredMonitoringTrademarks = [...monitoringTrademarks];
     
     console.log("🏷️ Monitoring trademarks yüklendi:", monitoringTrademarks.length);
-
+    initializeMonitoringPagination();
     renderMonitoringList();
     updateMonitoringCount();
      
@@ -194,43 +216,51 @@ async function loadBulletinOptions() {
 function updateMonitoringCount() {
     document.getElementById('monitoringCount').textContent = filteredMonitoringTrademarks.length;
 }
-
 function applyMonitoringListFilters() {
     const ownerFilter = ownerSearchInput.value.toLowerCase();
     const niceFilter = niceClassSearchInput.value.toLowerCase();
     
     filteredMonitoringTrademarks = monitoringTrademarks.filter(data => {
         const ownerNames = getOwnerNames(data).toLowerCase();
-        const niceClasses = Array.isArray(data.niceClass) ? 
-            data.niceClass.join(' ') : (data.niceClass || '');
+        const niceClasses = getNiceClassNumbers(data);
+        const ownerMatch = !ownerFilter || ownerNames.includes(ownerFilter);
+        const niceMatch = !niceFilter || niceClasses.includes(niceFilter);
         
-        return (!ownerFilter || ownerNames.includes(ownerFilter)) && 
-               (!niceFilter || niceClasses.includes(niceFilter));
+        return ownerMatch && niceMatch;
     });
+    
+    // Pagination'ı güncelle ve ilk sayfaya git
+    if (monitoringPagination) {
+        monitoringPagination.update(filteredMonitoringTrademarks.length);
+        monitoringPagination.reset();
+    }
     
     renderMonitoringList();
     updateMonitoringCount();
-    
-    // Buton durumlarını yeniden kontrol et
     checkCacheAndToggleButtonStates();
 }
 
 function renderMonitoringList() {
     const tbody = document.getElementById('monitoringListBody');
     
-    if (filteredMonitoringTrademarks.length === 0) {
+    // Pagination varsa ondan veri al, yoksa tüm veriyi göster
+    const currentPageData = monitoringPagination ? 
+        monitoringPagination.getCurrentPageData(filteredMonitoringTrademarks) : 
+        filteredMonitoringTrademarks;
+    
+    if (currentPageData.length === 0) {
         tbody.innerHTML = '<tr><td colspan="6" class="no-records">Filtreye uygun izlenecek marka bulunamadı.</td></tr>';
         return;
     }
     
-    tbody.innerHTML = filteredMonitoringTrademarks.map(tm => {
-        // Marka görseli
+    tbody.innerHTML = currentPageData.map(tm => {
+        // Marka görseli - 2 kat büyük göster
         const imgSrc = tm.brandImageUrl || tm.details?.brandInfo?.brandImage || '';
         let brandImgCell = '';
         if (imgSrc) {
-            brandImgCell = `<div class="trademark-image-wrapper"><img class="trademark-image-thumbnail" src="${imgSrc}" alt="Marka Görseli"></div>`;
+            brandImgCell = `<div class="trademark-image-wrapper-large"><img class="trademark-image-thumbnail-large" src="${imgSrc}" alt="Marka Görseli"></div>`;
         } else {
-            brandImgCell = '<div class="no-image-placeholder">🏷️</div>';
+            brandImgCell = '<div class="no-image-placeholder-large">Resim Yok</div>';
         }
         
         return `
@@ -285,7 +315,6 @@ function getOwnerNames(item) {
         }).filter(Boolean).join(', ');
     } 
     
-    // String olarak holders
     if (typeof item.holders === 'string') {
         return item.holders;
     }
@@ -298,12 +327,11 @@ function getNiceClassNumbers(item) {
         const classNumbers = item.goodsAndServicesByClass
             .map(classItem => classItem.classNo)
             .filter(classNo => classNo !== null && classNo !== undefined)
-            .sort((a, b) => Number(a) - Number(b)) // Sayısal sıralama
+            .sort((a, b) => Number(a) - Number(b))
             .join(', ');
         
         return classNumbers || '-';
     }
-    
     return '-';
 }
 
@@ -311,27 +339,23 @@ function setupImageHoverEffect() {
     const tbody = document.getElementById('monitoringListBody');
     let hoverElement = null;
 
-    // Önceki event listener'ları temizle
     if (tbody._imageHoverSetup) return;
     tbody._imageHoverSetup = true;
 
     tbody.addEventListener('mouseover', (e) => {
-        const thumbnail = e.target.closest('.trademark-image-thumbnail');
+        const thumbnail = e.target.closest('.trademark-image-thumbnail-large');
         if (!thumbnail) return;
 
-        // Daha önce oluşturulan elementi temizle
         if (hoverElement) {
             hoverElement.remove();
         }
 
-        // Yeni büyük resmi oluştur
         hoverElement = document.createElement('img');
         hoverElement.src = thumbnail.src;
         hoverElement.alt = thumbnail.alt;
         hoverElement.classList.add('trademark-image-hover-full');
         document.body.appendChild(hoverElement);
 
-        // Görünür yap
         setTimeout(() => {
             if (hoverElement) {
                 hoverElement.style.display = 'block';
@@ -340,10 +364,9 @@ function setupImageHoverEffect() {
     });
 
     tbody.addEventListener('mouseout', (e) => {
-        const thumbnail = e.target.closest('.trademark-image-thumbnail');
+        const thumbnail = e.target.closest('.trademark-image-thumbnail-large');
         if (!thumbnail) return;
         
-        // Büyük resmi gizle ve kaldır
         if (hoverElement) {
             hoverElement.style.display = 'none';
             hoverElement.remove();
