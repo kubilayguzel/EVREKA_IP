@@ -226,16 +226,6 @@
         width: 120px;
     }
 
-    .trademark-image-thumbnail {
-        width: 50px;
-        height: 50px;
-        object-fit: contain;
-        border-radius: 5px;
-        vertical-align: middle;
-        line-height: 0;
-        font-size: 0;
-    }
-
     .status-badge {
         display: inline-block;
         padding: 5px 10px;
@@ -272,20 +262,24 @@
 
 /* Marka Görseli Stilleri */
 .trademark-image-thumbnail {
-    width: 50px;
-    height: 50px;
+    width: 80px;
+    height: 80px;
     object-fit: contain;
-    border-radius: 4px;
-    border: 1px solid #ddd;
+    border-radius: 6px;
+    border: 2px solid #ddd;
     background: white;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: all 0.3s ease;
+    position: relative;
+    z-index: 1;
 }
 
 .trademark-image-thumbnail:hover {
-    transform: scale(1.1);
+    transform: scale(2.5);
     border-color: #1e3c72;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.3);
+    z-index: 1000;
+    position: relative;
 }
 
 /* Eksik alan uyarı stilleri */
@@ -366,6 +360,11 @@
         font-size: 10px;
         padding: 2px 6px;
     }
+}
+.accruals-table td:nth-child(2) {
+    min-width: 100px;
+    text-align: center;
+    padding: 15px 8px;
 }
   </style>
 </head>
@@ -589,7 +588,7 @@
             const isSelected = selectedMonitoringItems.has(r.id) ? 'checked' : '';
             const trademarkImageHtml = r.brandImageUrl && r.brandImageUrl.trim() !== ''
                 ? `<img src="${r.brandImageUrl}" alt="Marka Görseli" class="trademark-image-thumbnail" 
-                        style="width: 50px; height: 50px; object-fit: contain; border-radius: 4px; border: 1px solid #ddd;"
+                        style="width: 80px; height: 80px; object-fit: contain; border-radius: 6px; border: 2px solid #ddd;"
                         onerror="this.style.display='none'; this.nextElementSibling.style.display='inline';">
                 <span style="display:none; color:#999; font-size:11px;">🖼️ Görsel yok</span>`
                 : '<span style="color:#999; font-size:11px;">🖼️ Görsel yok</span>';
