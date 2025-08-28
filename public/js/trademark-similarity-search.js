@@ -58,12 +58,11 @@ function initializeMonitoringPagination() {
         showItemsPerPageSelector: true,
         itemsPerPageOptions: [5, 10, 20, 50],
         onPageChange: (page, itemsPerPage) => {
-            renderMonitoringListPaginated();
-            // Sayfa değiştiğinde tabloya scroll
-            document.getElementById('monitoringListBody').scrollIntoView({ 
-                behavior: 'smooth', 
-                block: 'start' 
-            });
+        renderMonitoringList(); // <-- vardı: renderMonitoringListPaginated()
+        document.getElementById('monitoringListBody').scrollIntoView({
+            behavior: 'smooth',
+            block: 'start'
+        });
         }
     });
 }
@@ -88,6 +87,8 @@ async function loadInitialData() {
     initializeMonitoringPagination();
     renderMonitoringList();
     updateMonitoringCount();
+    monitoringPagination.update(filteredMonitoringTrademarks.length);
+
      
     // ✅ Butonları başlangıçta devre dışı bırak
     startSearchBtn.disabled = true;
