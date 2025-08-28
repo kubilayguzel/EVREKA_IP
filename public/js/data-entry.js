@@ -1668,12 +1668,21 @@ window.updateClearButton = function() {
 
 // Nice Classification render'ından sonra çağrılacak
 window.addEventListener('load', () => {
-    // Interval ile temizle butonunu kontrol et
-    setInterval(() => {
+    // Event-based güncelleme - interval yerine
+    const observer = new MutationObserver(() => {
         if (window.updateClearButton) {
             window.updateClearButton();
         }
-    }, 1000); // Her saniye kontrol et
+    });
+    
+    const target = document.getElementById('selectedClassCount');
+    if (target) {
+        observer.observe(target, { 
+            childList: true, 
+            subtree: true, 
+            characterData: true 
+        });
+    }
 });
 
 // Sayfa yüklendiğinde modülü başlat
