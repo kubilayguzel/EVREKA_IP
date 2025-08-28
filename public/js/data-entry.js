@@ -580,51 +580,55 @@ class DataEntryModule {
         this.initializeDatePickers();
     }
     // Yeni metod: Tarih seçicileri başlatma
-initializeDatePickers() {
-    const dateFields = [
-        'applicationDate',
-        'registrationDate',
-        'renewalDate',
-        'bulletinDate',
-        'priorityDate',
-    ];
+    initializeDatePickers() {
+        const dateFields = [
+            'applicationDate',
+            'registrationDate',
+            'renewalDate',
+            'bulletinDate',
+            'priorityDate',
+        ];
 
-    dateFields.forEach(fieldId => {
-        const element = document.getElementById(fieldId);
-        if (element) {
-            flatpickr(element, {
-                dateFormat: "d.m.Y",
-                allowInput: true,
-                clickOpens: false,
-                locale: "tr",
-                parseStrict: true,
+        // dd.mm.yyyy formatını kontrol eden düzenli ifade
+        const dateRegex = /^\d{1,2}\.\d{1,2}\.\d{4}$/;
+
+        dateFields.forEach(fieldId => {
+            const element = document.getElementById(fieldId);
+            if (element) {
+                flatpickr(element, {
+                    dateFormat: "d.m.Y",
+                    allowInput: true,
+                    clickOpens: false,
+                    locale: "tr",
+                    
+                    // Takvim kapandığında veya kullanıcı enter'a bastığında tetiklenir
+                    onClose: (selectedDates, dateStr, instance) => {
+                        // Girişin formatını kontrol et
+                        if (dateStr && !dateRegex.test(dateStr)) {
+                            instance.clear(); // Takvimdeki seçimi temizle
+                            element.value = ''; // Giriş alanını boşalt
+                        }
+                    },
+                    // Elle giriş yapıldığında takvimdeki seçimi temizlemek için
+                    onKeydown: (selectedDates, dateStr, instance, event) => {
+                        const validKeys = [
+                            'Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Tab'
+                        ];
+
+                        // Sadece geçerli tuşlara basıldığında ve takvimde seçili bir tarih varken
+                        if (!validKeys.includes(event.key) && event.key.length === 1 && instance.latestSelectedDateObj) {
+                            instance.clear();
+                        }
+                    }
+                });
                 
-                // Klavye ile elle giriş yapıldığında takvimdeki seçimi temizlemek için
-                onClose: (selectedDates, dateStr, instance) => {
-                    // Eğer giriş alanı boşaltıldıysa veya geçersiz bir metinle doldurulduysa
-                    if (!dateStr || instance.latestSelectedDateObj === null) {
-                        instance.clear();
-                    }
-                }
-            });
-            
-            // Giriş alanına tıklandığında takvimi açmak için manuel dinleyici
-            element.addEventListener('click', () => {
-                element._flatpickr.open();
-            });
-
-            // Kullanıcı klavye kullanmaya başladığında takvimdeki seçimi kaldır
-            element.addEventListener('keydown', (event) => {
-                // Eğer alan boşsa veya rakam, nokta gibi geçerli tuşlara basıldıysa
-                if (event.key.length === 1 || event.key === 'Backspace' || event.key === 'Delete') {
-                    if (element._flatpickr.latestSelectedDateObj) {
-                        element._flatpickr.clear();
-                    }
-                }
-            });
-        }
-    });
-}
+                // Giriş alanına tıklandığında takvimi açmak için manuel dinleyici
+                element.addEventListener('click', () => {
+                    element._flatpickr.open();
+                });
+            }
+        });
+    }
     handleTabChange(targetTab) {
         if (targetTab === '#goods-services' && !this.isNiceInitialized) {
             console.log('🔄 Nice Classification başlatılıyor...');
