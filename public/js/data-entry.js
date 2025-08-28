@@ -589,9 +589,6 @@ class DataEntryModule {
             'priorityDate',
         ];
 
-        // dd.mm.yyyy formatını kontrol eden düzenli ifade
-        const dateRegex = /^\d{1,2}\.\d{1,2}\.\d{4}$/;
-
         dateFields.forEach(fieldId => {
             const element = document.getElementById(fieldId);
             if (element) {
@@ -600,23 +597,12 @@ class DataEntryModule {
                     allowInput: true,
                     clickOpens: false,
                     locale: "tr",
+                    parseStrict: true,
                     
-                    // Takvim kapandığında veya kullanıcı enter'a bastığında tetiklenir
+                    // Klavye ile elle giriş yapıldığında takvimdeki seçimi temizlemek için
                     onClose: (selectedDates, dateStr, instance) => {
-                        // Girişin formatını kontrol et
-                        if (dateStr && !dateRegex.test(dateStr)) {
-                            instance.clear(); // Takvimdeki seçimi temizle
-                            element.value = ''; // Giriş alanını boşalt
-                        }
-                    },
-                    // Elle giriş yapıldığında takvimdeki seçimi temizlemek için
-                    onKeydown: (selectedDates, dateStr, instance, event) => {
-                        const validKeys = [
-                            'Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Tab'
-                        ];
-
-                        // Sadece geçerli tuşlara basıldığında ve takvimde seçili bir tarih varken
-                        if (!validKeys.includes(event.key) && event.key.length === 1 && instance.latestSelectedDateObj) {
+                        // Eğer giriş alanı boşaltıldıysa veya geçersiz bir metinle doldurulduysa
+                        if (!dateStr || instance.latestSelectedDateObj === null) {
                             instance.clear();
                         }
                     }
@@ -625,6 +611,16 @@ class DataEntryModule {
                 // Giriş alanına tıklandığında takvimi açmak için manuel dinleyici
                 element.addEventListener('click', () => {
                     element._flatpickr.open();
+                });
+
+                // Kullanıcı klavye kullanmaya başladığında takvimdeki seçimi kaldır
+                element.addEventListener('keydown', (event) => {
+                    // Eğer alan boşsa veya rakam, nokta gibi geçerli tuşlara basıldıysa
+                    if (event.key.length === 1 || event.key === 'Backspace' || event.key === 'Delete') {
+                        if (element._flatpickr.latestSelectedDateObj) {
+                            element._flatpickr.clear();
+                        }
+                    }
                 });
             }
         });
