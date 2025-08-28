@@ -339,10 +339,22 @@ function setupImageHoverEffect() {
     const tbody = document.getElementById('monitoringListBody');
     let hoverElement = null;
 
+    // Önceki hover efektlerini temizle
     if (tbody._imageHoverSetup) return;
     tbody._imageHoverSetup = true;
 
-    tbody.addEventListener('mouseover', (e) => {
+    // CSS hover efektini devre dışı bırak
+    const style = document.createElement('style');
+    style.textContent = `
+        .trademark-image-thumbnail-large:hover {
+            transform: none !important;
+            z-index: initial !important;
+            position: static !important;
+        }
+    `;
+    document.head.appendChild(style);
+
+    tbody.addEventListener('mouseenter', (e) => {
         const thumbnail = e.target.closest('.trademark-image-thumbnail-large');
         if (!thumbnail) return;
 
@@ -354,25 +366,19 @@ function setupImageHoverEffect() {
         hoverElement.src = thumbnail.src;
         hoverElement.alt = thumbnail.alt;
         hoverElement.classList.add('trademark-image-hover-full');
+        hoverElement.style.display = 'block';
         document.body.appendChild(hoverElement);
+    }, true);
 
-        setTimeout(() => {
-            if (hoverElement) {
-                hoverElement.style.display = 'block';
-            }
-        }, 10);
-    });
-
-    tbody.addEventListener('mouseout', (e) => {
+    tbody.addEventListener('mouseleave', (e) => {
         const thumbnail = e.target.closest('.trademark-image-thumbnail-large');
         if (!thumbnail) return;
         
         if (hoverElement) {
-            hoverElement.style.display = 'none';
             hoverElement.remove();
             hoverElement = null;
         }
-    });
+    }, true);
 }
 
 // ✅ Cache kontrol problemini debug etmek için checkCacheAndToggleButtonStates fonksiyonunu güncelleyin:
