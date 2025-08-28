@@ -580,40 +580,51 @@ class DataEntryModule {
         this.initializeDatePickers();
     }
     // Yeni metod: Tarih seçicileri başlatma
-    initializeDatePickers() {
-        const dateFields = [
-            'applicationDate',
-            'registrationDate',
-            'renewalDate',
-            'bulletinDate',
-            'priorityDate',
-        ];
+initializeDatePickers() {
+    const dateFields = [
+        'applicationDate',
+        'registrationDate',
+        'renewalDate',
+        'bulletinDate',
+        'priorityDate',
+    ];
 
-        dateFields.forEach(fieldId => {
-            const element = document.getElementById(fieldId);
-            if (element) {
-                flatpickr(element, {
-                    dateFormat: "d.m.Y",      // Gün-Ay-Yıl formatı
-                    allowInput: true,         // Manuel girişe izin ver
-                    clickOpens: false,        // Otomatik açılmayı kapat
-                    locale: "tr",             // Türkçe dil desteği
-                    parseStrict: true,        // Sadece tam ve geçerli formatı kabul et
-                    
-                    // Klavyeden giriş yapıldığında takvimdeki seçimi temizle
-                    onOpen: (selectedDates, dateStr, instance) => {
-                        element.addEventListener('input', () => {
-                            instance.clear();
-                        }, { once: true }); // Olay dinleyiciyi bir kez çalıştıktan sonra kaldır
-                    }
-                });
+    dateFields.forEach(fieldId => {
+        const element = document.getElementById(fieldId);
+        if (element) {
+            flatpickr(element, {
+                dateFormat: "d.m.Y",
+                allowInput: true,
+                clickOpens: false,
+                locale: "tr",
+                parseStrict: true,
                 
-                // Giriş alanına tıklandığında takvimi açmak için manuel dinleyici
-                element.addEventListener('click', () => {
-                    element._flatpickr.open();
-                });
-            }
-        });
-    }
+                // Klavye ile elle giriş yapıldığında takvimdeki seçimi temizlemek için
+                onClose: (selectedDates, dateStr, instance) => {
+                    // Eğer giriş alanı boşaltıldıysa veya geçersiz bir metinle doldurulduysa
+                    if (!dateStr || instance.latestSelectedDateObj === null) {
+                        instance.clear();
+                    }
+                }
+            });
+            
+            // Giriş alanına tıklandığında takvimi açmak için manuel dinleyici
+            element.addEventListener('click', () => {
+                element._flatpickr.open();
+            });
+
+            // Kullanıcı klavye kullanmaya başladığında takvimdeki seçimi kaldır
+            element.addEventListener('keydown', (event) => {
+                // Eğer alan boşsa veya rakam, nokta gibi geçerli tuşlara basıldıysa
+                if (event.key.length === 1 || event.key === 'Backspace' || event.key === 'Delete') {
+                    if (element._flatpickr.latestSelectedDateObj) {
+                        element._flatpickr.clear();
+                    }
+                }
+            });
+        }
+    });
+}
     handleTabChange(targetTab) {
         if (targetTab === '#goods-services' && !this.isNiceInitialized) {
             console.log('🔄 Nice Classification başlatılıyor...');
