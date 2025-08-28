@@ -2,6 +2,12 @@
 import {personService , authService, db } from '../firebase-config.js';
 import { doc, getDoc, collection, getDocs, query, where } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
+// Global cache değişkenleri
+let layoutCache = null;
+let authCache = null;
+let lastAuthCheck = 0;
+const AUTH_CACHE_DURATION = 5000; // 5 saniye
+
 // Menü yapısını daha yönetilebilir bir veri formatında tanımlıyoruz
 const menuItems = [
     { id: 'dashboard', text: 'Dashboard', link: 'dashboard.html', icon: 'fas fa-tachometer-alt', category: 'Ana Menü' },
@@ -75,9 +81,6 @@ const menuItems = [
     { id: 'settings', text: 'Ayarlar', link: '#', icon: 'fas fa-cog', category: 'Araçlar', disabled: true }
     ];
 
-// Layout cache için global değişken
-let layoutCache = null;
-
 export async function loadSharedLayout(options = {}) {
     const { activeMenuLink } = options;
     const placeholder = document.getElementById('layout-placeholder');
@@ -88,80 +91,137 @@ export async function loadSharedLayout(options = {}) {
     }
 
     try {
-        // Stylesheet'leri sadece bir kez yükle
-        if (!document.querySelector('link[href*="font-awesome"]')) {
-            const fontAwesomeLink = document.createElement('link');
-            fontAwesomeLink.rel = 'stylesheet';
-            fontAwesomeLink.href = 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css';
-            document.head.appendChild(fontAwesomeLink);
-        }
+        // CSS ve Font yükleme - sadece bir kez
+        loadStylesheetsOnce();
         
-        if (!document.querySelector('link[href*="shared-styles.css"]')) {
-            const sharedStylesLink = document.createElement('link');
-            sharedStylesLink.rel = 'stylesheet';
-            sharedStylesLink.href = 'css/shared-styles.css';
-            document.head.appendChild(sharedStylesLink);
-        }
-
-        // Layout'u cache'den al veya ilk kez fetch et
-        let layoutHTML;
-        if (layoutCache) {
-            layoutHTML = layoutCache;
-            console.log('📦 Layout cache\'den yüklendi');
-        } else {
-            console.log('🌐 Layout ilk kez fetch ediliyor...');
-            const response = await fetch('shared_layout_parts.html');
-            if (!response.ok) throw new Error('shared_layout_parts.html could not be loaded.');
-            layoutHTML = await response.text();
-            layoutCache = layoutHTML; // Cache'e kaydet
-            console.log('✅ Layout cache\'e kaydedildi');
-        }
-
-        // Layout'u DOM'a ekle
-        placeholder.innerHTML = layoutHTML;
+        // Layout HTML'i cache'den al
+        let layoutHTML = await getLayoutHTML();
         
-        // Kullanıcı bilgilerini güncelle
-        const user = authService.getCurrentUser();
+        // Auth kontrolü - cache ile
+        const user = await getCachedAuth();
         if (!user && window.top === window) {
             window.location.href = '../index.html';
             return;
         }
 
-        const userRole = user.role || 'user';
+        // DOM'a yerleştir
+        placeholder.innerHTML = layoutHTML;
         
-        const userNameEl = document.getElementById('userName');
-        if (userNameEl) {
-            userNameEl.textContent = user.displayName || user.email.split('@')[0];
-        }
-        const userRoleEl = document.getElementById('userRole');
-        if (userRoleEl) {
-            userRoleEl.textContent = user.role.charAt(0).toUpperCase() + user.role.slice(1);
-        }
-        const userAvatarEl = document.getElementById('userAvatar');
-        if (userAvatarEl) {
-            userAvatarEl.textContent = (user.displayName || user.email.charAt(0)).charAt(0).toUpperCase();
-        }
-
+        // User bilgilerini güncelle - hızlı
+        updateUserInfo(user);
+        
+        // Menu render et
         const sidebarNav = document.querySelector('.sidebar-nav');
-        if(sidebarNav) {
-            renderMenu(sidebarNav, userRole);
-        } else {
-            console.error('Sidebar navigation container (.sidebar-nav) not found in layout.');
+        if (sidebarNav) {
+            renderMenu(sidebarNav, user.role || 'user');
+            setupFastMenuInteractions();
         }
 
+        // Logout event
         const logoutBtn = document.getElementById('logoutBtn');
-        if (logoutBtn) logoutBtn.addEventListener('click', (e) => { e.preventDefault(); authService.signOut(); });
+        if (logoutBtn) {
+            logoutBtn.onclick = (e) => {
+                e.preventDefault();
+                authService.signOut();
+            };
+        }
 
-        const currentPath = window.location.pathname.split('/').pop();
-        setupMenuInteractions(currentPath);
+        // Aktif sayfa işaretle
+        highlightActiveMenu(window.location.pathname.split('/').pop());
 
     } catch (error) {
         console.error('Error loading shared layout:', error);
-        const errorDiv = document.createElement('div');
-        errorDiv.style.cssText = 'padding: 20px; background-color: #f8d7da; color: #721c24; border-radius: 8px; margin: 20px;';
-        errorDiv.textContent = 'Uygulama arayüzü yüklenirken bir hata oluştu. Lütfen sayfayı yenilemeyi deneyin.';
-        document.body.prepend(errorDiv);
+        showLayoutError();
     }
+}
+
+// Yardımcı fonksiyonlar
+function loadStylesheetsOnce() {
+    if (!document.querySelector('link[href*="font-awesome"]')) {
+        const link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css';
+        document.head.appendChild(link);
+    }
+    
+    if (!document.querySelector('link[href*="shared-styles.css"]')) {
+        const link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = 'css/shared-styles.css';
+        document.head.appendChild(link);
+    }
+}
+
+async function getLayoutHTML() {
+    if (layoutCache) {
+        console.log('📦 Layout cache\'den geldi');
+        return layoutCache;
+    }
+    
+    console.log('🌐 Layout fetch ediliyor...');
+    const response = await fetch('shared_layout_parts.html');
+    if (!response.ok) throw new Error('Layout yüklenemedi');
+    
+    layoutCache = await response.text();
+    // shared_layout_parts.html'deki script'i temizle
+    layoutCache = layoutCache.replace(/<script[\s\S]*?<\/script>/gi, '');
+    console.log('✅ Layout cache\'lendi');
+    return layoutCache;
+}
+
+async function getCachedAuth() {
+    const now = Date.now();
+    if (authCache && (now - lastAuthCheck) < AUTH_CACHE_DURATION) {
+        return authCache;
+    }
+    
+    authCache = authService.getCurrentUser();
+    lastAuthCheck = now;
+    return authCache;
+}
+
+function updateUserInfo(user) {
+    const userNameEl = document.getElementById('userName');
+    const userRoleEl = document.getElementById('userRole');
+    const userAvatarEl = document.getElementById('userAvatar');
+    
+    if (userNameEl) userNameEl.textContent = user.displayName || user.email.split('@')[0];
+    if (userRoleEl) userRoleEl.textContent = user.role.charAt(0).toUpperCase() + user.role.slice(1);
+    if (userAvatarEl) userAvatarEl.textContent = (user.displayName || user.email.charAt(0)).charAt(0).toUpperCase();
+}
+
+function setupFastMenuInteractions() {
+    const sidebar = document.querySelector('.sidebar-nav');
+    if (!sidebar) return;
+    
+    // Event delegation - tek listener
+    sidebar.onclick = (e) => {
+        const header = e.target.closest('.accordion-header');
+        if (!header) return;
+        
+        const content = header.nextElementSibling;
+        const isActive = header.classList.contains('active');
+
+        if (isActive) {
+            header.classList.remove('active');
+            content.style.maxHeight = '0';
+        } else {
+            // Diğerlerini kapat
+            sidebar.querySelectorAll('.accordion-header.active').forEach(h => h.classList.remove('active'));
+            sidebar.querySelectorAll('.accordion-content').forEach(c => c.style.maxHeight = '0');
+            
+            // Tıklananı aç
+            header.classList.add('active');
+            content.style.maxHeight = content.scrollHeight + 'px';
+        }
+    };
+}
+
+function showLayoutError() {
+    const errorDiv = document.createElement('div');
+    errorDiv.style.cssText = 'padding: 20px; background-color: #f8d7da; color: #721c24; border-radius: 8px; margin: 20px;';
+    errorDiv.textContent = 'Arayüz yüklenemedi. Sayfayı yenileyin.';
+    document.body.prepend(errorDiv);
 }
 
 function renderMenu(container, userRole) { // currentPage parametresi kaldırıldı
