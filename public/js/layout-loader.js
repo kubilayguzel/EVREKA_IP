@@ -202,27 +202,30 @@ function renderMenu(container, userRole) { // currentPage parametresi kaldırıl
     });
 }
 function setupMenuInteractions(currentPage) {
-    // 1. Accordion başlıklarına tıklama olay dinleyicilerini ekle
-    document.querySelectorAll('.accordion-header').forEach(header => {
-        header.addEventListener('click', () => {
-            const content = header.nextElementSibling;
-            const isActive = header.classList.contains('active');
+    // Event delegation kullan - daha performanslı
+    const sidebar = document.querySelector('.sidebar-nav');
+    if (sidebar) {
+        sidebar.addEventListener('click', (e) => {
+            const header = e.target.closest('.accordion-header');
+            if (header) {
+                const content = header.nextElementSibling;
+                const isActive = header.classList.contains('active');
 
-            // Eğer tıklanan zaten aktifse, kapat
-            if (isActive) {
-                header.classList.remove('active');
-                content.style.maxHeight = '0';
-            } else {
-                // Diğerlerini kapat
-                document.querySelectorAll('.accordion-header').forEach(h => h.classList.remove('active'));
-                document.querySelectorAll('.accordion-content').forEach(c => c.style.maxHeight = '0');
-                
-                // Ardından sadece tıklananı aç
-                header.classList.add('active');
-                content.style.maxHeight = content.scrollHeight + 'px';
+                if (isActive) {
+                    header.classList.remove('active');
+                    content.style.maxHeight = '0';
+                } else {
+                    // Diğerlerini kapat
+                    sidebar.querySelectorAll('.accordion-header').forEach(h => h.classList.remove('active'));
+                    sidebar.querySelectorAll('.accordion-content').forEach(c => c.style.maxHeight = '0');
+                    
+                    // Tıklananı aç
+                    header.classList.add('active');
+                    content.style.maxHeight = content.scrollHeight + 'px';
+                }
             }
         });
-    });
+    }
 
     // 2. Akordeon alt menü linklerine tıklama olay dinleyicilerini ekle
     document.querySelectorAll('.accordion-content a').forEach(link => {
