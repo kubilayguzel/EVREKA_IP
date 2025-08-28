@@ -595,7 +595,7 @@ class DataEntryModule {
             const element = document.getElementById(fieldId);
             if (element) {
                 flatpickr(element, {
-                    dateFormat: "Y-m-d",      // Yıl-Ay-Gün formatı
+                    dateFormat: "d.m.Y",      // Gün-Ay-Yıl formatı
                     allowInput: true,         // Manuel girişe izin ver
                     clickOpens: true,         // Giriş alanına tıklama takvimi açar
                     locale: "tr"              // Türkçe dil desteği
