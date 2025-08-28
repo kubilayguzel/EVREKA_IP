@@ -208,19 +208,45 @@ function setupMenuInteractions(currentPage) {
             const content = header.nextElementSibling;
             const isActive = header.classList.contains('active');
 
-            // Tüm accordion'ları kapat
-            document.querySelectorAll('.accordion-header').forEach(h => h.classList.remove('active'));
-            document.querySelectorAll('.accordion-content').forEach(c => c.style.maxHeight = '0');
-
-            // Eğer tıklanan accordion kapalıydı, aç
-            if (!isActive) {
+            // Eğer tıklanan zaten aktifse, kapat
+            if (isActive) {
+                header.classList.remove('active');
+                content.style.maxHeight = '0';
+            } else {
+                // Diğerlerini kapat
+                document.querySelectorAll('.accordion-header').forEach(h => h.classList.remove('active'));
+                document.querySelectorAll('.accordion-content').forEach(c => c.style.maxHeight = '0');
+                
+                // Ardından sadece tıklananı aç
                 header.classList.add('active');
                 content.style.maxHeight = content.scrollHeight + 'px';
             }
         });
     });
 
-    // 2. Aktif sayfanın menüsünü vurgula
+    // 2. Akordeon alt menü linklerine tıklama olay dinleyicilerini ekle
+    document.querySelectorAll('.accordion-content a').forEach(link => {
+        link.addEventListener('click', (e) => {
+            const parentAccordion = e.target.closest('.accordion');
+            const accordionContent = parentAccordion ? parentAccordion.querySelector('.accordion-content') : null;
+
+            if (accordionContent) {
+                // Varsayılan sayfa yönlendirmesini engelle
+                e.preventDefault(); 
+                const targetLink = e.target.href;
+                
+                // Akordeon animasyonunun bitmesini bekle
+                const transitionEndHandler = () => {
+                    accordionContent.removeEventListener('transitionend', transitionEndHandler);
+                    window.location.href = targetLink;
+                };
+
+                accordionContent.addEventListener('transitionend', transitionEndHandler);
+            }
+        });
+    });
+
+    // 3. Aktif sayfanın menüsünü vurgula
     highlightActiveMenu(currentPage);
 }
 function highlightActiveMenu(currentPage) {
