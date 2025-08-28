@@ -126,10 +126,10 @@ body {
 }
 
 .accordion-content {
-    background: rgba(0, 0, 0, 0.2); /* Hafif koyu arka plan */
+    background: rgba(0, 0, 0, 0.2);
     max-height: 0;
     overflow: hidden;
-    transition: max-height 0.3s ease-out; /* Yumuşak açılma/kapanma */
+    transition: max-height 0.15s ease-out; /* Hızlandırıldı */
 }
 
 .accordion-content a {
