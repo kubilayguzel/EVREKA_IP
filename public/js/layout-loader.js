@@ -75,6 +75,9 @@ const menuItems = [
     { id: 'settings', text: 'Ayarlar', link: '#', icon: 'fas fa-cog', category: 'Araçlar', disabled: true }
     ];
 
+// Layout cache için global değişken
+let layoutCache = null;
+
 export async function loadSharedLayout(options = {}) {
     const { activeMenuLink } = options;
     const placeholder = document.getElementById('layout-placeholder');
@@ -85,14 +88,14 @@ export async function loadSharedLayout(options = {}) {
     }
 
     try {
-        // Font Awesome kütüphanesini ekle
+        // Stylesheet'leri sadece bir kez yükle
         if (!document.querySelector('link[href*="font-awesome"]')) {
             const fontAwesomeLink = document.createElement('link');
             fontAwesomeLink.rel = 'stylesheet';
             fontAwesomeLink.href = 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css';
             document.head.appendChild(fontAwesomeLink);
         }
-        // shared-styles.css dosyasını da buraya ekleyelim, eğer zaten eklenmemişse
+        
         if (!document.querySelector('link[href*="shared-styles.css"]')) {
             const sharedStylesLink = document.createElement('link');
             sharedStylesLink.rel = 'stylesheet';
@@ -100,8 +103,20 @@ export async function loadSharedLayout(options = {}) {
             document.head.appendChild(sharedStylesLink);
         }
 
-        const response = await fetch('shared_layout_parts.html');
-        if (!response.ok) throw new Error('shared_layout_parts.html could not be loaded.');
+        // Layout'u cache'den al veya ilk kez fetch et
+        let layoutHTML;
+        if (layoutCache) {
+            layoutHTML = layoutCache;
+            console.log('📦 Layout cache\'den yüklendi');
+        } else {
+            console.log('🌐 Layout ilk kez fetch ediliyor...');
+            const response = await fetch('shared_layout_parts.html');
+            if (!response.ok) throw new Error('shared_layout_parts.html could not be loaded.');
+            layoutHTML = await response.text();
+            layoutCache = layoutHTML; // Cache'e kaydet
+            console.log('✅ Layout cache\'e kaydedildi');
+        }
+
         placeholder.innerHTML = await response.text();
         const user = authService.getCurrentUser();
             if (!user && window.top === window) {
