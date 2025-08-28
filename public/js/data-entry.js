@@ -587,7 +587,6 @@ class DataEntryModule {
             'renewalDate',
             'bulletinDate',
             'priorityDate',
-            // Diğer tarih alanlarını buraya ekleyebilirsiniz
         ];
 
         dateFields.forEach(fieldId => {
@@ -596,20 +595,21 @@ class DataEntryModule {
                 flatpickr(element, {
                     dateFormat: "d.m.Y",      // Gün-Ay-Yıl formatı
                     allowInput: true,         // Manuel girişe izin ver
-                    clickOpens: true,         // Giriş alanına tıklama takvimi açar
+                    clickOpens: false,        // Otomatik açılmayı kapat
                     locale: "tr",             // Türkçe dil desteği
-                    // EKLE: Sadece tam ve geçerli formatı kabul et
-                    parseStrict: true,
-                    // EKLE: Elle giriş yapıldığında takvimdeki seçimi sıfırla
-                    onChange: (selectedDates, dateStr, instance) => {
-                        // Sadece kullanıcı elle giriş yaptıysa çalıştır
-                        if (document.activeElement === element) {
-                            // Eğer girilen değer boşsa veya geçerli bir tarih değilse, takvimdeki seçimi temizle
-                            if (!dateStr || instance.latestSelectedDateObj === null) {
-                                instance.clear();
-                            }
-                        }
+                    parseStrict: true,        // Sadece tam ve geçerli formatı kabul et
+                    
+                    // Klavyeden giriş yapıldığında takvimdeki seçimi temizle
+                    onOpen: (selectedDates, dateStr, instance) => {
+                        element.addEventListener('input', () => {
+                            instance.clear();
+                        }, { once: true }); // Olay dinleyiciyi bir kez çalıştıktan sonra kaldır
                     }
+                });
+                
+                // Giriş alanına tıklandığında takvimi açmak için manuel dinleyici
+                element.addEventListener('click', () => {
+                    element._flatpickr.open();
                 });
             }
         });
