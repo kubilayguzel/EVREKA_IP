@@ -403,25 +403,33 @@
             z-index: 1000;
             margin-bottom: -5px;
         }
-        /* Marka görseli stilleri */
-.trademark-image-wrapper {
+.trademark-image-wrapper-large {
     position: relative;
     display: inline-block;
     overflow: visible;
-    height: 50px;
-    width: 50px;
+    height: 50px; /* 100px'den 50px'e küçültüldü */
+    width: 50px; /* 100px'den 50px'e küçültüldü */
     z-index: 1;
 }
 
-.trademark-image-thumbnail {
+.trademark-image-thumbnail-large {
     width: 100%;
     height: 100%;
     object-fit: contain;
-    border-radius: 5px;
+    border-radius: 5px; /* 8px'den 5px'e küçültüldü */
     vertical-align: middle;
     transition: transform 0.5s cubic-bezier(0.23, 1, 0.32, 1), box-shadow 0.5s ease-out, border 0.5s ease-out;
     cursor: pointer;
     border: 1px solid #ddd;
+}
+
+/* Hover efekti - büyük görüntüleme */
+.trademark-image-thumbnail-large:hover {
+    transform: scale(6); /* Hover'da büyütme */
+    z-index: 9999;
+    position: relative;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+    border-color: #1e3c72;
 }
 
 .trademark-image-hover-full {
@@ -442,24 +450,27 @@
     transition: transform 0.3s ease-out, opacity 0.3s ease-out;
 }
 
-.no-image-placeholder {
+.no-image-placeholder-large {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 50px;
-    height: 50px;
+    width: 50px; /* 100px'den 50px'e küçültüldü */
+    height: 50px; /* 100px'den 50px'e küçültüldü */
     background-color: #f8f9fa;
     border: 1px solid #ddd;
-    border-radius: 5px;
+    border-radius: 5px; /* 8px'den 5px'e küçültüldü */
     color: #6c757d;
-    font-size: 1.2em;
+    font-size: 0.7em; /* 0.9em'den küçültüldü */
+    text-align: center;
+    line-height: 1.1;
+    font-weight: 500;
 }
 
-/* Tablo hücresi genişlikleri */
+/* Tablo hücresi genişlikleri - küçük görsel için */
 .results-table th:nth-child(1) { width: 25%; } /* Marka Adı */
-.results-table th:nth-child(2) { width: 10%; } /* Marka Görseli */
+.results-table th:nth-child(2) { width: 8%; }  /* Marka Görseli - küçültüldü */
 .results-table th:nth-child(3) { width: 15%; } /* Başvuru No */
-.results-table th:nth-child(4) { width: 25%; } /* Sahip */
+.results-table th:nth-child(4) { width: 27%; } /* Sahip - büyütüldü */
 .results-table th:nth-child(5) { width: 15%; } /* Nice Sınıfı */
 .results-table th:nth-child(6) { width: 10%; } /* Başvuru Tarihi */
 
