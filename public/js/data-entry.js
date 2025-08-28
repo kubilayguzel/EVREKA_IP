@@ -88,6 +88,14 @@ class DataEntryModule {
         }
     }
 
+    hideAddPersonModal() {
+        const personModal = document.getElementById('personModal');
+        if (personModal) {
+            personModal.classList.remove('show');
+            document.body.classList.remove('modal-open');
+        }
+    }
+
     handleIPTypeChange(ipType) {
         console.log('📋 IP türü değişti:', ipType);
         
@@ -1501,7 +1509,7 @@ async savePatentPortfolio(portfolioData) {
         throw new Error(result.error);
     }
 }
-// DataEntryModule sınıfının içinde, herhangi bir yere ekleyebilirsiniz
+
 async getCountries() {
     try {
         const db = getFirestore();
