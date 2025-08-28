@@ -587,18 +587,20 @@ class DataEntryModule {
             'renewalDate',
             'bulletinDate',
             'priorityDate',
+            // Diğer tarih alanlarını buraya ekleyebilirsiniz
         ];
 
         dateFields.forEach(fieldId => {
             const element = document.getElementById(fieldId);
             if (element) {
                 flatpickr(element, {
-                    dateFormat: "d.m.Y",
-                    allowInput: true,
-                    clickOpens: true,
-                    locale: "tr",
+                    dateFormat: "d.m.Y",      // Gün-Ay-Yıl formatı
+                    allowInput: true,         // Manuel girişe izin ver
+                    clickOpens: true,         // Giriş alanına tıklama takvimi açar
+                    locale: "tr",             // Türkçe dil desteği
+                    // EKLE: Sadece tam ve geçerli formatı kabul et
                     parseStrict: true,
-                    // EKLE: Elle giriş yapıldığında seçimi sıfırla
+                    // EKLE: Elle giriş yapıldığında takvimdeki seçimi sıfırla
                     onChange: (selectedDates, dateStr, instance) => {
                         // Sadece kullanıcı elle giriş yaptıysa çalıştır
                         if (document.activeElement === element) {
