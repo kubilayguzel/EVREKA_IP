@@ -595,7 +595,7 @@ if (tpQueryBtn) {
     }
 
     // Geliştirme aşamasında bu ID'yi tarayıcınızın Eklentiler sayfasından öğrenebilirsiniz.
-    const eklentiID = 'kmdlgghljcoanmckgnpibhklfpnkalci'; // <--- BİR ÖNCEKİ ADIMDAKİ GİBİ GÜNCELLEYİN
+    const eklentiID = 'bbcpnpgglakoagjakgigmgjpdpiigpah';
 
     // 2. Tarayıcıda 'chrome.runtime.sendMessage' fonksiyonunun varlığını kontrol et.
     if (typeof chrome !== 'undefined' && chrome.runtime && eklentiID) {
@@ -620,8 +620,7 @@ if (tpQueryBtn) {
         }
       );
     } else {
-      // DÜZELTME: Alert yerine doğrudan eklenti kurulum sayfasına yönlendir
-      if (confirm("Bu özellik için Chrome tabanlı bir tarayıcı ve 'Evreka IP Sorgu Yardımcısı' eklentisi gereklidir. Kurulum sayfasına gitmek ister misiniz?")) {
+       if (confirm("Bu özellik için Chrome tabanlı bir tarayıcı ve 'Evreka IP Sorgu Yardımcısı' eklentisi gereklidir. Kurulum sayfasına gitmek ister misiniz?")) {
         window.open('eklenti-kurulum.html', '_blank');
       }
     }
