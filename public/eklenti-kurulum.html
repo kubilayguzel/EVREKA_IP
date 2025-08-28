@@ -75,14 +75,14 @@
 <body>
 
   <div class="install-card">
-    <img src="https://path/to/your/logo.svg" alt="Evreka IP Logo" width="80" class="mb-4">
+    <img src="./evreka-logo.png" alt="Evreka IP Logo" width="80" class="mb-4">
     <h2>Yardımcı Eklenti Kurulumu Gerekli</h2>
     <p>
       TÜRKPATENT sitesinden anlık ve otomatik sorgulama yapabilmek için
       tarayıcınıza **"Evreka IP Sorgu Yardımcısı"** eklentisini güvenle kurmanız gerekmektedir.
     </p>
 
-    <a id="installLink" href="BURAYA_CHROME_WEB_MAGAZASI_LINKI_GELECEK" class="btn btn-success install-button" target="_blank">
+    <a id="installLink" href="https://chromewebstore.google.com/detail/evreka-ip-sorgu-yard%C4%B1mc%C4%B1s/bbcpnpgglakoagjakgigmgjpdpiigpah" class="btn btn-success install-button" target="_blank">
       Chrome Web Mağazası'ndan Güvenle Yükle
     </a>
 
@@ -96,7 +96,7 @@
   <script>
     // Kullanıcı bu sayfaya geldiğinde, linkin boş olmadığını kontrol edelim.
     const installLink = document.getElementById('installLink');
-    if (installLink.href.includes('BURAYA_CHROME_WEB_MAGAZASI_LINKI_GELECEK')) {
+    if (installLink.href.includes('https://chromewebstore.google.com/detail/evreka-ip-sorgu-yard%C4%B1mc%C4%B1s/bbcpnpgglakoagjakgigmgjpdpiigpah')) {
         installLink.textContent = 'Kurulum Linki Henüz Ayarlanmadı';
         installLink.classList.remove('btn-success');
         installLink.classList.add('btn-secondary');
