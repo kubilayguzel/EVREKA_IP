@@ -486,14 +486,30 @@
         let pagination;
         let portfolioModule; 
 
-        document.addEventListener('DOMContentLoaded', async () => {
-            await loadSharedLayout({ activeMenuLink: 'portfolio.html' });
-            await loadTransactionTypes();
-            await loadPersons();
-            portfolioModule = new PortfolioModule();
-            portfolioModule.init();
-            window.portfolioModule = portfolioModule;
+        document.addEventListener('DOMContentLoaded', () => {
+        // 1) Layout’u arka planda başlat (BEKLEME!)
+        loadSharedLayout({ activeMenuLink: 'portfolio.html' }).catch(console.error);
+
+        // 2) Lookup verilerini paralel başlat (BEKLEME!)
+        const txTypesPromise = loadTransactionTypes().catch(console.error);
+        const personsPromise = loadPersons().catch(console.error);
+
+        // 3) Sayfa modülünü HEMEN başlat (UI iskeleti / boş liste vs. görünsün)
+        portfolioModule = new PortfolioModule();
+        portfolioModule.init();
+        window.portfolioModule = portfolioModule;
+
+        // 4) Lookup'lar tamamlanınca modülü bilgilendir (opsiyonel, destekliyorsa)
+        Promise.all([txTypesPromise, personsPromise]).then(() => {
+            if (portfolioModule && typeof portfolioModule.onLookupsReady === 'function') {
+            portfolioModule.onLookupsReady();  // filtreleri/menüleri tazele
+            } else {
+            // onLookupsReady yoksa: filtre/menüleri burada manuel güncelleyebilirsin
+            // örn: rebuildFilters(); refreshCounters(); vb.
+            }
         });
+        });
+
         
         class PortfolioModule {
             constructor() {
