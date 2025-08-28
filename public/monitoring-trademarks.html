@@ -607,12 +607,25 @@
 
         currentPageData.forEach(r => {
             const isSelected = selectedMonitoringItems.has(r.id) ? 'checked' : '';
-            const trademarkImageHtml = r.brandImageUrl && r.brandImageUrl.trim() !== ''
-                ? `<img src="${r.brandImageUrl}" alt="Marka Görseli" class="trademark-image-thumbnail" 
-                        style="width: 80px; height: 80px; object-fit: contain; border-radius: 6px; border: 2px solid #ddd;"
-                        onerror="this.style.display='none'; this.nextElementSibling.style.display='inline';">
-                <span style="display:none; color:#999; font-size:11px;">🖼️ Görsel yok</span>`
-                : '<span style="color:#999; font-size:11px;">🖼️ Görsel yok</span>';
+            const trademarkImageHtml = (() => {
+                // Firebase Storage tam URL'i kontrol et
+                if (r.brandImageUrl && r.brandImageUrl.trim() !== '') {
+                    let imageUrl = r.brandImageUrl;
+                    
+                    // Eğer relatif path ise Firebase Storage URL'ine çevir
+                    if (!imageUrl.startsWith('http') && !imageUrl.startsWith('data:')) {
+                        // Firebase Storage bucket URL'inizi buraya yazın
+                        imageUrl = `https://firebasestorage.googleapis.com/v0/b/ip-manager-production-aab4b.appspot.com/o/${encodeURIComponent(imageUrl)}?alt=media`;
+                    }
+                    
+                    return `<img src="${imageUrl}" alt="Marka Görseli" class="trademark-image-thumbnail" 
+                            style="width: 80px; height: 80px; object-fit: contain; border-radius: 6px; border: 2px solid #ddd;"
+                            onerror="this.style.display='none'; this.nextElementSibling.style.display='inline';">
+                    <span style="display:none; color:#999; font-size:12px;">🖼️ Görsel yok</span>`;
+                }
+                
+                return '<span style="color:#999; font-size:12px;">🖼️ Görsel yok</span>';
+            })();
             
             const statusInfo = getStatusInTurkish(r.status);
             const ownerNames = getOwnerNames(r);
@@ -682,7 +695,12 @@
                     }
                     
                     hoverElement = document.createElement('img');
-                    hoverElement.src = e.target.src;
+                    // Görsel URL'ini düzelt
+                    let imageUrl = e.target.src;
+                    if (!imageUrl.startsWith('http') && !imageUrl.startsWith('data:')) {
+                        imageUrl = `https://firebasestorage.googleapis.com/v0/b/ip-manager-production-aab4b.appspot.com/o/${encodeURIComponent(imageUrl)}?alt=media`;
+                    }
+                    hoverElement.src = imageUrl;
                     hoverElement.alt = e.target.alt;
                     hoverElement.style.cssText = `
                         position: fixed;
