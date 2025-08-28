@@ -610,7 +610,7 @@ if (tpQueryBtn) {
           // 4. Eklentiden yanıt gelip gelmediğini kontrol et.
           if (chrome.runtime.lastError) {
               console.error(chrome.runtime.lastError.message);
-              // Kullanıcıya nedenini açıklayıp kurulum sayfasına yönlendir.
+              // DÜZELTME: Doğrudan eklenti kurulum sayfasına yönlendir
               if (confirm("TÜRKPATENT'ten anlık ve otomatik sorgulama yapabilmek için 'Evreka IP Sorgu Yardımcısı' eklentisini kurmalısınız. Kurulum sayfasına gitmek ister misiniz?")) {
                   window.open('eklenti-kurulum.html', '_blank');
               }
@@ -620,7 +620,10 @@ if (tpQueryBtn) {
         }
       );
     } else {
-      alert('Bu özellik için Chrome tabanlı bir tarayıcı ve yardımcı eklenti gereklidir.');
+      // DÜZELTME: Alert yerine doğrudan eklenti kurulum sayfasına yönlendir
+      if (confirm("Bu özellik için Chrome tabanlı bir tarayıcı ve 'Evreka IP Sorgu Yardımcısı' eklentisi gereklidir. Kurulum sayfasına gitmek ister misiniz?")) {
+        window.open('eklenti-kurulum.html', '_blank');
+      }
     }
   });
 }
