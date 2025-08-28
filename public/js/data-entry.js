@@ -581,24 +581,33 @@ class DataEntryModule {
     }
     // Yeni metod: Tarih seçicileri başlatma
     initializeDatePickers() {
-        // Takvim işlevselliği eklemek istediğiniz tüm ID'leri buraya ekleyin
         const dateFields = [
             'applicationDate',
             'registrationDate',
             'renewalDate',
             'bulletinDate',
             'priorityDate',
-            // Diğer tarih alanlarını buraya ekleyebilirsiniz
         ];
 
         dateFields.forEach(fieldId => {
             const element = document.getElementById(fieldId);
             if (element) {
                 flatpickr(element, {
-                    dateFormat: "d.m.Y",      // Gün-Ay-Yıl formatı
-                    allowInput: true,         // Manuel girişe izin ver
-                    clickOpens: true,         // Giriş alanına tıklama takvimi açar
-                    locale: "tr"              // Türkçe dil desteği
+                    dateFormat: "d.m.Y",
+                    allowInput: true,
+                    clickOpens: true,
+                    locale: "tr",
+                    parseStrict: true,
+                    // EKLE: Elle giriş yapıldığında seçimi sıfırla
+                    onChange: (selectedDates, dateStr, instance) => {
+                        // Sadece kullanıcı elle giriş yaptıysa çalıştır
+                        if (document.activeElement === element) {
+                            // Eğer girilen değer boşsa veya geçerli bir tarih değilse, takvimdeki seçimi temizle
+                            if (!dateStr || instance.latestSelectedDateObj === null) {
+                                instance.clear();
+                            }
+                        }
+                    }
                 });
             }
         });
