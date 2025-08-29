@@ -567,6 +567,16 @@ export const monitoringService = {
         }
     },
 
+    updateMonitoringItem: async (docId, data) => {
+        try {
+        const docRef = doc(db, "monitoringTrademarks", docId);
+        await updateDoc(docRef, data);
+        return { success: true };
+        } catch (error) {
+        return { success: false, error: error.message };
+        }
+    },
+
     // Bonus: Bir kaydın izlenip izlenmediğini kontrol etmek için
     async isMonitored(recordId) {
         if (!isFirebaseAvailable) return { success: false, error: "Firebase kullanılamıyor." };
