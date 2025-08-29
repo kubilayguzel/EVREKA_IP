@@ -93,9 +93,7 @@ class CreateTaskModule {
 
 async init() {
   this.currentUser = authService.getCurrentUser();
-  if (!this.currentUser) { 
-  return;
-}
+  if (!this.currentUser) { window.location.href = 'index.html'; return; }
 
   try {
     const [
@@ -2850,7 +2848,44 @@ async handleFormSubmit(e) {
     }
 }
 
-}    
+}
+// CreateTaskModule class'ını initialize et
+document.addEventListener('DOMContentLoaded', async () => {
+    console.log('🚀 DOM Content Loaded - CreateTask initialize ediliyor...');
+    
+    // Shared layout'u yükle
+    await loadSharedLayout({ activeMenuLink: 'create-task.html' });
+    
+    
+    ensurePersonModal();
+// CreateTask instance'ını oluştur ve initialize et
+    const createTaskInstance = new CreateTaskModule();
+    
+    // Global erişim için (debugging amaçlı)
+    window.createTaskInstance = createTaskInstance;
+    
+    // Initialize et
+    await createTaskInstance.init();
+    
+    console.log('✅ CreateTask başarıyla initialize edildi');
+});
+// CreateTaskModule class'ını initialize et// CreateTaskModule class'ını initialize et
+document.addEventListener('DOMContentLoaded', async () => {
+    console.log('🚀 DOM Content Loaded - CreateTask initialize ediliyor...');
+    
+    // Shared layout'u yükle
+    await loadSharedLayout({ activeMenuLink: 'create-task.html' });
+    
+    ensurePersonModal();
+    // CreateTask instance'ını oluştur ve initialize et
+    const createTaskInstance = new CreateTaskModule();
+    
+    // Global erişim için (debugging amaçlı)
+    window.createTaskInstance = createTaskInstance;
+    
+    // Initialize et
+    await createTaskInstance.init();
+    
     // DOM-Safe kart wrapper fonksiyonu - EVENT LISTENER'LARI KORUR
     function wrapCardsWithoutBreakingEvents() {
         const cards = document.querySelectorAll('.section-card:not([data-wrapped])');
@@ -2914,29 +2949,4 @@ async handleFormSubmit(e) {
     
     console.log('✅ CreateTask başarıyla initialize edildi');
     console.log('💡 Test fonksiyonları: window.wrapCardsWithoutBreakingEvents() ve window.testEventListeners()');
-});
-
-document.addEventListener('DOMContentLoaded', () => {
-  // Layout’u beklemeden yükle
-  loadSharedLayout({ activeMenuLink: 'create-task.html' }).catch(console.error);
-
-  let started = false;
-  function boot() {
-    if (started) return;
-    started = true;
-
-    const createTaskInstance = new CreateTaskModule();
-    window.createTaskInstance = createTaskInstance;
-    createTaskInstance.init(); // await yok
-  }
-
-  // Kullanıcı zaten girişliyse başlat
-  const current = auth.currentUser || (authService?.getCurrentUser && authService.getCurrentUser());
-  if (current) boot();
-
-  // Auth durumu değişirse
-  onAuthStateChanged(auth, (user) => {
-    if (user) boot();
-    else window.location.replace('index.html');
-  });
 });
