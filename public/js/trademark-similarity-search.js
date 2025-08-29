@@ -58,7 +58,7 @@ function initializeMonitoringPagination() {
         showItemsPerPageSelector: true,
         itemsPerPageOptions: [5, 10, 20, 50],
         onPageChange: (page, itemsPerPage) => {
-        renderMonitoringList(); // <-- vardı: renderMonitoringListPaginated()
+        renderMonitoringList();
         document.getElementById('monitoringListBody').scrollIntoView({
             behavior: 'smooth',
             block: 'start'
@@ -88,7 +88,6 @@ async function loadInitialData() {
     renderMonitoringList();
     updateMonitoringCount();
     monitoringPagination.update(filteredMonitoringTrademarks.length);
-
      
     // ✅ Butonları başlangıçta devre dışı bırak
     startSearchBtn.disabled = true;
@@ -697,7 +696,8 @@ async function performSearch(fromCacheOnly = false) {
             id: tm.id,
             markName: (tm.title || tm.markName || '').trim() || 'BELİRSİZ_MARKA',
             applicationDate: tm.applicationDate || '',
-            niceClasses: Array.isArray(tm.niceClass) ? tm.niceClass : (tm.niceClass ? [tm.niceClass] : [])
+            niceClasses: Array.isArray(tm.niceClass) ? tm.niceClass : (tm.niceClass ? [tm.niceClass] : []),
+            niceClassSearch: tm.niceClassSearch || [] // Yeni eklenen alan
         }));
         
         console.log("🔎 Arama payload hazırlandı:", monitoredMarksPayload);
@@ -868,11 +868,39 @@ function createResultRow(hit, rowIndex) {
         ? hit.holders.map(h => h.name || h.id).filter(Boolean).join(', ') 
         : (hit.holders || '');
 
-    const monitoredNice = hit.monitoredNiceClasses || [];
+    // İzlenen markanın niceClassSearch değerlerini al
+    let monitoredNiceClassNumbers = [];
+    
+    // Hit objesinde monitoredTrademarkId varsa, o markayı monitoringTrademarks'tan bul
+    if (hit.monitoredTrademarkId) {
+        const monitoredTrademark = monitoringTrademarks.find(tm => tm.id === hit.monitoredTrademarkId);
+        if (monitoredTrademark && monitoredTrademark.niceClassSearch) {
+            // niceClassSearch kullan
+            monitoredNiceClassNumbers = Array.isArray(monitoredTrademark.niceClassSearch)
+                ? monitoredTrademark.niceClassSearch.map(cls => String(cls))
+                : [String(monitoredTrademark.niceClassSearch)];
+        }
+    }
+    
+    // Eğer yukarıda bulunamadıysa, hit objesindeki monitoredNiceClasses'ı kullan (eski uyumluluk)
+    if (monitoredNiceClassNumbers.length === 0 && hit.monitoredNiceClasses) {
+        monitoredNiceClassNumbers = Array.isArray(hit.monitoredNiceClasses) 
+            ? hit.monitoredNiceClasses.map(cls => String(cls))
+            : [String(hit.monitoredNiceClasses)];
+    }
+
+    console.log("🎨 createResultRow - İzlenen marka niceClassSearch:", {
+        monitoredTrademarkId: hit.monitoredTrademarkId,
+        monitoredNiceClassNumbers,
+        hitNiceClasses: hit.niceClasses
+    });
+
     const niceClassHtml = Array.isArray(hit.niceClasses) 
-        ? hit.niceClasses.map(cls => 
-            `<span class="nice-class-badge ${monitoredNice.includes(cls) ? 'match' : ''}">${cls}</span>`
-          ).join('') 
+        ? hit.niceClasses.map(cls => {
+            const clsString = String(cls);
+            const isMatch = monitoredNiceClassNumbers.includes(clsString);
+            return `<span class="nice-class-badge ${isMatch ? 'match' : ''}">${cls}</span>`;
+          }).join('') 
         : (hit.niceClasses || '');
 
     const similarityScore = hit.similarityScore ? `${(hit.similarityScore * 100).toFixed(0)}%` : '-';
