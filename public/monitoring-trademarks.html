@@ -1092,33 +1092,61 @@
     }
 
     function populateNiceClassBoxes(selectedClasses, permanentClasses = []) {
+        // Önce tüm kutulardan seçimi kaldır
         document.querySelectorAll('.nice-class-box').forEach(box => {
-            box.classList.remove('selected');
-            box.classList.remove('permanent-item');
+            if (box) {  // Null kontrolü ekle
+                box.classList.remove('selected');
+                box.classList.remove('permanent-item');
+            }
         });
 
-        const allNiceClasses = new Set([...selectedClasses.map(String), ...permanentClasses.map(String)]);
+        // Number tipindeki verileri string'e çevir ve geçerli olanları filtrele
+        const selectedClassesString = (selectedClasses || [])
+            .map(cls => String(cls))
+            .filter(cls => cls !== 'null' && cls !== 'undefined' && cls.trim() !== '');
         
-        populateList(document.getElementById('niceClassSearchList'), [], permanentClasses);
+        const permanentClassesString = (permanentClasses || [])
+            .map(cls => String(cls))
+            .filter(cls => cls !== 'null' && cls !== 'undefined' && cls.trim() !== '');
 
+        const allNiceClasses = new Set([...selectedClassesString, ...permanentClassesString]);
+        
+        // Liste güncelleme
+        const niceClassSearchList = document.getElementById('niceClassSearchList');
+        if (niceClassSearchList) {
+            populateList(niceClassSearchList, [], permanentClassesString);
+        }
+
+        // Her sınıf için kutu seçimi
         allNiceClasses.forEach(cls => {
+            // Sadece geçerli sınıf numaraları için ara (1-45 arası ve 99)
+            const classNum = parseInt(cls);
+            if (isNaN(classNum) || (classNum < 1 || classNum > 45) && classNum !== 99) {
+                console.warn(`Geçersiz sınıf numarası: ${cls}`);
+                return;
+            }
+
             const box = document.querySelector(`.nice-class-box[data-class-no="${cls}"]`);
             if (box) {
                 box.classList.add('selected');
                 
-                if (permanentClasses.includes(cls)) {
+                // Kalıcı sınıfları işaretle
+                if (permanentClassesString.includes(cls)) {
                     box.classList.add('permanent-item');
                 }
-                const listItem = addListItem(document.getElementById('niceClassSearchList'), cls);
-                if (permanentClasses.includes(cls)) {
-                  listItem.classList.add('permanent-item');
+                
+                // Liste öğesi ekle
+                if (niceClassSearchList) {
+                    const listItem = addListItem(niceClassSearchList, cls);
+                    if (listItem && permanentClassesString.includes(cls)) {
+                        listItem.classList.add('permanent-item');
+                    }
                 }
             } else {
-                console.warn(`Nice class number ${cls} could not be found in the UI. It might be a data inconsistency.`);
+                console.warn(`Nice class number ${cls} could not be found in the UI.`);
             }
         });
     }
-
     function addListItem(listElement, text, isPermanent = false) {
         // Liste boşsa uyarı elemanını kaldır
         const emptyItem = listElement.querySelector('.list-group-item.text-muted');
