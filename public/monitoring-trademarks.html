@@ -390,6 +390,42 @@
     z-index: 9998;
     pointer-events: none;
 }
+    
+/* Yeni Nice Sınıfı Seçim Kutuları için Stiller */
+.nice-class-boxes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    background-color: #f8f9fa;
+    max-height: 250px;
+    overflow-y: auto;
+}
+
+.nice-class-box {
+    display: inline-block;
+    padding: 8px 12px;
+    border-radius: 6px;
+    border: 1px solid #ccc;
+    background-color: #fff;
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.2s ease;
+}
+
+.nice-class-box:hover {
+    background-color: #e9ecef;
+    border-color: #007bff;
+}
+
+.nice-class-box.selected {
+    background-color: #007bff;
+    color: #fff;
+    border-color: #007bff;
+    font-weight: bold;
+}
   </style>
 </head>
 <body>
@@ -489,15 +525,9 @@
           </ul>
 
           <div class="form-group">
-            <label for="niceClassSearchInput">Aranacak Nice Sınıfı:</label>
-            <div class="input-group">
-              <select class="form-control" id="niceClassSearchInput">
-                <option value="">Seçiniz...</option>
-                </select>
-              <div class="input-group-append">
-                <button class="btn btn-outline-secondary" type="button" id="addNiceClassBtn">Ekle</button>
-              </div>
-            </div>
+            <label>Aranacak Nice Sınıfı:</label>
+            <div id="niceClassSelectionContainer" class="nice-class-boxes">
+                </div>
           </div>
           <ul class="list-group" id="niceClassSearchList">
             <li class="list-group-item text-muted">Aranacak Nice Sınıfı listesi.</li>
@@ -532,6 +562,7 @@
         owner: ''
     };
     let currentSelectedItem;
+    let selectedNiceClasses = new Set();
 
     // Pagination'ı başlat
     function initializePagination() {
@@ -888,19 +919,19 @@
       const brandTextSearchInput = document.getElementById('brandTextSearchInput');
       const addBrandTextBtn = document.getElementById('addBrandTextBtn');
       const brandTextSearchList = document.getElementById('brandTextSearchList');
-      const niceClassSearchInput = document.getElementById('niceClassSearchInput');
-      const addNiceClassBtn = document.getElementById('addNiceClassBtn');
+      const niceClassSelectionContainer = document.getElementById('niceClassSelectionContainer');
       const niceClassSearchList = document.getElementById('niceClassSearchList');
       const modalTrademarkImage = document.getElementById('modalTrademarkImage');
-
-      // Nice Sınıfı dropdown'ını doldur
+      
+      // Nice Sınıfı kutularını dinamik olarak oluştur
       for (let i = 1; i <= 45; i++) {
-          const option = document.createElement('option');
-          option.value = i;
-          option.textContent = i;
-          niceClassSearchInput.appendChild(option);
+        const box = document.createElement('div');
+        box.className = 'nice-class-box';
+        box.textContent = i;
+        box.dataset.classNo = i;
+        niceClassSelectionContainer.appendChild(box);
       }
-
+      
       // Modalı açma
       editCriteriaBtn.addEventListener('click', () => {
           if (selectedMonitoringItems.size === 1) {
@@ -912,7 +943,18 @@
                   document.getElementById('modalTrademarkName').textContent = currentSelectedItem.title || currentSelectedItem.markName || '-';
                   document.getElementById('modalApplicationNo').textContent = currentSelectedItem.applicationNumber || currentSelectedItem.applicationNo || '-';
                   document.getElementById('modalOwner').textContent = getOwnerNames(currentSelectedItem);
-                  document.getElementById('modalNiceClass').textContent = (Array.isArray(currentSelectedItem.niceClass) ? currentSelectedItem.niceClass.join(', ') : currentSelectedItem.niceClass) || '-';
+                  const niceClassesInTable = (() => {
+                      const classes = new Set();
+                      if (currentSelectedItem.goodsAndServicesByClass && Array.isArray(currentSelectedItem.goodsAndServicesByClass)) {
+                          currentSelectedItem.goodsAndServicesByClass.forEach(classItem => {
+                              if (classItem.classNo !== null && classItem.classNo !== undefined) {
+                                  classes.add(String(classItem.classNo));
+                              }
+                          });
+                      }
+                      return Array.from(classes).sort((a,b) => a-b).join(', ');
+                  })();
+                  document.getElementById('modalNiceClass').textContent = niceClassesInTable || '-';
 
                   const imageUrl = currentSelectedItem.brandImageUrl && currentSelectedItem.brandImageUrl.startsWith('http')
                     ? currentSelectedItem.brandImageUrl
@@ -921,12 +963,26 @@
 
                   // Mevcut arama kriterlerini yükle
                   populateList(brandTextSearchList, currentSelectedItem.brandTextSearch || []);
-                  populateList(niceClassSearchList, currentSelectedItem.niceClassSearch || []);
+                  populateNiceClassBoxes(currentSelectedItem.niceClassSearch || []);
 
                   // Modal'ı göster
                   $('#editCriteriaModal').modal('show');
               }
           }
+      });
+
+      // Nice Sınıfı kutularına tıklama olayı
+      niceClassSelectionContainer.addEventListener('click', (e) => {
+        if (e.target.classList.contains('nice-class-box')) {
+          const classNo = e.target.dataset.classNo;
+          e.target.classList.toggle('selected');
+          
+          if (e.target.classList.contains('selected')) {
+            addListItem(niceClassSearchList, classNo);
+          } else {
+            removeListItem(niceClassSearchList, classNo);
+          }
+        }
       });
 
       // Marka Adı ekle
@@ -945,27 +1001,16 @@
           }
       });
 
-      // Nice Sınıfı ekle
-      const addNiceClass = () => {
-          const value = niceClassSearchInput.value;
-          if (value && value !== '0') {
-              addListItem(niceClassSearchList, value);
-              niceClassSearchInput.value = '';
-          }
-      };
-      addNiceClassBtn.addEventListener('click', addNiceClass);
-      niceClassSearchInput.addEventListener('keypress', (e) => {
-          if (e.key === 'Enter') {
-              e.preventDefault();
-              addNiceClass();
-          }
-      });
-
       // Kayıtları silme (tüm listeler için genel)
       document.querySelectorAll('.list-group').forEach(list => {
           list.addEventListener('click', (e) => {
               if (e.target.classList.contains('remove-item')) {
+                  const textContent = e.target.closest('li').querySelector('.list-item-text').textContent;
                   e.target.closest('li').remove();
+                  if (list.id === 'niceClassSearchList') {
+                      const box = document.querySelector(`.nice-class-box[data-class-no="${textContent}"]`);
+                      if (box) box.classList.remove('selected');
+                  }
                   if (list.children.length === 0) {
                      const emptyItem = document.createElement('li');
                      emptyItem.className = "list-group-item text-muted";
@@ -1007,6 +1052,22 @@
       });
     }
 
+    function populateNiceClassBoxes(selectedClasses) {
+        document.querySelectorAll('.nice-class-box').forEach(box => {
+            box.classList.remove('selected');
+        });
+
+        populateList(document.getElementById('niceClassSearchList'), []);
+        
+        selectedClasses.forEach(cls => {
+            const box = document.querySelector(`.nice-class-box[data-class-no="${cls}"]`);
+            if (box) {
+                box.classList.add('selected');
+                addListItem(document.getElementById('niceClassSearchList'), cls);
+            }
+        });
+    }
+
     function addListItem(listElement, text) {
         // Liste boşsa uyarı elemanını kaldır
         const emptyItem = listElement.querySelector('.list-group-item.text-muted');
@@ -1019,6 +1080,23 @@
         li.innerHTML = `<span class="list-item-text">${text}</span><button type="button" class="btn btn-sm btn-danger remove-item">&times;</button>`;
         listElement.appendChild(li);
     }
+    
+    function removeListItem(listElement, text) {
+        const items = listElement.querySelectorAll('li');
+        for (let item of items) {
+            if (item.querySelector('.list-item-text').textContent === text) {
+                item.remove();
+                break;
+            }
+        }
+        if (listElement.children.length === 0) {
+             const emptyItem = document.createElement('li');
+             emptyItem.className = "list-group-item text-muted";
+             emptyItem.textContent = listElement.id === 'brandTextSearchList' ? 'Aranacak marka adı listesi.' : 'Aranacak Nice Sınıfı listesi.';
+             listElement.appendChild(emptyItem);
+        }
+    }
+
 
     function populateList(listElement, items) {
         listElement.innerHTML = '';
