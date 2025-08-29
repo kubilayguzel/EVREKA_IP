@@ -426,6 +426,9 @@
     border-color: #007bff;
     font-weight: bold;
 }
+.list-group-item.permanent-item .remove-item {
+    display: none;
+}
   </style>
 </head>
 <body>
@@ -962,8 +965,22 @@
                   modalTrademarkImage.src = imageUrl;
 
                   // Mevcut arama kriterlerini yükle
-                  populateList(brandTextSearchList, currentSelectedItem.brandTextSearch || []);
-                  populateNiceClassBoxes(currentSelectedItem.niceClassSearch || []);
+                  // Kalıcı marka adı ve Nice sınıflarını ekle
+                  const permanentBrandText = [currentSelectedItem.title || currentSelectedItem.markName].filter(Boolean);
+                  const permanentNiceClasses = (() => {
+                      const classes = [];
+                      if (currentSelectedItem.goodsAndServicesByClass && Array.isArray(currentSelectedItem.goodsAndServicesByClass)) {
+                          currentSelectedItem.goodsAndServicesByClass.forEach(classItem => {
+                              if (classItem.classNo !== null && classItem.classNo !== undefined) {
+                                  classes.push(String(classItem.classNo));
+                              }
+                          });
+                      }
+                      return classes;
+                  })();
+
+                  populateList(brandTextSearchList, currentSelectedItem.brandTextSearch || [], permanentBrandText);
+                  populateNiceClassBoxes(currentSelectedItem.niceClassSearch || [], permanentNiceClasses);
 
                   // Modal'ı göster
                   $('#editCriteriaModal').modal('show');
@@ -1004,9 +1021,10 @@
       // Kayıtları silme (tüm listeler için genel)
       document.querySelectorAll('.list-group').forEach(list => {
           list.addEventListener('click', (e) => {
-              if (e.target.classList.contains('remove-item')) {
-                  const textContent = e.target.closest('li').querySelector('.list-item-text').textContent;
-                  e.target.closest('li').remove();
+              const listItem = e.target.closest('li');
+              if (e.target.classList.contains('remove-item') && !listItem.classList.contains('permanent-item')) {
+                  const textContent = listItem.querySelector('.list-item-text').textContent;
+                  listItem.remove();
                   if (list.id === 'niceClassSearchList') {
                       const box = document.querySelector(`.nice-class-box[data-class-no="${textContent}"]`);
                       if (box) box.classList.remove('selected');
@@ -1052,12 +1070,12 @@
       });
     }
 
-    function populateNiceClassBoxes(selectedClasses) {
+    function populateNiceClassBoxes(selectedClasses, permanentClasses = []) {
         document.querySelectorAll('.nice-class-box').forEach(box => {
             box.classList.remove('selected');
         });
 
-        populateList(document.getElementById('niceClassSearchList'), []);
+        populateList(document.getElementById('niceClassSearchList'), [], permanentClasses);
         
         selectedClasses.forEach(cls => {
             const box = document.querySelector(`.nice-class-box[data-class-no="${cls}"]`);
@@ -1068,15 +1086,24 @@
         });
     }
 
-    function addListItem(listElement, text) {
+    function addListItem(listElement, text, isPermanent = false) {
         // Liste boşsa uyarı elemanını kaldır
         const emptyItem = listElement.querySelector('.list-group-item.text-muted');
         if (emptyItem) {
             emptyItem.remove();
         }
+        
+        // Zaten listede var mı kontrolü
+        const existingItems = Array.from(listElement.querySelectorAll('.list-item-text')).map(el => el.textContent);
+        if (existingItems.includes(text)) {
+            return;
+        }
 
         const li = document.createElement('li');
         li.className = 'list-group-item d-flex justify-content-between align-items-center';
+        if (isPermanent) {
+            li.classList.add('permanent-item');
+        }
         li.innerHTML = `<span class="list-item-text">${text}</span><button type="button" class="btn btn-sm btn-danger remove-item">&times;</button>`;
         listElement.appendChild(li);
     }
@@ -1084,7 +1111,7 @@
     function removeListItem(listElement, text) {
         const items = listElement.querySelectorAll('li');
         for (let item of items) {
-            if (item.querySelector('.list-item-text').textContent === text) {
+            if (item.querySelector('.list-item-text').textContent === text && !item.classList.contains('permanent-item')) {
                 item.remove();
                 break;
             }
@@ -1098,7 +1125,7 @@
     }
 
 
-    function populateList(listElement, items) {
+    function populateList(listElement, items, permanentItems = []) {
         listElement.innerHTML = '';
         if (items && items.length > 0) {
             items.forEach(item => addListItem(listElement, item));
@@ -1107,6 +1134,9 @@
             emptyItem.className = "list-group-item text-muted";
             emptyItem.textContent = listElement.id === 'brandTextSearchList' ? 'Aranacak marka adı listesi.' : 'Aranacak Nice Sınıfı listesi.';
             listElement.appendChild(emptyItem);
+        }
+        if (permanentItems && permanentItems.length > 0) {
+            permanentItems.forEach(item => addListItem(listElement, item, true));
         }
     }
 
