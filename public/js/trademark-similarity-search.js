@@ -889,10 +889,12 @@ function createResultRow(hit, rowIndex) {
             : [String(hit.monitoredNiceClasses)];
     }
 
-    console.log("🎨 createResultRow - İzlenen marka niceClassSearch:", {
+    console.log("🎨 DEBUG - Nice sınıf vurgulama:", {
         monitoredTrademarkId: hit.monitoredTrademarkId,
+        monitoredTrademark: monitoringTrademarks.find(tm => tm.id === hit.monitoredTrademarkId),
         monitoredNiceClassNumbers,
-        hitNiceClasses: hit.niceClasses
+        hitNiceClasses: hit.niceClasses,
+        isArrayHit: Array.isArray(hit.niceClasses)
     });
 
     const niceClassHtml = Array.isArray(hit.niceClasses) 
