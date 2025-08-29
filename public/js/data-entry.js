@@ -5,6 +5,7 @@ import { ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/fireba
 import { loadSharedLayout, openPersonModal, ensurePersonModal } from './layout-loader.js';
 import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { STATUSES } from '../utils.js';
+import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
 class DataEntryModule {
     constructor() {
@@ -1686,26 +1687,42 @@ window.addEventListener('load', () => {
 });
 
 // Sayfa yüklendiğinde modülü başlat
-document.addEventListener('DOMContentLoaded', async () => {
-    console.log('🚀 Data Entry sayfası yükleniyor...');
-    
-    try {
-        // Önce layout'u yükle
-        console.log('📐 Layout yükleniyor...');
-        await loadSharedLayout();
-        
-    ensurePersonModal();
-console.log('✅ Layout yüklendi');
-        
-        // Sonra data entry modülünü başlat
-        console.log('📋 Data Entry Module başlatılıyor...');
-        const dataEntry = new DataEntryModule();
-        await dataEntry.init();
-        console.log('✅ Data Entry Module başlatıldı');
-        
-    } catch (error) {
-        console.error('❌ Sayfa yükleme hatası:', error);
-    }
-});
 
 export default DataEntryModule; 
+// === Tek DOMContentLoaded & guard'lı boot (await yok) ===
+document.addEventListener('DOMContentLoaded', () => {
+  console.log('🚀 Data Entry sayfası yükleniyor...');
+
+  // Layout’u BEKLEMEDEN yükle (performans)
+  loadSharedLayout({ activeMenuLink: 'data-entry.html' }).catch(console.error);
+
+  // Modal'ı hazırla (varsa)
+  if (typeof ensurePersonModal === 'function') {
+    ensurePersonModal();
+  }
+
+  let started = false;
+  function boot() {
+    if (started) return;
+    started = true;
+
+    console.log('📋 Data Entry Module başlatılıyor...');
+    const dataEntry = new DataEntryModule();
+    // init içindeki async işleri kendi bekleyecek; burada await YOK
+    dataEntry.init().then(() => {
+      console.log('✅ Data Entry Module başlatıldı');
+    }).catch((err) => {
+      console.error('❌ Data Entry Module init hatası:', err);
+    });
+  }
+
+  // Kullanıcı zaten girişliyse hemen başlat
+  const current = (typeof auth !== 'undefined' && auth.currentUser) || (typeof authService !== 'undefined' && authService.getCurrentUser && authService.getCurrentUser());
+  if (current) boot();
+
+  // Auth olayını dinle; kullanıcı yoksa login'e REPLACE ile dön
+  onAuthStateChanged(auth, (user) => {
+    if (user) boot();
+    else window.location.replace('index.html');
+  });
+});
