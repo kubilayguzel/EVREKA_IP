@@ -898,6 +898,7 @@ function createResultRow(hit, rowIndex) {
     });
 
     // hit.niceClasses string formatında geldiği için parse et
+ // hit.niceClasses string formatında geldiği için parse et
     const niceClassesArray = (() => {
         if (Array.isArray(hit.niceClasses)) {
             return hit.niceClasses;
@@ -911,14 +912,42 @@ function createResultRow(hit, rowIndex) {
         return [];
     })();
 
+    // İzlenen markanın goodsAndServicesByClass'tan nice sınıflarını al
+    let goodsAndServicesByClassNumbers = [];
+    if (hit.monitoredTrademarkId) {
+        const monitoredTrademark = monitoringTrademarks.find(tm => tm.id === hit.monitoredTrademarkId);
+        if (monitoredTrademark && monitoredTrademark.goodsAndServicesByClass && Array.isArray(monitoredTrademark.goodsAndServicesByClass)) {
+            goodsAndServicesByClassNumbers = monitoredTrademark.goodsAndServicesByClass
+                .map(classItem => String(classItem.classNo))
+                .filter(classNo => classNo !== null && classNo !== undefined && classNo !== 'null');
+        }
+    }
+
     console.log("🔧 Parse edilmiş niceClasses:", niceClassesArray);
+    console.log("📋 goodsAndServicesByClass sınıfları:", goodsAndServicesByClassNumbers);
 
     const niceClassHtml = niceClassesArray.length > 0
         ? niceClassesArray.map(cls => {
             const clsString = String(cls).trim();
-            const isMatch = monitoredNiceClassNumbers.includes(clsString);
-            console.log(`Nice ${clsString}: ${isMatch ? 'MATCH!' : 'no match'}`);
-            return `<span class="nice-class-badge ${isMatch ? 'match' : ''}">${cls}</span>`;
+            const inNiceClassSearch = monitoredNiceClassNumbers.includes(clsString);
+            const inGoodsAndServices = goodsAndServicesByClassNumbers.includes(clsString);
+            
+            let cssClass = '';
+            let matchType = '';
+            
+            if (inNiceClassSearch && inGoodsAndServices) {
+                cssClass = 'match';
+                matchType = 'TAM EŞLEŞME (hem search hem goods)';
+            } else if (inNiceClassSearch && !inGoodsAndServices) {
+                cssClass = 'partial-match';
+                matchType = 'KISMİ EŞLEŞME (sadece search)';
+            } else {
+                cssClass = '';
+                matchType = 'eşleşme yok';
+            }
+            
+            console.log(`Nice ${clsString}: ${matchType}`);
+            return `<span class="nice-class-badge ${cssClass}">${cls}</span>`;
         }).join('') 
         : (hit.niceClasses || '');
 
