@@ -924,26 +924,40 @@
                   populateList(niceClassSearchList, currentSelectedItem.niceClassSearch || []);
 
                   // Modal'ı göster
-                  $(editCriteriaModal).modal('show');
+                  $('#editCriteriaModal').modal('show');
               }
           }
       });
 
       // Marka Adı ekle
-      addBrandTextBtn.addEventListener('click', () => {
+      const addBrandText = () => {
           const value = brandTextSearchInput.value.trim();
           if (value) {
               addListItem(brandTextSearchList, value);
               brandTextSearchInput.value = '';
           }
+      };
+      addBrandTextBtn.addEventListener('click', addBrandText);
+      brandTextSearchInput.addEventListener('keypress', (e) => {
+          if (e.key === 'Enter') {
+              e.preventDefault();
+              addBrandText();
+          }
       });
 
       // Nice Sınıfı ekle
-      addNiceClassBtn.addEventListener('click', () => {
+      const addNiceClass = () => {
           const value = niceClassSearchInput.value;
           if (value && value !== '0') {
               addListItem(niceClassSearchList, value);
               niceClassSearchInput.value = '';
+          }
+      };
+      addNiceClassBtn.addEventListener('click', addNiceClass);
+      niceClassSearchInput.addEventListener('keypress', (e) => {
+          if (e.key === 'Enter') {
+              e.preventDefault();
+              addNiceClass();
           }
       });
 
@@ -976,7 +990,7 @@
               });
               if (res.success) {
                   showNotification('İzleme kriterleri başarıyla güncellendi.', 'success');
-                  $(editCriteriaModal).modal('hide');
+                  $('#editCriteriaModal').modal('hide');
                   // Veriyi yerel olarak da güncelle
                   const index = allMonitoringData.findIndex(item => item.id === currentSelectedItem.id);
                   if (index !== -1) {
