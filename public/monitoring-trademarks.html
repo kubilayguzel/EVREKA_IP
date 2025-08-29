@@ -543,7 +543,6 @@
       </div>
     </div>
   </div>
-
 <script type="module">
     import Pagination from './js/pagination.js'; // <- DIŞARIDAN İÇERİ AKTARILDI
     import { loadSharedLayout } from './js/layout-loader.js';
@@ -1094,27 +1093,27 @@
     function populateNiceClassBoxes(selectedClasses, permanentClasses = []) {
         document.querySelectorAll('.nice-class-box').forEach(box => {
             box.classList.remove('selected');
-            box.classList.remove('permanent-item'); // Kalıcı sınıfı da sıfırla
+            box.classList.remove('permanent-item');
         });
 
-        // Veritabanındaki ve kalıcı sınıfları birleştir
-        const allClasses = new Set([...selectedClasses.map(String), ...permanentClasses.map(String)]);
+        const allNiceClasses = new Set([...selectedClasses.map(String), ...permanentClasses.map(String)]);
         
         populateList(document.getElementById('niceClassSearchList'), [], permanentClasses);
 
-        allClasses.forEach(cls => {
+        allNiceClasses.forEach(cls => {
             const box = document.querySelector(`.nice-class-box[data-class-no="${cls}"]`);
             if (box) {
                 box.classList.add('selected');
-                // Kalıcı sınıflar için ek sınıf ekle
+                
                 if (permanentClasses.includes(cls)) {
                     box.classList.add('permanent-item');
                 }
-                // Listeye ekleme
                 const listItem = addListItem(document.getElementById('niceClassSearchList'), cls);
                 if (permanentClasses.includes(cls)) {
                   listItem.classList.add('permanent-item');
                 }
+            } else {
+                console.warn(`Nice class number ${cls} could not be found in the UI. It might be a data inconsistency.`);
             }
         });
     }
@@ -1162,7 +1161,6 @@
         }
     }
 
-
     function populateList(listElement, items, permanentItems = []) {
         listElement.innerHTML = '';
         const allItems = new Set([...items.map(String), ...permanentItems.map(String)]);
@@ -1178,7 +1176,6 @@
             listElement.appendChild(emptyItem);
         }
     }
-
 
     document.addEventListener('DOMContentLoaded', async () => {
         try {
