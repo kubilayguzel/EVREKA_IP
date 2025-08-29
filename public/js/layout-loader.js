@@ -91,19 +91,16 @@ export async function loadSharedLayout(options = {}) {
     }
 
     try {
-        // CSS ve Font yükleme - sadece bir kez
-        loadStylesheetsOnce();
-        
+       
         // Layout HTML'i cache'den al
         let layoutHTML = await getLayoutHTML();
-        
+
         // Auth kontrolü - cache ile
         const user = await getCachedAuth();
-        if (!user && window.top === window) {
-            window.location.href = '../index.html';
-            return;
-        }
 
+        // Redirect YAPMA. Kullanıcı yoksa bu fonksiyondan sessizce çık.
+        if (!user) { return; }
+        
         // DOM'a yerleştir
         placeholder.innerHTML = layoutHTML;
         
@@ -132,23 +129,6 @@ export async function loadSharedLayout(options = {}) {
     } catch (error) {
         console.error('Error loading shared layout:', error);
         showLayoutError();
-    }
-}
-
-// Yardımcı fonksiyonlar
-function loadStylesheetsOnce() {
-    if (!document.querySelector('link[href*="font-awesome"]')) {
-        const link = document.createElement('link');
-        link.rel = 'stylesheet';
-        link.href = 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css';
-        document.head.appendChild(link);
-    }
-    
-    if (!document.querySelector('link[href*="shared-styles.css"]')) {
-        const link = document.createElement('link');
-        link.rel = 'stylesheet';
-        link.href = 'css/shared-styles.css';
-        document.head.appendChild(link);
     }
 }
 
