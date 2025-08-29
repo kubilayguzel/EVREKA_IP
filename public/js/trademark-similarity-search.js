@@ -869,43 +869,18 @@ function createResultRow(hit, rowIndex) {
         : (hit.holders || '');
 
     // İzlenen markanın niceClassSearch değerlerini al
-// İzlenen markanın niceClassSearch değerlerini al - DEBUG VERSİYONU
-let monitoredNiceClassNumbers = [];
-
-console.log("🔍 DEBUG: monitoringTrademarks array:", monitoringTrademarks.length, "eleman");
-console.log("🔍 DEBUG: hit.monitoredTrademarkId:", hit.monitoredTrademarkId);
-
-// Hit objesinde monitoredTrademarkId varsa, o markayı monitoringTrademarks'tan bul
-if (hit.monitoredTrademarkId) {
-    const monitoredTrademark = monitoringTrademarks.find(tm => tm.id === hit.monitoredTrademarkId);
+    let monitoredNiceClassNumbers = [];
     
-    console.log("🔍 DEBUG: Bulunan monitoredTrademark:", monitoredTrademark ? {
-        id: monitoredTrademark.id,
-        title: monitoredTrademark.title,
-        niceClassSearch: monitoredTrademark.niceClassSearch,
-        goodsAndServicesByClass: monitoredTrademark.goodsAndServicesByClass
-    } : 'BULUNAMADI');
-    
-    if (monitoredTrademark) {
-        // Önce niceClassSearch'ü dene
-        if (monitoredTrademark.niceClassSearch) {
+    // Hit objesinde monitoredTrademarkId varsa, o markayı monitoringTrademarks'tan bul
+    if (hit.monitoredTrademarkId) {
+        const monitoredTrademark = monitoringTrademarks.find(tm => tm.id === hit.monitoredTrademarkId);
+        if (monitoredTrademark && monitoredTrademark.niceClassSearch) {
+            // niceClassSearch kullan
             monitoredNiceClassNumbers = Array.isArray(monitoredTrademark.niceClassSearch)
                 ? monitoredTrademark.niceClassSearch.map(cls => String(cls))
                 : [String(monitoredTrademark.niceClassSearch)];
-            console.log("✅ DEBUG: niceClassSearch'tan alındı:", monitoredNiceClassNumbers);
-        }
-        // Eğer niceClassSearch boşsa goodsAndServicesByClass'ı dene
-        else if (monitoredTrademark.goodsAndServicesByClass && Array.isArray(monitoredTrademark.goodsAndServicesByClass)) {
-            monitoredNiceClassNumbers = monitoredTrademark.goodsAndServicesByClass
-                .map(classItem => String(classItem.classNo))
-                .filter(classNo => classNo !== null && classNo !== undefined && classNo !== 'null');
-            console.log("✅ DEBUG: goodsAndServicesByClass'tan alındı:", monitoredNiceClassNumbers);
         }
     }
-}
-
-console.log("🎯 DEBUG: FINAL monitoredNiceClassNumbers:", monitoredNiceClassNumbers);
-console.log("🎯 DEBUG: hit.niceClasses:", hit.niceClasses);
     
     // Eğer yukarıda bulunamadıysa, hit objesindeki monitoredNiceClasses'ı kullan (eski uyumluluk)
     if (monitoredNiceClassNumbers.length === 0 && hit.monitoredNiceClasses) {
@@ -922,12 +897,29 @@ console.log("🎯 DEBUG: hit.niceClasses:", hit.niceClasses);
         isArrayHit: Array.isArray(hit.niceClasses)
     });
 
-    const niceClassHtml = Array.isArray(hit.niceClasses) 
-        ? hit.niceClasses.map(cls => {
-            const clsString = String(cls);
+    // hit.niceClasses string formatında geldiği için parse et
+    const niceClassesArray = (() => {
+        if (Array.isArray(hit.niceClasses)) {
+            return hit.niceClasses;
+        }
+        if (typeof hit.niceClasses === 'string') {
+            // "18 / 25 / 35 /" formatındaki string'i parse et
+            return hit.niceClasses.split('/')
+                .map(cls => cls.trim())
+                .filter(cls => cls && cls !== '');
+        }
+        return [];
+    })();
+
+    console.log("🔧 Parse edilmiş niceClasses:", niceClassesArray);
+
+    const niceClassHtml = niceClassesArray.length > 0
+        ? niceClassesArray.map(cls => {
+            const clsString = String(cls).trim();
             const isMatch = monitoredNiceClassNumbers.includes(clsString);
+            console.log(`Nice ${clsString}: ${isMatch ? 'MATCH!' : 'no match'}`);
             return `<span class="nice-class-badge ${isMatch ? 'match' : ''}">${cls}</span>`;
-          }).join('') 
+        }).join('') 
         : (hit.niceClasses || '');
 
     const similarityScore = hit.similarityScore ? `${(hit.similarityScore * 100).toFixed(0)}%` : '-';
