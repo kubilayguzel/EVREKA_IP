@@ -15,7 +15,7 @@
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333; display: flex; }
         
         .page-wrapper { flex-grow: 1; display: flex; flex-direction: column; height: 100vh; overflow-y: auto; background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%); }
-        .main-container { width: 100%; padding: 30px; margin: 0; }
+        .main-container { width: 100%; padding: 30px; padding-top: 120px; }
         
         .page-header { background: rgba(255, 255, 255, 0.95); padding: 30px; border-radius: 20px; margin-bottom: 30px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1); }
         .page-title { font-size: 2em; color: #1e3c72; margin-bottom: 10px; }
@@ -372,8 +372,8 @@
     import { showNotification, formatFileSize, readFileAsDataURL } from './utils.js';
     import { loadSharedLayout } from './js/layout-loader.js';
 
-    document.addEventListener('DOMContentLoaded', async () => {
-        await loadSharedLayout({ activeMenuLink: 'accruals.html' });
+    document.addEventListener('DOMContentLoaded', () => {
+    loadSharedLayout({ activeMenuLink: 'accruals.html' }).catch(console.error);
 
         class AccrualsModule {
             constructor() {
@@ -390,16 +390,12 @@
             }
 
             async init() {
-                this.currentUser = authService.getCurrentUser();
-                
-                if (!this.currentUser) {
-                    console.error('DEBUG: currentUser bulunamadı, ancak layout-loader yönlendirmedi.');
-                    window.location.href = 'index.html'; 
-                    return;
-                }
-
-                await this.loadAllData();
-                this.setupEventListeners();
+            this.currentUser = authService.getCurrentUser();
+            if (!this.currentUser) { 
+                return; // yönlendirme sayfa guard'ında yapılıyor
+            }
+            await this.loadAllData();
+            this.setupEventListeners();
             }
 
             setupEventListeners() {
@@ -1163,6 +1159,5 @@
         module.init();
     });
 </script>
-<script type="module" src="js/layout-loader.js"></script>
 </body>
 </html>
