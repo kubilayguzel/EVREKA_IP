@@ -1188,7 +1188,14 @@ setupImageHoverEffect() {
                     if (!record) { failed++; continue; }
                     if (record.type !== 'trademark') { skipped++; continue; }
                     
-                    const res = await monitoringService.addMonitoringItem({ ...record });
+                    // `brandTextSearch` ve `niceClassSearch` alanlarını doldur
+                    const monitoringData = {
+                        ...record,
+                        brandTextSearch: [record.title || record.brandText || ''].filter(Boolean),
+                        niceClassSearch: (record.goodsAndServicesByClass || []).map(item => Number(item.classNo)).filter(n => !isNaN(n))
+                    };
+                    
+                    const res = await monitoringService.addMonitoringItem(monitoringData);
                     if (res.success) successful++;
                     else failed++;
                 }
