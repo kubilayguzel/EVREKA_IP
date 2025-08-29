@@ -4,6 +4,19 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>IP Manager - Portföy</title>
+    <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+    <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+
+    <!-- kritik CSS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <link rel="stylesheet" href="./css/shared-styles.css">
+
+    <!-- mevcut stil -->
+    <link href="css/styles.css" rel="stylesheet">
+
+    <!-- kritik modülleri preload -->
+    <link rel="modulepreload" href="./firebase-config.js">
+    <link rel="modulepreload" href="./js/layout-loader.js">
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333; display: flex; }
         .page-wrapper { flex-grow: 1; display: flex; flex-direction: column; height: 100vh; overflow-y: auto; background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%); }
@@ -374,9 +387,7 @@
   opacity:1; transform: translateY(0);
 }
 
-    </style>
-
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+</style>
 </head>
 <body>
     <div id="notification-container" class="notification-container"></div>
@@ -485,32 +496,45 @@
         let allPersons = []; 
         let pagination;
         let portfolioModule; 
+        import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
-        document.addEventListener('DOMContentLoaded', () => {
-        // 1) Layout’u arka planda başlat (BEKLEME!)
+        let started = false;
+        function boot() {
+        if (started) return;
+        started = true;
+
+        // 1) Layout’u beklemeden yükle
         loadSharedLayout({ activeMenuLink: 'portfolio.html' }).catch(console.error);
 
-        // 2) Lookup verilerini paralel başlat (BEKLEME!)
+        // 2) Lookup verilerini paralel başlat
         const txTypesPromise = loadTransactionTypes().catch(console.error);
         const personsPromise = loadPersons().catch(console.error);
 
-        // 3) Sayfa modülünü HEMEN başlat (UI iskeleti / boş liste vs. görünsün)
+        // 3) Sayfa modülünü hemen başlat
         portfolioModule = new PortfolioModule();
         portfolioModule.init();
         window.portfolioModule = portfolioModule;
 
-        // 4) Lookup'lar tamamlanınca modülü bilgilendir (opsiyonel, destekliyorsa)
+        // 4) Lookup'lar tamamlanınca modülü bilgilendir
         Promise.all([txTypesPromise, personsPromise]).then(() => {
             if (portfolioModule && typeof portfolioModule.onLookupsReady === 'function') {
-            portfolioModule.onLookupsReady();  // filtreleri/menüleri tazele
-            } else {
-            // onLookupsReady yoksa: filtre/menüleri burada manuel güncelleyebilirsin
-            // örn: rebuildFilters(); refreshCounters(); vb.
+            portfolioModule.onLookupsReady();
             }
         });
-        });
+        }
 
-        
+        document.addEventListener('DOMContentLoaded', () => {
+        // Kullanıcı zaten girişliyse anında başlat
+        const current = auth.currentUser;
+        if (current) boot();
+
+        // Auth durumunu tek sefer dinle; yoksa login’e REPLACE ile dön
+        onAuthStateChanged(auth, (user) => {
+            if (user) boot();
+            else window.location.replace('index.html');
+        });
+        });
+                
         class PortfolioModule {
             constructor() {
                 this.allRecords = []; 
@@ -523,11 +547,11 @@
             }
 
             init() {
-                this.currentUser = auth.currentUser;
-                if (!this.currentUser) { window.location.href = 'index.html'; return; }
-                this.initializePagination();
-                this.setupEventListeners();
-                this.loadAllData();
+            this.currentUser = auth.currentUser;
+            if (!this.currentUser) { return; } // Guard dışarıda; burada sessizce çık
+            this.initializePagination();
+            this.setupEventListeners();
+            this.loadAllData();
             }
 
             initializePagination() {
