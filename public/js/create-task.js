@@ -3,6 +3,7 @@ import { loadSharedLayout, openPersonModal, ensurePersonModal } from './layout-l
 import { initializeNiceClassification, getSelectedNiceClasses } from './nice-classification.js';
 import { ref, uploadBytes, getStorage, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
 import { getFirestore, collection, getDocs, getDoc, doc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 // === ID-based configuration (added by assistant) ===
 export const TASK_IDS = {
   DEVIR: '5',
@@ -93,7 +94,7 @@ class CreateTaskModule {
 
 async init() {
   this.currentUser = authService.getCurrentUser();
-  if (!this.currentUser) { window.location.href = 'index.html'; return; }
+// (removed redirect to index.html; handled by page guard)
 
   try {
     const [
@@ -2850,103 +2851,72 @@ async handleFormSubmit(e) {
 
 }
 // CreateTaskModule class'ını initialize et
-document.addEventListener('DOMContentLoaded', async () => {
-    console.log('🚀 DOM Content Loaded - CreateTask initialize ediliyor...');
-    
-    // Shared layout'u yükle
-    await loadSharedLayout({ activeMenuLink: 'create-task.html' });
-    
-    
-    ensurePersonModal();
-// CreateTask instance'ını oluştur ve initialize et
-    const createTaskInstance = new CreateTaskModule();
-    
-    // Global erişim için (debugging amaçlı)
-    window.createTaskInstance = createTaskInstance;
-    
-    // Initialize et
-    await createTaskInstance.init();
-    
-    console.log('✅ CreateTask başarıyla initialize edildi');
-});
 // CreateTaskModule class'ını initialize et// CreateTaskModule class'ını initialize et
-document.addEventListener('DOMContentLoaded', async () => {
-    console.log('🚀 DOM Content Loaded - CreateTask initialize ediliyor...');
-    
-    // Shared layout'u yükle
-    await loadSharedLayout({ activeMenuLink: 'create-task.html' });
-    
-    ensurePersonModal();
-    // CreateTask instance'ını oluştur ve initialize et
+
+// === DOM-safe card wrapper helpers ===
+function wrapCardsWithoutBreakingEvents() {
+  const cards = document.querySelectorAll('.section-card:not([data-wrapped])');
+  console.log(`🔍 ${cards.length} adet wrapper eklenmemiş kart bulundu`);
+  cards.forEach((card, index) => {
+    const children = Array.from(card.children);
+    const wrapper = document.createElement('div');
+    wrapper.className = 'card-content-wrapper';
+    children.forEach(child => wrapper.appendChild(child));
+    card.appendChild(wrapper);
+    card.setAttribute('data-wrapped', 'true');
+    console.log(`✅ Kart ${index + 1} wrapper ile sarıldı (DOM-safe)`);
+  });
+}
+function setupChangeListener() {
+  const specificTaskType = document.getElementById('specificTaskType');
+  if (specificTaskType && !specificTaskType.dataset.changeListenerAdded) {
+    specificTaskType.addEventListener('change', () => {
+      console.log('🔄 İş tipi değişti, yeni kartları sarıyor');
+      setTimeout(() => wrapCardsWithoutBreakingEvents(), 500);
+    });
+    specificTaskType.dataset.changeListenerAdded = 'true';
+  }
+}
+window.wrapCardsWithoutBreakingEvents = wrapCardsWithoutBreakingEvents;
+window.testEventListeners = function() {
+  const ipSearch = document.getElementById('ipRecordSearch');
+  const personSearch = document.getElementById('personSearchInput');
+  console.log('Event listener test:', {
+    ipSearch: ipSearch ? 'Bulundu' : 'Bulunamadı',
+    personSearch: personSearch ? 'Bulundu' : 'Bulunamadı',
+    ipSearchListeners: (typeof getEventListeners === 'function' && ipSearch) ? getEventListeners(ipSearch) : 'N/A',
+    personSearchListeners: (typeof getEventListeners === 'function' && personSearch) ? getEventListeners(personSearch) : 'N/A'
+  });
+};
+
+// === Single DOMContentLoaded + boot (no awaits) ===
+document.addEventListener('DOMContentLoaded', () => {
+  // Layout’u beklemeden yükle
+  loadSharedLayout({ activeMenuLink: 'create-task.html' }).catch(console.error);
+
+  let started = false;
+  function boot() {
+    if (started) return;
+    started = true;
+
     const createTaskInstance = new CreateTaskModule();
-    
-    // Global erişim için (debugging amaçlı)
     window.createTaskInstance = createTaskInstance;
-    
-    // Initialize et
-    await createTaskInstance.init();
-    
-    // DOM-Safe kart wrapper fonksiyonu - EVENT LISTENER'LARI KORUR
-    function wrapCardsWithoutBreakingEvents() {
-        const cards = document.querySelectorAll('.section-card:not([data-wrapped])');
-        console.log(`🔍 ${cards.length} adet wrapper eklenmemiş kart bulundu`);
-        
-        cards.forEach((card, index) => {
-            // Mevcut içerikleri al ama DOM elementlerini koru
-            const children = Array.from(card.children);
-            
-            // Yeni wrapper div oluştur
-            const wrapper = document.createElement('div');
-            wrapper.className = 'card-content-wrapper';
-            
-            // Tüm çocuk elementleri wrapper'a taşı (event listener'lar korunur)
-            children.forEach(child => {
-                wrapper.appendChild(child);
-            });
-            
-            // Wrapper'ı karta ekle
-            card.appendChild(wrapper);
-            card.setAttribute('data-wrapped', 'true');
-            
-            console.log(`✅ Kart ${index + 1} wrapper ile sarıldı (DOM-safe)`);
-        });
-    }
-    
-    // İlk yüklemede kartları sar
-    setTimeout(() => {
-        wrapCardsWithoutBreakingEvents();
-    }, 500);
-    
-    // İş tipi değiştiğinde tekrar sar
-    const setupChangeListener = () => {
-        const specificTaskType = document.getElementById('specificTaskType');
-        if (specificTaskType && !specificTaskType.dataset.changeListenerAdded) {
-            specificTaskType.addEventListener('change', () => {
-                console.log('🔄 İş tipi değişti, yeni kartları sarıyor');
-                setTimeout(() => {
-                    wrapCardsWithoutBreakingEvents();
-                }, 500);
-            });
-            specificTaskType.dataset.changeListenerAdded = 'true';
-        }
-    };
-    
-    setTimeout(setupChangeListener, 600);
-    
-    // Global test fonksiyonları
-    window.wrapCardsWithoutBreakingEvents = wrapCardsWithoutBreakingEvents;
-    window.testEventListeners = function() {
-        const ipSearch = document.getElementById('ipRecordSearch');
-        const personSearch = document.getElementById('personSearchInput');
-        
-        console.log('Event listener test:', {
-            ipSearch: ipSearch ? 'Bulundu' : 'Bulunamadı',
-            personSearch: personSearch ? 'Bulundu' : 'Bulunamadı',
-            ipSearchListeners: ipSearch ? getEventListeners(ipSearch) : 'N/A',
-            personSearchListeners: personSearch ? getEventListeners(personSearch) : 'N/A'
-        });
-    };
-    
+    createTaskInstance.init(); // await yok
+
+    setTimeout(() => wrapCardsWithoutBreakingEvents(), 500);
+    setTimeout(() => setupChangeListener(), 600);
+
     console.log('✅ CreateTask başarıyla initialize edildi');
     console.log('💡 Test fonksiyonları: window.wrapCardsWithoutBreakingEvents() ve window.testEventListeners()');
+  }
+
+  // Kullanıcı zaten girişliyse başlat
+  const current = (typeof auth !== 'undefined' && auth.currentUser) || (typeof authService !== 'undefined' && authService.getCurrentUser && authService.getCurrentUser());
+  if (current) boot();
+
+  // Auth durumu değişirse
+  onAuthStateChanged(auth, (user) => {
+    if (user) boot();
+    else window.location.replace('index.html');
+  });
 });
