@@ -360,12 +360,12 @@
     .accruals-table {
         font-size: 12px;
     }
-
+    
     .trademark-image-thumbnail {
         width: 40px;
         height: 40px;
     }
-
+    
     .nice-class-badge {
         font-size: 10px;
         padding: 2px 6px;
@@ -731,23 +731,30 @@
             const statusInfo = getStatusInTurkish(r.status);
             const ownerNames = getOwnerNames(r);
             const niceClassesHtml = (() => {
-                const classes = [];
+                const classes = new Set();
 
                 // goodsAndServicesByClass array'inden nice sınıflarını çıkar
                 if (r.goodsAndServicesByClass && Array.isArray(r.goodsAndServicesByClass)) {
                     r.goodsAndServicesByClass.forEach(classItem => {
                         if (classItem.classNo !== null && classItem.classNo !== undefined) {
-                            const classNo = String(classItem.classNo);
-                            if (!classes.includes(classNo)) {
-                                classes.push(classNo);
-                            }
+                            classes.add(String(classItem.classNo));
                         }
                     });
                 }
+                
+                // niceClassSearch'den sınıfları çıkar
+                if (r.niceClassSearch && Array.isArray(r.niceClassSearch)) {
+                    r.niceClassSearch.forEach(classNo => {
+                        if (classNo !== null && classNo !== undefined) {
+                            classes.add(String(classNo));
+                        }
+                    });
+                }
+                
 
                 // Sınıfları sırala ve badge olarak göster
-                if (classes.length > 0) {
-                    return classes
+                if (classes.size > 0) {
+                    return Array.from(classes)
                         .map(cls => parseInt(cls))
                         .filter(cls => !isNaN(cls))
                         .sort((a, b) => a - b)
@@ -965,8 +972,7 @@
                   modalTrademarkImage.src = imageUrl;
 
                   // Mevcut arama kriterlerini yükle
-                  // Kalıcı marka adı ve Nice sınıflarını ekle
-                  const permanentBrandText = [currentSelectedItem.title || currentSelectedItem.markName].filter(Boolean);
+                  const permanentBrandText = [currentSelectedItem.title || currentSelectedItem.brandText || ''].filter(Boolean);
                   const permanentNiceClasses = (() => {
                       const classes = [];
                       if (currentSelectedItem.goodsAndServicesByClass && Array.isArray(currentSelectedItem.goodsAndServicesByClass)) {
@@ -979,8 +985,12 @@
                       return classes;
                   })();
 
-                  populateList(brandTextSearchList, currentSelectedItem.brandTextSearch || [], permanentBrandText);
-                  populateNiceClassBoxes(currentSelectedItem.niceClassSearch || [], permanentNiceClasses);
+                  // Veritabanındaki brandTextSearch ve niceClassSearch alanlarını da al
+                  const existingBrandTextSearch = currentSelectedItem.brandTextSearch || [];
+                  const existingNiceClassSearch = currentSelectedItem.niceClassSearch || [];
+
+                  populateList(brandTextSearchList, existingBrandTextSearch, permanentBrandText);
+                  populateNiceClassBoxes(existingNiceClassSearch, permanentNiceClasses);
 
                   // Modal'ı göster
                   $('#editCriteriaModal').modal('show');
@@ -1055,7 +1065,7 @@
           if (!currentSelectedItem) return;
 
           const brandTextArray = Array.from(brandTextSearchList.querySelectorAll('.list-item-text')).map(el => el.textContent);
-          const niceClassArray = Array.from(niceClassSearchList.querySelectorAll('.list-item-text')).map(el => parseInt(el.textContent));
+          const niceClassArray = Array.from(niceClassSearchList.querySelectorAll('.list-item-text')).map(el => parseInt(el.textContent)).filter(n => !isNaN(n));
 
           try {
               const res = await monitoringService.updateMonitoringItem(currentSelectedItem.id, {
@@ -1087,17 +1097,20 @@
             box.classList.remove('permanent-item'); // Kalıcı sınıfı da sıfırla
         });
 
+        // Veritabanındaki ve kalıcı sınıfları birleştir
+        const allClasses = new Set([...selectedClasses.map(String), ...permanentClasses.map(String)]);
+        
         populateList(document.getElementById('niceClassSearchList'), [], permanentClasses);
-        
-        const allClasses = new Set([...permanentClasses, ...selectedClasses]);
-        
+
         allClasses.forEach(cls => {
             const box = document.querySelector(`.nice-class-box[data-class-no="${cls}"]`);
             if (box) {
                 box.classList.add('selected');
+                // Kalıcı sınıflar için ek sınıf ekle
                 if (permanentClasses.includes(cls)) {
                     box.classList.add('permanent-item');
                 }
+                // Listeye ekleme
                 const listItem = addListItem(document.getElementById('niceClassSearchList'), cls);
                 if (permanentClasses.includes(cls)) {
                   listItem.classList.add('permanent-item');
@@ -1132,7 +1145,11 @@
     function removeListItem(listElement, text) {
         const items = listElement.querySelectorAll('li');
         for (let item of items) {
-            if (item.querySelector('.list-item-text').textContent === text && !item.classList.contains('permanent-item')) {
+            if (item.querySelector('.list-item-text').textContent === text) {
+                if (item.classList.contains('permanent-item')) {
+                     showNotification('Bu öğe orijinal marka bilgisi olduğu için kaldırılamaz.', 'warning');
+                     return;
+                }
                 item.remove();
                 break;
             }
@@ -1148,7 +1165,7 @@
 
     function populateList(listElement, items, permanentItems = []) {
         listElement.innerHTML = '';
-        const allItems = new Set([...items, ...permanentItems]);
+        const allItems = new Set([...items.map(String), ...permanentItems.map(String)]);
         if (allItems.size > 0) {
             allItems.forEach(item => {
                 const isPermanent = permanentItems.includes(item);
