@@ -32,21 +32,21 @@
         box-sizing: border-box;
         flex-shrink: 0;
     }
-    .page-header { 
-        background: rgba(255, 255, 255, 0.95); 
-        padding: 30px; 
-        border-radius: 20px; 
-        margin-bottom: 30px; 
-        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1); 
+    .page-header {
+        background: rgba(255, 255, 255, 0.95);
+        padding: 30px;
+        border-radius: 20px;
+        margin-bottom: 30px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
     }
-    .page-title { 
-        font-size: 2em; 
-        color: #1e3c72; 
-        margin-bottom: 10px; 
+    .page-title {
+        font-size: 2em;
+        color: #1e3c72;
+        margin-bottom: 10px;
     }
-    .page-subtitle { 
-        color: #666; 
-        font-size: 1.1em; 
+    .page-subtitle {
+        color: #666;
+        font-size: 1.1em;
     }
 
     .monitoring-controls {
@@ -97,36 +97,36 @@
         box-shadow: 0 2px 10px rgba(0,0,0,0.05);
         animation: fadeIn 0.3s ease-in;
     }
-    
+
     @keyframes fadeIn {
         from { opacity: 0; transform: translateY(-10px); }
         to { opacity: 1; transform: translateY(0); }
     }
-    
+
     .filter-controls {
         display: flex;
         gap: 15px;
         align-items: center;
         flex-wrap: wrap;
     }
-    
+
     .filter-group {
         display: flex;
         flex-direction: column;
         gap: 5px;
     }
-    
+
     .filter-group.search {
         flex: 1;
         min-width: 200px;
     }
-    
+
     .filter-label {
         font-size: 0.9em;
         color: #666;
         font-weight: 500;
     }
-    
+
     .filter-input, .filter-select {
         padding: 8px 12px;
         border: 1px solid #ddd;
@@ -134,21 +134,21 @@
         font-size: 14px;
         transition: all 0.2s ease;
     }
-    
+
     .filter-input:focus, .filter-select:focus {
         outline: none;
         border-color: #007bff;
         box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
     }
-    
+
     .filter-input.search {
         width: 100%;
     }
-    
+
     .filter-select {
         min-width: 120px;
     }
-    
+
     .clear-filters-btn {
         padding: 8px 16px;
         background: #6c757d;
@@ -160,7 +160,7 @@
         transition: all 0.2s ease;
         align-self: flex-end;
     }
-    
+
     .clear-filters-btn:hover {
         background: #5a6268;
         transform: translateY(-1px);
@@ -360,12 +360,12 @@
     .accruals-table {
         font-size: 12px;
     }
-    
+
     .trademark-image-thumbnail {
         width: 40px;
         height: 40px;
     }
-    
+
     .nice-class-badge {
         font-size: 10px;
         padding: 2px 6px;
@@ -405,6 +405,9 @@
       <div class="monitoring-controls">
         <button type="button" class="btn-selected-action" id="removeSelectedBtn" disabled>
           Seçileni Kaldır (<span id="selectedCount">0</span>)
+        </button>
+        <button type="button" class="btn-selected-action" id="editCriteriaBtn" disabled>
+          Kriterleri Düzenle
         </button>
       </div>
 
@@ -448,6 +451,66 @@
     </main>
   </div>
 
+  <div class="modal fade" id="editCriteriaModal" tabindex="-1" aria-labelledby="editCriteriaModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="editCriteriaModalLabel">İzleme Kriterlerini Düzenle</h5>
+          <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+            <span aria-hidden="true">&times;</span>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="card mb-3">
+            <div class="card-body">
+              <h5 class="card-title" id="modalTrademarkName"></h5>
+              <p class="card-text">
+                <strong>Marka Örneği:</strong> <br> <img id="modalTrademarkImage" src="" alt="Marka Görseli" style="max-width: 100px; max-height: 100px; object-fit: contain;">
+              </p>
+              <p class="card-text">
+                <strong>Başvuru No:</strong> <span id="modalApplicationNo"></span><br>
+                <strong>Sahip:</strong> <span id="modalOwner"></span><br>
+                <strong>Nice Sınıfı:</strong> <span id="modalNiceClass"></span>
+              </p>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="brandTextSearchInput">Aranacak Marka Adı:</label>
+            <div class="input-group">
+              <input type="text" class="form-control" id="brandTextSearchInput" placeholder="Marka adını girin...">
+              <div class="input-group-append">
+                <button class="btn btn-outline-secondary" type="button" id="addBrandTextBtn">Ekle</button>
+              </div>
+            </div>
+          </div>
+          <ul class="list-group mb-3" id="brandTextSearchList">
+            <li class="list-group-item text-muted">Aranacak marka adı listesi.</li>
+          </ul>
+
+          <div class="form-group">
+            <label for="niceClassSearchInput">Aranacak Nice Sınıfı:</label>
+            <div class="input-group">
+              <select class="form-control" id="niceClassSearchInput">
+                <option value="">Seçiniz...</option>
+                </select>
+              <div class="input-group-append">
+                <button class="btn btn-outline-secondary" type="button" id="addNiceClassBtn">Ekle</button>
+              </div>
+            </div>
+          </div>
+          <ul class="list-group" id="niceClassSearchList">
+            <li class="list-group-item text-muted">Aranacak Nice Sınıfı listesi.</li>
+          </ul>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-dismiss="modal">Kapat</button>
+          <button type="button" class="btn btn-primary" id="saveCriteriaBtn">Kaydet</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
 <script type="module">
     import Pagination from './js/pagination.js'; // <- DIŞARIDAN İÇERİ AKTARILDI
     import { loadSharedLayout } from './js/layout-loader.js';
@@ -468,6 +531,7 @@
         niceClass: '',
         owner: ''
     };
+    let currentSelectedItem;
 
     // Pagination'ı başlat
     function initializePagination() {
@@ -484,10 +548,10 @@
                 renderCurrentPage();
                 selectedMonitoringItems.clear();
                 updateSelectedButtonState();
-                
-                document.querySelector('.accruals-container').scrollIntoView({ 
-                    behavior: 'smooth', 
-                    block: 'start' 
+
+                document.querySelector('.accruals-container').scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'start'
                 });
             }
         });
@@ -496,13 +560,13 @@
     // Filtreleri kur
     function setupFilters() {
         const filterSection = document.getElementById('filterSection');
-        
+
         const searchInput = document.getElementById('searchFilter');
         const statusSelect = document.getElementById('statusFilter');
         const niceClassInput = document.getElementById('niceClassFilter');
         const ownerInput = document.getElementById('ownerFilter');
         const clearButton = document.getElementById('clearFilters');
-        
+
         const debounce = (func, wait) => {
             let timeout;
             return function executedFunction(...args) {
@@ -520,7 +584,7 @@
             currentFilters.status = statusSelect?.value || 'all';
             currentFilters.niceClass = niceClassInput?.value || '';
             currentFilters.owner = ownerInput?.value || '';
-            
+
             applyFilters();
         }, 300);
 
@@ -528,16 +592,16 @@
         if (statusSelect) statusSelect.addEventListener('change', applyFiltersDebounced);
         if (niceClassInput) niceClassInput.addEventListener('input', applyFiltersDebounced);
         if (ownerInput) ownerInput.addEventListener('input', applyFiltersDebounced);
-        
+
         if (clearButton) {
             clearButton.addEventListener('click', () => {
                 if (searchInput) searchInput.value = '';
                 if (statusSelect) statusSelect.value = 'all';
                 if (niceClassInput) niceClassInput.value = '';
                 if (ownerInput) ownerInput.value = '';
-                
+
                 currentFilters = { search: '', status: 'all', niceClass: '', owner: '' };
-                
+
                 applyFilters();
             });
         }
@@ -551,32 +615,32 @@
                 const markName = (item.title || item.markName || '').toLowerCase();
                 const owner = getOwnerNames(item).toLowerCase();
                 const applicationNo = (item.applicationNumber || item.applicationNo || '').toLowerCase();
-                
+
                 if (!markName.includes(searchTerm) && !owner.includes(searchTerm) && !applicationNo.includes(searchTerm)) {
                     return false;
                 }
             }
-            
+
             if (currentFilters.status !== 'all') {
                 const itemStatus = getStatusInTurkish(item.status).value || 'unknown';
                 if (itemStatus !== currentFilters.status) return false;
             }
-            
+
             if (currentFilters.niceClass) {
                 const itemClasses = Array.isArray(item.niceClass) ? item.niceClass.join(' ') : (item.niceClass || '').toString();
                 if (!itemClasses.toLowerCase().includes(currentFilters.niceClass.toLowerCase())) return false;
             }
-            
+
             if (currentFilters.owner) {
                 const ownerName = getOwnerNames(item).toLowerCase();
                 if (!ownerName.includes(currentFilters.owner.toLowerCase())) return false;
             }
-            
+
             return true;
         });
-        
+
         if (pagination) pagination.update(filteredData.length, 1);
-        
+
         renderCurrentPage();
     }
 
@@ -584,19 +648,19 @@
     function renderCurrentPage() {
         const container = document.getElementById('monitoringTableContainer');
         if (!container) return;
-        
+
         selectedMonitoringItems.clear();
         updateSelectedButtonState();
 
         const currentPageData = pagination ? pagination.getCurrentPageData(filteredData) : filteredData;
-        
+
         if (currentPageData.length === 0) {
-            const hasFilters = currentFilters.search || currentFilters.status !== 'all' || 
+            const hasFilters = currentFilters.search || currentFilters.status !== 'all' ||
                               currentFilters.niceClass || currentFilters.owner;
             container.innerHTML = `<div class="no-records">${hasFilters ? 'Filtreleme kriterlerinize uygun kayıt bulunamadı.' : 'İzleme listeniz boş.'}</div>`;
             return;
         }
-        
+
         let html = `<table class="accruals-table"><thead><tr>
                         <th><input type="checkbox" id="headerSelectAllCheckbox" /></th>
                         <th>Görsel</th>
@@ -614,27 +678,27 @@
                 // Firebase Storage tam URL'i kontrol et
                 if (r.brandImageUrl && r.brandImageUrl.trim() !== '') {
                     let imageUrl = r.brandImageUrl;
-                    
+
                     // Eğer relatif path ise Firebase Storage URL'ine çevir
                     if (!imageUrl.startsWith('http') && !imageUrl.startsWith('data:')) {
                         // Firebase Storage bucket URL'inizi buraya yazın
                         imageUrl = `https://firebasestorage.googleapis.com/v0/b/ip-manager-production-aab4b.appspot.com/o/${encodeURIComponent(imageUrl)}?alt=media`;
                     }
-                    
-                    return `<img src="${imageUrl}" alt="Marka Görseli" class="trademark-image-thumbnail" 
+
+                    return `<img src="${imageUrl}" alt="Marka Görseli" class="trademark-image-thumbnail"
                             style="width: 80px; height: 80px; object-fit: contain; border-radius: 6px; border: 2px solid #ddd;"
                             onerror="this.style.display='none'; this.nextElementSibling.style.display='inline';">
                     <span style="display:none; color:#999; font-size:12px;">🖼️ Görsel yok</span>`;
                 }
-                
+
                 return '<span style="color:#999; font-size:12px;">🖼️ Görsel yok</span>';
             })();
-            
+
             const statusInfo = getStatusInTurkish(r.status);
             const ownerNames = getOwnerNames(r);
             const niceClassesHtml = (() => {
                 const classes = [];
-                
+
                 // goodsAndServicesByClass array'inden nice sınıflarını çıkar
                 if (r.goodsAndServicesByClass && Array.isArray(r.goodsAndServicesByClass)) {
                     r.goodsAndServicesByClass.forEach(classItem => {
@@ -646,7 +710,7 @@
                         }
                     });
                 }
-                
+
                 // Sınıfları sırala ve badge olarak göster
                 if (classes.length > 0) {
                     return classes
@@ -656,7 +720,7 @@
                         .map(cls => `<span class="nice-class-badge">${cls}</span>`)
                         .join(' ');
                 }
-                
+
                 return '-';
             })();
 
@@ -687,16 +751,16 @@
                     updateSelectedButtonState();
                 });
             }
-            
+
             // Dinamik hover efekti için event listener ekle
             container.querySelectorAll('.trademark-image-thumbnail').forEach(img => {
                 let hoverElement = null;
-                
+
                 img.addEventListener('mouseenter', (e) => {
                     if (hoverElement) {
                         hoverElement.remove();
                     }
-                    
+
                     hoverElement = document.createElement('img');
                     // Görsel URL'ini düzelt
                     let imageUrl = e.target.src;
@@ -721,10 +785,10 @@
                         background: white;
                         padding: 10px;
                     `;
-                    
+
                     document.body.appendChild(hoverElement);
                 });
-                
+
                 img.addEventListener('mouseleave', () => {
                     if (hoverElement) {
                         hoverElement.remove();
@@ -767,7 +831,7 @@
                 .filter(name => name && name.trim() !== '')
                 .join(', ');
         }
-        
+
         // SONRA: Eski owners yapısı (geriye uyumluluk için)
         if (item.owners && Array.isArray(item.owners)) {
             return item.owners.map(owner => {
@@ -780,7 +844,7 @@
         } else if (typeof item.owners === 'string') {
             return item.owners;
         }
-        
+
         // owner string alanı varsa
         if (item.owner && typeof item.owner === 'string' && item.owner.trim() !== '') {
             return item.owner;
@@ -803,9 +867,11 @@
     const updateSelectedButtonState = () => {
         const selectedCountSpan = document.getElementById('selectedCount');
         const removeSelectedBtn = document.getElementById('removeSelectedBtn');
-        
+        const editCriteriaBtn = document.getElementById('editCriteriaBtn');
+
         if (selectedCountSpan) selectedCountSpan.textContent = selectedMonitoringItems.size;
         if (removeSelectedBtn) removeSelectedBtn.disabled = selectedMonitoringItems.size === 0;
+        if (editCriteriaBtn) editCriteriaBtn.disabled = selectedMonitoringItems.size !== 1;
 
         const headerCheckbox = document.getElementById('headerSelectAllCheckbox');
         if (headerCheckbox) {
@@ -814,12 +880,152 @@
         }
     };
 
+    // Modal Fonksiyonları
+    function setupEditCriteriaModal() {
+      const editCriteriaBtn = document.getElementById('editCriteriaBtn');
+      const editCriteriaModal = document.getElementById('editCriteriaModal');
+      const saveCriteriaBtn = document.getElementById('saveCriteriaBtn');
+      const brandTextSearchInput = document.getElementById('brandTextSearchInput');
+      const addBrandTextBtn = document.getElementById('addBrandTextBtn');
+      const brandTextSearchList = document.getElementById('brandTextSearchList');
+      const niceClassSearchInput = document.getElementById('niceClassSearchInput');
+      const addNiceClassBtn = document.getElementById('addNiceClassBtn');
+      const niceClassSearchList = document.getElementById('niceClassSearchList');
+      const modalTrademarkImage = document.getElementById('modalTrademarkImage');
+
+      // Nice Sınıfı dropdown'ını doldur
+      for (let i = 1; i <= 45; i++) {
+          const option = document.createElement('option');
+          option.value = i;
+          option.textContent = i;
+          niceClassSearchInput.appendChild(option);
+      }
+
+      // Modalı açma
+      editCriteriaBtn.addEventListener('click', () => {
+          if (selectedMonitoringItems.size === 1) {
+              const selectedId = Array.from(selectedMonitoringItems)[0];
+              currentSelectedItem = allMonitoringData.find(item => item.id === selectedId);
+
+              if (currentSelectedItem) {
+                  // Modal'daki bilgileri doldur
+                  document.getElementById('modalTrademarkName').textContent = currentSelectedItem.title || currentSelectedItem.markName || '-';
+                  document.getElementById('modalApplicationNo').textContent = currentSelectedItem.applicationNumber || currentSelectedItem.applicationNo || '-';
+                  document.getElementById('modalOwner').textContent = getOwnerNames(currentSelectedItem);
+                  document.getElementById('modalNiceClass').textContent = (Array.isArray(currentSelectedItem.niceClass) ? currentSelectedItem.niceClass.join(', ') : currentSelectedItem.niceClass) || '-';
+
+                  const imageUrl = currentSelectedItem.brandImageUrl && currentSelectedItem.brandImageUrl.startsWith('http')
+                    ? currentSelectedItem.brandImageUrl
+                    : `https://firebasestorage.googleapis.com/v0/b/ip-manager-production-aab4b.appspot.com/o/${encodeURIComponent(currentSelectedItem.brandImageUrl)}?alt=media`;
+                  modalTrademarkImage.src = imageUrl;
+
+                  // Mevcut arama kriterlerini yükle
+                  populateList(brandTextSearchList, currentSelectedItem.brandTextSearch || []);
+                  populateList(niceClassSearchList, currentSelectedItem.niceClassSearch || []);
+
+                  // Modal'ı göster
+                  $(editCriteriaModal).modal('show');
+              }
+          }
+      });
+
+      // Marka Adı ekle
+      addBrandTextBtn.addEventListener('click', () => {
+          const value = brandTextSearchInput.value.trim();
+          if (value) {
+              addListItem(brandTextSearchList, value);
+              brandTextSearchInput.value = '';
+          }
+      });
+
+      // Nice Sınıfı ekle
+      addNiceClassBtn.addEventListener('click', () => {
+          const value = niceClassSearchInput.value;
+          if (value && value !== '0') {
+              addListItem(niceClassSearchList, value);
+              niceClassSearchInput.value = '';
+          }
+      });
+
+      // Kayıtları silme (tüm listeler için genel)
+      document.querySelectorAll('.list-group').forEach(list => {
+          list.addEventListener('click', (e) => {
+              if (e.target.classList.contains('remove-item')) {
+                  e.target.closest('li').remove();
+                  if (list.children.length === 0) {
+                     const emptyItem = document.createElement('li');
+                     emptyItem.className = "list-group-item text-muted";
+                     emptyItem.textContent = list.id === 'brandTextSearchList' ? 'Aranacak marka adı listesi.' : 'Aranacak Nice Sınıfı listesi.';
+                     list.appendChild(emptyItem);
+                  }
+              }
+          });
+      });
+
+      // Kaydetme İşlemi
+      saveCriteriaBtn.addEventListener('click', async () => {
+          if (!currentSelectedItem) return;
+
+          const brandTextArray = Array.from(brandTextSearchList.querySelectorAll('.list-item-text')).map(el => el.textContent);
+          const niceClassArray = Array.from(niceClassSearchList.querySelectorAll('.list-item-text')).map(el => parseInt(el.textContent));
+
+          try {
+              const res = await monitoringService.updateMonitoringItem(currentSelectedItem.id, {
+                  brandTextSearch: brandTextArray,
+                  niceClassSearch: niceClassArray
+              });
+              if (res.success) {
+                  showNotification('İzleme kriterleri başarıyla güncellendi.', 'success');
+                  $(editCriteriaModal).modal('hide');
+                  // Veriyi yerel olarak da güncelle
+                  const index = allMonitoringData.findIndex(item => item.id === currentSelectedItem.id);
+                  if (index !== -1) {
+                      allMonitoringData[index].brandTextSearch = brandTextArray;
+                      allMonitoringData[index].niceClassSearch = niceClassArray;
+                  }
+              } else {
+                  showNotification('Kriterler güncellenirken hata oluştu: ' + res.error, 'error');
+              }
+          } catch (error) {
+              console.error('Kriter kaydetme hatası:', error);
+              showNotification('Kriterler güncellenirken beklenmeyen bir hata oluştu.', 'error');
+          }
+      });
+    }
+
+    function addListItem(listElement, text) {
+        // Liste boşsa uyarı elemanını kaldır
+        const emptyItem = listElement.querySelector('.list-group-item.text-muted');
+        if (emptyItem) {
+            emptyItem.remove();
+        }
+
+        const li = document.createElement('li');
+        li.className = 'list-group-item d-flex justify-content-between align-items-center';
+        li.innerHTML = `<span class="list-item-text">${text}</span><button type="button" class="btn btn-sm btn-danger remove-item">&times;</button>`;
+        listElement.appendChild(li);
+    }
+
+    function populateList(listElement, items) {
+        listElement.innerHTML = '';
+        if (items && items.length > 0) {
+            items.forEach(item => addListItem(listElement, item));
+        } else {
+            const emptyItem = document.createElement('li');
+            emptyItem.className = "list-group-item text-muted";
+            emptyItem.textContent = listElement.id === 'brandTextSearchList' ? 'Aranacak marka adı listesi.' : 'Aranacak Nice Sınıfı listesi.';
+            listElement.appendChild(emptyItem);
+        }
+    }
+
+
     document.addEventListener('DOMContentLoaded', async () => {
         try {
             initializePagination();
             setupFilters();
+            setupEditCriteriaModal();
             await loadSharedLayout({ activeMenuLink: 'monitoring-trademarks.html' });
-            
+
             const personsResult = await personService.getPersons();
             if (personsResult.success) allPersons = personsResult.data || [];
             else console.warn('Kişiler yüklenirken hata:', personsResult.error);
@@ -834,7 +1040,7 @@
                 }
 
                 container.innerHTML = '<div class="loading">İzleme listeniz yükleniyor...</div>';
-                
+
                 try {
                     const { success, data, error } = await monitoringService.getMonitoringItems(user.uid);
                     if (success) {
@@ -897,5 +1103,8 @@
         }
     });
 </script>
+<script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.1/dist/umd/popper.min.js"></script>
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
 </body>
 </html>
