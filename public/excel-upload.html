@@ -164,6 +164,7 @@
         import { authService, ipRecordsService, personService, auth } from './firebase-config.js';
         import { showNotification } from './utils.js';
         import { loadSharedLayout } from './js/layout-loader.js'; // layout-loader.js eklendi
+        import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
         let excelUploadModule;
 
@@ -179,18 +180,16 @@
             }
 
             init() {
-                auth.onAuthStateChanged(async (user) => {
-                    if (user || authService.getCurrentUser()) {
-                        this.currentUser = authService.getCurrentUser();
-                        // this.updateUserInfo(); // Bu artık layout-loader tarafından yapılıyor
-                        await this.loadAllPersons();
-                        this.initializeEventListeners();
-                    } else {
-                        window.location.href = '../index.html';
-                    }
-                });
+            const user = auth.currentUser || authService.getCurrentUser();
+            if (!user) { 
+                // Redirect burada yapılmıyor; sayfa guard’ı halledecek
+                return; 
             }
-
+            this.currentUser = user;
+            this.loadAllPersons().then(() => {
+                this.initializeEventListeners();
+            }).catch(console.error);
+            }
             // updateUserInfo() { /* Bu fonksiyon artık layout-loader.js içinde */ }
             
             async loadAllPersons() {
@@ -467,22 +466,31 @@
         }
 
         // Modül başlatma
-        auth.onAuthStateChanged(async (user) => {
-            if (user || authService.getCurrentUser()) {
-                if (!excelUploadModule) {
-                    excelUploadModule = new ExcelUploadModule();
-                    // updateUserInfo'yi burada doğrudan çağırmıyoruz, layout-loader halledecek.
-                }
-                // layout-loader çağrısı authStateChanged içinde değil, DOMContentLoaded içinde olmalı.
-                // Bu düzenleme zaten yapıldı.
-            } else {
-                window.location.href = '../index.html';
-            }
-        });
+        document.addEventListener('DOMContentLoaded', () => {
+        // 1) Ortak layout’u arka planda yükle (bekleme yok)
+        loadSharedLayout({ activeMenuLink: 'excel-upload.html' }).catch(console.error);
 
-        document.addEventListener('DOMContentLoaded', async () => {
-            await loadSharedLayout({ activeMenuLink: 'excel-upload.html' }); // activeMenuLink'i güncellendi
-            // ExcelUploadModule'ün init'i authStateChanged içinde olduğu için burada tekrar init çağırmıyoruz.
+        // 2) Tek auth guard
+        let started = false;
+        const boot = () => {
+            if (started) return;
+            started = true;
+
+            if (!excelUploadModule) {
+            excelUploadModule = new ExcelUploadModule();
+            }
+            // Sınıf içindeki init artık redirect yapmıyor; sadece mevcut user varsa başlatıyor
+            excelUploadModule.init();
+        };
+
+        // Kullanıcı zaten girişliyse anında başlat
+        if (auth.currentUser || authService.getCurrentUser()) boot();
+
+        // Değilse auth event’ini bekle; yoksa login’e REPLACE ile dön
+        onAuthStateChanged(auth, (user) => {
+            if (user) boot();
+            else window.location.replace('index.html');
+        });
         });
     </script>
 </body>
