@@ -520,13 +520,29 @@ export const monitoringService = {
     async addMonitoringItem(record) {
         if (!isFirebaseAvailable) return { success: false, error: "Firebase kullanılamıyor." };
         try {
-            const ref = doc(db, 'monitoringTrademarks', record.id);
-            await setDoc(ref, {
-                ...record,
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString()
-            });
+            // Kontrol: Zaten izleniyor mu?
+            const docRef = doc(db, 'monitoringTrademarks', record.id);
+            const docSnap = await getDoc(docRef);
+            if (docSnap.exists()) {
+                console.log("🔍 İzleme kaydı zaten mevcut, güncelleniyor:", record.id);
+                
+                await updateDoc(docRef, {
+                    ...record,
+                    updatedAt: new Date().toISOString()
+                });
+
+            } else {
+                console.log("✅ Yeni izleme kaydı oluşturuluyor:", record.id);
+
+                await setDoc(docRef, {
+                    ...record,
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString()
+                });
+            }
+
             return { success: true };
+
         } catch (error) {
             console.error("İzleme kaydı eklenirken hata:", error);
             return { success: false, error: error.message };
