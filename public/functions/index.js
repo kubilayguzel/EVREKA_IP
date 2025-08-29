@@ -2146,24 +2146,27 @@ function isValidBasedOnDate(hitDate, monitoredDate) {
 
 // functions/index.js - Düzeltilmiş nice sınıf fonksiyonu
 
-function hasOverlappingNiceClasses(monitoredNiceClasses, recordNiceClasses) {
+function hasOverlappingNiceClasses(monitoredTrademark, bulletinRecordNiceClasses) {
   logger.log("🏷️ Nice sınıf karşılaştırması:", {
-    monitoredNiceClasses,
-    recordNiceClasses,
-    monitoredType: typeof monitoredNiceClasses,
-    recordType: typeof recordNiceClasses
+    monitoredTrademarkId: monitoredTrademark.id,
+    monitoredNiceClassSearch: monitoredTrademark.niceClassSearch,
+    bulletinRecordNiceClasses,
+    bulletinRecordType: typeof bulletinRecordNiceClasses
   });
   
   try {
-    // Eğer izlenen markanın nice sınıfı yoksa, sınıf filtresini atla
-    if (!monitoredNiceClasses || (Array.isArray(monitoredNiceClasses) && monitoredNiceClasses.length === 0)) {
-      logger.log("ℹ️ İzlenen markanın nice sınıfı yok, filtre atlanıyor");
+    // İzlenen markadan niceClassSearch array'ini al
+    const monitoredNiceClassSearch = monitoredTrademark.niceClassSearch || [];
+    
+    // Eğer izlenen markanın niceClassSearch'u yoksa, sınıf filtresini atla
+    if (!Array.isArray(monitoredNiceClassSearch) || monitoredNiceClassSearch.length === 0) {
+      logger.log("ℹ️ İzlenen markanın niceClassSearch'u yok, filtre atlanıyor");
       return true;
     }
     
-    // Kayıtta nice sınıf yoksa çakışma yok
-    if (!recordNiceClasses) {
-      logger.log("ℹ️ Kayıtta nice sınıf yok, çakışma yok");
+    // Bülten kaydında nice sınıf yoksa çakışma yok
+    if (!bulletinRecordNiceClasses) {
+      logger.log("ℹ️ Bülten kaydında nice sınıf yok, çakışma yok");
       return false;
     }
 
@@ -2188,35 +2191,23 @@ function hasOverlappingNiceClasses(monitoredNiceClasses, recordNiceClasses) {
         .filter(cls => cls && cls.length > 0); // Boş olanları çıkar
     };
     
-    const monitoredClasses = normalizeNiceClasses(monitoredNiceClasses);
-    const recordClasses = normalizeNiceClasses(recordNiceClasses);
+    const monitoredClasses = normalizeNiceClasses(monitoredNiceClassSearch);
+    const bulletinRecordClasses = normalizeNiceClasses(bulletinRecordNiceClasses);
     
     logger.log("🔧 Normalize edilmiş sınıflar:", {
-      monitoredClasses,
-      recordClasses
+      monitoredClasses: monitoredClasses,
+      bulletinRecordClasses: bulletinRecordClasses
     });
     
-    // Her iki liste de boşsa true döndür
-    if (monitoredClasses.length === 0 && recordClasses.length === 0) {
-      logger.log("ℹ️ Her iki liste de boş, kabul ediliyor");
-      return true;
-    }
-    
-    // İzlenen marka sınıfları boşsa kabul et
-    if (monitoredClasses.length === 0) {
-      logger.log("ℹ️ İzlenen marka sınıfları boş, kabul ediliyor");
-      return true;
-    }
-    
-    // Kayıt sınıfları boşsa çakışma yok
-    if (recordClasses.length === 0) {
-      logger.log("ℹ️ Kayıt sınıfları boş, çakışma yok");
+    // Bülten kaydı sınıfları boşsa çakışma yok
+    if (bulletinRecordClasses.length === 0) {
+      logger.log("ℹ️ Bülten kaydı sınıfları boş, çakışma yok");
       return false;
     }
     
     // Kesişim kontrolü
     const hasOverlap = monitoredClasses.some(monitoredClass => 
-      recordClasses.some(recordClass => monitoredClass === recordClass)
+      bulletinRecordClasses.some(bulletinClass => monitoredClass === bulletinClass)
     );
     
     logger.log(`🏷️ Nice sınıf kesişimi: ${hasOverlap ? 'VAR' : 'YOK'}`);
@@ -2224,7 +2215,7 @@ function hasOverlappingNiceClasses(monitoredNiceClasses, recordNiceClasses) {
     // Debug: hangi sınıflar eşleşti?
     if (hasOverlap) {
       const matchingClasses = monitoredClasses.filter(monitoredClass => 
-        recordClasses.some(recordClass => monitoredClass === recordClass)
+        bulletinRecordClasses.some(bulletinClass => monitoredClass === bulletinClass)
       );
       logger.log(`✅ Eşleşen sınıflar: ${matchingClasses.join(', ')}`);
     }
@@ -2621,8 +2612,13 @@ export const performTrademarkSimilaritySearch = onCall(
             continue;
           }
 
-          // Nice sınıf filtresi devre dışı (mevcut durumda true)
-          const hasNiceClassOverlap = true; //
+          // Nice sınıf filtresi - AKTIF
+          const hasNiceClassOverlap = hasOverlappingNiceClasses(monitoredMark, hit.niceClasses);
+
+          // Eğer Nice sınıf kesişimi yoksa atla
+          if (!hasNiceClassOverlap) {
+            continue;
+          }
 
           // Benzerlik skoru
           const { finalScore: similarityScore, positionalExactMatchScore } = calculateSimilarityScoreInternal(
@@ -2695,7 +2691,7 @@ export const performTrademarkSimilaritySearch = onCall(
             
             // *** FRONTEND İÇİN GEREKLİ ALANLAR ***
             monitoredTrademark: markName, // Frontend'in eşleştirme için kullandığı alan
-            monitoredNiceClasses: niceClasses, //
+            monitoredNiceClasses: monitoredMark.niceClassSearch || [],
             monitoredTrademarkId: monitoredMark.id // Eski uyumluluk için
           });
         }
