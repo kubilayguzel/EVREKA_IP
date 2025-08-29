@@ -81,7 +81,26 @@ const menuItems = [
     { id: 'settings', text: 'Ayarlar', link: '#', icon: 'fas fa-cog', category: 'Araçlar', disabled: true }
     ];
 
+    // === TEMP: global stilleri garanti altına al ===
+function ensureGlobalStyles() {
+  // Font Awesome
+  if (!document.querySelector('link[href*="font-awesome/5.15.4"]')) {
+    const fa = document.createElement('link');
+    fa.rel = 'stylesheet';
+    fa.href = 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css';
+    document.head.appendChild(fa);
+  }
+  // Paylaşılan stil
+  if (!document.querySelector('link[href$="shared-styles.css"]')) {
+    const sh = document.createElement('link');
+    sh.rel = 'stylesheet';
+    sh.href = './css/shared-styles.css'; // tüm sayfalar public/ altında → ./css/...
+    document.head.appendChild(sh);
+  }
+}
+
 export async function loadSharedLayout(options = {}) {
+    ensureGlobalStyles();
     const { activeMenuLink } = options;
     const placeholder = document.getElementById('layout-placeholder');
 
