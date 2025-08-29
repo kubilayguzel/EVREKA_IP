@@ -540,6 +540,59 @@
     line-height: 1.2;
 }
 }
+/* Nice Class Legend Stilleri */
+.results-title-section {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.nice-class-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+    padding: 10px 0;
+    border-top: 1px solid #e1e8ed;
+    margin-top: 10px;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.9em;
+}
+
+.nice-class-badge.demo {
+    margin-right: 0;
+    cursor: default;
+}
+
+.legend-text {
+    color: #555;
+    font-weight: 500;
+}
+
+.results-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 20px 30px;
+    border-bottom: 1px solid #e1e8ed;
+}
+
+@media (max-width: 768px) {
+    .results-header {
+        flex-direction: column;
+        gap: 15px;
+        align-items: stretch;
+    }
+    
+    .nice-class-legend {
+        flex-direction: column;
+        gap: 10px;
+    }
+}
     </style>
 </head>
 <body>
@@ -602,7 +655,19 @@
     
             <div class="results-container">
                 <div class="results-header">
-                    <h3>Arama Sonuçları</h3>
+                    <div class="results-title-section">
+                        <h3>Arama Sonuçları</h3>
+                        <div class="nice-class-legend">
+                            <div class="legend-item">
+                                <span class="nice-class-badge match demo">35</span>
+                                <span class="legend-text">: Tescili Sınıf</span>
+                            </div>
+                            <div class="legend-item">
+                                <span class="nice-class-badge partial-match demo">41</span>
+                                <span class="legend-text">: İzlenen ama Tescil Kapsamında Olmayan Sınıf</span>
+                            </div>
+                        </div>
+                    </div>
                     <button id="btnGenerateReport" class="btn btn-primary">Rapor Oluştur</button>
                 </div>
                 <div id="infoMessageContainer"></div>
