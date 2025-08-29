@@ -869,18 +869,43 @@ function createResultRow(hit, rowIndex) {
         : (hit.holders || '');
 
     // İzlenen markanın niceClassSearch değerlerini al
-    let monitoredNiceClassNumbers = [];
+// İzlenen markanın niceClassSearch değerlerini al - DEBUG VERSİYONU
+let monitoredNiceClassNumbers = [];
+
+console.log("🔍 DEBUG: monitoringTrademarks array:", monitoringTrademarks.length, "eleman");
+console.log("🔍 DEBUG: hit.monitoredTrademarkId:", hit.monitoredTrademarkId);
+
+// Hit objesinde monitoredTrademarkId varsa, o markayı monitoringTrademarks'tan bul
+if (hit.monitoredTrademarkId) {
+    const monitoredTrademark = monitoringTrademarks.find(tm => tm.id === hit.monitoredTrademarkId);
     
-    // Hit objesinde monitoredTrademarkId varsa, o markayı monitoringTrademarks'tan bul
-    if (hit.monitoredTrademarkId) {
-        const monitoredTrademark = monitoringTrademarks.find(tm => tm.id === hit.monitoredTrademarkId);
-        if (monitoredTrademark && monitoredTrademark.niceClassSearch) {
-            // niceClassSearch kullan
+    console.log("🔍 DEBUG: Bulunan monitoredTrademark:", monitoredTrademark ? {
+        id: monitoredTrademark.id,
+        title: monitoredTrademark.title,
+        niceClassSearch: monitoredTrademark.niceClassSearch,
+        goodsAndServicesByClass: monitoredTrademark.goodsAndServicesByClass
+    } : 'BULUNAMADI');
+    
+    if (monitoredTrademark) {
+        // Önce niceClassSearch'ü dene
+        if (monitoredTrademark.niceClassSearch) {
             monitoredNiceClassNumbers = Array.isArray(monitoredTrademark.niceClassSearch)
                 ? monitoredTrademark.niceClassSearch.map(cls => String(cls))
                 : [String(monitoredTrademark.niceClassSearch)];
+            console.log("✅ DEBUG: niceClassSearch'tan alındı:", monitoredNiceClassNumbers);
+        }
+        // Eğer niceClassSearch boşsa goodsAndServicesByClass'ı dene
+        else if (monitoredTrademark.goodsAndServicesByClass && Array.isArray(monitoredTrademark.goodsAndServicesByClass)) {
+            monitoredNiceClassNumbers = monitoredTrademark.goodsAndServicesByClass
+                .map(classItem => String(classItem.classNo))
+                .filter(classNo => classNo !== null && classNo !== undefined && classNo !== 'null');
+            console.log("✅ DEBUG: goodsAndServicesByClass'tan alındı:", monitoredNiceClassNumbers);
         }
     }
+}
+
+console.log("🎯 DEBUG: FINAL monitoredNiceClassNumbers:", monitoredNiceClassNumbers);
+console.log("🎯 DEBUG: hit.niceClasses:", hit.niceClasses);
     
     // Eğer yukarıda bulunamadıysa, hit objesindeki monitoredNiceClasses'ı kullan (eski uyumluluk)
     if (monitoredNiceClassNumbers.length === 0 && hit.monitoredNiceClasses) {
