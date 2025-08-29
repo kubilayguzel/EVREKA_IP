@@ -992,6 +992,13 @@
       niceClassSelectionContainer.addEventListener('click', (e) => {
         if (e.target.classList.contains('nice-class-box')) {
           const classNo = e.target.dataset.classNo;
+          const isPermanent = e.target.classList.contains('permanent-item'); // Kalıcı olup olmadığını kontrol et
+          
+          if (isPermanent) {
+              showNotification('Bu sınıf orijinal marka sınıfı olduğu için kaldırılamaz.', 'warning');
+              return;
+          }
+          
           e.target.classList.toggle('selected');
           
           if (e.target.classList.contains('selected')) {
@@ -1022,7 +1029,11 @@
       document.querySelectorAll('.list-group').forEach(list => {
           list.addEventListener('click', (e) => {
               const listItem = e.target.closest('li');
-              if (e.target.classList.contains('remove-item') && !listItem.classList.contains('permanent-item')) {
+              if (listItem.classList.contains('permanent-item')) {
+                  showNotification('Bu öğe orijinal marka bilgisi olduğu için kaldırılamaz.', 'warning');
+                  return;
+              }
+              if (e.target.classList.contains('remove-item')) {
                   const textContent = listItem.querySelector('.list-item-text').textContent;
                   listItem.remove();
                   if (list.id === 'niceClassSearchList') {
@@ -1073,15 +1084,24 @@
     function populateNiceClassBoxes(selectedClasses, permanentClasses = []) {
         document.querySelectorAll('.nice-class-box').forEach(box => {
             box.classList.remove('selected');
+            box.classList.remove('permanent-item'); // Kalıcı sınıfı da sıfırla
         });
 
         populateList(document.getElementById('niceClassSearchList'), [], permanentClasses);
         
-        selectedClasses.forEach(cls => {
+        const allClasses = new Set([...permanentClasses, ...selectedClasses]);
+        
+        allClasses.forEach(cls => {
             const box = document.querySelector(`.nice-class-box[data-class-no="${cls}"]`);
             if (box) {
                 box.classList.add('selected');
-                addListItem(document.getElementById('niceClassSearchList'), cls);
+                if (permanentClasses.includes(cls)) {
+                    box.classList.add('permanent-item');
+                }
+                const listItem = addListItem(document.getElementById('niceClassSearchList'), cls);
+                if (permanentClasses.includes(cls)) {
+                  listItem.classList.add('permanent-item');
+                }
             }
         });
     }
@@ -1106,6 +1126,7 @@
         }
         li.innerHTML = `<span class="list-item-text">${text}</span><button type="button" class="btn btn-sm btn-danger remove-item">&times;</button>`;
         listElement.appendChild(li);
+        return li;
     }
     
     function removeListItem(listElement, text) {
@@ -1127,16 +1148,17 @@
 
     function populateList(listElement, items, permanentItems = []) {
         listElement.innerHTML = '';
-        if (items && items.length > 0) {
-            items.forEach(item => addListItem(listElement, item));
+        const allItems = new Set([...items, ...permanentItems]);
+        if (allItems.size > 0) {
+            allItems.forEach(item => {
+                const isPermanent = permanentItems.includes(item);
+                addListItem(listElement, item, isPermanent);
+            });
         } else {
             const emptyItem = document.createElement('li');
             emptyItem.className = "list-group-item text-muted";
             emptyItem.textContent = listElement.id === 'brandTextSearchList' ? 'Aranacak marka adı listesi.' : 'Aranacak Nice Sınıfı listesi.';
             listElement.appendChild(emptyItem);
-        }
-        if (permanentItems && permanentItems.length > 0) {
-            permanentItems.forEach(item => addListItem(listElement, item, true));
         }
     }
 
