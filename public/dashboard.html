@@ -214,10 +214,10 @@
     import { authService, ipRecordsService, accrualService, auth } from './firebase-config.js';
     import { showNotification } from './utils.js';
     import { loadSharedLayout } from './js/layout-loader.js';
+    import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
-        document.addEventListener('DOMContentLoaded', async function() {
-            // Ortak layout'u yükle ve bu sayfanın aktif linkini belirt
-            await loadSharedLayout({ activeMenuLink: 'dashboard.html' });
+    document.addEventListener('DOMContentLoaded', function() {
+    loadSharedLayout({ activeMenuLink: 'dashboard.html' }).catch(console.error);
 
             class DashboardController {
                 constructor() {
@@ -227,11 +227,11 @@
                     this.unpaidTrendChart = null;
                 }
 
-                async init() {
-                    this.currentUser = authService.getCurrentUser();
-                    if (!this.currentUser) { window.location.href = '../index.html'; return; }
-                    await this.loadDashboardData();
-                }
+            async init() {
+            this.currentUser = authService.getCurrentUser();
+            if (!this.currentUser) { return; } // yönlendirme bu sayfadaki guard’da yapılacak
+            await this.loadDashboardData();
+            }
 
                 async loadDashboardData() {
                     const [ipRecordsResult, accrualsResult] = await Promise.all([
@@ -462,18 +462,29 @@
                     });
                 }
             }
+            document.addEventListener('DOMContentLoaded', function() {
+            loadSharedLayout({ activeMenuLink: 'dashboard.html' }).catch(console.error);
 
-            let dashboard;
-            auth.onAuthStateChanged((user) => {
-                if (user || authService.getCurrentUser()) {
-                    if (!dashboard) {
-                        dashboard = new DashboardController();
-                        dashboard.init();
-                    }
-                } else {
-                    window.location.href = '../index.html'; 
-                }
+            let started = false;
+            const boot = () => {
+                if (started) return;
+                started = true;
+                // Controller’ı başlat
+                const dashboard = new DashboardController();
+                dashboard.init();
+                window.dashboard = dashboard;
+            };
+
+            // Kullanıcı zaten girişliyse anında başlat
+            if (auth.currentUser) boot();
+
+            // Auth durumunu tek sefer dinle; yoksa login’e REPLACE ile dön
+            onAuthStateChanged(auth, (user) => {
+                if (user) boot();
+                else window.location.replace('index.html');
             });
+            });
+
         });
     </script>
 </body>
