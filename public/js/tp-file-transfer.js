@@ -50,7 +50,6 @@ addBasvuruNoBtn.addEventListener('click', () => {
       <span>${number}</span>
       <button class="btn btn-sm btn-danger remove-btn">X</button>
     `;
-    \1
 refreshTransferListVisibility();
     basvuruNoInput.value = '';
     
