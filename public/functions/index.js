@@ -3599,7 +3599,7 @@ export const adminDeleteUser = onCall({ region: "europe-west1" }, async (req) =>
 });
 
 // TÜRKPATENT SCRAPING FONKSİYONU
-import { https, logger } from 'firebase-functions/v2';
+import { https } from 'firebase-functions/v2';
 import axios from 'axios';
 import * as cheerio from 'cheerio';
 
