@@ -98,7 +98,7 @@ queryBtn.addEventListener('click', async () => {
       showNotification('Sorgulama sırasında bir hata oluştu.', 'danger');
     }
   } else {
-    bulkResultsContainer.classList.remove('d-none');
+  const __ab2=document.getElementById('actionButtons'); if(__ab2) __ab2.style.display='block';
     resultsTableBody.innerHTML = '';
     actionButtons.style.display = 'none';
     const results = [];
@@ -154,9 +154,7 @@ function displaySingleResult(data) {
     }
 
   document.getElementById('brandImage').alt = data.trademarkName || 'Marka Görseli';
-  
-  singleResultContainer.classList.remove('d-none');
-const __ab=document.getElementById('actionButtons'); if(__ab) __ab.style.display='flex';
+  const __ab=document.getElementById('actionButtons'); if(__ab) __ab.style.display='block';
 }
 
 // Diğer butonların (Kaydet, İptal) mantığı buraya eklenecek
@@ -194,4 +192,20 @@ function showNotification(message, type) {
   container.appendChild(alert);
   
   setTimeout(() => alert.remove(), 5000);
+}
+
+function refreshTransferListVisibility() {
+  const list = document.getElementById('transferList');
+  const hasItems = list && list.children && list.children.length > 0;
+  const cont = document.getElementById('transferListContainer');
+  const empty = document.getElementById('transferListEmpty');
+  if (cont && empty) {
+    if (hasItems) {
+      cont.classList.remove('d-none');
+      empty.classList.add('d-none');
+    } else {
+      cont.classList.add('d-none');
+      empty.classList.remove('d-none');
+    }
+  }
 }
