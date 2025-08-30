@@ -3599,16 +3599,16 @@ export const adminDeleteUser = onCall({ region: "europe-west1" }, async (req) =>
 });
 
 // TÜRKPATENT SCRAPING FONKSİYONU
-const functions = require('firebase-functions');
-const axios = require('axios');
-const cheerio = require('cheerio');
+import { https, logger } from 'firebase-functions/v2';
+import axios from 'axios';
+import * as cheerio from 'cheerio';
 
 const TARGET_URL = 'https://www.turkpatent.gov.tr/arastirma-yap?form=trademark';
 
-exports.scrapeTrademark = functions.https.onCall(async (data, context) => {
-  const { basvuruNo } = data;
+export const scrapeTrademark = https.onCall(async (request) => {
+  const { basvuruNo } = request.data;
   if (!basvuruNo) {
-    throw new functions.https.HttpsError('invalid-argument', 'Başvuru numarası belirtilmelidir.');
+    throw new https.HttpsError('invalid-argument', 'Başvuru numarası belirtilmelidir.');
   }
   
   try {
@@ -3629,7 +3629,7 @@ exports.scrapeTrademark = functions.https.onCall(async (data, context) => {
     return result;
 
   } catch (error) {
-    functions.logger.error("Scraping failed:", error);
-    throw new functions.https.HttpsError('internal', 'Sorgulama işlemi başarısız oldu.', error.message);
+    logger.error("Scraping failed:", error);
+    throw new https.HttpsError('internal', 'Sorgulama işlemi başarısız oldu.', error.message);
   }
 });
