@@ -252,17 +252,6 @@ function refreshTransferListVisibility() {
 })();
 
 
-function refreshTransferListVisibility() {
-  const list = document.getElementById('transferList');
-  const empty = document.getElementById('transferListEmpty');
-  const container = document.getElementById('transferListContainer');
-  const hasItems = list && list.children && list.children.length > 0;
-  if (container && empty) {
-    if (hasItems) { container.classList.remove('d-none'); empty.classList.add('d-none'); }
-    else { container.classList.add('d-none'); empty.classList.remove('d-none'); }
-  }
-}
-
 function addCurrentInput() {
   const input = document.getElementById('basvuruNoInput');
   const list = document.getElementById('transferList');
