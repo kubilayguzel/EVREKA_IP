@@ -1,7 +1,11 @@
-/*__GLOBAL_SAFE_GUARDS__*/
-window.__lastScrapeResult = window.__lastScrapeResult || {};
-if (typeof resultData === 'undefined') { var resultData = window.__lastScrapeResult; }
-if (typeof data === 'undefined') { var data = {}; }
+
+// --- Safe DOM helpers ---
+function _el(id){ return document.getElementById(id); }
+function _show(id){ const n=_el(id); if(n && n.classList) n.classList.remove('d-none'); return n; }
+function _hide(id){ const n=_el(id); if(n && n.classList) n.classList.add('d-none'); return n; }
+function _toggleActionButtons(visible){ const ab=_el('actionButtons'); if(!ab) return; ab.style.display = visible ? 'flex' : 'none'; }
+// --- end helpers ---
+
 import { app } from '../firebase-config.js';
 import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.1.2/firebase-functions.js";
 
@@ -85,7 +89,8 @@ transferList.addEventListener('click', (event) => {
 
 // Sorgula butonuna tıklandığında
 queryBtn.addEventListener('click', async () => {
-  loading.classList.remove('d-none');
+  
+  _show('loading'); _hide('singleResultContainer'); _hide('bulkResultsContainer'); _toggleActionButtons(false);loading.classList.remove('d-none');
   const isSingle = document.getElementById('singleTransfer').checked;
   
   if (isSingle) {
@@ -133,65 +138,21 @@ queryBtn.addEventListener('click', async () => {
 });
 
 // Tekil sonuçları göster
-
-function displaySingleResult(resp) {
-  const d = resp || {};
-  // cache globally for any legacy uses
-  window.__lastScrapeResult = d;
-  try { resultData = d; } catch(e) {}
-
-  const title = document.getElementById('heroTitle');
-  const appNo = document.getElementById('applicationNumber');
-  const appDate = document.getElementById('applicationDate');
-  const imgEl = document.getElementById('brandImage');
-  const single = document.getElementById('singleResultContainer');
-  const bulk = document.getElementById('bulkResultsContainer');
-
-  if (bulk) bulk.classList.add('d-none');
-  if (single) single.classList.remove('d-none');
-
-  if (title) title.textContent = d.trademarkName || '—';
-  if (appNo) appNo.textContent = d.applicationNumber || '—';
-  if (appDate) appDate.textContent = d.applicationDate || '—';
-
-  const PH = 'data:image/svg+xml;utf8,' + encodeURIComponent(`
-    <svg xmlns="http://www.w3.org/2000/svg" width="180" height="120">
-      <rect width="100%" height="100%" fill="#e5e7eb"/>
-      <text x="50%" y="50%" font-family="Arial, sans-serif" font-size="14" fill="#6b7280"
-            text-anchor="middle" dominant-baseline="middle">No Image</text>
-    </svg>`);
-  if (imgEl) {
-    imgEl.src = d.imageUrl || PH;
-    imgEl.alt = d.trademarkName || 'Marka Görseli';
-    imgEl.addEventListener('error', () => { imgEl.src = PH; }, { once: true });
+function displaySingleResult(data) {
+  _toggleActionButtons(true);
+  if (!data) {
+    showNotification("Veri bulunamadı.", 'warning');
+    return;
   }
-
-  const ab = document.getElementById('actionButtons');
-  if (ab) ab.style.display = 'flex';
-}
-
   
   document.getElementById('heroTitle').textContent = data.trademarkName || 'Marka Adı Bulunamadı';
   document.getElementById('applicationNumber').textContent = data.applicationNumber || 'Bulunamadı';
   document.getElementById('applicationDate').textContent = data.applicationDate || 'Bulunamadı';
-    const imgEl = document.getElementById('brandImage');
-    const __PH__ = 'data:image/svg+xml;utf8,' + encodeURIComponent(`
-        <svg xmlns="http://www.w3.org/2000/svg" width="180" height="120">
-            <rect width="100%" height="100%" fill="#e5e7eb"/>
-            <text x="50%" y="50%" font-family="Arial, sans-serif" font-size="14" fill="#6b7280"
-                text-anchor="middle" dominant-baseline="middle">No Image</text>
-        </svg>
-        `);
-    if (!data.imageUrl) {
-    imgEl.src = __PH__;
-    } else {
-    imgEl.src = data.imageUrl;
-    imgEl.addEventListener('error', () => { imgEl.src = __PH__; }, { once: true });
-    }
-
+  document.getElementById('brandImage').src = data.imageUrl || '';
   document.getElementById('brandImage').alt = data.trademarkName || 'Marka Görseli';
   
-  singleResultContainer.classList.remove('d-none');
+  _show('singleResultContainer'); _toggleActionButtons(true);
+}
 
 // Diğer butonların (Kaydet, İptal) mantığı buraya eklenecek
 document.getElementById('savePortfolioBtn').addEventListener('click', () => {
