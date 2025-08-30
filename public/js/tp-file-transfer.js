@@ -132,13 +132,40 @@ queryBtn.addEventListener('click', async () => {
 // Tekil sonuçları göster
 
 // Tekil sonuçları göster
+
 function displaySingleResult(resultData) {
   if (!resultData) {
     showNotification("Veri bulunamadı.", 'warning');
     return;
   }
-  
-  document.getElementById('heroTitle').textContent = resultData.trademarkName || 'Marka Adı Bulunamadı';
+  // Fill hero fields
+  const titleEl = document.getElementById('heroTitle');
+  const appNoEl = document.getElementById('applicationNumber');
+  const appDateEl = document.getElementById('applicationDate');
+  const imgEl = document.getElementById('brandImage');
+  const placeholderImg = 'data:image/svg+xml;utf8,' + encodeURIComponent(`
+    <svg xmlns="http://www.w3.org/2000/svg" width="180" height="120">
+      <rect width="100%" height="100%" fill="#e5e7eb"/>
+      <text x="50%" y="50%" font-family="Arial, sans-serif" font-size="14" fill="#6b7280"
+            text-anchor="middle" dominant-baseline="middle">Görsel Yok</text>
+    </svg>`);
+
+  if (titleEl) titleEl.textContent = resultData.trademarkName || 'Marka Adı Bulunamadı';
+  if (appNoEl) appNoEl.textContent = resultData.applicationNumber || 'Bulunamadı';
+  if (appDateEl) appDateEl.textContent = resultData.applicationDate || 'Bulunamadı';
+
+  if (imgEl) {
+    imgEl.src = resultData.imageUrl || placeholderImg;
+    imgEl.alt = resultData.trademarkName || 'Marka Görseli';
+    imgEl.addEventListener('error', () => { imgEl.src = placeholderImg; }, { once: true });
+  }
+
+  const single = document.getElementById('singleResultContainer');
+  if (single) single.classList.remove('d-none');
+  const ab = document.getElementById('actionButtons');
+  if (ab) ab.style.display = 'flex';
+}
+document.getElementById('heroTitle').textContent = resultData.trademarkName || 'Marka Adı Bulunamadı';
   document.getElementById('applicationNumber').textContent = resultData.applicationNumber || 'Bulunamadı';
   document.getElementById('applicationDate').textContent = resultData.applicationDate || 'Bulunamadı';
   
@@ -162,26 +189,7 @@ function displaySingleResult(resultData) {
   
   if (singleResultContainer) singleResultContainer.classList.remove('d-none');
   actionButtons.style.display = 'block';
-}
-  document.getElementById('heroTitle').textContent = data.trademarkName || 'Marka Adı Bulunamadı';
-  document.getElementById('applicationNumber').textContent = data.applicationNumber || 'Bulunamadı';
-  document.getElementById('applicationDate').textContent = data.applicationDate || 'Bulunamadı';
-    const imgEl = document.getElementById('brandImage');
-    const __PH__ = 'data:image/svg+xml;utf8,' + encodeURIComponent(`
-        <svg xmlns="http://www.w3.org/2000/svg" width="180" height="120">
-            <rect width="100%" height="100%" fill="#e5e7eb"/>
-            <text x="50%" y="50%" font-family="Arial, sans-serif" font-size="14" fill="#6b7280"
-                text-anchor="middle" dominant-baseline="middle">No Image</text>
-        </svg>
-        `);
-    if (!data.imageUrl) {
-    imgEl.src = __PH__;
-    } else {
-    imgEl.src = data.imageUrl;
-    imgEl.addEventListener('error', () => { imgEl.src = __PH__; }, { once: true });
-    }
 
-  document.getElementById('brandImage').alt = data.trademarkName || 'Marka Görseli';
   const __ab=document.getElementById('actionButtons'); if(__ab) __ab.style.display='block';
 
 // Diğer butonların (Kaydet, İptal) mantığı buraya eklenecek
