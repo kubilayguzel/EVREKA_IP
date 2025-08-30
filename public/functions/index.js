@@ -3598,311 +3598,337 @@ export const adminDeleteUser = onCall({ region: "europe-west1" }, async (req) =>
   return { ok: true, uid };
 });
 
-// TÜRKPATENT SCRAPING FONKSİYONU
+// TÜRKPATENT SCRAPING FONKSİYONU - DÜZELTİLMİŞ VERSİYON
 import { https } from 'firebase-functions/v2';
 import axios from 'axios';
 import * as cheerio from 'cheerio';
 
-const TURKPATENT_URL = 'https://www.turkpatent.gov.tr/arastirma-yap?form=trademark';
+// Güncel URL'i kullan
+const TURKPATENT_URL = 'https://www.turkpatent.gov.tr/arastirma-yap';
 
 export const scrapeTrademark = https.onCall(async (request) => {
   const { basvuruNo } = request.data;
   logger.info('[scrapeTrademark] Function çağrıldı', { basvuruNo });
 
   if (!basvuruNo) {
-    logger.error('[scrapeTrademark] Başvuru numarası eksik');
     throw new https.HttpsError('invalid-argument', 'Başvuru numarası belirtilmelidir.');
   }
 
   try {
-    // İlk olarak ana sayfayı yükle ve CSRF token'ı al
+    // Daha gerçekçi User-Agent ve headers kullan
+    const headers = {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+      'Accept-Language': 'tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7',
+      'Accept-Encoding': 'gzip, deflate, br',
+      'Connection': 'keep-alive',
+      'Upgrade-Insecure-Requests': '1',
+      'Sec-Fetch-Dest': 'document',
+      'Sec-Fetch-Mode': 'navigate',
+      'Sec-Fetch-Site': 'none',
+      'Cache-Control': 'max-age=0'
+    };
+
+    // Önce ana sayfayı ziyaret et
     logger.info('[scrapeTrademark] Ana sayfa yükleniyor...');
     const initialResponse = await axios.get(TURKPATENT_URL, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-        'Accept-Language': 'tr-TR,tr;q=0.8,en-US;q=0.5,en;q=0.3',
-        'Accept-Encoding': 'gzip, deflate, br',
-        'Connection': 'keep-alive',
-        'Upgrade-Insecure-Requests': '1'
-      }
+      headers,
+      timeout: 30000,
+      maxRedirects: 5
     });
 
     const $ = cheerio.load(initialResponse.data);
     
-    // CSRF token'ı veya form token'ını ara
+    // Farklı token türlerini ara
     let csrfToken = $('meta[name="csrf-token"]').attr('content') ||
+                   $('meta[name="_token"]').attr('content') ||
                    $('input[name="_token"]').val() ||
-                   $('input[name="csrf_token"]').val();
+                   $('input[name="csrf_token"]').val() ||
+                   $('input[name="authenticity_token"]').val();
 
-    // Session cookies'i al
+    // Cookies'i topla
     const cookies = initialResponse.headers['set-cookie'] || [];
-    const cookieString = cookies.map(cookie => cookie.split(';')[0]).join('; ');
+    let cookieString = '';
+    
+    if (cookies.length > 0) {
+      cookieString = cookies
+        .map(cookie => cookie.split(';')[0])
+        .join('; ');
+    }
 
-    logger.info('[scrapeTrademark] CSRF token ve cookies hazırlandı', { 
+    logger.info('[scrapeTrademark] Token ve cookies hazırlandı', { 
       hasToken: !!csrfToken, 
-      cookieCount: cookies.length 
+      tokenLength: csrfToken?.length || 0,
+      cookieCount: cookies.length,
+      cookieString: cookieString.substring(0, 100) + '...'
     });
 
-    // Form verilerini hazırla (Chrome eklentisinin yaptığı gibi)
-    const formData = new URLSearchParams({
-      'applicationNumber': basvuruNo.toString(),
-      'searchType': 'applicationNumber', // veya site yapısına göre
-      '_token': csrfToken || '',
-      'submit': 'Sorgula'
-    });
+    // Form verilerini TÜRKPATENT'e uygun şekilde hazırla
+    const formData = new FormData();
+    
+    // Ana form alanları
+    formData.append('applicationNumber', basvuruNo);
+    formData.append('searchType', 'applicationNumber');
+    formData.append('form', 'trademark');
+    
+    // Token varsa ekle
+    if (csrfToken) {
+      formData.append('_token', csrfToken);
+    }
 
     // POST isteği gönder
     logger.info('[scrapeTrademark] Sorgulama isteği gönderiliyor...', { basvuruNo });
+    
     const searchResponse = await axios.post(TURKPATENT_URL, formData, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-        'Accept-Language': 'tr-TR,tr;q=0.8,en-US;q=0.5,en;q=0.3',
-        'Content-Type': 'application/x-www-form-urlencoded',
+        ...headers,
+        'Content-Type': 'multipart/form-data',
         'Referer': TURKPATENT_URL,
-        'Cookie': cookieString,
-        'Connection': 'keep-alive',
-        'Upgrade-Insecure-Requests': '1'
+        'Origin': 'https://www.turkpatent.gov.tr',
+        'Cookie': cookieString
       },
-      maxRedirects: 5,
-      timeout: 30000
+      timeout: 45000,
+      maxRedirects: 10
     });
 
     logger.info('[scrapeTrademark] Sorgulama yanıtı alındı', { 
       status: searchResponse.status,
-      contentLength: searchResponse.data.length 
+      contentLength: searchResponse.data?.length || 0,
+      finalUrl: searchResponse.request?.res?.responseUrl || 'bilinmiyor'
     });
 
     // Sonuçları parse et
     const $result = cheerio.load(searchResponse.data);
     
-    // TÜRKPATENT sitesinin gerçek HTML yapısına göre selector'lar
+    // Sayfa içeriğini kontrol et
+    const bodyText = $result('body').text().toLowerCase();
+    
+    // "Kayıt bulunamadı" kontrolü
+    const notFoundMessages = [
+      'kayıt bulunamadı',
+      'sonuç bulunamadı', 
+      'başvuru bulunamadı',
+      'no record found',
+      'no results found',
+      'arama sonucu bulunamadı'
+    ];
+    
+    const isNotFound = notFoundMessages.some(msg => bodyText.includes(msg));
+    
+    if (isNotFound) {
+      logger.info('[scrapeTrademark] Kayıt bulunamadı mesajı tespit edildi');
+      return {
+        applicationNumber: basvuruNo,
+        trademarkName: null,
+        applicationDate: null,
+        owner: null,
+        status: 'Kayıt Bulunamadı',
+        imageUrl: null,
+        found: false,
+        message: 'Belirtilen başvuru numarası için kayıt bulunamadı'
+      };
+    }
+
+    // Debug için sayfa içeriğinin bir kısmını logla
+    const sampleContent = $result('body').text().substring(0, 500);
+    logger.info('[scrapeTrademark] Sayfa içeriği örneği:', { 
+      bodyLength: $result('body').text().length,
+      sampleContent 
+    });
+
+    // Geliştirilmiş selector'lar - TÜRKPATENT'in yeni yapısına uygun
     const selectors = {
       trademarkName: [
-        'td:contains("Marka Adı") + td',
+        // Tablo tabanlı selector'lar
+        'td:contains("Marka Adı"):not(:has(*)) + td',
+        'td:contains("Marka"):not(:has(*)) + td', 
         '.MuiTableCell-body:contains("Marka Adı") + .MuiTableCell-body',
-        'tr:has(td:contains("Marka Adı")) td:last-child'
+        
+        // Div tabanlı selector'lar
+        '.detail-row:contains("Marka Adı") .detail-value',
+        '.info-row:contains("Marka") .info-value',
+        
+        // Form element'leri
+        'input[name*="trademark"], input[name*="marka"]',
+        
+        // Genel metin arama
+        ':contains("Marka Adı"):last'
       ],
+      
       applicationDate: [
-        'td:contains("Başvuru Tarihi") + td',
+        'td:contains("Başvuru Tarihi"):not(:has(*)) + td',
+        'td:contains("Application Date"):not(:has(*)) + td',
         '.MuiTableCell-body:contains("Başvuru Tarihi") + .MuiTableCell-body',
-        'tr:has(td:contains("Başvuru Tarihi")) td:nth-child(4)'
+        '.detail-row:contains("Başvuru Tarihi") .detail-value',
+        'input[name*="applicationDate"], input[name*="basvuru"]'
       ],
-      registrationNumber: [
-        'td:contains("Tescil Numarası") + td',
-        '.MuiTableCell-body:contains("Tescil Numarası") + .MuiTableCell-body'
-      ],
-      registrationDate: [
-        'td:contains("Tescil Tarihi") + td',
-        '.MuiTableCell-body:contains("Tescil Tarihi") + .MuiTableCell-body'
-      ],
+      
       owner: [
-        'td:contains("Sahip Bilgileri") + td',
-        '.MuiTableCell-body:contains("Sahip Bilgileri") + .MuiTableCell-body'
+        'td:contains("Sahip"):not(:has(*)) + td',
+        'td:contains("Applicant"):not(:has(*)) + td',
+        'td:contains("Başvuru Sahibi"):not(:has(*)) + td',
+        '.MuiTableCell-body:contains("Sahip") + .MuiTableCell-body',
+        '.detail-row:contains("Sahip") .detail-value'
       ],
-      representative: [
-        'td:contains("Vekil Bilgileri") + td',
-        '.MuiTableCell-body:contains("Vekil Bilgileri") + .MuiTableCell-body'
-      ],
-      niceClasses: [
-        'td:contains("Nice Sınıfları") + td',
-        '.MuiTableCell-body:contains("Nice Sınıfları") + .MuiTableCell-body'
-      ],
+      
       status: [
-        'td:contains("Karar") + td',
-        '.MuiTableCell-body:contains("Karar") + .MuiTableCell-body'
+        'td:contains("Durum"):not(:has(*)) + td',
+        'td:contains("Status"):not(:has(*)) + td',
+        'td:contains("Karar"):not(:has(*)) + td',
+        '.MuiTableCell-body:contains("Durum") + .MuiTableCell-body',
+        '.status-badge, .badge'
       ],
+      
       imageUrl: [
-        '.jss155 img',
+        '.trademark-image img',
+        '.marka-resmi img', 
         'fieldset img',
-        'img[width="150"]'
+        'img[alt*="marka"]',
+        'img[alt*="trademark"]',
+        '.image-container img',
+        'img[width]'
       ]
     };
 
-    // Her alan için selector'ları dene - TÜRKPATENT spesifik
-    function findValue(selectorArray, isImage = false) {
+    // Veri çıkarma fonksiyonu
+    function extractValue(selectorArray, isImage = false) {
       for (const selector of selectorArray) {
         try {
-          const element = $result(selector);
-          if (element.length > 0) {
+          const elements = $result(selector);
+          
+          for (let i = 0; i < elements.length; i++) {
+            const el = $result(elements[i]);
+            
             if (isImage) {
-              return element.attr('src') || '';
+              const src = el.attr('src');
+              if (src && !src.includes('placeholder') && !src.includes('default')) {
+                return src;
+              }
             } else {
-              let text = element.text().trim();
-              // Boş veya sadece "-" olan değerleri atla
-              if (text && text !== '-') return text;
+              let text = el.text().trim();
+              
+              // Input elementleri için value attribute'u kontrol et
+              if (!text && el.is('input')) {
+                text = el.val() || el.attr('value') || '';
+              }
+              
+              // Geçerli bir değer varsa döndür
+              if (text && text !== '-' && text !== 'N/A' && text.length > 1) {
+                return text;
+              }
             }
           }
         } catch (e) {
+          logger.warn(`[scrapeTrademark] Selector hatası: ${selector}`, { error: e.message });
           continue;
         }
       }
       return null;
     }
 
-    // Özel parsing fonksiyonu - MUI tablo yapısı için
-    function findValueInTable(labelText) {
+    // Geliştirilmiş tablo arama fonksiyonu
+    function findInTables(labelText) {
       try {
-        // Tablo satırlarını tara
-        const rows = $result('tr');
-        for (let i = 0; i < rows.length; i++) {
-          const row = $result(rows[i]);
-          const cells = row.find('td, .MuiTableCell-body');
+        const tables = $result('table');
+        
+        for (let i = 0; i < tables.length; i++) {
+          const $table = $result(tables[i]);
+          const rows = $table.find('tr');
           
-          for (let j = 0; j < cells.length; j++) {
-            const cell = $result(cells[j]);
-            const cellText = cell.text().trim();
+          for (let j = 0; j < rows.length; j++) {
+            const $row = $result(rows[j]);
+            const cells = $row.find('td, th');
             
-            if (cellText.includes(labelText)) {
-              // Bir sonraki hücreyi kontrol et
-              if (j + 1 < cells.length) {
-                const nextCell = $result(cells[j + 1]);
-                const value = nextCell.text().trim();
-                if (value && value !== '-') return value;
+            for (let k = 0; k < cells.length; k++) {
+              const $cell = $result(cells[k]);
+              const cellText = $cell.text().trim().toLowerCase();
+              
+              if (cellText.includes(labelText.toLowerCase())) {
+                // Bir sonraki hücreyi kontrol et
+                if (k + 1 < cells.length) {
+                  const nextValue = $result(cells[k + 1]).text().trim();
+                  if (nextValue && nextValue !== '-') {
+                    return nextValue;
+                  }
+                }
+                
+                // Aynı satırın son hücresini kontrol et
+                if (cells.length > 2) {
+                  const lastValue = $result(cells[cells.length - 1]).text().trim();
+                  if (lastValue && lastValue !== '-') {
+                    return lastValue;
+                  }
+                }
               }
-              // Aynı satırın son hücresini kontrol et
-              const lastCell = $result(cells[cells.length - 1]);
-              const lastValue = lastCell.text().trim();
-              if (lastValue && lastValue !== '-') return lastValue;
             }
           }
         }
-        return null;
       } catch (e) {
-        return null;
+        logger.warn('[scrapeTrademark] Tablo arama hatası:', { error: e.message });
       }
+      return null;
     }
 
-    // Verileri çıkar - TÜRKPATENT spesifik yöntemlerle
-    let trademarkName = findValueInTable('Marka Adı') || findValue(selectors.trademarkName);
-    let applicationDate = findValueInTable('Başvuru Tarihi') || findValue(selectors.applicationDate);
-    let registrationNumber = findValueInTable('Tescil Numarası') || findValue(selectors.registrationNumber);
-    let registrationDate = findValueInTable('Tescil Tarihi') || findValue(selectors.registrationDate);
-    let owner = findValueInTable('Sahip Bilgileri') || findValue(selectors.owner);
-    let representative = findValueInTable('Vekil Bilgileri') || findValue(selectors.representative);
-    let niceClasses = findValueInTable('Nice Sınıfları') || findValue(selectors.niceClasses);
-    let status = findValueInTable('Karar') || findValueInTable('Durumu') || findValue(selectors.status);
-    let imageUrl = findValue(selectors.imageUrl, true);
+    // Verileri çıkar
+    let trademarkName = extractValue(selectors.trademarkName) || findInTables('Marka Adı');
+    let applicationDate = extractValue(selectors.applicationDate) || findInTables('Başvuru Tarihi');
+    let owner = extractValue(selectors.owner) || findInTables('Sahip') || findInTables('Başvuru Sahibi');
+    let status = extractValue(selectors.status) || findInTables('Durum') || findInTables('Karar');
+    let imageUrl = extractValue(selectors.imageUrl, true);
 
-    // Owner bilgisini temizle (şirket numarası ve adresi çıkar, sadece şirket adını al)
+    // Owner bilgisini temizle
     if (owner) {
       const lines = owner.split('\n').map(line => line.trim()).filter(line => line);
-      // İkinci satır genellikle şirket adıdır
-      if (lines.length >= 2) {
+      if (lines.length > 1) {
+        // Genellikle ikinci satır şirket adıdır
         owner = lines[1];
       } else {
         owner = lines[0];
       }
-    }
-
-    // Sonuç bulunamadıysa alternatif yöntemler
-    if (!trademarkName && !applicationDate) {
-      logger.warn('[scrapeTrademark] Standart yöntemlerle veri bulunamadı, alternatif yöntemler deneniyor');
-      
-      // Fieldset içindeki tüm tabloları tara
-      const fieldsets = $result('fieldset');
-      fieldsets.each((i, fieldset) => {
-        const $fieldset = $result(fieldset);
-        const legend = $fieldset.find('legend').text().trim();
-        
-        if (legend.includes('Marka Bilgileri')) {
-          const table = $fieldset.find('table tbody');
-          const rows = table.find('tr');
-          
-          rows.each((j, row) => {
-            const $row = $result(row);
-            const cells = $row.find('td');
-            
-            if (cells.length >= 2) {
-              const label = $result(cells[0]).text().trim();
-              const value = $result(cells[1]).text().trim();
-              
-              if (label === 'Marka Adı' && !trademarkName && value !== '-') {
-                trademarkName = value;
-              } else if (label === 'Başvuru Tarihi' && !applicationDate && value !== '-') {
-                applicationDate = value;
-              }
-              
-              // Diğer kolonlar için de kontrol et
-              if (cells.length >= 4) {
-                const label2 = $result(cells[2]).text().trim();
-                const value2 = $result(cells[3]).text().trim();
-                
-                if (label2 === 'Başvuru Tarihi' && !applicationDate && value2 !== '-') {
-                  applicationDate = value2;
-                }
-              }
-            }
-          });
-        }
-      });
-    }
-
-    // Hala veri yoksa, sayfa içeriğini logla
-    if (!trademarkName) {
-      logger.warn('[scrapeTrademark] Veri bulunamadı, sayfa içeriği loglanıyor');
-      const bodyText = $result('body').text().substring(0, 1000);
-      logger.info('[scrapeTrademark] Sayfa içeriği örneği:', { bodyText });
-      
-      // "Kayıt bulunamadı" gibi mesajları kontrol et
-      const notFoundMessages = [
-        'kayıt bulunamadı',
-        'sonuç bulunamadı',
-        'no record found',
-        'başvuru bulunamadı'
-      ];
-      
-      const pageContent = $result('body').text().toLowerCase();
-      const isNotFound = notFoundMessages.some(msg => pageContent.includes(msg));
-      
-      if (isNotFound) {
-        logger.info('[scrapeTrademark] Kayıt bulunamadı mesajı tespit edildi');
-        return {
-          applicationNumber: basvuruNo,
-          trademarkName: null,
-          applicationDate: null,
-          owner: null,
-          status: 'Kayıt Bulunamadı',
-          imageUrl: null,
-          found: false
-        };
+      // Çok uzun isimleri kısalt
+      if (owner.length > 100) {
+        owner = owner.substring(0, 100) + '...';
       }
     }
 
     // Görsel URL'ini düzenle
-    if (imageUrl && !imageUrl.startsWith('http') && !imageUrl.startsWith('data:')) {
+    if (imageUrl) {
       if (imageUrl.startsWith('//')) {
         imageUrl = 'https:' + imageUrl;
       } else if (imageUrl.startsWith('/')) {
         imageUrl = 'https://www.turkpatent.gov.tr' + imageUrl;
+      } else if (!imageUrl.startsWith('http')) {
+        imageUrl = 'https://www.turkpatent.gov.tr/' + imageUrl;
       }
     }
 
-    // Placeholder görsel oluştur
-    if (!imageUrl) {
-      imageUrl = 'data:image/svg+xml;utf8,' + encodeURIComponent(`
-        <svg xmlns="http://www.w3.org/2000/svg" width="180" height="120">
-          <rect width="100%" height="100%" fill="#e5e7eb"/>
-          <text x="50%" y="50%" font-family="Arial, sans-serif" font-size="14" fill="#6b7280"
-                text-anchor="middle" dominant-baseline="middle">Görsel Yok</text>
-        </svg>
-      `);
+    // Veri bulunma durumunu değerlendir
+    const found = !!(trademarkName || applicationDate || owner);
+    
+    if (!found) {
+      logger.warn('[scrapeTrademark] Hiçbir veri çıkarılamadı - sayfa yapısı değişmiş olabilir');
+      
+      // Debug için HTML'in bir kısmını kaydet
+      const htmlSample = $result.html().substring(0, 1000);
+      logger.info('[scrapeTrademark] HTML örneği:', { htmlSample });
     }
 
+    // Sonuç objesini oluştur
     const result = {
       applicationNumber: basvuruNo,
-      trademarkName: trademarkName || `Marka - ${basvuruNo}`,
+      trademarkName: trademarkName || null,
       applicationDate: applicationDate || null,
       owner: owner || null,
       status: status || 'Bilinmiyor',
-      imageUrl,
-      found: !!(trademarkName || applicationDate) // Veri bulundu mu?
+      imageUrl: imageUrl || null,
+      found,
+      scrapedAt: new Date().toISOString(),
+      source: 'TÜRKPATENT'
     };
 
     logger.info('[scrapeTrademark] Scraping tamamlandı', { 
-      ...result, 
-      imageUrl: result.imageUrl?.substring(0, 100) + '...' // URL'yi kısalt
+      ...result,
+      imageUrl: result.imageUrl ? `${result.imageUrl.substring(0, 50)}...` : null
     });
 
     return result;
@@ -3912,18 +3938,35 @@ export const scrapeTrademark = https.onCall(async (request) => {
       message: error.message,
       code: error.code,
       status: error.response?.status,
-      stack: error.stack
+      url: error.config?.url,
+      stack: error.stack?.split('\n').slice(0, 5).join('\n')
     });
 
-    // Ağ hatalarını özel olarak işle
-    if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
-      throw new https.HttpsError('unavailable', 'TÜRKPATENT sitesine ulaşılamıyor.');
-    } else if (error.response?.status === 429) {
-      throw new https.HttpsError('resource-exhausted', 'Çok fazla istek gönderildi. Lütfen bekleyin.');
-    } else if (error.response?.status >= 500) {
-      throw new https.HttpsError('internal', 'TÜRKPATENT sitesinde geçici bir sorun var.');
+    // Belirli hata türlerine göre özel mesajlar
+    if (error.code === 'ENOTFOUND') {
+      throw new https.HttpsError('unavailable', 'TÜRKPATENT sitesine erişim sağlanamıyor.');
+    } 
+    
+    if (error.code === 'ECONNREFUSED') {
+      throw new https.HttpsError('unavailable', 'TÜRKPATENT sitesi bağlantı reddediyor.');
+    }
+    
+    if (error.code === 'ETIMEDOUT') {
+      throw new https.HttpsError('deadline-exceeded', 'TÜRKPATENT sitesi zaman aşımına uğradı.');
+    }
+    
+    if (error.response?.status === 429) {
+      throw new https.HttpsError('resource-exhausted', 'Çok fazla istek. Lütfen bir süre bekleyip tekrar deneyin.');
+    }
+    
+    if (error.response?.status === 403) {
+      throw new https.HttpsError('permission-denied', 'TÜRKPATENT sitesi erişimi engelliyor.');
+    }
+    
+    if (error.response?.status >= 500) {
+      throw new https.HttpsError('internal', 'TÜRKPATENT sitesinde sunucu hatası.');
     }
 
-    throw new https.HttpsError('internal', 'Sorgulama işlemi başarısız oldu: ' + error.message);
+    throw new https.HttpsError('internal', `Sorgulama hatası: ${error.message}`);
   }
 });
