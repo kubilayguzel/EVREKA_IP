@@ -413,20 +413,6 @@
 #transferList { counter-reset: rownum; }
 #transferList .list-group-item { position: relative; padding-left: 48px; }
 
-/* Listeye Ekle butonu diğer butonlarla tutarlı olsun */
-.section-card .input-group-append .btn { 
-    height: 44px; 
-    background-color: #1e3c72;
-    border-color: #1e3c72;
-    color: white;
-    border-radius: 0 12px 12px 0;
-    box-shadow: 0 4px 12px rgba(30, 60, 114, 0.3);
-}
-
-.section-card .input-group-append .btn:hover {
-    background-color: #2a5490;
-    border-color: #2a5490;
-}
 
 /* Liste görünürlüğü için stiller */
 .remove-btn {
@@ -493,7 +479,7 @@
             <div class="input-group">
               <input type="text" id="basvuruNoInput" class="form-control" placeholder="Başvuru Numarası Girin">
               <div class="input-group-append">
-                <button class="btn btn-primary" type="button" id="addBasvuruNoBtn">Listeye Ekle</button></div>
+                <button class="btn btn-warning" type="button" id="addBasvuruNoBtn">Listeye Ekle</button></div>
             </div>
           </div>
         </form>
@@ -512,7 +498,17 @@
       </section>
 
       <!-- Bölüm 3: Sorgulama Sonuçları -->
-      \1<div class="d-flex align-items-center justify-content-between">\2<div id="actionButtons" class="action-buttons" style="display:none;"><div class="d-flex align-items-center"><button id="cancelBtn" class="btn btn-outline-secondary">İptal</button><button id="savePortfolioBtn" class="btn btn-success ml-2">Kaydet - Portföy</button><button id="saveThirdPartyBtn" class="btn btn-info ml-2">Kaydet - 3.Taraf</button></div></div></div>
+      <section class="section-card" id="resultsCard">
+        <div class="d-flex align-items-center justify-content-between">
+          <h3 class="section-title m-0">Sorgulama Sonuçları</h3>
+          <div id="actionButtons" class="action-buttons" style="display:none;">
+            <div class="d-flex align-items-center">
+              <button id="cancelBtn" class="btn btn-outline-secondary">İptal</button>
+              <button id="savePortfolioBtn" class="btn btn-success ml-2">Kaydet - Portföy</button>
+              <button id="saveThirdPartyBtn" class="btn btn-info ml-2">Kaydet - 3.Taraf</button>
+            </div>
+          </div>
+        </div>
         <div id="singleResultContainer" class="d-none">
           <div id="heroCard" class="section-card" style="padding:20px;">
             <div class="hero">
@@ -548,9 +544,8 @@
               <tbody id="resultsTableBody"></tbody>
             </table>
           </div>
-        </div>
-        </div>
-      </section>
+</div>
+</section>
 
     </main>
   </div>
