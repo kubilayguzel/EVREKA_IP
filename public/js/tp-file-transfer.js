@@ -50,7 +50,8 @@ addBasvuruNoBtn.addEventListener('click', () => {
       <span>${number}</span>
       <button class="btn btn-sm btn-danger remove-btn">X</button>
     `;
-    transferList.appendChild(li);
+    \1
+refreshTransferListVisibility();
     basvuruNoInput.value = '';
     
     // Tekil transfer seçili ise, sadece bir eleman eklenebilir
