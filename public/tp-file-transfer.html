@@ -4,8 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>TÜRKPATENT Dosya Aktarımı</title>
-  <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
-  <link rel="stylesheet" href="./css/shared-styles.css">
+  <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" />
+  <!-- CSS path without leading ./ to avoid path resolution issues on GitHub Pages -->
+  <link rel="stylesheet" href="css/shared-styles.css" />
   <style>
     .result-list { max-height: 400px; overflow-y: auto; }
     .status-ok { color: green; font-weight: bold; }
@@ -15,6 +16,8 @@
 </head>
 <body>
   <div id="notification-container" class="notification-container"></div>
+
+  <!-- Sol menü + top header burada inject ediliyor -->
   <div id="layout-placeholder"></div>
 
   <div class="page-wrapper">
@@ -97,8 +100,7 @@
                     <th>Sorgu Sonucu</th>
                   </tr>
                 </thead>
-                <tbody id="resultsTableBody">
-                </tbody>
+                <tbody id="resultsTableBody"></tbody>
               </table>
             </div>
           </div>
@@ -115,8 +117,31 @@
     </div>
   </div>
 
-<script type="module" src="./js/layout-loader.js"></script>
-<script type="module" src="./firebase-config.js"></script>
-<script type="module" src="js/tp-file-transfer.js"></script>
+  <!-- Load order: firebase-config -> layout-loader -> page script -->
+  <script type="module" src="firebase-config.js"></script>
+  <script type="module" src="js/layout-loader.js"></script>
+  <script type="module" src="js/tp-file-transfer.js"></script>
+
+  <!-- Diagnostics: warn if layout didn't inject within 2s -->
+  <script>
+    (function() {
+      const started = Date.now();
+      setTimeout(() => {
+        const ph = document.getElementById('layout-placeholder');
+        if (ph && !ph.dataset.layoutInjected) {
+          console.warn('[layout-check] layout-placeholder present but no layout injected after ' + (Date.now() - started) + 'ms.');
+          console.warn('[layout-check] Check: 1) Network 404 for js/layout-loader.js  2) Console errors inside layout-loader.js  3) CSS path css/shared-styles.css');
+        }
+      }, 2000);
+    })();
+  </script>
+
+  <script type="module">
+    import { loadSharedLayout } from './js/layout-loader.js';
+    document.addEventListener('DOMContentLoaded', () => {
+      loadSharedLayout({ activeMenuLink: 'tp-file-transfer.html' });
+    });
+  </script>
+
 </body>
 </html>
