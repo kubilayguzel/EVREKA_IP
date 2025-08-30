@@ -370,7 +370,31 @@
 .section-card .form-control { border-radius: 12px; height: 44px; }
 .section-card .form-check-input { width: 1.1rem; height: 1.1rem; }
 
+
+/* action buttons alignment + spacing */
+#actionButtons { width: 100%; }
+#actionButtons .d-flex { justify-content: flex-end; }
+#actionButtons .d-flex > * + * { margin-left: 10px; }
+
+/* add gap between input and 'Listeye Ekle' */
+.section-card .input-group-append { margin-left: 8px; }
+.section-card .input-group-append .btn { height: 44px; }
+
+/* ordered transfer list with numbers (BS4-compatible) */
+#transferList { counter-reset: rownum; }
+#transferList .list-group-item {
+  position: relative;
+  padding-left: 48px;
+}
+#transferList .list-group-item::before {
+  counter-increment: rownum;
+  content: counter(rownum) ".";
+  position: absolute;
+  left: 16px; top: 50%; transform: translateY(-50%);
+  font-weight: 600; color: #6b7280;
+}
 </style>
+
 </head>
 
 <body>
@@ -426,7 +450,7 @@
       <section class="section-card" id="transferListCard">
         <h3 class="section-title">Aktarım Listesi</h3>
         <div id="transferListContainer" class="d-none">
-          <ul id="transferList" class="list-group result-list mb-3"></ul>
+          <ol id="transferList" class="list-group result-list mb-3"></ol>
           <div class="d-flex justify-content-end">
             <button id="queryBtn" class="btn btn-primary">Sorgula</button>
           </div>
@@ -475,10 +499,10 @@
         </div>
 
         <div id="actionButtons" class="action-buttons" style="display:none;">
-          <div class="d-flex justify-content-end">
-            <button id="cancelBtn" class="btn btn-secondary">İptal</button>
-            <button id="savePortfolioBtn" class="btn btn-primary">Kaydet - Portföy</button>
-            <button id="saveThirdPartyBtn" class="btn btn-primary">Kaydet - 3.Taraf</button>
+          <div class="d-flex justify-content-end justify-content-end">
+            <button id="cancelBtn" class="btn btn-outline-secondary">İptal</button>
+            <button id="savePortfolioBtn" class="btn btn-success">Kaydet - Portföy</button>
+            <button id="saveThirdPartyBtn" class="btn btn-info">Kaydet - 3.Taraf</button>
           </div>
         </div>
       </section>
