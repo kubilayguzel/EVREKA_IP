@@ -131,38 +131,38 @@ queryBtn.addEventListener('click', async () => {
 
 // Tekil sonuçları göster
 
-function displaySingleResult(data) {
-  const title = document.getElementById('heroTitle');
-  const appNo = document.getElementById('applicationNumber');
-  const appDate = document.getElementById('applicationDate');
+// Tekil sonuçları göster
+function displaySingleResult(resultData) {
+  if (!resultData) {
+    showNotification("Veri bulunamadı.", 'warning');
+    return;
+  }
+  
+  document.getElementById('heroTitle').textContent = resultData.trademarkName || 'Marka Adı Bulunamadı';
+  document.getElementById('applicationNumber').textContent = resultData.applicationNumber || 'Bulunamadı';
+  document.getElementById('applicationDate').textContent = resultData.applicationDate || 'Bulunamadı';
+  
   const imgEl = document.getElementById('brandImage');
-  const single = document.getElementById('singleResultContainer');
-  const bulk = document.getElementById('bulkResultsContainer');
-
-  if (bulk) bulk.classList.add('d-none');
-  if (single) single.classList.remove('d-none');
-
-  if (title) title.textContent = data.trademarkName || '—';
-  if (appNo) appNo.textContent = data.applicationNumber || '—';
-  if (appDate) appDate.textContent = data.applicationDate || '—';
-
-  const PH = 'data:image/svg+xml;utf8,' + encodeURIComponent(`
+  const placeholderImg = 'data:image/svg+xml;utf8,' + encodeURIComponent(`
     <svg xmlns="http://www.w3.org/2000/svg" width="180" height="120">
       <rect width="100%" height="100%" fill="#e5e7eb"/>
       <text x="50%" y="50%" font-family="Arial, sans-serif" font-size="14" fill="#6b7280"
-            text-anchor="middle" dominant-baseline="middle">No Image</text>
-    </svg>`);
-  if (imgEl) {
-    imgEl.src = data.imageUrl || PH;
-    imgEl.alt = data.trademarkName || 'Marka Görseli';
-    imgEl.addEventListener('error', () => { imgEl.src = PH; }, { once: true });
+            text-anchor="middle" dominant-baseline="middle">Görsel Yok</text>
+    </svg>
+  `);
+  
+  if (!resultData.imageUrl) {
+    imgEl.src = placeholderImg;
+  } else {
+    imgEl.src = resultData.imageUrl;
+    imgEl.addEventListener('error', () => { imgEl.src = placeholderImg; }, { once: true });
   }
 
-  const ab = document.getElementById('actionButtons');
-  if (ab) ab.style.display = 'block';
-}
-
+  imgEl.alt = resultData.trademarkName || 'Marka Görseli';
   
+  if (singleResultContainer) singleResultContainer.classList.remove('d-none');
+  actionButtons.style.display = 'block';
+}
   document.getElementById('heroTitle').textContent = data.trademarkName || 'Marka Adı Bulunamadı';
   document.getElementById('applicationNumber').textContent = data.applicationNumber || 'Bulunamadı';
   document.getElementById('applicationDate').textContent = data.applicationDate || 'Bulunamadı';
