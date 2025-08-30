@@ -5,9 +5,10 @@
     <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
     <title>Giriş - IP Manager</title>
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
     <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
     <link rel="stylesheet" href="./css/shared-styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+
     <style>
         * {
             margin: 0;
@@ -447,7 +448,10 @@
             width: auto;
             display: block;
         }
-    </style>
+.password-field{position:relative}
+.password-toggle{position:absolute;right:15px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#666;font-size:1.1rem;padding:5px;transition:color 0.3s ease}
+.password-toggle:hover{color:#1e3c72}
+</style>
 </head>
 <body>
 <div class="firebase-status" id="firebaseStatus">🔄 Firebase bağlanıyor...</div>
@@ -470,11 +474,13 @@
                 </div>
                 <div class="form-group">
                     <label class="form-label" for="signin-password">Şifre</label>
-                    <input autocomplete="current-password" class="form-input" id="signin-password" required=""
-                           type="password"/>
-                    <div class="error-message" id="signin-password-error"></div>
-                </div>
-                <div class="helper-links">
+                        <div class="password-field">
+                            <input class="form-input" id="password" placeholder="••••••••" type="password" required/>
+                            <button type="button" class="password-toggle" onclick="togglePassword()">
+                                <i class="fas fa-eye" id="toggleIcon"></i>
+                            </button>
+                        </div>
+                        <div class="forgot-password">
                     <button class="link-btn" id="forgotPasswordBtn" type="button">Şifremi Unuttum</button>
                 </div>
                 <button class="auth-btn" id="signinBtn" type="submit">
@@ -823,5 +829,21 @@
     });
 </script>
 <div class="notification-container" id="notification-container"></div>
+<script>
+    function togglePassword() {
+        const passwordInput = document.getElementById('password');
+        const toggleIcon = document.getElementById('toggleIcon');
+        
+        if (passwordInput.type === 'password') {
+            passwordInput.type = 'text';
+            toggleIcon.classList.remove('fa-eye');
+            toggleIcon.classList.add('fa-eye-slash');
+        } else {
+            passwordInput.type = 'password';
+            toggleIcon.classList.remove('fa-eye-slash');
+            toggleIcon.classList.add('fa-eye');
+        }
+    }
+</script>
 </body>
 </html>
