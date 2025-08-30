@@ -77,6 +77,7 @@ const menuItems = [
         { id: 'monitoring-designs', text: 'Tasarım İzleme', link: 'monitoring-designs.html' }
     ]
     },
+    {id: 'tp-file-transfer', text: 'TÜRKPATENT Dosya Aktarımı', link: 'tp-file-transfer.html', icon: 'fas fa-exchange-alt', category: 'Araçlar'},
     { id: 'reports', text: 'Raporlar', link: '#', icon: 'fas fa-chart-line', category: 'Araçlar', disabled: true },
     { id: 'settings', text: 'Ayarlar', link: '#', icon: 'fas fa-cog', category: 'Araçlar', disabled: true }
     ];
@@ -411,7 +412,6 @@ export function ensurePersonModal() {
           <small class="text-muted">Sadece rakam, 10 hane</small>
         </div>
 
-        <!-- Doğum Tarihi (yalnız GERÇEK kişi için görünsün) -->
         <div class="form-group" id="pm_birthDateGroup" style="display:none;">
         <label for="pm_birthDate" class="form-label">Doğum Tarihi</label>
         <input id="pm_birthDate" type="date" class="form-input">
@@ -437,7 +437,6 @@ export function ensurePersonModal() {
         <textarea id="pm_address" class="form-textarea" rows="2"></textarea>
         </div>
 
-        <!-- Ülke / İl -->
         <div class="form-row" style="display:flex; gap:12px;">
         <div class="form-group" style="flex:1;">
             <label for="pm_country" class="form-label">Ülke</label>
