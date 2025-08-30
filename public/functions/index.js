@@ -3617,7 +3617,15 @@ export const scrapeTrademark = https.onCall(async (request) => {
 
     const trademarkName = $('[data-key="marka_adi"]').text() || `Test Marka - ${basvuruNo}`;
     const applicationDate = $('[data-key="basvuru_tarihi"]').text() || '30.08.2025';
-    const imageUrl = $('img.hero-img').attr('src') || 'https://via.placeholder.com/180';
+    const imageUrl = $('img.hero-img').attr('src') || (
+      'data:image/svg+xml;utf8,' + encodeURIComponent(`
+        <svg xmlns="http://www.w3.org/2000/svg" width="180" height="120">
+          <rect width="100%" height="100%" fill="#e5e7eb"/>
+          <text x="50%" y="50%" font-family="Arial, sans-serif" font-size="14" fill="#6b7280"
+                text-anchor="middle" dominant-baseline="middle">No Image</text>
+        </svg>
+      `)
+    );
 
     const result = {
       applicationNumber: basvuruNo,
