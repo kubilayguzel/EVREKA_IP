@@ -22,15 +22,15 @@ let basvuruNumbers = [];
 transferOptionRadios.forEach(radio => {
   radio.addEventListener('change', (event) => {
     if (event.target.value === 'single') {
-      transferListContainer.classList.add('d-none');
-      singleResultContainer.classList.add('d-none');
-      bulkResultsContainer.classList.add('d-none');
+      if (transferListContainer) transferListContainer.classList.add('d-none');
+      if (singleResultContainer) singleResultContainer.classList.add('d-none');
+      if (bulkResultsContainer) bulkResultsContainer.classList.add('d-none');
       actionButtons.style.display = 'none';
       basvuruNoInput.disabled = false;
     } else {
-      transferListContainer.classList.remove('d-none');
-      singleResultContainer.classList.add('d-none');
-      bulkResultsContainer.classList.add('d-none');
+      if (transferListContainer) transferListContainer.classList.remove('d-none');
+      if (singleResultContainer) singleResultContainer.classList.add('d-none');
+      if (bulkResultsContainer) bulkResultsContainer.classList.add('d-none');
       actionButtons.style.display = 'none';
       basvuruNoInput.disabled = false;
       basvuruNumbers = [];
@@ -57,7 +57,7 @@ addBasvuruNoBtn.addEventListener('click', () => {
     if (document.getElementById('singleTransfer').checked) {
       addBasvuruNoBtn.disabled = true;
       basvuruNoInput.disabled = true;
-      transferListContainer.classList.remove('d-none');
+      if (transferListContainer) transferListContainer.classList.remove('d-none');
     }
   }
 });
@@ -73,7 +73,7 @@ transferList.addEventListener('click', (event) => {
         addBasvuruNoBtn.disabled = false;
         basvuruNoInput.disabled = false;
         if (basvuruNumbers.length === 0) {
-            transferListContainer.classList.add('d-none');
+            if (transferListContainer) transferListContainer.classList.add('d-none');
         }
     }
   }
@@ -81,12 +81,12 @@ transferList.addEventListener('click', (event) => {
 
 // Sorgula butonuna tıklandığında
 queryBtn.addEventListener('click', async () => {
-  loading.classList.remove('d-none');
+  if (loading) loading.classList.remove('d-none');
   const isSingle = document.getElementById('singleTransfer').checked;
   
   if (isSingle) {
     const basvuruNo = basvuruNumbers[0];
-    singleResultContainer.classList.add('d-none');
+    if (singleResultContainer) singleResultContainer.classList.add('d-none');
     actionButtons.style.display = 'none';
     
     try {
@@ -125,7 +125,7 @@ queryBtn.addEventListener('click', async () => {
     document.getElementById('savePortfolioBtn').disabled = false;
     document.getElementById('saveThirdPartyBtn').disabled = false;
   }
-  loading.classList.add('d-none');
+  if (loading) loading.classList.add('d-none');
 });
 
 // Tekil sonuçları göster
@@ -201,11 +201,26 @@ function refreshTransferListVisibility() {
   const empty = document.getElementById('transferListEmpty');
   if (cont && empty) {
     if (hasItems) {
-      cont.classList.remove('d-none');
-      empty.classList.add('d-none');
+      if (cont) cont.classList.remove('d-none');
+      if (empty) empty.classList.add('d-none');
     } else {
-      cont.classList.add('d-none');
-      empty.classList.remove('d-none');
+      if (cont) cont.classList.add('d-none');
+      if (empty) empty.classList.remove('d-none');
     }
   }
 }
+
+
+// Add by Enter key
+(function(){
+  const input = document.getElementById('basvuruNoInput');
+  const addBtn = document.getElementById('addBasvuruNoBtn');
+  if (input && addBtn) {
+    input.addEventListener('keydown', (e)=>{
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        addBtn.click();
+      }
+    });
+  }
+})();
