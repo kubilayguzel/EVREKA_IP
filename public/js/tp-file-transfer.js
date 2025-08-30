@@ -1,6 +1,7 @@
+import { app } from '../firebase-config.js';
 import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.1.2/firebase-functions.js";
 
-const functions = getFunctions();
+const functions = getFunctions(app);
 const scrapeTrademarkFunction = httpsCallable(functions, 'scrapeTrademark');
 
 const transferOptionRadios = document.getElementsByName('transferOption');
