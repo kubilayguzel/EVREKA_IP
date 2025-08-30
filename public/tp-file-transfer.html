@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TÜRKPATENT Dosya Aktarımı</title>
+  <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" />
+  <link rel="stylesheet" href="./css/shared-styles.css" />
+  <style>
+    .result-list { max-height: 400px; overflow-y: auto; }
+    .status-ok { color: green; font-weight: bold; }
+    .status-error { color: red; font-weight: bold; }
+    .list-group-item .btn { margin-left: 10px; }
+  </style>
+</head>
+<body>
+  <div id="notification-container" class="notification-container"></div>
+  <div id="layout-placeholder"></div>
+
+  <div class="page-wrapper">
+    <main class="main-container container">
+      <div id="loading" class="alert alert-info d-none">İşlem devam ediyor…</div>
+
+      <div class="card shadow-sm mb-4">
+        <div class="card-header"><strong>TÜRKPATENT Dosya Aktarımı</strong></div>
+        <div class="card-body">
+          <form id="transferForm">
+            <div class="form-row mb-3">
+              <div class="col-md-4">
+                <label for="docType">Tür</label>
+                <select id="docType" class="form-control">
+                  <option value="trademark" selected>Marka</option>
+                  <option value="patent" disabled>Patent (Yakında)</option>
+                  <option value="design" disabled>Tasarım (Yakında)</option>
+                </select>
+              </div>
+              <div class="col-md-8">
+                <label>Transfer Seçeneği</label>
+                <div>
+                  <div class="form-check form-check-inline">
+                    <input class="form-check-input" type="radio" name="transferOption" id="singleTransfer" value="single" checked>
+                    <label class="form-check-label" for="singleTransfer">Tekil Aktarım</label>
+                  </div>
+                  <div class="form-check form-check-inline">
+                    <input class="form-check-input" type="radio" name="transferOption" id="bulkTransfer" value="bulk">
+                    <label class="form-check-label" for="bulkTransfer">Çoklu Transfer</label>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="basvuruNoInput">Başvuru No:</label>
+              <div class="input-group">
+                <input type="text" id="basvuruNoInput" class="form-control" placeholder="Başvuru Numarası Girin">
+                <div class="input-group-append">
+                  <button class="btn btn-outline-secondary" type="button" id="addBasvuruNoBtn">Listeye Ekle</button>
+                </div>
+              </div>
+            </div>
+          </form>
+
+          <div id="transferListContainer" class="d-none mt-3">
+            <label>Aktarım Listesi:</label>
+            <ul id="transferList" class="list-group result-list mb-3"></ul>
+            <button id="queryBtn" class="btn btn-primary btn-block">Sorgula</button>
+          </div>
+
+          <div id="singleResultContainer" class="d-none mt-4">
+            <div id="heroCard" class="card shadow-sm mb-4">
+              <div class="card-body hero">
+                <div class="hero-img-wrap">
+                  <img id="brandImage" class="hero-img" alt="Marka Görseli" />
+                </div>
+                <div class="hero-meta">
+                  <h4 id="heroTitle" class="mb-3"></h4>
+                  <div id="heroKv" class="kv-grid">
+                    <div class="kv-item">
+                      <div class="label">Başvuru No</div>
+                      <div class="value" id="applicationNumber"></div>
+                    </div>
+                    <div class="kv-item">
+                      <div class="label">Başvuru Tarihi</div>
+                      <div class="value" id="applicationDate"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div id="bulkResultsContainer" class="d-none mt-4">
+            <div class="table-responsive">
+              <table class="table table-hover mb-0">
+                <thead>
+                  <tr>
+                    <th>Başvuru Numarası</th>
+                    <th>Sorgu Sonucu</th>
+                  </tr>
+                </thead>
+                <tbody id="resultsTableBody">
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <div class="container my-3" id="actionButtons" style="display: none;">
+    <div class="d-flex justify-content-end gap-2">
+      <button id="cancelBtn" class="btn btn-outline-secondary">İptal</button>
+      <button id="savePortfolioBtn" class="btn btn-success">Kaydet - Portföy</button>
+      <button id="saveThirdPartyBtn" class="btn btn-info">Kaydet - 3.Taraf</button>
+    </div>
+  </div>
+
+  <script type="module" src="js/layout-loader.js"></script>
+  <script type="module" src="./firebase-config.js"></script>
+  <script type="module" src="./js/tp-file-transfer.js"></script>
+</body>
+</html>
