@@ -138,8 +138,21 @@ function displaySingleResult(data) {
   document.getElementById('heroTitle').textContent = data.trademarkName || 'Marka Adı Bulunamadı';
   document.getElementById('applicationNumber').textContent = data.applicationNumber || 'Bulunamadı';
   document.getElementById('applicationDate').textContent = data.applicationDate || 'Bulunamadı';
-  const imgEl = document.getElementById('brandImage');
-  setBrandImageSafe(imgEl, data.imageUrl);
+    const imgEl = document.getElementById('brandImage');
+    const __PH__ = 'data:image/svg+xml;utf8,' + encodeURIComponent(`
+        <svg xmlns="http://www.w3.org/2000/svg" width="180" height="120">
+            <rect width="100%" height="100%" fill="#e5e7eb"/>
+            <text x="50%" y="50%" font-family="Arial, sans-serif" font-size="14" fill="#6b7280"
+                text-anchor="middle" dominant-baseline="middle">No Image</text>
+        </svg>
+        `);
+    if (!data.imageUrl) {
+    imgEl.src = __PH__;
+    } else {
+    imgEl.src = data.imageUrl;
+    imgEl.addEventListener('error', () => { imgEl.src = __PH__; }, { once: true });
+    }
+
   document.getElementById('brandImage').alt = data.trademarkName || 'Marka Görseli';
   
   singleResultContainer.classList.remove('d-none');
