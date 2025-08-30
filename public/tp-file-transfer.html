@@ -4,192 +4,499 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>TÜRKPATENT Dosya Aktarımı</title>
-  <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" />
-  <!-- CSS path without leading ./ to avoid path resolution issues on GitHub Pages -->
-  <link rel="stylesheet" href="css/shared-styles.css" />
-  
+  <link rel="stylesheet" href="css/shared-styles.css">
+  <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+  <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
   <style>
-    :root{ --card-radius:16px; }
-    body { font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color:#333; }
-    .page-wrapper { min-height:100vh; padding-top:16px; background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%); }
-    .container { max-width: 1400px; }
-    .card { border-radius: var(--card-radius); }
-    .shadow-sm { box-shadow: 0 10px 24px rgba(0,0,0,0.08) !important; }
-    .table thead th { background:#f8f9fa; }
-    .hero{ display:flex; gap:24px; align-items:flex-start; }
-    .hero-img-wrap{ flex:0 0 auto; max-width:360px; }
-    .hero-img{ width:100%; height:auto; border-radius:12px; border:1px solid #eee; background:#fff; }
-    .hero-meta{ flex:1; min-width:300px; }
-    .hero-meta h4{ color:#1e3c72; }
-    .kv-grid{ display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:12px 20px; }
-    .result-list { max-height: 400px; overflow-y: auto; }
-    .status-ok { color: green; font-weight: bold; }
-    .status-error { color: red; font-weight: bold; }
-    .list-group-item .btn { margin-left: 10px; }
-    .action-buttons { margin-top: 12px; }
-    .action-buttons .btn { flex: 0 0 auto; height: auto; display: inline-block; padding: .5rem 1rem; border-radius: .5rem; }
-    .action-buttons .d-flex > * + * { margin-left: 8px; }
-  
-/* === Typography & Card Header (aligned with portfolio-detail) === */
-:root {
-  --card-radius: 16px;
-  --card-header-bg: #f7f9fc;
-  --card-header-text: #1f2937;
-  --card-header-border: #e5e7eb;
-  --heading: #1e3c72;
-  --muted: #6b7280;
-}
-h1, h2, h3, h4, h5 { color: var(--heading); margin-bottom: .75rem; font-weight: 600; }
-h3 { font-size: 1.15rem; }
-.card {
-  border-radius: var(--card-radius);
-  border: 1px solid rgba(0,0,0,.06);
-  overflow: hidden;
-}
-.card-header {
-  background: var(--card-header-bg);
-  color: var(--card-header-text);
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--card-header-border);
-  font-weight: 600;
-  letter-spacing: .2px;
-}
-.card-body { padding: 16px; }
-.label { color: var(--muted); font-size: .9rem; }
-.value { font-weight: 600; }
 
-</style>
+        /* Bu sayfaya özel stiller */
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333; display: flex; }
+        .page-wrapper { flex-grow: 1; display: flex; flex-direction: column; height: 100vh; overflow-y: auto; background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%); }
+        .main-container {width: 100%; padding: 30px; padding-top: 120px; margin: 0; }
+        
+        /* Task Detail specific styles */
+        .page-header { background: rgba(255, 255, 255, 0.95); padding: 30px; border-radius: 20px; margin-bottom: 30px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1); }
+        .page-title { font-size: 2em; color: #1e3c72; margin-bottom: 10px; }
+        .page-subtitle { color: #666; font-size: 1.1em; }
 
+        .section-card {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 30px;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            margin-bottom: 25px;
+        }
+        
+        .task-detail-container {
+            padding: 0; 
+            background: none; 
+            box-shadow: none; 
+        }
 
+        .section-title {
+            font-size: 1.3em;
+            color: #1e3c72;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #e1e8ed;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 25px;
+        }
+        .form-group { margin-bottom: 25px; display: flex; flex-direction: column; }
+        .form-group.full-width { grid-column: 1 / -1; }
+        .form-label { display: block; margin-bottom: 8px; color: #333; font-weight: 500; }
+        .form-input, .form-select, .form-textarea {
+            width: 100%; padding: 12px 15px; border: 2px solid #e1e8ed;
+            border-radius: 10px; font-size: 1em; transition: all 0.3s ease;
+            background: white;
+        }
+        .form-input:focus, .form-select:focus, .form-textarea:focus {
+            outline: none; border-color: #1e3c72;
+            box-shadow: 0 0 0 3px rgba(30, 60, 114, 0.1);
+        }
+        .form-textarea { min-height: 120px; resize: vertical; }
+
+        .form-actions {
+            display: flex; justify-content: flex-end; gap: 10px;
+            padding-top: 20px; border-top: 1px solid #e9ecef; margin-top: 20px;
+        }
+        .btn { padding: 12px 25px; border: none; border-radius: 8px; font-size: 1em; font-weight: 600; cursor: pointer; }
+        .btn-primary { background: #1e3c72; color: white; }
+        .btn-primary:disabled { background: #ccc; cursor: not-allowed; }
+        .btn-secondary { background: #6c757d; color: white; }
+
+        .btn-add-item {
+            background: linear-gradient(45deg, #4CAF50, #66BB6A);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.9em;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            box-shadow: 0 4px 8px rgba(0, 123, 255, 0.2);
+        }
+        .btn-add-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(0, 123, 255, 0.3);
+            background: linear-gradient(45deg, #388E3C, #4CAF50);
+        }
+        .accrual-card {
+            background: #fff;
+            border: 1px solid #ddd;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 15px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+        }
+
+        .accrual-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .accrual-card-header h4 {
+            margin: 0;
+            font-size: 1.1em;
+            color: #1e3c72;
+        }
+
+        .accrual-card-body p {
+            margin: 5px 0;
+            font-size: 0.95em;
+        }
+
+        .accrual-card-actions {
+            margin-top: 10px;
+            text-align: right;
+        }
+
+        .accrual-card-actions .edit-accrual-btn {
+            background-color: #ffc107;
+            color: #000;
+        }
+
+    .edit-accrual-btn {
+        background-color: #ffda44;
+        border: none;
+        padding: 8px 14px;
+        border-radius: 6px;
+        font-weight: bold;
+        cursor: pointer;
+        margin-top: 10px;
+    }
+
+    .edit-accrual-btn:hover {
+        background-color: #f0c800;
+    }
+    .input-with-currency { display: flex; gap: 10px; }
+    .input-with-currency .form-input { flex-grow: 1; }
+    .currency-select {
+        padding: 12px 8px;
+        border: 2px solid #e1e8ed;
+        border-radius: 10px;
+        background-color: #f8f9fa;
+        font-weight: bold;
+    }
+    .checkbox-label {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        cursor: pointer;
+        font-weight: 500;
+    }
+        .search-results-list { max-height: 200px; overflow-y: auto; border: 1px solid #ccc; border-radius: 8-px; margin-top: 5px; }
+        .search-result-item { padding: 10px; cursor: pointer; border-bottom: 1px solid #eee; }
+        .search-result-item:hover { background-color: #f0f0f0; }
+        
+        .search-result-display { 
+            background: #e9f5ff; 
+            border: 1px solid #bde0fe; 
+            padding: 15px; 
+            border-radius: 8px; 
+            margin-top: 10px; 
+            display: flex; 
+            justify-content: space-between;
+            align-items: center;
+            gap: 15px; 
+        }
+        .search-result-display-content {
+            flex-grow: 1;
+        }
+        .remove-item-btn {
+            background: #ff6b6b;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            font-size: 1.2em;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .remove-item-btn:hover {
+            background: #ff5252;
+        }
+
+        .history-list {
+            max-height: none;
+            overflow-y: visible;
+            border: 1px solid #e1e8ed;
+            border-radius: 10px;
+            padding: 15px;
+        }
+        .history-item {
+            padding: 10px 0;
+            border-bottom: 1px dashed #eee;
+            font-size: 0.95em;
+        }
+        .history-item:last-child {
+            border-bottom: none;
+        }
+        .history-item-action {
+            font-weight: 600;
+            color: #333;
+        }
+        .history-item-meta {
+            color: #666;
+            font-size: 0.85em;
+            margin-top: 4px;
+        }
+        
+        /* Tek tip dosya yükleme alanı stili */
+        .file-upload-area {
+            border: 2px dashed #a8dadc;
+            border-radius: 12px;
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: #f1faee;
+            margin-top: 15px;
+        }
+        .file-upload-area:hover {
+            border-color: #457b9d;
+            background: #e0f2f7;
+        }
+        .upload-icon {
+            font-size: 3.5em;
+            color: #457b9d;
+            margin-bottom: 15px;
+        }
+        .upload-text {
+            font-size: 1.2em;
+            font-weight: 600;
+            color: #333;
+        }
+        .upload-subtext {
+            font-size: 0.9em;
+            color: #666;
+            margin-top: 5px;
+        }
+        .file-list-container {
+            margin-top: 25px;
+            border: 1px solid #e1e8ed;
+            border-radius: 12px;
+            overflow: hidden;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .file-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 20px;
+            border-bottom: 1px solid #eee;
+            background: white;
+        }
+        .file-item:last-child { border-bottom: none; }
+        .file-info { flex-grow: 1; display: flex; align-items: center; gap: 15px; }
+        .file-icon { font-size: 1.5em; color: #6c757d; }
+        .file-name { font-weight: 500; color: #333; }
+        .file-size { font-size: 0.85em; color: #666; }
+        .file-actions { display: flex; gap: 10px; align-items: center; }
+        .file-designation-select { padding: 6px 10px; border: 1px solid #ccc; border-radius: 8px; font-size: 0.9em; }
+        .btn-remove-file {
+            background: #ff6b6b; color: white; border: none; width: 30px; height: 30px; border-radius: 50%;
+            font-size: 1.2em; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: background 0.3s ease;
+        }
+        .btn-remove-file:hover { background: #ff5252; }
+
+        .total-amount-display {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #1e3c72;
+            text-align: right;
+            margin-top: 10px;
+            padding: 12px 15px;
+            background-color: #f0f4f8;
+            border-radius: 10px;
+        }
+        .input-with-currency { display: flex; gap: 10px; }
+        .input-with-currency .form-input { flex-grow: 1; }
+        .currency-select {
+            padding: 12px 8px;
+            border: 2px solid #e1e8ed;
+            border-radius: 10px;
+            background-color: #f8f9fa;
+            font-weight: bold;
+        }
+        .checkbox-label input {
+            width: 18px;
+            height: 18px;
+        }
+/* Modal Stilleri */
+.modal {
+    display: none; /* Varsayılan olarak gizle */
+    position: fixed; /* Ekranda sabit kal */
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.6); /* Yarı saydam siyah arka plan */
+    align-items: center;
+    justify-content: center;
+    z-index: 1002; /* Diğer her şeyin üstünde */
+    overflow-y: auto; /* İçerik taşarsa kaydırma çubuğu */
+    padding: 20px;
+}
+
+.modal.show {
+    display: flex; /* JavaScript ile görünür hale getir */
+}
+
+.modal-content {
+    background: white;
+    padding: 30px;
+    border-radius: 20px;
+    max-width: 1250px;
+    width: 100%;
+    max-height: 90vh; /* Ekran yüksekliğinin %90'ı */
+    overflow-y: auto;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+    transform: translateY(0); /* Animasyon başlangıcı */
+    transition: transform 0.3s ease-out;
+}
+
+.modal.show .modal-content {
+    transform: translateY(0);
+}
+
+.close-modal-btn {
+    background: none;
+    border: none;
+    font-size: 1.5em;
+    cursor: pointer;
+    color: #666;
+    padding: 5px;
+    border-radius: 50%;
+    transition: all 0.3s ease;
+    float: right;
+}
+
+.close-modal-btn:hover {
+    background: #f0f0f0;
+}
+
+/* --- Page specific tweaks for file transfer --- */
+.hero{ display:flex; gap:24px; align-items:flex-start; }
+.hero-img-wrap{ flex:0 0 auto; max-width:360px; }
+.hero-img{ width:100%; height:auto; border-radius:12px; border:1px solid #eee; background:#fff; }
+.hero-meta{ flex:1; min-width:300px; }
+.kv-grid{ display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:12px 20px; }
+.result-list { max-height: 400px; overflow-y: auto; }
+.status-ok { color: green; font-weight: bold; }
+.status-error { color: red; font-weight: bold; }
+.list-group-item .btn { margin-left: 10px; }
+.action-buttons { margin-top: 12px; }
+.action-buttons .btn { flex: 0 0 auto; height: auto; display: inline-block; padding: .5rem 1rem; border-radius: .5rem; }
+.action-buttons .d-flex > * + * { margin-left: 8px; }
+/* Headline section */
+.page-header { background: rgba(255, 255, 255, 0.95); padding: 30px; border-radius: 20px; margin-bottom: 30px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1); }
+.page-title { font-size: 2em; color: #1e3c72; margin-bottom: 10px; }
+.page-subtitle { color: #666; font-size: 1.1em; }
+/* Reuse section-card for each block */
+.section-card { background: rgba(255, 255, 255, 0.95); padding: 30px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1); margin-bottom: 25px; }
+.section-title { font-size: 1.3em; color: #1e3c72; margin-bottom: 20px; padding-bottom: 10px; border-bottom: 1px solid #e1e8ed; }
+  </style>
 </head>
+
 <body>
-  <div id="notification-container" class="notification-container"></div>
-
-  <!-- Sol menü + top header burada inject ediliyor -->
+  <div id="notification-container" style="position: fixed; top: 20px; right: 20px; z-index: 9999;"></div>
   <div id="layout-placeholder"></div>
-
   <div class="page-wrapper">
-    <main class="main-container container">
-      <div id="loading" class="alert alert-info d-none">İşlem devam ediyor…</div>
+    <main class="main-container">
+      <section class="page-header">
+        <h1 class="page-title">TÜRKPATENT Dosya Aktarımı</h1>
+        <p class="page-subtitle">Başvuru numaralarını ekleyin, sorgulayın ve sonuçları içeri aktarın.</p>
+      </section>
 
-      <!-- Card 1 -->
-      <div class="card shadow-sm mb-4">
-        <div class="card-header"><h3 class="m-0">TÜRKPATENT Dosya Aktarımı</h3></div>
-        <div class="card-body">
-          <form id="transferForm">
-            <div class="form-row mb-3">
-              <div class="col-md-4">
-                <label for="docType">Tür</label>
-                <select id="docType" class="form-control">
-                  <option value="trademark" selected>Marka</option>
-                  <option value="patent" disabled>Patent (Yakında)</option>
-                  <option value="design" disabled>Tasarım (Yakında)</option>
-                </select>
-              </div>
-              <div class="col-md-8">
-                <label>Transfer Seçeneği</label>
-                <div>
-                  <div class="form-check form-check-inline">
-                    <input class="form-check-input" type="radio" name="transferOption" id="singleTransfer" value="single" checked>
-                    <label class="form-check-label" for="singleTransfer">Tekil Aktarım</label>
-                  </div>
-                  <div class="form-check form-check-inline">
-                    <input class="form-check-input" type="radio" name="transferOption" id="bulkTransfer" value="bulk">
-                    <label class="form-check-label" for="bulkTransfer">Çoklu Transfer</label>
-                  </div>
+      <!-- Bölüm 1: Form -->
+      <section class="section-card">
+        <h3 class="section-title">Aktarım Ayarları</h3>
+        <form id="transferForm">
+          <div class="form-row mb-3">
+            <div class="col-md-4">
+              <label for="docType" class="form-label">Tür</label>
+              <select id="docType" class="form-control">
+                <option value="trademark" selected>Marka</option>
+                <option value="patent" disabled>Patent (Yakında)</option>
+                <option value="design" disabled>Tasarım (Yakında)</option>
+              </select>
+            </div>
+            <div class="col-md-8">
+              <label class="form-label">Transfer Seçeneği</label>
+              <div>
+                <div class="form-check form-check-inline">
+                  <input class="form-check-input" type="radio" name="transferOption" id="singleTransfer" value="single" checked>
+                  <label class="form-check-label" for="singleTransfer">Tekil Aktarım</label>
+                </div>
+                <div class="form-check form-check-inline">
+                  <input class="form-check-input" type="radio" name="transferOption" id="bulkTransfer" value="bulk">
+                  <label class="form-check-label" for="bulkTransfer">Çoklu Transfer</label>
                 </div>
               </div>
-            </div>
-            <div class="form-group mb-0">
-              <label for="basvuruNoInput">Başvuru No:</label>
-              <div class="input-group">
-                <input type="text" id="basvuruNoInput" class="form-control" placeholder="Başvuru Numarası Girin">
-                <div class="input-group-append">
-                  <button class="btn btn-outline-secondary" type="button" id="addBasvuruNoBtn">Listeye Ekle</button>
-                </div>
-              </div>
-            </div>
-          </form>
-        </div>
-      </div>
-
-      <!-- Card 2 -->
-      <div class="card shadow-sm mb-4" id="transferListCard">
-        <div class="card-header"><h3 class="m-0">Aktarım Listesi</h3></div>
-        <div class="card-body">
-          <div id="transferListContainer" class="d-none">
-            <ul id="transferList" class="list-group result-list mb-3"></ul>
-            <div class="d-flex justify-content-end">
-              <button id="queryBtn" class="btn btn-primary">Sorgula</button>
             </div>
           </div>
-          <div id="transferListEmpty" class="text-muted">Listeye eklenmiş başvuru yok.</div>
-        </div>
-      </div>
+          <div class="form-group mb-0">
+            <label for="basvuruNoInput" class="form-label">Başvuru No</label>
+            <div class="input-group">
+              <input type="text" id="basvuruNoInput" class="form-control" placeholder="Başvuru Numarası Girin">
+              <div class="input-group-append">
+                <button class="btn btn-outline-secondary" type="button" id="addBasvuruNoBtn">Listeye Ekle</button>
+              </div>
+            </div>
+          </div>
+        </form>
+      </section>
 
-      <!-- Card 3 -->
-      <div class="card shadow-sm mb-4" id="resultsCard">
-        <div class="card-header"><h3 class="m-0">Sorgulama Sonuçları</h3></div>
-        <div class="card-body">
-          <div id="singleResultContainer" class="d-none">
-            <div id="heroCard" class="card shadow-sm mb-4">
-              <div class="card-body hero">
-                <div class="hero-img-wrap">
-                  <img id="brandImage" class="hero-img" alt="Marka Görseli" />
-                </div>
-                <div class="hero-meta">
-                  <h4 id="heroTitle" class="mb-3"></h4>
-                  <div id="heroKv" class="kv-grid">
-                    <div class="kv-item">
-                      <div class="label">Başvuru No</div>
-                      <div class="value" id="applicationNumber"></div>
-                    </div>
-                    <div class="kv-item">
-                      <div class="label">Başvuru Tarihi</div>
-                      <div class="value" id="applicationDate"></div>
-                    </div>
+      <!-- Bölüm 2: Aktarım Listesi -->
+      <section class="section-card" id="transferListCard">
+        <h3 class="section-title">Aktarım Listesi</h3>
+        <div id="transferListContainer" class="d-none">
+          <ul id="transferList" class="list-group result-list mb-3"></ul>
+          <div class="d-flex justify-content-end">
+            <button id="queryBtn" class="btn btn-primary">Sorgula</button>
+          </div>
+        </div>
+        <div id="transferListEmpty" class="text-muted">Listeye eklenmiş başvuru yok.</div>
+      </section>
+
+      <!-- Bölüm 3: Sorgulama Sonuçları -->
+      <section class="section-card" id="resultsCard">
+        <h3 class="section-title">Sorgulama Sonuçları</h3>
+        <div id="singleResultContainer" class="d-none">
+          <div id="heroCard" class="section-card" style="padding:20px;">
+            <div class="hero">
+              <div class="hero-img-wrap">
+                <img id="brandImage" class="hero-img" alt="Marka Görseli" />
+              </div>
+              <div class="hero-meta">
+                <h4 id="heroTitle" class="mb-3"></h4>
+                <div id="heroKv" class="kv-grid">
+                  <div class="kv-item">
+                    <div class="label">Başvuru No</div>
+                    <div class="value" id="applicationNumber"></div>
+                  </div>
+                  <div class="kv-item">
+                    <div class="label">Başvuru Tarihi</div>
+                    <div class="value" id="applicationDate"></div>
                   </div>
                 </div>
               </div>
             </div>
           </div>
-          <div id="bulkResultsContainer" class="d-none">
-            <div class="table-responsive">
-              <table class="table table-hover mb-0">
-                <thead>
-                  <tr>
-                    <th>Başvuru Numarası</th>
-                    <th>Sorgu Sonucu</th>
-                  </tr>
-                </thead>
-                <tbody id="resultsTableBody"></tbody>
-              </table>
-            </div>
-          </div>
-          <div id="actionButtons" class="action-buttons" style="display:none;">
-            <div class="d-flex justify-content-end">
-              <button id="cancelBtn" class="btn btn-outline-secondary">İptal</button>
-              <button id="savePortfolioBtn" class="btn btn-success">Kaydet - Portföy</button>
-              <button id="saveThirdPartyBtn" class="btn btn-info">Kaydet - 3.Taraf</button>
-            </div>
+        </div>
+
+        <div id="bulkResultsContainer" class="d-none">
+          <div class="table-responsive">
+            <table class="table table-hover mb-0">
+              <thead>
+                <tr>
+                  <th>Başvuru Numarası</th>
+                  <th>Sorgu Sonucu</th>
+                </tr>
+              </thead>
+              <tbody id="resultsTableBody"></tbody>
+            </table>
           </div>
         </div>
-      </div>
-</main>
+
+        <div id="actionButtons" class="action-buttons" style="display:none;">
+          <div class="d-flex justify-content-end">
+            <button id="cancelBtn" class="btn btn-secondary">İptal</button>
+            <button id="savePortfolioBtn" class="btn btn-primary">Kaydet - Portföy</button>
+            <button id="saveThirdPartyBtn" class="btn btn-primary">Kaydet - 3.Taraf</button>
+          </div>
+        </div>
+      </section>
+
+    </main>
   </div>
 
-  <div class="container my-3" id="actionButtons" style="display: none;">
-    <div class="d-flex justify-content-end gap-2">
-      <button id="cancelBtn" class="btn btn-outline-secondary">İptal</button>
-      <button id="savePortfolioBtn" class="btn btn-success">Kaydet - Portföy</button>
-      <button id="saveThirdPartyBtn" class="btn btn-info">Kaydet - 3.Taraf</button>
-    </div>
-  </div>
-
-  <!-- Load order: firebase-config -> layout-loader -> page script -->
-  <script type="module" src="firebase-config.js"></script>
-  <script type="module" src="js/layout-loader.js"></script>
+  <!-- Scripts: task-detail style layout loader + page JS -->
+  <script type="module">
+    import { loadSharedLayout } from './js/layout-loader.js';
+    document.addEventListener('DOMContentLoaded', async () => {
+      try { await loadSharedLayout(); } catch(e){ console.warn('loadSharedLayout error', e); }
+    });
+  </script>
   <script type="module" src="js/tp-file-transfer.js"></script>
-
 </body>
 </html>
