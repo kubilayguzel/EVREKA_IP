@@ -138,7 +138,8 @@ function displaySingleResult(data) {
   document.getElementById('heroTitle').textContent = data.trademarkName || 'Marka Adı Bulunamadı';
   document.getElementById('applicationNumber').textContent = data.applicationNumber || 'Bulunamadı';
   document.getElementById('applicationDate').textContent = data.applicationDate || 'Bulunamadı';
-  document.getElementById('brandImage').src = data.imageUrl || '';
+  const imgEl = document.getElementById('brandImage');
+  setBrandImageSafe(imgEl, data.imageUrl);
   document.getElementById('brandImage').alt = data.trademarkName || 'Marka Görseli';
   
   singleResultContainer.classList.remove('d-none');
