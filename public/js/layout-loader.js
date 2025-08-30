@@ -21,6 +21,7 @@ const menuItems = [
         subItems: [
             { id: 'portfolio', text: 'Portföy', link: 'portfolio.html' }, // Buraya taşındı
             { id: 'data-entry', text: 'Yeni Kayıt', link: 'data-entry.html' }, // Buraya taşındı
+            { id: 'tp-file-transfer', text: 'TÜRKPATENT Dosya Aktarımı', link: 'tp-file-transfer.html' }, // Buraya taşındı
             { id: 'excel-upload', text: 'Excel ile Yükle', link: 'excel-upload.html', adminOnly: true } // Buraya taşındı
         ]
     },
@@ -77,7 +78,6 @@ const menuItems = [
         { id: 'monitoring-designs', text: 'Tasarım İzleme', link: 'monitoring-designs.html' }
     ]
     },
-    {id: 'tp-file-transfer', text: 'TÜRKPATENT Dosya Aktarımı', link: 'tp-file-transfer.html', icon: 'fas fa-exchange-alt', category: 'Araçlar'},
     { id: 'reports', text: 'Raporlar', link: '#', icon: 'fas fa-chart-line', category: 'Araçlar', disabled: true },
     { id: 'settings', text: 'Ayarlar', link: '#', icon: 'fas fa-cog', category: 'Araçlar', disabled: true }
     ];
