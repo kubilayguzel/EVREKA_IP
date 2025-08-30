@@ -22,6 +22,8 @@
     "adm-zip": "^0.5.16",
     "algoliasearch": "4.20.0",
     "archiver": "^7.0.1",
+    "axios": "^1.11.0",
+    "cheerio": "^1.1.2",
     "cors": "^2.8.5",
     "docx": "^9.5.1",
     "firebase-admin": "^12.7.0",
