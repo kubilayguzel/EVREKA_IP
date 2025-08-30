@@ -40,7 +40,27 @@
     #actionButtons .btn.btn-block {
     width: auto !important;
     }
-  </style>
+  
+/* Sadece bu sayfada, formun altındaki buton alanı */
+.action-buttons {
+  margin-top: 8px;
+}
+
+/* Butonların taşmasını ve gerilmesini engelle */
+.action-buttons .btn {
+  flex: 0 0 auto !important;
+  height: auto !important;
+  display: inline-block;
+  padding: .5rem 1rem;
+  border-radius: .5rem;
+}
+
+/* Bootstrap 4'te gap yoksa spacing için ufak boşluk */
+.action-buttons .d-flex > * + * {
+  margin-left: 8px;
+}
+</style>
+
 </head>
 <body>
   <div id="notification-container" class="notification-container"></div>
@@ -89,6 +109,20 @@
               </div>
             </div>
           </form>
+
+<!-- FORMUN HEMEN ALTINA KOY -->
+<div class="row mt-3">
+  <div class="col-md-4">
+    <div id="actionButtons" class="action-buttons" style="display:none;">
+      <div class="d-flex justify-content-between">
+        <button id="cancelBtn" class="btn btn-outline-secondary">İptal</button>
+        <button id="savePortfolioBtn" class="btn btn-success">Kaydet - Portföy</button>
+        <button id="saveThirdPartyBtn" class="btn btn-info">Kaydet - 3.Taraf</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 
           <div id="transferListContainer" class="d-none mt-3">
             <label>Aktarım Listesi:</label>
