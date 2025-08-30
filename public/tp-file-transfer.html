@@ -7,64 +7,29 @@
   <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" />
   <!-- CSS path without leading ./ to avoid path resolution issues on GitHub Pages -->
   <link rel="stylesheet" href="css/shared-styles.css" />
+  
   <style>
+    :root{ --card-radius:16px; }
+    body { font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color:#333; }
+    .page-wrapper { min-height:100vh; padding-top:16px; background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%); }
+    .container { max-width: 1400px; }
+    .card { border-radius: var(--card-radius); }
+    .shadow-sm { box-shadow: 0 10px 24px rgba(0,0,0,0.08) !important; }
+    .table thead th { background:#f8f9fa; }
+    .hero{ display:flex; gap:24px; align-items:flex-start; }
+    .hero-img-wrap{ flex:0 0 auto; max-width:360px; }
+    .hero-img{ width:100%; height:auto; border-radius:12px; border:1px solid #eee; background:#fff; }
+    .hero-meta{ flex:1; min-width:300px; }
+    .hero-meta h4{ color:#1e3c72; }
+    .kv-grid{ display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:12px 20px; }
     .result-list { max-height: 400px; overflow-y: auto; }
     .status-ok { color: green; font-weight: bold; }
     .status-error { color: red; font-weight: bold; }
     .list-group-item .btn { margin-left: 10px; }
-    #actionButtons {
-    position: sticky;       /* içerik uzun olsa da altta dursun */
-    bottom: 0;
-    background: #fff;
-    padding: 12px 16px;
-    z-index: 20;
-    border-top: 1px solid rgba(0,0,0,.06);
-    }
-
-    #actionButtons .d-flex {
-    gap: 12px;              /* Bootstrap 4 gap yoksa yine de boşluk verelim */
-    align-items: center;
-    justify-content: flex-end;
-    }
-
-    #actionButtons .btn {
-    flex: 0 0 auto !important;  /* sütun gibi gerilmeyi engelle */
-    height: auto !important;    /* dikey uzamayı kes */
-    padding: .6rem 1rem;
-    border-radius: .5rem;
-    line-height: 1.2;
-    display: inline-block;      /* olası display:block override’larını ez */
-    }
-
-    /* Eski bir kural .btn-block veriyorsa, bunu iptal et (güvenli) */
-    #actionButtons .btn.btn-block {
-    width: auto !important;
-    }
-  
-/* Sadece bu sayfada, formun altındaki buton alanı */
-.action-buttons {
-  margin-top: 8px;
-}
-
-/* Butonların taşmasını ve gerilmesini engelle */
-.action-buttons .btn {
-  flex: 0 0 auto !important;
-  height: auto !important;
-  display: inline-block;
-  padding: .5rem 1rem;
-  border-radius: .5rem;
-}
-
-/* Bootstrap 4'te gap yoksa spacing için ufak boşluk */
-.action-buttons .d-flex > * + * {
-  margin-left: 8px;
-}
-
-/* Scoped buttons under results */
-.action-buttons { margin-top: 12px; }
-.action-buttons .btn { flex: 0 0 auto; height: auto; display: inline-block; padding: .5rem 1rem; border-radius: .5rem; }
-.action-buttons .d-flex > * + * { margin-left: 8px; }
-</style>
+    .action-buttons { margin-top: 12px; }
+    .action-buttons .btn { flex: 0 0 auto; height: auto; display: inline-block; padding: .5rem 1rem; border-radius: .5rem; }
+    .action-buttons .d-flex > * + * { margin-left: 8px; }
+  </style>
 
 
 </head>
@@ -77,6 +42,8 @@
   <div class="page-wrapper">
     <main class="main-container container">
       <div id="loading" class="alert alert-info d-none">İşlem devam ediyor…</div>
+
+      <!-- Card 1 -->
       <div class="card shadow-sm mb-4">
         <div class="card-header"><strong>TÜRKPATENT Dosya Aktarımı</strong></div>
         <div class="card-body">
@@ -104,8 +71,7 @@
                 </div>
               </div>
             </div>
-
-            <div class="form-group">
+            <div class="form-group mb-0">
               <label for="basvuruNoInput">Başvuru No:</label>
               <div class="input-group">
                 <input type="text" id="basvuruNoInput" class="form-control" placeholder="Başvuru Numarası Girin">
@@ -115,21 +81,28 @@
               </div>
             </div>
           </form>
+        </div>
+      </div>
 
-<!-- FORMUN HEMEN ALTINA KOY -->
-<div class="row mt-3">
-  <div class="col-md-4"></div>
-  </div>
-</div>
-
-
-          <div id="transferListContainer" class="d-none mt-3">
-            <label>Aktarım Listesi:</label>
+      <!-- Card 2 -->
+      <div class="card shadow-sm mb-4" id="transferListCard">
+        <div class="card-header"><strong>Aktarım Listesi</strong></div>
+        <div class="card-body">
+          <div id="transferListContainer" class="d-none">
             <ul id="transferList" class="list-group result-list mb-3"></ul>
-            <button id="queryBtn" class="btn btn-primary btn-block">Sorgula</button>
+            <div class="d-flex justify-content-end">
+              <button id="queryBtn" class="btn btn-primary">Sorgula</button>
+            </div>
           </div>
+          <div id="transferListEmpty" class="text-muted">Listeye eklenmiş başvuru yok.</div>
+        </div>
+      </div>
 
-          <div id="singleResultContainer" class="d-none mt-4">
+      <!-- Card 3 -->
+      <div class="card shadow-sm mb-4" id="resultsCard">
+        <div class="card-header"><strong>Sorgulama Sonuçları</strong></div>
+        <div class="card-body">
+          <div id="singleResultContainer" class="d-none">
             <div id="heroCard" class="card shadow-sm mb-4">
               <div class="card-body hero">
                 <div class="hero-img-wrap">
@@ -151,8 +124,7 @@
               </div>
             </div>
           </div>
-
-          <div id="bulkResultsContainer" class="d-none mt-4">
+          <div id="bulkResultsContainer" class="d-none">
             <div class="table-responsive">
               <table class="table table-hover mb-0">
                 <thead>
@@ -165,21 +137,25 @@
               </table>
             </div>
           </div>
-        
-
-          <!-- Action buttons: show under results -->
           <div id="actionButtons" class="action-buttons" style="display:none;">
             <div class="d-flex justify-content-end">
               <button id="cancelBtn" class="btn btn-outline-secondary">İptal</button>
-              <button id="savePortfolioBtn" class="btn btn-success ml-2">Kaydet - Portföy</button>
-              <button id="saveThirdPartyBtn" class="btn btn-info ml-2">Kaydet - 3.Taraf</button>
+              <button id="savePortfolioBtn" class="btn btn-success">Kaydet - Portföy</button>
+              <button id="saveThirdPartyBtn" class="btn btn-info">Kaydet - 3.Taraf</button>
             </div>
           </div>
-
-</div>
+        </div>
       </div>
-    </main>
-  </div></div>
+</main>
+  </div>
+
+  <div class="container my-3" id="actionButtons" style="display: none;">
+    <div class="d-flex justify-content-end gap-2">
+      <button id="cancelBtn" class="btn btn-outline-secondary">İptal</button>
+      <button id="savePortfolioBtn" class="btn btn-success">Kaydet - Portföy</button>
+      <button id="saveThirdPartyBtn" class="btn btn-info">Kaydet - 3.Taraf</button>
+    </div>
+  </div>
 
   <!-- Load order: firebase-config -> layout-loader -> page script -->
   <script type="module" src="firebase-config.js"></script>
