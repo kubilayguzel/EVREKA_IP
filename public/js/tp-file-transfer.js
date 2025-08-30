@@ -50,7 +50,8 @@ addBasvuruNoBtn.addEventListener('click', () => {
       <span>${number}</span>
       <button class="btn btn-sm btn-danger remove-btn">X</button>
     `;
-refreshTransferListVisibility();
+    transferList.appendChild(li);
+    refreshTransferListVisibility();
     basvuruNoInput.value = '';
     
     // Tekil transfer seçili ise, sadece bir eleman eklenebilir
@@ -105,19 +106,19 @@ queryBtn.addEventListener('click', async () => {
     
     for (const basvuruNo of basvuruNumbers) {
       const row = document.createElement('tr');
-      row.innerHTML = `<td>${basvuruNo}</td><td id="status-${basvuruNo}">Sorgulanıyor...</td>`;
+      row.innerHTML = `<td>${basvuruNo}</td><td id="status-${basvuruNo.replace('/', '-')}">Sorgulanıyor...</td>`;
       resultsTableBody.appendChild(row);
       
       try {
         const result = await scrapeTrademarkFunction({ basvuruNo });
         results.push({ number: basvuruNo, status: 'Başarılı', data: result.data });
-        document.getElementById(`status-${basvuruNo}`).textContent = 'Transfer Başarılı';
-        document.getElementById(`status-${basvuruNo}`).classList.add('status-ok');
+        document.getElementById(`status-${basvuruNo.replace('/', '-')}`).textContent = 'Transfer Başarılı';
+        document.getElementById(`status-${basvuruNo.replace('/', '-')}`).classList.add('status-ok');
       } catch (error) {
         console.error("Sorgulama hatası:", error);
         results.push({ number: basvuruNo, status: 'Hata', error: error.message });
-        document.getElementById(`status-${basvuruNo}`).textContent = 'Hata';
-        document.getElementById(`status-${basvuruNo}`).classList.add('status-error');
+        document.getElementById(`status-${basvuruNo.replace('/', '-')}`).textContent = 'Hata: ' + error.message;
+        document.getElementById(`status-${basvuruNo.replace('/', '-')}`).classList.add('status-error');
         showNotification(`${basvuruNo} numaralı başvuruda hata: ${error.message}`, 'warning');
       }
     }
@@ -198,44 +199,43 @@ document.getElementById('cancelBtn').addEventListener('click', () => {
     // Sayfa sıfırlama veya yönlendirme
     window.location.reload();
 });
-
-
-// Küçük bir bildirim gösterme fonksiyonu
-function showNotification(message, type) {
-  const container = document.getElementById('notification-container');
-  const alert = document.createElement('div');
-  alert.className = `alert alert-${type} fade show`;
-  alert.role = 'alert';
-  alert.textContent = message;
+// Notification göster
+function showNotification(message, type = 'info') {
+  const notification = document.createElement('div');
+  notification.className = `alert alert-${type} alert-dismissible fade show`;
+  notification.style.position = 'fixed';
+  notification.style.top = '20px';
+  notification.style.right = '20px';
+  notification.style.zIndex = '9999';
+  notification.style.minWidth = '300px';
+  notification.innerHTML = `
+    ${message}
+    <button type="button" class="close" data-dismiss="alert">
+      <span>&times;</span>
+    </button>
+  `;
+  document.body.appendChild(notification);
   
-  const closeBtn = document.createElement('button');
-  closeBtn.className = 'close';
-  closeBtn.setAttribute('data-dismiss', 'alert');
-  closeBtn.setAttribute('aria-label', 'Close');
-  closeBtn.innerHTML = '<span aria-hidden="true">&times;</span>';
-  
-  alert.appendChild(closeBtn);
-  container.appendChild(alert);
-  
-  setTimeout(() => alert.remove(), 5000);
+  setTimeout(() => {
+    if (notification.parentNode) {
+      notification.parentNode.removeChild(notification);
+    }
+  }, 5000);
 }
 
+// Liste görünürlüğünü güncelle
 function refreshTransferListVisibility() {
-  const list = document.getElementById('transferList');
-  const hasItems = list && list.children && list.children.length > 0;
-  const cont = document.getElementById('transferListContainer');
-  const empty = document.getElementById('transferListEmpty');
-  if (cont && empty) {
-    if (hasItems) {
-      if (cont) cont.classList.remove('d-none');
-      if (empty) empty.classList.add('d-none');
-    } else {
-      if (cont) cont.classList.add('d-none');
-      if (empty) empty.classList.remove('d-none');
-    }
+  const transferListContainer = document.getElementById('transferListContainer');
+  const transferListEmpty = document.getElementById('transferListEmpty');
+  
+  if (basvuruNumbers.length > 0) {
+    if (transferListContainer) transferListContainer.classList.remove('d-none');
+    if (transferListEmpty) transferListEmpty.style.display = 'none';
+  } else {
+    if (transferListContainer) transferListContainer.classList.add('d-none');
+    if (transferListEmpty) transferListEmpty.style.display = 'block';
   }
 }
-
 
 // Add by Enter key
 (function(){
