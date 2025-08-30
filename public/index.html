@@ -5,10 +5,9 @@
     <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
     <title>Giriş - IP Manager</title>
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
     <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
     <link rel="stylesheet" href="./css/shared-styles.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-
     <style>
         * {
             margin: 0;
@@ -35,11 +34,11 @@
 
         .auth-container {
             background: rgba(255, 255, 255, 0.95);
-            padding: 80px 100px;
+            padding: 40px;
             border-radius: 20px;
             box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
             width: 100%;
-            max-width: 750px; /* Bu satır logonun maksimum genişliğini ayarlar */
+            max-width: 500px;
             backdrop-filter: blur(10px);
         }
 
@@ -49,7 +48,7 @@
         }
 
         .logo {
-            font-size: 3.5em;
+            font-size: 2.5em;
             font-weight: 700;
             color: #1e3c72;
             margin-bottom: 8px;
@@ -71,7 +70,7 @@
 
         .subtitle {
             color: #666;
-            font-size: 1.4em;
+            font-size: 1.1em;
             font-weight: 500;
         }
 
@@ -85,14 +84,13 @@
 
         .tab {
             flex: 1;
-            padding: 20px 24px;
+            padding: 12px 20px;
             text-align: center;
             cursor: pointer;
             border-radius: 8px;
             font-weight: 600;
             color: #666;
             transition: all 0.3s ease;
-            font-size: 1.2em;
         }
 
         .tab.active {
@@ -114,18 +112,17 @@
 
         .form-label {
             display: block;
-            font-size: 1.2em;
-            margin-bottom: 15px;
+            margin-bottom: 8px;
             font-weight: 600;
             color: #333;
         }
 
         .form-input {
             width: 100%;
-            padding: 22px 25px;
+            padding: 15px;
             border: 2px solid #e9ecef;
             border-radius: 10px;
-            font-size: 1.2em;
+            font-size: 1em;
             transition: all 0.3s ease;
         }
 
@@ -152,12 +149,12 @@
 
         .auth-btn {
             width: 100%;
-            padding: 25px;
+            padding: 15px;
             background: linear-gradient(45deg, #1e3c72, #2a5298);
             color: #fff;
             border: none;
             border-radius: 10px;
-            font-size: 1.3em;
+            font-size: 1.1em;
             font-weight: 600;
             cursor: pointer;
             transition: 0.3s;
@@ -431,7 +428,7 @@
             box-shadow: 0 12px 30px rgba(0, 0, 0, 0.08);
             width: 100%;
             max-width: 500px;
-            margin: 0 auto 20px auto; /* Üstte olacağı için margin değişti */
+            margin: 16px auto 0;
             display: flex;
             justify-content: center;
             align-items: center;
@@ -448,24 +445,13 @@
             width: auto;
             display: block;
         }
-.password-field{position:relative}
-.password-toggle{position:absolute;right:15px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#666;font-size:1.1rem;padding:5px;transition:color 0.3s ease}
-.password-toggle:hover{color:#1e3c72}
-</style>
+    </style>
 </head>
 <body>
 <div class="firebase-status" id="firebaseStatus">🔄 Firebase bağlanıyor...</div>
 <div class="main-container">
     <div class="auth-container">
         <div class="logo-section">
-                <div class="brand-card">
-                    <div class="brand-card-inner">
-                        <svg width="120" height="48" viewBox="0 0 120 48" xmlns="http://www.w3.org/2000/svg" class="brand-logo">
-                            <rect width="120" height="48" rx="8" fill="#7CB342"/>
-                            <text x="60" y="32" text-anchor="middle" fill="white" font-family="Arial, sans-serif" font-size="18" font-weight="bold">evreka</text>
-                        </svg>
-                    </div>
-                </div>
             <div class="app-title">IP Manager</div>
             <div class="subtitle">Fikri Mülkiyet Yönetim Sistemi</div>
         </div>
@@ -482,13 +468,11 @@
                 </div>
                 <div class="form-group">
                     <label class="form-label" for="signin-password">Şifre</label>
-                        <div class="password-field">
-                            <input class="form-input" id="password" placeholder="••••••••" type="password" required/>
-                            <button type="button" class="password-toggle" onclick="togglePassword()">
-                                <i class="fas fa-eye" id="toggleIcon"></i>
-                            </button>
-                        </div>
-                        <div class="forgot-password">
+                    <input autocomplete="current-password" class="form-input" id="signin-password" required=""
+                           type="password"/>
+                    <div class="error-message" id="signin-password-error"></div>
+                </div>
+                <div class="helper-links">
                     <button class="link-btn" id="forgotPasswordBtn" type="button">Şifremi Unuttum</button>
                 </div>
                 <button class="auth-btn" id="signinBtn" type="submit">
@@ -509,21 +493,22 @@
                     <input autocomplete="username" class="form-input" id="signup-email" required="" type="email"/>
                     <div class="error-message" id="signup-email-error"></div>
                 </div>
-                    <div class="form-group">
-                        <label class="form-label" for="signin-password">Şifre</label>
-                        <div style="position: relative;">
-                            <input autocomplete="current-password" class="form-input" id="signin-password" required="" type="password"/>
-                            <button type="button" onclick="togglePassword()" style="position: absolute; right: 15px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; color: #666;">
-                                <i class="fas fa-eye" id="toggleIcon"></i>
-                            </button>
-                        </div>
-                        <div class="error-message" id="signin-password-error"></div>
-                    </div>
+                <div class="form-group">
+                    <label class="form-label" for="signup-password">Şifre (min. 6 karakter)</label>
+                    <input autocomplete="new-password" class="form-input" id="signup-password" minlength="6" required=""
+                           type="password"/>
+                    <div class="error-message" id="signup-password-error"></div>
+                </div>
                 <button class="auth-btn" id="signupBtn" type="submit">
                     <span id="signupText">Kayıt Ol</span>
                     <span class="loading" id="signupLoading"></span>
                 </button>
             </form>
+        </div>
+    </div>
+    <div class="brand-card">
+        <div class="brand-card-inner">
+            <img alt="Evreka logo" class="brand-logo" src="evreka-logo.png"/>
         </div>
     </div>
 </div>
@@ -836,46 +821,5 @@
     });
 </script>
 <div class="notification-container" id="notification-container"></div>
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    const tabs = document.querySelectorAll('.tab');
-    const sections = document.querySelectorAll('.form-section');
-    
-    tabs.forEach(tab => {
-        tab.addEventListener('click', function() {
-            const targetTab = this.getAttribute('data-tab');
-            
-            // Remove active class from all tabs
-            tabs.forEach(t => t.classList.remove('active'));
-            // Add active class to clicked tab
-            this.classList.add('active');
-            
-            // Hide all sections
-            sections.forEach(section => section.classList.remove('active'));
-            // Show target section
-            const targetSection = document.getElementById(targetTab + '-section');
-            if (targetSection) {
-                targetSection.classList.add('active');
-            }
-        });
-    });
-});
-
-// Şifre göster/gizle fonksiyonu
-function togglePassword() {
-    const passwordInput = document.getElementById('signin-password');
-    const toggleIcon = document.getElementById('toggleIcon');
-    
-    if (passwordInput.type === 'password') {
-        passwordInput.type = 'text';
-        toggleIcon.classList.remove('fa-eye');
-        toggleIcon.classList.add('fa-eye-slash');
-    } else {
-        passwordInput.type = 'password';
-        toggleIcon.classList.remove('fa-eye-slash');
-        toggleIcon.classList.add('fa-eye');
-    }
-}
-</script>
 </body>
 </html>
