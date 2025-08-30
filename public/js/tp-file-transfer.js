@@ -1,3 +1,7 @@
+/*__GLOBAL_SAFE_GUARDS__*/
+window.__lastScrapeResult = window.__lastScrapeResult || {};
+if (typeof resultData === 'undefined') { var resultData = window.__lastScrapeResult; }
+if (typeof data === 'undefined') { var data = {}; }
 import { app } from '../firebase-config.js';
 import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.1.2/firebase-functions.js";
 
@@ -22,15 +26,15 @@ let basvuruNumbers = [];
 transferOptionRadios.forEach(radio => {
   radio.addEventListener('change', (event) => {
     if (event.target.value === 'single') {
-      if (transferListContainer) transferListContainer.classList.add('d-none');
-      if (singleResultContainer) singleResultContainer.classList.add('d-none');
-      if (bulkResultsContainer) bulkResultsContainer.classList.add('d-none');
+      transferListContainer.classList.add('d-none');
+      singleResultContainer.classList.add('d-none');
+      bulkResultsContainer.classList.add('d-none');
       actionButtons.style.display = 'none';
       basvuruNoInput.disabled = false;
     } else {
-      if (transferListContainer) transferListContainer.classList.remove('d-none');
-      if (singleResultContainer) singleResultContainer.classList.add('d-none');
-      if (bulkResultsContainer) bulkResultsContainer.classList.add('d-none');
+      transferListContainer.classList.remove('d-none');
+      singleResultContainer.classList.add('d-none');
+      bulkResultsContainer.classList.add('d-none');
       actionButtons.style.display = 'none';
       basvuruNoInput.disabled = false;
       basvuruNumbers = [];
@@ -51,14 +55,13 @@ addBasvuruNoBtn.addEventListener('click', () => {
       <button class="btn btn-sm btn-danger remove-btn">X</button>
     `;
     transferList.appendChild(li);
-    refreshTransferListVisibility();
     basvuruNoInput.value = '';
     
     // Tekil transfer seçili ise, sadece bir eleman eklenebilir
     if (document.getElementById('singleTransfer').checked) {
       addBasvuruNoBtn.disabled = true;
       basvuruNoInput.disabled = true;
-      if (transferListContainer) transferListContainer.classList.remove('d-none');
+      transferListContainer.classList.remove('d-none');
     }
   }
 });
@@ -74,7 +77,7 @@ transferList.addEventListener('click', (event) => {
         addBasvuruNoBtn.disabled = false;
         basvuruNoInput.disabled = false;
         if (basvuruNumbers.length === 0) {
-            if (transferListContainer) transferListContainer.classList.add('d-none');
+            transferListContainer.classList.add('d-none');
         }
     }
   }
@@ -82,12 +85,12 @@ transferList.addEventListener('click', (event) => {
 
 // Sorgula butonuna tıklandığında
 queryBtn.addEventListener('click', async () => {
-  if (loading) loading.classList.remove('d-none');
+  loading.classList.remove('d-none');
   const isSingle = document.getElementById('singleTransfer').checked;
   
   if (isSingle) {
     const basvuruNo = basvuruNumbers[0];
-    if (singleResultContainer) singleResultContainer.classList.add('d-none');
+    singleResultContainer.classList.add('d-none');
     actionButtons.style.display = 'none';
     
     try {
@@ -99,26 +102,26 @@ queryBtn.addEventListener('click', async () => {
       showNotification('Sorgulama sırasında bir hata oluştu.', 'danger');
     }
   } else {
-  const __ab2=document.getElementById('actionButtons'); if(__ab2) __ab2.style.display='block';
+    bulkResultsContainer.classList.remove('d-none');
     resultsTableBody.innerHTML = '';
     actionButtons.style.display = 'none';
     const results = [];
     
     for (const basvuruNo of basvuruNumbers) {
       const row = document.createElement('tr');
-      row.innerHTML = `<td>${basvuruNo}</td><td id="status-${basvuruNo.replace('/', '-')}">Sorgulanıyor...</td>`;
+      row.innerHTML = `<td>${basvuruNo}</td><td id="status-${basvuruNo}">Sorgulanıyor...</td>`;
       resultsTableBody.appendChild(row);
       
       try {
         const result = await scrapeTrademarkFunction({ basvuruNo });
         results.push({ number: basvuruNo, status: 'Başarılı', data: result.data });
-        document.getElementById(`status-${basvuruNo.replace('/', '-')}`).textContent = 'Transfer Başarılı';
-        document.getElementById(`status-${basvuruNo.replace('/', '-')}`).classList.add('status-ok');
+        document.getElementById(`status-${basvuruNo}`).textContent = 'Transfer Başarılı';
+        document.getElementById(`status-${basvuruNo}`).classList.add('status-ok');
       } catch (error) {
         console.error("Sorgulama hatası:", error);
         results.push({ number: basvuruNo, status: 'Hata', error: error.message });
-        document.getElementById(`status-${basvuruNo.replace('/', '-')}`).textContent = 'Hata: ' + error.message;
-        document.getElementById(`status-${basvuruNo.replace('/', '-')}`).classList.add('status-error');
+        document.getElementById(`status-${basvuruNo}`).textContent = 'Hata';
+        document.getElementById(`status-${basvuruNo}`).classList.add('status-error');
         showNotification(`${basvuruNo} numaralı başvuruda hata: ${error.message}`, 'warning');
       }
     }
@@ -126,71 +129,69 @@ queryBtn.addEventListener('click', async () => {
     document.getElementById('savePortfolioBtn').disabled = false;
     document.getElementById('saveThirdPartyBtn').disabled = false;
   }
-  if (loading) loading.classList.add('d-none');
+  loading.classList.add('d-none');
 });
 
 // Tekil sonuçları göster
 
-// Tekil sonuçları göster
+function displaySingleResult(resp) {
+  const d = resp || {};
+  // cache globally for any legacy uses
+  window.__lastScrapeResult = d;
+  try { resultData = d; } catch(e) {}
 
-function displaySingleResult(resultData) {
-  if (!resultData) {
-    showNotification("Veri bulunamadı.", 'warning');
-    return;
-  }
-  // Fill hero fields
-  const titleEl = document.getElementById('heroTitle');
-  const appNoEl = document.getElementById('applicationNumber');
-  const appDateEl = document.getElementById('applicationDate');
+  const title = document.getElementById('heroTitle');
+  const appNo = document.getElementById('applicationNumber');
+  const appDate = document.getElementById('applicationDate');
   const imgEl = document.getElementById('brandImage');
-  const placeholderImg = 'data:image/svg+xml;utf8,' + encodeURIComponent(`
+  const single = document.getElementById('singleResultContainer');
+  const bulk = document.getElementById('bulkResultsContainer');
+
+  if (bulk) bulk.classList.add('d-none');
+  if (single) single.classList.remove('d-none');
+
+  if (title) title.textContent = d.trademarkName || '—';
+  if (appNo) appNo.textContent = d.applicationNumber || '—';
+  if (appDate) appDate.textContent = d.applicationDate || '—';
+
+  const PH = 'data:image/svg+xml;utf8,' + encodeURIComponent(`
     <svg xmlns="http://www.w3.org/2000/svg" width="180" height="120">
       <rect width="100%" height="100%" fill="#e5e7eb"/>
       <text x="50%" y="50%" font-family="Arial, sans-serif" font-size="14" fill="#6b7280"
-            text-anchor="middle" dominant-baseline="middle">Görsel Yok</text>
+            text-anchor="middle" dominant-baseline="middle">No Image</text>
     </svg>`);
-
-  if (titleEl) titleEl.textContent = resultData.trademarkName || 'Marka Adı Bulunamadı';
-  if (appNoEl) appNoEl.textContent = resultData.applicationNumber || 'Bulunamadı';
-  if (appDateEl) appDateEl.textContent = resultData.applicationDate || 'Bulunamadı';
-
   if (imgEl) {
-    imgEl.src = resultData.imageUrl || placeholderImg;
-    imgEl.alt = resultData.trademarkName || 'Marka Görseli';
-    imgEl.addEventListener('error', () => { imgEl.src = placeholderImg; }, { once: true });
+    imgEl.src = d.imageUrl || PH;
+    imgEl.alt = d.trademarkName || 'Marka Görseli';
+    imgEl.addEventListener('error', () => { imgEl.src = PH; }, { once: true });
   }
 
-  const single = document.getElementById('singleResultContainer');
-  if (single) single.classList.remove('d-none');
   const ab = document.getElementById('actionButtons');
   if (ab) ab.style.display = 'flex';
 }
-document.getElementById('heroTitle').textContent = resultData.trademarkName || 'Marka Adı Bulunamadı';
-  document.getElementById('applicationNumber').textContent = resultData.applicationNumber || 'Bulunamadı';
-  document.getElementById('applicationDate').textContent = resultData.applicationDate || 'Bulunamadı';
-  
-  const imgEl = document.getElementById('brandImage');
-  const placeholderImg = 'data:image/svg+xml;utf8,' + encodeURIComponent(`
-    <svg xmlns="http://www.w3.org/2000/svg" width="180" height="120">
-      <rect width="100%" height="100%" fill="#e5e7eb"/>
-      <text x="50%" y="50%" font-family="Arial, sans-serif" font-size="14" fill="#6b7280"
-            text-anchor="middle" dominant-baseline="middle">Görsel Yok</text>
-    </svg>
-  `);
-  
-  if (!resultData.imageUrl) {
-    imgEl.src = placeholderImg;
-  } else {
-    imgEl.src = resultData.imageUrl;
-    imgEl.addEventListener('error', () => { imgEl.src = placeholderImg; }, { once: true });
-  }
 
-  imgEl.alt = resultData.trademarkName || 'Marka Görseli';
   
-  if (singleResultContainer) singleResultContainer.classList.remove('d-none');
-  actionButtons.style.display = 'block';
+  document.getElementById('heroTitle').textContent = data.trademarkName || 'Marka Adı Bulunamadı';
+  document.getElementById('applicationNumber').textContent = data.applicationNumber || 'Bulunamadı';
+  document.getElementById('applicationDate').textContent = data.applicationDate || 'Bulunamadı';
+    const imgEl = document.getElementById('brandImage');
+    const __PH__ = 'data:image/svg+xml;utf8,' + encodeURIComponent(`
+        <svg xmlns="http://www.w3.org/2000/svg" width="180" height="120">
+            <rect width="100%" height="100%" fill="#e5e7eb"/>
+            <text x="50%" y="50%" font-family="Arial, sans-serif" font-size="14" fill="#6b7280"
+                text-anchor="middle" dominant-baseline="middle">No Image</text>
+        </svg>
+        `);
+    if (!data.imageUrl) {
+    imgEl.src = __PH__;
+    } else {
+    imgEl.src = data.imageUrl;
+    imgEl.addEventListener('error', () => { imgEl.src = __PH__; }, { once: true });
+    }
 
-  const __ab=document.getElementById('actionButtons'); if(__ab) __ab.style.display='block';
+  document.getElementById('brandImage').alt = data.trademarkName || 'Marka Görseli';
+  
+  singleResultContainer.classList.remove('d-none');
 
 // Diğer butonların (Kaydet, İptal) mantığı buraya eklenecek
 document.getElementById('savePortfolioBtn').addEventListener('click', () => {
@@ -207,81 +208,24 @@ document.getElementById('cancelBtn').addEventListener('click', () => {
     // Sayfa sıfırlama veya yönlendirme
     window.location.reload();
 });
-// Notification göster
-function showNotification(message, type = 'info') {
-  const notification = document.createElement('div');
-  notification.className = `alert alert-${type} alert-dismissible fade show`;
-  notification.style.position = 'fixed';
-  notification.style.top = '20px';
-  notification.style.right = '20px';
-  notification.style.zIndex = '9999';
-  notification.style.minWidth = '300px';
-  notification.innerHTML = `
-    ${message}
-    <button type="button" class="close" data-dismiss="alert">
-      <span>&times;</span>
-    </button>
-  `;
-  document.body.appendChild(notification);
+
+
+// Küçük bir bildirim gösterme fonksiyonu
+function showNotification(message, type) {
+  const container = document.getElementById('notification-container');
+  const alert = document.createElement('div');
+  alert.className = `alert alert-${type} fade show`;
+  alert.role = 'alert';
+  alert.textContent = message;
   
-  setTimeout(() => {
-    if (notification.parentNode) {
-      notification.parentNode.removeChild(notification);
-    }
-  }, 5000);
-}
-
-// Liste görünürlüğünü güncelle
-function refreshTransferListVisibility() {
-  const transferListContainer = document.getElementById('transferListContainer');
-  const transferListEmpty = document.getElementById('transferListEmpty');
+  const closeBtn = document.createElement('button');
+  closeBtn.className = 'close';
+  closeBtn.setAttribute('data-dismiss', 'alert');
+  closeBtn.setAttribute('aria-label', 'Close');
+  closeBtn.innerHTML = '<span aria-hidden="true">&times;</span>';
   
-  if (basvuruNumbers.length > 0) {
-    if (transferListContainer) transferListContainer.classList.remove('d-none');
-    if (transferListEmpty) transferListEmpty.style.display = 'none';
-  } else {
-    if (transferListContainer) transferListContainer.classList.add('d-none');
-    if (transferListEmpty) transferListEmpty.style.display = 'block';
-  }
+  alert.appendChild(closeBtn);
+  container.appendChild(alert);
+  
+  setTimeout(() => alert.remove(), 5000);
 }
-
-// Add by Enter key
-(function(){
-  const input = document.getElementById('basvuruNoInput');
-  const addBtn = document.getElementById('addBasvuruNoBtn');
-  if (input && addBtn) {
-    input.addEventListener('keydown', (e)=>{
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        addBtn.click();
-      }
-    });
-  }
-})();
-
-
-function addCurrentInput() {
-  const input = document.getElementById('basvuruNoInput');
-  const list = document.getElementById('transferList');
-  if (!input || !list) return;
-  const val = (input.value || '').trim();
-  if (!val) return;
-  const li = document.createElement('li');
-  li.className = 'list-group-item d-flex align-items-center justify-content-between';
-  li.innerHTML = '<span>' + val + '</span><button type="button" class="btn btn-danger btn-sm">X</button>';
-  li.querySelector('button').addEventListener('click', () => { li.remove(); refreshTransferListVisibility(); });
-  list.appendChild(li);
-  input.value = '';
-  refreshTransferListVisibility();
-}
-
-(function setupAddHandlers(){
-  const input = document.getElementById('basvuruNoInput');
-  const addBtn = document.getElementById('addBasvuruNoBtn');
-  if (addBtn) addBtn.addEventListener('click', addCurrentInput);
-  if (input) input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') { e.preventDefault(); addCurrentInput(); }
-  });
-})();
-
-document.addEventListener('DOMContentLoaded', () => { try { refreshTransferListVisibility(); } catch(e){} });
