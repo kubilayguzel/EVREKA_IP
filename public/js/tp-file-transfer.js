@@ -50,7 +50,6 @@ addBasvuruNoBtn.addEventListener('click', () => {
       <span>${number}</span>
       <button class="btn btn-sm btn-danger remove-btn">X</button>
     `;
-    \1
 refreshTransferListVisibility();
     basvuruNoInput.value = '';
     
@@ -183,7 +182,6 @@ function displaySingleResult(data) {
 
   document.getElementById('brandImage').alt = data.trademarkName || 'Marka Görseli';
   const __ab=document.getElementById('actionButtons'); if(__ab) __ab.style.display='block';
-}
 
 // Diğer butonların (Kaydet, İptal) mantığı buraya eklenecek
 document.getElementById('savePortfolioBtn').addEventListener('click', () => {
