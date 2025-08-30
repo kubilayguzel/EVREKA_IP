@@ -192,18 +192,25 @@ h3 { font-size: 1.15rem; }
   <script type="module" src="js/tp-file-transfer.js"></script>
 
   <!-- Diagnostics: warn if layout didn't inject within 2s -->
+  <script>
+    (function() {
+      const started = Date.now();
+      setTimeout(() => {
+        const ph = document.getElementById('layout-placeholder');
+        if (ph && !ph.dataset.layoutInjected) {
+          console.warn('[layout-check] layout-placeholder present but no layout injected after ' + (Date.now() - started) + 'ms.');
+          console.warn('[layout-check] Check: 1) Network 404 for js/layout-loader.js  2) Console errors inside layout-loader.js  3) CSS path css/shared-styles.css');
+        }
+      }, 2000);
+    })();
+  </script>
 
-
-<script type="module">
-  import { loadSharedLayout } from "js/layout-loader.js";
-  document.addEventListener('DOMContentLoaded', () => {
-    try {
+  <script type="module">
+    import { loadSharedLayout } from './js/layout-loader.js';
+    document.addEventListener('DOMContentLoaded', () => {
       loadSharedLayout({ activeMenuLink: 'tp-file-transfer.html' });
-    } catch (e) {
-      console.warn('[layout-call] loadSharedLayout failed:', e);
-    }
-  });
-</script>
+    });
+  </script>
 
 </body>
 </html>
