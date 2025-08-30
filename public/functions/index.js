@@ -3607,12 +3607,18 @@ const TARGET_URL = 'https://www.turkpatent.gov.tr/arastirma-yap?form=trademark';
 
 export const scrapeTrademark = https.onCall(async (request) => {
   const { basvuruNo } = request.data;
+  logger.info('[scrapeTrademark] Function çağrıldı', { basvuruNo });
+
   if (!basvuruNo) {
+    logger.error('[scrapeTrademark] Başvuru numarası eksik');
     throw new https.HttpsError('invalid-argument', 'Başvuru numarası belirtilmelidir.');
   }
-  
+
   try {
+    logger.info('[scrapeTrademark] TARGET_URL istek başlatılıyor', { url: TARGET_URL });
     const response = await axios.get(TARGET_URL);
+    logger.info('[scrapeTrademark] TARGET_URL yanıt alındı', { status: response.status });
+
     const $ = cheerio.load(response.data);
 
     const trademarkName = $('[data-key="marka_adi"]').text() || `Test Marka - ${basvuruNo}`;
@@ -3629,15 +3635,20 @@ export const scrapeTrademark = https.onCall(async (request) => {
 
     const result = {
       applicationNumber: basvuruNo,
-      trademarkName: trademarkName,
-      applicationDate: applicationDate,
-      imageUrl: imageUrl
+      trademarkName,
+      applicationDate,
+      imageUrl
     };
-    
+
+    logger.info('[scrapeTrademark] Scraping tamamlandı', result);
+
     return result;
 
   } catch (error) {
-    logger.error("Scraping failed:", error);
+    logger.error('[scrapeTrademark] Scraping failed', {
+      message: error.message,
+      stack: error.stack
+    });
     throw new https.HttpsError('internal', 'Sorgulama işlemi başarısız oldu.', error.message);
   }
 });
