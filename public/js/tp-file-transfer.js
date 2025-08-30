@@ -156,6 +156,7 @@ function displaySingleResult(data) {
   document.getElementById('brandImage').alt = data.trademarkName || 'Marka Görseli';
   
   singleResultContainer.classList.remove('d-none');
+const __ab=document.getElementById('actionButtons'); if(__ab) __ab.style.display='flex';
 }
 
 // Diğer butonların (Kaydet, İptal) mantığı buraya eklenecek
