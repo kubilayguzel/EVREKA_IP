@@ -59,7 +59,13 @@
 .action-buttons .d-flex > * + * {
   margin-left: 8px;
 }
+
+/* Scoped buttons under results */
+.action-buttons { margin-top: 12px; }
+.action-buttons .btn { flex: 0 0 auto; height: auto; display: inline-block; padding: .5rem 1rem; border-radius: .5rem; }
+.action-buttons .d-flex > * + * { margin-left: 8px; }
 </style>
+
 
 </head>
 <body>
@@ -112,14 +118,7 @@
 
 <!-- FORMUN HEMEN ALTINA KOY -->
 <div class="row mt-3">
-  <div class="col-md-4">
-    <div id="actionButtons" class="action-buttons" style="display:none;">
-      <div class="d-flex justify-content-between">
-        <button id="cancelBtn" class="btn btn-outline-secondary">İptal</button>
-        <button id="savePortfolioBtn" class="btn btn-success">Kaydet - Portföy</button>
-        <button id="saveThirdPartyBtn" class="btn btn-info">Kaydet - 3.Taraf</button>
-      </div>
-    </div>
+  <div class="col-md-4"></div>
   </div>
 </div>
 
@@ -166,18 +165,21 @@
               </table>
             </div>
           </div>
-        </div>
+        
+
+          <!-- Action buttons: show under results -->
+          <div id="actionButtons" class="action-buttons" style="display:none;">
+            <div class="d-flex justify-content-end">
+              <button id="cancelBtn" class="btn btn-outline-secondary">İptal</button>
+              <button id="savePortfolioBtn" class="btn btn-success ml-2">Kaydet - Portföy</button>
+              <button id="saveThirdPartyBtn" class="btn btn-info ml-2">Kaydet - 3.Taraf</button>
+            </div>
+          </div>
+
+</div>
       </div>
     </main>
-  </div>
-
-  <div class="container my-3" id="actionButtons" style="display: none;">
-    <div class="d-flex justify-content-end gap-2">
-      <button id="cancelBtn" class="btn btn-outline-secondary">İptal</button>
-      <button id="savePortfolioBtn" class="btn btn-success">Kaydet - Portföy</button>
-      <button id="saveThirdPartyBtn" class="btn btn-info">Kaydet - 3.Taraf</button>
-    </div>
-  </div>
+  </div></div>
 
   <!-- Load order: firebase-config -> layout-loader -> page script -->
   <script type="module" src="firebase-config.js"></script>
