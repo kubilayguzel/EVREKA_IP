@@ -50,6 +50,7 @@ addBasvuruNoBtn.addEventListener('click', () => {
       <span>${number}</span>
       <button class="btn btn-sm btn-danger remove-btn">X</button>
     `;
+    \1
 refreshTransferListVisibility();
     basvuruNoInput.value = '';
     
@@ -129,11 +130,38 @@ queryBtn.addEventListener('click', async () => {
 });
 
 // Tekil sonuçları göster
+
 function displaySingleResult(data) {
-  if (!data) {
-    showNotification("Veri bulunamadı.", 'warning');
-    return;
+  const title = document.getElementById('heroTitle');
+  const appNo = document.getElementById('applicationNumber');
+  const appDate = document.getElementById('applicationDate');
+  const imgEl = document.getElementById('brandImage');
+  const single = document.getElementById('singleResultContainer');
+  const bulk = document.getElementById('bulkResultsContainer');
+
+  if (bulk) bulk.classList.add('d-none');
+  if (single) single.classList.remove('d-none');
+
+  if (title) title.textContent = data.trademarkName || '—';
+  if (appNo) appNo.textContent = data.applicationNumber || '—';
+  if (appDate) appDate.textContent = data.applicationDate || '—';
+
+  const PH = 'data:image/svg+xml;utf8,' + encodeURIComponent(`
+    <svg xmlns="http://www.w3.org/2000/svg" width="180" height="120">
+      <rect width="100%" height="100%" fill="#e5e7eb"/>
+      <text x="50%" y="50%" font-family="Arial, sans-serif" font-size="14" fill="#6b7280"
+            text-anchor="middle" dominant-baseline="middle">No Image</text>
+    </svg>`);
+  if (imgEl) {
+    imgEl.src = data.imageUrl || PH;
+    imgEl.alt = data.trademarkName || 'Marka Görseli';
+    imgEl.addEventListener('error', () => { imgEl.src = PH; }, { once: true });
   }
+
+  const ab = document.getElementById('actionButtons');
+  if (ab) ab.style.display = 'block';
+}
+
   
   document.getElementById('heroTitle').textContent = data.trademarkName || 'Marka Adı Bulunamadı';
   document.getElementById('applicationNumber').textContent = data.applicationNumber || 'Bulunamadı';
@@ -224,3 +252,41 @@ function refreshTransferListVisibility() {
     });
   }
 })();
+
+
+function refreshTransferListVisibility() {
+  const list = document.getElementById('transferList');
+  const empty = document.getElementById('transferListEmpty');
+  const container = document.getElementById('transferListContainer');
+  const hasItems = list && list.children && list.children.length > 0;
+  if (container && empty) {
+    if (hasItems) { container.classList.remove('d-none'); empty.classList.add('d-none'); }
+    else { container.classList.add('d-none'); empty.classList.remove('d-none'); }
+  }
+}
+
+function addCurrentInput() {
+  const input = document.getElementById('basvuruNoInput');
+  const list = document.getElementById('transferList');
+  if (!input || !list) return;
+  const val = (input.value || '').trim();
+  if (!val) return;
+  const li = document.createElement('li');
+  li.className = 'list-group-item d-flex align-items-center justify-content-between';
+  li.innerHTML = '<span>' + val + '</span><button type="button" class="btn btn-danger btn-sm">X</button>';
+  li.querySelector('button').addEventListener('click', () => { li.remove(); refreshTransferListVisibility(); });
+  list.appendChild(li);
+  input.value = '';
+  refreshTransferListVisibility();
+}
+
+(function setupAddHandlers(){
+  const input = document.getElementById('basvuruNoInput');
+  const addBtn = document.getElementById('addBasvuruNoBtn');
+  if (addBtn) addBtn.addEventListener('click', addCurrentInput);
+  if (input) input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); addCurrentInput(); }
+  });
+})();
+
+document.addEventListener('DOMContentLoaded', () => { try { refreshTransferListVisibility(); } catch(e){} });
