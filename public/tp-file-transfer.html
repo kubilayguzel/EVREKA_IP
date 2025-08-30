@@ -354,27 +354,23 @@
     background: #f0f0f0;
 }
 
-/* --- Page specific tweaks for file transfer --- */
+
+/* Page-specific tweaks for TP File Transfer using task-detail styles */
+.result-list { max-height: 400px; overflow-y: auto; }
+.list-group-item .btn { margin-left: 10px; }
 .hero{ display:flex; gap:24px; align-items:flex-start; }
 .hero-img-wrap{ flex:0 0 auto; max-width:360px; }
 .hero-img{ width:100%; height:auto; border-radius:12px; border:1px solid #eee; background:#fff; }
 .hero-meta{ flex:1; min-width:300px; }
 .kv-grid{ display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:12px 20px; }
-.result-list { max-height: 400px; overflow-y: auto; }
-.status-ok { color: green; font-weight: bold; }
-.status-error { color: red; font-weight: bold; }
-.list-group-item .btn { margin-left: 10px; }
 .action-buttons { margin-top: 12px; }
-.action-buttons .btn { flex: 0 0 auto; height: auto; display: inline-block; padding: .5rem 1rem; border-radius: .5rem; }
-.action-buttons .d-flex > * + * { margin-left: 8px; }
-/* Headline section */
-.page-header { background: rgba(255, 255, 255, 0.95); padding: 30px; border-radius: 20px; margin-bottom: 30px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1); }
-.page-title { font-size: 2em; color: #1e3c72; margin-bottom: 10px; }
-.page-subtitle { color: #666; font-size: 1.1em; }
-/* Reuse section-card for each block */
-.section-card { background: rgba(255, 255, 255, 0.95); padding: 30px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1); margin-bottom: 25px; }
-.section-title { font-size: 1.3em; color: #1e3c72; margin-bottom: 20px; padding-bottom: 10px; border-bottom: 1px solid #e1e8ed; }
-  </style>
+.action-buttons .btn { flex: 0 0 auto; height: auto; display: inline-block; padding: .6rem 1rem; border-radius: .6rem; }
+/* Buttons & selects look like task-detail */
+.section-card .btn { box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+.section-card .form-control { border-radius: 12px; height: 44px; }
+.section-card .form-check-input { width: 1.1rem; height: 1.1rem; }
+
+</style>
 </head>
 
 <body>
@@ -491,12 +487,15 @@
   </div>
 
   <!-- Scripts: task-detail style layout loader + page JS -->
-  <script type="module">
-    import { loadSharedLayout } from './js/layout-loader.js';
-    document.addEventListener('DOMContentLoaded', async () => {
-      try { await loadSharedLayout(); } catch(e){ console.warn('loadSharedLayout error', e); }
-    });
-  </script>
+  
   <script type="module" src="js/tp-file-transfer.js"></script>
+
+<script type="module">
+  import { loadSharedLayout } from './js/layout-loader.js';
+  document.addEventListener('DOMContentLoaded', async () => {
+    try { await loadSharedLayout(); } catch(e){ console.warn('loadSharedLayout error', e); }
+  });
+</script>
+
 </body>
 </html>
