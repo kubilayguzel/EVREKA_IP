@@ -12,6 +12,34 @@
     .status-ok { color: green; font-weight: bold; }
     .status-error { color: red; font-weight: bold; }
     .list-group-item .btn { margin-left: 10px; }
+    #actionButtons {
+    position: sticky;       /* içerik uzun olsa da altta dursun */
+    bottom: 0;
+    background: #fff;
+    padding: 12px 16px;
+    z-index: 20;
+    border-top: 1px solid rgba(0,0,0,.06);
+    }
+
+    #actionButtons .d-flex {
+    gap: 12px;              /* Bootstrap 4 gap yoksa yine de boşluk verelim */
+    align-items: center;
+    justify-content: flex-end;
+    }
+
+    #actionButtons .btn {
+    flex: 0 0 auto !important;  /* sütun gibi gerilmeyi engelle */
+    height: auto !important;    /* dikey uzamayı kes */
+    padding: .6rem 1rem;
+    border-radius: .5rem;
+    line-height: 1.2;
+    display: inline-block;      /* olası display:block override’larını ez */
+    }
+
+    /* Eski bir kural .btn-block veriyorsa, bunu iptal et (güvenli) */
+    #actionButtons .btn.btn-block {
+    width: auto !important;
+    }
   </style>
 </head>
 <body>
