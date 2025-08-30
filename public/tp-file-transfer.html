@@ -29,7 +29,36 @@
     .action-buttons { margin-top: 12px; }
     .action-buttons .btn { flex: 0 0 auto; height: auto; display: inline-block; padding: .5rem 1rem; border-radius: .5rem; }
     .action-buttons .d-flex > * + * { margin-left: 8px; }
-  </style>
+  
+/* === Typography & Card Header (aligned with portfolio-detail) === */
+:root {
+  --card-radius: 16px;
+  --card-header-bg: #f7f9fc;
+  --card-header-text: #1f2937;
+  --card-header-border: #e5e7eb;
+  --heading: #1e3c72;
+  --muted: #6b7280;
+}
+h1, h2, h3, h4, h5 { color: var(--heading); margin-bottom: .75rem; font-weight: 600; }
+h3 { font-size: 1.15rem; }
+.card {
+  border-radius: var(--card-radius);
+  border: 1px solid rgba(0,0,0,.06);
+  overflow: hidden;
+}
+.card-header {
+  background: var(--card-header-bg);
+  color: var(--card-header-text);
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--card-header-border);
+  font-weight: 600;
+  letter-spacing: .2px;
+}
+.card-body { padding: 16px; }
+.label { color: var(--muted); font-size: .9rem; }
+.value { font-weight: 600; }
+
+</style>
 
 
 </head>
@@ -45,7 +74,7 @@
 
       <!-- Card 1 -->
       <div class="card shadow-sm mb-4">
-        <div class="card-header"><strong>TÜRKPATENT Dosya Aktarımı</strong></div>
+        <div class="card-header"><h3 class="m-0">TÜRKPATENT Dosya Aktarımı</h3></div>
         <div class="card-body">
           <form id="transferForm">
             <div class="form-row mb-3">
@@ -86,7 +115,7 @@
 
       <!-- Card 2 -->
       <div class="card shadow-sm mb-4" id="transferListCard">
-        <div class="card-header"><strong>Aktarım Listesi</strong></div>
+        <div class="card-header"><h3 class="m-0">Aktarım Listesi</h3></div>
         <div class="card-body">
           <div id="transferListContainer" class="d-none">
             <ul id="transferList" class="list-group result-list mb-3"></ul>
@@ -100,7 +129,7 @@
 
       <!-- Card 3 -->
       <div class="card shadow-sm mb-4" id="resultsCard">
-        <div class="card-header"><strong>Sorgulama Sonuçları</strong></div>
+        <div class="card-header"><h3 class="m-0">Sorgulama Sonuçları</h3></div>
         <div class="card-body">
           <div id="singleResultContainer" class="d-none">
             <div id="heroCard" class="card shadow-sm mb-4">
