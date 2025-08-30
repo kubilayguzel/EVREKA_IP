@@ -393,6 +393,27 @@
   left: 16px; top: 50%; transform: translateY(-50%);
   font-weight: 600; color: #6b7280;
 }
+
+/* input + 'Listeye Ekle' ayrık görünsün, yükseklik eşitlensin */
+.section-card .input-group { flex-wrap: nowrap; }
+.section-card .input-group-append { margin-left: 8px; }
+.section-card .input-group-append .btn { height: 44px; }
+
+/* task-detail görünümü: select ve butonlar */
+.section-card .form-control { border-radius: 12px; height: 44px; }
+.section-card .btn { box-shadow: 0 4px 12px rgba(0,0,0,0.08); border-radius: 12px; }
+
+/* alt aksiyon butonları header sağında, aralıklı */
+.action-buttons .d-flex > * + * { margin-left: 10px; }
+
+/* numaralı aktarım listesi */
+#transferList { counter-reset: rownum; }
+#transferList .list-group-item { position: relative; padding-left: 48px; }
+#transferList .list-group-item::before {
+  counter-increment: rownum; content: counter(rownum) ".";
+  position: absolute; left: 16px; top: 50%; transform: translateY(-50%);
+  font-weight: 600; color: #6b7280;
+}
 </style>
 
 </head>
@@ -459,8 +480,7 @@
       </section>
 
       <!-- Bölüm 3: Sorgulama Sonuçları -->
-      <section class="section-card" id="resultsCard">
-        <h3 class="section-title">Sorgulama Sonuçları</h3>
+      \1<div class="d-flex align-items-center justify-content-between">\2<div id="actionButtons" class="action-buttons" style="display:none;"><div class="d-flex align-items-center"><button id="cancelBtn" class="btn btn-outline-secondary">İptal</button><button id="savePortfolioBtn" class="btn btn-success ml-2">Kaydet - Portföy</button><button id="saveThirdPartyBtn" class="btn btn-info ml-2">Kaydet - 3.Taraf</button></div></div></div>
         <div id="singleResultContainer" class="d-none">
           <div id="heroCard" class="section-card" style="padding:20px;">
             <div class="hero">
@@ -497,13 +517,6 @@
             </table>
           </div>
         </div>
-
-        <div id="actionButtons" class="action-buttons" style="display:none;">
-          <div class="d-flex justify-content-end justify-content-end">
-            <button id="cancelBtn" class="btn btn-outline-secondary">İptal</button>
-            <button id="savePortfolioBtn" class="btn btn-success">Kaydet - Portföy</button>
-            <button id="saveThirdPartyBtn" class="btn btn-info">Kaydet - 3.Taraf</button>
-          </div>
         </div>
       </section>
 
