@@ -460,7 +460,10 @@
         <div class="logo-section">
                 <div class="brand-card">
                     <div class="brand-card-inner">
-                        <img src="https://via.placeholder.com/120x48/7CB342/FFFFFF?text=evreka" alt="Evreka" class="brand-logo">
+                        <svg width="120" height="48" viewBox="0 0 120 48" xmlns="http://www.w3.org/2000/svg" class="brand-logo">
+                            <rect width="120" height="48" rx="8" fill="#7CB342"/>
+                            <text x="60" y="32" text-anchor="middle" fill="white" font-family="Arial, sans-serif" font-size="18" font-weight="bold">evreka</text>
+                        </svg>
                     </div>
                 </div>
             <div class="app-title">IP Manager</div>
@@ -506,12 +509,16 @@
                     <input autocomplete="username" class="form-input" id="signup-email" required="" type="email"/>
                     <div class="error-message" id="signup-email-error"></div>
                 </div>
-                <div class="form-group">
-                    <label class="form-label" for="signup-password">Şifre (min. 6 karakter)</label>
-                    <input autocomplete="new-password" class="form-input" id="signup-password" minlength="6" required=""
-                           type="password"/>
-                    <div class="error-message" id="signup-password-error"></div>
-                </div>
+                    <div class="form-group">
+                        <label class="form-label" for="signin-password">Şifre</label>
+                        <div style="position: relative;">
+                            <input autocomplete="current-password" class="form-input" id="signin-password" required="" type="password"/>
+                            <button type="button" onclick="togglePassword()" style="position: absolute; right: 15px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; color: #666;">
+                                <i class="fas fa-eye" id="toggleIcon"></i>
+                            </button>
+                        </div>
+                        <div class="error-message" id="signin-password-error"></div>
+                    </div>
                 <button class="auth-btn" id="signupBtn" type="submit">
                     <span id="signupText">Kayıt Ol</span>
                     <span class="loading" id="signupLoading"></span>
@@ -830,20 +837,45 @@
 </script>
 <div class="notification-container" id="notification-container"></div>
 <script>
-    function togglePassword() {
-        const passwordInput = document.getElementById('password');
-        const toggleIcon = document.getElementById('toggleIcon');
-        
-        if (passwordInput.type === 'password') {
-            passwordInput.type = 'text';
-            toggleIcon.classList.remove('fa-eye');
-            toggleIcon.classList.add('fa-eye-slash');
-        } else {
-            passwordInput.type = 'password';
-            toggleIcon.classList.remove('fa-eye-slash');
-            toggleIcon.classList.add('fa-eye');
-        }
+document.addEventListener('DOMContentLoaded', function() {
+    const tabs = document.querySelectorAll('.tab');
+    const sections = document.querySelectorAll('.form-section');
+    
+    tabs.forEach(tab => {
+        tab.addEventListener('click', function() {
+            const targetTab = this.getAttribute('data-tab');
+            
+            // Remove active class from all tabs
+            tabs.forEach(t => t.classList.remove('active'));
+            // Add active class to clicked tab
+            this.classList.add('active');
+            
+            // Hide all sections
+            sections.forEach(section => section.classList.remove('active'));
+            // Show target section
+            const targetSection = document.getElementById(targetTab + '-section');
+            if (targetSection) {
+                targetSection.classList.add('active');
+            }
+        });
+    });
+});
+
+// Şifre göster/gizle fonksiyonu
+function togglePassword() {
+    const passwordInput = document.getElementById('signin-password');
+    const toggleIcon = document.getElementById('toggleIcon');
+    
+    if (passwordInput.type === 'password') {
+        passwordInput.type = 'text';
+        toggleIcon.classList.remove('fa-eye');
+        toggleIcon.classList.add('fa-eye-slash');
+    } else {
+        passwordInput.type = 'password';
+        toggleIcon.classList.remove('fa-eye-slash');
+        toggleIcon.classList.add('fa-eye');
     }
+}
 </script>
 </body>
 </html>
