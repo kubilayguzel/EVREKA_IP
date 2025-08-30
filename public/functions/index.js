@@ -3600,7 +3600,6 @@ export const adminDeleteUser = onCall({ region: "europe-west1" }, async (req) =>
 
 // TÜRKPATENT SCRAPING FONKSİYONU
 import { https } from 'firebase-functions/v2';
-import { logger } from 'firebase-functions/v2';
 import axios from 'axios';
 import * as cheerio from 'cheerio';
 
