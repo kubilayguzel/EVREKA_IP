@@ -3604,6 +3604,9 @@ import chromium from '@sparticuz/chromium';
 
 // ====== COMMON HANDLER ======
 async function handleScrapeTrademark(basvuruNo) {
+  // Puppeteer sürümüne bağımsız bekleme
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
   // === JSON yakalama (scope-wide) ===
   let __ajaxJson = null;
   const __jsonListener = async (resp) => {
@@ -3771,6 +3774,8 @@ async function handleScrapeTrademark(basvuruNo) {
 
     // 5) Sorgula butonunu bul ve tıkla
     logger.info('[scrapeTrademarkPuppeteer] Sorgula butonu tıklanıyor ve sonuç bekleniyor...');
+    // bot izi azaltmak için kısa jitter (yeni istek göndermez)
+    await sleep(400 + Math.floor(Math.random() * 600));
 
     try {
       const isButtonClicked = await page.evaluate(() => {
@@ -3794,13 +3799,13 @@ async function handleScrapeTrademark(basvuruNo) {
       if (typeof page.waitForNetworkIdle === 'function') {
         await page.waitForNetworkIdle({ idleTime: 1000, timeout: 15000 });
       } else {
-        await page.waitForTimeout(1200);
+        await sleep(1200);
       }
 
       // 12 sn. boyunca JSON bekle
       const t0 = Date.now();
       while (!__ajaxJson && Date.now() - t0 < 12000) {
-        await page.waitForTimeout(250);
+        await sleep(250);
       }
 
       // Dinleyiciyi mutlaka kaldır (hatta başarısız olsa bile)
