@@ -3605,58 +3605,39 @@ const __tpCache = global.__tpCache || (global.__tpCache = new Map());
 
 // ====== COMMON HANDLER ======
 async function handleScrapeTrademark(basvuruNo) {
-  // Puppeteer sürümüne bağımsız bekleme
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
-  // === JSON yakalama (scope-wide) ===
-  let __ajaxJson = null;
-  const __jsonListener = async (resp) => {
-    try {
-      const type = resp.request().resourceType();
-      if (type !== 'xhr' && type !== 'fetch') return;
-      const ct = (resp.headers()['content-type'] || '').toLowerCase();
-      if (!ct.includes('application/json')) return;
-
-      if (!__ajaxJson) {
-        __ajaxJson = await resp.json();
-        logger.info('[scrapeTrademark] JSON response yakalandı', { url: resp.url() });
-      }
-    } catch (e) {
-      logger.info('[scrapeTrademark] JSON parse hatası: ' + (e?.message || e));
-    }
-  };
+  // Sürümden bağımsız bekleme
+  const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
   if (!basvuruNo) {
     throw new HttpsError('invalid-argument', 'Başvuru numarası (basvuruNo) zorunludur.');
   }
 
   logger.info('[scrapeTrademarkPuppeteer] Başlıyor', { basvuruNo });
+
+  // 5 dk cache
   const c = __tpCache.get(basvuruNo);
   if (c && (Date.now() - c.ts) < 5 * 60 * 1000) {
     logger.info('Cache hit, 5 dk içindeki sonucu döndürüyorum.');
     return c.data;
   }
 
-  // Rate limiting check
+  // Basit oran sınırlama (45–60 sn jitter)
   const lastRequestKey = `turkpatent_last_request`;
-  // 45–60 sn arası rastgele bekleme
   const minDelay = 45000 + Math.floor(Math.random() * 15000);
   const lastRequest = global[lastRequestKey] || 0;
   const timeSinceLastRequest = Date.now() - lastRequest;
-
   if (timeSinceLastRequest < minDelay) {
     const waitTime = minDelay - timeSinceLastRequest;
     logger.info(`Rate limiting: ${waitTime}ms bekleyecek`);
-    await new Promise(resolve => setTimeout(resolve, waitTime));
+    await sleep(waitTime);
   }
-
   global[lastRequestKey] = Date.now();
 
   let browser;
 
   try {
     const isLocal = process.env.FUNCTIONS_EMULATOR === 'true' || process.env.LOCAL_PUPPETEER === '1';
-    
+
     const launchOptions = isLocal ? {
       headless: true,
       args: ['--no-sandbox', '--disable-setuid-sandbox']
@@ -3670,7 +3651,6 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
         '--no-first-run',
         '--disable-default-apps',
         '--disable-features=VizDisplayCompositor',
-        // Bot detection'ı atlatmak için
         '--disable-blink-features=AutomationControlled',
         '--disable-web-security',
         '--disable-features=VizDisplayCompositor'
@@ -3681,64 +3661,48 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     browser = await puppeteer.launch(launchOptions);
     const page = await browser.newPage();
 
-    // User agent ayarla
     await page.setUserAgent(
       'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome Safari'
     );
+    await page.setExtraHTTPHeaders({ 'Accept-Language': 'tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7' });
 
     page.setDefaultTimeout(30000);
     page.setDefaultNavigationTimeout(30000);
 
     logger.info('[scrapeTrademarkPuppeteer] Sayfaya gidiliyor...');
-    
-    // 1) TÜRKPATENT arama sayfasına git
     await page.goto('https://www.turkpatent.gov.tr/arastirma-yap?form=trademark', {
       waitUntil: 'domcontentloaded'
     });
 
-    // 2) Popup/Modal kapatma (Chrome eklentisinden alınan selector'lar)
+    // Popup/Modal kapat
     try {
       logger.info('[scrapeTrademarkPuppeteer] Popup/modal kapatma işlemi...');
-      
-      // a) Dolandırıcılık popup'ı kapat (varsa)
       try {
         await page.waitForSelector('.jss84 .jss92', { timeout: 2000 });
         await page.click('.jss84 .jss92');
         logger.info('Dolandırıcılık popup kapatıldı');
-      } catch (e) {
-        logger.info('Dolandırıcılık popup bulunamadı');
-      }
+      } catch { logger.info('Dolandırıcılık popup bulunamadı'); }
 
-      // b) MUI dialog/modal kapat (varsa)
       try {
         await page.waitForSelector('[role="dialog"], .MuiDialog-root, .MuiModal-root', { timeout: 2000 });
         const closeBtn = await page.$('button[aria-label="Close"], button[aria-label="Kapat"], .close');
-        if (closeBtn) {
-          await closeBtn.click();
-          logger.info('MUI modal kapatıldı');
-        }
-      } catch (e) {
-        logger.info('MUI modal bulunamadı');
-      }
+        if (closeBtn) { await closeBtn.click(); logger.info('MUI modal kapatıldı'); }
+      } catch { logger.info('MUI modal bulunamadı'); }
     } catch (modalError) {
       logger.info('Modal kapatma hatası (normal):', modalError.message);
     }
 
-    // 3) "Dosya Takibi" sekmesine geçiliyor...
+    // "Dosya Takibi" sekmesi
     try {
-      // Metin içeriğine göre butonu bul ve tıkla
       await page.evaluate(() => {
         const buttons = document.querySelectorAll('button[role="tab"]');
         for (const btn of buttons) {
           if (btn.textContent && btn.textContent.includes('Dosya Takibi')) {
-            if (btn.getAttribute('aria-selected') !== 'true') {
-              btn.click();
-            }
+            if (btn.getAttribute('aria-selected') !== 'true') btn.click();
             return;
           }
         }
       });
-      // Butonun tıklanması ve formun yüklenmesi için bekle
       await page.waitForSelector('input[placeholder="Başvuru Numarası"]', { timeout: 5000 });
       logger.info('Dosya Takibi sekmesine geçiş başarılı.');
     } catch (tabError) {
@@ -3746,23 +3710,15 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
       throw new HttpsError('internal', `Tab geçişi başarısız: ${tabError.message}`);
     }
 
-    // 4) Form elemanlarını bekle ve doldur
+    // Form doldur
     logger.info('[scrapeTrademarkPuppeteer] Form doldurma işlemi...');
-    
     try {
-      // Başvuru numarası input alanını bekle
       await page.waitForSelector('input[placeholder="Başvuru Numarası"]', { timeout: 5000 });
-      
       const input = await page.$('input[placeholder="Başvuru Numarası"]');
-      if (!input) {
-        throw new Error('Başvuru numarası input alanı bulunamadı');
-      }
+      if (!input) throw new Error('Başvuru numarası input alanı bulunamadı');
 
-      // Input alanını temizle ve başvuru numarasını yaz
-      await input.click({ clickCount: 3 }); // Tümünü seç
+      await input.click({ clickCount: 3 });
       await input.type(basvuruNo);
-      
-      // React controlled input için event'ler
       await page.evaluate((inputEl, value) => {
         inputEl.value = value;
         inputEl.dispatchEvent(new Event('input', { bubbles: true }));
@@ -3770,51 +3726,41 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
       }, input, basvuruNo);
 
       logger.info(`Başvuru numarası yazıldı: ${basvuruNo}`);
-
-      // XHR/Fetch JSON'u kaçırmamak için tıklamadan hemen ÖNCE dinleyiciyi bağla
-      page.on('response', __jsonListener);
-
     } catch (inputError) {
       logger.error('Form doldurma hatası:', inputError.message);
       throw new HttpsError('internal', `Form doldurma başarısız: ${inputError.message}`);
     }
 
-    // 5) Sorgula butonunu bul ve tıkla
+    // --- TEK TIK + TEK BEKLEME ---
     logger.info('[scrapeTrademarkPuppeteer] Sorgula butonu tıklanıyor ve sonuç bekleniyor...');
-    // bot izi azaltmak için kısa jitter (yeni istek göndermez)
-    await sleep(400 + Math.floor(Math.random() * 600));
+    await sleep(400 + Math.floor(Math.random() * 600)); // küçük jitter
 
+    // 1) JSON yanıtını ÖNDEN beklemeye al
+    const apiRespPromise = page.waitForResponse(res => {
+      const type = res.request().resourceType();
+      const ct = (res.headers()['content-type'] || '').toLowerCase();
+      return (type === 'xhr' || type === 'fetch') && ct.includes('application/json') && res.status() === 200;
+    }, { timeout: 12000 });
+
+    // 2) Butona tek tık
+    const isButtonClicked = await page.evaluate(() => {
+      const btn = Array.from(document.querySelectorAll('button'))
+        .find(b => /sorgula/i.test(b.textContent || '') && !b.disabled && !b.getAttribute('aria-disabled'));
+      if (!btn) return false;
+      btn.click();
+      return true;
+    });
+    if (!isButtonClicked) {
+      throw new HttpsError('internal', 'Sorgula butonu bulunamadı');
+    }
+
+    // 3) İlk JSON'u bekle (tek atış)
+    let apiResp = null;
     try {
-      const isButtonClicked = await page.evaluate(() => {
-        const buttons = document.querySelectorAll('button');
-        for (const btn of buttons) {
-          if (btn.textContent && btn.textContent.includes('Sorgula')) {
-            btn.click();
-            return true;
-          }
-        }
-        return false;
-      });
+      apiResp = await apiRespPromise;
+    } catch { /* 12 sn içinde JSON gelmeyebilir → DOM fallback */ }
 
-      if (!isButtonClicked) {
-        throw new Error('Sorgula butonu bulunamadı');
-      }
-
-      logger.info('Sorgula butonuna tıklandı, AJAX sonuç bekleniyor...');
-
-      // Ağ trafiği dursun (yeniden istek göndermeden)
-      if (typeof page.waitForNetworkIdle === 'function') {
-        await page.waitForNetworkIdle({ idleTime: 1000, timeout: 15000 });
-      } else {
-        await sleep(1200);
-      }
-
-      // 12 sn. boyunca JSON bekle
-      const t0 = Date.now();
-      while (!__ajaxJson && Date.now() - t0 < 12000) {
-        await sleep(250);
-      }
-    // --- TürkPatent rate-limit ekranını erken tespit et ---
+    // --- Rate-limit ekranını erken tespit et ---
     const hitRateLimit = await page.evaluate(() => {
       const t = (document.body.innerText || '').toLowerCase();
       return (
@@ -3825,10 +3771,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
         t.includes('geçici olarak hizmet dışı')
       );
     });
-
     if (hitRateLimit) {
-      // listener'ı kapat ve temiz bir yanıtla dön
-      page.off('response', __jsonListener);
       logger.info('TürkPatent rate-limit sayfası tespit edildi, erken dönülüyor.');
       return {
         status: 'RateLimited',
@@ -3838,383 +3781,186 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
       };
     }
 
-      // Dinleyiciyi mutlaka kaldır (hatta başarısız olsa bile)
-      page.off('response', __jsonListener);
+    // --- JSON geldiyse DOM’a girmeden dön ---
+    if (apiResp) {
+      const json = await apiResp.json();
 
-      // JSON geldiyse DOM'a hiç girmeden erken dön
-      if (__ajaxJson) {
-        const list =
-          (Array.isArray(__ajaxJson?.data?.resultList) && __ajaxJson.data.resultList) ||
-          (Array.isArray(__ajaxJson?.resultList) && __ajaxJson.resultList) ||
-          (Array.isArray(__ajaxJson?.rows) && __ajaxJson.rows) ||
-          (Array.isArray(__ajaxJson) && __ajaxJson) ||
-          (__ajaxJson?.data && [__ajaxJson.data]) ||
-          [__ajaxJson];
+      const list =
+        (Array.isArray(json?.data?.resultList) && json.data.resultList) ||
+        (Array.isArray(json?.resultList) && json.resultList) ||
+        (Array.isArray(json?.rows) && json.rows) ||
+        (Array.isArray(json) && json) ||
+        (json?.data && [json.data]) ||
+        [json];
 
-        const first = list[0] || {};
-        const normalized = {
-          applicationNumber: first.applicationNumber || first.appNo || first.basvuruNo || basvuruNo,
-          applicationDate:  first.applicationDate  || first.appDate || first.basvuruTarihi || '',
-          trademarkName:    first.trademarkName    || first.brandName || first.name || '',
-          imageUrl:         first.imageUrl         || first.image || first.logoUrl || ''
-        };
-
-        return {
-          status: 'Success',
-          found: !!(normalized.trademarkName || normalized.applicationNumber),
-          data: normalized,
-          ...normalized
-        };
-      }
-
-      // --- JSON gelmediyse alttaki mevcut DOM bekleme/çıkarma kodun çalışsın ---
-
-      // ✅ AJAX SONUÇ BEKLEMESİ - Navigation değil, element bekleme
-      await Promise.race([
-        // "Marka Bilgileri" başlık metni
-        page.waitForFunction(() => document.body.textContent.includes('Marka Bilgileri'), { timeout: 30000 }),
-        // Sonuç container'ı
-        page.waitForSelector('.jss192', { timeout: 30000 }),
-        // Fieldset elementi
-        page.waitForSelector('fieldset', { timeout: 30000 }),
-        // "Başvuru Numarası" ve "Tescil Numarası" gibi anahtar metinler
-        page.waitForFunction(() => {
-          const text = document.body.textContent;
-          return text.includes('Başvuru Numarası') && text.includes('Tescil Numarası');
-        }, { timeout: 30000 })
-      ]);
-
-      logger.info('AJAX sonucu yüklendi.');
-
-      // 2 saniye daha bekle - tam yükleme için
-      await new Promise(resolve => setTimeout(resolve, 2000));
-
-      // Debug bilgisi topla
-      const debugInfo = await page.evaluate(() => {
-        return {
-          hasResults: !!document.querySelector('#search-results'),
-          hasTable: !!document.querySelector('table.MuiTable-root'),
-          hasContainer: !!document.querySelector('.jss192'),
-          hasFieldset: !!document.querySelector('fieldset'),
-          hasMarkaBilgileri: document.body.textContent.includes('Marka Bilgileri'),
-          hasBasvuruNo: document.body.textContent.includes('Başvuru Numarası'),
-          pageTitle: document.title,
-          currentUrl: window.location.href,
-          bodyText: document.body.textContent.substring(0, 1000)
-        };
-      });
-      logger.info('AJAX sonrası debug:', debugInfo);
-
-      // Başarılı yüklemeyi doğrula
-      const hasData = await page.evaluate(() => {
-        return document.body.textContent.includes('Marka Bilgileri') || 
-               document.body.textContent.includes('Başvuru Numarası') ||
-               !!document.querySelector('fieldset') ||
-               !!document.querySelector('.jss192');
-      });
-
-      if (!hasData) {
-        try {
-          await page.screenshot({ path: '/tmp/debug-screenshot.png' });
-        } catch (screenshotError) {
-          logger.info('Screenshot alınamadı:', screenshotError.message);
-        }
-        throw new Error('AJAX sonucu yüklenemedi');
-      }
-
-      logger.info('Sonuç başarıyla yüklendi.');
-
-    } catch (buttonError) {
-      logger.error('Sorgula butonu hatası:', buttonError.message);
-      throw new HttpsError('internal', `Sorgula butonu hatası: ${buttonError.message}`);
-    }
-
-    // 6) Sonuç sayfasından veri çıkar
-    logger.info('[scrapeTrademarkPuppeteer] Sonuç verisi çıkarılıyor...');
-
-    try {
-      // AJAX sonuçlarının tam yüklenmesi için kısa bekleme
-      await new Promise(resolve => setTimeout(resolve, 1500));
-
-      // === Dinamik içerik bekleme (sade & tek bekleme) ===
-      try {
-        await page.waitForFunction(() => {
-          // Birden fazla ihtimalli container
-          const root =
-            document.querySelector('#search-results') ||
-            document.querySelector('.result-container') ||
-            document.querySelector('.trademark-result') ||
-            document.querySelector('[class*="result"]');
-
-          if (!root) return false;
-
-          // MUI tablolarında hücre/satır kontrolü
-          const hasRows = root.querySelector('tr.MuiTableRow-root, [role="row"], .MuiTableCell-root');
-          // Anlamlı metin uzunluğu
-          const text = (root.innerText || '').replace(/\s+/g, ' ').trim();
-
-          return !!hasRows || text.length > 120;
-        }, { timeout: 12000 });
-
-        logger.info('Dinamik içerik: koşul sağlandı (tek bekleme).');
-      } catch (e) {
-        logger.info('Dinamik içerik: süre doldu, mevcut içerikle devam ediliyor.');
-      }
-
-      // Sayfada hata mesajı var mı kontrol et
-      const hasError = await page.evaluate(() => {
-        // Hata mesajı içeren potansiyel elementleri seç
-      const elements = document.querySelectorAll('.error, .alert-danger, .MuiAlert-message, p, div, span, h1, h2, h3');
-      const keywords = [
-        'bulunamadı',
-        'sonuç yok',
-        'hata',
-        'geçersiz',
-        'çok fazla deneme',       // rate limit
-        'too many attempts',      // rate limit (ing)
-        'rate limit',             // rate limit (ing)
-        'sistem meşgul',
-        'geçici olarak hizmet dışı'
-      ];
-
-        for (const el of elements) {
-          const text = (el.textContent || '').trim().toLowerCase();
-          for (const keyword of keywords) {
-            if (text.includes(keyword)) {
-              // Ekranda görünen bir hata mesajı bulundu
-              return (el.textContent || '').trim();
-            }
-          }
-        }
-        return null;
-      });
-
-      if (hasError) {
-        logger.info('Sorgu sonucunda hata:', hasError);
-        return {
-          applicationNumber: basvuruNo,
-          found: false,
-          status: 'NotFound',
-          message: hasError,
-          error: hasError
-        };
-      }
-
-      // Marka verilerini çıkar - YENİ (düzenlenmiş) yaklaşım
-      const trademarkData = await page.evaluate((basvuruNoArg) => {
-        const data = {
-          found: false,
-          trademarkName: null,
-          imageUrl: null,
-          applicationDate: null,
-          applicationNumber: null,
-          owner: null,
-          status: null,
-          niceClasses: []
-        };
-
-        // 1) Sonuç container'ını bul
-        let resultContainer = null;
-        const containerSelectors = [
-          '#search-results',
-          '.result-container', 
-          '.trademark-result',
-          '[class*="result"]',
-          '.ajax-content',
-          '.search-result-content'
-        ];
-        for (const selector of containerSelectors) {
-          const container = document.querySelector(selector);
-          if (container) { resultContainer = container; break; }
-        }
-
-        // 2) Alternatif: tüm sayfada başvuru numarasını ara
-        if (!resultContainer && basvuruNoArg) {
-          const allEls = document.querySelectorAll('*');
-          for (const el of allEls) {
-            const t = (el.textContent || '');
-            if (t.includes(basvuruNoArg)) {
-              resultContainer = el.closest('div, section, article, main, .container') || el;
-              break;
-            }
-          }
-        }
-
-        // Yardımcılar
-        const getText = (node) => (node?.textContent || '').trim();
-        const getTextLower = (node) => getText(node).toLowerCase();
-
-        // Container metni ve elementler
-        let containerText = resultContainer ? (resultContainer.textContent || '') : '';
-        let allElements = resultContainer ? Array.from(resultContainer.querySelectorAll('*')) : [];
-
-        // Eğer container boşsa tüm sayfayı dene
-        if (containerText.length < 50) {
-          containerText = (document.body.textContent || '');
-          allElements = Array.from(document.querySelectorAll('*'));
-        }
-
-        // 3) Tablo yaklaşımı
-        if (resultContainer) {
-          const rows = resultContainer.querySelectorAll('tr');
-          for (const row of rows) {
-            const cells = row.querySelectorAll('td, th, .MuiTableCell-root, [role="cell"]');
-            if (cells.length >= 2) {
-              const label = getTextLower(cells[0]);
-              const value = getText(cells[1]);
-
-              // Marka adı
-              if ((label.includes('marka') && label.includes('ad')) || label.includes('trademark') || label.includes('name')) {
-                data.trademarkName = value;
-              }
-              // Başvuru numarası
-              if (label.includes('başvuru') || label.includes('application') || /\d{4}\/\d{6}/.test(value)) {
-                data.applicationNumber = value;
-              }
-              // Tarih
-              if (label.includes('tarih') || label.includes('date')) {
-                const m = value.match(/\d{2}[.\/]\d{2}[.\/]\d{4}/);
-                if (m) data.applicationDate = m[0];
-              }
-              // Sahip
-              if (label.includes('sahib') || label.includes('başvuran') || label.includes('owner') || label.includes('applicant')) {
-                data.owner = value;
-              }
-            }
-          }
-        }
-
-        // 4) Label-value çift yaklaşımı (tablo yoksa)
-        if (!data.trademarkName && allElements.length) {
-          const allTexts = allElements
-            .map(el => getText(el))
-            .filter(text => text && text.length > 0);
-          for (let i = 0; i < allTexts.length - 1; i++) {
-            const current = allTexts[i].toLowerCase();
-            const next = allTexts[i + 1];
-            if ((current.includes('marka') && (current.includes('ad') || current.includes('name'))) ||
-                current === 'trademark name' ||
-                current === 'marka adı') {
-              data.trademarkName = next;
-              break;
-            }
-          }
-        }
-
-        // 5) Regex ile fallback
-        if (!data.applicationNumber) {
-          const m = containerText.match(/\b\d{4}\/\d{6}\b/);
-          if (m) data.applicationNumber = m[0];
-        }
-        if (!data.applicationDate) {
-          const m = containerText.match(/\b\d{2}[.\/]\d{2}[.\/]\d{4}\b/);
-          if (m) data.applicationDate = m[0];
-        }
-        const niceMatches = containerText.match(/(?:sınıf|class|nice)\s*:?\s*(\d{1,2})/gi);
-        if (niceMatches) {
-          data.niceClasses = niceMatches
-            .map(s => (s.match(/\d{1,2}/) || [])[0])
-            .filter(Boolean);
-        }
-
-        // 6) Görsel
-        if (resultContainer) {
-          const images = resultContainer.querySelectorAll('img');
-          for (const img of images) {
-            const src = img?.src || '';
-            if (src && !/icon|logo|button/i.test(src)) {
-              data.imageUrl = src;
-              break;
-            }
-          }
-        }
-
-        // Hata mesajı kontrolü
-        const errorMessages = [
-          'çok fazla deneme yaptınız',
-          'too many attempts',
-          'sistem meşgul',
-          'geçici olarak hizmet dışı',
-          'rate limit'
-        ];
-        const lowerText = containerText.toLowerCase();
-        for (const msg of errorMessages) {
-          if (lowerText.includes(msg)) {
-            data.found = false;
-            data.trademarkName = null;
-            data.error = 'Rate limit exceeded';
-            return data;
-          }
-        }
-
-        // Varsayılanlar
-        if (!data.applicationNumber && basvuruNoArg) {
-          data.applicationNumber = basvuruNoArg;
-        }
-        if (!data.trademarkName) {
-          const meaningful = allElements
-            .map(el => getText(el))
-            .filter(t => t && t.length > 2 && t.length < 120 && !/Marka Araştırma|Dosya Takibi|Sorgula/i.test(t));
-          if (meaningful.length) data.trademarkName = meaningful[0];
-        }
-
-        data.found = !!(data.trademarkName || data.applicationNumber || data.imageUrl);
-        return data;
-      }, basvuruNo);
-
-      // Sayfa başlığından da bilgi çıkarmaya çalış
-      const pageTitle = await page.title();
-
-      // Eğer veri bulunamadıysa ancak sayfa yüklendiyse
-      if (!trademarkData.found) {
-        const bodyText = await page.evaluate(() => document.body.textContent || '');
-        if (bodyText.includes('bulunamadı') || bodyText.includes('sonuç yok')) {
-          return {
-            applicationNumber: basvuruNo,
-            found: false,
-            status: 'NotFound',
-            message: 'Belirtilen başvuru numarası için sonuç bulunamadı'
-          };
-        }
-        return {
-          applicationNumber: basvuruNo,
-          found: false,
-          status: 'DataExtractionError',
-          message: 'Sayfa yüklendi ancak veri çıkarılamadı',
-          pageTitle
-        };
-      }
-
-      logger.info('Marka verisi başarıyla çıkarıldı', trademarkData);
-
-      return {
-        applicationNumber: basvuruNo,
-        found: true,
-        status: 'Success',
-        data: trademarkData,
-        ...trademarkData
+      const first = list[0] || {};
+      const normalized = {
+        applicationNumber: first.applicationNumber || first.appNo || first.basvuruNo || basvuruNo,
+        applicationDate:  first.applicationDate  || first.appDate || first.basvuruTarihi || '',
+        trademarkName:    first.trademarkName    || first.brandName || first.name || '',
+        imageUrl:         first.imageUrl         || first.image || first.logoUrl || ''
       };
 
-    } catch (dataError) {
-      logger.error('Veri çıkarma hatası:', dataError.message);
-      throw new HttpsError('internal', `Veri çıkarma hatası: ${dataError.message}`);
+      const result = {
+        status: 'Success',
+        found: !!(normalized.trademarkName || normalized.applicationNumber),
+        data: normalized,
+        ...normalized
+      };
+      __tpCache.set(basvuruNo, { ts: Date.now(), data: result });
+      return result;
     }
 
-  } catch (err) {
-    logger.error('[scrapeTrademarkPuppeteer] Genel hata', { 
-      message: err?.message, 
-      stack: err?.stack,
-      basvuruNo 
+    // --- JSON gelmediyse: DOM FALLBACK (tek bekleme) ---
+    await Promise.race([
+      page.waitForFunction(() => document.body.textContent.includes('Marka Bilgileri'), { timeout: 30000 }),
+      page.waitForSelector('.jss192', { timeout: 30000 }),
+      page.waitForSelector('fieldset', { timeout: 30000 }),
+      page.waitForFunction(() => {
+        const text = document.body.textContent || '';
+        return text.includes('Başvuru Numarası') && text.includes('Tescil Numarası');
+      }, { timeout: 30000 })
+    ]);
+    logger.info('AJAX sonucu yüklendi (DOM fallback).');
+    await sleep(1500);
+
+    // Hata mesajı kontrolü
+    const hasError = await page.evaluate(() => {
+      const elements = document.querySelectorAll('.error, .alert-danger, .MuiAlert-message, p, div, span, h1, h2, h3');
+      const keywords = [
+        'bulunamadı', 'sonuç yok', 'hata', 'geçersiz',
+        'çok fazla deneme', 'too many attempts', 'rate limit', 'sistem meşgul', 'geçici olarak hizmet dışı'
+      ];
+      for (const el of elements) {
+        const text = (el.textContent || '').trim().toLowerCase();
+        for (const k of keywords) if (text.includes(k)) return (el.textContent || '').trim();
+      }
+      return null;
     });
+    if (hasError) {
+      logger.info('Sorgu sonucunda hata:', hasError);
+      return { applicationNumber: basvuruNo, found: false, status: 'NotFound', message: hasError, error: hasError };
+    }
+
+    // Veri çıkarma (DOM)
+    const trademarkData = await page.evaluate((basvuruNoArg) => {
+      const data = {
+        found: false,
+        trademarkName: null,
+        imageUrl: null,
+        applicationDate: null,
+        applicationNumber: null,
+        owner: null,
+        status: null,
+        niceClasses: []
+      };
+
+      let resultContainer = null;
+      const containerSelectors = [
+        '#search-results', '.result-container', '.trademark-result',
+        '[class*="result"]', '.ajax-content', '.search-result-content'
+      ];
+      for (const s of containerSelectors) {
+        const c = document.querySelector(s);
+        if (c) { resultContainer = c; break; }
+      }
+      if (!resultContainer && basvuruNoArg) {
+        const allEls = document.querySelectorAll('*');
+        for (const el of allEls) {
+          const t = (el.textContent || '');
+          if (t.includes(basvuruNoArg)) { resultContainer = el.closest('div, section, article, main, .container') || el; break; }
+        }
+      }
+
+      const getText = (n) => (n?.textContent || '').trim();
+      const getTextLower = (n) => getText(n).toLowerCase();
+
+      let containerText = resultContainer ? (resultContainer.textContent || '') : '';
+      let allElements = resultContainer ? Array.from(resultContainer.querySelectorAll('*')) : [];
+
+      if (containerText.length < 50) {
+        containerText = (document.body.textContent || '');
+        allElements = Array.from(document.querySelectorAll('*'));
+      }
+
+      if (resultContainer) {
+        const rows = resultContainer.querySelectorAll('tr');
+        for (const row of rows) {
+          const cells = row.querySelectorAll('td, th, .MuiTableCell-root, [role="cell"]');
+          if (cells.length >= 2) {
+            const label = getTextLower(cells[0]);
+            const value = getText(cells[1]);
+            if ((label.includes('marka') && label.includes('ad')) || label.includes('trademark') || label.includes('name')) data.trademarkName = value;
+            if (label.includes('başvuru') || label.includes('application') || /\d{4}\/\d{6}/.test(value)) data.applicationNumber = value;
+            if (label.includes('tarih') || label.includes('date')) { const m = value.match(/\d{2}[.\/]\d{2}[.\/]\d{4}/); if (m) data.applicationDate = m[0]; }
+            if (label.includes('sahib') || label.includes('başvuran') || label.includes('owner') || label.includes('applicant')) data.owner = value;
+          }
+        }
+      }
+
+      if (!data.trademarkName && allElements.length) {
+        const allTexts = allElements.map(el => getText(el)).filter(Boolean);
+        for (let i = 0; i < allTexts.length - 1; i++) {
+          const current = allTexts[i].toLowerCase();
+          const next = allTexts[i + 1];
+          if ((current.includes('marka') && (current.includes('ad') || current.includes('name'))) ||
+              current === 'trademark name' || current === 'marka adı') { data.trademarkName = next; break; }
+        }
+      }
+
+      if (!data.applicationNumber) {
+        const m = containerText.match(/\b\d{4}\/\d{6}\b/);
+        if (m) data.applicationNumber = m[0];
+      }
+      if (!data.applicationDate) {
+        const m = containerText.match(/\b\d{2}[.\/]\d{2}[.\/]\d{4}\b/);
+        if (m) data.applicationDate = m[0];
+      }
+      const niceMatches = containerText.match(/(?:sınıf|class|nice)\s*:?\s*(\d{1,2})/gi);
+      if (niceMatches) {
+        data.niceClasses = niceMatches.map(s => (s.match(/\d{1,2}/) || [])[0]).filter(Boolean);
+      }
+
+      if (resultContainer) {
+        const images = resultContainer.querySelectorAll('img');
+        for (const img of images) {
+          const src = img?.src || '';
+          if (src && !/icon|logo|button/i.test(src)) { data.imageUrl = src; break; }
+        }
+      }
+
+      if (!data.applicationNumber && basvuruNoArg) data.applicationNumber = basvuruNoArg;
+
+      const meaningful = allElements.map(el => getText(el))
+        .filter(t => t && t.length > 2 && t.length < 120 && !/Marka Araştırma|Dosya Takibi|Sorgula/i.test(t));
+      if (!data.trademarkName && meaningful.length) data.trademarkName = meaningful[0];
+
+      data.found = !!(data.trademarkName || data.applicationNumber || data.imageUrl);
+      return data;
+    }, basvuruNo);
+
+    const pageTitle = await page.title();
+
+    if (!trademarkData.found) {
+      const bodyText = await page.evaluate(() => document.body.textContent || '');
+      if (bodyText.includes('bulunamadı') || bodyText.includes('sonuç yok')) {
+        return { applicationNumber: basvuruNo, found: false, status: 'NotFound', message: 'Belirtilen başvuru numarası için sonuç bulunamadı' };
+      }
+      return { applicationNumber: basvuruNo, found: false, status: 'DataExtractionError', message: 'Sayfa yüklendi ancak veri çıkarılamadı', pageTitle };
+    }
+
+    logger.info('Marka verisi başarıyla çıkarıldı', trademarkData);
+    const result = { applicationNumber: basvuruNo, found: true, status: 'Success', data: trademarkData, ...trademarkData };
+    __tpCache.set(basvuruNo, { ts: Date.now(), data: result });
+    return result;
+
+  } catch (err) {
+    logger.error('[scrapeTrademarkPuppeteer] Genel hata', { message: err?.message, stack: err?.stack, basvuruNo });
     throw new HttpsError('internal', `Puppeteer hatası: ${err?.message || String(err)}`);
   } finally {
     if (browser) {
-      try { 
-        await browser.close(); 
-        logger.info('Browser kapatıldı');
-      } catch (closeError) {
-        logger.error('Browser kapatma hatası:', closeError.message);
-      }
+      try { await browser.close(); logger.info('Browser kapatıldı'); }
+      catch (closeError) { logger.error('Browser kapatma hatası:', closeError.message); }
     }
   }
 }
