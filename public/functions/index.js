@@ -3722,30 +3722,104 @@ async function handleScrapeTrademark(basvuruNo) {
       throw new HttpsError('internal', `Form doldurma başarısız: ${inputError.message}`);
     }
 
-    // 5) Sorgula butonunu bul ve tıkla
-    logger.info('[scrapeTrademarkPuppeteer] Sorgula butonu tıklanıyor ve sonuç bekleniyor...');
-    try {
-        const isButtonClicked = await page.evaluate(() => {
-            const buttons = document.querySelectorAll('button');
-            for (const btn of buttons) {
-                if (btn.textContent && btn.textContent.includes('Sorgula')) {
-                    btn.click();
-                    return true;
-                }
+// 5) Sorgula butonunu bul ve tıkla
+logger.info('[scrapeTrademarkPuppeteer] Sorgula butonu tıklanıyor ve sonuç bekleniyor...');
+try {
+    const isButtonClicked = await page.evaluate(() => {
+        const buttons = document.querySelectorAll('button');
+        for (const btn of buttons) {
+            if (btn.textContent && btn.textContent.includes('Sorgula')) {
+                btn.click();
+                return true;
             }
-            return false;
-        });
-
-        if (isButtonClicked) {
-            await page.waitForSelector('table.MuiTable-root', { timeout: 60000 });
-            logger.info('Sorgula butonuna tıklandı ve sonuç tablosu yüklendi.');
-        } else {
-            throw new Error('Sorgula butonu bulunamadı');
         }
-    } catch (buttonError) {
-        logger.error('Sorgula butonu hatası:', buttonError.message);
-        throw new HttpsError('internal', `Sorgula butonu hatası: ${buttonError.message}`);
+        return false;
+    });
+
+    if (isButtonClicked) {
+        logger.info('Sorgula butonuna tıklandı, sonuç bekleniyor...');
+        
+        // ✅ EN KAPSAMLI ÇÖZÜM: Birden fazla alternatifi dene
+        try {
+            // 5 saniye bekle - sayfa geçişi için
+            await page.waitForTimeout(5000);
+            
+            // Debug bilgisi topla
+            const debugInfo = await page.evaluate(() => {
+                return {
+                    hasResults: !!document.querySelector('#search-results'),
+                    hasTable: !!document.querySelector('table.MuiTable-root'),
+                    hasContainer: !!document.querySelector('.jss192'),
+                    hasFieldset: !!document.querySelector('fieldset'),
+                    pageTitle: document.title,
+                    currentUrl: window.location.href,
+                    bodyText: document.body.textContent.substring(0, 500)
+                };
+            });
+            logger.info('Debug bilgisi:', debugInfo);
+            
+            // Birden fazla olasılığı paralel bekle
+            await Promise.race([
+                page.waitForSelector('table.MuiTable-root', { timeout: 45000 }),
+                page.waitForSelector('#search-results', { timeout: 45000 }),
+                page.waitForSelector('.jss192', { timeout: 45000 }),
+                page.waitForSelector('fieldset legend', { timeout: 45000 }), // "Marka Bilgileri" başlığı
+                page.waitForSelector('.error, .alert, .MuiAlert-message', { timeout: 45000 }) // Hata mesajı varsa
+            ]);
+            
+            // Başarılı yüklemeyi doğrula
+            const hasData = await page.evaluate(() => {
+                return !!document.querySelector('table.MuiTable-root') || 
+                       !!document.querySelector('#search-results .jss192') ||
+                       !!document.querySelector('fieldset legend') ||
+                       !!document.querySelector('.error, .alert');
+            });
+            
+            if (!hasData) {
+                // Screenshot al debug için
+                try {
+                    await page.screenshot({ path: '/tmp/debug-screenshot.png' });
+                } catch (screenshotError) {
+                    logger.info('Screenshot alınamadı:', screenshotError.message);
+                }
+                throw new Error('Sonuç tablosu veya hata mesajı yüklenemedi');
+            }
+            
+            logger.info('Sonuç sayfası başarıyla yüklendi.');
+            
+        } catch (waitError) {
+            logger.error('Tablo bekleme hatası:', waitError.message);
+            
+            // Son şans: Sayfa durumunu kontrol et
+            const finalCheck = await page.evaluate(() => {
+                const bodyText = document.body.textContent.toLowerCase();
+                if (bodyText.includes('bulunamadı') || bodyText.includes('sonuç yok')) {
+                    return { type: 'no_results', message: 'Sonuç bulunamadı' };
+                } else if (bodyText.includes('hata') || bodyText.includes('error')) {
+                    return { type: 'error', message: 'Sayfa hatası' };
+                }
+                return { type: 'unknown', message: 'Bilinmeyen durum' };
+            });
+            
+            logger.info('Final kontrol:', finalCheck);
+            
+            // Screenshot al
+            try {
+                await page.screenshot({ path: '/tmp/error-screenshot.png' });
+            } catch (screenshotError) {
+                logger.info('Error screenshot alınamadı:', screenshotError.message);
+            }
+            
+            throw waitError;
+        }
+        
+    } else {
+        throw new Error('Sorgula butonu bulunamadı');
     }
+} catch (buttonError) {
+    logger.error('Sorgula butonu hatası:', buttonError.message);
+    throw new HttpsError('internal', `Sorgula butonu hatası: ${buttonError.message}`);
+}
 
     // 6) Sonuç sayfasından veri çıkar
     logger.info('[scrapeTrademarkPuppeteer] Sonuç verisi çıkarılıyor...');
