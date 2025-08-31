@@ -296,7 +296,6 @@ function renderSingleResult(payload, fallbackNo){
   if (applicationDateEl) applicationDateEl.textContent = payload?.applicationDate || '';
   _show('singleResultContainer');
   _hide('bulkResultsContainer');
-}
 
 // Reset
 function resetResults(){
