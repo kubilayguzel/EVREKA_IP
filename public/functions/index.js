@@ -3866,7 +3866,56 @@ async function handleScrapeTrademark(basvuruNo) {
       try { primaryEndpoint = apiResp.url(); } catch {}
       // >>> DEĞİŞTİ: apiResp.json() yerine XSSI güvenli parse
       const json = await safeJsonFromResponse(apiResp);
-
+      // 🔍 DEBUG: JSON yapısını tamamen logla
+        try {
+          logger.info('[DEBUG] Tam JSON yapısı:', JSON.stringify(json, null, 2));
+          
+          // Tüm key'leri recursive olarak topla
+          function getAllKeys(obj, prefix = '', keys = new Set()) {
+            if (obj && typeof obj === 'object') {
+              Object.keys(obj).forEach(key => {
+                const fullKey = prefix ? `${prefix}.${key}` : key;
+                keys.add(fullKey);
+                if (typeof obj[key] === 'object' && obj[key] !== null) {
+                  getAllKeys(obj[key], fullKey, keys);
+                }
+              });
+            }
+            return Array.from(keys);
+          }
+          
+          const allKeys = getAllKeys(json);
+          logger.info('[DEBUG] JSON içindeki tüm key\'ler:', allKeys);
+          
+          // String değerler içinde marka adı olabilecekleri ara
+          function findPotentialTrademarkNames(obj, path = '') {
+            const results = [];
+            if (obj && typeof obj === 'object') {
+              Object.entries(obj).forEach(([key, value]) => {
+                const currentPath = path ? `${path}.${key}` : key;
+                if (typeof value === 'string' && value.length > 0 && value.length < 100) {
+                  // Türkçe karakterler, İngilizce harfler veya anlamlı kelimeler içeriyorsa
+                  if (/[a-zA-ZğüşıöçĞÜŞİÖÇ]/.test(value) && 
+                      !/^\d+$/.test(value) && // Sadece rakam değil
+                      !value.includes('http') && // URL değil
+                      !value.includes('function') && // JavaScript kodu değil
+                      value.trim() !== '') {
+                    results.push({ path: currentPath, value: value.trim() });
+                  }
+                } else if (typeof value === 'object') {
+                  results.push(...findPotentialTrademarkNames(value, currentPath));
+                }
+              });
+            }
+            return results;
+          }
+          
+          const potentialNames = findPotentialTrademarkNames(json);
+          logger.info('[DEBUG] Marka adı olabilecek değerler:', potentialNames.slice(0, 10));
+          
+        } catch (debugErr) {
+          logger.error('[DEBUG] JSON debug hatası:', debugErr.message);
+        }
       try {
         logger.info('[scrapeTrademarkPuppeteer] İlk JSON yakalandı', {
           url: primaryEndpoint || '(unknown)',
@@ -3934,6 +3983,112 @@ async function handleScrapeTrademark(basvuruNo) {
         return text.includes('Başvuru Numarası') && text.includes('Tescil Numarası');
       }, { timeout: 30000 })
     ]);
+    // 🔍 DEBUG: Sayfadaki tüm DOM yapısını analiz et
+    const domAnalysis = await page.evaluate(() => {
+      const analysis = {
+        allTexts: [],
+        allInputs: [],
+        allTables: [],
+        allImages: [],
+        potentialContainers: [],
+        bodyClasses: document.body.className,
+        bodyText: document.body.textContent.slice(0, 1000)
+      };
+      
+      // Tüm görünür text'leri topla
+      const allElements = Array.from(document.querySelectorAll('*'));
+      allElements.forEach(el => {
+        const text = (el.textContent || '').trim();
+        if (text && text.length > 3 && text.length < 200 && 
+            !text.includes('\n') && // Çok satırlı değil
+            el.children.length === 0) { // Leaf node
+          analysis.allTexts.push({
+            tag: el.tagName,
+            class: el.className,
+            text: text,
+            xpath: getXPath(el)
+          });
+        }
+      });
+      
+      // Input alanlarını topla
+      document.querySelectorAll('input, textarea, select').forEach(input => {
+        analysis.allInputs.push({
+          tag: input.tagName,
+          type: input.type,
+          name: input.name,
+          id: input.id,
+          class: input.className,
+          value: input.value,
+          placeholder: input.placeholder
+        });
+      });
+      
+      // Tabloları analiz et
+      document.querySelectorAll('table, .table, [role="table"]').forEach(table => {
+        const rows = Array.from(table.querySelectorAll('tr, .table-row, [role="row"]'));
+        analysis.allTables.push({
+          class: table.className,
+          rowCount: rows.length,
+          firstRowCells: rows[0] ? Array.from(rows[0].querySelectorAll('td, th, .cell, [role="cell"]')).map(cell => cell.textContent?.trim().slice(0, 50)) : []
+        });
+      });
+      
+      // Görsel öğeleri topla
+      document.querySelectorAll('img').forEach(img => {
+        if (img.src && !img.src.includes('data:image') && !img.src.includes('icon')) {
+          analysis.allImages.push({
+            src: img.src,
+            alt: img.alt,
+            class: img.className
+          });
+        }
+      });
+      
+      // Potansiyel container'ları bul
+      const containers = document.querySelectorAll('div, section, main, article');
+      containers.forEach(container => {
+        const text = container.textContent || '';
+        if (text.length > 100 && text.length < 5000 && 
+            (text.includes('2021/122') || text.includes('marka') || text.includes('başvuru'))) {
+          analysis.potentialContainers.push({
+            tag: container.tagName,
+            class: container.className,
+            id: container.id,
+            textLength: text.length,
+            textPreview: text.slice(0, 200)
+          });
+        }
+      });
+      
+      function getXPath(element) {
+        if (element.id) return `//*[@id="${element.id}"]`;
+        if (element === document.body) return '/html/body';
+        
+        let ix = 0;
+        const siblings = element.parentNode?.children || [];
+        for (let i = 0; i < siblings.length; i++) {
+          const sibling = siblings[i];
+          if (sibling === element) {
+            const tagName = element.tagName.toLowerCase();
+            const parent = getXPath(element.parentNode);
+            return `${parent}/${tagName}[${ix + 1}]`;
+          }
+          if (sibling.nodeType === 1 && sibling.tagName === element.tagName) {
+            ix++;
+          }
+        }
+      }
+      
+      return analysis;
+    });
+
+    logger.info('[DEBUG] DOM Analizi - Tüm textler (ilk 20):', domAnalysis.allTexts.slice(0, 20));
+    logger.info('[DEBUG] DOM Analizi - Tablolar:', domAnalysis.allTables);
+    logger.info('[DEBUG] DOM Analizi - Potansiyel containerlar:', domAnalysis.potentialContainers);
+    logger.info('[DEBUG] DOM Analizi - Görseller:', domAnalysis.allImages);
+    logger.info('[DEBUG] Body classes:', domAnalysis.bodyClasses);
+    logger.info('[DEBUG] Body text preview:', domAnalysis.bodyText);
     logger.info('AJAX sonucu yüklendi (DOM fallback).');
     await sleep(1500);
 
