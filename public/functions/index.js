@@ -3631,6 +3631,7 @@ function domParseFn() {
     return m ? `${m[3]}-${m[2]}-${m[1]}` : (s || null);
   };
   const txt = (n) => (n && (n.textContent || '')).trim();
+  const dashToEmpty = (v) => (v === '-' ? '' : v);
 
   const tables = Array.from(document.querySelectorAll('table.MuiTable-root'));
   if (!tables.length) return out;
@@ -3638,13 +3639,14 @@ function domParseFn() {
   // 1) Özet tablo (label/value)
   const t0 = tables[0];
   const rows0 = t0.querySelectorAll('tbody tr');
+
   rows0.forEach(tr => {
     const tds = Array.from(tr.querySelectorAll('td'));
     if (tds.length === 2) {
       const label = txt(tds[0]).toLowerCase();
       const cell  = tds[1];
       const raw   = txt(cell);
-      const val   = raw === '-' ? '' : raw;
+      const val   = dashToEmpty(raw);
 
       if (label.includes('marka adı')) out.trademarkName = val;
       else if (label.includes('sahip bilgileri')) {
@@ -3655,15 +3657,17 @@ function domParseFn() {
       }
       else if (label.includes('rüçhan bilgileri')) out.priorityInfo = val;
     } else if (tds.length === 4) {
-      const label1 = txt(tds[0]).toLowerCase(), value1 = txt(tds[1]);
-      const label2 = txt(tds[2]).toLowerCase(), value2 = txt(tds[3]);
+      const label1 = txt(tds[0]).toLowerCase(), value1 = dashToEmpty(txt(tds[1]));
+      const label2 = txt(tds[2]).toLowerCase(), value2 = dashToEmpty(txt(tds[3]));
 
-      // Çift 1
-      if (label1.includes('başvuru numarası')) out.applicationNumber = value1;
+      // --- ÖNCE daha spesifik olanları kontrol et ---
+      if (label1.includes('uluslararası tescil numarası')) out.intlRegistrationNumber = value1;
       else if (label1.includes('tescil numarası')) out.registrationNumber = value1;
-      else if (label1.includes('uluslararası tescil numarası')) out.intlRegistrationNumber = value1;
+      else if (label1.includes('başvuru numarası')) out.applicationNumber = value1;
       else if (label1.includes('marka ilan bülten tarihi')) out.bulletinDate = normDate(value1);
       else if (label1.includes('marka ilan bülten no')) out.bulletinNo = value1;
+      else if (label1.includes('tescil yayın bülten tarihi')) out.regBulletinDate = normDate(value1);
+      else if (label1.includes('tescil yayın bülten no')) out.regBulletinNo = value1;
       else if (label1.includes('koruma tarihi')) out.protectionDate = normDate(value1);
       else if (label1.includes('nice sınıfları')) {
         out.niceClasses = (value1 || '')
@@ -3672,22 +3676,31 @@ function domParseFn() {
           .filter(Boolean);
       } else if (label1.includes('karar')) out.decision = value1;
 
-      // Çift 2
-      if (label2.includes('başvuru tarihi')) out.applicationDate = normDate(value2);
+      if (label2.includes('uluslararası tescil numarası')) out.intlRegistrationNumber = value2;
+      else if (label2.includes('tescil numarası')) out.registrationNumber = value2;
+      else if (label2.includes('başvuru tarihi')) out.applicationDate = normDate(value2);
       else if (label2.includes('tescil tarihi')) out.registrationDate = normDate(value2);
       else if (label2.includes('evrak numarası')) out.documentNumber = value2;
       else if (label2.includes('tescil yayın bülten tarihi')) out.regBulletinDate = normDate(value2);
       else if (label2.includes('tescil yayın bülten no')) out.regBulletinNo = value2;
-      else if (label2.includes('durumu')) out.status = (value2 === '-' ? '' : value2);
+      else if (label2.includes('marka ilan bülten tarihi')) out.bulletinDate = normDate(value2);
+      else if (label2.includes('marka ilan bülten no')) out.bulletinNo = value2;
+      else if (label2.includes('durumu')) out.status = value2;
       else if (label2 === 'türü') out.type = value2;
       else if (label2.includes('karar gerekçesi')) out.decisionReason = value2;
     }
   });
 
-  // 2) Sınıf / Mal-Hizmet tablosu
-  const t1 = tables.find(t => /sınıf/i.test(txt(t)));
-  if (t1) {
-    const rows1 = t1.querySelectorAll('tbody tr');
+  // 2) GOODS tablosunu THEAD başlığıyla tespit et
+  const goodsTable = tables.find(t => {
+    const ths = Array.from(t.querySelectorAll('thead th'));
+    return ths.length >= 2 &&
+           /sınıf/i.test(txt(ths[0])) &&
+           /mal ve hizmetler/i.test(txt(ths[1]));
+  });
+
+  if (goodsTable) {
+    const rows1 = goodsTable.querySelectorAll('tbody tr');
     rows1.forEach(tr => {
       const tds = tr.querySelectorAll('td');
       const cls = txt(tds[0]);
