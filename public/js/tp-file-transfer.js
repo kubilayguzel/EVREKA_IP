@@ -70,6 +70,14 @@ const brandImage = _el('brandImage');
 const applicationNumberEl = _el('applicationNumber');
 const applicationDateEl = _el('applicationDate');
 
+const statusBadgeEl   = _el('statusBadge');
+const ownerEl         = _el('ownerText');
+const niceClassesEl   = _el('niceClasses');
+const fileUrlEl       = _el('fileUrl');
+const rawJsonEl       = _el('rawJson');
+const loadingEl       = _el('loading');
+
+
 let basvuruNumbers = [];
 
 // Enable Add button on input
@@ -162,9 +170,11 @@ queryBtn?.addEventListener('click', async () => {
   if (singleMode){
     const basvuruNo = basvuruNumbers[0];
     try {
+      loadingEl && _show('loading');
       const result = await scrapeTrademarkFunction({ basvuruNo });
       renderSingleResult(result?.data || null, basvuruNo);
       _toggleActionButtons(true);
+      loadingEl && _hide('loading');
       savePortfolioBtn && (savePortfolioBtn.disabled = false);
       saveThirdPartyBtn && (saveThirdPartyBtn.disabled = false);
     } catch (err){
@@ -208,11 +218,72 @@ queryBtn?.addEventListener('click', async () => {
 });
 
 // Render single
+
 function renderSingleResult(payload, fallbackNo){
   if (!payload){
     showNotification('Sonuç verisi alınamadı', 'warning');
     return;
   }
+
+  // Sunucu bazen alanları hem üst seviyede hem data içinde döndürebilir → birleşik görüntü
+  const p = payload?.data && (payload.trademarkName == null && payload.applicationNumber == null)
+    ? payload.data
+    : payload;
+
+  // Başlık / görsel
+  const name = p?.trademarkName || p?.message || '(İsim yok)';
+  const img  = p?.imageUrl || '';
+  if (heroTitle) heroTitle.textContent = name;
+  if (brandImage){
+    brandImage.src = img || '';
+    brandImage.style.display = img ? 'block' : 'none';
+  }
+
+  // Bilgiler
+  if (applicationNumberEl) applicationNumberEl.textContent = p?.applicationNumber || fallbackNo || '';
+  if (applicationDateEl)  applicationDateEl.textContent  = p?.applicationDate || '';
+
+  if (ownerEl)       ownerEl.textContent       = p?.owner || '';
+  if (niceClassesEl) niceClassesEl.textContent = Array.isArray(p?.niceClasses) ? p.niceClasses.join(', ') : (p?.niceClasses || '');
+
+  if (fileUrlEl){
+    if (p?.fileUrl){
+      fileUrlEl.textContent = 'Dosyayı Aç';
+      fileUrlEl.href = p.fileUrl;
+      fileUrlEl.style.display = '';
+    } else {
+      fileUrlEl.textContent = '';
+      fileUrlEl.removeAttribute('href');
+      fileUrlEl.style.display = 'none';
+    }
+  }
+
+  // Durum rozeti
+  const status = p?.status || payload?.status || '';
+  if (statusBadgeEl){
+    if (status){
+      statusBadgeEl.style.display = '';
+      statusBadgeEl.textContent = status;
+      statusBadgeEl.classList.remove('badge-success','badge-secondary','badge-info','badge-warning','badge-danger');
+      if (status === 'Success' && (p?.found ?? true)) statusBadgeEl.classList.add('badge-success');
+      else if (status === 'NotFound')                  statusBadgeEl.classList.add('badge-secondary');
+      else if (status === 'RateLimited' || status === 'Backoff') statusBadgeEl.classList.add('badge-warning');
+      else if (status === 'DataExtractionError')       statusBadgeEl.classList.add('badge-danger');
+      else                                             statusBadgeEl.classList.add('badge-info');
+    } else {
+      statusBadgeEl.style.display = 'none';
+    }
+  }
+
+  // Debug JSON (opsiyonel)
+  if (rawJsonEl){
+    try { rawJsonEl.textContent = JSON.stringify(payload, null, 2); } catch {}
+  }
+
+  _show('singleResultContainer');
+  _hide('bulkResultsContainer');
+}
+
   const name = payload?.trademarkName || payload?.message || '(İsim yok)';
   const img = payload?.imageUrl || '';
   if (heroTitle) heroTitle.textContent = name;
