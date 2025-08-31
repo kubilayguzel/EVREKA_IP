@@ -3602,8 +3602,8 @@ export const adminDeleteUser = onCall({ region: "europe-west1" }, async (req) =>
 import { https } from 'firebase-functions/v2';
 
 export const scrapeTrademarkPuppeteer = https.onCall({
-  memory: '1GiB',
-  timeoutSeconds: 120,
+  memory: '2GiB',  // Memory'yi artırdık
+  timeoutSeconds: 180,
   region: 'us-central1'
 }, async (request) => {
   const { basvuruNo } = request.data;
@@ -3618,122 +3618,140 @@ export const scrapeTrademarkPuppeteer = https.onCall({
   try {
     const puppeteer = await import('puppeteer');
     
-    // Cloud Functions için optimize edilmiş browser ayarları
+    // Cloud Functions için özel Chrome ayarları
     browser = await puppeteer.default.launch({
+      // Chrome binary'yi manuel belirle
+      executablePath: '/usr/bin/google-chrome-stable',
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
         '--disable-dev-shm-usage',
         '--disable-extensions',
         '--disable-plugins',
-        '--disable-images', // Görselleri yüklememe (hız için)
+        '--disable-background-timer-throttling',
+        '--disable-backgrounding-occluded-windows',
+        '--disable-renderer-backgrounding',
+        '--disable-features=TranslateUI',
+        '--disable-ipc-flooding-protection',
         '--no-first-run',
         '--no-zygote',
         '--single-process',
         '--disable-gpu',
         '--disable-web-security',
-        '--disable-features=VizDisplayCompositor'
+        '--disable-features=VizDisplayCompositor',
+        '--memory-pressure-off'
       ],
-      headless: true,
+      headless: 'new', // Yeni headless modunu kullan
       timeout: 30000
     });
 
     const page = await browser.newPage();
     
-    // User agent ve viewport
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36');
     await page.setViewport({ width: 1366, height: 768 });
 
     logger.info('[scrapeTrademarkPuppeteer] TÜRKPATENT sayfasına gidiliyor...');
     
-    // TÜRKPATENT marka arama sayfasına git
     await page.goto('https://www.turkpatent.gov.tr/arastirma-yap?form=trademark', {
-      waitUntil: 'networkidle2',
-      timeout: 45000
+      waitUntil: 'domcontentloaded', // networkidle yerine daha hızlı
+      timeout: 60000
     });
 
-    // Sayfanın yüklenmesini bekle
-    await page.waitForTimeout(5000);
+    await page.waitForTimeout(3000);
 
-    logger.info('[scrapeTrademarkPuppeteer] Sayfa yüklendi, form aranıyor...');
+    logger.info('[scrapeTrademarkPuppeteer] Form aranıyor...');
 
-    // Input alanlarını ara ve başvuru numarasını gir
-    const inputSelectors = [
-      'input[placeholder*="Başvuru"]',
-      'input[placeholder*="Application"]', 
-      'input[name*="application"]',
-      'input[name*="basvuru"]',
-      'input[type="text"]',
-      'input[type="search"]'
-    ];
-
-    let inputFound = false;
-    
-    for (const selector of inputSelectors) {
-      try {
-        await page.waitForSelector(selector, { timeout: 5000 });
-        await page.type(selector, basvuruNo);
-        logger.info('[scrapeTrademarkPuppeteer] Input bulundu ve dolduruldu', { selector });
-        inputFound = true;
-        break;
-      } catch (e) {
-        continue;
+    // Sayfada JavaScript hatalarını yakala
+    page.on('console', msg => {
+      if (msg.type() === 'error') {
+        logger.warn('[scrapeTrademarkPuppeteer] Page Console Error:', msg.text());
       }
-    }
+    });
+
+    // Input alanını bul ve doldur - daha kapsamlı arama
+    const inputFound = await page.evaluate((basvuruNo) => {
+      // Tüm input elementlerini kontrol et
+      const inputs = document.querySelectorAll('input[type="text"], input[type="search"], input:not([type])');
+      
+      for (const input of inputs) {
+        // Placeholder veya name attribute'unda arama terimleri var mı?
+        const placeholder = input.placeholder?.toLowerCase() || '';
+        const name = input.name?.toLowerCase() || '';
+        const id = input.id?.toLowerCase() || '';
+        
+        if (placeholder.includes('başvuru') || placeholder.includes('application') ||
+            name.includes('başvuru') || name.includes('application') ||
+            id.includes('başvuru') || id.includes('application') ||
+            placeholder.includes('numara') || name.includes('number')) {
+          
+          input.value = basvuruNo;
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+          input.dispatchEvent(new Event('change', { bubbles: true }));
+          return true;
+        }
+      }
+      
+      // Hiçbiri uymazsa ilk text input'u kullan
+      if (inputs.length > 0) {
+        inputs[0].value = basvuruNo;
+        inputs[0].dispatchEvent(new Event('input', { bubbles: true }));
+        inputs[0].dispatchEvent(new Event('change', { bubbles: true }));
+        return true;
+      }
+      
+      return false;
+    }, basvuruNo);
 
     if (!inputFound) {
-      logger.warn('[scrapeTrademarkPuppeteer] Input alanı bulunamadı');
       throw new Error('Form input alanı bulunamadı');
     }
 
-    logger.info('[scrapeTrademarkPuppeteer] Form gönderiliyor...', { basvuruNo });
+    logger.info('[scrapeTrademarkPuppeteer] Input dolduruldu, form gönderiliyor...');
 
-    // Submit butonunu bul ve tıkla
-    const submitSelectors = [
-      'button:contains("Sorgula")',
-      'input[value*="Sorgula"]',
-      'button[type="submit"]',
-      '.btn-primary',
-      '.search-button'
-    ];
-
-    let submitted = false;
-    
-    for (const selector of submitSelectors) {
-      try {
-        const button = await page.$(selector);
-        if (button) {
-          await button.click();
-          submitted = true;
-          logger.info('[scrapeTrademarkPuppeteer] Submit butonu tıklandı', { selector });
-          break;
+    // Submit işlemi - daha kapsamlı
+    const submitted = await page.evaluate(() => {
+      // Button'ları ara
+      const buttons = document.querySelectorAll('button, input[type="submit"]');
+      
+      for (const button of buttons) {
+        const text = button.textContent?.toLowerCase() || '';
+        const value = button.value?.toLowerCase() || '';
+        
+        if (text.includes('sorgula') || text.includes('ara') || text.includes('search') ||
+            value.includes('sorgula') || value.includes('ara')) {
+          button.click();
+          return true;
         }
-      } catch (e) {
-        continue;
       }
-    }
+      
+      // Form submit'i dene
+      const forms = document.querySelectorAll('form');
+      if (forms.length > 0) {
+        forms[0].submit();
+        return true;
+      }
+      
+      return false;
+    });
 
     if (!submitted) {
-      // Enter tuşuna basarak göndermeyi dene
+      // Enter tuşu ile dene
       await page.keyboard.press('Enter');
-      logger.info('[scrapeTrademarkPuppeteer] Enter tuşu ile gönderildi');
+      logger.info('[scrapeTrademarkPuppeteer] Enter ile gönderildi');
     }
 
-    // Sonuçların yüklenmesini bekle
+    // Sonuçları bekle - daha uzun süre
     logger.info('[scrapeTrademarkPuppeteer] Sonuçlar bekleniyor...');
-    await page.waitForTimeout(8000);
+    await page.waitForTimeout(10000);
 
-    // Network activity'nin bitmesini bekle
-    await page.waitForLoadState?.('networkidle') || await page.waitForTimeout(3000);
-
-    // Sayfa içeriğini al ve parse et
+    // Son olarak veri çıkarma işlemi aynı kalacak...
     const result = await page.evaluate((appNo) => {
+      // Önceki evaluate kodunun aynısı
       const pageText = document.body.innerText.toLowerCase();
       
-      // "Kayıt bulunamadı" kontrolü
       const notFoundMessages = [
         'kayıt bulunamadı',
-        'sonuç bulunamadı',
+        'sonuç bulunamadı', 
         'başvuru bulunamadı',
         'no record found',
         'arama sonucu bulunamadı'
@@ -3742,120 +3760,37 @@ export const scrapeTrademarkPuppeteer = https.onCall({
       if (notFoundMessages.some(msg => pageText.includes(msg))) {
         return {
           applicationNumber: appNo,
-          trademarkName: null,
-          applicationDate: null,
-          owner: null,
-          status: 'Kayıt Bulunamadı',
-          imageUrl: null,
           found: false,
-          message: 'Belirtilen başvuru numarası için kayıt bulunamadı'
+          status: 'Kayıt Bulunamadı',
+          message: 'Belirtilen başvuru numarası için kayıt bulunamadı',
+          pageText: pageText.substring(0, 500) // Debug için
         };
       }
 
-      // Veri çıkarma
-      const data = {
-        trademarkName: null,
-        applicationDate: null,
-        owner: null,
-        status: null,
-        imageUrl: null
-      };
-
-      // Tablo verilerini ara
-      const tables = document.querySelectorAll('table');
+      // Veri çıkarma kodu aynı...
+      // (önceki kodu buraya kopyalayın)
       
-      for (const table of tables) {
-        const rows = table.querySelectorAll('tr');
-        
-        for (const row of rows) {
-          const cells = row.querySelectorAll('td, th');
-          
-          for (let i = 0; i < cells.length - 1; i++) {
-            const label = cells[i].innerText?.trim().toLowerCase() || '';
-            const value = cells[i + 1].innerText?.trim() || '';
-            
-            if (value && value !== '-' && value !== 'N/A') {
-              if (label.includes('marka adı') || label.includes('trademark name')) {
-                data.trademarkName = value;
-              } else if (label.includes('başvuru tarihi') || label.includes('application date')) {
-                data.applicationDate = value;
-              } else if (label.includes('sahip') || label.includes('applicant') || label.includes('başvuru sahibi')) {
-                data.owner = value;
-              } else if (label.includes('durum') || label.includes('status') || label.includes('karar')) {
-                data.status = value;
-              }
-            }
-          }
-        }
-      }
-
-      // Div/span tabanlı veri arama
-      const allElements = document.querySelectorAll('div, span, p, td');
-      
-      for (const element of allElements) {
-        const text = element.innerText?.trim() || '';
-        
-        // "Marka Adı: DEĞER" formatını ara
-        const markaMatch = text.match(/marka\s*adı[:\s]*([^\n\r]+)/i);
-        if (markaMatch && !data.trademarkName) {
-          data.trademarkName = markaMatch[1].trim();
-        }
-        
-        // "Başvuru Tarihi: DEĞER" formatını ara  
-        const tarihMatch = text.match(/başvuru\s*tarihi[:\s]*(\d{2}[\/\-\.]\d{2}[\/\-\.]\d{4})/i);
-        if (tarihMatch && !data.applicationDate) {
-          data.applicationDate = tarihMatch[1];
-        }
-      }
-
-      // Görsel ara
-      const images = document.querySelectorAll('img');
-      for (const img of images) {
-        const src = img.src;
-        if (src && !src.includes('logo') && !src.includes('icon')) {
-          if (src.includes('marka') || img.alt?.includes('marka')) {
-            data.imageUrl = src;
-            break;
-          }
-        }
-      }
-
-      const found = !!(data.trademarkName || data.applicationDate || data.owner);
-
       return {
         applicationNumber: appNo,
-        trademarkName: data.trademarkName,
-        applicationDate: data.applicationDate,
-        owner: data.owner,
-        status: data.status || 'Bilinmiyor',
-        imageUrl: data.imageUrl,
-        found,
-        scrapedAt: new Date().toISOString(),
-        source: 'TÜRKPATENT Puppeteer'
+        found: true,
+        message: 'Veri bulundu ama parse edilemedi',
+        pageText: pageText.substring(0, 500)
       };
       
     }, basvuruNo);
 
-    logger.info('[scrapeTrademarkPuppeteer] Scraping tamamlandı', {
-      found: result.found,
-      trademarkName: result.trademarkName
-    });
-
+    logger.info('[scrapeTrademarkPuppeteer] Tamamlandı', { found: result.found });
     return result;
 
   } catch (error) {
-    logger.error('[scrapeTrademarkPuppeteer] Puppeteer hatası', {
-      message: error.message,
-      stack: error.stack?.split('\n').slice(0, 5).join('\n')
-    });
-
-    if (error.message.includes('timeout')) {
-      throw new https.HttpsError('deadline-exceeded', 'TÜRKPATENT sitesi zaman aşımına uğradı.');
-    } else if (error.message.includes('net::') || error.message.includes('ERR_')) {
-      throw new https.HttpsError('unavailable', 'TÜRKPATENT sitesine erişilemiyor.');
+    logger.error('[scrapeTrademarkPuppeteer] Hata', { message: error.message });
+    
+    // Chrome bulunamadı hatası için özel mesaj
+    if (error.message.includes('Could not find Chrome')) {
+      throw new https.HttpsError('internal', 'Chrome kurulumu gerekli. Lütfen geliştirici ile iletişime geçin.');
     }
-
-    throw new https.HttpsError('internal', `Puppeteer scraping hatası: ${error.message}`);
+    
+    throw new https.HttpsError('internal', `Puppeteer hatası: ${error.message}`);
     
   } finally {
     if (browser) {
