@@ -1,14 +1,29 @@
-// --- Safe DOM helpers ---
+// --- DOM helpers ---
 function _el(id){ return document.getElementById(id); }
-function _show(id){ const n=_el(id); if(n && n.classList) n.classList.remove('d-none'); return n; }
-function _hide(id){ const n=_el(id); if(n && n.classList) n.classList.add('d-none'); return n; }
+function _showBlock(el){
+  if (!el) return;
+  el.classList?.remove('d-none');
+  el.style.display = '';
+  // If inside Bootstrap .collapse, force open
+  const collapse = el.closest('.collapse');
+  if (collapse){
+    collapse.classList.add('show');
+    collapse.style.height = 'auto';
+  }
+}
+function _show(id){ const n=_el(id); _showBlock(n); return n; }
+function _hide(id){ const n=_el(id); if(n){ n.classList?.add('d-none'); } return n; }
 function _toggleActionButtons(visible){
   const ab = _el('actionButtons');
   if (!ab) return;
   ab.style.display = visible ? 'flex' : 'none';
 }
+function _scrollIntoView(id){
+  const n=_el(id);
+  if (n) n.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
 
-// --- Lightweight notification ---
+// --- Toast ---
 function showNotification(message, type='info'){
   let container = document.getElementById('notification-container');
   if (!container) {
@@ -32,259 +47,209 @@ function showNotification(message, type='info'){
       </button>
     </div>`;
   container.appendChild(alert);
-  setTimeout(() => { alert.classList.remove('show'); alert.addEventListener('transitionend', () => alert.remove()); }, 4000);
+  setTimeout(() => { alert.classList.remove('show'); alert.addEventListener('transitionend', () => alert.remove()); }, 3500);
   alert.querySelector('.close')?.addEventListener('click', () => alert.remove());
 }
 
-// --- Imports ---
+// --- Firebase Functions ---
 import { app } from '../firebase-config.js';
 import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-functions.js';
 
-// Use europe-west1 to match your deployed region
 const functions = getFunctions(app, 'europe-west1');
 const scrapeTrademarkFunction = httpsCallable(functions, 'scrapeTrademarkPuppeteerCallable');
 
 // --- Elements ---
 const transferOptionRadios = document.getElementsByName('transferOption');
-const basvuruNoInput = document.getElementById('basvuruNoInput');
-const addBasvuruNoBtn = document.getElementById('addBasvuruNoBtn');
-const transferListContainer = document.getElementById('transferListContainer');
-const transferList = document.getElementById('transferList');
-const transferListEmpty = document.getElementById('transferListEmpty');
-const queryBtn = document.getElementById('queryBtn');
-const singleResultContainer = document.getElementById('singleResultContainer');
-const bulkResultsContainer = document.getElementById('bulkResultsContainer');
-const resultsTableBody = document.getElementById('resultsTableBody');
-const savePortfolioBtn = document.getElementById('savePortfolioBtn');
-const saveThirdPartyBtn = document.getElementById('saveThirdPartyBtn');
-const cancelBtn = document.getElementById('cancelBtn');
-const heroTitle = document.getElementById('heroTitle');
-const brandImage = document.getElementById('brandImage');
+const basvuruNoInput = _el('basvuruNoInput');
+const addBasvuruNoBtn = _el('addBasvuruNoBtn');
+const transferListContainer = _el('transferListContainer');
+const transferList = _el('transferList');
+const transferListEmpty = _el('transferListEmpty');
+const queryBtn = _el('queryBtn');
+const singleResultContainer = _el('singleResultContainer');
+const bulkResultsContainer = _el('bulkResultsContainer');
+const resultsTableBody = _el('resultsTableBody');
+const savePortfolioBtn = _el('savePortfolioBtn');
+const saveThirdPartyBtn = _el('saveThirdPartyBtn');
+const cancelBtn = _el('cancelBtn');
+const heroTitle = _el('heroTitle');
+const brandImage = _el('brandImage');
 
 let basvuruNumbers = [];
 
-// --- Helpers to handle button enabling ---
-function forceEnableAddButton(){
+// Ensure container exists
+(function ensureListElements(){
+  if (!transferListContainer){
+    // Create a fallback container if not present to avoid silent no-op
+    const fallback = document.createElement('div');
+    fallback.id = 'transferListContainer';
+    fallback.className = 'mt-3';
+    fallback.innerHTML = `
+      <ul id="transferList" class="list-group"></ul>
+      <div id="transferListEmpty" class="text-muted small">Liste boş</div>`;
+    // Append near results section
+    (document.body || document.documentElement).appendChild(fallback);
+  }
+})();
+
+// Enable Add button when there is input
+function syncAdd(){
   if (!addBasvuruNoBtn) return;
-  addBasvuruNoBtn.disabled = false;
-  addBasvuruNoBtn.classList.remove('disabled');
-  addBasvuruNoBtn.style.pointerEvents = '';
-  addBasvuruNoBtn.style.opacity = '';
+  const enabled = !!(basvuruNoInput && basvuruNoInput.value.trim().length>0);
+  addBasvuruNoBtn.disabled = !enabled;
+  addBasvuruNoBtn.classList.toggle('disabled', !enabled);
 }
-function syncAddButtonEnabled(){
-  if (!addBasvuruNoBtn) return;
-  const hasVal = !!(basvuruNoInput && basvuruNoInput.value.trim().length > 0);
-  addBasvuruNoBtn.disabled = !hasVal;
-  addBasvuruNoBtn.classList.toggle('disabled', !hasVal);
-}
+basvuruNoInput?.addEventListener('input', syncAdd);
+basvuruNoInput?.addEventListener('keydown', e => { if (e.key==='Enter'){ e.preventDefault(); addBasvuruNoBtn?.click(); }});
+syncAdd();
 
-// Make sure button becomes clickable on load even if HTML marks it disabled
-forceEnableAddButton();
-syncAddButtonEnabled();
-
-// Enable/disable Add based on input typing
-if (basvuruNoInput){
-  basvuruNoInput.addEventListener('input', () => {
-    forceEnableAddButton();
-    syncAddButtonEnabled();
-  });
-  // Pressing Enter triggers Add
-  basvuruNoInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      addBasvuruNoBtn?.click();
-    }
-  });
-}
-
-// --- UI Mode toggle ---
+// Mode toggle
 transferOptionRadios.forEach(radio => {
-  radio.addEventListener('change', (event) => {
-    const mode = event.target.value;
+  radio.addEventListener('change', (ev)=>{
     resetResults();
-    if (mode === 'single') {
-      _hide('transferListContainer');
-      _hide('bulkResultsContainer');
-      _hide('singleResultContainer');
-      _toggleActionButtons(false);
-      forceEnableAddButton();
-      syncAddButtonEnabled();
-      basvuruNoInput && (basvuruNoInput.disabled = false);
-    } else {
-      _show('transferListContainer');
-      _hide('bulkResultsContainer');
-      _hide('singleResultContainer');
-      _toggleActionButtons(false);
-      transferListEmpty && transferListEmpty.classList.remove('d-none');
-      forceEnableAddButton();
-      syncAddButtonEnabled();
-      basvuruNoInput && (basvuruNoInput.disabled = false);
-    }
+    _toggleActionButtons(false);
+    // Her iki modda da listeyi görünür yapıyoruz (istek üzerine)
+    _show('transferListContainer');
+    _scrollIntoView('transferListContainer');
+    syncAdd();
   });
 });
 
-// If there are no radios on the page, default to single-mode behavior
-if (!transferOptionRadios || transferOptionRadios.length === 0){
-  _hide('transferListContainer');
+// Add to list
+addBasvuruNoBtn?.addEventListener('click', () => {
+  const raw = (basvuruNoInput?.value || '').trim();
+  if (!raw) return showNotification('Lütfen bir başvuru numarası girin', 'warning');
+  const number = raw.replace(/[^\d/.-]/g, '');
+  if (!number) return showNotification('Geçersiz başvuru numarası', 'warning');
+  if (basvuruNumbers.includes(number)) return showNotification('Bu başvuru numarası zaten listede', 'info');
+
+  basvuruNumbers.push(number);
+
+  // Render list item ALWAYS (single & bulk)
+  const listEl = _el('transferList');
+  if (listEl){
+    const li = document.createElement('li');
+    li.className = 'list-group-item d-flex justify-content-between align-items-center';
+    li.innerHTML = `<span>${number}</span>
+      <button class="btn btn-sm btn-danger remove-btn" title="Kaldır">X</button>`;
+    listEl.appendChild(li);
+    _el('transferListEmpty')?.classList.add('d-none');
+    _show('transferListContainer');
+    _scrollIntoView('transferListContainer');
+  }
+
+  // In single mode freeze input value but keep button enabled
+  const singleTransferRadio = _el('singleTransfer');
+  if (singleTransferRadio?.checked){
+    if (basvuruNoInput) basvuruNoInput.disabled = true;
+  } else {
+    if (basvuruNoInput) basvuruNoInput.value = '';
+  }
+  syncAdd();
+
+  showNotification('Aktarım listesine eklendi', 'success');
+});
+
+// Remove from list
+_el('transferList')?.addEventListener('click', (ev) => {
+  const target = ev.target;
+  if (!(target instanceof Element)) return;
+  if (!target.classList.contains('remove-btn')) return;
+  const li = target.closest('li');
+  const span = li?.querySelector('span');
+  const val = span?.textContent;
+  if (val){
+    basvuruNumbers = basvuruNumbers.filter(x => x !== val);
+  }
+  li?.remove();
+  if (basvuruNumbers.length === 0){
+    _el('transferListEmpty')?.classList.remove('d-none');
+  }
+});
+
+// Query
+queryBtn?.addEventListener('click', async () => {
+  const singleMode = _el('singleTransfer')?.checked;
+  if (singleMode){
+    if (basvuruNumbers.length === 0){
+      const n = (basvuruNoInput?.value || '').trim();
+      if (!n) return showNotification('Önce başvuru numarası girin (Tekil Aktarım).', 'warning');
+      basvuruNumbers = [n];
+      // Ensure visible in list
+      addBasvuruNoBtn?.click();
+    }
+  } else if (basvuruNumbers.length === 0){
+    return showNotification('Listeye en az bir başvuru numarası ekleyin.', 'warning');
+  }
+
   _toggleActionButtons(false);
-  forceEnableAddButton();
-  syncAddButtonEnabled();
-}
+  savePortfolioBtn && (savePortfolioBtn.disabled = true);
+  saveThirdPartyBtn && (saveThirdPartyBtn.disabled = true);
 
-// --- Add number to list ---
-if (addBasvuruNoBtn) {
-  addBasvuruNoBtn.addEventListener('click', () => {
-    const raw = (basvuruNoInput?.value || '').trim();
-    if (!raw) {
-      showNotification('Lütfen bir başvuru numarası girin', 'warning');
-      return;
-    }
-    const number = raw.replace(/[^\d/.-]/g, '');
-    if (!number) {
-      showNotification('Geçersiz başvuru numarası', 'warning');
-      return;
-    }
-    if (basvuruNumbers.includes(number)) {
-      showNotification('Bu başvuru numarası zaten listede', 'info');
-      return;
-    }
-    basvuruNumbers.push(number);
-
-    // Render list (for bulk); in single we lock the input but show result after query
-    if (transferList) {
-      const li = document.createElement('li');
-      li.className = 'list-group-item d-flex justify-content-between align-items-center';
-      li.innerHTML = `<span>${number}</span>
-        <button class="btn btn-sm btn-danger remove-btn" title="Kaldır">X</button>`;
-      transferList.appendChild(li);
-      transferListEmpty && transferListEmpty.classList.add('d-none');
-    }
-
-    const singleTransferRadio = document.getElementById('singleTransfer');
-    if (singleTransferRadio?.checked) {
-      // Keep add button enabled so user can correct mistakes; just freeze the input value
-      basvuruNoInput && (basvuruNoInput.disabled = true);
-      syncAddButtonEnabled(); // may disable if input now empty/disabled
-    } else {
-      basvuruNoInput && (basvuruNoInput.value = '');
-      _show('transferListContainer');
-      forceEnableAddButton();
-      syncAddButtonEnabled();
-    }
-  });
-}
-
-// Remove from list (bulk)
-if (transferList) {
-  transferList.addEventListener('click', (event) => {
-    const target = event.target;
-    if (!(target instanceof Element)) return;
-    if (target.classList.contains('remove-btn')) {
-      const li = target.closest('li');
-      if (!li) return;
-      const numberToRemove = li.querySelector('span')?.textContent;
-      if (numberToRemove) basvuruNumbers = basvuruNumbers.filter(n => n !== numberToRemove);
-      li.remove();
-      if (basvuruNumbers.length === 0 && transferListEmpty) {
-        transferListEmpty.classList.remove('d-none');
-      }
-    }
-  });
-}
-
-// Query button
-if (queryBtn) {
-  queryBtn.addEventListener('click', async () => {
-    const singleMode = document.getElementById('singleTransfer')?.checked;
-
-    if (singleMode) {
-      if (basvuruNumbers.length === 0) {
-        const n = (basvuruNoInput?.value || '').trim();
-        if (!n) {
-          showNotification('Önce başvuru numarası girin (Tekil Aktarım).', 'warning');
-          return;
-        }
-        basvuruNumbers = [n];
-      }
-    } else if (basvuruNumbers.length === 0) {
-      showNotification('Listeye en az bir başvuru numarası ekleyin.', 'warning');
-      return;
-    }
-
-    _toggleActionButtons(false);
-    savePortfolioBtn && (savePortfolioBtn.disabled = true);
-    saveThirdPartyBtn && (saveThirdPartyBtn.disabled = true);
-
-    if (singleMode) {
-      const basvuruNo = basvuruNumbers[0];
-      try {
-        const result = await scrapeTrademarkFunction({ basvuruNo });
-        renderSingleResult(result?.data || null);
-        _toggleActionButtons(true);
-        savePortfolioBtn && (savePortfolioBtn.disabled = false);
-        saveThirdPartyBtn && (saveThirdPartyBtn.disabled = false);
-      } catch (err) {
-        showNotification('Sorgulama hatası: ' + (err?.message || err), 'danger');
-      }
-    } else {
-      resultsTableBody && (resultsTableBody.innerHTML = '');
-      _show('bulkResultsContainer');
-
-      for (const basvuruNo of basvuruNumbers) {
-        const safeId = basvuruNo.replace(/[^a-zA-Z0-9_-]/g, '_');
-        const tr = document.createElement('tr');
-        tr.innerHTML = `<td>${basvuruNo}</td>
-                        <td id="status-${safeId}">Sorgulanıyor...</td>`;
-        resultsTableBody && resultsTableBody.appendChild(tr);
-      }
-
-      for (const basvuruNo of basvuruNumbers) {
-        const safeId = basvuruNo.replace(/[^a-zA-Z0-9_-]/g, '_');
-        const statusEl = document.getElementById('status-' + safeId);
-        try {
-          const result = await scrapeTrademarkFunction({ basvuruNo });
-          const data = result?.data || {};
-          const ok = data?.found || data?.status === 'Bulundu' || data?.status === 'Navigated';
-          if (statusEl) {
-            statusEl.textContent = ok ? 'Transfer Başarılı' : (data?.status || 'Tamamlandı');
-            statusEl.classList.toggle('status-ok', !!ok);
-          }
-        } catch (err) {
-          if (statusEl) {
-            statusEl.textContent = 'Hata: ' + (err?.message || err);
-            statusEl.classList.add('status-error');
-          }
-          showNotification(`${basvuruNo} sorgusunda hata: ${err?.message || err}`, 'warning');
-        }
-      }
-
+  if (singleMode){
+    const basvuruNo = basvuruNumbers[0];
+    try {
+      const result = await scrapeTrademarkFunction({ basvuruNo });
+      renderSingleResult(result?.data || null);
       _toggleActionButtons(true);
       savePortfolioBtn && (savePortfolioBtn.disabled = false);
       saveThirdPartyBtn && (saveThirdPartyBtn.disabled = false);
+    } catch (err){
+      showNotification('Sorgulama hatası: ' + (err?.message || err), 'danger');
     }
-  });
-}
+  } else {
+    resultsTableBody && (resultsTableBody.innerHTML = '');
+    _show('bulkResultsContainer');
 
-// Cancel button: reset UI
-if (cancelBtn) {
-  cancelBtn.addEventListener('click', () => {
-    resetResults();
-    _toggleActionButtons(false);
-    forceEnableAddButton();
-    syncAddButtonEnabled();
-  });
-}
+    for (const no of basvuruNumbers){
+      const safeId = no.replace(/[^a-zA-Z0-9_-]/g, '_');
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${no}</td><td id="status-${safeId}">Sorgulanıyor...</td>`;
+      resultsTableBody?.appendChild(tr);
+    }
 
-// --- Render functions ---
+    for (const no of basvuruNumbers){
+      const safeId = no.replace(/[^a-zA-Z0-9_-]/g, '_');
+      const statusEl = _el('status-' + safeId);
+      try {
+        const result = await scrapeTrademarkFunction({ basvuruNo: no });
+        const data = result?.data || {};
+        const ok = data?.found || data?.status === 'Bulundu' || data?.status === 'Navigated';
+        if (statusEl){
+          statusEl.textContent = ok ? 'Transfer Başarılı' : (data?.status || 'Tamamlandı');
+          statusEl.classList.toggle('status-ok', !!ok);
+        }
+      } catch (err){
+        if (statusEl){
+          statusEl.textContent = 'Hata: ' + (err?.message || err);
+          statusEl.classList.add('status-error');
+        }
+        showNotification(`${no} sorgusunda hata: ${err?.message || err}`, 'warning');
+      }
+    }
+
+    _toggleActionButtons(true);
+    savePortfolioBtn && (savePortfolioBtn.disabled = false);
+    saveThirdPartyBtn && (saveThirdPartyBtn.disabled = false);
+  }
+});
+
+// Cancel
+cancelBtn?.addEventListener('click', () => {
+  resetResults();
+  _toggleActionButtons(false);
+});
+
+// Render single
 function renderSingleResult(payload){
-  if (!payload) {
+  if (!payload){
     showNotification('Sonuç verisi alınamadı', 'warning');
     return;
   }
   const name = payload?.trademarkName || '(İsim yok)';
   const img = payload?.imageUrl || '';
-  heroTitle && (heroTitle.textContent = name);
-  if (brandImage) {
+  if (heroTitle) heroTitle.textContent = name;
+  if (brandImage){
     brandImage.src = img || '';
     brandImage.style.display = img ? 'block' : 'none';
   }
@@ -292,10 +257,11 @@ function renderSingleResult(payload){
   _hide('bulkResultsContainer');
 }
 
+// Reset
 function resetResults(){
   basvuruNumbers = [];
-  transferList && (transferList.innerHTML = '');
-  if (basvuruNoInput) {
+  _el('transferList') && (_el('transferList').innerHTML = '');
+  if (basvuruNoInput){
     basvuruNoInput.value = '';
     basvuruNoInput.disabled = false;
   }
@@ -303,5 +269,5 @@ function resetResults(){
   _hide('singleResultContainer');
   _hide('bulkResultsContainer');
   resultsTableBody && (resultsTableBody.innerHTML = '');
-  transferListEmpty && transferListEmpty.classList.remove('d-none');
+  _el('transferListEmpty')?.classList.remove('d-none');
 }
