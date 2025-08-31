@@ -3737,12 +3737,29 @@ try {
     });
 
     if (isButtonClicked) {
-        logger.info('Sorgula butonuna tıklandı, sonuç bekleniyor...');
+        logger.info('Sorgula butonuna tıklandı, AJAX sonuç bekleniyor...');
         
-        // ✅ EN KAPSAMLI ÇÖZÜM: Birden fazla alternatifi dene
         try {
-            // 5 saniye bekle - sayfa geçişi için (DOĞRU YÖNTEM)
-            await new Promise(resolve => setTimeout(resolve, 5000));
+            // ✅ AJAX SONUÇ BEKLEMESİ - Navigation değil, element bekleme
+            // Ekran görüntüsünde görülen "Marka Bilgileri" div'ini bekle
+            await Promise.race([
+                // "Marka Bilgileri" başlık metni
+                page.waitForFunction(() => document.body.textContent.includes('Marka Bilgileri'), { timeout: 30000 }),
+                // Sonuç container'ı
+                page.waitForSelector('.jss192', { timeout: 30000 }),
+                // Fieldset elementi
+                page.waitForSelector('fieldset', { timeout: 30000 }),
+                // "ŞEBİNLİ" gibi marka adı
+                page.waitForFunction(() => {
+                    const text = document.body.textContent;
+                    return text.includes('Başvuru Numarası') && text.includes('Tescil Numarası');
+                }, { timeout: 30000 })
+            ]);
+            
+            logger.info('AJAX sonucu yüklendi.');
+            
+            // 2 saniye daha bekle - tam yükleme için
+            await new Promise(resolve => setTimeout(resolve, 2000));
             
             // Debug bilgisi topla
             const debugInfo = await page.evaluate(() => {
@@ -3751,28 +3768,21 @@ try {
                     hasTable: !!document.querySelector('table.MuiTable-root'),
                     hasContainer: !!document.querySelector('.jss192'),
                     hasFieldset: !!document.querySelector('fieldset'),
+                    hasMarkaBilgileri: document.body.textContent.includes('Marka Bilgileri'),
+                    hasBasvuruNo: document.body.textContent.includes('Başvuru Numarası'),
                     pageTitle: document.title,
                     currentUrl: window.location.href,
-                    bodyText: document.body.textContent.substring(0, 500)
+                    bodyText: document.body.textContent.substring(0, 1000)
                 };
             });
-            logger.info('Debug bilgisi:', debugInfo);
-            
-            // Birden fazla olasılığı paralel bekle
-            await Promise.race([
-                page.waitForSelector('table.MuiTable-root', { timeout: 45000 }),
-                page.waitForSelector('#search-results', { timeout: 45000 }),
-                page.waitForSelector('.jss192', { timeout: 45000 }),
-                page.waitForSelector('fieldset legend', { timeout: 45000 }), // "Marka Bilgileri" başlığı
-                page.waitForSelector('.error, .alert, .MuiAlert-message', { timeout: 45000 }) // Hata mesajı varsa
-            ]);
+            logger.info('AJAX sonrası debug:', debugInfo);
             
             // Başarılı yüklemeyi doğrula
             const hasData = await page.evaluate(() => {
-                return !!document.querySelector('table.MuiTable-root') || 
-                       !!document.querySelector('#search-results .jss192') ||
-                       !!document.querySelector('fieldset legend') ||
-                       !!document.querySelector('.error, .alert');
+                return document.body.textContent.includes('Marka Bilgileri') || 
+                       document.body.textContent.includes('Başvuru Numarası') ||
+                       !!document.querySelector('fieldset') ||
+                       !!document.querySelector('.jss192');
             });
             
             if (!hasData) {
@@ -3782,35 +3792,56 @@ try {
                 } catch (screenshotError) {
                     logger.info('Screenshot alınamadı:', screenshotError.message);
                 }
-                throw new Error('Sonuç tablosu veya hata mesajı yüklenemedi');
+                throw new Error('AJAX sonucu yüklenemedi');
             }
             
-            logger.info('Sonuç sayfası başarıyla yüklendi.');
+            logger.info('Sonuç başarıyla yüklendi.');
             
         } catch (waitError) {
-            logger.error('Tablo bekleme hatası:', waitError.message);
+            logger.error('AJAX sonuç bekleme hatası:', waitError.message);
+            
+            // AJAX başarısız oldu, final kontrol
+            logger.info('AJAX başarısız, final kontrol yapılıyor...');
+            
+            // 3 saniye bekle ve tekrar kontrol et
+            await new Promise(resolve => setTimeout(resolve, 3000));
             
             // Son şans: Sayfa durumunu kontrol et
             const finalCheck = await page.evaluate(() => {
                 const bodyText = document.body.textContent.toLowerCase();
-                if (bodyText.includes('bulunamadı') || bodyText.includes('sonuç yok')) {
+                if (bodyText.includes('bulunamadı') || bodyText.includes('sonuç yok') || bodyText.includes('kayıt bulunamadı')) {
                     return { type: 'no_results', message: 'Sonuç bulunamadı' };
                 } else if (bodyText.includes('hata') || bodyText.includes('error')) {
                     return { type: 'error', message: 'Sayfa hatası' };
+                } else if (bodyText.includes('marka bilgileri') || bodyText.includes('başvuru numarası')) {
+                    return { type: 'success', message: 'Veri bulundu' };
                 }
-                return { type: 'unknown', message: 'Bilinmeyen durum' };
+                return { 
+                    type: 'unknown', 
+                    message: 'Bilinmeyen durum', 
+                    url: window.location.href,
+                    bodyPreview: bodyText.substring(0, 500)
+                };
             });
             
             logger.info('Final kontrol:', finalCheck);
             
-            // Screenshot al
-            try {
-                await page.screenshot({ path: '/tmp/error-screenshot.png' });
-            } catch (screenshotError) {
-                logger.info('Error screenshot alınamadı:', screenshotError.message);
+            // Eğer 'no_results' ise bu başarılı bir durum
+            if (finalCheck.type === 'no_results') {
+                logger.info('Başvuru numarası bulunamadı - bu normal bir sonuç.');
+                // Bu durumda error atmıyoruz, başarılı olarak devam ediyoruz
+            } else if (finalCheck.type === 'success') {
+                logger.info('Veri bulundu, devam ediliyor.');
+            } else {
+                // Screenshot al
+                try {
+                    await page.screenshot({ path: '/tmp/error-screenshot.png' });
+                } catch (screenshotError) {
+                    logger.info('Error screenshot alınamadı:', screenshotError.message);
+                }
+                
+                throw waitError;
             }
-            
-            throw waitError;
         }
         
     } else {
@@ -3858,6 +3889,7 @@ try {
       }
 
       // Marka verilerini çıkar
+// Marka verilerini çıkar - YENİ XPath ve fieldset tabanlı yaklaşım
       const trademarkData = await page.evaluate(() => {
         const data = {
           found: false,
@@ -3870,87 +3902,176 @@ try {
           niceClasses: []
         };
 
-        // Marka adı için muhtemel selector'lar
-        const nameSelectors = [
-          'h1', '.trademark-name', '.brand-name', '.marka-adi',
-          '[class*="name"]', '[class*="title"]'
-        ];
+        // 1️⃣ ÖNCELİK: XPath ile fieldset alanını kontrol et
+        const fieldsetXPath = '/html/body/div[1]/div/div[2]/main/div[2]/div/div/fieldset[1]';
+        let fieldsetElement = null;
         
-        for (const selector of nameSelectors) {
-          const element = document.querySelector(selector);
-          if (element && element.textContent.trim()) {
-            data.trademarkName = element.textContent.trim();
-            data.found = true;
-            break;
-          }
+        try {
+          const result = document.evaluate(fieldsetXPath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
+          fieldsetElement = result.singleNodeValue;
+        } catch (xpathError) {
+          console.log('XPath hatası:', xpathError);
         }
 
-        // Marka görseli için muhtemel selector'lar
-        const imageSelectors = [
-          'img[src*="trademark"]', 'img[src*="marka"]', 
-          '.trademark-image img', '.brand-image img',
-          'img[alt*="marka"]', 'img[alt*="trademark"]'
-        ];
-        
-        for (const selector of imageSelectors) {
-          const element = document.querySelector(selector);
-          if (element && element.src) {
-            data.imageUrl = element.src;
-            break;
-          }
+        // 2️⃣ Alternatif: CSS selector ile fieldset bul
+        if (!fieldsetElement) {
+          fieldsetElement = document.querySelector('fieldset') || 
+                           document.querySelector('main fieldset') ||
+                           document.querySelector('[class*="fieldset"]') ||
+                           document.querySelector('.jss192');
         }
 
-        // Başvuru tarihi
-        const dateElements = document.querySelectorAll('td, span, div');
-        for (const el of dateElements) {
-          const text = el.textContent.trim();
-          // Tarih formatı: DD.MM.YYYY veya DD/MM/YYYY
-          if (/\d{2}[.\/]\d{2}[.\/]\d{4}/.test(text)) {
-            data.applicationDate = text;
-            break;
-          }
-        }
+        // 3️⃣ Fieldset içinde veri çıkarma
+        if (fieldsetElement) {
+          console.log('Fieldset bulundu, veri çıkarılıyor...');
+          data.found = true;
 
-        // Başvuru numarası
-        for (const el of dateElements) {
-          const text = el.textContent.trim();
-          // Başvuru numarası formatı: YYYY/XXXXXX
-          if (/\d{4}\/\d{6}/.test(text)) {
-            data.applicationNumber = text;
-            break;
-          }
-        }
+          // Fieldset içindeki tüm td, span, div elementlerini al
+          const allElements = fieldsetElement.querySelectorAll('td, span, div, p, label, input');
+          const allText = Array.from(allElements).map(el => el.textContent.trim()).filter(t => t);
 
-        // Marka sahibi
-        const ownerKeywords = ['sahibi', 'başvuran', 'owner', 'applicant'];
-        for (const el of dateElements) {
-          const text = el.textContent.toLowerCase();
-          for (const keyword of ownerKeywords) {
-            if (text.includes(keyword)) {
-              const nextEl = el.nextElementSibling;
-              if (nextEl && nextEl.textContent.trim()) {
-                data.owner = nextEl.textContent.trim();
-                break;
+          console.log('Bulunan tüm metinler:', allText);
+
+          // Marka adı - fieldset içindeki ilk anlamlı metin veya h1/h2
+          const headings = fieldsetElement.querySelectorAll('h1, h2, h3, legend, .title, [class*="name"]');
+          for (const heading of headings) {
+            const text = heading.textContent.trim();
+            if (text && text.length > 1 && !text.includes('Bilgiler') && !text.includes('Detay')) {
+              data.trademarkName = text;
+              break;
+            }
+          }
+
+          // Alternatif: Label-value çiftlerini bul
+          const labels = fieldsetElement.querySelectorAll('td, label, span');
+          for (let i = 0; i < labels.length - 1; i++) {
+            const labelText = labels[i].textContent.trim().toLowerCase();
+            
+            // Marka adı
+            if ((labelText.includes('marka') && labelText.includes('ad')) || labelText.includes('trademark name')) {
+              const nextElement = labels[i + 1];
+              if (nextElement && nextElement.textContent.trim()) {
+                data.trademarkName = nextElement.textContent.trim();
+              }
+            }
+            
+            // Başvuru numarası
+            if (labelText.includes('başvuru') || labelText.includes('application')) {
+              const nextElement = labels[i + 1];
+              const nextText = nextElement ? nextElement.textContent.trim() : '';
+              if (nextText && /\d{4}\/\d{6}/.test(nextText)) {
+                data.applicationNumber = nextText;
+              }
+            }
+            
+            // Başvuru tarihi
+            if (labelText.includes('tarih') || labelText.includes('date')) {
+              const nextElement = labels[i + 1];
+              const nextText = nextElement ? nextElement.textContent.trim() : '';
+              if (nextText && /\d{2}[.\/]\d{2}[.\/]\d{4}/.test(nextText)) {
+                data.applicationDate = nextText;
+              }
+            }
+            
+            // Marka sahibi
+            if (labelText.includes('sahibi') || labelText.includes('başvuran') || labelText.includes('owner')) {
+              const nextElement = labels[i + 1];
+              if (nextElement && nextElement.textContent.trim()) {
+                data.owner = nextElement.textContent.trim();
               }
             }
           }
-          if (data.owner) break;
-        }
 
-        // Nice sınıfları
-        for (const el of dateElements) {
-          const text = el.textContent.trim();
-          // Nice sınıfı formatı: Sınıf XX veya Class XX
-          const niceMatch = text.match(/(?:sınıf|class|nice)\s*:?\s*(\d{1,2})/gi);
-          if (niceMatch) {
-            data.niceClasses = niceMatch.map(match => match.match(/\d{1,2}/)[0]);
-            break;
+          // Görsel arama - fieldset içinde
+          const images = fieldsetElement.querySelectorAll('img');
+          for (const img of images) {
+            if (img.src && !img.src.includes('icon') && !img.src.includes('logo')) {
+              data.imageUrl = img.src;
+              break;
+            }
+          }
+
+          // Regex ile metin içinden veri çıkarma (yedek metod)
+          const fullText = fieldsetElement.textContent;
+          
+          // Nice sınıfları
+          const niceMatches = fullText.match(/(?:sınıf|class|nice)\s*:?\s*(\d{1,2})/gi);
+          if (niceMatches) {
+            data.niceClasses = niceMatches.map(match => match.match(/\d{1,2}/)[0]);
+          }
+
+          // Başvuru numarası (regex backup)
+          if (!data.applicationNumber) {
+            const appNoMatch = fullText.match(/\d{4}\/\d{6}/);
+            if (appNoMatch) {
+              data.applicationNumber = appNoMatch[0];
+            }
+          }
+
+          // Tarih (regex backup)
+          if (!data.applicationDate) {
+            const dateMatch = fullText.match(/\d{2}[.\/]\d{2}[.\/]\d{4}/);
+            if (dateMatch) {
+              data.applicationDate = dateMatch[0];
+            }
+          }
+
+        } else {
+          // 4️⃣ FALLBACK: Eski yöntemle dene (tüm sayfa)
+          console.log('Fieldset bulunamadı, eski yöntemle devam ediliyor...');
+          
+          // Marka adı için genel selector'lar
+          const nameSelectors = [
+            'h1', 'h2', '.trademark-name', '.brand-name', '.marka-adi',
+            '[class*="name"]', '[class*="title"]', 'legend'
+          ];
+          
+          for (const selector of nameSelectors) {
+            const element = document.querySelector(selector);
+            if (element && element.textContent.trim() && !element.textContent.includes('Bilgiler')) {
+              data.trademarkName = element.textContent.trim();
+              data.found = true;
+              break;
+            }
+          }
+
+          // Genel veri çıkarma (eski kod)
+          const allElements = document.querySelectorAll('td, span, div, p');
+          for (const el of allElements) {
+            const text = el.textContent.trim();
+            
+            // Başvuru numarası
+            if (!data.applicationNumber && /\d{4}\/\d{6}/.test(text)) {
+              data.applicationNumber = text;
+            }
+            
+            // Tarih
+            if (!data.applicationDate && /\d{2}[.\/]\d{2}[.\/]\d{4}/.test(text)) {
+              data.applicationDate = text;
+            }
+          }
+
+          // Görsel arama
+          const imageSelectors = [
+            'img[src*="trademark"]', 'img[src*="marka"]', 
+            '.trademark-image img', '.brand-image img',
+            'img[alt*="marka"]', 'img[alt*="trademark"]'
+          ];
+          
+          for (const selector of imageSelectors) {
+            const element = document.querySelector(selector);
+            if (element && element.src) {
+              data.imageUrl = element.src;
+              break;
+            }
           }
         }
 
+        // Debug log
+        console.log('Çıkarılan veri:', data);
         return data;
       });
-
+      
       // Sayfa başlığından da bilgi çıkarmaya çalış
       const pageTitle = await page.title();
       
