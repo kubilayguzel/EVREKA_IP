@@ -3598,203 +3598,100 @@ export const adminDeleteUser = onCall({ region: "europe-west1" }, async (req) =>
   return { ok: true, uid };
 });
 
-// TÜRKPATENT SCRAPER - PUPPETEER VERSİYONU (Cloud Functions için optimize)
-import { https } from 'firebase-functions/v2';
+// ====== IMPORTS ======
+import puppeteer from 'puppeteer-core';
+import chromium from '@sparticuz/chromium';
 
-export const scrapeTrademarkPuppeteer = https.onCall({
-  memory: '2GiB',  // Memory'yi artırdık
-  timeoutSeconds: 180,
-  region: 'us-central1'
-}, async (request) => {
-  const { basvuruNo } = request.data;
-  logger.info('[scrapeTrademarkPuppeteer] Function çağrıldı', { basvuruNo });
-
+// ====== COMMON HANDLER ======
+async function handleScrapeTrademark(basvuruNo) {
   if (!basvuruNo) {
-    throw new https.HttpsError('invalid-argument', 'Başvuru numarası belirtilmelidir.');
+    throw new HttpsError('invalid-argument', 'Başvuru numarası (basvuruNo) zorunludur.');
   }
 
+  logger.info('[scrapeTrademarkPuppeteer] Başlıyor', { basvuruNo });
   let browser;
-  
+
   try {
-    const puppeteer = await import('puppeteer');
-    
-    // Cloud Functions için özel Chrome ayarları
-    browser = await puppeteer.default.launch({
-      // Chrome binary'yi manuel belirle
-      executablePath: '/usr/bin/google-chrome-stable',
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-extensions',
-        '--disable-plugins',
-        '--disable-background-timer-throttling',
-        '--disable-backgrounding-occluded-windows',
-        '--disable-renderer-backgrounding',
-        '--disable-features=TranslateUI',
-        '--disable-ipc-flooding-protection',
-        '--no-first-run',
-        '--no-zygote',
-        '--single-process',
-        '--disable-gpu',
-        '--disable-web-security',
-        '--disable-features=VizDisplayCompositor',
-        '--memory-pressure-off'
-      ],
-      headless: 'new', // Yeni headless modunu kullan
-      timeout: 30000
-    });
+    const isLocal =
+      process.env.FUNCTIONS_EMULATOR === 'true' ||
+      process.env.LOCAL_PUPPETEER === '1';
 
-    const page = await browser.newPage();
-    
-    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36');
-    await page.setViewport({ width: 1366, height: 768 });
-
-    logger.info('[scrapeTrademarkPuppeteer] TÜRKPATENT sayfasına gidiliyor...');
-    
-    await page.goto('https://www.turkpatent.gov.tr/arastirma-yap?form=trademark', {
-      waitUntil: 'domcontentloaded', // networkidle yerine daha hızlı
-      timeout: 60000
-    });
-
-    await page.waitForTimeout(3000);
-
-    logger.info('[scrapeTrademarkPuppeteer] Form aranıyor...');
-
-    // Sayfada JavaScript hatalarını yakala
-    page.on('console', msg => {
-      if (msg.type() === 'error') {
-        logger.warn('[scrapeTrademarkPuppeteer] Page Console Error:', msg.text());
-      }
-    });
-
-    // Input alanını bul ve doldur - daha kapsamlı arama
-    const inputFound = await page.evaluate((basvuruNo) => {
-      // Tüm input elementlerini kontrol et
-      const inputs = document.querySelectorAll('input[type="text"], input[type="search"], input:not([type])');
-      
-      for (const input of inputs) {
-        // Placeholder veya name attribute'unda arama terimleri var mı?
-        const placeholder = input.placeholder?.toLowerCase() || '';
-        const name = input.name?.toLowerCase() || '';
-        const id = input.id?.toLowerCase() || '';
-        
-        if (placeholder.includes('başvuru') || placeholder.includes('application') ||
-            name.includes('başvuru') || name.includes('application') ||
-            id.includes('başvuru') || id.includes('application') ||
-            placeholder.includes('numara') || name.includes('number')) {
-          
-          input.value = basvuruNo;
-          input.dispatchEvent(new Event('input', { bubbles: true }));
-          input.dispatchEvent(new Event('change', { bubbles: true }));
-          return true;
+    const launchOptions = isLocal
+      ? {
+          // Lokalde istersen PUPPETEER_EXECUTABLE_PATH ile Chrome yolunu ver:
+          // executablePath: process.env.PUPPETEER_EXECUTABLE_PATH,
+          headless: true
         }
-      }
-      
-      // Hiçbiri uymazsa ilk text input'u kullan
-      if (inputs.length > 0) {
-        inputs[0].value = basvuruNo;
-        inputs[0].dispatchEvent(new Event('input', { bubbles: true }));
-        inputs[0].dispatchEvent(new Event('change', { bubbles: true }));
-        return true;
-      }
-      
-      return false;
-    }, basvuruNo);
-
-    if (!inputFound) {
-      throw new Error('Form input alanı bulunamadı');
-    }
-
-    logger.info('[scrapeTrademarkPuppeteer] Input dolduruldu, form gönderiliyor...');
-
-    // Submit işlemi - daha kapsamlı
-    const submitted = await page.evaluate(() => {
-      // Button'ları ara
-      const buttons = document.querySelectorAll('button, input[type="submit"]');
-      
-      for (const button of buttons) {
-        const text = button.textContent?.toLowerCase() || '';
-        const value = button.value?.toLowerCase() || '';
-        
-        if (text.includes('sorgula') || text.includes('ara') || text.includes('search') ||
-            value.includes('sorgula') || value.includes('ara')) {
-          button.click();
-          return true;
-        }
-      }
-      
-      // Form submit'i dene
-      const forms = document.querySelectorAll('form');
-      if (forms.length > 0) {
-        forms[0].submit();
-        return true;
-      }
-      
-      return false;
-    });
-
-    if (!submitted) {
-      // Enter tuşu ile dene
-      await page.keyboard.press('Enter');
-      logger.info('[scrapeTrademarkPuppeteer] Enter ile gönderildi');
-    }
-
-    // Sonuçları bekle - daha uzun süre
-    logger.info('[scrapeTrademarkPuppeteer] Sonuçlar bekleniyor...');
-    await page.waitForTimeout(10000);
-
-    // Son olarak veri çıkarma işlemi aynı kalacak...
-    const result = await page.evaluate((appNo) => {
-      // Önceki evaluate kodunun aynısı
-      const pageText = document.body.innerText.toLowerCase();
-      
-      const notFoundMessages = [
-        'kayıt bulunamadı',
-        'sonuç bulunamadı', 
-        'başvuru bulunamadı',
-        'no record found',
-        'arama sonucu bulunamadı'
-      ];
-
-      if (notFoundMessages.some(msg => pageText.includes(msg))) {
-        return {
-          applicationNumber: appNo,
-          found: false,
-          status: 'Kayıt Bulunamadı',
-          message: 'Belirtilen başvuru numarası için kayıt bulunamadı',
-          pageText: pageText.substring(0, 500) // Debug için
+      : {
+          headless: chromium.headless,
+          executablePath: await chromium.executablePath(),
+          args: chromium.args,
+          defaultViewport: { width: 1280, height: 800 }
         };
-      }
 
-      // Veri çıkarma kodu aynı...
-      // (önceki kodu buraya kopyalayın)
-      
-      return {
-        applicationNumber: appNo,
-        found: true,
-        message: 'Veri bulundu ama parse edilemedi',
-        pageText: pageText.substring(0, 500)
-      };
-      
-    }, basvuruNo);
+    browser = await puppeteer.launch(launchOptions);
+    const page = await browser.newPage();
 
-    logger.info('[scrapeTrademarkPuppeteer] Tamamlandı', { found: result.found });
-    return result;
+    await page.setUserAgent(
+      'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome Safari'
+    );
 
-  } catch (error) {
-    logger.error('[scrapeTrademarkPuppeteer] Hata', { message: error.message });
-    
-    // Chrome bulunamadı hatası için özel mesaj
-    if (error.message.includes('Could not find Chrome')) {
-      throw new https.HttpsError('internal', 'Chrome kurulumu gerekli. Lütfen geliştirici ile iletişime geçin.');
-    }
-    
-    throw new https.HttpsError('internal', `Puppeteer hatası: ${error.message}`);
-    
+    page.setDefaultTimeout(60000);
+    page.setDefaultNavigationTimeout(60000);
+
+    // 1) Arama sayfasına git
+    logger.info('[scrapeTrademarkPuppeteer] Sayfaya gidiliyor...');
+    await page.goto('https://www.turkpatent.gov.tr/arastirma-yap?form=trademark', {
+      waitUntil: 'domcontentloaded'
+    });
+
+    // 2) (Varsa) uyarı/modali kapatmaya çalış (sessiz başarısız)
+    try {
+      await page.waitForSelector('button.swal2-confirm, .modal-footer .btn-primary', { timeout: 4000 });
+      await page.click('button.swal2-confirm, .modal-footer .btn-primary');
+    } catch (_) {}
+
+    // TODO: Buradan sonrası, gerçek DOM selector’larına göre doldurulacak.
+    // Şimdilik sadece sayfaya ulaşıldığını teyit eden minimal bir çıktı veriyoruz.
+    const title = await page.title();
+
+    return {
+      applicationNumber: basvuruNo,
+      found: false,
+      status: 'Navigated',
+      message: `Sayfa açıldı: ${title}. Veri çıkarma selector'ları ayrıca ayarlanacak.`
+    };
+  } catch (err) {
+    logger.error('[scrapeTrademarkPuppeteer] Hata', { message: err?.message, stack: err?.stack });
+    throw new HttpsError('internal', `Puppeteer hatası: ${err?.message || String(err)}`);
   } finally {
     if (browser) {
-      await browser.close();
+      try { await browser.close(); } catch {}
     }
   }
-});
+}
+
+// ====== HTTP (onRequest) VERSİYONU ======
+export const scrapeTrademarkPuppeteer = onRequest(
+  { region: 'europe-west1', memory: '2GiB', timeoutSeconds: 180 },
+  async (req, res) => {
+    try {
+      const body = (req.method === 'POST') ? (req.body || {}) : {};
+      const basvuruNo = body?.data?.basvuruNo ?? body?.basvuruNo ?? req.query?.basvuruNo;
+      const result = await handleScrapeTrademark(basvuruNo);
+      return res.json({ result });
+    } catch (e) {
+      const code = e?.code === 'invalid-argument' ? 400 : 500;
+      return res.status(code).json({ error: { message: e.message, status: e.code || 'INTERNAL' } });
+    }
+  }
+);
+
+// ====== CALLABLE (onCall) VERSİYONU ======
+export const scrapeTrademarkPuppeteerCallable = onCall(
+  { region: 'europe-west1', memory: '2GiB', timeoutSeconds: 180 },
+  async (request) => {
+    const basvuruNo = request.data?.basvuruNo;
+    return await handleScrapeTrademark(basvuruNo);
+  }
+);
