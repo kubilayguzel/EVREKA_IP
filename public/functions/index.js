@@ -4139,71 +4139,185 @@ async function handleScrapeTrademark(basvuruNo) {
     if (hasError) {
       return { applicationNumber: basvuruNo, found: false, status: 'NotFound', message: hasError, error: hasError };
     }
+// MUI Tablo yapısına göre özel veri çıkarma
+const trademarkData = await page.evaluate((basvuruNoArg) => {
+  const data = { 
+    found: false, 
+    trademarkName: null, 
+    imageUrl: null, 
+    applicationDate: null, 
+    applicationNumber: null, 
+    owner: null, 
+    status: null, 
+    niceClasses: [],
+    registrationNumber: null,
+    registrationDate: null,
+    bulletinDate: null,
+    bulletinNumber: null,
+    trademarkType: null,
+    goodsServices: []
+  };
 
-    // Veri çıkarma (DOM)
-    const trademarkData = await page.evaluate((basvuruNoArg) => {
-      const data = { found:false, trademarkName:null, imageUrl:null, applicationDate:null, applicationNumber:null, owner:null, status:null, niceClasses:[] };
+  const getText = (element) => (element?.textContent || '').trim();
+  const lower = (text) => (text || '').toLowerCase().replace(/i̇/g, 'i'); // Türkçe i'leri normalize et
 
-      let resultContainer = null;
-      for (const s of ['#search-results','.result-container','.trademark-result','[class*="result"]','.ajax-content','.search-result-content']) {
-        const c = document.querySelector(s); if (c) { resultContainer = c; break; }
+  // MUI tablolarını bul (birinci tablo: genel bilgiler)
+  const muiTables = document.querySelectorAll('table.MuiTable-root');
+  if (muiTables.length === 0) {
+    console.log('MUI tablosu bulunamadı');
+    return data;
+  }
+
+  const mainTable = muiTables[0]; // İlk tablo (genel bilgiler)
+  
+  // Ana tablo satırlarını işle
+  const rows = mainTable.querySelectorAll('tr.MuiTableRow-root');
+  console.log(`Toplam ${rows.length} satır bulundu`);
+  
+  rows.forEach((row, index) => {
+    const cells = row.querySelectorAll('td.MuiTableCell-root');
+    console.log(`Satır ${index}: ${cells.length} hücre`);
+    
+    if (cells.length === 2) {
+      // 2 hücreli satır (label-value, genelde colspan=3 olanlar)
+      const label = lower(getText(cells[0]));
+      const value = getText(cells[1]);
+      
+      console.log(`2-hücre | Label: "${label}" -> Value: "${value}"`);
+      
+      if (label.includes('marka adı')) {
+        data.trademarkName = value;
       }
-      if (!resultContainer && basvuruNoArg) {
-        for (const el of document.querySelectorAll('*')) {
-          const t = (el.textContent || '');
-          if (t.includes(basvuruNoArg)) { resultContainer = el.closest('div, section, article, main, .container') || el; break; }
+      else if (label.includes('sahip bilgileri')) {
+        // Sahip bilgilerini çıkar - div içindeki p elementlerinden
+        const paragraphs = cells[1].querySelectorAll('p.MuiTypography-root');
+        const ownerParts = Array.from(paragraphs).map(p => getText(p)).filter(text => text && text !== '-');
+        
+        if (ownerParts.length >= 2) {
+          data.owner = ownerParts[1]; // İkinci paragraf genelde şirket adı
         }
+        console.log('Sahip bilgileri parçaları:', ownerParts);
       }
-
-      const getText = (n) => (n?.textContent || '').trim();
-      const lower = (s) => (s||'').toLowerCase();
-      let containerText = resultContainer ? (resultContainer.textContent || '') : '';
-      let allElements = resultContainer ? Array.from(resultContainer.querySelectorAll('*')) : [];
-      if (containerText.length < 50) { containerText = (document.body.textContent || ''); allElements = Array.from(document.querySelectorAll('*')); }
-
-      if (resultContainer) {
-        const rows = resultContainer.querySelectorAll('tr');
-        for (const row of rows) {
-          const cells = row.querySelectorAll('td, th, .MuiTableCell-root, [role="cell"]');
-          if (cells.length >= 2) {
-            const label = lower(getText(cells[0]));
-            const value = getText(cells[1]);
-            if ((label.includes('marka') && label.includes('ad')) || label.includes('trademark') || label.includes('name')) data.trademarkName = value;
-            if (label.includes('başvuru') || label.includes('application') || /\d{4}\/\d{6}/.test(value)) data.applicationNumber = value;
-            if (label.includes('tarih') || label.includes('date')) { const m = value.match(/\d{2}[.\/]\d{2}[.\/]\d{4}/); if (m) data.applicationDate = m[0]; }
-            if (label.includes('sahib') || label.includes('başvuran') || label.includes('owner') || label.includes('applicant')) data.owner = value;
-          }
-        }
+      else if (label.includes('rüçhan bilgileri')) {
+        // Öncelik bilgileri
+        data.priorityInfo = value;
       }
-
-      if (!data.trademarkName && allElements.length) {
-        const texts = allElements.map(el => getText(el)).filter(Boolean);
-        for (let i = 0; i < texts.length - 1; i++) {
-          const cur = lower(texts[i]); const next = texts[i+1];
-          if ((cur.includes('marka') && (cur.includes('ad') || cur.includes('name'))) || cur === 'trademark name' || cur === 'marka adı') { data.trademarkName = next; break; }
-        }
+    }
+    else if (cells.length === 4) {
+      // 4 hücreli satır (label1-value1-label2-value2)
+      const label1 = lower(getText(cells[0]));
+      const value1 = getText(cells[1]);
+      const label2 = lower(getText(cells[2]));
+      const value2 = getText(cells[3]);
+      
+      console.log(`4-hücre | "${label1}": "${value1}" | "${label2}": "${value2}"`);
+      
+      // İlk çift kontrol et
+      if (label1.includes('başvuru numarası')) {
+        data.applicationNumber = value1;
       }
-
-      if (!data.applicationNumber) { const m = containerText.match(/\b\d{4}\/\d{6}\b/); if (m) data.applicationNumber = m[0]; }
-      if (!data.applicationDate)  { const m = containerText.match(/\b\d{2}[.\/]\d{2}[.\/]\d{4}\b/); if (m) data.applicationDate = m[0]; }
-      const niceMatches = containerText.match(/(?:sınıf|class|nice)\s*:?\s*(\d{1,2})/gi);
-      if (niceMatches) data.niceClasses = niceMatches.map(s => (s.match(/\d{1,2}/) || [])[0]).filter(Boolean);
-
-      if (resultContainer) {
-        const imgs = resultContainer.querySelectorAll('img');
-        for (const img of imgs) {
-          const src = img?.src || '';
-          if (src && !/icon|logo|button/i.test(src)) { data.imageUrl = src; break; }
-        }
+      else if (label1.includes('tescil numarası')) {
+        data.registrationNumber = value1;
       }
+      else if (label1.includes('uluslararası tescil numarası')) {
+        data.internationalRegistrationNumber = value1;
+      }
+      else if (label1.includes('marka ilan bülten tarihi')) {
+        data.bulletinDate = value1;
+      }
+      else if (label1.includes('marka ilan bülten no')) {
+        data.bulletinNumber = value1;
+      }
+      else if (label1.includes('koruma tarihi')) {
+        data.protectionDate = value1;
+      }
+      else if (label1.includes('nice sınıfları')) {
+        // "01 / 05 /" formatından array oluştur
+        data.niceClasses = value1.split('/').map(s => s.trim()).filter(s => s && s !== '');
+      }
+      else if (label1.includes('karar')) {
+        data.decision = value1;
+      }
+      
+      // İkinci çift kontrol et
+      if (label2.includes('başvuru tarihi')) {
+        data.applicationDate = value2;
+      }
+      else if (label2.includes('tescil tarihi')) {
+        data.registrationDate = value2;
+      }
+      else if (label2.includes('evrak numarası')) {
+        data.documentNumber = value2;
+      }
+      else if (label2.includes('tescil yayın bülten tarihi')) {
+        data.registrationBulletinDate = value2;
+      }
+      else if (label2.includes('tescil yayın bülten no')) {
+        data.registrationBulletinNumber = value2;
+      }
+      else if (label2.includes('durumu')) {
+        data.status = value2 === '-' ? null : value2;
+      }
+      else if (label2.includes('türü')) {
+        data.trademarkType = value2;
+      }
+      else if (label2.includes('karar gerekçesi')) {
+        data.decisionReason = value2;
+      }
+    }
+  });
 
-      if (!data.applicationNumber && basvuruNoArg) data.applicationNumber = basvuruNoArg;
-      const meaningful = allElements.map(el => getText(el)).filter(t => t && t.length > 2 && t.length < 120 && !/Marka Araştırma|Dosya Takibi|Sorgula/i.test(t));
-      if (!data.trademarkName && meaningful.length) data.trademarkName = meaningful[0];
+  // İkinci tablo varsa (mal ve hizmetler tablosu)
+  if (muiTables.length > 1) {
+    const goodsServicesTable = muiTables[1];
+    const gsRows = goodsServicesTable.querySelectorAll('tbody tr.MuiTableRow-root');
+    
+    gsRows.forEach(row => {
+      const cells = row.querySelectorAll('td.MuiTableCell-root');
+      if (cells.length >= 2) {
+        const classNumber = getText(cells[0]);
+        const description = getText(cells[1]);
+        
+        data.goodsServices.push({
+          class: classNumber,
+          description: description
+        });
+      }
+    });
+    
+    console.log(`Mal ve hizmetler: ${data.goodsServices.length} sınıf`);
+  }
 
-      data.found = !!(data.trademarkName || data.applicationNumber || data.imageUrl);
-      return data;
-    }, basvuruNo);
+  // Görsel araması (tüm sayfada)
+  const images = document.querySelectorAll('img');
+  for (const img of images) {
+    const src = img.src || '';
+    if (src && 
+        !src.includes('data:image') && 
+        !src.includes('icon') && 
+        !src.includes('logo') && 
+        !src.includes('button') &&
+        !src.includes('avatar') &&
+        (src.includes('trademark') || src.includes('marka') || img.alt)) {
+      data.imageUrl = src;
+      break;
+    }
+  }
+
+  // Veri bulunmuş mu kontrolü
+  data.found = !!(data.trademarkName || data.applicationNumber || data.registrationNumber);
+  
+  console.log('=== ÇIKARILAN VERİ ÖZETİ ===');
+  console.log('Başvuru No:', data.applicationNumber);
+  console.log('Marka Adı:', data.trademarkName);
+  console.log('Sahip:', data.owner);
+  console.log('Durum:', data.status);
+  console.log('Nice Sınıfları:', data.niceClasses);
+  console.log('Mal/Hizmet Sınıf Sayısı:', data.goodsServices.length);
+  console.log('Found:', data.found);
+  
+  return data;
+}, basvuruNo);
 
     const pageTitle = await page.title();
 
