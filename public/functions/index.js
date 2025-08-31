@@ -3822,6 +3822,12 @@ async function handleScrapeTrademark(basvuruNo) {
     if (apiResp) {
       try { primaryEndpoint = apiResp.url(); } catch {}
       const json = await apiResp.json();
+        try {
+        logger.info('[scrapeTrademarkPuppeteer] İlk JSON yakalandı', {
+          url: primaryEndpoint || '(unknown)',
+          status: apiResp.status && apiResp.status()
+        });
+      } catch {}
 
       const list =
         (Array.isArray(json?.data?.resultList) && json.data.resultList) ||
@@ -3839,6 +3845,13 @@ async function handleScrapeTrademark(basvuruNo) {
         imageUrl:         first.imageUrl         || first.image || first.logoUrl || ''
       };
 
+      logger.info('[scrapeTrademarkPuppeteer] JSON normalize ok', {
+        applicationNumber: normalized.applicationNumber,
+        applicationDate: normalized.applicationDate,
+        trademarkName: normalized.trademarkName,
+        hasImage: !!normalized.imageUrl
+      });
+
       const result = {
         status: 'Success',
         found: !!(normalized.trademarkName || normalized.applicationNumber),
@@ -3850,6 +3863,7 @@ async function handleScrapeTrademark(basvuruNo) {
     }
 
     // ---- JSON gelmediyse: DOM FALLBACK (tek bekleme) ----
+    logger.info('[scrapeTrademarkPuppeteer] JSON gelmedi, DOM fallback başlıyor...');
     await Promise.race([
       page.waitForFunction(() => (document.body.textContent || '').includes('Marka Bilgileri'), { timeout: 30000 }),
       page.waitForSelector('.jss192', { timeout: 30000 }),
