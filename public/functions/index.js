@@ -3764,8 +3764,8 @@ async function handleScrapeTrademark(basvuruNo) {
       });
 
       if (clickResult === 'clicked') {
-        // Navigation'ı bekle
-        await page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 15000 });
+      // Sorgu sonucu geldiğinde beliren benzersiz bir elementi bekle
+      await page.waitForSelector('table.MuiTable-root', { timeout: 30000 });
         logger.info('Sorgula butonuna tıklandı ve sayfa yüklendi');
       } else {
         throw new Error('Sorgula butonu bulunamadı');
