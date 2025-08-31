@@ -3836,7 +3836,10 @@ async function handleScrapeTrademark(basvuruNo) {
         (Array.isArray(json) && json) ||
         (json?.data && [json.data]) ||
         [json];
-
+      // Raw JSON'u loglayalım
+      logger.info('[DEBUG] Raw JSON response:', JSON.stringify(json, null, 2));
+      logger.info('[DEBUG] List structure:', JSON.stringify(list, null, 2));
+      logger.info('[DEBUG] First item:', JSON.stringify(first, null, 2));
       const first = list[0] || {};
       const normalized = {
         applicationNumber: first.applicationNumber || first.appNo || first.basvuruNo || basvuruNo,
