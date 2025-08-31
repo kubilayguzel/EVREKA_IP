@@ -3857,14 +3857,52 @@ try {
 
     try {
       // AJAX sonuçlarının tam yüklenmesi için daha fazla bekle
-      await new Promise(resolve => setTimeout(resolve, 5000));
-      
-      // Sonuç kontainerının yüklenmesini bekle
-      try {
-        await page.waitForSelector('#search-results, .result-container, .trademark-result', { timeout: 10000 });
-        logger.info('Sonuç container\'ı bulundu');
-      } catch (waitError) {
-        logger.info('Sonuç container bekleme hatası:', waitError.message);
+      await new Promise(resolve => setTimeout(resolve, 3000));
+
+      // Dinamik içerik yüklenmesini bekle
+      let contentLoaded = false;
+      let attempts = 0;
+      const maxAttempts = 20; // 20 * 1 saniye = 20 saniye max
+
+      while (!contentLoaded && attempts < maxAttempts) {
+        attempts++;
+        
+        // Container'ın içinde anlamlı veri var mı kontrol et
+        const hasData = await page.evaluate((basvuruNo) => {
+          const containers = [
+            document.querySelector('#search-results'),
+            document.querySelector('.result-container'),
+            document.querySelector('.trademark-result'),
+            document.querySelector('[class*="result"]')
+          ];
+          
+          for (const container of containers) {
+            if (container) {
+              const text = container.textContent || '';
+              // Başvuru numarasını veya anlamlı veriyi arıyor
+              if (text.includes(basvuruNo) || 
+                  text.includes('Başvuru') ||
+                  text.includes('Marka') ||
+                  text.length > 200) {
+                console.log(`Container'da ${text.length} karakter veri bulundu`);
+                return true;
+              }
+            }
+          }
+          return false;
+        }, basvuruNo);
+        
+        if (hasData) {
+          contentLoaded = true;
+          logger.info(`Dinamik içerik ${attempts}. denemede yüklendi`);
+        } else {
+          logger.info(`Dinamik içerik bekleniyor... Deneme ${attempts}/${maxAttempts}`);
+          await new Promise(resolve => setTimeout(resolve, 1000)); // 1 saniye bekle
+        }
+      }
+
+      if (!contentLoaded) {
+        logger.info('Dinamik içerik yüklenemedi, mevcut içerikle devam ediliyor');
       }
 
       // Sayfada hata mesajı var mı kontrol et
@@ -3951,16 +3989,33 @@ const data = {
     }
   }
 
-  if (resultContainer) {
-    console.log('📋 Container içeriği analiz ediliyor...');
-    data.found = true;
+if (resultContainer) {
+  console.log('📋 Container içeriği analiz ediliyor...');
+  data.found = true;
 
-    // Container içindeki tüm metinleri topla
-    const containerText = resultContainer.textContent || '';
-    const allElements = resultContainer.querySelectorAll('*');
+  // Container içindeki tüm metinleri topla
+  const containerText = resultContainer.textContent || '';
+  const allElements = resultContainer.querySelectorAll('*');
+  
+  console.log(`📝 Container metin uzunluğu: ${containerText.length}`);
+  console.log(`🔍 Container HTML: ${resultContainer.innerHTML.substring(0, 500)}...`);
+  
+  // Eğer container boşsa, tüm sayfada ara
+  if (containerText.length < 50) {
+    console.log('⚠️ Container boş görünüyor, tüm sayfada aranıyor...');
+    const fullPageText = document.body.textContent || '';
+    console.log(`📄 Tam sayfa uzunluğu: ${fullPageText.length}`);
     
-    console.log(`📊 Container içinde ${allElements.length} element bulundu`);
-    console.log(`📝 Container text uzunluğu: ${containerText.length}`);
+    // Tam sayfada başvuru numarasını ara
+    if (fullPageText.includes('2021/170000')) {
+      console.log('✅ Başvuru numarası tam sayfada bulundu');
+      
+      // Tüm sayfayı container olarak kullan
+      resultContainer = document.body;
+      containerText = fullPageText;
+      allElements = document.querySelectorAll('*');
+    }
+  }
 
     // 3️⃣ Tablo yaklaşımı - tr/td yapısı ara
     const rows = resultContainer.querySelectorAll('tr');
