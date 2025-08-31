@@ -3600,7 +3600,6 @@ export const adminDeleteUser = onCall({ region: "europe-west1" }, async (req) =>
 
 // TÜRKPATENT SCRAPER - PUPPETEER VERSİYONU (Cloud Functions için optimize)
 import { https } from 'firebase-functions/v2';
-import { logger } from 'firebase-functions';
 
 export const scrapeTrademarkPuppeteer = https.onCall({
   memory: '1GiB',
