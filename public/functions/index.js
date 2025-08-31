@@ -3611,6 +3611,23 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 const loadCookiesFor = (key) => __cookieJar.get(key) || [];
 const saveCookiesFor = (key, cookies) => __cookieJar.set(key, cookies);
 
+// ====== JSON Güvenli Parsleyici (XSSI prefix kırpar) ======
+// Puppeteer HTTPResponse nesnesinden güvenli JSON parse
+async function safeJsonFromResponse(resp) {
+  const raw = await resp.text();
+  // TÜRKPATENT bazı uçlarda )]}'\n XSSI prefix ekleyebiliyor
+  const cleaned = raw.replace(/^\)\]\}'(?:\r?\n)?/, '').trim();
+  try {
+    return JSON.parse(cleaned);
+  } catch (err) {
+    // İlk 500 karakteri loglayıp anlamlı bir hata fırlat
+    try {
+      logger.error('[scrapeTrademark] JSON parse failed. Sample:', cleaned.slice(0, 500));
+    } catch {}
+    throw new HttpsError('internal', 'TürkPatent yanıtı geçerli JSON formatında değil (muhtemel XSSI/format değişimi).');
+  }
+}
+
 // ====== COMMON HANDLER ======
 async function handleScrapeTrademark(basvuruNo) {
   if (!basvuruNo) {
@@ -3638,7 +3655,7 @@ async function handleScrapeTrademark(basvuruNo) {
   }
   global[lastRequestKey] = Date.now();
 
-  // ---- 2) Global BACKOFF (daha önce rate-limit yediysek hiç tarayıcı açmadan dön) ----
+  // ---- 2) Global BACKOFF ----
   const tpBackoffKey = 'turkpatent_backoff_until';
   const backoffRemaining = Math.max(0, (global[tpBackoffKey] || 0) - Date.now());
   if (backoffRemaining > 0) {
@@ -3673,8 +3690,7 @@ async function handleScrapeTrademark(basvuruNo) {
         '--disable-default-apps',
         '--disable-features=VizDisplayCompositor',
         '--disable-blink-features=AutomationControlled',
-        '--disable-web-security',
-        '--disable-features=VizDisplayCompositor'
+        '--disable-web-security'
       ],
       defaultViewport: { width: 1920, height: 1080 }
     };
@@ -3687,25 +3703,22 @@ async function handleScrapeTrademark(basvuruNo) {
     await page.setExtraHTTPHeaders({ 'Accept-Language': 'tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7' });
     try { await page.emulateTimezone('Europe/Istanbul'); } catch {}
     await page.evaluateOnNewDocument(() => {
-      // Basit webdriver bayrağı gizleme
       Object.defineProperty(navigator, 'webdriver', { get: () => false });
     });
 
-    // --- Cookie reuse: önceki oturumu geri yükle ---
+    // --- Cookie reuse ---
     const savedCookies = loadCookiesFor('turkpatent');
     if (savedCookies.length) {
       try { await page.setCookie(...savedCookies); } catch {}
     }
 
-    // --- Gereksiz kaynakları kes (ağ fan-out’u azalt) ---
+    // --- Request interception ---
     await page.setRequestInterception(true);
-    let primaryEndpoint = null; // ilk JSON endpoint
+    let primaryEndpoint = null;
     page.on('request', req => {
       const t = req.resourceType();
       const url = req.url();
-      // İlk JSON endpoint'i yakaladıktan sonra aynı endpoint'e tekrar gitme
       if (primaryEndpoint && (t === 'xhr' || t === 'fetch') && url === primaryEndpoint) return req.abort();
-      // Statik kaynakları iptal et
       if (t === 'image' || t === 'font' || t === 'stylesheet' || t === 'media') return req.abort();
       req.continue();
     });
@@ -3777,7 +3790,9 @@ async function handleScrapeTrademark(basvuruNo) {
     const apiRespPromise = page.waitForResponse(res => {
       const type = res.request().resourceType();
       const ct = (res.headers()['content-type'] || '').toLowerCase();
-      return (type === 'xhr' || type === 'fetch') && ct.includes('application/json') && res.status() === 200;
+      // JSON bazı durumlarda text/plain olarak gelebilir; her iki durumu da kabul et
+      const isJsonLike = ct.includes('application/json') || ct.includes('text/json') || ct.includes('text/plain');
+      return (type === 'xhr' || type === 'fetch') && isJsonLike && res.status() === 200;
     }, { timeout: 12000 });
 
     // 2) Butona tek tık
@@ -3821,31 +3836,35 @@ async function handleScrapeTrademark(basvuruNo) {
     // ---- JSON geldiyse DOM’a girmeden dön ----
     if (apiResp) {
       try { primaryEndpoint = apiResp.url(); } catch {}
-      const json = await apiResp.json();
-              try {
-              logger.info('[scrapeTrademarkPuppeteer] İlk JSON yakalandı', {
-                url: primaryEndpoint || '(unknown)',
-                status: apiResp.status && apiResp.status()
-              });
-            } catch {}
+      // >>> DEĞİŞTİ: apiResp.json() yerine XSSI güvenli parse
+      const json = await safeJsonFromResponse(apiResp);
 
-            // DEBUG: Ham JSON'u loglayalım
-            logger.info('[DEBUG] Ham JSON yapısı:', JSON.stringify(json, null, 2));
+      try {
+        logger.info('[scrapeTrademarkPuppeteer] İlk JSON yakalandı', {
+          url: primaryEndpoint || '(unknown)',
+          status: apiResp.status && apiResp.status()
+        });
+      } catch {}
 
-            const list =
-              (Array.isArray(json?.data?.resultList) && json.data.resultList) ||
-              (Array.isArray(json?.resultList) && json.resultList) ||
-              (Array.isArray(json?.rows) && json.rows) ||
-              (Array.isArray(json) && json) ||
-              (json?.data && [json.data]) ||
-              [json];
+      // DEBUG: Ham JSON'u loglayalım (kısaltılmış)
+      try { logger.info('[DEBUG] Ham JSON yapısı (kısmi):', JSON.stringify(json, null, 2).slice(0, 4000)); } catch {}
 
-            const first = list[0] || {};
-            
-            // DEBUG: List ve first item'ı loglayalım
-            logger.info('[DEBUG] List yapısı:', JSON.stringify(list, null, 2));
-            logger.info('[DEBUG] İlk item:', JSON.stringify(first, null, 2));
-            
+      const list =
+        (Array.isArray(json?.data?.resultList) && json.data.resultList) ||
+        (Array.isArray(json?.resultList) && json.resultList) ||
+        (Array.isArray(json?.rows) && json.rows) ||
+        (Array.isArray(json) && json) ||
+        (json?.data && [json.data]) ||
+        [json];
+
+      const first = list[0] || {};
+
+      // DEBUG: List ve first item'ı loglayalım (kısaltılmış)
+      try {
+        logger.info('[DEBUG] List yapısı (kısmi):', JSON.stringify(list, null, 2).slice(0, 2000));
+        logger.info('[DEBUG] İlk item (kısmi):', JSON.stringify(first, null, 2).slice(0, 2000));
+      } catch {}
+
       // TÜRKPATENT API gerçek field adlarına göre mapping
       const markInfo = first.payload?.item?.markInformation || first.markInformation || first;
 
@@ -3854,9 +3873,9 @@ async function handleScrapeTrademark(basvuruNo) {
         applicationDate:  markInfo.applicationDate || markInfo.appDate || markInfo.basvuruTarihi || '',
         trademarkName:    markInfo.markName || markInfo.trademarkName || markInfo.brandName || markInfo.name || '',
         imageUrl:         markInfo.figure || markInfo.imageUrl || markInfo.image || markInfo.logoUrl || '',
-        owner:           markInfo.holdName || markInfo.owner || markInfo.sahip || markInfo.applicant || '',
-        status:          markInfo.state || markInfo.status || markInfo.durum || '',
-        niceClasses:     markInfo.niceClasses || markInfo.subNiceClasses || markInfo.classes || []
+        owner:            markInfo.holdName || markInfo.owner || markInfo.sahip || markInfo.applicant || '',
+        status:           markInfo.state || markInfo.status || markInfo.durum || '',
+        niceClasses:      markInfo.niceClasses || markInfo.subNiceClasses || markInfo.classes || []
       };
 
       logger.info('[scrapeTrademarkPuppeteer] JSON normalize ok', {
