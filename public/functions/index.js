@@ -3980,7 +3980,7 @@ async function handleScrapeTrademark(basvuruNo) {
 }
 
 // ====== CALLABLE (onCall) VERSİYONU ======
-export const scrapeTrademarkPuppeteerCallable = onCall(
+export const scrapeTrademark = onCall(
   { region: 'europe-west1', memory: '2GiB', timeoutSeconds: 180 },
   async (request) => {
     const basvuruNo = request.data?.basvuruNo;
