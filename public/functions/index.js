@@ -3600,8 +3600,6 @@ export const adminDeleteUser = onCall({ region: "europe-west1" }, async (req) =>
 // ====== IMPORTS ======
 import puppeteer from 'puppeteer-core';
 import chromium from '@sparticuz/chromium';
-import { onCall, HttpsError } from 'firebase-functions/v2/https';
-import * as logger from 'firebase-functions/logger';
 
 // Basit bellek içi cache ve cookie jar (aynı instance yaşadığı sürece geçerli)
 const __tpCache   = global.__tpCache   || (global.__tpCache   = new Map());
