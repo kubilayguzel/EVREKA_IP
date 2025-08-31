@@ -284,18 +284,6 @@ function renderSingleResult(payload, fallbackNo){
   _hide('bulkResultsContainer');
 }
 
-  const name = payload?.trademarkName || payload?.message || '(İsim yok)';
-  const img = payload?.imageUrl || '';
-  if (heroTitle) heroTitle.textContent = name;
-  if (brandImage){
-    brandImage.src = img || '';
-    brandImage.style.display = img ? 'block' : 'none';
-  }
-  // NEW: populate info fields
-  if (applicationNumberEl) applicationNumberEl.textContent = payload?.applicationNumber || fallbackNo || '';
-  if (applicationDateEl) applicationDateEl.textContent = payload?.applicationDate || '';
-  _show('singleResultContainer');
-  _hide('bulkResultsContainer');
 
 // Reset
 function resetResults(){
