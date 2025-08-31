@@ -3741,8 +3741,8 @@ try {
         
         // ✅ EN KAPSAMLI ÇÖZÜM: Birden fazla alternatifi dene
         try {
-            // 5 saniye bekle - sayfa geçişi için
-            await page.waitForTimeout(5000);
+            // 5 saniye bekle - sayfa geçişi için (DOĞRU YÖNTEM)
+            await new Promise(resolve => setTimeout(resolve, 5000));
             
             // Debug bilgisi topla
             const debugInfo = await page.evaluate(() => {
