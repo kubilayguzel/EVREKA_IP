@@ -240,8 +240,6 @@ function renderSingleResult(payload, fallbackNo){
   }
 
   // Bilgiler
-  if (applicationNumberEl) applicationNumberEl.textContent = p?.applicationNumber || fallbackNo || '';
-  if (applicationDateEl)  applicationDateEl.textContent  = p?.applicationDate || '';
 
   if (ownerEl)       ownerEl.textContent       = p?.owner || '';
   if (niceClassesEl) niceClassesEl.textContent = Array.isArray(p?.niceClasses) ? p.niceClasses.join(', ') : (p?.niceClasses || '');
