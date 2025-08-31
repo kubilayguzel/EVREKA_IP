@@ -3609,6 +3609,21 @@ async function handleScrapeTrademark(basvuruNo) {
   }
 
   logger.info('[scrapeTrademarkPuppeteer] Başlıyor', { basvuruNo });
+
+  // Rate limiting check
+  const lastRequestKey = `turkpatent_last_request`;
+  const minDelay = 30000; // 30 saniye minimum bekleme
+  const lastRequest = global[lastRequestKey] || 0;
+  const timeSinceLastRequest = Date.now() - lastRequest;
+
+  if (timeSinceLastRequest < minDelay) {
+    const waitTime = minDelay - timeSinceLastRequest;
+    logger.info(`Rate limiting: ${waitTime}ms bekleyecek`);
+    await new Promise(resolve => setTimeout(resolve, waitTime));
+  }
+
+  global[lastRequestKey] = Date.now();
+
   let browser;
 
   try {
@@ -3620,8 +3635,19 @@ async function handleScrapeTrademark(basvuruNo) {
     } : {
       headless: chromium.headless,
       executablePath: await chromium.executablePath(),
-      args: chromium.args,
-      defaultViewport: { width: 1280, height: 800 }
+      args: [
+        ...chromium.args,
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+        '--no-first-run',
+        '--disable-default-apps',
+        '--disable-features=VizDisplayCompositor',
+        // Bot detection'ı atlatmak için
+        '--disable-blink-features=AutomationControlled',
+        '--disable-web-security',
+        '--disable-features=VizDisplayCompositor'
+      ],
+      defaultViewport: { width: 1920, height: 1080 }
     };
 
     browser = await puppeteer.launch(launchOptions);
@@ -4126,6 +4152,27 @@ if (resultContainer) {
         data.imageUrl = img.src;
         console.log(`✅ Görsel bulundu: ${img.src}`);
         break;
+      }
+    }
+
+    // Marka adı hala yoksa, ilk anlamlı metni al
+    // ÖNEMLİ: Türkpatent hata mesajlarını kontrol et
+    const errorMessages = [
+      'çok fazla deneme yaptınız',
+      'too many attempts',
+      'sistem meşgul',
+      'geçici olarak hizmet dışı',
+      'rate limit'
+    ];
+
+    const containerText = resultContainer.textContent.toLowerCase();
+    for (const errorMsg of errorMessages) {
+      if (containerText.includes(errorMsg)) {
+        console.log(`🚫 Türkpatent hatası tespit edildi: ${errorMsg}`);
+        data.found = false;
+        data.trademarkName = null;
+        data.error = 'Rate limit exceeded';
+        return data;
       }
     }
 
