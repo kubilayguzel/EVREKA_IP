@@ -3822,31 +3822,38 @@ async function handleScrapeTrademark(basvuruNo) {
     if (apiResp) {
       try { primaryEndpoint = apiResp.url(); } catch {}
       const json = await apiResp.json();
-        try {
-        logger.info('[scrapeTrademarkPuppeteer] İlk JSON yakalandı', {
-          url: primaryEndpoint || '(unknown)',
-          status: apiResp.status && apiResp.status()
-        });
-      } catch {}
+              try {
+              logger.info('[scrapeTrademarkPuppeteer] İlk JSON yakalandı', {
+                url: primaryEndpoint || '(unknown)',
+                status: apiResp.status && apiResp.status()
+              });
+            } catch {}
 
-      const list =
-        (Array.isArray(json?.data?.resultList) && json.data.resultList) ||
-        (Array.isArray(json?.resultList) && json.resultList) ||
-        (Array.isArray(json?.rows) && json.rows) ||
-        (Array.isArray(json) && json) ||
-        (json?.data && [json.data]) ||
-        [json];
-      // Raw JSON'u loglayalım
-      logger.info('[DEBUG] Raw JSON response:', JSON.stringify(json, null, 2));
-      logger.info('[DEBUG] List structure:', JSON.stringify(list, null, 2));
-      logger.info('[DEBUG] First item:', JSON.stringify(first, null, 2));
-      const first = list[0] || {};
-      const normalized = {
-        applicationNumber: first.applicationNumber || first.appNo || first.basvuruNo || basvuruNo,
-        applicationDate:  first.applicationDate  || first.appDate || first.basvuruTarihi || '',
-        trademarkName:    first.trademarkName    || first.brandName || first.name || '',
-        imageUrl:         first.imageUrl         || first.image || first.logoUrl || ''
-      };
+            // DEBUG: Ham JSON'u loglayalım
+            logger.info('[DEBUG] Ham JSON yapısı:', JSON.stringify(json, null, 2));
+
+            const list =
+              (Array.isArray(json?.data?.resultList) && json.data.resultList) ||
+              (Array.isArray(json?.resultList) && json.resultList) ||
+              (Array.isArray(json?.rows) && json.rows) ||
+              (Array.isArray(json) && json) ||
+              (json?.data && [json.data]) ||
+              [json];
+
+            const first = list[0] || {};
+            
+            // DEBUG: List ve first item'ı loglayalım
+            logger.info('[DEBUG] List yapısı:', JSON.stringify(list, null, 2));
+            logger.info('[DEBUG] İlk item:', JSON.stringify(first, null, 2));
+const normalized = {
+  applicationNumber: first.applicationNumber || first.appNo || first.basvuruNo || first.applicationNo || first.başvuruNo || basvuruNo,
+  applicationDate:  first.applicationDate  || first.appDate || first.basvuruTarihi || first.başvuruTarihi || first.date || '',
+  trademarkName:    first.trademarkName    || first.brandName || first.name || first.markName || first.markaAdı || first.title || '',
+  imageUrl:         first.imageUrl         || first.image || first.logoUrl || first.logo || first.brandImage || '',
+  owner:           first.owner || first.sahip || first.applicant || first.başvuran || '',
+  status:          first.status || first.durum || '',
+  niceClasses:     first.niceClasses || first.classes || first.sınıflar || []
+};
 
       logger.info('[scrapeTrademarkPuppeteer] JSON normalize ok', {
         applicationNumber: normalized.applicationNumber,
