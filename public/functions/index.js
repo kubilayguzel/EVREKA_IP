@@ -3670,26 +3670,23 @@ async function handleScrapeTrademark(basvuruNo) {
       logger.info('Modal kapatma hatası (normal):', modalError.message);
     }
 
-    // 3) "Dosya Takibi" sekmesine geç
-    logger.info('[scrapeTrademarkPuppeteer] Dosya Takibi sekmesine geçiliyor...');
+    // 3) "Dosya Takibi" sekmesine geçiliyor...
     try {
-        // XPath ile Dosya Takibi butonunu bul
-        const [dosyaTakibiBtn] = await page.$x('//button[contains(., "Dosya Takibi")]');
-
-        if (dosyaTakibiBtn) {
-            // Eğer butona tıklandıysa veya zaten aktifse log yaz
-            const isSelected = await (await dosyaTakibiBtn.getProperty('aria-selected')).jsonValue();
-            if (isSelected !== 'true') {
-                await dosyaTakibiBtn.click();
-                logger.info('Dosya Takibi sekmesine tıklandı.');
-                // Tıkladıktan sonra sayfanın stabil hale gelmesini bekle
-                await page.waitForSelector('input[placeholder="Başvuru Numarası"]', { timeout: 5000 });
-            } else {
-                logger.info('Dosya Takibi zaten aktif.');
+        // Metin içeriğine göre butonu bul ve tıkla
+        await page.evaluate(() => {
+            const buttons = document.querySelectorAll('button[role="tab"]');
+            for (const btn of buttons) {
+                if (btn.textContent && btn.textContent.includes('Dosya Takibi')) {
+                    if (btn.getAttribute('aria-selected') !== 'true') {
+                        btn.click();
+                    }
+                    return;
+                }
             }
-        } else {
-            throw new Error('Dosya Takibi sekmesi bulunamadı');
-        }
+        });
+        // Butonun tıklanması ve formun yüklenmesi için bekle
+        await page.waitForSelector('input[placeholder="Başvuru Numarası"]', { timeout: 5000 });
+        logger.info('Dosya Takibi sekmesine geçiş başarılı.');
     } catch (tabError) {
         logger.error('Dosya Takibi sekmesine geçiş hatası:', tabError.message);
         throw new HttpsError('internal', `Tab geçişi başarısız: ${tabError.message}`);
@@ -3724,25 +3721,27 @@ async function handleScrapeTrademark(basvuruNo) {
       logger.error('Form doldurma hatası:', inputError.message);
       throw new HttpsError('internal', `Form doldurma başarısız: ${inputError.message}`);
     }
-
+    
     // 5) Sorgula butonunu bul ve tıkla
-      logger.info('[scrapeTrademarkPuppeteer] Sorgula butonu tıklanıyor...');
-      try {
-          // XPath ile "Sorgula" butonunu bul
-          const [sorgulaBtn] = await page.$x('//button[contains(., "Sorgula")]');
-          if (sorgulaBtn) {
-              await sorgulaBtn.click();
-              logger.info('Sorgula butonuna tıklandı.');
-              // Sorgu sonucu geldiğinde beliren benzersiz bir elementi bekle
-              await page.waitForSelector('table.MuiTable-root', { timeout: 30000 });
-              logger.info('Sorgu sonuç tablosu yüklendi.');
-          } else {
-              throw new Error('Sorgula butonu bulunamadı');
-          }
-      } catch (buttonError) {
-          logger.error('Sorgula butonu hatası:', buttonError.message);
-          throw new HttpsError('internal', `Sorgula butonu hatası: ${buttonError.message}`);
-      }
+    logger.info('[scrapeTrademarkPuppeteer] Sorgula butonu tıklanıyor...');
+    try {
+        // Butonu metin içeriğine göre bul ve tıkla
+        await page.evaluate(() => {
+            const buttons = document.querySelectorAll('button');
+            for (const btn of buttons) {
+                if (btn.textContent && btn.textContent.includes('Sorgula')) {
+                    btn.click();
+                    return;
+                }
+            }
+        });
+        // Sorgu sonucu geldiğinde beliren benzersiz bir elementi bekle
+        await page.waitForSelector('table.MuiTable-root', { timeout: 30000 });
+        logger.info('Sorgula butonuna tıklandı ve sonuç tablosu yüklendi.');
+    } catch (buttonError) {
+        logger.error('Sorgula butonu hatası:', buttonError.message);
+        throw new HttpsError('internal', `Sorgula butonu hatası: ${buttonError.message}`);
+    }
 
     // 6) Sonuç sayfasından veri çıkar
     logger.info('[scrapeTrademarkPuppeteer] Sonuç verisi çıkarılıyor...');
