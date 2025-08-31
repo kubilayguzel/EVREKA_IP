@@ -4,583 +4,128 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>TÜRKPATENT Dosya Aktarımı</title>
+
+  <!-- Styles -->
   <link rel="stylesheet" href="css/shared-styles.css">
   <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
   <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+
   <style>
-
-        /* Bu sayfaya özel stiller */
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333; display: flex; }
-        .page-wrapper { flex-grow: 1; display: flex; flex-direction: column; height: 100vh; overflow-y: auto; background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%); }
-        .main-container {width: 100%; padding: 30px; padding-top: 120px; margin: 0; }
-        
-        /* Task Detail specific styles */
-        .page-header { background: rgba(255, 255, 255, 0.95); padding: 30px; border-radius: 20px; margin-bottom: 30px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1); }
-        .page-title { font-size: 2em; color: #1e3c72; margin-bottom: 10px; }
-        .page-subtitle { color: #666; font-size: 1.1em; }
-
-        .section-card {
-            background: rgba(255, 255, 255, 0.95);
-            padding: 30px;
-            border-radius: 20px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-            margin-bottom: 25px;
-        }
-        
-        .task-detail-container {
-            padding: 0; 
-            background: none; 
-            box-shadow: none; 
-        }
-
-        .section-title {
-            font-size: 1.3em;
-            color: #1e3c72;
-            margin-bottom: 20px;
-            padding-bottom: 10px;
-            border-bottom: 1px solid #e1e8ed;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .form-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 25px;
-        }
-        .form-group { margin-bottom: 25px; display: flex; flex-direction: column; }
-        .form-group.full-width { grid-column: 1 / -1; }
-        .form-label { display: block; margin-bottom: 8px; color: #333; font-weight: 500; }
-        .form-input, .form-select, .form-textarea {
-            width: 100%; padding: 12px 15px; border: 2px solid #e1e8ed;
-            border-radius: 10px; font-size: 1em; transition: all 0.3s ease;
-            background: white;
-        }
-        .form-input:focus, .form-select:focus, .form-textarea:focus {
-            outline: none; border-color: #1e3c72;
-            box-shadow: 0 0 0 3px rgba(30, 60, 114, 0.1);
-        }
-        .form-textarea { min-height: 120px; resize: vertical; }
-
-        .form-actions {
-            display: flex; justify-content: flex-end; gap: 10px;
-            padding-top: 20px; border-top: 1px solid #e9ecef; margin-top: 20px;
-        }
-        .btn { padding: 12px 25px; border: none; border-radius: 8px; font-size: 1em; font-weight: 600; cursor: pointer; }
-        .btn-primary { background: #1e3c72; color: white; }
-        .btn-primary:disabled { background: #ccc; cursor: not-allowed; }
-        .btn-secondary { background: #6c757d; color: white; }
-
-        .btn-add-item {
-            background: linear-gradient(45deg, #4CAF50, #66BB6A);
-            color: white;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 0.9em;
-            font-weight: 600;
-            transition: all 0.3s ease;
-            display: flex;
-            align-items: center;
-            gap: 5px;
-            box-shadow: 0 4px 8px rgba(0, 123, 255, 0.2);
-        }
-        .btn-add-item:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 12px rgba(0, 123, 255, 0.3);
-            background: linear-gradient(45deg, #388E3C, #4CAF50);
-        }
-        .accrual-card {
-            background: #fff;
-            border: 1px solid #ddd;
-            border-radius: 10px;
-            padding: 20px;
-            margin-bottom: 15px;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.05);
-        }
-
-        .accrual-card-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 10px;
-        }
-
-        .accrual-card-header h4 {
-            margin: 0;
-            font-size: 1.1em;
-            color: #1e3c72;
-        }
-
-        .accrual-card-body p {
-            margin: 5px 0;
-            font-size: 0.95em;
-        }
-
-        .accrual-card-actions {
-            margin-top: 10px;
-            text-align: right;
-        }
-
-        .accrual-card-actions .edit-accrual-btn {
-            background-color: #ffc107;
-            color: #000;
-        }
-
-    .edit-accrual-btn {
-        background-color: #ffda44;
-        border: none;
-        padding: 8px 14px;
-        border-radius: 6px;
-        font-weight: bold;
-        cursor: pointer;
-        margin-top: 10px;
-    }
-
-    .edit-accrual-btn:hover {
-        background-color: #f0c800;
-    }
-    .input-with-currency { display: flex; gap: 10px; }
-    .input-with-currency .form-input { flex-grow: 1; }
-    .currency-select {
-        padding: 12px 8px;
-        border: 2px solid #e1e8ed;
-        border-radius: 10px;
-        background-color: #f8f9fa;
-        font-weight: bold;
-    }
-    .checkbox-label {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        cursor: pointer;
-        font-weight: 500;
-    }
-        .search-results-list { max-height: 200px; overflow-y: auto; border: 1px solid #ccc; border-radius: 8-px; margin-top: 5px; }
-        .search-result-item { padding: 10px; cursor: pointer; border-bottom: 1px solid #eee; }
-        .search-result-item:hover { background-color: #f0f0f0; }
-        
-        .search-result-display { 
-            background: #e9f5ff; 
-            border: 1px solid #bde0fe; 
-            padding: 15px; 
-            border-radius: 8px; 
-            margin-top: 10px; 
-            display: flex; 
-            justify-content: space-between;
-            align-items: center;
-            gap: 15px; 
-        }
-        .search-result-display-content {
-            flex-grow: 1;
-        }
-        .remove-item-btn {
-            background: #ff6b6b;
-            color: white;
-            border: none;
-            border-radius: 50%;
-            width: 30px;
-            height: 30px;
-            font-size: 1.2em;
-            cursor: pointer;
-            transition: background-color 0.3s ease;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        .remove-item-btn:hover {
-            background: #ff5252;
-        }
-
-        .history-list {
-            max-height: none;
-            overflow-y: visible;
-            border: 1px solid #e1e8ed;
-            border-radius: 10px;
-            padding: 15px;
-        }
-        .history-item {
-            padding: 10px 0;
-            border-bottom: 1px dashed #eee;
-            font-size: 0.95em;
-        }
-        .history-item:last-child {
-            border-bottom: none;
-        }
-        .history-item-action {
-            font-weight: 600;
-            color: #333;
-        }
-        .history-item-meta {
-            color: #666;
-            font-size: 0.85em;
-            margin-top: 4px;
-        }
-        
-        /* Tek tip dosya yükleme alanı stili */
-        .file-upload-area {
-            border: 2px dashed #a8dadc;
-            border-radius: 12px;
-            padding: 40px;
-            text-align: center;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            background: #f1faee;
-            margin-top: 15px;
-        }
-        .file-upload-area:hover {
-            border-color: #457b9d;
-            background: #e0f2f7;
-        }
-        .upload-icon {
-            font-size: 3.5em;
-            color: #457b9d;
-            margin-bottom: 15px;
-        }
-        .upload-text {
-            font-size: 1.2em;
-            font-weight: 600;
-            color: #333;
-        }
-        .upload-subtext {
-            font-size: 0.9em;
-            color: #666;
-            margin-top: 5px;
-        }
-        .file-list-container {
-            margin-top: 25px;
-            border: 1px solid #e1e8ed;
-            border-radius: 12px;
-            overflow: hidden;
-            max-height: 400px;
-            overflow-y: auto;
-        }
-        .file-item {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 12px 20px;
-            border-bottom: 1px solid #eee;
-            background: white;
-        }
-        .file-item:last-child { border-bottom: none; }
-        .file-info { flex-grow: 1; display: flex; align-items: center; gap: 15px; }
-        .file-icon { font-size: 1.5em; color: #6c757d; }
-        .file-name { font-weight: 500; color: #333; }
-        .file-size { font-size: 0.85em; color: #666; }
-        .file-actions { display: flex; gap: 10px; align-items: center; }
-        .file-designation-select { padding: 6px 10px; border: 1px solid #ccc; border-radius: 8px; font-size: 0.9em; }
-        .btn-remove-file {
-            background: #ff6b6b; color: white; border: none; width: 30px; height: 30px; border-radius: 50%;
-            font-size: 1.2em; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: background 0.3s ease;
-        }
-        .btn-remove-file:hover { background: #ff5252; }
-
-        .total-amount-display {
-            font-size: 1.2em;
-            font-weight: bold;
-            color: #1e3c72;
-            text-align: right;
-            margin-top: 10px;
-            padding: 12px 15px;
-            background-color: #f0f4f8;
-            border-radius: 10px;
-        }
-        .input-with-currency { display: flex; gap: 10px; }
-        .input-with-currency .form-input { flex-grow: 1; }
-        .currency-select {
-            padding: 12px 8px;
-            border: 2px solid #e1e8ed;
-            border-radius: 10px;
-            background-color: #f8f9fa;
-            font-weight: bold;
-        }
-        .checkbox-label input {
-            width: 18px;
-            height: 18px;
-        }
-/* Modal Stilleri */
-.modal {
-    display: none; /* Varsayılan olarak gizle */
-    position: fixed; /* Ekranda sabit kal */
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0, 0, 0, 0.6); /* Yarı saydam siyah arka plan */
-    align-items: center;
-    justify-content: center;
-    z-index: 1002; /* Diğer her şeyin üstünde */
-    overflow-y: auto; /* İçerik taşarsa kaydırma çubuğu */
-    padding: 20px;
-}
-
-.modal.show {
-    display: flex; /* JavaScript ile görünür hale getir */
-}
-
-.modal-content {
-    background: white;
-    padding: 30px;
-    border-radius: 20px;
-    max-width: 1250px;
-    width: 100%;
-    max-height: 90vh; /* Ekran yüksekliğinin %90'ı */
-    overflow-y: auto;
-    box-shadow: 0 10px 40px rgba(0,0,0,0.2);
-    transform: translateY(0); /* Animasyon başlangıcı */
-    transition: transform 0.3s ease-out;
-}
-
-.modal.show .modal-content {
-    transform: translateY(0);
-}
-
-.close-modal-btn {
-    background: none;
-    border: none;
-    font-size: 1.5em;
-    cursor: pointer;
-    color: #666;
-    padding: 5px;
-    border-radius: 50%;
-    transition: all 0.3s ease;
-    float: right;
-}
-
-.close-modal-btn:hover {
-    background: #f0f0f0;
-}
-
-
-/* Page-specific tweaks for TP File Transfer using task-detail styles */
-.result-list { max-height: 400px; overflow-y: auto; }
-.list-group-item .btn { margin-left: 10px; }
-.hero{ display:flex; gap:24px; align-items:flex-start; }
-.hero-img-wrap{ flex:0 0 auto; max-width:360px; }
-.hero-img{ width:100%; height:auto; border-radius:12px; border:1px solid #eee; background:#fff; }
-.hero-meta{ flex:1; min-width:300px; }
-.kv-grid{ display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:12px 20px; }
-.action-buttons { margin-top: 12px; }
-.action-buttons .btn { flex: 0 0 auto; height: auto; display: inline-block; padding: .6rem 1rem; border-radius: .6rem; }
-/* Buttons & selects look like task-detail */
-.section-card .btn { box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
-.section-card .form-control { border-radius: 12px; height: 44px; }
-.section-card .form-check-input { width: 1.1rem; height: 1.1rem; }
-
-
-/* action buttons alignment + spacing */
-#actionButtons { width: 100%; }
-#actionButtons .d-flex { justify-content: flex-end; }
-#actionButtons .d-flex > * + * { margin-left: 10px; }
-
-/* add gap between input and 'Listeye Ekle' */
-.section-card .input-group-append { margin-left: 8px; }
-.section-card .input-group-append .btn { height: 44px; }
-
-/* ordered transfer list with numbers (BS4-compatible) */
-#transferList { counter-reset: rownum; }
-#transferList .list-group-item {
-  position: relative;
-  padding-left: 48px;
-}
-#transferList .list-group-item::before {
-  counter-increment: rownum;
-  content: counter(rownum) ".";
-  position: absolute;
-  left: 16px;
-  top: 50%;
-  transform: translateY(-50%);
-  font-weight: bold;
-  color: #1e3c72;
-}
-
-/* input + 'Listeye Ekle' ayrık görünsün, yükseklik eşitlensin */
-.section-card .input-group { flex-wrap: nowrap; }
-.section-card .input-group-append { margin-left: 8px; }
-.section-card .input-group-append .btn { height: 44px; }
-
-/* task-detail görünümü: select ve butonlar */
-.section-card .form-control { border-radius: 12px; height: 44px; }
-.section-card .btn { box-shadow: 0 4px 12px rgba(0,0,0,0.08); border-radius: 12px; }
-
-/* alt aksiyon butonları header sağında, aralıklı */
-.action-buttons .d-flex > * + * { margin-left: 10px; }
-
-/* numaralı aktarım listesi */
-#transferList { counter-reset: rownum; }
-#transferList .list-group-item { position: relative; padding-left: 48px; }
-
-
-/* Liste görünürlüğü için stiller */
-.remove-btn {
-    background: #dc3545;
-    border: none;
-    color: white;
-    width: 30px;
-    height: 30px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 14px;
-    line-height: 1;
-    cursor: pointer;
-}
-
-.remove-btn:hover {
-    background: #c82333;
-}
-</style>
-
+    :root{ --card-radius:16px; --card-shadow:0 10px 24px rgba(0,0,0,.08); }
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color:#333; background: linear-gradient(135deg,#f5f7fa 0%,#c3cfe2 100%); }
+    .page-wrapper { min-height:100vh; padding:24px 0; }
+    .container { max-width: 1280px; }
+    .section-card{ background:#fff; border:1px solid rgba(0,0,0,.06); border-radius:var(--card-radius); box-shadow:var(--card-shadow); padding:24px; margin-bottom:18px; }
+    .section-title{ font-size:1.25rem; color:#1e3c72; margin-bottom:16px; padding-bottom:10px; border-bottom:1px solid #e8ecf1; display:flex; align-items:center; justify-content:space-between; }
+    .form-label { font-weight:600; }
+    .form-inline-gap { display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap; }
+    .hero{ display:flex; gap:24px; align-items:flex-start; }
+    .hero-img-wrap{ flex:0 0 auto; width:180px; height:180px; }
+    .hero-img{ width:100%; height:100%; object-fit:contain; border-radius:12px; border:1px solid #eee; background:#fff; }
+    .badge-soft { background:#eef2ff; color:#4e5cf2; font-weight:600; padding:.35rem .55rem; border-radius:10px; }
+    .kv-grid{ display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:12px 18px; }
+    .kv-item .label{ font-weight:600; font-size:.9em; color:#555; margin-bottom:4px; }
+    .kv-item .value{ background:#f8f9fa; border:1px solid #eee; border-radius:8px; padding:8px 10px; min-height:38px; display:flex; align-items:center; }
+    .goods-group{ border:1px solid #e8ecf1; border-radius:12px; padding:12px 14px; margin-bottom:12px; background:#fff; }
+    .goods-class{ font-weight:700; color:#1e3c72; margin-bottom:6px; }
+    .goods-items{ margin:0; padding-left:18px; }
+    .goods-items li{ margin-bottom:4px; }
+    .form-actions{ display:flex; justify-content:flex-end; gap:10px; margin-top:10px; }
+    .btn-primary{ background:#1e3c72; border:none; }
+    .btn-primary:disabled{ background:#9aa3b2; }
+    .hide{ display:none !important; }
+    #loading { display:none; }
+    /* küçük helper */
+    .muted{ color:#6c757d; }
+  </style>
 </head>
 
 <body>
-  <div id="notification-container" style="position: fixed; top: 20px; right: 20px; z-index: 9999;"></div>
-  <div id="layout-placeholder"></div>
   <div class="page-wrapper">
-    <main class="main-container">
-      <section class="page-header">
-        <h1 class="page-title">TÜRKPATENT Dosya Aktarımı</h1>
-        <p class="page-subtitle">Başvuru numaralarını ekleyin, sorgulayın ve sonuçları içeri aktarın.</p>
-      </section>
-      
-      <!-- Loading Spinner -->
-      <div id="loading" class="d-none text-center p-4">
-        <div class="spinner-border text-primary" role="status">
-          <span class="sr-only">Yükleniyor...</span>
-        </div>
-        <div class="mt-2">Sorgulama yapılıyor, lütfen bekleyin...</div>
+    <div class="container">
+
+      <!-- Başlık -->
+      <div class="section-card">
+        <h2 class="mb-0">TÜRKPATENT Dosya Aktarımı</h2>
+        <div class="muted">Tür: Marka — tekli sorgu ya da sahip numarası ile toplu aktarım</div>
       </div>
 
-      <!-- Bölüm 1: Form -->
-      <section class="section-card">
-        <h3 class="section-title">Aktarım Ayarları</h3>
-        <form id="transferForm">
-          <div class="form-row mb-3">
-            <div class="col-md-4">
-              <label for="docType" class="form-label">Tür</label>
-              <select id="docType" class="form-control">
-                <option value="trademark" selected>Marka</option>
-                <option value="patent" disabled>Patent (Yakında)</option>
-                <option value="design" disabled>Tasarım (Yakında)</option>
-              </select>
+      <!-- Aktarım Ayarları -->
+      <div class="section-card">
+        <div class="section-title">Aktarım Ayarları</div>
+
+        <div class="form-group mb-2">
+          <label class="form-label d-block">Transfer Seçeneği</label>
+          <div>
+            <div class="form-check form-check-inline">
+              <input class="form-check-input" type="radio" name="transferOption" id="singleTransfer" value="single" checked>
+              <label class="form-check-label" for="singleTransfer">Tekli Dosya Aktarımı</label>
             </div>
-            <div class="col-md-8">
-              <label class="form-label">Transfer Seçeneği</label>
-              <div>
-                <div class="form-check form-check-inline">
-                  <input class="form-check-input" type="radio" name="transferOption" id="singleTransfer" value="single" checked>
-                  <label class="form-check-label" for="singleTransfer">Tekil Aktarım</label>
-                </div>
-                <div class="form-check form-check-inline">
-                  <input class="form-check-input" type="radio" name="transferOption" id="bulkTransfer" value="bulk">
-                  <label class="form-check-label" for="bulkTransfer">Çoklu Transfer</label>
-                </div>
-              </div>
+            <div class="form-check form-check-inline">
+              <input class="form-check-input" type="radio" name="transferOption" id="bulkByOwner" value="bulkOwner">
+              <label class="form-check-label" for="bulkByOwner">Sahip Numarası ile Toplu Dosya Transferi</label>
             </div>
+          </div>
+        </div>
+
+        <!-- Tekli alan -->
+        <div id="singleFields" class="form-inline-gap">
+          <div class="form-group mb-0">
+            <label for="basvuruNoInput" class="form-label">Başvuru Numarası</label>
+            <input type="text" id="basvuruNoInput" class="form-control" placeholder="örn: 2021/110000" />
           </div>
           <div class="form-group mb-0">
-            <label for="basvuruNoInput" class="form-label">Başvuru No</label>
-            <div class="input-group">
-              <input type="text" id="basvuruNoInput" class="form-control" placeholder="Başvuru Numarası Girin">
-              <div class="input-group-append">
-                <button class="btn btn-warning" type="button" id="addBasvuruNoBtn">Listeye Ekle</button></div>
-            </div>
-          </div>
-        </form>
-      </section>
-
-      <!-- Bölüm 2: Aktarım Listesi -->
-      <section class="section-card" id="transferListCard">
-        <h3 class="section-title">Aktarım Listesi</h3>
-        <div id="transferListContainer" class="d-none">
-          <ol id="transferList" class="list-group result-list mb-3"></ol>
-          <div class="d-flex justify-content-end">
             <button id="queryBtn" class="btn btn-primary">Sorgula</button>
           </div>
+          <div class="form-group mb-0" id="loading">
+            <span class="spinner-border spinner-border-sm"></span> <span class="ml-2">Sorgulanıyor...</span>
+          </div>
         </div>
-        <div id="transferListEmpty" class="text-muted">Listeye eklenmiş başvuru yok.</div>
-      </section>
 
-      <!-- Bölüm 3: Sorgulama Sonuçları -->
-      <section class="section-card" id="resultsCard">
+        <!-- Toplu (sahip no) alan -->
+        <div id="bulkFields" class="form-inline-gap hide">
+          <div class="form-group mb-0">
+            <label for="ownerIdInput" class="form-label">Sahip Numarası</label>
+            <input type="text" id="ownerIdInput" class="form-control" placeholder="örn: 6888897" />
+          </div>
+          <div class="form-group mb-0">
+            <button id="bulkQueryBtn" class="btn btn-secondary">Ara</button>
+          </div>
+          <div class="muted">Not: Toplu aktarım için arayüz hazır; kurumsal uç geliştirmesi tamamlandığında bağlanacaktır.</div>
+        </div>
+      </div>
+
+      <!-- SONUÇ: Tekli -->
+      <div id="singleResultContainer" class="section-card hide">
+        <div class="section-title">Sonuç</div>
+        <div id="singleResultInner"></div>
+      </div>
+
+      <!-- İlgili Taraf Kartı -->
+      <div id="relatedPartyCard" class="section-card hide">
+        <div class="section-title">İlgili Taraf Ekle</div>
         <div class="d-flex align-items-center justify-content-between">
-          <h3 class="section-title m-0">Sorgulama Sonuçları</h3>
-          <div id="actionButtons" class="action-buttons" style="display:none;">
-            <div class="d-flex align-items-center">
-              <button id="cancelBtn" class="btn btn-outline-secondary">İptal</button>
-              <button id="savePortfolioBtn" class="btn btn-success ml-2">Kaydet - Portföy</button>
-              <button id="saveThirdPartyBtn" class="btn btn-info ml-2">Kaydet - 3.Taraf</button>
-            </div>
+          <div>
+            <div class="muted mb-2">Portföye eklemeden önce ilgili tarafı eklemek isterseniz:</div>
+            <button id="openPersonModalBtn" class="btn btn-outline-primary"><i class="fas fa-user-plus mr-1"></i>Kişi Ara / Ekle</button>
           </div>
+          <div id="selectedPersonSummary" class="text-right"></div>
         </div>
-        <div id="singleResultContainer" class="d-none">
-          <div id="heroCard" class="section-card" style="padding:20px;">
-            <div class="hero">
-              <div class="hero-img-wrap">
-                <img id="brandImage" class="hero-img" alt="Marka Görseli" />
-              </div>
-              <div class="hero-meta">
-                <h4 class="mb-3"><span id="heroTitle" class="mb-3"></span><span id="statusBadge" class="badge badge-secondary ml-2" style="vertical-align:middle; display:none;"></span></h4>
-                <div id="heroKv" class="kv-grid">
-                  <div class="kv-item">
-                    <div class="label">Başvuru No</div>
-                    <div class="value" id="applicationNumber"></div>
-                  </div>
-                  <div class="kv-item">
-                    <div class="label">Başvuru Tarihi</div>
-                    <div class="value" id="applicationDate"></div>
-                  </div>
-                  <div class="kv-item">
-                    <div class="label">Sahip / Başvuran</div>
-                    <div class="value" id="ownerText"></div>
-                  </div>
-                  <div class="kv-item">
-                    <div class="label">Nice Sınıfları</div>
-                    <div class="value" id="niceClasses"></div>
-                  </div>
-                  <div class="kv-item">
-                    <div class="label">Dosya</div>
-                    <div class="value"><a id="fileUrl" target="_blank" rel="noopener"></a></div>
-                  </div>
-        
-                </div>
-              </div>
-            </div>
-          </div>
+      </div>
+
+      <!-- ALT BUTONLAR (statik) -->
+      <div class="section-card">
+        <div class="form-actions">
+          <button id="savePortfolioBtn" class="btn btn-primary" disabled>Portföye Kaydet</button>
+          <button id="saveThirdPartyBtn" class="btn btn-secondary" disabled>Üçüncü Taraf İşlemi Oluştur</button>
+          <button id="cancelBtn" class="btn btn-outline-secondary">İptal</button>
         </div>
+      </div>
 
-        <div id="bulkResultsContainer" class="d-none">
-          <div class="table-responsive">
-            <table class="table table-hover mb-0">
-              <thead>
-                <tr>
-                  <th>Başvuru Numarası</th>
-                  <th>Sorgu Sonucu</th>
-                </tr>
-              </thead>
-              <tbody id="resultsTableBody"></tbody>
-            </table>
-          </div>
-</div>
-</section>
-
-    </main>
+    </div>
   </div>
 
-  <!-- Scripts: task-detail style layout loader + page JS -->
-  
-  <script type="module" src="js/tp-file-transfer.js"></script>
-
-<script type="module">
-  import { loadSharedLayout } from './js/layout-loader.js';
-  document.addEventListener('DOMContentLoaded', async () => {
-    try { await loadSharedLayout(); } catch(e){ console.warn('loadSharedLayout error', e); }
-  });
-</script>
-
+  <script type="module" src="./tp-file-transfer.js"></script>
 </body>
 </html>
