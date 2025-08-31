@@ -3672,49 +3672,27 @@ async function handleScrapeTrademark(basvuruNo) {
 
     // 3) "Dosya Takibi" sekmesine geç
     logger.info('[scrapeTrademarkPuppeteer] Dosya Takibi sekmesine geçiliyor...');
-    
     try {
-      // Dosya Takibi butonunu bul
-      await page.waitForSelector('button[role="tab"]', { timeout: 5000 });
-      
-      // Tüm tab butonlarını al ve "Dosya Takibi" olan butonunu bul
-      const dosyaTakibiBtn = await page.evaluate(() => {
-        const buttons = document.querySelectorAll('button[role="tab"]');
-        for (const btn of buttons) {
-          if (btn.textContent && btn.textContent.includes('Dosya Takibi')) {
-            return true;
-          }
-        }
-        return false;
-      });
+        // XPath ile Dosya Takibi butonunu bul
+        const [dosyaTakibiBtn] = await page.$x('//button[contains(., "Dosya Takibi")]');
 
-      if (dosyaTakibiBtn) {
-        // Dosya Takibi butonuna tıkla
-        await page.evaluate(() => {
-          const buttons = document.querySelectorAll('button[role="tab"]');
-          for (const btn of buttons) {
-            if (btn.textContent && btn.textContent.includes('Dosya Takibi')) {
-              if (btn.getAttribute('aria-selected') !== 'true') {
-                btn.click();
-                return 'clicked';
-              }
-              return 'already-selected';
+        if (dosyaTakibiBtn) {
+            // Eğer butona tıklandıysa veya zaten aktifse log yaz
+            const isSelected = await (await dosyaTakibiBtn.getProperty('aria-selected')).jsonValue();
+            if (isSelected !== 'true') {
+                await dosyaTakibiBtn.click();
+                logger.info('Dosya Takibi sekmesine tıklandı.');
+                // Tıkladıktan sonra sayfanın stabil hale gelmesini bekle
+                await page.waitForSelector('input[placeholder="Başvuru Numarası"]', { timeout: 5000 });
+            } else {
+                logger.info('Dosya Takibi zaten aktif.');
             }
-          }
-          return 'not-found';
-        });
-        
-        logger.info('Dosya Takibi sekmesi işlendi');
-      } else {
-        throw new Error('Dosya Takibi sekmesi bulunamadı');
-      }
-
-      // Tab değişiminin tamamlanmasını bekle
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
+        } else {
+            throw new Error('Dosya Takibi sekmesi bulunamadı');
+        }
     } catch (tabError) {
-      logger.error('Dosya Takibi sekmesine geçiş hatası:', tabError.message);
-      throw new HttpsError('internal', `Tab geçişi başarısız: ${tabError.message}`);
+        logger.error('Dosya Takibi sekmesine geçiş hatası:', tabError.message);
+        throw new HttpsError('internal', `Tab geçişi başarısız: ${tabError.message}`);
     }
 
     // 4) Form elemanlarını bekle ve doldur
@@ -3748,33 +3726,23 @@ async function handleScrapeTrademark(basvuruNo) {
     }
 
     // 5) Sorgula butonunu bul ve tıkla
-    logger.info('[scrapeTrademarkPuppeteer] Sorgula butonu tıklanıyor...');
-    
-    try {
-      // Sorgula butonunu bul ve tıkla
-      const clickResult = await page.evaluate(() => {
-        const buttons = document.querySelectorAll('button');
-        for (const btn of buttons) {
-          if (btn.textContent && btn.textContent.includes('Sorgula')) {
-            btn.click();
-            return 'clicked';
+      logger.info('[scrapeTrademarkPuppeteer] Sorgula butonu tıklanıyor...');
+      try {
+          // XPath ile "Sorgula" butonunu bul
+          const [sorgulaBtn] = await page.$x('//button[contains(., "Sorgula")]');
+          if (sorgulaBtn) {
+              await sorgulaBtn.click();
+              logger.info('Sorgula butonuna tıklandı.');
+              // Sorgu sonucu geldiğinde beliren benzersiz bir elementi bekle
+              await page.waitForSelector('table.MuiTable-root', { timeout: 30000 });
+              logger.info('Sorgu sonuç tablosu yüklendi.');
+          } else {
+              throw new Error('Sorgula butonu bulunamadı');
           }
-        }
-        return 'not-found';
-      });
-
-      if (clickResult === 'clicked') {
-      // Sorgu sonucu geldiğinde beliren benzersiz bir elementi bekle
-      await page.waitForSelector('table.MuiTable-root', { timeout: 30000 });
-        logger.info('Sorgula butonuna tıklandı ve sayfa yüklendi');
-      } else {
-        throw new Error('Sorgula butonu bulunamadı');
+      } catch (buttonError) {
+          logger.error('Sorgula butonu hatası:', buttonError.message);
+          throw new HttpsError('internal', `Sorgula butonu hatası: ${buttonError.message}`);
       }
-
-    } catch (buttonError) {
-      logger.error('Sorgula butonu hatası:', buttonError.message);
-      throw new HttpsError('internal', `Sorgula butonu hatası: ${buttonError.message}`);
-    }
 
     // 6) Sonuç sayfasından veri çıkar
     logger.info('[scrapeTrademarkPuppeteer] Sonuç verisi çıkarılıyor...');
