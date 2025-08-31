@@ -3611,23 +3611,38 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 const loadCookiesFor = (key) => __cookieJar.get(key) || [];
 const saveCookiesFor = (key, cookies) => __cookieJar.set(key, cookies);
 
-// ====== JSON Güvenli Parsleyici (XSSI prefix kırpar) ======
+// ====== JSON Güvenli Parsleyici (XSSI prefix kırpar + URL filtreleme) ======
 // Puppeteer HTTPResponse nesnesinden güvenli JSON parse
 async function safeJsonFromResponse(resp) {
+  const url = resp.url();
+  
+  // reCAPTCHA ve benzeri JavaScript response'ları filtrele
+  if (url.includes('recaptcha') || url.includes('google.com') || 
+      url.includes('gstatic.com') || url.includes('googletagmanager.com')) {
+    throw new Error('Non-JSON response detected (reCAPTCHA/Google scripts)');
+  }
+  
   const raw = await resp.text();
+  
+  // Eğer response JavaScript kodu ise (function, var, eval içeriyorsa) hata fırlat
+  if (raw.includes('function(') || raw.includes('var ') || 
+      raw.includes('eval(') || raw.includes('return ')) {
+    throw new Error('JavaScript code detected instead of JSON');
+  }
+  
   // TÜRKPATENT bazı uçlarda )]}'\n XSSI prefix ekleyebiliyor
   const cleaned = raw.replace(/^\)\]\}'(?:\r?\n)?/, '').trim();
+  
   try {
     return JSON.parse(cleaned);
   } catch (err) {
     // İlk 500 karakteri loglayıp anlamlı bir hata fırlat
     try {
-      logger.error('[scrapeTrademark] JSON parse failed. Sample:', cleaned.slice(0, 500));
+      logger.error('[scrapeTrademark] JSON parse failed. URL:', url, 'Sample:', cleaned.slice(0, 500));
     } catch {}
-    throw new HttpsError('internal', 'TürkPatent yanıtı geçerli JSON formatında değil (muhtemel XSSI/format değişimi).');
+    throw new Error('Invalid JSON format detected');
   }
 }
-
 // ====== COMMON HANDLER ======
 async function handleScrapeTrademark(basvuruNo) {
   if (!basvuruNo) {
@@ -3786,10 +3801,23 @@ async function handleScrapeTrademark(basvuruNo) {
     logger.info('[scrapeTrademarkPuppeteer] Sorgula butonu tıklanıyor ve sonuç bekleniyor...');
     await sleep(400 + Math.floor(Math.random() * 600)); // küçük jitter
 
-    // 1) İlk JSON'u önden beklemeye al
+    // 1) İlk JSON'u önden beklemeye al - URL filtreleme ile
     const apiRespPromise = page.waitForResponse(res => {
+      const url = res.url();
       const type = res.request().resourceType();
       const ct = (res.headers()['content-type'] || '').toLowerCase();
+      
+      // reCAPTCHA ve diğer Google servislerini filtrele
+      if (url.includes('recaptcha') || url.includes('google.com') || 
+          url.includes('gstatic.com') || url.includes('googletagmanager.com')) {
+        return false;
+      }
+      
+      // Sadece TürkPatent domain'inden gelen JSON'ları kabul et
+      if (!url.includes('turkpatent.gov.tr') && !url.includes('ci.turkpatent.gov.tr')) {
+        return false;
+      }
+      
       // JSON bazı durumlarda text/plain olarak gelebilir; her iki durumu da kabul et
       const isJsonLike = ct.includes('application/json') || ct.includes('text/json') || ct.includes('text/plain');
       return (type === 'xhr' || type === 'fetch') && isJsonLike && res.status() === 200;
