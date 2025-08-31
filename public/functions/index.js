@@ -3612,80 +3612,372 @@ async function handleScrapeTrademark(basvuruNo) {
   let browser;
 
   try {
-    const isLocal =
-      process.env.FUNCTIONS_EMULATOR === 'true' ||
-      process.env.LOCAL_PUPPETEER === '1';
-
-    const launchOptions = isLocal
-      ? {
-          // Lokalde istersen PUPPETEER_EXECUTABLE_PATH ile Chrome yolunu ver:
-          // executablePath: process.env.PUPPETEER_EXECUTABLE_PATH,
-          headless: true
-        }
-      : {
-          headless: chromium.headless,
-          executablePath: await chromium.executablePath(),
-          args: chromium.args,
-          defaultViewport: { width: 1280, height: 800 }
-        };
+    const isLocal = process.env.FUNCTIONS_EMULATOR === 'true' || process.env.LOCAL_PUPPETEER === '1';
+    
+    const launchOptions = isLocal ? {
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox']
+    } : {
+      headless: chromium.headless,
+      executablePath: await chromium.executablePath(),
+      args: chromium.args,
+      defaultViewport: { width: 1280, height: 800 }
+    };
 
     browser = await puppeteer.launch(launchOptions);
     const page = await browser.newPage();
 
+    // User agent ayarla
     await page.setUserAgent(
       'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome Safari'
     );
 
-    page.setDefaultTimeout(60000);
-    page.setDefaultNavigationTimeout(60000);
+    page.setDefaultTimeout(30000);
+    page.setDefaultNavigationTimeout(30000);
 
-    // 1) Arama sayfasına git
     logger.info('[scrapeTrademarkPuppeteer] Sayfaya gidiliyor...');
+    
+    // 1) TÜRKPATENT arama sayfasına git
     await page.goto('https://www.turkpatent.gov.tr/arastirma-yap?form=trademark', {
       waitUntil: 'domcontentloaded'
     });
 
-    // 2) (Varsa) uyarı/modali kapatmaya çalış (sessiz başarısız)
+    // 2) Popup/Modal kapatma (Chrome eklentisinden alınan selector'lar)
     try {
-      await page.waitForSelector('button.swal2-confirm, .modal-footer .btn-primary', { timeout: 4000 });
-      await page.click('button.swal2-confirm, .modal-footer .btn-primary');
-    } catch (_) {}
+      logger.info('[scrapeTrademarkPuppeteer] Popup/modal kapatma işlemi...');
+      
+      // a) Dolandırıcılık popup'ı kapat (varsa)
+      try {
+        await page.waitForSelector('.jss84 .jss92', { timeout: 2000 });
+        await page.click('.jss84 .jss92');
+        logger.info('Dolandırıcılık popup kapatıldı');
+      } catch (e) {
+        logger.info('Dolandırıcılık popup bulunamadı');
+      }
 
-    // TODO: Buradan sonrası, gerçek DOM selector’larına göre doldurulacak.
-    // Şimdilik sadece sayfaya ulaşıldığını teyit eden minimal bir çıktı veriyoruz.
-    const title = await page.title();
+      // b) MUI dialog/modal kapat (varsa)
+      try {
+        await page.waitForSelector('[role="dialog"], .MuiDialog-root, .MuiModal-root', { timeout: 2000 });
+        const closeBtn = await page.$('button[aria-label="Close"], button[aria-label="Kapat"], .close');
+        if (closeBtn) {
+          await closeBtn.click();
+          logger.info('MUI modal kapatıldı');
+        }
+      } catch (e) {
+        logger.info('MUI modal bulunamadı');
+      }
+    } catch (modalError) {
+      logger.info('Modal kapatma hatası (normal):', modalError.message);
+    }
 
-    return {
-      applicationNumber: basvuruNo,
-      found: false,
-      status: 'Navigated',
-      message: `Sayfa açıldı: ${title}. Veri çıkarma selector'ları ayrıca ayarlanacak.`
-    };
+    // 3) "Dosya Takibi" sekmesine geç
+    logger.info('[scrapeTrademarkPuppeteer] Dosya Takibi sekmesine geçiliyor...');
+    
+    try {
+      // Dosya Takibi butonunu bul
+      await page.waitForSelector('button[role="tab"]', { timeout: 5000 });
+      
+      // Tüm tab butonlarını al ve "Dosya Takibi" olan butonunu bul
+      const dosyaTakibiBtn = await page.evaluate(() => {
+        const buttons = document.querySelectorAll('button[role="tab"]');
+        for (const btn of buttons) {
+          if (btn.textContent && btn.textContent.includes('Dosya Takibi')) {
+            return true;
+          }
+        }
+        return false;
+      });
+
+      if (dosyaTakibiBtn) {
+        // Dosya Takibi butonuna tıkla
+        await page.evaluate(() => {
+          const buttons = document.querySelectorAll('button[role="tab"]');
+          for (const btn of buttons) {
+            if (btn.textContent && btn.textContent.includes('Dosya Takibi')) {
+              if (btn.getAttribute('aria-selected') !== 'true') {
+                btn.click();
+                return 'clicked';
+              }
+              return 'already-selected';
+            }
+          }
+          return 'not-found';
+        });
+        
+        logger.info('Dosya Takibi sekmesi işlendi');
+      } else {
+        throw new Error('Dosya Takibi sekmesi bulunamadı');
+      }
+
+      // Tab değişiminin tamamlanmasını bekle
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+    } catch (tabError) {
+      logger.error('Dosya Takibi sekmesine geçiş hatası:', tabError.message);
+      throw new HttpsError('internal', `Tab geçişi başarısız: ${tabError.message}`);
+    }
+
+    // 4) Form elemanlarını bekle ve doldur
+    logger.info('[scrapeTrademarkPuppeteer] Form doldurma işlemi...');
+    
+    try {
+      // Başvuru numarası input alanını bekle
+      await page.waitForSelector('input[placeholder="Başvuru Numarası"]', { timeout: 5000 });
+      
+      const input = await page.$('input[placeholder="Başvuru Numarası"]');
+      if (!input) {
+        throw new Error('Başvuru numarası input alanı bulunamadı');
+      }
+
+      // Input alanını temizle ve başvuru numarasını yaz
+      await input.click({ clickCount: 3 }); // Tümünü seç
+      await input.type(basvuruNo);
+      
+      // React controlled input için event'ler
+      await page.evaluate((inputEl, value) => {
+        inputEl.value = value;
+        inputEl.dispatchEvent(new Event('input', { bubbles: true }));
+        inputEl.dispatchEvent(new Event('change', { bubbles: true }));
+      }, input, basvuruNo);
+
+      logger.info(`Başvuru numarası yazıldı: ${basvuruNo}`);
+
+    } catch (inputError) {
+      logger.error('Form doldurma hatası:', inputError.message);
+      throw new HttpsError('internal', `Form doldurma başarısız: ${inputError.message}`);
+    }
+
+    // 5) Sorgula butonunu bul ve tıkla
+    logger.info('[scrapeTrademarkPuppeteer] Sorgula butonu tıklanıyor...');
+    
+    try {
+      // Sorgula butonunu bul ve tıkla
+      const clickResult = await page.evaluate(() => {
+        const buttons = document.querySelectorAll('button');
+        for (const btn of buttons) {
+          if (btn.textContent && btn.textContent.includes('Sorgula')) {
+            btn.click();
+            return 'clicked';
+          }
+        }
+        return 'not-found';
+      });
+
+      if (clickResult === 'clicked') {
+        // Navigation'ı bekle
+        await page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 15000 });
+        logger.info('Sorgula butonuna tıklandı ve sayfa yüklendi');
+      } else {
+        throw new Error('Sorgula butonu bulunamadı');
+      }
+
+    } catch (buttonError) {
+      logger.error('Sorgula butonu hatası:', buttonError.message);
+      throw new HttpsError('internal', `Sorgula butonu hatası: ${buttonError.message}`);
+    }
+
+    // 6) Sonuç sayfasından veri çıkar
+    logger.info('[scrapeTrademarkPuppeteer] Sonuç verisi çıkarılıyor...');
+    
+    try {
+      // Sonuç sayfasının yüklenmesini bekle
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      // Sayfada hata mesajı var mı kontrol et
+      const hasError = await page.evaluate(() => {
+        // Hata mesajları için yaygın selector'lar
+        const errorSelectors = [
+          '.error', '.alert-danger', '.MuiAlert-message',
+          'div:contains("bulunamadı")', 'div:contains("hata")', 
+          'div:contains("geçersiz")'
+        ];
+        
+        for (const selector of errorSelectors) {
+          try {
+            const element = document.querySelector(selector);
+            if (element && element.textContent.trim()) {
+              return element.textContent.trim();
+            }
+          } catch (e) {
+            // CSS :contains() desteklenmeyebilir, text content'i manuel kontrol et
+          }
+        }
+
+        // Manuel text kontrol
+        const allText = document.body.textContent.toLowerCase();
+        if (allText.includes('bulunamadı') || allText.includes('geçersiz') || 
+            allText.includes('hata') || allText.includes('error')) {
+          return 'Veri bulunamadı veya hata oluştu';
+        }
+
+        return null;
+      });
+
+      if (hasError) {
+        logger.info('Sorgu sonucunda hata:', hasError);
+        return {
+          applicationNumber: basvuruNo,
+          found: false,
+          status: 'NotFound',
+          message: hasError,
+          error: hasError
+        };
+      }
+
+      // Marka verilerini çıkar
+      const trademarkData = await page.evaluate(() => {
+        const data = {
+          found: false,
+          trademarkName: null,
+          imageUrl: null,
+          applicationDate: null,
+          applicationNumber: null,
+          owner: null,
+          status: null,
+          niceClasses: []
+        };
+
+        // Marka adı için muhtemel selector'lar
+        const nameSelectors = [
+          'h1', '.trademark-name', '.brand-name', '.marka-adi',
+          '[class*="name"]', '[class*="title"]'
+        ];
+        
+        for (const selector of nameSelectors) {
+          const element = document.querySelector(selector);
+          if (element && element.textContent.trim()) {
+            data.trademarkName = element.textContent.trim();
+            data.found = true;
+            break;
+          }
+        }
+
+        // Marka görseli için muhtemel selector'lar
+        const imageSelectors = [
+          'img[src*="trademark"]', 'img[src*="marka"]', 
+          '.trademark-image img', '.brand-image img',
+          'img[alt*="marka"]', 'img[alt*="trademark"]'
+        ];
+        
+        for (const selector of imageSelectors) {
+          const element = document.querySelector(selector);
+          if (element && element.src) {
+            data.imageUrl = element.src;
+            break;
+          }
+        }
+
+        // Başvuru tarihi
+        const dateElements = document.querySelectorAll('td, span, div');
+        for (const el of dateElements) {
+          const text = el.textContent.trim();
+          // Tarih formatı: DD.MM.YYYY veya DD/MM/YYYY
+          if (/\d{2}[.\/]\d{2}[.\/]\d{4}/.test(text)) {
+            data.applicationDate = text;
+            break;
+          }
+        }
+
+        // Başvuru numarası
+        for (const el of dateElements) {
+          const text = el.textContent.trim();
+          // Başvuru numarası formatı: YYYY/XXXXXX
+          if (/\d{4}\/\d{6}/.test(text)) {
+            data.applicationNumber = text;
+            break;
+          }
+        }
+
+        // Marka sahibi
+        const ownerKeywords = ['sahibi', 'başvuran', 'owner', 'applicant'];
+        for (const el of dateElements) {
+          const text = el.textContent.toLowerCase();
+          for (const keyword of ownerKeywords) {
+            if (text.includes(keyword)) {
+              const nextEl = el.nextElementSibling;
+              if (nextEl && nextEl.textContent.trim()) {
+                data.owner = nextEl.textContent.trim();
+                break;
+              }
+            }
+          }
+          if (data.owner) break;
+        }
+
+        // Nice sınıfları
+        for (const el of dateElements) {
+          const text = el.textContent.trim();
+          // Nice sınıfı formatı: Sınıf XX veya Class XX
+          const niceMatch = text.match(/(?:sınıf|class|nice)\s*:?\s*(\d{1,2})/gi);
+          if (niceMatch) {
+            data.niceClasses = niceMatch.map(match => match.match(/\d{1,2}/)[0]);
+            break;
+          }
+        }
+
+        return data;
+      });
+
+      // Sayfa başlığından da bilgi çıkarmaya çalış
+      const pageTitle = await page.title();
+      
+      // Eğer veri bulunamadıysa ancak sayfa yüklendiyse
+      if (!trademarkData.found) {
+        const bodyText = await page.evaluate(() => document.body.textContent);
+        
+        if (bodyText.includes('bulunamadı') || bodyText.includes('sonuç yok')) {
+          return {
+            applicationNumber: basvuruNo,
+            found: false,
+            status: 'NotFound',
+            message: 'Belirtilen başvuru numarası için sonuç bulunamadı'
+          };
+        }
+        
+        return {
+          applicationNumber: basvuruNo,
+          found: false,
+          status: 'DataExtractionError',
+          message: 'Sayfa yüklendi ancak veri çıkarılamadı',
+          pageTitle: pageTitle
+        };
+      }
+
+      logger.info('Marka verisi başarıyla çıkarıldı', trademarkData);
+
+      return {
+        applicationNumber: basvuruNo,
+        found: true,
+        status: 'Success',
+        data: trademarkData,
+        ...trademarkData
+      };
+
+    } catch (dataError) {
+      logger.error('Veri çıkarma hatası:', dataError.message);
+      throw new HttpsError('internal', `Veri çıkarma hatası: ${dataError.message}`);
+    }
+
   } catch (err) {
-    logger.error('[scrapeTrademarkPuppeteer] Hata', { message: err?.message, stack: err?.stack });
+    logger.error('[scrapeTrademarkPuppeteer] Genel hata', { 
+      message: err?.message, 
+      stack: err?.stack,
+      basvuruNo 
+    });
+    
     throw new HttpsError('internal', `Puppeteer hatası: ${err?.message || String(err)}`);
+    
   } finally {
     if (browser) {
-      try { await browser.close(); } catch {}
+      try { 
+        await browser.close(); 
+        logger.info('Browser kapatıldı');
+      } catch (closeError) {
+        logger.error('Browser kapatma hatası:', closeError.message);
+      }
     }
   }
 }
-
-// ====== HTTP (onRequest) VERSİYONU ======
-export const scrapeTrademarkPuppeteer = onRequest(
-  { region: 'europe-west1', memory: '2GiB', timeoutSeconds: 180 },
-  async (req, res) => {
-    try {
-      const body = (req.method === 'POST') ? (req.body || {}) : {};
-      const basvuruNo = body?.data?.basvuruNo ?? body?.basvuruNo ?? req.query?.basvuruNo;
-      const result = await handleScrapeTrademark(basvuruNo);
-      return res.json({ result });
-    } catch (e) {
-      const code = e?.code === 'invalid-argument' ? 400 : 500;
-      return res.status(code).json({ error: { message: e.message, status: e.code || 'INTERNAL' } });
-    }
-  }
-);
 
 // ====== CALLABLE (onCall) VERSİYONU ======
 export const scrapeTrademarkPuppeteerCallable = onCall(
