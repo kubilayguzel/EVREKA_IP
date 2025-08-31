@@ -172,6 +172,9 @@ queryBtn?.addEventListener('click', async () => {
     try {
       loadingEl && _show('loading');
       const result = await scrapeTrademarkFunction({ basvuruNo });
+      console.log('🔍 Scraping sonucu:', result);
+      console.log('🔍 Result data:', result?.data);
+      console.log('🔍 Full result object:', JSON.stringify(result, null, 2));
       renderSingleResult(result?.data || null, basvuruNo);
       _toggleActionButtons(true);
       loadingEl && _hide('loading');
@@ -220,7 +223,11 @@ queryBtn?.addEventListener('click', async () => {
 // Render single
 
 function renderSingleResult(payload, fallbackNo){
+    console.log('🎯 renderSingleResult çağrıldı');
+  console.log('🎯 Payload:', payload);
+  console.log('🎯 fallbackNo:', fallbackNo);
   if (!payload){
+    console.log('❌ Payload boş, uyarı gösteriliyor');
     showNotification('Sonuç verisi alınamadı', 'warning');
     return;
   }
