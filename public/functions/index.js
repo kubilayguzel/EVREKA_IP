@@ -3742,6 +3742,33 @@ async function handleScrapeTrademark(basvuruNo) {
       }, input, basvuruNo);
 
       logger.info(`Başvuru numarası yazıldı: ${basvuruNo}`);
+      
+      // --- JSON response yakalama ---
+      let __ajaxJson = null;
+
+      const __jsonListener = async (resp) => {
+        try {
+          const type = resp.request().resourceType();
+          if (type !== 'xhr' && type !== 'fetch') return;
+
+          const ct = (resp.headers()['content-type'] || '').toLowerCase();
+          if (!ct.includes('application/json')) return;
+
+          // İlk uygun JSON'u al
+          if (!__ajaxJson) {
+            __ajaxJson = await resp.json();
+            logger.info('[scrapeTrademarkPuppeteer] JSON response yakalandı', {
+              url: resp.url()
+            });
+          }
+        } catch (e) {
+          logger.info('JSON parse edilemedi: ' + (e?.message || e));
+        }
+      };
+
+      // Sorgudan önce mutlaka dinleyiciyi aç
+      page.on('response', __jsonListener);
+
 
     } catch (inputError) {
       logger.error('Form doldurma hatası:', inputError.message);
@@ -3750,6 +3777,14 @@ async function handleScrapeTrademark(basvuruNo) {
 
 // 5) Sorgula butonunu bul ve tıkla
 logger.info('[scrapeTrademarkPuppeteer] Sorgula butonu tıklanıyor ve sonuç bekleniyor...');
+// Ağ trafiği durulana kadar tek sefer bekle (yeniden sorgu yapmaz)
+if (typeof page.waitForNetworkIdle === 'function') {
+  await page.waitForNetworkIdle({ idleTime: 1000, timeout: 15000 });
+} else {
+  // Eski Puppeteer sürümleri için küçük bekleme
+  await page.waitForTimeout(1200);
+}
+
 try {
     const isButtonClicked = await page.evaluate(() => {
         const buttons = document.querySelectorAll('button');
@@ -3764,6 +3799,51 @@ try {
 
     if (isButtonClicked) {
         logger.info('Sorgula butonuna tıklandı, AJAX sonuç bekleniyor...');
+
+        // --- 30 sn. JSON bekle; gelirse DOM'a girmeden dön ---
+        {
+          const started = Date.now();
+          while (!__ajaxJson && Date.now() - started < 30000) {
+            await page.waitForTimeout(250);
+          }
+
+          // Dinleyiciyi kapat (memory leak olmasın)
+          page.off('response', __jsonListener);
+
+          if (__ajaxJson) {
+            logger.info('AJAX JSON alındı; veri DOM yerine JSON’dan işlenecek.');
+
+            // JSON normalize et (TÜRKPATENT yanıt formatları değişebildiği için esnek alan isimleri)
+            const list =
+              (__ajaxJson?.data?.resultList && Array.isArray(__ajaxJson.data.resultList)) ? __ajaxJson.data.resultList :
+              (Array.isArray(__ajaxJson?.resultList)) ? __ajaxJson.resultList :
+              (Array.isArray(__ajaxJson?.rows)) ? __ajaxJson.rows :
+              (Array.isArray(__ajaxJson)) ? __ajaxJson :
+              (__ajaxJson?.data && !Array.isArray(__ajaxJson.data)) ? [__ajaxJson.data] :
+              (__ajaxJson ? [__ajaxJson] : []);
+
+            const first = list[0] || {};
+
+            const normalized = {
+              applicationNumber: first.applicationNumber || first.appNo || first.basvuruNo || basvuruNo,
+              applicationDate:  first.applicationDate  || first.appDate || first.basvuruTarihi || '',
+              trademarkName:    first.trademarkName    || first.brandName || first.name || '',
+              imageUrl:         first.imageUrl         || first.image || first.logoUrl || ''
+            };
+
+            console.log('🎯 Final sonuç (JSON):', normalized);
+
+            return {
+              applicationNumber: normalized.applicationNumber || basvuruNo,
+              found: !!(normalized.trademarkName || normalized.applicationNumber),
+              status: 'Success',
+              data: normalized,
+              ...normalized
+            };
+          }
+        }
+        // --- JSON gelmediyse alttaki mevcut DOM bekleme/çıkarma kodun çalışsın ---
+
         
         try {
             // ✅ AJAX SONUÇ BEKLEMESİ - Navigation değil, element bekleme
@@ -3885,52 +3965,32 @@ try {
       // AJAX sonuçlarının tam yüklenmesi için daha fazla bekle
       await new Promise(resolve => setTimeout(resolve, 3000));
 
-      // Dinamik içerik yüklenmesini bekle
-      let contentLoaded = false;
-      let attempts = 0;
-      const maxAttempts = 20; // 20 * 1 saniye = 20 saniye max
+    // === Dinamik içerik bekleme (sade & tek bekleme) ===
+    try {
+      // 1) Sonuç alanında gerçekten METİN/SATIR oluşana kadar bekle
+      await page.waitForFunction(() => {
+        // Birden fazla ihtimalli container
+        const root =
+          document.querySelector('#search-results') ||
+          document.querySelector('.result-container') ||
+          document.querySelector('.trademark-result') ||
+          document.querySelector('[class*="result"]');
 
-      while (!contentLoaded && attempts < maxAttempts) {
-        attempts++;
-        
-        // Container'ın içinde anlamlı veri var mı kontrol et
-        const hasData = await page.evaluate((basvuruNo) => {
-          const containers = [
-            document.querySelector('#search-results'),
-            document.querySelector('.result-container'),
-            document.querySelector('.trademark-result'),
-            document.querySelector('[class*="result"]')
-          ];
-          
-          for (const container of containers) {
-            if (container) {
-              const text = container.textContent || '';
-              // Başvuru numarasını veya anlamlı veriyi arıyor
-              if (text.includes(basvuruNo) || 
-                  text.includes('Başvuru') ||
-                  text.includes('Marka') ||
-                  text.length > 200) {
-                console.log(`Container'da ${text.length} karakter veri bulundu`);
-                return true;
-              }
-            }
-          }
-          return false;
-        }, basvuruNo);
-        
-        if (hasData) {
-          contentLoaded = true;
-          logger.info(`Dinamik içerik ${attempts}. denemede yüklendi`);
-        } else {
-          logger.info(`Dinamik içerik bekleniyor... Deneme ${attempts}/${maxAttempts}`);
-          await new Promise(resolve => setTimeout(resolve, 1000)); // 1 saniye bekle
-        }
-      }
+        if (!root) return false;
 
-      if (!contentLoaded) {
-        logger.info('Dinamik içerik yüklenemedi, mevcut içerikle devam ediliyor');
-      }
+        // MUI tablolarında hücre/satır kontrolü
+        const hasRows = root.querySelector('tr.MuiTableRow-root, [role="row"], .MuiTableCell-root');
+        // Anlamlı metin uzunluğu
+        const text = (root.innerText || '').replace(/\s+/g, ' ').trim();
 
+        return !!hasRows || text.length > 120;
+      }, { timeout: 12000 });
+
+      logger.info('Dinamik içerik: koşul sağlandı (tek bekleme).');
+    } catch (e) {
+      // Süre doldu; yine de DOM yakalama/JSON fallback devam etsin
+      logger.info('Dinamik içerik: süre doldu, mevcut içerikle devam ediliyor.');
+    }
       // Sayfada hata mesajı var mı kontrol et
       const hasError = await page.evaluate(() => {
           // Hata mesajı içeren potansiyel elementleri seç
