@@ -3845,15 +3845,19 @@ async function handleScrapeTrademark(basvuruNo) {
             // DEBUG: List ve first item'ı loglayalım
             logger.info('[DEBUG] List yapısı:', JSON.stringify(list, null, 2));
             logger.info('[DEBUG] İlk item:', JSON.stringify(first, null, 2));
-const normalized = {
-  applicationNumber: first.applicationNumber || first.appNo || first.basvuruNo || first.applicationNo || first.başvuruNo || basvuruNo,
-  applicationDate:  first.applicationDate  || first.appDate || first.basvuruTarihi || first.başvuruTarihi || first.date || '',
-  trademarkName:    first.trademarkName    || first.brandName || first.name || first.markName || first.markaAdı || first.title || '',
-  imageUrl:         first.imageUrl         || first.image || first.logoUrl || first.logo || first.brandImage || '',
-  owner:           first.owner || first.sahip || first.applicant || first.başvuran || '',
-  status:          first.status || first.durum || '',
-  niceClasses:     first.niceClasses || first.classes || first.sınıflar || []
-};
+            
+      // TÜRKPATENT API gerçek field adlarına göre mapping
+      const markInfo = first.payload?.item?.markInformation || first.markInformation || first;
+
+      const normalized = {
+        applicationNumber: markInfo.applicationNo || markInfo.applicationNumber || markInfo.appNo || markInfo.basvuruNo || basvuruNo,
+        applicationDate:  markInfo.applicationDate || markInfo.appDate || markInfo.basvuruTarihi || '',
+        trademarkName:    markInfo.markName || markInfo.trademarkName || markInfo.brandName || markInfo.name || '',
+        imageUrl:         markInfo.figure || markInfo.imageUrl || markInfo.image || markInfo.logoUrl || '',
+        owner:           markInfo.holdName || markInfo.owner || markInfo.sahip || markInfo.applicant || '',
+        status:          markInfo.state || markInfo.status || markInfo.durum || '',
+        niceClasses:     markInfo.niceClasses || markInfo.subNiceClasses || markInfo.classes || []
+      };
 
       logger.info('[scrapeTrademarkPuppeteer] JSON normalize ok', {
         applicationNumber: normalized.applicationNumber,
