@@ -3600,25 +3600,27 @@ export const adminDeleteUser = onCall({ region: "europe-west1" }, async (req) =>
 // ====== IMPORTS ======
 import puppeteer from 'puppeteer-core';
 import chromium from '@sparticuz/chromium';
+import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import * as logger from 'firebase-functions/logger';
 
 // Basit bellek içi cache ve cookie jar (aynı instance yaşadığı sürece geçerli)
-const __tpCache   = (global as any).__tpCache   || (((global as any).__tpCache   = new Map()), (global as any).__tpCache);
-const __cookieJar = (global as any).__cookieJar || (((global as any).__cookieJar = new Map()), (global as any).__cookieJar);
+const __tpCache   = global.__tpCache   || (global.__tpCache   = new Map());
+const __cookieJar = global.__cookieJar || (global.__cookieJar = new Map());
 
 // Küçük yardımcılar
-const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
-const loadCookiesFor = (key: string) => __cookieJar.get(key) || [];
-const saveCookiesFor = (key: string, cookies: any[]) => __cookieJar.set(key, cookies);
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+const loadCookiesFor = (key) => __cookieJar.get(key) || [];
+const saveCookiesFor = (key, cookies) => __cookieJar.set(key, cookies);
 
 // ====== reCAPTCHA tespiti (bypass YOK) ======
-async function detectCaptcha(page: puppeteer.Page) {
+async function detectCaptcha(page) {
   const text = (await page.evaluate(() => document.body.innerText || '')).toLowerCase();
   return /recaptcha|ben robot değilim|i'm not a robot|lütfen doğrulayın/.test(text);
 }
 
 // ====== MUI tablolarını DOM'dan parse eden fonksiyon ======
 function domParseFn() {
-  const out: any = {
+  const out = {
     applicationNumber:null, applicationDate:null, registrationNumber:null, registrationDate:null,
     intlRegistrationNumber:null, documentNumber:null, bulletinDate:null, bulletinNo:null,
     regBulletinDate:null, regBulletinNo:null, protectionDate:null, status:null, priorityInfo:null,
@@ -3626,17 +3628,17 @@ function domParseFn() {
     decision:null, decisionReason:null, goods:[], imageUrl:null, found:false
   };
 
-  const normDate = (s: string) => {
+  const normDate = (s) => {
     const m = (s||'').match(/\b(\d{2})[./](\d{2})[./](\d{4})\b/);
     return m ? `${m[3]}-${m[2]}-${m[1]}` : (s || null);
   };
-  const txt = (n: any) => (n && (n.textContent || '')).trim();
+  const txt = (n) => (n && (n.textContent || '')).trim();
 
   const tables = Array.from(document.querySelectorAll('table.MuiTable-root'));
   if (!tables.length) return out;
 
   // 1) Özet tablo (label/value)
-  const t0 = tables[0] as HTMLTableElement;
+  const t0 = tables[0];
   const rows0 = t0.querySelectorAll('tbody tr');
   rows0.forEach(tr => {
     const tds = Array.from(tr.querySelectorAll('td'));
@@ -3666,7 +3668,6 @@ function domParseFn() {
       else if (label1.includes('marka ilan bülten no')) out.bulletinNo = value1;
       else if (label1.includes('koruma tarihi')) out.protectionDate = normDate(value1);
       else if (label1.includes('nice sınıfları')) {
-        // “01 / 05 / ” -> ["01","05"]
         out.niceClasses = (value1 || '')
           .split(/[^\d]+/)
           .map(s => s.trim())
@@ -3699,9 +3700,9 @@ function domParseFn() {
 
   // 3) Görsel (yakında bir img)
   const scope = t0.closest('section,div,main') || document;
-  const img = scope.querySelector('img[alt*="Marka"], img[src*="resim"], img[src*="marka"], .trademark-image img') as HTMLImageElement | null;
+  const img = scope.querySelector('img[alt*="Marka"], img[src*="resim"], img[src*="marka"], .trademark-image img');
   if (img && img.src && !/icon|logo|button|avatar/i.test(img.src)) {
-    try { out.imageUrl = new URL(img.src, (location as any).href).href; }
+    try { out.imageUrl = new URL(img.src, location.href).href; }
     catch { out.imageUrl = img.src; }
   }
 
@@ -3710,7 +3711,7 @@ function domParseFn() {
 }
 
 // ====== COMMON HANDLER ======
-async function handleScrapeTrademark(basvuruNo: string) {
+async function handleScrapeTrademark(basvuruNo) {
   if (!basvuruNo) {
     throw new HttpsError('invalid-argument', 'Başvuru numarası (basvuruNo) zorunludur.');
   }
@@ -3727,18 +3728,18 @@ async function handleScrapeTrademark(basvuruNo: string) {
   // ---- 1) Global oran sınırlama (45–60 sn jitter) ----
   const lastRequestKey = 'turkpatent_last_request';
   const minDelay = 45000 + Math.floor(Math.random() * 15000);
-  const lastRequest = (global as any)[lastRequestKey] || 0;
+  const lastRequest = global[lastRequestKey] || 0;
   const elapsed = Date.now() - lastRequest;
   if (elapsed < minDelay) {
     const waitTime = minDelay - elapsed;
     logger.info(`Rate limiting: ${waitTime}ms bekleyecek`);
     await sleep(waitTime);
   }
-  (global as any)[lastRequestKey] = Date.now();
+  global[lastRequestKey] = Date.now();
 
   // ---- 2) Global BACKOFF ----
   const tpBackoffKey = 'turkpatent_backoff_until';
-  const backoffRemaining = Math.max(0, ((global as any)[tpBackoffKey] || 0) - Date.now());
+  const backoffRemaining = Math.max(0, (global[tpBackoffKey] || 0) - Date.now());
   if (backoffRemaining > 0) {
     const retryAfterSec = Math.ceil(backoffRemaining / 1000);
     logger.info(`Backoff aktif, ${retryAfterSec}s sonra tekrar deneyin.`);
@@ -3751,13 +3752,13 @@ async function handleScrapeTrademark(basvuruNo: string) {
     };
   }
 
-  let browser: puppeteer.Browser | undefined;
-  let page: puppeteer.Page | undefined;
+  let browser;
+  let page;
 
   try {
     const isLocal = process.env.FUNCTIONS_EMULATOR === 'true' || process.env.LOCAL_PUPPETEER === '1';
 
-    const launchOptions: puppeteer.LaunchOptions & puppeteer.BrowserLaunchArgumentOptions & puppeteer.BrowserConnectOptions = isLocal ? {
+    const launchOptions = isLocal ? {
       headless: true,
       args: ['--no-sandbox', '--disable-setuid-sandbox']
     } : {
@@ -3809,14 +3810,13 @@ async function handleScrapeTrademark(basvuruNo: string) {
 
     // --- Popup/Modal kapat ---
     try {
-      try { await page.waitForSelector('.jss84 .jss92', { timeout: 2000 }); await page.click('.jss84 .jss92'); }
-      catch {}
+      try { await page.waitForSelector('.jss84 .jss92', { timeout: 2000 }); await page.click('.jss84 .jss92'); } catch {}
       try {
         await page.waitForSelector('[role="dialog"], .MuiDialog-root, .MuiModal-root', { timeout: 2000 });
         const closeBtn = await page.$('button[aria-label="Close"], button[aria-label="Kapat"], .close');
         if (closeBtn) { await closeBtn.click(); }
       } catch {}
-    } catch (modalError: any) {
+    } catch (modalError) {
       logger.info('Modal kapatma hatası (normal):', modalError.message);
     }
 
@@ -3824,7 +3824,7 @@ async function handleScrapeTrademark(basvuruNo: string) {
     try {
       await page.evaluate(() => {
         const buttons = document.querySelectorAll('button[role="tab"]');
-        for (const btn of Array.from(buttons) as HTMLButtonElement[]) {
+        for (const btn of buttons) {
           if (btn.textContent && btn.textContent.includes('Dosya Takibi')) {
             if (btn.getAttribute('aria-selected') !== 'true') btn.click();
             return;
@@ -3833,7 +3833,7 @@ async function handleScrapeTrademark(basvuruNo: string) {
       });
       await page.waitForSelector('input[placeholder="Başvuru Numarası"]', { timeout: 5000 });
       logger.info('Dosya Takibi sekmesine geçiş başarılı.');
-    } catch (tabError: any) {
+    } catch (tabError) {
       logger.error('Dosya Takibi sekmesine geçiş hatası:', tabError.message);
       throw new HttpsError('internal', `Tab geçişi başarısız: ${tabError.message}`);
     }
@@ -3847,14 +3847,14 @@ async function handleScrapeTrademark(basvuruNo: string) {
 
       await input.click({ clickCount: 3 });
       await input.type(basvuruNo);
-      await page.evaluate((inputEl: HTMLInputElement, value: string) => {
-        (inputEl as any).value = value;
+      await page.evaluate((inputEl, value) => {
+        inputEl.value = value;
         inputEl.dispatchEvent(new Event('input', { bubbles: true }));
         inputEl.dispatchEvent(new Event('change', { bubbles: true }));
       }, input, basvuruNo);
 
       logger.info(`Başvuru numarası yazıldı: ${basvuruNo}`);
-    } catch (inputError: any) {
+    } catch (inputError) {
       logger.error('Form doldurma hatası:', inputError.message);
       throw new HttpsError('internal', `Form doldurma başarısız: ${inputError.message}`);
     }
@@ -3865,7 +3865,7 @@ async function handleScrapeTrademark(basvuruNo: string) {
 
     const clicked = await page.evaluate(() => {
       const btn = Array.from(document.querySelectorAll('button'))
-        .find(b => /sorgula/i.test((b.textContent || '')) && !(b as any).disabled && !b.getAttribute('aria-disabled')) as HTMLButtonElement | undefined;
+        .find(b => /sorgula/i.test((b.textContent || '')) && !b.disabled && !b.getAttribute('aria-disabled'));
       if (!btn) return false;
       btn.click();
       return true;
@@ -3875,7 +3875,7 @@ async function handleScrapeTrademark(basvuruNo: string) {
     // Captcha kontrolü (bypass yok; anlamlı dönüş)
     if (await detectCaptcha(page)) {
       const retryAfterSec = 120 + Math.floor(Math.random()*60);
-      (global as any)[tpBackoffKey] = Date.now() + retryAfterSec * 1000;
+      global[tpBackoffKey] = Date.now() + retryAfterSec * 1000;
       return {
         status: 'CaptchaRequired',
         found: false,
@@ -3885,7 +3885,7 @@ async function handleScrapeTrademark(basvuruNo: string) {
       };
     }
 
-    // DOM yüklenmesini bekle (tablo görünsün)
+    // DOM yüklenmesini bekle
     await page.waitForSelector('table.MuiTable-root tbody tr', { timeout: 30000 });
 
     // DOM'dan veriyi çek
@@ -3911,7 +3911,7 @@ async function handleScrapeTrademark(basvuruNo: string) {
       return { applicationNumber: basvuruNo, found: false, status: 'DataExtractionError', message: 'Sayfa yüklendi ancak veri çıkarılamadı', pageTitle };
     }
 
-    // Normalizasyon (UI ile uyumlu alanlar)
+    // Normalizasyon
     const normalized = {
       applicationNumber: tdata.applicationNumber || basvuruNo,
       applicationDate:  tdata.applicationDate || '',
@@ -3921,7 +3921,7 @@ async function handleScrapeTrademark(basvuruNo: string) {
       status:           tdata.status || '',
       niceClasses:      Array.isArray(tdata.niceClasses) ? tdata.niceClasses : [],
 
-      // isteğe bağlı ek alanlar
+      // ek alanlar
       registrationNumber:        tdata.registrationNumber || '',
       registrationDate:          tdata.registrationDate || '',
       intlRegistrationNumber:    tdata.intlRegistrationNumber || '',
@@ -3940,7 +3940,7 @@ async function handleScrapeTrademark(basvuruNo: string) {
       goods:                     Array.isArray(tdata.goods) ? tdata.goods : []
     };
 
-    logger.info('Marka verisi başarıyla DOM’dan çıkarıldı', {
+    logger.info('Marka verisi DOM’dan çıkarıldı', {
       applicationNumber: normalized.applicationNumber,
       applicationDate: normalized.applicationDate,
       trademarkName: normalized.trademarkName,
@@ -3952,7 +3952,7 @@ async function handleScrapeTrademark(basvuruNo: string) {
     __tpCache.set(basvuruNo, { ts: Date.now(), data: result });
     return result;
 
-  } catch (err: any) {
+  } catch (err) {
     logger.error('[scrapeTrademarkPuppeteer] Genel hata', { message: err?.message, stack: err?.stack, basvuruNo });
     throw new HttpsError('internal', `Puppeteer hatası: ${err?.message || String(err)}`);
   } finally {
@@ -3966,7 +3966,7 @@ async function handleScrapeTrademark(basvuruNo: string) {
 
     if (browser) {
       try { await browser.close(); logger.info('Browser kapatıldı'); }
-      catch (closeError: any) { logger.error('Browser kapatma hatası:', closeError.message); }
+      catch (closeError) { logger.error('Browser kapatma hatası:', closeError.message); }
     }
   }
 }
