@@ -3601,6 +3601,7 @@ export const adminDeleteUser = onCall({ region: "europe-west1" }, async (req) =>
 // ====== IMPORTS ======
 import puppeteer from 'puppeteer-core';
 import chromium from '@sparticuz/chromium';
+const __tpCache = global.__tpCache || (global.__tpCache = new Map());
 
 // ====== COMMON HANDLER ======
 async function handleScrapeTrademark(basvuruNo) {
@@ -3630,10 +3631,16 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   }
 
   logger.info('[scrapeTrademarkPuppeteer] Başlıyor', { basvuruNo });
+  const c = __tpCache.get(basvuruNo);
+  if (c && (Date.now() - c.ts) < 5 * 60 * 1000) {
+    logger.info('Cache hit, 5 dk içindeki sonucu döndürüyorum.');
+    return c.data;
+  }
 
   // Rate limiting check
   const lastRequestKey = `turkpatent_last_request`;
-  const minDelay = 30000; // 30 saniye minimum bekleme
+  // 45–60 sn arası rastgele bekleme
+  const minDelay = 45000 + Math.floor(Math.random() * 15000);
   const lastRequest = global[lastRequestKey] || 0;
   const timeSinceLastRequest = Date.now() - lastRequest;
 
