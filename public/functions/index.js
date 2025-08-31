@@ -3721,23 +3721,27 @@ async function handleScrapeTrademark(basvuruNo) {
       logger.error('Form doldurma hatası:', inputError.message);
       throw new HttpsError('internal', `Form doldurma başarısız: ${inputError.message}`);
     }
-    
+
     // 5) Sorgula butonunu bul ve tıkla
-    logger.info('[scrapeTrademarkPuppeteer] Sorgula butonu tıklanıyor...');
+    logger.info('[scrapeTrademarkPuppeteer] Sorgula butonu tıklanıyor ve sonuç bekleniyor...');
     try {
-        // Butonu metin içeriğine göre bul ve tıkla
-        await page.evaluate(() => {
+        const isButtonClicked = await page.evaluate(() => {
             const buttons = document.querySelectorAll('button');
             for (const btn of buttons) {
                 if (btn.textContent && btn.textContent.includes('Sorgula')) {
                     btn.click();
-                    return;
+                    return true;
                 }
             }
+            return false;
         });
-        // Sorgu sonucu geldiğinde beliren benzersiz bir elementi bekle
-        await page.waitForSelector('table.MuiTable-root', { timeout: 30000 });
-        logger.info('Sorgula butonuna tıklandı ve sonuç tablosu yüklendi.');
+
+        if (isButtonClicked) {
+            await page.waitForSelector('table.MuiTable-root', { timeout: 60000 });
+            logger.info('Sorgula butonuna tıklandı ve sonuç tablosu yüklendi.');
+        } else {
+            throw new Error('Sorgula butonu bulunamadı');
+        }
     } catch (buttonError) {
         logger.error('Sorgula butonu hatası:', buttonError.message);
         throw new HttpsError('internal', `Sorgula butonu hatası: ${buttonError.message}`);
