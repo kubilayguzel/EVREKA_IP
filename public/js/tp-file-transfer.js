@@ -29,7 +29,7 @@ function fmtDateToTR(isoOrDDMMYYYY){
 }
 
 // --- Firebase Functions ---
-import { app } from './firebase-config.js';
+import { app } from '../firebase-config.js';
 import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-functions.js';
 const functions = getFunctions(app, 'europe-west1');
 const scrapeTrademarkFunction = httpsCallable(functions, 'scrapeTrademark');
