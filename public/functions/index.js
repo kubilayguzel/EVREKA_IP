@@ -3753,32 +3753,20 @@ async function handleScrapeTrademark(basvuruNo) {
 
       // Sayfada hata mesajı var mı kontrol et
       const hasError = await page.evaluate(() => {
-        // Hata mesajları için yaygın selector'lar
-        const errorSelectors = [
-          '.error', '.alert-danger', '.MuiAlert-message',
-          'div:contains("bulunamadı")', 'div:contains("hata")', 
-          'div:contains("geçersiz")'
-        ];
-        
-        for (const selector of errorSelectors) {
-          try {
-            const element = document.querySelector(selector);
-            if (element && element.textContent.trim()) {
-              return element.textContent.trim();
-            }
-          } catch (e) {
-            // CSS :contains() desteklenmeyebilir, text content'i manuel kontrol et
+          // Hata mesajı içeren potansiyel elementleri seç
+          const elements = document.querySelectorAll('.error, .alert-danger, .MuiAlert-message, p, div, span, h1, h2, h3');
+          const keywords = ['bulunamadı', 'sonuç yok', 'hata', 'geçersiz'];
+
+          for (const el of elements) {
+              const text = el.textContent.trim().toLowerCase();
+              for (const keyword of keywords) {
+                  if (text.includes(keyword)) {
+                      // Ekranda görünen bir hata mesajı bulundu
+                      return el.textContent.trim();
+                  }
+              }
           }
-        }
-
-        // Manuel text kontrol
-        const allText = document.body.textContent.toLowerCase();
-        if (allText.includes('bulunamadı') || allText.includes('geçersiz') || 
-            allText.includes('hata') || allText.includes('error')) {
-          return 'Veri bulunamadı veya hata oluştu';
-        }
-
-        return null;
+          return null;
       });
 
       if (hasError) {
