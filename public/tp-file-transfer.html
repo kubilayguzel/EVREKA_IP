@@ -5,53 +5,59 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>TÜRKPATENT Dosya Aktarımı</title>
 
-  <!-- Styles -->
   <link rel="stylesheet" href="css/shared-styles.css">
   <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
   <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
 
   <style>
-    :root{ --card-radius:16px; --card-shadow:0 10px 24px rgba(0,0,0,.08); }
-    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color:#333; background: linear-gradient(135deg,#f5f7fa 0%,#c3cfe2 100%); }
-    .page-wrapper { min-height:100vh; padding:24px 0; }
-    .container { max-width: 1280px; }
-    .section-card{ background:#fff; border:1px solid rgba(0,0,0,.06); border-radius:var(--card-radius); box-shadow:var(--card-shadow); padding:24px; margin-bottom:18px; }
-    .section-title{ font-size:1.25rem; color:#1e3c72; margin-bottom:16px; padding-bottom:10px; border-bottom:1px solid #e8ecf1; display:flex; align-items:center; justify-content:space-between; }
-    .form-label { font-weight:600; }
-    .form-inline-gap { display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap; }
-    .hero{ display:flex; gap:24px; align-items:flex-start; }
-    .hero-img-wrap{ flex:0 0 auto; width:180px; height:180px; }
-    .hero-img{ width:100%; height:100%; object-fit:contain; border-radius:12px; border:1px solid #eee; background:#fff; }
-    .badge-soft { background:#eef2ff; color:#4e5cf2; font-weight:600; padding:.35rem .55rem; border-radius:10px; }
-    .kv-grid{ display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:12px 18px; }
-    .kv-item .label{ font-weight:600; font-size:.9em; color:#555; margin-bottom:4px; }
-    .kv-item .value{ background:#f8f9fa; border:1px solid #eee; border-radius:8px; padding:8px 10px; min-height:38px; display:flex; align-items:center; }
-    .goods-group{ border:1px solid #e8ecf1; border-radius:12px; padding:12px 14px; margin-bottom:12px; background:#fff; }
-    .goods-class{ font-weight:700; color:#1e3c72; margin-bottom:6px; }
-    .goods-items{ margin:0; padding-left:18px; }
-    .goods-items li{ margin-bottom:4px; }
-    .form-actions{ display:flex; justify-content:flex-end; gap:10px; margin-top:10px; }
-    .btn-primary{ background:#1e3c72; border:none; }
-    .btn-primary:disabled{ background:#9aa3b2; }
-    .hide{ display:none !important; }
-    #loading { display:none; }
-    /* küçük helper */
-    .muted{ color:#6c757d; }
+    /* Styles for consistency with trademark-similarity-search.html */
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333; display: flex; }
+    .page-wrapper { flex-grow: 1; display: flex; flex-direction: column; min-height: 100vh; overflow-y: auto; background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%); }
+    .main-container { width: 100%; padding: 30px; padding-top: 120px; }
+    .page-header { background: rgba(255, 255, 255, 0.95); padding: 30px; border-radius: 20px; margin-bottom: 30px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1); }
+    .page-title { font-size: 2em; color: #1e3c72; margin-bottom: 10px; }
+    .page-subtitle { color: #666; font-size: 1.1em; }
+    .section-card { background: rgba(255, 255, 255, 0.95); border: 1px solid rgba(0, 0, 0, .06); border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); padding: 24px; margin-bottom: 30px; }
+    .section-title { font-size: 1.25rem; color: #1e3c72; margin-bottom: 16px; padding-bottom: 10px; border-bottom: 1px solid #e8ecf1; display: flex; align-items: center; justify-content: space-between; }
+    .form-label { font-weight: 600; }
+    .form-inline-gap { display: flex; gap: 15px; align-items: flex-end; flex-wrap: wrap; }
+    .form-control, .btn { border-radius: 10px; }
+    .btn { padding: 12px 24px; border: none; cursor: pointer; font-size: 1em; font-weight: 600; transition: all 0.2s ease-in-out; }
+    .btn-primary { background: #1e3c72; color: white; }
+    .btn-primary:hover:not(:disabled) { background: #2a5298; transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+    .btn-secondary { background: #6c757d; color: white; }
+    .btn-secondary:hover:not(:disabled) { background: #5a6268; transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+    .btn-outline-primary { border: 2px solid #1e3c72; color: #1e3c72; background-color: transparent; }
+    .btn-outline-primary:hover { background-color: #1e3c72; color: white; }
+    .hero { display: flex; gap: 24px; align-items: flex-start; }
+    .hero-img-wrap { flex: 0 0 auto; width: 180px; height: 180px; }
+    .hero-img { width: 100%; height: 100%; object-fit: contain; border-radius: 12px; border: 1px solid #eee; background: #fff; }
+    .badge-soft { background: #eef2ff; color: #4e5cf2; font-weight: 600; padding: .35rem .55rem; border-radius: 10px; }
+    .kv-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px 18px; }
+    .kv-item .label { font-weight: 600; font-size: .9em; color: #555; margin-bottom: 4px; }
+    .kv-item .value { background: #f8f9fa; border: 1px solid #eee; border-radius: 8px; padding: 8px 10px; min-height: 38px; display: flex; align-items: center; }
+    .goods-group { border: 1px solid #e8ecf1; border-radius: 12px; padding: 12px 14px; margin-bottom: 12px; background: #fff; }
+    .goods-class { font-weight: 700; color: #1e3c72; margin-bottom: 6px; }
+    .goods-items { margin: 0; padding-left: 18px; }
+    .goods-items li { margin-bottom: 4px; }
+    .form-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 10px; }
+    .hide { display: none !important; }
+    #loading { display: none; }
+    .muted { color: #6c757d; }
   </style>
 </head>
 
 <body>
+  <div id="layout-placeholder"></div>
   <div class="page-wrapper">
-    <div class="container">
+    <main class="main-container">
+      <section class="page-header">
+        <h1 class="page-title">TÜRKPATENT Dosya Aktarımı</h1>
+        <p class="page-subtitle">Tür: Marka — tekli sorgu ya da sahip numarası ile toplu aktarım</p>
+      </section>
 
-      <!-- Başlık -->
-      <div class="section-card">
-        <h2 class="mb-0">TÜRKPATENT Dosya Aktarımı</h2>
-        <div class="muted">Tür: Marka — tekli sorgu ya da sahip numarası ile toplu aktarım</div>
-      </div>
-
-      <!-- Aktarım Ayarları -->
       <div class="section-card">
         <div class="section-title">Aktarım Ayarları</div>
 
@@ -69,7 +75,6 @@
           </div>
         </div>
 
-        <!-- Tekli alan -->
         <div id="singleFields" class="form-inline-gap">
           <div class="form-group mb-0">
             <label for="basvuruNoInput" class="form-label">Başvuru Numarası</label>
@@ -83,7 +88,6 @@
           </div>
         </div>
 
-        <!-- Toplu (sahip no) alan -->
         <div id="bulkFields" class="form-inline-gap hide">
           <div class="form-group mb-0">
             <label for="ownerIdInput" class="form-label">Sahip Numarası</label>
@@ -96,13 +100,11 @@
         </div>
       </div>
 
-      <!-- SONUÇ: Tekli -->
       <div id="singleResultContainer" class="section-card hide">
         <div class="section-title">Sonuç</div>
         <div id="singleResultInner"></div>
       </div>
 
-      <!-- İlgili Taraf Kartı -->
       <div id="relatedPartyCard" class="section-card hide">
         <div class="section-title">İlgili Taraf Ekle</div>
         <div class="d-flex align-items-center justify-content-between">
@@ -114,7 +116,6 @@
         </div>
       </div>
 
-      <!-- ALT BUTONLAR (statik) -->
       <div class="section-card">
         <div class="form-actions">
           <button id="savePortfolioBtn" class="btn btn-primary" disabled>Portföye Kaydet</button>
@@ -123,7 +124,7 @@
         </div>
       </div>
 
-    </div>
+    </main>
   </div>
   <script type="module" src="./js/layout-loader.js"></script>
   <script type="module" src="./firebase-config.js"></script>
