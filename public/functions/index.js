@@ -4020,7 +4020,6 @@ if (resultContainer) {
   data.found = true;
 
   // Container içindeki tüm metinleri topla
-  const containerText = resultContainer.textContent || '';
   const allElements = resultContainer.querySelectorAll('*');
   
   console.log(`📝 Container metin uzunluğu: ${containerText.length}`);
