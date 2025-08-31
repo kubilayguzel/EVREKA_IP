@@ -3923,24 +3923,58 @@ async function handleScrapeTrademark(basvuruNo) {
         });
       } catch {}
 
-      // DEBUG: Ham JSON'u loglayalım (kısaltılmış)
-      try { logger.info('[DEBUG] Ham JSON yapısı (kısmi):', JSON.stringify(json, null, 2).slice(0, 4000)); } catch {}
+      // 🔍 DEBUG: JSON'ı TAMAMEN logla - hiçbir kısaltma yapma
+      try { 
+        logger.info('[DEBUG] TAM JSON YAPISI - BAŞLANGIÇ');
+        logger.info('[DEBUG] JSON Type:', typeof json);
+        logger.info('[DEBUG] JSON Keys:', Object.keys(json || {}));
+        logger.info('[DEBUG] Tam JSON (string olarak):', JSON.stringify(json, null, 2));
+        logger.info('[DEBUG] TAM JSON YAPISI - BİTİŞ');
+      } catch (debugErr) {
+        logger.error('[DEBUG] JSON loglama hatası:', debugErr.message);
+      }
+
+      // 🔍 Tüm olası list yapılarını kontrol et ve logla
+      const possibleLists = {
+        'json': json,
+        'json.data': json?.data,
+        'json.data.resultList': json?.data?.resultList,
+        'json.resultList': json?.resultList,
+        'json.rows': json?.rows,
+        'json.results': json?.results,
+        'json.items': json?.items,
+        'json.list': json?.list,
+        'json.response': json?.response,
+        'json.payload': json?.payload
+      };
+
+      Object.entries(possibleLists).forEach(([path, value]) => {
+        if (value !== undefined) {
+          logger.info(`[DEBUG] ${path} değeri:`, JSON.stringify(value, null, 2));
+          if (Array.isArray(value)) {
+            logger.info(`[DEBUG] ${path} array uzunluğu:`, value.length);
+            if (value.length > 0) {
+              logger.info(`[DEBUG] ${path}[0] içeriği:`, JSON.stringify(value[0], null, 2));
+            }
+          }
+        }
+      });
 
       const list =
         (Array.isArray(json?.data?.resultList) && json.data.resultList) ||
         (Array.isArray(json?.resultList) && json.resultList) ||
         (Array.isArray(json?.rows) && json.rows) ||
+        (Array.isArray(json?.results) && json.results) ||
+        (Array.isArray(json?.items) && json.items) ||
         (Array.isArray(json) && json) ||
         (json?.data && [json.data]) ||
         [json];
 
       const first = list[0] || {};
 
-      // DEBUG: List ve first item'ı loglayalım (kısaltılmış)
-      try {
-        logger.info('[DEBUG] List yapısı (kısmi):', JSON.stringify(list, null, 2).slice(0, 2000));
-        logger.info('[DEBUG] İlk item (kısmi):', JSON.stringify(first, null, 2).slice(0, 2000));
-      } catch {}
+      // 🔍 Final list ve first item'ı tam logla
+      logger.info('[DEBUG] FINAL LIST:', JSON.stringify(list, null, 2));
+      logger.info('[DEBUG] FINAL FIRST ITEM:', JSON.stringify(first, null, 2));
 
       // TÜRKPATENT API gerçek field adlarına göre mapping
       const markInfo = first.payload?.item?.markInformation || first.markInformation || first;
