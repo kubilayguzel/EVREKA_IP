@@ -1,306 +1,250 @@
 // --- DOM helpers ---
 function _el(id){ return document.getElementById(id); }
-function _showBlock(el){
-  if (!el) return;
-  el.classList?.remove('d-none');
-  el.style.display = '';
-  const collapse = el.closest?.('.collapse');
-  if (collapse){
-    collapse.classList.add('show');
-    collapse.style.height = 'auto';
-  }
+function _showBlock(el){ if(!el) return; el.classList.remove('hide'); el.style.display=''; }
+function _hideBlock(el){ if(!el) return; el.classList.add('hide'); }
+function showToast(msg, type='info'){
+  const cls = type==='danger'?'alert-danger':(type==='success'?'alert-success':(type==='warning'?'alert-warning':'alert-info'));
+  const div = document.createElement('div');
+  div.className = `alert ${cls}`;
+  div.style.position = 'fixed';
+  div.style.top = '18px';
+  div.style.right = '18px';
+  div.style.zIndex = '9999';
+  div.style.minWidth = '260px';
+  div.innerHTML = `<div class="d-flex align-items-center justify-content-between">
+    <div>${msg}</div><button class="close ml-3" aria-label="Close"><span>&times;</span></button>
+  </div>`;
+  document.body.appendChild(div);
+  setTimeout(()=>{ div.classList.add('fade'); div.addEventListener('transitionend', ()=>div.remove()); }, 3500);
+  div.querySelector('.close')?.addEventListener('click', ()=>div.remove());
 }
-function _show(id){ const n=_el(id); _showBlock(n); return n; }
-function _hide(id){ const n=_el(id); if(n){ n.classList?.add('d-none'); } return n; }
-function _toggleActionButtons(visible){
-  const ab = _el('actionButtons');
-  if (!ab) return;
-  ab.style.display = visible ? 'flex' : 'none';
-}
-function showNotification(message, type='info'){
-  let container = document.getElementById('notification-container');
-  if (!container) {
-    container = document.createElement('div');
-    container.id = 'notification-container';
-    container.style.position = 'fixed';
-    container.style.top = '20px';
-    container.style.right = '20px';
-    container.style.zIndex = '9999';
-    document.body.appendChild(container);
-  }
-  const alert = document.createElement('div');
-  alert.className = `alert alert-${type} fade show`;
-  alert.role = 'alert';
-  alert.style.minWidth = '280px';
-  alert.innerHTML = `
-    <div class="d-flex align-items-center">
-      <div class="flex-grow-1">${message}</div>
-      <button type="button" class="close ml-3" data-dismiss="alert" aria-label="Close">
-        <span aria-hidden="true">&times;</span>
-      </button>
-    </div>`;
-  container.appendChild(alert);
-  setTimeout(() => { alert.classList.remove('show'); alert.addEventListener('transitionend', () => alert.remove()); }, 3500);
-  alert.querySelector('.close')?.addEventListener('click', () => alert.remove());
+function fmtDateToTR(isoOrDDMMYYYY){
+  if(!isoOrDDMMYYYY) return '';
+  // If DD.MM.YYYY -> preserve
+  if(/^\d{2}\.\d{2}\.\d{4}$/.test(isoOrDDMMYYYY)) return isoOrDDMMYYYY;
+  // If ISO YYYY-MM-DD
+  const m = String(isoOrDDMMYYYY).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if(m) return `${m[3]}.${m[2]}.${m[1]}`;
+  return String(isoOrDDMMYYYY);
 }
 
 // --- Firebase Functions ---
-import { app } from '../firebase-config.js';
+import { app } from './firebase-config.js';
 import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-functions.js';
-
 const functions = getFunctions(app, 'europe-west1');
 const scrapeTrademarkFunction = httpsCallable(functions, 'scrapeTrademark');
 
+// --- Optional person modal helpers from layout (if available) ---
+let ensurePersonModal = null;
+let openPersonModal = null;
+(async () => {
+  try {
+    const mod = await import('./layout-loader.js');
+    ensurePersonModal = mod.ensurePersonModal;
+    openPersonModal = mod.openPersonModal;
+  } catch (e) {
+    // layout-loader may not exist in isolated preview; ignore
+  }
+})();
+
 // --- Elements ---
-const transferOptionRadios = document.getElementsByName('transferOption');
+const singleFields = _el('singleFields');
+const bulkFields   = _el('bulkFields');
+const singleRadio  = _el('singleTransfer');
+const bulkRadio    = _el('bulkByOwner');
 const basvuruNoInput = _el('basvuruNoInput');
-const addBasvuruNoBtn = _el('addBasvuruNoBtn');
-const transferListContainer = _el('transferListContainer');
-const transferList = _el('transferList');
-const transferListEmpty = _el('transferListEmpty');
-const queryBtn = _el('queryBtn');
+const queryBtn       = _el('queryBtn');
+const ownerIdInput   = _el('ownerIdInput');
+const bulkQueryBtn   = _el('bulkQueryBtn');
+const loadingEl      = _el('loading');
 const singleResultContainer = _el('singleResultContainer');
-const bulkResultsContainer = _el('bulkResultsContainer');
-const resultsTableBody = _el('resultsTableBody');
+const singleResultInner = _el('singleResultInner');
+const relatedPartyCard = _el('relatedPartyCard');
+const openPersonModalBtn = _el('openPersonModalBtn');
+const selectedPersonSummary = _el('selectedPersonSummary');
 const savePortfolioBtn = _el('savePortfolioBtn');
 const saveThirdPartyBtn = _el('saveThirdPartyBtn');
 const cancelBtn = _el('cancelBtn');
-const heroTitle = _el('heroTitle');
-const brandImage = _el('brandImage');
-const applicationNumberEl = _el('applicationNumber');
-const applicationDateEl = _el('applicationDate');
-
-const statusBadgeEl   = _el('statusBadge');
-const ownerEl         = _el('ownerText');
-const niceClassesEl   = _el('niceClasses');
-const fileUrlEl       = _el('fileUrl');
-const rawJsonEl       = _el('rawJson');
-const loadingEl       = _el('loading');
-
-
-let basvuruNumbers = [];
-
-// Enable Add button on input
-function syncAdd(){
-  if (!addBasvuruNoBtn) return;
-  const enabled = !!(basvuruNoInput && basvuruNoInput.value.trim().length>0);
-  addBasvuruNoBtn.disabled = !enabled;
-  addBasvuruNoBtn.classList.toggle('disabled', !enabled);
-}
-basvuruNoInput?.addEventListener('input', syncAdd);
-basvuruNoInput?.addEventListener('keydown', e => { if (e.key==='Enter'){ e.preventDefault(); addBasvuruNoBtn?.click(); }});
-syncAdd();
 
 // Mode toggle
-transferOptionRadios.forEach(radio => {
-  radio.addEventListener('change', ()=>{
-    resetResults();
-    _toggleActionButtons(false);
-    _show('transferListContainer');
-    syncAdd();
-  });
-});
-
-// Add to list
-addBasvuruNoBtn?.addEventListener('click', () => {
-  const raw = (basvuruNoInput?.value || '').trim();
-  if (!raw) return showNotification('Lütfen bir başvuru numarası girin', 'warning');
-  const number = raw.replace(/[^\d/.-]/g, '');
-  if (!number) return showNotification('Geçersiz başvuru numarası', 'warning');
-  if (basvuruNumbers.includes(number)) return showNotification('Bu başvuru numarası zaten listede', 'info');
-
-  basvuruNumbers.push(number);
-
-  if (transferList){
-    const li = document.createElement('li');
-    li.className = 'list-group-item d-flex justify-content-between align-items-center';
-    li.innerHTML = `<span>${number}</span>
-      <button class="btn btn-sm btn-danger remove-btn" title="Kaldır">X</button>`;
-    transferList.appendChild(li);
-    transferListEmpty?.classList.add('d-none');
-    _show('transferListContainer');
-  }
-
-  const singleTransferRadio = _el('singleTransfer');
-  if (singleTransferRadio?.checked){
-    basvuruNoInput && (basvuruNoInput.disabled = true);
+function syncMode(){
+  const isSingle = singleRadio?.checked;
+  if (isSingle){
+    _showBlock(singleFields);
+    _hideBlock(bulkFields);
   } else {
-    basvuruNoInput && (basvuruNoInput.value = '');
+    _hideBlock(singleFields);
+    _showBlock(bulkFields);
   }
-  syncAdd();
-  showNotification('Aktarım listesine eklendi', 'success');
-});
-
-// Remove from list
-transferList?.addEventListener('click', (ev) => {
-  const target = ev.target;
-  if (!(target instanceof Element)) return;
-  if (!target.classList.contains('remove-btn')) return;
-  const li = target.closest('li');
-  const span = li?.querySelector('span');
-  const val = span?.textContent;
-  if (val){
-    basvuruNumbers = basvuruNumbers.filter(x => x !== val);
-  }
-  li?.remove();
-  if (basvuruNumbers.length === 0){
-    transferListEmpty?.classList.remove('d-none');
-  }
-});
-
-// Query
-queryBtn?.addEventListener('click', async () => {
-  const singleMode = document.getElementById('singleTransfer')?.checked;
-  if (singleMode){
-    if (basvuruNumbers.length === 0){
-      const n = (basvuruNoInput?.value || '').trim();
-      if (!n) return showNotification('Önce başvuru numarası girin (Tekil Aktarım).', 'warning');
-      basvuruNumbers = [n];
-      // Listeye de yazdır
-      addBasvuruNoBtn?.click();
-    }
-  } else if (basvuruNumbers.length === 0){
-    return showNotification('Listeye en az bir başvuru numarası ekleyin.', 'warning');
-  }
-
-  _toggleActionButtons(false);
-  savePortfolioBtn && (savePortfolioBtn.disabled = true);
-  saveThirdPartyBtn && (saveThirdPartyBtn.disabled = true);
-
-  if (singleMode){
-    const basvuruNo = basvuruNumbers[0];
-    try {
-      loadingEl && _show('loading');
-      const result = await scrapeTrademarkFunction({ basvuruNo });
-      console.log('🔍 Scraping sonucu:', result);
-      console.log('🔍 Result data:', result?.data);
-      console.log('🔍 Full result object:', JSON.stringify(result, null, 2));
-      renderSingleResult(result?.data || null, basvuruNo);
-      _toggleActionButtons(true);
-      loadingEl && _hide('loading');
-      savePortfolioBtn && (savePortfolioBtn.disabled = false);
-      saveThirdPartyBtn && (saveThirdPartyBtn.disabled = false);
-    } catch (err){
-      showNotification('Sorgulama hatası: ' + (err?.message || err), 'danger');
-    }
-  } else {
-    resultsTableBody && (resultsTableBody.innerHTML = '');
-    _show('bulkResultsContainer');
-
-    for (const no of basvuruNumbers){
-      const safeId = no.replace(/[^a-zA-Z0-9_-]/g, '_');
-      const tr = document.createElement('tr');
-      tr.innerHTML = `<td>${no}</td><td id="status-${safeId}">Sorgulanıyor...</td>`;
-      resultsTableBody?.appendChild(tr);
-    }
-
-    for (const no of basvuruNumbers){
-      const safeId = no.replace(/[^a-zA-Z0-9_-]/g, '_');
-      const statusEl = document.getElementById('status-' + safeId);
-      try {
-        const result = await scrapeTrademarkFunction({ basvuruNo: no });
-        const data = result?.data || {};
-        const ok = data?.found || data?.status === 'Bulundu' || data?.status === 'Navigated';
-        if (statusEl){
-          statusEl.textContent = ok ? 'Transfer Başarılı' : (data?.status || 'Tamamlandı');
-          statusEl.classList.toggle('status-ok', !!ok);
-        }
-      } catch (err){
-        if (statusEl){
-          statusEl.textContent = 'Hata: ' + (err?.message || err);
-          statusEl.classList.add('status-error');
-        }
-        showNotification(`${no} sorgusunda hata: ${err?.message || err}`, 'warning');
-      }
-    }
-
-    _toggleActionButtons(true);
-    savePortfolioBtn && (savePortfolioBtn.disabled = false);
-    saveThirdPartyBtn && (saveThirdPartyBtn.disabled = false);
-  }
-});
-
-// Render single
-
-function renderSingleResult(payload, fallbackNo){
-    console.log('🎯 renderSingleResult çağrıldı');
-  console.log('🎯 Payload:', payload);
-  console.log('🎯 fallbackNo:', fallbackNo);
-  if (!payload){
-    console.log('❌ Payload boş, uyarı gösteriliyor');
-    showNotification('Sonuç verisi alınamadı', 'warning');
-    return;
-  }
-
-  // Sunucu bazen alanları hem üst seviyede hem data içinde döndürebilir → birleşik görüntü
-  const p = payload?.data && (payload.trademarkName == null && payload.applicationNumber == null)
-    ? payload.data
-    : payload;
-
-  // Başlık / görsel
-  const name = p?.trademarkName || p?.message || '(İsim yok)';
-  const img  = p?.imageUrl || '';
-  if (heroTitle) heroTitle.textContent = name;
-  if (brandImage){
-    brandImage.src = img || '';
-    brandImage.style.display = img ? 'block' : 'none';
-  }
-
-  // Bilgiler
-
-  if (ownerEl)       ownerEl.textContent       = p?.owner || '';
-  if (niceClassesEl) niceClassesEl.textContent = Array.isArray(p?.niceClasses) ? p.niceClasses.join(', ') : (p?.niceClasses || '');
-
-  if (fileUrlEl){
-    if (p?.fileUrl){
-      fileUrlEl.textContent = 'Dosyayı Aç';
-      fileUrlEl.href = p.fileUrl;
-      fileUrlEl.style.display = '';
-    } else {
-      fileUrlEl.textContent = '';
-      fileUrlEl.removeAttribute('href');
-      fileUrlEl.style.display = 'none';
-    }
-  }
-
-  // Durum rozeti
-  const status = p?.status || payload?.status || '';
-  if (statusBadgeEl){
-    if (status){
-      statusBadgeEl.style.display = '';
-      statusBadgeEl.textContent = status;
-      statusBadgeEl.classList.remove('badge-success','badge-secondary','badge-info','badge-warning','badge-danger');
-      if (status === 'Success' && (p?.found ?? true)) statusBadgeEl.classList.add('badge-success');
-      else if (status === 'NotFound')                  statusBadgeEl.classList.add('badge-secondary');
-      else if (status === 'RateLimited' || status === 'Backoff') statusBadgeEl.classList.add('badge-warning');
-      else if (status === 'DataExtractionError')       statusBadgeEl.classList.add('badge-danger');
-      else                                             statusBadgeEl.classList.add('badge-info');
-    } else {
-      statusBadgeEl.style.display = 'none';
-    }
-  }
-
-  // Debug JSON (opsiyonel)
-  if (rawJsonEl){
-    try { rawJsonEl.textContent = JSON.stringify(payload, null, 2); } catch {}
-  }
-
-  _show('singleResultContainer');
-  _hide('bulkResultsContainer');
+  // temizle
+  singleResultInner.innerHTML='';
+  _hideBlock(singleResultContainer);
+  _hideBlock(relatedPartyCard);
+  savePortfolioBtn.disabled = true;
+  saveThirdPartyBtn.disabled = true;
 }
+singleRadio?.addEventListener('change', syncMode);
+bulkRadio?.addEventListener('change', syncMode);
+syncMode();
 
-
-// Reset
-function resetResults(){
-  basvuruNumbers = [];
-  transferList && (transferList.innerHTML = '');
-  if (basvuruNoInput){
-    basvuruNoInput.value = '';
-    basvuruNoInput.disabled = false;
+// Query single
+queryBtn?.addEventListener('click', async () => {
+  const basvuruNo = (basvuruNoInput?.value || '').trim();
+  if (!basvuruNo) return showToast('Başvuru numarası girin.', 'warning');
+  try {
+    _showBlock(loadingEl);
+    const result = await scrapeTrademarkFunction({ basvuruNo });
+    const data = result?.data || {};
+    // Expected: data.status, data.found, ... and flattened fields
+    if (!data || data.found === false){
+      showToast(data?.message || 'Sonuç bulunamadı ya da erişilemedi.', 'warning');
+      _hideBlock(loadingEl);
+      return;
+    }
+    renderSingleResult(data);
+    _hideBlock(loadingEl);
+  } catch (err){
+    _hideBlock(loadingEl);
+    showToast('Sorgulama hatası: ' + (err?.message || err), 'danger');
   }
-  addBasvuruNoBtn && (addBasvuruNoBtn.disabled = false);
-  _hide('singleResultContainer');
-  _hide('bulkResultsContainer');
-  resultsTableBody && (resultsTableBody.innerHTML = '');
-  transferListEmpty && transferListEmpty.classList.remove('d-none');
+});
+
+// Bulk placeholder
+bulkQueryBtn?.addEventListener('click', () => {
+  const ownerId = (ownerIdInput?.value || '').trim();
+  if(!ownerId) return showToast('Sahip numarası girin.', 'warning');
+  showToast('Toplu aktarım kurumsal uç tamamlandığında bağlanacaktır.', 'info');
+});
+
+// Person modal open
+openPersonModalBtn?.addEventListener('click', async () => {
+  if (typeof ensurePersonModal === 'function') try { await ensurePersonModal(); } catch {}
+  if (typeof openPersonModal === 'function') {
+    openPersonModal('relatedParty', (person) => {
+      if (!person) return;
+      selectedPersonSummary.innerHTML = `<div class="text-right">
+        <div><strong>${person.name || person.displayName || person.title || 'Seçilen Kişi'}</strong></div>
+        <div class="muted" style="font-size:12px;">${person.email || person.taxNo || ''}</div>
+      </div>`;
+      showToast('Kişi eklendi.', 'success');
+    });
+  } else {
+    showToast('Kişi ekleme modülü bu sayfada devre dışı.', 'warning');
+  }
+});
+
+cancelBtn?.addEventListener('click', () => {
+  history.back();
+});
+
+function renderSingleResult(payload){
+  // payload düzleştirilmiş olabilir: data içinde ve root'ta
+  const d = payload.data && typeof payload.data === 'object' ? payload.data : payload;
+  const trademarkName = d.trademarkName || '';
+  const status = d.status || '';
+  const imageUrl = d.imageUrl || '';
+  const owner = d.owner || '';
+  const ownerId = d.ownerId || '';
+  const ownerAddress = d.ownerAddress || '';
+  const applicationNumber = d.applicationNumber || '';
+  const applicationDate = fmtDateToTR(d.applicationDate || '');
+  const registrationNumber = d.registrationNumber || '';
+  const registrationDate = fmtDateToTR(d.registrationDate || '');
+  const intlRegNo = d.intlRegistrationNumber || d.internationalRegistrationNumber || '';
+  const protectionDate = fmtDateToTR(d.protectionDate || '');
+  const type = d.type || d.trademarkType || '';
+  const niceClasses = Array.isArray(d.niceClasses) ? d.niceClasses : [];
+  const goods = Array.isArray(d.goods) ? d.goods : [];
+
+  // HERO CARD (Portfolio Detail'e benzer)
+  const heroHtml = `
+    <div class="hero">
+      <div class="hero-img-wrap">
+        <img class="hero-img" src="${imageUrl || ''}" alt="Marka Görseli" onerror="this.src=''; this.style.background='#f4f6f8';">
+      </div>
+      <div class="hero-meta flex-grow-1">
+        <h4 class="mb-1">${trademarkName || '(Marka Adı Yok)'}</h4>
+        <div class="mb-3"><span class="badge badge-soft">${status || 'Durum bilgisi yok'}</span></div>
+        <div class="kv-grid">
+          <div class="kv-item">
+            <div class="label">Sahip</div>
+            <div class="value">${owner || '-'}</div>
+          </div>
+          <div class="kv-item">
+            <div class="label">Sahip No</div>
+            <div class="value">${ownerId || '-'}</div>
+          </div>
+          <div class="kv-item">
+            <div class="label">Başvuru No</div>
+            <div class="value">${applicationNumber || '-'}</div>
+          </div>
+          <div class="kv-item">
+            <div class="label">Başvuru Tarihi</div>
+            <div class="value">${applicationDate || '-'}</div>
+          </div>
+          <div class="kv-item">
+            <div class="label">Tescil No</div>
+            <div class="value">${registrationNumber || '-'}</div>
+          </div>
+          <div class="kv-item">
+            <div class="label">Tescil Tarihi</div>
+            <div class="value">${registrationDate || '-'}</div>
+          </div>
+          <div class="kv-item">
+            <div class="label">Uluslararası Tescil No</div>
+            <div class="value">${intlRegNo || '-'}</div>
+          </div>
+          <div class="kv-item">
+            <div class="label">Koruma Tarihi</div>
+            <div class="value">${protectionDate || '-'}</div>
+          </div>
+          <div class="kv-item">
+            <div class="label">Tür</div>
+            <div class="value">${type || '-'}</div>
+          </div>
+          <div class="kv-item">
+            <div class="label">Nice Sınıfları</div>
+            <div class="value">${(niceClasses && niceClasses.length) ? niceClasses.join(', ') : '-'}</div>
+          </div>
+          <div class="kv-item" style="grid-column:1 / -1;">
+            <div class="label">Sahip Adresi</div>
+            <div class="value">${ownerAddress || '-'}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // GOODS CARD
+  let goodsHtml = '';
+  if (goods.length){
+    const clsMap = {};
+    goods.forEach(g => {
+      const c = String(g.class || g.cls || '').trim() || 'Genel';
+      if(!clsMap[c]) clsMap[c] = [];
+      const desc = (g.description || '').trim();
+      if (desc) clsMap[c].push(desc);
+    });
+    goodsHtml = Object.keys(clsMap).map(cls => {
+      const items = clsMap[cls].map(x => `<li>${x}</li>`).join('');
+      return `<div class="goods-group"><div class="goods-class">Sınıf ${cls}</div><ul class="goods-items">${items}</ul></div>`;
+    }).join('');
+  } else {
+    goodsHtml = `<div class="muted">Mal ve hizmetler listesi bulunamadı.</div>`;
+  }
+
+  singleResultInner.innerHTML = `
+    <div class="section-card" style="box-shadow:none; border:none; padding:0; margin:0 0 12px 0;">
+      ${heroHtml}
+    </div>
+    <div class="section-card" style="box-shadow:none; border:none; padding:0; margin:0;">
+      <div class="section-title" style="padding-left:0; padding-right:0;">Mal ve Hizmetler</div>
+      ${goodsHtml}
+    </div>
+  `;
+
+  _showBlock(singleResultContainer);
+  _showBlock(relatedPartyCard);
+  savePortfolioBtn.disabled = false;
+  saveThirdPartyBtn.disabled = false;
 }
