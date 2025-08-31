@@ -3807,6 +3807,29 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
       while (!__ajaxJson && Date.now() - t0 < 12000) {
         await sleep(250);
       }
+    // --- TürkPatent rate-limit ekranını erken tespit et ---
+    const hitRateLimit = await page.evaluate(() => {
+      const t = (document.body.innerText || '').toLowerCase();
+      return (
+        t.includes('çok fazla deneme') ||
+        t.includes('too many attempts') ||
+        t.includes('rate limit') ||
+        t.includes('sistem meşgul') ||
+        t.includes('geçici olarak hizmet dışı')
+      );
+    });
+
+    if (hitRateLimit) {
+      // listener'ı kapat ve temiz bir yanıtla dön
+      page.off('response', __jsonListener);
+      logger.info('TürkPatent rate-limit sayfası tespit edildi, erken dönülüyor.');
+      return {
+        status: 'RateLimited',
+        found: false,
+        applicationNumber: basvuruNo,
+        message: 'TürkPatent geçici limit uyarısı aldı. Lütfen 1-2 dk sonra tekrar deneyin.'
+      };
+    }
 
       // Dinleyiciyi mutlaka kaldır (hatta başarısız olsa bile)
       page.off('response', __jsonListener);
@@ -3934,8 +3957,18 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
       // Sayfada hata mesajı var mı kontrol et
       const hasError = await page.evaluate(() => {
         // Hata mesajı içeren potansiyel elementleri seç
-        const elements = document.querySelectorAll('.error, .alert-danger, .MuiAlert-message, p, div, span, h1, h2, h3');
-        const keywords = ['bulunamadı', 'sonuç yok', 'hata', 'geçersiz'];
+      const elements = document.querySelectorAll('.error, .alert-danger, .MuiAlert-message, p, div, span, h1, h2, h3');
+      const keywords = [
+        'bulunamadı',
+        'sonuç yok',
+        'hata',
+        'geçersiz',
+        'çok fazla deneme',       // rate limit
+        'too many attempts',      // rate limit (ing)
+        'rate limit',             // rate limit (ing)
+        'sistem meşgul',
+        'geçici olarak hizmet dışı'
+      ];
 
         for (const el of elements) {
           const text = (el.textContent || '').trim().toLowerCase();
