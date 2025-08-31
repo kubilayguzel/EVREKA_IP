@@ -7,8 +7,36 @@ function _toggleActionButtons(visible){
   if (!ab) return;
   ab.style.display = visible ? 'flex' : 'none';
 }
-// --- end helpers ---
 
+// --- Lightweight notification ---
+function showNotification(message, type='info'){
+  let container = document.getElementById('notification-container');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'notification-container';
+    container.style.position = 'fixed';
+    container.style.top = '20px';
+    container.style.right = '20px';
+    container.style.zIndex = '9999';
+    document.body.appendChild(container);
+  }
+  const alert = document.createElement('div');
+  alert.className = `alert alert-${type} fade show`;
+  alert.role = 'alert';
+  alert.style.minWidth = '280px';
+  alert.innerHTML = `
+    <div class="d-flex align-items-center">
+      <div class="flex-grow-1">${message}</div>
+      <button type="button" class="close ml-3" data-dismiss="alert" aria-label="Close">
+        <span aria-hidden="true">&times;</span>
+      </button>
+    </div>`;
+  container.appendChild(alert);
+  setTimeout(() => { alert.classList.remove('show'); alert.addEventListener('transitionend', () => alert.remove()); }, 4000);
+  alert.querySelector('.close')?.addEventListener('click', () => alert.remove());
+}
+
+// --- Imports ---
 import { app } from '../firebase-config.js';
 import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-functions.js';
 
@@ -16,7 +44,7 @@ import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/
 const functions = getFunctions(app, 'europe-west1');
 const scrapeTrademarkFunction = httpsCallable(functions, 'scrapeTrademarkPuppeteerCallable');
 
-// Elements
+// --- Elements ---
 const transferOptionRadios = document.getElementsByName('transferOption');
 const basvuruNoInput = document.getElementById('basvuruNoInput');
 const addBasvuruNoBtn = document.getElementById('addBasvuruNoBtn');
@@ -27,16 +55,47 @@ const queryBtn = document.getElementById('queryBtn');
 const singleResultContainer = document.getElementById('singleResultContainer');
 const bulkResultsContainer = document.getElementById('bulkResultsContainer');
 const resultsTableBody = document.getElementById('resultsTableBody');
-
 const savePortfolioBtn = document.getElementById('savePortfolioBtn');
 const saveThirdPartyBtn = document.getElementById('saveThirdPartyBtn');
 const cancelBtn = document.getElementById('cancelBtn');
-
-// Single hero fields
 const heroTitle = document.getElementById('heroTitle');
 const brandImage = document.getElementById('brandImage');
 
 let basvuruNumbers = [];
+
+// --- Helpers to handle button enabling ---
+function forceEnableAddButton(){
+  if (!addBasvuruNoBtn) return;
+  addBasvuruNoBtn.disabled = false;
+  addBasvuruNoBtn.classList.remove('disabled');
+  addBasvuruNoBtn.style.pointerEvents = '';
+  addBasvuruNoBtn.style.opacity = '';
+}
+function syncAddButtonEnabled(){
+  if (!addBasvuruNoBtn) return;
+  const hasVal = !!(basvuruNoInput && basvuruNoInput.value.trim().length > 0);
+  addBasvuruNoBtn.disabled = !hasVal;
+  addBasvuruNoBtn.classList.toggle('disabled', !hasVal);
+}
+
+// Make sure button becomes clickable on load even if HTML marks it disabled
+forceEnableAddButton();
+syncAddButtonEnabled();
+
+// Enable/disable Add based on input typing
+if (basvuruNoInput){
+  basvuruNoInput.addEventListener('input', () => {
+    forceEnableAddButton();
+    syncAddButtonEnabled();
+  });
+  // Pressing Enter triggers Add
+  basvuruNoInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      addBasvuruNoBtn?.click();
+    }
+  });
+}
 
 // --- UI Mode toggle ---
 transferOptionRadios.forEach(radio => {
@@ -44,27 +103,35 @@ transferOptionRadios.forEach(radio => {
     const mode = event.target.value;
     resetResults();
     if (mode === 'single') {
-      // Single mode: show only the input, hide list until add/query
       _hide('transferListContainer');
       _hide('bulkResultsContainer');
       _hide('singleResultContainer');
       _toggleActionButtons(false);
-      if (addBasvuruNoBtn) addBasvuruNoBtn.disabled = false;
-      if (basvuruNoInput) basvuruNoInput.disabled = false;
+      forceEnableAddButton();
+      syncAddButtonEnabled();
+      basvuruNoInput && (basvuruNoInput.disabled = false);
     } else {
-      // Bulk
       _show('transferListContainer');
       _hide('bulkResultsContainer');
       _hide('singleResultContainer');
       _toggleActionButtons(false);
-      if (transferListEmpty) transferListEmpty.classList.remove('d-none');
-      if (addBasvuruNoBtn) addBasvuruNoBtn.disabled = false;
-      if (basvuruNoInput) basvuruNoInput.disabled = false;
+      transferListEmpty && transferListEmpty.classList.remove('d-none');
+      forceEnableAddButton();
+      syncAddButtonEnabled();
+      basvuruNoInput && (basvuruNoInput.disabled = false);
     }
   });
 });
 
-// --- Add number to list (used in both modes to keep UX consistent) ---
+// If there are no radios on the page, default to single-mode behavior
+if (!transferOptionRadios || transferOptionRadios.length === 0){
+  _hide('transferListContainer');
+  _toggleActionButtons(false);
+  forceEnableAddButton();
+  syncAddButtonEnabled();
+}
+
+// --- Add number to list ---
 if (addBasvuruNoBtn) {
   addBasvuruNoBtn.addEventListener('click', () => {
     const raw = (basvuruNoInput?.value || '').trim();
@@ -72,37 +139,37 @@ if (addBasvuruNoBtn) {
       showNotification('Lütfen bir başvuru numarası girin', 'warning');
       return;
     }
-    // Basic normalize (allow digits, / and -)
     const number = raw.replace(/[^\d/.-]/g, '');
     if (!number) {
       showNotification('Geçersiz başvuru numarası', 'warning');
       return;
     }
-    // Prevent duplicates
     if (basvuruNumbers.includes(number)) {
       showNotification('Bu başvuru numarası zaten listede', 'info');
       return;
     }
     basvuruNumbers.push(number);
 
-    // Render list item (only visible in bulk mode)
+    // Render list (for bulk); in single we lock the input but show result after query
     if (transferList) {
       const li = document.createElement('li');
       li.className = 'list-group-item d-flex justify-content-between align-items-center';
       li.innerHTML = `<span>${number}</span>
         <button class="btn btn-sm btn-danger remove-btn" title="Kaldır">X</button>`;
       transferList.appendChild(li);
-      if (transferListEmpty) transferListEmpty.classList.add('d-none');
+      transferListEmpty && transferListEmpty.classList.add('d-none');
     }
 
-    // In single mode, disable add/input to lock single item
     const singleTransferRadio = document.getElementById('singleTransfer');
     if (singleTransferRadio?.checked) {
-      if (addBasvuruNoBtn) addBasvuruNoBtn.disabled = true;
-      if (basvuruNoInput) basvuruNoInput.disabled = true;
+      // Keep add button enabled so user can correct mistakes; just freeze the input value
+      basvuruNoInput && (basvuruNoInput.disabled = true);
+      syncAddButtonEnabled(); // may disable if input now empty/disabled
     } else {
-      if (basvuruNoInput) basvuruNoInput.value = '';
+      basvuruNoInput && (basvuruNoInput.value = '');
       _show('transferListContainer');
+      forceEnableAddButton();
+      syncAddButtonEnabled();
     }
   });
 }
@@ -116,9 +183,7 @@ if (transferList) {
       const li = target.closest('li');
       if (!li) return;
       const numberToRemove = li.querySelector('span')?.textContent;
-      if (numberToRemove) {
-        basvuruNumbers = basvuruNumbers.filter(n => n !== numberToRemove);
-      }
+      if (numberToRemove) basvuruNumbers = basvuruNumbers.filter(n => n !== numberToRemove);
       li.remove();
       if (basvuruNumbers.length === 0 && transferListEmpty) {
         transferListEmpty.classList.remove('d-none');
@@ -132,7 +197,6 @@ if (queryBtn) {
   queryBtn.addEventListener('click', async () => {
     const singleMode = document.getElementById('singleTransfer')?.checked;
 
-    // Safety: ensure at least one number
     if (singleMode) {
       if (basvuruNumbers.length === 0) {
         const n = (basvuruNoInput?.value || '').trim();
@@ -148,23 +212,21 @@ if (queryBtn) {
     }
 
     _toggleActionButtons(false);
-    if (savePortfolioBtn) savePortfolioBtn.disabled = true;
-    if (saveThirdPartyBtn) saveThirdPartyBtn.disabled = true;
+    savePortfolioBtn && (savePortfolioBtn.disabled = true);
+    saveThirdPartyBtn && (saveThirdPartyBtn.disabled = true);
 
     if (singleMode) {
-      // Single flow: call once and render hero
       const basvuruNo = basvuruNumbers[0];
       try {
         const result = await scrapeTrademarkFunction({ basvuruNo });
         renderSingleResult(result?.data || null);
         _toggleActionButtons(true);
-        if (savePortfolioBtn) savePortfolioBtn.disabled = false;
-        if (saveThirdPartyBtn) saveThirdPartyBtn.disabled = false;
+        savePortfolioBtn && (savePortfolioBtn.disabled = false);
+        saveThirdPartyBtn && (saveThirdPartyBtn.disabled = false);
       } catch (err) {
         showNotification('Sorgulama hatası: ' + (err?.message || err), 'danger');
       }
     } else {
-      // Bulk flow: table rows + sequential calls
       resultsTableBody && (resultsTableBody.innerHTML = '');
       _show('bulkResultsContainer');
 
@@ -197,8 +259,8 @@ if (queryBtn) {
       }
 
       _toggleActionButtons(true);
-      if (savePortfolioBtn) savePortfolioBtn.disabled = false;
-      if (saveThirdPartyBtn) saveThirdPartyBtn.disabled = false;
+      savePortfolioBtn && (savePortfolioBtn.disabled = false);
+      saveThirdPartyBtn && (saveThirdPartyBtn.disabled = false);
     }
   });
 }
@@ -208,19 +270,20 @@ if (cancelBtn) {
   cancelBtn.addEventListener('click', () => {
     resetResults();
     _toggleActionButtons(false);
+    forceEnableAddButton();
+    syncAddButtonEnabled();
   });
 }
 
 // --- Render functions ---
 function renderSingleResult(payload){
-  // payload: result.data from callable
   if (!payload) {
     showNotification('Sonuç verisi alınamadı', 'warning');
     return;
   }
   const name = payload?.trademarkName || '(İsim yok)';
   const img = payload?.imageUrl || '';
-  if (heroTitle) heroTitle.textContent = name;
+  heroTitle && (heroTitle.textContent = name);
   if (brandImage) {
     brandImage.src = img || '';
     brandImage.style.display = img ? 'block' : 'none';
@@ -231,46 +294,14 @@ function renderSingleResult(payload){
 
 function resetResults(){
   basvuruNumbers = [];
-  if (transferList) transferList.innerHTML = '';
+  transferList && (transferList.innerHTML = '');
   if (basvuruNoInput) {
     basvuruNoInput.value = '';
     basvuruNoInput.disabled = false;
   }
-  if (addBasvuruNoBtn) addBasvuruNoBtn.disabled = false;
+  addBasvuruNoBtn && (addBasvuruNoBtn.disabled = false);
   _hide('singleResultContainer');
   _hide('bulkResultsContainer');
-  if (resultsTableBody) resultsTableBody.innerHTML = '';
-  if (transferListEmpty) transferListEmpty.classList.remove('d-none');
-}
-
-// --- Lightweight notification ---
-function showNotification(message, type='info'){
-  let container = document.getElementById('notification-container');
-  if (!container) {
-    container = document.createElement('div');
-    container.id = 'notification-container';
-    container.style.position = 'fixed';
-    container.style.top = '20px';
-    container.style.right = '20px';
-    container.style.zIndex = '9999';
-    document.body.appendChild(container);
-  }
-  const alert = document.createElement('div');
-  alert.className = `alert alert-${type} fade show`;
-  alert.role = 'alert';
-  alert.style.minWidth = '280px';
-  alert.innerHTML = `
-    <div class="d-flex align-items-center">
-      <div class="flex-grow-1">${message}</div>
-      <button type="button" class="close ml-3" data-dismiss="alert" aria-label="Close">
-        <span aria-hidden="true">&times;</span>
-      </button>
-    </div>`;
-  container.appendChild(alert);
-  // auto dismiss
-  setTimeout(() => {
-    alert.classList.remove('show');
-    alert.addEventListener('transitionend', () => alert.remove());
-  }, 4000);
-  alert.querySelector('.close')?.addEventListener('click', () => alert.remove());
+  resultsTableBody && (resultsTableBody.innerHTML = '');
+  transferListEmpty && transferListEmpty.classList.remove('d-none');
 }
