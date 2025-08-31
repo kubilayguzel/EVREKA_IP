@@ -4,8 +4,7 @@ function _showBlock(el){
   if (!el) return;
   el.classList?.remove('d-none');
   el.style.display = '';
-  // If inside Bootstrap .collapse, force open
-  const collapse = el.closest('.collapse');
+  const collapse = el.closest?.('.collapse');
   if (collapse){
     collapse.classList.add('show');
     collapse.style.height = 'auto';
@@ -18,12 +17,6 @@ function _toggleActionButtons(visible){
   if (!ab) return;
   ab.style.display = visible ? 'flex' : 'none';
 }
-function _scrollIntoView(id){
-  const n=_el(id);
-  if (n) n.scrollIntoView({ behavior: 'smooth', block: 'start' });
-}
-
-// --- Toast ---
 function showNotification(message, type='info'){
   let container = document.getElementById('notification-container');
   if (!container) {
@@ -74,25 +67,12 @@ const saveThirdPartyBtn = _el('saveThirdPartyBtn');
 const cancelBtn = _el('cancelBtn');
 const heroTitle = _el('heroTitle');
 const brandImage = _el('brandImage');
+const applicationNumberEl = _el('applicationNumber');
+const applicationDateEl = _el('applicationDate');
 
 let basvuruNumbers = [];
 
-// Ensure container exists
-(function ensureListElements(){
-  if (!transferListContainer){
-    // Create a fallback container if not present to avoid silent no-op
-    const fallback = document.createElement('div');
-    fallback.id = 'transferListContainer';
-    fallback.className = 'mt-3';
-    fallback.innerHTML = `
-      <ul id="transferList" class="list-group"></ul>
-      <div id="transferListEmpty" class="text-muted small">Liste boş</div>`;
-    // Append near results section
-    (document.body || document.documentElement).appendChild(fallback);
-  }
-})();
-
-// Enable Add button when there is input
+// Enable Add button on input
 function syncAdd(){
   if (!addBasvuruNoBtn) return;
   const enabled = !!(basvuruNoInput && basvuruNoInput.value.trim().length>0);
@@ -105,12 +85,10 @@ syncAdd();
 
 // Mode toggle
 transferOptionRadios.forEach(radio => {
-  radio.addEventListener('change', (ev)=>{
+  radio.addEventListener('change', ()=>{
     resetResults();
     _toggleActionButtons(false);
-    // Her iki modda da listeyi görünür yapıyoruz (istek üzerine)
     _show('transferListContainer');
-    _scrollIntoView('transferListContainer');
     syncAdd();
   });
 });
@@ -125,33 +103,28 @@ addBasvuruNoBtn?.addEventListener('click', () => {
 
   basvuruNumbers.push(number);
 
-  // Render list item ALWAYS (single & bulk)
-  const listEl = _el('transferList');
-  if (listEl){
+  if (transferList){
     const li = document.createElement('li');
     li.className = 'list-group-item d-flex justify-content-between align-items-center';
     li.innerHTML = `<span>${number}</span>
       <button class="btn btn-sm btn-danger remove-btn" title="Kaldır">X</button>`;
-    listEl.appendChild(li);
-    _el('transferListEmpty')?.classList.add('d-none');
+    transferList.appendChild(li);
+    transferListEmpty?.classList.add('d-none');
     _show('transferListContainer');
-    _scrollIntoView('transferListContainer');
   }
 
-  // In single mode freeze input value but keep button enabled
   const singleTransferRadio = _el('singleTransfer');
   if (singleTransferRadio?.checked){
-    if (basvuruNoInput) basvuruNoInput.disabled = true;
+    basvuruNoInput && (basvuruNoInput.disabled = true);
   } else {
-    if (basvuruNoInput) basvuruNoInput.value = '';
+    basvuruNoInput && (basvuruNoInput.value = '');
   }
   syncAdd();
-
   showNotification('Aktarım listesine eklendi', 'success');
 });
 
 // Remove from list
-_el('transferList')?.addEventListener('click', (ev) => {
+transferList?.addEventListener('click', (ev) => {
   const target = ev.target;
   if (!(target instanceof Element)) return;
   if (!target.classList.contains('remove-btn')) return;
@@ -163,19 +136,19 @@ _el('transferList')?.addEventListener('click', (ev) => {
   }
   li?.remove();
   if (basvuruNumbers.length === 0){
-    _el('transferListEmpty')?.classList.remove('d-none');
+    transferListEmpty?.classList.remove('d-none');
   }
 });
 
 // Query
 queryBtn?.addEventListener('click', async () => {
-  const singleMode = _el('singleTransfer')?.checked;
+  const singleMode = document.getElementById('singleTransfer')?.checked;
   if (singleMode){
     if (basvuruNumbers.length === 0){
       const n = (basvuruNoInput?.value || '').trim();
       if (!n) return showNotification('Önce başvuru numarası girin (Tekil Aktarım).', 'warning');
       basvuruNumbers = [n];
-      // Ensure visible in list
+      // Listeye de yazdır
       addBasvuruNoBtn?.click();
     }
   } else if (basvuruNumbers.length === 0){
@@ -190,7 +163,7 @@ queryBtn?.addEventListener('click', async () => {
     const basvuruNo = basvuruNumbers[0];
     try {
       const result = await scrapeTrademarkFunction({ basvuruNo });
-      renderSingleResult(result?.data || null);
+      renderSingleResult(result?.data || null, basvuruNo);
       _toggleActionButtons(true);
       savePortfolioBtn && (savePortfolioBtn.disabled = false);
       saveThirdPartyBtn && (saveThirdPartyBtn.disabled = false);
@@ -210,7 +183,7 @@ queryBtn?.addEventListener('click', async () => {
 
     for (const no of basvuruNumbers){
       const safeId = no.replace(/[^a-zA-Z0-9_-]/g, '_');
-      const statusEl = _el('status-' + safeId);
+      const statusEl = document.getElementById('status-' + safeId);
       try {
         const result = await scrapeTrademarkFunction({ basvuruNo: no });
         const data = result?.data || {};
@@ -234,25 +207,22 @@ queryBtn?.addEventListener('click', async () => {
   }
 });
 
-// Cancel
-cancelBtn?.addEventListener('click', () => {
-  resetResults();
-  _toggleActionButtons(false);
-});
-
 // Render single
-function renderSingleResult(payload){
+function renderSingleResult(payload, fallbackNo){
   if (!payload){
     showNotification('Sonuç verisi alınamadı', 'warning');
     return;
   }
-  const name = payload?.trademarkName || '(İsim yok)';
+  const name = payload?.trademarkName || payload?.message || '(İsim yok)';
   const img = payload?.imageUrl || '';
   if (heroTitle) heroTitle.textContent = name;
   if (brandImage){
     brandImage.src = img || '';
     brandImage.style.display = img ? 'block' : 'none';
   }
+  // NEW: populate info fields
+  if (applicationNumberEl) applicationNumberEl.textContent = payload?.applicationNumber || fallbackNo || '';
+  if (applicationDateEl) applicationDateEl.textContent = payload?.applicationDate || '';
   _show('singleResultContainer');
   _hide('bulkResultsContainer');
 }
@@ -260,7 +230,7 @@ function renderSingleResult(payload){
 // Reset
 function resetResults(){
   basvuruNumbers = [];
-  _el('transferList') && (_el('transferList').innerHTML = '');
+  transferList && (transferList.innerHTML = '');
   if (basvuruNoInput){
     basvuruNoInput.value = '';
     basvuruNoInput.disabled = false;
@@ -269,5 +239,5 @@ function resetResults(){
   _hide('singleResultContainer');
   _hide('bulkResultsContainer');
   resultsTableBody && (resultsTableBody.innerHTML = '');
-  _el('transferListEmpty')?.classList.remove('d-none');
+  transferListEmpty && transferListEmpty.classList.remove('d-none');
 }
