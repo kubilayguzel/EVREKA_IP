@@ -3933,7 +3933,7 @@ async function handleScrapeTrademark(basvuruNo) {
     await page.setRequestInterception(true);
     page.on('request', req => {
       const t = req.resourceType();
-      if (t === 'image' || t === 'font' || t === 'stylesheet' || t === 'media') return req.abort();
+      if (t === 'image' || t === 'font' || t === 'media') return req.abort();
       req.continue();
     });
 
@@ -4187,7 +4187,7 @@ async function handleScrapeOwnerTrademarks(ownerId, opts = {}) {
     await page.setRequestInterception(true);
     page.on('request', req => {
       const t = req.resourceType();
-      if (t === 'image' || t === 'font' || t === 'stylesheet' || t === 'media') return req.abort();
+      if (t === 'image' || t === 'font' || t === 'media') return req.abort(); // stylesheet artık serbest
       req.continue();
     });
     page.setDefaultTimeout(30000);
@@ -4197,8 +4197,8 @@ async function handleScrapeOwnerTrademarks(ownerId, opts = {}) {
 
     // --- Kişi Numarası araması (sekme değiştirmeden) ---
     logger.info('[scrapeOwnerTrademarks] Kişi No alanı bekleniyor...');
-    const ownerInputSel = 'input[placeholder="Kişi Numarası"]';
-    await page.waitForSelector(ownerInputSel, { timeout: 10000 });
+    const ownerInputSel = 'input[placeholder*="Kişi"], input[placeholder*="Sahip"]';
+    await page.waitForSelector(ownerInputSel, { timeout: 15000, visible: true });
     const input = await page.$(ownerInputSel);
     if (!input) throw new HttpsError('internal', 'Kişi Numarası input alanı bulunamadı');
 
@@ -4359,17 +4359,31 @@ if (pageDebugInfo.allTables === 0) {
   logger.info('Sayfada hiç tablo bulunamadı. Sayfa tam yüklenmemiş olabilir.');
   
   // Captcha kontrolü yap
-  if (await detectCaptcha(page)) {
-    const retryAfterSec = 120 + Math.floor(Math.random()*60);
-    global['turkpatent_backoff_until'] = Date.now() + retryAfterSec * 1000;
-    return {
-      status: 'CaptchaRequired',
-      found: false,
-      ownerId,
-      retryAfterSec,
-      message: 'reCAPTCHA doğrulaması gerekiyor. Lütfen doğrulayıp tekrar deneyin.'
-    };
+// === Arama tıklandıktan sonra SPA XHR/render bitsin diye kısa idle bekle
+try {
+  await page.waitForNetworkIdle({ idleTime: 750, timeout: 15000 });
+} catch { /* önemli değil */ }
+
+// === Captcha kontrolü: navigation/context yarışı güvenli
+let captchaHit = false;
+try {
+  captchaHit = await detectCaptcha(page);
+} catch (e) {
+  if (!/Execution context was destroyed|Cannot find context/i.test(e?.message || '')) {
+    throw e; // gerçek hata; fırlat
   }
+}
+if (captchaHit) {
+  const retryAfterSec = 120 + Math.floor(Math.random() * 60);
+  global['turkpatent_backoff_until'] = Date.now() + retryAfterSec * 1000;
+  return {
+    status: 'CaptchaRequired',
+    found: false,
+    ownerId,
+    retryAfterSec,
+    message: 'reCAPTCHA doğrulaması gerekiyor. Lütfen doğrulayıp tekrar deneyin.'
+  };
+}
   
   // Hata mesajı kontrol et
   const hasError = await page.evaluate(() => {
