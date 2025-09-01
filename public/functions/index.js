@@ -4248,8 +4248,41 @@ async function handleScrapeOwnerTrademarks(ownerId, opts = {}) {
 
     // Sonuçları bekle
 // Sayfa yüklendikten sonra debug yapılacak - daha fazla bekleme süresi
-logger.info('Arama yapıldıktan sonra sayfa durumunu kontrol ediliyor...');
-await sleep(10000); // 10 saniye bekle
+// Arama sonrası dinamik sonuçların yüklenmesini bekle
+logger.info('Arama yapıldıktan sonra sonuçların yüklenmesi bekleniyor...');
+
+// Dinamik içeriğin yüklenmesini bekle - maksimum 30 saniye
+let tablesLoaded = false;
+let attempts = 0;
+const maxAttempts = 30; // 30x1=30 saniye
+
+while (!tablesLoaded && attempts < maxAttempts) {
+  await sleep(1000); // 1 saniye bekle
+  attempts++;
+  
+  const pageCheck = await page.evaluate(() => ({
+    allTables: document.querySelectorAll('table').length,
+    allTrs: document.querySelectorAll('tr').length,
+    loading: document.querySelector('.loading, .spinner, .MuiCircularProgress-root') !== null,
+    // Sonuç metni var mı kontrol et
+    hasResultText: /kayıt bulundu|sonuç|bulunamadı/i.test(document.body.textContent)
+  }));
+  
+  logger.info(`Deneme ${attempts}: Tables=${pageCheck.allTables}, TRs=${pageCheck.allTrs}, Loading=${pageCheck.loading}, HasText=${pageCheck.hasResultText}`);
+  
+  if (pageCheck.allTables > 0 && pageCheck.allTrs > 0) {
+    tablesLoaded = true;
+    logger.info('✅ Tablolar yüklendi!');
+  } else if (pageCheck.hasResultText && !pageCheck.loading) {
+    // Sonuç metni var ama tablo yok - muhtemelen "sonuç bulunamadı"
+    logger.info('Sonuç metni bulundu ama tablo yok');
+    break;
+  }
+}
+
+if (!tablesLoaded) {
+  logger.info('Tablolar yüklenemedi, son durumu kontrol ediliyor...');
+}
 
 // Sayfa durumunu detaylı kontrol et
 const pageDebugInfo = await page.evaluate(() => {
