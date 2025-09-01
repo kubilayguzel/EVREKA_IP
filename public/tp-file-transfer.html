@@ -57,6 +57,12 @@
     .search-result-item { padding: 12px 15px !important; cursor: pointer !important; border-bottom: 1px solid #eee !important; transition: background-color .2s !important; background: #fff !important; }
     .search-result-item:hover { background: #f8f9fa !important; }
     .empty-state { color: #6c757d; text-align: center; padding: 20px; }
+
+    /* Bulk tablo (portföy sayfası ile uyumlu, sade Bootstrap üstünde) */
+    .tp-results-table { width: 100%; }
+    .tp-results-table th, .tp-results-table td { vertical-align: middle; white-space: nowrap; }
+    .tp-results-table th { background: #f1f4f8; color: #1e3c72; font-weight: 700; border-top: none !important; }
+    .tp-results-table tbody tr:hover { background: #f9fbff; }
   </style>
 </head>
 
@@ -94,10 +100,10 @@
           <div class="form-group mb-0">
             <button id="queryBtn" class="btn btn-primary">Sorgula</button>
           </div>
-            <div class="form-group mb-0 hide" id="loading">
-              <span class="spinner-border spinner-border-sm"></span>
-              <span class="ml-2">Sorgulanıyor...</span>
-            </div>
+          <div class="form-group mb-0 hide" id="loading">
+            <span class="spinner-border spinner-border-sm"></span>
+            <span class="ml-2">Sorgulanıyor...</span>
+          </div>
         </div>
 
         <div id="bulkFields" class="form-inline-gap hide">
@@ -108,7 +114,10 @@
           <div class="form-group mb-0">
             <button id="bulkQueryBtn" class="btn btn-secondary">Ara</button>
           </div>
-          <div class="muted">Not: Toplu aktarım için arayüz hazır; kurumsal uç geliştirmesi tamamlandığında bağlanacaktır.</div>
+          <div class="form-group mb-0 hide" id="bulkLoading">
+            <span class="spinner-border spinner-border-sm"></span>
+            <span class="ml-2">Sonuçlar çekiliyor...</span>
+          </div>
         </div>
       </div>
 
@@ -141,6 +150,36 @@
               <p class="text-muted">Henüz taraf eklenmedi.</p>
             </div>
           </div>
+        </div>
+      </div>
+
+      <!-- BULK RESULT LIST -->
+      <div id="bulkResultsContainer" class="section-card hide">
+        <div class="section-title">
+          <div><strong>Toplu Sonuçlar</strong> <small class="text-muted" id="bulkMeta"></small></div>
+          <div>
+            <button id="exportCsvBtn" class="btn btn-outline-primary btn-sm"><i class="fas fa-file-csv mr-1"></i> CSV Dışa Aktar</button>
+          </div>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-hover table-striped tp-results-table" id="bulkResultsTable">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Başvuru Numarası</th>
+                <th>Marka Adı</th>
+                <th>Marka Sahibi</th>
+                <th>Başvuru Tarihi</th>
+                <th>Tescil No</th>
+                <th>Durumu</th>
+                <th>Nice Sınıfları</th>
+                <th class="text-center">İşlem</th>
+              </tr>
+            </thead>
+            <tbody id="bulkResultsBody">
+              <!-- doldurulacak -->
+            </tbody>
+          </table>
         </div>
       </div>
 
