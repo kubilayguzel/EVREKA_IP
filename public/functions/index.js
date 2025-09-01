@@ -4284,19 +4284,34 @@ async function handleScrapeOwnerTrademarks(ownerId, opts = {}) {
     if (enableInfinite) {
       await page.evaluate(async (maxScrolls) => {
         const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
         const getTotal = () => {
-          const t = Array.from(document.querySelectorAll('body *')).map(n => n.textContent || '').find(t => /kayıt bulundu/i.test(t)) || '';
+          const t = Array.from(document.querySelectorAll('body *'))
+            .map(n => n.textContent || '')
+            .find(t => /kayıt bulundu/i.test(t)) || '';
           const m = t.match(/(\d+)\s*kayıt bulundu/i);
           return m ? parseInt(m[1], 10) : null;
         };
-        const scroller = document.querySelector('.MuiTableContainer-root') || document.scrollingElement || document.documentElement;
+
+        const scroller =
+          document.querySelector('.MuiTableContainer-root') ||
+          document.scrollingElement ||
+          document.documentElement;
+
         let last = 0;
         const total = getTotal();
+
         for (let i = 0; i < maxScrolls; i++) {
           const count = document.querySelectorAll('table.MuiTable-root tbody tr').length;
           if (total && count >= total) break;
           if (count > last) { last = count; }
-          (scroller as any).scrollTop = (scroller as any).scrollHeight;
+
+          if (scroller) {
+            scroller.scrollTop = scroller.scrollHeight;   // ✅ TS cast yok
+          } else {
+            window.scrollTo(0, document.body.scrollHeight);
+          }
+
           await sleep(700);
         }
       }, maxScrolls);
