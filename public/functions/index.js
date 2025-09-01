@@ -4079,13 +4079,10 @@ export const scrapeTrademark = onCall(
   }
 );
 // ====== SAHİP NUMARASI İLE TOPLU MARKA ARAMA ======
-// ====== SAHİP NUMARASI İLE TOPLU MARKA ARAMA ======
-
 export const scrapeOwnerTrademarks = onCall(
   { region: 'europe-west1', memory: '2GiB', timeoutSeconds: 300 },
   async (request) => {
     const { ownerId } = request.data;
-    
     if (!ownerId) {
       throw new HttpsError('invalid-argument', 'Sahip numarası (ownerId) zorunludur.');
     }
@@ -4107,59 +4104,50 @@ export const scrapeOwnerTrademarks = onCall(
     let browser;
     try {
       // Cloud Functions için Puppeteer konfigürasyonu
+      const isLocal = process.env.FUNCTIONS_EMULATOR === 'true';
+      const executablePath = isLocal && process.env.CHROME_PATH
+        ? process.env.CHROME_PATH
+        : await chromium.executablePath();
+
       browser = await puppeteer.launch({
-        headless: 'new',
         args: [
+          ...chromium.args,
           '--no-sandbox',
           '--disable-setuid-sandbox',
-          '--disable-dev-shm-usage',
-          '--disable-accelerated-2d-canvas',
-          '--no-first-run',
-          '--no-zygote',
-          '--single-process',
-          '--disable-gpu',
-          '--disable-background-timer-throttling',
-          '--disable-backgrounding-occluded-windows',
-          '--disable-renderer-backgrounding'
+          '--disable-dev-shm-usage'
         ],
-        // Cloud Functions'da executablePath belirtmeye gerek yok
-        // Puppeteer otomatik olarak bundled Chromium'u kullanacak
+        defaultViewport: chromium.defaultViewport,
+        executablePath,
+        headless: chromium.headless,
+        ignoreHTTPSErrors: true,
+        protocolTimeout: 180000
       });
 
       const page = await browser.newPage();
-      
-      // Request interceptor ekle (performans için)
+
+      // Request interceptor
       await page.setRequestInterception(true);
-      page.on('request', (request) => {
-        const resourceType = request.resourceType();
-        if (['image', 'stylesheet', 'font', 'media'].includes(resourceType)) {
-          request.abort();
-        } else {
-          request.continue();
-        }
+      page.on('request', (req) => {
+        const type = req.resourceType();
+        if (['image', 'stylesheet', 'font', 'media'].includes(type)) req.abort();
+        else req.continue();
       });
-      
-      // Viewport ve user agent
+
+      // Viewport & UA
       await page.setViewport({ width: 1280, height: 720 });
       await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
 
-      // Cookie'leri yükle (eğer varsa)
+      // Cookie'ler
       const savedCookies = loadCookiesFor('turkpatent');
       if (savedCookies?.length) {
         await page.setCookie(...savedCookies);
         logger.info(`${savedCookies.length} cookie yüklendi`);
       }
 
-      // TürkPatent marka araştırma sayfasına git
+      // TürkPatent
       const searchUrl = 'https://www.turkpatent.gov.tr/arastirma-yap';
       logger.info(`Sayfaya gidiliyor: ${searchUrl}`);
-      
-      await page.goto(searchUrl, { 
-        waitUntil: 'domcontentloaded', 
-        timeout: 30000 
-      });
-      
-      // Sayfa yüklenme kontrolü
+      await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
       await page.waitForTimeout(3000);
       logger.info('Sayfa yüklendi');
 
@@ -4172,34 +4160,27 @@ export const scrapeOwnerTrademarks = onCall(
           '.modal-backdrop + .modal .close',
           'div[style*="display: block"] .close'
         ];
-
-        for (const selector of modalSelectors) {
+        for (const sel of modalSelectors) {
           try {
-            const closeBtn = await page.$(selector);
-            if (closeBtn) {
-              await closeBtn.click();
+            const btn = await page.$(sel);
+            if (btn) {
+              await btn.click();
               await page.waitForTimeout(1000);
-              logger.info(`Modal kapatıldı: ${selector}`);
+              logger.info(`Modal kapatıldı: ${sel}`);
               break;
             }
-          } catch (e) {
-            continue;
-          }
+          } catch { /* boş */ }
         }
-
-        // ESC tuşu ile modal kapatmayı dene
         await page.keyboard.press('Escape');
         await page.waitForTimeout(500);
-
       } catch (modalError) {
         logger.info('Modal işlemi sırasında hata:', modalError.message);
       }
 
-      // Sayfadaki tüm input alanlarını analiz et
+      // Form analizi
       const formAnalysis = await page.evaluate(() => {
         const inputs = Array.from(document.querySelectorAll('input'));
         const labels = Array.from(document.querySelectorAll('label'));
-        
         return {
           inputs: inputs.map((input, idx) => ({
             index: idx,
@@ -4220,14 +4201,11 @@ export const scrapeOwnerTrademarks = onCall(
           url: window.location.href
         };
       });
-
       logger.info('Form analizi:', JSON.stringify(formAnalysis, null, 2));
 
-      // Başvuru Sahibi input alanını bul
-      // Genellikle 3. input alanı (index 2) başvuru sahibi için kullanılır
-      const targetInputIndex = 2; // Ekran görüntüsünden çıkardığımız index
-      
-      // Input alanına kişi numarasını gir
+      // Başvuru Sahibi input (örnek index)
+      const targetInputIndex = 2;
+
       await page.evaluate((index, value) => {
         const inputs = document.querySelectorAll('input[type="text"], input:not([type="button"]):not([type="submit"])');
         const targetInput = inputs[index];
@@ -4245,7 +4223,6 @@ export const scrapeOwnerTrademarks = onCall(
 
       logger.info(`Kişi numarası (${ownerId}) input alanına girildi (index: ${targetInputIndex})`);
 
-      // Form durumunu kontrol et
       const formState = await page.evaluate(() => {
         const inputs = document.querySelectorAll('input');
         return Array.from(inputs).map((input, idx) => ({
@@ -4254,59 +4231,33 @@ export const scrapeOwnerTrademarks = onCall(
           type: input.type
         }));
       });
-
       logger.info('Form durumu:', formState);
 
-      // SORGULA butonunu bul ve tıkla
+      // SORGULA tıkla
       await page.waitForTimeout(2000);
-      
       const clickResult = await page.evaluate(() => {
-        // Çeşitli selector'ları dene
-        const selectors = [
-          'button:contains("SORGULA")',
-          'input[value*="SORGULA"]',
-          'button[type="submit"]',
-          '.btn-primary',
-          '.btn:contains("Ara")',
-          'button.btn'
-        ];
-
-        for (const selector of selectors) {
-          try {
-            // jQuery tarzı :contains yerine manuel arama
-            const buttons = Array.from(document.querySelectorAll('button, input[type="submit"], input[type="button"]'));
-            const button = buttons.find(btn => 
-              btn.textContent?.includes('SORGULA') || 
-              btn.value?.includes('SORGULA') ||
-              btn.textContent?.includes('Ara') ||
-              btn.type === 'submit'
-            );
-            
-            if (button) {
-              button.click();
-              return { success: true, buttonText: button.textContent || button.value, selector };
-            }
-          } catch (e) {
-            continue;
-          }
+        const buttons = Array.from(document.querySelectorAll('button, input[type="submit"], input[type="button"]'));
+        const button = buttons.find(btn =>
+          btn.textContent?.includes('SORGULA') ||
+          btn.value?.includes('SORGULA') ||
+          btn.textContent?.includes('Ara') ||
+          btn.type === 'submit'
+        );
+        if (button) {
+          button.click();
+          return { success: true, buttonText: button.textContent || button.value };
         }
         return { success: false, error: 'Button not found' };
       });
-
-      if (!clickResult.success) {
-        throw new Error('SORGULA butonu bulunamadı veya tıklanamadı');
-      }
-
+      if (!clickResult.success) throw new Error('SORGULA butonu bulunamadı veya tıklanamadı');
       logger.info('SORGULA butonuna tıklandı:', clickResult);
 
       // Sonuçları bekle
       await page.waitForTimeout(5000);
 
-      // Sayfa durumunu analiz et
       const pageAnalysis = await page.evaluate(() => {
         const tables = document.querySelectorAll('table');
         const resultInfo = document.querySelector('.result-info, .kayit-sayisi, .pagination-info');
-        
         return {
           url: window.location.href,
           title: document.title,
@@ -4318,24 +4269,16 @@ export const scrapeOwnerTrademarks = onCall(
           bodyText: document.body.textContent.substring(0, 500)
         };
       });
-
       logger.info('Sayfa analizi:', pageAnalysis);
 
-      // Cookie'leri kaydet
       const cookies = await page.cookies();
-      if (cookies?.length) {
-        saveCookiesFor('turkpatent', cookies);
-      }
+      if (cookies?.length) saveCookiesFor('turkpatent', cookies);
 
       return {
         status: 'Success',
-        ownerId: ownerId,
+        ownerId,
         message: 'Sorgulama tamamlandı, sayfa analizi yapıldı',
-        debug: {
-          formAnalysis,
-          pageAnalysis,
-          clickResult
-        },
+        debug: { formAnalysis, pageAnalysis, clickResult },
         items: [],
         total: 0,
         found: pageAnalysis.hasResults
