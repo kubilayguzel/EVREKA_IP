@@ -143,7 +143,7 @@ function renderSingleResult(payload){
   const d = payload.data && typeof payload.data === 'object' ? payload.data : payload;
   const trademarkName = d.trademarkName || '';
   const status = d.status || '';
-  const imageUrl = d.imageUrl || '';
+  const imageUrl = d.imageSignedUrl || d.publicImageUrl || d.imageUrl || '';
   const owner = d.owner || '';
   const ownerId = d.ownerId || '';
   const ownerAddress = d.ownerAddress || '';
