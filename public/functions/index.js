@@ -3603,6 +3603,8 @@ import puppeteer from 'puppeteer-core';
 import chromium from '@sparticuz/chromium';
 import { getApps, initializeApp } from 'firebase-admin/app';
 import { getStorage } from 'firebase-admin/storage';
+chromium.setHeadlessMode = true;
+chromium.setGraphicsMode = false;
 
 // Ensure admin is initialized once
 if (!getApps().length) {
@@ -3850,7 +3852,15 @@ async function handleScrapeTrademark(basvuruNo) {
       defaultViewport: { width: 1920, height: 1080 }
     };
 
-    browser = await puppeteer.launch(launchOptions);
+    const browser = await puppeteer.launch({
+      args: [...chromium.args, '--no-sandbox', '--disable-setuid-sandbox'],
+      defaultViewport: chromium.defaultViewport,
+      executablePath: await chromium.executablePath(),  // 🔴 kritik satır
+      headless: chromium.headless,
+      ignoreHTTPSErrors: true,
+      protocolTimeout: 180000
+    });
+
     page = await browser.newPage();
 
     // --- Stealth / Kimlik ayarları ---
