@@ -3601,9 +3601,6 @@ export const adminDeleteUser = onCall({ region: "europe-west1" }, async (req) =>
 // ====== IMPORTS ======
 import puppeteer from 'puppeteer-core';
 import chromium from '@sparticuz/chromium';
-
-import { onCall, HttpsError } from 'firebase-functions/v2/https';
-import logger from 'firebase-functions/logger';
 import { getApps, initializeApp } from 'firebase-admin/app';
 import { getStorage } from 'firebase-admin/storage';
 
