@@ -487,46 +487,5 @@
 
         });
     </script>
-    <!-- Firebase config'ini SAYFAYA yükle (window.firebaseConfig set eder) -->
-
-<script type="module" src="./firebase-config.js"></script>
-
-<!-- Test butonu: İstersen kaldırırsın -->
-<button id="owner-search-test" style="position:fixed;right:16px;bottom:16px;z-index:9999">Kişi No Ara (dev)</button>
-
-<!-- Callable'ı çağıran modül script -->
-<script type="module">
-  import { getApps, getApp, initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-  import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js";
-
-  // 0) Config gerçekten geldi mi? (404 olursa path'i düzelt)
-  if (!window.firebaseConfig) {
-    alert("firebase-config.js yüklenmedi. Path'i kontrol et: /EVREKA_IP/public/js/firebase-config.js");
-  }
-
-  // 1) Uygulamayı başlat
-  const app = getApps().length ? getApp() : initializeApp(window.firebaseConfig);
-
-  // 2) Hızlı teşhis: projectId görmelisin
-  console.log("projectId =", app.options.projectId);
-
-  // 3) Callable referansı
-  const ownerSearch = httpsCallable(getFunctions(app, "europe-west1"), "ownerSearchSmokeTest");
-
-  // 4) Butonla çağır
-  document.getElementById("owner-search-test").addEventListener("click", async () => {
-    const ownerId = prompt("Kişi/Sahip No gir (örn. 123456):");
-    if (!ownerId) return;
-    try {
-      const { data } = await ownerSearch({ ownerId });
-      console.log("ownerSearchSmokeTest →", data);
-      alert(JSON.stringify(data, null, 2));
-    } catch (err) {
-      console.error(err);
-      alert("Hata: " + (err?.message || err));
-    }
-  });
-</script>
-
 </body>
 </html>
