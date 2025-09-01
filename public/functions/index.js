@@ -4259,11 +4259,21 @@ async function handleScrapeOwnerTrademarks(ownerId, opts = {}) {
     // --- "Sonsuz Liste" toggle (varsa) ---
     try {
       await page.evaluate(() => {
-        const findByText = (re) => Array.from(document.querySelectorAll('label, span, div, button')).find(el => re.test(el.textContent || ''));
+        const findByText = (re) =>
+          Array.from(document.querySelectorAll('label, span, div, button'))
+            .find(el => re.test((el.textContent || '')));
+
         const label = findByText(/sonsuz liste/i);
-        const sw = (label?.closest('div') || document).querySelector('input[type="checkbox"], button[role="switch"], [class*="MuiSwitch-switchBase"]');
-        if (sw) (sw as any).click?.();
-        else label?.click?.();
+
+        // label çevresinde bir switch/input arıyoruz
+        const sw =
+          (label && label.closest('div') || document).querySelector('input[type="checkbox"], button[role="switch"], [class*="MuiSwitch-switchBase"]');
+
+        if (sw && typeof sw.click === 'function') {
+          sw.click();                         // ✅ TS cast yok
+        } else if (label && typeof label.click === 'function') {
+          label.click();                      // ✅ TS cast yok
+        }
       });
     } catch {}
 
