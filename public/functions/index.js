@@ -3793,12 +3793,37 @@ function parseOwnerListPage() {
   const m = totalText.match(/(\d+)\s*kayıt bulundu/i);
   const total = m ? parseInt(m[1], 10) : null;
 
-  const rows = Array.from(document.querySelectorAll('table.MuiTable-root tbody tr'));
+  // HTML yapısına göre daha spesifik selector'lar
+  const rowSelectors = [
+    'tr.MuiTableRow-root.MuiTableRow-hover[role="number"]',
+    'tr.MuiTableRow-root.MuiTableRow-hover',
+    'tr.MuiTableRow-root',
+    'tr[role="number"]',
+    'table.MuiTable-root tbody tr'
+  ];
+
+  let rows = [];
+  for (const selector of rowSelectors) {
+    rows = Array.from(document.querySelectorAll(selector));
+    if (rows.length > 0) break;
+  }
   const items = rows.map((tr, idx) => {
-    const q = (role) => {
-      const el = tr.querySelector(`[role="${role}"]`) || tr.querySelector(`#${role}-${idx}`);
-      return txt(el);
-    };
+  const q = (role) => {
+    // Önce role attribute'u ile dene
+    let el = tr.querySelector(`[role="${role}"]`);
+    // Bulamazsan id ile dene
+    if (!el) el = tr.querySelector(`#${role}-${idx}`);
+    // Hala bulamadıysan td'lerin sırasına göre dene
+    if (!el && role === 'applicationNo') el = tr.querySelector('td:nth-child(2)');
+    if (!el && role === 'markName') el = tr.querySelector('td:nth-child(3)');
+    if (!el && role === 'holdName') el = tr.querySelector('td:nth-child(4)');
+    if (!el && role === 'applicationDate') el = tr.querySelector('td:nth-child(5)');
+    if (!el && role === 'registrationNo') el = tr.querySelector('td:nth-child(6)');
+    if (!el && role === 'state') el = tr.querySelector('td:nth-child(7)');
+    if (!el && role === 'niceClasses') el = tr.querySelector('td:nth-child(8)');
+    
+    return txt(el);
+  };
     return {
       index: idx + 1,
       applicationNo: q('applicationNo'),
@@ -4222,7 +4247,69 @@ async function handleScrapeOwnerTrademarks(ownerId, opts = {}) {
     }
 
     // Sonuçları bekle
-    await page.waitForSelector('table.MuiTable-root tbody tr', { timeout: 30000 });
+    // Sonuçları bekle - HTML yapısına göre spesifik selector'lar
+let tableFound = false;
+const selectors = [
+  'tr.MuiTableRow-root.MuiTableRow-hover[role="number"]',
+  'tr.MuiTableRow-root.MuiTableRow-hover',
+  'tr.MuiTableRow-root',
+  'table.MuiTable-root tbody tr',
+  'tr[role="number"]',
+  'td[role="applicationNo"]'
+];
+
+for (const selector of selectors) {
+  try {
+    await page.waitForSelector(selector, { timeout: 5000 });
+    tableFound = true;
+    logger.info(`Tablo bulundu: ${selector}`);
+    break;
+  } catch (e) {
+    logger.info(`Selector bulunamadı: ${selector}`);
+    continue;
+  }
+}
+
+if (!tableFound) {
+  // Hata mesajı kontrolü
+  const errorMessage = await page.evaluate(() => {
+    const errorSelectors = [
+      '.error', '.alert-danger', '.MuiAlert-message', 
+      'p', 'div', 'span', 'h1', 'h2', 'h3'
+    ];
+    const errorKeywords = [
+      'bulunamadı', 'sonuç yok', 'hata', 'geçersiz', 
+      'çok fazla deneme', 'too many attempts', 'rate limit', 
+      'sistem meşgul', 'geçici olarak hizmet dışı'
+    ];
+    
+    for (const selectors of errorSelectors) {
+      const elements = document.querySelectorAll(selectors);
+      for (const el of elements) {
+        const text = (el.textContent || '').trim().toLowerCase();
+        for (const keyword of errorKeywords) {
+          if (text.includes(keyword)) {
+            return el.textContent.trim();
+          }
+        }
+      }
+    }
+    return null;
+  });
+
+  if (errorMessage) {
+    logger.info(`Hata mesajı bulundu: ${errorMessage}`);
+    return {
+      status: 'Error',
+      found: false,
+      ownerId,
+      message: errorMessage,
+      error: errorMessage
+    };
+  }
+
+  throw new HttpsError('internal', 'Arama sonuçları tablosu bulunamadı');
+}
 
     // Sonsuz Liste'yi açmayı dene
     try {
