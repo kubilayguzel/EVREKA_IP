@@ -31,22 +31,10 @@ function fmtDateToTR(isoOrDDMMYYYY){
 // --- Firebase Functions ---
 import { app } from '../firebase-config.js';
 import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-functions.js';
-import { loadSharedLayout } from './layout-loader.js';
+import { loadSharedLayout, ensurePersonModal, openPersonModal } from './layout-loader.js';
+import { personService } from '../firebase-config.js'; // personService'i import et
 const functions = getFunctions(app, 'europe-west1');
 const scrapeTrademarkFunction = httpsCallable(functions, 'scrapeTrademark');
-
-// --- Optional person modal helpers from layout (if available) ---
-let ensurePersonModal = null;
-let openPersonModal = null;
-(async () => {
-  try {
-    const mod = await import('./layout-loader.js');
-    ensurePersonModal = mod.ensurePersonModal;
-    openPersonModal = mod.openPersonModal;
-  } catch (e) {
-    // layout-loader may not exist in isolated preview; ignore
-  }
-})();
 
 // --- Elements ---
 const singleFields = _el('singleFields');
@@ -60,14 +48,116 @@ const bulkQueryBtn   = _el('bulkQueryBtn');
 const loadingEl      = _el('loading');
 const singleResultContainer = _el('singleResultContainer');
 const singleResultInner = _el('singleResultInner');
-const relatedPartyCard = _el('relatedPartyCard');
-const openPersonModalBtn = _el('openPersonModalBtn');
-const selectedPersonSummary = _el('selectedPersonSummary');
 const savePortfolioBtn = _el('savePortfolioBtn');
 const saveThirdPartyBtn = _el('saveThirdPartyBtn');
 const cancelBtn = _el('cancelBtn');
 
-// Mode toggle
+// Yeni eklenen elementler
+const relatedPartySearchInput = _el('relatedPartySearchInput');
+const relatedPartySearchResults = _el('relatedPartySearchResults');
+const addNewPersonBtn = _el('addNewPersonBtn');
+const relatedPartyList = _el('relatedPartyList');
+const relatedPartyCount = _el('relatedPartyCount');
+
+// --- Global State ---
+let allPersons = [];
+let selectedRelatedParties = [];
+
+async function init() {
+  try {
+    const personsResult = await personService.getPersons();
+    allPersons = Array.isArray(personsResult.data) ? personsResult.data : [];
+    console.log(`[INIT] ${allPersons.length} kişi yüklendi.`);
+
+    // Olay dinleyicilerini kurun
+    setupEventListeners();
+  } catch (error) {
+    console.error("Veri yüklenirken hata oluştu:", error);
+    showToast("Gerekli veriler yüklenemedi.", "danger");
+  }
+}
+
+function setupEventListeners() {
+  singleRadio?.addEventListener('change', syncMode);
+  bulkRadio?.addEventListener('change', syncMode);
+  syncMode();
+
+  queryBtn?.addEventListener('click', async () => {
+    const basvuruNo = (basvuruNoInput?.value || '').trim();
+    if (!basvuruNo) return showToast('Başvuru numarası girin.', 'warning');
+    try {
+      _showBlock(loadingEl);
+      const result = await scrapeTrademarkFunction({ basvuruNo });
+      const data = result?.data || {};
+      if (!data || data.found === false){
+        showToast(data?.message || 'Sonuç bulunamadı ya da erişilemedi.', 'warning');
+        _hideBlock(loadingEl);
+        return;
+      }
+      renderSingleResult(data);
+      _hideBlock(loadingEl);
+    } catch (err){
+      _hideBlock(loadingEl);
+      showToast('Sorgulama hatası: ' + (err?.message || err), 'danger');
+    }
+  });
+
+  bulkQueryBtn?.addEventListener('click', () => {
+    const ownerId = (ownerIdInput?.value || '').trim();
+    if(!ownerId) return showToast('Sahip numarası girin.', 'warning');
+    showToast('Toplu aktarım kurumsal uç tamamlandığında bağlanacaktır.', 'info');
+  });
+
+  cancelBtn?.addEventListener('click', () => {
+    history.back();
+  });
+
+  // Yeni kişi yönetimi olay dinleyicileri
+  let searchTimer;
+  relatedPartySearchInput.addEventListener('input', (e) => {
+    const query = e.target.value.trim();
+    clearTimeout(searchTimer);
+    if (query.length < 2) {
+      relatedPartySearchResults.innerHTML = '';
+      _hideBlock(relatedPartySearchResults);
+      return;
+    }
+    searchTimer = setTimeout(() => searchPersons(query), 250);
+  });
+
+  relatedPartySearchResults.addEventListener('click', (e) => {
+    const item = e.target.closest('.search-result-item');
+    if (!item) return;
+    const personId = item.dataset.id;
+    const person = allPersons.find(p => p.id === personId);
+    if (person) {
+      addRelatedParty(person);
+      relatedPartySearchInput.value = '';
+      _hideBlock(relatedPartySearchResults);
+    }
+  });
+
+  addNewPersonBtn.addEventListener('click', async () => {
+    if (typeof ensurePersonModal === 'function') await ensurePersonModal();
+    if (typeof openPersonModal === 'function') {
+      openPersonModal('relatedParty', (newPerson) => {
+        if (newPerson) {
+          allPersons.push(newPerson);
+          addRelatedParty(newPerson);
+        }
+      });
+    }
+  });
+
+  relatedPartyList.addEventListener('click', (e) => {
+    const btn = e.target.closest('.remove-selected-item-btn');
+    if (btn) {
+      const personId = btn.dataset.id;
+      removeRelatedParty(personId);
+    }
+  });
+}
+
 function syncMode(){
   const isSingle = singleRadio?.checked;
   if (isSingle){
@@ -80,66 +170,13 @@ function syncMode(){
   // temizle
   singleResultInner.innerHTML='';
   _hideBlock(singleResultContainer);
-  _hideBlock(relatedPartyCard);
+  selectedRelatedParties = [];
+  renderSelectedRelatedParties();
   savePortfolioBtn.disabled = true;
   saveThirdPartyBtn.disabled = true;
 }
-singleRadio?.addEventListener('change', syncMode);
-bulkRadio?.addEventListener('change', syncMode);
-syncMode();
-
-// Query single
-queryBtn?.addEventListener('click', async () => {
-  const basvuruNo = (basvuruNoInput?.value || '').trim();
-  if (!basvuruNo) return showToast('Başvuru numarası girin.', 'warning');
-  try {
-    _showBlock(loadingEl);
-    const result = await scrapeTrademarkFunction({ basvuruNo });
-    const data = result?.data || {};
-    // Expected: data.status, data.found, ... and flattened fields
-    if (!data || data.found === false){
-      showToast(data?.message || 'Sonuç bulunamadı ya da erişilemedi.', 'warning');
-      _hideBlock(loadingEl);
-      return;
-    }
-    renderSingleResult(data);
-    _hideBlock(loadingEl);
-  } catch (err){
-    _hideBlock(loadingEl);
-    showToast('Sorgulama hatası: ' + (err?.message || err), 'danger');
-  }
-});
-
-// Bulk placeholder
-bulkQueryBtn?.addEventListener('click', () => {
-  const ownerId = (ownerIdInput?.value || '').trim();
-  if(!ownerId) return showToast('Sahip numarası girin.', 'warning');
-  showToast('Toplu aktarım kurumsal uç tamamlandığında bağlanacaktır.', 'info');
-});
-
-// Person modal open
-openPersonModalBtn?.addEventListener('click', async () => {
-  if (typeof ensurePersonModal === 'function') try { await ensurePersonModal(); } catch {}
-  if (typeof openPersonModal === 'function') {
-    openPersonModal('relatedParty', (person) => {
-      if (!person) return;
-      selectedPersonSummary.innerHTML = `<div class="text-right">
-        <div><strong>${person.name || person.displayName || person.title || 'Seçilen Kişi'}</strong></div>
-        <div class="muted" style="font-size:12px;">${person.email || person.taxNo || ''}</div>
-      </div>`;
-      showToast('Kişi eklendi.', 'success');
-    });
-  } else {
-    showToast('Kişi ekleme modülü bu sayfada devre dışı.', 'warning');
-  }
-});
-
-cancelBtn?.addEventListener('click', () => {
-  history.back();
-});
 
 function renderSingleResult(payload){
-  // payload düzleştirilmiş olabilir: data içinde ve root'ta
   const d = payload.data && typeof payload.data === 'object' ? payload.data : payload;
   const trademarkName = d.trademarkName || '';
   const status = d.status || '';
@@ -157,7 +194,19 @@ function renderSingleResult(payload){
   const niceClasses = Array.isArray(d.niceClasses) ? d.niceClasses : [];
   const goods = Array.isArray(d.goods) ? d.goods : [];
 
-  // HERO CARD (Portfolio Detail'e benzer)
+  // Önceki seçimleri temizle
+  selectedRelatedParties = [];
+  renderSelectedRelatedParties();
+
+  // Sahip numarasını (ownerId) kullanarak veritabanında eşleşme ara
+  if (ownerId) {
+    const matchedPerson = allPersons.find(p => String(p.tpeNo) === String(ownerId));
+    if (matchedPerson) {
+      addRelatedParty(matchedPerson);
+      showToast(`${matchedPerson.name} (${ownerId}) portföy sahibiyle eşleşti ve otomatik eklendi.`, 'success');
+    }
+  }
+
   const heroHtml = `
     <div class="hero">
       <div class="hero-img-wrap">
@@ -217,7 +266,6 @@ function renderSingleResult(payload){
     </div>
   `;
 
-  // GOODS CARD
   let goodsHtml = '';
   if (goods.length){
     const clsMap = {};
@@ -246,7 +294,68 @@ function renderSingleResult(payload){
   `;
 
   _showBlock(singleResultContainer);
-  _showBlock(relatedPartyCard);
   savePortfolioBtn.disabled = false;
   saveThirdPartyBtn.disabled = false;
 }
+
+function searchPersons(query) {
+  const container = _el('relatedPartySearchResults');
+  const nq = query.toLowerCase();
+  const filtered = allPersons.filter(p =>
+    (p.name || '').toLowerCase().includes(nq) || (p.tpeNo || '').includes(nq)
+  );
+
+  if (filtered.length === 0) {
+    container.innerHTML = '<p class="p-2 text-muted">Sonuç bulunamadı.</p>';
+    _showBlock(container);
+    return;
+  }
+
+  container.innerHTML = filtered.slice(0, 50).map(p =>
+    `<div class="search-result-item" data-id="${p.id}">
+      <b>${p.name}</b> <small class="text-muted">${p.email || ''} | TPE No: ${p.tpeNo || ''}</small>
+    </div>`
+  ).join('');
+
+  _showBlock(container);
+}
+
+function addRelatedParty(person) {
+  if (selectedRelatedParties.some(p => p.id === person.id)) {
+    return showToast('Bu kişi zaten eklenmiş.', 'warning');
+  }
+  selectedRelatedParties.push(person);
+  renderSelectedRelatedParties();
+}
+
+function removeRelatedParty(personId) {
+  selectedRelatedParties = selectedRelatedParties.filter(p => p.id !== personId);
+  renderSelectedRelatedParties();
+}
+
+function renderSelectedRelatedParties() {
+  const list = _el('relatedPartyList');
+  const countEl = _el('relatedPartyCount');
+
+  if (!list) return;
+
+  if (selectedRelatedParties.length === 0) {
+    list.innerHTML = `<div class="empty-state"><i class="fas fa-user-friends fa-3x text-muted mb-3"></i><p class="text-muted">Henüz taraf eklenmedi.</p></div>`;
+  } else {
+    list.innerHTML = selectedRelatedParties.map(p =>
+      `<div class="selected-item d-flex justify-content-between align-items-center p-2 mb-2 border rounded">
+        <span>${p.name} <small class="text-muted">TPE No: ${p.tpeNo || ''}</small></span>
+        <button type="button" class="btn btn-sm btn-danger remove-selected-item-btn" data-id="${p.id}">
+          <i class="fas fa-trash-alt"></i>
+        </button>
+      </div>`
+    ).join('');
+  }
+
+  if (countEl) countEl.textContent = selectedRelatedParties.length;
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  loadSharedLayout();
+  init();
+});
