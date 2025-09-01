@@ -168,10 +168,6 @@ function renderSingleResult(payload){
         <div class="mb-3"><span class="badge badge-soft">${status || 'Durum bilgisi yok'}</span></div>
         <div class="kv-grid">
           <div class="kv-item">
-            <div class="label">Sahip</div>
-            <div class="value">${owner || '-'}</div>
-          </div>
-          <div class="kv-item">
             <div class="label">Sahip No</div>
             <div class="value">${ownerId || '-'}</div>
           </div>
@@ -206,6 +202,11 @@ function renderSingleResult(payload){
           <div class="kv-item">
             <div class="label">Nice Sınıfları</div>
             <div class="value">${(niceClasses && niceClasses.length) ? niceClasses.join(', ') : '-'}</div>
+          </div>
+
+          <div class="kv-item owner-wide" style="grid-column:1 / span 2;">
+            <div class="label">Sahip</div>
+            <div class="value">${owner || '-'}</div>
           </div>
           <div class="kv-item" style="grid-column:1 / -1;">
             <div class="label">Sahip Adresi</div>
