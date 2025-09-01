@@ -4236,7 +4236,12 @@ export const scrapeOwnerTrademarks = onCall(
         }
         return { success: false, inputFound: false };
       }, ownerId);
-      logger.info(`Kişi numarası (${ownerId}) input alanına girildi (index: ${targetInputIndex})`);
+
+      logger.info(`Kişi numarası (${ownerId}) input sonucu:`, inputResult);
+
+      if (!inputResult.success) {
+        throw new Error('Kişi numarası input alanı bulunamadı veya değer girilemedi');
+      }
 
       // ---- Form durumu (debug) ----
       const formState = await page.evaluate(() => {
