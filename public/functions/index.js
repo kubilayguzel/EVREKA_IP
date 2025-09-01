@@ -3995,17 +3995,31 @@ async function handleScrapeTrademark(basvuruNo) {
     if (!clicked) throw new HttpsError('internal', 'Sorgula butonu bulunamadı');
 
     // Captcha kontrolü (bypass yok; anlamlı dönüş)
-    if (await detectCaptcha(page)) {
-      const retryAfterSec = 120 + Math.floor(Math.random()*60);
-      global['turkpatent_backoff_until'] = Date.now() + retryAfterSec * 1000;
-      return {
-        status: 'CaptchaRequired',
-        found: false,
-        applicationNumber: basvuruNo,
-        retryAfterSec,
-        message: 'reCAPTCHA doğrulaması gerekiyor. Lütfen doğrulayıp tekrar deneyin.'
-      };
-    }
+// === Arama tıklandıktan sonra SPA XHR/render bitsin diye kısa idle bekle
+try {
+  await page.waitForNetworkIdle({ idleTime: 750, timeout: 15000 });
+} catch { /* önemli değil */ }
+
+// === Captcha kontrolü: navigation/context yarışı güvenli
+let captchaHit = false;
+try {
+  captchaHit = await detectCaptcha(page);
+} catch (e) {
+  if (!/Execution context was destroyed|Cannot find context/i.test(e?.message || '')) {
+    throw e; // gerçek hata ise fırlat
+  }
+}
+if (captchaHit) {
+  const retryAfterSec = 120 + Math.floor(Math.random() * 60);
+  global['turkpatent_backoff_until'] = Date.now() + retryAfterSec * 1000;
+  return {
+    status: 'CaptchaRequired',
+    found: false,
+    ownerId,
+    retryAfterSec,
+    message: 'reCAPTCHA doğrulaması gerekiyor. Lütfen doğrulayıp tekrar deneyin.'
+  };
+}
 
     // DOM yüklenmesini bekle
     await page.waitForSelector('table.MuiTable-root tbody tr', { timeout: 30000 });
