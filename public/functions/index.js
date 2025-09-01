@@ -4065,3 +4065,197 @@ export const scrapeTrademark = onCall(
     return await handleScrapeTrademark(basvuruNo);
   }
 );
+// ====== SAHİP NUMARASI İLE TOPLU MARKA ARAMA ======
+
+export const scrapeOwnerTrademarks = onCall(
+  { region: 'europe-west1', memory: '2GiB', timeoutSeconds: 300 },
+  async (request) => {
+    const { ownerId } = request.data;
+    
+    if (!ownerId) {
+      throw new HttpsError('invalid-argument', 'Sahip numarası (ownerId) zorunludur.');
+    }
+
+    logger.info('[scrapeOwnerTrademarks] Başlıyor', { ownerId });
+
+    let browser;
+    try {
+      browser = await puppeteer.launch({
+        headless: false, // Debug için false yapıyoruz
+        args: [
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-dev-shm-usage'
+        ]
+      });
+
+      const page = await browser.newPage();
+      
+      // Viewport ve user agent
+      await page.setViewport({ width: 1280, height: 720 });
+      await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36');
+
+      // TürkPatent marka araştırma sayfasına git
+      const searchUrl = 'https://www.turkpatent.gov.tr/arastirma-yap';
+      logger.info(`Sayfaya gidiliyor: ${searchUrl}`);
+      
+      await page.goto(searchUrl, { waitUntil: 'networkidle0', timeout: 30000 });
+      
+      // Sayfa yüklenme kontrolü
+      await page.waitForTimeout(3000);
+      logger.info('Sayfa yüklendi, modal kontrol ediliyor');
+
+      // Modal varsa kapat (dosya takibindeki gibi)
+      try {
+        // Çeşitli modal kapatma selector'ları
+        const modalCloseSelectors = [
+          '.modal .close',
+          '.modal-close',
+          'button[data-dismiss="modal"]',
+          '.modal .btn-close',
+          '[aria-label="Close"]',
+          '.close-modal'
+        ];
+
+        for (const selector of modalCloseSelectors) {
+          const closeBtn = await page.$(selector);
+          if (closeBtn) {
+            await closeBtn.click();
+            await page.waitForTimeout(1000);
+            logger.info(`Modal kapatıldı: ${selector}`);
+            break;
+          }
+        }
+      } catch (modalError) {
+        logger.info('Modal bulunamadı veya kapatılamadı:', modalError.message);
+      }
+
+      // Kişi numarası alanını bul - ekran görüntüsüne göre input alanları var
+      await page.waitForTimeout(2000);
+      
+      // Sayfada form elementlerini ara
+      const inputs = await page.evaluate(() => {
+        const allInputs = Array.from(document.querySelectorAll('input[type="text"], input:not([type])'));
+        return allInputs.map((input, index) => ({
+          index,
+          id: input.id,
+          name: input.name,
+          placeholder: input.placeholder,
+          className: input.className,
+          value: input.value
+        }));
+      });
+
+      logger.info('Sayfadaki input alanları:', inputs);
+
+      // Başvuru Sahibi bölümündeki input alanını bul
+      // Ekran görüntüsünden görünen yapıya göre "Başvuru Sahibi" altındaki input'u hedefleyelim
+      let personInput;
+      
+      try {
+        // Önce "5184578" yazan input'u bul (Başvuru Sahibi bölümünde)
+        // Bu muhtemelen 3. input alanı (index 2)
+        await page.waitForSelector('input[type="text"]', { timeout: 10000 });
+        
+        // Tüm text input'ları al ve uygun olanı bul
+        personInput = await page.evaluateHandle(() => {
+          const inputs = document.querySelectorAll('input[type="text"]');
+          // Başvuru Sahibi bölümündeki input (genellikle 3. sırada)
+          return inputs[2] || inputs[1]; // Alternatif olarak 2. input'u da dene
+        });
+
+        if (!personInput) {
+          throw new Error('Kişi numarası input alanı bulunamadı');
+        }
+
+        logger.info('Kişi numarası input alanı bulundu');
+
+      } catch (inputError) {
+        logger.error('Input alanı bulunamadı:', inputError.message);
+        throw new HttpsError('internal', 'Kişi numarası input alanı bulunamadı');
+      }
+
+      // Mevcut değeri temizle ve yeni değeri gir
+      await page.evaluate((input, value) => {
+        input.focus();
+        input.value = '';
+        input.value = value;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      }, personInput, ownerId);
+
+      logger.info(`Kişi numarası girildi: ${ownerId}`);
+
+      // Sorgula butonunu bul ve tıkla
+      await page.waitForTimeout(1000);
+      
+      try {
+        // SORGULA butonunu bul (kırmızı buton)
+        await page.waitForSelector('button:has-text("SORGULA"), input[value="SORGULA"], .btn:has-text("SORGULA")', { timeout: 5000 });
+        
+        const sorgulaButton = await page.$('button:has-text("SORGULA"), input[value="SORGULA"], .btn:has-text("SORGULA")');
+        
+        if (!sorgulaButton) {
+          // Alternatif selector'lar dene
+          const altButton = await page.$('button[type="submit"], input[type="submit"]');
+          if (altButton) {
+            await altButton.click();
+          } else {
+            throw new Error('Sorgula butonu bulunamadı');
+          }
+        } else {
+          await sorgulaButton.click();
+        }
+
+        logger.info('SORGULA butonuna tıklandı');
+
+      } catch (buttonError) {
+        logger.error('Sorgula butonu hatası:', buttonError.message);
+        throw new HttpsError('internal', 'Sorgula butonu bulunamadı veya tıklanamadı');
+      }
+
+      // Sonuçların yüklenmesini bekle
+      await page.waitForTimeout(5000);
+      
+      // Bu noktada sayfada sonuçlar görünmeli
+      // Konsol çıktısını alalım
+      const pageContent = await page.evaluate(() => {
+        return {
+          title: document.title,
+          url: window.location.href,
+          hasTable: !!document.querySelector('table'),
+          tableCount: document.querySelectorAll('table').length,
+          resultInfo: document.querySelector('.result-info, .kayit-sayisi')?.textContent || '',
+          firstTableHTML: document.querySelector('table')?.outerHTML?.substring(0, 500) || 'Tablo bulunamadı'
+        };
+      });
+
+      logger.info('Sorgulama sonrası sayfa durumu:', pageContent);
+
+      // Geçici olarak başarılı sonuç döndür
+      return {
+        status: 'Success',
+        ownerId: ownerId,
+        message: 'Sorgulama tamamlandı, sayfa analizi yapılıyor',
+        debug: pageContent,
+        items: [], // Şimdilik boş
+        total: 0
+      };
+
+    } catch (error) {
+      logger.error('[scrapeOwnerTrademarks] Hata:', error.message, error.stack);
+      throw new HttpsError('internal', `Owner search hatası: ${error.message}`);
+    } finally {
+      // Debug için browser'ı hemen kapatma
+      setTimeout(async () => {
+        if (browser) {
+          try {
+            await browser.close();
+          } catch (e) {
+            logger.warn('Browser kapatma hatası:', e.message);
+          }
+        }
+      }, 10000); // 10 saniye sonra kapat
+    }
+  }
+);
