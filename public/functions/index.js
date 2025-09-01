@@ -4211,31 +4211,35 @@ async function handleScrapeOwnerTrademarks(ownerId, opts = {}) {
     }, input, String(ownerId));
 
     // Sorgula/Ara butonunu tıkla
-    logger.info('[scrapeOwnerTrademarks] Sorgula/Ara tıklanıyor...');
-    const clicked = await page.evaluate(() => {
-      const btn = Array.from(document.querySelectorAll('button'))
-        .find(b => /(sorgula|ara)/i.test((b.textContent || '')) && !b.disabled && !b.getAttribute('aria-disabled'));
-      if (!btn) return false;
-      btn.click();
-      return true;
-    });
-    if (!clicked) throw new HttpsError('internal', 'Sorgula/Ara butonu bulunamadı');
+// Sorgula/Ara butonunu bul ve tıkla
+logger.info('[scrapeOwnerTrademarks] Sorgula/Ara tıklanıyor...');
 
-    // Captcha kontrolü
-    if (await detectCaptcha(page)) {
-      const retryAfterSec = 120 + Math.floor(Math.random()*60);
-      global['turkpatent_backoff_until'] = Date.now() + retryAfterSec * 1000;
-      return {
-        status: 'CaptchaRequired',
-        found: false,
-        ownerId,
-        retryAfterSec,
-        message: 'reCAPTCHA doğrulaması gerekiyor. Lütfen doğrulayıp tekrar deneyin.'
-      };
-    }
+try {
+  await page.waitForSelector('button[type="submit"]', { timeout: 10000 });
+  await page.click('button[type="submit"]');
+  logger.info('Buton tıklandı, sayfa yüklenmesi bekleniyor...');
+  
+  // Tıklama sonrası kısa süre bekle
+  await sleep(3000);
+  
+  // Sayfa durumunu kontrol et
+  const pageStatus = await page.evaluate(() => ({
+    url: window.location.href,
+    title: document.title,
+    bodyLength: document.body ? document.body.textContent.length : 0,
+    hasError: document.body ? document.body.textContent.toLowerCase().includes('hata') : false
+  }));
+  
+  logger.info('Tıklama sonrası sayfa durumu:', pageStatus);
+  
+} catch (buttonError) {
+  logger.error('Buton tıklama hatası:', { 
+    message: buttonError.message, 
+    stack: buttonError.stack 
+  });
+  throw new HttpsError('internal', `Buton tıklama hatası: ${buttonError.message}`);
+}
 
-    // Sonuçları bekle
-// Sayfa yüklendikten sonra debug yapılacak - daha fazla bekleme süresi
 // Arama sonrası dinamik sonuçların yüklenmesini bekle
 logger.info('Arama yapıldıktan sonra sonuçların yüklenmesi bekleniyor...');
 
