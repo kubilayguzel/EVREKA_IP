@@ -4079,17 +4079,18 @@ export const scrapeTrademark = onCall(
   }
 );
 // ====== SAHİP NUMARASI İLE TOPLU MARKA ARAMA ======
+
 export const scrapeOwnerTrademarks = onCall(
   { region: 'europe-west1', memory: '2GiB', timeoutSeconds: 300 },
   async (request) => {
-    const { ownerId } = request.data;
+    const { ownerId } = request.data || {};
     if (!ownerId) {
       throw new HttpsError('invalid-argument', 'Sahip numarası (ownerId) zorunludur.');
     }
 
     logger.info('[scrapeOwnerTrademarks] Başlıyor', { ownerId });
 
-    // Rate limiting
+    // ---- Rate limiting ----
     const lastRequestKey = 'turkpatent_owner_last_request';
     const minDelay = 30000 + Math.floor(Math.random() * 10000);
     const lastRequest = global[lastRequestKey] || 0;
@@ -4097,15 +4098,17 @@ export const scrapeOwnerTrademarks = onCall(
     if (elapsed < minDelay) {
       const waitTime = minDelay - elapsed;
       logger.info(`Owner search rate limiting: ${waitTime}ms bekleyecek`);
-      await new Promise(resolve => setTimeout(resolve, waitTime));
+      await sleep(waitTime);
     }
     global[lastRequestKey] = Date.now();
 
     let browser;
     try {
-      // Cloud Functions için Puppeteer konfigürasyonu
+      // ---- PUPPETEER LAUNCH ----
+      // Not: puppeteer-core Chromium'u bundle etmez; Functions'ta
+      // @sparticuz/chromium ile executablePath belirtilmelidir.
       const isLocal = process.env.FUNCTIONS_EMULATOR === 'true';
-      const executablePath = isLocal && process.env.CHROME_PATH
+      const executablePath = (isLocal && process.env.CHROME_PATH)
         ? process.env.CHROME_PATH
         : await chromium.executablePath();
 
@@ -4117,7 +4120,7 @@ export const scrapeOwnerTrademarks = onCall(
           '--disable-dev-shm-usage'
         ],
         defaultViewport: chromium.defaultViewport,
-        executablePath,
+        executablePath,                 // 🔴 ZORUNLU
         headless: chromium.headless,
         ignoreHTTPSErrors: true,
         protocolTimeout: 180000
@@ -4125,33 +4128,40 @@ export const scrapeOwnerTrademarks = onCall(
 
       const page = await browser.newPage();
 
-      // Request interceptor
+      // ---- Request interceptor (performans) ----
       await page.setRequestInterception(true);
       page.on('request', (req) => {
         const type = req.resourceType();
-        if (['image', 'stylesheet', 'font', 'media'].includes(type)) req.abort();
-        else req.continue();
+        if (['image', 'stylesheet', 'font', 'media'].includes(type)) {
+          req.abort();
+        } else {
+          req.continue();
+        }
       });
 
-      // Viewport & UA
+      // ---- Viewport & User-Agent ----
       await page.setViewport({ width: 1280, height: 720 });
-      await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+      await page.setUserAgent(
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) ' +
+        'AppleWebKit/537.36 (KHTML, like Gecko) ' +
+        'Chrome/120.0.0.0 Safari/537.36'
+      );
 
-      // Cookie'ler
-      const savedCookies = loadCookiesFor('turkpatent');
+      // ---- Cookie'leri yükle (varsa) ----
+      const savedCookies = loadCookiesFor?.('turkpatent');
       if (savedCookies?.length) {
         await page.setCookie(...savedCookies);
         logger.info(`${savedCookies.length} cookie yüklendi`);
       }
 
-      // TürkPatent
+      // ---- TürkPatent sayfasına git ----
       const searchUrl = 'https://www.turkpatent.gov.tr/arastirma-yap';
       logger.info(`Sayfaya gidiliyor: ${searchUrl}`);
       await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
-      await page.waitForTimeout(3000);
+      await sleep(3000);
       logger.info('Sayfa yüklendi');
 
-      // Modal varsa kapat
+      // ---- Modal varsa kapat ----
       try {
         const modalSelectors = [
           '.modal.show .close',
@@ -4165,19 +4175,19 @@ export const scrapeOwnerTrademarks = onCall(
             const btn = await page.$(sel);
             if (btn) {
               await btn.click();
-              await page.waitForTimeout(1000);
+              await sleep(1000);
               logger.info(`Modal kapatıldı: ${sel}`);
               break;
             }
-          } catch { /* boş */ }
+          } catch { /* yut */ }
         }
         await page.keyboard.press('Escape');
-        await page.waitForTimeout(500);
+        await sleep(500);
       } catch (modalError) {
         logger.info('Modal işlemi sırasında hata:', modalError.message);
       }
 
-      // Form analizi
+      // ---- Form analizi (debug) ----
       const formAnalysis = await page.evaluate(() => {
         const inputs = Array.from(document.querySelectorAll('input'));
         const labels = Array.from(document.querySelectorAll('label'));
@@ -4203,11 +4213,12 @@ export const scrapeOwnerTrademarks = onCall(
       });
       logger.info('Form analizi:', JSON.stringify(formAnalysis, null, 2));
 
-      // Başvuru Sahibi input (örnek index)
-      const targetInputIndex = 2;
-
+      // ---- Başvuru Sahibi / Kişi No alanını doldur ----
+      const targetInputIndex = 2; // mevcut arayüz varsayımı
       await page.evaluate((index, value) => {
-        const inputs = document.querySelectorAll('input[type="text"], input:not([type="button"]):not([type="submit"])');
+        const inputs = document.querySelectorAll(
+          'input[type="text"], input:not([type="button"]):not([type="submit"])'
+        );
         const targetInput = inputs[index];
         if (targetInput) {
           targetInput.focus();
@@ -4220,9 +4231,9 @@ export const scrapeOwnerTrademarks = onCall(
         }
         return false;
       }, targetInputIndex, ownerId);
-
       logger.info(`Kişi numarası (${ownerId}) input alanına girildi (index: ${targetInputIndex})`);
 
+      // ---- Form durumu (debug) ----
       const formState = await page.evaluate(() => {
         const inputs = document.querySelectorAll('input');
         return Array.from(inputs).map((input, idx) => ({
@@ -4233,8 +4244,8 @@ export const scrapeOwnerTrademarks = onCall(
       });
       logger.info('Form durumu:', formState);
 
-      // SORGULA tıkla
-      await page.waitForTimeout(2000);
+      // ---- SORGULA butonunu tıkla ----
+      await sleep(2000);
       const clickResult = await page.evaluate(() => {
         const buttons = Array.from(document.querySelectorAll('button, input[type="submit"], input[type="button"]'));
         const button = buttons.find(btn =>
@@ -4252,9 +4263,13 @@ export const scrapeOwnerTrademarks = onCall(
       if (!clickResult.success) throw new Error('SORGULA butonu bulunamadı veya tıklanamadı');
       logger.info('SORGULA butonuna tıklandı:', clickResult);
 
-      // Sonuçları bekle
-      await page.waitForTimeout(5000);
+      // ---- Sonuçları bekle ----
+      await Promise.race([
+        page.waitForSelector('table tbody tr, .search-results, .kayit-sayisi', { timeout: 12000 }).catch(() => {}),
+        sleep(5000)
+      ]);
 
+      // ---- Sayfa analizi ----
       const pageAnalysis = await page.evaluate(() => {
         const tables = document.querySelectorAll('table');
         const resultInfo = document.querySelector('.result-info, .kayit-sayisi, .pagination-info');
@@ -4271,9 +4286,13 @@ export const scrapeOwnerTrademarks = onCall(
       });
       logger.info('Sayfa analizi:', pageAnalysis);
 
+      // ---- Cookie'leri kaydet ----
       const cookies = await page.cookies();
-      if (cookies?.length) saveCookiesFor('turkpatent', cookies);
+      if (cookies?.length) {
+        saveCookiesFor?.('turkpatent', cookies);
+      }
 
+      // ---- Yanıt ----
       return {
         status: 'Success',
         ownerId,
@@ -4286,18 +4305,18 @@ export const scrapeOwnerTrademarks = onCall(
 
     } catch (error) {
       logger.error('[scrapeOwnerTrademarks] Hata:', {
-        message: error.message,
-        stack: error.stack,
+        message: error?.message,
+        stack: error?.stack,
         ownerId
       });
-      throw new HttpsError('internal', `Owner search hatası: ${error.message}`);
+      throw new HttpsError('internal', `Owner search hatası: ${error?.message}`);
     } finally {
       if (browser) {
         try {
           await browser.close();
           logger.info('Browser kapatıldı');
         } catch (e) {
-          logger.warn('Browser kapatma hatası:', e.message);
+          logger.warn('Browser kapatma hatası:', e?.message);
         }
       }
     }
