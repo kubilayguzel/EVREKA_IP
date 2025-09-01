@@ -3793,14 +3793,16 @@ function parseOwnerListPage() {
   const m = totalText.match(/(\d+)\s*kayıt bulundu/i);
   const total = m ? parseInt(m[1], 10) : null;
 
-  // HTML yapısına göre daha spesifik selector'lar
-  const rowSelectors = [
-    'tr.MuiTableRow-root.MuiTableRow-hover[role="number"]',
-    'tr.MuiTableRow-root.MuiTableRow-hover',
-    'tr.MuiTableRow-root',
-    'tr[role="number"]',
-    'table.MuiTable-root tbody tr'
-  ];
+// #results ID'si ile birlikte selector'lar
+const rowSelectors = [
+  '#results tbody tr',
+  '#results > tbody > tr',
+  'tbody.MuiTableBody-root tr.MuiTableRow-root',
+  'tr.MuiTableRow-root[role="number"]',
+  'tbody tr[role="number"]',
+  'tr.MuiTableRow-root.MuiTableRow-hover',
+  'table.MuiTable-root tbody tr'
+];
 
   let rows = [];
   for (const selector of rowSelectors) {
@@ -4250,12 +4252,13 @@ async function handleScrapeOwnerTrademarks(ownerId, opts = {}) {
     // Sonuçları bekle - HTML yapısına göre spesifik selector'lar
 let tableFound = false;
 const selectors = [
-  'tr.MuiTableRow-root.MuiTableRow-hover[role="number"]',
+  '#results tbody tr',
+  '#results > tbody > tr',
+  'tbody.MuiTableBody-root tr.MuiTableRow-root',
+  'tr.MuiTableRow-root[role="number"]',
+  'tbody tr[role="number"]',
   'tr.MuiTableRow-root.MuiTableRow-hover',
-  'tr.MuiTableRow-root',
-  'table.MuiTable-root tbody tr',
-  'tr[role="number"]',
-  'td[role="applicationNo"]'
+  'table.MuiTable-root tbody tr'
 ];
 
 for (const selector of selectors) {
