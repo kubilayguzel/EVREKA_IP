@@ -3598,7 +3598,6 @@ export const adminDeleteUser = onCall({ region: "europe-west1" }, async (req) =>
   return { ok: true, uid };
 });
 
-
 // ====== IMPORTS ======
 import puppeteer from 'puppeteer-core';
 import chromium from '@sparticuz/chromium';
@@ -3674,18 +3673,12 @@ async function persistImageToStorage(src, applicationNumber) {
 }
 
 // ====== reCAPTCHA tespiti (bypass YOK) ======
-// ====== reCAPTCHA tespiti (bypass YOK) ======
 async function detectCaptcha(page) {
-  return await page.evaluate(() => {
-    const txt = (document.body.innerText || '').toLowerCase();
-    const byText = /recaptcha|ben robot değilim|i'm not a robot|lütfen doğrulayın/.test(txt);
-    const byFrame = !!document.querySelector('iframe[src*="recaptcha"], iframe[title*="recaptcha"], div.g-recaptcha');
-    return byText || byFrame;
-  });
+  const text = (await page.evaluate(() => document.body.innerText || '')).toLowerCase();
+  return /recaptcha|ben robot değilim|i'm not a robot|lütfen doğrulayın/.test(text);
 }
 
-
-// ====== MUI tablolarını DOM'dan parse eden fonksiyon (TEK KAYIT DETAY) ======
+// ====== MUI tablolarını DOM'dan parse eden fonksiyon ======
 function domParseFn() {
   const out = {
     applicationNumber:null, applicationDate:null, registrationNumber:null, registrationDate:null,
@@ -3790,62 +3783,7 @@ function domParseFn() {
   return out;
 }
 
-// ====== OWNER LISTE SAYFASINI PARSE EDEN FONKS ======
-function parseOwnerListPage() {
-  const txt = (n) => (n && (n.textContent || '')).trim();
-
-  // Toplam kayıt sayısını bulmak için daha genel bir yaklaşım
-  const totalText = Array.from(document.querySelectorAll('div, p, span'))
-    .map(n => n.textContent || '')
-    .find(t => /kayıt bulundu/i.test(t)) || '';
-  const m = totalText.match(/(\d+)\s*kayıt bulundu/i);
-  const total = m ? parseInt(m[1], 10) : null;
-
-  // Tabloyu daha güvenilir bir şekilde seç
-  const table = document.querySelector('table.MuiTable-root');
-  if (!table) return { total: 0, count: 0, items: [] };
-
-  const rows = Array.from(table.querySelectorAll('tbody tr'));
-  
-  // Her satırdaki veriyi kolon indeksine göre al
-  const items = rows.map((tr) => {
-    const cells = tr.querySelectorAll('td');
-    if (cells.length < 9) { // Yeterli sayıda kolon yoksa atla
-      return null;
-    }
-    return {
-      applicationNo: txt(cells[2]), // 3. kolon
-      markName:      txt(cells[3]), // 4. kolon
-      holdName:      txt(cells[4]), // 5. kolon
-      applicationDate: txt(cells[5]), // 6. kolon
-      registrationNo:  txt(cells[6]), // 7. kolon
-      state:           txt(cells[7]), // 8. kolon
-      niceClasses:     txt(cells[8]), // 9. kolon
-    };
-  }).filter(Boolean);
-
-  return { total, count: items.length, items };
-}
-
-// ====== ORTAK: Sayfaya git + modal kapat ======
-async function gotoSearchHome(page) {
-  logger.info('[turkpatent] Sayfaya gidiliyor...');
-  await page.goto('https://www.turkpatent.gov.tr/arastirma-yap?form=trademark', { waitUntil: 'domcontentloaded' });
-
-  // --- Popup/Modal kapat ---
-  try {
-    try { await page.waitForSelector('.jss84 .jss92', { timeout: 2000 }); await page.click('.jss84 .jss92'); } catch {}
-    try {
-      await page.waitForSelector('[role="dialog"], .MuiDialog-root, .MuiModal-root', { timeout: 2000 });
-      const closeBtn = await page.$('button[aria-label="Close"], button[aria-label="Kapat"], .close');
-      if (closeBtn) { await closeBtn.click(); }
-    } catch {}
-  } catch (modalError) {
-    logger.info('Modal kapatma hatası (normal):', { message: modalError?.message });
-  }
-}
-
-// ====== COMMON HANDLER (TEK KAYIT) ======
+// ====== COMMON HANDLER ======
 async function handleScrapeTrademark(basvuruNo) {
   if (!basvuruNo) {
     throw new HttpsError('invalid-argument', 'Başvuru numarası (basvuruNo) zorunludur.');
@@ -3933,14 +3871,27 @@ async function handleScrapeTrademark(basvuruNo) {
     await page.setRequestInterception(true);
     page.on('request', req => {
       const t = req.resourceType();
-      if (t === 'image' || t === 'font' || t === 'media') return req.abort();
+      if (t === 'image' || t === 'font' || t === 'stylesheet' || t === 'media') return req.abort();
       req.continue();
     });
 
     page.setDefaultTimeout(30000);
     page.setDefaultNavigationTimeout(30000);
 
-    await gotoSearchHome(page);
+    logger.info('[scrapeTrademarkPuppeteer] Sayfaya gidiliyor...');
+    await page.goto('https://www.turkpatent.gov.tr/arastirma-yap?form=trademark', { waitUntil: 'domcontentloaded' });
+
+    // --- Popup/Modal kapat ---
+    try {
+      try { await page.waitForSelector('.jss84 .jss92', { timeout: 2000 }); await page.click('.jss84 .jss92'); } catch {}
+      try {
+        await page.waitForSelector('[role="dialog"], .MuiDialog-root, .MuiModal-root', { timeout: 2000 });
+        const closeBtn = await page.$('button[aria-label="Close"], button[aria-label="Kapat"], .close');
+        if (closeBtn) { await closeBtn.click(); }
+      } catch {}
+    } catch (modalError) {
+      logger.info('Modal kapatma hatası (normal):', { message: modalError?.message });
+    }
 
     // --- "Dosya Takibi" sekmesi ---
     try {
@@ -3981,7 +3932,7 @@ async function handleScrapeTrademark(basvuruNo) {
       throw new HttpsError('internal', `Form doldurma başarısız: ${inputError.message}`);
     }
 
-    // --- TEK TIK + DOM BEKLEME ---
+    // --- TEK TIK + DOM BEKLEME (JSON YOK) ---
     logger.info('[scrapeTrademarkPuppeteer] Sorgula butonu tıklanıyor ve DOM bekleniyor...');
     await sleep(400 + Math.floor(Math.random() * 600)); // küçük jitter
 
@@ -3995,31 +3946,17 @@ async function handleScrapeTrademark(basvuruNo) {
     if (!clicked) throw new HttpsError('internal', 'Sorgula butonu bulunamadı');
 
     // Captcha kontrolü (bypass yok; anlamlı dönüş)
-// === Arama tıklandıktan sonra SPA XHR/render bitsin diye kısa idle bekle
-try {
-  await page.waitForNetworkIdle({ idleTime: 750, timeout: 15000 });
-} catch { /* önemli değil */ }
-
-// === Captcha kontrolü: navigation/context yarışı güvenli
-let captchaHit = false;
-try {
-  captchaHit = await detectCaptcha(page);
-} catch (e) {
-  if (!/Execution context was destroyed|Cannot find context/i.test(e?.message || '')) {
-    throw e; // gerçek hata ise fırlat
-  }
-}
-if (captchaHit) {
-  const retryAfterSec = 120 + Math.floor(Math.random() * 60);
-  global['turkpatent_backoff_until'] = Date.now() + retryAfterSec * 1000;
-  return {
-    status: 'CaptchaRequired',
-    found: false,
-    ownerId,
-    retryAfterSec,
-    message: 'reCAPTCHA doğrulaması gerekiyor. Lütfen doğrulayıp tekrar deneyin.'
-  };
-}
+    if (await detectCaptcha(page)) {
+      const retryAfterSec = 120 + Math.floor(Math.random()*60);
+      global['turkpatent_backoff_until'] = Date.now() + retryAfterSec * 1000;
+      return {
+        status: 'CaptchaRequired',
+        found: false,
+        applicationNumber: basvuruNo,
+        retryAfterSec,
+        message: 'reCAPTCHA doğrulaması gerekiyor. Lütfen doğrulayıp tekrar deneyin.'
+      };
+    }
 
     // DOM yüklenmesini bekle
     await page.waitForSelector('table.MuiTable-root tbody tr', { timeout: 30000 });
@@ -4106,6 +4043,7 @@ if (captchaHit) {
   } finally {
     // Cookie’leri sakla (başarılı/başarısız fark etmez)
     try {
+      // eslint-disable-next-line no-undef
       if (typeof page !== 'undefined' && page) {
         const freshCookies = await page.cookies();
         if (freshCookies?.length) saveCookiesFor('turkpatent', freshCookies);
@@ -4119,405 +4057,11 @@ if (captchaHit) {
   }
 }
 
-// ====== HANDLER (SAHİP NO => LİSTE) ======
-async function handleScrapeOwnerTrademarks(ownerId, opts = {}) {
-  if (!ownerId) {
-    throw new HttpsError('invalid-argument', 'Sahip numarası (ownerId) zorunludur.');
-  }
-
-  const cacheKey = `owner_${ownerId}`;
-  const cached = __tpCache.get(cacheKey);
-  if (cached && (Date.now() - cached.ts) < 5 * 60 * 1000) {
-    logger.info('[scrapeOwnerTrademarks] Cache hit');
-    return cached.data;
-  }
-
-  // Rate limit & backoff reuse
-  const lastRequestKey = 'turkpatent_last_request';
-  const minDelay = 45000 + Math.floor(Math.random() * 15000);
-  const lastRequest = global[lastRequestKey] || 0;
-  const elapsed = Date.now() - lastRequest;
-  if (elapsed < minDelay) {
-    const waitTime = minDelay - elapsed;
-    logger.info(`Rate limiting (owner): ${waitTime}ms bekleyecek`);
-    await sleep(waitTime);
-  }
-  global[lastRequestKey] = Date.now();
-
-  const tpBackoffKey = 'turkpatent_backoff_until';
-  const backoffRemaining = Math.max(0, (global[tpBackoffKey] || 0) - Date.now());
-  if (backoffRemaining > 0) {
-    const retryAfterSec = Math.ceil(backoffRemaining / 1000);
-    logger.info(`Backoff aktif (owner), ${retryAfterSec}s sonra tekrar deneyin.`);
-    return {
-      status: 'Backoff',
-      found: false,
-      ownerId,
-      retryAfterSec,
-      message: 'TürkPatent geçici limitten dolayı bekleme süresi aktif.'
-    };
-  }
-
-  let browser;
-  let page;
-
-  try {
-    const isLocal = process.env.FUNCTIONS_EMULATOR === 'true' || process.env.LOCAL_PUPPETEER === '1';
-
-    const launchOptions = isLocal ? {
-      headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
-    } : {
-      headless: chromium.headless,
-      executablePath: await chromium.executablePath(),
-      args: [
-        ...chromium.args,
-        '--disable-dev-shm-usage',
-        '--disable-gpu',
-        '--no-first-run',
-        '--disable-default-apps',
-        '--disable-features=VizDisplayCompositor',
-        '--disable-blink-features=AutomationControlled',
-        '--disable-web-security'
-      ],
-      defaultViewport: { width: 1920, height: 1080 }
-    };
-
-    browser = await puppeteer.launch(launchOptions);
-    page = await browser.newPage();
-
-    // stealth
-    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36');
-    await page.setExtraHTTPHeaders({ 'Accept-Language': 'tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7' });
-    try { await page.emulateTimezone('Europe/Istanbul'); } catch {}
-    await page.evaluateOnNewDocument(() => {
-      Object.defineProperty(navigator, 'webdriver', { get: () => false });
-    });
-
-    // cookies
-    const savedCookies = loadCookiesFor('turkpatent');
-    if (savedCookies.length) { try { await page.setCookie(...savedCookies); } catch {} }
-
-    await page.setRequestInterception(true);
-    page.on('request', req => {
-      const t = req.resourceType();
-      if (t === 'image' || t === 'font' || t === 'media') return req.abort(); // stylesheet artık serbest
-      req.continue();
-    });
-    page.setDefaultTimeout(30000);
-    page.setDefaultNavigationTimeout(30000);
-
-    await gotoSearchHome(page);
-
-    // --- Kişi Numarası araması (sekme değiştirmeden) ---
-    logger.info('[scrapeOwnerTrademarks] Kişi No alanı bekleniyor...');
-    const ownerInputSel = 'input[placeholder*="Kişi"], input[placeholder*="Sahip"]';
-    await page.waitForSelector(ownerInputSel, { timeout: 15000, visible: true });
-    const input = await page.$(ownerInputSel);
-    if (!input) throw new HttpsError('internal', 'Kişi Numarası input alanı bulunamadı');
-
-    await input.click({ clickCount: 3 });
-    await input.type(String(ownerId));
-    await page.evaluate((el, val) => {
-      el.value = val;
-      el.dispatchEvent(new Event('input', { bubbles: true }));
-      el.dispatchEvent(new Event('change', { bubbles: true }));
-    }, input, String(ownerId));
-
-    // Sorgula/Ara butonunu tıkla
-// Sorgula/Ara butonunu bul ve tıkla
-logger.info('[scrapeOwnerTrademarks] Sorgula/Ara tıklanıyor...');
-
-try {
-  await page.waitForSelector('button[type="submit"]', { timeout: 10000 });
-  await page.click('button[type="submit"]');
-  logger.info('Buton tıklandı, sayfa yüklenmesi bekleniyor...');
-  
-  // Tıklama sonrası kısa süre bekle
-  await sleep(3000);
-  
-  // Sayfa durumunu kontrol et
-  const pageStatus = await page.evaluate(() => ({
-    url: window.location.href,
-    title: document.title,
-    bodyLength: document.body ? document.body.textContent.length : 0,
-    hasError: document.body ? document.body.textContent.toLowerCase().includes('hata') : false
-  }));
-  
-  logger.info('Tıklama sonrası sayfa durumu:', pageStatus);
-  
-} catch (buttonError) {
-  logger.error('Buton tıklama hatası:', { 
-    message: buttonError.message, 
-    stack: buttonError.stack 
-  });
-  throw new HttpsError('internal', `Buton tıklama hatası: ${buttonError.message}`);
-}
-
-// Arama sonrası dinamik sonuçların yüklenmesini bekle
-logger.info('Arama yapıldıktan sonra sonuçların yüklenmesi bekleniyor...');
-
-// Daha kısa süreyle kontrol et - maksimum 10 saniye
-let tablesLoaded = false;
-let attempts = 0;
-const maxAttempts = 10; // 10x1=10 saniye
-
-try {
-  while (!tablesLoaded && attempts < maxAttempts) {
-    await sleep(1000); // 1 saniye bekle
-    attempts++;
-    
-    logger.info(`Deneme ${attempts}/${maxAttempts} başlıyor...`);
-    
-    const pageCheck = await page.evaluate(() => {
-      try {
-        const bodyText = document.body.textContent || '';
-        return {
-          allTables: document.querySelectorAll('table').length,
-          allTrs: document.querySelectorAll('tr').length,
-          loading: !!document.querySelector('.loading, .spinner, .MuiCircularProgress-root'),
-          hasResultText: /kayıt bulundu|sonuç|bulunamadı|hiç|yok/i.test(bodyText),
-          bodyTextSample: bodyText.substring(0, 200)
-        };
-      } catch (err) {
-        return {
-          allTables: 0,
-          allTrs: 0, 
-          loading: false,
-          hasResultText: false,
-          bodyTextSample: 'Error: ' + err.message,
-          error: err.message
-        };
-      }
-    });
-    
-    logger.info(`Deneme ${attempts}: Tables=${pageCheck.allTables}, TRs=${pageCheck.allTrs}, Loading=${pageCheck.loading}, HasText=${pageCheck.hasResultText}, BodySample="${pageCheck.bodyTextSample}"`);
-    
-    if (pageCheck.allTables > 0 && pageCheck.allTrs > 0) {
-      tablesLoaded = true;
-      logger.info('✅ Tablolar yüklendi!');
-      break;
-    } else if (pageCheck.hasResultText && !pageCheck.loading) {
-      logger.info('Sonuç metni var ama tablolar yok - NoResults kontrolü yapılıyor');
-      
-      // Sonuç metni kontrol et
-      const noResultsMessage = await page.evaluate(() => {
-        try {
-          const bodyText = document.body.textContent.toLowerCase();
-          
-          if (bodyText.includes('sonuç bulunamadı') || 
-              bodyText.includes('kayıt bulunamadı') ||
-              bodyText.includes('hiçbir sonuç') ||
-              bodyText.includes('0 kayıt bulundu') ||
-              bodyText.includes('bulunamadı')) {
-            return 'Bu sahip numarası için sonuç bulunamadı.';
-          }
-          return null;
-        } catch (err) {
-          return 'Error checking results: ' + err.message;
-        }
-      });
-      
-      if (noResultsMessage && !noResultsMessage.startsWith('Error')) {
-        logger.info('✅ Sonuç bulunamadı mesajı tespit edildi');
-        return {
-          status: 'NoResults',
-          found: false,
-          ownerId,
-          total: 0,
-          items: [],
-          message: noResultsMessage
-        };
-      }
-      
-      logger.info('Sonuç metni bulundu ama "bulunamadı" değil');
-      break;
-    }
-    
-    logger.info(`Deneme ${attempts} tamamlandı, ${maxAttempts - attempts} deneme kaldı`);
-  }
-  
-  logger.info(`Loop tamamlandı. TablesLoaded: ${tablesLoaded}, Attempts: ${attempts}`);
-  
-} catch (loopError) {
-  logger.error('Loop hatası:', { message: loopError.message, stack: loopError.stack });
-}
-
-if (!tablesLoaded) {
-  logger.info('Tablolar yüklenemedi, son durumu kontrol ediliyor...');
-}
-
-// Sayfa durumunu detaylı kontrol et
-const pageDebugInfo = await page.evaluate(() => {
-  return {
-    title: document.title,
-    url: window.location.href,
-    bodyText: document.body.textContent.substring(0, 1000),
-    allTables: document.querySelectorAll('table').length,
-    allTbodies: document.querySelectorAll('tbody').length,
-    allTrs: document.querySelectorAll('tr').length,
-    muiTables: document.querySelectorAll('.MuiTable-root').length,
-    muiTableBodies: document.querySelectorAll('.MuiTableBody-root').length,
-    muiTableRows: document.querySelectorAll('.MuiTableRow-root').length,
-    roleNumberElements: document.querySelectorAll('[role="number"]').length,
-    applicationNoElements: document.querySelectorAll('[role="applicationNo"]').length,
-    // Sayfa HTML'inin bir kısmını al
-    htmlSample: document.documentElement.innerHTML.substring(0, 2000)
-  };
-});
-
-logger.info('Sayfa debug bilgileri:', pageDebugInfo);
-
-// Eğer hiç tablo yoksa, başka bir problem var demektir
-if (pageDebugInfo.allTables === 0) {
-  logger.info('Sayfada hiç tablo bulunamadı. Sayfa tam yüklenmemiş olabilir.');
-  
-  // Captcha kontrolü yap
-// === Arama tıklandıktan sonra SPA XHR/render bitsin diye kısa idle bekle
-try {
-  await page.waitForNetworkIdle({ idleTime: 750, timeout: 15000 });
-} catch { /* önemli değil */ }
-
-// === Captcha kontrolü: navigation/context yarışı güvenli
-let captchaHit = false;
-try {
-  captchaHit = await detectCaptcha(page);
-} catch (e) {
-  if (!/Execution context was destroyed|Cannot find context/i.test(e?.message || '')) {
-    throw e; // gerçek hata; fırlat
-  }
-}
-if (captchaHit) {
-  const retryAfterSec = 120 + Math.floor(Math.random() * 60);
-  global['turkpatent_backoff_until'] = Date.now() + retryAfterSec * 1000;
-  return {
-    status: 'CaptchaRequired',
-    found: false,
-    ownerId,
-    retryAfterSec,
-    message: 'reCAPTCHA doğrulaması gerekiyor. Lütfen doğrulayıp tekrar deneyin.'
-  };
-}
-  
-  // Hata mesajı kontrol et
-  const hasError = await page.evaluate(() => {
-    const errorKeywords = ['bulunamadı', 'sonuç yok', 'hata', 'geçersiz', 'çok fazla deneme'];
-    const bodyText = document.body.textContent.toLowerCase();
-    return errorKeywords.some(keyword => bodyText.includes(keyword));
-  });
-  
-  if (hasError) {
-    return {
-      status: 'NoResults',
-      found: false,
-      ownerId,
-      message: 'Bu sahip numarası için sonuç bulunamadı.'
-    };
-  }
-  
-  throw new HttpsError('internal', `Sayfa yüklenemedi. Debug: ${JSON.stringify(pageDebugInfo)}`);
-}
-
-// Tablolar var ama tr elementleri yoksa
-if (pageDebugInfo.allTrs === 0) {
-  throw new HttpsError('internal', `Tablolar var ama satırlar yok. Debug: ${JSON.stringify(pageDebugInfo)}`);
-}
-
-logger.info('Sayfa başarıyla yüklendi ve tablolar mevcut.');
-
-    // Sonsuz Liste'yi açmayı dene
-    try {
-      await page.evaluate(() => {
-        function clickIfExists(el) { try { el && el.click(); } catch {} }
-        const label = Array.from(document.querySelectorAll('label, span, div, button'))
-          .find(el => /sonsuz liste/i.test(el.textContent || ''));
-        if (label) {
-          // en yakındaki switch/input
-          const root = label.closest('div') || document;
-          const sw = root.querySelector('input[type="checkbox"], input[role="switch"]') ||
-                     document.querySelector('input[type="checkbox"][aria-label*="Sonsuz"], input[role="switch"][aria-label*="Sonsuz"]');
-          if (sw && sw.getAttribute('aria-checked') !== 'true' && !sw.checked) {
-            clickIfExists(sw);
-          } else if (label && label.click) {
-            // label'a tıkla (bazı temalarda toggle bu şekilde çalışıyor)
-            clickIfExists(label);
-          }
-        }
-      });
-    } catch (e) {
-      logger.info('Sonsuz Liste toggle bulunamadı/kliklenemedi (devam ediliyor).');
-    }
-
-    // Scroll ile tüm kayıtları yükle
-    const maxScrolls = Number.isFinite(opts.maxScrolls) ? opts.maxScrolls : 200;
-    const enableInfinite = opts.enableInfinite !== false; // default: true
-    let lastCount = 0;
-    let scrolls = 0;
-    let total = null;
-    if (enableInfinite) {
-      while (scrolls < maxScrolls) {
-        const info = await page.evaluate(parseOwnerListPage);
-        total = info.total;
-        if (info.count > lastCount) {
-          lastCount = info.count;
-          scrolls += 1;
-          await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-          await sleep(800);
-        } else {
-          break;
-        }
-        if (total && lastCount >= total) break;
-      }
-    }
-
-    // Nihai listeyi al
-    const { items, total: parsedTotal } = await page.evaluate(parseOwnerListPage);
-    const result = {
-      status: 'Success',
-      found: items.length > 0,
-      ownerId,
-      total: parsedTotal || items.length,
-      items
-    };
-
-    __tpCache.set(cacheKey, { ts: Date.now(), data: result });
-    return result;
-
-  } catch (err) {
-    logger.error('[scrapeOwnerTrademarks] Genel hata', { message: err?.message, stack: err?.stack, ownerId });
-    throw new HttpsError('internal', `Puppeteer hatası: ${err?.message || String(err)}`);
-  } finally {
-    try {
-      if (typeof page !== 'undefined' && page) {
-        const freshCookies = await page.cookies();
-        if (freshCookies?.length) saveCookiesFor('turkpatent', freshCookies);
-      }
-    } catch {}
-
-    if (typeof browser !== 'undefined' && browser) {
-      try { await browser.close(); logger.info('Browser kapatıldı'); }
-      catch (closeError) { logger.error('Browser kapatma hatası:', { message: closeError?.message }); }
-    }
-  }
-}
-
-// ====== CALLABLE (onCall) VERSİYONLARI ======
+// ====== CALLABLE (onCall) VERSİYONU ======
 export const scrapeTrademark = onCall(
   { region: 'europe-west1', memory: '2GiB', timeoutSeconds: 180 },
   async (request) => {
     const basvuruNo = request.data?.basvuruNo;
     return await handleScrapeTrademark(basvuruNo);
-  }
-);
-
-export const scrapeOwnerTrademarks = onCall(
-  { region: 'europe-west1', memory: '2GiB', timeoutSeconds: 300 },
-  async (request) => {
-    const ownerId = request.data?.ownerId;
-    const options = {
-      enableInfinite: request.data?.enableInfinite !== false,
-      maxScrolls: Number.isFinite(request.data?.maxScrolls) ? request.data.maxScrolls : 200
-    };
-    return await handleScrapeOwnerTrademarks(ownerId, options);
   }
 );
