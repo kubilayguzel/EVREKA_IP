@@ -3794,32 +3794,35 @@ function domParseFn() {
 function parseOwnerListPage() {
   const txt = (n) => (n && (n.textContent || '')).trim();
 
-  // "11 kayıt bulundu." benzeri metinden toplamı çek
-  const totalText = Array.from(document.querySelectorAll('body *'))
+  // Toplam kayıt sayısını bulmak için daha genel bir yaklaşım
+  const totalText = Array.from(document.querySelectorAll('div, p, span'))
     .map(n => n.textContent || '')
     .find(t => /kayıt bulundu/i.test(t)) || '';
   const m = totalText.match(/(\d+)\s*kayıt bulundu/i);
   const total = m ? parseInt(m[1], 10) : null;
 
-  // Sadece görünen (detay satırı olmayan) tr'leri topla
-  const rows = Array.from(document.querySelectorAll('table.MuiTable-root tbody tr'))
-    .filter(tr => tr.querySelector('[role="applicationNo"], [id^="applicationNo-"]'));
+  // Tabloyu daha güvenilir bir şekilde seç
+  const table = document.querySelector('table.MuiTable-root');
+  if (!table) return { total: 0, count: 0, items: [] };
 
+  const rows = Array.from(table.querySelectorAll('tbody tr'));
+  
+  // Her satırdaki veriyi kolon indeksine göre al
   const items = rows.map((tr) => {
-    const pick = (role) => {
-      const el = tr.querySelector(`[role="${role}"]`) || tr.querySelector(`[id^="${role}-"]`);
-      return txt(el);
-    };
+    const cells = tr.querySelectorAll('td');
+    if (cells.length < 9) { // Yeterli sayıda kolon yoksa atla
+      return null;
+    }
     return {
-      applicationNo: pick('applicationNo'),
-      markName:      pick('markName'),
-      holdName:      pick('holdName'),
-      applicationDate: pick('applicationDate'),
-      registrationNo:  pick('registrationNo'),
-      state:           pick('state'),
-      niceClasses:     pick('niceClasses'),
+      applicationNo: txt(cells[2]), // 3. kolon
+      markName:      txt(cells[3]), // 4. kolon
+      holdName:      txt(cells[4]), // 5. kolon
+      applicationDate: txt(cells[5]), // 6. kolon
+      registrationNo:  txt(cells[6]), // 7. kolon
+      state:           txt(cells[7]), // 8. kolon
+      niceClasses:     txt(cells[8]), // 9. kolon
     };
-  });
+  }).filter(Boolean);
 
   return { total, count: items.length, items };
 }
