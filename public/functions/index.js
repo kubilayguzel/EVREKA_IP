@@ -4239,33 +4239,90 @@ async function handleScrapeOwnerTrademarks(ownerId, opts = {}) {
 // Arama sonrası dinamik sonuçların yüklenmesini bekle
 logger.info('Arama yapıldıktan sonra sonuçların yüklenmesi bekleniyor...');
 
-// Dinamik içeriğin yüklenmesini bekle - maksimum 30 saniye
+// Daha kısa süreyle kontrol et - maksimum 10 saniye
 let tablesLoaded = false;
 let attempts = 0;
-const maxAttempts = 30; // 30x1=30 saniye
+const maxAttempts = 10; // 10x1=10 saniye
 
-while (!tablesLoaded && attempts < maxAttempts) {
-  await sleep(1000); // 1 saniye bekle
-  attempts++;
-  
-  const pageCheck = await page.evaluate(() => ({
-    allTables: document.querySelectorAll('table').length,
-    allTrs: document.querySelectorAll('tr').length,
-    loading: document.querySelector('.loading, .spinner, .MuiCircularProgress-root') !== null,
-    // Sonuç metni var mı kontrol et
-    hasResultText: /kayıt bulundu|sonuç|bulunamadı/i.test(document.body.textContent)
-  }));
-  
-  logger.info(`Deneme ${attempts}: Tables=${pageCheck.allTables}, TRs=${pageCheck.allTrs}, Loading=${pageCheck.loading}, HasText=${pageCheck.hasResultText}`);
-  
-  if (pageCheck.allTables > 0 && pageCheck.allTrs > 0) {
-    tablesLoaded = true;
-    logger.info('✅ Tablolar yüklendi!');
-  } else if (pageCheck.hasResultText && !pageCheck.loading) {
-    // Sonuç metni var ama tablo yok - muhtemelen "sonuç bulunamadı"
-    logger.info('Sonuç metni bulundu ama tablo yok');
-    break;
+try {
+  while (!tablesLoaded && attempts < maxAttempts) {
+    await sleep(1000); // 1 saniye bekle
+    attempts++;
+    
+    logger.info(`Deneme ${attempts}/${maxAttempts} başlıyor...`);
+    
+    const pageCheck = await page.evaluate(() => {
+      try {
+        const bodyText = document.body.textContent || '';
+        return {
+          allTables: document.querySelectorAll('table').length,
+          allTrs: document.querySelectorAll('tr').length,
+          loading: !!document.querySelector('.loading, .spinner, .MuiCircularProgress-root'),
+          hasResultText: /kayıt bulundu|sonuç|bulunamadı|hiç|yok/i.test(bodyText),
+          bodyTextSample: bodyText.substring(0, 200)
+        };
+      } catch (err) {
+        return {
+          allTables: 0,
+          allTrs: 0, 
+          loading: false,
+          hasResultText: false,
+          bodyTextSample: 'Error: ' + err.message,
+          error: err.message
+        };
+      }
+    });
+    
+    logger.info(`Deneme ${attempts}: Tables=${pageCheck.allTables}, TRs=${pageCheck.allTrs}, Loading=${pageCheck.loading}, HasText=${pageCheck.hasResultText}, BodySample="${pageCheck.bodyTextSample}"`);
+    
+    if (pageCheck.allTables > 0 && pageCheck.allTrs > 0) {
+      tablesLoaded = true;
+      logger.info('✅ Tablolar yüklendi!');
+      break;
+    } else if (pageCheck.hasResultText && !pageCheck.loading) {
+      logger.info('Sonuç metni var ama tablolar yok - NoResults kontrolü yapılıyor');
+      
+      // Sonuç metni kontrol et
+      const noResultsMessage = await page.evaluate(() => {
+        try {
+          const bodyText = document.body.textContent.toLowerCase();
+          
+          if (bodyText.includes('sonuç bulunamadı') || 
+              bodyText.includes('kayıt bulunamadı') ||
+              bodyText.includes('hiçbir sonuç') ||
+              bodyText.includes('0 kayıt bulundu') ||
+              bodyText.includes('bulunamadı')) {
+            return 'Bu sahip numarası için sonuç bulunamadı.';
+          }
+          return null;
+        } catch (err) {
+          return 'Error checking results: ' + err.message;
+        }
+      });
+      
+      if (noResultsMessage && !noResultsMessage.startsWith('Error')) {
+        logger.info('✅ Sonuç bulunamadı mesajı tespit edildi');
+        return {
+          status: 'NoResults',
+          found: false,
+          ownerId,
+          total: 0,
+          items: [],
+          message: noResultsMessage
+        };
+      }
+      
+      logger.info('Sonuç metni bulundu ama "bulunamadı" değil');
+      break;
+    }
+    
+    logger.info(`Deneme ${attempts} tamamlandı, ${maxAttempts - attempts} deneme kaldı`);
   }
+  
+  logger.info(`Loop tamamlandı. TablesLoaded: ${tablesLoaded}, Attempts: ${attempts}`);
+  
+} catch (loopError) {
+  logger.error('Loop hatası:', { message: loopError.message, stack: loopError.stack });
 }
 
 if (!tablesLoaded) {
