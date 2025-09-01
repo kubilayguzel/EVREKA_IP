@@ -3795,13 +3795,11 @@ function parseOwnerListPage() {
 
 // #results ID'si ile birlikte selector'lar
 const rowSelectors = [
-  '#results tbody tr',
-  '#results > tbody > tr',
-  'tbody.MuiTableBody-root tr.MuiTableRow-root',
-  'tr.MuiTableRow-root[role="number"]',
-  'tbody tr[role="number"]',
+  'tbody.MuiTableBody-root.jss246 tr',
   'tr.MuiTableRow-root.MuiTableRow-hover',
-  'table.MuiTable-root tbody tr'
+  'tbody.MuiTableBody-root tr',
+  'tr[role="number"]',
+  'table tbody tr'
 ];
 
   let rows = [];
@@ -4252,13 +4250,11 @@ async function handleScrapeOwnerTrademarks(ownerId, opts = {}) {
     // Sonuçları bekle - HTML yapısına göre spesifik selector'lar
 let tableFound = false;
 const selectors = [
-  '#results tbody tr',
-  '#results > tbody > tr',
-  'tbody.MuiTableBody-root tr.MuiTableRow-root',
-  'tr.MuiTableRow-root[role="number"]',
-  'tbody tr[role="number"]',
+  'tbody.MuiTableBody-root.jss246 tr',
   'tr.MuiTableRow-root.MuiTableRow-hover',
-  'table.MuiTable-root tbody tr'
+  'tbody.MuiTableBody-root tr',
+  'tr[role="number"]',
+  'table tbody tr'
 ];
 
 for (const selector of selectors) {
