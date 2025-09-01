@@ -4115,7 +4115,7 @@ async function handleScrapeOwnerTrademarks(ownerId, opts = {}) {
     return cached.data;
   }
 
-  // ---- rate limit & backoff (aynı) ----
+  // Rate limit & backoff reuse
   const lastRequestKey = 'turkpatent_last_request';
   const minDelay = 45000 + Math.floor(Math.random() * 15000);
   const lastRequest = global[lastRequestKey] || 0;
@@ -4131,6 +4131,7 @@ async function handleScrapeOwnerTrademarks(ownerId, opts = {}) {
   const backoffRemaining = Math.max(0, (global[tpBackoffKey] || 0) - Date.now());
   if (backoffRemaining > 0) {
     const retryAfterSec = Math.ceil(backoffRemaining / 1000);
+    logger.info(`Backoff aktif (owner), ${retryAfterSec}s sonra tekrar deneyin.`);
     return {
       status: 'Backoff',
       found: false,
@@ -4140,9 +4141,12 @@ async function handleScrapeOwnerTrademarks(ownerId, opts = {}) {
     };
   }
 
-  let browser, page;
+  let browser;
+  let page;
+
   try {
     const isLocal = process.env.FUNCTIONS_EMULATOR === 'true' || process.env.LOCAL_PUPPETEER === '1';
+
     const launchOptions = isLocal ? {
       headless: true,
       args: ['--no-sandbox', '--disable-setuid-sandbox']
@@ -4165,83 +4169,54 @@ async function handleScrapeOwnerTrademarks(ownerId, opts = {}) {
     browser = await puppeteer.launch(launchOptions);
     page = await browser.newPage();
 
+    // stealth
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36');
     await page.setExtraHTTPHeaders({ 'Accept-Language': 'tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7' });
     try { await page.emulateTimezone('Europe/Istanbul'); } catch {}
-    await page.evaluateOnNewDocument(() => { Object.defineProperty(navigator, 'webdriver', { get: () => false }); });
+    await page.evaluateOnNewDocument(() => {
+      Object.defineProperty(navigator, 'webdriver', { get: () => false });
+    });
 
+    // cookies
     const savedCookies = loadCookiesFor('turkpatent');
     if (savedCookies.length) { try { await page.setCookie(...savedCookies); } catch {} }
 
-    // Önemli: CSS'leri abort etme!
     await page.setRequestInterception(true);
     page.on('request', req => {
       const t = req.resourceType();
-      if (t === 'image' || t === 'media' || t === 'font') return req.abort();
+      if (t === 'image' || t === 'font' || t === 'stylesheet' || t === 'media') return req.abort();
       req.continue();
     });
-
-    page.setDefaultTimeout(45000);
-    page.setDefaultNavigationTimeout(45000);
+    page.setDefaultTimeout(30000);
+    page.setDefaultNavigationTimeout(30000);
 
     await gotoSearchHome(page);
 
-    // --- Kişi Numarası input’unu daha sağlam bul ---
-    const candidateSelectors = [
-      'input[placeholder="Kişi Numarası"]',
-      'input.MuiInputBase-input[placeholder*="Kişi"]',
-      'input[aria-label*="Kişi"]',
-    ];
-    let inputHandle = null;
-    for (const sel of candidateSelectors) {
-      try {
-        await page.waitForSelector(sel, { timeout: 4000, visible: true });
-        inputHandle = await page.$(sel);
-        if (inputHandle) break;
-      } catch {}
-    }
-    if (!inputHandle) {
-      // label üzerinden fallback (XPath)
-      const xpaths = [
-        '//label[contains(normalize-space(.),"Kişi Numarası")]/following::input[1]',
-        '//*[contains(text(),"Kişi Numarası")]/following::input[1]'
-      ];
-      for (const xp of xpaths) {
-        const [h] = await page.$x(xp);
-        if (h) { inputHandle = h; break; }
-      }
-    }
-    if (!inputHandle) throw new HttpsError('internal', 'Kişi Numarası input alanı bulunamadı');
+    // --- Kişi Numarası araması (sekme değiştirmeden) ---
+    logger.info('[scrapeOwnerTrademarks] Kişi No alanı bekleniyor...');
+    const ownerInputSel = 'input[placeholder="Kişi Numarası"]';
+    await page.waitForSelector(ownerInputSel, { timeout: 10000 });
+    const input = await page.$(ownerInputSel);
+    if (!input) throw new HttpsError('internal', 'Kişi Numarası input alanı bulunamadı');
 
-    await inputHandle.evaluate(el => el.scrollIntoView({ block: 'center' }));
-    await inputHandle.click({ clickCount: 3 });
-    await page.keyboard.type(String(ownerId));
+    await input.click({ clickCount: 3 });
+    await input.type(String(ownerId));
     await page.evaluate((el, val) => {
       el.value = val;
       el.dispatchEvent(new Event('input', { bubbles: true }));
       el.dispatchEvent(new Event('change', { bubbles: true }));
-    }, inputHandle, String(ownerId));
+    }, input, String(ownerId));
 
-    // --- Ara/Sorgula tıkla ---
+    // Sorgula/Ara butonunu tıkla
+    logger.info('[scrapeOwnerTrademarks] Sorgula/Ara tıklanıyor...');
     const clicked = await page.evaluate(() => {
       const btn = Array.from(document.querySelectorAll('button'))
         .find(b => /(sorgula|ara)/i.test((b.textContent || '')) && !b.disabled && !b.getAttribute('aria-disabled'));
       if (!btn) return false;
-      btn.click(); return true;
+      btn.click();
+      return true;
     });
     if (!clicked) throw new HttpsError('internal', 'Sorgula/Ara butonu bulunamadı');
-
-    // --- Sonuç/Boş/Captcha'dan biri görülene kadar bekle ---
-    const ok = await page.waitForFunction(() => {
-      const hasRows = document.querySelectorAll('table.MuiTable-root tbody tr').length > 0;
-      const noRes = /kayıt bulunamadı|sonuç yok/i.test(document.body.innerText || '');
-      const captcha = !!document.querySelector('iframe[src*="recaptcha"], iframe[title*="recaptcha"], div.g-recaptcha');
-      return hasRows || noRes || captcha;
-    }, { timeout: 60000 }).catch(() => false);
-
-    if (!ok) {
-      throw new HttpsError('deadline-exceeded', 'Sonuçlar zamanında gelmedi.');
-    }
 
     // Captcha kontrolü
     if (await detectCaptcha(page)) {
@@ -4256,68 +4231,154 @@ async function handleScrapeOwnerTrademarks(ownerId, opts = {}) {
       };
     }
 
-    // --- "Sonsuz Liste" toggle (varsa) ---
+    // Sonuçları bekle
+// Sayfa yüklendikten sonra debug yapılacak - daha fazla bekleme süresi
+// Arama sonrası dinamik sonuçların yüklenmesini bekle
+logger.info('Arama yapıldıktan sonra sonuçların yüklenmesi bekleniyor...');
+
+// Dinamik içeriğin yüklenmesini bekle - maksimum 30 saniye
+let tablesLoaded = false;
+let attempts = 0;
+const maxAttempts = 30; // 30x1=30 saniye
+
+while (!tablesLoaded && attempts < maxAttempts) {
+  await sleep(1000); // 1 saniye bekle
+  attempts++;
+  
+  const pageCheck = await page.evaluate(() => ({
+    allTables: document.querySelectorAll('table').length,
+    allTrs: document.querySelectorAll('tr').length,
+    loading: document.querySelector('.loading, .spinner, .MuiCircularProgress-root') !== null,
+    // Sonuç metni var mı kontrol et
+    hasResultText: /kayıt bulundu|sonuç|bulunamadı/i.test(document.body.textContent)
+  }));
+  
+  logger.info(`Deneme ${attempts}: Tables=${pageCheck.allTables}, TRs=${pageCheck.allTrs}, Loading=${pageCheck.loading}, HasText=${pageCheck.hasResultText}`);
+  
+  if (pageCheck.allTables > 0 && pageCheck.allTrs > 0) {
+    tablesLoaded = true;
+    logger.info('✅ Tablolar yüklendi!');
+  } else if (pageCheck.hasResultText && !pageCheck.loading) {
+    // Sonuç metni var ama tablo yok - muhtemelen "sonuç bulunamadı"
+    logger.info('Sonuç metni bulundu ama tablo yok');
+    break;
+  }
+}
+
+if (!tablesLoaded) {
+  logger.info('Tablolar yüklenemedi, son durumu kontrol ediliyor...');
+}
+
+// Sayfa durumunu detaylı kontrol et
+const pageDebugInfo = await page.evaluate(() => {
+  return {
+    title: document.title,
+    url: window.location.href,
+    bodyText: document.body.textContent.substring(0, 1000),
+    allTables: document.querySelectorAll('table').length,
+    allTbodies: document.querySelectorAll('tbody').length,
+    allTrs: document.querySelectorAll('tr').length,
+    muiTables: document.querySelectorAll('.MuiTable-root').length,
+    muiTableBodies: document.querySelectorAll('.MuiTableBody-root').length,
+    muiTableRows: document.querySelectorAll('.MuiTableRow-root').length,
+    roleNumberElements: document.querySelectorAll('[role="number"]').length,
+    applicationNoElements: document.querySelectorAll('[role="applicationNo"]').length,
+    // Sayfa HTML'inin bir kısmını al
+    htmlSample: document.documentElement.innerHTML.substring(0, 2000)
+  };
+});
+
+logger.info('Sayfa debug bilgileri:', pageDebugInfo);
+
+// Eğer hiç tablo yoksa, başka bir problem var demektir
+if (pageDebugInfo.allTables === 0) {
+  logger.info('Sayfada hiç tablo bulunamadı. Sayfa tam yüklenmemiş olabilir.');
+  
+  // Captcha kontrolü yap
+  if (await detectCaptcha(page)) {
+    const retryAfterSec = 120 + Math.floor(Math.random()*60);
+    global['turkpatent_backoff_until'] = Date.now() + retryAfterSec * 1000;
+    return {
+      status: 'CaptchaRequired',
+      found: false,
+      ownerId,
+      retryAfterSec,
+      message: 'reCAPTCHA doğrulaması gerekiyor. Lütfen doğrulayıp tekrar deneyin.'
+    };
+  }
+  
+  // Hata mesajı kontrol et
+  const hasError = await page.evaluate(() => {
+    const errorKeywords = ['bulunamadı', 'sonuç yok', 'hata', 'geçersiz', 'çok fazla deneme'];
+    const bodyText = document.body.textContent.toLowerCase();
+    return errorKeywords.some(keyword => bodyText.includes(keyword));
+  });
+  
+  if (hasError) {
+    return {
+      status: 'NoResults',
+      found: false,
+      ownerId,
+      message: 'Bu sahip numarası için sonuç bulunamadı.'
+    };
+  }
+  
+  throw new HttpsError('internal', `Sayfa yüklenemedi. Debug: ${JSON.stringify(pageDebugInfo)}`);
+}
+
+// Tablolar var ama tr elementleri yoksa
+if (pageDebugInfo.allTrs === 0) {
+  throw new HttpsError('internal', `Tablolar var ama satırlar yok. Debug: ${JSON.stringify(pageDebugInfo)}`);
+}
+
+logger.info('Sayfa başarıyla yüklendi ve tablolar mevcut.');
+
+    // Sonsuz Liste'yi açmayı dene
     try {
       await page.evaluate(() => {
-        const findByText = (re) =>
-          Array.from(document.querySelectorAll('label, span, div, button'))
-            .find(el => re.test((el.textContent || '')));
-
-        const label = findByText(/sonsuz liste/i);
-
-        // label çevresinde bir switch/input arıyoruz
-        const sw =
-          (label && label.closest('div') || document).querySelector('input[type="checkbox"], button[role="switch"], [class*="MuiSwitch-switchBase"]');
-
-        if (sw && typeof sw.click === 'function') {
-          sw.click();                         // ✅ TS cast yok
-        } else if (label && typeof label.click === 'function') {
-          label.click();                      // ✅ TS cast yok
+        function clickIfExists(el) { try { el && el.click(); } catch {} }
+        const label = Array.from(document.querySelectorAll('label, span, div, button'))
+          .find(el => /sonsuz liste/i.test(el.textContent || ''));
+        if (label) {
+          // en yakındaki switch/input
+          const root = label.closest('div') || document;
+          const sw = root.querySelector('input[type="checkbox"], input[role="switch"]') ||
+                     document.querySelector('input[type="checkbox"][aria-label*="Sonsuz"], input[role="switch"][aria-label*="Sonsuz"]');
+          if (sw && sw.getAttribute('aria-checked') !== 'true' && !sw.checked) {
+            clickIfExists(sw);
+          } else if (label && label.click) {
+            // label'a tıkla (bazı temalarda toggle bu şekilde çalışıyor)
+            clickIfExists(label);
+          }
         }
       });
-    } catch {}
-
-    // --- Doğru scroller üzerinde tüm kayıtları yüklemeye çalış ---
-    const enableInfinite = opts.enableInfinite !== false;
-    const maxScrolls = Number.isFinite(opts.maxScrolls) ? opts.maxScrolls : 200;
-
-    if (enableInfinite) {
-      await page.evaluate(async (maxScrolls) => {
-        const sleep = (ms) => new Promise(r => setTimeout(r, ms));
-
-        const getTotal = () => {
-          const t = Array.from(document.querySelectorAll('body *'))
-            .map(n => n.textContent || '')
-            .find(t => /kayıt bulundu/i.test(t)) || '';
-          const m = t.match(/(\d+)\s*kayıt bulundu/i);
-          return m ? parseInt(m[1], 10) : null;
-        };
-
-        const scroller =
-          document.querySelector('.MuiTableContainer-root') ||
-          document.scrollingElement ||
-          document.documentElement;
-
-        let last = 0;
-        const total = getTotal();
-
-        for (let i = 0; i < maxScrolls; i++) {
-          const count = document.querySelectorAll('table.MuiTable-root tbody tr').length;
-          if (total && count >= total) break;
-          if (count > last) { last = count; }
-
-          if (scroller) {
-            scroller.scrollTop = scroller.scrollHeight;   // ✅ TS cast yok
-          } else {
-            window.scrollTo(0, document.body.scrollHeight);
-          }
-
-          await sleep(700);
-        }
-      }, maxScrolls);
+    } catch (e) {
+      logger.info('Sonsuz Liste toggle bulunamadı/kliklenemedi (devam ediliyor).');
     }
 
-    // --- Listeyi topla ---
+    // Scroll ile tüm kayıtları yükle
+    const maxScrolls = Number.isFinite(opts.maxScrolls) ? opts.maxScrolls : 200;
+    const enableInfinite = opts.enableInfinite !== false; // default: true
+    let lastCount = 0;
+    let scrolls = 0;
+    let total = null;
+    if (enableInfinite) {
+      while (scrolls < maxScrolls) {
+        const info = await page.evaluate(parseOwnerListPage);
+        total = info.total;
+        if (info.count > lastCount) {
+          lastCount = info.count;
+          scrolls += 1;
+          await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+          await sleep(800);
+        } else {
+          break;
+        }
+        if (total && lastCount >= total) break;
+      }
+    }
+
+    // Nihai listeyi al
     const { items, total: parsedTotal } = await page.evaluate(parseOwnerListPage);
     const result = {
       status: 'Success',
@@ -4340,13 +4401,13 @@ async function handleScrapeOwnerTrademarks(ownerId, opts = {}) {
         if (freshCookies?.length) saveCookiesFor('turkpatent', freshCookies);
       }
     } catch {}
+
     if (typeof browser !== 'undefined' && browser) {
       try { await browser.close(); logger.info('Browser kapatıldı'); }
       catch (closeError) { logger.error('Browser kapatma hatası:', { message: closeError?.message }); }
     }
   }
 }
-
 
 // ====== CALLABLE (onCall) VERSİYONLARI ======
 export const scrapeTrademark = onCall(
