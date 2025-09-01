@@ -361,20 +361,20 @@ function renderSingleResult(payload){
             <div class="label">Uluslararası Tescil No</div>
             <div class="value">${intlRegNo || '-'}</div>
           </div>
+
+          <div class="kv-item owner-wide" style="grid-column:1 / -1;">
+            <div class="label">Sahip Adresi</div>
+            <div class="value">${ownerAddress || '-'}</div>
+          </div>
+          <div class="kv-item owner-wide" style="grid-column:1 / -1;">
+            <div class="label">Sahip</div>
+            <div class="value">${owner || '-'}</div>
+          </div>
+
           <div class="kv-item">
             <div class="label">Koruma Tarihi</div>
             <div class="value">${protectionDate || '-'}</div>
           </div>
-
-          <div class="kv-item owner-wide" style="grid-column:1 / span 2;">
-            <div class="label">Sahip</div>
-            <div class="value">${owner || '-'}</div>
-          </div>
-          <div class="kv-item" style="grid-column:1 / -1;">
-            <div class="label">Sahip Adresi</div>
-            <div class="value">${ownerAddress || '-'}</div>
-          </div>
-
           <div class="kv-item">
             <div class="label">Tür</div>
             <div class="value">${type || '-'}</div>
