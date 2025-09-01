@@ -3597,9 +3597,20 @@ export const adminDeleteUser = onCall({ region: "europe-west1" }, async (req) =>
 
   return { ok: true, uid };
 });
+
 // ====== IMPORTS ======
 import puppeteer from 'puppeteer-core';
 import chromium from '@sparticuz/chromium';
+
+import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import logger from 'firebase-functions/logger';
+import { getApps, initializeApp } from 'firebase-admin/app';
+import { getStorage } from 'firebase-admin/storage';
+
+// Ensure admin is initialized once
+if (!getApps().length) {
+  initializeApp();
+}
 
 // Basit bellek içi cache ve cookie jar (aynı instance yaşadığı sürece geçerli)
 const __tpCache   = global.__tpCache   || (global.__tpCache   = new Map());
@@ -3609,6 +3620,60 @@ const __cookieJar = global.__cookieJar || (global.__cookieJar = new Map());
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 const loadCookiesFor = (key) => __cookieJar.get(key) || [];
 const saveCookiesFor = (key, cookies) => __cookieJar.set(key, cookies);
+
+// ====== Data URL parse helper ======
+function parseDataUrl(dataUrl) {
+  const m = String(dataUrl).match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
+  if (!m) throw new Error('Geçersiz data URL');
+  const contentType = m[1];
+  const base64 = m[2];
+  const buffer = Buffer.from(base64, 'base64');
+  const ext = contentType.split('/')[1].replace('jpeg', 'jpg');
+  return { contentType, buffer, ext };
+}
+
+// ====== Görseli Storage'a yazan yardımcı ======
+async function persistImageToStorage(src, applicationNumber) {
+  try {
+    const bucket = getStorage().bucket();
+    const safeAppNo = String(applicationNumber || 'unknown').replace(/[^\w-]/g, '_');
+    let buffer, contentType, ext;
+
+    if (String(src).startsWith('data:')) {
+      const parsed = parseDataUrl(src);
+      buffer = parsed.buffer;
+      contentType = parsed.contentType;
+      ext = parsed.ext;
+    } else {
+      // HTTP(S) kaynağını indir
+      const resp = await fetch(src);
+      if (!resp.ok) throw new Error(`Resim indirilemedi: ${resp.status}`);
+      const arrayBuf = await resp.arrayBuffer();
+      buffer = Buffer.from(arrayBuf);
+      contentType = resp.headers.get('content-type') || 'image/jpeg';
+      ext = contentType.split('/')[1]?.replace('jpeg', 'jpg') || 'jpg';
+    }
+
+    const filePath = `trademarks/${safeAppNo}/logo.${ext}`;
+    const file = bucket.file(filePath);
+    await file.save(buffer, {
+      contentType,
+      resumable: false,
+      metadata: { cacheControl: 'public,max-age=31536000' },
+    });
+
+    // İmzalı URL (2035'e kadar)
+    const [signedUrl] = await file.getSignedUrl({
+      action: 'read',
+      expires: '2035-01-01',
+    });
+
+    return { imagePath: filePath, imageSignedUrl: signedUrl, publicImageUrl: `https://storage.googleapis.com/${bucket.name}/${filePath}` };
+  } catch (e) {
+    logger.warn('Görsel Storage’a kaydedilemedi, data URL döndürülecek.', { message: e?.message });
+    return { imagePath: '', imageSignedUrl: '', publicImageUrl: '' };
+  }
+}
 
 // ====== reCAPTCHA tespiti (bypass YOK) ======
 async function detectCaptcha(page) {
@@ -3709,9 +3774,9 @@ function domParseFn() {
     });
   }
 
-  // 3) Görsel (yakında bir img)
+  // 3) Görsel (data URL veya URL)
   const scope = t0.closest('section,div,main') || document;
-  const img = scope.querySelector('img[alt*="Marka"], img[src*="resim"], img[src*="marka"], .trademark-image img');
+  const img = scope.querySelector('img[alt*="Marka"], img[src^="data:image"], img[src*="resim"], img[src*="marka"], .trademark-image img');
   if (img && img.src && !/icon|logo|button|avatar/i.test(img.src)) {
     try { out.imageUrl = new URL(img.src, location.href).href; }
     catch { out.imageUrl = img.src; }
@@ -3828,7 +3893,7 @@ async function handleScrapeTrademark(basvuruNo) {
         if (closeBtn) { await closeBtn.click(); }
       } catch {}
     } catch (modalError) {
-      logger.info('Modal kapatma hatası (normal):', modalError.message);
+      logger.info('Modal kapatma hatası (normal):', { message: modalError?.message });
     }
 
     // --- "Dosya Takibi" sekmesi ---
@@ -3845,7 +3910,7 @@ async function handleScrapeTrademark(basvuruNo) {
       await page.waitForSelector('input[placeholder="Başvuru Numarası"]', { timeout: 5000 });
       logger.info('Dosya Takibi sekmesine geçiş başarılı.');
     } catch (tabError) {
-      logger.error('Dosya Takibi sekmesine geçiş hatası:', tabError.message);
+      logger.error('Dosya Takibi sekmesine geçiş hatası:', { message: tabError?.message });
       throw new HttpsError('internal', `Tab geçişi başarısız: ${tabError.message}`);
     }
 
@@ -3866,7 +3931,7 @@ async function handleScrapeTrademark(basvuruNo) {
 
       logger.info(`Başvuru numarası yazıldı: ${basvuruNo}`);
     } catch (inputError) {
-      logger.error('Form doldurma hatası:', inputError.message);
+      logger.error('Form doldurma hatası:', { message: inputError?.message });
       throw new HttpsError('internal', `Form doldurma başarısız: ${inputError.message}`);
     }
 
@@ -3886,7 +3951,7 @@ async function handleScrapeTrademark(basvuruNo) {
     // Captcha kontrolü (bypass yok; anlamlı dönüş)
     if (await detectCaptcha(page)) {
       const retryAfterSec = 120 + Math.floor(Math.random()*60);
-      global[tpBackoffKey] = Date.now() + retryAfterSec * 1000;
+      global['turkpatent_backoff_until'] = Date.now() + retryAfterSec * 1000;
       return {
         status: 'CaptchaRequired',
         found: false,
@@ -3959,6 +4024,18 @@ async function handleScrapeTrademark(basvuruNo) {
       goodsCount: normalized.goods.length
     });
 
+    // --- Görsel varsa Storage'a yaz ve linkleri ekle ---
+    if (normalized.imageUrl) {
+      const { imagePath, imageSignedUrl, publicImageUrl } = await persistImageToStorage(normalized.imageUrl, normalized.applicationNumber);
+      if (imagePath) {
+        normalized.imagePath = imagePath;
+        normalized.imageSignedUrl = imageSignedUrl;
+        normalized.publicImageUrl = publicImageUrl;
+        // UI kolaylığı için imageUrl'ü imzalı URL ile değiştir
+        normalized.imageUrl = imageSignedUrl || publicImageUrl || normalized.imageUrl;
+      }
+    }
+
     const result = { status: 'Success', found: true, data: normalized, ...normalized };
     __tpCache.set(basvuruNo, { ts: Date.now(), data: result });
     return result;
@@ -3969,15 +4046,16 @@ async function handleScrapeTrademark(basvuruNo) {
   } finally {
     // Cookie’leri sakla (başarılı/başarısız fark etmez)
     try {
-      if (page) {
+      // eslint-disable-next-line no-undef
+      if (typeof page !== 'undefined' && page) {
         const freshCookies = await page.cookies();
         if (freshCookies?.length) saveCookiesFor('turkpatent', freshCookies);
       }
     } catch {}
 
-    if (browser) {
+    if (typeof browser !== 'undefined' && browser) {
       try { await browser.close(); logger.info('Browser kapatıldı'); }
-      catch (closeError) { logger.error('Browser kapatma hatası:', closeError.message); }
+      catch (closeError) { logger.error('Browser kapatma hatası:', { message: closeError?.message }); }
     }
   }
 }
