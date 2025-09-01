@@ -4213,13 +4213,12 @@ export const scrapeOwnerTrademarks = onCall(
       });
       logger.info('Form analizi:', JSON.stringify(formAnalysis, null, 2));
 
-      // ---- Başvuru Sahibi / Kişi No alanını doldur ----
-      const targetInputIndex = 2; // mevcut arayüz varsayımı
-      await page.evaluate((index, value) => {
-        const inputs = document.querySelectorAll(
-          'input[type="text"], input:not([type="button"]):not([type="submit"])'
-        );
-        const targetInput = inputs[index];
+      // Kişi numarası input alanını placeholder'a göre bul
+      const inputResult = await page.evaluate((value) => {
+        // "Kişi Numarası" placeholder'ına sahip input'u bul
+        const inputs = Array.from(document.querySelectorAll('input[type="text"]'));
+        const targetInput = inputs.find(input => input.placeholder && input.placeholder.includes('Kişi'));
+        
         if (targetInput) {
           targetInput.focus();
           targetInput.value = '';
@@ -4227,10 +4226,16 @@ export const scrapeOwnerTrademarks = onCall(
           targetInput.dispatchEvent(new Event('input', { bubbles: true }));
           targetInput.dispatchEvent(new Event('change', { bubbles: true }));
           targetInput.dispatchEvent(new Event('blur', { bubbles: true }));
-          return true;
+          return { 
+            success: true, 
+            inputFound: true, 
+            value: targetInput.value, 
+            placeholder: targetInput.placeholder,
+            index: inputs.indexOf(targetInput)
+          };
         }
-        return false;
-      }, targetInputIndex, ownerId);
+        return { success: false, inputFound: false };
+      }, ownerId);
       logger.info(`Kişi numarası (${ownerId}) input alanına girildi (index: ${targetInputIndex})`);
 
       // ---- Form durumu (debug) ----
