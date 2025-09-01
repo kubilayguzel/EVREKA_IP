@@ -4214,34 +4214,59 @@ export const scrapeOwnerTrademarks = onCall(
       logger.info('Form analizi:', JSON.stringify(formAnalysis, null, 2));
 
       // Kişi numarası input alanını placeholder'a göre bul
-      const inputResult = await page.evaluate((value) => {
-        // "Kişi Numarası" placeholder'ına sahip input'u bul
-        const inputs = Array.from(document.querySelectorAll('input[type="text"]'));
-        const targetInput = inputs.find(input => input.placeholder && input.placeholder.includes('Kişi'));
-        
-        if (targetInput) {
-          targetInput.focus();
-          targetInput.value = '';
-          targetInput.value = value;
-          targetInput.dispatchEvent(new Event('input', { bubbles: true }));
-          targetInput.dispatchEvent(new Event('change', { bubbles: true }));
-          targetInput.dispatchEvent(new Event('blur', { bubbles: true }));
-          return { 
-            success: true, 
-            inputFound: true, 
-            value: targetInput.value, 
-            placeholder: targetInput.placeholder,
-            index: inputs.indexOf(targetInput)
-          };
-        }
-        return { success: false, inputFound: false };
-      }, ownerId);
-
-      logger.info(`Kişi numarası (${ownerId}) input sonucu:`, inputResult);
-
-      if (!inputResult.success) {
-        throw new Error('Kişi numarası input alanı bulunamadı veya değer girilemedi');
+// Kişi numarası input alanını placeholder'a göre bul ve multiple attempts
+const inputResult = await page.evaluate(async (value) => {
+  const inputs = Array.from(document.querySelectorAll('input[type="text"]'));
+  const targetInput = inputs.find(input => input.placeholder && input.placeholder.includes('Kişi'));
+  
+  if (!targetInput) return { success: false, inputFound: false };
+  
+  // Multiple attempts for value setting
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      // Clear and focus
+      targetInput.focus();
+      targetInput.select();
+      
+      // Method 1: Direct value setting
+      targetInput.value = value;
+      
+      // Method 2: React/Material-UI compatible setter
+      const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+      nativeInputValueSetter.call(targetInput, value);
+      
+      // Dispatch events
+      ['focus', 'input', 'change', 'blur'].forEach(eventType => {
+        targetInput.dispatchEvent(new Event(eventType, { bubbles: true, cancelable: true }));
+      });
+      
+      // Wait a bit
+      await new Promise(resolve => setTimeout(resolve, 200));
+      
+      // Check if value is set
+      if (targetInput.value === value) {
+        return { 
+          success: true, 
+          inputFound: true, 
+          value: targetInput.value, 
+          placeholder: targetInput.placeholder,
+          index: inputs.indexOf(targetInput),
+          attempt: attempt + 1
+        };
       }
+    } catch (e) {
+      console.log(`Attempt ${attempt + 1} failed:`, e);
+    }
+  }
+  
+  return { 
+    success: false, 
+    inputFound: true, 
+    value: targetInput.value, 
+    placeholder: targetInput.placeholder,
+    error: 'Value setting failed after 3 attempts'
+  };
+}, ownerId);
 
       // ---- Form durumu (debug) ----
       const formState = await page.evaluate(() => {
