@@ -35,6 +35,13 @@ import { loadSharedLayout, ensurePersonModal, openPersonModal } from './layout-l
 import { personService } from '../firebase-config.js';
 const functions = getFunctions(app, 'europe-west1');
 const scrapeTrademarkFunction = httpsCallable(functions, 'scrapeTrademark');
+// Yeni: Sahip numarasıyla liste döndüren uç (sunucuda uygulanmalı)
+let scrapeOwnerTrademarks;
+try {
+  scrapeOwnerTrademarks = httpsCallable(functions, 'scrapeOwnerTrademarks');
+} catch (e) {
+  // yoksa çağrı anında yakalanacak
+}
 
 // --- Elements ---
 const singleFields = _el('singleFields');
@@ -46,8 +53,13 @@ const queryBtn       = _el('queryBtn');
 const ownerIdInput   = _el('ownerIdInput');
 const bulkQueryBtn   = _el('bulkQueryBtn');
 const loadingEl      = _el('loading');
+const bulkLoadingEl  = _el('bulkLoading');
 const singleResultContainer = _el('singleResultContainer');
 const singleResultInner = _el('singleResultInner');
+const bulkResultsContainer = _el('bulkResultsContainer');
+const bulkResultsBody = _el('bulkResultsBody');
+const bulkMeta = _el('bulkMeta');
+const exportCsvBtn = _el('exportCsvBtn');
 const savePortfolioBtn = _el('savePortfolioBtn');
 const saveThirdPartyBtn = _el('saveThirdPartyBtn');
 const cancelBtn = _el('cancelBtn');
@@ -62,14 +74,16 @@ const relatedPartyCount = _el('relatedPartyCount');
 // --- Global State ---
 let allPersons = [];
 let selectedRelatedParties = [];
+let lastBulkItems = [];
 
+// --------------- INIT ---------------
 async function init() {
   try {
     const personsResult = await personService.getPersons();
     allPersons = Array.isArray(personsResult.data) ? personsResult.data : [];
     console.log(`[INIT] ${allPersons.length} kişi yüklendi.`);
 
-    // Olay dinleyicilerini kurun
+    // Olay dinleyicilerini kur
     setupEventListeners();
   } catch (error) {
     console.error("Veri yüklenirken hata oluştu:", error);
@@ -82,44 +96,14 @@ function setupEventListeners() {
   bulkRadio?.addEventListener('change', syncMode);
   syncMode();
 
-queryBtn?.addEventListener('click', async () => {
-    const basvuruNo = (basvuruNoInput?.value || '').trim();
-    if (!basvuruNo) {
-        return showToast('Başvuru numarası girin.', 'warning');
-    }
-    try {
-        // Yükleme göstergesini hemen göster
-        _showBlock(loadingEl);
+  queryBtn?.addEventListener('click', onSingleQuery);
+  bulkQueryBtn?.addEventListener('click', onBulkQuery);
 
-        const result = await scrapeTrademarkFunction({ basvuruNo });
-        const data = result?.data || {};
+  cancelBtn?.addEventListener('click', () => history.back());
 
-        if (!data || data.found === false) {
-            showToast(data?.message || 'Sonuç bulunamadı ya da erişilemedi.', 'warning');
-        } else {
-            renderSingleResult(data);
-        }
-    } catch (err) {
-        showToast('Sorgulama hatası: ' + (err?.message || err), 'danger');
-    } finally {
-        // İşlem tamamlandığında yükleme göstergesini gizle
-        _hideBlock(loadingEl);
-    }
-});
-
-  bulkQueryBtn?.addEventListener('click', () => {
-    const ownerId = (ownerIdInput?.value || '').trim();
-    if(!ownerId) return showToast('Sahip numarası girin.', 'warning');
-    showToast('Toplu aktarım kurumsal uç tamamlandığında bağlanacaktır.', 'info');
-  });
-
-  cancelBtn?.addEventListener('click', () => {
-    history.back();
-  });
-
-  // Yeni kişi yönetimi olay dinleyicileri
+  // Yeni kişi yönetimi olayları
   let searchTimer;
-  relatedPartySearchInput.addEventListener('input', (e) => {
+  relatedPartySearchInput?.addEventListener('input', (e) => {
     const query = e.target.value.trim();
     clearTimeout(searchTimer);
     if (query.length < 2) {
@@ -129,8 +113,7 @@ queryBtn?.addEventListener('click', async () => {
     }
     searchTimer = setTimeout(() => searchPersons(query), 250);
   });
-
-  relatedPartySearchResults.addEventListener('click', (e) => {
+  relatedPartySearchResults?.addEventListener('click', (e) => {
     const item = e.target.closest('.search-result-item');
     if (!item) return;
     const personId = item.dataset.id;
@@ -141,8 +124,7 @@ queryBtn?.addEventListener('click', async () => {
       _hideBlock(relatedPartySearchResults);
     }
   });
-
-  addNewPersonBtn.addEventListener('click', async () => {
+  addNewPersonBtn?.addEventListener('click', async () => {
     if (typeof ensurePersonModal === 'function') await ensurePersonModal();
     if (typeof openPersonModal === 'function') {
       openPersonModal('relatedParty', (newPerson) => {
@@ -153,13 +135,61 @@ queryBtn?.addEventListener('click', async () => {
       });
     }
   });
-
-  relatedPartyList.addEventListener('click', (e) => {
+  relatedPartyList?.addEventListener('click', (e) => {
     const btn = e.target.closest('.remove-selected-item-btn');
-    if (btn) {
-      const personId = btn.dataset.id;
-      removeRelatedParty(personId);
+    if (btn) removeRelatedParty(btn.dataset.id);
+  });
+
+  // Bulk tabloda DETAY tıklamaları
+  bulkResultsBody?.addEventListener('click', async (e) => {
+    const btn = e.target.closest('.js-bulk-detail');
+    if (!btn) return;
+    const appNo = btn.dataset.appno;
+    if (!appNo) return;
+    try {
+      _showBlock(loadingEl);
+      const result = await scrapeTrademarkFunction({ basvuruNo: appNo });
+      const data = result?.data || {};
+      if (!data || data.found === false) {
+        showToast(data?.message || 'Detay alınamadı.', 'warning');
+      } else {
+        // Tekli paneli doldur ve yukarı kaydır
+        renderSingleResult(data);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    } catch (err) {
+      showToast('Detay sorgu hatası: ' + (err?.message || err), 'danger');
+    } finally {
+      _hideBlock(loadingEl);
     }
+  });
+
+  // CSV dışa aktar
+  exportCsvBtn?.addEventListener('click', () => {
+    if (!lastBulkItems || lastBulkItems.length === 0) {
+      return showToast('Dışa aktarılacak veri yok.', 'warning');
+    }
+    const headers = ['Sıra','Başvuru Numarası','Marka Adı','Marka Sahibi','Başvuru Tarihi','Tescil No','Durumu','Nice Sınıfları'];
+    const rows = lastBulkItems.map((x, i) => [
+      i+1,
+      x.applicationNo || '',
+      x.markName || '',
+      x.holdName || '',
+      fmtDateToTR(x.applicationDate || ''),
+      x.registrationNo || '',
+      x.state || '',
+      (x.niceClasses || '').replace(/\s*\/\s*$/,'')
+    ]);
+    const csv = [headers].concat(rows).map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `turkpatent_${Date.now()}_sahip_liste.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
   });
 }
 
@@ -168,6 +198,7 @@ function syncMode(){
   if (isSingle){
     _showBlock(singleFields);
     _hideBlock(bulkFields);
+    _hideBlock(bulkResultsContainer);
   } else {
     _hideBlock(singleFields);
     _showBlock(bulkFields);
@@ -181,6 +212,91 @@ function syncMode(){
   saveThirdPartyBtn.disabled = true;
 }
 
+// --------------- TEKLI SORGU ---------------
+async function onSingleQuery(){
+  const basvuruNo = (basvuruNoInput?.value || '').trim();
+  if (!basvuruNo) return showToast('Başvuru numarası girin.', 'warning');
+  try {
+    _showBlock(loadingEl);
+    const result = await scrapeTrademarkFunction({ basvuruNo });
+    const data = result?.data || {};
+    if (!data || data.found === false) {
+      showToast(data?.message || 'Sonuç bulunamadı ya da erişilemedi.', 'warning');
+    } else {
+      renderSingleResult(data);
+    }
+  } catch (err) {
+    showToast('Sorgulama hatası: ' + (err?.message || err), 'danger');
+  } finally {
+    _hideBlock(loadingEl);
+  }
+}
+
+// --------------- TOPLU (SAHİP NO) ---------------
+async function onBulkQuery(){
+  const ownerId = (ownerIdInput?.value || '').trim();
+  if(!ownerId) return showToast('Sahip numarası girin.', 'warning');
+
+  if (!scrapeOwnerTrademarks) {
+    return showToast('Sunucu ucu henüz tanımlı değil: scrapeOwnerTrademarks', 'danger');
+  }
+
+  try {
+    _showBlock(bulkLoadingEl);
+    _hideBlock(bulkResultsContainer);
+    bulkResultsBody.innerHTML = '';
+    lastBulkItems = [];
+
+    // Not: Sunucu tarafı "sonsuz liste" ve scroll işlemlerini yapıp tüm kayıtları döndürmelidir.
+    // Örnek yanıt beklenen şema:
+    // { status: 'Success', ownerId: '5537169', owner: '...', total: 185, items: [ { applicationNo, markName, holdName, applicationDate, registrationNo, state, niceClasses } ] }
+    const resp = await scrapeOwnerTrademarks({ ownerId, maxPages: 0, enableInfinite: true });
+    const payload = resp?.data || {};
+    const items = Array.isArray(payload.items) ? payload.items : [];
+    lastBulkItems = items;
+
+    if (!items.length) {
+      showToast('Bu sahip numarası için sonuç bulunamadı.', 'warning');
+      return;
+    }
+
+    renderBulkResults(payload);
+  } catch (err) {
+    console.error(err);
+    showToast('Toplu arama hatası: ' + (err?.message || err), 'danger');
+  } finally {
+    _hideBlock(bulkLoadingEl);
+  }
+}
+
+function renderBulkResults(payload){
+  const items = Array.isArray(payload.items) ? payload.items : [];
+  const ownerId = payload.ownerId || (items[0]?.holdName?.match(/\((\d+)\)/)?.[1] || '');
+  const total = payload.total ?? items.length;
+
+  bulkMeta.textContent = `Sahip No: ${ownerId || '-'} • ${total} kayıt`;
+  bulkResultsBody.innerHTML = items.map((x, idx) => `
+    <tr>
+      <td>${idx+1}</td>
+      <td>${x.applicationNo || ''}</td>
+      <td>${x.markName || ''}</td>
+      <td>${x.holdName || ''}</td>
+      <td>${fmtDateToTR(x.applicationDate || '')}</td>
+      <td>${x.registrationNo || ''}</td>
+      <td>${x.state || ''}</td>
+      <td>${(x.niceClasses || '').replace(/\s*\/\s*$/,'')}</td>
+      <td class="text-center">
+        <button class="btn btn-sm btn-primary js-bulk-detail" data-appno="${x.applicationNo || ''}">
+          Detay
+        </button>
+      </td>
+    </tr>
+  `).join('');
+
+  _showBlock(bulkResultsContainer);
+}
+
+// --------------- TEKLI RENDER ---------------
 function renderSingleResult(payload){
   const d = payload.data && typeof payload.data === 'object' ? payload.data : payload;
   const trademarkName = d.trademarkName || '';
@@ -249,14 +365,6 @@ function renderSingleResult(payload){
             <div class="label">Koruma Tarihi</div>
             <div class="value">${protectionDate || '-'}</div>
           </div>
-          <div class="kv-item">
-            <div class="label">Tür</div>
-            <div class="value">${type || '-'}</div>
-          </div>
-          <div class="kv-item">
-            <div class="label">Nice Sınıfları</div>
-            <div class="value">${(niceClasses && niceClasses.length) ? niceClasses.join(', ') : '-'}</div>
-          </div>
 
           <div class="kv-item owner-wide" style="grid-column:1 / span 2;">
             <div class="label">Sahip</div>
@@ -265,6 +373,15 @@ function renderSingleResult(payload){
           <div class="kv-item" style="grid-column:1 / -1;">
             <div class="label">Sahip Adresi</div>
             <div class="value">${ownerAddress || '-'}</div>
+          </div>
+
+          <div class="kv-item">
+            <div class="label">Tür</div>
+            <div class="value">${type || '-'}</div>
+          </div>
+          <div class="kv-item">
+            <div class="label">Nice Sınıfları</div>
+            <div class="value">${(niceClasses && niceClasses.length) ? niceClasses.join(', ') : '-'}</div>
           </div>
         </div>
       </div>
@@ -303,6 +420,7 @@ function renderSingleResult(payload){
   saveThirdPartyBtn.disabled = false;
 }
 
+// --- Kişi arama & ekleme ---
 function searchPersons(query) {
   const container = _el('relatedPartySearchResults');
   const nq = query.toLowerCase();
