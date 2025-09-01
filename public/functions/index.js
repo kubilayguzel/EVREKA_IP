@@ -4247,68 +4247,73 @@ async function handleScrapeOwnerTrademarks(ownerId, opts = {}) {
     }
 
     // Sonuçları bekle
-    // Sonuçları bekle - HTML yapısına göre spesifik selector'lar
-let tableFound = false;
-const selectors = [
-  'tbody.MuiTableBody-root.jss246 tr',
-  'tr.MuiTableRow-root.MuiTableRow-hover',
-  'tbody.MuiTableBody-root tr',
-  'tr[role="number"]',
-  'table tbody tr'
-];
+// Sayfa yüklendikten sonra debug yapılacak - daha fazla bekleme süresi
+logger.info('Arama yapıldıktan sonra sayfa durumunu kontrol ediliyor...');
+await sleep(10000); // 10 saniye bekle
 
-for (const selector of selectors) {
-  try {
-    await page.waitForSelector(selector, { timeout: 5000 });
-    tableFound = true;
-    logger.info(`Tablo bulundu: ${selector}`);
-    break;
-  } catch (e) {
-    logger.info(`Selector bulunamadı: ${selector}`);
-    continue;
-  }
-}
+// Sayfa durumunu detaylı kontrol et
+const pageDebugInfo = await page.evaluate(() => {
+  return {
+    title: document.title,
+    url: window.location.href,
+    bodyText: document.body.textContent.substring(0, 1000),
+    allTables: document.querySelectorAll('table').length,
+    allTbodies: document.querySelectorAll('tbody').length,
+    allTrs: document.querySelectorAll('tr').length,
+    muiTables: document.querySelectorAll('.MuiTable-root').length,
+    muiTableBodies: document.querySelectorAll('.MuiTableBody-root').length,
+    muiTableRows: document.querySelectorAll('.MuiTableRow-root').length,
+    roleNumberElements: document.querySelectorAll('[role="number"]').length,
+    applicationNoElements: document.querySelectorAll('[role="applicationNo"]').length,
+    // Sayfa HTML'inin bir kısmını al
+    htmlSample: document.documentElement.innerHTML.substring(0, 2000)
+  };
+});
 
-if (!tableFound) {
-  // Hata mesajı kontrolü
-  const errorMessage = await page.evaluate(() => {
-    const errorSelectors = [
-      '.error', '.alert-danger', '.MuiAlert-message', 
-      'p', 'div', 'span', 'h1', 'h2', 'h3'
-    ];
-    const errorKeywords = [
-      'bulunamadı', 'sonuç yok', 'hata', 'geçersiz', 
-      'çok fazla deneme', 'too many attempts', 'rate limit', 
-      'sistem meşgul', 'geçici olarak hizmet dışı'
-    ];
-    
-    for (const selectors of errorSelectors) {
-      const elements = document.querySelectorAll(selectors);
-      for (const el of elements) {
-        const text = (el.textContent || '').trim().toLowerCase();
-        for (const keyword of errorKeywords) {
-          if (text.includes(keyword)) {
-            return el.textContent.trim();
-          }
-        }
-      }
-    }
-    return null;
-  });
+logger.info('Sayfa debug bilgileri:', pageDebugInfo);
 
-  if (errorMessage) {
-    logger.info(`Hata mesajı bulundu: ${errorMessage}`);
+// Eğer hiç tablo yoksa, başka bir problem var demektir
+if (pageDebugInfo.allTables === 0) {
+  logger.info('Sayfada hiç tablo bulunamadı. Sayfa tam yüklenmemiş olabilir.');
+  
+  // Captcha kontrolü yap
+  if (await detectCaptcha(page)) {
+    const retryAfterSec = 120 + Math.floor(Math.random()*60);
+    global['turkpatent_backoff_until'] = Date.now() + retryAfterSec * 1000;
     return {
-      status: 'Error',
+      status: 'CaptchaRequired',
       found: false,
       ownerId,
-      message: errorMessage,
-      error: errorMessage
+      retryAfterSec,
+      message: 'reCAPTCHA doğrulaması gerekiyor. Lütfen doğrulayıp tekrar deneyin.'
     };
   }
-
-  throw new HttpsError('internal', 'Arama sonuçları tablosu bulunamadı');
+  
+  // Hata mesajı kontrol et
+  const hasError = await page.evaluate(() => {
+    const errorKeywords = ['bulunamadı', 'sonuç yok', 'hata', 'geçersiz', 'çok fazla deneme'];
+    const bodyText = document.body.textContent.toLowerCase();
+    return errorKeywords.some(keyword => bodyText.includes(keyword));
+  });
+  
+  if (hasError) {
+    return {
+      status: 'NoResults',
+      found: false,
+      ownerId,
+      message: 'Bu sahip numarası için sonuç bulunamadı.'
+    };
+  }
+  
+  throw new HttpsError('internal', `Sayfa yüklenemedi. Debug: ${JSON.stringify(pageDebugInfo)}`);
 }
+
+// Tablolar var ama tr elementleri yoksa
+if (pageDebugInfo.allTrs === 0) {
+  throw new HttpsError('internal', `Tablolar var ama satırlar yok. Debug: ${JSON.stringify(pageDebugInfo)}`);
+}
+
+logger.info('Sayfa başarıyla yüklendi ve tablolar mevcut.');
 
     // Sonsuz Liste'yi açmayı dene
     try {
