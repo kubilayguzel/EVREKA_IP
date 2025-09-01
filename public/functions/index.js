@@ -4065,3 +4065,154 @@ export const scrapeTrademark = onCall(
     return await handleScrapeTrademark(basvuruNo);
   }
 );
+// === Minimal Owner Search: Marka Araştırma sekmesinde Kişi No ile SORGULA ===
+const TP_TR_SEARCH_URL = 'https://www.turkpatent.gov.tr/arastirma-yap?form=trademark';
+const NAV_TIMEOUT = 60000;
+
+export const ownerSearchSmokeTest = onCall(
+  { region: 'europe-west1', timeoutSeconds: 180, memory: '2GiB' },
+  async (request) => {
+    const ownerId = String((request.data && request.data.ownerId) || '').trim();
+    if (!ownerId) {
+      throw new HttpsError('invalid-argument', 'ownerId gerekli');
+    }
+
+    let browser;
+    try {
+      const executablePath = await chromium.executablePath();
+      browser = await puppeteer.launch({
+        headless: true,
+        args: [
+          ...chromium.args,
+          '--no-sandbox',
+          '--disable-dev-shm-usage',
+          '--disable-features=site-per-process'
+        ],
+        executablePath
+      });
+
+      const page = await browser.newPage();
+      await page.setViewport({ width: 1366, height: 900, deviceScaleFactor: 1 });
+
+      // Ağ optimizasyonu: CSS serbest, görsel/font/media engelli
+      await page.setRequestInterception(true);
+      page.on('request', (r) => {
+        const t = r.resourceType();
+        if (t === 'image' || t === 'font' || t === 'media') r.abort();
+        else r.continue();
+      });
+
+      logger.info('[ownerSearchSmokeTest] Sayfa açılıyor…');
+      await page.goto(TP_TR_SEARCH_URL, { waitUntil: 'domcontentloaded', timeout: NAV_TIMEOUT });
+
+      // Açılış modal/çerez kapanışı
+      await closeTurkPatentModals(page);
+
+      // Kişi/Sahip No input
+      const inputSel = 'input[placeholder*="Kişi"], input[placeholder*="Sahip"]';
+      logger.info('[ownerSearchSmokeTest] Kişi/Sahip No alanı bekleniyor…');
+      await page.waitForSelector(inputSel, { visible: true, timeout: 20000 });
+      const input = await page.$(inputSel);
+      if (!input) throw new Error('Kişi/Sahip No input bulunamadı');
+
+      // Alanı doldur
+      await input.click({ clickCount: 3 });
+      await page.keyboard.type(ownerId, { delay: 30 });
+
+      // SORGULA tıkla (fallback: Enter)
+      logger.info('[ownerSearchSmokeTest] SORGULA tetikleniyor…');
+      const clicked = await page.evaluate(() => {
+        const list = Array.from(document.querySelectorAll('button, [role="button"], a[role="button"]'));
+        const cand = list.find((b) => {
+          const txt = (b.textContent || '').trim();
+          const disabled = (b.getAttribute && (b.getAttribute('aria-disabled') || b.getAttribute('disabled'))) ? true : false;
+          return /sorgula/i.test(txt) && !disabled;
+        });
+        if (cand) {
+          if (cand.scrollIntoView) cand.scrollIntoView({ block: 'center' });
+          if (typeof cand.click === 'function') cand.click();
+          return true;
+        }
+        return false;
+      });
+
+      if (!clicked) {
+        await input.focus();
+        await page.keyboard.press('Enter');
+        logger.info('[ownerSearchSmokeTest] SORGULA butonu bulunamadı, Enter ile tetiklendi');
+      }
+
+      // Arama sonrası kısa idle bekle (SPA XHR + render)
+      try { await page.waitForNetworkIdle({ idleTime: 800, timeout: 15000 }); } catch (e) {}
+
+      // reCAPTCHA kontrol
+      if (await isCaptchaVisible(page)) {
+        return {
+          ok: true,
+          status: 'CaptchaRequired',
+          ownerId: ownerId,
+          message: 'reCAPTCHA çıktı. Manuel doğrulayıp tekrar deneyin.'
+        };
+      }
+
+      // Sonuç sinyali: tablo satırı, grid ya da "bulunamadı"
+      const signal = await page.evaluate(() => {
+        const rows = document.querySelectorAll('table tbody tr').length;
+        const grid = !!document.querySelector('[class*="MuiDataGrid-root"]');
+        const text = document.body.innerText || '';
+        const none = /kayıt\s*bulunamad[ıi]/i.test(text) || /sonuç bulunamad[ıi]/i.test(text);
+        return { rows: rows, grid: grid, none: none };
+      });
+
+      return {
+        ok: true,
+        status: 'SearchTriggered',
+        ownerId: ownerId,
+        resultsLikelyLoaded: !!(signal.rows || signal.grid || signal.none),
+        signal: signal
+      };
+    } catch (err) {
+      logger.error('[ownerSearchSmokeTest] Hata', err);
+      throw new HttpsError('internal', String((err && err.message) || err));
+    } finally {
+      try {
+        if (browser) { await browser.close(); } // optional chaining yok: parser net
+      } catch (e) {}
+    }
+  }
+); // <-- callable function burada biter
+// --- Yardımcılar ---
+async function closeTurkPatentModals(page) {
+  // OneTrust Cookies (varsa)
+  try {
+    const oneTrust = await page.$('#onetrust-accept-btn-handler');
+    if (oneTrust) { await oneTrust.click(); await page.waitForTimeout(300); }
+  } catch (e) {}
+
+  // Genel dialog kapatma: "Kapat / Tamam / Kabul Et / Anladım / Devam"
+  try {
+    await page.evaluate(() => {
+      const texts = ['kapat', 'tamam', 'kabul et', 'anladım', 'devam'];
+      const btns = Array.from(document.querySelectorAll('button, [role="button"]'));
+      for (const b of btns) {
+        const t = (b.textContent || '').toLowerCase();
+        if (texts.some(function (x) { return t.indexOf(x) !== -1; })) {
+          if (typeof b.click === 'function') { b.click(); }
+          break;
+        }
+      }
+    });
+  } catch (e) {}
+
+  try { await page.keyboard.press('Escape'); } catch (e) {}
+  await page.waitForTimeout(300);
+}
+
+async function isCaptchaVisible(page) {
+  try {
+    const el = await page.$('.grecaptcha-badge, iframe[src*="recaptcha"]');
+    return !!el;
+  } catch (e) {
+    return false;
+  }
+}
