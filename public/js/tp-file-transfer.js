@@ -82,25 +82,30 @@ function setupEventListeners() {
   bulkRadio?.addEventListener('change', syncMode);
   syncMode();
 
-  queryBtn?.addEventListener('click', async () => {
+queryBtn?.addEventListener('click', async () => {
     const basvuruNo = (basvuruNoInput?.value || '').trim();
-    if (!basvuruNo) return showToast('Başvuru numarası girin.', 'warning');
-    try {
-      _showBlock(loadingEl);
-      const result = await scrapeTrademarkFunction({ basvuruNo });
-      const data = result?.data || {};
-      if (!data || data.found === false){
-        showToast(data?.message || 'Sonuç bulunamadı ya da erişilemedi.', 'warning');
-        _hideBlock(loadingEl);
-        return;
-      }
-      renderSingleResult(data);
-      _hideBlock(loadingEl);
-    } catch (err){
-      _hideBlock(loadingEl);
-      showToast('Sorgulama hatası: ' + (err?.message || err), 'danger');
+    if (!basvuruNo) {
+        return showToast('Başvuru numarası girin.', 'warning');
     }
-  });
+    try {
+        // Yükleme göstergesini hemen göster
+        _showBlock(loadingEl);
+
+        const result = await scrapeTrademarkFunction({ basvuruNo });
+        const data = result?.data || {};
+
+        if (!data || data.found === false) {
+            showToast(data?.message || 'Sonuç bulunamadı ya da erişilemedi.', 'warning');
+        } else {
+            renderSingleResult(data);
+        }
+    } catch (err) {
+        showToast('Sorgulama hatası: ' + (err?.message || err), 'danger');
+    } finally {
+        // İşlem tamamlandığında yükleme göstergesini gizle
+        _hideBlock(loadingEl);
+    }
+});
 
   bulkQueryBtn?.addEventListener('click', () => {
     const ownerId = (ownerIdInput?.value || '').trim();
