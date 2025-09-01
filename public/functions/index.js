@@ -3831,26 +3831,29 @@ async function handleScrapeTrademark(basvuruNo) {
   let page;
 
   try {
-    const isLocal = process.env.FUNCTIONS_EMULATOR === 'true' || process.env.LOCAL_PUPPETEER === '1';
+const isLocal = process.env.FUNCTIONS_EMULATOR === 'true';
 
-    const launchOptions = isLocal ? {
-      headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
-    } : {
-      headless: chromium.headless,
-      executablePath: await chromium.executablePath(),
-      args: [
-        ...chromium.args,
-        '--disable-dev-shm-usage',
-        '--disable-gpu',
-        '--no-first-run',
-        '--disable-default-apps',
-        '--disable-features=VizDisplayCompositor',
-        '--disable-blink-features=AutomationControlled',
-        '--disable-web-security'
-      ],
-      defaultViewport: { width: 1920, height: 1080 }
-    };
+const launchOptions = isLocal ? {
+  headless: true,
+  executablePath: process.env.CHROME_PATH || await chromium.executablePath(),
+  args: ['--no-sandbox', '--disable-setuid-sandbox'],
+  defaultViewport: { width: 1920, height: 1080 }
+} : {
+  headless: chromium.headless,
+  executablePath: await chromium.executablePath(),
+  args: [
+    ...chromium.args,
+    '--disable-dev-shm-usage',
+    '--disable-gpu',
+    '--no-first-run',
+    '--disable-default-apps',
+    '--disable-features=VizDisplayCompositor',
+    '--disable-blink-features=AutomationControlled',
+    '--disable-web-security'
+  ],
+  defaultViewport: { width: 1920, height: 1080 }
+};
+
 
     const browser = await puppeteer.launch({
       args: [...chromium.args, '--no-sandbox', '--disable-setuid-sandbox'],
