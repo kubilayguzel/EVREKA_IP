@@ -4515,7 +4515,6 @@ const networkActivity = await page.evaluate(() => {
 logger.info('Network activity:', networkActivity);
 
 
-
 // === Sonuçları kanıta dayalı bekle & listeyi topla (owner search) ===
 logger.info('Owner search: sonuç bekleniyor (table#results + DETAY/ÇIKTI AL/Sonsuz Liste kanıtları)...');
 
@@ -4620,15 +4619,6 @@ const rows = await page.evaluate(() => {
 });
 
 logger.info('[owner-scrape] rowCount:', rows?.length || 0);
-// 3) Döndür
-return {
-  status: 'ok',
-  ownerId,
-  found: rows.length > 0,
-  count: rows.length,
-  proof,
-  rows
-};
 logger.info('Final analiz:', finalAnalysis);
 
     } catch (error) {
