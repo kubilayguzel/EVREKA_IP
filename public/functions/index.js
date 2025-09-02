@@ -4095,151 +4095,173 @@ export const scrapeTrademark = onCall(
 let puppeteerLocal = null;
 
 export const scrapeOwnerTrademarks = onCall(
-  { region: 'europe-west1', memory: '2GiB', timeoutSeconds: 300 },
-  async (request) => {
-    const { ownerId } = request.data || {};
-    if (!ownerId) throw new HttpsError('invalid-argument', 'Sahip numarası (ownerId) zorunludur.');
+  { region: 'europe-west1', memory: '2GiB', timeoutSeconds: 300 },
+  async (request) => {
+    const { ownerId } = request.data || {};
+    if (!ownerId) throw new HttpsError('invalid-argument', 'Sahip numarası (ownerId) zorunludur.');
 
-    logger.info('[scrapeOwnerTrademarks] start', { ownerId });
+    logger.info('[scrapeOwnerTrademarks] start', { ownerId });
 
-    const sleep = (ms) => new Promise(r => setTimeout(r, ms));
-    const isLocal = !!process.env.FUNCTIONS_EMULATOR || (!process.env.K_SERVICE && process.env.NODE_ENV !== 'production');
+    const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+    const isLocal = !!process.env.FUNCTIONS_EMULATOR || (!process.env.K_SERVICE && process.env.NODE_ENV !== 'production');
 
-    let browser;
-    try {
-      // === Launch ===
-      if (isLocal) {
-        if (!puppeteerLocal) { puppeteerLocal = (await import('puppeteer')).default; }
-        browser = await puppeteerLocal.launch({
-          headless: 'new',
-          args: ['--no-sandbox','--disable-setuid-sandbox','--disable-dev-shm-usage'],
-          defaultViewport: { width: 1366, height: 900 },
-        });
-      } else {
-        chromium.setHeadlessMode = true;
-        chromium.setGraphicsMode = false;
-        const execPath = await chromium.executablePath();
-        browser = await puppeteer.launch({
-          args: [...chromium.args, '--no-sandbox','--disable-setuid-sandbox','--disable-dev-shm-usage'],
-          defaultViewport: chromium.defaultViewport || { width: 1366, height: 900 },
-          executablePath: execPath,
-          headless: chromium.headless,
-          ignoreHTTPSErrors: true,
-        });
-      }
+    let browser;
+    try {
+      // === Launch ===
+      if (isLocal) {
+        if (!puppeteerLocal) { puppeteerLocal = (await import('puppeteer')).default; }
+        browser = await puppeteerLocal.launch({
+          headless: 'new',
+          args: ['--no-sandbox','--disable-setuid-sandbox','--disable-dev-shm-usage'],
+          defaultViewport: { width: 1366, height: 900 },
+        });
+      } else {
+        chromium.setHeadlessMode = true;
+        chromium.setGraphicsMode = false;
+        const execPath = await chromium.executablePath();
+        browser = await puppeteer.launch({
+          args: [...chromium.args, '--no-sandbox','--disable-setuid-sandbox','--disable-dev-shm-usage'],
+          defaultViewport: chromium.defaultViewport || { width: 1366, height: 900 },
+          executablePath: execPath,
+          headless: chromium.headless,
+          ignoreHTTPSErrors: true,
+        });
+      }
 
-      const page = await browser.newPage();
-      await page.setJavaScriptEnabled(true);
-      await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119 Safari/537.36');
+      const page = await browser.newPage();
+      await page.setJavaScriptEnabled(true);
+      await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119 Safari/537.36');
 
-      await page.goto('https://www.turkpatent.gov.tr/arastirma-yap', { waitUntil: 'domcontentloaded', timeout: 120000 });
-      logger.info('page loaded');
+      await page.goto('https://www.turkpatent.gov.tr/arastirma-yap', { waitUntil: 'domcontentloaded', timeout: 120000 });
+      logger.info('page loaded');
 
-      // === Input doldur ===
-      await sleep(250);
-      const inputResult = await page.evaluate((val) => {
-        let input = document.querySelector('input[placeholder*="Kişi Numarası" i]');
-        if (!input) {
-          input = Array.from(document.querySelectorAll('input')).find(i => {
-            const p = (i.placeholder||'').toLowerCase();
-            return p.includes('kişi') && p.includes('numara');
-          });
-        }
-        if (!input) return { success: false, error: 'Kişi Numarası inputu bulunamadı' };
-        input.focus();
-        input.value = '';
-        const setEvt = new Event('input', { bubbles: true });
-        input.value = String(val);
-        input.dispatchEvent(setEvt);
-        return { success: true };
-      }, String(ownerId));
-      if (!inputResult.success) {
-        throw new Error(inputResult.error);
-      }
+      // Marka Araştırma sayfası varsayılan olduğu için sekme geçişi gerekmiyor
+      
+      // === Input doldur ===
+      await sleep(250);
+      const inputResult = await page.evaluate((val) => {
+        let input = document.querySelector('input[placeholder*="Kişi Numarası" i]');
+        if (!input) {
+          input = Array.from(document.querySelectorAll('input')).find(i => {
+            const p = (i.placeholder||'').toLowerCase();
+            return p.includes('kişi') && p.includes('numara');
+          });
+        }
+        if (!input) return { success: false, error: 'Kişi Numarası inputu bulunamadı' };
+        input.focus();
+        input.value = '';
+        const setEvt = new Event('input', { bubbles: true });
+        input.value = String(val);
+        input.dispatchEvent(setEvt);
+        return { success: true };
+      }, String(ownerId));
+      if (!inputResult.success) {
+        throw new Error(inputResult.error);
+      }
 
-      // === SORGULA butonuna tıkla ===
-      await sleep(300);
-      const clickResult = await page.evaluate(() => {
-        const ownerInput = document.querySelector('input[placeholder*="Kişi Numarası" i]') 
-                         || Array.from(document.querySelectorAll('input'))
-                             .find(i => (i.placeholder||'').toLowerCase().includes('kişi')
-                                     && (i.placeholder||'').toLowerCase().includes('numara'));
-        const container = ownerInput?.closest('form')
-                        || ownerInput?.closest('[role="tabpanel"]')
-                        || ownerInput?.closest('.MuiPaper-root, .MuiGrid-container, .MuiCard-root')
-                        || document;
-        const btns = Array.from(container.querySelectorAll('button, input[type="submit"], input[type="button"]'));
-        const isSorgula = (el) => /\bSORGULA\b/i.test((el.textContent || el.value || '').trim());
-        let btn = btns.find(isSorgula);
-        if (!btn) btn = Array.from(document.querySelectorAll('button,input[type="submit"],input[type="button"]')).find(isSorgula);
-        if (!btn) return { success:false, error:'SORGULA bulunamadı' };
-        btn.click();
-        return { success:true, text:(btn.textContent||btn.value||'').trim() };
-      });
-      logger.info('clicked:', clickResult);
-      if (!clickResult.success) {
-        throw new Error(clickResult.error);
-      }
+      // === SORGULA butonuna tıkla ===
+      await sleep(300);
+      const clickResult = await page.evaluate(() => {
+        const ownerInput = document.querySelector('input[placeholder*="Kişi Numarası" i]') 
+                        || Array.from(document.querySelectorAll('input'))
+                           .find(i => (i.placeholder||'').toLowerCase().includes('kişi')
+                                    && (i.placeholder||'').toLowerCase().includes('numara'));
+        const container = ownerInput?.closest('form')
+                       || ownerInput?.closest('[role="tabpanel"]')
+                       || ownerInput?.closest('.MuiPaper-root, .MuiGrid-container, .MuiCard-root')
+                       || document;
+        const btns = Array.from(container.querySelectorAll('button, input[type="submit"], input[type="button"]'));
+        const isSorgula = (el) => /\bSORGULA\b/i.test((el.textContent || el.value || '').trim());
+        let btn = btns.find(isSorgula);
+        if (!btn) btn = Array.from(document.querySelectorAll('button,input[type="submit"],input[type="button"]')).find(isSorgula);
+        if (!btn) return { success:false, error:'SORGULA bulunamadı' };
+        btn.click();
+        return { success:true, text:(btn.textContent||btn.value||'').trim() };
+      });
+      logger.info('clicked:', clickResult);
+      if (!clickResult.success) {
+        throw new Error(clickResult.error);
+      }
 
-      // === Sonuçların görünmesini daha esnek bir şekilde bekle ===
-      logger.info('Sonuç tablosunun yüklenmesini bekliyor...');
-      const resultsLoaded = await page.waitForFunction(
-        () => {
-          // Tabloyu veya "kayıt bulunamadı" mesajını arayın
-          const table = document.querySelector('.MuiTable-root tbody tr');
-          const notFound = document.body.innerText.includes('0 kayıt bulundu');
-          return table || notFound;
-        },
-        { timeout: 60000 }
-      );
-      
-      const foundSomething = await resultsLoaded.jsonValue();
-      if (!foundSomething) {
-        return {
-          status: 'NotFound',
-          found: false,
-          ownerId,
-          count: 0,
-          message: 'Belirtilen sahip numarası için kayıt bulunamadı.'
-        };
-      }
-      logger.info('results table or "not found" message appeared');
-      
-      // === SCRAPE (table.MuiTable-root + role attribute) ===
-      const rows = await page.$$eval('.MuiTable-root tbody tr', trs => {
-        const norm = (s) => (s || '').replace(/\s+/g,' ').trim();
-        return trs.map(tr => {
-          const get = (role) => norm(tr.querySelector(`td[role="${role}"]`)?.innerText);
-          const img = tr.querySelector('td[role="image"] img');
-          const hrefEl = tr.querySelector('td[role="_actions"] a[href], td[role="_actions"] button');
-          return {
-            applicationNumber: get('applicationNo'),
-            brandName: get('markName'),
-            ownerName: get('holdName'),
-            applicationDate: get('applicationDate'),
-            registrationNumber: get('registrationNo'),
-            status: get('state'),
-            niceClasses: get('niceClasses'),
-            niceList: (get('niceClasses') || '').split(/[^\d]+/).map(x => x.trim()).filter(Boolean),
-            imageUrl: img ? img.getAttribute('src') : '',
-            detailUrl: hrefEl ? (hrefEl.getAttribute('href') || '') : ''
-          };
-        }).filter(x => x.applicationNumber || x.brandName);
-      });
+      // === Sonuçların görünmesini daha esnek bir şekilde bekle ===
+      logger.info('Sonuçların yüklenmesini bekliyor... ("ÇIKTI AL" veya "Sonsuz Liste" metni)');
+      const resultsLoaded = await page.waitForFunction(
+        () => {
+          // Başarı veya boş sonuç durumu için metinleri kontrol et
+          const bodyText = document.body.innerText.toLowerCase();
+          const successKeywords = ['Çıktı Al', 'Sonsuz Liste', 'kayıt bulundu.', 'sayfa', 'listele'];
+          const notFoundKeywords = ['0 kayıt bulundu', 'kayıt bulunamadı', 'sonuç bulunamadı', 'hata'];
 
-      logger.info('[owner-scrape] rowCount:', rows.length);
+          if (successKeywords.some(kw => bodyText.includes(kw))) return 'found';
+          if (notFoundKeywords.some(kw => bodyText.includes(kw))) return 'not_found';
+          
+          return false; // Yükleme devam ediyor
+        },
+        { timeout: 60000 }
+      );
+      
+      const status = await resultsLoaded.jsonValue();
+      
+      // === SCRAPE ===
+      if (status === 'found') {
+        logger.info('Sonuçlar başarılı bir şekilde yüklendi.');
+        const rows = await page.$$eval('.MuiTable-root tbody tr', trs => {
+          const norm = (s) => (s || '').replace(/\s+/g,' ').trim();
+          return trs.map(tr => {
+            const get = (role) => norm(tr.querySelector(`td[role="${role}"]`)?.innerText);
+            const img = tr.querySelector('td[role="image"] img');
+            const hrefEl = tr.querySelector('td[role="_actions"] a[href], td[role="_actions"] button');
+            return {
+              applicationNumber: get('applicationNo'),
+              brandName: get('markName'),
+              ownerName: get('holdName'),
+              applicationDate: get('applicationDate'),
+              registrationNumber: get('registrationNo'),
+              status: get('state'),
+              niceClasses: get('niceClasses'),
+              niceList: (get('niceClasses') || '').split(/[^\d]+/).map(x => x.trim()).filter(Boolean),
+              imageUrl: img ? img.getAttribute('src') : '',
+              detailUrl: hrefEl ? (hrefEl.getAttribute('href') || '') : ''
+            };
+          }).filter(x => x.applicationNumber || x.brandName);
+        });
 
-      return {
-        status: 'Success',
-        found: rows.length > 0,
-        count: rows.length,
-        items: rows
-      };
-    } catch (err) {
-      logger.error('[scrapeOwnerTrademarks] error', { message: err?.message, stack: err?.stack });
-      throw new HttpsError('internal', `Owner arama hatası: ${err?.message || String(err)}`);
-    } finally {
-      if (browser) { try { await browser.close(); logger.info('browser closed'); } catch {} }
-    }
-  }
+        logger.info('[owner-scrape] rowCount:', rows.length);
+
+        return {
+          status: 'Success',
+          found: rows.length > 0,
+          count: rows.length,
+          items: rows
+        };
+
+      } else if (status === 'not_found') {
+        logger.info('Belirtilen sahip numarası için kayıt bulunamadı.');
+        return {
+          status: 'NotFound',
+          found: false,
+          ownerId,
+          count: 0,
+          message: 'Belirtilen sahip numarası için kayıt bulunamadı.'
+        };
+      }
+      
+      throw new Error('Beklenen metinler 60 saniye içinde bulunamadı.');
+
+    } catch (err) {
+      logger.error('[scrapeOwnerTrademarks] error', { message: err?.message, stack: err?.stack });
+      
+      // Hata durumunda ekran görüntüsü al
+      try {
+        const screenshot = await page.screenshot({ encoding: 'base64' });
+        logger.error('screenshot_base64', { data: screenshot });
+      } catch (e) {
+        logger.error('Ekran görüntüsü alınamadı', { message: e.message });
+      }
+
+      throw new HttpsError('internal', `Owner arama hatası: ${err?.message || String(err)}`);
+    } finally {
+      if (browser) { try { await browser.close(); logger.info('browser closed'); } catch {} }
+    }
+  }
 );
