@@ -99,39 +99,6 @@ async function init() {
   }
 }
 
-function setupExtensionMessageListener() {
-    console.log('[DEBUG] PostMessage dinleyicisi kuruluyor...');
-    
-    // Web sayfası olduğumuz için sadece PostMessage ile iletişim kuruyoruz
-    window.addEventListener('message', (event) => {
-        // Güvenlik: Yalnızca aynı origin'den gelen mesajları kabul et
-        if (event.origin !== window.location.origin) {
-            return;
-        }
-        
-        if (event.data && event.data.source === 'tp-extension-sahip') {
-            console.log('[DEBUG] PostMessage alındı:', event.data);
-            
-            if (event.data.type === 'VERI_GELDI_KISI') {
-                _hideBlock(bulkLoadingEl);
-                lastBulkItems = event.data.data || [];
-                if (!lastBulkItems.length) {
-                    showToast('Bu sahip numarası için sonuç bulunamadı.', 'warning');
-                } else {
-                    renderBulkResults({ items: lastBulkItems });
-                    showToast(`${lastBulkItems.length} kayıt başarıyla alındı.`, 'success');
-                }
-            } else if (event.data.type === 'HATA_KISI') {
-                _hideBlock(bulkLoadingEl);
-                showToast('Eklenti hatası: ' + (event.data.data?.message || 'Bilinmeyen Hata'), 'danger');
-            } else if (event.data.type === 'SORGU_BASLADI') {
-                showToast('Sorgu başladı. Lütfen bekleyin...', 'info');
-            }
-        }
-    });
-    
-    console.log('[DEBUG] ✅ PostMessage dinleyicisi kuruldu.');
-}
 
 function setupEventListeners() {
   singleRadio?.addEventListener('change', syncMode);
@@ -277,9 +244,9 @@ async function onSingleQuery(){
 // --------------- TOPLU (SAHİP NO) - EKLENTİ İLE ---------------
 
 function setupExtensionMessageListener() {
-    console.log('[DEBUG] DOM event ve PostMessage dinleyicileri kuruluyor...');
+    console.log('[DEBUG] PostMessage dinleyicisi kuruluyor...');
     
-    // PostMessage dinleyicisi (eklentiden gelen veriler için)
+    // Web sayfası olduğumuz için sadece PostMessage ile iletişim kuruyoruz
     window.addEventListener('message', (event) => {
         // Güvenlik: Sadece TÜRKPATENT ve kendi origin'imizden mesajları kabul et
         const allowedOrigins = [
