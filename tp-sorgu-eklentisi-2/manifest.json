@@ -23,7 +23,8 @@
     "matches": [
       "http://localhost:*/*",
       "https://ip-manager-production-aab4b.web.app/*",
-      "https://kubilayguzel.github.io/*"
+      "https://kubilayguzel.github.io/*",
+      "http://192.168.1.37:8080"
     ]
   }
 } 
