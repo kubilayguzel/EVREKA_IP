@@ -4327,70 +4327,40 @@ const inputResult = await page.evaluate(async (value) => {
 await sleep(500);
 
 // SORGULA butonuna tıkla - detaylı monitoring ile
+// ---- SORGULA butonunu tıkla (alan-bağımlı, güvenli) ----
+await sleep(500);
 const clickResult = await page.evaluate(() => {
-  // 1) Önce Kişi Numarası input'unu bul ve aynı panelde ara
   const ownerInput = document.querySelector('input[placeholder*="Kişi Numarası" i]') 
-                  || Array.from(document.querySelectorAll('input')).find(i => (i.placeholder||'').toLowerCase().includes('kişi') && (i.placeholder||'').toLowerCase().includes('numara'));
+                  || Array.from(document.querySelectorAll('input'))
+                     .find(i => (i.placeholder||'').toLowerCase().includes('kişi')
+                              && (i.placeholder||'').toLowerCase().includes('numara'));
 
-  // Panel/Container tahmini
   const container = ownerInput?.closest('form')
                  || ownerInput?.closest('[role="tabpanel"]')
                  || ownerInput?.closest('.MuiPaper-root, .MuiGrid-container, .MuiCard-root')
                  || document;
 
-  // 2) Container içindeki butonları tara ve METİNİ TAM OLARAK "SORGULA" olanı seç
   const buttons = Array.from(container.querySelectorAll('button, input[type="submit"], input[type="button"]'));
-  const isSorgula = (el) => {
-    const text = (el.textContent || el.value || '').trim();
-    return /\bSORGULA\b/i.test(text);
-  };
+  const isSorgula = (el) => /\bSORGULA\b/i.test((el.textContent || el.value || '').trim());
   let sorgulaButton = buttons.find(isSorgula);
+  if (!sorgulaButton) sorgulaButton = Array.from(document.querySelectorAll('button,input[type="submit"],input[type="button"]')).find(isSorgula);
+  if (!sorgulaButton) return { success:false, error:'SORGULA butonu bulunamadı' };
 
-  // 3) Bulunamazsa, globalde "SORGULA" olanı dene (ama "Marka Araştırma" gibi 'ARA' içerenleri asla seçme)
-  if (!sorgulaButton) {
-    const allBtns = Array.from(document.querySelectorAll('button, input[type="submit"], input[type="button"]'));
-    sorgulaButton = allBtns.find(isSorgula);
-  }
-
-  if (!sorgulaButton) {
-    return { success: false, error: 'SORGULA butonu bulunamadı' };
-  }
-
-  // Form & durum verileri
-  const form = sorgulaButton.closest('form');
-  const isDisabled = !!sorgulaButton.disabled;
-  const hasClickHandler = !!sorgulaButton.onclick || !!sorgulaButton.getAttribute('onclick');
-
-  // Network activity'yi izlemek için
   window.networkRequests = [];
-  const originalFetch = window.fetch;
-  window.fetch = function(...args) {
-    try { window.networkRequests.push({ type: 'fetch', url: (args[0] && args[0].url) ? args[0].url : String(args[0]), time: Date.now() }); } catch {}
-    return originalFetch.apply(this, args);
-  };
-  const originalXHROpen = XMLHttpRequest.prototype.open;
-  XMLHttpRequest.prototype.open = function(method, url) {
-    try { window.networkRequests.push({ type: 'xhr', method, url, time: Date.now() }); } catch {}
-    return originalXHROpen.apply(this, arguments);
-  };
+  const of = window.fetch; window.fetch = function(...a){ try{window.networkRequests.push({type:'fetch',url:String(a[0]),time:Date.now()});}catch{} return of.apply(this,a); };
+  const ox = XMLHttpRequest.prototype.open; XMLHttpRequest.prototype.open = function(m,u){ try{window.networkRequests.push({type:'xhr',method:m,url:u,time:Date.now()});}catch{} return ox.apply(this,arguments); };
 
-  // Tıkla
   sorgulaButton.click();
-
-  return { 
-    success: true,
-    buttonText: (sorgulaButton.textContent || sorgulaButton.value || '').trim(),
-    buttonType: sorgulaButton.type || '',
-    isDisabled,
-    hasClickHandler,
-    hasForm: !!form,
-    formAction: form?.action || '',
-    formMethod: form?.method || ''
+  const form = sorgulaButton.closest('form');
+  return {
+    success:true,
+    buttonText:(sorgulaButton.textContent||sorgulaButton.value||'').trim(),
+    buttonType:sorgulaButton.type||'',
+    hasForm:!!form, formAction:form?.action||'', formMethod:form?.method||''
   };
 });
 logger.info('SORGULA butonuna tıklandı:', clickResult);
 
-// reCAPTCHA kontrolü - debug ile
 // reCAPTCHA kontrolü ve bypass denemesi
 const captchaDetected = await detectCaptcha(page);
 logger.info('reCAPTCHA kontrolü:', { captchaDetected });
