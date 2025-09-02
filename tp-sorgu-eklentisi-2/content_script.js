@@ -106,25 +106,22 @@ async function runAutomation() {
       });
     });
 
-    // 5) Müvekkilin Uygulamadaki Verisi ile Kıyaslamak için Veriyi Uygulamaya Geri Gönder
-    console.log('[TP Eklenti] Veriler başarıyla toplandı. Geri gönderiliyor.');
-    chrome.runtime.sendMessageExternal('abnopnippoapheoakgangaofeelllpbm', {
-      type: 'VERI_GELDI_KISI',
-      data: scrapedData
-    }, (response) => {
-      if (chrome.runtime.lastError) {
-        console.error('Mesaj gönderme hatası:', chrome.runtime.lastError.message);
-      } else {
-        console.log('Mesaj başarıyla gönderildi:', response);
-      }
-    });
+  // 5) Müvekkilin Uygulamadaki Verisi ile Kıyaslamak için Veriyi Uygulamaya Geri Gönder
+  console.log('[TP Eklenti] Veriler başarıyla toplandı. PostMessage ile gönderiliyor.');
+  window.postMessage({
+    source: 'tp-extension-sahip',
+    type: 'VERI_GELDI_KISI',
+    data: scrapedData
+  }, '*');
+  console.log('[TP Eklenti] PostMessage gönderildi:', scrapedData.length, 'kayıt');
 
-  } catch (error) {
-    console.error('[TP Eklenti] Otomasyon hatası:', error);
-    // Hata durumunda da uygulamayı bilgilendir
-    chrome.runtime.sendMessageExternal('abnopnippoapheoakgangaofeelllpbm', {
-      type: 'HATA_KISI', 
-      data: { message: error.message }
-    });
-  }
+} catch (error) {
+  console.error('[TP Eklenti] Otomasyon hatası:', error);
+  // Hata durumunda da uygulamayı bilgilendir
+  window.postMessage({
+    source: 'tp-extension-sahip',
+    type: 'HATA_KISI',
+    data: { message: error.message }
+  }, '*');
+}
 }
