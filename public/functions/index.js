@@ -4113,6 +4113,11 @@ export const scrapeOwnerTrademarks = onCall(
     }
     global[lastRequestKey] = Date.now();
 
+    // reCAPTCHA tespiti fonksiyonu (scrapeTrademark'tan)
+    const detectCaptcha = async (page) => {
+      const text = (await page.evaluate(() => document.body.innerText || '')).toLowerCase();
+      return /recaptcha|ben robot değilim|i'm not a robot|lütfen doğrulayın/.test(text);
+    };
     let browser;
     try {
       // ---- PUPPETEER LAUNCH ----
@@ -4138,6 +4143,13 @@ export const scrapeOwnerTrademarks = onCall(
       });
 
       const page = await browser.newPage();
+
+      // Bot detection önleme (scrapeTrademark'tan)
+      await page.evaluateOnNewDocument(() => {
+        Object.defineProperty(navigator, 'webdriver', { get: () => false });
+      });
+
+      // Network monitoring ve request interceptor
 
       // ---- Request interceptor (performans) ----
       await page.setRequestInterception(true);
@@ -4344,7 +4356,20 @@ const clickResult = await page.evaluate(() => {
 
 logger.info('SORGULA butonuna tıklandı:', clickResult);
 
-// Kısa süre bekle ve network activity'yi kontrol et
+// reCAPTCHA kontrolü
+if (await detectCaptcha(page)) {
+  const retryAfterSec = 120 + Math.floor(Math.random()*60);
+  global['turkpatent_backoff_until'] = Date.now() + retryAfterSec * 1000;
+  return {
+    status: 'CaptchaRequired',
+    found: false,
+    ownerId: ownerId,
+    retryAfterSec,
+    message: 'reCAPTCHA doğrulaması gerekiyor. Lütfen doğrulayıp tekrar deneyin.'
+  };
+}
+
+// Sonuçları bekle
 await new Promise(resolve => setTimeout(resolve, 3000));
 const networkActivity = await page.evaluate(() => {
   return {
