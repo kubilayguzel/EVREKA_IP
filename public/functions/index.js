@@ -4090,37 +4090,33 @@ export const scrapeTrademark = onCall(
   }
 );
 // ====== SAHİP NUMARASI İLE TOPLU MARKA ARAMA ======
-// Local dev için (emülatör veya NODE_ENV=development) full puppeteer'a düşeceğiz.
-// Local dev için (emülatör veya NODE_ENV=development) full puppeteer'a düşeceğiz.
-let puppeteerLocal = null;
 
 export const scrapeOwnerTrademarks = onCall(
   { region: 'europe-west1', memory: '2GiB', timeoutSeconds: 300 },
   async (request) => {
     const { ownerId } = request.data || {};
-    if (!ownerId) throw new HttpsError('invalid-argument', 'Sahip numarası (ownerId) zorunludur.');
+    if (!ownerId) {
+      throw new HttpsError('invalid-argument', 'Sahip numarası (ownerId) zorunludur.');
+    }
 
-    logger.info('[scrapeOwnerTrademarks] start', { ownerId });
+    logger.info('[scrapeOwnerTrademarks] Başlıyor', { ownerId });
 
-    const sleep = (ms) => new Promise(r => setTimeout(r, ms));
     const isLocal = !!process.env.FUNCTIONS_EMULATOR || (!process.env.K_SERVICE && process.env.NODE_ENV !== 'production');
-
     let browser;
+
     try {
       // === Launch ===
       if (isLocal) {
-        if (!puppeteerLocal) { puppeteerLocal = (await import('puppeteer')).default; }
-        browser = await puppeteerLocal.launch({
+        const puppeteerLocal = await import('puppeteer');
+        browser = await puppeteerLocal.default.launch({
           headless: 'new',
-          args: ['--no-sandbox','--disable-setuid-sandbox','--disable-dev-shm-usage'],
+          args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
           defaultViewport: { width: 1366, height: 900 },
         });
       } else {
-        chromium.setHeadlessMode = true;
-        chromium.setGraphicsMode = false;
         const execPath = await chromium.executablePath();
         browser = await puppeteer.launch({
-          args: [...chromium.args, '--no-sandbox','--disable-setuid-sandbox','--disable-dev-shm-usage'],
+          args: [...chromium.args, '--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
           defaultViewport: chromium.defaultViewport || { width: 1366, height: 900 },
           executablePath: execPath,
           headless: chromium.headless,
@@ -4131,82 +4127,71 @@ export const scrapeOwnerTrademarks = onCall(
       const page = await browser.newPage();
       await page.setJavaScriptEnabled(true);
       await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119 Safari/537.36');
-
-      await page.goto('https://www.turkpatent.gov.tr/arastirma-yap', { waitUntil: 'domcontentloaded', timeout: 120000 });
-      logger.info('page loaded');
-
-      // Marka Araştırma sayfası varsayılan olduğu için sekme geçişi gerekmiyor
       
-      // === Input doldur ===
-      await sleep(250);
-      const inputResult = await page.evaluate((val) => {
-        let input = document.querySelector('input[placeholder*="Kişi Numarası" i]');
-        if (!input) {
-          input = Array.from(document.querySelectorAll('input')).find(i => {
-            const p = (i.placeholder||'').toLowerCase();
-            return p.includes('kişi') && p.includes('numara');
-          });
+      // Network isteği engelleme
+      await page.setRequestInterception(true);
+      page.on('request', (req) => {
+        const resourceType = req.resourceType();
+        if (['image', 'stylesheet', 'font', 'media', 'manifest'].includes(resourceType)) {
+          req.abort();
+        } else {
+          req.continue();
         }
+      });
+      
+      await page.goto('https://www.turkpatent.gov.tr/arastirma-yap', { waitUntil: 'domcontentloaded', timeout: 120000 });
+      logger.info('Sayfa başarıyla yüklendi.');
+
+      // === Input doldur ve butona tıkla ===
+      await sleep(500); // Küçük bir bekleme ekledik
+      
+      const inputResult = await page.evaluate((val) => {
+        const input = document.querySelector('input[placeholder*="Kişi Numarası" i]') || 
+                      Array.from(document.querySelectorAll('input')).find(i => (i.placeholder || '').toLowerCase().includes('kişi') && (i.placeholder || '').toLowerCase().includes('numara'));
         if (!input) return { success: false, error: 'Kişi Numarası inputu bulunamadı' };
         input.focus();
-        input.value = '';
-        const setEvt = new Event('input', { bubbles: true });
         input.value = String(val);
-        input.dispatchEvent(setEvt);
+        input.dispatchEvent(new Event('input', { bubbles: true }));
         return { success: true };
       }, String(ownerId));
-      if (!inputResult.success) {
-        throw new Error(inputResult.error);
-      }
+      if (!inputResult.success) throw new Error(inputResult.error);
 
-      // === SORGULA butonuna tıkla ===
-      await sleep(300);
+      await sleep(500);
+      
       const clickResult = await page.evaluate(() => {
-        const ownerInput = document.querySelector('input[placeholder*="Kişi Numarası" i]') 
-                        || Array.from(document.querySelectorAll('input'))
-                           .find(i => (i.placeholder||'').toLowerCase().includes('kişi')
-                                    && (i.placeholder||'').toLowerCase().includes('numara'));
-        const container = ownerInput?.closest('form')
-                       || ownerInput?.closest('[role="tabpanel"]')
-                       || ownerInput?.closest('.MuiPaper-root, .MuiGrid-container, .MuiCard-root')
-                       || document;
-        const btns = Array.from(container.querySelectorAll('button, input[type="submit"], input[type="button"]'));
-        const isSorgula = (el) => /\bSORGULA\b/i.test((el.textContent || el.value || '').trim());
-        let btn = btns.find(isSorgula);
-        if (!btn) btn = Array.from(document.querySelectorAll('button,input[type="submit"],input[type="button"]')).find(isSorgula);
-        if (!btn) return { success:false, error:'SORGULA bulunamadı' };
+        const btn = Array.from(document.querySelectorAll('button')).find(b => /\bSORGULA\b/i.test((b.textContent || b.value || '').trim()) && !b.disabled);
+        if (!btn) return { success: false, error: 'SORGULA butonu bulunamadı' };
         btn.click();
-        return { success:true, text:(btn.textContent||btn.value||'').trim() };
+        return { success: true };
       });
-      logger.info('clicked:', clickResult);
-      if (!clickResult.success) {
-        throw new Error(clickResult.error);
-      }
+      if (!clickResult.success) throw new Error(clickResult.error);
+
+      logger.info('Sorgula butonuna tıklandı, sonuçlar bekleniyor.');
 
       // === Sonuçların görünmesini daha esnek bir şekilde bekle ===
-      logger.info('Sonuçların yüklenmesini bekliyor... ("ÇIKTI AL" veya "Sonsuz Liste" metni)');
       const resultsLoaded = await page.waitForFunction(
         () => {
-          // Başarı veya boş sonuç durumu için metinleri kontrol et
           const bodyText = document.body.innerText.toLowerCase();
-          const successKeywords = ['Çıktı Al', 'Sonsuz Liste', 'kayıt bulundu.', 'sayfa', 'listele'];
-          const notFoundKeywords = ['0 kayıt bulundu', 'kayıt bulunamadı', 'sonuç bulunamadı', 'hata'];
-
+          const successKeywords = ['çıktı al', 'sonsuz liste', 'kayıt bulundu', 'sayfa'];
+          const notFoundKeywords = ['0 kayıt bulundu', 'kayıt bulunamadı', 'sonuç bulunamadı'];
+          const captchaKeywords = ['robot değilim', 'recaptcha', 'doğrulama'];
+          
           if (successKeywords.some(kw => bodyText.includes(kw))) return 'found';
           if (notFoundKeywords.some(kw => bodyText.includes(kw))) return 'not_found';
+          if (captchaKeywords.some(kw => bodyText.includes(kw))) return 'captcha';
           
-          return false; // Yükleme devam ediyor
+          return false;
         },
         { timeout: 60000 }
       );
       
       const status = await resultsLoaded.jsonValue();
-      
+
       // === SCRAPE ===
       if (status === 'found') {
-        logger.info('Sonuçlar başarılı bir şekilde yüklendi.');
+        logger.info('Sonuçlar yüklendi, tablo scrape ediliyor.');
         const rows = await page.$$eval('.MuiTable-root tbody tr', trs => {
-          const norm = (s) => (s || '').replace(/\s+/g,' ').trim();
+          const norm = (s) => (s || '').replace(/\s+/g, ' ').trim();
           return trs.map(tr => {
             const get = (role) => norm(tr.querySelector(`td[role="${role}"]`)?.innerText);
             const img = tr.querySelector('td[role="image"] img');
@@ -4225,40 +4210,26 @@ export const scrapeOwnerTrademarks = onCall(
             };
           }).filter(x => x.applicationNumber || x.brandName);
         });
-
         logger.info('[owner-scrape] rowCount:', rows.length);
-
-        return {
-          status: 'Success',
-          found: rows.length > 0,
-          count: rows.length,
-          items: rows
-        };
+        return { status: 'Success', found: rows.length > 0, count: rows.length, items: rows };
 
       } else if (status === 'not_found') {
         logger.info('Belirtilen sahip numarası için kayıt bulunamadı.');
-        return {
-          status: 'NotFound',
-          found: false,
-          ownerId,
-          count: 0,
-          message: 'Belirtilen sahip numarası için kayıt bulunamadı.'
-        };
+        return { status: 'NotFound', found: false, ownerId, count: 0, message: 'Belirtilen sahip numarası için kayıt bulunamadı.' };
+      } else if (status === 'captcha') {
+        throw new Error('reCAPTCHA veya benzeri bir doğrulama tespit edildi.');
+      } else {
+        throw new Error('Beklenen metinler 60 saniye içinde bulunamadı.');
       }
-      
-      throw new Error('Beklenen metinler 60 saniye içinde bulunamadı.');
 
     } catch (err) {
       logger.error('[scrapeOwnerTrademarks] error', { message: err?.message, stack: err?.stack });
-      
-      // Hata durumunda ekran görüntüsü al
       try {
         const screenshot = await page.screenshot({ encoding: 'base64' });
         logger.error('screenshot_base64', { data: screenshot });
       } catch (e) {
         logger.error('Ekran görüntüsü alınamadı', { message: e.message });
       }
-
       throw new HttpsError('internal', `Owner arama hatası: ${err?.message || String(err)}`);
     } finally {
       if (browser) { try { await browser.close(); logger.info('browser closed'); } catch {} }
