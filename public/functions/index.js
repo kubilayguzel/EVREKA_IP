@@ -4104,147 +4104,89 @@ export const scrapeOwnerTrademarks = onCall(
     let browser;
 
     try {
-      // === Launch ===
-      if (isLocal) {
-        const puppeteerLocal = await import('puppeteer');
-        browser = await puppeteerLocal.default.launch({
-          headless: 'new',
-          args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
-          defaultViewport: { width: 1366, height: 900 },
-        });
-      } else {
-        const execPath = await chromium.executablePath();
-        browser = await puppeteer.launch({
-          args: [...chromium.args, '--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
-          defaultViewport: chromium.defaultViewport || { width: 1366, height: 900 },
-          executablePath: execPath,
-          headless: chromium.headless,
-          ignoreHTTPSErrors: true,
-        });
-      }
+      const puppeteerModule = isLocal ? await import('puppeteer') : puppeteer;
+      browser = await puppeteerModule.default.launch({
+        headless: 'new',
+        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+        defaultViewport: { width: 1366, height: 900 },
+      });
 
       const page = await browser.newPage();
       await page.setJavaScriptEnabled(true);
       await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119 Safari/537.36');
 
-      // Bot tespiti önlemleri
-      await page.evaluateOnNewDocument(() => {
-        Object.defineProperty(navigator, 'webdriver', { get: () => false });
-      });
+      let responseData = null;
 
-      await page.setRequestInterception(true);
-      page.on('request', (req) => {
-        const resourceType = req.resourceType();
-        if (['image', 'stylesheet', 'font', 'media', 'manifest'].includes(resourceType)) {
-          req.abort();
-        } else {
-          req.continue();
+      // Ağ trafiğini dinle
+      page.on('response', async (response) => {
+        const url = response.url();
+        if (url.includes('/api/') && response.request().method() === 'POST') {
+          try {
+            const json = await response.json();
+            if (json?.data && Array.isArray(json.data)) {
+              responseData = json.data;
+              logger.info('XHR verisi başarıyla yakalandı', { count: json.data.length });
+            }
+          } catch (err) {
+            logger.warn('XHR yanıtı JSON değil veya hata oluştu', { url, err: err.message });
+          }
         }
       });
 
       await page.goto('https://www.turkpatent.gov.tr/arastirma-yap', { waitUntil: 'domcontentloaded', timeout: 120000 });
-      logger.info('Sayfa başarıyla yüklendi.');
 
-      // Gerçekçi kullanıcı davranışı simülasyonu
-      await page.mouse.move(100, 100);
-      await page.mouse.click(100, 100);
-      await page.keyboard.type('test');
-      await page.evaluate(() => window.scrollBy(0, 500));
-      await sleep(500);
-
-      // === Input doldur ve butona tıkla ===
-      const inputResult = await page.evaluate((val) => {
+      // Input doldur
+      await page.evaluate((val) => {
         const input = document.querySelector('input[placeholder*="Kişi Numarası" i]') ||
                       Array.from(document.querySelectorAll('input')).find(i => (i.placeholder || '').toLowerCase().includes('kişi') && (i.placeholder || '').toLowerCase().includes('numara'));
-        if (!input) return { success: false, error: 'Kişi Numarası inputu bulunamadı' };
-        input.focus();
-        input.value = String(val);
-        input.dispatchEvent(new Event('input', { bubbles: true }));
-        return { success: true };
+        if (input) {
+          input.focus();
+          input.value = String(val);
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+        }
       }, String(ownerId));
-      if (!inputResult.success) throw new Error(inputResult.error);
 
-      await sleep(500);
+      await page.waitForTimeout(500);
 
-      const clickResult = await page.evaluate(() => {
+      // Butona tıkla
+      await page.evaluate(() => {
         const btn = Array.from(document.querySelectorAll('button')).find(b => /\bSORGULA\b/i.test((b.textContent || b.value || '').trim()) && !b.disabled);
-        if (!btn) return { success: false, error: 'SORGULA butonu bulunamadı' };
-        btn.click();
-        return { success: true };
+        if (btn) btn.click();
       });
-      if (!clickResult.success) throw new Error(clickResult.error);
 
-      logger.info('Sorgula butonuna tıklandı, sonuçlar bekleniyor.');
-
-      // reCAPTCHA iframe kontrolü
-      const frames = page.frames();
-      const captchaFrame = frames.find(f => f.url().includes('recaptcha'));
-      if (captchaFrame) {
-        throw new Error('reCAPTCHA iframe bulundu, işlem durduruldu.');
+      // XHR verisinin gelmesini bekle
+      const maxWait = 15000;
+      const start = Date.now();
+      while (!responseData && Date.now() - start < maxWait) {
+        await page.waitForTimeout(500);
       }
 
-      // === Sonuçların görünmesini bekle ===
-      const resultsLoaded = await page.waitForFunction(() => {
-        const bodyText = document.body.innerText.toLowerCase();
-        const successKeywords = ['çıktı al', 'sonsuz liste', 'kayıt bulundu', 'sayfa'];
-        const notFoundKeywords = ['0 kayıt bulundu', 'kayıt bulunamadı', 'sonuç bulunamadı'];
-        const captchaKeywords = ['robot değilim', 'recaptcha', 'doğrulama'];
-
-        if (successKeywords.some(kw => bodyText.includes(kw))) return 'found';
-        if (notFoundKeywords.some(kw => bodyText.includes(kw))) return 'not_found';
-        if (captchaKeywords.some(kw => bodyText.includes(kw))) return 'captcha';
-
-        return false;
-      }, { timeout: 60000 });
-
-      const status = await resultsLoaded.jsonValue();
-
-      // === SCRAPE ===
-      if (status === 'found') {
-        logger.info('Sonuçlar yüklendi, tablo scrape ediliyor.');
-        const rows = await page.$$eval('.MuiTable-root tbody tr', trs => {
-          const norm = (s) => (s || '').replace(/\s+/g, ' ').trim();
-          return trs.map(tr => {
-            const get = (role) => norm(tr.querySelector(`td[role="${role}"]`)?.innerText);
-            const img = tr.querySelector('td[role="image"] img');
-            const hrefEl = tr.querySelector('td[role="_actions"] a[href], td[role="_actions"] button');
-            return {
-              applicationNumber: get('applicationNo'),
-              brandName: get('markName'),
-              ownerName: get('holdName'),
-              applicationDate: get('applicationDate'),
-              registrationNumber: get('registrationNo'),
-              status: get('state'),
-              niceClasses: get('niceClasses'),
-              niceList: (get('niceClasses') || '').split(/[^\d]+/).map(x => x.trim()).filter(Boolean),
-              imageUrl: img ? img.getAttribute('src') : '',
-              detailUrl: hrefEl ? (hrefEl.getAttribute('href') || '') : ''
-            };
-          }).filter(x => x.applicationNumber || x.brandName);
-        });
-        logger.info('[owner-scrape] rowCount:', rows.length);
-        return { status: 'Success', found: rows.length > 0, count: rows.length, items: rows };
-
-      } else if (status === 'not_found') {
-        logger.info('Belirtilen sahip numarası için kayıt bulunamadı.');
-        return { status: 'NotFound', found: false, ownerId, count: 0, message: 'Belirtilen sahip numarası için kayıt bulunamadı.' };
-      } else if (status === 'captcha') {
-        throw new Error('reCAPTCHA veya benzeri bir doğrulama tespit edildi.');
-      } else {
-        throw new Error('Beklenen metinler 60 saniye içinde bulunamadı.');
+      if (!responseData) {
+        throw new Error('XHR verisi alınamadı veya zaman aşımına uğradı.');
       }
+
+      // Veriyi normalize et
+      const items = responseData.map(item => ({
+        applicationNumber: item.applicationNo,
+        brandName: item.markName,
+        ownerName: item.holdName,
+        applicationDate: item.applicationDate,
+        registrationNumber: item.registrationNo,
+        status: item.state,
+        niceClasses: item.niceClasses,
+        niceList: (item.niceClasses || '').split(/[^\d]+/).map(x => x.trim()).filter(Boolean),
+        imageUrl: item.imageUrl || '',
+        detailUrl: item.detailUrl || ''
+      }));
+
+      return { status: 'Success', found: items.length > 0, count: items.length, items };
 
     } catch (err) {
       logger.error('[scrapeOwnerTrademarks] error', { message: err?.message, stack: err?.stack });
-      try {
-        const screenshot = await page.screenshot({ encoding: 'base64' });
-        logger.error('screenshot_base64', { data: screenshot });
-      } catch (e) {
-        logger.error('Ekran görüntüsü alınamadı', { message: e.message });
-      }
-      throw new HttpsError('internal', `Owner arama hatası: ${err?.message || String(err)}`);
+      throw new HttpsError('internal', `XHR scraping hatası: ${err?.message || String(err)}`);
     } finally {
-      if (browser) { try { await browser.close(); logger.info('browser closed'); } catch {} }
+      if (browser) { try { await browser.close(); logger.info('browser kapatıldı'); } catch {} }
     }
   }
 );
+
