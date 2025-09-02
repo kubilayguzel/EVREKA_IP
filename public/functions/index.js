@@ -3983,7 +3983,7 @@ const launchOptions = isLocal ? {
     }
 
     // DOM yüklenmesini bekle
-    await page.waitForSelector('table.MuiTable-root tbody tr', { timeout: 30000 });
+    await page.waitForSelector('table#results tbody tr', { timeout: 60000 });
 
     // DOM'dan veriyi çek
     const tdata = await page.evaluate(domParseFn);
@@ -4106,7 +4106,7 @@ export const scrapeOwnerTrademarks = onCall(
 
     let browser;
     try {
-      // === LAUNCH (scrapetrademark ile aynı model) ===
+      // === Launch ===
       if (isLocal) {
         if (!puppeteerLocal) { puppeteerLocal = (await import('puppeteer')).default; }
         browser = await puppeteerLocal.launch({
@@ -4152,7 +4152,7 @@ export const scrapeOwnerTrademarks = onCall(
         input.dispatchEvent(setEvt);
       }, String(ownerId));
 
-      // === SORGULA ===
+      // === SORGULA butonuna tıkla ===
       await sleep(300);
       const clickResult = await page.evaluate(() => {
         const ownerInput = document.querySelector('input[placeholder*="Kişi Numarası" i]') 
@@ -4168,91 +4168,45 @@ export const scrapeOwnerTrademarks = onCall(
         let btn = btns.find(isSorgula);
         if (!btn) btn = Array.from(document.querySelectorAll('button,input[type="submit"],input[type="button"]')).find(isSorgula);
         if (!btn) return { success:false, error:'SORGULA bulunamadı' };
-
         btn.click();
         return { success:true, text:(btn.textContent||btn.value||'').trim() };
       });
       logger.info('clicked:', clickResult);
 
-      // === SONUÇ BEKLEME ===
-      const primarySelectors = [
-        'td[role="applicationNo"]',
-        'table#results tbody tr td',
-        '.MuiTable-root tbody tr td',
-        '.MuiTableRow-root td',
-        '.MuiDataGrid-virtualScrollerRenderZone [role="row"] [role="gridcell"]'
-      ].join(', ');
-      const quickOk = await page.waitForSelector(primarySelectors, { timeout: 20000 }).catch(() => null);
+      // === SONUÇ BEKLEME: table#results tbody tr ===
+      await page.waitForSelector('table#results tbody tr', { timeout: 60000 });
+      logger.info('results table appeared');
 
-      const proof = await (async () => {
-        async function snap() {
-          return page.evaluate(() => {
-            const t = (document.body?.innerText || '').toLowerCase();
-            const hasCiktiAl = t.includes('çıktı al');
-            const hasSonsuz  = t.includes('sonsuz liste') || t.includes('sonsuz');
-            const roleRows   = document.querySelectorAll('td[role="applicationNo"]').length;
-            const tableRows  = Array.from(document.querySelectorAll('table#results tbody tr, .MuiTable-root tbody tr, .MuiTableRow-root'))
-                                .filter(r => (r.querySelectorAll ? r.querySelectorAll('td').length >= 2 : true)).length;
-            const gridRows   = document.querySelectorAll('.MuiDataGrid-virtualScrollerRenderZone [role="row"]').length;
-            const rows = Math.max(roleRows, tableRows, gridRows);
-            const isEmpty = /kayıt bulunamadı|0 kayıt|kayıt yok/.test(t);
-            return { rows, hasCiktiAl, hasSonsuz, isEmpty };
-          });
-        }
-        if (quickOk) {
-          const p = await snap();
-          return { status: (p.rows>0 || p.hasCiktiAl || p.hasSonsuz) ? 'ok':'timeout', ...p };
-        }
-        const timeoutMs = 60000, start = Date.now();
-        while (Date.now() - start < timeoutMs) {
-          const p = await snap();
-          if (p.isEmpty) return { status:'empty', ...p };
-          if (p.rows >= 1 || p.hasCiktiAl || p.hasSonsuz) return { status:'ok', ...p };
-          await new Promise(r => setTimeout(r, 250));
-        }
-        return { status:'timeout', rows:0, hasCiktiAl:false, hasSonsuz:false, isEmpty:false };
-      })();
-      logger.info('[owner-results-proof]', proof);
-
-      if (proof.status === 'empty') return { status:'empty', found:false, ownerId, count:0, proof };
-      if (proof.status === 'timeout') return { status:'timeout', found:false, ownerId, proof };
-
-      // === SCRAPE (ROLE → TABLE → DATAGRID) ===
-      const rows = await page.evaluate(() => {
+      // === SCRAPE (table#results + role attribute) ===
+      const rows = await page.$$eval('table#results tbody tr', trs => {
         const norm = (s) => (s || '').replace(/\s+/g,' ').trim();
-        const roleRows = Array.from(document.querySelectorAll('tr.MuiTableRow-root'));
-        let out = [];
-        if (roleRows.length) {
-          out = roleRows.map(row => {
-            const q = (r) => row.querySelector(`td[role="${r}"]`);
-            const txt = (r) => norm(q(r)?.innerText);
-            const img = row.querySelector('td[role="image"] img');
-            const detayEl = row.querySelector('td[role="_actions"] a[href], td[role="_actions"] button');
-            const href = detayEl ? (detayEl.getAttribute('href') || '') : '';
-            const nice = txt('niceClasses');
-            const niceList = (nice || '').split(/[^\d]+/).map(x => x.trim()).filter(Boolean);
-
-            return {
-              applicationNumber: txt('applicationNo'),
-              brandName: txt('markName'),
-              ownerName: txt('holdName'),
-              applicationDate: txt('applicationDate'),
-              registrationNumber: txt('registrationNo'),
-              status: txt('state'),
-              niceClasses: nice,
-              niceList,
-              imageUrl: img ? (img.getAttribute('src') || '') : '',
-              detailUrl: href
-            };
-          }).filter(x => x.applicationNumber || x.brandName);
-          if (out.length) return out;
-        }
-        return out;
+        return trs.map(tr => {
+          const get = (role) => norm(tr.querySelector(`td[role="${role}"]`)?.innerText);
+          const img = tr.querySelector('td[role="image"] img');
+          const hrefEl = tr.querySelector('td[role="_actions"] a[href], td[role="_actions"] button');
+          return {
+            applicationNumber: get('applicationNo'),
+            brandName: get('markName'),
+            ownerName: get('holdName'),
+            applicationDate: get('applicationDate'),
+            registrationNumber: get('registrationNo'),
+            status: get('state'),
+            niceClasses: get('niceClasses'),
+            niceList: (get('niceClasses') || '').split(/[^\d]+/).map(x => x.trim()).filter(Boolean),
+            imageUrl: img ? img.getAttribute('src') : '',
+            detailUrl: hrefEl ? (hrefEl.getAttribute('href') || '') : ''
+          };
+        }).filter(x => x.applicationNumber || x.brandName);
       });
 
-      logger.info('[owner-scrape] rowCount:', rows?.length || 0);
-      return { status:'Success', found:(rows?.length||0)>0, count:rows?.length||0, items:rows };
+      logger.info('[owner-scrape] rowCount:', rows.length);
 
+      return {
+        status: 'Success',
+        found: rows.length > 0,
+        count: rows.length,
+        items: rows
+      };
     } catch (err) {
       logger.error('[scrapeOwnerTrademarks] error', { message: err?.message, stack: err?.stack });
       throw new HttpsError('internal', `Owner arama hatası: ${err?.message || String(err)}`);
