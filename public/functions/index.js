@@ -4090,6 +4090,7 @@ export const scrapeTrademark = onCall(
   }
 );
 // ====== YENİLENMİŞ SAHİP NUMARASI İLE TOPLU MARKA ARAMA (FOUND YALNIZCA SATIR VARSA) ======
+// ====== YENİLENMİŞ SAHİP NUMARASI İLE TOPLU MARKA ARAMA (iframe + role="number" + role-öncelikli parse) ======
 export const scrapeOwnerTrademarks = onCall(
   { region: 'europe-west1', memory: '2GiB', timeoutSeconds: 300 },
   async (request) => {
@@ -4144,23 +4145,19 @@ export const scrapeOwnerTrademarks = onCall(
           'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
         );
 
-        // Basit bot-detection bypass (senin sürümünle uyumlu)
+        // Basit bot-detection bypass
         await page.evaluateOnNewDocument(() => {
           Object.defineProperty(navigator, 'webdriver', { get: () => false });
           Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
           Object.defineProperty(navigator, 'languages', { get: () => ['tr-TR', 'tr', 'en-US', 'en'] });
           window.chrome = {
             runtime: {},
-            loadTimes: function () {
-              return { requestTime: Date.now() / 1000 };
-            },
-            csi: function () {
-              return { startE: Date.now(), onloadT: Date.now() };
-            },
+            loadTimes: function () { return { requestTime: Date.now() / 1000 }; },
+            csi: function () { return { startE: Date.now(), onloadT: Date.now() }; },
           };
         });
 
-        // Request interception - reCAPTCHA'ları engelle
+        // Request interception - reCAPTCHA isteklerini engelle + hafif içerik diyeti
         await page.setRequestInterception(true);
         page.on('request', (req) => {
           const url = req.url();
@@ -4240,117 +4237,92 @@ export const scrapeOwnerTrademarks = onCall(
 
         logger.info('Sorgula butonuna tıklandı, sonuçlar bekleniyor...');
 
-        // === GELİŞTİRİLMİŞ SONUÇ BEKLEME: "found" sadece satır varsa ===
+        // === Selector listeleri (satır tespiti için) ===
+        const rowSelectorList = [
+          'table tbody tr[role="number"]',
+          'table tbody tr',
+          '.MuiTable-root tbody tr[role="number"]',
+          '.MuiTable-root tbody tr',
+          '[role="table"] tbody tr',
+          // MUI DataGrid / virtualized:
+          '[role="grid"] [role="row"]',
+          '[role="rowgroup"] [role="row"]',
+          'tbody tr[role="number"]',
+          'tbody tr'
+        ];
+
+        // === Her frame’de satır var mı kontrolü (iframe-aware probe) ===
+        async function probeAnyFrame(page) {
+          const frames = [page.mainFrame(), ...page.frames()];
+          for (const f of frames) {
+            try {
+              const res = await f.evaluate((selectors) => {
+                const bodyText = (document.body.innerText || '').toLowerCase();
+
+                const loadingKw = ['yükleniyor', 'loading', 'bekleyin', 'aranıyor'];
+                const notFoundKw = ['0 kayıt bulundu', 'kayıt bulunamadı', 'sonuç bulunamadı', 'hiç kayıt', 'sonuç yok'];
+                const errKw = ['hata oluştu', 'sistem hatası', 'geçici hata'];
+
+                const isLoading   = loadingKw.some(k => bodyText.includes(k));
+                const hasNotFound = notFoundKw.some(k => bodyText.includes(k));
+                const hasError    = errKw.some(k => bodyText.includes(k));
+
+                let rowCount = 0, usedSelector = '';
+                for (const sel of selectors) {
+                  const n = document.querySelectorAll(sel).length;
+                  if (n > 0) { rowCount = n; usedSelector = sel; break; }
+                }
+
+                // İlk 2 satır ön izlemesi
+                const firstRowsPreview = [];
+                if (rowCount > 0) {
+                  const trs = document.querySelectorAll(usedSelector);
+                  const lim = Math.min(2, trs.length);
+                  for (let i = 0; i < lim; i++) {
+                    firstRowsPreview.push((trs[i].innerText || '').replace(/\s+/g, ' ').trim());
+                  }
+                }
+
+                return { isLoading, hasNotFound, hasError, rowCount, usedSelector, firstRowsPreview };
+              }, rowSelectorList);
+
+              if (res?.rowCount > 0 || res?.hasNotFound || res?.hasError) {
+                return { frame: f, ...res };
+              }
+            } catch {}
+          }
+          return null;
+        }
+
+        // === GELİŞTİRİLMİŞ SONUÇ BEKLEME: "found" sadece gerçek satır varsa ===
         let status = null;
+        let foundFrame = null;
         const maxWaitTime = 120000; // 2 dk
         const pollEvery = 1500;
-        const startTime = Date.now();
+        const t0 = Date.now();
 
-        while (Date.now() - startTime < maxWaitTime) {
-          try {
-            const probe = await page.evaluate(() => {
-              const bodyText = (document.body.innerText || '').toLowerCase();
-
-              const loadingKw = ['yükleniyor', 'loading', 'bekleyin', 'aranıyor'];
-              const notFoundKw = ['0 kayıt bulundu', 'kayıt bulunamadı', 'sonuç bulunamadı', 'hiç kayıt', 'sonuç yok'];
-              const errKw = ['hata oluştu', 'sistem hatası', 'geçici hata'];
-
-              const isLoading = loadingKw.some((k) => bodyText.includes(k));
-              const hasNotFound = notFoundKw.some((k) => bodyText.includes(k));
-              const hasError = errKw.some((k) => bodyText.includes(k));
-
-              // Sadece gerçek satır varsa found:
-              const rowSelectorList = [
-                'table tbody tr',
-                '.MuiTable-root tbody tr',
-                '[role="table"] tbody tr',
-                // MUI DataGrid / virtualized:
-                '[role="grid"] [role="row"]',
-                '[role="rowgroup"] [role="row"]',
-                'tbody tr',
-              ];
-              let rowCount = 0;
-              let usedSelector = '';
-              for (const sel of rowSelectorList) {
-                const n = document.querySelectorAll(sel).length;
-                if (n > 0) {
-                  rowCount = n;
-                  usedSelector = sel;
-                  break;
-                }
-              }
-
-              // Kısa HTML özeti (çok büyük olmasın)
-              let tableHtmlPreview = '';
-              const tableEl =
-                document.querySelector('.MuiTable-root') ||
-                document.querySelector('table') ||
-                document.querySelector('[role="table"]') ||
-                document.querySelector('[role="grid"]');
-              if (tableEl) {
-                const html = tableEl.outerHTML || '';
-                tableHtmlPreview = html.slice(0, 800);
-              }
-
-              // İlk 2 satırın text ön izlemesi
-              const firstRowsPreview = [];
-              if (rowCount > 0) {
-                const trs = document.querySelectorAll(usedSelector);
-                const lim = Math.min(2, trs.length);
-                for (let i = 0; i < lim; i++) {
-                  firstRowsPreview.push((trs[i].innerText || '').replace(/\s+/g, ' ').trim());
-                }
-              }
-
-              return {
-                isLoading,
-                hasNotFound,
-                hasError,
-                rowCount,
-                usedSelector,
-                tableHtmlPreview,
-                firstRowsPreview,
-              };
+        while (Date.now() - t0 < maxWaitTime) {
+          const p = await probeAnyFrame(page);
+          if (p) {
+            logger.info('[probe]', {
+              rowCount: p.rowCount,
+              usedSelector: p.usedSelector,
+              isLoading: p.isLoading,
+              hasNotFound: p.hasNotFound,
+              hasError: p.hasError
             });
 
-            logger.info('[probe] durum', {
-              isLoading: probe.isLoading,
-              hasNotFound: probe.hasNotFound,
-              hasError: probe.hasError,
-              rowCount: probe.rowCount,
-              usedSelector: probe.usedSelector,
-            });
-
-            if (probe.rowCount > 0 && !probe.isLoading) {
+            if (p.rowCount > 0 && !p.isLoading) {
               status = 'found';
-              logger.info('Sonuç durumu belirlendi: found (tablo var, satır sayısı: ' + probe.rowCount + ')');
-
-              if (probe.firstRowsPreview?.length) {
-                logger.info('[rows-preview]', { rows: probe.firstRowsPreview });
-              }
-              if (probe.tableHtmlPreview) {
-                logger.info('[table-html-preview]', { snippet: probe.tableHtmlPreview });
-              }
+              foundFrame = p.frame;  // satırlar hangi frame’deyse onu kullan
+              logger.info('Sonuç durumu belirlendi: found (satır sayısı: ' + p.rowCount + ')');
+              if (p.firstRowsPreview?.length) logger.info('[rows-preview]', { rows: p.firstRowsPreview });
               break;
             }
-
-            if (probe.hasNotFound && !probe.isLoading) {
-              status = 'not_found';
-              logger.info('Sonuç durumu belirlendi: not_found');
-              break;
-            }
-
-            if (probe.hasError) {
-              status = 'error';
-              logger.warn('Sonuç durumu belirlendi: error');
-              break;
-            }
-
-            await sleep(pollEvery);
-          } catch (evalErr) {
-            logger.warn('Sayfa değerlendirme hatası:', evalErr?.message);
-            await sleep(pollEvery);
+            if (p.hasNotFound && !p.isLoading) { status = 'not_found'; break; }
+            if (p.hasError) { status = 'error'; break; }
           }
+          await sleep(pollEvery);
         }
 
         if (!status) {
@@ -4358,79 +4330,76 @@ export const scrapeOwnerTrademarks = onCall(
           status = 'timeout';
         }
 
-        // Eğer found geldiyse, en az bir satır görünene kadar da garanti bekleyelim (UI sanal liste olabilir)
+        // Found ise en az bir satır görünene kadar garanti bekleyelim
         if (status === 'found') {
-          await page
-            .waitForSelector('table tbody tr, .MuiTable-root tbody tr, [role="grid"] [role="row"]', {
-              visible: true,
-              timeout: 30000,
-            })
-            .catch(() => {});
+          try {
+            await (foundFrame || page).waitForSelector(
+              'table tbody tr, .MuiTable-root tbody tr, [role="grid"] [role="row"]',
+              { visible: true, timeout: 30000 }
+            );
+          } catch {}
         }
 
-        // === SONUÇ İŞLEME ===
+        // === SONUÇ İŞLEME / PARSE (role-öncelikli + iframe-aware) ===
         if (status === 'found') {
           logger.info('Veri çekiliyor...');
+          await sleep(800);
 
-          // Küçük nefes payı
-          await sleep(1200);
+          const frameForParse = foundFrame || page.mainFrame();
 
-          // Satırları ve kolonları ayrıntılı çek
-          const { rows, rowCount, usedSelector } = await page.evaluate(() => {
+          const { rows, rowCount, usedSelector } = await frameForParse.evaluate(() => {
             const norm = (s) => (s || '').replace(/\s+/g, ' ').trim();
 
             const selectors = [
-              '.MuiTable-root tbody tr',
+              'table tbody tr[role="number"]',
+              '.MuiTable-root tbody tr[role="number"]',
+              '[role="table"] tbody tr[role="number"]',
               'table tbody tr',
+              '.MuiTable-root tbody tr',
               '[role="table"] tbody tr',
+              // fallback’lar:
               '[role="grid"] [role="row"]',
               '[role="rowgroup"] [role="row"]',
-              'tbody tr',
+              'tbody tr[role="number"]',
+              'tbody tr'
             ];
 
             let trs = [];
             let usedSelector = '';
             for (const sel of selectors) {
               const list = document.querySelectorAll(sel);
-              if (list.length > 0) {
-                trs = Array.from(list);
-                usedSelector = sel;
-                break;
-              }
+              if (list.length > 0) { trs = Array.from(list); usedSelector = sel; break; }
             }
 
-            const rows = trs.map((tr) => {
-              // Klasik tablo hücreleri
-              let cells = Array.from(tr.querySelectorAll('td'));
-              // MUI grid hücreleri fallback
-              if (cells.length === 0) cells = Array.from(tr.querySelectorAll('[role="cell"]'));
-
-              const get = (i) => (cells[i] ? norm(cells[i].innerText) : '');
-
-              // Role'lü kolon isimleri varsa yine de çalışsın
+            const rows = trs.map(tr => {
+              // Önce role’lü hücre
               const byRole = (role) => {
-                const el = tr.querySelector(`td[role="${role}"], [role="cell"][data-field="${role}"]`);
+                const el =
+                  tr.querySelector(`td[role="${role}"]`) ||
+                  tr.querySelector(`[role="cell"][data-field="${role}"]`);
                 return el ? norm(el.innerText) : '';
               };
 
-              const applicationNumber = byRole('applicationNo') || get(0);
-              const brandName = byRole('markName') || get(1);
-              const ownerName = byRole('holdName') || get(2);
-              const applicationDate = byRole('applicationDate') || get(3);
-              const registrationNo = byRole('registrationNo') || get(4);
-              const state = byRole('state') || get(5);
-              const niceText = byRole('niceClasses') || get(6);
+              // Sonra index fallback (ilk kolon numara/checkbox olabilir)
+              let cells = Array.from(tr.querySelectorAll('td'));
+              if (cells.length === 0) cells = Array.from(tr.querySelectorAll('[role="cell"]'));
+              const get = (i) => (cells[i] ? norm(cells[i].innerText) : '');
+
+              const applicationNumber = byRole('applicationNo')   || get(1) || get(0);
+              const brandName        = byRole('markName')        || get(2) || get(1);
+              const ownerName        = byRole('holdName')        || get(3) || get(2);
+              const applicationDate  = byRole('applicationDate') || get(4) || get(3);
+              const registrationNo   = byRole('registrationNo')  || get(5) || get(4);
+              const state            = byRole('state')           || get(6) || get(5);
+              const niceText         = byRole('niceClasses')     || get(7) || get(6);
 
               const niceList = (niceText || '')
                 .split(/[^\d]+/)
-                .map((x) => x.trim())
+                .map(x => x.trim())
                 .filter(Boolean);
 
-              const img =
-                tr.querySelector('img') ||
-                tr.querySelector('picture img') ||
-                tr.querySelector('[role="cell"] img');
-              const a = tr.querySelector('a[href]');
+              const img = tr.querySelector('img') || tr.querySelector('picture img') || tr.querySelector('[role="cell"] img');
+              const a   = tr.querySelector('a[href]');
 
               return {
                 applicationNumber,
@@ -4442,38 +4411,34 @@ export const scrapeOwnerTrademarks = onCall(
                 niceClasses: niceText,
                 niceList,
                 imageUrl: img ? img.getAttribute('src') : '',
-                detailUrl: a ? a.getAttribute('href') : '',
+                detailUrl: a ? a.getAttribute('href') : ''
               };
-            });
+            }).filter(r => r && (r.applicationNumber || r.brandName));
 
-            return {
-              rows: rows.filter((r) => r && (r.applicationNumber || r.brandName)),
-              rowCount: trs.length,
-              usedSelector,
-            };
+            return { rows, rowCount: trs.length, usedSelector };
           });
 
           logger.info(`[owner-scrape] Satır sayısı (ham): ${rowCount} | Kullanılan selector: ${usedSelector}`);
           logger.info(`[owner-scrape] Parse sonrası kayıt: ${rows.length}`);
 
           if (rows.length === 0) {
-            // Ek teşhis: ilk satırın HTML'inden küçük bir kesit
+            // Teşhis için ilk satırdan kısa HTML kesiti
             try {
-              const snippet = await page.evaluate((sel) => {
+              const snippet = await (foundFrame || page).evaluate((sel) => {
                 const tr = document.querySelector(sel);
                 if (!tr) return '';
                 const html = tr.outerHTML || '';
                 return html.slice(0, 600);
               }, usedSelector);
               if (snippet) logger.info('[first-tr-html-snippet]', { snippet });
-            } catch (_) {}
+            } catch {}
 
             return {
               status: 'NotFound',
               found: false,
               ownerId,
               count: 0,
-              message: 'Tablo bulundu ancak veri yok',
+              message: 'Tablo bulundu ancak veri yok'
             };
           }
 
@@ -4482,8 +4447,9 @@ export const scrapeOwnerTrademarks = onCall(
             found: true,
             count: rows.length,
             ownerId,
-            items: rows,
+            items: rows
           };
+
         } else if (status === 'not_found') {
           logger.info('Kayıt bulunamadı.');
           return {
@@ -4491,15 +4457,15 @@ export const scrapeOwnerTrademarks = onCall(
             found: false,
             ownerId,
             count: 0,
-            message: 'Belirtilen sahip numarası için kayıt bulunamadı.',
+            message: 'Belirtilen sahip numarası için kayıt bulunamadı.'
           };
+
         } else {
           throw new Error(`Beklenmeyen durum: ${status}`);
         }
+
       } catch (err) {
-        logger.error(`[scrapeOwnerTrademarks] Deneme ${retryCount + 1} hatası:`, {
-          message: err?.message,
-        });
+        logger.error(`[scrapeOwnerTrademarks] Deneme ${retryCount + 1} hatası:`, { message: err?.message });
 
         // Screenshot al (debug)
         if (browser) {
@@ -4507,9 +4473,7 @@ export const scrapeOwnerTrademarks = onCall(
             const pages = await browser.pages();
             if (pages.length > 0) {
               const screenshot = await pages[0].screenshot({ encoding: 'base64', quality: 30 });
-              if (screenshot) {
-                logger.info('Hata screenshot alındı');
-              }
+              if (screenshot) logger.info('Hata screenshot alındı');
             }
           } catch (e) {
             logger.warn('Screenshot alınamadı:', e.message);
@@ -4517,15 +4481,13 @@ export const scrapeOwnerTrademarks = onCall(
         }
 
         if (retryCount >= maxRetries - 1) {
-          throw new HttpsError(
-            'internal',
-            `Owner arama hatası (${maxRetries} deneme): ${err?.message || String(err)}`
-          );
+          throw new HttpsError('internal', `Owner arama hatası (${maxRetries} deneme): ${err?.message || String(err)}`);
         }
 
         retryCount++;
         logger.info(`${retryCount + 1}. deneme için bekleniyor...`);
         await sleep(5000 * retryCount);
+
       } finally {
         if (browser) {
           try {
