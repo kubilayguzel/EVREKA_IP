@@ -4090,11 +4090,6 @@ export const scrapeTrademark = onCall(
   }
 );
 // ====== SAHİP NUMARASI İLE TOPLU MARKA ARAMA ======
-import puppeteer from 'puppeteer-core';
-import chromium from '@sparticuz/chromium';
-chromium.setHeadlessMode = true;
-chromium.setGraphicsMode = false;
-
 // ====== GELIŞMIŞ reCAPTCHA BYPASS STRATEJİLERİ ======
 async function bypassCaptchaStrategies(page) {
   const strategies = [
