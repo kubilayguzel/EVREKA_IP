@@ -1,7 +1,7 @@
 // --- DOM helpers ---
 function _el(id){ return document.getElementById(id); }
 function _showBlock(el){ if(!el) return; el.classList.remove('hide'); el.style.display=''; }
-function _hideBlock(el){ if(!el) return; el.classList.add('hide'); }
+function _hideBlock(el){ if(!el; return; el.classList.add('hide'); }
 function showToast(msg, type='info'){
   const cls = type==='danger'?'alert-danger':(type==='success'?'alert-success':(type==='warning'?'alert-warning':'alert-info'));
   const div = document.createElement('div');
@@ -33,6 +33,7 @@ import { app } from '../firebase-config.js';
 import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-functions.js';
 import { loadSharedLayout, ensurePersonModal, openPersonModal } from './layout-loader.js';
 import { personService } from '../firebase-config.js';
+
 const functions = getFunctions(app, 'europe-west1');
 const scrapeTrademarkFunction = httpsCallable(functions, 'scrapeTrademark', { timeout: 120000 });
 // Yeni: Sahip numarasıyla liste döndüren uç (sunucuda uygulanmalı)
@@ -76,6 +77,10 @@ let allPersons = [];
 let selectedRelatedParties = [];
 let lastBulkItems = [];
 
+// Eklentinin ID'sini buraya ekleyin
+// ÖNEMLİ: Eklentinizi Chrome'a yükledikten sonra bu ID'yi güncelleyin.
+const EXTENSION_ID = 'YOUR_EXTENSION_ID';
+
 // --------------- INIT ---------------
 async function init() {
   try {
@@ -83,12 +88,37 @@ async function init() {
     allPersons = Array.isArray(personsResult.data) ? personsResult.data : [];
     console.log(`[INIT] ${allPersons.length} kişi yüklendi.`);
 
-    // Olay dinleyicilerini kur
+    // Eklentiden gelen mesajları dinle
+    setupExtensionMessageListener();
     setupEventListeners();
   } catch (error) {
     console.error("Veri yüklenirken hata oluştu:", error);
     showToast("Gerekli veriler yüklenemedi.", "danger");
   }
+}
+
+function setupExtensionMessageListener() {
+    if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessageExternal) {
+        chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => {
+            if (request.type === 'VERI_GELDI_KISI' && request.data) {
+                _hideBlock(bulkLoadingEl);
+                lastBulkItems = request.data;
+                if (!lastBulkItems.length) {
+                    showToast('Bu sahip numarası için sonuç bulunamadı.', 'warning');
+                } else {
+                    renderBulkResults({ items: lastBulkItems });
+                }
+                sendResponse({ status: 'OK' });
+            } else if (request.type === 'HATA_KISI') {
+                _hideBlock(bulkLoadingEl);
+                showToast('Eklenti hatası: ' + (request.data.message || 'Bilinmeyen Hata'), 'danger');
+                sendResponse({ status: 'ERROR' });
+            }
+            return true;
+        });
+    } else {
+        console.warn('Chrome eklenti mesaj dinleyicisi kurulamadı. Chrome ortamında değil.');
+    }
 }
 
 function setupEventListeners() {
@@ -172,13 +202,13 @@ function setupEventListeners() {
     const headers = ['Sıra','Başvuru Numarası','Marka Adı','Marka Sahibi','Başvuru Tarihi','Tescil No','Durumu','Nice Sınıfları'];
     const rows = lastBulkItems.map((x, i) => [
       i+1,
-      x.applicationNo || '',
-      x.markName || '',
-      x.holdName || '',
+      x.applicationNumber || '',
+      x.brandName || '',
+      x.ownerName || '',
       fmtDateToTR(x.applicationDate || ''),
-      x.registrationNo || '',
-      x.state || '',
-      (x.niceClasses || '').replace(/\s*\/\s*$/,'')
+      x.registrationNumber || '',
+      x.status || '',
+      x.niceClasses || ''
     ]);
     const csv = [headers].concat(rows).map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -232,80 +262,60 @@ async function onSingleQuery(){
   }
 }
 
-// --------------- TOPLU (SAHİP NO) ---------------
+// --------------- TOPLU (SAHİP NO) - EKLENTİ İLE ---------------
 async function onBulkQuery(){
-  const ownerId = (ownerIdInput?.value || '').trim();
-  if(!ownerId) return showToast('Sahip numarası girin.', 'warning');
+    const ownerId = (ownerIdInput?.value || '').trim();
+    if (!ownerId) {
+        return showToast('Sahip numarası girin.', 'warning');
+    }
 
-  if (!scrapeOwnerTrademarks) {
-    return showToast('Sunucu ucu henüz tanımlı değil: scrapeOwnerTrademarks', 'danger');
-  }
+    if (typeof chrome === 'undefined' || !chrome.runtime || !chrome.runtime.sendMessageExternal) {
+        return showToast('Eklenti ortamı bulunamadı. Lütfen Chrome tarayıcısında deneyin.', 'danger');
+    }
 
-  try {
     _showBlock(bulkLoadingEl);
     _hideBlock(bulkResultsContainer);
     bulkResultsBody.innerHTML = '';
     lastBulkItems = [];
 
-    // Not: Sunucu tarafı "sonsuz liste" ve scroll işlemlerini yapıp tüm kayıtları döndürmelidir.
-    // Örnek yanıt beklenen şema:
-    // { status: 'Success', ownerId: '5537169', owner: '...', total: 185, items: [ { applicationNo, markName, holdName, applicationDate, registrationNo, state, niceClasses } ] }
-    const resp = await scrapeOwnerTrademarks({ ownerId, maxPages: 0, enableInfinite: true });
-    const payload = resp?.data || {};
-    const items = Array.isArray(payload.items) ? payload.items : [];
-    lastBulkItems = items;
-
-    if (!items.length) {
-      showToast('Bu sahip numarası için sonuç bulunamadı.', 'warning');
-      return;
+    try {
+        chrome.runtime.sendMessageExternal(EXTENSION_ID, {
+            type: 'SORGULA_KISI',
+            data: ownerId
+        }, (response) => {
+            if (chrome.runtime.lastError) {
+                _hideBlock(bulkLoadingEl);
+                console.error('Eklentiye mesaj gönderme hatası:', chrome.runtime.lastError.message);
+                showToast('Eklentiye bağlanılamadı. Eklentinin yüklü ve etkin olduğundan emin olun.', 'danger');
+            } else {
+                console.log('Sorgu eklentiye başarıyla gönderildi.', response);
+                // Eklentiden gelecek yanıt setupExtensionMessageListener tarafından işlenecek
+            }
+        });
+    } catch (err) {
+        _hideBlock(bulkLoadingEl);
+        showToast('İşlem başlatılırken bir hata oluştu: ' + (err.message || err), 'danger');
     }
-
-    renderBulkResults(payload);
-  } catch (err) {
-    console.error(err);
-    if (err?.code === 'deadline-exceeded') {
-      showToast('İstek zaman aşımına uğradı. Zaman aşımı artırıldı, yeniden deneniyor…', 'warning');
-      try {
-        const retryFn = httpsCallable(functions, 'scrapeOwnerTrademarks', { timeout: 300000 });
-        const resp2 = await retryFn({ ownerId, maxPages: 0, enableInfinite: true });
-        const payload2 = resp2?.data || {};
-        const items2 = Array.isArray(payload2.items) ? payload2.items : [];
-        lastBulkItems = items2;
-        if (!items2.length) {
-          showToast('Bu sahip numarası için sonuç bulunamadı.', 'warning');
-        } else {
-          renderBulkResults(payload2);
-        }
-      } catch (err2) {
-        console.error(err2);
-        showToast('Toplu arama zaman aşımı (yeniden deneme başarısız): ' + (err2?.message || err2), 'danger');
-      }
-    } else {
-      showToast('Toplu arama hatası: ' + (err?.message || err), 'danger');
-    }
-  } finally {
-    _hideBlock(bulkLoadingEl);
-  }
 }
 
 function renderBulkResults(payload){
   const items = Array.isArray(payload.items) ? payload.items : [];
-  const ownerId = payload.ownerId || (items[0]?.holdName?.match(/\((\d+)\)/)?.[1] || '');
+  const ownerId = payload.ownerId || (items[0]?.ownerName?.match(/\((\d+)\)/)?.[1] || '');
   const total = payload.total ?? items.length;
 
   bulkMeta.textContent = `Sahip No: ${ownerId || '-'} • ${total} kayıt`;
   bulkResultsBody.innerHTML = items.map((x, idx) => `
     <tr>
       <td>${idx+1}</td>
-      <td>${x.applicationNo || ''}</td>
-      <td>${x.markName || ''}</td>
-      <td>${x.holdName || ''}</td>
+      <td>${x.applicationNumber || ''}</td>
+      <td>${x.brandName || ''}</td>
+      <td>${x.ownerName || ''}</td>
       <td>${fmtDateToTR(x.applicationDate || '')}</td>
-      <td>${x.registrationNo || ''}</td>
-      <td>${x.state || ''}</td>
-      <td>${(x.niceClasses || '').replace(/\s*\/\s*$/,'')}</td>
+      <td>${x.registrationNumber || ''}</td>
+      <td>${x.status || ''}</td>
+      <td>${x.niceClasses || ''}</td>
       <td class="text-center">
-        <button class="btn btn-sm btn-primary js-bulk-detail" data-appno="${x.applicationNo || ''}">
+        <button class="btn btn-sm btn-primary js-bulk-detail" data-appno="${x.applicationNumber || ''}">
           Detay
         </button>
       </td>
