@@ -108,7 +108,7 @@ async function runAutomation() {
 
     // 5) Müvekkilin Uygulamadaki Verisi ile Kıyaslamak için Veriyi Uygulamaya Geri Gönder
     console.log('[TP Eklenti] Veriler başarıyla toplandı. Geri gönderiliyor.');
-    chrome.runtime.sendMessageExternal('ip-manager-production-aab4b', {
+    chrome.runtime.sendMessageExternal('abnopnippoapheoakgangaofeelllpbm', {
       type: 'VERI_GELDI_KISI',
       data: scrapedData
     }, (response) => {
@@ -122,8 +122,8 @@ async function runAutomation() {
   } catch (error) {
     console.error('[TP Eklenti] Otomasyon hatası:', error);
     // Hata durumunda da uygulamayı bilgilendir
-    chrome.runtime.sendMessageExternal('ip-manager-production-aab4b', {
-      type: 'HATA_KISI',
+    chrome.runtime.sendMessageExternal('abnopnippoapheoakgangaofeelllpbm', {
+      type: 'HATA_KISI', 
       data: { message: error.message }
     });
   }
