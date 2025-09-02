@@ -4090,7 +4090,8 @@ export const scrapeTrademark = onCall(
   }
 );
 // ====== SAHİP NUMARASI İLE TOPLU MARKA ARAMA ======
-
+// ====== SAHİP NUMARASI İLE TOPLU MARKA ARAMA (v5 — role tabanlı DOM, LAUNCH FIX) ======
+// Bu bloğu index.js içindeki mevcut scrapeOwnerTrademarks yerine koyabilirsiniz.
 export const scrapeOwnerTrademarks = onCall(
   { region: 'europe-west1', memory: '2GiB', timeoutSeconds: 300 },
   async (request) => {
@@ -4103,12 +4104,36 @@ export const scrapeOwnerTrademarks = onCall(
 
     let browser;
     try {
-      browser = await puppeteer.launch({
-        args: await chromium.args(),
-        defaultViewport: { width: 1366, height: 900 },
-        executablePath: await chromium.executablePath(),
+      // ---------- FIXED CHROMIUM LAUNCH (handles both chrome-aws-lambda & vanilla puppeteer) ----------
+      let launchOpts = {
         headless: true,
-      });
+        args: ['--no-sandbox','--disable-setuid-sandbox','--disable-dev-shm-usage']
+      };
+      try {
+        // If chrome-aws-lambda is available, prefer it
+        if (typeof chromium !== 'undefined' && chromium) {
+          // args may be a property (common) or a function (rare) -> normalize:
+          let chromeArgs = chromium.args;
+          if (typeof chromeArgs === 'function') {
+            try { chromeArgs = await chromium.args(); } catch { /* ignore */ }
+          }
+          // executablePath may be a function or a promise or a string -> normalize:
+          let execPath = chromium.executablePath;
+          try {
+            if (typeof execPath === 'function') execPath = await execPath();
+            else if (execPath && typeof execPath.then === 'function') execPath = await execPath;
+          } catch { /* ignore */ }
+
+          launchOpts = {
+            args: chromeArgs || launchOpts.args,
+            defaultViewport: { width: 1366, height: 900 },
+            executablePath: execPath || launchOpts.executablePath,
+            headless: (chromium.headless !== undefined ? chromium.headless : true),
+          };
+        }
+      } catch { /* fallback to default launchOpts */ }
+
+      browser = await puppeteer.launch(launchOpts);
       const page = await browser.newPage();
       await page.setJavaScriptEnabled(true);
       await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119 Safari/537.36');
@@ -4172,7 +4197,7 @@ export const scrapeOwnerTrademarks = onCall(
       });
       logger.info('SORGULA butonuna tıklandı:', clickResult);
 
-      // Araştırma API yanıtını bekle (deterministik sinyal)
+      // Araştırma API yanıtını bekle (deterministik sinyal, varsa)
       let apiRespOk = false;
       try {
         const resp = await page.waitForResponse(r => {
@@ -4182,16 +4207,14 @@ export const scrapeOwnerTrademarks = onCall(
       } catch {}
       logger.info('[research-api]', { ok: apiRespOk });
 
-      // === Sonuçları kanıta dayalı bekle (role tabanlı + tablo/grid fallback)
-      logger.info('Owner search: sonuç bekleniyor (role=applicationNo / table#results / MUI DataGrid)...');
+      // === Sonuçları kanıta dayalı bekle (role=applicationNo / table#results / MUI DataGrid)...
+      logger.info('Owner search: sonuç bekleniyor (role=applicationNo / table#results / DataGrid)...');
 
-      // 0) Hızlı kanıt: role tabanlı hücreler veya tablo/grid hücreleri
       const quickOk = await page.waitForSelector(
         'td[role="applicationNo"], table#results tbody tr td, .MuiTable-root tbody tr td, .MuiDataGrid-virtualScrollerRenderZone [role="row"] [role="gridcell"]',
         { timeout: 20000 }
       ).catch(() => null);
 
-      // 1) Kanıt döngüsü
       const proof = await (async () => {
         async function snapshot() {
           return page.evaluate(() => {
@@ -4235,7 +4258,7 @@ export const scrapeOwnerTrademarks = onCall(
       const rows = await page.evaluate(() => {
         const norm = (s) => (s || '').replace(/\s+/g,' ').trim();
 
-        // A) ROLE TABANLI (ekrandaki örnek DOM’a göre en güvenilir)
+        // A) ROLE TABANLI
         const roleRows = Array.from(document.querySelectorAll('tr.MuiTableRow-root'));
         let out = [];
         if (roleRows.length) {
