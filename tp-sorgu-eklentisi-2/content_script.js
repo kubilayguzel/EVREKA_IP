@@ -14,8 +14,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 // -------------- Yardımcılar --------------
 function waitFor(selector, { root = document, timeout = 7000, test = null } = {}) {
   return new Promise((resolve, reject) => {
+    // Hemen var mı?
     let el = root.querySelector(selector);
     if (el && (!test || test(el))) return resolve(el);
+
+    // Observer ile hızlı yakala
     const obs = new MutationObserver(() => {
       el = root.querySelector(selector);
       if (el && (!test || test(el))) {
@@ -24,21 +27,30 @@ function waitFor(selector, { root = document, timeout = 7000, test = null } = {}
       }
     });
     obs.observe(root, { childList: true, subtree: true, attributes: true });
+
+    // Emniyet timeout
     const to = setTimeout(() => {
       obs.disconnect();
       reject(new Error(`waitFor timeout: ${selector}`));
     }, timeout);
+
+    // Resolve olunca timeout temizlensin
     const _resolve = (v) => { clearTimeout(to); resolve(v); };
   });
 }
 
 function click(el) {
   if (!el) return false;
-  el.click();
-  return true;
+  const rect = el.getBoundingClientRect();
+  if (rect.width > 0 && rect.height > 0) {
+    el.click();
+    return true;
+  }
+  return false;
 }
 
 function findButtonByTextFast(text) {
+  // Çok hızlı text yakalama (span->button da dahil)
   const btns = document.querySelectorAll('button');
   for (const b of btns) {
     if ((b.textContent || '').trim().includes(text)) return b;
@@ -52,14 +64,24 @@ function findButtonByTextFast(text) {
 async function runAutomation() {
   console.log('[TP Eklenti] Otomasyon başladı. Kişi No:', targetOwnerId);
 
-  // 1) Popup kapat
+  // 1) Modal/popup kapat (anında yakala)
   try {
-    const dialog = document.querySelector('[role="dialog"], .MuiDialog-root');
-    if (dialog) {
-      const closeBtn = dialog.querySelector('button[aria-label="Kapat"], .close');
-      if (closeBtn) click(closeBtn);
+    // Dolandırıcılık Hakkında popup
+    const fraudClose = await waitFor('.jss84 .jss92', { timeout: 1500 });
+    click(fraudClose);
+    console.log('[TP Eklenti] Dolandırıcılık popup kapatıldı.');
+  } catch { /* görünmediyse sorun değil */ }
+
+  try {
+    // Klasik MUI dialog/overlay (varsa)
+    const anyDialog = await waitFor('[role="dialog"], .MuiDialog-root, .MuiModal-root, .modal', { timeout: 800 });
+    const closeCandidate = anyDialog.querySelector('button[aria-label="Close"], button[aria-label="Kapat"], .close') || anyDialog.querySelector('button');
+    if (closeCandidate) {
+      click(closeCandidate);
+      console.log('[TP Eklenti] MUI modal kapatıldı.');
     }
-  } catch {}
+  } catch { /* yoksa geç */ }
+
 
   // 2) Formu doldur + Sorgula
   try {
