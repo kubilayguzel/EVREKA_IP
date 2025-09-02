@@ -3880,13 +3880,24 @@ const launchOptions = isLocal ? {
       try { await page.setCookie(...savedCookies); } catch {}
     }
 
-    // --- Request interception (ağ fan-out’unu azalt) ---
-    await page.setRequestInterception(true);
-    page.on('request', req => {
-      const t = req.resourceType();
-      if (t === 'image' || t === 'font' || t === 'stylesheet' || t === 'media') return req.abort();
-      req.continue();
-    });
+    // Network monitoring ve request interceptor
+      await page.setRequestInterception(true);
+      
+      page.on('request', (request) => {
+        logger.info('Request:', request.url(), request.method());
+        const resourceType = request.resourceType();
+        if (['image', 'stylesheet', 'font', 'media'].includes(resourceType)) {
+          request.abort();
+        } else {
+          request.continue();
+        }
+      });
+
+      page.on('response', (response) => {
+        if (response.url().includes('turkpatent') || response.url().includes('api') || response.url().includes('search')) {
+          logger.info('Response:', response.url(), response.status());
+        }
+      });
 
     page.setDefaultTimeout(30000);
     page.setDefaultNavigationTimeout(30000);
@@ -4334,8 +4345,7 @@ const clickResult = await page.evaluate(() => {
 logger.info('SORGULA butonuna tıklandı:', clickResult);
 
 // Kısa süre bekle ve network activity'yi kontrol et
-await page.waitForTimeout(3000);
-
+await new Promise(resolve => setTimeout(resolve, 3000));
 const networkActivity = await page.evaluate(() => {
   return {
     requests: window.networkRequests || [],
@@ -4348,7 +4358,7 @@ const networkActivity = await page.evaluate(() => {
 logger.info('Network activity:', networkActivity);
 
 // Daha uzun bekle - AJAX response için
-await page.waitForTimeout(8000);
+await new Promise(resolve => setTimeout(resolve, 8000));
 
 // Final sayfa durumu
 const finalAnalysis = await page.evaluate(() => {
