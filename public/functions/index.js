@@ -4089,120 +4089,7 @@ export const scrapeTrademark = onCall(
     return await handleScrapeTrademark(basvuruNo);
   }
 );
-// ====== SAHİP NUMARASI İLE TOPLU MARKA ARAMA ======
-// ====== GELIŞMIŞ reCAPTCHA BYPASS STRATEJİLERİ ======
-async function bypassCaptchaStrategies(page) {
-  const strategies = [
-    // Strateji 1: Farklı User Agent
-    async () => {
-      const agents = [
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
-        'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36'
-      ];
-      const randomAgent = agents[Math.floor(Math.random() * agents.length)];
-      await page.setUserAgent(randomAgent);
-      logger.info('User-Agent değiştirildi');
-    },
-
-    // Strateji 2: İnsan benzeri davranış
-    async () => {
-      for (let i = 0; i < 3; i++) {
-        const x = Math.floor(Math.random() * 400) + 200;
-        const y = Math.floor(Math.random() * 300) + 200;
-        await page.mouse.move(x, y, { steps: 5 });
-        await sleep(Math.random() * 200 + 100);
-      }
-
-      await page.evaluate(() => {
-        window.scrollTo(0, Math.floor(Math.random() * 300));
-      });
-      await sleep(800);
-
-      await page.keyboard.press('Tab');
-      await sleep(200);
-    }
-  ];
-
-  for (const strategy of strategies) {
-    try {
-      await strategy();
-    } catch (e) {
-      logger.warn('Strateji hatası:', e.message);
-    }
-  }
-}
-
-async function setupAdvancedBotDetectionBypass(page) {
-  await page.evaluateOnNewDocument(() => {
-    // Navigator özelliklerini normalleştir
-    Object.defineProperty(navigator, 'webdriver', { get: () => false });
-    Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
-    Object.defineProperty(navigator, 'languages', { get: () => ['tr-TR', 'tr', 'en-US', 'en'] });
-    
-    // Chrome özellikleri ekle
-    window.chrome = {
-      runtime: {},
-      loadTimes: function() { return { requestTime: Date.now() / 1000 }; },
-      csi: function() { return { startE: Date.now(), onloadT: Date.now() }; },
-      app: {}
-    };
-    
-    // WebGL fingerprint normalize et
-    const getParameter = WebGLRenderingContext.getParameter;
-    WebGLRenderingContext.prototype.getParameter = function(parameter) {
-      if (parameter === 37445) return 'Intel Inc.';
-      if (parameter === 37446) return 'Intel Iris OpenGL Engine';
-      return getParameter.call(this, parameter);
-    };
-  });
-}
-
-async function handleCaptchaDetection(page) {
-  try {
-    const captchaExists = await page.evaluate(() => {
-      const text = document.body.innerText.toLowerCase();
-      const captchaKeywords = ['recaptcha', 'robot değilim', 'doğrulama'];
-      const hasCaptchaText = captchaKeywords.some(keyword => text.includes(keyword));
-      
-      const frames = Array.from(document.querySelectorAll('iframe'));
-      const hasCaptchaFrame = frames.some(frame => 
-        frame.src && frame.src.includes('recaptcha')
-      );
-      
-      return hasCaptchaText || hasCaptchaFrame;
-    });
-
-    if (captchaExists) {
-      logger.warn('reCAPTCHA tespit edildi, bypass stratejileri uygulanıyor...');
-      
-      await bypassCaptchaStrategies(page);
-      
-      await page.reload({ waitUntil: 'domcontentloaded', timeout: 30000 });
-      await sleep(3000);
-      
-      const stillHasCaptcha = await page.evaluate(() => {
-        const text = document.body.innerText.toLowerCase();
-        return text.includes('recaptcha') || text.includes('robot değilim');
-      });
-      
-      if (stillHasCaptcha) {
-        logger.warn('reCAPTCHA hala mevcut');
-        return false;
-      }
-      
-      logger.info('reCAPTCHA başarıyla aşıldı!');
-    }
-    
-    return true;
-  } catch (error) {
-    logger.error('Captcha bypass hatası:', error.message);
-    return false;
-  }
-}
-
-// ====== YENİLENMİŞ SAHİP NUMARASI İLE TOPLU MARKA ARAMA ======
-// ====== GELIŞMIŞ SAHİP NUMARASI MARKA ARAMA (TIMEOUT FİKSLİ) ======
+// ====== YENİLENMİŞ SAHİP NUMARASI İLE TOPLU MARKA ARAMA (FOUND YALNIZCA SATIR VARSA) ======
 export const scrapeOwnerTrademarks = onCall(
   { region: 'europe-west1', memory: '2GiB', timeoutSeconds: 300 },
   async (request) => {
@@ -4227,10 +4114,10 @@ export const scrapeOwnerTrademarks = onCall(
           browser = await puppeteerLocal.default.launch({
             headless: 'new',
             args: [
-              '--no-sandbox', 
-              '--disable-setuid-sandbox', 
+              '--no-sandbox',
+              '--disable-setuid-sandbox',
               '--disable-dev-shm-usage',
-              '--disable-blink-features=AutomationControlled'
+              '--disable-blink-features=AutomationControlled',
             ],
             defaultViewport: { width: 1366, height: 900 },
           });
@@ -4238,11 +4125,11 @@ export const scrapeOwnerTrademarks = onCall(
           const execPath = await chromium.executablePath();
           browser = await puppeteer.launch({
             args: [
-              ...chromium.args, 
-              '--no-sandbox', 
-              '--disable-setuid-sandbox', 
+              ...chromium.args,
+              '--no-sandbox',
+              '--disable-setuid-sandbox',
               '--disable-dev-shm-usage',
-              '--disable-blink-features=AutomationControlled'
+              '--disable-blink-features=AutomationControlled',
             ],
             defaultViewport: chromium.defaultViewport || { width: 1366, height: 900 },
             executablePath: execPath,
@@ -4253,18 +4140,23 @@ export const scrapeOwnerTrademarks = onCall(
 
         const page = await browser.newPage();
         await page.setJavaScriptEnabled(true);
-        await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+        await page.setUserAgent(
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        );
 
-        // Bot detection bypass
+        // Basit bot-detection bypass (senin sürümünle uyumlu)
         await page.evaluateOnNewDocument(() => {
           Object.defineProperty(navigator, 'webdriver', { get: () => false });
           Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
           Object.defineProperty(navigator, 'languages', { get: () => ['tr-TR', 'tr', 'en-US', 'en'] });
-          
           window.chrome = {
             runtime: {},
-            loadTimes: function() { return { requestTime: Date.now() / 1000 }; },
-            csi: function() { return { startE: Date.now(), onloadT: Date.now() }; }
+            loadTimes: function () {
+              return { requestTime: Date.now() / 1000 };
+            },
+            csi: function () {
+              return { startE: Date.now(), onloadT: Date.now() };
+            },
           };
         });
 
@@ -4273,15 +4165,17 @@ export const scrapeOwnerTrademarks = onCall(
         page.on('request', (req) => {
           const url = req.url();
           const resourceType = req.resourceType();
-          
-          if (url.includes('recaptcha') || 
-              url.includes('gstatic.com/recaptcha') ||
-              url.includes('google.com/recaptcha')) {
+
+          if (
+            url.includes('recaptcha') ||
+            url.includes('gstatic.com/recaptcha') ||
+            url.includes('google.com/recaptcha')
+          ) {
             logger.info('reCAPTCHA isteği engellendi');
             req.abort();
             return;
           }
-          
+
           if (['image', 'stylesheet', 'font', 'media', 'manifest'].includes(resourceType)) {
             req.abort();
           } else {
@@ -4290,31 +4184,32 @@ export const scrapeOwnerTrademarks = onCall(
         });
 
         // Sayfayı yükle
-        await page.goto('https://www.turkpatent.gov.tr/arastirma-yap', { 
-          waitUntil: 'domcontentloaded', 
-          timeout: 60000 
+        await page.goto('https://www.turkpatent.gov.tr/arastirma-yap', {
+          waitUntil: 'domcontentloaded',
+          timeout: 60000,
         });
-        
         logger.info('Sayfa başarıyla yüklendi.');
 
-        // İnsan benzeri davranış
+        // İnsan benzeri küçük davranış
         await page.mouse.move(200, 200);
         await page.mouse.click(200, 200);
         await page.keyboard.type('test');
-        await sleep(1000);
+        await sleep(700);
 
         // === Form Doldurma ===
         await page.waitForSelector('input', { timeout: 10000 });
-        
+
         const inputResult = await page.evaluate((val) => {
-          const input = document.querySelector('input[placeholder*="Kişi Numarası" i]') ||
-                        document.querySelector('input[placeholder*="kişi" i]') ||
-                        Array.from(document.querySelectorAll('input')).find(i => 
-                          (i.placeholder || '').toLowerCase().includes('kişi') ||
-                          (i.placeholder || '').toLowerCase().includes('numara')
-                        );
+          const input =
+            document.querySelector('input[placeholder*="Kişi Numarası" i]') ||
+            document.querySelector('input[placeholder*="kişi" i]') ||
+            Array.from(document.querySelectorAll('input')).find(
+              (i) =>
+                (i.placeholder || '').toLowerCase().includes('kişi') ||
+                (i.placeholder || '').toLowerCase().includes('numara')
+            );
           if (!input) return { success: false, error: 'Kişi Numarası inputu bulunamadı' };
-          
+
           input.focus();
           input.value = '';
           input.value = String(val);
@@ -4327,13 +4222,12 @@ export const scrapeOwnerTrademarks = onCall(
           throw new Error(inputResult.error);
         }
 
-        await sleep(1000);
+        await sleep(600);
 
         // === Sorgula Butonuna Tıklama ===
         const clickResult = await page.evaluate(() => {
-          const btn = Array.from(document.querySelectorAll('button')).find(b => 
-            /sorgula/i.test((b.textContent || b.value || '').trim()) && 
-            !b.disabled
+          const btn = Array.from(document.querySelectorAll('button')).find(
+            (b) => /sorgula/i.test((b.textContent || b.value || '').trim()) && !b.disabled
           );
           if (!btn) return { success: false, error: 'SORGULA butonu bulunamadı' };
           btn.click();
@@ -4346,165 +4240,268 @@ export const scrapeOwnerTrademarks = onCall(
 
         logger.info('Sorgula butonuna tıklandı, sonuçlar bekleniyor...');
 
-        // === GELİŞTİRİLMİŞ SONUÇ BEKLEME ===
+        // === GELİŞTİRİLMİŞ SONUÇ BEKLEME: "found" sadece satır varsa ===
         let status = null;
-        const maxWaitTime = 120000; // 2 dakika
-        const checkInterval = 2000; // 2 saniye
+        const maxWaitTime = 120000; // 2 dk
+        const pollEvery = 1500;
         const startTime = Date.now();
 
         while (Date.now() - startTime < maxWaitTime) {
           try {
-            status = await page.evaluate(() => {
-              const bodyText = document.body.innerText.toLowerCase();
-              
-              // Yükleme indikatörleri
-              const loadingKeywords = ['yükleniyor', 'loading', 'bekleyin', 'aranıyor'];
-              const isLoading = loadingKeywords.some(kw => bodyText.includes(kw));
-              
-              // Başarı indikatörleri - daha geniş arama
-              const successKeywords = [
-                'çıktı al', 'sonsuz liste', 'kayıt bulundu', 'sayfa', 'toplam',
-                'tescil', 'başvuru', 'marka', 'sonuç', 'liste', 'tablo'
+            const probe = await page.evaluate(() => {
+              const bodyText = (document.body.innerText || '').toLowerCase();
+
+              const loadingKw = ['yükleniyor', 'loading', 'bekleyin', 'aranıyor'];
+              const notFoundKw = ['0 kayıt bulundu', 'kayıt bulunamadı', 'sonuç bulunamadı', 'hiç kayıt', 'sonuç yok'];
+              const errKw = ['hata oluştu', 'sistem hatası', 'geçici hata'];
+
+              const isLoading = loadingKw.some((k) => bodyText.includes(k));
+              const hasNotFound = notFoundKw.some((k) => bodyText.includes(k));
+              const hasError = errKw.some((k) => bodyText.includes(k));
+
+              // Sadece gerçek satır varsa found:
+              const rowSelectorList = [
+                'table tbody tr',
+                '.MuiTable-root tbody tr',
+                '[role="table"] tbody tr',
+                // MUI DataGrid / virtualized:
+                '[role="grid"] [role="row"]',
+                '[role="rowgroup"] [role="row"]',
+                'tbody tr',
               ];
-              const hasSuccess = successKeywords.some(kw => bodyText.includes(kw));
-              
-              // Başarısızlık indikatörleri
-              const notFoundKeywords = [
-                '0 kayıt bulundu', 'kayıt bulunamadı', 'sonuç bulunamadı', 
-                'hiç kayıt', 'bulunamadı', 'sonuç yok'
-              ];
-              const hasNotFound = notFoundKeywords.some(kw => bodyText.includes(kw));
-              
-              // Hata indikatörleri
-              const errorKeywords = ['hata oluştu', 'sistem hatası', 'geçici hata'];
-              const hasError = errorKeywords.some(kw => bodyText.includes(kw));
-              
-              // Tablo varlığını kontrol et
-              const hasTable = document.querySelector('table tbody tr, .MuiTable-root tbody tr');
-              
-              if (hasTable && !isLoading) return 'found';
-              if (hasSuccess && !isLoading) return 'found';
-              if (hasNotFound) return 'not_found';
-              if (hasError) return 'error';
-              if (isLoading) return 'loading';
-              
-              return null;
+              let rowCount = 0;
+              let usedSelector = '';
+              for (const sel of rowSelectorList) {
+                const n = document.querySelectorAll(sel).length;
+                if (n > 0) {
+                  rowCount = n;
+                  usedSelector = sel;
+                  break;
+                }
+              }
+
+              // Kısa HTML özeti (çok büyük olmasın)
+              let tableHtmlPreview = '';
+              const tableEl =
+                document.querySelector('.MuiTable-root') ||
+                document.querySelector('table') ||
+                document.querySelector('[role="table"]') ||
+                document.querySelector('[role="grid"]');
+              if (tableEl) {
+                const html = tableEl.outerHTML || '';
+                tableHtmlPreview = html.slice(0, 800);
+              }
+
+              // İlk 2 satırın text ön izlemesi
+              const firstRowsPreview = [];
+              if (rowCount > 0) {
+                const trs = document.querySelectorAll(usedSelector);
+                const lim = Math.min(2, trs.length);
+                for (let i = 0; i < lim; i++) {
+                  firstRowsPreview.push((trs[i].innerText || '').replace(/\s+/g, ' ').trim());
+                }
+              }
+
+              return {
+                isLoading,
+                hasNotFound,
+                hasError,
+                rowCount,
+                usedSelector,
+                tableHtmlPreview,
+                firstRowsPreview,
+              };
             });
 
-            if (status && status !== 'loading') {
-              logger.info('Sonuç durumu belirlendi:', status);
+            logger.info('[probe] durum', {
+              isLoading: probe.isLoading,
+              hasNotFound: probe.hasNotFound,
+              hasError: probe.hasError,
+              rowCount: probe.rowCount,
+              usedSelector: probe.usedSelector,
+            });
+
+            if (probe.rowCount > 0 && !probe.isLoading) {
+              status = 'found';
+              logger.info('Sonuç durumu belirlendi: found (tablo var, satır sayısı: ' + probe.rowCount + ')');
+
+              if (probe.firstRowsPreview?.length) {
+                logger.info('[rows-preview]', { rows: probe.firstRowsPreview });
+              }
+              if (probe.tableHtmlPreview) {
+                logger.info('[table-html-preview]', { snippet: probe.tableHtmlPreview });
+              }
               break;
             }
 
-            await sleep(checkInterval);
-            
-          } catch (evalError) {
-            logger.warn('Sayfa değerlendirme hatası:', evalError.message);
-            await sleep(checkInterval);
+            if (probe.hasNotFound && !probe.isLoading) {
+              status = 'not_found';
+              logger.info('Sonuç durumu belirlendi: not_found');
+              break;
+            }
+
+            if (probe.hasError) {
+              status = 'error';
+              logger.warn('Sonuç durumu belirlendi: error');
+              break;
+            }
+
+            await sleep(pollEvery);
+          } catch (evalErr) {
+            logger.warn('Sayfa değerlendirme hatası:', evalErr?.message);
+            await sleep(pollEvery);
           }
         }
 
-        if (!status || status === 'loading') {
+        if (!status) {
           logger.warn('Timeout: Sonuç durumu belirlenemedi');
           status = 'timeout';
+        }
+
+        // Eğer found geldiyse, en az bir satır görünene kadar da garanti bekleyelim (UI sanal liste olabilir)
+        if (status === 'found') {
+          await page
+            .waitForSelector('table tbody tr, .MuiTable-root tbody tr, [role="grid"] [role="row"]', {
+              visible: true,
+              timeout: 30000,
+            })
+            .catch(() => {});
         }
 
         // === SONUÇ İŞLEME ===
         if (status === 'found') {
           logger.info('Veri çekiliyor...');
-          
-          // Sayfanın tam yüklenmesini bekle
-          await sleep(3000);
-          
-          const rows = await page.evaluate(() => {
+
+          // Küçük nefes payı
+          await sleep(1200);
+
+          // Satırları ve kolonları ayrıntılı çek
+          const { rows, rowCount, usedSelector } = await page.evaluate(() => {
             const norm = (s) => (s || '').replace(/\s+/g, ' ').trim();
-            
-            // Farklı tablo selectorlarını dene
-            const tables = [
+
+            const selectors = [
               '.MuiTable-root tbody tr',
               'table tbody tr',
               '[role="table"] tbody tr',
-              '.table tbody tr',
-              'tbody tr'
+              '[role="grid"] [role="row"]',
+              '[role="rowgroup"] [role="row"]',
+              'tbody tr',
             ];
-            
+
             let trs = [];
-            for (const selector of tables) {
-              trs = document.querySelectorAll(selector);
-              if (trs.length > 0) break;
+            let usedSelector = '';
+            for (const sel of selectors) {
+              const list = document.querySelectorAll(sel);
+              if (list.length > 0) {
+                trs = Array.from(list);
+                usedSelector = sel;
+                break;
+              }
             }
-            
-            if (trs.length === 0) return [];
-            
-            return Array.from(trs).map(tr => {
-              const tds = Array.from(tr.querySelectorAll('td'));
-              if (tds.length < 3) return null;
-              
-              const get = (role) => {
-                const td = tr.querySelector(`td[role="${role}"]`);
-                return td ? norm(td.innerText) : '';
+
+            const rows = trs.map((tr) => {
+              // Klasik tablo hücreleri
+              let cells = Array.from(tr.querySelectorAll('td'));
+              // MUI grid hücreleri fallback
+              if (cells.length === 0) cells = Array.from(tr.querySelectorAll('[role="cell"]'));
+
+              const get = (i) => (cells[i] ? norm(cells[i].innerText) : '');
+
+              // Role'lü kolon isimleri varsa yine de çalışsın
+              const byRole = (role) => {
+                const el = tr.querySelector(`td[role="${role}"], [role="cell"][data-field="${role}"]`);
+                return el ? norm(el.innerText) : '';
               };
-              
-              const getText = (index) => tds[index] ? norm(tds[index].innerText) : '';
-              
-              const img = tr.querySelector('img');
-              const hrefEl = tr.querySelector('a[href]');
-              
+
+              const applicationNumber = byRole('applicationNo') || get(0);
+              const brandName = byRole('markName') || get(1);
+              const ownerName = byRole('holdName') || get(2);
+              const applicationDate = byRole('applicationDate') || get(3);
+              const registrationNo = byRole('registrationNo') || get(4);
+              const state = byRole('state') || get(5);
+              const niceText = byRole('niceClasses') || get(6);
+
+              const niceList = (niceText || '')
+                .split(/[^\d]+/)
+                .map((x) => x.trim())
+                .filter(Boolean);
+
+              const img =
+                tr.querySelector('img') ||
+                tr.querySelector('picture img') ||
+                tr.querySelector('[role="cell"] img');
+              const a = tr.querySelector('a[href]');
+
               return {
-                applicationNumber: get('applicationNo') || getText(0),
-                brandName: get('markName') || getText(1),
-                ownerName: get('holdName') || getText(2),
-                applicationDate: get('applicationDate') || getText(3),
-                registrationNumber: get('registrationNo') || getText(4),
-                status: get('state') || getText(5),
-                niceClasses: get('niceClasses') || getText(6),
-                niceList: (get('niceClasses') || getText(6) || '').split(/[^\d]+/).map(x => x.trim()).filter(Boolean),
+                applicationNumber,
+                brandName,
+                ownerName,
+                applicationDate,
+                registrationNumber: registrationNo,
+                status: state,
+                niceClasses: niceText,
+                niceList,
                 imageUrl: img ? img.getAttribute('src') : '',
-                detailUrl: hrefEl ? hrefEl.getAttribute('href') : ''
+                detailUrl: a ? a.getAttribute('href') : '',
               };
-            }).filter(x => x && (x.applicationNumber || x.brandName));
+            });
+
+            return {
+              rows: rows.filter((r) => r && (r.applicationNumber || r.brandName)),
+              rowCount: trs.length,
+              usedSelector,
+            };
           });
-          
-          logger.info(`[owner-scrape] ${rows.length} kayıt bulundu`);
-          
+
+          logger.info(`[owner-scrape] Satır sayısı (ham): ${rowCount} | Kullanılan selector: ${usedSelector}`);
+          logger.info(`[owner-scrape] Parse sonrası kayıt: ${rows.length}`);
+
           if (rows.length === 0) {
-            return { 
-              status: 'NotFound', 
-              found: false, 
-              ownerId, 
-              count: 0, 
-              message: 'Tablo bulundu ancak veri yok' 
+            // Ek teşhis: ilk satırın HTML'inden küçük bir kesit
+            try {
+              const snippet = await page.evaluate((sel) => {
+                const tr = document.querySelector(sel);
+                if (!tr) return '';
+                const html = tr.outerHTML || '';
+                return html.slice(0, 600);
+              }, usedSelector);
+              if (snippet) logger.info('[first-tr-html-snippet]', { snippet });
+            } catch (_) {}
+
+            return {
+              status: 'NotFound',
+              found: false,
+              ownerId,
+              count: 0,
+              message: 'Tablo bulundu ancak veri yok',
             };
           }
-          
-          return { 
-            status: 'Success', 
-            found: true, 
-            count: rows.length, 
-            ownerId,
-            items: rows 
-          };
 
+          return {
+            status: 'Success',
+            found: true,
+            count: rows.length,
+            ownerId,
+            items: rows,
+          };
         } else if (status === 'not_found') {
           logger.info('Kayıt bulunamadı.');
-          return { 
-            status: 'NotFound', 
-            found: false, 
-            ownerId, 
-            count: 0, 
-            message: 'Belirtilen sahip numarası için kayıt bulunamadı.' 
+          return {
+            status: 'NotFound',
+            found: false,
+            ownerId,
+            count: 0,
+            message: 'Belirtilen sahip numarası için kayıt bulunamadı.',
           };
-
         } else {
           throw new Error(`Beklenmeyen durum: ${status}`);
         }
-
       } catch (err) {
-        logger.error(`[scrapeOwnerTrademarks] Deneme ${retryCount + 1} hatası:`, { 
-          message: err?.message
+        logger.error(`[scrapeOwnerTrademarks] Deneme ${retryCount + 1} hatası:`, {
+          message: err?.message,
         });
 
-        // Screenshot al
+        // Screenshot al (debug)
         if (browser) {
           try {
             const pages = await browser.pages();
@@ -4519,21 +4516,22 @@ export const scrapeOwnerTrademarks = onCall(
           }
         }
 
-        // Son deneme miyiz?
         if (retryCount >= maxRetries - 1) {
-          throw new HttpsError('internal', `Owner arama hatası (${maxRetries} deneme): ${err?.message || String(err)}`);
+          throw new HttpsError(
+            'internal',
+            `Owner arama hatası (${maxRetries} deneme): ${err?.message || String(err)}`
+          );
         }
 
         retryCount++;
         logger.info(`${retryCount + 1}. deneme için bekleniyor...`);
         await sleep(5000 * retryCount);
-
       } finally {
         if (browser) {
-          try { 
-            await browser.close(); 
+          try {
+            await browser.close();
             browser = null;
-            logger.info('Browser kapatıldı'); 
+            logger.info('Browser kapatıldı');
           } catch (e) {
             logger.warn('Browser kapatma hatası:', e.message);
           }
