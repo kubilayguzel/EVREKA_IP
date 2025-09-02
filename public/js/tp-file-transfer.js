@@ -290,40 +290,41 @@ async function onBulkQuery(){
     bulkResultsBody.innerHTML = '';
     lastBulkItems = [];
 
-    try {
-        // Chrome Extension var mı kontrol et
-        if (typeof chrome === 'undefined' || !chrome.runtime) {
-            throw new Error('Chrome Extension API erişimi yok. Bu özellik yalnızca Chrome tarayıcısında çalışır.');
-        }
-
-        // Eklentiye mesaj gönder (external)
-        chrome.runtime.sendMessageExternal(EXTENSION_ID_SAHIP, {
-            type: 'SORGULA_KISI',
-            data: ownerId
-        }, (response) => {
-            if (chrome.runtime.lastError) {
-                _hideBlock(bulkLoadingEl);
-                console.error('[DEBUG] Eklenti iletişim hatası:', chrome.runtime.lastError.message);
-                
-                // Daha user-friendly hata mesajları
-                if (chrome.runtime.lastError.message.includes('not exist')) {
-                    showToast('tp-sorgu-eklentisi-2 eklentisi yüklenmemiş. Chrome Web Store\'dan yükleyip aktifleştirin.', 'danger');
-                } else if (chrome.runtime.lastError.message.includes('disabled')) {
-                    showToast('tp-sorgu-eklentisi-2 eklentisi devre dışı. Chrome eklentiler sayfasından aktifleştirin.', 'danger');
-                } else {
-                    showToast('Eklenti bağlantı hatası: ' + chrome.runtime.lastError.message, 'danger');
-                }
-            } else {
-                console.log('[DEBUG] Eklenti mesajı başarıyla gönderildi:', response);
-                showToast('Sorgu eklentiye gönderildi. TÜRKPATENT sayfası açılacak ve sonuçlar otomatik gelecek.', 'info');
-            }
-        });
-
-    } catch (err) {
+    // Chrome Extension API'ye erişim var mı diye kontrol et
+    if (typeof chrome === 'undefined' || !chrome.runtime || typeof chrome.runtime.sendMessageExternal !== 'function') {
         _hideBlock(bulkLoadingEl);
-        console.error('[DEBUG] onBulkQuery hatası:', err);
-        showToast('İşlem hatası: ' + (err.message || err), 'danger');
+        const errorMessage = 'Chrome eklenti API erişimi yok. Bu özellik yalnızca bir eklenti ortamında ve geçerli izinlere sahip web sayfasında çalışır.';
+        console.error('[DEBUG] onBulkQuery hatası:', errorMessage);
+        showToast(errorMessage, 'danger');
+        return;
     }
+
+    // Eklentiye mesaj gönder (external)
+    chrome.runtime.sendMessageExternal(EXTENSION_ID_SAHIP, {
+        type: 'SORGULA_KISI',
+        data: ownerId
+    }, (response) => {
+        // Callback içindeki hataları ele al
+        if (chrome.runtime.lastError) {
+            _hideBlock(bulkLoadingEl);
+            const errorMessage = chrome.runtime.lastError.message;
+            console.error('[DEBUG] Eklenti iletişim hatası:', errorMessage);
+            
+            // Kullanıcı dostu hata mesajları
+            if (errorMessage.includes('not exist')) {
+                showToast('tp-sorgu-eklentisi-2 eklentisi yüklenmemiş veya ID yanlış. Lütfen kontrol edin.', 'danger');
+            } else if (errorMessage.includes('disabled')) {
+                showToast('tp-sorgu-eklentisi-2 eklentisi devre dışı. Chrome eklentiler sayfasından aktifleştirin.', 'danger');
+            } else if (errorMessage.includes('not connected')) {
+                showToast('Uygulamanız ile eklenti arasında bağlantı kurulamıyor. Manifest dosyasındaki "matches" ayarlarını kontrol edin.', 'danger');
+            } else {
+                showToast('Eklenti bağlantı hatası: ' + errorMessage, 'danger');
+            }
+        } else {
+            console.log('[DEBUG] Eklenti mesajı başarıyla gönderildi:', response);
+            showToast('Sorgu eklentiye gönderildi. TÜRKPATENT sayfası açılacak ve sonuçlar otomatik gelecek.', 'info');
+        }
+    });
 }
 
 function renderBulkResults(payload){
