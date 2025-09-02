@@ -63,6 +63,18 @@ function findButtonByTextFast(text) {
 // -------------- Ana akış --------------
 async function runAutomation() {
   console.log('[TP Eklenti] Otomasyon başladı. Kişi No:', targetOwnerId);
+
+  // Sorgu başladığını web sayfasına bildir
+  try {
+    window.postMessage({
+      source: 'tp-extension-sahip',
+      type: 'SORGU_BASLADI',
+      data: { ownerId: targetOwnerId }
+    }, window.location.origin);
+  } catch (e) {
+    console.log('[TP Eklenti] PostMessage gönderim hatası (başlangıç):', e.message);
+  }
+
 // 1) Modal/popup kapat (gelişmiş logic)
 try {
     // a) “Dolandırıcılık Hakkında” popup
@@ -115,20 +127,34 @@ try {
 
     // 5) Veriyi ana uygulamaya geri gönder
     console.log('[TP Eklenti] Veriler başarıyla toplandı. PostMessage ile gönderiliyor.');
-    window.postMessage({
-      source: 'tp-extension-sahip',
-      type: 'VERI_GELDI_KISI',
-      data: scrapedData
-    }, '*');
-    console.log('[TP Eklenti] PostMessage gönderildi:', scrapedData.length, 'kayıt');
+    try {
+        window.postMessage({
+          source: 'tp-extension-sahip',
+          type: 'VERI_GELDI_KISI',
+          data: scrapedData
+        }, window.location.origin);
+        console.log('[TP Eklenti] PostMessage gönderildi:', scrapedData.length, 'kayıt');
+    } catch (postErr) {
+        console.error('[TP Eklenti] PostMessage gönderim hatası:', postErr);
+        // Hata durumunda da bilgilendir
+        window.postMessage({
+          source: 'tp-extension-sahip',
+          type: 'HATA_KISI',
+          data: { message: 'PostMessage gönderim hatası: ' + postErr.message }
+        }, window.location.origin);
+    }
 
-} catch (error) {
-  console.error('[TP Eklenti] Otomasyon hatası:', error);
-  // Hata durumunda da uygulamayı bilgilendir
-  window.postMessage({
-    source: 'tp-extension-sahip',
-    type: 'HATA_KISI',
-    data: { message: error.message }
-  }, '*');
-}
+    } catch (error) {
+      console.error('[TP Eklenti] Otomasyon hatası:', error);
+      // Hata durumunda da uygulamayı bilgilendir
+      try {
+        window.postMessage({
+          source: 'tp-extension-sahip',
+          type: 'HATA_KISI',
+          data: { message: error.message }
+        }, window.location.origin);
+      } catch (postErr) {
+        console.error('[TP Eklenti] Hata PostMessage gönderim hatası:', postErr);
+      }
+    }
 }
