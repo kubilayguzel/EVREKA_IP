@@ -100,8 +100,19 @@ async function init() {
 }
 
 function setupExtensionMessageListener() {
+    // Detaylı debug bilgisi
+    console.log('[DEBUG] Chrome kontrolü:', {
+        'typeof chrome': typeof chrome,
+        'chrome.runtime': !!chrome?.runtime,
+        'chrome.runtime.onMessageExternal': !!chrome?.runtime?.onMessageExternal,
+        'chrome.runtime.sendMessageExternal': !!chrome?.runtime?.sendMessageExternal,
+        'navigator.userAgent': navigator.userAgent,
+        'location.protocol': location.protocol,
+        'location.hostname': location.hostname
+    });
+
     if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessageExternal) {
-        console.log('[DEBUG] Chrome eklenti mesaj dinleyicisi kuruluyor...');
+        console.log('[DEBUG] ✅ Chrome eklenti mesaj dinleyicisi kuruluyor...');
         chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => {
             console.log('[DEBUG] Eklentiden mesaj alındı:', request, 'Gönderen ID:', sender.id);
             
@@ -125,14 +136,37 @@ function setupExtensionMessageListener() {
             // Başvuru numarası eklentisinden gelen mesajlar (eğer varsa)
             else if (sender.id === EXTENSION_ID_BASVURU) {
                 console.log('[DEBUG] Başvuru numarası eklentisinden mesaj:', request);
-                // Gerekirse burada başvuru numarası eklentisi mesajlarını işleyin
                 sendResponse({ status: 'OK' });
             }
             
             return true;
         });
     } else {
-        console.warn('Chrome eklenti mesaj dinleyicisi kurulamadı. Chrome ortamında değil.');
+        console.error('[DEBUG] ❌ Chrome eklenti mesaj dinleyicisi kurulamadı. Detaylar:');
+        console.error('- typeof chrome:', typeof chrome);
+        console.error('- chrome?.runtime:', chrome?.runtime);
+        console.error('- onMessageExternal:', chrome?.runtime?.onMessageExternal);
+        
+        // Alternatif çözüm: PostMessage dinleyicisi ekle
+        console.log('[DEBUG] 🔄 PostMessage dinleyicisi alternatif olarak kuruluyor...');
+        window.addEventListener('message', (event) => {
+            if (event.data && event.data.source === 'tp-extension-sahip') {
+                console.log('[DEBUG] PostMessage alındı:', event.data);
+                
+                if (event.data.type === 'VERI_GELDI_KISI') {
+                    _hideBlock(bulkLoadingEl);
+                    lastBulkItems = event.data.data || [];
+                    if (!lastBulkItems.length) {
+                        showToast('Bu sahip numarası için sonuç bulunamadı.', 'warning');
+                    } else {
+                        renderBulkResults({ items: lastBulkItems });
+                    }
+                } else if (event.data.type === 'HATA_KISI') {
+                    _hideBlock(bulkLoadingEl);
+                    showToast('Eklenti hatası: ' + (event.data.data?.message || 'Bilinmeyen Hata'), 'danger');
+                }
+            }
+        });
     }
 }
 
@@ -284,8 +318,19 @@ async function onBulkQuery(){
         return showToast('Sahip numarası girin.', 'warning');
     }
 
+    console.log('[DEBUG] onBulkQuery Chrome kontrolü:', {
+        'typeof chrome': typeof chrome,
+        'chrome.runtime': !!chrome?.runtime,
+        'sendMessageExternal': !!chrome?.runtime?.sendMessageExternal
+    });
+
     if (typeof chrome === 'undefined' || !chrome.runtime || !chrome.runtime.sendMessageExternal) {
-        return showToast('Eklenti ortamı bulunamadı. Lütfen Chrome tarayıcısında deneyin.', 'danger');
+        console.error('[DEBUG] Chrome API mevcut değil. Tarayıcı bilgileri:', {
+            userAgent: navigator.userAgent,
+            protocol: location.protocol,
+            isSecureContext: window.isSecureContext
+        });
+        return showToast('Bu özellik Chrome/Edge/Brave tarayıcılarında ve HTTPS bağlantısında çalışır. Tarayıcınızı kontrol edin.', 'danger');
     }
 
     _showBlock(bulkLoadingEl);
