@@ -4090,8 +4090,6 @@ export const scrapeTrademark = onCall(
   }
 );
 // ====== SAHİP NUMARASI İLE TOPLU MARKA ARAMA ======
-import chromium from '@sparticuz/chromium';
-import puppeteer from 'puppeteer-core';
 // Local dev için (emülatör veya NODE_ENV=development) full puppeteer'a düşeceğiz.
 let puppeteerLocal = null;
 
