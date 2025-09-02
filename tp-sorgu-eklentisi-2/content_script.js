@@ -1,69 +1,13 @@
 // =============================
 // TP Kişi Numarası Otomasyon Eklentisi
 // ===================================
-
 let targetOwnerId = null;
-let sourceOrigin = null;
 
-// URL parametrelerini kontrol et ve otomatik sorguyu başlat
-function checkAutoQuery() {
-    try {
-        const urlParams = new URLSearchParams(window.location.search);
-        const autoQuery = urlParams.get('auto_query');
-        const queryType = urlParams.get('query_type');
-        sourceOrigin = urlParams.get('source');
-        
-        console.log('[TP Eklenti] URL parametreleri kontrol ediliyor:', { 
-            autoQuery, 
-            queryType, 
-            sourceOrigin,
-            currentURL: window.location.href 
-        });
-        
-        if (autoQuery && queryType === 'sahip') {
-            console.log('[TP Eklenti] Otomatik sorgu parametresi bulundu:', autoQuery);
-            targetOwnerId = autoQuery;
-            
-            // Ana sayfaya eklenti hazır olduğunu bildir
-            if (sourceOrigin) {
-                try {
-                    window.opener?.postMessage({
-                        source: 'tp-extension-sahip',
-                        type: 'EKLENTI_HAZIR',
-                        data: { ownerId: targetOwnerId }
-                    }, sourceOrigin);
-                } catch (e) {
-                    console.log('[TP Eklenti] Hazır bildirimi gönderim hatası:', e.message);
-                }
-            }
-            
-            // Kısa gecikme ile otomasyonu başlat  
-            setTimeout(() => {
-                runAutomation().catch(err => {
-                    console.error('[TP Eklenti] Otomasyon hatası:', err);
-                    // Hata durumunda ana sayfaya bildir
-                    sendErrorMessage(err.message || 'Otomasyon hatası');
-                });
-            }, 2000);
-            
-            return true;
-        }
-    } catch (error) {
-        console.error('[TP Eklenti] URL parametre kontrolü hatası:', error);
-        sendErrorMessage('URL parametre kontrolü hatası: ' + error.message);
-    }
-    return false;
-}
-
-// background.js'den gelen mesajları dinle (eski sistem için compat)
+// background.js'den komutu al
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.type === 'AUTO_FILL_KISI' && request.data) {
     targetOwnerId = request.data;
-    console.log('[TP Eklenti] Background.js\'den mesaj alındı:', targetOwnerId);
-    runAutomation().catch(err => {
-        console.error('[TP Eklenti] Hata:', err);
-        sendErrorMessage(err.message || 'Background mesajı işleme hatası');
-    });
+    runAutomation().catch(err => console.error('[TP Eklenti] Hata:', err));
     sendResponse({ status: 'OK' });
   }
   return true;
@@ -72,11 +16,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 // -------------- Yardımcı Fonksiyonlar --------------
 function waitFor(selector, { root = document, timeout = 7000, test = null } = {}) {
   return new Promise((resolve, reject) => {
-    // Hemen var mı kontrol et
     let el = root.querySelector(selector);
     if (el && (!test || test(el))) return resolve(el);
 
-    // Observer ile dinamik değişiklikleri yakala
     const obs = new MutationObserver(() => {
       el = root.querySelector(selector);
       if (el && (!test || test(el))) {
@@ -86,13 +28,11 @@ function waitFor(selector, { root = document, timeout = 7000, test = null } = {}
     });
     obs.observe(root, { childList: true, subtree: true, attributes: true });
 
-    // Timeout güvenlik mekanizması
     const timeoutId = setTimeout(() => {
       obs.disconnect();
       reject(new Error(`waitFor timeout: ${selector}`));
     }, timeout);
 
-    // Resolve olunca timeout'u temizle
     const originalResolve = resolve;
     resolve = (value) => {
       clearTimeout(timeoutId);
@@ -112,7 +52,6 @@ function click(el) {
 }
 
 function findButtonByTextFast(text) {
-  // Hızlı text arama (span içindeki buttonlar dahil)
   const btns = document.querySelectorAll('button');
   for (const btn of btns) {
     if ((btn.textContent || '').trim().includes(text)) return btn;
@@ -122,75 +61,37 @@ function findButtonByTextFast(text) {
   return null;
 }
 
-// Hata mesajı gönderme fonksiyonu
 function sendErrorMessage(errorMsg) {
-    if (sourceOrigin) {
-        try {
-            window.opener?.postMessage({
-                source: 'tp-extension-sahip',
-                type: 'HATA_KISI',
-                data: { message: errorMsg }
-            }, sourceOrigin);
-        } catch (e) {
-            console.log('[TP Eklenti] Hata bildirimi gönderim hatası:', e.message);
-        }
-    }
+  window.postMessage({
+    source: 'tp-extension-sahip',
+    type: 'HATA_KISI',
+    data: { message: errorMsg }
+  }, '*');
 }
 
-// Başarı mesajı gönderme fonksiyonu
 function sendSuccessMessage(data) {
-    const messageData = {
-        source: 'tp-extension-sahip',
-        type: 'VERI_GELDI_KISI', 
-        data: data,
-        timestamp: Date.now()
-    };
-
-    try {
-        // Ana sayfaya (opener) mesaj gönder
-        if (window.opener && sourceOrigin) {
-            window.opener.postMessage(messageData, sourceOrigin);
-            console.log('[TP Eklenti] Ana sayfaya mesaj gönderildi:', sourceOrigin);
-        } else {
-            // Fallback: Broadcast mesaj
-            window.postMessage(messageData, window.location.origin);
-            console.log('[TP Eklenti] Broadcast mesaj gönderildi');
-        }
-    } catch (postErr) {
-        console.error('[TP Eklenti] PostMessage gönderim hatası:', postErr);
-    }
+  const messageData = {
+    source: 'tp-extension-sahip',
+    type: 'VERI_GELDI_KISI',
+    data: data,
+    timestamp: Date.now()
+  };
+  window.postMessage(messageData, '*');
 }
 
 // -------------- Ana Otomasyon Akışı --------------
 async function runAutomation() {
   console.log('[TP Eklenti] Otomasyon başladı. Kişi No:', targetOwnerId);
 
-  // Sorgu başladığını bildir
-  if (sourceOrigin) {
-    try {
-      window.opener?.postMessage({
-        source: 'tp-extension-sahip',
-        type: 'SORGU_BASLADI',
-        data: { ownerId: targetOwnerId }
-      }, sourceOrigin);
-    } catch (e) {
-      console.log('[TP Eklenti] Başlangıç bildirimi hatası:', e.message);
-    }
-  }
-
-  // 1) Modal/popup kapat (gelişmiş logic)
   try {
     await closeModals();
   } catch (modalError) {
     console.log('[TP Eklenti] Modal kapatma hatası (devam ediliyor):', modalError.message);
   }
 
-  // 2) Formu doldur ve sorguyu başlat
   try {
-    // Kişi numarası input'unu bekle
     const input = await waitFor('input[placeholder*="Kişi Numarası"]', { timeout: 6000 });
     
-    // Sorgula butonunu bul
     let sorgulaBtn = findButtonByTextFast('Sorgula');
     if (!sorgulaBtn) {
       sorgulaBtn = await waitFor('button', { 
@@ -199,25 +100,19 @@ async function runAutomation() {
       });
     }
 
-    // Form alanını doldur
     input.focus();
     input.value = targetOwnerId;
     input.dispatchEvent(new Event('input', { bubbles: true }));
     input.dispatchEvent(new Event('change', { bubbles: true }));
     console.log('[TP Eklenti] Kişi No yazıldı:', targetOwnerId);
 
-    // Sorgula butonuna tıkla
     click(sorgulaBtn);
     console.log('[TP Eklenti] Sorgula butonuna tıklandı.');
 
-    // 3) Sonuç tablosunun yüklenmesini bekle
     const tableExists = await waitFor('.MuiTable-root tbody tr', { timeout: 20000 });
     console.log('[TP Eklenti] Sonuç tablosu yüklendi. Veriler alınıyor.');
-
-    // Kısa bekleme (tablo tamamen yüklensin)
     await new Promise(resolve => setTimeout(resolve, 1000));
 
-    // 4) Veriyi scrape et
     const scrapedData = [];
     const rows = document.querySelectorAll('.MuiTable-root tbody tr');
     
@@ -242,7 +137,6 @@ async function runAutomation() {
           imageUrl: imageElement ? imageElement.getAttribute('src') : '',
         };
 
-        // Boş satırları filtrele
         if (rowData.applicationNumber || rowData.brandName || rowData.ownerName) {
           scrapedData.push(rowData);
         }
@@ -252,8 +146,6 @@ async function runAutomation() {
     });
 
     console.log('[TP Eklenti] Veriler başarıyla toplandı:', scrapedData.length, 'kayıt');
-
-    // 5) Veriyi ana uygulamaya geri gönder
     sendSuccessMessage(scrapedData);
 
   } catch (error) {
@@ -265,24 +157,23 @@ async function runAutomation() {
 // Modal kapatma fonksiyonu (gelişmiş)
 async function closeModals() {
   const modalSelectors = [
-    '.jss84 .jss92',                           // Dolandırıcılık popup (mevcut)
-    'button[aria-label="close"]',              // ARIA close button
-    'button[aria-label="kapat"]',              // Türkçe close button
-    'button[aria-label="Close"]',              // İngilizce close button
-    '.modal-header .close',                    // Bootstrap modal
-    '.MuiIconButton-root[aria-label="close"]', // MUI close icon
-    '[data-testid="CloseIcon"]',               // MUI close icon testid
-    '.popup .close',                           // Generic popup close
-    '[role="dialog"] button:last-child',       // Dialog'daki son button
+    '.jss84 .jss92',
+    'button[aria-label="close"]',
+    'button[aria-label="kapat"]',
+    'button[aria-label="Close"]',
+    '.modal-header .close',
+    '.MuiIconButton-root[aria-label="close"]',
+    '[data-testid="CloseIcon"]',
+    '.popup .close',
+    '[role="dialog"] button:last-child',
   ];
 
-  // Her selector'ü dene
   for (const selector of modalSelectors) {
     try {
       const element = document.querySelector(selector);
       if (element && click(element)) {
         console.log('[TP Eklenti] Modal kapatıldı (selector):', selector);
-        await new Promise(resolve => setTimeout(resolve, 500)); // Animasyon beklemesi
+        await new Promise(resolve => setTimeout(resolve, 500));
         break;
       }
     } catch (e) {
@@ -290,7 +181,6 @@ async function closeModals() {
     }
   }
 
-  // Text tabanlı button arama
   const buttons = Array.from(document.querySelectorAll('button'));
   for (const btn of buttons) {
     const text = (btn.textContent || '').toLowerCase().trim();
@@ -298,25 +188,11 @@ async function closeModals() {
       if (click(btn)) {
         console.log('[TP Eklenti] Modal kapatıldı (text):', text);
         await new Promise(resolve => setTimeout(resolve, 500));
-        
-        // Modal kapatıldığını bildir
-        if (sourceOrigin) {
-          try {
-            window.opener?.postMessage({
-              source: 'tp-extension-sahip',
-              type: 'MODAL_KAPATILDI',
-              data: { buttonText: text }
-            }, sourceOrigin);
-          } catch (e) {
-            console.log('[TP Eklenti] Modal kapatma bildirimi hatası:', e.message);
-          }
-        }
         break;
       }
     }
   }
 
-  // Son çare: ESC tuşu
   try {
     document.dispatchEvent(new KeyboardEvent('keydown', { 
       key: 'Escape', 
@@ -337,12 +213,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
 window.addEventListener('load', () => {
     console.log('[TP Eklenti] Window loaded - Kontrol başlatılıyor');
-    if (!targetOwnerId) { // Zaten başlatılmadıysa
+    if (!targetOwnerId) {
         checkAutoQuery();
     }
 });
 
-// URL değişikliklerini takip et (SPA için)
 let lastUrl = location.href;
 const urlObserver = new MutationObserver(() => {
     const currentUrl = location.href;
@@ -355,7 +230,6 @@ const urlObserver = new MutationObserver(() => {
     }
 });
 
-// URL observer'ı başlat
 urlObserver.observe(document, { subtree: true, childList: true });
 
 console.log('[TP Eklenti] Content script yüklendi ve hazır');
