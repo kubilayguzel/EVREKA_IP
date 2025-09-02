@@ -276,55 +276,73 @@ async function onSingleQuery(){
 
 // --------------- TOPLU (SAHİP NO) - EKLENTİ İLE ---------------
 
-async function onBulkQuery(){
-    const ownerId = (ownerIdInput?.value || '').trim();
-    if (!ownerId) {
-        return showToast('Sahip numarası girin.', 'warning');
-    }
-
-    console.log('[DEBUG] Sahip numarası sorgusu başlatılıyor:', ownerId);
-
-    // Loading göster
-    _showBlock(bulkLoadingEl);
-    _hideBlock(bulkResultsContainer);
-    bulkResultsBody.innerHTML = '';
-    lastBulkItems = [];
-
-    // Chrome Extension API'ye erişim var mı diye kontrol et
-    if (typeof chrome === 'undefined' || !chrome.runtime || typeof chrome.runtime.sendMessageExternal !== 'function') {
-        _hideBlock(bulkLoadingEl);
-        const errorMessage = 'Chrome eklenti API erişimi yok. Bu özellik yalnızca bir eklenti ortamında ve geçerli izinlere sahip web sayfasında çalışır.';
-        console.error('[DEBUG] onBulkQuery hatası:', errorMessage);
-        showToast(errorMessage, 'danger');
-        return;
-    }
-
-    // Eklentiye mesaj gönder (external)
-    chrome.runtime.sendMessageExternal(EXTENSION_ID_SAHIP, {
-        type: 'SORGULA_KISI',
-        data: ownerId
-    }, (response) => {
-        // Callback içindeki hataları ele al
-        if (chrome.runtime.lastError) {
-            _hideBlock(bulkLoadingEl);
-            const errorMessage = chrome.runtime.lastError.message;
-            console.error('[DEBUG] Eklenti iletişim hatası:', errorMessage);
+function setupExtensionMessageListener() {
+    console.log('[DEBUG] DOM event ve PostMessage dinleyicileri kuruluyor...');
+    
+    // PostMessage dinleyicisi (eklentiden gelen veriler için)
+    window.addEventListener('message', (event) => {
+        // Güvenlik: Sadece TÜRKPATENT ve kendi origin'imizden mesajları kabul et
+        const allowedOrigins = [
+            window.location.origin,
+            'https://www.turkpatent.gov.tr',
+            'https://turkpatent.gov.tr'
+        ];
+        
+        if (!allowedOrigins.includes(event.origin)) {
+            return;
+        }
+        
+        if (event.data && event.data.source === 'tp-extension-sahip') {
+            console.log('[DEBUG] PostMessage alındı:', event.data);
             
-            // Kullanıcı dostu hata mesajları
-            if (errorMessage.includes('not exist')) {
-                showToast('tp-sorgu-eklentisi-2 eklentisi yüklenmemiş veya ID yanlış. Lütfen kontrol edin.', 'danger');
-            } else if (errorMessage.includes('disabled')) {
-                showToast('tp-sorgu-eklentisi-2 eklentisi devre dışı. Chrome eklentiler sayfasından aktifleştirin.', 'danger');
-            } else if (errorMessage.includes('not connected')) {
-                showToast('Uygulamanız ile eklenti arasında bağlantı kurulamıyor. Manifest dosyasındaki "matches" ayarlarını kontrol edin.', 'danger');
-            } else {
-                showToast('Eklenti bağlantı hatası: ' + errorMessage, 'danger');
+            // Global timeout'u iptal et
+            if (window.tpQueryTimeout) {
+                clearTimeout(window.tpQueryTimeout);
+                delete window.tpQueryTimeout;
             }
-        } else {
-            console.log('[DEBUG] Eklenti mesajı başarıyla gönderildi:', response);
-            showToast('Sorgu eklentiye gönderildi. TÜRKPATENT sayfası açılacak ve sonuçlar otomatik gelecek.', 'info');
+            
+            // Query status'u güncelle
+            document.body.setAttribute('data-tp-query-status', 'completed');
+            
+            if (event.data.type === 'VERI_GELDI_KISI') {
+                _hideBlock(bulkLoadingEl);
+                lastBulkItems = event.data.data || [];
+                
+                if (!lastBulkItems.length) {
+                    showToast('Bu sahip numarası için sonuç bulunamadı.', 'warning');
+                } else {
+                    renderBulkResults({ items: lastBulkItems });
+                    showToast(`${lastBulkItems.length} kayıt başarıyla alındı.`, 'success');
+                }
+                
+            } else if (event.data.type === 'HATA_KISI') {
+                _hideBlock(bulkLoadingEl);
+                const errorMsg = event.data.data?.message || 'Bilinmeyen Hata';
+                showToast('Eklenti hatası: ' + errorMsg, 'danger');
+                
+            } else if (event.data.type === 'SORGU_BASLADI') {
+                showToast('TÜRKPATENT sayfasında sorgu başladı. Lütfen bekleyin...', 'info');
+                
+            } else if (event.data.type === 'MODAL_KAPATILDI') {
+                console.log('[DEBUG] Modal kapatıldı bilgisi alındı');
+                
+            } else if (event.data.type === 'EKLENTI_HAZIR') {
+                console.log('[DEBUG] Eklenti hazır olduğunu bildirdi');
+            }
+            
+            // İşlem tamamlandıysa data attribute'ları temizle
+            if (event.data.type === 'VERI_GELDI_KISI' || event.data.type === 'HATA_KISI') {
+                setTimeout(() => {
+                    document.body.removeAttribute('data-tp-query');
+                    document.body.removeAttribute('data-tp-query-type'); 
+                    document.body.removeAttribute('data-tp-query-status');
+                    document.body.removeAttribute('data-tp-timestamp');
+                }, 1000);
+            }
         }
     });
+    
+    console.log('[DEBUG] ✅ Event dinleyicileri kuruldu.');
 }
 
 function renderBulkResults(payload){
