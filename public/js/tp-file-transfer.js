@@ -100,74 +100,37 @@ async function init() {
 }
 
 function setupExtensionMessageListener() {
-    // Detaylı debug bilgisi
-    console.log('[DEBUG] Chrome kontrolü:', {
-        'typeof chrome': typeof chrome,
-        'chrome.runtime': !!chrome?.runtime,
-        'chrome.runtime.onMessageExternal': !!chrome?.runtime?.onMessageExternal,
-        'chrome.runtime.sendMessageExternal': !!chrome?.runtime?.sendMessageExternal,
-        'navigator.userAgent': navigator.userAgent,
-        'location.protocol': location.protocol,
-        'location.hostname': location.hostname
-    });
-
-    if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessageExternal) {
-        console.log('[DEBUG] ✅ Chrome eklenti mesaj dinleyicisi kuruluyor...');
-        chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => {
-            console.log('[DEBUG] Eklentiden mesaj alındı:', request, 'Gönderen ID:', sender.id);
+    console.log('[DEBUG] PostMessage dinleyicisi kuruluyor...');
+    
+    // Web sayfası olduğumuz için sadece PostMessage ile iletişim kuruyoruz
+    window.addEventListener('message', (event) => {
+        // Güvenlik: Yalnızca aynı origin'den gelen mesajları kabul et
+        if (event.origin !== window.location.origin) {
+            return;
+        }
+        
+        if (event.data && event.data.source === 'tp-extension-sahip') {
+            console.log('[DEBUG] PostMessage alındı:', event.data);
             
-            // Sahip numarası eklentisinden gelen mesajlar
-            if (request.type === 'VERI_GELDI_KISI' && request.data && sender.id === EXTENSION_ID_SAHIP) {
+            if (event.data.type === 'VERI_GELDI_KISI') {
                 _hideBlock(bulkLoadingEl);
-                lastBulkItems = request.data;
+                lastBulkItems = event.data.data || [];
                 if (!lastBulkItems.length) {
                     showToast('Bu sahip numarası için sonuç bulunamadı.', 'warning');
                 } else {
                     renderBulkResults({ items: lastBulkItems });
+                    showToast(`${lastBulkItems.length} kayıt başarıyla alındı.`, 'success');
                 }
-                sendResponse({ status: 'OK' });
-            } 
-            // Sahip numarası eklentisinden gelen hata mesajları
-            else if (request.type === 'HATA_KISI' && sender.id === EXTENSION_ID_SAHIP) {
+            } else if (event.data.type === 'HATA_KISI') {
                 _hideBlock(bulkLoadingEl);
-                showToast('Eklenti hatası: ' + (request.data.message || 'Bilinmeyen Hata'), 'danger');
-                sendResponse({ status: 'ERROR' });
+                showToast('Eklenti hatası: ' + (event.data.data?.message || 'Bilinmeyen Hata'), 'danger');
+            } else if (event.data.type === 'SORGU_BASLADI') {
+                showToast('Sorgu başladı. Lütfen bekleyin...', 'info');
             }
-            // Başvuru numarası eklentisinden gelen mesajlar (eğer varsa)
-            else if (sender.id === EXTENSION_ID_BASVURU) {
-                console.log('[DEBUG] Başvuru numarası eklentisinden mesaj:', request);
-                sendResponse({ status: 'OK' });
-            }
-            
-            return true;
-        });
-    } else {
-        console.error('[DEBUG] ❌ Chrome eklenti mesaj dinleyicisi kurulamadı. Detaylar:');
-        console.error('- typeof chrome:', typeof chrome);
-        console.error('- chrome?.runtime:', chrome?.runtime);
-        console.error('- onMessageExternal:', chrome?.runtime?.onMessageExternal);
-        
-        // Alternatif çözüm: PostMessage dinleyicisi ekle
-        console.log('[DEBUG] 🔄 PostMessage dinleyicisi alternatif olarak kuruluyor...');
-        window.addEventListener('message', (event) => {
-            if (event.data && event.data.source === 'tp-extension-sahip') {
-                console.log('[DEBUG] PostMessage alındı:', event.data);
-                
-                if (event.data.type === 'VERI_GELDI_KISI') {
-                    _hideBlock(bulkLoadingEl);
-                    lastBulkItems = event.data.data || [];
-                    if (!lastBulkItems.length) {
-                        showToast('Bu sahip numarası için sonuç bulunamadı.', 'warning');
-                    } else {
-                        renderBulkResults({ items: lastBulkItems });
-                    }
-                } else if (event.data.type === 'HATA_KISI') {
-                    _hideBlock(bulkLoadingEl);
-                    showToast('Eklenti hatası: ' + (event.data.data?.message || 'Bilinmeyen Hata'), 'danger');
-                }
-            }
-        });
-    }
+        }
+    });
+    
+    console.log('[DEBUG] ✅ PostMessage dinleyicisi kuruldu.');
 }
 
 function setupEventListeners() {
@@ -312,31 +275,14 @@ async function onSingleQuery(){
 }
 
 // --------------- TOPLU (SAHİP NO) - EKLENTİ İLE ---------------
+
 async function onBulkQuery(){
     const ownerId = (ownerIdInput?.value || '').trim();
     if (!ownerId) {
         return showToast('Sahip numarası girin.', 'warning');
     }
 
-    // Detaylı kontrol
-    console.log('[DEBUG] Tarayıcı kontrolü:');
-    console.log('- typeof chrome:', typeof chrome);
-    console.log('- navigator.userAgent:', navigator.userAgent);
-    console.log('- location.protocol:', location.protocol);
-    console.log('- window.chrome:', !!window.chrome);
-    
-    if (typeof chrome !== 'undefined') {
-        console.log('- chrome.runtime:', !!chrome.runtime);
-        if (chrome.runtime) {
-            console.log('- sendMessageExternal:', !!chrome.runtime.sendMessageExternal);
-        }
-    }
-
-    console.log('[DEBUG] onBulkQuery Chrome kontrolü:', {
-        'typeof chrome': typeof chrome,
-        'chrome.runtime': !!chrome?.runtime,
-        'sendMessageExternal': !!chrome?.runtime?.sendMessageExternal
-    });
+    console.log('[DEBUG] Sahip numarası sorgusu başlatılıyor:', ownerId);
 
     // Loading göster
     _showBlock(bulkLoadingEl);
@@ -344,34 +290,40 @@ async function onBulkQuery(){
     bulkResultsBody.innerHTML = '';
     lastBulkItems = [];
 
-    // HTTP protokolünde veya chrome.runtime yoksa PostMessage yöntemi kullan
-// Chrome eklentisi kontrolü ve mesaj gönderme
-try {
-    // Önce Chrome eklenti desteği var mı kontrol et
-    if (typeof chrome === 'undefined' || !chrome.runtime) {
-        throw new Error('Chrome eklenti API\'sine erişim yok.');
-    }
-
-    // Mesaj gönderme işlemi
-    chrome.runtime.sendMessageExternal(EXTENSION_ID_SAHIP, {
-        type: 'SORGULA_KISI',
-        data: ownerId
-    }, (response) => {
-        if (chrome.runtime.lastError) {
-            _hideBlock(bulkLoadingEl);
-            console.error('[TP Eklenti] Hata:', chrome.runtime.lastError.message);
-            showToast('tp-sorgu-eklentisi-2 eklentisi bulunamadı veya yüklenmemiş. Lütfen Chrome Web Store\'dan yükleyin.', 'danger');
-        } else {
-            console.log('[TP Eklenti] Sorgu başarıyla gönderildi:', response);
-            showToast('Sorgu eklentiye gönderildi. TÜRKPATENT sayfası açıldığında sonuçlar otomatik gelecek.', 'info');
+    try {
+        // Chrome Extension var mı kontrol et
+        if (typeof chrome === 'undefined' || !chrome.runtime) {
+            throw new Error('Chrome Extension API erişimi yok. Bu özellik yalnızca Chrome tarayıcısında çalışır.');
         }
-    });
 
-} catch (err) {
-    _hideBlock(bulkLoadingEl);
-    console.error('[TP Eklenti] Eklenti iletişim hatası:', err);
-    showToast('Eklenti iletişim hatası: ' + (err.message || err), 'danger');
-}
+        // Eklentiye mesaj gönder (external)
+        chrome.runtime.sendMessageExternal(EXTENSION_ID_SAHIP, {
+            type: 'SORGULA_KISI',
+            data: ownerId
+        }, (response) => {
+            if (chrome.runtime.lastError) {
+                _hideBlock(bulkLoadingEl);
+                console.error('[DEBUG] Eklenti iletişim hatası:', chrome.runtime.lastError.message);
+                
+                // Daha user-friendly hata mesajları
+                if (chrome.runtime.lastError.message.includes('not exist')) {
+                    showToast('tp-sorgu-eklentisi-2 eklentisi yüklenmemiş. Chrome Web Store\'dan yükleyip aktifleştirin.', 'danger');
+                } else if (chrome.runtime.lastError.message.includes('disabled')) {
+                    showToast('tp-sorgu-eklentisi-2 eklentisi devre dışı. Chrome eklentiler sayfasından aktifleştirin.', 'danger');
+                } else {
+                    showToast('Eklenti bağlantı hatası: ' + chrome.runtime.lastError.message, 'danger');
+                }
+            } else {
+                console.log('[DEBUG] Eklenti mesajı başarıyla gönderildi:', response);
+                showToast('Sorgu eklentiye gönderildi. TÜRKPATENT sayfası açılacak ve sonuçlar otomatik gelecek.', 'info');
+            }
+        });
+
+    } catch (err) {
+        _hideBlock(bulkLoadingEl);
+        console.error('[DEBUG] onBulkQuery hatası:', err);
+        showToast('İşlem hatası: ' + (err.message || err), 'danger');
+    }
 }
 
 function renderBulkResults(payload){
