@@ -4095,101 +4095,391 @@ import chromium from '@sparticuz/chromium';
 chromium.setHeadlessMode = true;
 chromium.setGraphicsMode = false;
 
+// ====== GELIŞMIŞ reCAPTCHA BYPASS STRATEJİLERİ ======
+async function bypassCaptchaStrategies(page) {
+  const strategies = [
+    // Strateji 1: Farklı User Agent
+    async () => {
+      const agents = [
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36'
+      ];
+      const randomAgent = agents[Math.floor(Math.random() * agents.length)];
+      await page.setUserAgent(randomAgent);
+      logger.info('User-Agent değiştirildi');
+    },
+
+    // Strateji 2: İnsan benzeri davranış
+    async () => {
+      for (let i = 0; i < 3; i++) {
+        const x = Math.floor(Math.random() * 400) + 200;
+        const y = Math.floor(Math.random() * 300) + 200;
+        await page.mouse.move(x, y, { steps: 5 });
+        await sleep(Math.random() * 200 + 100);
+      }
+
+      await page.evaluate(() => {
+        window.scrollTo(0, Math.floor(Math.random() * 300));
+      });
+      await sleep(800);
+
+      await page.keyboard.press('Tab');
+      await sleep(200);
+    }
+  ];
+
+  for (const strategy of strategies) {
+    try {
+      await strategy();
+    } catch (e) {
+      logger.warn('Strateji hatası:', e.message);
+    }
+  }
+}
+
+async function setupAdvancedBotDetectionBypass(page) {
+  await page.evaluateOnNewDocument(() => {
+    // Navigator özelliklerini normalleştir
+    Object.defineProperty(navigator, 'webdriver', { get: () => false });
+    Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
+    Object.defineProperty(navigator, 'languages', { get: () => ['tr-TR', 'tr', 'en-US', 'en'] });
+    
+    // Chrome özellikleri ekle
+    window.chrome = {
+      runtime: {},
+      loadTimes: function() { return { requestTime: Date.now() / 1000 }; },
+      csi: function() { return { startE: Date.now(), onloadT: Date.now() }; },
+      app: {}
+    };
+    
+    // WebGL fingerprint normalize et
+    const getParameter = WebGLRenderingContext.getParameter;
+    WebGLRenderingContext.prototype.getParameter = function(parameter) {
+      if (parameter === 37445) return 'Intel Inc.';
+      if (parameter === 37446) return 'Intel Iris OpenGL Engine';
+      return getParameter.call(this, parameter);
+    };
+  });
+}
+
+async function handleCaptchaDetection(page) {
+  try {
+    const captchaExists = await page.evaluate(() => {
+      const text = document.body.innerText.toLowerCase();
+      const captchaKeywords = ['recaptcha', 'robot değilim', 'doğrulama'];
+      const hasCaptchaText = captchaKeywords.some(keyword => text.includes(keyword));
+      
+      const frames = Array.from(document.querySelectorAll('iframe'));
+      const hasCaptchaFrame = frames.some(frame => 
+        frame.src && frame.src.includes('recaptcha')
+      );
+      
+      return hasCaptchaText || hasCaptchaFrame;
+    });
+
+    if (captchaExists) {
+      logger.warn('reCAPTCHA tespit edildi, bypass stratejileri uygulanıyor...');
+      
+      await bypassCaptchaStrategies(page);
+      
+      await page.reload({ waitUntil: 'domcontentloaded', timeout: 30000 });
+      await sleep(3000);
+      
+      const stillHasCaptcha = await page.evaluate(() => {
+        const text = document.body.innerText.toLowerCase();
+        return text.includes('recaptcha') || text.includes('robot değilim');
+      });
+      
+      if (stillHasCaptcha) {
+        logger.warn('reCAPTCHA hala mevcut');
+        return false;
+      }
+      
+      logger.info('reCAPTCHA başarıyla aşıldı!');
+    }
+    
+    return true;
+  } catch (error) {
+    logger.error('Captcha bypass hatası:', error.message);
+    return false;
+  }
+}
+
+// ====== YENİLENMİŞ SAHİP NUMARASI İLE TOPLU MARKA ARAMA ======
 export const scrapeOwnerTrademarks = onCall(
   { region: 'europe-west1', memory: '2GiB', timeoutSeconds: 300 },
   async (request) => {
-    const { ownerId } = request.data || {};
+    const { ownerId, maxRetries = 2 } = request.data || {};
     if (!ownerId) {
       throw new HttpsError('invalid-argument', 'Sahip numarası (ownerId) zorunludur.');
     }
 
-    logger.info('[scrapeOwnerTrademarks] Başlıyor', { ownerId });
+    logger.info('[scrapeOwnerTrademarks] Başlıyor', { ownerId, maxRetries });
 
+    const isLocal = !!process.env.FUNCTIONS_EMULATOR || (!process.env.K_SERVICE && process.env.NODE_ENV !== 'production');
     let browser;
+    let retryCount = 0;
 
-    try {
-      browser = await puppeteer.launch({
-        executablePath: await chromium.executablePath(),
-        args: chromium.args,
-        headless: chromium.headless,
-        defaultViewport: { width: 1366, height: 900 },
-      });
+    while (retryCount < maxRetries) {
+      try {
+        logger.info(`Deneme ${retryCount + 1}/${maxRetries} başlıyor...`);
 
-      const page = await browser.newPage();
-      await page.setJavaScriptEnabled(true);
-      await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119 Safari/537.36');
-
-      let responseData = null;
-
-      // Ağ trafiğini dinle
-      page.on('response', async (response) => {
-        const url = response.url();
-        if (url.includes('/api/') && response.request().method() === 'POST') {
-          try {
-            const json = await response.json();
-            if (json?.data && Array.isArray(json.data)) {
-              responseData = json.data;
-              logger.info('XHR verisi başarıyla yakalandı', { count: json.data.length });
-            }
-          } catch (err) {
-            logger.warn('XHR yanıtı JSON değil veya hata oluştu', { url, err: err.message });
-          }
+        // === Browser Başlatma - Doğru Import Kullanımı ===
+        if (isLocal) {
+          // Local geliştirme için
+          const puppeteerLocal = await import('puppeteer');
+          browser = await puppeteerLocal.default.launch({
+            headless: 'new',
+            args: [
+              '--no-sandbox', 
+              '--disable-setuid-sandbox', 
+              '--disable-dev-shm-usage',
+              '--disable-blink-features=AutomationControlled',
+              '--disable-features=VizDisplayCompositor'
+            ],
+            defaultViewport: { width: 1366, height: 900 },
+          });
+        } else {
+          // Production için - chromium ile puppeteer-core kullanımı
+          const execPath = await chromium.executablePath();
+          browser = await puppeteer.launch({
+            args: [
+              ...chromium.args, 
+              '--no-sandbox', 
+              '--disable-setuid-sandbox', 
+              '--disable-dev-shm-usage',
+              '--disable-blink-features=AutomationControlled',
+              '--disable-features=VizDisplayCompositor'
+            ],
+            defaultViewport: chromium.defaultViewport || { width: 1366, height: 900 },
+            executablePath: execPath,
+            headless: chromium.headless,
+            ignoreHTTPSErrors: true,
+          });
         }
-      });
 
-      await page.goto('https://www.turkpatent.gov.tr/arastirma-yap', { waitUntil: 'domcontentloaded', timeout: 120000 });
+        const page = await browser.newPage();
+        await page.setJavaScriptEnabled(true);
 
-      // Input doldur
-      await page.evaluate((val) => {
-        const input = document.querySelector('input[placeholder*="Kişi Numarası" i]') ||
-                      Array.from(document.querySelectorAll('input')).find(i => (i.placeholder || '').toLowerCase().includes('kişi') && (i.placeholder || '').toLowerCase().includes('numara'));
-        if (input) {
+        // Gelişmiş bot detection bypass
+        await setupAdvancedBotDetectionBypass(page);
+
+        // Request interception ile reCAPTCHA engelleme
+        await page.setRequestInterception(true);
+        page.on('request', (req) => {
+          const url = req.url();
+          const resourceType = req.resourceType();
+          
+          // reCAPTCHA isteklerini engelle
+          if (url.includes('recaptcha') || 
+              url.includes('gstatic.com/recaptcha') ||
+              url.includes('google.com/recaptcha')) {
+            logger.info('reCAPTCHA isteği engellendi');
+            req.abort();
+            return;
+          }
+          
+          // Gereksiz kaynakları engelle
+          if (['image', 'stylesheet', 'font', 'media', 'manifest'].includes(resourceType)) {
+            req.abort();
+          } else {
+            req.continue();
+          }
+        });
+
+        // Sayfayı yükle
+        await page.goto('https://www.turkpatent.gov.tr/arastirma-yap', { 
+          waitUntil: 'domcontentloaded', 
+          timeout: 60000 
+        });
+        
+        logger.info('Sayfa başarıyla yüklendi.');
+
+        // Captcha kontrolü ve bypass
+        const captchaHandled = await handleCaptchaDetection(page);
+        if (!captchaHandled && retryCount < maxRetries - 1) {
+          await browser.close();
+          browser = null;
+          retryCount++;
+          logger.warn(`Captcha aşılamadı, ${retryCount + 1}. deneme yapılacak...`);
+          await sleep(5000 * retryCount);
+          continue;
+        }
+
+        // İnsan benzeri davranış simülasyonu
+        await page.mouse.move(100, 100);
+        await page.mouse.click(100, 100);
+        await page.keyboard.type('test');
+        await page.evaluate(() => window.scrollBy(0, 300));
+        await sleep(1000);
+
+        // === Form Doldurma ===
+        const inputResult = await page.evaluate((val) => {
+          const input = document.querySelector('input[placeholder*="Kişi Numarası" i]') ||
+                        Array.from(document.querySelectorAll('input')).find(i => 
+                          (i.placeholder || '').toLowerCase().includes('kişi') && 
+                          (i.placeholder || '').toLowerCase().includes('numara')
+                        );
+          if (!input) return { success: false, error: 'Kişi Numarası inputu bulunamadı' };
+          
           input.focus();
+          input.value = '';
           input.value = String(val);
           input.dispatchEvent(new Event('input', { bubbles: true }));
+          input.dispatchEvent(new Event('change', { bubbles: true }));
+          return { success: true };
+        }, String(ownerId));
+
+        if (!inputResult.success) {
+          throw new Error(inputResult.error);
         }
-      }, String(ownerId));
 
-      await page.waitForTimeout(500);
+        await sleep(800);
 
-      // Butona tıkla
-      await page.evaluate(() => {
-        const btn = Array.from(document.querySelectorAll('button')).find(b => /\bSORGULA\b/i.test((b.textContent || b.value || '').trim()) && !b.disabled);
-        if (btn) btn.click();
-      });
+        // === Sorgula Butonuna Tıklama ===
+        const clickResult = await page.evaluate(() => {
+          const btn = Array.from(document.querySelectorAll('button')).find(b => 
+            /\bSORGULA\b/i.test((b.textContent || b.value || '').trim()) && 
+            !b.disabled && 
+            !b.getAttribute('aria-disabled')
+          );
+          if (!btn) return { success: false, error: 'SORGULA butonu bulunamadı' };
+          btn.click();
+          return { success: true };
+        });
 
-      // XHR verisinin gelmesini bekle
-      const maxWait = 15000;
-      const start = Date.now();
-      while (!responseData && Date.now() - start < maxWait) {
-        await page.waitForTimeout(500);
+        if (!clickResult.success) {
+          throw new Error(clickResult.error);
+        }
+
+        logger.info('Sorgula butonuna tıklandı, sonuçlar bekleniyor...');
+
+        // === Sonuç Bekleme ===
+        const resultsLoaded = await page.waitForFunction(() => {
+          const bodyText = document.body.innerText.toLowerCase();
+          
+          // Başarı indikatörleri
+          const successKeywords = ['çıktı al', 'sonsuz liste', 'kayıt bulundu', 'sayfa', 'toplam'];
+          const hasSuccess = successKeywords.some(kw => bodyText.includes(kw));
+          
+          // Başarısızlık indikatörleri  
+          const notFoundKeywords = ['0 kayıt bulundu', 'kayıt bulunamadı', 'sonuç bulunamadı'];
+          const hasNotFound = notFoundKeywords.some(kw => bodyText.includes(kw));
+          
+          // Hata indikatörleri (reCAPTCHA hariç)
+          const errorKeywords = ['hata oluştu', 'sistem hatası'];
+          const hasError = errorKeywords.some(kw => bodyText.includes(kw));
+          
+          if (hasSuccess) return 'found';
+          if (hasNotFound) return 'not_found';
+          if (hasError) return 'error';
+          
+          return false;
+        }, { timeout: 90000 });
+
+        const status = await resultsLoaded.jsonValue();
+        logger.info('Sonuç durumu:', status);
+
+        // === Sonuç İşleme ===
+        if (status === 'found') {
+          // Tablo verilerini çek
+          const rows = await page.$$eval('.MuiTable-root tbody tr, table tbody tr', trs => {
+            const norm = (s) => (s || '').replace(/\s+/g, ' ').trim();
+            return trs.map(tr => {
+              const get = (role) => {
+                const td = tr.querySelector(`td[role="${role}"]`);
+                return td ? norm(td.innerText) : '';
+              };
+              
+              // Alternatif selector'lar
+              const tds = Array.from(tr.querySelectorAll('td'));
+              const getText = (index) => tds[index] ? norm(tds[index].innerText) : '';
+              
+              const img = tr.querySelector('td img, img');
+              const hrefEl = tr.querySelector('td a[href], a[href]');
+              
+              return {
+                applicationNumber: get('applicationNo') || getText(0),
+                brandName: get('markName') || getText(1),
+                ownerName: get('holdName') || getText(2),
+                applicationDate: get('applicationDate') || getText(3),
+                registrationNumber: get('registrationNo') || getText(4),
+                status: get('state') || getText(5),
+                niceClasses: get('niceClasses') || getText(6),
+                niceList: (get('niceClasses') || getText(6) || '').split(/[^\d]+/).map(x => x.trim()).filter(Boolean),
+                imageUrl: img ? img.getAttribute('src') : '',
+                detailUrl: hrefEl ? hrefEl.getAttribute('href') : ''
+              };
+            }).filter(x => x.applicationNumber || x.brandName);
+          });
+          
+          logger.info(`[owner-scrape] ${rows.length} kayıt bulundu`);
+          
+          return { 
+            status: 'Success', 
+            found: rows.length > 0, 
+            count: rows.length, 
+            ownerId,
+            items: rows 
+          };
+
+        } else if (status === 'not_found') {
+          logger.info('Belirtilen sahip numarası için kayıt bulunamadı.');
+          return { 
+            status: 'NotFound', 
+            found: false, 
+            ownerId, 
+            count: 0, 
+            message: 'Belirtilen sahip numarası için kayıt bulunamadı.' 
+          };
+
+        } else {
+          throw new Error(`Beklenmeyen durum: ${status}`);
+        }
+
+      } catch (err) {
+        logger.error(`[scrapeOwnerTrademarks] Deneme ${retryCount + 1} hatası:`, { 
+          message: err?.message, 
+          stack: err?.stack?.substring(0, 500) 
+        });
+
+        if (browser) {
+          try {
+            const page = (await browser.pages())[0];
+            if (page) {
+              const screenshot = await page.screenshot({ encoding: 'base64' });
+              if (screenshot) {
+                logger.error('Hata screenshot_base64', { data: screenshot.substring(0, 100) + '...' });
+              }
+            }
+          } catch (e) {
+            logger.error('Screenshot alınamadı:', e.message);
+          }
+        }
+
+        // Son deneme miyiz?
+        if (retryCount >= maxRetries - 1) {
+          throw new HttpsError('internal', `Owner arama hatası (${maxRetries} deneme): ${err?.message || String(err)}`);
+        }
+
+        retryCount++;
+        logger.info(`${retryCount + 1}. deneme için bekleniyor...`);
+        await sleep(3000 * retryCount);
+
+      } finally {
+        if (browser) {
+          try { 
+            await browser.close(); 
+            browser = null;
+            logger.info('Browser kapatıldı'); 
+          } catch (e) {
+            logger.warn('Browser kapatma hatası:', e.message);
+          }
+        }
       }
-
-      if (!responseData) {
-        throw new Error('XHR verisi alınamadı veya zaman aşımına uğradı.');
-      }
-
-      // Veriyi normalize et
-      const items = responseData.map(item => ({
-        applicationNumber: item.applicationNo,
-        brandName: item.markName,
-        ownerName: item.holdName,
-        applicationDate: item.applicationDate,
-        registrationNumber: item.registrationNo,
-        status: item.state,
-        niceClasses: item.niceClasses,
-        niceList: (item.niceClasses || '').split(/[^\d]+/).map(x => x.trim()).filter(Boolean),
-        imageUrl: item.imageUrl || '',
-        detailUrl: item.detailUrl || ''
-      }));
-
-      return { status: 'Success', found: items.length > 0, count: items.length, items };
-
-    } catch (err) {
-      logger.error('[scrapeOwnerTrademarks] error', { message: err?.message, stack: err?.stack });
-      throw new HttpsError('internal', `XHR scraping hatası: ${err?.message || String(err)}`);
-    } finally {
-      if (browser) { try { await browser.close(); logger.info('browser kapatıldı'); } catch {} }
     }
+
+    throw new HttpsError('internal', 'Tüm denemeler başarısız oldu');
   }
 );
