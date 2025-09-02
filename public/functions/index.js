@@ -4515,11 +4515,28 @@ const networkActivity = await page.evaluate(() => {
 logger.info('Network activity:', networkActivity);
 
 
-// === Sonuçları kanıta dayalı bekle & listeyi topla (owner search) ===
-logger.info('Owner search: sonuç bekleniyor...');
 
-// 1) Bekleme döngüsü: tablo satırı veya ÇIKTI AL / Sonsuz Liste sinyali
+// === Sonuçları kanıta dayalı bekle & listeyi topla (owner search) ===
+logger.info('Owner search: sonuç bekleniyor (table#results + DETAY/ÇIKTI AL/Sonsuz Liste kanıtları)...');
+
+// 0) Hızlı: doğrudan tbody>tr bekle (table#results daha stabil görünüyor)
+const quickSelOk = await page.waitForSelector('table#results tbody tr td', { timeout: 20000 }).catch(() => null);
+
+// 1) Ek bekleme döngüsü: tabloda satır veya ÇIKTI AL / Sonsuz Liste sinyali
 const proof = await (async () => {
+  if (quickSelOk) {
+    // kısa yol
+    const p = await page.evaluate(() => {
+      const t = (document.body?.innerText || '').toLowerCase();
+      const hasCiktiAl = t.includes('çıktı al');
+      const hasSonsuz = t.includes('sonsuz liste') || t.includes('sonsuz');
+      const rows = Array.from(document.querySelectorAll('table#results tbody tr'))
+        .filter(r => r.querySelectorAll('td').length >= 2).length;
+      const isEmpty = /kayıt bulunamadı|0 kayıt|kayıt yok/.test(t);
+      return { status: (rows>0 || hasCiktiAl || hasSonsuz) ? 'ok' : 'timeout', rows, hasCiktiAl, hasSonsuz, isEmpty };
+    });
+    return p;
+  }
   const timeoutMs = 60000;
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
@@ -4527,14 +4544,14 @@ const proof = await (async () => {
       const t = (document.body?.innerText || '').toLowerCase();
       const hasCiktiAl = t.includes('çıktı al');
       const hasSonsuz = t.includes('sonsuz liste') || t.includes('sonsuz');
-      const rows = Array.from(document.querySelectorAll('#results tbody tr, table.MuiTable-root tbody tr'))
+      const rows = Array.from(document.querySelectorAll('table#results tbody tr, table.MuiTable-root tbody tr'))
         .filter(r => r.querySelectorAll('td').length >= 2).length;
       const isEmpty = /kayıt bulunamadı|0 kayıt|kayıt yok/.test(t);
       return { rows, hasCiktiAl, hasSonsuz, isEmpty };
     });
     if (p.isEmpty) return { status: 'empty', ...p };
     if (p.rows >= 1 || p.hasCiktiAl || p.hasSonsuz) return { status: 'ok', ...p };
-    await new Promise(r => setTimeout(r, 300));
+    await new Promise(r => setTimeout(r, 250));
   }
   return { status: 'timeout', rows: 0, hasCiktiAl: false, hasSonsuz: false, isEmpty: false };
 })();
@@ -4550,51 +4567,59 @@ if (proof.status === 'timeout') {
 
 // 2) Tablodan verileri çek
 const rows = await page.evaluate(() => {
-  const pick = (el) => (el?.innerText || '').trim();
-  const table = document.querySelector('#results') || document.querySelector('table.MuiTable-root');
+  const pick = (el) => (el?.innerText || '').replace(/\s+/g,' ').trim();
+  const table = document.querySelector('table#results') || document.querySelector('table.MuiTable-root') || document.querySelector('table');
   if (!table) return [];
 
+  // Başlık metinlerinden index eşleme
   const headers = Array.from(table.querySelectorAll('thead th')).map(th => (th.innerText || '').trim().toLowerCase());
   const idx = (names, fallback) => {
-    for (const n of names) {
-      const i = headers.findIndex(h => h.includes(n));
-      if (i !== -1) return i;
-    }
+    for (const n of names) { const i = headers.findIndex(h => h.includes(n)); if (i !== -1) return i; }
     return fallback;
   };
 
   const iBasvuru = idx(['başvuru numarası','başvuru no','başvuru'], 1);
   const iMarkaAdi = idx(['marka adı','marka adi','marka'], 2);
-  const iSahibi = idx(['marka sahibi','sahibi','başvuru sahibi'], 3);
+  const iSahibi  = idx(['marka sahibi','sahibi','başvuru sahibi'], 3);
   const iBasvTar = idx(['başvuru tarihi','tarih'], 4);
   const iTescil  = idx(['tescil no','tescil'], 5);
-  const iDurum   = idx(['durumu','durum'], 6);
+  const iDurum   = idx(['durumu','durum','state'], 6);
   const iNice    = idx(['nice sınıfları','nice','sınıf','sınıflar'], 7);
-  const iSekil   = idx(['şekil','logo','görsel'], 8);
-  const iIslem   = idx(['işlem','detay'], 9);
+  const iSekil   = idx(['şekil','logo','görsel','image'], 8);
+  const iIslem   = idx(['işlem','detay','aksi̇yon','action'], 9);
 
   const trs = Array.from(table.querySelectorAll('tbody tr')).filter(r => r.querySelectorAll('td').length >= 2);
   return trs.map(tr => {
     const tds = Array.from(tr.querySelectorAll('td'));
-    const imgAlt = tds[iSekil]?.querySelector('img')?.alt || '';
-    const actionEl = tds[iIslem]?.querySelector('a,button');
-    const href = actionEl ? (actionEl.href || actionEl.getAttribute('href')) : null;
+
+    const get = (i) => pick(tds[i]);
+    const getEl = (i) => tds[i] || null;
+
+    const sekilTd = getEl(iSekil);
+    const img = sekilTd ? sekilTd.querySelector('img') : null;
+    const imageUrl = img ? img.getAttribute('src') : null;
+    const imageAlt = img ? (img.getAttribute('alt') || '').trim() : '';
+
+    const islemTd = getEl(iIslem);
+    const a = islemTd ? islemTd.querySelector('a[href]') : null;
+    const detayHref = a ? (a.href || a.getAttribute('href')) : null;
+
     return {
-      basvuruNo: pick(tds[iBasvuru]),
-      markaAdi: pick(tds[iMarkaAdi]),
-      markaSahibi: pick(tds[iSahibi]),
-      basvuruTarihi: pick(tds[iBasvTar]),
-      tescilNo: pick(tds[iTescil]),
-      durumu: pick(tds[iDurum]),
-      niceSiniflari: pick(tds[iNice]),
-      sekilAltYazi: imgAlt ? imgAlt.trim() : '',
-      detayHref: href || null
+      basvuruNo: get(iBasvuru),
+      markaAdi: get(iMarkaAdi),
+      markaSahibi: get(iSahibi),
+      basvuruTarihi: get(iBasvTar),
+      tescilNo: get(iTescil),
+      durumu: get(iDurum),
+      niceSiniflari: get(iNice),
+      sekilAltYazi: imageAlt,
+      sekilUrl: imageUrl,
+      detayHref: detayHref
     };
   });
 });
 
 logger.info('[owner-scrape] rowCount:', rows?.length || 0);
-
 // 3) Döndür
 return {
   status: 'ok',
