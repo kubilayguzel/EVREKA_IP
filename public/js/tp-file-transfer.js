@@ -34,11 +34,11 @@ import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/
 import { loadSharedLayout, ensurePersonModal, openPersonModal } from './layout-loader.js';
 import { personService } from '../firebase-config.js';
 const functions = getFunctions(app, 'europe-west1');
-const scrapeTrademarkFunction = httpsCallable(functions, 'scrapeTrademark');
+const scrapeTrademarkFunction = httpsCallable(functions, 'scrapeTrademark', { timeout: 120000 });
 // Yeni: Sahip numarasıyla liste döndüren uç (sunucuda uygulanmalı)
 let scrapeOwnerTrademarks;
 try {
-  scrapeOwnerTrademarks = httpsCallable(functions, 'scrapeOwnerTrademarks');
+  scrapeOwnerTrademarks = httpsCallable(functions, 'scrapeOwnerTrademarks', { timeout: 240000 });
 } catch (e) {
   // yoksa çağrı anında yakalanacak
 }
@@ -263,7 +263,26 @@ async function onBulkQuery(){
     renderBulkResults(payload);
   } catch (err) {
     console.error(err);
-    showToast('Toplu arama hatası: ' + (err?.message || err), 'danger');
+    if (err?.code === 'deadline-exceeded') {
+      showToast('İstek zaman aşımına uğradı. Zaman aşımı artırıldı, yeniden deneniyor…', 'warning');
+      try {
+        const retryFn = httpsCallable(functions, 'scrapeOwnerTrademarks', { timeout: 300000 });
+        const resp2 = await retryFn({ ownerId, maxPages: 0, enableInfinite: true });
+        const payload2 = resp2?.data || {};
+        const items2 = Array.isArray(payload2.items) ? payload2.items : [];
+        lastBulkItems = items2;
+        if (!items2.length) {
+          showToast('Bu sahip numarası için sonuç bulunamadı.', 'warning');
+        } else {
+          renderBulkResults(payload2);
+        }
+      } catch (err2) {
+        console.error(err2);
+        showToast('Toplu arama zaman aşımı (yeniden deneme başarısız): ' + (err2?.message || err2), 'danger');
+      }
+    } else {
+      showToast('Toplu arama hatası: ' + (err?.message || err), 'danger');
+    }
   } finally {
     _hideBlock(bulkLoadingEl);
   }
