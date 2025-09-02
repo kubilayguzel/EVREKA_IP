@@ -4202,358 +4202,345 @@ async function handleCaptchaDetection(page) {
 }
 
 // ====== YENİLENMİŞ SAHİP NUMARASI İLE TOPLU MARKA ARAMA ======
-// ====== FORM SUBMIT DEBUGGİNG İLE API KEŞFİ ======
+// ====== GELIŞMIŞ SAHİP NUMARASI MARKA ARAMA (TIMEOUT FİKSLİ) ======
 export const scrapeOwnerTrademarks = onCall(
   { region: 'europe-west1', memory: '2GiB', timeoutSeconds: 300 },
   async (request) => {
-    const { ownerId } = request.data || {};
+    const { ownerId, maxRetries = 2 } = request.data || {};
     if (!ownerId) {
       throw new HttpsError('invalid-argument', 'Sahip numarası (ownerId) zorunludur.');
     }
 
-    logger.info('[scrapeOwnerTrademarks] Form debugging ile API keşfi', { ownerId });
+    logger.info('[scrapeOwnerTrademarks] Başlıyor', { ownerId, maxRetries });
 
     const isLocal = !!process.env.FUNCTIONS_EMULATOR || (!process.env.K_SERVICE && process.env.NODE_ENV !== 'production');
     let browser;
+    let retryCount = 0;
 
-    try {
-      // === Browser Başlatma ===
-      if (isLocal) {
-        const puppeteerLocal = await import('puppeteer');
-        browser = await puppeteerLocal.default.launch({
-          headless: 'new',
-          args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
-          defaultViewport: { width: 1366, height: 900 },
+    while (retryCount < maxRetries) {
+      try {
+        logger.info(`Deneme ${retryCount + 1}/${maxRetries} başlıyor...`);
+
+        // === Browser Başlatma ===
+        if (isLocal) {
+          const puppeteerLocal = await import('puppeteer');
+          browser = await puppeteerLocal.default.launch({
+            headless: 'new',
+            args: [
+              '--no-sandbox', 
+              '--disable-setuid-sandbox', 
+              '--disable-dev-shm-usage',
+              '--disable-blink-features=AutomationControlled'
+            ],
+            defaultViewport: { width: 1366, height: 900 },
+          });
+        } else {
+          const execPath = await chromium.executablePath();
+          browser = await puppeteer.launch({
+            args: [
+              ...chromium.args, 
+              '--no-sandbox', 
+              '--disable-setuid-sandbox', 
+              '--disable-dev-shm-usage',
+              '--disable-blink-features=AutomationControlled'
+            ],
+            defaultViewport: chromium.defaultViewport || { width: 1366, height: 900 },
+            executablePath: execPath,
+            headless: chromium.headless,
+            ignoreHTTPSErrors: true,
+          });
+        }
+
+        const page = await browser.newPage();
+        await page.setJavaScriptEnabled(true);
+        await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+
+        // Bot detection bypass
+        await page.evaluateOnNewDocument(() => {
+          Object.defineProperty(navigator, 'webdriver', { get: () => false });
+          Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
+          Object.defineProperty(navigator, 'languages', { get: () => ['tr-TR', 'tr', 'en-US', 'en'] });
+          
+          window.chrome = {
+            runtime: {},
+            loadTimes: function() { return { requestTime: Date.now() / 1000 }; },
+            csi: function() { return { startE: Date.now(), onloadT: Date.now() }; }
+          };
         });
-      } else {
-        const execPath = await chromium.executablePath();
-        browser = await puppeteer.launch({
-          args: [...chromium.args, '--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
-          defaultViewport: chromium.defaultViewport || { width: 1366, height: 900 },
-          executablePath: execPath,
-          headless: chromium.headless,
-          ignoreHTTPSErrors: true,
-        });
-      }
 
-      const page = await browser.newPage();
-      await page.setJavaScriptEnabled(true);
-      await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
-
-      // === KAPSAMLI NETWORK VE FORM MONİTORİNG ===
-      const allRequests = [];
-      await page.setRequestInterception(true);
-      
-      page.on('request', (req) => {
-        const url = req.url();
-        const method = req.method();
-        const resourceType = req.resourceType();
-        const postData = req.postData();
-        
-        // Tüm istekleri logla (sadece reCAPTCHA'ları engelle)
-        if (method === 'POST' || url.includes('search') || url.includes('query') || url.includes('api')) {
-          logger.info(`${method} İsteği: ${url}`);
-          if (postData) {
-            logger.info(`POST Data: ${postData.substring(0, 500)}`);
+        // Request interception - reCAPTCHA'ları engelle
+        await page.setRequestInterception(true);
+        page.on('request', (req) => {
+          const url = req.url();
+          const resourceType = req.resourceType();
+          
+          if (url.includes('recaptcha') || 
+              url.includes('gstatic.com/recaptcha') ||
+              url.includes('google.com/recaptcha')) {
+            logger.info('reCAPTCHA isteği engellendi');
+            req.abort();
+            return;
           }
           
-          allRequests.push({
-            url: url,
-            method: method,
-            postData: postData,
-            resourceType: resourceType,
-            timestamp: Date.now()
-          });
-        }
+          if (['image', 'stylesheet', 'font', 'media', 'manifest'].includes(resourceType)) {
+            req.abort();
+          } else {
+            req.continue();
+          }
+        });
 
-        if (url.includes('recaptcha')) {
-          logger.info('reCAPTCHA isteği engellendi');
-          req.abort();
-        } else {
-          req.continue();
-        }
-      });
-
-      // Response monitoring
-      page.on('response', async (response) => {
-        const url = response.url();
-        const status = response.status();
-        const method = response.request().method();
+        // Sayfayı yükle
+        await page.goto('https://www.turkpatent.gov.tr/arastirma-yap', { 
+          waitUntil: 'domcontentloaded', 
+          timeout: 60000 
+        });
         
-        if (method === 'POST' && status === 200) {
+        logger.info('Sayfa başarıyla yüklendi.');
+
+        // İnsan benzeri davranış
+        await page.mouse.move(200, 200);
+        await page.mouse.click(200, 200);
+        await page.keyboard.type('test');
+        await sleep(1000);
+
+        // === Form Doldurma ===
+        await page.waitForSelector('input', { timeout: 10000 });
+        
+        const inputResult = await page.evaluate((val) => {
+          const input = document.querySelector('input[placeholder*="Kişi Numarası" i]') ||
+                        document.querySelector('input[placeholder*="kişi" i]') ||
+                        Array.from(document.querySelectorAll('input')).find(i => 
+                          (i.placeholder || '').toLowerCase().includes('kişi') ||
+                          (i.placeholder || '').toLowerCase().includes('numara')
+                        );
+          if (!input) return { success: false, error: 'Kişi Numarası inputu bulunamadı' };
+          
+          input.focus();
+          input.value = '';
+          input.value = String(val);
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+          input.dispatchEvent(new Event('change', { bubbles: true }));
+          return { success: true };
+        }, String(ownerId));
+
+        if (!inputResult.success) {
+          throw new Error(inputResult.error);
+        }
+
+        await sleep(1000);
+
+        // === Sorgula Butonuna Tıklama ===
+        const clickResult = await page.evaluate(() => {
+          const btn = Array.from(document.querySelectorAll('button')).find(b => 
+            /sorgula/i.test((b.textContent || b.value || '').trim()) && 
+            !b.disabled
+          );
+          if (!btn) return { success: false, error: 'SORGULA butonu bulunamadı' };
+          btn.click();
+          return { success: true };
+        });
+
+        if (!clickResult.success) {
+          throw new Error(clickResult.error);
+        }
+
+        logger.info('Sorgula butonuna tıklandı, sonuçlar bekleniyor...');
+
+        // === GELİŞTİRİLMİŞ SONUÇ BEKLEME ===
+        let status = null;
+        const maxWaitTime = 120000; // 2 dakika
+        const checkInterval = 2000; // 2 saniye
+        const startTime = Date.now();
+
+        while (Date.now() - startTime < maxWaitTime) {
           try {
-            const responseText = await response.text();
-            logger.info(`POST Response: ${url} - Status: ${status}`);
-            logger.info(`Response preview: ${responseText.substring(0, 200)}`);
+            status = await page.evaluate(() => {
+              const bodyText = document.body.innerText.toLowerCase();
+              
+              // Yükleme indikatörleri
+              const loadingKeywords = ['yükleniyor', 'loading', 'bekleyin', 'aranıyor'];
+              const isLoading = loadingKeywords.some(kw => bodyText.includes(kw));
+              
+              // Başarı indikatörleri - daha geniş arama
+              const successKeywords = [
+                'çıktı al', 'sonsuz liste', 'kayıt bulundu', 'sayfa', 'toplam',
+                'tescil', 'başvuru', 'marka', 'sonuç', 'liste', 'tablo'
+              ];
+              const hasSuccess = successKeywords.some(kw => bodyText.includes(kw));
+              
+              // Başarısızlık indikatörleri
+              const notFoundKeywords = [
+                '0 kayıt bulundu', 'kayıt bulunamadı', 'sonuç bulunamadı', 
+                'hiç kayıt', 'bulunamadı', 'sonuç yok'
+              ];
+              const hasNotFound = notFoundKeywords.some(kw => bodyText.includes(kw));
+              
+              // Hata indikatörleri
+              const errorKeywords = ['hata oluştu', 'sistem hatası', 'geçici hata'];
+              const hasError = errorKeywords.some(kw => bodyText.includes(kw));
+              
+              // Tablo varlığını kontrol et
+              const hasTable = document.querySelector('table tbody tr, .MuiTable-root tbody tr');
+              
+              if (hasTable && !isLoading) return 'found';
+              if (hasSuccess && !isLoading) return 'found';
+              if (hasNotFound) return 'not_found';
+              if (hasError) return 'error';
+              if (isLoading) return 'loading';
+              
+              return null;
+            });
+
+            if (status && status !== 'loading') {
+              logger.info('Sonuç durumu belirlendi:', status);
+              break;
+            }
+
+            await sleep(checkInterval);
             
-            if (responseText.includes('applicationNo') || 
-                responseText.includes('markName') || 
-                responseText.includes('holdName') || 
-                responseText.includes('<table') ||
-                responseText.includes('MuiTable')) {
-              logger.info('BULUNDU: Bu response marka verisi içeriyor!');
+          } catch (evalError) {
+            logger.warn('Sayfa değerlendirme hatası:', evalError.message);
+            await sleep(checkInterval);
+          }
+        }
+
+        if (!status || status === 'loading') {
+          logger.warn('Timeout: Sonuç durumu belirlenemedi');
+          status = 'timeout';
+        }
+
+        // === SONUÇ İŞLEME ===
+        if (status === 'found') {
+          logger.info('Veri çekiliyor...');
+          
+          // Sayfanın tam yüklenmesini bekle
+          await sleep(3000);
+          
+          const rows = await page.evaluate(() => {
+            const norm = (s) => (s || '').replace(/\s+/g, ' ').trim();
+            
+            // Farklı tablo selectorlarını dene
+            const tables = [
+              '.MuiTable-root tbody tr',
+              'table tbody tr',
+              '[role="table"] tbody tr',
+              '.table tbody tr',
+              'tbody tr'
+            ];
+            
+            let trs = [];
+            for (const selector of tables) {
+              trs = document.querySelectorAll(selector);
+              if (trs.length > 0) break;
+            }
+            
+            if (trs.length === 0) return [];
+            
+            return Array.from(trs).map(tr => {
+              const tds = Array.from(tr.querySelectorAll('td'));
+              if (tds.length < 3) return null;
+              
+              const get = (role) => {
+                const td = tr.querySelector(`td[role="${role}"]`);
+                return td ? norm(td.innerText) : '';
+              };
+              
+              const getText = (index) => tds[index] ? norm(tds[index].innerText) : '';
+              
+              const img = tr.querySelector('img');
+              const hrefEl = tr.querySelector('a[href]');
+              
+              return {
+                applicationNumber: get('applicationNo') || getText(0),
+                brandName: get('markName') || getText(1),
+                ownerName: get('holdName') || getText(2),
+                applicationDate: get('applicationDate') || getText(3),
+                registrationNumber: get('registrationNo') || getText(4),
+                status: get('state') || getText(5),
+                niceClasses: get('niceClasses') || getText(6),
+                niceList: (get('niceClasses') || getText(6) || '').split(/[^\d]+/).map(x => x.trim()).filter(Boolean),
+                imageUrl: img ? img.getAttribute('src') : '',
+                detailUrl: hrefEl ? hrefEl.getAttribute('href') : ''
+              };
+            }).filter(x => x && (x.applicationNumber || x.brandName));
+          });
+          
+          logger.info(`[owner-scrape] ${rows.length} kayıt bulundu`);
+          
+          if (rows.length === 0) {
+            return { 
+              status: 'NotFound', 
+              found: false, 
+              ownerId, 
+              count: 0, 
+              message: 'Tablo bulundu ancak veri yok' 
+            };
+          }
+          
+          return { 
+            status: 'Success', 
+            found: true, 
+            count: rows.length, 
+            ownerId,
+            items: rows 
+          };
+
+        } else if (status === 'not_found') {
+          logger.info('Kayıt bulunamadı.');
+          return { 
+            status: 'NotFound', 
+            found: false, 
+            ownerId, 
+            count: 0, 
+            message: 'Belirtilen sahip numarası için kayıt bulunamadı.' 
+          };
+
+        } else {
+          throw new Error(`Beklenmeyen durum: ${status}`);
+        }
+
+      } catch (err) {
+        logger.error(`[scrapeOwnerTrademarks] Deneme ${retryCount + 1} hatası:`, { 
+          message: err?.message
+        });
+
+        // Screenshot al
+        if (browser) {
+          try {
+            const pages = await browser.pages();
+            if (pages.length > 0) {
+              const screenshot = await pages[0].screenshot({ encoding: 'base64', quality: 30 });
+              if (screenshot) {
+                logger.info('Hata screenshot alındı');
+              }
             }
           } catch (e) {
-            logger.warn('Response okunamadı:', e.message);
+            logger.warn('Screenshot alınamadı:', e.message);
           }
         }
-      });
 
-      // Sayfayı yükle
-      await page.goto('https://www.turkpatent.gov.tr/arastirma-yap', { 
-        waitUntil: 'networkidle0', 
-        timeout: 60000 
-      });
-      
-      logger.info('Sayfa yüklendi');
-
-      // === FORM ANALİZİ ===
-      const formAnalysis = await page.evaluate(() => {
-        const forms = Array.from(document.querySelectorAll('form'));
-        const inputs = Array.from(document.querySelectorAll('input'));
-        const buttons = Array.from(document.querySelectorAll('button'));
-        
-        return {
-          formCount: forms.length,
-          forms: forms.map(f => ({
-            action: f.action,
-            method: f.method,
-            id: f.id,
-            className: f.className
-          })),
-          inputCount: inputs.length,
-          inputs: inputs.map(i => ({
-            type: i.type,
-            name: i.name,
-            id: i.id,
-            placeholder: i.placeholder,
-            value: i.value
-          })),
-          buttonCount: buttons.length,
-          buttons: buttons.map(b => ({
-            type: b.type,
-            textContent: b.textContent?.trim(),
-            id: b.id,
-            className: b.className,
-            disabled: b.disabled
-          }))
-        };
-      });
-      
-      logger.info('Form analizi:', formAnalysis);
-
-      // === Input bulma ve doldurma ===
-      await page.waitForSelector('input', { timeout: 10000 });
-      
-      const inputFillResult = await page.evaluate((val) => {
-        // Kişi numarası input'larını ara
-        const inputs = Array.from(document.querySelectorAll('input'));
-        const ownerInputs = inputs.filter(i => 
-          (i.placeholder && i.placeholder.toLowerCase().includes('kişi')) ||
-          (i.name && i.name.toLowerCase().includes('owner')) ||
-          (i.id && i.id.toLowerCase().includes('owner')) ||
-          (i.placeholder && i.placeholder.toLowerCase().includes('numara'))
-        );
-        
-        if (ownerInputs.length === 0) {
-          return { success: false, error: 'Owner input bulunamadı', availableInputs: inputs.length };
+        // Son deneme miyiz?
+        if (retryCount >= maxRetries - 1) {
+          throw new HttpsError('internal', `Owner arama hatası (${maxRetries} deneme): ${err?.message || String(err)}`);
         }
-        
-        const input = ownerInputs[0];
-        input.focus();
-        input.value = String(val);
-        input.dispatchEvent(new Event('input', { bubbles: true }));
-        input.dispatchEvent(new Event('change', { bubbles: true }));
-        
-        return { 
-          success: true, 
-          inputInfo: {
-            placeholder: input.placeholder,
-            name: input.name,
-            id: input.id,
-            type: input.type
+
+        retryCount++;
+        logger.info(`${retryCount + 1}. deneme için bekleniyor...`);
+        await sleep(5000 * retryCount);
+
+      } finally {
+        if (browser) {
+          try { 
+            await browser.close(); 
+            browser = null;
+            logger.info('Browser kapatıldı'); 
+          } catch (e) {
+            logger.warn('Browser kapatma hatası:', e.message);
           }
-        };
-      }, String(ownerId));
-
-      logger.info('Input doldurma sonucu:', inputFillResult);
-
-      if (!inputFillResult.success) {
-        throw new Error(inputFillResult.error);
-      }
-
-      await sleep(2000);
-
-      // === FARKLI SUBMIT STRATEJİLERİ ===
-      logger.info('Submit stratejileri deneniyor...');
-
-      // Strateji 1: Form submit
-      const formSubmitResult = await page.evaluate(() => {
-        const forms = document.querySelectorAll('form');
-        if (forms.length > 0) {
-          const form = forms[0];
-          form.submit();
-          return { success: true, method: 'form.submit()' };
-        }
-        return { success: false, error: 'Form bulunamadı' };
-      });
-      logger.info('Form submit result:', formSubmitResult);
-
-      await sleep(3000);
-
-      // Strateji 2: Button click
-      const buttonClickResult = await page.evaluate(() => {
-        const buttons = Array.from(document.querySelectorAll('button'));
-        const submitButtons = buttons.filter(b => 
-          /sorgula/i.test(b.textContent || '') ||
-          /search/i.test(b.textContent || '') ||
-          b.type === 'submit'
-        );
-        
-        if (submitButtons.length > 0) {
-          const btn = submitButtons[0];
-          btn.click();
-          return { 
-            success: true, 
-            method: 'button.click()',
-            buttonText: btn.textContent?.trim(),
-            buttonType: btn.type
-          };
-        }
-        return { success: false, error: 'Submit button bulunamadı' };
-      });
-      logger.info('Button click result:', buttonClickResult);
-
-      await sleep(3000);
-
-      // Strateji 3: Enter tuşu
-      await page.focus('input');
-      await page.keyboard.press('Enter');
-      logger.info('Enter tuşu basıldı');
-
-      await sleep(3000);
-
-      // === SONUÇ BEKLEMESİ ===
-      logger.info('Sonuçlar bekleniyor...');
-      
-      // 10 saniye boyunca network trafiğini izle
-      for (let i = 0; i < 10; i++) {
-        const pageContent = await page.evaluate(() => {
-          const bodyText = document.body.innerText.toLowerCase();
-          return {
-            hasTable: document.querySelector('table') !== null,
-            hasMuiTable: document.querySelector('.MuiTable-root') !== null,
-            hasResults: bodyText.includes('sonuç') || bodyText.includes('kayıt'),
-            hasLoading: bodyText.includes('yükleniyor') || bodyText.includes('loading'),
-            hasError: bodyText.includes('hata') || bodyText.includes('error'),
-            bodyPreview: document.body.innerText.substring(0, 500)
-          };
-        });
-        
-        logger.info(`Sayfa kontrolü ${i+1}/10:`, pageContent);
-        
-        if (pageContent.hasTable || pageContent.hasResults) {
-          logger.info('Tablo veya sonuç bulundu!');
-          break;
-        }
-        
-        await sleep(1000);
-      }
-
-      logger.info(`Toplam ${allRequests.length} network isteği yakalandı`);
-
-      // API isteklerini filtrele
-      const apiRequests = allRequests.filter(req => 
-        req.method === 'POST' && 
-        !req.url.includes('google-analytics') &&
-        !req.url.includes('recaptcha')
-      );
-
-      logger.info(`${apiRequests.length} gerçek API isteği bulundu`);
-
-      if (apiRequests.length > 0) {
-        logger.info('API istekleri:', apiRequests.map(r => ({
-          url: r.url,
-          method: r.method,
-          hasPostData: !!r.postData
-        })));
-      }
-
-      // DOM'dan veri çekmeyi dene
-      const scrapingResult = await page.evaluate(() => {
-        const tables = document.querySelectorAll('table');
-        const muiTables = document.querySelectorAll('.MuiTable-root');
-        
-        let results = [];
-        
-        // Normal tablolar
-        tables.forEach(table => {
-          const rows = table.querySelectorAll('tbody tr, tr');
-          Array.from(rows).forEach(row => {
-            const cells = Array.from(row.querySelectorAll('td, th'));
-            if (cells.length >= 3) {
-              const rowData = cells.map(cell => cell.innerText?.trim() || '');
-              if (rowData.some(cell => cell && cell.length > 2)) {
-                results.push({ source: 'table', data: rowData });
-              }
-            }
-          });
-        });
-
-        // MUI tablolar
-        muiTables.forEach(table => {
-          const rows = table.querySelectorAll('tbody tr');
-          Array.from(rows).forEach(row => {
-            const cells = Array.from(row.querySelectorAll('td'));
-            if (cells.length >= 3) {
-              const rowData = cells.map(cell => cell.innerText?.trim() || '');
-              if (rowData.some(cell => cell && cell.length > 2)) {
-                results.push({ source: 'MuiTable', data: rowData });
-              }
-            }
-          });
-        });
-
-        return {
-          tableCount: tables.length,
-          muiTableCount: muiTables.length,
-          resultCount: results.length,
-          results: results.slice(0, 5), // İlk 5 sonuç
-          bodyText: document.body.innerText.substring(0, 1000)
-        };
-      });
-
-      logger.info('Final scraping sonucu:', scrapingResult);
-
-      return {
-        status: 'Debug',
-        found: scrapingResult.resultCount > 0,
-        count: scrapingResult.resultCount,
-        ownerId,
-        debug: {
-          formAnalysis: formAnalysis,
-          inputResult: inputFillResult,
-          networkRequests: allRequests.length,
-          apiRequests: apiRequests.length,
-          scrapingResult: scrapingResult,
-          allApiRequests: apiRequests
-        },
-        method: 'form_debugging'
-      };
-
-    } catch (err) {
-      logger.error('[scrapeOwnerTrademarks] Debug hatası:', { message: err?.message });
-      throw new HttpsError('internal', `Debug hatası: ${err?.message || String(err)}`);
-
-    } finally {
-      if (browser) {
-        try { 
-          await browser.close(); 
-          logger.info('Browser kapatıldı'); 
-        } catch (e) {
-          logger.warn('Browser kapatma hatası:', e.message);
         }
       }
     }
+
+    throw new HttpsError('internal', 'Tüm denemeler başarısız oldu');
   }
 );
