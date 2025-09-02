@@ -4281,62 +4281,89 @@ const inputResult = await page.evaluate(async (value) => {
 
       // ---- SORGULA butonunu tıkla ----
       await sleep(2000);
-      const clickResult = await page.evaluate(() => {
-        const buttons = Array.from(document.querySelectorAll('button, input[type="submit"], input[type="button"]'));
-        const button = buttons.find(btn =>
-          btn.textContent?.includes('SORGULA') ||
-          btn.value?.includes('SORGULA') ||
-          btn.textContent?.includes('Ara') ||
-          btn.type === 'submit'
-        );
-        if (button) {
-          button.click();
-          return { success: true, buttonText: button.textContent || button.value };
-        }
-        return { success: false, error: 'Button not found' };
-      });
-      if (!clickResult.success) throw new Error('SORGULA butonu bulunamadı veya tıklanamadı');
-      logger.info('SORGULA butonuna tıklandı:', clickResult);
+// SORGULA butonuna tıkla - detaylı monitoring ile
+const clickResult = await page.evaluate(() => {
+  const buttons = Array.from(document.querySelectorAll('button, input[type="submit"], input[type="button"]'));
+  
+  const sorgulaButton = buttons.find(btn => 
+    btn.textContent?.toUpperCase().includes('SORGULA') || 
+    btn.value?.toUpperCase().includes('SORGULA') ||
+    btn.textContent?.toUpperCase().includes('ARA') ||
+    btn.type === 'submit'
+  );
+  
+  if (sorgulaButton) {
+    // Form validation durumunu kontrol et
+    const form = sorgulaButton.closest('form');
+    const isDisabled = sorgulaButton.disabled;
+    const hasClickHandler = sorgulaButton.onclick !== null;
+    
+    // Network activity'yi izlemek için
+    window.networkRequests = [];
+    const originalFetch = window.fetch;
+    window.fetch = function(...args) {
+      window.networkRequests.push({ type: 'fetch', url: args[0], time: Date.now() });
+      return originalFetch.apply(this, args);
+    };
+    
+    // XMLHttpRequest'i de izle
+    const originalXHROpen = XMLHttpRequest.prototype.open;
+    XMLHttpRequest.prototype.open = function(method, url) {
+      window.networkRequests.push({ type: 'xhr', method, url, time: Date.now() });
+      return originalXHROpen.apply(this, arguments);
+    };
+    
+    // Butona tıkla
+    sorgulaButton.click();
+    
+    return { 
+      success: true, 
+      buttonText: sorgulaButton.textContent || sorgulaButton.value,
+      buttonType: sorgulaButton.type,
+      isDisabled,
+      hasClickHandler,
+      hasForm: !!form,
+      formAction: form?.action || '',
+      formMethod: form?.method || ''
+    };
+  }
+  
+  return { success: false, error: 'SORGULA butonu bulunamadı' };
+});
 
-      // ---- Sonuçları bekle ----
-      await Promise.race([
-        page.waitForSelector('table tbody tr, .search-results, .kayit-sayisi', { timeout: 12000 }).catch(() => {}),
-        sleep(5000)
-      ]);
+logger.info('SORGULA butonuna tıklandı:', clickResult);
 
-      // ---- Sayfa analizi ----
-      const pageAnalysis = await page.evaluate(() => {
-        const tables = document.querySelectorAll('table');
-        const resultInfo = document.querySelector('.result-info, .kayit-sayisi, .pagination-info');
-        return {
-          url: window.location.href,
-          title: document.title,
-          tableCount: tables.length,
-          resultText: resultInfo?.textContent?.trim() || '',
-          firstTableHeaders: tables[0] ? Array.from(tables[0].querySelectorAll('th')).map(th => th.textContent?.trim()) : [],
-          firstTableRowCount: tables[0] ? tables[0].querySelectorAll('tr').length : 0,
-          hasResults: !!document.querySelector('table tbody tr, .search-results'),
-          bodyText: document.body.textContent.substring(0, 500)
-        };
-      });
-      logger.info('Sayfa analizi:', pageAnalysis);
+// Kısa süre bekle ve network activity'yi kontrol et
+await page.waitForTimeout(3000);
 
-      // ---- Cookie'leri kaydet ----
-      const cookies = await page.cookies();
-      if (cookies?.length) {
-        saveCookiesFor?.('turkpatent', cookies);
-      }
+const networkActivity = await page.evaluate(() => {
+  return {
+    requests: window.networkRequests || [],
+    currentUrl: window.location.href,
+    pageTitle: document.title,
+    hasLoadingIndicator: !!(document.querySelector('.loading, .spinner, [class*="loading"]'))
+  };
+});
 
-      // ---- Yanıt ----
-      return {
-        status: 'Success',
-        ownerId,
-        message: 'Sorgulama tamamlandı, sayfa analizi yapıldı',
-        debug: { formAnalysis, pageAnalysis, clickResult },
-        items: [],
-        total: 0,
-        found: pageAnalysis.hasResults
-      };
+logger.info('Network activity:', networkActivity);
+
+// Daha uzun bekle - AJAX response için
+await page.waitForTimeout(8000);
+
+// Final sayfa durumu
+const finalAnalysis = await page.evaluate(() => {
+  return {
+    url: window.location.href,
+    title: document.title,
+    tableCount: document.querySelectorAll('table').length,
+    hasResults: !!(document.querySelector('table tbody tr, .search-results, .result-item')),
+    bodyText: document.body.textContent.substring(0, 500),
+    errorMessages: Array.from(document.querySelectorAll('.error, .alert, [class*="error"]')).map(el => el.textContent?.trim()),
+    finalNetworkRequests: window.networkRequests || []
+  };
+});
+
+logger.info('Final analiz:', finalAnalysis);
 
     } catch (error) {
       logger.error('[scrapeOwnerTrademarks] Hata:', {
