@@ -4356,8 +4356,11 @@ const clickResult = await page.evaluate(() => {
 
 logger.info('SORGULA butonuna tıklandı:', clickResult);
 
-// reCAPTCHA kontrolü
-if (await detectCaptcha(page)) {
+// reCAPTCHA kontrolü - debug ile
+const captchaDetected = await detectCaptcha(page);
+logger.info('reCAPTCHA kontrolü:', { captchaDetected });
+
+if (captchaDetected) {
   const retryAfterSec = 120 + Math.floor(Math.random()*60);
   global['turkpatent_backoff_until'] = Date.now() + retryAfterSec * 1000;
   return {
