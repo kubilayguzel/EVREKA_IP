@@ -4501,85 +4501,84 @@ if (captchaDetected) {
   }
 }
 
+// Sonuçları bekle
+await new Promise(resolve => setTimeout(resolve, 3000));
+const networkActivity = await page.evaluate(() => {
+  return {
+    requests: window.networkRequests || [],
+    currentUrl: window.location.href,
+    pageTitle: document.title,
+    hasLoadingIndicator: !!(document.querySelector('.loading, .spinner, [class*="loading"]'))
+  };
+});
 
-// Sonuçları kanıtla ve listeyi topla
-const deadline = Date.now() + 60000; // 60s üst sınır
-let proof = { tableRows: 0, uiProof: false };
+logger.info('Network activity:', networkActivity);
 
-while (Date.now() < deadline) {
-  const p = await page.evaluate(() => {
-    const bodyText = (document.body?.innerText || '').toLowerCase();
-    const btns = Array.from(document.querySelectorAll('button,a'));
-    const hasCiktiAl = btns.some(b => /çıktı\s*al/i.test(b.textContent || '')) || bodyText.includes('çıktı al');
-    const hasSonsuz = bodyText.includes('sonsuz liste') || bodyText.includes('sonsuz');
-    const rows = Array.from(document.querySelectorAll('tbody tr')).filter(r => r.querySelectorAll('td').length >= 2).length;
-    const isEmpty = /kayıt bulunamadı|0 kayıt|kayıt yok/.test(bodyText);
-    const isCaptcha = bodyText.includes('robot') || bodyText.includes('captcha') || !!document.querySelector('input[name="captcha"]');
-    return { hasUiProof: (hasCiktiAl || hasSonsuz), rows, isEmpty, isCaptcha };
-  });
 
-  if (p.isCaptcha) {
-    return { status: 'CaptchaRequired', found: false, ownerId };
+// === Sonuçları kanıta dayalı bekle & listeyi topla (owner search) ===
+logger.info('Owner search: sonuç bekleniyor...');
+
+// 1) Bekleme döngüsü: tablo satırı veya ÇIKTI AL / Sonsuz Liste sinyali
+const proof = await (async () => {
+  const timeoutMs = 60000;
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const p = await page.evaluate(() => {
+      const t = (document.body?.innerText || '').toLowerCase();
+      const hasCiktiAl = t.includes('çıktı al');
+      const hasSonsuz = t.includes('sonsuz liste') || t.includes('sonsuz');
+      const rows = Array.from(document.querySelectorAll('#results tbody tr, table.MuiTable-root tbody tr'))
+        .filter(r => r.querySelectorAll('td').length >= 2).length;
+      const isEmpty = /kayıt bulunamadı|0 kayıt|kayıt yok/.test(t);
+      return { rows, hasCiktiAl, hasSonsuz, isEmpty };
+    });
+    if (p.isEmpty) return { status: 'empty', ...p };
+    if (p.rows >= 1 || p.hasCiktiAl || p.hasSonsuz) return { status: 'ok', ...p };
+    await new Promise(r => setTimeout(r, 300));
   }
-  if (p.isEmpty) {
-    return { status: 'empty', found: false, ownerId, count: 0 };
-  }
-  if (p.rows >= 1 || p.hasUiProof) {
-    proof = { tableRows: p.rows, uiProof: p.hasUiProof };
-    break;
-  }
-  await sleep(400);
+  return { status: 'timeout', rows: 0, hasCiktiAl: false, hasSonsuz: false, isEmpty: false };
+})();
+
+logger.info('[owner-results-proof]', proof);
+
+if (proof.status === 'empty') {
+  return { status: 'empty', found: false, ownerId, count: 0, proof };
+}
+if (proof.status === 'timeout') {
+  return { status: 'timeout', found: false, ownerId, proof };
 }
 
-// Zaman aşımı
-if (proof.tableRows === 0 && !proof.uiProof) {
-  return { status: 'timeout', found: false, ownerId };
-}
-
-// Tablodan verileri çek
+// 2) Tablodan verileri çek
 const rows = await page.evaluate(() => {
-  function pick(el) { return (el?.innerText || '').trim(); }
-  const table = document.querySelector('table.MuiTable-root') || document.querySelector('table');
+  const pick = (el) => (el?.innerText || '').trim();
+  const table = document.querySelector('#results') || document.querySelector('table.MuiTable-root');
   if (!table) return [];
 
   const headers = Array.from(table.querySelectorAll('thead th')).map(th => (th.innerText || '').trim().toLowerCase());
-  const idx = (name, fallback) => {
-    const map = {
-      basvuruNo: ['başvuru numarası', 'başvuru', 'başvuru no', '#'],
-      markaAdi: ['marka adı', 'marka adi', 'marka', 'adı'],
-      markaSahibi: ['marka sahibi', 'sahibi', 'başvuru sahibi'],
-      basvuruTarihi: ['başvuru tarihi', 'tarih'],
-      tescilNo: ['tescil no', 'tescil', 'tescil numarası'],
-      durumu: ['durumu', 'durum'],
-      niceSiniflari: ['nice sınıfları', 'nice', 'sınıf', 'sınıflar'],
-      sekil: ['şekil', 'logo', 'görsel'],
-      islem: ['işlem', 'detay', 'aksiyon']
-    };
-    const keys = map[name] || [];
-    for (const k of keys) {
-      const i = headers.findIndex(h => h.includes(k));
+  const idx = (names, fallback) => {
+    for (const n of names) {
+      const i = headers.findIndex(h => h.includes(n));
       if (i !== -1) return i;
     }
     return fallback;
   };
 
-  const iBasvuru = idx('basvuruNo', 1);
-  const iMarkaAdi = idx('markaAdi', 2);
-  const iSahibi = idx('markaSahibi', 3);
-  const iBasvTar = idx('basvuruTarihi', 4);
-  const iTescil = idx('tescilNo', 5);
-  const iDurum = idx('durumu', 6);
-  const iNice = idx('niceSiniflari', 7);
-  const iSekil = idx('sekil', 8);
-  const iIslem = idx('islem', 9);
+  const iBasvuru = idx(['başvuru numarası','başvuru no','başvuru'], 1);
+  const iMarkaAdi = idx(['marka adı','marka adi','marka'], 2);
+  const iSahibi = idx(['marka sahibi','sahibi','başvuru sahibi'], 3);
+  const iBasvTar = idx(['başvuru tarihi','tarih'], 4);
+  const iTescil  = idx(['tescil no','tescil'], 5);
+  const iDurum   = idx(['durumu','durum'], 6);
+  const iNice    = idx(['nice sınıfları','nice','sınıf','sınıflar'], 7);
+  const iSekil   = idx(['şekil','logo','görsel'], 8);
+  const iIslem   = idx(['işlem','detay'], 9);
 
-  const trs = Array.from(table.querySelectorAll('tbody tr')).filter(r => r.querySelectorAll('td').length >= 2).slice(0, 50);
+  const trs = Array.from(table.querySelectorAll('tbody tr')).filter(r => r.querySelectorAll('td').length >= 2);
   return trs.map(tr => {
     const tds = Array.from(tr.querySelectorAll('td'));
     const imgAlt = tds[iSekil]?.querySelector('img')?.alt || '';
     const actionEl = tds[iIslem]?.querySelector('a,button');
     const href = actionEl ? (actionEl.href || actionEl.getAttribute('href')) : null;
-
     return {
       basvuruNo: pick(tds[iBasvuru]),
       markaAdi: pick(tds[iMarkaAdi]),
@@ -4594,6 +4593,9 @@ const rows = await page.evaluate(() => {
   });
 });
 
+logger.info('[owner-scrape] rowCount:', rows?.length || 0);
+
+// 3) Döndür
 return {
   status: 'ok',
   ownerId,
@@ -4602,6 +4604,7 @@ return {
   proof,
   rows
 };
+logger.info('Final analiz:', finalAnalysis);
 
     } catch (error) {
       logger.error('[scrapeOwnerTrademarks] Hata:', {
