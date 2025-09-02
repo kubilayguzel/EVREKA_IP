@@ -318,26 +318,69 @@ async function onBulkQuery(){
         return showToast('Sahip numarası girin.', 'warning');
     }
 
+    // Detaylı kontrol
+    console.log('[DEBUG] Tarayıcı kontrolü:');
+    console.log('- typeof chrome:', typeof chrome);
+    console.log('- navigator.userAgent:', navigator.userAgent);
+    console.log('- location.protocol:', location.protocol);
+    console.log('- window.chrome:', !!window.chrome);
+    
+    if (typeof chrome !== 'undefined') {
+        console.log('- chrome.runtime:', !!chrome.runtime);
+        if (chrome.runtime) {
+            console.log('- sendMessageExternal:', !!chrome.runtime.sendMessageExternal);
+        }
+    }
+
     console.log('[DEBUG] onBulkQuery Chrome kontrolü:', {
         'typeof chrome': typeof chrome,
         'chrome.runtime': !!chrome?.runtime,
         'sendMessageExternal': !!chrome?.runtime?.sendMessageExternal
     });
 
-    if (typeof chrome === 'undefined' || !chrome.runtime || !chrome.runtime.sendMessageExternal) {
-        console.error('[DEBUG] Chrome API mevcut değil. Tarayıcı bilgileri:', {
-            userAgent: navigator.userAgent,
-            protocol: location.protocol,
-            isSecureContext: window.isSecureContext
-        });
-        return showToast('Bu özellik Chrome/Edge/Brave tarayıcılarında ve HTTPS bağlantısında çalışır. Tarayıcınızı kontrol edin.', 'danger');
-    }
-
+    // Loading göster
     _showBlock(bulkLoadingEl);
     _hideBlock(bulkResultsContainer);
     bulkResultsBody.innerHTML = '';
     lastBulkItems = [];
 
+    // HTTP protokolünde veya chrome.runtime yoksa PostMessage yöntemi kullan
+    if (location.protocol === 'http:' || !chrome?.runtime?.sendMessageExternal) {
+        console.log('[DEBUG] HTTP protokolü veya Chrome runtime eksik - PostMessage yöntemi kullanılacak');
+        
+        try {
+            // Eklentiye background.js üzerinden mesaj gönder
+            if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
+                console.log('[DEBUG] chrome.runtime.sendMessage ile eklentiye mesaj gönderiliyor...');
+                chrome.runtime.sendMessage(EXTENSION_ID_SAHIP, {
+                    type: 'SORGULA_KISI',
+                    data: ownerId
+                }, (response) => {
+                    if (chrome.runtime.lastError) {
+                        console.error('[DEBUG] Eklenti mesaj hatası:', chrome.runtime.lastError.message);
+                        _hideBlock(bulkLoadingEl);
+                        showToast('tp-sorgu-eklentisi-2 eklentisi bulunamadı veya yüklenmemiş. Lütfen eklentiyi Chrome\'dan yükleyin.', 'danger');
+                    } else {
+                        console.log('[DEBUG] Eklentiye mesaj gönderildi:', response);
+                        showToast('Sorgu eklentiye gönderildi. TÜRKPATENT sayfası açıldığında sonuçlar otomatik gelecek.', 'info');
+                    }
+                });
+            } else {
+                console.error('[DEBUG] Chrome mesaj API bulunamadı');
+                _hideBlock(bulkLoadingEl);
+                showToast('Chrome eklenti API\'sine erişim yok. HTTPS kullanın veya localhost deneyin.', 'danger');
+            }
+        } catch (err) {
+            console.error('[DEBUG] Eklenti iletişim hatası:', err);
+            _hideBlock(bulkLoadingEl);
+            showToast('Eklenti iletişim hatası: ' + (err.message || err), 'danger');
+        }
+        return; // Fonksiyondan çık
+    }
+
+    // HTTPS protokolünde normal yöntem
+    console.log('[DEBUG] HTTPS protokolü - Normal sendMessageExternal kullanılacak');
+    
     try {
         chrome.runtime.sendMessageExternal(EXTENSION_ID_SAHIP, {
             type: 'SORGULA_KISI',
@@ -349,7 +392,7 @@ async function onBulkQuery(){
                 showToast('Eklentiye bağlanılamadı. Eklentinin yüklü ve etkin olduğundan emin olun.', 'danger');
             } else {
                 console.log('Sorgu eklentiye başarıyla gönderildi.', response);
-                // Eklentiden gelecek yanıt setupExtensionMessageListener tarafından işlenecek
+                showToast('Sorgu eklentiye gönderildi. TÜRKPATENT sayfası açıldığında sonuçlar otomatik gelecek.', 'info');
             }
         });
     } catch (err) {
