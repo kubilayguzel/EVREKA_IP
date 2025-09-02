@@ -3617,6 +3617,49 @@ const __cookieJar = global.__cookieJar || (global.__cookieJar = new Map());
 
 // Küçük yardımcılar
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+/**
+ * Bekleme yardımcı: Araştırma sonuçlarının gerçekten yüklenip yüklenmediğini
+ * buton/sinyal (Çıktı Al, Sonsuz Liste) ve tablo satır sayısı ile doğrular.
+ * Ayrıca "kayıt yok" ve captcha durumlarını ayırır.
+ */
+async function waitForResultsLoaded(page, {
+  timeoutMs = 60000,
+  minRowCount = 1,
+  requireAnyProof = true // true => (tabloda satır >= min) VEYA (UI kanıtı)
+} = {}) {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const state = await page.evaluate((min) => {
+      const hasText = (t) => (document.body?.innerText || '').toLowerCase().includes(t);
+      // Tablodaki veri satırları (th değil td içeren)
+      const rows = Array.from(document.querySelectorAll('tbody tr'))
+        .filter(r => r.querySelectorAll('td').length >= 2);
+      const tableOk = rows.length >= min;
+      // "ÇIKTI AL" ve/veya "Sonsuz Liste" sinyalleri
+      const btns = Array.from(document.querySelectorAll('button,a'));
+      const hasCiktiAl = btns.some(b => /çıktı\s*al/i.test((b.textContent || ''))) || hasText('çıktı al');
+      const hasSonsuz = hasText('sonsuz liste') || hasText('sonsuz');
+      const uiOk = hasCiktiAl || hasSonsuz;
+
+      const text = (document.body?.innerText || '').toLowerCase();
+      const isEmpty = text.includes('kayıt bulunamadı') || text.includes('0 kayıt') || text.includes('kayıt yok');
+      const isCaptcha = text.includes('recaptcha') || text.includes('ben robot değilim') || !!document.querySelector('input[name="captcha"]');
+
+      return { tableRows: rows.length, tableOk, uiOk, isEmpty, isCaptcha };
+    }, minRowCount);
+
+    if (state.isCaptcha) return { status: 'captcha' };
+    if (state.isEmpty) return { status: 'empty' };
+
+    if (requireAnyProof ? (state.tableOk || state.uiOk) : (state.tableOk && state.uiOk)) {
+      return { status: 'ok', tableRows: state.tableRows, uiProof: state.uiOk };
+    }
+    await page.waitForTimeout(400);
+  }
+  return { status: 'timeout' };
+}
+
 const loadCookiesFor = (key) => __cookieJar.get(key) || [];
 const saveCookiesFor = (key, cookies) => __cookieJar.set(key, cookies);
 
@@ -4376,6 +4419,45 @@ const clickResult = await page.evaluate(() => {
 });
 
 logger.info('SORGULA butonuna tıklandı:', clickResult);
+
+      // ---- Sonuçların yüklendiğini kanıtla (tabloda satır veya "ÇIKTI AL / Sonsuz Liste")
+      const loadProof = await waitForResultsLoaded(page, { timeoutMs: 60000, minRowCount: 1, requireAnyProof: true });
+      logger.info('[scrapeOwnerTrademarks] loadProof:', loadProof);
+
+      if (loadProof.status === 'captcha') {
+        return { status: 'CaptchaRequired', ownerId, found: false, message: 'reCAPTCHA doğrulaması gerekiyor' };
+      }
+      if (loadProof.status === 'empty') {
+        return { status: 'Empty', ownerId, found: false, count: 0, rows: [] };
+      }
+      if (loadProof.status === 'timeout') {
+        return { status: 'Timeout', ownerId, found: false, message: 'Sonuç sinyali yakalanamadı' };
+      }
+
+      // (Geçici) Basit tablo çıkarımı — ileride kesin alan eşlemeyi birlikte tamamlayacağız
+      const rows = await page.$$eval('tbody tr', trs => {
+        const pick = (el) => (el?.innerText || '').trim();
+        return trs
+          .filter(tr => tr.querySelectorAll('td').length >= 2)
+          .slice(0, 50) // çok uzun listeleri sınırla
+          .map(tr => {
+            const tds = Array.from(tr.querySelectorAll('td'));
+            return {
+              basvuruNo:     pick(tds[1]),
+              markaAdi:      pick(tds[2]),
+              markaSahibi:   pick(tds[3]),
+              basvuruTarihi: pick(tds[4]),
+              tescilNo:      pick(tds[5]),
+              durumu:        pick(tds[6]),
+              niceSiniflari: pick(tds[7]),
+              sekilAltYazi:  pick(tds[8]),
+              detayHref:     (tds[9]?.querySelector('a')?.href || null)
+            };
+          });
+      });
+
+      return { status: 'ok', ownerId, found: rows.length > 0, count: rows.length, rows, proof: loadProof };
+
 
 // reCAPTCHA kontrolü - debug ile
 // reCAPTCHA kontrolü ve bypass denemesi
