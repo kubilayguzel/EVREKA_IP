@@ -4202,7 +4202,7 @@ async function handleCaptchaDetection(page) {
 }
 
 // ====== YENİLENMİŞ SAHİP NUMARASI İLE TOPLU MARKA ARAMA ======
-// ====== NETWORK MONİTORİNG İLE API KEŞFİ ======
+// ====== FORM SUBMIT DEBUGGİNG İLE API KEŞFİ ======
 export const scrapeOwnerTrademarks = onCall(
   { region: 'europe-west1', memory: '2GiB', timeoutSeconds: 300 },
   async (request) => {
@@ -4211,7 +4211,7 @@ export const scrapeOwnerTrademarks = onCall(
       throw new HttpsError('invalid-argument', 'Sahip numarası (ownerId) zorunludur.');
     }
 
-    logger.info('[scrapeOwnerTrademarks] Network monitoring ile API keşfi başlıyor', { ownerId });
+    logger.info('[scrapeOwnerTrademarks] Form debugging ile API keşfi', { ownerId });
 
     const isLocal = !!process.env.FUNCTIONS_EMULATOR || (!process.env.K_SERVICE && process.env.NODE_ENV !== 'production');
     let browser;
@@ -4240,319 +4240,310 @@ export const scrapeOwnerTrademarks = onCall(
       await page.setJavaScriptEnabled(true);
       await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
 
-      // === KAPSAMLI NETWORK MONİTORİNG ===
-      const networkEvents = [];
-      
-      // Request yakalama
+      // === KAPSAMLI NETWORK VE FORM MONİTORİNG ===
+      const allRequests = [];
       await page.setRequestInterception(true);
+      
       page.on('request', (req) => {
         const url = req.url();
         const method = req.method();
         const resourceType = req.resourceType();
-        const headers = req.headers();
         const postData = req.postData();
         
-        // Tüm POST isteklerini logla
-        if (method === 'POST') {
-          logger.info(`POST İsteği: ${url}`);
-          networkEvents.push({
-            type: 'request',
+        // Tüm istekleri logla (sadece reCAPTCHA'ları engelle)
+        if (method === 'POST' || url.includes('search') || url.includes('query') || url.includes('api')) {
+          logger.info(`${method} İsteği: ${url}`);
+          if (postData) {
+            logger.info(`POST Data: ${postData.substring(0, 500)}`);
+          }
+          
+          allRequests.push({
             url: url,
             method: method,
-            headers: headers,
-            postData: postData,
-            resourceType: resourceType,
-            timestamp: Date.now()
-          });
-        }
-        
-        // XHR/fetch isteklerini özellikle logla
-        if (resourceType === 'xhr' || resourceType === 'fetch') {
-          logger.info(`${resourceType.toUpperCase()} İsteği: ${method} ${url}`);
-          networkEvents.push({
-            type: 'xhr_request',
-            url: url,
-            method: method,
-            headers: headers,
             postData: postData,
             resourceType: resourceType,
             timestamp: Date.now()
           });
         }
 
-        // reCAPTCHA engelle
         if (url.includes('recaptcha')) {
           logger.info('reCAPTCHA isteği engellendi');
-          req.abort();
-        } else if (['image', 'stylesheet', 'font', 'media', 'manifest'].includes(resourceType)) {
           req.abort();
         } else {
           req.continue();
         }
       });
 
-      // Response yakalama
+      // Response monitoring
       page.on('response', async (response) => {
-        const request = response.request();
         const url = response.url();
         const status = response.status();
-        const method = request.method();
+        const method = response.request().method();
         
         if (method === 'POST' && status === 200) {
           try {
             const responseText = await response.text();
-            logger.info(`POST Response: ${url} - Status: ${status} - Length: ${responseText.length}`);
+            logger.info(`POST Response: ${url} - Status: ${status}`);
+            logger.info(`Response preview: ${responseText.substring(0, 200)}`);
             
-            // JSON response'u kontrol et
-            if (responseText.includes('"') && responseText.length > 100) {
-              try {
-                const jsonData = JSON.parse(responseText);
-                logger.info(`JSON Response alındı:`, { 
-                  url: url,
-                  keys: Object.keys(jsonData).slice(0, 10) // İlk 10 key
-                });
-                
-                networkEvents.push({
-                  type: 'json_response',
-                  url: url,
-                  status: status,
-                  data: jsonData,
-                  timestamp: Date.now()
-                });
-              } catch (e) {
-                logger.info(`JSON parse edilemedi: ${url}`);
-              }
+            if (responseText.includes('applicationNo') || 
+                responseText.includes('markName') || 
+                responseText.includes('holdName') || 
+                responseText.includes('<table') ||
+                responseText.includes('MuiTable')) {
+              logger.info('BULUNDU: Bu response marka verisi içeriyor!');
             }
-            
-            // HTML içinde veri var mı kontrol et
-            if (responseText.includes('<table') || responseText.includes('applicationNo') || 
-                responseText.includes('markName') || responseText.includes('holdName')) {
-              logger.info(`HTML response veri içeriyor: ${url}`);
-              networkEvents.push({
-                type: 'html_response',
-                url: url,
-                status: status,
-                hasTable: responseText.includes('<table'),
-                hasTrademarkData: responseText.includes('applicationNo'),
-                timestamp: Date.now()
-              });
-            }
-            
           } catch (e) {
-            logger.warn(`Response okunamadı: ${url} - ${e.message}`);
+            logger.warn('Response okunamadı:', e.message);
           }
-        }
-      });
-
-      // Console mesajlarını yakala
-      page.on('console', msg => {
-        if (msg.type() === 'log' || msg.type() === 'error') {
-          logger.info(`Console ${msg.type()}: ${msg.text()}`);
         }
       });
 
       // Sayfayı yükle
       await page.goto('https://www.turkpatent.gov.tr/arastirma-yap', { 
-        waitUntil: 'networkidle0', // Tüm network istekleri bitene kadar bekle
+        waitUntil: 'networkidle0', 
         timeout: 60000 
       });
       
-      logger.info('Sayfa yüklendi, network trafiği yakalandı');
+      logger.info('Sayfa yüklendi');
 
-      // Form doldur
+      // === FORM ANALİZİ ===
+      const formAnalysis = await page.evaluate(() => {
+        const forms = Array.from(document.querySelectorAll('form'));
+        const inputs = Array.from(document.querySelectorAll('input'));
+        const buttons = Array.from(document.querySelectorAll('button'));
+        
+        return {
+          formCount: forms.length,
+          forms: forms.map(f => ({
+            action: f.action,
+            method: f.method,
+            id: f.id,
+            className: f.className
+          })),
+          inputCount: inputs.length,
+          inputs: inputs.map(i => ({
+            type: i.type,
+            name: i.name,
+            id: i.id,
+            placeholder: i.placeholder,
+            value: i.value
+          })),
+          buttonCount: buttons.length,
+          buttons: buttons.map(b => ({
+            type: b.type,
+            textContent: b.textContent?.trim(),
+            id: b.id,
+            className: b.className,
+            disabled: b.disabled
+          }))
+        };
+      });
+      
+      logger.info('Form analizi:', formAnalysis);
+
+      // === Input bulma ve doldurma ===
       await page.waitForSelector('input', { timeout: 10000 });
       
-      const inputResult = await page.evaluate((val) => {
-        const input = document.querySelector('input[placeholder*="Kişi Numarası" i]') ||
-                      document.querySelector('input[placeholder*="kişi" i]') ||
-                      Array.from(document.querySelectorAll('input')).find(i => 
-                        (i.placeholder || '').toLowerCase().includes('kişi') ||
-                        (i.placeholder || '').toLowerCase().includes('numara')
-                      );
-        if (!input) return { success: false, error: 'Kişi Numarası inputu bulunamadı' };
+      const inputFillResult = await page.evaluate((val) => {
+        // Kişi numarası input'larını ara
+        const inputs = Array.from(document.querySelectorAll('input'));
+        const ownerInputs = inputs.filter(i => 
+          (i.placeholder && i.placeholder.toLowerCase().includes('kişi')) ||
+          (i.name && i.name.toLowerCase().includes('owner')) ||
+          (i.id && i.id.toLowerCase().includes('owner')) ||
+          (i.placeholder && i.placeholder.toLowerCase().includes('numara'))
+        );
         
+        if (ownerInputs.length === 0) {
+          return { success: false, error: 'Owner input bulunamadı', availableInputs: inputs.length };
+        }
+        
+        const input = ownerInputs[0];
         input.focus();
         input.value = String(val);
         input.dispatchEvent(new Event('input', { bubbles: true }));
         input.dispatchEvent(new Event('change', { bubbles: true }));
-        return { success: true };
+        
+        return { 
+          success: true, 
+          inputInfo: {
+            placeholder: input.placeholder,
+            name: input.name,
+            id: input.id,
+            type: input.type
+          }
+        };
       }, String(ownerId));
 
-      if (!inputResult.success) {
-        throw new Error(inputResult.error);
+      logger.info('Input doldurma sonucu:', inputFillResult);
+
+      if (!inputFillResult.success) {
+        throw new Error(inputFillResult.error);
       }
 
-      await sleep(1000);
+      await sleep(2000);
 
-      // Sorgula butonuna tıkla
-      logger.info('Sorgula butonuna tıklanıyor...');
-      const clickResult = await page.evaluate(() => {
-        const btn = Array.from(document.querySelectorAll('button')).find(b => 
-          /sorgula/i.test((b.textContent || '').trim()) && !b.disabled
+      // === FARKLI SUBMIT STRATEJİLERİ ===
+      logger.info('Submit stratejileri deneniyor...');
+
+      // Strateji 1: Form submit
+      const formSubmitResult = await page.evaluate(() => {
+        const forms = document.querySelectorAll('form');
+        if (forms.length > 0) {
+          const form = forms[0];
+          form.submit();
+          return { success: true, method: 'form.submit()' };
+        }
+        return { success: false, error: 'Form bulunamadı' };
+      });
+      logger.info('Form submit result:', formSubmitResult);
+
+      await sleep(3000);
+
+      // Strateji 2: Button click
+      const buttonClickResult = await page.evaluate(() => {
+        const buttons = Array.from(document.querySelectorAll('button'));
+        const submitButtons = buttons.filter(b => 
+          /sorgula/i.test(b.textContent || '') ||
+          /search/i.test(b.textContent || '') ||
+          b.type === 'submit'
         );
-        if (!btn) return { success: false, error: 'SORGULA butonu bulunamadı' };
-        btn.click();
-        return { success: true };
+        
+        if (submitButtons.length > 0) {
+          const btn = submitButtons[0];
+          btn.click();
+          return { 
+            success: true, 
+            method: 'button.click()',
+            buttonText: btn.textContent?.trim(),
+            buttonType: btn.type
+          };
+        }
+        return { success: false, error: 'Submit button bulunamadı' };
       });
+      logger.info('Button click result:', buttonClickResult);
 
-      if (!clickResult.success) {
-        throw new Error(clickResult.error);
+      await sleep(3000);
+
+      // Strateji 3: Enter tuşu
+      await page.focus('input');
+      await page.keyboard.press('Enter');
+      logger.info('Enter tuşu basıldı');
+
+      await sleep(3000);
+
+      // === SONUÇ BEKLEMESİ ===
+      logger.info('Sonuçlar bekleniyor...');
+      
+      // 10 saniye boyunca network trafiğini izle
+      for (let i = 0; i < 10; i++) {
+        const pageContent = await page.evaluate(() => {
+          const bodyText = document.body.innerText.toLowerCase();
+          return {
+            hasTable: document.querySelector('table') !== null,
+            hasMuiTable: document.querySelector('.MuiTable-root') !== null,
+            hasResults: bodyText.includes('sonuç') || bodyText.includes('kayıt'),
+            hasLoading: bodyText.includes('yükleniyor') || bodyText.includes('loading'),
+            hasError: bodyText.includes('hata') || bodyText.includes('error'),
+            bodyPreview: document.body.innerText.substring(0, 500)
+          };
+        });
+        
+        logger.info(`Sayfa kontrolü ${i+1}/10:`, pageContent);
+        
+        if (pageContent.hasTable || pageContent.hasResults) {
+          logger.info('Tablo veya sonuç bulundu!');
+          break;
+        }
+        
+        await sleep(1000);
       }
 
-      // Network trafiğinin tamamlanmasını bekle
-      logger.info('Network trafiği bekleniyor...');
-      await page.waitForFunction(() => {
-        // Sayfada "yükleniyor" göstergesi var mı kontrol et
-        const loadingIndicators = ['yükleniyor', 'loading', 'bekle'];
-        const bodyText = document.body.innerText.toLowerCase();
-        return !loadingIndicators.some(indicator => bodyText.includes(indicator));
-      }, { timeout: 30000 });
+      logger.info(`Toplam ${allRequests.length} network isteği yakalandı`);
 
-      // Sayfanın final halini bekle
-      await sleep(5000);
-
-      // Network events'i analiz et
-      logger.info(`Toplam ${networkEvents.length} network event yakalandı`);
-      
-      const apiRequests = networkEvents.filter(event => 
-        event.type === 'request' && 
-        event.method === 'POST' && 
-        (event.url.includes('api') || event.url.includes('search') || 
-         event.url.includes('query') || event.url.includes('trademark'))
+      // API isteklerini filtrele
+      const apiRequests = allRequests.filter(req => 
+        req.method === 'POST' && 
+        !req.url.includes('google-analytics') &&
+        !req.url.includes('recaptcha')
       );
-      
-      const jsonResponses = networkEvents.filter(event => event.type === 'json_response');
-      const htmlResponses = networkEvents.filter(event => event.type === 'html_response');
-      
-      logger.info(`${apiRequests.length} API request, ${jsonResponses.length} JSON response, ${htmlResponses.length} HTML response`);
 
-      if (jsonResponses.length > 0) {
-        // JSON API bulundu!
-        const jsonResp = jsonResponses[0];
-        logger.info('JSON API endpoint bulundu!', { url: jsonResp.url });
-        
-        // Matching request'i bul
-        const matchingReq = apiRequests.find(req => req.url === jsonResp.url);
-        if (matchingReq) {
-          logger.info('Matching request bulundu, direkt API çağrısı yapılacak');
-          
-          // API çağrısını dene
-          try {
-            await browser.close();
-            browser = null;
-            
-            // Direkt API çağrısı yap
-            return await callDirectAPI(matchingReq, jsonResp, ownerId);
-            
-          } catch (apiError) {
-            logger.error('Direkt API çağrısı başarısız:', apiError.message);
-          }
-        }
+      logger.info(`${apiRequests.length} gerçek API isteği bulundu`);
+
+      if (apiRequests.length > 0) {
+        logger.info('API istekleri:', apiRequests.map(r => ({
+          url: r.url,
+          method: r.method,
+          hasPostData: !!r.postData
+        })));
       }
 
-      // API bulunamadıysa DOM scraping yap
-      logger.info('API endpoint bulunamadı, DOM scraping yapılacak');
-      
-      // Gelişmiş DOM scraping
+      // DOM'dan veri çekmeyi dene
       const scrapingResult = await page.evaluate(() => {
-        const results = [];
+        const tables = document.querySelectorAll('table');
+        const muiTables = document.querySelectorAll('.MuiTable-root');
         
-        // Farklı tablo tiplerini dene
-        const tableSelectors = [
-          'table tbody tr',
-          '.MuiTable-root tbody tr',
-          '[role="table"] tbody tr',
-          '.table tbody tr',
-          'tbody tr',
-          '.data-table tbody tr',
-          '.results-table tbody tr'
-        ];
+        let results = [];
         
-        for (const selector of tableSelectors) {
-          const rows = document.querySelectorAll(selector);
-          if (rows.length > 0) {
-            console.log(`${rows.length} satır bulundu: ${selector}`);
-            
-            Array.from(rows).forEach(tr => {
-              const cells = Array.from(tr.querySelectorAll('td, th'));
-              if (cells.length >= 3) {
-                const rowData = cells.map(cell => cell.innerText.trim());
-                if (rowData.some(cell => cell && cell.length > 0 && !cell.includes('Sıra'))) {
-                  results.push({
-                    cells: rowData,
-                    selector: selector,
-                    cellCount: cells.length
-                  });
-                }
+        // Normal tablolar
+        tables.forEach(table => {
+          const rows = table.querySelectorAll('tbody tr, tr');
+          Array.from(rows).forEach(row => {
+            const cells = Array.from(row.querySelectorAll('td, th'));
+            if (cells.length >= 3) {
+              const rowData = cells.map(cell => cell.innerText?.trim() || '');
+              if (rowData.some(cell => cell && cell.length > 2)) {
+                results.push({ source: 'table', data: rowData });
               }
-            });
-            
-            if (results.length > 0) break; // İlk başarılı selector'da dur
-          }
-        }
-        
+            }
+          });
+        });
+
+        // MUI tablolar
+        muiTables.forEach(table => {
+          const rows = table.querySelectorAll('tbody tr');
+          Array.from(rows).forEach(row => {
+            const cells = Array.from(row.querySelectorAll('td'));
+            if (cells.length >= 3) {
+              const rowData = cells.map(cell => cell.innerText?.trim() || '');
+              if (rowData.some(cell => cell && cell.length > 2)) {
+                results.push({ source: 'MuiTable', data: rowData });
+              }
+            }
+          });
+        });
+
         return {
-          results: results,
-          bodyText: document.body.innerText.substring(0, 1000),
-          hasTable: !!document.querySelector('table'),
-          hasMuiTable: !!document.querySelector('.MuiTable-root')
+          tableCount: tables.length,
+          muiTableCount: muiTables.length,
+          resultCount: results.length,
+          results: results.slice(0, 5), // İlk 5 sonuç
+          bodyText: document.body.innerText.substring(0, 1000)
         };
       });
-      
-      logger.info('DOM scraping sonucu:', {
-        resultCount: scrapingResult.results.length,
-        hasTable: scrapingResult.hasTable,
-        hasMuiTable: scrapingResult.hasMuiTable
-      });
 
-      if (scrapingResult.results.length > 0) {
-        // Veriyi normalize et
-        const items = scrapingResult.results.map(row => ({
-          applicationNumber: row.cells[0] || '',
-          brandName: row.cells[1] || '',
-          ownerName: row.cells[2] || '',
-          applicationDate: row.cells[3] || '',
-          registrationNumber: row.cells[4] || '',
-          status: row.cells[5] || '',
-          niceClasses: row.cells[6] || '',
-          niceList: (row.cells[6] || '').split(/[^\d]+/).map(x => x.trim()).filter(Boolean),
-          imageUrl: '',
-          detailUrl: ''
-        })).filter(item => item.applicationNumber || item.brandName);
+      logger.info('Final scraping sonucu:', scrapingResult);
 
-        logger.info(`DOM scraping ile ${items.length} kayıt bulundu`);
-
-        return {
-          status: 'Success',
-          found: items.length > 0,
-          count: items.length,
-          ownerId,
-          items: items,
-          method: 'dom_scraping',
-          debug: {
-            networkEvents: networkEvents.length,
-            scrapingInfo: scrapingResult
-          }
-        };
-      } else {
-        return {
-          status: 'NotFound',
-          found: false,
-          ownerId,
-          count: 0,
-          message: 'Tablo bulunamadı veya veri yok',
-          method: 'dom_scraping',
-          debug: {
-            networkEvents: networkEvents.length,
-            scrapingInfo: scrapingResult,
-            bodyPreview: scrapingResult.bodyText
-          }
-        };
-      }
+      return {
+        status: 'Debug',
+        found: scrapingResult.resultCount > 0,
+        count: scrapingResult.resultCount,
+        ownerId,
+        debug: {
+          formAnalysis: formAnalysis,
+          inputResult: inputFillResult,
+          networkRequests: allRequests.length,
+          apiRequests: apiRequests.length,
+          scrapingResult: scrapingResult,
+          allApiRequests: apiRequests
+        },
+        method: 'form_debugging'
+      };
 
     } catch (err) {
-      logger.error('[scrapeOwnerTrademarks] Hata:', { message: err?.message });
-      throw new HttpsError('internal', `Sahip arama hatası: ${err?.message || String(err)}`);
+      logger.error('[scrapeOwnerTrademarks] Debug hatası:', { message: err?.message });
+      throw new HttpsError('internal', `Debug hatası: ${err?.message || String(err)}`);
 
     } finally {
       if (browser) {
@@ -4566,106 +4557,3 @@ export const scrapeOwnerTrademarks = onCall(
     }
   }
 );
-
-// Direkt API çağrısı fonksiyonu
-async function callDirectAPI(request, response, ownerId) {
-  logger.info('Direkt API çağrısı başlatılıyor...', { 
-    url: request.url,
-    method: request.method 
-  });
-
-  try {
-    // Request payload'ını modifiye et
-    let modifiedPayload = request.postData;
-    if (modifiedPayload) {
-      try {
-        const payloadObj = JSON.parse(modifiedPayload);
-        
-        // Owner ID'yi güncelle
-        const replaceInObject = (obj) => {
-          for (const key in obj) {
-            if (typeof obj[key] === 'string' && /^\d+$/.test(obj[key])) {
-              obj[key] = ownerId;
-            } else if (typeof obj[key] === 'number') {
-              obj[key] = parseInt(ownerId);
-            } else if (typeof obj[key] === 'object' && obj[key] !== null) {
-              replaceInObject(obj[key]);
-            }
-          }
-        };
-        replaceInObject(payloadObj);
-        
-        modifiedPayload = JSON.stringify(payloadObj);
-        logger.info('Payload modifiye edildi');
-      } catch (e) {
-        logger.warn('Payload parse edilemedi, orijinal kullanılacak');
-      }
-    }
-
-    const fetchResponse = await fetch(request.url, {
-      method: request.method,
-      headers: {
-        ...request.headers,
-        'Content-Type': 'application/json',
-        'Referer': 'https://www.turkpatent.gov.tr/',
-        'Origin': 'https://www.turkpatent.gov.tr'
-      },
-      body: modifiedPayload
-    });
-
-    if (!fetchResponse.ok) {
-      throw new Error(`API yanıtı: ${fetchResponse.status}`);
-    }
-
-    const apiData = await fetchResponse.json();
-    logger.info('API çağrısı başarılı');
-
-    // Response'u parse et
-    const items = parseApiResponse(apiData);
-
-    return {
-      status: items.length > 0 ? 'Success' : 'NotFound',
-      found: items.length > 0,
-      count: items.length,
-      ownerId,
-      items: items,
-      method: 'direct_api'
-    };
-
-  } catch (error) {
-    logger.error('Direkt API çağrısı hatası:', error.message);
-    throw error;
-  }
-}
-
-// API response parser
-function parseApiResponse(data) {
-  const items = [];
-  
-  if (!data || typeof data !== 'object') return items;
-  
-  const dataArray = data.data || data.items || data.results || 
-                   data.list || data.trademarks || 
-                   (Array.isArray(data) ? data : []);
-  
-  if (Array.isArray(dataArray)) {
-    dataArray.forEach(item => {
-      if (item && typeof item === 'object') {
-        items.push({
-          applicationNumber: item.applicationNo || item.applicationNumber || item.basvuruNo || '',
-          brandName: item.markName || item.brandName || item.markaAdi || item.name || '',
-          ownerName: item.holdName || item.ownerName || item.sahipAdi || item.owner || '',
-          applicationDate: item.applicationDate || item.basvuruTarihi || item.date || '',
-          registrationNumber: item.registrationNo || item.registrationNumber || item.tescilNo || '',
-          status: item.state || item.status || item.durum || '',
-          niceClasses: item.niceClasses || item.siniflar || item.classes || '',
-          niceList: (item.niceClasses || item.siniflar || item.classes || '').toString().split(/[^\d]+/).map(x => x.trim()).filter(Boolean),
-          imageUrl: item.imageUrl || item.logoUrl || item.resim || '',
-          detailUrl: item.detailUrl || item.link || ''
-        });
-      }
-    });
-  }
-  
-  return items;
-}
