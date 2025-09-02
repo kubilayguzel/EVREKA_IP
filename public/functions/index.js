@@ -4105,35 +4105,76 @@ export const scrapeOwnerTrademarks = onCall(
     let browser;
     try {
       // ---------- FIXED CHROMIUM LAUNCH (handles both chrome-aws-lambda & vanilla puppeteer) ----------
-      let launchOpts = {
+// ---------- CHROME/PUPPETEER LAUNCH - CLOUD FUNCTIONS COMPATIBLE ----------
+    const isEmulator = process.env.FUNCTIONS_EMULATOR === 'true';
+    
+    let launchOpts;
+    
+    if (isEmulator) {
+      // Local development - use system Chrome
+      launchOpts = {
         headless: true,
-        args: ['--no-sandbox','--disable-setuid-sandbox','--disable-dev-shm-usage']
+        executablePath: process.env.CHROME_PATH || '/usr/bin/google-chrome-stable',
+        args: [
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-dev-shm-usage',
+          '--disable-gpu',
+          '--no-first-run'
+        ],
+        defaultViewport: { width: 1366, height: 900 }
       };
+    } else {
+      // Production - use chrome-aws-lambda
       try {
-        // If chrome-aws-lambda is available, prefer it
-        if (typeof chromium !== 'undefined' && chromium) {
-          // args may be a property (common) or a function (rare) -> normalize:
-          let chromeArgs = chromium.args;
-          if (typeof chromeArgs === 'function') {
-            try { chromeArgs = await chromium.args(); } catch { /* ignore */ }
-          }
-          // executablePath may be a function or a promise or a string -> normalize:
-          let execPath = chromium.executablePath;
-          try {
-            if (typeof execPath === 'function') execPath = await execPath();
-            else if (execPath && typeof execPath.then === 'function') execPath = await execPath;
-          } catch { /* ignore */ }
+        // Import chrome-aws-lambda if available
+        const chromium = require('chrome-aws-lambda');
+        
+        launchOpts = {
+          headless: chromium.headless,
+          executablePath: await chromium.executablePath,
+          args: [
+            ...chromium.args,
+            '--disable-dev-shm-usage',
+            '--disable-gpu',
+            '--no-first-run',
+            '--disable-default-apps',
+            '--disable-features=VizDisplayCompositor'
+          ],
+          defaultViewport: { width: 1366, height: 900 },
+          ignoreHTTPSErrors: true
+        };
+      } catch (chromiumError) {
+        logger.warn('chrome-aws-lambda bulunamadı, fallback kullanılıyor', { error: chromiumError.message });
+        
+        // Fallback for environments without chrome-aws-lambda
+        launchOpts = {
+          headless: true,
+          args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-gpu',
+            '--no-first-run',
+            '--disable-default-apps',
+            '--single-process',
+            '--disable-background-timer-throttling',
+            '--disable-backgrounding-occluded-windows',
+            '--disable-renderer-backgrounding'
+          ],
+          defaultViewport: { width: 1366, height: 900 },
+          ignoreHTTPSErrors: true
+        };
+      }
+    }
 
-          launchOpts = {
-            args: chromeArgs || launchOpts.args,
-            defaultViewport: { width: 1366, height: 900 },
-            executablePath: execPath || launchOpts.executablePath,
-            headless: (chromium.headless !== undefined ? chromium.headless : true),
-          };
-        }
-      } catch { /* fallback to default launchOpts */ }
+    logger.info('[scrapeOwnerTrademarks] Browser başlatılıyor...', { 
+      isEmulator, 
+      hasExecutablePath: !!launchOpts.executablePath,
+      argsCount: launchOpts.args?.length
+    });
 
-      browser = await puppeteer.launch(launchOpts);
+    browser = await puppeteer.launch(launchOpts);
       const page = await browser.newPage();
       await page.setJavaScriptEnabled(true);
       await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119 Safari/537.36');
