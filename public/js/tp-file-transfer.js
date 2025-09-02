@@ -345,60 +345,33 @@ async function onBulkQuery(){
     lastBulkItems = [];
 
     // HTTP protokolünde veya chrome.runtime yoksa PostMessage yöntemi kullan
-    if (location.protocol === 'http:' || !chrome?.runtime?.sendMessageExternal) {
-        console.log('[DEBUG] HTTP protokolü veya Chrome runtime eksik - PostMessage yöntemi kullanılacak');
-        
-        try {
-            // Eklentiye background.js üzerinden mesaj gönder
-            if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
-                console.log('[DEBUG] chrome.runtime.sendMessage ile eklentiye mesaj gönderiliyor...');
-                chrome.runtime.sendMessage(EXTENSION_ID_SAHIP, {
-                    type: 'SORGULA_KISI',
-                    data: ownerId
-                }, (response) => {
-                    if (chrome.runtime.lastError) {
-                        console.error('[DEBUG] Eklenti mesaj hatası:', chrome.runtime.lastError.message);
-                        _hideBlock(bulkLoadingEl);
-                        showToast('tp-sorgu-eklentisi-2 eklentisi bulunamadı veya yüklenmemiş. Lütfen eklentiyi Chrome\'dan yükleyin.', 'danger');
-                    } else {
-                        console.log('[DEBUG] Eklentiye mesaj gönderildi:', response);
-                        showToast('Sorgu eklentiye gönderildi. TÜRKPATENT sayfası açıldığında sonuçlar otomatik gelecek.', 'info');
-                    }
-                });
-            } else {
-                console.error('[DEBUG] Chrome mesaj API bulunamadı');
-                _hideBlock(bulkLoadingEl);
-                showToast('Chrome eklenti API\'sine erişim yok. HTTPS kullanın veya localhost deneyin.', 'danger');
-            }
-        } catch (err) {
-            console.error('[DEBUG] Eklenti iletişim hatası:', err);
-            _hideBlock(bulkLoadingEl);
-            showToast('Eklenti iletişim hatası: ' + (err.message || err), 'danger');
-        }
-        return; // Fonksiyondan çık
+// Chrome eklentisi kontrolü ve mesaj gönderme
+try {
+    // Önce Chrome eklenti desteği var mı kontrol et
+    if (typeof chrome === 'undefined' || !chrome.runtime) {
+        throw new Error('Chrome eklenti API\'sine erişim yok.');
     }
 
-    // HTTPS protokolünde normal yöntem
-    console.log('[DEBUG] HTTPS protokolü - Normal sendMessageExternal kullanılacak');
-    
-    try {
-        chrome.runtime.sendMessageExternal(EXTENSION_ID_SAHIP, {
-            type: 'SORGULA_KISI',
-            data: ownerId
-        }, (response) => {
-            if (chrome.runtime.lastError) {
-                _hideBlock(bulkLoadingEl);
-                console.error('Eklentiye mesaj gönderme hatası:', chrome.runtime.lastError.message);
-                showToast('Eklentiye bağlanılamadı. Eklentinin yüklü ve etkin olduğundan emin olun.', 'danger');
-            } else {
-                console.log('Sorgu eklentiye başarıyla gönderildi.', response);
-                showToast('Sorgu eklentiye gönderildi. TÜRKPATENT sayfası açıldığında sonuçlar otomatik gelecek.', 'info');
-            }
-        });
-    } catch (err) {
-        _hideBlock(bulkLoadingEl);
-        showToast('İşlem başlatılırken bir hata oluştu: ' + (err.message || err), 'danger');
-    }
+    // Mesaj gönderme işlemi
+    chrome.runtime.sendMessageExternal(EXTENSION_ID_SAHIP, {
+        type: 'SORGULA_KISI',
+        data: ownerId
+    }, (response) => {
+        if (chrome.runtime.lastError) {
+            _hideBlock(bulkLoadingEl);
+            console.error('[TP Eklenti] Hata:', chrome.runtime.lastError.message);
+            showToast('tp-sorgu-eklentisi-2 eklentisi bulunamadı veya yüklenmemiş. Lütfen Chrome Web Store\'dan yükleyin.', 'danger');
+        } else {
+            console.log('[TP Eklenti] Sorgu başarıyla gönderildi:', response);
+            showToast('Sorgu eklentiye gönderildi. TÜRKPATENT sayfası açıldığında sonuçlar otomatik gelecek.', 'info');
+        }
+    });
+
+} catch (err) {
+    _hideBlock(bulkLoadingEl);
+    console.error('[TP Eklenti] Eklenti iletişim hatası:', err);
+    showToast('Eklenti iletişim hatası: ' + (err.message || err), 'danger');
+}
 }
 
 function renderBulkResults(payload){
