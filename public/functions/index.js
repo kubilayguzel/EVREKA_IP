@@ -4144,9 +4144,30 @@ export const scrapeOwnerTrademarks = onCall(
 
       const page = await browser.newPage();
 
-      // Bot detection önleme (scrapeTrademark'tan)
+      // Gelişmiş bot detection önleme
       await page.evaluateOnNewDocument(() => {
-        Object.defineProperty(navigator, 'webdriver', { get: () => false });
+        // webdriver özelliğini gizle
+        Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+        
+        // Chrome runtime simüle et
+        window.chrome = { runtime: {} };
+        
+        // Plugin detection
+        Object.defineProperty(navigator, 'plugins', {
+          get: () => [1, 2, 3, 4, 5]
+        });
+        
+        // Language simüle et
+        Object.defineProperty(navigator, 'languages', {
+          get: () => ['tr-TR', 'tr', 'en-US', 'en']
+        });
+        
+        // Permission API simüle et
+        Object.defineProperty(navigator, 'permissions', {
+          get: () => ({
+            query: () => Promise.resolve({ state: 'granted' })
+          })
+        });
       });
 
       // Network monitoring ve request interceptor
@@ -4357,19 +4378,127 @@ const clickResult = await page.evaluate(() => {
 logger.info('SORGULA butonuna tıklandı:', clickResult);
 
 // reCAPTCHA kontrolü - debug ile
+// reCAPTCHA kontrolü ve bypass denemesi
 const captchaDetected = await detectCaptcha(page);
 logger.info('reCAPTCHA kontrolü:', { captchaDetected });
 
 if (captchaDetected) {
-  const retryAfterSec = 120 + Math.floor(Math.random()*60);
-  global['turkpatent_backoff_until'] = Date.now() + retryAfterSec * 1000;
-  return {
-    status: 'CaptchaRequired',
-    found: false,
-    ownerId: ownerId,
-    retryAfterSec,
-    message: 'reCAPTCHA doğrulaması gerekiyor. Lütfen doğrulayıp tekrar deneyin.'
-  };
+  logger.info('reCAPTCHA tespit edildi - bypass deneniyor...');
+  
+  try {
+    // Yöntem 1: iframe reCAPTCHA checkbox'ını otomatik tıkla
+    const recaptchaFrames = await page.frames();
+    const recaptchaFrame = recaptchaFrames.find(frame => 
+      frame.url().includes('recaptcha/api2/anchor')
+    );
+    
+    if (recaptchaFrame) {
+      logger.info('reCAPTCHA frame bulundu, checkbox tıklanıyor...');
+      
+      // Checkbox'ı bul ve tıkla
+      await recaptchaFrame.waitForSelector('#recaptcha-anchor', { timeout: 5000 });
+      await recaptchaFrame.click('#recaptcha-anchor');
+      
+      // Biraz bekle
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // Challenge var mı kontrol et
+      const challengeFrame = recaptchaFrames.find(frame => 
+        frame.url().includes('recaptcha/api2/bframe')
+      );
+      
+      if (challengeFrame) {
+        logger.info('reCAPTCHA challenge çıktı - otomatik çözüm deneniyor...');
+        
+        // Yöntem 2: Audio challenge dene
+        try {
+          await challengeFrame.waitForSelector('#recaptcha-audio-button', { timeout: 3000 });
+          await challengeFrame.click('#recaptcha-audio-button');
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          
+          // Audio URL'sini al ve çöz (bu kısım external service gerektirir)
+          const audioUrl = await challengeFrame.$eval('audio source', el => el.src);
+          if (audioUrl) {
+            logger.info('Audio challenge URL alındı:', audioUrl);
+            // Burada speech-to-text service kullanılabilir
+            // Şimdilik manuel bypass dene
+            
+            // Alternatif: Refresh ile tekrar dene
+            await challengeFrame.click('#recaptcha-reload-button');
+            await new Promise(resolve => setTimeout(resolve, 2000));
+          }
+        } catch (audioError) {
+          logger.warn('Audio challenge hatası:', audioError.message);
+        }
+        
+        // Yöntem 3: Challenge'ı bypass etmeye çalış
+        try {
+          // reCAPTCHA token'ını direkt manipüle et
+          await page.evaluate(() => {
+            // Callback fonksiyonunu çağır
+            if (window.grecaptcha && window.grecaptcha.getResponse()) {
+              const response = window.grecaptcha.getResponse();
+              if (response) {
+                // Token varsa formu submit et
+                const event = new CustomEvent('recaptcha-solved');
+                document.dispatchEvent(event);
+                return true;
+              }
+            }
+            return false;
+          });
+        } catch (tokenError) {
+          logger.warn('Token manipülasyonu başarısız:', tokenError.message);
+        }
+      } else {
+        logger.info('reCAPTCHA checkbox başarıyla çözüldü');
+      }
+      
+      // Çözülüp çözülmediğini kontrol et
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      const isSolved = await page.evaluate(() => {
+        const frames = document.querySelectorAll('iframe[src*="recaptcha"]');
+        for (let frame of frames) {
+          try {
+            if (frame.contentDocument) {
+              const checkbox = frame.contentDocument.querySelector('#recaptcha-anchor');
+              if (checkbox && checkbox.getAttribute('aria-checked') === 'true') {
+                return true;
+              }
+            }
+          } catch (e) {}
+        }
+        return false;
+      });
+      
+      if (isSolved) {
+        logger.info('reCAPTCHA başarıyla çözüldü!');
+      } else {
+        logger.warn('reCAPTCHA çözülemedi - geri dönülüyor');
+        const retryAfterSec = 120 + Math.floor(Math.random()*60);
+        global['turkpatent_backoff_until'] = Date.now() + retryAfterSec * 1000;
+        return {
+          status: 'CaptchaRequired',
+          found: false,
+          ownerId: ownerId,
+          retryAfterSec,
+          message: 'reCAPTCHA otomatik çözülemedi. Lütfen daha sonra tekrar deneyin.'
+        };
+      }
+    }
+    
+  } catch (bypassError) {
+    logger.error('reCAPTCHA bypass hatası:', bypassError.message);
+    const retryAfterSec = 120 + Math.floor(Math.random()*60);
+    global['turkpatent_backoff_until'] = Date.now() + retryAfterSec * 1000;
+    return {
+      status: 'CaptchaRequired',
+      found: false,
+      ownerId: ownerId,
+      retryAfterSec,
+      message: 'reCAPTCHA bypass hatası. Lütfen daha sonra tekrar deneyin.'
+    };
+  }
 }
 
 // Sonuçları bekle
