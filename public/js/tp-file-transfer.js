@@ -33,15 +33,13 @@ import { app } from '../firebase-config.js';
 import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-functions.js';
 import { loadSharedLayout, ensurePersonModal, openPersonModal } from './layout-loader.js';
 import { personService } from '../firebase-config.js';
-
 const functions = getFunctions(app, 'europe-west1');
 const scrapeTrademarkFunction = httpsCallable(functions, 'scrapeTrademark', { timeout: 120000 });
-// Yeni: Sahip numarasıyla liste döndüren uç (sunucuda uygulanmalı)
 let scrapeOwnerTrademarks;
 try {
   scrapeOwnerTrademarks = httpsCallable(functions, 'scrapeOwnerTrademarks', { timeout: 240000 });
 } catch (e) {
-  // yoksa çağrı anında yakalanacak
+  // Yoksa çağrı anında yakalanacak
 }
 
 // --- Elements ---
@@ -77,9 +75,7 @@ let allPersons = [];
 let selectedRelatedParties = [];
 let lastBulkItems = [];
 
-// Eklentinin ID'sini buraya ekleyin
-// ÖNEMLİ: Eklentinizi Chrome'a yükledikten sonra bu ID'yi güncelleyin.
-
+// Eklentinin ID'sini buraya ekleyin (sadece bilgi amaçlı)
 const EXTENSION_ID_BASVURU = 'bbcpnpgglakoagjakgigmgjpdpiigpah';  // Başvuru numarası için
 const EXTENSION_ID_SAHIP = 'abnopnippoapheoakgangaofeelllpbm';  // Sahip numarası için (tp-sorgu-eklentisi-2)
 
@@ -89,9 +85,6 @@ async function init() {
     const personsResult = await personService.getPersons();
     allPersons = Array.isArray(personsResult.data) ? personsResult.data : [];
     console.log(`[INIT] ${allPersons.length} kişi yüklendi.`);
-
-    // Eklentiden gelen mesajları dinle
-    setupExtensionMessageListener();
     setupEventListeners();
   } catch (error) {
     console.error("Veri yüklenirken hata oluştu:", error);
@@ -99,17 +92,14 @@ async function init() {
   }
 }
 
-
 function setupEventListeners() {
   singleRadio?.addEventListener('change', syncMode);
   bulkRadio?.addEventListener('change', syncMode);
   syncMode();
 
   queryBtn?.addEventListener('click', onSingleQuery);
-  bulkQueryBtn?.addEventListener('click', onBulkQuery);
-
   cancelBtn?.addEventListener('click', () => history.back());
-
+  
   // Yeni kişi yönetimi olayları
   let searchTimer;
   relatedPartySearchInput?.addEventListener('input', (e) => {
@@ -149,31 +139,6 @@ function setupEventListeners() {
     if (btn) removeRelatedParty(btn.dataset.id);
   });
 
-  // Bulk tabloda DETAY tıklamaları
-  bulkResultsBody?.addEventListener('click', async (e) => {
-    const btn = e.target.closest('.js-bulk-detail');
-    if (!btn) return;
-    const appNo = btn.dataset.appno;
-    if (!appNo) return;
-    try {
-      _showBlock(loadingEl);
-      const result = await scrapeTrademarkFunction({ basvuruNo: appNo });
-      const data = result?.data || {};
-      if (!data || data.found === false) {
-        showToast(data?.message || 'Detay alınamadı.', 'warning');
-      } else {
-        // Tekli paneli doldur ve yukarı kaydır
-        renderSingleResult(data);
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-      }
-    } catch (err) {
-      showToast('Detay sorgu hatası: ' + (err?.message || err), 'danger');
-    } finally {
-      _hideBlock(loadingEl);
-    }
-  });
-
-  // CSV dışa aktar
   exportCsvBtn?.addEventListener('click', () => {
     if (!lastBulkItems || lastBulkItems.length === 0) {
       return showToast('Dışa aktarılacak veri yok.', 'warning');
@@ -212,7 +177,6 @@ function syncMode(){
     _hideBlock(singleFields);
     _showBlock(bulkFields);
   }
-  // temizle
   singleResultInner.innerHTML='';
   _hideBlock(singleResultContainer);
   selectedRelatedParties = [];
@@ -242,75 +206,9 @@ async function onSingleQuery(){
 }
 
 // --------------- TOPLU (SAHİP NO) - EKLENTİ İLE ---------------
-
-function setupExtensionMessageListener() {
-    console.log('[DEBUG] PostMessage dinleyicisi kuruluyor...');
-    
-    // Web sayfası olduğumuz için sadece PostMessage ile iletişim kuruyoruz
-    window.addEventListener('message', (event) => {
-        // Güvenlik: Sadece TÜRKPATENT ve kendi origin'imizden mesajları kabul et
-        const allowedOrigins = [
-            window.location.origin,
-            'https://www.turkpatent.gov.tr',
-            'https://turkpatent.gov.tr'
-        ];
-        
-        if (!allowedOrigins.includes(event.origin)) {
-            return;
-        }
-        
-        if (event.data && event.data.source === 'tp-extension-sahip') {
-            console.log('[DEBUG] PostMessage alındı:', event.data);
-            
-            // Global timeout'u iptal et
-            if (window.tpQueryTimeout) {
-                clearTimeout(window.tpQueryTimeout);
-                delete window.tpQueryTimeout;
-            }
-            
-            // Query status'u güncelle
-            document.body.setAttribute('data-tp-query-status', 'completed');
-            
-            if (event.data.type === 'VERI_GELDI_KISI') {
-                _hideBlock(bulkLoadingEl);
-                lastBulkItems = event.data.data || [];
-                
-                if (!lastBulkItems.length) {
-                    showToast('Bu sahip numarası için sonuç bulunamadı.', 'warning');
-                } else {
-                    renderBulkResults({ items: lastBulkItems });
-                    showToast(`${lastBulkItems.length} kayıt başarıyla alındı.`, 'success');
-                }
-                
-            } else if (event.data.type === 'HATA_KISI') {
-                _hideBlock(bulkLoadingEl);
-                const errorMsg = event.data.data?.message || 'Bilinmeyen Hata';
-                showToast('Eklenti hatası: ' + errorMsg, 'danger');
-                
-            } else if (event.data.type === 'SORGU_BASLADI') {
-                showToast('TÜRKPATENT sayfasında sorgu başladı. Lütfen bekleyin...', 'info');
-                
-            } else if (event.data.type === 'MODAL_KAPATILDI') {
-                console.log('[DEBUG] Modal kapatıldı bilgisi alındı');
-                
-            } else if (event.data.type === 'EKLENTI_HAZIR') {
-                console.log('[DEBUG] Eklenti hazır olduğunu bildirdi');
-            }
-            
-            // İşlem tamamlandıysa data attribute'ları temizle
-            if (event.data.type === 'VERI_GELDI_KISI' || event.data.type === 'HATA_KISI') {
-                setTimeout(() => {
-                    document.body.removeAttribute('data-tp-query');
-                    document.body.removeAttribute('data-tp-query-type'); 
-                    document.body.removeAttribute('data-tp-query-status');
-                    document.body.removeAttribute('data-tp-timestamp');
-                }, 1000);
-            }
-        }
-    });
-    
-    console.log('[DEBUG] ✅ Event dinleyicileri kuruldu.');
-}
+// Bu fonksiyon, tekli sorguya odaklanıldığı için kaldırılmıştır.
+// Ancak, eğer gelecekte bu işlevselliği eklemek isterseniz,
+// kodun bu kısma eklenebileceğini unutmayın.
 
 function renderBulkResults(payload){
   const items = Array.isArray(payload.items) ? payload.items : [];
