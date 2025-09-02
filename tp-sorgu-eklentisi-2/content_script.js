@@ -63,25 +63,54 @@ function findButtonByTextFast(text) {
 // -------------- Ana akış --------------
 async function runAutomation() {
   console.log('[TP Eklenti] Otomasyon başladı. Kişi No:', targetOwnerId);
+// 1) Modal/popup kapat (gelişmiş logic)
+try {
+    // Dolandırıcılık popup için tüm olası selektörler
+    const modalSelectors = [
+        '.jss84 .jss92',                    // Mevcut selector
+        'button[aria-label="close"]',        // ARIA close button
+        'button[aria-label="kapat"]',        // Türkçe close button
+        '.modal-header .close',              // Bootstrap modal
+        '.MuiIconButton-root[aria-label="close"]', // MUI close icon
+        '[data-testid="CloseIcon"]',         // MUI close icon testid
+        'button:contains("Kapat")',          // Kapat text içeren button
+        'button:contains("Devamı")',         // Devam button
+        '.popup .close',                     // Generic popup close
+        '[role="dialog"] button:last-child', // Dialog'daki son button
+    ];
 
-  // 1) Modal/popup kapat (anında yakala)
-  try {
-    // Dolandırıcılık Hakkında popup
-    const fraudClose = await waitFor('.jss84 .jss92', { timeout: 1500 });
-    click(fraudClose);
-    console.log('[TP Eklenti] Dolandırıcılık popup kapatıldı.');
-  } catch { /* görünmediyse sorun değil */ }
-
-  try {
-    // Klasik MUI dialog/overlay (varsa)
-    const anyDialog = await waitFor('[role="dialog"], .MuiDialog-root, .MuiModal-root, .modal', { timeout: 800 });
-    const closeCandidate = anyDialog.querySelector('button[aria-label="Close"], button[aria-label="Kapat"], .close') || anyDialog.querySelector('button');
-    if (closeCandidate) {
-      click(closeCandidate);
-      console.log('[TP Eklenti] MUI modal kapatıldı.');
+    for (const selector of modalSelectors) {
+        try {
+            const element = document.querySelector(selector);
+            if (element && click(element)) {
+                console.log('[TP Eklenti] Modal kapatıldı:', selector);
+                await new Promise(resolve => setTimeout(resolve, 300)); // Kısa bekleme
+                break;
+            }
+        } catch (e) {
+            continue;
+        }
     }
-  } catch { /* yoksa geç */ }
 
+    // Eğer hiçbiri çalışmazsa, "Devamı" veya "Kapat" text'i içeren button'ları ara
+    const buttons = Array.from(document.querySelectorAll('button'));
+    for (const btn of buttons) {
+        const text = (btn.textContent || '').toLowerCase().trim();
+        if (text.includes('devam') || text.includes('kapat') || text.includes('tamam')) {
+            if (click(btn)) {
+                console.log('[TP Eklenti] Modal kapatıldı (text):', text);
+                await new Promise(resolve => setTimeout(resolve, 300));
+                break;
+            }
+        }
+    }
+
+    // Son çare: ESC tuşu gönder
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    
+} catch (error) {
+    console.log('[TP Eklenti] Modal kapatma hatası:', error.message);
+}
 
   // 2) Formu doldur + Sorgula
   try {
