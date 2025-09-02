@@ -4323,58 +4323,71 @@ const inputResult = await page.evaluate(async (value) => {
       });
       logger.info('Form durumu:', formState);
 
-      // ---- SORGULA butonunu tıkla ----
-      await sleep(2000);
+      // ---- SORGULA butonunu tıkla (alan-bağımlı, güvenli) ----
+await sleep(500);
+
 // SORGULA butonuna tıkla - detaylı monitoring ile
 const clickResult = await page.evaluate(() => {
-  const buttons = Array.from(document.querySelectorAll('button, input[type="submit"], input[type="button"]'));
-  
-  const sorgulaButton = buttons.find(btn => 
-    btn.textContent?.toUpperCase().includes('SORGULA') || 
-    btn.value?.toUpperCase().includes('SORGULA') ||
-    btn.textContent?.toUpperCase().includes('ARA') ||
-    btn.type === 'submit'
-  );
-  
-  if (sorgulaButton) {
-    // Form validation durumunu kontrol et
-    const form = sorgulaButton.closest('form');
-    const isDisabled = sorgulaButton.disabled;
-    const hasClickHandler = sorgulaButton.onclick !== null;
-    
-    // Network activity'yi izlemek için
-    window.networkRequests = [];
-    const originalFetch = window.fetch;
-    window.fetch = function(...args) {
-      window.networkRequests.push({ type: 'fetch', url: args[0], time: Date.now() });
-      return originalFetch.apply(this, args);
-    };
-    
-    // XMLHttpRequest'i de izle
-    const originalXHROpen = XMLHttpRequest.prototype.open;
-    XMLHttpRequest.prototype.open = function(method, url) {
-      window.networkRequests.push({ type: 'xhr', method, url, time: Date.now() });
-      return originalXHROpen.apply(this, arguments);
-    };
-    
-    // Butona tıkla
-    sorgulaButton.click();
-    
-    return { 
-      success: true, 
-      buttonText: sorgulaButton.textContent || sorgulaButton.value,
-      buttonType: sorgulaButton.type,
-      isDisabled,
-      hasClickHandler,
-      hasForm: !!form,
-      formAction: form?.action || '',
-      formMethod: form?.method || ''
-    };
-  }
-  
-  return { success: false, error: 'SORGULA butonu bulunamadı' };
-});
+  // 1) Önce Kişi Numarası input'unu bul ve aynı panelde ara
+  const ownerInput = document.querySelector('input[placeholder*="Kişi Numarası" i]') 
+                  || Array.from(document.querySelectorAll('input')).find(i => (i.placeholder||'').toLowerCase().includes('kişi') && (i.placeholder||'').toLowerCase().includes('numara'));
 
+  // Panel/Container tahmini
+  const container = ownerInput?.closest('form')
+                 || ownerInput?.closest('[role="tabpanel"]')
+                 || ownerInput?.closest('.MuiPaper-root, .MuiGrid-container, .MuiCard-root')
+                 || document;
+
+  // 2) Container içindeki butonları tara ve METİNİ TAM OLARAK "SORGULA" olanı seç
+  const buttons = Array.from(container.querySelectorAll('button, input[type="submit"], input[type="button"]'));
+  const isSorgula = (el) => {
+    const text = (el.textContent || el.value || '').trim();
+    return /\bSORGULA\b/i.test(text);
+  };
+  let sorgulaButton = buttons.find(isSorgula);
+
+  // 3) Bulunamazsa, globalde "SORGULA" olanı dene (ama "Marka Araştırma" gibi 'ARA' içerenleri asla seçme)
+  if (!sorgulaButton) {
+    const allBtns = Array.from(document.querySelectorAll('button, input[type="submit"], input[type="button"]'));
+    sorgulaButton = allBtns.find(isSorgula);
+  }
+
+  if (!sorgulaButton) {
+    return { success: false, error: 'SORGULA butonu bulunamadı' };
+  }
+
+  // Form & durum verileri
+  const form = sorgulaButton.closest('form');
+  const isDisabled = !!sorgulaButton.disabled;
+  const hasClickHandler = !!sorgulaButton.onclick || !!sorgulaButton.getAttribute('onclick');
+
+  // Network activity'yi izlemek için
+  window.networkRequests = [];
+  const originalFetch = window.fetch;
+  window.fetch = function(...args) {
+    try { window.networkRequests.push({ type: 'fetch', url: (args[0] && args[0].url) ? args[0].url : String(args[0]), time: Date.now() }); } catch {}
+    return originalFetch.apply(this, args);
+  };
+  const originalXHROpen = XMLHttpRequest.prototype.open;
+  XMLHttpRequest.prototype.open = function(method, url) {
+    try { window.networkRequests.push({ type: 'xhr', method, url, time: Date.now() }); } catch {}
+    return originalXHROpen.apply(this, arguments);
+  };
+
+  // Tıkla
+  sorgulaButton.click();
+
+  return { 
+    success: true,
+    buttonText: (sorgulaButton.textContent || sorgulaButton.value || '').trim(),
+    buttonType: sorgulaButton.type || '',
+    isDisabled,
+    hasClickHandler,
+    hasForm: !!form,
+    formAction: form?.action || '',
+    formMethod: form?.method || ''
+  };
+});
 logger.info('SORGULA butonuna tıklandı:', clickResult);
 
 // reCAPTCHA kontrolü - debug ile
