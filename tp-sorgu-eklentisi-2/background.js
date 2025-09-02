@@ -22,3 +22,12 @@ chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => 
   }
   return true; 
 });
+// Tab kapanma durumunda cleanup
+chrome.tabs.onRemoved.addListener((tabId) => {
+    console.log('[TP Eklenti] Tab kapatıldı:', tabId);
+});
+
+// Extension hatası durumunda loglama
+chrome.runtime.onSuspend.addListener(() => {
+    console.log('[TP Eklenti] Extension suspend oldu.');
+});
