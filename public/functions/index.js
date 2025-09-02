@@ -4095,531 +4095,260 @@ export const scrapeOwnerTrademarks = onCall(
   { region: 'europe-west1', memory: '2GiB', timeoutSeconds: 300 },
   async (request) => {
     const { ownerId } = request.data || {};
-    if (!ownerId) {
-      throw new HttpsError('invalid-argument', 'Sahip numarası (ownerId) zorunludur.');
-    }
+    if (!ownerId) throw new HttpsError('invalid-argument', 'Sahip numarası (ownerId) zorunludur.');
 
     logger.info('[scrapeOwnerTrademarks] Başlıyor', { ownerId });
 
-    // ---- Rate limiting ----
-    const lastRequestKey = 'turkpatent_owner_last_request';
-    const minDelay = 30000 + Math.floor(Math.random() * 10000);
-    const lastRequest = global[lastRequestKey] || 0;
-    const elapsed = Date.now() - lastRequest;
-    if (elapsed < minDelay) {
-      const waitTime = minDelay - elapsed;
-      logger.info(`Owner search rate limiting: ${waitTime}ms bekleyecek`);
-      await sleep(waitTime);
-    }
-    global[lastRequestKey] = Date.now();
+    const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-    // reCAPTCHA tespiti fonksiyonu (scrapeTrademark'tan)
-    const detectCaptcha = async (page) => {
-      const text = (await page.evaluate(() => document.body.innerText || '')).toLowerCase();
-      return /recaptcha|ben robot değilim|i'm not a robot|lütfen doğrulayın/.test(text);
-    };
     let browser;
     try {
-      // ---- PUPPETEER LAUNCH ----
-      // Not: puppeteer-core Chromium'u bundle etmez; Functions'ta
-      // @sparticuz/chromium ile executablePath belirtilmelidir.
-      const isLocal = process.env.FUNCTIONS_EMULATOR === 'true';
-      const executablePath = (isLocal && process.env.CHROME_PATH)
-        ? process.env.CHROME_PATH
-        : await chromium.executablePath();
-
       browser = await puppeteer.launch({
-        args: [
-          ...chromium.args,
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
-          '--disable-dev-shm-usage'
-        ],
-        defaultViewport: chromium.defaultViewport,
-        executablePath,                 // 🔴 ZORUNLU
-        headless: chromium.headless,
-        ignoreHTTPSErrors: true,
-        protocolTimeout: 180000
+        args: await chromium.args(),
+        defaultViewport: { width: 1366, height: 900 },
+        executablePath: await chromium.executablePath(),
+        headless: true,
       });
-
       const page = await browser.newPage();
+      await page.setJavaScriptEnabled(true);
+      await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119 Safari/537.36');
 
-      // Gelişmiş bot detection önleme
-      await page.evaluateOnNewDocument(() => {
-        // webdriver özelliğini gizle
-        Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
-        
-        // Chrome runtime simüle et
-        window.chrome = { runtime: {} };
-        
-        // Plugin detection
-        Object.defineProperty(navigator, 'plugins', {
-          get: () => [1, 2, 3, 4, 5]
-        });
-        
-        // Language simüle et
-        Object.defineProperty(navigator, 'languages', {
-          get: () => ['tr-TR', 'tr', 'en-US', 'en']
-        });
-        
-        // Permission API simüle et
-        Object.defineProperty(navigator, 'permissions', {
-          get: () => ({
-            query: () => Promise.resolve({ state: 'granted' })
-          })
-        });
-      });
-
-      // Network monitoring ve request interceptor
-
-      // ---- Request interceptor (performans) ----
-      await page.setRequestInterception(true);
-      page.on('request', (req) => {
-        const type = req.resourceType();
-        if (['image', 'stylesheet', 'font', 'media'].includes(type)) {
-          req.abort();
-        } else {
-          req.continue();
-        }
-      });
-
-      // ---- Viewport & User-Agent ----
-      await page.setViewport({ width: 1280, height: 720 });
-      await page.setUserAgent(
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) ' +
-        'AppleWebKit/537.36 (KHTML, like Gecko) ' +
-        'Chrome/120.0.0.0 Safari/537.36'
-      );
-
-      // ---- Cookie'leri yükle (varsa) ----
-      const savedCookies = loadCookiesFor?.('turkpatent');
-      if (savedCookies?.length) {
-        await page.setCookie(...savedCookies);
-        logger.info(`${savedCookies.length} cookie yüklendi`);
-      }
-
-      // ---- TürkPatent sayfasına git ----
-      const searchUrl = 'https://www.turkpatent.gov.tr/arastirma-yap';
-      logger.info(`Sayfaya gidiliyor: ${searchUrl}`);
-      await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
-      await sleep(3000);
+      await page.goto('https://www.turkpatent.gov.tr/arastirma-yap', { waitUntil: 'domcontentloaded', timeout: 120000 });
       logger.info('Sayfa yüklendi');
 
-      // ---- Modal varsa kapat ----
-      try {
-        const modalSelectors = [
-          '.modal.show .close',
-          '.modal.show button[data-dismiss="modal"]',
-          '.modal.show .btn-close',
-          '.modal-backdrop + .modal .close',
-          'div[style*="display: block"] .close'
-        ];
-        for (const sel of modalSelectors) {
-          try {
-            const btn = await page.$(sel);
-            if (btn) {
-              await btn.click();
-              await sleep(1000);
-              logger.info(`Modal kapatıldı: ${sel}`);
-              break;
-            }
-          } catch { /* yut */ }
-        }
-        await page.keyboard.press('Escape');
-        await sleep(500);
-      } catch (modalError) {
-        logger.info('Modal işlemi sırasında hata:', modalError.message);
-      }
+      // Basit captcha kontrolü
+      const captchaDetected = await page.evaluate(() => /recaptcha|robot/i.test(document.body.innerText || ''));
+      logger.info('reCAPTCHA kontrolü:', { captchaDetected });
 
-      // ---- Form analizi (debug) ----
-      const formAnalysis = await page.evaluate(() => {
-        const inputs = Array.from(document.querySelectorAll('input'));
-        const labels = Array.from(document.querySelectorAll('label'));
-        return {
-          inputs: inputs.map((input, idx) => ({
-            index: idx,
-            type: input.type,
-            name: input.name,
-            id: input.id,
-            placeholder: input.placeholder || '',
-            value: input.value || '',
-            className: input.className,
-            parentText: input.parentElement?.textContent?.trim()?.substring(0, 50) || ''
-          })),
-          labels: labels.map(label => ({
-            text: label.textContent?.trim(),
-            for: label.getAttribute('for'),
-            htmlFor: label.htmlFor
-          })),
-          pageTitle: document.title,
-          url: window.location.href
-        };
-      });
-      logger.info('Form analizi:', JSON.stringify(formAnalysis, null, 2));
-
-      // Kişi numarası input alanını placeholder'a göre bul
-// Kişi numarası input alanını placeholder'a göre bul ve multiple attempts
-const inputResult = await page.evaluate(async (value) => {
-  const inputs = Array.from(document.querySelectorAll('input[type="text"]'));
-  const targetInput = inputs.find(input => input.placeholder && input.placeholder.includes('Kişi'));
-  
-  if (!targetInput) return { success: false, inputFound: false };
-  
-  // Multiple attempts for value setting
-  for (let attempt = 0; attempt < 3; attempt++) {
-    try {
-      // Clear and focus
-      targetInput.focus();
-      targetInput.select();
-      
-      // Method 1: Direct value setting
-      targetInput.value = value;
-      
-      // Method 2: React/Material-UI compatible setter
-      const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
-      nativeInputValueSetter.call(targetInput, value);
-      
-      // Dispatch events
-      ['focus', 'input', 'change', 'blur'].forEach(eventType => {
-        targetInput.dispatchEvent(new Event(eventType, { bubbles: true, cancelable: true }));
-      });
-      
-      // Wait a bit
-      await new Promise(resolve => setTimeout(resolve, 200));
-      
-      // Check if value is set
-      if (targetInput.value === value) {
-        return { 
-          success: true, 
-          inputFound: true, 
-          value: targetInput.value, 
-          placeholder: targetInput.placeholder,
-          index: inputs.indexOf(targetInput),
-          attempt: attempt + 1
-        };
-      }
-    } catch (e) {
-      console.log(`Attempt ${attempt + 1} failed:`, e);
-    }
-  }
-  
-  return { 
-    success: false, 
-    inputFound: true, 
-    value: targetInput.value, 
-    placeholder: targetInput.placeholder,
-    error: 'Value setting failed after 3 attempts'
-  };
-}, ownerId);
-
-      // ---- Form durumu (debug) ----
-      const formState = await page.evaluate(() => {
-        const inputs = document.querySelectorAll('input');
-        return Array.from(inputs).map((input, idx) => ({
-          index: idx,
-          value: input.value,
-          type: input.type
-        }));
-      });
-      logger.info('Form durumu:', formState);
-
-      // ---- SORGULA butonunu tıkla (alan-bağımlı, güvenli) ----
-await sleep(500);
-
-// SORGULA butonuna tıkla - detaylı monitoring ile
-// ---- SORGULA butonunu tıkla (alan-bağımlı, güvenli) ----
-await sleep(500);
-const clickResult = await page.evaluate(() => {
-  const ownerInput = document.querySelector('input[placeholder*="Kişi Numarası" i]') 
-                  || Array.from(document.querySelectorAll('input'))
-                     .find(i => (i.placeholder||'').toLowerCase().includes('kişi')
-                              && (i.placeholder||'').toLowerCase().includes('numara'));
-
-  const container = ownerInput?.closest('form')
-                 || ownerInput?.closest('[role="tabpanel"]')
-                 || ownerInput?.closest('.MuiPaper-root, .MuiGrid-container, .MuiCard-root')
-                 || document;
-
-  const buttons = Array.from(container.querySelectorAll('button, input[type="submit"], input[type="button"]'));
-  const isSorgula = (el) => /\bSORGULA\b/i.test((el.textContent || el.value || '').trim());
-  let sorgulaButton = buttons.find(isSorgula);
-  if (!sorgulaButton) sorgulaButton = Array.from(document.querySelectorAll('button,input[type="submit"],input[type="button"]')).find(isSorgula);
-  if (!sorgulaButton) return { success:false, error:'SORGULA butonu bulunamadı' };
-
-  window.networkRequests = [];
-  const of = window.fetch; window.fetch = function(...a){ try{window.networkRequests.push({type:'fetch',url:String(a[0]),time:Date.now()});}catch{} return of.apply(this,a); };
-  const ox = XMLHttpRequest.prototype.open; XMLHttpRequest.prototype.open = function(m,u){ try{window.networkRequests.push({type:'xhr',method:m,url:u,time:Date.now()});}catch{} return ox.apply(this,arguments); };
-
-  sorgulaButton.click();
-  const form = sorgulaButton.closest('form');
-  return {
-    success:true,
-    buttonText:(sorgulaButton.textContent||sorgulaButton.value||'').trim(),
-    buttonType:sorgulaButton.type||'',
-    hasForm:!!form, formAction:form?.action||'', formMethod:form?.method||''
-  };
-});
-logger.info('SORGULA butonuna tıklandı:', clickResult);
-
-// reCAPTCHA kontrolü ve bypass denemesi
-const captchaDetected = await detectCaptcha(page);
-logger.info('reCAPTCHA kontrolü:', { captchaDetected });
-
-if (captchaDetected) {
-  logger.info('reCAPTCHA tespit edildi - bypass deneniyor...');
-  
-  try {
-    // Yöntem 1: iframe reCAPTCHA checkbox'ını otomatik tıkla
-    const recaptchaFrames = await page.frames();
-    const recaptchaFrame = recaptchaFrames.find(frame => 
-      frame.url().includes('recaptcha/api2/anchor')
-    );
-    
-    if (recaptchaFrame) {
-      logger.info('reCAPTCHA frame bulundu, checkbox tıklanıyor...');
-      
-      // Checkbox'ı bul ve tıkla
-      await recaptchaFrame.waitForSelector('#recaptcha-anchor', { timeout: 5000 });
-      await recaptchaFrame.click('#recaptcha-anchor');
-      
-      // Biraz bekle
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      // Challenge var mı kontrol et
-      const challengeFrame = recaptchaFrames.find(frame => 
-        frame.url().includes('recaptcha/api2/bframe')
-      );
-      
-      if (challengeFrame) {
-        logger.info('reCAPTCHA challenge çıktı - otomatik çözüm deneniyor...');
-        
-        // Yöntem 2: Audio challenge dene
-        try {
-          await challengeFrame.waitForSelector('#recaptcha-audio-button', { timeout: 3000 });
-          await challengeFrame.click('#recaptcha-audio-button');
-          await new Promise(resolve => setTimeout(resolve, 1000));
-          
-          // Audio URL'sini al ve çöz (bu kısım external service gerektirir)
-          const audioUrl = await challengeFrame.$eval('audio source', el => el.src);
-          if (audioUrl) {
-            logger.info('Audio challenge URL alındı:', audioUrl);
-            // Burada speech-to-text service kullanılabilir
-            // Şimdilik manuel bypass dene
-            
-            // Alternatif: Refresh ile tekrar dene
-            await challengeFrame.click('#recaptcha-reload-button');
-            await new Promise(resolve => setTimeout(resolve, 2000));
-          }
-        } catch (audioError) {
-          logger.warn('Audio challenge hatası:', audioError.message);
-        }
-        
-        // Yöntem 3: Challenge'ı bypass etmeye çalış
-        try {
-          // reCAPTCHA token'ını direkt manipüle et
-          await page.evaluate(() => {
-            // Callback fonksiyonunu çağır
-            if (window.grecaptcha && window.grecaptcha.getResponse()) {
-              const response = window.grecaptcha.getResponse();
-              if (response) {
-                // Token varsa formu submit et
-                const event = new CustomEvent('recaptcha-solved');
-                document.dispatchEvent(event);
-                return true;
-              }
-            }
-            return false;
+      // Kişi Numarası alanına yaz
+      await sleep(250);
+      await page.evaluate((val) => {
+        let input = document.querySelector('input[placeholder*="Kişi Numarası" i]');
+        if (!input) {
+          input = Array.from(document.querySelectorAll('input')).find(i => {
+            const p = (i.placeholder||'').toLowerCase();
+            return p.includes('kişi') && p.includes('numara');
           });
-        } catch (tokenError) {
-          logger.warn('Token manipülasyonu başarısız:', tokenError.message);
         }
-      } else {
-        logger.info('reCAPTCHA checkbox başarıyla çözüldü');
-      }
-      
-      // Çözülüp çözülmediğini kontrol et
-      await new Promise(resolve => setTimeout(resolve, 3000));
-      const isSolved = await page.evaluate(() => {
-        const frames = document.querySelectorAll('iframe[src*="recaptcha"]');
-        for (let frame of frames) {
-          try {
-            if (frame.contentDocument) {
-              const checkbox = frame.contentDocument.querySelector('#recaptcha-anchor');
-              if (checkbox && checkbox.getAttribute('aria-checked') === 'true') {
-                return true;
-              }
-            }
-          } catch (e) {}
-        }
-        return false;
-      });
-      
-      if (isSolved) {
-        logger.info('reCAPTCHA başarıyla çözüldü!');
-      } else {
-        logger.warn('reCAPTCHA çözülemedi - geri dönülüyor');
-        const retryAfterSec = 120 + Math.floor(Math.random()*60);
-        global['turkpatent_backoff_until'] = Date.now() + retryAfterSec * 1000;
+        if (!input) throw new Error('Kişi Numarası inputu bulunamadı');
+        input.focus();
+        input.value = '';
+        const setEvt = new Event('input', { bubbles: true });
+        input.value = String(val);
+        input.dispatchEvent(setEvt);
+      }, String(ownerId));
+
+      // SORGULA butonuna tıkla (aynı panelde, metni tam SORGULA)
+      await sleep(300);
+      const clickResult = await page.evaluate(() => {
+        const ownerInput = document.querySelector('input[placeholder*="Kişi Numarası" i]') 
+                        || Array.from(document.querySelectorAll('input'))
+                           .find(i => (i.placeholder||'').toLowerCase().includes('kişi')
+                                    && (i.placeholder||'').toLowerCase().includes('numara'));
+        const container = ownerInput?.closest('form')
+                       || ownerInput?.closest('[role="tabpanel"]')
+                       || ownerInput?.closest('.MuiPaper-root, .MuiGrid-container, .MuiCard-root')
+                       || document;
+
+        const btns = Array.from(container.querySelectorAll('button, input[type="submit"], input[type="button"]'));
+        const isSorgula = (el) => /\bSORGULA\b/i.test((el.textContent || el.value || '').trim());
+        let btn = btns.find(isSorgula);
+        if (!btn) btn = Array.from(document.querySelectorAll('button,input[type="submit"],input[type="button"]')).find(isSorgula);
+        if (!btn) return { success:false, error:'SORGULA butonu bulunamadı' };
+
+        // Ağ izleme hook
+        window.networkRequests = [];
+        const of = window.fetch; window.fetch = function(...a){ try{window.networkRequests.push({type:'fetch',url:String(a[0]),time:Date.now()});}catch{} return of.apply(this,a); };
+        const ox = XMLHttpRequest.prototype.open; XMLHttpRequest.prototype.open = function(m,u){ try{window.networkRequests.push({type:'xhr',method:m,url:u,time:Date.now()});}catch{} return ox.apply(this,arguments); };
+
+        btn.click();
+        const form = btn.closest('form');
         return {
-          status: 'CaptchaRequired',
-          found: false,
-          ownerId: ownerId,
-          retryAfterSec,
-          message: 'reCAPTCHA otomatik çözülemedi. Lütfen daha sonra tekrar deneyin.'
+          success:true,
+          buttonText:(btn.textContent||btn.value||'').trim(),
+          buttonType:btn.type||'',
+          hasForm:!!form, formAction:form?.action||'', formMethod:form?.method||''
         };
-      }
-    }
-    
-  } catch (bypassError) {
-    logger.error('reCAPTCHA bypass hatası:', bypassError.message);
-    const retryAfterSec = 120 + Math.floor(Math.random()*60);
-    global['turkpatent_backoff_until'] = Date.now() + retryAfterSec * 1000;
-    return {
-      status: 'CaptchaRequired',
-      found: false,
-      ownerId: ownerId,
-      retryAfterSec,
-      message: 'reCAPTCHA bypass hatası. Lütfen daha sonra tekrar deneyin.'
-    };
-  }
-}
-
-// Sonuçları bekle
-await new Promise(resolve => setTimeout(resolve, 3000));
-const networkActivity = await page.evaluate(() => {
-  return {
-    requests: window.networkRequests || [],
-    currentUrl: window.location.href,
-    pageTitle: document.title,
-    hasLoadingIndicator: !!(document.querySelector('.loading, .spinner, [class*="loading"]'))
-  };
-});
-
-logger.info('Network activity:', networkActivity);
-
-
-// === Sonuçları kanıta dayalı bekle & listeyi topla (owner search) ===
-logger.info('Owner search: sonuç bekleniyor (table#results + DETAY/ÇIKTI AL/Sonsuz Liste kanıtları)...');
-
-// 0) Hızlı: doğrudan tbody>tr bekle (table#results daha stabil görünüyor)
-const quickSelOk = await page.waitForSelector('table#results tbody tr td', { timeout: 20000 }).catch(() => null);
-
-// 1) Ek bekleme döngüsü: tabloda satır veya ÇIKTI AL / Sonsuz Liste sinyali
-const proof = await (async () => {
-  if (quickSelOk) {
-    // kısa yol
-    const p = await page.evaluate(() => {
-      const t = (document.body?.innerText || '').toLowerCase();
-      const hasCiktiAl = t.includes('çıktı al');
-      const hasSonsuz = t.includes('sonsuz liste') || t.includes('sonsuz');
-      const rows = Array.from(document.querySelectorAll('table#results tbody tr'))
-        .filter(r => r.querySelectorAll('td').length >= 2).length;
-      const isEmpty = /kayıt bulunamadı|0 kayıt|kayıt yok/.test(t);
-      return { status: (rows>0 || hasCiktiAl || hasSonsuz) ? 'ok' : 'timeout', rows, hasCiktiAl, hasSonsuz, isEmpty };
-    });
-    return p;
-  }
-  const timeoutMs = 60000;
-  const start = Date.now();
-  while (Date.now() - start < timeoutMs) {
-    const p = await page.evaluate(() => {
-      const t = (document.body?.innerText || '').toLowerCase();
-      const hasCiktiAl = t.includes('çıktı al');
-      const hasSonsuz = t.includes('sonsuz liste') || t.includes('sonsuz');
-      const rows = Array.from(document.querySelectorAll('table#results tbody tr, table.MuiTable-root tbody tr'))
-        .filter(r => r.querySelectorAll('td').length >= 2).length;
-      const isEmpty = /kayıt bulunamadı|0 kayıt|kayıt yok/.test(t);
-      return { rows, hasCiktiAl, hasSonsuz, isEmpty };
-    });
-    if (p.isEmpty) return { status: 'empty', ...p };
-    if (p.rows >= 1 || p.hasCiktiAl || p.hasSonsuz) return { status: 'ok', ...p };
-    await new Promise(r => setTimeout(r, 250));
-  }
-  return { status: 'timeout', rows: 0, hasCiktiAl: false, hasSonsuz: false, isEmpty: false };
-})();
-
-logger.info('[owner-results-proof]', proof);
-
-if (proof.status === 'empty') {
-  return { status: 'empty', found: false, ownerId, count: 0, proof };
-}
-if (proof.status === 'timeout') {
-  return { status: 'timeout', found: false, ownerId, proof };
-}
-
-// 2) Tablodan verileri çek
-const rows = await page.evaluate(() => {
-  const pick = (el) => (el?.innerText || '').replace(/\s+/g,' ').trim();
-  const table = document.querySelector('table#results') || document.querySelector('table.MuiTable-root') || document.querySelector('table');
-  if (!table) return [];
-
-  // Başlık metinlerinden index eşleme
-  const headers = Array.from(table.querySelectorAll('thead th')).map(th => (th.innerText || '').trim().toLowerCase());
-  const idx = (names, fallback) => {
-    for (const n of names) { const i = headers.findIndex(h => h.includes(n)); if (i !== -1) return i; }
-    return fallback;
-  };
-
-  const iBasvuru = idx(['başvuru numarası','başvuru no','başvuru'], 1);
-  const iMarkaAdi = idx(['marka adı','marka adi','marka'], 2);
-  const iSahibi  = idx(['marka sahibi','sahibi','başvuru sahibi'], 3);
-  const iBasvTar = idx(['başvuru tarihi','tarih'], 4);
-  const iTescil  = idx(['tescil no','tescil'], 5);
-  const iDurum   = idx(['durumu','durum','state'], 6);
-  const iNice    = idx(['nice sınıfları','nice','sınıf','sınıflar'], 7);
-  const iSekil   = idx(['şekil','logo','görsel','image'], 8);
-  const iIslem   = idx(['işlem','detay','aksi̇yon','action'], 9);
-
-  const trs = Array.from(table.querySelectorAll('tbody tr')).filter(r => r.querySelectorAll('td').length >= 2);
-  return trs.map(tr => {
-    const tds = Array.from(tr.querySelectorAll('td'));
-
-    const get = (i) => pick(tds[i]);
-    const getEl = (i) => tds[i] || null;
-
-    const sekilTd = getEl(iSekil);
-    const img = sekilTd ? sekilTd.querySelector('img') : null;
-    const imageUrl = img ? img.getAttribute('src') : null;
-    const imageAlt = img ? (img.getAttribute('alt') || '').trim() : '';
-
-    const islemTd = getEl(iIslem);
-    const a = islemTd ? islemTd.querySelector('a[href]') : null;
-    const detayHref = a ? (a.href || a.getAttribute('href')) : null;
-
-    return {
-      basvuruNo: get(iBasvuru),
-      markaAdi: get(iMarkaAdi),
-      markaSahibi: get(iSahibi),
-      basvuruTarihi: get(iBasvTar),
-      tescilNo: get(iTescil),
-      durumu: get(iDurum),
-      niceSiniflari: get(iNice),
-      sekilAltYazi: imageAlt,
-      sekilUrl: imageUrl,
-      detayHref: detayHref
-    };
-  });
-});
-
-logger.info('[owner-scrape] rowCount:', rows?.length || 0);
-logger.info('Final analiz:', finalAnalysis);
-
-    } catch (error) {
-      logger.error('[scrapeOwnerTrademarks] Hata:', {
-        message: error?.message,
-        stack: error?.stack,
-        ownerId
       });
-      throw new HttpsError('internal', `Owner search hatası: ${error?.message}`);
-    } finally {
-      if (browser) {
-        try {
-          await browser.close();
-          logger.info('Browser kapatıldı');
-        } catch (e) {
-          logger.warn('Browser kapatma hatası:', e?.message);
+      logger.info('SORGULA butonuna tıklandı:', clickResult);
+
+      // Araştırma API yanıtını bekle (deterministik sinyal)
+      let apiRespOk = false;
+      try {
+        const resp = await page.waitForResponse(r => {
+          try { return r.url().includes('/api/research') && r.status() === 200; } catch { return false; }
+        }, { timeout: 15000 });
+        apiRespOk = !!resp;
+      } catch {}
+      logger.info('[research-api]', { ok: apiRespOk });
+
+      // === Sonuçları kanıta dayalı bekle (role tabanlı + tablo/grid fallback)
+      logger.info('Owner search: sonuç bekleniyor (role=applicationNo / table#results / MUI DataGrid)...');
+
+      // 0) Hızlı kanıt: role tabanlı hücreler veya tablo/grid hücreleri
+      const quickOk = await page.waitForSelector(
+        'td[role="applicationNo"], table#results tbody tr td, .MuiTable-root tbody tr td, .MuiDataGrid-virtualScrollerRenderZone [role="row"] [role="gridcell"]',
+        { timeout: 20000 }
+      ).catch(() => null);
+
+      // 1) Kanıt döngüsü
+      const proof = await (async () => {
+        async function snapshot() {
+          return page.evaluate(() => {
+            const t = (document.body?.innerText || '').toLowerCase();
+            const hasCiktiAl = t.includes('çıktı al');
+            const hasSonsuz = t.includes('sonsuz liste') || t.includes('sonsuz');
+
+            const roleRows = document.querySelectorAll('td[role="applicationNo"]').length;
+            const tableRows = Array.from(document.querySelectorAll('table#results tbody tr, .MuiTable-root tbody tr'))
+              .filter(r => r.querySelectorAll('td').length >= 2).length;
+            const gridRows = document.querySelectorAll('.MuiDataGrid-virtualScrollerRenderZone [role="row"]').length;
+            const rows = Math.max(roleRows, tableRows, gridRows);
+            const isEmpty = /kayıt bulunamadı|0 kayıt|kayıt yok/.test(t);
+            return { rows, hasCiktiAl, hasSonsuz, isEmpty };
+          });
         }
+        if (quickOk) {
+          const p = await snapshot();
+          return { status: (p.rows>0 || p.hasCiktiAl || p.hasSonsuz) ? 'ok':'timeout', ...p };
+        }
+        const timeoutMs = 60000, start = Date.now();
+        while (Date.now() - start < timeoutMs) {
+          const p = await snapshot();
+          if (p.isEmpty) return { status:'empty', ...p };
+          if (p.rows >= 1 || p.hasCiktiAl || p.hasSonsuz) return { status:'ok', ...p };
+          await new Promise(r => setTimeout(r, 250));
+        }
+        return { status:'timeout', rows:0, hasCiktiAl:false, hasSonsuz:false, isEmpty:false };
+      })();
+
+      logger.info('[owner-results-proof]', proof);
+
+      if (proof.status === 'empty') {
+        return { status: 'empty', found: false, ownerId, count: 0, proof };
       }
+      if (proof.status === 'timeout') {
+        return { status: 'timeout', found: false, ownerId, proof };
+      }
+
+      // === Satırları topla (ROLE tabanlı -> TABLE fallback -> DATAGRID fallback)
+      const rows = await page.evaluate(() => {
+        const norm = (s) => (s || '').replace(/\s+/g,' ').trim();
+
+        // A) ROLE TABANLI (ekrandaki örnek DOM’a göre en güvenilir)
+        const roleRows = Array.from(document.querySelectorAll('tr.MuiTableRow-root'));
+        let out = [];
+        if (roleRows.length) {
+          out = roleRows.map(row => {
+            const q = (r) => row.querySelector(`td[role="${r}"]`);
+            const txt = (r) => norm(q(r)?.innerText);
+            const img = row.querySelector('td[role="image"] img');
+            const detayEl = row.querySelector('td[role="_actions"] a[href], td[role="_actions"] button');
+            const href = detayEl ? (detayEl.getAttribute('href') || '') : '';
+
+            const nice = txt('niceClasses');
+            const niceList = (nice || '').split(/[^\d]+/).map(x => x.trim()).filter(Boolean);
+
+            return {
+              applicationNumber: txt('applicationNo'),
+              brandName: txt('markName'),
+              ownerName: txt('holdName'),
+              applicationDate: txt('applicationDate'),
+              registrationNumber: txt('registrationNo'),
+              status: txt('state'),
+              niceClasses: nice,
+              niceList,
+              imageUrl: img ? (img.getAttribute('src') || '') : '',
+              detailUrl: href
+            };
+          }).filter(x => x.applicationNumber || x.brandName);
+          if (out.length) return out;
+        }
+
+        // B) TABLE HEADER tabanlı (genel fallback)
+        const pick = (el) => (el?.innerText || '').replace(/\s+/g,' ').trim();
+        const table = document.querySelector('table#results') || document.querySelector('.MuiTable-root') || document.querySelector('table');
+        if (table) {
+          const headers = Array.from(table.querySelectorAll('thead th')).map(th => (th.innerText || '').trim().toLowerCase());
+          const idx = (names, fallback) => {
+            for (const n of names) { const i = headers.findIndex(h => h.includes(n)); if (i !== -1) return i; }
+            return fallback;
+          };
+          const iBasvuru = idx(['başvuru numarası','başvuru no','başvuru'], 1);
+          const iMarkaAdi = idx(['marka adı','marka adi','marka'], 2);
+          const iSahibi  = idx(['marka sahibi','sahibi','başvuru sahibi'], 3);
+          const iBasvTar = idx(['başvuru tarihi','tarih'], 4);
+          const iTescil  = idx(['tescil no','tescil'], 5);
+          const iDurum   = idx(['durumu','durum','state'], 6);
+          const iNice    = idx(['nice sınıfları','nice','sınıf','sınıflar'], 7);
+          const iSekil   = idx(['şekil','logo','görsel','image'], 8);
+          const iIslem   = idx(['işlem','detay','aksi̇yon','action'], 9);
+
+          const trs = Array.from(table.querySelectorAll('tbody tr')).filter(r => r.querySelectorAll('td').length >= 2);
+          out = trs.map(tr => {
+            const tds = Array.from(tr.querySelectorAll('td'));
+            const get = (i) => pick(tds[i]);
+            const getEl = (i) => tds[i] || null;
+            const sekilTd = getEl(iSekil);
+            const img = sekilTd ? sekilTd.querySelector('img') : null;
+            const imageUrl = img ? img.getAttribute('src') : null;
+            const imageAlt = img ? (img.getAttribute('alt') || '').trim() : '';
+            const islemTd = getEl(iIslem);
+            const a = islemTd ? islemTd.querySelector('a[href]') : null;
+            const detayHref = a ? (a.href || a.getAttribute('href')) : null;
+
+            return {
+              applicationNumber: get(iBasvuru),
+              brandName: get(iMarkaAdi),
+              ownerName: get(iSahibi),
+              applicationDate: get(iBasvTar),
+              registrationNumber: get(iTescil),
+              status: get(iDurum),
+              niceClasses: get(iNice),
+              niceList: (get(iNice) || '').split(/[^\d]+/).map(x => x.trim()).filter(Boolean),
+              imageUrl: imageUrl || '',
+              detailUrl: detayHref || ''
+            };
+          }).filter(x => x.applicationNumber || x.brandName);
+          if (out.length) return out;
+        }
+
+        // C) MUI DataGrid fallback
+        const gridRows = Array.from(document.querySelectorAll('.MuiDataGrid-virtualScrollerRenderZone [role="row"]'));
+        if (gridRows.length) {
+          return gridRows.map(row => {
+            const cells = Array.from(row.querySelectorAll('[role="gridcell"]')).map(c => norm(c.innerText));
+            return {
+              applicationNumber: cells[1] || '',
+              brandName: cells[2] || '',
+              ownerName: cells[3] || '',
+              applicationDate: cells[4] || '',
+              registrationNumber: cells[5] || '',
+              status: cells[6] || '',
+              niceClasses: cells[7] || '',
+              niceList: (cells[7] || '').split(/[^\d]+/).map(x => x.trim()).filter(Boolean),
+              imageUrl: '',
+              detailUrl: ''
+            };
+          });
+        }
+
+        return out;
+      });
+
+      logger.info('[owner-scrape] rowCount:', rows?.length || 0);
+
+      return {
+        status: 'Success',
+        found: (rows?.length || 0) > 0,
+        count: rows?.length || 0,
+        items: rows
+      };
+    } catch (err) {
+      logger.error('[scrapeOwnerTrademarks] Hata', { message: err?.message, stack: err?.stack });
+      throw new HttpsError('internal', `Owner arama hatası: ${err?.message || String(err)}`);
+    } finally {
+      if (browser) { try { await browser.close(); logger.info('Browser kapatıldı'); } catch {} }
     }
   }
 );
