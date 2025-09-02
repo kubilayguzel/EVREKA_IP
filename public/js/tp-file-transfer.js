@@ -79,7 +79,9 @@ let lastBulkItems = [];
 
 // Eklentinin ID'sini buraya ekleyin
 // ÖNEMLİ: Eklentinizi Chrome'a yükledikten sonra bu ID'yi güncelleyin.
-const EXTENSION_ID = 'abnopnippoapheoakgangaofeelllpbm';
+
+const EXTENSION_ID_BASVURU = 'bbcpnpgglakoagjakgigmgjpdpiigpah';  // Başvuru numarası için
+const EXTENSION_ID_SAHIP = 'abnopnippoapheoakgangaofeelllpbm';  // Sahip numarası için (tp-sorgu-eklentisi-2)
 
 // --------------- INIT ---------------
 async function init() {
@@ -99,8 +101,12 @@ async function init() {
 
 function setupExtensionMessageListener() {
     if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessageExternal) {
+        console.log('[DEBUG] Chrome eklenti mesaj dinleyicisi kuruluyor...');
         chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => {
-            if (request.type === 'VERI_GELDI_KISI' && request.data) {
+            console.log('[DEBUG] Eklentiden mesaj alındı:', request, 'Gönderen ID:', sender.id);
+            
+            // Sahip numarası eklentisinden gelen mesajlar
+            if (request.type === 'VERI_GELDI_KISI' && request.data && sender.id === EXTENSION_ID_SAHIP) {
                 _hideBlock(bulkLoadingEl);
                 lastBulkItems = request.data;
                 if (!lastBulkItems.length) {
@@ -109,11 +115,20 @@ function setupExtensionMessageListener() {
                     renderBulkResults({ items: lastBulkItems });
                 }
                 sendResponse({ status: 'OK' });
-            } else if (request.type === 'HATA_KISI') {
+            } 
+            // Sahip numarası eklentisinden gelen hata mesajları
+            else if (request.type === 'HATA_KISI' && sender.id === EXTENSION_ID_SAHIP) {
                 _hideBlock(bulkLoadingEl);
                 showToast('Eklenti hatası: ' + (request.data.message || 'Bilinmeyen Hata'), 'danger');
                 sendResponse({ status: 'ERROR' });
             }
+            // Başvuru numarası eklentisinden gelen mesajlar (eğer varsa)
+            else if (sender.id === EXTENSION_ID_BASVURU) {
+                console.log('[DEBUG] Başvuru numarası eklentisinden mesaj:', request);
+                // Gerekirse burada başvuru numarası eklentisi mesajlarını işleyin
+                sendResponse({ status: 'OK' });
+            }
+            
             return true;
         });
     } else {
@@ -279,7 +294,7 @@ async function onBulkQuery(){
     lastBulkItems = [];
 
     try {
-        chrome.runtime.sendMessageExternal(EXTENSION_ID, {
+        chrome.runtime.sendMessageExternal(EXTENSION_ID_SAHIP, {
             type: 'SORGULA_KISI',
             data: ownerId
         }, (response) => {
