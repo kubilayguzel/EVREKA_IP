@@ -1,7 +1,7 @@
 // --- DOM helpers ---
 function _el(id){ return document.getElementById(id); }
 function _showBlock(el){ if(!el) return; el.classList.remove('hide'); el.style.display=''; }
-function _hideBlock(el){ if(!el; return; el.classList.add('hide'); }
+function _hideBlock(el){ if(!el) return; el.classList.add('hide'); }
 function showToast(msg, type='info'){
   const cls = type==='danger'?'alert-danger':(type==='success'?'alert-success':(type==='warning'?'alert-warning':'alert-info'));
   const div = document.createElement('div');
@@ -79,7 +79,7 @@ let lastBulkItems = [];
 
 // Eklentinin ID'sini buraya ekleyin
 // ÖNEMLİ: Eklentinizi Chrome'a yükledikten sonra bu ID'yi güncelleyin.
-const EXTENSION_ID = 'YOUR_EXTENSION_ID';
+const EXTENSION_ID = 'abnopnippoapheoakgangaofeelllpbm';
 
 // --------------- INIT ---------------
 async function init() {
