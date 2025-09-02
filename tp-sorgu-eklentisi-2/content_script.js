@@ -1,9 +1,6 @@
 // =============================
 // TP Kişi Numarası Otomasyon Eklentisi
-// =============================
-
-let targetOwnerId = null;
-
+// ===================================
 // background.js'den komutu al
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.type === 'AUTO_FILL_KISI' && request.data) {
@@ -106,14 +103,14 @@ async function runAutomation() {
       });
     });
 
-  // 5) Müvekkilin Uygulamadaki Verisi ile Kıyaslamak için Veriyi Uygulamaya Geri Gönder
-  console.log('[TP Eklenti] Veriler başarıyla toplandı. PostMessage ile gönderiliyor.');
-  window.postMessage({
-    source: 'tp-extension-sahip',
-    type: 'VERI_GELDI_KISI',
-    data: scrapedData
-  }, '*');
-  console.log('[TP Eklenti] PostMessage gönderildi:', scrapedData.length, 'kayıt');
+    // 5) Veriyi ana uygulamaya geri gönder
+    console.log('[TP Eklenti] Veriler başarıyla toplandı. PostMessage ile gönderiliyor.');
+    window.postMessage({
+      source: 'tp-extension-sahip',
+      type: 'VERI_GELDI_KISI',
+      data: scrapedData
+    }, '*');
+    console.log('[TP Eklenti] PostMessage gönderildi:', scrapedData.length, 'kayıt');
 
 } catch (error) {
   console.error('[TP Eklenti] Otomasyon hatası:', error);
