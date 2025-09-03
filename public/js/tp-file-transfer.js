@@ -94,7 +94,12 @@ function setupEventListeners() {
     if (e.target.id === 'queryBtn' || e.target.id === 'bulkQueryBtn') {
       e.preventDefault();
       handleQuery();
-    } else if (e.target.id === 'savePortfolioBtn') {
+    }
+  });
+  
+  // Portföye kaydet butonu
+  document.addEventListener('click', (e) => {
+    if (e.target.id === 'savePortfolioBtn') {
       e.preventDefault();
       handleSaveToPortfolio();
     }
@@ -149,6 +154,114 @@ function setupEventListeners() {
   });
 
   console.log('[DEBUG] Event listeners kuruldu');
+}
+async function handleSaveToPortfolio() {
+  const checkedBoxes = document.querySelectorAll('.record-checkbox:checked');
+  
+  if (checkedBoxes.length === 0) {
+    showToast('Kaydetmek için en az bir kayıt seçin.', 'warning');
+    return;
+  }
+  
+  const selectedIndexes = Array.from(checkedBoxes).map(cb => parseInt(cb.dataset.index));
+  const selectedRecords = selectedIndexes.map(index => currentOwnerResults[index]).filter(Boolean);
+  
+  if (selectedRecords.length === 0) {
+    showToast('Seçili kayıtlar bulunamadı.', 'danger');
+    return;
+  }
+  
+  // Seçili sahipleri al (bu durumda arayüzden)
+  const selectedApplicants = selectedRelatedParties.length > 0 ? selectedRelatedParties : [];
+  
+  try {
+    // Loading göster
+    const saveBtn = document.getElementById('savePortfolioBtn');
+    const originalText = saveBtn.textContent;
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm mr-2"></span>Kaydediliyor...';
+    
+    // TÜRKPATENT verilerini IPRecord formatına dönüştür
+    const ipRecords = mapTurkpatentResultsToIPRecords(selectedRecords, selectedApplicants);
+    
+    // recordOwnerType'ı 'self' olarak ayarla
+    ipRecords.forEach(record => {
+      record.recordOwnerType = 'self';
+    });
+    
+    let savedCount = 0;
+    let skippedCount = 0;
+    let errorCount = 0;
+    const results = [];
+    
+    // Her kayıt için ayrı ayrı kaydetme dene
+    for (const record of ipRecords) {
+      try {
+        // Aynı başvuru numarası ile 'self' kaydı var mı kontrol et
+        const existingCheck = await ipRecordsService.checkDuplicateApplicationNumber(
+          record.applicationNumber, 
+          'self'
+        );
+        
+        if (existingCheck.exists) {
+          skippedCount++;
+          results.push({ 
+            record: record.title || record.applicationNumber, 
+            status: 'skipped', 
+            reason: 'Aynı başvuru numarası ile kayıt mevcut' 
+          });
+          continue;
+        }
+        
+        // Kaydet
+        const result = await ipRecordsService.createRecord(record);
+        
+        if (result.success) {
+          savedCount++;
+          results.push({ 
+            record: record.title || record.applicationNumber, 
+            status: 'saved' 
+          });
+        } else {
+          errorCount++;
+          results.push({ 
+            record: record.title || record.applicationNumber, 
+            status: 'error', 
+            reason: result.message || 'Bilinmeyen hata' 
+          });
+        }
+        
+      } catch (error) {
+        errorCount++;
+        results.push({ 
+          record: record.title || record.applicationNumber, 
+          status: 'error', 
+          reason: error.message || 'Bilinmeyen hata' 
+        });
+        console.error('Kayıt hatası:', error);
+      }
+    }
+    
+    // Sonuç bildirimi
+    let message = '';
+    if (savedCount > 0) message += `${savedCount} kayıt başarıyla eklendi. `;
+    if (skippedCount > 0) message += `${skippedCount} kayıt zaten mevcut olduğu için atlandı. `;
+    if (errorCount > 0) message += `${errorCount} kayıtta hata oluştu. `;
+    
+    const notificationType = errorCount > 0 ? 'warning' : (savedCount > 0 ? 'success' : 'info');
+    showToast(message.trim(), notificationType);
+    
+    console.log('Kaydetme sonuçları:', results);
+    
+  } catch (error) {
+    console.error('Portföye kaydetme hatası:', error);
+    showToast('Kaydetme işlemi sırasında hata oluştu: ' + error.message, 'danger');
+  } finally {
+    // Loading'i kaldır
+    const saveBtn = document.getElementById('savePortfolioBtn');
+    saveBtn.disabled = false;
+    saveBtn.textContent = originalText;
+  }
 }
 
 // ===============================
@@ -436,10 +549,15 @@ function renderSingleResult(payload) {
 function renderOwnerResults(items) {
   if (!items?.length) return;
   
-  let tableHTML = `
+// Sahip bilgisini çıkar (ilk kayıttan)
+// Sahip bilgisini kayıtlardan bul (herhangi birinde olabilir)
+const ownerRecord = items.find(item => item.ownerName && item.ownerName.trim());
+const ownerInfo = ownerRecord ? ` - Sahip: ${ownerRecord.ownerName}` : '';
+
+let tableHTML = `
     <div class="section-card">
       <div class="results-header d-flex justify-content-between align-items-center mb-3">
-        <div><strong>${items.length} sonuç bulundu</strong> <small class="text-muted" id="bulkMeta"></small></div>
+        <div><strong>${items.length} sonuç bulundu${ownerInfo}</strong> <small class="text-muted" id="bulkMeta"></small></div>
         <div>
           <button id="exportCsvBtn" class="btn btn-outline-primary btn-sm"><i class="fas fa-file-csv mr-1"></i> CSV Dışa Aktar</button>
         </div>
@@ -639,3 +757,7 @@ document.addEventListener('DOMContentLoaded', () => {
   loadSharedLayout();
   init();
 });
+// ===============================
+// PORTFÖYE KAYDETME FONKSİYONU
+// ===============================
+
