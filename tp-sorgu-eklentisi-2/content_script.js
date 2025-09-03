@@ -333,30 +333,93 @@ function findDetailButton(tr) {
 
 async function parseDetailsFromOpenDialog(dialogRoot) {
   if (!dialogRoot) return {};
-  // Görsel almayı atla - zaten tablo satırında mevcut
+  
+  const data = {
+    imageDataUrl: null,
+    fields: {},
+    goodsAndServices: [],
+    transactions: []
+  };
 
-  // Genel alan/etiket yakalama (varsa)
-  const fields = {};
+  // 1) Mal/Hizmet Listesi (Eşya Listesi)
+  try {
+    // Nice sınıfları ve eşya listelerini bul
+    const goodsSections = dialogRoot.querySelectorAll('*');
+    for (const section of goodsSections) {
+      const text = section.textContent || '';
+      
+      // "Nice 19", "Nice 35" gibi başlıkları ara
+      const niceMatch = text.match(/Nice\s+(\d+)/i);
+      if (niceMatch) {
+        const classNo = parseInt(niceMatch[1]);
+        
+        // Bu sınıf için eşyaları bul
+        let nextElement = section.nextElementSibling;
+        while (nextElement && !nextElement.textContent.match(/Nice\s+\d+/i)) {
+          const goodsText = nextElement.textContent?.trim();
+          if (goodsText && goodsText.length > 10) {
+            // Eşyaları virgül veya noktalı virgülle ayır
+            const items = goodsText.split(/[,;]+/)
+              .map(item => item.trim())
+              .filter(item => item.length > 2);
+            
+            if (items.length > 0) {
+              data.goodsAndServices.push({
+                classNo,
+                items
+              });
+            }
+          }
+          nextElement = nextElement.nextElementSibling;
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('Mal/hizmet listesi parse hatası:', e);
+  }
+
+  // 2) İşlem Geçmişi (Transactions)
+  try {
+    const transactionRows = dialogRoot.querySelectorAll('tbody tr');
+    for (const row of transactionRows) {
+      const cells = row.querySelectorAll('td');
+      if (cells.length >= 3) {
+        const date = cells[0]?.textContent?.trim();
+        const description = cells[2]?.textContent?.trim();
+        const note = cells[3]?.textContent?.trim();
+        
+        if (date && description) {
+          data.transactions.push({
+            date,
+            description,
+            note: note || null
+          });
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('İşlem geçmişi parse hatası:', e);
+  }
+
+  // 3) Genel alan/etiket yakalama (mevcut kod)
   const rows = Array.from(dialogRoot.querySelectorAll('div, li, tr'));
   rows.forEach(node => {
-    // label:value ikilileri gibi yapılar için basit sezgisel okuma
     const labels = Array.from(node.querySelectorAll('label, .MuiFormLabel-root, .MuiTypography-root')).map(x => (x.textContent||'').trim()).filter(Boolean);
     const strongs = Array.from(node.querySelectorAll('strong, b')).map(x => (x.textContent||'').trim()).filter(Boolean);
     const texts = (node.textContent || '').trim();
-    // Çok uzun bloklar yerine küçük çiftler
+    
     if (labels.length === 1) {
       const label = labels[0];
-      // label dışındaki değer:
       let value = texts.replace(label, '').trim();
-      if (value && value.length && value.length < 500) fields[label] = value;
+      if (value && value.length && value.length < 500) data.fields[label] = value;
     } else if (strongs.length === 1) {
       const label = strongs[0];
       let value = texts.replace(label, '').trim();
-      if (value && value.length && value.length < 500) fields[label] = value;
+      if (value && value.length && value.length < 500) data.fields[label] = value;
     }
   });
 
-  return { imageDataUrl: null, fields }; // imageDataUrl null döndür
+  return data;
 }
 
 async function openRowModalAndParse(tr, { timeout = 9000 } = {}) {
@@ -417,16 +480,29 @@ async function collectOwnerResultsWithDetails() {
   for (const [idx, tr] of rows.entries()) {
     const base = parseOwnerRowBase(tr, idx);
     
-    // Tablo satırından görseli al (modal'dan değil)
-    const img = tr.querySelector('img');
-    if (img && img.src) {
-      base.brandImageDataUrl = img.src;
+    // Görsel zaten parseOwnerRowBase'de alındı
+    if (base.imageSrc) {
+      base.brandImageDataUrl = base.imageSrc;
+      base.brandImageUrl = base.imageSrc;
     }
     
-    // Modal açıp sadece ek alanları al (görsel değil)
+    // Modal açıp detayları al
     const details = await openRowModalAndParse(tr).catch(()=>null);
-    if (details && details.fields && Object.keys(details.fields).length) {
-      base.details = details.fields;
+    if (details) {
+      // Genel alanlar
+      if (details.fields && Object.keys(details.fields).length) {
+        base.details = details.fields;
+      }
+      
+      // Mal/hizmet listesi
+      if (details.goodsAndServices && details.goodsAndServices.length) {
+        base.goodsAndServicesByClass = details.goodsAndServices;
+      }
+      
+      // İşlem geçmişi
+      if (details.transactions && details.transactions.length) {
+        base.transactions = details.transactions;
+      }
     }
     
     items.push(base);
