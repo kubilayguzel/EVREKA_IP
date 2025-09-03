@@ -1,5 +1,5 @@
 // ================================================
-// Evreka IP — SADE (Sadece Sahip No) İçerik Scripti + Sonuç Toplama
+// Evreka IP — SADE (Sadece Sahip No) İçerik Scripti + Sonuç Toplama (STRICT)
 // ================================================
 
 const TAG = '[Evreka SahipNo]';
@@ -19,14 +19,13 @@ function waitFor(selector, { root = document, timeout = 7000, test = null } = {}
     const obs = new MutationObserver(() => {
       el = root.querySelector(selector);
       if (el && (!test || test(el))) {
-        obs.disconnect();
+        cleanup();
         resolve(el);
       }
     });
     obs.observe(root, { childList: true, subtree: true, attributes: true });
-    const to = setTimeout(() => { obs.disconnect(); reject(new Error(`waitFor timeout: ${selector}`)); }, timeout);
-    const _resolve = resolve;
-    resolve = (v) => { clearTimeout(to); _resolve(v); };
+    const timer = setTimeout(() => { cleanup(); reject(new Error(`waitFor timeout: ${selector}`)); }, timeout);
+    function cleanup() { try { obs.disconnect(); } catch {} try { clearTimeout(timer); } catch {} }
   });
 }
 function click(el) {
@@ -182,19 +181,42 @@ function findScrollContainerFor(el) {
 }
 
 // ---- Beklenen Toplamı Oku: "34 kayıt bulundu. Sayfa 1 / 2" ----
+function getExpectedTotalCountFromNodeText(txt) {
+  const m = (txt || '').match(/(\d+)\s*kayıt\s*b[uü]lundu/i);
+  return m ? parseInt(m[1], 10) : null;
+}
 function getExpectedTotalCount() {
   const nodes = Array.from(document.querySelectorAll('p, span, div'));
   const node = nodes.find(n => elementHasText(n, 'kayıt bulundu'));
   if (!node) return null;
-  const m = (node.textContent || '').match(/(\d+)\s*kayıt\s*b[uü]lundu/i);
-  return m ? parseInt(m[1], 10) : null;
+  return getExpectedTotalCountFromNodeText(node.textContent || '');
+}
+async function waitForTotalMetaAndParse(timeout = 45000) {
+  // Önce varsa direkt oku
+  let expected = getExpectedTotalCount();
+  if (typeof expected === 'number') return expected;
+
+  // Yoksa "kayıt bulundu" metni gelene kadar bekle
+  const start = performance.now();
+  while (performance.now() - start < timeout) {
+    const nodes = Array.from(document.querySelectorAll('p, span, div'));
+    const node = nodes.find(n => elementHasText(n, 'kayıt bulundu'));
+    if (node) {
+      expected = getExpectedTotalCountFromNodeText(node.textContent || '');
+      if (typeof expected === 'number') return expected;
+    }
+    await new Promise(r => setTimeout(r, 500));
+  }
+  return null;
 }
 
-// ---- Scroll Akışı: "yükleme → 1sn bekle → scroll" ----
+// ---- Scroll Akışı: "yükleme → 1sn bekle → scroll" (beklenen sayıya ulaşana dek) ----
 function sleep(ms){ return new Promise(r => setTimeout(r, ms)); }
 const countRows = () => document.querySelectorAll('tbody.MuiTableBody-root tr').length;
+const isLoading = () =>
+  !!document.querySelector('.MuiCircularProgress-root, [role="progressbar"], .MuiBackdrop-root[aria-hidden="false"]');
 
-function waitForRowIncrease(baseCount, timeout = 20000) {
+function waitForRowIncrease(baseCount, timeout = 35000) {
   return new Promise((resolve) => {
     const tbody = document.querySelector('tbody.MuiTableBody-root');
     if (!tbody) return resolve(false);
@@ -214,14 +236,15 @@ function waitForRowIncrease(baseCount, timeout = 20000) {
     obs.observe(tbody, { childList: true, subtree: true });
 
     // bazı ortamlarda sanal liste/paketli ekleme olabileceği için ek olarak poll
-    const poll = setInterval(check, 350);
+    const poll = setInterval(check, 400);
     const timer = setTimeout(() => { cleanup(); resolve(false); }, timeout);
   });
 }
 
-async function infiniteScrollAllRows(expectedTotal) {
+async function infiniteScrollAllRowsSTRICT(expectedTotal, { overallTimeoutMs = 360000 } = {}) {
   const tbody = document.querySelector('tbody.MuiTableBody-root');
   if (!tbody) return;
+
   const scroller = findScrollContainerFor(tbody);
   const scrollBottom = () => {
     try {
@@ -233,35 +256,57 @@ async function infiniteScrollAllRows(expectedTotal) {
     } catch {}
   };
 
+  const start = performance.now();
   let lastCount = countRows();
-  const expected = (typeof expectedTotal === 'number' && expectedTotal > 0) ? expectedTotal : null;
 
   // Eğer daha fazlası bekleniyorsa ilk scroll'u tetikle
-  if (!expected || lastCount < expected) {
-    await sleep(1000); // sayfa ilk paket veriyi çeksin
+  if (!expectedTotal || lastCount < expectedTotal) {
+    await sleep(800); // ilk paket için kısa bekleme
     scrollBottom();
   }
 
-  for (let i = 0; i < 200; i++) { // güvenlik üst limiti
-    const increasedTo = await waitForRowIncrease(lastCount, 20000);
-    if (!increasedTo) {
-      log('Yeni satır gelmedi, yükleme bitti veya zaman aşımı.');
-      break;
-    }
-    lastCount = increasedTo;
-    log('Yüklenen kayıt sayısı:', lastCount, expected ? ('/ ' + expected) : '');
-
-    if (expected && lastCount >= expected) {
-      await sleep(400); // küçük stabilize beklemesi
+  while (true) {
+    if (expectedTotal && lastCount >= expectedTotal) {
+      // küçük stabilize beklemesi
+      await sleep(500);
       break;
     }
 
-    // İSTENEN: "yeni veriler geldikten sonra 1sn bekle → scroll"
-    await sleep(1000);
+    // güvenlik: toplam süre aşıldıysa çık
+    if (performance.now() - start > overallTimeoutMs) {
+      log('Uyarı: overall timeout aşıldı. Yüklenen:', lastCount, 'beklenen:', expectedTotal);
+      break;
+    }
+
+    // yeni kayıt gelmesini bekle
+    const increasedTo = await waitForRowIncrease(lastCount, 35000); // 35s chunk beklemesi
+    if (increasedTo && increasedTo > lastCount) {
+      lastCount = increasedTo;
+      log('Yeni kayıtlar geldi →', lastCount, '/', expectedTotal || '?');
+
+      // İSTENEN: "yeni veriler geldikten sonra 1 sn bekle → scroll"
+      await sleep(1000);
+      scrollBottom();
+      continue;
+    }
+
+    // artış yoksa ama spinner/loader görünüyorsa biraz daha bekle ve tekrar dene
+    if (isLoading()) {
+      log('Loader görünüyor, biraz daha bekleniyor...');
+      await sleep(1500);
+      scrollBottom();
+      continue;
+    }
+
+    // artış yok, loader da yok → yine de bir şans daha ver
+    await sleep(1200);
     scrollBottom();
+
+    // küçük bir ek beklemeden sonra tekrar kontrol edilecek; döngü devam eder
   }
 
-  log('Sonsuz liste toplam satır:', lastCount, 'beklenen:', expectedTotal);
+  log('STRICT: Yüklenen toplam satır:', lastCount, 'beklenen:', expectedTotal);
+  return lastCount;
 }
 
 // --------- Sonuç Toplama ---------
@@ -293,24 +338,42 @@ function parseOwnerResults() {
 }
 
 async function waitAndSendOwnerResults() {
-  try { await waitFor('tbody.MuiTableBody-root tr', { timeout: 15000 }); } catch {}
-  await new Promise(r => setTimeout(r, 250));
+  // 1) Önce meta: "... kayıt bulundu" gelene kadar bekle ve oku
+  let expected = await waitForTotalMetaAndParse(60000); // 60s'e kadar bekle
+  if (typeof expected !== 'number' || !(expected > 0)) {
+    // Meta bulunamazsa yine de tabloya göre ilerleyelim (fallback)
+    try { await waitFor('tbody.MuiTableBody-root tr', { timeout: 20000 }); } catch {}
+    expected = getExpectedTotalCount(); // son bir kez daha dene
+  }
+  log('Beklenen toplam kayıt:', expected);
 
-  // toplam beklenen kayıt sayısı
-  let expected = null;
-  try { expected = getExpectedTotalCount(); } catch {}
+  // 2) Tablo en az bir satır gözüksün
+  try { await waitFor('tbody.MuiTableBody-root tr', { timeout: 30000 }); } catch {}
 
-  // Eğer >= 20 ise Sonsuz Liste'yi aç ve beklenen sayıya ulaşana kadar "yükleme→bekle→scroll" uygula
+  // 3) Sonsuz Liste gerekiyorsa aç
   try {
     const initialCount = document.querySelectorAll('tbody.MuiTableBody-root tr').length;
     const needInfinite = (typeof expected === 'number' ? expected >= 20 : initialCount >= 20);
     if (needInfinite) {
       const ok = await ensureInfiniteOn();
-      if (ok) {
-        await infiniteScrollAllRows(expected);
+      if (ok && typeof expected === 'number' && expected > 0) {
+        // 4) STRICT: beklenen sayıya ulaşana kadar yükleme→bekle→scroll
+        const loaded = await infiniteScrollAllRowsSTRICT(expected, { overallTimeoutMs: 360000 });
+        if (typeof loaded === 'number' && loaded < expected) {
+          log('Uyarı: beklenen sayıya ulaşılamadı. loaded:', loaded, 'expected:', expected);
+        }
       }
     }
   } catch (e) { /* yoksay */ }
+
+  // 5) Yalnızca beklenen sayıya ulaştıysak veriyi gönder (meta biliniyorsa)
+  const finalCount = document.querySelectorAll('tbody.MuiTableBody-root tr').length;
+  if (typeof expected === 'number' && expected > 0 && finalCount < expected) {
+    // beklenen tamamlanmadı → erken gönderme!
+    log('Beklenen sayıya ulaşılmadı, veri gönderilmeyecek. final:', finalCount, 'expected:', expected);
+    sendToOpener('HATA_KISI', { message: 'Sonuçların tam listelemesi tamamlanmadı.', loaded: finalCount, expected });
+    return;
+  }
 
   const items = parseOwnerResults();
   sendToOpener('VERI_GELDI_KISI', items);
