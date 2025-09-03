@@ -6,6 +6,7 @@
   "permissions": [],
   "host_permissions": [
     "*://arastirma.turkpatent.gov.tr/*",
+    "*://webim.turkpatent.gov.tr/*",
     "*://www.turkpatent.gov.tr/*"
   ],
   "background": {
@@ -15,11 +16,14 @@
     {
       "matches": [
         "*://arastirma.turkpatent.gov.tr/*",
+        "*://webim.turkpatent.gov.tr/*",
         "*://www.turkpatent.gov.tr/arastirma-yap*"
       ],
       "js": [
         "content_script.js"
-      ]
+      ],
+      "all_frames": true,
+      "run_at": "document_idle"
     }
   ],
   "externally_connectable": {
