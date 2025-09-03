@@ -125,81 +125,80 @@ const createGoodsAndServicesByClass = () => {
         return priorities;
     };
 
-    // IPRecord formatına dönüştür
-    const ipRecord = {
-        // Temel kimlik bilgileri
-        title: brandName || 'Başlıksız Marka',
-        type: 'trademark',
-        portfoyStatus: 'active',
-        
-        // Durum bilgileri
-        status: mapStatus(status),
-        recordOwnerType: 'self', // Varsayılan - handleSaveToPortfolio'da ayarlanacak
-        
-        // Başvuru bilgileri
-        applicationNumber: applicationNumber || null,
-        applicationDate: formatDate(applicationDate),
-        registrationNumber: registrationNumber || getDetailValue('Tescil Numarası') || null,
-        registrationDate: formatDate(getDetailValue('Tescil Tarihi')),
-        renewalDate: formatDate(getDetailValue('Yenileme Tarihi')),
-        
-        // Marka özel bilgileri
-        brandText: brandName || '',
-        brandImageUrl: brandImageDataUrl || null,
-        description: getDetailValue('Açıklama') || null,
-        
-        // Marka türü ve kategorisi
-        brandType: getDetailValue('Marka Türü') || 'Şekil + Kelime',
-        brandCategory: getDetailValue('Marka Kategorisi') || 'Ticaret/Hizmet Markası',
-        nonLatinAlphabet: getDetailValue('Latin Olmayan Alfabe') || null,
-        
-        // Sınıf ve mal/hizmet bilgileri
-        goodsAndServicesByClass: createGoodsAndServicesByClass(),
-        
-        // Bülten bilgileri
-        bulletins: createBulletins(),
-        
-        // Rüçhan bilgileri
-        priorities: createPriorities(),
-        
-        // Başvuru sahipleri - arayüzden gelen seçili sahipler
-        applicants: selectedApplicants.map(applicant => ({
-            id: applicant.id,
-            name: applicant.name,
-            email: applicant.email || null
-        })),
-        
-        // Ek bilgiler
-        agentInfo: getDetailValue('Vekil Bilgileri') || null,
-        
-        // Diğer alanlar
-        consentRequest: null,
-        coverLetterRequest: null,
-        
-        // Zaman damgaları
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-        };
-
-        // İşlem geçmişini ekle (eğer varsa)
-        if (transactions && Array.isArray(transactions) && transactions.length > 0) {
-            ipRecord.transactions = transactions.map(tx => ({
-                date: formatDate(tx.date),
-                description: tx.description,
-                note: tx.note,
-                type: 'system', // TÜRKPATENT'ten gelen
-                createdAt: new Date().toISOString()
-            }));
-        }
-
-        // Metadata ekle
-        ipRecord._metadata = {
-            source: 'turkpatent_scrape',
-            originalData: turkpatentData,
-            scrapedAt: new Date().toISOString()
-        };
-
-    return ipRecord;
+// IPRecord formatına dönüştür
+const ipRecord = {
+    // Temel kimlik bilgileri
+    title: brandName || 'Başlıksız Marka',
+    type: 'trademark',
+    portfoyStatus: 'active',
+    
+    // Durum bilgileri
+    status: mapStatus(status),
+    recordOwnerType: 'self',
+    
+    // Başvuru bilgileri
+    applicationNumber: applicationNumber || null,
+    applicationDate: formatDate(applicationDate),
+    registrationNumber: registrationNumber || getDetailValue('Tescil Numarası') || null,
+    registrationDate: formatDate(getDetailValue('Tescil Tarihi')),
+    renewalDate: formatDate(getDetailValue('Yenileme Tarihi')),
+    
+    // Marka özel bilgileri
+    brandText: brandName || '',
+    brandImageUrl: brandImageDataUrl || null,
+    description: getDetailValue('Açıklama') || null,
+    
+    // Marka türü ve kategorisi
+    brandType: getDetailValue('Marka Türü') || 'Şekil + Kelime',
+    brandCategory: getDetailValue('Marka Kategorisi') || 'Ticaret/Hizmet Markası',
+    nonLatinAlphabet: getDetailValue('Latin Olmayan Alfabe') || null,
+    
+    // Sınıf ve mal/hizmet bilgileri
+    goodsAndServicesByClass: createGoodsAndServicesByClass(),
+    
+    // Bülten bilgileri
+    bulletins: createBulletins(),
+    
+    // Rüçhan bilgileri
+    priorities: createPriorities(),
+    
+    // Başvuru sahipleri
+    applicants: selectedApplicants.map(applicant => ({
+        id: applicant.id,
+        name: applicant.name,
+        email: applicant.email || null
+    })),
+    
+    // Ek bilgiler
+    agentInfo: getDetailValue('Vekil Bilgileri') || null,
+    
+    // İşlem geçmişi (eğer varsa)
+    transactions: transactions && Array.isArray(transactions) && transactions.length > 0 
+        ? transactions.map(tx => ({
+            date: formatDate(tx.date),
+            description: tx.description,
+            note: tx.note,
+            type: 'system',
+            createdAt: new Date().toISOString()
+        })) 
+        : [],
+    
+    // Diğer alanlar
+    consentRequest: null,
+    coverLetterRequest: null,
+    
+    // Zaman damgaları
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    
+    // Metadata
+    _metadata: {
+        source: 'turkpatent_scrape',
+        originalData: turkpatentData,
+        scrapedAt: new Date().toISOString()
+    }
+};
+return ipRecord;
 }
 
 /**
@@ -265,13 +264,3 @@ export {
     mapTurkpatentResultsToIPRecords,
     mapStatus
 };
-// İşlem geçmişini ekle (eğer varsa)
-if (transactions && Array.isArray(transactions) && transactions.length > 0) {
-    ipRecord.transactions = transactions.map(tx => ({
-        date: formatDate(tx.date),
-        description: tx.description,
-        note: tx.note,
-        type: 'system', // TÜRKPATENT'ten gelen
-        createdAt: new Date().toISOString()
-    }));
-}
