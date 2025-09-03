@@ -97,7 +97,7 @@ function setupEventListeners() {
   bulkRadio?.addEventListener('change', syncMode);
   syncMode();
 
-  queryBtn?.addEventListener('click', onSingleQuery);
+  queryBtn?.addEventListener('click', onQuery);
   cancelBtn?.addEventListener('click', () => history.back());
   
   // Yeni kişi yönetimi olayları
@@ -422,4 +422,54 @@ function renderSelectedRelatedParties() {
 document.addEventListener('DOMContentLoaded', () => {
   loadSharedLayout();
   init();
+});
+// === Tek buton handler ===
+function onQuery(){
+  if (bulkRadio?.checked) {
+    onOwnerQueryViaExtension();
+  } else {
+    onSingleQuery();
+  }
+}
+
+// === Sahip No akışı: eklentiyi tetikle ===
+function onOwnerQueryViaExtension(){
+  const ownerId = (ownerIdInput?.value || '').trim();
+  if (!ownerId) return showToast('Sahip numarası girin.', 'warning');
+
+  const tpUrl = 'https://www.turkpatent.gov.tr/arastirma-yap?tab=marka';
+  window.open(tpUrl, '_blank');
+
+  try {
+    chrome?.runtime?.sendMessage?.(
+      EXTENSION_ID_SAHIP,
+      { type: 'START_KISI_QUERY', data: String(ownerId) },
+      (resp) => {
+        if (chrome.runtime.lastError) {
+          console.error('Mesaj hata:', chrome.runtime.lastError.message);
+          showToast('Eklentiye ulaşılamadı. Eklentinin yüklü/aktif olduğundan emin olun.', 'danger');
+        } else {
+          console.log('Eklentiye iletildi:', resp);
+          showToast('TÜRKPATENT sayfasında sorgu başlatılıyor…', 'info');
+        }
+      }
+    );
+  } catch (e){
+    console.error(e);
+    showToast('Eklenti mesajı gönderilemedi.', 'danger');
+  }
+}
+
+// === Eklentiden dönüş: sonuçları al ===
+window.addEventListener('message', (ev) => {
+  const msg = ev?.data || {};
+  if (msg?.source !== 'tp-extension-sahip') return;
+  if (msg.type === 'VERI_GELDI_KISI') {
+    const items = Array.isArray(msg.data) ? msg.data : [];
+    lastBulkItems = items;
+    renderBulkResults({ items, ownerId: ownerIdInput?.value || '', total: items.length });
+    showToast(`${items.length} kayıt alındı.`, 'success');
+  } else if (msg.type === 'HATA_KISI') {
+    showToast(`Sorgu hatası: ${msg.data?.message || 'Bilinmeyen'}`, 'danger');
+  }
 });
