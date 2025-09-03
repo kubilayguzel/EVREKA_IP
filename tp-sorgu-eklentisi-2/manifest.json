@@ -1,13 +1,13 @@
 {
   "manifest_version": 3,
-  "name": "Evreka IP Sorgu Yardımcısı (Kişi Numarası)",
-  "version": "1.0",
-  "description": "Evreka IP uygulamasından TÜRKPATENT üzerinde otomatik sorgulama yapar.",
+  "name": "Evreka IP • Sahip No Otomasyon",
+  "version": "1.0.0",
+  "description": "Marka Araştırması ekranında Kişi Numarası ile otomatik sorgu yapar (modal kapatma + input doldurma + Sorgula tıklama).",
   "permissions": [],
   "host_permissions": [
+    "*://www.turkpatent.gov.tr/*",
     "*://arastirma.turkpatent.gov.tr/*",
-    "*://webim.turkpatent.gov.tr/*",
-    "*://www.turkpatent.gov.tr/*"
+    "*://webim.turkpatent.gov.tr/*"
   ],
   "background": {
     "service_worker": "background.js"
@@ -15,9 +15,8 @@
   "content_scripts": [
     {
       "matches": [
-        "*://arastirma.turkpatent.gov.tr/*",
-        "*://webim.turkpatent.gov.tr/*",
-        "*://www.turkpatent.gov.tr/arastirma-yap*"
+        "*://www.turkpatent.gov.tr/arastirma-yap*",
+        "*://webim.turkpatent.gov.tr/*"
       ],
       "js": [
         "content_script.js"
@@ -29,11 +28,8 @@
   "externally_connectable": {
     "matches": [
       "http://localhost:*/*",
-      "http://127.0.0.1:*/*",
-      "https://ip-manager-production-aab4b.web.app/*",
       "https://kubilayguzel.github.io/*",
-      "http://192.168.1.37:8080/*",
-      "http://192.168.*:*/*"
+      "https://ip-manager-production-aab4b.web.app/*"
     ]
   }
 }
