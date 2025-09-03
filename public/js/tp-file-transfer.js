@@ -87,6 +87,32 @@ async function init() {
 }
 
 function setupEventListeners() {
+
+    // Radio button events ekle
+  const singleRadio = document.getElementById('singleTransfer');
+  const bulkRadio = document.getElementById('bulkByOwner');
+  const singleFields = document.getElementById('singleFields');
+  const bulkFields = document.getElementById('bulkFields');
+  
+  // Radio button değiştiğinde alanları göster/gizle
+  function toggleFields() {
+    if (singleRadio?.checked) {
+      singleFields?.classList.remove('hide');
+      bulkFields?.classList.add('hide');
+      console.log('[DEBUG] Single fields gösterildi');
+    } else if (bulkRadio?.checked) {
+      singleFields?.classList.add('hide');
+      bulkFields?.classList.remove('hide');
+      console.log('[DEBUG] Bulk fields gösterildi');
+    }
+  }
+  
+  singleRadio?.addEventListener('change', toggleFields);
+  bulkRadio?.addEventListener('change', toggleFields);
+  
+  // Sayfa yüklendiğinde initial state ayarla
+  toggleFields();
+  
   // Ana sorgulama butonu
   queryBtn?.addEventListener('click', handleQuery);
   
