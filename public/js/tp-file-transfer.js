@@ -155,6 +155,7 @@ function setupEventListeners() {
 
   console.log('[DEBUG] Event listeners kuruldu');
 }
+
 async function handleSaveToPortfolio() {
   const checkedBoxes = document.querySelectorAll('.record-checkbox:checked');
   
@@ -177,9 +178,10 @@ async function handleSaveToPortfolio() {
   try {
     // Loading göster
     const saveBtn = document.getElementById('savePortfolioBtn');
-    const originalText = saveBtn.textContent;
-    saveBtn.disabled = true;
-    saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm mr-2"></span>Kaydediliyor...';
+    if (saveBtn) {
+      saveBtn.disabled = true;
+      saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm mr-2"></span>Kaydediliyor...';
+    }
     
     // TÜRKPATENT verilerini IPRecord formatına dönüştür
     const ipRecords = mapTurkpatentResultsToIPRecords(selectedRecords, selectedApplicants);
@@ -194,16 +196,20 @@ async function handleSaveToPortfolio() {
     let errorCount = 0;
     const results = [];
     
+    // Mevcut kayıtları al (duplikasyon kontrolü için)
+    const existingRecords = await ipRecordsService.getRecords();
+    const allRecords = existingRecords?.data || existingRecords?.items || [];
+    
     // Her kayıt için ayrı ayrı kaydetme dene
     for (const record of ipRecords) {
       try {
         // Aynı başvuru numarası ile 'self' kaydı var mı kontrol et
-        const existingCheck = await ipRecordsService.checkDuplicateApplicationNumber(
-          record.applicationNumber, 
-          'self'
+        const existingRecord = allRecords.find(r => 
+          r.applicationNumber === record.applicationNumber && 
+          r.recordOwnerType === 'self'
         );
         
-        if (existingCheck.exists) {
+        if (existingRecord) {
           skippedCount++;
           results.push({ 
             record: record.title || record.applicationNumber, 
@@ -259,8 +265,10 @@ async function handleSaveToPortfolio() {
   } finally {
     // Loading'i kaldır
     const saveBtn = document.getElementById('savePortfolioBtn');
-    saveBtn.disabled = false;
-    saveBtn.textContent = originalText;
+    if (saveBtn) {
+      saveBtn.disabled = false;
+      saveBtn.innerHTML = 'Portföye Ekle';
+    }
   }
 }
 
