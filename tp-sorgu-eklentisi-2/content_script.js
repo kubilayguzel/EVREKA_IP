@@ -1,5 +1,6 @@
 // ================================================
 // Evreka IP — SADE (Sadece Sahip No) İçerik Scripti + Sonuç Toplama (STRICT)
+// (Güncellenmiş sürüm: dump/log kısayolları + daha güçlü bekleme)
 // ================================================
 
 const TAG = '[Evreka SahipNo]';
@@ -333,7 +334,7 @@ function findDetailButton(tr) {
 
 async function parseDetailsFromOpenDialog(dialogRoot) {
   if (!dialogRoot) return {};
-  // Önce görsel
+  // Görsel
   let imgSrc = null;
   const img = dialogRoot.querySelector('img');
   if (img && img.src) imgSrc = img.src;
@@ -349,7 +350,6 @@ async function parseDetailsFromOpenDialog(dialogRoot) {
     // Çok uzun bloklar yerine küçük çiftler
     if (labels.length === 1) {
       const label = labels[0];
-      // label dışındaki değer:
       let value = texts.replace(label, '').trim();
       if (value && value.length && value.length < 500) fields[label] = value;
     } else if (strongs.length === 1) {
@@ -391,7 +391,7 @@ async function openRowModalAndParse(tr, { timeout = 9000 } = {}) {
   }
 }
 
-// --------- Sonuç Toplama ---------
+// --------- Satır Parse ---------
 function parseOwnerRowBase(tr, idx) {
   const get = (role) => {
     const td = tr.querySelector(`td[role="${role}"]`);
@@ -428,6 +428,40 @@ async function collectOwnerResultsWithDetails() {
     items.push(base);
   }
   return items;
+}
+
+// --------- Sonuç Toplama & Dump ---------
+function installDumpShortcuts() {
+  document.addEventListener('keydown', (ev) => {
+    if (!ev.altKey) return;
+    const key = ev.key.toLowerCase();
+    if (key === 'l') {
+      console.log('📦 __evrekaOwnerDump:', window.__evrekaOwnerDump);
+      if (window.__evrekaOwnerDump?.items?.length) {
+        console.table(window.__evrekaOwnerDump.items.slice(0, 15).map(x => ({
+          order: x.order,
+          appNo: x.applicationNumber,
+          brand: x.brandName,
+          owner: x.ownerName,
+          regNo: x.registrationNumber,
+          status: x.status,
+          classes: x.niceClasses
+        })));
+      }
+    } else if (key === 's') {
+      if (!window.__evrekaOwnerDump) return;
+      const blob = new Blob([JSON.stringify(window.__evrekaOwnerDump, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const ts = new Date().toISOString().replace(/[:.]/g, '-');
+      a.href = url;
+      a.download = `evreka-owner-dump-${ts}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+  });
 }
 
 async function waitAndSendOwnerResults() {
@@ -469,6 +503,36 @@ async function waitAndSendOwnerResults() {
 
   // 5) Satırları MODAL ile detaylı parse et (görsel dahil)
   const items = await collectOwnerResultsWithDetails();
+
+  // Dump'ı hazırla
+  const dump = {
+    meta: {
+      url: location.href,
+      ts: new Date().toISOString(),
+      expectedTotal: expected ?? null,
+      loadedCount: finalCount
+    },
+    items
+  };
+  window.__evrekaOwnerDump = dump;
+
+  // Özet log + ilk öğe
+  log('Toplanan kayıt sayısı:', items.length);
+  if (items.length) {
+    console.table(items.slice(0, 15).map(x => ({
+      order: x.order,
+      appNo: x.applicationNumber,
+      brand: x.brandName,
+      owner: x.ownerName,
+      regNo: x.registrationNumber,
+      status: x.status,
+      classes: x.niceClasses,
+      hasImage: !!x.brandImageDataUrl
+    })));
+    console.log('İlk kayıt (full):', items[0]);
+    console.log('Dump → window.__evrekaOwnerDump (Alt+L: log, Alt+S: JSON indirme)');
+  }
+
   sendToOpener('VERI_GELDI_KISI', items);
 }
 
@@ -562,6 +626,7 @@ function captureUrlParams() {
 
 document.addEventListener('DOMContentLoaded', () => {
   log('DOMContentLoaded. frame:', window.self !== window.top ? 'iframe' : 'top');
+  installDumpShortcuts();
   captureUrlParams();
 });
 window.addEventListener('load', () => {
