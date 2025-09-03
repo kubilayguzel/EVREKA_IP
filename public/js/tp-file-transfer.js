@@ -1,8 +1,13 @@
-// --- DOM helpers ---
-function _el(id){ return document.getElementById(id); }
-function _showBlock(el){ if(!el) return; el.classList.remove('hide'); el.style.display=''; }
-function _hideBlock(el){ if(!el) return; el.classList.add('hide'); }
-function showToast(msg, type='info'){
+// =============================
+// TÜRKPATENT Dosya Aktarım Modülü
+// =============================
+
+// --- DOM Helper Fonksiyonlar ---
+function _el(id) { return document.getElementById(id); }
+function _showBlock(el) { if(!el) return; el.classList.remove('hide'); el.style.display=''; }
+function _hideBlock(el) { if(!el) return; el.classList.add('hide'); }
+
+function showToast(msg, type='info') {
   const cls = type==='danger'?'alert-danger':(type==='success'?'alert-success':(type==='warning'?'alert-warning':'alert-info'));
   const div = document.createElement('div');
   div.className = `alert ${cls}`;
@@ -18,52 +23,38 @@ function showToast(msg, type='info'){
   setTimeout(()=>{ div.classList.add('fade'); div.addEventListener('transitionend', ()=>div.remove()); }, 3500);
   div.querySelector('.close')?.addEventListener('click', ()=>div.remove());
 }
-function fmtDateToTR(isoOrDDMMYYYY){
+
+function fmtDateToTR(isoOrDDMMYYYY) {
   if(!isoOrDDMMYYYY) return '';
-  // If DD.MM.YYYY -> preserve
+  // DD.MM.YYYY formatında ise aynen dön
   if(/^\d{2}\.\d{2}\.\d{4}$/.test(isoOrDDMMYYYY)) return isoOrDDMMYYYY;
-  // If ISO YYYY-MM-DD
+  // ISO YYYY-MM-DD formatını DD.MM.YYYY'ye çevir
   const m = String(isoOrDDMMYYYY).match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if(m) return `${m[3]}.${m[2]}.${m[1]}`;
   return String(isoOrDDMMYYYY);
 }
 
-// --- Firebase Functions ---
+// --- Firebase Imports ---
 import { app } from '../firebase-config.js';
 import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-functions.js';
 import { loadSharedLayout, ensurePersonModal, openPersonModal } from './layout-loader.js';
 import { personService } from '../firebase-config.js';
+
+// --- Firebase Functions ---
 const functions = getFunctions(app, 'europe-west1');
 const scrapeTrademarkFunction = httpsCallable(functions, 'scrapeTrademark', { timeout: 120000 });
-let scrapeOwnerTrademarks;
-try {
-  scrapeOwnerTrademarks = httpsCallable(functions, 'scrapeOwnerTrademarks', { timeout: 240000 });
-} catch (e) {
-  // Yoksa çağrı anında yakalanacak
-}
 
-// --- Elements ---
+// --- DOM Elements ---
 const singleFields = _el('singleFields');
-const bulkFields   = _el('bulkFields');
-const singleRadio  = _el('singleTransfer');
-const bulkRadio    = _el('bulkByOwner');
 const basvuruNoInput = _el('basvuruNoInput');
-const queryBtn       = _el('queryBtn');
-const ownerIdInput   = _el('ownerIdInput');
-const bulkQueryBtn   = _el('bulkQueryBtn');
-const loadingEl      = _el('loading');
-const bulkLoadingEl  = _el('bulkLoading');
+const sahipNoInput = _el('sahipNoInput');
+const queryBtn = _el('queryBtn');
+const loadingEl = _el('loading');
 const singleResultContainer = _el('singleResultContainer');
 const singleResultInner = _el('singleResultInner');
-const bulkResultsContainer = _el('bulkResultsContainer');
-const bulkResultsBody = _el('bulkResultsBody');
-const bulkMeta = _el('bulkMeta');
-const exportCsvBtn = _el('exportCsvBtn');
-const savePortfolioBtn = _el('savePortfolioBtn');
-const saveThirdPartyBtn = _el('saveThirdPartyBtn');
 const cancelBtn = _el('cancelBtn');
 
-// Yeni eklenen elementler
+// Kişi yönetimi elementleri
 const relatedPartySearchInput = _el('relatedPartySearchInput');
 const relatedPartySearchResults = _el('relatedPartySearchResults');
 const addNewPersonBtn = _el('addNewPersonBtn');
@@ -73,19 +64,22 @@ const relatedPartyCount = _el('relatedPartyCount');
 // --- Global State ---
 let allPersons = [];
 let selectedRelatedParties = [];
-let lastBulkItems = [];
 
-// Eklentinin ID'sini buraya ekleyin (sadece bilgi amaçlı)
-const EXTENSION_ID_BASVURU = 'bbcpnpgglakoagjakgigmgjpdpiigpah';  // Başvuru numarası için
-const EXTENSION_ID_SAHIP = 'abnopnippoapheoakgangaofeelllpbm';  // Sahip numarası için (tp-sorgu-eklentisi-2)
+// --- Extension ID'leri ---
+const EXTENSION_ID_SAHIP = 'abnopnippoapheoakgangaofeelllpbm';
 
-// --------------- INIT ---------------
+// ===============================
+// INITIALIZATION
+// ===============================
+
 async function init() {
   try {
     const personsResult = await personService.getPersons();
     allPersons = Array.isArray(personsResult.data) ? personsResult.data : [];
     console.log(`[INIT] ${allPersons.length} kişi yüklendi.`);
+    
     setupEventListeners();
+    setupExtensionMessageListener();
   } catch (error) {
     console.error("Veri yüklenirken hata oluştu:", error);
     showToast("Gerekli veriler yüklenemedi.", "danger");
@@ -93,14 +87,13 @@ async function init() {
 }
 
 function setupEventListeners() {
-  singleRadio?.addEventListener('change', syncMode);
-  bulkRadio?.addEventListener('change', syncMode);
-  syncMode();
-
-  queryBtn?.addEventListener('click', onQuery);
+  // Ana sorgulama butonu
+  queryBtn?.addEventListener('click', handleQuery);
+  
+  // İptal butonu
   cancelBtn?.addEventListener('click', () => history.back());
   
-  // Yeni kişi yönetimi olayları
+  // Kişi arama
   let searchTimer;
   relatedPartySearchInput?.addEventListener('input', (e) => {
     const query = e.target.value.trim();
@@ -112,6 +105,8 @@ function setupEventListeners() {
     }
     searchTimer = setTimeout(() => searchPersons(query), 250);
   });
+  
+  // Arama sonuçlarına tıklama
   relatedPartySearchResults?.addEventListener('click', (e) => {
     const item = e.target.closest('.search-result-item');
     if (!item) return;
@@ -123,6 +118,8 @@ function setupEventListeners() {
       _hideBlock(relatedPartySearchResults);
     }
   });
+  
+  // Yeni kişi ekleme
   addNewPersonBtn?.addEventListener('click', async () => {
     if (typeof ensurePersonModal === 'function') await ensurePersonModal();
     if (typeof openPersonModal === 'function') {
@@ -134,112 +131,205 @@ function setupEventListeners() {
       });
     }
   });
+  
+  // Kişi silme
   relatedPartyList?.addEventListener('click', (e) => {
     const btn = e.target.closest('.remove-selected-item-btn');
     if (btn) removeRelatedParty(btn.dataset.id);
   });
 
-  exportCsvBtn?.addEventListener('click', () => {
-    if (!lastBulkItems || lastBulkItems.length === 0) {
-      return showToast('Dışa aktarılacak veri yok.', 'warning');
-    }
-    const headers = ['Sıra','Başvuru Numarası','Marka Adı','Marka Sahibi','Başvuru Tarihi','Tescil No','Durumu','Nice Sınıfları'];
-    const rows = lastBulkItems.map((x, i) => [
-      i+1,
-      x.applicationNumber || '',
-      x.brandName || '',
-      x.ownerName || '',
-      fmtDateToTR(x.applicationDate || ''),
-      x.registrationNumber || '',
-      x.status || '',
-      x.niceClasses || ''
-    ]);
-    const csv = [headers].concat(rows).map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `turkpatent_${Date.now()}_sahip_liste.csv`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
+  console.log('[DEBUG] Event listeners kuruldu:', {
+    'queryBtn': !!queryBtn,
+    'basvuruNoInput': !!basvuruNoInput,
+    'sahipNoInput': !!sahipNoInput
   });
 }
 
-function syncMode(){
-  const isSingle = singleRadio?.checked;
-  if (isSingle){
-    _showBlock(singleFields);
-    _hideBlock(bulkFields);
-    _hideBlock(bulkResultsContainer);
-  } else {
-    _hideBlock(singleFields);
-    _showBlock(bulkFields);
+// ===============================
+// ANA SORGULAMA FONKSİYONU
+// ===============================
+
+async function handleQuery() {
+  const basvuruNo = (basvuruNoInput?.value || '').trim();
+  const sahipNo = (sahipNoInput?.value || '').trim();
+  
+  // İki alanın da dolu olmadığını kontrol et
+  if (!basvuruNo && !sahipNo) {
+    return showToast('Başvuru numarası veya sahip numarası girin.', 'warning');
   }
-  singleResultInner.innerHTML='';
-  _hideBlock(singleResultContainer);
-  selectedRelatedParties = [];
-  renderSelectedRelatedParties();
-  savePortfolioBtn.disabled = true;
-  saveThirdPartyBtn.disabled = true;
+  
+  // İkisinin birden dolu olmadığını kontrol et
+  if (basvuruNo && sahipNo) {
+    return showToast('Lütfen sadece bir alan doldurun (başvuru numarası VEYA sahip numarası).', 'warning');
+  }
+  
+  if (basvuruNo) {
+    // Başvuru numarası ile Firebase function'a git
+    await queryByApplicationNumber(basvuruNo);
+  } else if (sahipNo) {
+    // Sahip numarası ile eklentiye yönlendir
+    await queryByOwnerNumber(sahipNo);
+  }
 }
 
-// --------------- TEKLI SORGU ---------------
-async function onSingleQuery(){
-  const basvuruNo = (basvuruNoInput?.value || '').trim();
-  if (!basvuruNo) return showToast('Başvuru numarası girin.', 'warning');
+// ===============================
+// BAŞVURU NUMARASI SORGULAMA
+// ===============================
+
+async function queryByApplicationNumber(basvuruNo) {
+  console.log('[DEBUG] Başvuru numarası sorgulanıyor:', basvuruNo);
+  
   try {
     _showBlock(loadingEl);
+    _hideBlock(singleResultContainer);
+    
     const result = await scrapeTrademarkFunction({ basvuruNo });
     const data = result?.data || {};
+    
     if (!data || data.found === false) {
-      showToast(data?.message || 'Sonuç bulunamadı ya da erişilemedi.', 'warning');
+      showToast(data?.message || 'Bu başvuru numarası için sonuç bulunamadı.', 'warning');
     } else {
       renderSingleResult(data);
+      showToast('Başvuru bilgileri başarıyla alındı.', 'success');
     }
   } catch (err) {
+    console.error('[DEBUG] Başvuru numarası sorgulama hatası:', err);
     showToast('Sorgulama hatası: ' + (err?.message || err), 'danger');
   } finally {
     _hideBlock(loadingEl);
   }
 }
 
-// --------------- TOPLU (SAHİP NO) - EKLENTİ İLE ---------------
-// Bu fonksiyon, tekli sorguya odaklanıldığı için kaldırılmıştır.
-// Ancak, eğer gelecekte bu işlevselliği eklemek isterseniz,
-// kodun bu kısma eklenebileceğini unutmayın.
+// ===============================
+// SAHİP NUMARASI SORGULAMA
+// ===============================
 
-function renderBulkResults(payload){
-  const items = Array.isArray(payload.items) ? payload.items : [];
-  const ownerId = payload.ownerId || (items[0]?.ownerName?.match(/\((\d+)\)/)?.[1] || '');
-  const total = payload.total ?? items.length;
+async function queryByOwnerNumber(sahipNo) {
+  console.log('[DEBUG] Sahip numarası eklentiye yönlendiriliyor:', sahipNo);
+  
+  try {
+    _showBlock(loadingEl);
+    _hideBlock(singleResultContainer);
+    
+    // DOM'a data attribute ile bilgiyi kaydet
+    document.body.setAttribute('data-tp-query', sahipNo);
+    document.body.setAttribute('data-tp-query-type', 'sahip-no');
+    document.body.setAttribute('data-tp-query-status', 'pending');
+    document.body.setAttribute('data-tp-timestamp', Date.now().toString());
+    
+    // TÜRKPATENT sayfasını otomatik parametrelerle aç
+    const turkPatentUrl = `https://www.turkpatent.gov.tr/arastirma-yap?form=trademark&auto_query=${encodeURIComponent(sahipNo)}&query_type=sahip&source=${encodeURIComponent(window.location.origin)}`;
+    
+    console.log('[DEBUG] TÜRKPATENT URL açılıyor:', turkPatentUrl);
+    
+    // Yeni sekme aç
+    const newWindow = window.open(turkPatentUrl, '_blank', 'noopener,noreferrer');
+    
+    if (newWindow) {
+      showToast('TÜRKPATENT sayfası açıldı. Eklenti otomatik çalışacak ve sonuçları gönderecek.', 'info');
+      
+      // 45 saniye timeout
+      const timeoutId = setTimeout(() => {
+        const currentStatus = document.body.getAttribute('data-tp-query-status');
+        if (currentStatus === 'pending') {
+          _hideBlock(loadingEl);
+          showToast('Sorgu zaman aşımına uğradı. Eklentinin yüklü ve aktif olduğundan emin olun.', 'warning');
+          clearAttributes();
+        }
+      }, 45000);
+      
+      window.tpQueryTimeout = timeoutId;
+      
+    } else {
+      _hideBlock(loadingEl);
+      showToast('Pop-up engellendi. Lütfen tarayıcı ayarlarından pop-up\'ları açın ve tekrar deneyin.', 'danger');
+      clearAttributes();
+    }
 
-  bulkMeta.textContent = `Sahip No: ${ownerId || '-'} • ${total} kayıt`;
-  bulkResultsBody.innerHTML = items.map((x, idx) => `
-    <tr>
-      <td>${idx+1}</td>
-      <td>${x.applicationNumber || ''}</td>
-      <td>${x.brandName || ''}</td>
-      <td>${x.ownerName || ''}</td>
-      <td>${fmtDateToTR(x.applicationDate || '')}</td>
-      <td>${x.registrationNumber || ''}</td>
-      <td>${x.status || ''}</td>
-      <td>${x.niceClasses || ''}</td>
-      <td class="text-center">
-        <button class="btn btn-sm btn-primary js-bulk-detail" data-appno="${x.applicationNumber || ''}">
-          Detay
-        </button>
-      </td>
-    </tr>
-  `).join('');
-
-  _showBlock(bulkResultsContainer);
+  } catch (err) {
+    _hideBlock(loadingEl);
+    console.error('[DEBUG] Sahip numarası sorgulama hatası:', err);
+    showToast('İşlem hatası: ' + (err.message || err), 'danger');
+    clearAttributes();
+  }
 }
 
-// --------------- TEKLI RENDER ---------------
-function renderSingleResult(payload){
+// ===============================
+// EKLENTİ MESAJ DİNLEYİCİSİ
+// ===============================
+
+function setupExtensionMessageListener() {
+  console.log('[DEBUG] Eklenti mesaj dinleyicisi kuruluyor...');
+  
+  window.addEventListener('message', (event) => {
+    // Güvenlik kontrolü
+    const allowedOrigins = [
+      window.location.origin,
+      'https://www.turkpatent.gov.tr',
+      'https://turkpatent.gov.tr'
+    ];
+    
+    if (!allowedOrigins.includes(event.origin)) {
+      return;
+    }
+    
+    if (event.data && event.data.source === 'tp-extension-sahip') {
+      console.log('[DEBUG] Eklenti mesajı alındı:', event.data);
+      
+      // Global timeout'u iptal et
+      if (window.tpQueryTimeout) {
+        clearTimeout(window.tpQueryTimeout);
+        delete window.tpQueryTimeout;
+      }
+      
+      if (event.data.type === 'VERI_GELDI_KISI') {
+        _hideBlock(loadingEl);
+        const data = event.data.data || [];
+        
+        if (!data.length) {
+          showToast('Bu sahip numarası için sonuç bulunamadı.', 'warning');
+        } else {
+          renderOwnerResults(data);
+          showToast(`${data.length} kayıt başarıyla alındı.`, 'success');
+        }
+        clearAttributes();
+        
+      } else if (event.data.type === 'HATA_KISI') {
+        _hideBlock(loadingEl);
+        const errorMsg = event.data.data?.message || 'Bilinmeyen Hata';
+        showToast('Eklenti hatası: ' + errorMsg, 'danger');
+        clearAttributes();
+        
+      } else if (event.data.type === 'SORGU_BASLADI') {
+        showToast('TÜRKPATENT sayfasında sorgu başladı. Lütfen bekleyin...', 'info');
+        
+      } else if (event.data.type === 'EKLENTI_HAZIR') {
+        console.log('[DEBUG] Eklenti hazır olduğunu bildirdi');
+      }
+    }
+  });
+  
+  console.log('[DEBUG] ✅ Eklenti mesaj dinleyicisi kuruldu.');
+}
+
+// ===============================
+// YARDIMCI FONKSİYONLAR
+// ===============================
+
+function clearAttributes() {
+  document.body.removeAttribute('data-tp-query');
+  document.body.removeAttribute('data-tp-query-type');
+  document.body.removeAttribute('data-tp-query-status');
+  document.body.removeAttribute('data-tp-timestamp');
+}
+
+// ===============================
+// RENDER FONKSİYONLARI
+// ===============================
+
+function renderSingleResult(payload) {
   const d = payload.data && typeof payload.data === 'object' ? payload.data : payload;
+  
   const trademarkName = d.trademarkName || '';
   const status = d.status || '';
   const imageUrl = d.imageSignedUrl || d.publicImageUrl || d.imageUrl || '';
@@ -256,137 +346,220 @@ function renderSingleResult(payload){
   const niceClasses = Array.isArray(d.niceClasses) ? d.niceClasses : [];
   const goods = Array.isArray(d.goods) ? d.goods : [];
 
-  // Önceki seçimleri temizle
-  selectedRelatedParties = [];
-  renderSelectedRelatedParties();
+  const niceStr = niceClasses.map(n => `Sınıf ${n}`).join(', ');
+  const goodsStr = goods.length ? goods.join(', ') : '';
 
-  // Sahip numarasını (ownerId) kullanarak veritabanında eşleşme ara
-  if (ownerId) {
-    const matchedPerson = allPersons.find(p => String(p.tpeNo) === String(ownerId));
-    if (matchedPerson) {
-      addRelatedParty(matchedPerson);
-      showToast(`${matchedPerson.name} (${ownerId}) portföy sahibiyle eşleşti ve otomatik eklendi.`, 'success');
-    }
+  let imageHTML = '';
+  if (imageUrl) {
+    imageHTML = `<div class="trademark-image-container mb-3">
+      <img src="${imageUrl}" alt="Marka Görseli" class="trademark-image" style="max-width: 200px; max-height: 200px; border: 1px solid #ddd; border-radius: 8px;" />
+    </div>`;
   }
 
-  const heroHtml = `
-    <div class="hero">
-      <div class="hero-img-wrap">
-        <img class="hero-img" src="${imageUrl || ''}" alt="Marka Görseli" onerror="this.src=''; this.style.background='#f4f6f8';">
-      </div>
-      <div class="hero-meta flex-grow-1">
-        <h4 class="mb-1">${trademarkName || '(Marka Adı Yok)'}</h4>
-        <div class="mb-3"><span class="badge badge-soft">${status || 'Durum bilgisi yok'}</span></div>
-        <div class="kv-grid">
-          <div class="kv-item">
-            <div class="label">Sahip No</div>
-            <div class="value">${ownerId || '-'}</div>
+  const htmlContent = `
+    ${imageHTML}
+    <div class="trademark-details">
+      <div class="row">
+        <div class="col-md-6">
+          <div class="detail-group">
+            <label class="detail-label">Marka Adı:</label>
+            <div class="detail-value">${trademarkName || '—'}</div>
           </div>
-          <div class="kv-item">
-            <div class="label">Başvuru No</div>
-            <div class="value">${applicationNumber || '-'}</div>
+          <div class="detail-group">
+            <label class="detail-label">Başvuru Numarası:</label>
+            <div class="detail-value">${applicationNumber || '—'}</div>
           </div>
-          <div class="kv-item">
-            <div class="label">Başvuru Tarihi</div>
-            <div class="value">${applicationDate || '-'}</div>
+          <div class="detail-group">
+            <label class="detail-label">Başvuru Tarihi:</label>
+            <div class="detail-value">${applicationDate || '—'}</div>
           </div>
-          <div class="kv-item">
-            <div class="label">Tescil No</div>
-            <div class="value">${registrationNumber || '-'}</div>
+          <div class="detail-group">
+            <label class="detail-label">Tescil Numarası:</label>
+            <div class="detail-value">${registrationNumber || '—'}</div>
           </div>
-          <div class="kv-item">
-            <div class="label">Tescil Tarihi</div>
-            <div class="value">${registrationDate || '-'}</div>
+          <div class="detail-group">
+            <label class="detail-label">Tescil Tarihi:</label>
+            <div class="detail-value">${registrationDate || '—'}</div>
           </div>
-          <div class="kv-item">
-            <div class="label">Uluslararası Tescil No</div>
-            <div class="value">${intlRegNo || '-'}</div>
+        </div>
+        <div class="col-md-6">
+          <div class="detail-group">
+            <label class="detail-label">Durumu:</label>
+            <div class="detail-value">${status || '—'}</div>
           </div>
-
-          <div class="kv-item owner-wide" style="grid-column:1 / -1;">
-            <div class="label">Sahip Adresi</div>
-            <div class="value">${ownerAddress || '-'}</div>
+          <div class="detail-group">
+            <label class="detail-label">Sahibi:</label>
+            <div class="detail-value">${owner || '—'}</div>
           </div>
-          <div class="kv-item owner-wide" style="grid-column:1 / -1;">
-            <div class="label">Sahip</div>
-            <div class="value">${owner || '-'}</div>
+          <div class="detail-group">
+            <label class="detail-label">Sahip ID:</label>
+            <div class="detail-value">${ownerId || '—'}</div>
           </div>
-
-          <div class="kv-item">
-            <div class="label">Koruma Tarihi</div>
-            <div class="value">${protectionDate || '-'}</div>
+          <div class="detail-group">
+            <label class="detail-label">Sahip Adresi:</label>
+            <div class="detail-value">${ownerAddress || '—'}</div>
           </div>
-          <div class="kv-item">
-            <div class="label">Tür</div>
-            <div class="value">${type || '-'}</div>
-          </div>
-          <div class="kv-item">
-            <div class="label">Nice Sınıfları</div>
-            <div class="value">${(niceClasses && niceClasses.length) ? niceClasses.join(', ') : '-'}</div>
+          <div class="detail-group">
+            <label class="detail-label">Marka Türü:</label>
+            <div class="detail-value">${type || '—'}</div>
           </div>
         </div>
       </div>
+      ${intlRegNo ? `
+      <div class="detail-group">
+        <label class="detail-label">Uluslararası Tescil No:</label>
+        <div class="detail-value">${intlRegNo}</div>
+      </div>` : ''}
+      ${protectionDate ? `
+      <div class="detail-group">
+        <label class="detail-label">Koruma Tarihi:</label>
+        <div class="detail-value">${protectionDate}</div>
+      </div>` : ''}
+      ${niceStr ? `
+      <div class="detail-group">
+        <label class="detail-label">Nice Sınıfları:</label>
+        <div class="detail-value">${niceStr}</div>
+      </div>` : ''}
+      ${goodsStr ? `
+      <div class="detail-group">
+        <label class="detail-label">Mal/Hizmetler:</label>
+        <div class="detail-value">${goodsStr}</div>
+      </div>` : ''}
     </div>
   `;
 
-  let goodsHtml = '';
-  if (goods.length){
-    const clsMap = {};
-    goods.forEach(g => {
-      const c = String(g.class || g.cls || '').trim() || 'Genel';
-      if(!clsMap[c]) clsMap[c] = [];
-      const desc = (g.description || '').trim();
-      if (desc) clsMap[c].push(desc);
-    });
-    goodsHtml = Object.keys(clsMap).map(cls => {
-      const items = clsMap[cls].map(x => `<li>${x}</li>`).join('');
-      return `<div class="goods-group"><div class="goods-class">Sınıf ${cls}</div><ul class="goods-items">${items}</ul></div>`;
-    }).join('');
-  } else {
-    goodsHtml = `<div class="muted">Mal ve hizmetler listesi bulunamadı.</div>`;
-  }
-
-  singleResultInner.innerHTML = `
-    <div class="section-card" style="box-shadow:none; border:none; padding:0; margin:0 0 12px 0;">
-      ${heroHtml}
-    </div>
-    <div class="section-card" style="box-shadow:none; border:none; padding:0; margin:0;">
-      <div class="section-title" style="padding-left:0; padding-right:0;">Mal ve Hizmetler</div>
-      ${goodsHtml}
-    </div>
-  `;
-
+  singleResultInner.innerHTML = htmlContent;
   _showBlock(singleResultContainer);
-  savePortfolioBtn.disabled = false;
-  saveThirdPartyBtn.disabled = false;
 }
 
-// --- Kişi arama & ekleme ---
-function searchPersons(query) {
-  const container = _el('relatedPartySearchResults');
-  const nq = query.toLowerCase();
-  const filtered = allPersons.filter(p =>
-    (p.name || '').toLowerCase().includes(nq) || (p.tpeNo || '').includes(nq)
-  );
-
-  if (filtered.length === 0) {
-    container.innerHTML = '<p class="p-2 text-muted">Sonuç bulunamadı.</p>';
-    _showBlock(container);
+function renderOwnerResults(items) {
+  if (!items || !items.length) {
+    singleResultInner.innerHTML = '<p class="text-muted">Sonuç bulunamadı.</p>';
+    _showBlock(singleResultContainer);
     return;
   }
 
-  container.innerHTML = filtered.slice(0, 50).map(p =>
-    `<div class="search-result-item" data-id="${p.id}">
-      <b>${p.name}</b> <small class="text-muted">${p.email || ''} | TPE No: ${p.tpeNo || ''}</small>
-    </div>`
-  ).join('');
+  const total = items.length;
+  const firstItem = items[0];
+  const ownerName = firstItem.ownerName || '';
+  
+  let tableHTML = `
+    <div class="owner-results">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h5>Sahip: ${ownerName} • ${total} kayıt</h5>
+        <button class="btn btn-outline-primary btn-sm" onclick="exportOwnerResultsCSV()">
+          <i class="fas fa-file-csv mr-1"></i> CSV Dışa Aktar
+        </button>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-hover table-striped">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Başvuru Numarası</th>
+              <th>Marka Adı</th>
+              <th>Başvuru Tarihi</th>
+              <th>Tescil No</th>
+              <th>Durumu</th>
+              <th>Nice Sınıfları</th>
+            </tr>
+          </thead>
+          <tbody>`;
 
-  _showBlock(container);
+  items.forEach((item, index) => {
+    tableHTML += `
+      <tr>
+        <td>${index + 1}</td>
+        <td>${item.applicationNumber || ''}</td>
+        <td>${item.brandName || ''}</td>
+        <td>${fmtDateToTR(item.applicationDate || '')}</td>
+        <td>${item.registrationNumber || ''}</td>
+        <td>${item.status || ''}</td>
+        <td>${item.niceClasses || ''}</td>
+      </tr>`;
+  });
+
+  tableHTML += `
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+
+  // Global değişkene kaydet (CSV export için)
+  window.currentOwnerResults = items;
+
+  singleResultInner.innerHTML = tableHTML;
+  _showBlock(singleResultContainer);
+}
+
+// CSV Export fonksiyonu
+window.exportOwnerResultsCSV = function() {
+  if (!window.currentOwnerResults || !window.currentOwnerResults.length) {
+    showToast('Dışa aktarılacak veri yok.', 'warning');
+    return;
+  }
+  
+  const headers = ['Sıra','Başvuru Numarası','Marka Adı','Marka Sahibi','Başvuru Tarihi','Tescil No','Durumu','Nice Sınıfları'];
+  const rows = window.currentOwnerResults.map((x, i) => [
+    i+1,
+    x.applicationNumber || '',
+    x.brandName || '',
+    x.ownerName || '',
+    fmtDateToTR(x.applicationDate || ''),
+    x.registrationNumber || '',
+    x.status || '',
+    x.niceClasses || ''
+  ]);
+  
+  const csv = [headers].concat(rows).map(r => 
+    r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')
+  ).join('\n');
+  
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `turkpatent_sahip_${Date.now()}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  
+  showToast('CSV dosyası indirildi.', 'success');
+};
+
+// ===============================
+// KİŞİ YÖNETİMİ FONKSİYONLARI
+// ===============================
+
+function searchPersons(searchQuery) {
+  if (!searchQuery || searchQuery.length < 2) return;
+  
+  const filtered = allPersons.filter(person => {
+    const name = (person.name || '').toLowerCase();
+    const tpeNo = (person.tpeNo || '').toLowerCase();
+    const query = searchQuery.toLowerCase();
+    return name.includes(query) || tpeNo.includes(query);
+  }).slice(0, 10);
+
+  if (!filtered.length) {
+    relatedPartySearchResults.innerHTML = '<div class="search-result-item">Sonuç bulunamadı</div>';
+  } else {
+    relatedPartySearchResults.innerHTML = filtered.map(person => 
+      `<div class="search-result-item" data-id="${person.id}">
+        <strong>${person.name}</strong>
+        ${person.tpeNo ? `<br><small class="text-muted">TPE No: ${person.tpeNo}</small>` : ''}
+      </div>`
+    ).join('');
+  }
+  
+  _showBlock(relatedPartySearchResults);
 }
 
 function addRelatedParty(person) {
-  if (selectedRelatedParties.some(p => p.id === person.id)) {
-    return showToast('Bu kişi zaten eklenmiş.', 'warning');
+  if (selectedRelatedParties.find(p => p.id === person.id)) {
+    showToast('Bu kişi zaten eklenmiş.', 'warning');
+    return;
   }
   selectedRelatedParties.push(person);
   renderSelectedRelatedParties();
@@ -404,7 +577,10 @@ function renderSelectedRelatedParties() {
   if (!list) return;
 
   if (selectedRelatedParties.length === 0) {
-    list.innerHTML = `<div class="empty-state"><i class="fas fa-user-friends fa-3x text-muted mb-3"></i><p class="text-muted">Henüz taraf eklenmedi.</p></div>`;
+    list.innerHTML = `<div class="empty-state">
+      <i class="fas fa-user-friends fa-3x text-muted mb-3"></i>
+      <p class="text-muted">Henüz taraf eklenmedi.</p>
+    </div>`;
   } else {
     list.innerHTML = selectedRelatedParties.map(p =>
       `<div class="selected-item d-flex justify-content-between align-items-center p-2 mb-2 border rounded">
@@ -419,57 +595,11 @@ function renderSelectedRelatedParties() {
   if (countEl) countEl.textContent = selectedRelatedParties.length;
 }
 
+// ===============================
+// SAYFA YÜKLENDİĞİNDE BAŞLAT
+// ===============================
+
 document.addEventListener('DOMContentLoaded', () => {
   loadSharedLayout();
   init();
-});
-// === Tek buton handler ===
-function onQuery(){
-  if (bulkRadio?.checked) {
-    onOwnerQueryViaExtension();
-  } else {
-    onSingleQuery();
-  }
-}
-
-// === Sahip No akışı: eklentiyi tetikle ===
-function onOwnerQueryViaExtension(){
-  const ownerId = (ownerIdInput?.value || '').trim();
-  if (!ownerId) return showToast('Sahip numarası girin.', 'warning');
-
-  const tpUrl = 'https://www.turkpatent.gov.tr/arastirma-yap?tab=marka';
-  window.open(tpUrl, '_blank');
-
-  try {
-    chrome?.runtime?.sendMessage?.(
-      EXTENSION_ID_SAHIP,
-      { type: 'START_KISI_QUERY', data: String(ownerId) },
-      (resp) => {
-        if (chrome.runtime.lastError) {
-          console.error('Mesaj hata:', chrome.runtime.lastError.message);
-          showToast('Eklentiye ulaşılamadı. Eklentinin yüklü/aktif olduğundan emin olun.', 'danger');
-        } else {
-          console.log('Eklentiye iletildi:', resp);
-          showToast('TÜRKPATENT sayfasında sorgu başlatılıyor…', 'info');
-        }
-      }
-    );
-  } catch (e){
-    console.error(e);
-    showToast('Eklenti mesajı gönderilemedi.', 'danger');
-  }
-}
-
-// === Eklentiden dönüş: sonuçları al ===
-window.addEventListener('message', (ev) => {
-  const msg = ev?.data || {};
-  if (msg?.source !== 'tp-extension-sahip') return;
-  if (msg.type === 'VERI_GELDI_KISI') {
-    const items = Array.isArray(msg.data) ? msg.data : [];
-    lastBulkItems = items;
-    renderBulkResults({ items, ownerId: ownerIdInput?.value || '', total: items.length });
-    showToast(`${items.length} kayıt alındı.`, 'success');
-  } else if (msg.type === 'HATA_KISI') {
-    showToast(`Sorgu hatası: ${msg.data?.message || 'Bilinmeyen'}`, 'danger');
-  }
 });
