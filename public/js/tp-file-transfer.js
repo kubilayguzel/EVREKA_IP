@@ -254,7 +254,7 @@ async function queryByOwnerNumber(sahipNo) {
     console.log('[DEBUG] TÜRKPATENT URL açılıyor:', turkPatentUrl);
     
     // Yeni sekme aç
-const newWindow = window.open(turkPatentUrl, '_blank'); // opener kalsın (mesaj için gerekli)
+    const newWindow = window.open(turkPatentUrl, '_blank'); // opener kalsın (mesaj için gerekli)
     
     if (newWindow) {
       showToast('TÜRKPATENT sayfası açıldı. Eklenti çalışacak ve sonuçları gönderecek.', 'info');
@@ -454,6 +454,7 @@ function renderOwnerResults(items) {
           <thead>
             <tr>
               <th>#</th>
+              <th>Görsel</th>
               <th>Başvuru Numarası</th>
               <th>Marka Adı</th>
               <th>Başvuru Tarihi</th>
@@ -465,9 +466,11 @@ function renderOwnerResults(items) {
           <tbody>`;
 
   items.forEach((item, index) => {
+    const imgSrc = item.brandImageDataUrl || item.brandImageUrl || item.imageSrc || '';
     tableHTML += `
       <tr>
         <td>${index + 1}</td>
+        <td>${imgSrc ? `<img src="${imgSrc}" alt="" style="height:56px;max-width:120px;border:1px solid #eee;border-radius:6px;" />` : ''}</td>
         <td>${item.applicationNumber || ''}</td>
         <td>${item.brandName || ''}</td>
         <td>${fmtDateToTR(item.applicationDate || '')}</td>
@@ -497,7 +500,7 @@ window.exportOwnerResultsCSV = function() {
     return;
   }
   
-  const headers = ['Sıra','Başvuru Numarası','Marka Adı','Marka Sahibi','Başvuru Tarihi','Tescil No','Durumu','Nice Sınıfları'];
+  const headers = ['Sıra','Başvuru Numarası','Marka Adı','Marka Sahibi','Başvuru Tarihi','Tescil No','Durumu','Nice Sınıfları','Görsel'];
   const rows = currentOwnerResults.map((x, i) => [
     i+1,
     x.applicationNumber || '',
@@ -506,12 +509,13 @@ window.exportOwnerResultsCSV = function() {
     fmtDateToTR(x.applicationDate || ''),
     x.registrationNumber || '',
     x.status || '',
-    x.niceClasses || ''
+    x.niceClasses || '',
+    (x.brandImageDataUrl || x.brandImageUrl || x.imageSrc) ? 'VAR' : ''
   ]);
   
   const csv = [headers].concat(rows).map(r => 
     r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')
-  ).join('\n');
+  ).join('\\n');
   
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
