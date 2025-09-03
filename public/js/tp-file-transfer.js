@@ -150,25 +150,32 @@ function setupEventListeners() {
 // ===============================
 
 async function handleQuery() {
-  const basvuruNo = (basvuruNoInput?.value || '').trim();
-  const sahipNo = (sahipNoInput?.value || '').trim();
+  // Radio button durumunu kontrol et
+  const isSingleMode = document.getElementById('singleTransfer')?.checked;
+  const isBulkMode = document.getElementById('bulkByOwner')?.checked;
   
-  // İki alanın da dolu olmadığını kontrol et
-  if (!basvuruNo && !sahipNo) {
-    return showToast('Başvuru numarası veya sahip numarası girin.', 'warning');
-  }
+  console.log('[DEBUG] handleQuery - Radio states:', { isSingleMode, isBulkMode });
   
-  // İkisinin birden dolu olmadığını kontrol et
-  if (basvuruNo && sahipNo) {
-    return showToast('Lütfen sadece bir alan doldurun (başvuru numarası VEYA sahip numarası).', 'warning');
-  }
-  
-  if (basvuruNo) {
-    // Başvuru numarası ile Firebase function'a git
+  if (isSingleMode) {
+    // Tekli mod - başvuru numarası
+    const basvuruNo = (basvuruNoInput?.value || '').trim();
+    if (!basvuruNo) {
+      return showToast('Başvuru numarası girin.', 'warning');
+    }
+    console.log('[DEBUG] Başvuru numarası ile sorgulama:', basvuruNo);
     await queryByApplicationNumber(basvuruNo);
-  } else if (sahipNo) {
-    // Sahip numarası ile eklentiye yönlendir
+    
+  } else if (isBulkMode) {
+    // Bulk mod - sahip numarası
+    const sahipNo = (sahipNoInput?.value || '').trim();
+    if (!sahipNo) {
+      return showToast('Sahip numarası girin.', 'warning');
+    }
+    console.log('[DEBUG] Sahip numarası ile sorgulama:', sahipNo);
     await queryByOwnerNumber(sahipNo);
+    
+  } else {
+    showToast('Lütfen bir sorgulama türü seçin.', 'warning');
   }
 }
 
