@@ -33,10 +33,10 @@ function fmtDateToTR(isoOrDDMMYYYY) {
 }
 
 // --- Firebase Imports ---
-import { app } from '../firebase-config.js';
+import { app, personService, ipRecordsService } from '../firebase-config.js';
 import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-functions.js';
 import { loadSharedLayout, ensurePersonModal, openPersonModal } from './layout-loader.js';
-import { personService } from '../firebase-config.js';
+import { mapTurkpatentResultsToIPRecords } from './turkpatent-mapper.js';
 
 // --- Firebase Functions ---
 const functions = getFunctions(app, 'europe-west1');
@@ -94,6 +94,9 @@ function setupEventListeners() {
     if (e.target.id === 'queryBtn' || e.target.id === 'bulkQueryBtn') {
       e.preventDefault();
       handleQuery();
+    } else if (e.target.id === 'savePortfolioBtn') {
+      e.preventDefault();
+      handleSaveToPortfolio();
     }
   });
   
@@ -431,29 +434,21 @@ function renderSingleResult(payload) {
 }
 
 function renderOwnerResults(items) {
-  if (!items || !items.length) {
-    singleResultInner.innerHTML = '<p class="text-muted">Sonuç bulunamadı.</p>';
-    _showBlock(singleResultContainer);
-    return;
-  }
-
-  const total = items.length;
-  const firstItem = items[0];
-  const ownerName = firstItem.ownerName || '';
+  if (!items?.length) return;
   
   let tableHTML = `
-    <div class="owner-results">
-      <div class="d-flex justify-content-between align-items-center mb-3">
-        <h5>Sahip: ${ownerName} • ${total} kayıt</h5>
-        <button class="btn btn-outline-primary btn-sm" onclick="exportOwnerResultsCSV()">
-          <i class="fas fa-file-csv mr-1"></i> CSV Dışa Aktar
-        </button>
+    <div class="section-card">
+      <div class="results-header d-flex justify-content-between align-items-center mb-3">
+        <div><strong>${items.length} sonuç bulundu</strong> <small class="text-muted" id="bulkMeta"></small></div>
+        <div>
+          <button id="exportCsvBtn" class="btn btn-outline-primary btn-sm"><i class="fas fa-file-csv mr-1"></i> CSV Dışa Aktar</button>
+        </div>
       </div>
       <div class="table-responsive">
-        <table class="table table-hover table-striped">
+        <table class="table table-hover table-striped tp-results-table">
           <thead>
             <tr>
-              <th>#</th>
+              <th><input type="checkbox" id="selectAllRecords" checked></th>
               <th>Görsel</th>
               <th>Başvuru Numarası</th>
               <th>Marka Adı</th>
@@ -465,11 +460,11 @@ function renderOwnerResults(items) {
           </thead>
           <tbody>`;
 
-  items.forEach((item, index) => {
-    const imgSrc = item.brandImageDataUrl || item.brandImageUrl || item.imageSrc || '';
+  items.forEach((item, i) => {
+    const imgSrc = item.brandImageDataUrl || item.brandImageUrl || item.imageSrc;
     tableHTML += `
       <tr>
-        <td>${index + 1}</td>
+        <td><input type="checkbox" class="record-checkbox" data-index="${i}" checked></td>
         <td>${imgSrc ? `<img src="${imgSrc}" alt="" style="height:56px;max-width:120px;border:1px solid #eee;border-radius:6px;" />` : ''}</td>
         <td>${item.applicationNumber || ''}</td>
         <td>${item.brandName || ''}</td>
@@ -486,11 +481,50 @@ function renderOwnerResults(items) {
       </div>
     </div>`;
 
-  // Global değişkene kaydet (CSV export için)
+  // Global değişkene kaydet
   currentOwnerResults = items;
 
   singleResultInner.innerHTML = tableHTML;
   _showBlock(singleResultContainer);
+  
+  // Checkbox event listeners ekle
+  setupCheckboxListeners();
+  updateSaveButton();
+}
+
+function setupCheckboxListeners() {
+  const selectAll = document.getElementById('selectAllRecords');
+  const checkboxes = document.querySelectorAll('.record-checkbox');
+  
+  if (selectAll) {
+    selectAll.addEventListener('change', (e) => {
+      checkboxes.forEach(cb => cb.checked = e.target.checked);
+      updateSaveButton();
+    });
+  }
+  
+  checkboxes.forEach(cb => {
+    cb.addEventListener('change', () => {
+      const allChecked = Array.from(checkboxes).every(c => c.checked);
+      const noneChecked = Array.from(checkboxes).every(c => !c.checked);
+      
+      if (selectAll) {
+        selectAll.checked = allChecked;
+        selectAll.indeterminate = !allChecked && !noneChecked;
+      }
+      
+      updateSaveButton();
+    });
+  });
+}
+
+function updateSaveButton() {
+  const saveBtn = document.getElementById('savePortfolioBtn');
+  const checkedBoxes = document.querySelectorAll('.record-checkbox:checked');
+  
+  if (saveBtn) {
+    saveBtn.disabled = checkedBoxes.length === 0;
+  }
 }
 
 // CSV Export fonksiyonu
