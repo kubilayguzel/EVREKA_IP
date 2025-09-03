@@ -19,22 +19,9 @@ function mapTurkpatentToIPRecord(turkpatentData, selectedApplicants = []) {
         details = {}
     } = turkpatentData;
 
-    // Modal'dan gelen detay alanları (dinamik)
+    // Modal'dan gelen detay alanları
     const getDetailValue = (key) => {
-        // Türkçe ve İngilizce anahtar kelimeleri dene
-        const possibleKeys = [
-            key,
-            key.toLowerCase(),
-            key.toUpperCase(),
-            ...getPossibleTranslations(key)
-        ];
-        
-        for (const possibleKey of possibleKeys) {
-            if (details[possibleKey]) {
-                return details[possibleKey];
-            }
-        }
-        return null;
+        return details[key] || null;
     };
 
     // Tarih formatını düzenle (DD.MM.YYYY -> YYYY-MM-DD)
@@ -74,50 +61,38 @@ function mapTurkpatentToIPRecord(turkpatentData, selectedApplicants = []) {
         const niceClassNumbers = parseNiceClasses(niceClasses);
         const goodsText = getDetailValue('Mal/Hizmet Listesi') || 
                          getDetailValue('Mal ve Hizmetler') ||
-                         getDetailValue('Goods and Services') ||
                          '';
 
         if (!goodsText && niceClassNumbers.length === 0) {
             return [];
         }
 
-        // Eğer mal/hizmet metni varsa sınıflara böl
+        // Mal/hizmet metni varsa parse et
+        let goodsItems = [];
         if (goodsText) {
-            const goodsItems = goodsText.split(/[,;]+/).map(item => item.trim()).filter(Boolean);
-            
-            return niceClassNumbers.map(classNo => ({
-                classNo,
-                items: goodsItems // Tüm mal/hizmetleri her sınıfa ata (detaylı ayrım için ek parsing gerekebilir)
-            }));
+            goodsItems = goodsText.split(/[,;]+/)
+                                  .map(item => item.trim())
+                                  .filter(Boolean);
         }
 
-        // Sadece sınıf numaraları varsa boş items ile oluştur
+        // Her Nice sınıfı için aynı mal/hizmetleri toplu şekilde kaydet
         return niceClassNumbers.map(classNo => ({
             classNo,
-            items: []
+            items: goodsItems
         }));
     };
 
-    // Bülten bilgilerini oluştur
+    // Bülten bilgilerini oluştur (sadece normal bülten)
     const createBulletins = () => {
         const bulletins = [];
         
-        const bulletinNo = getDetailValue('Bülten Numarası') || getDetailValue('Bulletin Number');
-        const bulletinDate = getDetailValue('Bülten Tarihi') || getDetailValue('Bulletin Date');
-        const regBulletinNo = getDetailValue('Tescil Bülten Numarası') || getDetailValue('Registration Bulletin Number');
-        const regBulletinDate = getDetailValue('Tescil Bülten Tarihi') || getDetailValue('Registration Bulletin Date');
+        const bulletinNo = getDetailValue('Bülten Numarası');
+        const bulletinDate = getDetailValue('Bülten Tarihi');
 
         if (bulletinNo || bulletinDate) {
             bulletins.push({
                 bulletinNo: bulletinNo || null,
                 bulletinDate: formatDate(bulletinDate)
-            });
-        }
-
-        if (regBulletinNo || regBulletinDate) {
-            bulletins.push({
-                bulletinNo: regBulletinNo || null,
-                bulletinDate: formatDate(regBulletinDate)
             });
         }
 
@@ -128,9 +103,9 @@ function mapTurkpatentToIPRecord(turkpatentData, selectedApplicants = []) {
     const createPriorities = () => {
         const priorities = [];
         
-        const priorityDate = getDetailValue('Öncelik Tarihi') || getDetailValue('Priority Date');
-        const priorityNumber = getDetailValue('Öncelik Numarası') || getDetailValue('Priority Number');
-        const priorityCountry = getDetailValue('Öncelik Ülkesi') || getDetailValue('Priority Country');
+        const priorityDate = getDetailValue('Öncelik Tarihi');
+        const priorityNumber = getDetailValue('Öncelik Numarası');
+        const priorityCountry = getDetailValue('Öncelik Ülkesi');
 
         if (priorityDate || priorityNumber) {
             priorities.push({
@@ -146,30 +121,30 @@ function mapTurkpatentToIPRecord(turkpatentData, selectedApplicants = []) {
     // IPRecord formatına dönüştür
     const ipRecord = {
         // Temel kimlik bilgileri
-        title: brandName || getDetailValue('Marka Adı') || 'Başlıksız Marka',
+        title: brandName || 'Başlıksız Marka',
         type: 'trademark',
         portfoyStatus: 'active',
         
         // Durum bilgileri
         status: mapStatus(status),
-        recordOwnerType: 'own', // Varsayılan - arayüzden güncellenecek
+        recordOwnerType: 'self', // Varsayılan - handleSaveToPortfolio'da ayarlanacak
         
         // Başvuru bilgileri
         applicationNumber: applicationNumber || null,
-        applicationDate: formatDate(applicationDate || getDetailValue('Başvuru Tarihi')),
+        applicationDate: formatDate(applicationDate),
         registrationNumber: registrationNumber || getDetailValue('Tescil Numarası') || null,
         registrationDate: formatDate(getDetailValue('Tescil Tarihi')),
         renewalDate: formatDate(getDetailValue('Yenileme Tarihi')),
         
         // Marka özel bilgileri
-        brandText: brandName || getDetailValue('Marka Adı') || '',
+        brandText: brandName || '',
         brandImageUrl: brandImageDataUrl || null,
-        description: getDetailValue('Açıklama') || getDetailValue('Description') || null,
+        description: getDetailValue('Açıklama') || null,
         
         // Marka türü ve kategorisi
-        brandType: getDetailValue('Marka Türü') || getDetailValue('Trademark Type') || 'Şekil + Kelime',
-        brandCategory: getDetailValue('Marka Kategorisi') || getDetailValue('Trademark Category') || 'Ticaret/Hizmet Markası',
-        nonLatinAlphabet: getDetailValue('Latin Olmayan Alfabe') || getDetailValue('Non-Latin Alphabet') || null,
+        brandType: getDetailValue('Marka Türü') || 'Şekil + Kelime',
+        brandCategory: getDetailValue('Marka Kategorisi') || 'Ticaret/Hizmet Markası',
+        nonLatinAlphabet: getDetailValue('Latin Olmayan Alfabe') || null,
         
         // Sınıf ve mal/hizmet bilgileri
         goodsAndServicesByClass: createGoodsAndServicesByClass(),
@@ -188,24 +163,21 @@ function mapTurkpatentToIPRecord(turkpatentData, selectedApplicants = []) {
         })),
         
         // Ek bilgiler
-        agentInfo: getDetailValue('Vekil Bilgileri') || getDetailValue('Agent Info') || null,
-        decision: getDetailValue('Karar') || getDetailValue('Decision') || null,
-        decisionReason: getDetailValue('Karar Gerekçesi') || getDetailValue('Decision Reason') || null,
+        agentInfo: getDetailValue('Vekil Bilgileri') || null,
         
         // Diğer alanlar
-        consentRequest: null, // Arayüzden ayarlanacak
-        coverLetterRequest: null, // Arayüzden ayarlanacak
+        consentRequest: null,
+        coverLetterRequest: null,
         
         // Zaman damgaları
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         
-        // Metadata - orijinal TÜRKPATENT verisi referans için
+        // Metadata
         _metadata: {
             source: 'turkpatent_scrape',
             originalData: turkpatentData,
-            scrapedAt: new Date().toISOString(),
-            ownerSearchQuery: ownerName
+            scrapedAt: new Date().toISOString()
         }
     };
 
@@ -213,31 +185,10 @@ function mapTurkpatentToIPRecord(turkpatentData, selectedApplicants = []) {
 }
 
 /**
- * Anahtar kelimelerin olası çevirilerini döndürür
- */
-function getPossibleTranslations(key) {
-    const translations = {
-        'Tescil Numarası': ['Registration Number', 'Reg Number', 'Reg No'],
-        'Tescil Tarihi': ['Registration Date', 'Reg Date'],
-        'Bülten Numarası': ['Bulletin Number', 'Bull No'],
-        'Bülten Tarihi': ['Bulletin Date', 'Bull Date'],
-        'Marka Türü': ['Trademark Type', 'Brand Type', 'Mark Type'],
-        'Nice Sınıf': ['Nice Class', 'Class', 'Classification'],
-        'Mal ve Hizmetler': ['Goods and Services', 'Products Services'],
-        'Başvuru Tarihi': ['Application Date', 'App Date'],
-        'Öncelik Tarihi': ['Priority Date'],
-        'Vekil Bilgileri': ['Agent Information', 'Representative Info'],
-        'Sahip': ['Owner', 'Holder', 'Proprietor']
-    };
-    
-    return translations[key] || [];
-}
-
-/**
  * TÜRKPATENT durumunu standart durum kodlarına çevirir
  */
 function mapStatus(turkpatentStatus) {
-    if (!turkpatentStatus) return 'filed'; // Varsayılan
+    if (!turkpatentStatus) return 'filed';
     
     const statusMap = {
         'tescilli': 'registered',
@@ -260,7 +211,7 @@ function mapStatus(turkpatentStatus) {
     };
     
     const normalizedStatus = turkpatentStatus.toLowerCase().trim();
-    return statusMap[normalizedStatus] || 'filed'; // Varsayılan 'filed'
+    return statusMap[normalizedStatus] || 'filed';
 }
 
 /**
@@ -294,6 +245,5 @@ function mapTurkpatentResultsToIPRecords(turkpatentResults, selectedApplicants) 
 export {
     mapTurkpatentToIPRecord,
     mapTurkpatentResultsToIPRecords,
-    mapStatus,
-    getPossibleTranslations
+    mapStatus
 };
