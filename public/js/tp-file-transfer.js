@@ -63,7 +63,7 @@ let selectedRelatedParties = [];
 let currentOwnerResults = []; // CSV export için
 
 // --- Extension ID ---
-const EXTENSION_ID_SAHIP = 'abnopnippoapheoakgangaofeelllpbm';
+const EXTENSION_ID_SAHIP = 'gkhmldkbjmnipikgjabmlilibllikapk';
 
 // ===============================
 // INITIALIZATION
