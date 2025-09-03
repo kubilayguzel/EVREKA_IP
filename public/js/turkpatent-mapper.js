@@ -56,31 +56,35 @@ function mapTurkpatentToIPRecord(turkpatentData, selectedApplicants = []) {
         return [...new Set(numbers)]; // Tekrarları kaldır
     };
 
-    // Mal ve hizmetleri sınıflara göre grupla
-    const createGoodsAndServicesByClass = () => {
-        const niceClassNumbers = parseNiceClasses(niceClasses);
-        const goodsText = getDetailValue('Mal/Hizmet Listesi') || 
-                         getDetailValue('Mal ve Hizmetler') ||
-                         '';
+// Mal ve hizmetleri sınıflara göre grupla
+const createGoodsAndServicesByClass = () => {
+    // Önce modal'dan gelen detaylı listeyi kontrol et
+    if (turkpatentData.goodsAndServicesByClass && turkpatentData.goodsAndServicesByClass.length > 0) {
+        return turkpatentData.goodsAndServicesByClass;
+    }
+    
+    // Fallback: niceClasses string'inden parse et
+    const niceClassNumbers = parseNiceClasses(niceClasses);
+    const goodsText = getDetailValue('Mal/Hizmet Listesi') || 
+                     getDetailValue('Mal ve Hizmetler') ||
+                     '';
 
-        if (!goodsText && niceClassNumbers.length === 0) {
-            return [];
-        }
+    if (!goodsText && niceClassNumbers.length === 0) {
+        return [];
+    }
 
-        // Mal/hizmet metni varsa parse et
-        let goodsItems = [];
-        if (goodsText) {
-            goodsItems = goodsText.split(/[,;]+/)
-                                  .map(item => item.trim())
-                                  .filter(Boolean);
-        }
+    let goodsItems = [];
+    if (goodsText) {
+        goodsItems = goodsText.split(/[,;]+/)
+                              .map(item => item.trim())
+                              .filter(Boolean);
+    }
 
-        // Her Nice sınıfı için aynı mal/hizmetleri toplu şekilde kaydet
-        return niceClassNumbers.map(classNo => ({
-            classNo,
-            items: goodsItems
-        }));
-    };
+    return niceClassNumbers.map(classNo => ({
+        classNo,
+        items: goodsItems
+    }));
+};
 
     // Bülten bilgilerini oluştur (sadece normal bülten)
     const createBulletins = () => {
@@ -247,3 +251,13 @@ export {
     mapTurkpatentResultsToIPRecords,
     mapStatus
 };
+// İşlem geçmişini ekle (eğer varsa)
+if (turkpatentData.transactions && turkpatentData.transactions.length > 0) {
+    ipRecord.transactions = turkpatentData.transactions.map(tx => ({
+        date: formatDate(tx.date),
+        description: tx.description,
+        note: tx.note,
+        type: 'system', // TÜRKPATENT'ten gelen
+        createdAt: new Date().toISOString()
+    }));
+}
