@@ -99,6 +99,111 @@ async function closeFraudModalIfAny() {
   document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true }));
 }
 
+// --------- Sonsuz Liste & Sonsuza Kadar Scroll ---------
+function elementHasText(el, text) {
+  return !!el && (el.textContent || '').toLowerCase().includes((text || '').toLowerCase());
+}
+function findInfiniteToggle() {
+  // "Sonsuz Liste" metnini taşıyan label/span'ı bul
+  const labelCandidates = Array.from(document.querySelectorAll(
+    'label.MuiFormControlLabel-root, .MuiFormControlLabel-root, label, .MuiFormControlLabel-label, .MuiTypography-root'
+  ));
+  const labelNode = labelCandidates.find(n => (n.textContent || '').toLowerCase().includes('sonsuz liste'));
+  if (!labelNode) return null;
+
+  const root = labelNode.closest('.MuiFormControlLabel-root') || labelNode.parentElement || labelNode;
+  const input = root.querySelector('input.MuiSwitch-input[type="checkbox"], input[type="checkbox"]');
+  const switchBase = root.querySelector('.MuiSwitch-switchBase');
+  const switchRoot = root.querySelector('.MuiSwitch-root');
+  const clickable = switchBase || switchRoot || root;
+
+  return { root, labelNode, input, switchBase, switchRoot, clickable };
+}
+async function ensureInfiniteOn() {
+  const t = findInfiniteToggle();
+  if (!t) { log('Sonsuz Liste toggle bulunamadı.'); return false; }
+
+  const isChecked = () => {
+    try {
+      if (t.input && typeof t.input.checked !== 'undefined') return !!t.input.checked;
+      if (t.switchBase) return t.switchBase.classList.contains('Mui-checked');
+      const checkedEl = t.root.querySelector('.MuiSwitch-switchBase.Mui-checked');
+      return !!checkedEl;
+    } catch { return false; }
+  };
+
+  if (isChecked()) { log('Sonsuz Liste zaten AÇIK.'); return true; }
+
+  // 1) Switch base/root tıklaması
+  if (t.clickable) click(t.clickable);
+  await new Promise(r => setTimeout(r, 150));
+  if (isChecked()) { log('Sonsuz Liste AÇILDI (clickable).'); return true; }
+
+  // 2) Input tıklaması
+  if (t.input) {
+    click(t.input);
+    await new Promise(r => setTimeout(r, 150));
+    if (isChecked()) { log('Sonsuz Liste AÇILDI (input).'); return true; }
+  }
+
+  // 3) Label tıklaması
+  if (t.labelNode) {
+    click(t.labelNode);
+    await new Promise(r => setTimeout(r, 150));
+    if (isChecked()) { log('Sonsuz Liste AÇILDI (label).'); return true; }
+  }
+
+  // 4) Son çare: input.checked = true + event
+  try {
+    if (t.input) {
+      t.input.checked = true;
+      t.input.dispatchEvent(new Event('input', { bubbles: true }));
+      t.input.dispatchEvent(new Event('change', { bubbles: true }));
+      await new Promise(r => setTimeout(r, 100));
+      if (isChecked()) { log('Sonsuz Liste AÇILDI (forced).'); return true; }
+    }
+  } catch {}
+
+  log('Sonsuz Liste AÇILAMADI.');
+  return false;
+}
+function findScrollContainerFor(el) {
+  let cur = el;
+  while (cur) {
+    const sh = cur.scrollHeight, ch = cur.clientHeight;
+    const style = cur === document.documentElement ? '' : getComputedStyle(cur);
+    const overflowY = style ? style.overflowY : '';
+    if (sh && ch && (sh - ch > 5) && (overflowY === 'auto' || overflowY === 'scroll' || cur === document.scrollingElement)) {
+      return cur;
+    }
+    cur = cur.parentElement;
+  }
+  return document.scrollingElement || document.documentElement || document.body;
+}
+async function infiniteScrollAllRows() {
+  const tbody = document.querySelector('tbody.MuiTableBody-root');
+  if (!tbody) return;
+  const scroller = findScrollContainerFor(tbody);
+  let stableIters = 0;
+  let lastCount = 0;
+  for (let i = 0; i < 200; i++) { // güvenlik üst limiti
+    const rows = document.querySelectorAll('tbody.MuiTableBody-root tr');
+    const count = rows.length;
+    if (count > lastCount) { stableIters = 0; lastCount = count; }
+    else { stableIters++; }
+    try {
+      if (scroller === document.scrollingElement || scroller === document.documentElement || scroller === document.body) {
+        window.scrollTo(0, document.body.scrollHeight);
+      } else {
+        scroller.scrollTop = scroller.scrollHeight;
+      }
+    } catch {}
+    await new Promise(r => setTimeout(r, 300));
+    if (stableIters >= 4) break; // bir süre yeni satır gelmediyse dur
+  }
+  log('Sonsuz liste toplam satır:', lastCount);
+}
+
 // --------- Sonuç Toplama ---------
 function parseOwnerResults() {
   const rows = Array.from(document.querySelectorAll('tbody.MuiTableBody-root tr'));
@@ -109,7 +214,6 @@ function parseOwnerResults() {
       return td ? (td.textContent || '').trim() : '';
     };
     const orderTxt = (tr.querySelector('td .MuiTypography-alignCenter') || tr.querySelector('td'))?.textContent || `${idx+1}`;
-    const imageEl = tr.querySelector('td[role="image"] img');
     const hold = get('holdName');
     const ownerName = hold ? hold.replace(/\s*\(\d+\)\s*$/, '') : '';
 
@@ -121,8 +225,8 @@ function parseOwnerResults() {
       applicationDate: get('applicationDate') || '',
       registrationNumber: get('registrationNo') || '',
       status: get('state') || '',
-      niceClasses: get('niceClasses') || '',
-      imageUrl: imageEl ? imageEl.src : ''
+      niceClasses: get('niceClasses') || ''
+      // imageUrl ALINMIYOR (Marka örneği/Logo çıkarıldı)
     });
   }
   return items;
@@ -130,6 +234,16 @@ function parseOwnerResults() {
 async function waitAndSendOwnerResults() {
   try { await waitFor('tbody.MuiTableBody-root tr', { timeout: 15000 }); } catch {}
   await new Promise(r => setTimeout(r, 250));
+  // Eğer ilk gelişte satır sayısı >= 20 ise Sonsuz Liste'yi açıp sona kadar scroll et
+  try {
+    const initialCount = document.querySelectorAll('tbody.MuiTableBody-root tr').length;
+    if (initialCount >= 20) {
+      const ok = await ensureInfiniteOn();
+      if (ok) {
+        await infiniteScrollAllRows();
+      }
+    }
+  } catch (e) { /* yoksay */ }
   const items = parseOwnerResults();
   sendToOpener('VERI_GELDI_KISI', items);
 }
