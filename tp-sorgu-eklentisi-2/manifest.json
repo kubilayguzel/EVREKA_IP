@@ -4,29 +4,32 @@
   "version": "1.0",
   "description": "Evreka IP uygulamasından TÜRKPATENT üzerinde otomatik sorgulama yapar.",
   "permissions": [],
-  
   "host_permissions": [
     "*://arastirma.turkpatent.gov.tr/*",
     "*://www.turkpatent.gov.tr/*"
-       
   ],
   "background": {
     "service_worker": "background.js"
   },
   "content_scripts": [
     {
-      "matches": ["*://www.turkpatent.gov.tr/arastirma-yap*"],
-      "js": ["content_script.js"]
+      "matches": [
+        "*://arastirma.turkpatent.gov.tr/*",
+        "*://www.turkpatent.gov.tr/arastirma-yap*"
+      ],
+      "js": [
+        "content_script.js"
+      ]
     }
   ],
-"externally_connectable": {
-  "matches": [
-    "http://localhost:*/*",
-    "http://127.0.0.1:*/*",
-    "https://ip-manager-production-aab4b.web.app/*",
-    "https://kubilayguzel.github.io/*",
-    "http://192.168.1.37:8080/*",
-    "http://192.168.*:*/*"
-  ]
+  "externally_connectable": {
+    "matches": [
+      "http://localhost:*/*",
+      "http://127.0.0.1:*/*",
+      "https://ip-manager-production-aab4b.web.app/*",
+      "https://kubilayguzel.github.io/*",
+      "http://192.168.1.37:8080/*",
+      "http://192.168.*:*/*"
+    ]
+  }
 }
-} 
