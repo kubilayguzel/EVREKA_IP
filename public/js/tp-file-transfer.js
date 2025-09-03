@@ -254,7 +254,7 @@ async function queryByOwnerNumber(sahipNo) {
     console.log('[DEBUG] TÜRKPATENT URL açılıyor:', turkPatentUrl);
     
     // Yeni sekme aç
-    const newWindow = window.open(turkPatentUrl, '_blank', 'noopener,noreferrer');
+const newWindow = window.open(turkPatentUrl, '_blank'); // opener kalsın (mesaj için gerekli)
     
     if (newWindow) {
       showToast('TÜRKPATENT sayfası açıldı. Eklenti çalışacak ve sonuçları gönderecek.', 'info');
