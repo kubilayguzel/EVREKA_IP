@@ -165,7 +165,7 @@
           <table class="table table-hover table-striped tp-results-table" id="bulkResultsTable">
             <thead>
               <tr>
-                <th>#</th>
+                <th><input type="checkbox" id="selectAllRecords" checked></th>
                 <th>Başvuru Numarası</th>
                 <th>Marka Adı</th>
                 <th>Marka Sahibi</th>
@@ -173,7 +173,6 @@
                 <th>Tescil No</th>
                 <th>Durumu</th>
                 <th>Nice Sınıfları</th>
-                <th class="text-center">İşlem</th>
               </tr>
             </thead>
             <tbody id="bulkResultsBody">
@@ -186,7 +185,6 @@
       <div class="section-card">
         <div class="form-actions">
           <button id="savePortfolioBtn" class="btn btn-primary" disabled>Portföye Kaydet</button>
-          <button id="saveThirdPartyBtn" class="btn btn-secondary" disabled>Üçüncü Taraf İşlemi Oluştur</button>
           <button id="cancelBtn" class="btn btn-outline-secondary">İptal</button>
         </div>
       </div>
