@@ -99,7 +99,7 @@ async function closeFraudModalIfAny() {
   document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true }));
 }
 
-// --------- Sonsuz Liste & Sonsuza Kadar Scroll ---------
+// --------- Sonsuz Liste & Scroll Yardımcıları ---------
 function elementHasText(el, text) {
   return !!el && (el.textContent || '').toLowerCase().includes((text || '').toLowerCase());
 }
@@ -180,17 +180,50 @@ function findScrollContainerFor(el) {
   }
   return document.scrollingElement || document.documentElement || document.body;
 }
-async function infiniteScrollAllRows() {
+
+// ---- Beklenen Toplamı Oku: "34 kayıt bulundu. Sayfa 1 / 2" ----
+function getExpectedTotalCount() {
+  const nodes = Array.from(document.querySelectorAll('p, span, div'));
+  const node = nodes.find(n => elementHasText(n, 'kayıt bulundu'));
+  if (!node) return null;
+  const m = (node.textContent || '').match(/(\d+)\s*kayıt\s*b[uü]lundu/i);
+  return m ? parseInt(m[1], 10) : null;
+}
+
+// ---- Scroll Akışı: "yükleme → 1sn bekle → scroll" ----
+function sleep(ms){ return new Promise(r => setTimeout(r, ms)); }
+const countRows = () => document.querySelectorAll('tbody.MuiTableBody-root tr').length;
+
+function waitForRowIncrease(baseCount, timeout = 20000) {
+  return new Promise((resolve) => {
+    const tbody = document.querySelector('tbody.MuiTableBody-root');
+    if (!tbody) return resolve(false);
+
+    const check = () => {
+      const n = countRows();
+      if (n > baseCount) { cleanup(); resolve(n); }
+    };
+
+    const cleanup = () => {
+      try { obs.disconnect(); } catch {}
+      if (poll) clearInterval(poll);
+      if (timer) clearTimeout(timer);
+    };
+
+    const obs = new MutationObserver(check);
+    obs.observe(tbody, { childList: true, subtree: true });
+
+    // bazı ortamlarda sanal liste/paketli ekleme olabileceği için ek olarak poll
+    const poll = setInterval(check, 350);
+    const timer = setTimeout(() => { cleanup(); resolve(false); }, timeout);
+  });
+}
+
+async function infiniteScrollAllRows(expectedTotal) {
   const tbody = document.querySelector('tbody.MuiTableBody-root');
   if (!tbody) return;
   const scroller = findScrollContainerFor(tbody);
-  let stableIters = 0;
-  let lastCount = 0;
-  for (let i = 0; i < 200; i++) { // güvenlik üst limiti
-    const rows = document.querySelectorAll('tbody.MuiTableBody-root tr');
-    const count = rows.length;
-    if (count > lastCount) { stableIters = 0; lastCount = count; }
-    else { stableIters++; }
+  const scrollBottom = () => {
     try {
       if (scroller === document.scrollingElement || scroller === document.documentElement || scroller === document.body) {
         window.scrollTo(0, document.body.scrollHeight);
@@ -198,10 +231,37 @@ async function infiniteScrollAllRows() {
         scroller.scrollTop = scroller.scrollHeight;
       }
     } catch {}
-    await new Promise(r => setTimeout(r, 300));
-    if (stableIters >= 4) break; // bir süre yeni satır gelmediyse dur
+  };
+
+  let lastCount = countRows();
+  const expected = (typeof expectedTotal === 'number' && expectedTotal > 0) ? expectedTotal : null;
+
+  // Eğer daha fazlası bekleniyorsa ilk scroll'u tetikle
+  if (!expected || lastCount < expected) {
+    await sleep(1000); // sayfa ilk paket veriyi çeksin
+    scrollBottom();
   }
-  log('Sonsuz liste toplam satır:', lastCount);
+
+  for (let i = 0; i < 200; i++) { // güvenlik üst limiti
+    const increasedTo = await waitForRowIncrease(lastCount, 20000);
+    if (!increasedTo) {
+      log('Yeni satır gelmedi, yükleme bitti veya zaman aşımı.');
+      break;
+    }
+    lastCount = increasedTo;
+    log('Yüklenen kayıt sayısı:', lastCount, expected ? ('/ ' + expected) : '');
+
+    if (expected && lastCount >= expected) {
+      await sleep(400); // küçük stabilize beklemesi
+      break;
+    }
+
+    // İSTENEN: "yeni veriler geldikten sonra 1sn bekle → scroll"
+    await sleep(1000);
+    scrollBottom();
+  }
+
+  log('Sonsuz liste toplam satır:', lastCount, 'beklenen:', expectedTotal);
 }
 
 // --------- Sonuç Toplama ---------
@@ -226,24 +286,32 @@ function parseOwnerResults() {
       registrationNumber: get('registrationNo') || '',
       status: get('state') || '',
       niceClasses: get('niceClasses') || ''
-      // imageUrl ALINMIYOR (Marka örneği/Logo çıkarıldı)
+      // image/logo alınmıyor
     });
   }
   return items;
 }
+
 async function waitAndSendOwnerResults() {
   try { await waitFor('tbody.MuiTableBody-root tr', { timeout: 15000 }); } catch {}
   await new Promise(r => setTimeout(r, 250));
-  // Eğer ilk gelişte satır sayısı >= 20 ise Sonsuz Liste'yi açıp sona kadar scroll et
+
+  // toplam beklenen kayıt sayısı
+  let expected = null;
+  try { expected = getExpectedTotalCount(); } catch {}
+
+  // Eğer >= 20 ise Sonsuz Liste'yi aç ve beklenen sayıya ulaşana kadar "yükleme→bekle→scroll" uygula
   try {
     const initialCount = document.querySelectorAll('tbody.MuiTableBody-root tr').length;
-    if (initialCount >= 20) {
+    const needInfinite = (typeof expected === 'number' ? expected >= 20 : initialCount >= 20);
+    if (needInfinite) {
       const ok = await ensureInfiniteOn();
       if (ok) {
-        await infiniteScrollAllRows();
+        await infiniteScrollAllRows(expected);
       }
     }
   } catch (e) { /* yoksay */ }
+
   const items = parseOwnerResults();
   sendToOpener('VERI_GELDI_KISI', items);
 }
