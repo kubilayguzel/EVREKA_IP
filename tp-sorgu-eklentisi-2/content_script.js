@@ -1,21 +1,26 @@
-// =============================
-// Evreka IP - Turkpatent Otomasyon (Owner + Application)
-// =============================
-// 2025-09-03 (rev2):
-// - iframe desteği için manifestte all_frames + webim.* eklendi (içerik scripti her frame'de yüklenecek)
-// - Modal kapatma: .jss84 > .jss92 close ikonuna doğrudan tıkla + parent fallback
-// - "Sahip / Vekil" sekmesi ve "Kişi" filtresi otomatik aktive edildi (activateOwnerSearchContext geri eklendi)
-// - Kişi No akışında 3 aşamalı retry (modal -> sekme/filtresi -> input+buton) ve ayrıntılı log
-// - React kontrollü input için güvenli set + 'Enter' fallback
+// ================================================
+// Evreka IP — SADE (Sadece Sahip No) İçerik Scripti
+// ================================================
+// Çalışma şekli:
+// - Yeni sekme URL'i: .../arastirma-yap?form=trademark&auto_query=SAHİP_NO&query_type=sahip
+// - Veya background'dan: chrome.tabs.sendMessage({ type: 'AUTO_FILL_KISI', data: 'SAHİP_NO' })
+// - iFrame (webim.turkpatent.gov.tr) içinde de çalışır (manifest: all_frames + matches).
 //
-// Not: Bu script, hem üst sayfada hem de iframe'lerde çalışır.
+// Yaptıkları:
+// 1) Dolandırıcılık popup'ını kapatır (.jss84 .jss92 → svg/ikon).
+// 2) "Marka Araştırması" tabında kalır (sekme değiştirmez).
+// 3) input[placeholder="Kişi Numarası"] alanına sahip no'yu yazar (React controlled güvenli set).
+// 4) Aynı bloktaki "Sorgula" butonuna tıklar; yoksa Enter gönderir.
+// 5) Parent URL'deki auto_query'yi iframe'e yaymak için küçük postMessage köprüsü içerir.
 
-let targetBasvuruNo = null;
+const TAG = '[Evreka SahipNo]';
+
 let targetKisiNo = null;
-let sourceOrigin = null;
 
-// --------------- Helpers ---------------
-function log(...args){ console.log('[Evreka Eklenti]', ...args); }
+// --------- Yardımcılar ---------
+function log(...args){ console.log(TAG, ...args); }
+function warn(...args){ console.warn(TAG, ...args); }
+function err(...args){ console.error(TAG, ...args); }
 
 function waitFor(selector, { root = document, timeout = 7000, test = null } = {}) {
   return new Promise((resolve, reject) => {
@@ -53,28 +58,10 @@ function click(el) {
   return false;
 }
 
-function findButtonByTextFast(text) {
-  const btns = document.querySelectorAll('button');
-  for (const b of btns) {
-    const t = (b.textContent || '').trim();
-    const a = (b.getAttribute('aria-label') || '').trim();
-    if (t.includes(text) || a.includes(text)) return b;
-    const spanBtn = b.querySelector('span');
-    if (spanBtn) {
-      const st = (spanBtn.textContent || '').trim();
-      if (st.includes(text)) return b;
-    }
-  }
-  return null;
-}
-
 function setReactInputValue(input, value) {
   const nativeDescriptor = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
-  if (nativeDescriptor && nativeDescriptor.set) {
-    nativeDescriptor.set.call(input, value);
-  } else {
-    input.value = value;
-  }
+  if (nativeDescriptor && nativeDescriptor.set) nativeDescriptor.set.call(input, value);
+  else input.value = value;
   input.dispatchEvent(new Event('input', { bubbles: true }));
   input.dispatchEvent(new Event('change', { bubbles: true }));
 }
@@ -85,216 +72,146 @@ function pressEnter(el){
   el.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
 }
 
-// --------------- Modal Kapatma ---------------
-async function closeModalsAdvanced() {
-  // a) “Dolandırıcılık Hakkında” popup -> .jss84 > .jss92 (span)
+// --------- Modal Kapatma ---------
+async function closeFraudModalIfAny() {
+  // a) “Dolandırıcılık Hakkında” popup -> .jss84 > .jss92 (ikon)
   try {
-    const fraudContainer = await waitFor('.jss84', { timeout: 2000 }).catch(()=>null);
+    const fraudContainer = await waitFor('.jss84', { timeout: 1800 }).catch(()=>null);
     if (fraudContainer) {
       const closeEl = fraudContainer.querySelector('.jss92');
       if (closeEl && click(closeEl)) {
         log('Dolandırıcılık popup kapatıldı (.jss92).');
-        await new Promise(r => setTimeout(r, 150));
+        await new Promise(r => setTimeout(r, 120));
         return;
       }
       // bazen kapatma handler'ı container'a bağlı olabilir
       if (click(fraudContainer)) {
         log('Dolandırıcılık popup container tıklandı (fallback).');
-        await new Promise(r => setTimeout(r, 150));
+        await new Promise(r => setTimeout(r, 120));
         return;
       }
     }
-  } catch {}
+  } catch (e) {
+    warn('Fraud modal kapatma hata:', e?.message);
+  }
 
-  // b) MUI dialog/overlay
+  // b) Genel MUI dialog/overlay emniyet kemeri
   try {
-    const anyDialog = await waitFor('[role="dialog"], .MuiDialog-root, .MuiModal-root, .modal', { timeout: 900 });
-    const closeCandidate = anyDialog.querySelector('button[aria-label="Close"], button[aria-label="Kapat"], .close, .MuiIconButton-root[aria-label="close"]')
-      || anyDialog.querySelector('button');
-    if (closeCandidate && click(closeCandidate)) {
-      log('MUI modal kapatıldı.');
-      await new Promise(r => setTimeout(r, 150));
-      return;
-    }
-  } catch {}
-
-  // c) Text/aria fallback
-  const buttons = Array.from(document.querySelectorAll('button'));
-  for (const btn of buttons) {
-    const txt = (btn.textContent || '').toLowerCase();
-    const aria = (btn.getAttribute('aria-label') || '').toLowerCase();
-    if (txt.includes('kapat') || txt.includes('devam') || txt.includes('tamam') || txt.includes('close') ||
-        aria.includes('kapat') || aria.includes('close')) {
-      if (click(btn)) {
-        log('Modal kapatıldı (text/aria).');
-        await new Promise(r => setTimeout(r, 150));
+    const anyDialog = await waitFor('[role="dialog"], .MuiDialog-root, .MuiModal-root, .modal', { timeout: 700 }).catch(()=>null);
+    if (anyDialog) {
+      const closeCandidate = anyDialog.querySelector('button[aria-label="Close"], button[aria-label="Kapat"], .close, .MuiIconButton-root[aria-label="close"]')
+        || anyDialog.querySelector('button');
+      if (closeCandidate && click(closeCandidate)) {
+        log('Genel MUI modal kapatıldı.');
+        await new Promise(r => setTimeout(r, 100));
         return;
       }
     }
-  }
+  } catch (e) { /* sessiz geç */ }
 
-  // d) ESC
+  // c) ESC
   document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true }));
-  await new Promise(r => setTimeout(r, 120));
+  await new Promise(r => setTimeout(r, 80));
 }
 
-// --------------- Owner context ---------------
-async function activateOwnerSearchContext() {
-  // "Sahip / Vekil" veya "Sahip" tabını dene
-  const possibleOwnerTabTexts = ['Sahip / Vekil', 'Sahip', 'Kişi', 'Vekil'];
-  let activated = false;
+// --------- Ana Akış (Sadece Kişi No) ---------
+async function runOwnerFlow() {
+  log('Sahip No akışı başladı:', targetKisiNo);
+  if (!targetKisiNo) { warn('targetKisiNo boş; çıkış.'); return; }
 
-  const tabs = Array.from(document.querySelectorAll('[role="tab"], .MuiTab-root, .tab, .nav-tabs .nav-link'));
-  for (const t of tabs) {
-    const tx = (t.textContent || '').trim();
-    if (possibleOwnerTabTexts.some(s => tx.includes(s))) {
-      if (click(t)) {
-        activated = true;
-        await new Promise(r => setTimeout(r, 200));
-        break;
-      }
-    }
-  }
+  try { await closeFraudModalIfAny(); } catch {}
 
-  // Radyo kutusu / select ile "Kişi Numarası" filtresi seç
-  const radios = Array.from(document.querySelectorAll('input[type="radio"], input[type="checkbox"]'));
-  for (const r of radios) {
-    const label = document.querySelector(`label[for="${r.id}"]`);
-    const lt = (label?.textContent || '').toLowerCase();
-    if (lt.includes('kişi') || lt.includes('sahip')) {
-      if (!r.checked) r.click();
-      activated = true;
-      await new Promise(r => setTimeout(r, 150));
-      break;
-    }
-  }
-
-  const selects = Array.from(document.querySelectorAll('select'));
-  for (const s of selects) {
-    const option = Array.from(s.options).find(o => /kişi|sahip/i.test(o.textContent || ''));
-    if (option) { s.value = option.value; s.dispatchEvent(new Event('change', { bubbles: true })); activated = true; break; }
-  }
-
-  if (activated) log('Owner/Kişi konteksi aktive edildi.');
-}
-
-// --------------- Otomasyon Akışları ---------------
-async function runAutomationOwner() {
-  log('Otomasyon (Kişi No) başladı:', targetKisiNo);
-
-  // Retry 1: Modal
-  try { await closeModalsAdvanced(); } catch (e) { log('Modal kapatma hata:', e?.message); }
-
-  // Retry 2: Owner/Kişi sekmesi
-  try { await activateOwnerSearchContext(); } catch (e) { log('Owner context hata:', e?.message); }
-
-  // Retry 3: Input + buton
-  // <input placeholder="Kişi Numarası" class="MuiInputBase-input MuiInput-input">
-  let kisiInput = document.querySelector('input.MuiInputBase-input.MuiInput-input[placeholder="Kişi Numarası"]') ||
-                  document.querySelector('input[placeholder="Kişi Numarası"]');
+  // input[placeholder="Kişi Numarası"]
+  let kisiInput =
+    document.querySelector('input.MuiInputBase-input.MuiInput-input[placeholder="Kişi Numarası"]') ||
+    document.querySelector('input[placeholder="Kişi Numarası"]');
 
   if (!kisiInput) {
-    // Bazı durumlarda input geç yüklenebilir
     kisiInput = await waitFor('input[placeholder="Kişi Numarası"]', { timeout: 5000 }).catch(()=>null);
   }
-  if (!kisiInput) throw new Error('Kişi Numarası alanı bulunamadı.');
+  if (!kisiInput) { err('Kişi Numarası alanı bulunamadı.'); return; }
 
-  // Aynı blokta Sorgula
+  // Aynı bloktaki Sorgula butonu → yoksa globalde bul → en sonda Enter
   let container = kisiInput.closest('.MuiFormControl-root') || kisiInput.closest('form') || document;
   let sorgulaBtn = Array.from(container.querySelectorAll('button')).find(b => /sorgula/i.test(b.textContent || ''));
-  if (!sorgulaBtn) sorgulaBtn = findButtonByTextFast('Sorgula');
-
   if (!sorgulaBtn) {
-    // bazı sayfalarda enter ile tetikleme çalışır
-    log('Sorgula butonu bulunamadı; Enter denenecek.');
+    const allButtons = Array.from(document.querySelectorAll('button'));
+    sorgulaBtn = allButtons.find(b => /sorgula/i.test(b.textContent || ''));
   }
 
   kisiInput.focus();
   setReactInputValue(kisiInput, String(targetKisiNo));
   log('Kişi No yazıldı.');
 
-  if (sorgulaBtn) {
-    click(sorgulaBtn);
-    log('Sorgula (Kişi) tıklandı.');
+  if (sorgulaBtn && click(sorgulaBtn)) {
+    log('Sorgula tıklandı. ✔');
   } else {
     pressEnter(kisiInput);
-    log('Enter gönderildi.');
+    log('Sorgula butonu yok; Enter gönderildi. ✔');
   }
 }
 
-async function runAutomationApplication() {
-  log('Otomasyon (Başvuru No) başladı:', targetBasvuruNo);
-
-  try { await closeModalsAdvanced(); } catch {}
-  let tabBtn = findButtonByTextFast('Dosya Takibi');
-  if (!tabBtn) {
-    try {
-      tabBtn = await waitFor('button[role="tab"]', {
-        timeout: 4000,
-        test: (el) => (el.textContent || '').includes('Dosya Takibi')
-      });
-    } catch {}
-  }
-  if (tabBtn && tabBtn.getAttribute('aria-selected') !== 'true') click(tabBtn);
-
-  const input = await waitFor('input[placeholder="Başvuru Numarası"]', { timeout: 5000 }).catch(() => null);
-  if (!input) throw new Error('Başvuru Numarası alanı bulunamadı.');
-
-  let sorgulaBtn = findButtonByTextFast('Sorgula') ||
-    await waitFor('button', { timeout: 4000, test: (el) => (el.textContent || '').includes('Sorgula') }).catch(() => null);
-  if (!sorgulaBtn) throw new Error('Sorgula butonu bulunamadı.');
-
-  input.focus();
-  setReactInputValue(input, targetBasvuruNo);
-  click(sorgulaBtn);
-  log('Sorgula (Başvuru) tıklandı.');
-}
-
-// --------------- Messaging ---------------
+// --------- Background ve URL tetikleyicileri ---------
 chrome.runtime?.onMessage?.addListener?.((request, sender, sendResponse) => {
-  try {
-    if (request.type === 'AUTO_FILL' && request.data) {
-      targetBasvuruNo = request.data;
-      runAutomationApplication().catch(err => log('Hata(başvuru):', err));
-      sendResponse?.({ status: 'OK' });
-    }
-    if (request.type === 'AUTO_FILL_KISI' && request.data) {
-      targetKisiNo = request.data;
-      runAutomationOwner().catch(err => log('Hata(kisi):', err));
-      sendResponse?.({ status: 'OK' });
-    }
-  } catch (e) {
-    log('Listener hata:', e);
+  if (request?.type === 'AUTO_FILL_KISI' && request?.data) {
+    targetKisiNo = request.data;
+    runOwnerFlow().catch(err);
+    sendResponse?.({ status: 'OK' });
   }
   return true;
 });
 
+// Parent → iframe köprüsü: üst sayfa auto_query'yi tüm framelere yayınlar
+function broadcastAutoQueryToFrames(value) {
+  try {
+    const payload = { source: 'EVREKA', type: 'EVREKA_AUTO_QUERY', queryType: 'sahip', value };
+    // tüm child framelere
+    const frames = window.frames || [];
+    for (let i = 0; i < frames.length; i++) {
+      try { frames[i].postMessage(payload, '*'); } catch {}
+    }
+    // kendine de gönder (iframe'te olabiliriz)
+    window.postMessage(payload, '*');
+    log('auto_query yayınlandı:', payload);
+  } catch (e) {
+    warn('broadcastAutoQueryToFrames hata:', e?.message);
+  }
+}
+
+// Her frame, köprü mesajını dinlesin
+window.addEventListener('message', (e) => {
+  const msg = e?.data;
+  if (!msg || msg.source !== 'EVREKA' || msg.type !== 'EVREKA_AUTO_QUERY') return;
+  if (msg.queryType === 'sahip') {
+    targetKisiNo = msg.value;
+    runOwnerFlow().catch(err);
+  }
+}, false);
+
+// URL parametresi
 function checkAutoQueryFromUrl() {
   try {
     const urlParams = new URLSearchParams(window.location.search);
     const autoQuery = urlParams.get('auto_query');
     const queryType = urlParams.get('query_type');
-    sourceOrigin = urlParams.get('source') || null;
-
-    if (autoQuery && queryType) {
-      if (queryType === 'sahip') {
-        targetKisiNo = autoQuery;
-        runAutomationOwner().catch(err => log('Hata(kisi/url):', err));
-        return true;
-      }
-      if (queryType === 'application') {
-        targetBasvuruNo = autoQuery;
-        runAutomationApplication().catch(err => log('Hata(basvuru/url):', err));
-        return true;
-      }
+    if (autoQuery && queryType === 'sahip') {
+      log('URL üzerinden sahip no bulundu:', autoQuery);
+      broadcastAutoQueryToFrames(autoQuery);
+      targetKisiNo = autoQuery;
+      runOwnerFlow().catch(err);
+      return true;
     }
   } catch (e) {
-    log('URL param hatası:', e?.message);
+    warn('URL param hatası:', e?.message);
   }
   return false;
 }
 
-document.addEventListener('DOMContentLoaded', () => { checkAutoQueryFromUrl(); });
-window.addEventListener('load', () => { checkAutoQueryFromUrl(); });
-
-log('content_script (rev2) yüklendi. frame:', window.self !== window.top ? 'iframe' : 'top');
+document.addEventListener('DOMContentLoaded', () => {
+  log('SahipNo script DOMContentLoaded. frame:', window.self !== window.top ? 'iframe' : 'top');
+  checkAutoQueryFromUrl();
+});
+window.addEventListener('load', () => {
+  log('SahipNo script window.load. frame:', window.self !== window.top ? 'iframe' : 'top');
+  checkAutoQueryFromUrl();
+});
