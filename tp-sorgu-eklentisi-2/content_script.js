@@ -1,3 +1,24 @@
+
+function getQueryParam(name) {
+  const u = new URL(location.href);
+  return u.searchParams.get(name);
+}
+function encodePayload(obj){
+  try{ return btoa(unescape(encodeURIComponent(JSON.stringify(obj)))); }catch(e){ return ''; }
+}
+
+function deliverResultsToReturnUrl(ownerId, data){
+  const ret = getQueryParam('return');
+  if (ret) {
+    const url = new URL(decodeURIComponent(ret));
+    url.hash = 'tpdata=' + encodePayload({ ownerId, items: data });
+    location.href = url.toString();
+    return true;
+  }
+  return false;
+}
+
+
 // =============================
 // TP Kişi Numarası Otomasyon Eklentisi
 // ===================================
@@ -69,7 +90,7 @@ function sendErrorMessage(errorMsg) {
   }, '*');
 }
 
-function sendSuccessMessage(data) {
+function if (!deliverResultsToReturnUrl(targetOwnerId, scrapedData)) { sendSuccessMessage(data); }{
   const messageData = {
     source: 'tp-extension-sahip',
     type: 'VERI_GELDI_KISI',
@@ -146,9 +167,10 @@ async function runAutomation() {
     });
 
     console.log('[TP Eklenti] Veriler başarıyla toplandı:', scrapedData.length, 'kayıt');
-    sendSuccessMessage(scrapedData);
-
-  } catch (error) {
+if (!deliverResultsToReturnUrl(targetOwnerId, scrapedData)) {
+  sendSuccessMessage(scrapedData);
+}
+} catch (error) {
     console.error('[TP Eklenti] Otomasyon hatası:', error);
     sendErrorMessage(error.message || 'Bilinmeyen otomasyon hatası');
   }
