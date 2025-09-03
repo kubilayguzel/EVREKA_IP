@@ -63,7 +63,7 @@ function sendToOpener(type, data) {
   }
 }
 
-// --------- Modal Kapatma ---------
+// --------- Modal Yardımcıları ---------
 async function closeFraudModalIfAny() {
   try {
     const fraudContainer = await waitFor('.jss84', { timeout: 1800 }).catch(()=>null);
@@ -95,6 +95,17 @@ async function closeFraudModalIfAny() {
     }
   } catch (e) { /* sessiz */ }
 
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true }));
+}
+
+function closeAnyOpenDialog() {
+  const dialogs = document.querySelectorAll('[role="dialog"], .MuiDialog-root, .MuiModal-root, .modal');
+  if (!dialogs.length) return;
+  for (const d of dialogs) {
+    const closeBtn = d.querySelector('button[aria-label="Close"], button[aria-label="Kapat"], .close, .MuiIconButton-root[aria-label="close"]')
+      || d.querySelector('button');
+    if (closeBtn) click(closeBtn);
+  }
   document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true }));
 }
 
@@ -309,30 +320,112 @@ async function infiniteScrollAllRowsSTRICT(expectedTotal, { overallTimeoutMs = 3
   return lastCount;
 }
 
+// --------- MODAL PARSE: Detay'ı aç ve görsel + alanları topla ---------
+function findDetailButton(tr) {
+  const btns = Array.from(tr.querySelectorAll('button, a[role="button"], .MuiIconButton-root'));
+  const byLabel = btns.find(b => {
+    const t = (b.textContent || '').toLowerCase();
+    const a = (b.getAttribute?.('aria-label') || '').toLowerCase();
+    return /detay|detail|incele/.test(t) || /detay|detail|incele/.test(a);
+  });
+  return byLabel || btns[btns.length - 1] || null;
+}
+
+async function parseDetailsFromOpenDialog(dialogRoot) {
+  if (!dialogRoot) return {};
+  // Önce görsel
+  let imgSrc = null;
+  const img = dialogRoot.querySelector('img');
+  if (img && img.src) imgSrc = img.src;
+
+  // Genel alan/etiket yakalama (varsa)
+  const fields = {};
+  const rows = Array.from(dialogRoot.querySelectorAll('div, li, tr'));
+  rows.forEach(node => {
+    // label:value ikilileri gibi yapılar için basit sezgisel okuma
+    const labels = Array.from(node.querySelectorAll('label, .MuiFormLabel-root, .MuiTypography-root')).map(x => (x.textContent||'').trim()).filter(Boolean);
+    const strongs = Array.from(node.querySelectorAll('strong, b')).map(x => (x.textContent||'').trim()).filter(Boolean);
+    const texts = (node.textContent || '').trim();
+    // Çok uzun bloklar yerine küçük çiftler
+    if (labels.length === 1) {
+      const label = labels[0];
+      // label dışındaki değer:
+      let value = texts.replace(label, '').trim();
+      if (value && value.length && value.length < 500) fields[label] = value;
+    } else if (strongs.length === 1) {
+      const label = strongs[0];
+      let value = texts.replace(label, '').trim();
+      if (value && value.length && value.length < 500) fields[label] = value;
+    }
+  });
+
+  return { imageDataUrl: imgSrc, fields };
+}
+
+async function openRowModalAndParse(tr, { timeout = 9000 } = {}) {
+  try {
+    // Her ihtimale karşı önce açık bir modal varsa kapat
+    closeAnyOpenDialog();
+
+    const btn = findDetailButton(tr);
+    if (!btn) return null;
+    click(btn);
+
+    // Dialogu bekle
+    const dialog = await waitFor('[role="dialog"], .MuiDialog-root, .MuiModal-root, .modal', { timeout }).catch(()=>null);
+    if (!dialog) return null;
+
+    // İçerik yüklenmesi için ufak bekleme
+    await sleep(350);
+
+    // Parse et
+    const { imageDataUrl, fields } = await parseDetailsFromOpenDialog(dialog);
+
+    // Kapat
+    closeAnyOpenDialog();
+
+    return { imageDataUrl, fields };
+  } catch (e) {
+    warn('openRowModalAndParse hata:', e?.message || e);
+    return null;
+  }
+}
+
 // --------- Sonuç Toplama ---------
-function parseOwnerResults() {
+function parseOwnerRowBase(tr, idx) {
+  const get = (role) => {
+    const td = tr.querySelector(`td[role="${role}"]`);
+    return td ? (td.textContent || '').trim() : '';
+  };
+  const orderTxt = (tr.querySelector('td .MuiTypography-alignCenter') || tr.querySelector('td'))?.textContent || `${idx+1}`;
+  const hold = get('holdName');
+  const ownerName = hold ? hold.replace(/\s*\(\d+\)\s*$/, '') : '';
+
+  return {
+    order: Number(orderTxt) || (idx+1),
+    applicationNumber: get('applicationNo') || '',
+    brandName: get('markName') || '',
+    ownerName,
+    applicationDate: get('applicationDate') || '',
+    registrationNumber: get('registrationNo') || '',
+    status: get('state') || '',
+    niceClasses: get('niceClasses') || ''
+    // Görsel ve detaylar modal'dan okunacak
+  };
+}
+
+async function collectOwnerResultsWithDetails() {
   const rows = Array.from(document.querySelectorAll('tbody.MuiTableBody-root tr'));
   const items = [];
   for (const [idx, tr] of rows.entries()) {
-    const get = (role) => {
-      const td = tr.querySelector(`td[role="${role}"]`);
-      return td ? (td.textContent || '').trim() : '';
-    };
-    const orderTxt = (tr.querySelector('td .MuiTypography-alignCenter') || tr.querySelector('td'))?.textContent || `${idx+1}`;
-    const hold = get('holdName');
-    const ownerName = hold ? hold.replace(/\s*\(\d+\)\s*$/, '') : '';
-
-    items.push({
-      order: Number(orderTxt) || (idx+1),
-      applicationNumber: get('applicationNo') || '',
-      brandName: get('markName') || '',
-      ownerName,
-      applicationDate: get('applicationDate') || '',
-      registrationNumber: get('registrationNo') || '',
-      status: get('state') || '',
-      niceClasses: get('niceClasses') || ''
-      // image/logo alınmıyor
-    });
+    const base = parseOwnerRowBase(tr, idx);
+    // Modal açıp görseli ve ek alanları al
+    const details = await openRowModalAndParse(tr).catch(()=>null);
+    if (details) {
+      if (details.imageDataUrl) base.brandImageDataUrl = details.imageDataUrl;
+      if (details.fields && Object.keys(details.fields).length) base.details = details.fields;
+    }
+    items.push(base);
   }
   return items;
 }
@@ -366,16 +459,16 @@ async function waitAndSendOwnerResults() {
     }
   } catch (e) { /* yoksay */ }
 
-  // 5) Yalnızca beklenen sayıya ulaştıysak veriyi gönder (meta biliniyorsa)
+  // 4) Beklenen sayıya ulaşmadan ERKEN GÖNDERMEYİ ÖNLE! (meta biliniyorsa)
   const finalCount = document.querySelectorAll('tbody.MuiTableBody-root tr').length;
   if (typeof expected === 'number' && expected > 0 && finalCount < expected) {
-    // beklenen tamamlanmadı → erken gönderme!
     log('Beklenen sayıya ulaşılmadı, veri gönderilmeyecek. final:', finalCount, 'expected:', expected);
     sendToOpener('HATA_KISI', { message: 'Sonuçların tam listelemesi tamamlanmadı.', loaded: finalCount, expected });
     return;
   }
 
-  const items = parseOwnerResults();
+  // 5) Satırları MODAL ile detaylı parse et (görsel dahil)
+  const items = await collectOwnerResultsWithDetails();
   sendToOpener('VERI_GELDI_KISI', items);
 }
 
