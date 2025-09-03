@@ -47,7 +47,7 @@ const scrapeTrademarkFunction = httpsCallable(functions, 'scrapeTrademark', { ti
 // --- DOM Elements ---
 const singleFields = _el('singleFields');
 const basvuruNoInput = _el('basvuruNoInput');
-const sahipNoInput = _el('sahipNoInput');
+const sahipNoInput = _el('ownerIdInput');
 const queryBtn = _el('queryBtn');
 const loadingEl = _el('loading');
 const singleResultContainer = _el('singleResultContainer');
