@@ -6,18 +6,20 @@
  */
 function mapTurkpatentToIPRecord(turkpatentData, selectedApplicants = []) {
     // Tablo verilerinden gelen temel alanlar
-    const {
-        order,
-        applicationNumber,
-        brandName,
-        ownerName,
-        applicationDate,
-        registrationNumber,
-        status,
-        niceClasses,
-        brandImageDataUrl,
-        details = {}
-    } = turkpatentData;
+const {
+    order,
+    applicationNumber,
+    brandName,
+    ownerName,
+    applicationDate,
+    registrationNumber,
+    status,
+    niceClasses,
+    brandImageDataUrl,
+    details = {},
+    goodsAndServicesByClass, // Modal'dan gelen
+    transactions // Modal'dan gelen
+} = turkpatentData;
 
     // Modal'dan gelen detay alanları
     const getDetailValue = (key) => {
@@ -57,10 +59,11 @@ function mapTurkpatentToIPRecord(turkpatentData, selectedApplicants = []) {
     };
 
 // Mal ve hizmetleri sınıflara göre grupla
+// Mal ve hizmetleri sınıflara göre grupla
 const createGoodsAndServicesByClass = () => {
-    // Önce modal'dan gelen detaylı listeyi kontrol et
-    if (turkpatentData.goodsAndServicesByClass && turkpatentData.goodsAndServicesByClass.length > 0) {
-        return turkpatentData.goodsAndServicesByClass;
+    // Önce ana objeden gelen detaylı listeyi kontrol et
+    if (goodsAndServicesByClass && Array.isArray(goodsAndServicesByClass) && goodsAndServicesByClass.length > 0) {
+        return goodsAndServicesByClass;
     }
     
     // Fallback: niceClasses string'inden parse et
@@ -175,15 +178,26 @@ const createGoodsAndServicesByClass = () => {
         
         // Zaman damgaları
         createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        
-        // Metadata
-        _metadata: {
+        updatedAt: new Date().toISOString()
+        };
+
+        // İşlem geçmişini ekle (eğer varsa)
+        if (transactions && Array.isArray(transactions) && transactions.length > 0) {
+            ipRecord.transactions = transactions.map(tx => ({
+                date: formatDate(tx.date),
+                description: tx.description,
+                note: tx.note,
+                type: 'system', // TÜRKPATENT'ten gelen
+                createdAt: new Date().toISOString()
+            }));
+        }
+
+        // Metadata ekle
+        ipRecord._metadata = {
             source: 'turkpatent_scrape',
             originalData: turkpatentData,
             scrapedAt: new Date().toISOString()
-        }
-    };
+        };
 
     return ipRecord;
 }
@@ -252,8 +266,8 @@ export {
     mapStatus
 };
 // İşlem geçmişini ekle (eğer varsa)
-if (turkpatentData.transactions && turkpatentData.transactions.length > 0) {
-    ipRecord.transactions = turkpatentData.transactions.map(tx => ({
+if (transactions && Array.isArray(transactions) && transactions.length > 0) {
+    ipRecord.transactions = transactions.map(tx => ({
         date: formatDate(tx.date),
         description: tx.description,
         note: tx.note,
