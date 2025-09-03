@@ -333,10 +333,7 @@ function findDetailButton(tr) {
 
 async function parseDetailsFromOpenDialog(dialogRoot) {
   if (!dialogRoot) return {};
-  // Önce görsel
-  let imgSrc = null;
-  const img = dialogRoot.querySelector('img');
-  if (img && img.src) imgSrc = img.src;
+  // Görsel almayı atla - zaten tablo satırında mevcut
 
   // Genel alan/etiket yakalama (varsa)
   const fields = {};
@@ -359,7 +356,7 @@ async function parseDetailsFromOpenDialog(dialogRoot) {
     }
   });
 
-  return { imageDataUrl: imgSrc, fields };
+  return { imageDataUrl: null, fields }; // imageDataUrl null döndür
 }
 
 async function openRowModalAndParse(tr, { timeout = 9000 } = {}) {
@@ -419,12 +416,19 @@ async function collectOwnerResultsWithDetails() {
   const items = [];
   for (const [idx, tr] of rows.entries()) {
     const base = parseOwnerRowBase(tr, idx);
-    // Modal açıp görseli ve ek alanları al
-    const details = await openRowModalAndParse(tr).catch(()=>null);
-    if (details) {
-      if (details.imageDataUrl) base.brandImageDataUrl = details.imageDataUrl;
-      if (details.fields && Object.keys(details.fields).length) base.details = details.fields;
+    
+    // Tablo satırından görseli al (modal'dan değil)
+    const img = tr.querySelector('img');
+    if (img && img.src) {
+      base.brandImageDataUrl = img.src;
     }
+    
+    // Modal açıp sadece ek alanları al (görsel değil)
+    const details = await openRowModalAndParse(tr).catch(()=>null);
+    if (details && details.fields && Object.keys(details.fields).length) {
+      base.details = details.fields;
+    }
+    
     items.push(base);
   }
   return items;
