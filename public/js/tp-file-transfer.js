@@ -171,103 +171,62 @@ async function handleSaveToPortfolio() {
     showToast('Seçili kayıtlar bulunamadı.', 'danger');
     return;
   }
-  
-  // Seçili sahipleri al (bu durumda arayüzden)
-  const selectedApplicants = selectedRelatedParties.length > 0 ? selectedRelatedParties : [];
-  
+
+  // Progress bar for saving
+  const saveProgress = window.showProgress({
+    title: 'Portföye Kaydediliyor',
+    subtitle: `${selectedRecords.length} kayıt veritabanına aktarılıyor...`,
+    steps: [
+      'Veriler hazırlanıyor',
+      'TÜRKPATENT formatı dönüştürülüyor',
+      'Veritabanına kaydediliyor',
+      'İşlem tamamlanıyor'
+    ]
+  });
+
   try {
-    // Loading göster
-    const saveBtn = document.getElementById('savePortfolioBtn');
-    if (saveBtn) {
-      saveBtn.disabled = true;
-      saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm mr-2"></span>Kaydediliyor...';
-    }
+    saveProgress.setStep(0); // Veriler hazırlanıyor
     
-    // TÜRKPATENT verilerini IPRecord formatına dönüştür
-    const ipRecords = await mapTurkpatentResultsToIPRecords(selectedRecords, selectedApplicants);    
-    // recordOwnerType'ı 'self' olarak ayarla
-    ipRecords.forEach(record => {
-      record.recordOwnerType = 'self';
-    });
+    saveProgress.setStep(1); // TÜRKPATENT formatı dönüştürülüyor
+    const ipRecords = await mapTurkpatentResultsToIPRecords(selectedRecords, selectedRelatedParties);
     
-    let savedCount = 0;
-    let skippedCount = 0;
-    let errorCount = 0;
+    saveProgress.setStep(2); // Veritabanına kaydediliyor
     const results = [];
     
-    // Mevcut kayıtları al (duplikasyon kontrolü için)
-    const existingRecords = await ipRecordsService.getRecords();
-    const allRecords = existingRecords?.data || existingRecords?.items || [];
-    
-    // Her kayıt için ayrı ayrı kaydetme dene
-    for (const record of ipRecords) {
+    for (let i = 0; i < ipRecords.length; i++) {
+      const record = ipRecords[i];
       try {
-        // Aynı başvuru numarası ile 'self' kaydı var mı kontrol et
-        const existingRecord = allRecords.find(r => 
-          r.applicationNumber === record.applicationNumber && 
-          r.recordOwnerType === 'self'
-        );
-        
-        if (existingRecord) {
-          skippedCount++;
-          results.push({ 
-            record: record.title || record.applicationNumber, 
-            status: 'skipped', 
-            reason: 'Aynı başvuru numarası ile kayıt mevcut' 
-          });
-          continue;
-        }
-        
-        // Kaydet
         const result = await ipRecordsService.createRecord(record);
+        results.push(result);
         
-        if (result.success) {
-          savedCount++;
-          results.push({ 
-            record: record.title || record.applicationNumber, 
-            status: 'saved' 
-          });
-        } else {
-          errorCount++;
-          results.push({ 
-            record: record.title || record.applicationNumber, 
-            status: 'error', 
-            reason: result.message || 'Bilinmeyen hata' 
-          });
-        }
-        
+        // Progress güncelleme
+        const progressPercent = ((i + 1) / ipRecords.length) * 100;
+        saveProgress.setProgress(progressPercent);
       } catch (error) {
-        errorCount++;
-        results.push({ 
-          record: record.title || record.applicationNumber, 
-          status: 'error', 
-          reason: error.message || 'Bilinmeyen hata' 
-        });
         console.error('Kayıt hatası:', error);
+        results.push({ success: false, error: error.message });
       }
     }
     
-    // Sonuç bildirimi
-    let message = '';
-    if (savedCount > 0) message += `${savedCount} kayıt başarıyla eklendi. `;
-    if (skippedCount > 0) message += `${skippedCount} kayıt zaten mevcut olduğu için atlandı. `;
-    if (errorCount > 0) message += `${errorCount} kayıtta hata oluştu. `;
-    
-    const notificationType = errorCount > 0 ? 'warning' : (savedCount > 0 ? 'success' : 'info');
-    showToast(message.trim(), notificationType);
+    saveProgress.setStep(3); // İşlem tamamlanıyor
     
     console.log('Kaydetme sonuçları:', results);
     
-  } catch (error) {
-    console.error('Portföye kaydetme hatası:', error);
-    showToast('Kaydetme işlemi sırasında hata oluştu: ' + error.message, 'danger');
-  } finally {
-    // Loading'i kaldır
-    const saveBtn = document.getElementById('savePortfolioBtn');
-    if (saveBtn) {
-      saveBtn.disabled = false;
-      saveBtn.innerHTML = 'Portföye Ekle';
+    const successCount = results.filter(r => r.success).length;
+    const errorCount = results.length - successCount;
+    
+    if (errorCount === 0) {
+      saveProgress.showSuccess(`${successCount} kayıt başarıyla portföye eklendi!`);
+      showToast(`${successCount} kayıt başarıyla portföye eklendi!`, 'success');
+    } else {
+      saveProgress.showError(`${successCount} kayıt başarılı, ${errorCount} kayıt başarısız oldu.`);
+      showToast(`${successCount} kayıt başarılı, ${errorCount} kayıt başarısız oldu.`, 'warning');
     }
+    
+  } catch (error) {
+    console.error('Portföy kaydetme genel hatası:', error);
+    saveProgress.showError('Kaydetme sırasında hata oluştu: ' + error.message);
+    showToast('Kaydetme sırasında hata oluştu: ' + error.message, 'danger');
   }
 }
 
@@ -307,14 +266,25 @@ function setupRadioButtons() {
 // ANA SORGULAMA FONKSİYONU
 // ===============================
 
-async function handleQuery(data) {
-  const { basvuruNo, sahipNo } = data;
-  console.log('[DEBUG] handleQuery çağrıldı:', data);
+// SİL: handleQuery fonksiyonunu
+
+// DEĞIŞTIR/EKLE:
+async function handleQuery() {
+  const basvuruNo = basvuruNoInput?.value?.trim() || '';
+  const sahipNo = sahipNoInput?.value?.trim() || '';
+  
+  console.log('[DEBUG] handleQuery çağrıldı:', { basvuruNo, sahipNo });
+
+  // Validation
+  if (!basvuruNo && !sahipNo) {
+    showToast('Lütfen başvuru numarası veya sahip numarası girin.', 'warning');
+    return;
+  }
 
   let progress = null;
 
   try {
-    if (sahipNo && sahipNo.trim()) {
+    if (sahipNo) {
       // Sahip numarası sorgusu için progress
       progress = window.showProgress({
         title: 'TÜRKPATENT Sorgulanıyor',
@@ -324,11 +294,14 @@ async function handleQuery(data) {
           'Sahip numarası giriliyor',
           'Sorgu çalıştırılıyor',
           'Sonuçlar yükleniyor',
-          'Detaylar alınıyor',
-          'Veriler işleniyor'
+          'Veriler işleniyor',
+          'Sonuçlar gösteriliyor'
         ],
         onCancel: () => {
           console.log('[DEBUG] Sorgu iptal edildi');
+          if (window.currentProgress) {
+            window.currentProgress = null;
+          }
         }
       });
 
@@ -340,11 +313,17 @@ async function handleQuery(data) {
       console.log('[DEBUG] TÜRKPATENT URL açılıyor:', url);
       
       progress.setStep(1); // Sahip numarası giriliyor
-      window.open(url, '_blank');
-
-      // Message listener'da progress güncellemesi yapılacak
       
-    } else if (basvuruNo && basvuruNo.trim()) {
+      const newWindow = window.open(url, '_blank');
+      if (!newWindow) {
+        progress.showError('Pop-up engellendi. Tarayıcı ayarlarından pop-up\'ları açın.');
+        return;
+      }
+
+      // Progress referansını global'e kaydet
+      window.currentProgress = progress;
+
+    } else if (basvuruNo) {
       // Başvuru numarası sorgusu için progress
       progress = window.showProgress({
         title: 'TÜRKPATENT Sorgulanıyor',
@@ -365,21 +344,29 @@ async function handleQuery(data) {
       
       console.log('[DEBUG] Başvuru numarası eklentiye yönlendiriliyor:', basvuruNo);
       
-      const url = `https://www.turkpatent.gov.tr/arastirma-yap?form=trademark&auto_query=${encodeURIComponent(basvuruNo)}&query_type=basvuru&source=${encodeURIComponent(window.location.origin)}`;
-      console.log('[DEBUG] TÜRKPATENT URL açılıyor:', url);
-      
+      // Başvuru numarası sorgusu için Firebase Cloud Function kullan
       progress.setStep(1);
-      window.open(url, '_blank');
+      progress.setStep(2); // Sorgu çalıştırılıyor
+      
+      const result = await scrapeTrademarkFunction({ applicationNumber: basvuruNo });
+      
+      progress.setStep(3); // Detaylar alınıyor
+      
+      if (result?.data) {
+        progress.setStep(4); // Veriler işleniyor
+        renderSingleResult(result.data);
+        progress.showSuccess('Başvuru detayları başarıyla alındı!');
+      } else {
+        progress.showError('Bu başvuru numarası için sonuç bulunamadı.');
+      }
     }
-
-    // Progress referansını global'e kaydet
-    window.currentProgress = progress;
 
   } catch (error) {
     console.error('[ERROR] handleQuery:', error);
     if (progress) {
       progress.showError('Sorgu başlatılırken hata oluştu: ' + error.message);
     }
+    showToast('İşlem hatası: ' + (error.message || error), 'danger');
   }
 }
 
@@ -470,24 +457,50 @@ function setupExtensionMessageListener() {
     if (event.data && event.data.source === 'tp-extension-sahip') {
       console.log('[DEBUG] Eklenti mesajı alındı:', event.data);
       
-      if (event.data.type === 'VERI_GELDI_KISI') {
+      if (event.data.type === 'SORGU_BASLADI') {
+        console.log('[DEBUG] Eklenti sorguyu başlattı');
+        if (window.currentProgress) {
+          window.currentProgress.setStep(2); // Sorgu çalıştırılıyor
+        }
+        showToast('TÜRKPATENT sayfasında sorgu başladı...', 'info');
+      }
+      
+      else if (event.data.type === 'VERI_GELDI_KISI') {
         _hideBlock(loadingEl);
         const data = event.data.data || [];
         
+        if (window.currentProgress) {
+          window.currentProgress.setStep(4); // Veriler işleniyor
+        }
+        
         if (!data.length) {
+          if (window.currentProgress) {
+            window.currentProgress.showError('Bu sahip numarası için sonuç bulunamadı.');
+            window.currentProgress = null;
+          }
           showToast('Bu sahip numarası için sonuç bulunamadı.', 'warning');
         } else {
           renderOwnerResults(data);
+          
+          if (window.currentProgress) {
+            window.currentProgress.setStep(5); // Sonuçlar gösteriliyor
+            window.currentProgress.showSuccess(`${data.length} kayıt başarıyla alındı!`);
+            window.currentProgress = null;
+          }
           showToast(`${data.length} kayıt başarıyla alındı.`, 'success');
         }
         
-      } else if (event.data.type === 'HATA_KISI') {
+      } 
+      
+      else if (event.data.type === 'HATA_KISI') {
         _hideBlock(loadingEl);
         const errorMsg = event.data.data?.message || 'Bilinmeyen Hata';
-        showToast('Eklenti hatası: ' + errorMsg, 'danger');
         
-      } else if (event.data.type === 'SORGU_BASLADI') {
-        showToast('TÜRKPATENT sayfasında sorgu başladı...', 'info');
+        if (window.currentProgress) {
+          window.currentProgress.showError('Eklenti hatası: ' + errorMsg);
+          window.currentProgress = null;
+        }
+        showToast('Eklenti hatası: ' + errorMsg, 'danger');
       }
     }
   });
