@@ -480,6 +480,12 @@ async function collectOwnerResultsWithDetails() {
   for (const [idx, tr] of rows.entries()) {
     const base = parseOwnerRowBase(tr, idx);
     
+    // BOŞ SATIR KONTROLÜ - En az başvuru numarası veya marka adı olmalı
+    if (!base.applicationNumber && !base.brandName) {
+      log(`Boş satır atlandı: satır ${idx + 1}`);
+      continue; // Boş satırı atla
+    }
+    
     // Görsel zaten parseOwnerRowBase'de alındı
     if (base.imageSrc) {
       base.brandImageDataUrl = base.imageSrc;
@@ -507,6 +513,8 @@ async function collectOwnerResultsWithDetails() {
     
     items.push(base);
   }
+  
+  log(`Toplam satır: ${rows.length}, Geçerli veri: ${items.length}`);
   return items;
 }
 
