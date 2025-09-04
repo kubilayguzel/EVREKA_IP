@@ -461,6 +461,48 @@ function parseOwnerRowBase(tr, idx) {
   const hold = get('holdName');
   const ownerName = hold ? hold.replace(/\s*\(\d+\)\s*$/, '') : '';
 
+  // Görsel arama - çeşitli selector'lar deneyelim
+  let imageSrc = null;
+  
+  // 1) Satır içi herhangi bir img
+  const img1 = tr.querySelector('img');
+  if (img1 && img1.src) {
+    imageSrc = img1.src;
+    log(`🖼️ Satır ${idx + 1} - img bulundu:`, imageSrc);
+  }
+  
+  // 2) td içindeki img
+  const img2 = tr.querySelector('td img');
+  if (!imageSrc && img2 && img2.src) {
+    imageSrc = img2.src;
+    log(`🖼️ Satır ${idx + 1} - td img bulundu:`, imageSrc);
+  }
+  
+  // 3) Belirli role'lü td içindeki img
+  const imgTd = tr.querySelector('td[role="img"] img, td[role="image"] img');
+  if (!imageSrc && imgTd && imgTd.src) {
+    imageSrc = imgTd.src;
+    log(`🖼️ Satır ${idx + 1} - role img bulundu:`, imageSrc);
+  }
+  
+  // 4) Background image kontrol et
+  const allTds = tr.querySelectorAll('td');
+  for (const td of allTds) {
+    const bgImg = getComputedStyle(td).backgroundImage;
+    if (!imageSrc && bgImg && bgImg !== 'none') {
+      const match = bgImg.match(/url\(["']?(.*?)["']?\)/);
+      if (match) {
+        imageSrc = match[1];
+        log(`🖼️ Satır ${idx + 1} - background img bulundu:`, imageSrc);
+        break;
+      }
+    }
+  }
+  
+  if (!imageSrc) {
+    log(`❌ Satır ${idx + 1} - görsel bulunamadı`);
+  }
+
   return {
     order: Number(orderTxt) || (idx+1),
     applicationNumber: get('applicationNo') || '',
@@ -469,8 +511,8 @@ function parseOwnerRowBase(tr, idx) {
     applicationDate: get('applicationDate') || '',
     registrationNumber: get('registrationNo') || '',
     status: get('state') || '',
-    niceClasses: get('niceClasses') || ''
-    // Görsel ve detaylar modal'dan okunacak
+    niceClasses: get('niceClasses') || '',
+    imageSrc: imageSrc // Görsel URL'i
   };
 }
 
@@ -480,42 +522,29 @@ async function collectOwnerResultsWithDetails() {
   for (const [idx, tr] of rows.entries()) {
     const base = parseOwnerRowBase(tr, idx);
     
-    // BOŞ SATIR KONTROLÜ - En az başvuru numarası veya marka adı olmalı
+    // BOŞ SATIR KONTROLÜ
     if (!base.applicationNumber && !base.brandName) {
       log(`Boş satır atlandı: satır ${idx + 1}`);
-      continue; // Boş satırı atla
+      continue;
     }
+    
+    // Görsel debug
+    log(`🔍 Satır ${idx + 1} final:`, {
+      appNo: base.applicationNumber,
+      brandName: base.brandName,
+      imageSrc: base.imageSrc,
+      hasImage: !!base.imageSrc
+    });
     
     // Görsel zaten parseOwnerRowBase'de alındı
     if (base.imageSrc) {
       base.brandImageDataUrl = base.imageSrc;
       base.brandImageUrl = base.imageSrc;
+      log(`✅ Görsel set edildi: ${base.imageSrc}`);
+    } else {
+      log(`❌ Görsel yok - satır ${idx + 1}`);
     }
-    
-    // Modal açıp detayları al
-    const details = await openRowModalAndParse(tr).catch(()=>null);
-    if (details) {
-      // Genel alanlar
-      if (details.fields && Object.keys(details.fields).length) {
-        base.details = details.fields;
-      }
-      
-      // Mal/hizmet listesi
-      if (details.goodsAndServices && details.goodsAndServices.length) {
-        base.goodsAndServicesByClass = details.goodsAndServices;
-      }
-      
-      // İşlem geçmişi
-      if (details.transactions && details.transactions.length) {
-        base.transactions = details.transactions;
-      }
-    }
-    
-    items.push(base);
   }
-  
-  log(`Toplam satır: ${rows.length}, Geçerli veri: ${items.length}`);
-  return items;
 }
 
 async function waitAndSendOwnerResults() {
