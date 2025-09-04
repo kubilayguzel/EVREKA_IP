@@ -342,69 +342,88 @@ async function parseDetailsFromOpenDialog(dialogRoot) {
   };
 
   try {
-    // Tüm tabloları kontrol et, başlıklarına göre ayırt et
+    // Hızlı tablo parsing - tek geçişte her şeyi topla
     const allTables = dialogRoot.querySelectorAll('table, .MuiTable-root');
     
-    allTables.forEach(table => {
+    for (const table of allTables) {
       const headers = table.querySelectorAll('th, .MuiTableCell-head');
       const headerTexts = Array.from(headers).map(h => h.textContent.trim());
       
-      // EŞYA TABLOSU: "Sınıf" ve "Mal" içeren başlıklar
+      const tbody = table.querySelector('tbody, .MuiTableBody-root');
+      if (!tbody) continue;
+      
+      const rows = tbody.querySelectorAll('tr, .MuiTableRow-root');
+      
+      // EŞYA TABLOSU kontrolü
       if (headerTexts.some(h => h.includes('Sınıf')) && 
           headerTexts.some(h => h.includes('Mal') || h.includes('Hizmet'))) {
         
-        const tbody = table.querySelector('tbody, .MuiTableBody-root');
-        if (tbody) {
-          const rows = tbody.querySelectorAll('tr, .MuiTableRow-root');
-          
-          rows.forEach(row => {
-            const cells = row.querySelectorAll('td, .MuiTableCell-body');
-            if (cells.length === 2) {
-              const classNo = parseInt(cells[0].textContent.trim(), 10);
-              const goodsText = cells[1].textContent.trim();
+        for (const row of rows) {
+          const cells = row.querySelectorAll('td, .MuiTableCell-body');
+          if (cells.length === 2) {
+            const classNo = parseInt(cells[0].textContent.trim(), 10);
+            const goodsText = cells[1].textContent.trim();
+            
+            if (!isNaN(classNo) && classNo >= 1 && classNo <= 45 && goodsText.length > 0) {
+              const items = goodsText
+                .split(/\n+/)
+                .map(item => item.trim())
+                .filter(Boolean)
+                .map(item => item.replace(/\s+/g, ' '));
               
-              if (!isNaN(classNo) && classNo >= 1 && classNo <= 45 && goodsText.length > 0) {
-                const items = goodsText
-                  .split(/\n+/)
-                  .map(item => item.trim())
-                  .filter(item => item && item.length > 0)
-                  .map(item => item.replace(/\s+/g, ' '));
-                
-                data.goodsAndServices.push({ classNo, items });
-              }
+              data.goodsAndServices.push({ classNo, items });
             }
-          });
+          }
         }
       }
       
-      // İŞLEM TABLOSU: "Tarih" ve "İşlem" içeren başlıklar
+      // İŞLEM TABLOSU kontrolü
       else if (headerTexts.some(h => h.includes('Tarih')) && 
                headerTexts.some(h => h.includes('İşlem'))) {
         
-        const tbody = table.querySelector('tbody, .MuiTableBody-root');
-        if (tbody) {
-          const rows = tbody.querySelectorAll('tr, .MuiTableRow-root');
-          const dateRegex = /^\d{2}\.\d{2}\.\d{4}$/;
-          
-          rows.forEach(row => {
-            const cells = row.querySelectorAll('td, .MuiTableCell-body');
-            if (cells.length === 4) {
-              const dateText = cells[0].textContent.trim();
-              const operationText = cells[2].textContent.trim();
-              const noteText = cells[3].textContent.trim();
-              
-              if (dateRegex.test(dateText) && operationText && operationText !== '-') {
-                data.transactions.push({
-                  date: dateText,
-                  description: operationText,
-                  note: (noteText && noteText !== '-') ? noteText : null
-                });
-              }
+        const dateRegex = /^\d{2}\.\d{2}\.\d{4}$/;
+        
+        for (const row of rows) {
+          const cells = row.querySelectorAll('td, .MuiTableCell-body');
+          if (cells.length === 4) {
+            const dateText = cells[0].textContent.trim();
+            const operationText = cells[2].textContent.trim();
+            const noteText = cells[3].textContent.trim();
+            
+            if (dateRegex.test(dateText) && operationText && operationText !== '-') {
+              data.transactions.push({
+                date: dateText,
+                description: operationText,
+                note: (noteText && noteText !== '-') ? noteText : null
+              });
             }
-          });
+          }
         }
       }
-    });
+    }
+    
+    // Hızlı genel bilgi toplama
+    const fieldsets = dialogRoot.querySelectorAll('fieldset');
+    for (const fieldset of fieldsets) {
+      const legend = fieldset.querySelector('legend');
+      if (!legend) continue;
+      
+      const legendText = legend.textContent.trim();
+      if (legendText.includes('Marka Bilgileri')) {
+        const allText = fieldset.textContent;
+        
+        // Regex ile hızlı çıkarım
+        const bulletinNoMatch = allText.match(/Marka İlan Bülten No[:\s]*([^\n\r]+)/i);
+        const bulletinDateMatch = allText.match(/Marka İlan Bülten Tarihi[:\s]*([^\n\r]+)/i);
+        const registrationDateMatch = allText.match(/Tescil Tarihi[:\s]*([^\n\r]+)/i);
+        
+        if (bulletinNoMatch) data.fields['Marka İlan Bülten No'] = bulletinNoMatch[1].trim();
+        if (bulletinDateMatch) data.fields['Marka İlan Bülten Tarihi'] = bulletinDateMatch[1].trim();
+        if (registrationDateMatch) data.fields['Tescil Tarihi'] = registrationDateMatch[1].trim();
+        
+        break; // İlk marka bilgisini bulduktan sonra çık
+      }
+    }
     
   } catch (e) {
     console.warn('Modal parse hatası:', e);
@@ -413,48 +432,88 @@ async function parseDetailsFromOpenDialog(dialogRoot) {
   return data;
 }
 
-async function openRowModalAndParse(tr, { timeout = 7000 } = {}) {
+
+async function openRowModalAndParse(tr, { timeout = 10000 } = {}) {
   try {
+    console.log('🔍 openRowModalAndParse başladı');
+    
+    // Önceki modal'ı hızla kapat
     closeAnyOpenDialog();
-    await sleep(200);
+    await sleep(100); // Azaltıldı
 
     const btn = findDetailButton(tr);
-    if (!btn) return null;
+    if (!btn) {
+      console.warn('❌ Detail butonu bulunamadı');
+      return null;
+    }
     
+    console.log('✅ Detail butonu bulundu, tıklanıyor');
     click(btn);
-    await sleep(1000);
+    
+    // Tıklama sonrası kısa bekleme
+    await sleep(300); // Azaltıldı
 
-    // Z-index stratejisi - en üstteki modal'ı bul
+    console.log('🔍 Modal aranıyor...');
+    
+    // Hızlı modal arama - sadece yüksek z-index stratejisi
     let dialog = null;
-    const highZElements = Array.from(document.querySelectorAll('div'))
-      .filter(el => {
-        const zIndex = parseInt(getComputedStyle(el).zIndex) || 0;
-        return zIndex > 1000;
-      })
-      .sort((a, b) => {
-        const aZ = parseInt(getComputedStyle(a).zIndex) || 0;
-        const bZ = parseInt(getComputedStyle(b).zIndex) || 0;
-        return bZ - aZ;
-      });
+    const maxAttempts = 5; // Azaltıldı
+    
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const highZElements = Array.from(document.querySelectorAll('div'))
+        .filter(el => {
+          const zIndex = parseInt(getComputedStyle(el).zIndex) || 0;
+          return zIndex > 1000;
+        })
+        .sort((a, b) => {
+          const aZ = parseInt(getComputedStyle(a).zIndex) || 0;
+          const bZ = parseInt(getComputedStyle(b).zIndex) || 0;
+          return bZ - aZ;
+        });
 
-    // Fieldset veya tablo içeren en üst element'i bul
-    for (const el of highZElements.slice(0, 3)) {
-      if (el.querySelector('fieldset, table')) {
-        dialog = el;
-        break;
+      // Fieldset veya tablo içeren ilk element'i bul
+      for (const el of highZElements.slice(0, 2)) { // Sadece ilk 2'sini kontrol et
+        if (el.querySelector('fieldset, table')) {
+          dialog = el;
+          console.log(`✅ Modal bulundu (attempt ${attempt + 1})`);
+          break;
+        }
       }
+      
+      if (dialog) break;
+      
+      // Kısa bekleme
+      await sleep(200); // Azaltıldı
     }
 
-    if (!dialog) return null;
+    if (!dialog) {
+      console.error('❌ Modal bulunamadı');
+      return null;
+    }
 
-    await sleep(2000); // İçerik stabilizasyonu
-    
+    console.log('✅ Dialog bulundu, hızlı stabilizasyon...');
+
+    // Hızlı stabilizasyon - sadece fieldset bekle
+    try {
+      await waitFor('fieldset', { root: dialog, timeout: 2000 }); // Azaltıldı
+      console.log('✅ Fieldset bulundu');
+    } catch (e) {
+      console.log('⚠️ Fieldset bekleme timeout, devam ediliyor');
+    }
+
+    // Minimal ek bekleme
+    await sleep(500); // Azaltıldı
+
+    console.log('🔄 Parse işlemi başlatılıyor...');
     const parsed = await parseDetailsFromOpenDialog(dialog);
+
+    console.log('🔄 Dialog kapatılıyor...');
     closeAnyOpenDialog();
-    
+
+    console.log('✅ openRowModalAndParse tamamlandı');
     return parsed;
   } catch (e) {
-    console.error('Modal parse hata:', e.message);
+    console.error('❌ openRowModalAndParse hata:', (e && e.message) || e);
     return null;
   }
 }
@@ -535,28 +594,51 @@ function parseOwnerRowBase(tr, idx) {
 }
 
 async function collectOwnerResultsWithDetails() {
+  console.log('🔍 collectOwnerResultsWithDetails başladı');
+  
   const rows = Array.from(document.querySelectorAll('tbody.MuiTableBody-root tr, tbody tr'));
+  console.log(`🔍 Toplam ${rows.length} satır bulundu`);
+  
   const items = [];
+  const processedApplicationNumbers = new Set(); // Çift kayıt önleme
   
   for (const [idx, tr] of rows.entries()) {
+    console.log(`🔍 Satır ${idx + 1}/${rows.length} işleniyor...`);
+    
     const base = parseOwnerRowBase(tr, idx);
 
-    if (!base.applicationNumber) continue;
+    // Başvuru numarası yoksa atla
+    if (!base.applicationNumber) {
+      console.log(`⚠️ Başvuru numarası olmayan satır atlandı: satır ${idx + 1}`);
+      continue;
+    }
+
+    // Çift kayıt kontrolü
+    if (processedApplicationNumbers.has(base.applicationNumber)) {
+      console.log(`⚠️ Çift kayıt atlandı: ${base.applicationNumber}`);
+      continue;
+    }
+    processedApplicationNumbers.add(base.applicationNumber);
 
     if (base.imageSrc) {
       base.brandImageDataUrl = base.imageSrc;
       base.brandImageUrl = base.imageSrc;
     }
 
-    const detail = await openRowModalAndParse(tr, { timeout: 15000 });
+    console.log(`🔄 Satır ${idx + 1} için modal açılıyor...`);
+    
+    // Detayları modal üzerinden çek
+    const detail = await openRowModalAndParse(tr, { timeout: 10000 }); // Timeout azaltıldı
     
     if (detail) {
       base.details = detail.fields || {};
       if (Array.isArray(detail.goodsAndServices)) {
         base.goodsAndServicesByClass = detail.goodsAndServices;
+        console.log(`✅ GoodsAndServices eklendi: ${detail.goodsAndServices.length} sınıf`);
       }
       if (Array.isArray(detail.transactions)) {
         base.transactions = detail.transactions;
+        console.log(`✅ Transactions eklendi: ${detail.transactions.length} işlem`);
       }
       if (!base.imageSrc && detail.imageDataUrl) {
         base.brandImageDataUrl = detail.imageDataUrl;
@@ -565,8 +647,10 @@ async function collectOwnerResultsWithDetails() {
     }
 
     items.push(base);
+    console.log(`✅ Satır ${idx + 1} tamamlandı - ${base.applicationNumber}`);
   }
 
+  console.log(`🎉 collectOwnerResultsWithDetails tamamlandı: ${items.length} kayıt`);
   return items;
 }
 
