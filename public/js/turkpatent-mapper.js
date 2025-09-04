@@ -162,17 +162,31 @@ function createBulletins(details, transactions) {
  * - Modal'dan gelen liste varsa önceliklidir
  * - Yoksa details içindeki metinlerden fallback
  */
+
 function createGoodsAndServicesByClass(inputGSC, niceClassesStr, details) {
-  if (Array.isArray(inputGSC) && inputGSC.length) {
+  console.log('🔍 createGoodsAndServicesByClass çağrıldı:', { 
+    inputGSC, 
+    niceClassesStr, 
+    details,
+    inputGSCLength: Array.isArray(inputGSC) ? inputGSC.length : 'not array'
+  });
+
+  // Önce modal'dan gelen goodsAndServicesByClass'ı kontrol et
+  if (Array.isArray(inputGSC) && inputGSC.length > 0) {
+    console.log('✅ Modal\'dan gelen goodsAndServicesByClass kullanılıyor');
     return inputGSC.map(x => ({
       classNo: Number(x.classNo),
       items: Array.isArray(x.items) ? x.items : []
     }));
   }
 
+  console.log('⚠️ Modal\'dan veri yok, alternatif kaynaklardan deneniyor...');
+
   const niceNums =
     parseNiceClasses(niceClassesStr) ||
     parseNiceClasses(details?.['Nice Sınıfları']);
+
+  console.log('🔍 Nice sınıfları:', niceNums);
 
   // Detay metinlerinde olabilecek anahtarlar
   const goodsText =
@@ -182,9 +196,15 @@ function createGoodsAndServicesByClass(inputGSC, niceClassesStr, details) {
     details?.['Eşya Listesi'] ||
     '';
 
-  if (!Array.isArray(niceNums) || niceNums.length === 0) return [];
+  console.log('🔍 Eşya metni:', goodsText);
+
+  if (!Array.isArray(niceNums) || niceNums.length === 0) {
+    console.log('❌ Nice sınıfları bulunamadı, boş array dönülüyor');
+    return [];
+  }
+  
   if (!goodsText) {
-    // Sadece sınıfları ver, items boş kalabilir
+    console.log('⚠️ Eşya metni yok, sadece sınıf numaraları ile boş items dönülüyor');
     return niceNums.map(classNo => ({ classNo, items: [] }));
   }
 
@@ -193,24 +213,47 @@ function createGoodsAndServicesByClass(inputGSC, niceClassesStr, details) {
     .map(t => t.trim())
     .filter(Boolean);
 
-  return niceNums.map(classNo => ({
+  console.log('✅ Eşya listesi oluşturuldu:', rawItems);
+
+  const result = niceNums.map(classNo => ({
     classNo,
     items: rawItems
   }));
+
+  console.log('✅ Final goodsAndServicesByClass:', result);
+  return result;
 }
 
 /**
  * oldTransactions üretimi
  */
+
 function createOldTransactions(transactions) {
-  if (!Array.isArray(transactions) || transactions.length === 0) return [];
-  return transactions.map(tx => ({
-    date: formatDate(tx?.date),
-    description: tx?.description || null,
-    note: tx?.note || null,
-    source: 'turkpatent_scrape',
-    createdAt: new Date().toISOString()
-  }));
+  console.log('🔍 createOldTransactions çağrıldı:', { 
+    transactions, 
+    isArray: Array.isArray(transactions),
+    length: Array.isArray(transactions) ? transactions.length : 'not array'
+  });
+
+  if (!Array.isArray(transactions) || transactions.length === 0) {
+    console.log('❌ Transactions boş veya array değil, boş array dönülüyor');
+    return [];
+  }
+
+  const result = transactions.map(tx => {
+    const formattedTx = {
+      date: formatDate(tx?.date),
+      description: tx?.description || null,
+      note: tx?.note || null,
+      source: 'turkpatent_scrape',
+      createdAt: new Date().toISOString()
+    };
+    console.log('✅ Transaction formatlandı:', formattedTx);
+    return formattedTx;
+  });
+
+  console.log('✅ Final oldTransactions:', result);
+  return result;
 }
 
 /**
