@@ -503,7 +503,22 @@ function parseOwnerRowBase(tr, idx) {
     log(`❌ Satır ${idx + 1} - görsel bulunamadı`);
   }
 
-  return {
+  
+  // --- Fallback: role attribute'ları yoksa sütun indekslerinden oku ---
+  try {
+    const tds = Array.from(tr.querySelectorAll('td'));
+    const textAt = (i) => (tds[i]?.textContent || '').trim();
+    // Tipik kolon dizilimi: [check/img], Görsel, Başvuru No, Marka Adı, Başvuru Tarihi, Tescil No, Durumu, Nice
+    if (!base.applicationNumber) base.applicationNumber = textAt(2);
+    if (!base.brandName)        base.brandName        = textAt(3);
+    if (!base.applicationDate)  base.applicationDate  = textAt(4);
+    if (!base.registrationNumber) base.registrationNumber = textAt(5);
+    if (!base.status)           base.status           = textAt(6);
+    if (!base.niceClasses)      base.niceClasses      = textAt(7);
+  } catch (e) {
+    log('Fallback kolon parse hatası:', e?.message || e);
+  }
+return {
     order: Number(orderTxt) || (idx+1),
     applicationNumber: get('applicationNo') || '',
     brandName: get('markName') || '',
