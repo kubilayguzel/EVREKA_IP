@@ -332,261 +332,244 @@ function findDetailButton(tr) {
 }
 
 async function parseDetailsFromOpenDialog(dialogRoot) {
-if (!dialogRoot) return {};
+  if (!dialogRoot) return {};
 
-const data = {
-  imageDataUrl: null,
-  fields: {},
-  goodsAndServices: [],
-  transactions: []
-};
+  const data = {
+    imageDataUrl: null,
+    fields: {},
+    goodsAndServices: [],
+    transactions: []
+  };
 
-// ---- General field scraping (labels/strong) ----
-try {
-  const rows = Array.from(dialogRoot.querySelectorAll('div, li, tr'));
-  rows.forEach(node => {
-    const labels = Array.from(node.querySelectorAll('label, .MuiFormLabel-root, .MuiTypography-root'))
-      .map(x => (x.textContent || '').trim())
-      .filter(Boolean);
-    const strongs = Array.from(node.querySelectorAll('strong, b'))
-      .map(x => (x.textContent || '').trim())
-      .filter(Boolean);
-    const texts = (node.textContent || '').trim();
+  // ---- General field scraping (labels/strong) ----
+  try {
+    const rows = Array.from(dialogRoot.querySelectorAll('div, li, tr'));
+    rows.forEach(node => {
+      const labels = Array.from(node.querySelectorAll('label, .MuiFormLabel-root, .MuiTypography-root'))
+        .map(x => (x.textContent || '').trim())
+        .filter(Boolean);
+      const strongs = Array.from(node.querySelectorAll('strong, b'))
+        .map(x => (x.textContent || '').trim())
+        .filter(Boolean);
+      const texts = (node.textContent || '').trim();
 
-    if (labels.length === 1) {
-      const label = labels[0];
-      let value = texts.replace(label, '').trim();
-      if (value && value.length && value.length < 10000) data.fields[label] = value;
-    } else if (strongs.length === 1) {
-      const label = strongs[0];
-      let value = texts.replace(label, '').trim();
-      if (value && value.length && value.length < 10000) data.fields[label] = value;
-    }
-  });
-} catch (e) { console.warn('Genel alan parse hatası:', e); }
+      if (labels.length === 1) {
+        const label = labels[0];
+        let value = texts.replace(label, '').trim();
+        if (value && value.length && value.length < 10000) data.fields[label] = value;
+      } else if (strongs.length === 1) {
+        const label = strongs[0];
+        let value = texts.replace(label, '').trim();
+        if (value && value.length && value.length < 10000) data.fields[label] = value;
+      }
+    });
+  } catch (e) { console.warn('Genel alan parse hatası:', e); }
 
-// ---- Goods & Services (fieldset 'Mal ve Hizmet Bilgileri') ----
-try {
-  const gsFieldset = Array.from(dialogRoot.querySelectorAll('fieldset')).find(fs => {
-    const lg = fs.querySelector('legend');
-    return lg && (lg.textContent || '').trim().toLowerCase().includes('mal ve hizmet bilgileri');
-  });
-  if (gsFieldset) {
-    const rows = Array.from(gsFieldset.querySelectorAll('tbody.MuiTableBody-root tr, tbody tr'));
-    for (const tr of rows) {
-      const tds = Array.from(tr.querySelectorAll('td'));
-      if (tds.length === 2) {
-        const classNoRaw = (tds[0].textContent || '').trim();
-        const classNo = parseInt(classNoRaw, 10);
-        if (!Number.isNaN(classNo) && classNo >= 1 && classNo <= 45) {
-          const text = (tds[1].textContent || '').replace(/\r/g, '').trim();
-          const items = text
-            .split(/\n+/) // split by line breaks
-            .map(s => s.trim().replace(/\s+/g, ' '))
-            .filter(Boolean);
-          data.goodsAndServices.push({ classNo, items });
+  // ---- Goods & Services (fieldset 'Mal ve Hizmet Bilgileri') ----
+  try {
+    const gsFieldset = Array.from(dialogRoot.querySelectorAll('fieldset')).find(fs => {
+      const lg = fs.querySelector('legend');
+      return lg && (lg.textContent || '').trim().toLowerCase().includes('mal ve hizmet bilgileri');
+    });
+    if (gsFieldset) {
+      const rows = Array.from(gsFieldset.querySelectorAll('tbody.MuiTableBody-root tr, tbody tr'));
+      for (const tr of rows) {
+        const tds = Array.from(tr.querySelectorAll('td'));
+        if (tds.length === 2) {
+          const classNoRaw = (tds[0].textContent || '').trim();
+          const classNo = parseInt(classNoRaw, 10);
+          if (!Number.isNaN(classNo) && classNo >= 1 && classNo <= 45) {
+            const text = (tds[1].textContent || '').replace(/\r/g, '').trim();
+            const items = text
+              .split(/\n+/) // split by line breaks
+              .map(s => s.trim().replace(/\s+/g, ' '))
+              .filter(Boolean);
+            data.goodsAndServices.push({ classNo, items });
+          }
         }
       }
     }
-  }
-} catch (e) { console.warn('Goods&Services parse hatası:', e); }
+  } catch (e) { console.warn('Goods&Services parse hatası:', e); }
 
-// ---- Transactions (fieldset 'Başvuru İşlem Bilgileri') ----
-try {
-  const txFieldset = Array.from(dialogRoot.querySelectorAll('fieldset')).find(fs => {
-    const lg = fs.querySelector('legend');
-    return lg && (lg.textContent || '').trim().toLowerCase().includes('başvuru işlem bilgileri');
-  });
-  const isDate = (s) => /\b\d{2}\.\d{2}\.\d{4}\b/.test(s || '');
-  if (txFieldset) {
-    const rows = Array.from(txFieldset.querySelectorAll('tbody.MuiTableBody-root tr, tbody tr'));
-    for (const tr of rows) {
-      const tds = Array.from(tr.querySelectorAll('td'));
-      if (!tds.length) continue;
-      // Skip section headers (colspan=4 + strong)
-      const colspan = tds[0].getAttribute('colspan');
-      if (colspan && parseInt(colspan, 10) >= 4) continue;
-      if (tds.length >= 4) {
-        const d0 = (tds[0].textContent || '').trim();
-        if (isDate(d0)) {
-          const date = d0;
-          const description = (tds[2].textContent || '').trim();
-          const note = (tds[3].textContent || '').trim();
-          data.transactions.push({ date, description, note: note || null });
+  // ---- Transactions (fieldset 'Başvuru İşlem Bilgileri') ----
+  try {
+    const txFieldset = Array.from(dialogRoot.querySelectorAll('fieldset')).find(fs => {
+      const lg = fs.querySelector('legend');
+      return lg && (lg.textContent || '').trim().toLowerCase().includes('başvuru işlem bilgileri');
+    });
+    const isDate = (s) => /\b\d{2}\.\d{2}\.\d{4}\b/.test(s || '');
+    if (txFieldset) {
+      const rows = Array.from(txFieldset.querySelectorAll('tbody.MuiTableBody-root tr, tbody tr'));
+      for (const tr of rows) {
+        const tds = Array.from(tr.querySelectorAll('td'));
+        if (!tds.length) continue;
+        // Skip section headers (colspan=4 + strong)
+        const colspan = tds[0].getAttribute('colspan');
+        if (colspan && parseInt(colspan, 10) >= 4) continue;
+        if (tds.length >= 4) {
+          const d0 = (tds[0].textContent || '').trim();
+          if (isDate(d0)) {
+            const date = d0;
+            const description = (tds[2].textContent || '').trim();
+            const note = (tds[3].textContent || '').trim();
+            data.transactions.push({ date, description, note: note || null });
+          }
         }
       }
     }
-  }
-} catch (e) { console.warn('Transactions parse hatası:', e); }
+  } catch (e) { console.warn('Transactions parse hatası:', e); }
 
-return data;
+  return data;
 }
 
 async function openRowModalAndParse(tr, { timeout = 9000 } = {}) {
-try {
-  // Her ihtimale karşı önce açık bir modal varsa kapat
-  closeAnyOpenDialog();
+  try {
+    // Her ihtimale karşı önce açık bir modal varsa kapat
+    closeAnyOpenDialog();
 
-  const btns = Array.from(tr.querySelectorAll('button, a[role="button"], .MuiIconButton-root'));
-  let btn = btns.find(b => {
-    const t = (b.textContent || '').toLowerCase();
-    const a = (b.getAttribute?.('aria-label') || '').toLowerCase();
-    return /detay|detail|incele/.test(t) || /detay|detail|incele/.test(a);
-  }) || btns[btns.length - 1];
-  if (!btn) return null;
-  click(btn);
+    const btns = Array.from(tr.querySelectorAll('button, a[role="button"], .MuiIconButton-root'));
+    let btn = btns.find(b => {
+      const t = (b.textContent || '').toLowerCase();
+      const a = (b.getAttribute?.('aria-label') || '').toLowerCase();
+      return /detay|detail|incele/.test(t) || /detay|detail|incele/.test(a);
+    }) || btns[btns.length - 1];
+    if (!btn) return null;
+    click(btn);
 
-  // Dialogu bekle
-  const dialog = await waitFor('[role="dialog"], .MuiDialog-root, .MuiModal-root, .modal', { timeout }).catch(()=>null);
-  if (!dialog) return null;
+    // Dialogu bekle
+    const dialog = await waitFor('[role="dialog"], .MuiDialog-root, .MuiModal-root, .modal', { timeout }).catch(()=>null);
+    if (!dialog) return null;
 
-  // İçerik yüklenmesi için ufak bekleme
-  await sleep(350);
+    // İçerik yüklenmesi için ufak bekleme
+    await sleep(350);
 
-  // Parse et
-  const parsed = await parseDetailsFromOpenDialog(dialog);
+    // Parse et
+    const parsed = await parseDetailsFromOpenDialog(dialog);
 
-  // Kapat
-  closeAnyOpenDialog();
+    // Kapat
+    closeAnyOpenDialog();
 
-  return parsed; // { imageDataUrl, fields, goodsAndServices, transactions }
-} catch (e) {
-  warn('openRowModalAndParse hata:', e?.message || e);
-  return null;
-}
+    return parsed; // { imageDataUrl, fields, goodsAndServices, transactions }
+  } catch (e) {
+    warn('openRowModalAndParse hata:', e?.message || e);
+    return null;
+  }
 }
 
 // --------- Sonuç Toplama ---------
 function parseOwnerRowBase(tr, idx) {
-const get = (role) => {
-  const td = tr.querySelector(`td[role="${role}"]`);
-  return td ? (td.textContent || '').trim() : '';
-};
-const orderTxt = (tr.querySelector('td .MuiTypography-alignCenter') || tr.querySelector('td'))?.textContent || `${idx+1}`;
-const hold = get('holdName');
-const ownerName = hold ? hold.replace(/\s*\(\d+\)\s*$/, '') : '';
+  const get = (role) => {
+    const td = tr.querySelector(`td[role="${role}"]`);
+    return td ? (td.textContent || '').trim() : '';
+  };
+  const orderTxt = (tr.querySelector('td .MuiTypography-alignCenter') || tr.querySelector('td'))?.textContent || `${idx+1}`;
+  const hold = get('holdName');
+  const ownerName = hold ? hold.replace(/\s*\(\d+\)\s*$/, '') : '';
 
-// Görsel arama - çeşitli selector'lar deneyelim
-let imageSrc = null;
-const img1 = tr.querySelector('img'); if (img1?.src) imageSrc = img1.src;
-if (!imageSrc) { const img2 = tr.querySelector('td img'); if (img2?.src) imageSrc = img2.src; }
-if (!imageSrc) { const imgTd = tr.querySelector('td[role="img"] img, td[role="image"] img'); if (imgTd?.src) imageSrc = imgTd.src; }
-if (!imageSrc) {
-  const allTds = tr.querySelectorAll('td');
-  for (const td of allTds) {
-    const bgImg = getComputedStyle(td).backgroundImage;
-    if (bgImg && bgImg !== 'none') { const m = bgImg.match(/url\(["']?(.*?)["']?\)/); if (m) { imageSrc = m[1]; break; } }
+  // Görsel arama - çeşitli selector'lar deneyelim
+  let imageSrc = null;
+  const img1 = tr.querySelector('img'); if (img1?.src) imageSrc = img1.src;
+  if (!imageSrc) { const img2 = tr.querySelector('td img'); if (img2?.src) imageSrc = img2.src; }
+  if (!imageSrc) { const imgTd = tr.querySelector('td[role="img"] img, td[role="image"] img'); if (imgTd?.src) imageSrc = imgTd.src; }
+  if (!imageSrc) {
+    const allTds = tr.querySelectorAll('td');
+    for (const td of allTds) {
+      const bgImg = getComputedStyle(td).backgroundImage;
+      if (bgImg && bgImg !== 'none') { const m = bgImg.match(/url\(["']?(.*?)["']?\)/); if (m) { imageSrc = m[1]; break; } }
+    }
   }
-}
 
-// Temel alanlar (önce role, yoksa index/regex)
-let applicationNumber = get('applicationNo') || '';
-let brandName = get('markName') || '';
-let applicationDate = get('applicationDate') || '';
-let registrationNumber = get('registrationNo') || '';
-let status = get('state') || '';
-let niceClasses = get('niceClasses') || '';
+  // Temel alanlar (önce role, yoksa index/regex)
+  let applicationNumber = get('applicationNo') || '';
+  let brandName = get('markName') || '';
+  let applicationDate = get('applicationDate') || '';
+  let registrationNumber = get('registrationNo') || '';
+  let status = get('state') || '';
+  let niceClasses = get('niceClasses') || '';
 
-try {
-  const tds = Array.from(tr.querySelectorAll('td'));
-  const texts = tds.map(td => (td.textContent || '').replace(/\s+/g,' ').trim());
-  // Başvuru no: 2024/123456
-  if (!applicationNumber) {
-    const appPattern = /(^|\s)\d{4}\/\d{4,7}(\s|$)/;
-    const idxApp = texts.findIndex(t => appPattern.test(t));
-    if (idxApp >= 0) { applicationNumber = texts[idxApp]; if (!brandName && texts[idxApp+1]) brandName = texts[idxApp+1]; }
-  }
-  // Tarih DD.MM.YYYY
-  if (!applicationDate) {
-    const m = texts.find(t => /\b\d{2}\.\d{2}\.\d{4}\b/.test(t));
-    if (m) applicationDate = (m.match(/\b\d{2}\.\d{2}\.\d{4}\b/) || [null])[0] || '';
-  }
-  // Nice sınıf listesi
-  if (!niceClasses) {
-    const nice = texts.find(t => /(^|\s)([1-9]|[1-3]\d|4[0-5])(\s*,\s*([1-9]|[1-3]\d|4[0-5]))*/.test(t));
-    if (nice) niceClasses = nice;
-  }
-  // Durum
-  if (!status) {
-    const s = texts.find(t => /BAŞVURU|TESCİL|GEÇERSİZ|RED|RET|YAYIN|BÜLTEN/i.test(t));
-    if (s) status = s;
-  }
-  // Tescil no
-  if (!registrationNumber) {
-    const reg = texts.find(t => /\b\d{4,}\b/.test(t) && t !== applicationNumber);
-    if (reg) registrationNumber = reg;
-  }
-} catch {}
+  try {
+    const tds = Array.from(tr.querySelectorAll('td'));
+    const texts = tds.map(td => (td.textContent || '').replace(/\s+/g,' ').trim());
+    // Başvuru no: 2024/123456
+    if (!applicationNumber) {
+      const appPattern = /(^|\s)\d{4}\/\d{4,7}(\s|$)/;
+      const idxApp = texts.findIndex(t => appPattern.test(t));
+      if (idxApp >= 0) { applicationNumber = texts[idxApp]; if (!brandName && texts[idxApp+1]) brandName = texts[idxApp+1]; }
+    }
+    // Tarih DD.MM.YYYY
+    if (!applicationDate) {
+      const m = texts.find(t => /\b\d{2}\.\d{2}\.\d{4}\b/.test(t));
+      if (m) applicationDate = (m.match(/\b\d{2}\.\d{2}\.\d{4}\b/) || [null])[0] || '';
+    }
+    // Nice sınıf listesi
+    if (!niceClasses) {
+      const nice = texts.find(t => /(^|\s)([1-9]|[1-3]\d|4[0-5])(\s*,\s*([1-9]|[1-3]\d|4[0-5]))*/.test(t));
+      if (nice) niceClasses = nice;
+    }
+    // Durum
+    if (!status) {
+      const s = texts.find(t => /BAŞVURU|TESCİL|GEÇERSİZ|RED|RET|YAYIN|BÜLTEN/i.test(t));
+      if (s) status = s;
+    }
+    // Tescil no
+    if (!registrationNumber) {
+      const reg = texts.find(t => /\b\d{4,}\b/.test(t) && t !== applicationNumber);
+      if (reg) registrationNumber = reg;
+    }
+  } catch {}
 
-return {
-  order: Number(orderTxt) || (idx+1),
-  applicationNumber,
-  brandName,
-  ownerName,
-  applicationDate,
-  registrationNumber,
-  status,
-  niceClasses,
-  imageSrc
-};
+  return {
+    order: Number(orderTxt) || (idx+1),
+    applicationNumber,
+    brandName,
+    ownerName,
+    applicationDate,
+    registrationNumber,
+    status,
+    niceClasses,
+    imageSrc
+  };
 }
 
 async function collectOwnerResultsWithDetails() {
-const rows = Array.from(document.querySelectorAll('tbody.MuiTableBody-root tr, tbody tr'));
-const items = [];
-for (const [idx, tr] of rows.entries()) {
-  const base = parseOwnerRowBase(tr, idx);
+  const rows = Array.from(document.querySelectorAll('tbody.MuiTableBody-root tr, tbody tr'));
+  const items = [];
+  for (const [idx, tr] of rows.entries()) {
+    const base = parseOwnerRowBase(tr, idx);
 
-  // Başvuru numarası yoksa atla
-  if (!base.applicationNumber) {
-    log(`Başvuru numarası olmayan satır atlandı: satır ${idx + 1}`);
-    continue;
-  }
-
-  if (base.imageSrc) {
-    base.brandImageDataUrl = base.imageSrc;
-    base.brandImageUrl = base.imageSrc;
-  }
-
-  // Detayları modal üzerinden çek
-  const detail = await openRowModalAndParse(tr, { timeout: 15000 });
-  if (detail) {
-    base.details = detail.fields || {};
-    if (Array.isArray(detail.goodsAndServices)) {
-      base.goodsAndServicesByClass = detail.goodsAndServices;
+    // Başvuru numarası yoksa atla
+    if (!base.applicationNumber) {
+      log(`Başvuru numarası olmayan satır atlandı: satır ${idx + 1}`);
+      continue;
     }
-    if (Array.isArray(detail.transactions)) {
-      base.transactions = detail.transactions;
-    }
-    if (!base.imageSrc && detail.imageDataUrl) {
-      base.brandImageDataUrl = detail.imageDataUrl;
-      base.brandImageUrl = detail.imageDataUrl;
-    }
-  }
 
-  items.push(base);
-}
-return items;
-}
-    
-    // Görsel debug
-    log(`🔍 Satır ${idx + 1} final:`, {
-      appNo: base.applicationNumber,
-      brandName: base.brandName,
-      imageSrc: base.imageSrc,
-      hasImage: !!base.imageSrc
-    });
-    
-    // Görsel zaten parseOwnerRowBase'de alındı
     if (base.imageSrc) {
       base.brandImageDataUrl = base.imageSrc;
       base.brandImageUrl = base.imageSrc;
-      log(`✅ Görsel set edildi: ${base.imageSrc}`);
-    } else {
-      log(`❌ Görsel yok - satır ${idx + 1}`);
     }
-    items.push(base); // Satırı items'a ekle
-    return items; // ✅ RETURN STATEMENT EKLENDİ
+
+    // Detayları modal üzerinden çek
+    const detail = await openRowModalAndParse(tr, { timeout: 15000 });
+    if (detail) {
+      base.details = detail.fields || {};
+      if (Array.isArray(detail.goodsAndServices)) {
+        base.goodsAndServicesByClass = detail.goodsAndServices;
+      }
+      if (Array.isArray(detail.transactions)) {
+        base.transactions = detail.transactions;
+      }
+      if (!base.imageSrc && detail.imageDataUrl) {
+        base.brandImageDataUrl = detail.imageDataUrl;
+        base.brandImageUrl = detail.imageDataUrl;
+      }
+    }
+
+    items.push(base);
+  }
+
+  // Fonksiyonun sonu düzeltildi
+  return items;
+}
 
 async function waitAndSendOwnerResults() {
   // 1) Önce meta: "... kayıt bulundu" gelene kadar bekle ve oku
