@@ -281,21 +281,55 @@ export async function mapTurkpatentToIPRecord(turkpatentData, selectedApplicants
 
   const brandImageUrl = await uploadBrandImage(applicationNumber, brandImageDataUrl, imageSrc);
 
+  // 1) REGISTRATION DATE - Details'tan veya transactions'tan çek
+  let registrationDate = null;
+  
+  // Önce details'tan dene
+  if (details?.['Tescil Tarihi']) {
+    registrationDate = formatDate(details['Tescil Tarihi']);
+  }
+  
+  // Details'ta yoksa transactions'tan "TESCİL EDİLDİ" işleminin tarihini al
+  if (!registrationDate && Array.isArray(transactions)) {
+    const registrationTx = transactions.find(tx => 
+      tx?.description && tx.description.toUpperCase().includes('TESCİL EDİLDİ')
+    );
+    if (registrationTx?.date) {
+      registrationDate = formatDate(registrationTx.date);
+    }
+  }
+
+  // 2) STATUS - Sadece GEÇERSİZ durumunda "rejected", yoksa null
+  let mappedStatus = null;
+  if (status && status.toUpperCase().includes('GEÇERSİZ')) {
+    mappedStatus = 'rejected';
+  }
+
+  // 3) BULLETINS - Bülten bilgilerini details'tan al
+  const bulletins = [];
+  
+  if (details?.['Marka İlan Bülten No'] || details?.['Marka İlan Bülten Tarihi']) {
+    bulletins.push({
+      bulletinNo: details['Marka İlan Bülten No'] || null,
+      bulletinDate: formatDate(details['Marka İlan Bülten Tarihi']) || null
+    });
+  }
+
   const ipRecord = {
     // Temel kimlik
     title: brandName || 'Başlıksız Marka',
     type: 'trademark',
     portfoyStatus: 'active',
 
-    // Durum
-    status: (deriveStatusFromTransactions(transactions) || mapStatusToUtils(status)),
+    // Durum - Sadece GEÇERSİZ ise "rejected", yoksa null
+    status: mappedStatus,
     recordOwnerType: 'self',
 
     // Başvuru/Tescil
     applicationNumber: applicationNumber || null,
     applicationDate: formatDate(applicationDate),
     registrationNumber: registrationNumber || details?.['Tescil Numarası'] || null,
-    registrationDate: formatDate(details?.['Tescil Tarihi']),
+    registrationDate: registrationDate, // ✅ Düzeltildi
     renewalDate: formatDate(details?.['Yenileme Tarihi']),
 
     // Marka bilgileri
@@ -313,8 +347,8 @@ export async function mapTurkpatentToIPRecord(turkpatentData, selectedApplicants
       details
     ),
 
-    // Bültenler
-    bulletins: createBulletins(details, transactions),
+    // Bültenler - ✅ Düzeltildi
+    bulletins: bulletins,
 
     // Rüçhan (varsa)
     priorities: (() => {
@@ -348,9 +382,6 @@ export async function mapTurkpatentToIPRecord(turkpatentData, selectedApplicants
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
   };
-
-  // İSTEK: agentInfo alanını artık basmayalım
-  // (bilerek eklenmedi)
 
   return ipRecord;
 }
