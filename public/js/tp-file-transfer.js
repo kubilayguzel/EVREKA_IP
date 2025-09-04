@@ -560,94 +560,146 @@ function renderSingleResult(payload) {
   _showBlock(singleResultContainer);
 }
 
+// SİL: renderOwnerResults fonksiyonunu
+
+// DEĞIŞTIR/EKLE:
 function renderOwnerResults(items) {
   if (!items?.length) return;
   
-// Sahip bilgisini çıkar (ilk kayıttan)
-// Sahip bilgisini kayıtlardan bul (herhangi birinde olabilir)
-const ownerRecord = items.find(item => item.ownerName && item.ownerName.trim());
-const ownerInfo = ownerRecord ? ` - Sahip: ${ownerRecord.ownerName}` : '';
+  console.log('🔄 renderOwnerResults başladı:', items.length, 'kayıt');
+  const startTime = performance.now();
+  
+  // Sahip bilgisini hızlıca bul
+  const ownerRecord = items.find(item => item.ownerName?.trim());
+  const ownerInfo = ownerRecord ? ` - Sahip: ${ownerRecord.ownerName}` : '';
 
-let tableHTML = `
-    <div class="section-card">
-      <div class="results-header d-flex justify-content-between align-items-center mb-3">
-        <div><strong>${items.length} sonuç bulundu${ownerInfo}</strong> <small class="text-muted" id="bulkMeta"></small></div>
-        <div>
-          <button id="exportCsvBtn" class="btn btn-outline-primary btn-sm"><i class="fas fa-file-csv mr-1"></i> CSV Dışa Aktar</button>
-        </div>
-      </div>
-      <div class="table-responsive">
-        <table class="table table-hover table-striped tp-results-table">
-          <thead>
-            <tr>
-              <th><input type="checkbox" id="selectAllRecords" checked></th>
-              <th>Görsel</th>
-              <th>Başvuru Numarası</th>
-              <th>Marka Adı</th>
-              <th>Başvuru Tarihi</th>
-              <th>Tescil No</th>
-              <th>Durumu</th>
-              <th>Nice Sınıfları</th>
-            </tr>
-          </thead>
-          <tbody>`;
-
-  items.forEach((item, i) => {
-    const imgSrc = item.brandImageDataUrl || item.brandImageUrl || item.imageSrc;
-    tableHTML += `
+  // Fragment kullanarak hızlı DOM oluşturma
+  const container = document.createElement('div');
+  container.className = 'section-card';
+  
+  // Header kısmı
+  const header = document.createElement('div');
+  header.className = 'results-header d-flex justify-content-between align-items-center mb-3';
+  header.innerHTML = `
+    <div><strong>${items.length} sonuç bulundu${ownerInfo}</strong> <small class="text-muted" id="bulkMeta"></small></div>
+    <div>
+      <button id="exportCsvBtn" class="btn btn-outline-primary btn-sm"><i class="fas fa-file-csv mr-1"></i> CSV Dışa Aktar</button>
+    </div>
+  `;
+  
+  // Tablo wrapper
+  const tableWrapper = document.createElement('div');
+  tableWrapper.className = 'table-responsive';
+  
+  // Tablo ve header
+  const table = document.createElement('table');
+  table.className = 'table table-hover table-striped tp-results-table';
+  table.innerHTML = `
+    <thead>
       <tr>
-        <td><input type="checkbox" class="record-checkbox" data-index="${i}" checked></td>
-        <td>${imgSrc ? `<img src="${imgSrc}" alt="" style="height:56px;max-width:120px;border:1px solid #eee;border-radius:6px;" />` : ''}</td>
-        <td>${item.applicationNumber || ''}</td>
-        <td>${item.brandName || ''}</td>
-        <td>${fmtDateToTR(item.applicationDate || '')}</td>
-        <td>${item.registrationNumber || ''}</td>
-        <td>${item.status || ''}</td>
-        <td>${item.niceClasses || ''}</td>
-      </tr>`;
+        <th><input type="checkbox" id="selectAllRecords" checked></th>
+        <th>Görsel</th>
+        <th>Başvuru Numarası</th>
+        <th>Marka Adı</th>
+        <th>Başvuru Tarihi</th>
+        <th>Tescil No</th>
+        <th>Durumu</th>
+        <th>Nice Sınıfları</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  `;
+  
+  const tbody = table.querySelector('tbody');
+  
+  // Array.map ile hızlı row oluşturma
+  const rows = items.map((item, i) => {
+    const imgSrc = item.brandImageDataUrl || item.brandImageUrl || item.imageSrc;
+    
+    const row = document.createElement('tr');
+    row.innerHTML = `
+      <td><input type="checkbox" class="record-checkbox" data-index="${i}" checked></td>
+      <td>${imgSrc ? `<img src="${imgSrc}" alt="" style="height:56px;max-width:120px;border:1px solid #eee;border-radius:6px;" />` : ''}</td>
+      <td>${item.applicationNumber || ''}</td>
+      <td>${item.brandName || ''}</td>
+      <td>${fmtDateToTR(item.applicationDate || '')}</td>
+      <td>${item.registrationNumber || ''}</td>
+      <td>${item.status || ''}</td>
+      <td>${item.niceClasses || ''}</td>
+    `;
+    
+    return row;
   });
-
-  tableHTML += `
-          </tbody>
-        </table>
-      </div>
-    </div>`;
-
+  
+  // Batch DOM insertion (DocumentFragment kullan)
+  const fragment = document.createDocumentFragment();
+  rows.forEach(row => fragment.appendChild(row));
+  tbody.appendChild(fragment);
+  
+  // Assembly
+  tableWrapper.appendChild(table);
+  container.appendChild(header);
+  container.appendChild(tableWrapper);
+  
   // Global değişkene kaydet
   currentOwnerResults = items;
 
-  singleResultInner.innerHTML = tableHTML;
+  // Single DOM manipulation
+  singleResultInner.innerHTML = '';
+  singleResultInner.appendChild(container);
   _showBlock(singleResultContainer);
   
-  // Checkbox event listeners ekle
-  setupCheckboxListeners();
-  updateSaveButton();
+  const endTime = performance.now();
+  console.log(`✅ renderOwnerResults tamamlandı: ${(endTime - startTime).toFixed(2)}ms`);
+  
+  // Event listeners - requestAnimationFrame ile asenkron yap
+  requestAnimationFrame(() => {
+    setupCheckboxListeners();
+    updateSaveButton();
+    
+    // CSV export event listener
+    const exportBtn = document.getElementById('exportCsvBtn');
+    if (exportBtn) {
+      exportBtn.addEventListener('click', exportOwnerResultsCSV);
+    }
+  });
 }
 
+// SİL: setupCheckboxListeners ve updateSaveButton fonksiyonlarını
+
+// DEĞIŞTIR/EKLE:
 function setupCheckboxListeners() {
   const selectAll = document.getElementById('selectAllRecords');
   const checkboxes = document.querySelectorAll('.record-checkbox');
   
-  if (selectAll) {
-    selectAll.addEventListener('change', (e) => {
-      checkboxes.forEach(cb => cb.checked = e.target.checked);
-      updateSaveButton();
-    });
-  }
+  if (!selectAll || !checkboxes.length) return;
   
-  checkboxes.forEach(cb => {
-    cb.addEventListener('change', () => {
+  // Event delegation kullan (daha performanslı)
+  const handleChange = (e) => {
+    if (e.target.id === 'selectAllRecords') {
+      const checked = e.target.checked;
+      checkboxes.forEach(cb => cb.checked = checked);
+    } else if (e.target.classList.contains('record-checkbox')) {
       const allChecked = Array.from(checkboxes).every(c => c.checked);
       const noneChecked = Array.from(checkboxes).every(c => !c.checked);
       
-      if (selectAll) {
-        selectAll.checked = allChecked;
-        selectAll.indeterminate = !allChecked && !noneChecked;
-      }
-      
-      updateSaveButton();
-    });
-  });
+      selectAll.checked = allChecked;
+      selectAll.indeterminate = !allChecked && !noneChecked;
+    }
+    
+    updateSaveButton();
+  };
+  
+  // Single event listener
+  document.addEventListener('change', handleChange);
+}
+
+function updateSaveButton() {
+  const saveBtn = document.getElementById('savePortfolioBtn');
+  if (!saveBtn) return;
+  
+  const checkedCount = document.querySelectorAll('.record-checkbox:checked').length;
+  saveBtn.disabled = checkedCount === 0;
 }
 
 function updateSaveButton() {
@@ -660,41 +712,42 @@ function updateSaveButton() {
 }
 
 // CSV Export fonksiyonu
-window.exportOwnerResultsCSV = function() {
-  if (!currentOwnerResults || !currentOwnerResults.length) {
+function exportOwnerResultsCSV() {
+  if (!currentOwnerResults?.length) {
     showToast('Dışa aktarılacak veri yok.', 'warning');
     return;
   }
   
+  // Worker kullanmadan hızlı CSV oluşturma
   const headers = ['Sıra','Başvuru Numarası','Marka Adı','Marka Sahibi','Başvuru Tarihi','Tescil No','Durumu','Nice Sınıfları','Görsel'];
-  const rows = currentOwnerResults.map((x, i) => [
-    i+1,
-    x.applicationNumber || '',
-    x.brandName || '',
-    x.ownerName || '',
-    fmtDateToTR(x.applicationDate || ''),
-    x.registrationNumber || '',
-    x.status || '',
-    x.niceClasses || '',
-    (x.brandImageDataUrl || x.brandImageUrl || x.imageSrc) ? 'VAR' : ''
-  ]);
   
-  const csv = [headers].concat(rows).map(r => 
-    r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')
-  ).join('\\n');
+  // Array.map ile hızlı dönüşüm
+  const csvContent = [
+    headers.join(','),
+    ...currentOwnerResults.map((x, i) => [
+      i+1,
+      x.applicationNumber || '',
+      x.brandName || '',
+      x.ownerName || '',
+      fmtDateToTR(x.applicationDate || ''),
+      x.registrationNumber || '',
+      x.status || '',
+      x.niceClasses || '',
+      (x.brandImageDataUrl || x.brandImageUrl || x.imageSrc) ? 'VAR' : ''
+    ].map(v => `"${String(v).replace(/"/g,'""')}"`).join(','))
+  ].join('\n');
   
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  // Blob ve download
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
   a.download = `turkpatent_sahip_${Date.now()}.csv`;
-  document.body.appendChild(a);
   a.click();
-  a.remove();
   URL.revokeObjectURL(url);
   
   showToast('CSV dosyası indirildi.', 'success');
-};
+}
 
 // ===============================
 // KİŞİ YÖNETİMİ FONKSİYONLARI
