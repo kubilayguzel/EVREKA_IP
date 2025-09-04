@@ -1,25 +1,33 @@
+// Firebase imports for image upload
+import { getStorage, ref, uploadBytes, getDownloadURL } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js';
+import { app } from '../firebase-config.js';
+
+// Initialize Firebase Storage
+const storage = getStorage(app);
+
 /**
  * TÜRKPATENT'ten gelen sahip numarası sorgu verilerini IPRecord formatına dönüştürür
  * @param {Object} turkpatentData - TÜRKPATENT'ten gelen ham veri
  * @param {Array} selectedApplicants - Arayüzden seçilen sahip bilgileri
  * @returns {Object} IPRecord formatında veri
  */
-function mapTurkpatentToIPRecord(turkpatentData, selectedApplicants = []) {
+async function mapTurkpatentToIPRecord(turkpatentData, selectedApplicants = []) {
     // Tablo verilerinden gelen temel alanlar
-const {
-    order,
-    applicationNumber,
-    brandName,
-    ownerName,
-    applicationDate,
-    registrationNumber,
-    status,
-    niceClasses,
-    brandImageDataUrl,
-    details = {},
-    goodsAndServicesByClass, // Modal'dan gelen
-    transactions // Modal'dan gelen
-} = turkpatentData;
+    const {
+        order,
+        applicationNumber,
+        brandName,
+        ownerName,
+        applicationDate,
+        registrationNumber,
+        status,
+        niceClasses,
+        brandImageDataUrl,
+        imageSrc,
+        details = {},
+        goodsAndServicesByClass, // Modal'dan gelen
+        transactions // Modal'dan gelen
+    } = turkpatentData;
 
     // Modal'dan gelen detay alanları
     const getDetailValue = (key) => {
@@ -45,56 +53,82 @@ const {
         return null;
     };
 
+    // Görsel upload işlemi
+    const uploadBrandImage = async () => {
+        const imageUrl = brandImageDataUrl || imageSrc;
+        if (!imageUrl || !applicationNumber) return null;
+
+        try {
+            // Resmi fetch et
+            const response = await fetch(imageUrl);
+            if (!response.ok) return null;
+            
+            const blob = await response.blob();
+            const fileName = `${applicationNumber}_${Date.now()}.${blob.type.split('/')[1] || 'jpg'}`;
+            
+            // Firebase Storage'a yükle
+            const storageRef = ref(storage, `brand-examples/${fileName}`);
+            const snapshot = await uploadBytes(storageRef, blob);
+            const downloadURL = await getDownloadURL(snapshot.ref);
+            
+            return downloadURL;
+        } catch (error) {
+            console.error('Görsel upload hatası:', error);
+            return null;
+        }
+    };
+
     // Nice sınıflarını parse et
     const parseNiceClasses = (niceClassesStr) => {
         if (!niceClassesStr) return [];
         
-        // Virgül, noktalı virgül veya boşlukla ayrılmış sayıları bul
         const numbers = niceClassesStr.toString()
             .split(/[,;\s]+/)
             .map(n => parseInt(n.trim()))
             .filter(n => !isNaN(n) && n > 0 && n <= 45);
             
-        return [...new Set(numbers)]; // Tekrarları kaldır
+        return [...new Set(numbers)];
     };
 
-// Mal ve hizmetleri sınıflara göre grupla
-// Mal ve hizmetleri sınıflara göre grupla
-const createGoodsAndServicesByClass = () => {
-    // Önce ana objeden gelen detaylı listeyi kontrol et
-    if (goodsAndServicesByClass && Array.isArray(goodsAndServicesByClass) && goodsAndServicesByClass.length > 0) {
-        return goodsAndServicesByClass;
-    }
-    
-    // Fallback: niceClasses string'inden parse et
-    const niceClassNumbers = parseNiceClasses(niceClasses);
-    const goodsText = getDetailValue('Mal/Hizmet Listesi') || 
-                     getDetailValue('Mal ve Hizmetler') ||
-                     '';
+    // Mal ve hizmetleri sınıflara göre grupla
+    const createGoodsAndServicesByClass = () => {
+        // Modal'dan gelen detaylı listeyi önce kontrol et
+        if (goodsAndServicesByClass && Array.isArray(goodsAndServicesByClass) && goodsAndServicesByClass.length > 0) {
+            return goodsAndServicesByClass.map(item => ({
+                classNo: item.classNo,
+                items: Array.isArray(item.items) ? item.items : []
+            }));
+        }
+        
+        // Fallback: niceClasses string'inden parse et
+        const niceClassNumbers = parseNiceClasses(niceClasses);
+        const goodsText = getDetailValue('Mal/Hizmet Listesi') || 
+                         getDetailValue('Mal ve Hizmetler') ||
+                         '';
 
-    if (!goodsText && niceClassNumbers.length === 0) {
-        return [];
-    }
+        if (niceClassNumbers.length === 0) {
+            return [];
+        }
 
-    let goodsItems = [];
-    if (goodsText) {
-        goodsItems = goodsText.split(/[,;]+/)
-                              .map(item => item.trim())
-                              .filter(Boolean);
-    }
+        let goodsItems = [];
+        if (goodsText) {
+            goodsItems = goodsText.split(/[,;]+/)
+                                  .map(item => item.trim())
+                                  .filter(Boolean);
+        }
 
-    return niceClassNumbers.map(classNo => ({
-        classNo,
-        items: goodsItems
-    }));
-};
+        return niceClassNumbers.map(classNo => ({
+            classNo,
+            items: goodsItems
+        }));
+    };
 
     // Bülten bilgilerini oluştur (sadece normal bülten)
     const createBulletins = () => {
         const bulletins = [];
         
-        const bulletinNo = getDetailValue('Bülten Numarası');
-        const bulletinDate = getDetailValue('Bülten Tarihi');
+        const bulletinNo = getDetailValue('Bülten Numarası') || getDetailValue('Bulletin Number');
+        const bulletinDate = getDetailValue('Bülten Tarihi') || getDetailValue('Bulletin Date');
 
         if (bulletinNo || bulletinDate) {
             bulletins.push({
@@ -125,111 +159,96 @@ const createGoodsAndServicesByClass = () => {
         return priorities;
     };
 
-// IPRecord formatına dönüştür
-const ipRecord = {
-    // Temel kimlik bilgileri
-    title: brandName || 'Başlıksız Marka',
-    type: 'trademark',
-    portfoyStatus: 'active',
-    
-    // Durum bilgileri
-    status: mapStatus(status),
-    recordOwnerType: 'self',
-    
-    // Başvuru bilgileri
-    applicationNumber: applicationNumber || null,
-    applicationDate: formatDate(applicationDate),
-    registrationNumber: registrationNumber || getDetailValue('Tescil Numarası') || null,
-    registrationDate: formatDate(getDetailValue('Tescil Tarihi')),
-    renewalDate: formatDate(getDetailValue('Yenileme Tarihi')),
-    
-    // Marka özel bilgileri
-    brandText: brandName || '',
-    brandImageUrl: brandImageDataUrl || null,
-    description: getDetailValue('Açıklama') || null,
-    
-    // Marka türü ve kategorisi
-    brandType: getDetailValue('Marka Türü') || 'Şekil + Kelime',
-    brandCategory: getDetailValue('Marka Kategorisi') || 'Ticaret/Hizmet Markası',
-    nonLatinAlphabet: getDetailValue('Latin Olmayan Alfabe') || null,
-    
-    // Sınıf ve mal/hizmet bilgileri
-    goodsAndServicesByClass: createGoodsAndServicesByClass(),
-    
-    // Bülten bilgileri
-    bulletins: createBulletins(),
-    
-    // Rüçhan bilgileri
-    priorities: createPriorities(),
-    
-    // Başvuru sahipleri
-    applicants: selectedApplicants.map(applicant => ({
-        id: applicant.id,
-        name: applicant.name,
-        email: applicant.email || null
-    })),
-    
-    // Ek bilgiler
-    agentInfo: getDetailValue('Vekil Bilgileri') || null,
-    
-    // İşlem geçmişi (eğer varsa)
-    transactions: transactions && Array.isArray(transactions) && transactions.length > 0 
-        ? transactions.map(tx => ({
-            date: formatDate(tx.date),
-            description: tx.description,
-            note: tx.note,
-            type: 'system',
-            createdAt: new Date().toISOString()
-        })) 
-        : [],
-    
-    // Diğer alanlar
-    consentRequest: null,
-    coverLetterRequest: null,
-    
-    // Zaman damgaları
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    
-    // Metadata
-    _metadata: {
-        source: 'turkpatent_scrape',
-        originalData: turkpatentData,
-        scrapedAt: new Date().toISOString()
-    }
-};
-return ipRecord;
+    // Görsel upload et
+    const brandImageUrl = await uploadBrandImage();
+
+    // IPRecord formatına dönüştür
+    const ipRecord = {
+        // Temel kimlik bilgileri
+        title: brandName || 'Başlıksız Marka',
+        type: 'trademark',
+        portfoyStatus: 'active',
+        
+        // Durum bilgileri - utils status mapping ile
+        status: mapStatusToUtils(status),
+        recordOwnerType: 'self',
+        
+        // Başvuru bilgileri
+        applicationNumber: applicationNumber || null,
+        applicationDate: formatDate(applicationDate),
+        registrationNumber: registrationNumber || getDetailValue('Tescil Numarası') || null,
+        registrationDate: formatDate(getDetailValue('Tescil Tarihi')),
+        renewalDate: formatDate(getDetailValue('Yenileme Tarihi')),
+        
+        // Marka özel bilgileri
+        brandText: brandName || '',
+        brandImageUrl: brandImageUrl, // Upload edilmiş URL
+        description: getDetailValue('Açıklama') || null,
+        
+        // Marka türü ve kategorisi
+        brandType: getDetailValue('Marka Türü') || 'Şekil + Kelime',
+        brandCategory: getDetailValue('Marka Kategorisi') || 'Ticaret/Hizmet Markası',
+        nonLatinAlphabet: getDetailValue('Latin Olmayan Alfabe') || null,
+        
+        // Sınıf ve mal/hizmet bilgileri
+        goodsAndServicesByClass: createGoodsAndServicesByClass(),
+        
+        // Bülten bilgileri
+        bulletins: createBulletins(),
+        
+        // Rüçhan bilgileri
+        priorities: createPriorities(),
+        
+        // Başvuru sahipleri
+        applicants: selectedApplicants.map(applicant => ({
+            id: applicant.id,
+            name: applicant.name,
+            email: applicant.email || null
+        })),
+        
+        // Ek bilgiler
+        agentInfo: getDetailValue('Vekil Bilgileri') || null,
+        
+        // İşlem geçmişi -> oldTransactions olarak kaydet
+        oldTransactions: transactions && Array.isArray(transactions) && transactions.length > 0 
+            ? transactions.map(tx => ({
+                date: formatDate(tx.date),
+                description: tx.description,
+                note: tx.note,
+                source: 'turkpatent_scrape',
+                createdAt: new Date().toISOString()
+            })) 
+            : [],
+        
+        // Diğer alanlar
+        consentRequest: null,
+        coverLetterRequest: null,
+        
+        // Zaman damgaları
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+    };
+
+    return ipRecord;
 }
 
 /**
- * TÜRKPATENT durumunu standart durum kodlarına çevirir
+ * TÜRKPATENT durumunu utils status değerleriyle mapping yapar
  */
-function mapStatus(turkpatentStatus) {
-    if (!turkpatentStatus) return 'filed';
-    
-    const statusMap = {
-        'tescilli': 'registered',
-        'tescil edildi': 'registered', 
-        'registered': 'registered',
-        'başvuru yapıldı': 'filed',
-        'başvuru': 'filed',
-        'filed': 'filed',
-        'reddedildi': 'rejected',
-        'rejected': 'rejected',
-        'ret': 'rejected',
-        'itiraz': 'opposition',
-        'opposition': 'opposition',
-        'iptal': 'cancelled',
-        'cancelled': 'cancelled',
-        'sona erdi': 'expired',
-        'expired': 'expired',
-        'askıya alındı': 'suspended',
-        'suspended': 'suspended'
-    };
+function mapStatusToUtils(turkpatentStatus) {
+    if (!turkpatentStatus) return null;
     
     const normalizedStatus = turkpatentStatus.toLowerCase().trim();
-    return statusMap[normalizedStatus] || 'filed';
+    
+    // Sadece "MARKA BAŞVURUSU/TESCİLİ GEÇERSİZ" durumu için mapping
+    if (normalizedStatus === 'marka başvurusu/tescili geçersiz') {
+        return 'rejected';
+    }
+    
+    // Diğer tüm durumlar için null (boş)
+    return null;
 }
+
 
 /**
  * Sahip numarası sorgusundan gelen tüm kayıtları IPRecord formatına dönüştürür
@@ -237,30 +256,37 @@ function mapStatus(turkpatentStatus) {
  * @param {Array} selectedApplicants - Seçilen sahipler
  * @returns {Array} IPRecord formatındaki kayıtlar
  */
-function mapTurkpatentResultsToIPRecords(turkpatentResults, selectedApplicants) {
+async function mapTurkpatentResultsToIPRecords(turkpatentResults, selectedApplicants) {
     if (!Array.isArray(turkpatentResults)) {
         console.error('turkpatentResults array olmalı');
         return [];
     }
     
-    return turkpatentResults.map((result, index) => {
+    const results = [];
+    
+    // Her kayıt için sırayla işle (paralel upload sorunları için)
+    for (let index = 0; index < turkpatentResults.length; index++) {
+        const result = turkpatentResults[index];
         try {
-            const ipRecord = mapTurkpatentToIPRecord(result, selectedApplicants);
+            const ipRecord = await mapTurkpatentToIPRecord(result, selectedApplicants);
             
             // Her kayıt için benzersiz ID oluştur
             ipRecord.tempId = `turkpatent_${Date.now()}_${index}`;
             
-            return ipRecord;
+            results.push(ipRecord);
         } catch (error) {
             console.error(`Kayıt ${index} için mapping hatası:`, error, result);
-            return null;
+            // Hatalı kayıtları null olarak ekle, sonra filtrele
+            results.push(null);
         }
-    }).filter(Boolean); // null kayıtları filtrele
+    }
+    
+    return results.filter(Boolean); // null kayıtları filtrele
 }
 
 // Export fonksiyonları
 export {
     mapTurkpatentToIPRecord,
     mapTurkpatentResultsToIPRecords,
-    mapStatus
+    mapStatusToUtils
 };
