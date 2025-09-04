@@ -522,29 +522,21 @@ async function collectOwnerResultsWithDetails() {
   for (const [idx, tr] of rows.entries()) {
     const base = parseOwnerRowBase(tr, idx);
     
-// BOŞ SATIR KONTROLÜ - Sadece başvuru numarası yeterli
-if (!base.applicationNumber) {
-  log(`Başvuru numarası olmayan satır atlandı: satır ${idx + 1}`);
-  continue;
-}
-    
-    // Görsel debug
-    log(`🔍 Satır ${idx + 1} final:`, {
-      appNo: base.applicationNumber,
-      brandName: base.brandName,
-      imageSrc: base.imageSrc,
-      hasImage: !!base.imageSrc
-    });
-    
-    // Görsel zaten parseOwnerRowBase'de alındı
+    // Başvuru numarası yoksa atla
+    if (!base.applicationNumber) {
+      log(`Başvuru numarası olmayan satır atlandı: satır ${idx + 1}`);
+      continue;
+    }
+
     if (base.imageSrc) {
       base.brandImageDataUrl = base.imageSrc;
       base.brandImageUrl = base.imageSrc;
       log(`✅ Görsel set edildi: ${base.imageSrc}`);
-    } else {
-      log(`❌ Görsel yok - satır ${idx + 1}`);
     }
+
+    items.push(base);
   }
+  return items; 
 }
 
 async function waitAndSendOwnerResults() {
