@@ -331,6 +331,10 @@ function findDetailButton(tr) {
   return byLabel || btns[btns.length - 1] || null;
 }
 
+Anladım! Fieldset'ler bulunamıyor. Bu, DOM yapısının beklediğimizden farklı olması veya modal'ın tam yüklenmemiş olması anlamına geliyor.
+Debug yapalım ve doğru selector'ları bulalım:
+Dosya: tp-sorgu-eklentisi-2/content_script.js
+javascript// SİL:
 async function parseDetailsFromOpenDialog(dialogRoot) {
   if (!dialogRoot) {
     console.warn('❌ parseDetailsFromOpenDialog: dialogRoot boş');
@@ -500,6 +504,252 @@ async function parseDetailsFromOpenDialog(dialogRoot) {
     });
   } catch (e) {
     console.error('❌ Genel bilgi parse hatası:', e);
+  }
+
+  console.log('🎉 parseDetailsFromOpenDialog tamamlandı:', {
+    fieldsCount: Object.keys(data.fields).length,
+    goodsAndServicesCount: data.goodsAndServices.length,
+    transactionsCount: data.transactions.length
+  });
+  
+  return data;
+}
+
+// DEĞIŞTIR/EKLE:
+async function parseDetailsFromOpenDialog(dialogRoot) {
+  if (!dialogRoot) {
+    console.warn('❌ parseDetailsFromOpenDialog: dialogRoot boş');
+    return {};
+  }
+
+  console.log('🔍 parseDetailsFromOpenDialog başladı');
+  console.log('🔍 DialogRoot HTML:', dialogRoot.outerHTML.substring(0, 500) + '...');
+
+  const data = {
+    imageDataUrl: null,
+    fields: {},
+    goodsAndServices: [],
+    transactions: []
+  };
+
+  // ---- DEBUG: Tüm DOM yapısını incele ----
+  try {
+    console.log('🔍 DOM YAPISI ARAŞTIRMASI:');
+    
+    // Tüm fieldset'leri listele
+    const allFieldsets = dialogRoot.querySelectorAll('fieldset');
+    console.log('🔍 Toplam fieldset sayısı:', allFieldsets.length);
+    
+    allFieldsets.forEach((fieldset, index) => {
+      const legend = fieldset.querySelector('legend');
+      const legendText = legend ? legend.textContent.trim() : 'LEGEND YOK';
+      console.log(`🔍 Fieldset ${index + 1}: "${legendText}"`);
+      
+      // Fieldset içindeki table'ları say
+      const tables = fieldset.querySelectorAll('table, .MuiTable-root');
+      console.log(`   📊 ${tables.length} tablo bulundu`);
+      
+      // Her tablo için tbody'leri say
+      tables.forEach((table, tableIndex) => {
+        const tbodies = table.querySelectorAll('tbody, .MuiTableBody-root');
+        console.log(`   📊 Tablo ${tableIndex + 1}: ${tbodies.length} tbody`);
+        
+        tbodies.forEach((tbody, tbodyIndex) => {
+          const rows = tbody.querySelectorAll('tr, .MuiTableRow-root');
+          console.log(`   📊 Tbody ${tbodyIndex + 1}: ${rows.length} satır`);
+        });
+      });
+    });
+
+    // Fieldset yoksa, direkt tablo ara
+    if (allFieldsets.length === 0) {
+      console.log('🔍 Fieldset yok, direkt tablo aranıyor...');
+      const allTables = dialogRoot.querySelectorAll('table, .MuiTable-root');
+      console.log('🔍 Direkt bulunan tablo sayısı:', allTables.length);
+      
+      allTables.forEach((table, index) => {
+        const headers = table.querySelectorAll('th, .MuiTableCell-head');
+        const headerTexts = Array.from(headers).map(h => h.textContent.trim());
+        console.log(`🔍 Tablo ${index + 1} başlıkları:`, headerTexts);
+      });
+    }
+
+  } catch (e) {
+    console.error('❌ DOM araştırma hatası:', e);
+  }
+
+  // ---- EŞYA LİSTESİ - Farklı yöntemler dene ----
+  try {
+    console.log('🔍 EŞYA LİSTESİ ARAŞTIRMASI:');
+    
+    // Yöntem 1: Fieldset içinde ara
+    let goodsFound = false;
+    const allFieldsets = dialogRoot.querySelectorAll('fieldset');
+    
+    for (const fieldset of allFieldsets) {
+      const legend = fieldset.querySelector('legend');
+      const legendText = legend ? legend.textContent.trim() : '';
+      console.log(`🔍 Fieldset kontrol: "${legendText}"`);
+      
+      if (legendText.includes('Mal') || legendText.includes('Hizmet') || legendText.includes('Sınıf')) {
+        console.log('✅ Eşya fieldset bulundu:', legendText);
+        
+        const tbody = fieldset.querySelector('tbody, .MuiTableBody-root');
+        if (tbody) {
+          const rows = tbody.querySelectorAll('tr, .MuiTableRow-root');
+          console.log(`📊 ${rows.length} satır bulundu`);
+          
+          for (const row of rows) {
+            const cells = row.querySelectorAll('td, .MuiTableCell-body');
+            if (cells.length === 2) {
+              const classNoText = cells[0].textContent.trim();
+              const goodsText = cells[1].textContent.trim();
+              const classNo = parseInt(classNoText, 10);
+              
+              if (!isNaN(classNo) && classNo >= 1 && classNo <= 45) {
+                const items = goodsText.split(/\n+/).map(item => item.trim()).filter(Boolean);
+                data.goodsAndServices.push({ classNo, items });
+                console.log(`✅ Sınıf ${classNo} eklendi: ${items.length} eşya`);
+                goodsFound = true;
+              }
+            }
+          }
+        }
+        break;
+      }
+    }
+    
+    // Yöntem 2: Fieldset yoksa direkt tablo ara (Sınıf + Mal/Hizmet başlıklı)
+    if (!goodsFound) {
+      console.log('🔍 Fieldset\'te bulunamadı, direkt tablo aranıyor...');
+      
+      const allTables = dialogRoot.querySelectorAll('table, .MuiTable-root');
+      for (const table of allTables) {
+        const headers = table.querySelectorAll('th, .MuiTableCell-head');
+        const headerTexts = Array.from(headers).map(h => h.textContent.trim());
+        
+        // "Sınıf" ve "Mal" içeren başlık varsa bu eşya tablosu
+        if (headerTexts.some(h => h.includes('Sınıf')) && 
+            headerTexts.some(h => h.includes('Mal') || h.includes('Hizmet'))) {
+          console.log('✅ Eşya tablosu bulundu (başlık kontrolü):', headerTexts);
+          
+          const tbody = table.querySelector('tbody, .MuiTableBody-root');
+          if (tbody) {
+            const rows = tbody.querySelectorAll('tr, .MuiTableRow-root');
+            for (const row of rows) {
+              const cells = row.querySelectorAll('td, .MuiTableCell-body');
+              if (cells.length === 2) {
+                const classNoText = cells[0].textContent.trim();
+                const goodsText = cells[1].textContent.trim();
+                const classNo = parseInt(classNoText, 10);
+                
+                if (!isNaN(classNo) && classNo >= 1 && classNo <= 45) {
+                  const items = goodsText.split(/\n+/).map(item => item.trim()).filter(Boolean);
+                  data.goodsAndServices.push({ classNo, items });
+                  console.log(`✅ Sınıf ${classNo} eklendi: ${items.length} eşya`);
+                  goodsFound = true;
+                }
+              }
+            }
+          }
+          break;
+        }
+      }
+    }
+    
+    console.log('✅ Eşya araştırması tamamlandı:', data.goodsAndServices.length, 'sınıf bulundu');
+  } catch (e) {
+    console.error('❌ Eşya listesi parse hatası:', e);
+  }
+
+  // ---- İŞLEM GEÇMİŞİ - Farklı yöntemler dene ----
+  try {
+    console.log('🔍 İŞLEM GEÇMİŞİ ARAŞTIRMASI:');
+    
+    let transactionsFound = false;
+    const allFieldsets = dialogRoot.querySelectorAll('fieldset');
+    
+    // Yöntem 1: Fieldset içinde ara
+    for (const fieldset of allFieldsets) {
+      const legend = fieldset.querySelector('legend');
+      const legendText = legend ? legend.textContent.trim() : '';
+      
+      if (legendText.includes('İşlem') || legendText.includes('Başvuru') || legendText.includes('Bilgi')) {
+        console.log('✅ İşlem fieldset bulundu:', legendText);
+        
+        const tbody = fieldset.querySelector('tbody, .MuiTableBody-root');
+        if (tbody) {
+          const rows = tbody.querySelectorAll('tr, .MuiTableRow-root');
+          console.log(`📊 ${rows.length} satır bulundu`);
+          
+          for (const row of rows) {
+            const cells = row.querySelectorAll('td, .MuiTableCell-body');
+            if (cells.length === 4) {
+              const dateText = cells[0].textContent.trim();
+              const operationText = cells[2].textContent.trim();
+              const noteText = cells[3].textContent.trim();
+              
+              // Tarih formatı kontrolü
+              if (/^\d{2}\.\d{2}\.\d{4}$/.test(dateText) && operationText && operationText !== '-') {
+                data.transactions.push({
+                  date: dateText,
+                  description: operationText,
+                  note: (noteText && noteText !== '-') ? noteText : null
+                });
+                console.log(`✅ İşlem eklendi: ${dateText} - ${operationText}`);
+                transactionsFound = true;
+              }
+            }
+          }
+        }
+        break;
+      }
+    }
+    
+    // Yöntem 2: Fieldset yoksa direkt tablo ara (Tarih başlıklı)
+    if (!transactionsFound) {
+      console.log('🔍 Fieldset\'te bulunamadı, direkt tablo aranıyor...');
+      
+      const allTables = dialogRoot.querySelectorAll('table, .MuiTable-root');
+      for (const table of allTables) {
+        const headers = table.querySelectorAll('th, .MuiTableCell-head');
+        const headerTexts = Array.from(headers).map(h => h.textContent.trim());
+        
+        // "Tarih" ve "İşlem" içeren başlık varsa bu işlem tablosu
+        if (headerTexts.some(h => h.includes('Tarih')) && 
+            headerTexts.some(h => h.includes('İşlem'))) {
+          console.log('✅ İşlem tablosu bulundu (başlık kontrolü):', headerTexts);
+          
+          const tbody = table.querySelector('tbody, .MuiTableBody-root');
+          if (tbody) {
+            const rows = tbody.querySelectorAll('tr, .MuiTableRow-root');
+            for (const row of rows) {
+              const cells = row.querySelectorAll('td, .MuiTableCell-body');
+              if (cells.length === 4) {
+                const dateText = cells[0].textContent.trim();
+                const operationText = cells[2].textContent.trim();
+                const noteText = cells[3].textContent.trim();
+                
+                if (/^\d{2}\.\d{2}\.\d{4}$/.test(dateText) && operationText && operationText !== '-') {
+                  data.transactions.push({
+                    date: dateText,
+                    description: operationText,
+                    note: (noteText && noteText !== '-') ? noteText : null
+                  });
+                  console.log(`✅ İşlem eklendi: ${dateText} - ${operationText}`);
+                  transactionsFound = true;
+                }
+              }
+            }
+          }
+          break;
+        }
+      }
+    }
+    
+    console.log('✅ İşlem araştırması tamamlandı:', data.transactions.length, 'işlem bulundu');
+  } catch (e) {
+    console.error('❌ İşlem geçmişi parse hatası:', e);
   }
 
   console.log('🎉 parseDetailsFromOpenDialog tamamlandı:', {
