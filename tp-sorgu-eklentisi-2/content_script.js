@@ -559,7 +559,9 @@ if (!base.applicationNumber) {
     } else {
       log(`❌ Görsel yok - satır ${idx + 1}`);
     }
+    items.push(base); // Satırı items'a ekle
   }
+    return items; // ✅ RETURN STATEMENT EKLENDİ
 }
 
 async function waitAndSendOwnerResults() {
