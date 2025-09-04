@@ -731,14 +731,27 @@ function parseOwnerRowBase(tr, idx) {
 }
 
 async function collectOwnerResultsWithDetails() {
+  console.log('🔍 collectOwnerResultsWithDetails başladı');
+  
   const rows = Array.from(document.querySelectorAll('tbody.MuiTableBody-root tr, tbody tr'));
+  console.log(`🔍 Toplam ${rows.length} satır bulundu`);
+  
   const items = [];
+  
   for (const [idx, tr] of rows.entries()) {
+    console.log(`🔍 Satır ${idx + 1}/${rows.length} işleniyor...`);
+    
     const base = parseOwnerRowBase(tr, idx);
+    console.log(`🔍 Base veri:`, {
+      order: base.order,
+      applicationNumber: base.applicationNumber,
+      brandName: base.brandName,
+      ownerName: base.ownerName
+    });
 
     // Başvuru numarası yoksa atla
     if (!base.applicationNumber) {
-      log(`Başvuru numarası olmayan satır atlandı: satır ${idx + 1}`);
+      console.log(`⚠️ Başvuru numarası olmayan satır atlandı: satır ${idx + 1}`);
       continue;
     }
 
@@ -747,26 +760,63 @@ async function collectOwnerResultsWithDetails() {
       base.brandImageUrl = base.imageSrc;
     }
 
+    console.log(`🔄 Satır ${idx + 1} için modal açılıyor...`);
+    
     // Detayları modal üzerinden çek
     const detail = await openRowModalAndParse(tr, { timeout: 15000 });
+    
+    console.log(`🔍 Modal parse sonucu:`, detail);
+    
     if (detail) {
       base.details = detail.fields || {};
+      console.log(`✅ Fields eklendi: ${Object.keys(base.details).length} adet`);
+      
       if (Array.isArray(detail.goodsAndServices)) {
         base.goodsAndServicesByClass = detail.goodsAndServices;
+        console.log(`✅ GoodsAndServices eklendi: ${detail.goodsAndServices.length} sınıf`);
+      } else {
+        console.log(`⚠️ GoodsAndServices array değil:`, detail.goodsAndServices);
       }
+      
       if (Array.isArray(detail.transactions)) {
         base.transactions = detail.transactions;
+        console.log(`✅ Transactions eklendi: ${detail.transactions.length} işlem`);
+      } else {
+        console.log(`⚠️ Transactions array değil:`, detail.transactions);
       }
+      
       if (!base.imageSrc && detail.imageDataUrl) {
         base.brandImageDataUrl = detail.imageDataUrl;
         base.brandImageUrl = detail.imageDataUrl;
+        console.log(`✅ Image eklendi`);
       }
+    } else {
+      console.log(`❌ Modal parse başarısız oldu`);
     }
 
+    console.log(`🔍 Final base veri:`, {
+      hasDetails: !!base.details,
+      hasGoodsAndServices: !!base.goodsAndServicesByClass,
+      hasTransactions: !!base.transactions,
+      goodsCount: base.goodsAndServicesByClass ? base.goodsAndServicesByClass.length : 0,
+      transactionCount: base.transactions ? base.transactions.length : 0
+    });
+
     items.push(base);
+    
+    console.log(`✅ Satır ${idx + 1} tamamlandı`);
   }
 
-  // Fonksiyonun sonu düzeltildi
+  console.log(`🎉 collectOwnerResultsWithDetails tamamlandı: ${items.length} kayıt`);
+  console.log('🔍 Final items özeti:');
+  items.forEach((item, i) => {
+    console.log(`Item ${i + 1}:`, {
+      applicationNumber: item.applicationNumber,
+      goodsCount: item.goodsAndServicesByClass ? item.goodsAndServicesByClass.length : 0,
+      transactionCount: item.transactions ? item.transactions.length : 0
+    });
+  });
+  
   return items;
 }
 
