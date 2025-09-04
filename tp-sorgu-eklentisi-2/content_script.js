@@ -332,7 +332,11 @@ function findDetailButton(tr) {
 }
 
 async function parseDetailsFromOpenDialog(dialogRoot) {
-  if (!dialogRoot) return {};
+  if (!dialogRoot) {
+    log('parseDetailsFromOpenDialog: Dialog kök elemanı bulunamadı.');
+    return {};
+  }
+  log('parseDetailsFromOpenDialog: Dialog kök elemanı bulundu, veri çekiliyor...');
 
   const data = {
     imageDataUrl: null,
@@ -364,13 +368,19 @@ async function parseDetailsFromOpenDialog(dialogRoot) {
         if (value && value.length && value.length < 10000) data.fields[label] = value;
       }
     });
-  } catch (e) { console.warn('Genel alan parse hatası:', e); }
+    log('Genel alanlar parse edildi:', Object.keys(data.fields).length, 'adet.');
+  } catch (e) {
+    warn('Genel alan parse hatası:', e);
+  }
 
   // ---- Goods & Services (Mal ve Hizmetler) düzeltildi ----
   try {
     const tableBodies = Array.from(dialogRoot.querySelectorAll('tbody.MuiTableBody-root, tbody'));
-    tableBodies.forEach(tbody => {
+    log('Nice sınıfları ve Mal/Hizmet için tablo araniyor. Bulunan tbody sayısı:', tableBodies.length);
+
+    tableBodies.forEach((tbody, tbodyIndex) => {
       const rows = Array.from(tbody.querySelectorAll('tr'));
+      log(`Tbody ${tbodyIndex + 1} içinde ${rows.length} satır bulundu.`);
       for (const tr of rows) {
         const tds = Array.from(tr.querySelectorAll('td'));
         // 2 hücreli satırları, ilk hücrede sayısal bir değer varsa Nice sınıfı olarak işle.
@@ -384,19 +394,25 @@ async function parseDetailsFromOpenDialog(dialogRoot) {
               .map(s => s.trim().replace(/\s+/g, ' '))
               .filter(Boolean);
             data.goodsAndServices.push({ classNo, items });
+            log(`Nice Sınıfı ve Mal/Hizmet verisi çekildi: Sınıf ${classNo}, ${items.length} öğe.`);
           }
         }
       }
     });
-  } catch (e) { console.warn('Goods&Services parse hatası:', e); }
+    log('Nice sınıfları parse tamamlandı. Toplam bulunan:', data.goodsAndServices.length);
+  } catch (e) {
+    warn('Goods&Services parse hatası:', e);
+  }
 
   // ---- Transactions (İşlem Bilgileri) düzeltildi ----
   try {
     const txTableBodies = Array.from(dialogRoot.querySelectorAll('tbody.MuiTableBody-root, tbody'));
+    log('İşlem geçmişi için tablo aranıyor. Bulunan tbody sayısı:', txTableBodies.length);
     const isDate = (s) => /\b\d{2}\.\d{2}\.\d{4}\b/.test(s || '');
-    
-    txTableBodies.forEach(tbody => {
+
+    txTableBodies.forEach((tbody, tbodyIndex) => {
       const rows = Array.from(tbody.querySelectorAll('tr'));
+      log(`İşlem geçmişi için Tbody ${tbodyIndex + 1} içinde ${rows.length} satır bulundu.`);
       for (const tr of rows) {
         const tds = Array.from(tr.querySelectorAll('td'));
         if (tds.length >= 4) { // Dört veya daha fazla sütunlu satırları işlem olarak işle.
@@ -406,17 +422,24 @@ async function parseDetailsFromOpenDialog(dialogRoot) {
             const description = (tds[2].textContent || '').trim();
             const note = (tds[3].textContent || '').trim();
             data.transactions.push({ date, description, note: note || null });
+            log(`İşlem geçmişi verisi çekildi: Tarih ${date}, Açıklama "${description.substring(0, 30)}..."`);
           }
         }
       }
     });
-  } catch (e) { console.warn('Transactions parse hatası:', e); }
-
+    log('İşlem geçmişi parse tamamlandı. Toplam bulunan:', data.transactions.length);
+  } catch (e) {
+    warn('Transactions parse hatası:', e);
+  }
+  
+  log('parseDetailsFromOpenDialog tamamlandı. Dönülen veri:', data);
   return data;
 }
 
+
 async function openRowModalAndParse(tr, { timeout = 9000 } = {}) {
   try {
+    log('openRowModalAndParse: Detay butonu aranıyor ve modal açılıyor...');
     closeAnyOpenDialog();
 
     const btns = Array.from(tr.querySelectorAll('button, a[role="button"], .MuiIconButton-root'));
@@ -425,25 +448,30 @@ async function openRowModalAndParse(tr, { timeout = 9000 } = {}) {
       const a = (b.getAttribute?.('aria-label') || '').toLowerCase();
       return /detay|detail|incele/.test(t) || /detay|detail|incele/.test(a);
     }) || btns[btns.length - 1];
-    if (!btn) return null;
+    if (!btn) {
+      log('openRowModalAndParse: Detay butonu bulunamadı.');
+      return null;
+    }
     click(btn);
 
-    // Modalın görünmesini bekle, içeriğin yüklenmesi için daha kısa bir bekleme yapıldı.
     const dialog = await waitFor('[role="dialog"], .MuiDialog-root, .MuiModal-root, .modal', { timeout }).catch(() => null);
-    if (!dialog) return null;
+    if (!dialog) {
+      log('openRowModalAndParse: Modal bulunamadı, timeout.');
+      return null;
+    }
+    log('openRowModalAndParse: Modal açıldı, içerik bekleniyor...');
 
-    // 
-    // Sabit bekleme (350ms) yerine, içeriğin hazır olup olmadığını kontrol eden daha akıllı bir bekleme mekanizması eklendi.
-    // Bu, hem hızlı açılan modallarda gereksiz beklemenin önüne geçer hem de yavaş açılanlarda yeterli zaman tanır.
-    await waitFor('.MuiCircularProgress-root, .loader', { root: dialog, timeout: 3000, test: el => !el || el.style.display === 'none' }).catch(() => {});
-    await sleep(100); // Ekstra küçük bir stabilizasyon beklemesi.
+    // Yükleme animasyonunun kaybolmasını bekle
+    await waitFor('.MuiCircularProgress-root, .loader', { root: dialog, timeout: 5000, test: el => !el || el.style.display === 'none' }).catch(() => {});
+    await sleep(200); // Ekstra küçük bir stabilizasyon beklemesi.
 
-    // Parse et
+    log('openRowModalAndParse: İçerik yüklemesi tamamlandı gibi görünüyor, parse ediliyor...');
     const parsed = await parseDetailsFromOpenDialog(dialog);
 
-    // Kapat
+    log('openRowModalAndParse: Modal parse edildi. Kapatılıyor...');
     closeAnyOpenDialog();
 
+    log('openRowModalAndParse: Fonksiyon tamamlandı. Dönülen sonuç:', parsed);
     return parsed;
   } catch (e) {
     warn('openRowModalAndParse hata:', e?.message || e);
