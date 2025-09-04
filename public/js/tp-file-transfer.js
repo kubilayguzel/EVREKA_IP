@@ -156,6 +156,9 @@ function setupEventListeners() {
   console.log('[DEBUG] Event listeners kuruldu');
 }
 
+// SİL: handleSaveToPortfolio fonksiyonunu
+
+// DEĞIŞTIR/EKLE:
 async function handleSaveToPortfolio() {
   const checkedBoxes = document.querySelectorAll('.record-checkbox:checked');
   
@@ -172,61 +175,71 @@ async function handleSaveToPortfolio() {
     return;
   }
 
-  // Progress bar for saving
-  const saveProgress = window.showProgress({
-    title: 'Portföye Kaydediliyor',
-    subtitle: `${selectedRecords.length} kayıt veritabanına aktarılıyor...`,
-    steps: [
-      'Veriler hazırlanıyor',
-      'TÜRKPATENT formatı dönüştürülüyor',
-      'Veritabanına kaydediliyor',
-      'İşlem tamamlanıyor'
-    ]
-  });
+  // Simple Loading ile kaydetme progress
+  const saveLoading = window.showSimpleLoading(
+    'Portföye kaydediliyor',
+    `${selectedRecords.length} kayıt veritabanına aktarılıyor...`
+  );
 
   try {
-    saveProgress.setStep(0); // Veriler hazırlanıyor
+    console.log('Kaydetme işlemi başladı:', selectedRecords.length, 'kayıt');
     
-    saveProgress.setStep(1); // TÜRKPATENT formatı dönüştürülüyor
+    saveLoading.updateText('Veriler hazırlanıyor', 'TÜRKPATENT formatı dönüştürülüyor...');
+    
     const ipRecords = await mapTurkpatentResultsToIPRecords(selectedRecords, selectedRelatedParties);
     
-    saveProgress.setStep(2); // Veritabanına kaydediliyor
+    saveLoading.updateText('Veritabanına kaydediliyor', 'Kayıtlar tek tek işleniyor...');
+    
     const results = [];
+    let savedCount = 0;
+    let skippedCount = 0;
+    let errorCount = 0;
     
     for (let i = 0; i < ipRecords.length; i++) {
       const record = ipRecords[i];
       try {
+        saveLoading.updateText(
+          'Kaydediliyor', 
+          `${i + 1}/${ipRecords.length} kayıt işleniyor...`
+        );
+        
         const result = await ipRecordsService.createRecord(record);
         results.push(result);
         
-        // Progress güncelleme
-        const progressPercent = ((i + 1) / ipRecords.length) * 100;
-        saveProgress.setProgress(progressPercent);
+        if (result.success) {
+          savedCount++;
+        } else if (result.isDuplicate || result.isExistingRecord) {
+          skippedCount++;
+        } else {
+          errorCount++;
+        }
       } catch (error) {
         console.error('Kayıt hatası:', error);
         results.push({ success: false, error: error.message });
+        errorCount++;
       }
     }
     
-    saveProgress.setStep(3); // İşlem tamamlanıyor
-    
     console.log('Kaydetme sonuçları:', results);
     
-    const successCount = results.filter(r => r.success).length;
-    const errorCount = results.length - successCount;
+    // Sonuç mesajı
+    let message = '';
+    if (savedCount > 0) message += `${savedCount} kayıt başarıyla kaydedildi. `;
+    if (skippedCount > 0) message += `${skippedCount} kayıt zaten mevcut olduğu için atlandı. `;
+    if (errorCount > 0) message += `${errorCount} kayıtta hata oluştu. `;
     
     if (errorCount === 0) {
-      saveProgress.showSuccess(`${successCount} kayıt başarıyla portföye eklendi!`);
-      showToast(`${successCount} kayıt başarıyla portföye eklendi!`, 'success');
+      saveLoading.showSuccess(message.trim());
+      showToast(message.trim(), 'success');
     } else {
-      saveProgress.showError(`${successCount} kayıt başarılı, ${errorCount} kayıt başarısız oldu.`);
-      showToast(`${successCount} kayıt başarılı, ${errorCount} kayıt başarısız oldu.`, 'warning');
+      saveLoading.showError(message.trim());
+      showToast(message.trim(), 'warning');
     }
     
   } catch (error) {
-    console.error('Portföy kaydetme genel hatası:', error);
-    saveProgress.showError('Kaydetme sırasında hata oluştu: ' + error.message);
-    showToast('Kaydetme sırasında hata oluştu: ' + error.message, 'danger');
+    console.error('Portföye kaydetme hatası:', error);
+    saveLoading.showError('Kaydetme işlemi sırasında hata oluştu: ' + error.message);
+    showToast('Kaydetme işlemi sırasında hata oluştu: ' + error.message, 'danger');
   }
 }
 
