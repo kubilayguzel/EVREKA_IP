@@ -494,12 +494,13 @@ async function parseDetailsFromOpenDialog(dialogRoot) {
   return data;
 }
 
-async function openRowModalAndParse(tr, { timeout = 7000 } = {}) {
-try {
+async function openRowModalAndParse(tr, { timeout = 15000 } = {}) {
+  try {
     console.log('🔍 openRowModalAndParse başladı');
     
     // Önceki modal'ı kapat
     closeAnyOpenDialog();
+    await sleep(200);
 
     const btn = findDetailButton(tr);
     if (!btn) {
@@ -509,34 +510,136 @@ try {
     
     console.log('✅ Detail butonu bulundu, tıklanıyor');
     click(btn);
+    
+    // Tıklama sonrası biraz bekle
+    await sleep(1000);
 
-    // Modal'ı bekle
-    const dialog = await waitFor('[role="dialog"], .MuiDialog-root, .MuiModal-root, .modal', { timeout }).catch(() => null);
+    console.log('🔍 Modal aranıyor...');
+    
+    // ÇOK GENİŞ ARAMA STRATEJİSİ
+    let dialog = null;
+    
+    // Strateji 1: Z-index en yüksek olan element
+    const allElements = Array.from(document.querySelectorAll('div'));
+    const highZIndexElements = allElements
+      .filter(el => {
+        const style = getComputedStyle(el);
+        const zIndex = parseInt(style.zIndex) || 0;
+        return zIndex > 1000; // Yüksek z-index'li elementler
+      })
+      .sort((a, b) => {
+        const aZ = parseInt(getComputedStyle(a).zIndex) || 0;
+        const bZ = parseInt(getComputedStyle(b).zIndex) || 0;
+        return bZ - aZ; // En yüksekten en düşüğe
+      });
+    
+    console.log(`🔍 Yüksek z-index'li ${highZIndexElements.length} element bulundu`);
+    
+    // En yüksek z-index'li element'lerden fieldset içereni ara
+    for (const el of highZIndexElements.slice(0, 5)) { // İlk 5'ini kontrol et
+      const hasFieldset = el.querySelector('fieldset');
+      const hasTable = el.querySelector('table, .MuiTable-root');
+      const style = getComputedStyle(el);
+      
+      console.log(`🔍 Z-index ${style.zIndex} element kontrol:`, {
+        hasFieldset: !!hasFieldset,
+        hasTable: !!hasTable,
+        className: el.className.substring(0, 50),
+        display: style.display,
+        visibility: style.visibility
+      });
+      
+      if (hasFieldset || hasTable) {
+        dialog = el;
+        console.log('✅ Modal bulundu (z-index stratejisi)');
+        break;
+      }
+    }
+    
+    // Strateji 2: Son eklenen büyük div
     if (!dialog) {
-      console.warn('❌ Dialog bulunamadı');
+      console.log('🔍 Strateji 2: Son eklenen div\'ler aranıyor...');
+      
+      const allDivs = Array.from(document.querySelectorAll('div'));
+      const largeDivs = allDivs
+        .filter(el => {
+          const rect = el.getBoundingClientRect();
+          return rect.width > 400 && rect.height > 300; // Büyük div'ler
+        })
+        .slice(-10); // Son 10 tane
+      
+      console.log(`🔍 Büyük ${largeDivs.length} div kontrol ediliyor...`);
+      
+      for (const el of largeDivs.reverse()) { // Tersten kontrol et (en son eklenen önce)
+        const hasFieldset = el.querySelector('fieldset');
+        const hasTable = el.querySelector('table, .MuiTable-root');
+        
+        if (hasFieldset || hasTable) {
+          dialog = el;
+          console.log('✅ Modal bulundu (büyük div stratejisi)');
+          break;
+        }
+      }
+    }
+    
+    // Strateji 3: Text içinde "Mal ve Hizmet" veya "İşlem Bilgi" içeren
+    if (!dialog) {
+      console.log('🔍 Strateji 3: Text content arama...');
+      
+      const textSearchElements = Array.from(document.querySelectorAll('div'))
+        .filter(el => {
+          const text = el.textContent || '';
+          return text.includes('Mal ve Hizmet') || text.includes('İşlem Bilgileri');
+        })
+        .slice(0, 5); // İlk 5'ini al
+      
+      console.log(`🔍 Text içeren ${textSearchElements.length} element bulundu`);
+      
+      for (const el of textSearchElements) {
+        const style = getComputedStyle(el);
+        const isVisible = style.display !== 'none' && 
+                         style.visibility !== 'hidden' && 
+                         style.opacity !== '0';
+        
+        console.log(`🔍 Text element kontrol:`, {
+          isVisible,
+          className: el.className.substring(0, 50)
+        });
+        
+        if (isVisible) {
+          dialog = el;
+          console.log('✅ Modal bulundu (text content stratejisi)');
+          break;
+        }
+      }
+    }
+
+    if (!dialog) {
+      console.error('❌ Modal hiçbir strateji ile bulunamadı');
+      
+      // DEBUG: Açık olan tüm overlay'leri listele
+      console.log('🔍 DEBUG: Şu anda sayfadaki tüm overlay\'ler:');
+      document.querySelectorAll('div').forEach((el, i) => {
+        const style = getComputedStyle(el);
+        const zIndex = parseInt(style.zIndex) || 0;
+        if (zIndex > 100) {
+          console.log(`Overlay ${i}:`, {
+            zIndex,
+            className: el.className.substring(0, 30),
+            hasFieldset: !!el.querySelector('fieldset'),
+            hasTable: !!el.querySelector('table'),
+            textPreview: (el.textContent || '').substring(0, 50)
+          });
+        }
+      });
+      
       return null;
     }
 
     console.log('✅ Dialog bulundu, içerik yüklemesi bekleniyor...');
 
-    // Fieldset'lerin yüklenmesini bekle - bu critical!
-    try {
-      await waitFor('fieldset', { root: dialog, timeout: 10000 });
-      console.log('✅ Fieldset bulundu, ek stabilizasyon bekleniyor...');
-    } catch (e) {
-      console.warn('⚠️ Fieldset bulunamadı, yine de devam ediliyor...');
-    }
-
-    // Tablonun da yüklenmesini bekle
-    try {
-      await waitFor('.MuiTableBody-root', { root: dialog, timeout: 8000 });
-      console.log('✅ Tablo body bulundu');
-    } catch (e) {
-      console.warn('⚠️ Tablo body bulunamadı, yine de devam ediliyor...');
-    }
-
-    // Ekstra stabilizasyon beklemesi
-    await sleep(1500);
+    // İçerik stabilizasyonu
+    await sleep(2000);
 
     console.log('🔄 Parse işlemi başlatılıyor...');
     const parsed = await parseDetailsFromOpenDialog(dialog);
