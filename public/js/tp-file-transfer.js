@@ -678,9 +678,7 @@ function renderOwnerResults(items) {
   });
 }
 
-// SİL: setupCheckboxListeners ve updateSaveButton fonksiyonlarını
 
-// DEĞIŞTIR/EKLE:
 function setupCheckboxListeners() {
   const selectAll = document.getElementById('selectAllRecords');
   const checkboxes = document.querySelectorAll('.record-checkbox');
@@ -715,14 +713,6 @@ function updateSaveButton() {
   saveBtn.disabled = checkedCount === 0;
 }
 
-function updateSaveButton() {
-  const saveBtn = document.getElementById('savePortfolioBtn');
-  const checkedBoxes = document.querySelectorAll('.record-checkbox:checked');
-  
-  if (saveBtn) {
-    saveBtn.disabled = checkedBoxes.length === 0;
-  }
-}
 
 // CSV Export fonksiyonu
 function exportOwnerResultsCSV() {
