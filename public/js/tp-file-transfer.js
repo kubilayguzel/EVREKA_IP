@@ -184,8 +184,7 @@ async function handleSaveToPortfolio() {
     }
     
     // TÜRKPATENT verilerini IPRecord formatına dönüştür
-    const ipRecords = mapTurkpatentResultsToIPRecords(selectedRecords, selectedApplicants);
-    
+    const ipRecords = await mapTurkpatentResultsToIPRecords(selectedRecords, selectedApplicants);    
     // recordOwnerType'ı 'self' olarak ayarla
     ipRecords.forEach(record => {
       record.recordOwnerType = 'self';
