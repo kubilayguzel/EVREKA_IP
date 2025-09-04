@@ -307,28 +307,79 @@ function setupRadioButtons() {
 // ANA SORGULAMA FONKSİYONU
 // ===============================
 
-async function handleQuery() {
-  // Hangi alan dolu?
-  const basvuruNo = (basvuruNoInput?.value || '').trim();
-  const sahipNo = (sahipNoInput?.value || '').trim();
-  
-  console.log('[DEBUG] handleQuery çağrıldı:', { basvuruNo, sahipNo });
-  
-  if (basvuruNo && !sahipNo) {
-    // BAŞVURU NUMARASI VAR
-    await queryByApplicationNumber(basvuruNo);
-    
-  } else if (sahipNo && !basvuruNo) {
-    // SAHİP NUMARASI VAR  
-    await queryByOwnerNumber(sahipNo);
-    
-  } else if (basvuruNo && sahipNo) {
-    // İKİSİ DE DOLU
-    showToast('Lütfen sadece bir alan doldurun.', 'warning');
-    
-  } else {
-    // İKİSİ DE BOŞ
-    showToast('Başvuru numarası veya sahip numarası girin.', 'warning');
+async function handleQuery(data) {
+  const { basvuruNo, sahipNo } = data;
+  console.log('[DEBUG] handleQuery çağrıldı:', data);
+
+  let progress = null;
+
+  try {
+    if (sahipNo && sahipNo.trim()) {
+      // Sahip numarası sorgusu için progress
+      progress = window.showProgress({
+        title: 'TÜRKPATENT Sorgulanıyor',
+        subtitle: 'Sahip numarası ile kayıtlar araştırılıyor...',
+        steps: [
+          'TÜRKPATENT sayfası açılıyor',
+          'Sahip numarası giriliyor',
+          'Sorgu çalıştırılıyor',
+          'Sonuçlar yükleniyor',
+          'Detaylar alınıyor',
+          'Veriler işleniyor'
+        ],
+        onCancel: () => {
+          console.log('[DEBUG] Sorgu iptal edildi');
+        }
+      });
+
+      progress.setStep(0); // TÜRKPATENT sayfası açılıyor
+      
+      console.log('[DEBUG] Sahip numarası eklentiye yönlendiriliyor:', sahipNo);
+      
+      const url = `https://www.turkpatent.gov.tr/arastirma-yap?form=trademark&auto_query=${encodeURIComponent(sahipNo)}&query_type=sahip&source=${encodeURIComponent(window.location.origin)}`;
+      console.log('[DEBUG] TÜRKPATENT URL açılıyor:', url);
+      
+      progress.setStep(1); // Sahip numarası giriliyor
+      window.open(url, '_blank');
+
+      // Message listener'da progress güncellemesi yapılacak
+      
+    } else if (basvuruNo && basvuruNo.trim()) {
+      // Başvuru numarası sorgusu için progress
+      progress = window.showProgress({
+        title: 'TÜRKPATENT Sorgulanıyor',
+        subtitle: 'Başvuru numarası ile kayıt araştırılıyor...',
+        steps: [
+          'TÜRKPATENT sayfası açılıyor',
+          'Başvuru numarası giriliyor',
+          'Sorgu çalıştırılıyor',
+          'Detaylar alınıyor',
+          'Veriler işleniyor'
+        ],
+        onCancel: () => {
+          console.log('[DEBUG] Sorgu iptal edildi');
+        }
+      });
+
+      progress.setStep(0);
+      
+      console.log('[DEBUG] Başvuru numarası eklentiye yönlendiriliyor:', basvuruNo);
+      
+      const url = `https://www.turkpatent.gov.tr/arastirma-yap?form=trademark&auto_query=${encodeURIComponent(basvuruNo)}&query_type=basvuru&source=${encodeURIComponent(window.location.origin)}`;
+      console.log('[DEBUG] TÜRKPATENT URL açılıyor:', url);
+      
+      progress.setStep(1);
+      window.open(url, '_blank');
+    }
+
+    // Progress referansını global'e kaydet
+    window.currentProgress = progress;
+
+  } catch (error) {
+    console.error('[ERROR] handleQuery:', error);
+    if (progress) {
+      progress.showError('Sorgu başlatılırken hata oluştu: ' + error.message);
+    }
   }
 }
 
@@ -764,7 +815,3 @@ document.addEventListener('DOMContentLoaded', () => {
   loadSharedLayout();
   init();
 });
-// ===============================
-// PORTFÖYE KAYDETME FONKSİYONU
-// ===============================
-
