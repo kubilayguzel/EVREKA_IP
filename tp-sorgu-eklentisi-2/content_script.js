@@ -522,11 +522,11 @@ async function collectOwnerResultsWithDetails() {
   for (const [idx, tr] of rows.entries()) {
     const base = parseOwnerRowBase(tr, idx);
     
-    // BOŞ SATIR KONTROLÜ
-    if (!base.applicationNumber && !base.brandName) {
-      log(`Boş satır atlandı: satır ${idx + 1}`);
-      continue;
-    }
+// BOŞ SATIR KONTROLÜ - Sadece başvuru numarası yeterli
+if (!base.applicationNumber) {
+  log(`Başvuru numarası olmayan satır atlandı: satır ${idx + 1}`);
+  continue;
+}
     
     // Görsel debug
     log(`🔍 Satır ${idx + 1} final:`, {
