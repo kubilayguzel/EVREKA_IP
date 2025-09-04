@@ -341,10 +341,11 @@ async function parseDetailsFromOpenDialog(dialogRoot) {
     transactions: []
   };
 
-  // ---- General field scraping (labels/strong) ----
+  // ---- Genel alanları çekme ----
   try {
     const rows = Array.from(dialogRoot.querySelectorAll('div, li, tr'));
     rows.forEach(node => {
+      // Önceki genel parse mantığı aynen kaldı.
       const labels = Array.from(node.querySelectorAll('label, .MuiFormLabel-root, .MuiTypography-root'))
         .map(x => (x.textContent || '').trim())
         .filter(Boolean);
@@ -365,50 +366,42 @@ async function parseDetailsFromOpenDialog(dialogRoot) {
     });
   } catch (e) { console.warn('Genel alan parse hatası:', e); }
 
-  // ---- Goods & Services (fieldset 'Mal ve Hizmet Bilgileri') ----
+  // ---- Goods & Services (Mal ve Hizmetler) düzeltildi ----
   try {
-    const gsFieldset = Array.from(dialogRoot.querySelectorAll('fieldset')).find(fs => {
-      const lg = fs.querySelector('legend');
-      return lg && (lg.textContent || '').trim().toLowerCase().includes('mal ve hizmet bilgileri');
-    });
-    if (gsFieldset) {
-      const rows = Array.from(gsFieldset.querySelectorAll('tbody.MuiTableBody-root tr, tbody tr'));
+    const tableBodies = Array.from(dialogRoot.querySelectorAll('tbody.MuiTableBody-root, tbody'));
+    tableBodies.forEach(tbody => {
+      const rows = Array.from(tbody.querySelectorAll('tr'));
       for (const tr of rows) {
         const tds = Array.from(tr.querySelectorAll('td'));
+        // 2 hücreli satırları, ilk hücrede sayısal bir değer varsa Nice sınıfı olarak işle.
         if (tds.length === 2) {
           const classNoRaw = (tds[0].textContent || '').trim();
           const classNo = parseInt(classNoRaw, 10);
           if (!Number.isNaN(classNo) && classNo >= 1 && classNo <= 45) {
             const text = (tds[1].textContent || '').replace(/\r/g, '').trim();
             const items = text
-              .split(/\n+/) // split by line breaks
+              .split(/\n+/)
               .map(s => s.trim().replace(/\s+/g, ' '))
               .filter(Boolean);
             data.goodsAndServices.push({ classNo, items });
           }
         }
       }
-    }
+    });
   } catch (e) { console.warn('Goods&Services parse hatası:', e); }
 
-  // ---- Transactions (fieldset 'Başvuru İşlem Bilgileri') ----
+  // ---- Transactions (İşlem Bilgileri) düzeltildi ----
   try {
-    const txFieldset = Array.from(dialogRoot.querySelectorAll('fieldset')).find(fs => {
-      const lg = fs.querySelector('legend');
-      return lg && (lg.textContent || '').trim().toLowerCase().includes('başvuru işlem bilgileri');
-    });
+    const txTableBodies = Array.from(dialogRoot.querySelectorAll('tbody.MuiTableBody-root, tbody'));
     const isDate = (s) => /\b\d{2}\.\d{2}\.\d{4}\b/.test(s || '');
-    if (txFieldset) {
-      const rows = Array.from(txFieldset.querySelectorAll('tbody.MuiTableBody-root tr, tbody tr'));
+    
+    txTableBodies.forEach(tbody => {
+      const rows = Array.from(tbody.querySelectorAll('tr'));
       for (const tr of rows) {
         const tds = Array.from(tr.querySelectorAll('td'));
-        if (!tds.length) continue;
-        // Skip section headers (colspan=4 + strong)
-        const colspan = tds[0].getAttribute('colspan');
-        if (colspan && parseInt(colspan, 10) >= 4) continue;
-        if (tds.length >= 4) {
+        if (tds.length >= 4) { // Dört veya daha fazla sütunlu satırları işlem olarak işle.
           const d0 = (tds[0].textContent || '').trim();
-          if (isDate(d0)) {
+          if (isDate(d0)) { // İlk sütunda tarih varsa devam et.
             const date = d0;
             const description = (tds[2].textContent || '').trim();
             const note = (tds[3].textContent || '').trim();
@@ -416,7 +409,7 @@ async function parseDetailsFromOpenDialog(dialogRoot) {
           }
         }
       }
-    }
+    });
   } catch (e) { console.warn('Transactions parse hatası:', e); }
 
   return data;
@@ -424,7 +417,6 @@ async function parseDetailsFromOpenDialog(dialogRoot) {
 
 async function openRowModalAndParse(tr, { timeout = 9000 } = {}) {
   try {
-    // Her ihtimale karşı önce açık bir modal varsa kapat
     closeAnyOpenDialog();
 
     const btns = Array.from(tr.querySelectorAll('button, a[role="button"], .MuiIconButton-root'));
@@ -436,12 +428,15 @@ async function openRowModalAndParse(tr, { timeout = 9000 } = {}) {
     if (!btn) return null;
     click(btn);
 
-    // Dialogu bekle
-    const dialog = await waitFor('[role="dialog"], .MuiDialog-root, .MuiModal-root, .modal', { timeout }).catch(()=>null);
+    // Modalın görünmesini bekle, içeriğin yüklenmesi için daha kısa bir bekleme yapıldı.
+    const dialog = await waitFor('[role="dialog"], .MuiDialog-root, .MuiModal-root, .modal', { timeout }).catch(() => null);
     if (!dialog) return null;
 
-    // İçerik yüklenmesi için ufak bekleme
-    await sleep(350);
+    // 
+    // Sabit bekleme (350ms) yerine, içeriğin hazır olup olmadığını kontrol eden daha akıllı bir bekleme mekanizması eklendi.
+    // Bu, hem hızlı açılan modallarda gereksiz beklemenin önüne geçer hem de yavaş açılanlarda yeterli zaman tanır.
+    await waitFor('.MuiCircularProgress-root, .loader', { root: dialog, timeout: 3000, test: el => !el || el.style.display === 'none' }).catch(() => {});
+    await sleep(100); // Ekstra küçük bir stabilizasyon beklemesi.
 
     // Parse et
     const parsed = await parseDetailsFromOpenDialog(dialog);
@@ -449,7 +444,7 @@ async function openRowModalAndParse(tr, { timeout = 9000 } = {}) {
     // Kapat
     closeAnyOpenDialog();
 
-    return parsed; // { imageDataUrl, fields, goodsAndServices, transactions }
+    return parsed;
   } catch (e) {
     warn('openRowModalAndParse hata:', e?.message || e);
     return null;
