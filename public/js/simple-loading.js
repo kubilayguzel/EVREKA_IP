@@ -1,6 +1,5 @@
 /**
- * Simple Loading Animation
- * Basit yükleniyor animasyonu
+ * Simple Loading Animation - Tech Company Style
  */
 
 class SimpleLoading {
@@ -9,13 +8,6 @@ class SimpleLoading {
     this.onCancel = null;
   }
 
-  /**
-   * Loading animasyonunu göster
-   * @param {Object} options - Konfigürasyon
-   * @param {string} options.text - Ana metin
-   * @param {string} options.subtext - Alt açıklama
-   * @param {Function} options.onCancel - İptal callback'i
-   */
   show(options = {}) {
     const {
       text = 'İşlem yapılıyor',
@@ -25,22 +17,22 @@ class SimpleLoading {
 
     this.onCancel = onCancel;
 
-    // Overlay oluştur
+    // Statik üç nokta ekle
+    const displayText = text + '...';
+
     this.overlay = document.createElement('div');
     this.overlay.className = 'simple-loading-overlay';
     this.overlay.innerHTML = `
       <div class="simple-loading-content">
         <div class="loading-spinner"></div>
-        <div class="loading-text">${text}<span class="loading-dots"></span></div>
+        <div class="loading-text">${displayText}</div>
         <div class="loading-subtext">${subtext}</div>
         ${onCancel ? '<button class="loading-cancel" id="loadingCancel">İptal</button>' : ''}
       </div>
     `;
 
-    // DOM'a ekle
     document.body.appendChild(this.overlay);
     
-    // Event listener kur
     if (onCancel) {
       const cancelBtn = this.overlay.querySelector('#loadingCancel');
       cancelBtn?.addEventListener('click', () => {
@@ -49,17 +41,11 @@ class SimpleLoading {
       });
     }
 
-    // Göster
     setTimeout(() => {
       this.overlay.classList.add('show');
     }, 10);
   }
 
-  /**
-   * Metni güncelle
-   * @param {string} text - Yeni ana metin
-   * @param {string} subtext - Yeni alt metin
-   */
   updateText(text, subtext) {
     if (!this.overlay) return;
 
@@ -67,56 +53,40 @@ class SimpleLoading {
     const subtextEl = this.overlay.querySelector('.loading-subtext');
     
     if (textEl && text) {
-      textEl.innerHTML = `${text}<span class="loading-dots"></span>`;
+      textEl.textContent = text + '...'; // Statik nokta
     }
     if (subtextEl && subtext) {
       subtextEl.textContent = subtext;
     }
   }
 
-  /**
-   * Başarı durumu göster ve kapat
-   * @param {string} message - Başarı mesajı
-   */
   showSuccess(message) {
     if (!this.overlay) return;
 
     const content = this.overlay.querySelector('.simple-loading-content');
-    content.style.borderLeft = '4px solid #27ae60';
-    
+    content.style.background = 'linear-gradient(145deg, #dcfce7, #bbf7d0)';
     content.innerHTML = `
-      <div style="color: #27ae60; font-size: 24px; margin-bottom: 10px;">✓</div>
-      <div class="loading-text" style="color: #27ae60;">Tamamlandı</div>
+      <div style="color: #16a34a; font-size: 28px; margin-bottom: 12px;">✓</div>
+      <div class="loading-text" style="background: linear-gradient(135deg, #166534, #16a34a); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Tamamlandı</div>
       <div class="loading-subtext">${message}</div>
     `;
 
-    // 2 saniye sonra otomatik kapat
-    setTimeout(() => {
-      this.hide();
-    }, 2000);
+    setTimeout(() => this.hide(), 2000);
   }
 
-  /**
-   * Hata durumu göster
-   * @param {string} message - Hata mesajı
-   */
   showError(message) {
     if (!this.overlay) return;
 
     const content = this.overlay.querySelector('.simple-loading-content');
-    content.style.borderLeft = '4px solid #e74c3c';
-    
+    content.style.background = 'linear-gradient(145deg, #fecaca, #fca5a5)';
     content.innerHTML = `
-      <div style="color: #e74c3c; font-size: 24px; margin-bottom: 10px;">✗</div>
-      <div class="loading-text" style="color: #e74c3c;">Hata Oluştu</div>
+      <div style="color: #dc2626; font-size: 28px; margin-bottom: 12px;">✗</div>
+      <div class="loading-text" style="background: linear-gradient(135deg, #991b1b, #dc2626); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Hata Oluştu</div>
       <div class="loading-subtext">${message}</div>
       <button class="loading-cancel" onclick="this.closest('.simple-loading-overlay').remove()">Kapat</button>
     `;
   }
 
-  /**
-   * Loading'i gizle
-   */
   hide() {
     if (!this.overlay) return;
 
@@ -131,7 +101,7 @@ class SimpleLoading {
   }
 }
 
-// Global utility functions
+// Global functions
 window.SimpleLoading = SimpleLoading;
 
 window.showSimpleLoading = (text, subtext, onCancel) => {
@@ -140,6 +110,4 @@ window.showSimpleLoading = (text, subtext, onCancel) => {
   return loading;
 };
 
-window.showLoadingWithCancel = (text, subtext, onCancel) => {
-  return window.showSimpleLoading(text, subtext, onCancel);
-};
+window.showLoadingWithCancel = window.showSimpleLoading;
