@@ -332,52 +332,7 @@ function findDetailButton(tr) {
 }
 
 async function parseDetailsFromOpenDialog(dialogRoot) {
-  if (!dialogRoot) {
-    console.warn('❌ parseDetailsFromOpenDialog: dialogRoot boş');
-    return {};
-  }
-
-  console.log('🔍 parseDetailsFromOpenDialog başladı');
-  
-  // ---- FULL DOM DEBUG ----
-  console.log('🔍 FULL DOM DEBUG:');
-  console.log('DialogRoot tagName:', dialogRoot.tagName);
-  console.log('DialogRoot innerHTML length:', dialogRoot.innerHTML.length);
-  console.log('DialogRoot ilk 1000 karakter:', dialogRoot.innerHTML.substring(0, 1000));
-  
-  // Tüm child element'leri listele
-  const allChildren = dialogRoot.querySelectorAll('*');
-  console.log('🔍 Toplam child element sayısı:', allChildren.length);
-  
-  // fieldset arama
-  const fieldsets = dialogRoot.querySelectorAll('fieldset');
-  console.log('🔍 Fieldset sayısı:', fieldsets.length);
-  
-  // Eğer fieldset yoksa, tüm legend'ları ara
-  const legends = dialogRoot.querySelectorAll('legend');
-  console.log('🔍 Legend sayısı:', legends.length);
-  legends.forEach((legend, i) => {
-    console.log(`Legend ${i+1}:`, legend.textContent.trim());
-  });
-  
-  // Tüm table'ları ara
-  const tables = dialogRoot.querySelectorAll('table, .MuiTable-root');
-  console.log('🔍 Tablo sayısı:', tables.length);
-  
-  // Tüm tbody'leri ara
-  const tbodies = dialogRoot.querySelectorAll('tbody, .MuiTableBody-root');
-  console.log('🔍 Tbody sayısı:', tbodies.length);
-  
-  // Text içinde "Mal ve Hizmet" arama
-  const textContent = dialogRoot.textContent || '';
-  const hasMalHizmet = textContent.includes('Mal ve Hizmet');
-  const hasIslemBilgi = textContent.includes('İşlem Bilgileri');
-  console.log('🔍 Text içinde "Mal ve Hizmet" var mı:', hasMalHizmet);
-  console.log('🔍 Text içinde "İşlem Bilgileri" var mı:', hasIslemBilgi);
-  
-  // Eğer loading varsa bekle
-  const loadings = dialogRoot.querySelectorAll('.loading, .loader, .MuiCircularProgress-root, [role="progressbar"]');
-  console.log('🔍 Loading element sayısı:', loadings.length);
+  if (!dialogRoot) return {};
 
   const data = {
     imageDataUrl: null,
@@ -386,42 +341,27 @@ async function parseDetailsFromOpenDialog(dialogRoot) {
     transactions: []
   };
 
-  // ---- YENİ STRATEJI: Text content'e göre arama ----
   try {
-    console.log('🔍 Text-based arama başlatılıyor...');
-    
-    // Tüm table'ları kontrol et, başlıklarına bak
+    // Tüm tabloları kontrol et, başlıklarına göre ayırt et
     const allTables = dialogRoot.querySelectorAll('table, .MuiTable-root');
-    console.log(`🔍 ${allTables.length} tablo kontrol ediliyor...`);
     
-    allTables.forEach((table, tableIndex) => {
-      console.log(`🔍 Tablo ${tableIndex + 1} kontrol ediliyor...`);
-      
-      // Tablo başlıklarını kontrol et
+    allTables.forEach(table => {
       const headers = table.querySelectorAll('th, .MuiTableCell-head');
       const headerTexts = Array.from(headers).map(h => h.textContent.trim());
-      console.log(`📊 Tablo ${tableIndex + 1} başlıkları:`, headerTexts);
       
       // EŞYA TABLOSU: "Sınıf" ve "Mal" içeren başlıklar
       if (headerTexts.some(h => h.includes('Sınıf')) && 
           headerTexts.some(h => h.includes('Mal') || h.includes('Hizmet'))) {
-        console.log('✅ EŞYA TABLOSU BULUNDU!');
         
         const tbody = table.querySelector('tbody, .MuiTableBody-root');
         if (tbody) {
           const rows = tbody.querySelectorAll('tr, .MuiTableRow-root');
-          console.log(`📊 Eşya tablosunda ${rows.length} satır`);
           
-          rows.forEach((row, rowIndex) => {
+          rows.forEach(row => {
             const cells = row.querySelectorAll('td, .MuiTableCell-body');
-            console.log(`🔍 Eşya satır ${rowIndex + 1}: ${cells.length} hücre`);
-            
             if (cells.length === 2) {
-              const classNoText = cells[0].textContent.trim();
+              const classNo = parseInt(cells[0].textContent.trim(), 10);
               const goodsText = cells[1].textContent.trim();
-              const classNo = parseInt(classNoText, 10);
-              
-              console.log(`🔍 Sınıf: "${classNoText}" -> ${classNo}, Eşya: "${goodsText.substring(0, 50)}..."`);
               
               if (!isNaN(classNo) && classNo >= 1 && classNo <= 45 && goodsText.length > 0) {
                 const items = goodsText
@@ -431,7 +371,6 @@ async function parseDetailsFromOpenDialog(dialogRoot) {
                   .map(item => item.replace(/\s+/g, ' '));
                 
                 data.goodsAndServices.push({ classNo, items });
-                console.log(`✅ EŞYA EKLENDİ: Sınıf ${classNo}, ${items.length} adet`);
               }
             }
           });
@@ -441,35 +380,25 @@ async function parseDetailsFromOpenDialog(dialogRoot) {
       // İŞLEM TABLOSU: "Tarih" ve "İşlem" içeren başlıklar
       else if (headerTexts.some(h => h.includes('Tarih')) && 
                headerTexts.some(h => h.includes('İşlem'))) {
-        console.log('✅ İŞLEM TABLOSU BULUNDU!');
         
         const tbody = table.querySelector('tbody, .MuiTableBody-root');
         if (tbody) {
           const rows = tbody.querySelectorAll('tr, .MuiTableRow-root');
-          console.log(`📊 İşlem tablosunda ${rows.length} satır`);
-          
           const dateRegex = /^\d{2}\.\d{2}\.\d{4}$/;
           
-          rows.forEach((row, rowIndex) => {
+          rows.forEach(row => {
             const cells = row.querySelectorAll('td, .MuiTableCell-body');
-            console.log(`🔍 İşlem satır ${rowIndex + 1}: ${cells.length} hücre`);
-            
             if (cells.length === 4) {
               const dateText = cells[0].textContent.trim();
               const operationText = cells[2].textContent.trim();
               const noteText = cells[3].textContent.trim();
               
-              console.log(`🔍 Tarih: "${dateText}", İşlem: "${operationText}"`);
-              
               if (dateRegex.test(dateText) && operationText && operationText !== '-') {
-                const transaction = {
+                data.transactions.push({
                   date: dateText,
                   description: operationText,
                   note: (noteText && noteText !== '-') ? noteText : null
-                };
-                
-                data.transactions.push(transaction);
-                console.log(`✅ İŞLEM EKLENDİ: ${dateText} - ${operationText}`);
+                });
               }
             }
           });
@@ -478,179 +407,54 @@ async function parseDetailsFromOpenDialog(dialogRoot) {
     });
     
   } catch (e) {
-    console.error('❌ Text-based arama hatası:', e);
+    console.warn('Modal parse hatası:', e);
   }
-
-  console.log('🎉 parseDetailsFromOpenDialog tamamlandı:', {
-    fieldsCount: Object.keys(data.fields).length,
-    goodsAndServicesCount: data.goodsAndServices.length,
-    transactionsCount: data.transactions.length
-  });
-  
-  console.log('📊 SONUÇ VERİLERİ:');
-  console.log('GoodsAndServices:', data.goodsAndServices);
-  console.log('Transactions:', data.transactions);
   
   return data;
 }
 
-async function openRowModalAndParse(tr, { timeout = 15000 } = {}) {
+async function openRowModalAndParse(tr, { timeout = 7000 } = {}) {
   try {
-    console.log('🔍 openRowModalAndParse başladı');
-    
-    // Önceki modal'ı kapat
     closeAnyOpenDialog();
     await sleep(200);
 
     const btn = findDetailButton(tr);
-    if (!btn) {
-      console.warn('❌ Detail butonu bulunamadı');
-      return null;
-    }
+    if (!btn) return null;
     
-    console.log('✅ Detail butonu bulundu, tıklanıyor');
     click(btn);
-    
-    // Tıklama sonrası biraz bekle
     await sleep(1000);
 
-    console.log('🔍 Modal aranıyor...');
-    
-    // ÇOK GENİŞ ARAMA STRATEJİSİ
+    // Z-index stratejisi - en üstteki modal'ı bul
     let dialog = null;
-    
-    // Strateji 1: Z-index en yüksek olan element
-    const allElements = Array.from(document.querySelectorAll('div'));
-    const highZIndexElements = allElements
+    const highZElements = Array.from(document.querySelectorAll('div'))
       .filter(el => {
-        const style = getComputedStyle(el);
-        const zIndex = parseInt(style.zIndex) || 0;
-        return zIndex > 1000; // Yüksek z-index'li elementler
+        const zIndex = parseInt(getComputedStyle(el).zIndex) || 0;
+        return zIndex > 1000;
       })
       .sort((a, b) => {
         const aZ = parseInt(getComputedStyle(a).zIndex) || 0;
         const bZ = parseInt(getComputedStyle(b).zIndex) || 0;
-        return bZ - aZ; // En yüksekten en düşüğe
+        return bZ - aZ;
       });
-    
-    console.log(`🔍 Yüksek z-index'li ${highZIndexElements.length} element bulundu`);
-    
-    // En yüksek z-index'li element'lerden fieldset içereni ara
-    for (const el of highZIndexElements.slice(0, 5)) { // İlk 5'ini kontrol et
-      const hasFieldset = el.querySelector('fieldset');
-      const hasTable = el.querySelector('table, .MuiTable-root');
-      const style = getComputedStyle(el);
-      
-      console.log(`🔍 Z-index ${style.zIndex} element kontrol:`, {
-        hasFieldset: !!hasFieldset,
-        hasTable: !!hasTable,
-        className: el.className.substring(0, 50),
-        display: style.display,
-        visibility: style.visibility
-      });
-      
-      if (hasFieldset || hasTable) {
+
+    // Fieldset veya tablo içeren en üst element'i bul
+    for (const el of highZElements.slice(0, 3)) {
+      if (el.querySelector('fieldset, table')) {
         dialog = el;
-        console.log('✅ Modal bulundu (z-index stratejisi)');
         break;
       }
     }
+
+    if (!dialog) return null;
+
+    await sleep(2000); // İçerik stabilizasyonu
     
-    // Strateji 2: Son eklenen büyük div
-    if (!dialog) {
-      console.log('🔍 Strateji 2: Son eklenen div\'ler aranıyor...');
-      
-      const allDivs = Array.from(document.querySelectorAll('div'));
-      const largeDivs = allDivs
-        .filter(el => {
-          const rect = el.getBoundingClientRect();
-          return rect.width > 400 && rect.height > 300; // Büyük div'ler
-        })
-        .slice(-10); // Son 10 tane
-      
-      console.log(`🔍 Büyük ${largeDivs.length} div kontrol ediliyor...`);
-      
-      for (const el of largeDivs.reverse()) { // Tersten kontrol et (en son eklenen önce)
-        const hasFieldset = el.querySelector('fieldset');
-        const hasTable = el.querySelector('table, .MuiTable-root');
-        
-        if (hasFieldset || hasTable) {
-          dialog = el;
-          console.log('✅ Modal bulundu (büyük div stratejisi)');
-          break;
-        }
-      }
-    }
-    
-    // Strateji 3: Text içinde "Mal ve Hizmet" veya "İşlem Bilgi" içeren
-    if (!dialog) {
-      console.log('🔍 Strateji 3: Text content arama...');
-      
-      const textSearchElements = Array.from(document.querySelectorAll('div'))
-        .filter(el => {
-          const text = el.textContent || '';
-          return text.includes('Mal ve Hizmet') || text.includes('İşlem Bilgileri');
-        })
-        .slice(0, 5); // İlk 5'ini al
-      
-      console.log(`🔍 Text içeren ${textSearchElements.length} element bulundu`);
-      
-      for (const el of textSearchElements) {
-        const style = getComputedStyle(el);
-        const isVisible = style.display !== 'none' && 
-                         style.visibility !== 'hidden' && 
-                         style.opacity !== '0';
-        
-        console.log(`🔍 Text element kontrol:`, {
-          isVisible,
-          className: el.className.substring(0, 50)
-        });
-        
-        if (isVisible) {
-          dialog = el;
-          console.log('✅ Modal bulundu (text content stratejisi)');
-          break;
-        }
-      }
-    }
-
-    if (!dialog) {
-      console.error('❌ Modal hiçbir strateji ile bulunamadı');
-      
-      // DEBUG: Açık olan tüm overlay'leri listele
-      console.log('🔍 DEBUG: Şu anda sayfadaki tüm overlay\'ler:');
-      document.querySelectorAll('div').forEach((el, i) => {
-        const style = getComputedStyle(el);
-        const zIndex = parseInt(style.zIndex) || 0;
-        if (zIndex > 100) {
-          console.log(`Overlay ${i}:`, {
-            zIndex,
-            className: el.className.substring(0, 30),
-            hasFieldset: !!el.querySelector('fieldset'),
-            hasTable: !!el.querySelector('table'),
-            textPreview: (el.textContent || '').substring(0, 50)
-          });
-        }
-      });
-      
-      return null;
-    }
-
-    console.log('✅ Dialog bulundu, içerik yüklemesi bekleniyor...');
-
-    // İçerik stabilizasyonu
-    await sleep(2000);
-
-    console.log('🔄 Parse işlemi başlatılıyor...');
     const parsed = await parseDetailsFromOpenDialog(dialog);
-
-    console.log('🔄 Dialog kapatılıyor...');
     closeAnyOpenDialog();
-
-    console.log('✅ openRowModalAndParse tamamlandı:', parsed);
+    
     return parsed;
   } catch (e) {
-    console.error('❌ openRowModalAndParse hata:', (e && e.message) || e);
+    console.error('Modal parse hata:', e.message);
     return null;
   }
 }
@@ -731,92 +535,38 @@ function parseOwnerRowBase(tr, idx) {
 }
 
 async function collectOwnerResultsWithDetails() {
-  console.log('🔍 collectOwnerResultsWithDetails başladı');
-  
   const rows = Array.from(document.querySelectorAll('tbody.MuiTableBody-root tr, tbody tr'));
-  console.log(`🔍 Toplam ${rows.length} satır bulundu`);
-  
   const items = [];
   
   for (const [idx, tr] of rows.entries()) {
-    console.log(`🔍 Satır ${idx + 1}/${rows.length} işleniyor...`);
-    
     const base = parseOwnerRowBase(tr, idx);
-    console.log(`🔍 Base veri:`, {
-      order: base.order,
-      applicationNumber: base.applicationNumber,
-      brandName: base.brandName,
-      ownerName: base.ownerName
-    });
 
-    // Başvuru numarası yoksa atla
-    if (!base.applicationNumber) {
-      console.log(`⚠️ Başvuru numarası olmayan satır atlandı: satır ${idx + 1}`);
-      continue;
-    }
+    if (!base.applicationNumber) continue;
 
     if (base.imageSrc) {
       base.brandImageDataUrl = base.imageSrc;
       base.brandImageUrl = base.imageSrc;
     }
 
-    console.log(`🔄 Satır ${idx + 1} için modal açılıyor...`);
-    
-    // Detayları modal üzerinden çek
     const detail = await openRowModalAndParse(tr, { timeout: 15000 });
-    
-    console.log(`🔍 Modal parse sonucu:`, detail);
     
     if (detail) {
       base.details = detail.fields || {};
-      console.log(`✅ Fields eklendi: ${Object.keys(base.details).length} adet`);
-      
       if (Array.isArray(detail.goodsAndServices)) {
         base.goodsAndServicesByClass = detail.goodsAndServices;
-        console.log(`✅ GoodsAndServices eklendi: ${detail.goodsAndServices.length} sınıf`);
-      } else {
-        console.log(`⚠️ GoodsAndServices array değil:`, detail.goodsAndServices);
       }
-      
       if (Array.isArray(detail.transactions)) {
         base.transactions = detail.transactions;
-        console.log(`✅ Transactions eklendi: ${detail.transactions.length} işlem`);
-      } else {
-        console.log(`⚠️ Transactions array değil:`, detail.transactions);
       }
-      
       if (!base.imageSrc && detail.imageDataUrl) {
         base.brandImageDataUrl = detail.imageDataUrl;
         base.brandImageUrl = detail.imageDataUrl;
-        console.log(`✅ Image eklendi`);
       }
-    } else {
-      console.log(`❌ Modal parse başarısız oldu`);
     }
 
-    console.log(`🔍 Final base veri:`, {
-      hasDetails: !!base.details,
-      hasGoodsAndServices: !!base.goodsAndServicesByClass,
-      hasTransactions: !!base.transactions,
-      goodsCount: base.goodsAndServicesByClass ? base.goodsAndServicesByClass.length : 0,
-      transactionCount: base.transactions ? base.transactions.length : 0
-    });
-
     items.push(base);
-    
-    console.log(`✅ Satır ${idx + 1} tamamlandı`);
   }
 
-  console.log(`🎉 collectOwnerResultsWithDetails tamamlandı: ${items.length} kayıt`);
-  console.log('🔍 Final items özeti:');
-  items.forEach((item, i) => {
-    console.log(`Item ${i + 1}:`, {
-      applicationNumber: item.applicationNumber,
-      goodsCount: item.goodsAndServicesByClass ? item.goodsAndServicesByClass.length : 0,
-      transactionCount: item.transactions ? item.transactions.length : 0
-    });
-  });
-  
   return items;
 }
 
