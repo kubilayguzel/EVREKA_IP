@@ -38,6 +38,19 @@ function uniq(arr) {
 }
 
 /**
+ * Transactions'tan durum türetme: öncelik sırası -> rejected > registered > pending > null
+ */
+function deriveStatusFromTransactions(transactions) {
+  if (!Array.isArray(transactions)) return null;
+  const txt = transactions.map(t => (t?.description || '') + ' ' + (t?.note || '')).join(' ').toLowerCase();
+  if (!txt) return null;
+  if (/(geçersiz|başvuru\/tescil\s*geçersiz|iptal|hükümsüz|red|redded)/i.test(txt)) return 'rejected';
+  if (/tescil edildi|tescil\b/i.test(txt) && !/(iptal|hükümsüz|geçersiz)/i.test(txt)) return 'registered';
+  if (/başvuru|yayın/i.test(txt)) return 'pending';
+  return null;
+}
+
+/**
  * TÜRKPATENT durumunu utils status değerleriyle mapping yapar
  * - "MARKA BAŞVURUSU/TESCİLİ GEÇERSİZ" -> rejected
  * - İçerikte "geçersiz", "ret", "redded" vb. -> rejected
@@ -232,7 +245,7 @@ export async function mapTurkpatentToIPRecord(turkpatentData, selectedApplicants
     portfoyStatus: 'active',
 
     // Durum
-    status: mapStatusToUtils(status),
+    status: (deriveStatusFromTransactions(transactions) || mapStatusToUtils(status)),
     recordOwnerType: 'self',
 
     // Başvuru/Tescil
