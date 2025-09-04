@@ -266,105 +266,72 @@ function setupRadioButtons() {
 // ANA SORGULAMA FONKSİYONU
 // ===============================
 
-// SİL: handleQuery fonksiyonunu
-
-// DEĞIŞTIR/EKLE:
 async function handleQuery() {
   const basvuruNo = basvuruNoInput?.value?.trim() || '';
   const sahipNo = sahipNoInput?.value?.trim() || '';
   
   console.log('[DEBUG] handleQuery çağrıldı:', { basvuruNo, sahipNo });
 
-  // Validation
   if (!basvuruNo && !sahipNo) {
     showToast('Lütfen başvuru numarası veya sahip numarası girin.', 'warning');
     return;
   }
 
-  let progress = null;
+  let loading = null;
 
   try {
     if (sahipNo) {
-      // Sahip numarası sorgusu için progress
-      progress = window.showProgress({
-        title: 'TÜRKPATENT Sorgulanıyor',
-        subtitle: 'Sahip numarası ile kayıtlar araştırılıyor...',
-        steps: [
-          'TÜRKPATENT sayfası açılıyor',
-          'Sahip numarası giriliyor',
-          'Sorgu çalıştırılıyor',
-          'Sonuçlar yükleniyor',
-          'Veriler işleniyor',
-          'Sonuçlar gösteriliyor'
-        ],
-        onCancel: () => {
+      // Sahip numarası sorgusu
+      loading = window.showLoadingWithCancel(
+        'TÜRKPATENT sorgulanıyor',
+        'Sahip numarası ile kayıtlar araştırılıyor...',
+        () => {
           console.log('[DEBUG] Sorgu iptal edildi');
-          if (window.currentProgress) {
-            window.currentProgress = null;
+          if (window.currentLoading) {
+            window.currentLoading = null;
           }
         }
-      });
-
-      progress.setStep(0); // TÜRKPATENT sayfası açılıyor
+      );
       
       console.log('[DEBUG] Sahip numarası eklentiye yönlendiriliyor:', sahipNo);
       
       const url = `https://www.turkpatent.gov.tr/arastirma-yap?form=trademark&auto_query=${encodeURIComponent(sahipNo)}&query_type=sahip&source=${encodeURIComponent(window.location.origin)}`;
       console.log('[DEBUG] TÜRKPATENT URL açılıyor:', url);
       
-      progress.setStep(1); // Sahip numarası giriliyor
-      
       const newWindow = window.open(url, '_blank');
       if (!newWindow) {
-        progress.showError('Pop-up engellendi. Tarayıcı ayarlarından pop-up\'ları açın.');
+        loading.showError('Pop-up engellendi. Tarayıcı ayarlarından pop-up\'ları açın.');
         return;
       }
 
-      // Progress referansını global'e kaydet
-      window.currentProgress = progress;
+      // Loading referansını global'e kaydet
+      window.currentLoading = loading;
 
     } else if (basvuruNo) {
-      // Başvuru numarası sorgusu için progress
-      progress = window.showProgress({
-        title: 'TÜRKPATENT Sorgulanıyor',
-        subtitle: 'Başvuru numarası ile kayıt araştırılıyor...',
-        steps: [
-          'TÜRKPATENT sayfası açılıyor',
-          'Başvuru numarası giriliyor',
-          'Sorgu çalıştırılıyor',
-          'Detaylar alınıyor',
-          'Veriler işleniyor'
-        ],
-        onCancel: () => {
-          console.log('[DEBUG] Sorgu iptal edildi');
-        }
-      });
-
-      progress.setStep(0);
+      // Başvuru numarası sorgusu
+      loading = window.showSimpleLoading(
+        'TÜRKPATENT sorgulanıyor',
+        'Başvuru numarası ile kayıt araştırılıyor...'
+      );
       
       console.log('[DEBUG] Başvuru numarası eklentiye yönlendiriliyor:', basvuruNo);
       
-      // Başvuru numarası sorgusu için Firebase Cloud Function kullan
-      progress.setStep(1);
-      progress.setStep(2); // Sorgu çalıştırılıyor
+      loading.updateText('Sorgu çalıştırılıyor', 'Kayıt detayları alınıyor...');
       
       const result = await scrapeTrademarkFunction({ applicationNumber: basvuruNo });
       
-      progress.setStep(3); // Detaylar alınıyor
-      
       if (result?.data) {
-        progress.setStep(4); // Veriler işleniyor
         renderSingleResult(result.data);
-        progress.showSuccess('Başvuru detayları başarıyla alındı!');
+        loading.showSuccess('Başvuru detayları başarıyla alındı!');
       } else {
-        progress.showError('Bu başvuru numarası için sonuç bulunamadı.');
+        loading.showError('Bu başvuru numarası için sonuç bulunamadı.');
       }
     }
 
   } catch (error) {
     console.error('[ERROR] handleQuery:', error);
-    if (progress) {
-      progress.showError('Sorgu başlatılırken hata oluştu: ' + error.message);
+    if (loading) {
+      loading.showError('Sorgu başlatılırken hata oluştu: ' + error.message);
     }
     showToast('İşlem hatası: ' + (error.message || error), 'danger');
   }
@@ -445,7 +412,6 @@ function setupExtensionMessageListener() {
   console.log('[DEBUG] Eklenti mesaj dinleyicisi kuruluyor...');
   
   window.addEventListener('message', (event) => {
-    // Güvenlik kontrolü
     const allowedOrigins = [
       window.location.origin,
       'https://www.turkpatent.gov.tr',
@@ -459,8 +425,8 @@ function setupExtensionMessageListener() {
       
       if (event.data.type === 'SORGU_BASLADI') {
         console.log('[DEBUG] Eklenti sorguyu başlattı');
-        if (window.currentProgress) {
-          window.currentProgress.setStep(2); // Sorgu çalıştırılıyor
+        if (window.currentLoading) {
+          window.currentLoading.updateText('Sorgu çalıştırılıyor', 'Sonuçlar yükleniyor...');
         }
         showToast('TÜRKPATENT sayfasında sorgu başladı...', 'info');
       }
@@ -469,23 +435,22 @@ function setupExtensionMessageListener() {
         _hideBlock(loadingEl);
         const data = event.data.data || [];
         
-        if (window.currentProgress) {
-          window.currentProgress.setStep(4); // Veriler işleniyor
+        if (window.currentLoading) {
+          window.currentLoading.updateText('Veriler işleniyor', 'Sonuçlar hazırlanıyor...');
         }
         
         if (!data.length) {
-          if (window.currentProgress) {
-            window.currentProgress.showError('Bu sahip numarası için sonuç bulunamadı.');
-            window.currentProgress = null;
+          if (window.currentLoading) {
+            window.currentLoading.showError('Bu sahip numarası için sonuç bulunamadı.');
+            window.currentLoading = null;
           }
           showToast('Bu sahip numarası için sonuç bulunamadı.', 'warning');
         } else {
           renderOwnerResults(data);
           
-          if (window.currentProgress) {
-            window.currentProgress.setStep(5); // Sonuçlar gösteriliyor
-            window.currentProgress.showSuccess(`${data.length} kayıt başarıyla alındı!`);
-            window.currentProgress = null;
+          if (window.currentLoading) {
+            window.currentLoading.showSuccess(`${data.length} kayıt başarıyla alındı!`);
+            window.currentLoading = null;
           }
           showToast(`${data.length} kayıt başarıyla alındı.`, 'success');
         }
@@ -496,9 +461,9 @@ function setupExtensionMessageListener() {
         _hideBlock(loadingEl);
         const errorMsg = event.data.data?.message || 'Bilinmeyen Hata';
         
-        if (window.currentProgress) {
-          window.currentProgress.showError('Eklenti hatası: ' + errorMsg);
-          window.currentProgress = null;
+        if (window.currentLoading) {
+          window.currentLoading.showError('Eklenti hatası: ' + errorMsg);
+          window.currentLoading = null;
         }
         showToast('Eklenti hatası: ' + errorMsg, 'danger');
       }
