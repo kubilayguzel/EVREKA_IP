@@ -267,73 +267,50 @@ function setupRadioButtons() {
 // ===============================
 
 async function handleQuery() {
-  const basvuruNo = basvuruNoInput?.value?.trim() || '';
-  const sahipNo = sahipNoInput?.value?.trim() || '';
+  // Hangi alan dolu?
+  const basvuruNo = (basvuruNoInput?.value || '').trim();
+  const sahipNo = (sahipNoInput?.value || '').trim();
   
   console.log('[DEBUG] handleQuery çağrıldı:', { basvuruNo, sahipNo });
-
-  if (!basvuruNo && !sahipNo) {
-    showToast('Lütfen başvuru numarası veya sahip numarası girin.', 'warning');
-    return;
-  }
-
-  let loading = null;
-
-  try {
-    if (sahipNo) {
-      // Sahip numarası sorgusu
-      loading = window.showLoadingWithCancel(
-        'TÜRKPATENT sorgulanıyor',
-        'Sahip numarası ile kayıtlar araştırılıyor...',
-        () => {
-          console.log('[DEBUG] Sorgu iptal edildi');
-          if (window.currentLoading) {
-            window.currentLoading = null;
-          }
+  
+  if (basvuruNo && !sahipNo) {
+    // BAŞVURU NUMARASI VAR
+    await queryByApplicationNumber(basvuruNo);
+    
+  } else if (sahipNo && !basvuruNo) {
+    // SAHİP NUMARASI VAR - Simple Loading ile
+    let loading = window.showLoadingWithCancel(
+      'TÜRKPATENT sorgulanıyor',
+      'Sahip numarası ile kayıtlar araştırılıyor...',
+      () => {
+        console.log('[DEBUG] Sorgu iptal edildi');
+        if (window.currentLoading) {
+          window.currentLoading = null;
         }
-      );
-      
-      console.log('[DEBUG] Sahip numarası eklentiye yönlendiriliyor:', sahipNo);
-      
-      const url = `https://www.turkpatent.gov.tr/arastirma-yap?form=trademark&auto_query=${encodeURIComponent(sahipNo)}&query_type=sahip&source=${encodeURIComponent(window.location.origin)}`;
-      console.log('[DEBUG] TÜRKPATENT URL açılıyor:', url);
-      
-      const newWindow = window.open(url, '_blank');
-      if (!newWindow) {
-        loading.showError('Pop-up engellendi. Tarayıcı ayarlarından pop-up\'ları açın.');
-        return;
       }
+    );
 
-      // Loading referansını global'e kaydet
-      window.currentLoading = loading;
-
-    } else if (basvuruNo) {
-      // Başvuru numarası sorgusu
-      loading = window.showSimpleLoading(
-        'TÜRKPATENT sorgulanıyor',
-        'Başvuru numarası ile kayıt araştırılıyor...'
-      );
-      
-      console.log('[DEBUG] Başvuru numarası eklentiye yönlendiriliyor:', basvuruNo);
-      
-      loading.updateText('Sorgu çalıştırılıyor', 'Kayıt detayları alınıyor...');
-      
-      const result = await scrapeTrademarkFunction({ applicationNumber: basvuruNo });
-      
-      if (result?.data) {
-        renderSingleResult(result.data);
-        loading.showSuccess('Başvuru detayları başarıyla alındı!');
-      } else {
-        loading.showError('Bu başvuru numarası için sonuç bulunamadı.');
-      }
+    console.log('[DEBUG] Sahip numarası eklentiye yönlendiriliyor:', sahipNo);
+    
+    const url = `https://www.turkpatent.gov.tr/arastirma-yap?form=trademark&auto_query=${encodeURIComponent(sahipNo)}&query_type=sahip&source=${encodeURIComponent(window.location.origin)}`;
+    console.log('[DEBUG] TÜRKPATENT URL açılıyor:', url);
+    
+    const newWindow = window.open(url, '_blank');
+    if (!newWindow) {
+      loading.showError('Pop-up engellendi. Tarayıcı ayarlarından pop-up\'ları açın.');
+      return;
     }
 
-  } catch (error) {
-    console.error('[ERROR] handleQuery:', error);
-    if (loading) {
-      loading.showError('Sorgu başlatılırken hata oluştu: ' + error.message);
-    }
-    showToast('İşlem hatası: ' + (error.message || error), 'danger');
+    // Loading referansını global'e kaydet
+    window.currentLoading = loading;
+    
+  } else if (basvuruNo && sahipNo) {
+    // İKİSİ DE DOLU
+    showToast('Lütfen sadece bir alan doldurun.', 'warning');
+    
+  } else {
+    // İKİSİ DE BOŞ
+    showToast('Başvuru numarası veya sahip numarası girin.', 'warning');
   }
 }
 
@@ -412,6 +389,7 @@ function setupExtensionMessageListener() {
   console.log('[DEBUG] Eklenti mesaj dinleyicisi kuruluyor...');
   
   window.addEventListener('message', (event) => {
+    // Güvenlik kontrolü
     const allowedOrigins = [
       window.location.origin,
       'https://www.turkpatent.gov.tr',
