@@ -519,75 +519,103 @@ async function openRowModalAndParse(tr, { timeout = 10000 } = {}) {
 }
 
 // --------- Sonuç Toplama ---------
-function parseOwnerRowBase(tr, idx) {
-  const get = (role) => {
-    const td = tr.querySelector(`td[role="${role}"]`);
-    return td ? (td.textContent || '').trim() : '';
-  };
-  const orderTxt = (tr.querySelector('td .MuiTypography-alignCenter') || tr.querySelector('td'))?.textContent || `${idx+1}`;
-  const hold = get('holdName');
-  const ownerName = hold ? hold.replace(/\s*\(\d+\)\s*$/, '') : '';
 
-  // Görsel arama - çeşitli selector'lar deneyelim
+function parseOwnerRowBase(tr, idx) {
+  const orderTxt = (tr.querySelector('td .MuiTypography-alignCenter') || tr.querySelector('td'))?.textContent || `${idx+1}`;
+  
+  // Tüm hücreleri al
+  const tds = Array.from(tr.querySelectorAll('td'));
+  
+  let applicationNumber = '';
+  let brandName = '';
+  let ownerName = '';
+  let applicationDate = '';
+  let registrationNumber = '';
+  let status = '';
+  let niceClasses = '';
   let imageSrc = null;
-  const img1 = tr.querySelector('img'); if (img1?.src) imageSrc = img1.src;
-  if (!imageSrc) { const img2 = tr.querySelector('td img'); if (img2?.src) imageSrc = img2.src; }
-  if (!imageSrc) { const imgTd = tr.querySelector('td[role="img"] img, td[role="image"] img'); if (imgTd?.src) imageSrc = imgTd.src; }
-  if (!imageSrc) {
-    const allTds = tr.querySelectorAll('td');
-    for (const td of allTds) {
-      const bgImg = getComputedStyle(td).backgroundImage;
-      if (bgImg && bgImg !== 'none') { const m = bgImg.match(/url\(["']?(.*?)["']?\)/); if (m) { imageSrc = m[1]; break; } }
-    }
+
+  // Görsel arama
+  const img1 = tr.querySelector('img');
+  if (img1?.src) imageSrc = img1.src;
+
+  // SADECE owner name'i role'dan al - başka hiçbir yere basma
+  const ownerElement = tr.querySelector('td[role="holdName"]');
+  if (ownerElement) {
+    ownerName = ownerElement.textContent.trim().replace(/\s*\(\d+\)\s*$/, '');
   }
 
-  // Temel alanlar (önce role, yoksa index/regex)
-  let applicationNumber = get('applicationNo') || '';
-  let brandName = get('markName') || '';
-  let applicationDate = get('applicationDate') || '';
-  let registrationNumber = get('registrationNo') || '';
-  let status = get('state') || '';
-  let niceClasses = get('niceClasses') || '';
+  // Hücre içeriklerini TAM OLARAK parse et - boş bırak boşsa
+  if (tds.length >= 7) {
+    const cell2 = (tds[2]?.textContent || '').trim();
+    const cell3 = (tds[3]?.textContent || '').trim();
+    const cell4 = (tds[4]?.textContent || '').trim();
+    const cell5 = (tds[5]?.textContent || '').trim();
+    const cell6 = (tds[6]?.textContent || '').trim();
+    const cell7 = tds[7] ? (tds[7].textContent || '').trim() : '';
 
-  try {
-    const tds = Array.from(tr.querySelectorAll('td'));
-    const texts = tds.map(td => (td.textContent || '').replace(/\s+/g,' ').trim());
-    // Başvuru no: 2024/123456
-    if (!applicationNumber) {
-      const appPattern = /(^|\s)\d{4}\/\d{4,7}(\s|$)/;
-      const idxApp = texts.findIndex(t => appPattern.test(t));
-      if (idxApp >= 0) { applicationNumber = texts[idxApp]; if (!brandName && texts[idxApp+1]) brandName = texts[idxApp+1]; }
+    // Başvuru numarası: 2022/125224 formatı
+    if (/^\d{4}\/\d+$/.test(cell2)) {
+      applicationNumber = cell2;
     }
-    // Tarih DD.MM.YYYY
-    if (!applicationDate) {
-      const m = texts.find(t => /\b\d{2}\.\d{2}\.\d{4}\b/.test(t));
-      if (m) applicationDate = (m.match(/\b\d{2}\.\d{2}\.\d{4}\b/) || [null])[0] || '';
+
+    // Marka adı: başvuru numarasından sonraki hücre, owner name değilse
+    if (cell3 && cell3 !== ownerName && !cell3.includes('LİMİTED') && !cell3.includes('ŞİRKETİ')) {
+      brandName = cell3;
     }
-    // Nice sınıf listesi
-    if (!niceClasses) {
-      const nice = texts.find(t => /(^|\s)([1-9]|[1-3]\d|4[0-5])(\s*,\s*([1-9]|[1-3]\d|4[0-5]))*/.test(t));
-      if (nice) niceClasses = nice;
+
+    // Başvuru tarihi: DD.MM.YYYY formatı
+    if (/^\d{2}\.\d{2}\.\d{4}$/.test(cell4)) {
+      applicationDate = cell4;
     }
-    // Durum
-    if (!status) {
-      const s = texts.find(t => /BAŞVURU|TESCİL|GEÇERSİZ|RED|RET|YAYIN|BÜLTEN/i.test(t));
-      if (s) status = s;
+
+    // Tescil numarası: YYYY NNNNN formatı
+    if (/^\d{4}\s+\d+$/.test(cell5)) {
+      registrationNumber = cell5;
     }
-    // Tescil no
-    if (!registrationNumber) {
-      const reg = texts.find(t => /\b\d{4,}\b/.test(t) && t !== applicationNumber);
-      if (reg) registrationNumber = reg;
+
+    // Durum: Sadece geçerli durum metinleri kabul et
+    if (cell6 && 
+        !cell6.includes('LİMİTED') && 
+        !cell6.includes('ŞİRKETİ') && 
+        !cell6.includes('TİCARET') &&
+        cell6 !== ownerName &&
+        cell6.length < 100) { // Çok uzun metinler durum değil
+      
+      // Bilinen durum metinleri
+      const validStatuses = [
+        'MARKA BAŞVURUSU/TESCİLİ GEÇERSİZ',
+        'TESCİL EDİLDİ',
+        'BAŞVURU KABUL EDİLDİ',
+        'BAŞVURU REDDEDİLDİ',
+        'YAYIN KARARI'
+      ];
+      
+      const isValidStatus = validStatuses.some(s => cell6.includes(s)) || 
+                           cell6.includes('BAŞVURU') || 
+                           cell6.includes('TESCİL') ||
+                           cell6.includes('GEÇERSİZ');
+      
+      if (isValidStatus) {
+        status = cell6;
+      }
+      // Değilse boş bırak - owner name basma!
     }
-  } catch {}
+
+    // Nice sınıfları: sayı/sayı formatı
+    if (cell7 && /\d+/.test(cell7)) {
+      niceClasses = cell7;
+    }
+  }
 
   return {
     order: Number(orderTxt) || (idx+1),
     applicationNumber,
     brandName,
-    ownerName,
+    ownerName, // Sadece role'dan gelir
     applicationDate,
     registrationNumber,
-    status,
+    status, // Boşsa boş kalır
     niceClasses,
     imageSrc
   };
