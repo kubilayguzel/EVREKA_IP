@@ -223,7 +223,7 @@ async function waitForTotalMetaAndParse(timeout = 45000) {
 
 // ---- Scroll Akışı: "yükleme → 1sn bekle → scroll" (beklenen sayıya ulaşana dek) ----
 function sleep(ms){ return new Promise(r => setTimeout(r, ms)); }
-const countRows = () => document.querySelectorAll('tbody.MuiTableBody-root tr, tbody tr').length;
+const countRows = () => document.querySelectorAll('tbody.MuiTableBody-root tr').length;
 const isLoading = () =>
   !!document.querySelector('.MuiCircularProgress-root, [role="progressbar"], .MuiBackdrop-root[aria-hidden="false"]');
 
@@ -332,13 +332,8 @@ function findDetailButton(tr) {
 }
 
 async function parseDetailsFromOpenDialog(dialogRoot) {
-  if (!dialogRoot) {
-    console.warn('❌ parseDetailsFromOpenDialog: dialogRoot boş');
-    return {};
-  }
-
-  console.log('🔍 parseDetailsFromOpenDialog başladı');
-
+  if (!dialogRoot) return {};
+  
   const data = {
     imageDataUrl: null,
     fields: {},
@@ -346,136 +341,84 @@ async function parseDetailsFromOpenDialog(dialogRoot) {
     transactions: []
   };
 
-  // ---- Goods & Services - "Mal ve Hizmet Bilgileri" fieldset'i ara ----
+  // 1) Mal/Hizmet Listesi (Eşya Listesi)
   try {
-    const goodsFieldset = Array.from(dialogRoot.querySelectorAll('fieldset')).find(fs => {
-      const legend = fs.querySelector('legend');
-      return legend && legend.textContent.includes('Mal ve Hizmet');
-    });
-
-    if (goodsFieldset) {
-      console.log('✅ Mal ve Hizmet Bilgileri fieldset bulundu');
+    // Nice sınıfları ve eşya listelerini bul
+    const goodsSections = dialogRoot.querySelectorAll('*');
+    for (const section of goodsSections) {
+      const text = section.textContent || '';
       
-      // MuiTable içindeki tbody'yi ara
-      const tbody = goodsFieldset.querySelector('.MuiTable-root .MuiTableBody-root');
-      if (tbody) {
-        const trs = Array.from(tbody.querySelectorAll('.MuiTableRow-root'));
-        console.log('🔍 Mal/Hizmet tablosunda', trs.length, 'satır bulundu');
+      // "Nice 19", "Nice 35" gibi başlıkları ara
+      const niceMatch = text.match(/Nice\s+(\d+)/i);
+      if (niceMatch) {
+        const classNo = parseInt(niceMatch[1]);
         
-        for (const tr of trs) {
-          const tds = Array.from(tr.querySelectorAll('.MuiTableCell-body'));
-          if (tds.length === 2) {
-            const classNoRaw = (tds[0].textContent || '').trim();
-            const maybeClassNo = parseInt(classNoRaw, 10);
+        // Bu sınıf için eşyaları bul
+        let nextElement = section.nextElementSibling;
+        while (nextElement && !nextElement.textContent.match(/Nice\s+\d+/i)) {
+          const goodsText = nextElement.textContent?.trim();
+          if (goodsText && goodsText.length > 10) {
+            // Eşyaları virgül veya noktalı virgülle ayır
+            const items = goodsText.split(/[,;]+/)
+              .map(item => item.trim())
+              .filter(item => item.length > 2);
             
-            if (!Number.isNaN(maybeClassNo) && maybeClassNo >= 1 && maybeClassNo <= 45) {
-              const text = (tds[1].textContent || '').replace(/\r/g, '').trim();
-              
-              // Metni satırlara böl ve temizle
-              const items = text
-                .split(/\n+/)
-                .map(s => s.trim())
-                .map(s => s.replace(/\s+/g, ' '))
-                .filter(Boolean);
-              
-              console.log('✅ GoodsAndServices eklendi:', maybeClassNo, items);
-              data.goodsAndServices.push({ classNo: maybeClassNo, items });
+            if (items.length > 0) {
+              data.goodsAndServices.push({
+                classNo,
+                items
+              });
             }
           }
+          nextElement = nextElement.nextElementSibling;
         }
       }
-    } else {
-      console.warn('⚠️ Mal ve Hizmet Bilgileri fieldset bulunamadı');
     }
-    console.log('✅ Toplam goodsAndServices:', data.goodsAndServices.length);
-  } catch (e) { 
-    console.warn('❌ Goods&Services parse hatası:', e); 
+  } catch (e) {
+    console.warn('Mal/hizmet listesi parse hatası:', e);
   }
 
-  // ---- Transactions - "Başvuru İşlem Bilgileri" fieldset'i ara ----
+  // 2) İşlem Geçmişi (Transactions)
   try {
-    const transactionFieldset = Array.from(dialogRoot.querySelectorAll('fieldset')).find(fs => {
-      const legend = fs.querySelector('legend');
-      return legend && legend.textContent.includes('İşlem Bilgileri');
-    });
-
-    if (transactionFieldset) {
-      console.log('✅ Başvuru İşlem Bilgileri fieldset bulundu');
-      
-      // MuiTable içindeki tbody'yi ara
-      const tbody = transactionFieldset.querySelector('.MuiTable-root .MuiTableBody-root');
-      if (tbody) {
-        const trs = Array.from(tbody.querySelectorAll('.MuiTableRow-root'));
-        console.log('🔍 İşlem tablosunda', trs.length, 'satır bulundu');
+    const transactionRows = dialogRoot.querySelectorAll('tbody tr');
+    for (const row of transactionRows) {
+      const cells = row.querySelectorAll('td');
+      if (cells.length >= 3) {
+        const date = cells[0]?.textContent?.trim();
+        const description = cells[2]?.textContent?.trim();
+        const note = cells[3]?.textContent?.trim();
         
-        const isDate = (s) => /\b\d{2}\.\d{2}\.\d{4}\b/.test(s || '');
-        
-        for (const tr of trs) {
-          const tds = Array.from(tr.querySelectorAll('.MuiTableCell-body'));
-          
-          // 4 sütunlu satırları kontrol et (Tarih, Tebliğ Tarihi, İşlem, Açıklama)
-          if (tds.length === 4) {
-            const firstTdText = (tds[0].textContent || '').trim();
-            
-            if (isDate(firstTdText)) {
-              const date = firstTdText;
-              const description = (tds[2].textContent || '').trim();
-              const note = (tds[3].textContent || '').trim();
-              
-              // Boş değil ve "-" değilse ekle
-              if (description && description !== '-') {
-                console.log('✅ Transaction eklendi:', { date, description, note });
-                data.transactions.push({ 
-                  date, 
-                  description, 
-                  note: (note && note !== '-') ? note : null 
-                });
-              }
-            }
-          }
-          // colspan="4" olan başlık satırlarını atla (strong içerik)
-          else if (tds.length === 1 && tr.querySelector('strong')) {
-            const strongText = tr.querySelector('strong').textContent.trim();
-            console.log('🔍 Başlık satırı atlandı:', strongText);
-          }
+        if (date && description) {
+          data.transactions.push({
+            date,
+            description,
+            note: note || null
+          });
         }
       }
-    } else {
-      console.warn('⚠️ Başvuru İşlem Bilgileri fieldset bulunamadı');
     }
-    console.log('✅ Toplam transactions:', data.transactions.length);
-  } catch (e) { 
-    console.warn('❌ Transactions parse hatası:', e); 
+  } catch (e) {
+    console.warn('İşlem geçmişi parse hatası:', e);
   }
 
-  // ---- General field scraping - diğer bilgiler için ----
-  try {
-    const fieldsets = Array.from(dialogRoot.querySelectorAll('fieldset'));
-    console.log('🔍 Toplam fieldset sayısı:', fieldsets.length);
+  // 3) Genel alan/etiket yakalama (mevcut kod)
+  const rows = Array.from(dialogRoot.querySelectorAll('div, li, tr'));
+  rows.forEach(node => {
+    const labels = Array.from(node.querySelectorAll('label, .MuiFormLabel-root, .MuiTypography-root')).map(x => (x.textContent||'').trim()).filter(Boolean);
+    const strongs = Array.from(node.querySelectorAll('strong, b')).map(x => (x.textContent||'').trim()).filter(Boolean);
+    const texts = (node.textContent || '').trim();
     
-    for (const fieldset of fieldsets) {
-      const legend = fieldset.querySelector('legend');
-      const legendText = legend ? legend.textContent.trim() : '';
-      
-      // Mal/Hizmet ve İşlem fieldset'lerini atla
-      if (legendText.includes('Mal ve Hizmet') || legendText.includes('İşlem Bilgileri')) {
-        continue;
-      }
-      
-      // Diğer fieldset'lerdeki bilgileri topla
-      if (legendText) {
-        const content = fieldset.textContent.replace(legendText, '').trim();
-        if (content && content.length > 0 && content.length < 1000) {
-          data.fields[legendText] = content;
-          console.log('✅ Genel alan eklendi:', legendText, '=', content.substring(0, 100) + '...');
-        }
-      }
+    if (labels.length === 1) {
+      const label = labels[0];
+      let value = texts.replace(label, '').trim();
+      if (value && value.length && value.length < 500) data.fields[label] = value;
+    } else if (strongs.length === 1) {
+      const label = strongs[0];
+      let value = texts.replace(label, '').trim();
+      if (value && value.length && value.length < 500) data.fields[label] = value;
     }
-  } catch (e) { 
-    console.warn('❌ Genel alan parse hatası:', e); 
-  }
+  });
 
-  console.log('✅ parseDetailsFromOpenDialog tamamlandı:', data);
   return data;
 }
 
@@ -489,175 +432,181 @@ async function openRowModalAndParse(tr, { timeout = 9000 } = {}) {
     click(btn);
 
     // Dialogu bekle
-    const dialog = await waitFor('[role="dialog"], .MuiDialog-root, .MuiModal-root, .modal', { timeout }).catch(() => null);
+    const dialog = await waitFor('[role="dialog"], .MuiDialog-root, .MuiModal-root, .modal', { timeout }).catch(()=>null);
     if (!dialog) return null;
 
     // İçerik yüklenmesi için ufak bekleme
     await sleep(350);
 
     // Parse et
-    const parsed = await parseDetailsFromOpenDialog(dialog);
+    const { imageDataUrl, fields } = await parseDetailsFromOpenDialog(dialog);
 
     // Kapat
     closeAnyOpenDialog();
 
-    return parsed; // { imageDataUrl, fields, goodsAndServices, transactions }
+    return { imageDataUrl, fields };
   } catch (e) {
-    warn('openRowModalAndParse hata:', (e && e.message) || e);
+    warn('openRowModalAndParse hata:', e?.message || e);
     return null;
   }
 }
 
-// --------- Satır Parsleme (Base) ---------
+// --------- Sonuç Toplama ---------
 function parseOwnerRowBase(tr, idx) {
-  const getByRole = (role) => {
+  const get = (role) => {
     const td = tr.querySelector(`td[role="${role}"]`);
     return td ? (td.textContent || '').trim() : '';
   };
   const orderTxt = (tr.querySelector('td .MuiTypography-alignCenter') || tr.querySelector('td'))?.textContent || `${idx+1}`;
-  const hold = getByRole('holdName');
+  const hold = get('holdName');
   const ownerName = hold ? hold.replace(/\s*\(\d+\)\s*$/, '') : '';
 
-  // Görsel arama
+  // Görsel arama - çeşitli selector'lar deneyelim
   let imageSrc = null;
+  
+  // 1) Satır içi herhangi bir img
   const img1 = tr.querySelector('img');
-  if (img1 && img1.src) imageSrc = img1.src;
-  if (!imageSrc) {
-    const img2 = tr.querySelector('td img');
-    if (img2 && img2.src) imageSrc = img2.src;
+  if (img1 && img1.src) {
+    imageSrc = img1.src;
+    log(`🖼️ Satır ${idx + 1} - img bulundu:`, imageSrc);
   }
-  if (!imageSrc) {
-    const imgTd = tr.querySelector('td[role="img"] img, td[role="image"] img');
-    if (imgTd && imgTd.src) imageSrc = imgTd.src;
+  
+  // 2) td içindeki img
+  const img2 = tr.querySelector('td img');
+  if (!imageSrc && img2 && img2.src) {
+    imageSrc = img2.src;
+    log(`🖼️ Satır ${idx + 1} - td img bulundu:`, imageSrc);
   }
-  if (!imageSrc) {
-    const allTds = tr.querySelectorAll('td');
-    for (const td of allTds) {
-      const bgImg = getComputedStyle(td).backgroundImage;
-      if (bgImg && bgImg !== 'none') {
-        const match = bgImg.match(/url\(["']?(.*?)["']?\)/);
-        if (match) { imageSrc = match[1]; break; }
+  
+  // 3) Belirli role'lü td içindeki img
+  const imgTd = tr.querySelector('td[role="img"] img, td[role="image"] img');
+  if (!imageSrc && imgTd && imgTd.src) {
+    imageSrc = imgTd.src;
+    log(`🖼️ Satır ${idx + 1} - role img bulundu:`, imageSrc);
+  }
+  
+  // 4) Background image kontrol et
+  const allTds = tr.querySelectorAll('td');
+  for (const td of allTds) {
+    const bgImg = getComputedStyle(td).backgroundImage;
+    if (!imageSrc && bgImg && bgImg !== 'none') {
+      const match = bgImg.match(/url\(["']?(.*?)["']?\)/);
+      if (match) {
+        imageSrc = match[1];
+        log(`🖼️ Satır ${idx + 1} - background img bulundu:`, imageSrc);
+        break;
       }
     }
   }
+  
+  if (!imageSrc) {
+    log(`❌ Satır ${idx + 1} - görsel bulunamadı`);
+  }
 
-  const base = {
-    order: Number(orderTxt) || (idx+1),
-    applicationNumber: getByRole('applicationNo') || '',
-    brandName: getByRole('markName') || '',
-    ownerName,
-    applicationDate: getByRole('applicationDate') || '',
-    registrationNumber: getByRole('registrationNo') || '',
-    status: getByRole('state') || '',
-    niceClasses: getByRole('niceClasses') || '',
-    imageSrc: imageSrc || null
-  };
-
-  // Fallback: sabit indeks & regex
+  
+  // --- Fallback: role attribute'ları yoksa sütun indekslerinden oku ---
   try {
     const tds = Array.from(tr.querySelectorAll('td'));
     const textAt = (i) => (tds[i]?.textContent || '').trim();
-
-    if (!base.applicationNumber && tds.length >= 3) base.applicationNumber = textAt(2);
-    if (!base.brandName && tds.length >= 4)        base.brandName        = textAt(3);
-    if (!base.applicationDate && tds.length >= 5)  base.applicationDate  = textAt(4);
-    if (!base.registrationNumber && tds.length>=6) base.registrationNumber = textAt(5);
-    if (!base.status && tds.length >= 7)           base.status           = textAt(6);
-    if (!base.niceClasses && tds.length >= 8)      base.niceClasses      = textAt(7);
-
-    const txts = tds.map(td => (td.textContent || '').replace(/\s+/g,' ').trim());
-    if (!base.applicationNumber) {
-      const appPattern = /(^|\s)\d{4}\/\d{4,7}(\s|$)/;
-      const appIdx = txts.findIndex(t => appPattern.test(t));
-      if (appIdx >= 0) {
-        base.applicationNumber = txts[appIdx];
-        if (!base.brandName && txts[appIdx+1]) base.brandName = txts[appIdx+1];
-      }
-    }
-    if (!base.applicationDate) {
-      const datePattern = /\b\d{2}\.\d{2}\.\d{4}\b/;
-      const dateCell = txts.find(t => datePattern.test(t));
-      if (dateCell) base.applicationDate = (dateCell.match(datePattern) || [null])[0] || '';
-    }
-    if (!base.niceClasses) {
-      const nc = txts.find(t => /(^|\s)([1-9]|[1-3]\d|4[0-5])(\s*,\s*([1-9]|[1-3]\d|4[0-5]))*/.test(t));
-      if (nc) base.niceClasses = nc;
-    }
-    if (!base.status) {
-      const sc = txts.find(t => /BAŞVURU|TESCİL|GEÇERSİZ|RED|RET|YAYIN|BÜLTEN/i.test(t));
-      if (sc) base.status = sc;
-    }
-    if (!base.registrationNumber) {
-      const rc = txts.find(t => /\b\d{4,}\b/.test(t) && t !== base.applicationNumber);
-      if (rc) base.registrationNumber = rc;
-    }
+    // Tipik kolon dizilimi: [check/img], Görsel, Başvuru No, Marka Adı, Başvuru Tarihi, Tescil No, Durumu, Nice
+    if (!base.applicationNumber) base.applicationNumber = textAt(2);
+    if (!base.brandName)        base.brandName        = textAt(3);
+    if (!base.applicationDate)  base.applicationDate  = textAt(4);
+    if (!base.registrationNumber) base.registrationNumber = textAt(5);
+    if (!base.status)           base.status           = textAt(6);
+    if (!base.niceClasses)      base.niceClasses      = textAt(7);
   } catch (e) {
-    log('Fallback kolon parse hatası:', (e && e.message) || e);
+    log('Fallback kolon parse hatası:', e?.message || e);
   }
-
-  return base;
+return {
+    order: Number(orderTxt) || (idx+1),
+    applicationNumber: get('applicationNo') || '',
+    brandName: get('markName') || '',
+    ownerName,
+    applicationDate: get('applicationDate') || '',
+    registrationNumber: get('registrationNo') || '',
+    status: get('state') || '',
+    niceClasses: get('niceClasses') || '',
+    imageSrc: imageSrc // Görsel URL'i
+  };
 }
 
-// --------- Sonuç Toplama (Detay Dahil) ---------
 async function collectOwnerResultsWithDetails() {
-  const rows = Array.from(document.querySelectorAll('tbody.MuiTableBody-root tr, tbody tr'));
+  const rows = Array.from(document.querySelectorAll('tbody.MuiTableBody-root tr'));
   const items = [];
   for (const [idx, tr] of rows.entries()) {
     const base = parseOwnerRowBase(tr, idx);
-
-    if (!base.applicationNumber) {
-      log(`Başvuru numarası olmayan satır atlandı: satır ${idx + 1}`);
-      continue;
-    }
-
+    
+// BOŞ SATIR KONTROLÜ - Sadece başvuru numarası yeterli
+if (!base.applicationNumber) {
+  log(`Başvuru numarası olmayan satır atlandı: satır ${idx + 1}`);
+  continue;
+}
+    
+    // Görsel debug
+    log(`🔍 Satır ${idx + 1} final:`, {
+      appNo: base.applicationNumber,
+      brandName: base.brandName,
+      imageSrc: base.imageSrc,
+      hasImage: !!base.imageSrc
+    });
+    
+    // Görsel zaten parseOwnerRowBase'de alındı
     if (base.imageSrc) {
       base.brandImageDataUrl = base.imageSrc;
       base.brandImageUrl = base.imageSrc;
+      log(`✅ Görsel set edildi: ${base.imageSrc}`);
+    } else {
+      log(`❌ Görsel yok - satır ${idx + 1}`);
     }
-
-    // Detay modalını aç ve verileri al
-    const detail = await openRowModalAndParse(tr, { timeout: 12000 });
-    if (detail) {
-      base.details = detail.fields || {};
-      if (Array.isArray(detail.goodsAndServices)) {
-        base.goodsAndServicesByClass = detail.goodsAndServices;
-      }
-      if (Array.isArray(detail.transactions)) {
-        base.transactions = detail.transactions;
-      }
-      if (!base.imageSrc && detail.imageDataUrl) {
-        base.brandImageDataUrl = detail.imageDataUrl;
-        base.brandImageUrl = detail.imageDataUrl;
-      }
-    }
-
-    items.push(base);
+    items.push(base); // Satırı items'a ekle
   }
-  return items;
+    return items; // ✅ RETURN STATEMENT EKLENDİ
 }
 
-// --------- Yükle & Gönder ---------
 async function waitAndSendOwnerResults() {
-  let expected = await waitForTotalMetaAndParse(60000); // meta varsa al
-  try { await waitFor('tbody tr', { timeout: 30000 }); } catch {}
+  // 1) Önce meta: "... kayıt bulundu" gelene kadar bekle ve oku
+  let expected = await waitForTotalMetaAndParse(60000); // 60s'e kadar bekle
+  if (typeof expected !== 'number' || !(expected > 0)) {
+    // Meta bulunamazsa yine de tabloya göre ilerleyelim (fallback)
+    try { await waitFor('tbody.MuiTableBody-root tr', { timeout: 20000 }); } catch {}
+    expected = getExpectedTotalCount(); // son bir kez daha dene
+  }
+  log('Beklenen toplam kayıt:', expected);
 
+  // 2) Tablo en az bir satır gözüksün
+  try { await waitFor('tbody.MuiTableBody-root tr', { timeout: 30000 }); } catch {}
+
+  // 3) Sonsuz Liste gerekiyorsa aç
   try {
-    const initialCount = document.querySelectorAll('tbody tr').length;
+    const initialCount = document.querySelectorAll('tbody.MuiTableBody-root tr').length;
     const needInfinite = (typeof expected === 'number' ? expected >= 20 : initialCount >= 20);
     if (needInfinite) {
       const ok = await ensureInfiniteOn();
       if (ok && typeof expected === 'number' && expected > 0) {
-        await infiniteScrollAllRowsSTRICT(expected, { overallTimeoutMs: 360000 });
+        // 4) STRICT: beklenen sayıya ulaşana kadar yükleme→bekle→scroll
+        const loaded = await infiniteScrollAllRowsSTRICT(expected, { overallTimeoutMs: 360000 });
+        if (typeof loaded === 'number' && loaded < expected) {
+          log('Uyarı: beklenen sayıya ulaşılamadı. loaded:', loaded, 'expected:', expected);
+        }
       }
     }
-  } catch (e) {
-    log('Infinite scroll hatası:', (e && e.message) || e);
+  } catch (e) { /* yoksay */ }
+
+  // 4) Beklenen sayıya ulaşmadan ERKEN GÖNDERMEYİ ÖNLE! (meta biliniyorsa)
+  const finalCount = document.querySelectorAll('tbody.MuiTableBody-root tr').length;
+  if (typeof expected === 'number' && expected > 0 && finalCount < expected) {
+    log('Beklenen sayıya ulaşılmadı, veri gönderilmeyecek. final:', finalCount, 'expected:', expected);
+    sendToOpener('HATA_KISI', { message: 'Sonuçların tam listelemesi tamamlanmadı.', loaded: finalCount, expected });
+    return;
   }
 
+  // 5) Satırları MODAL ile detaylı parse et (görsel dahil)
   const items = await collectOwnerResultsWithDetails();
-  sendToOpener('VERI_GELDI_KISI', Array.isArray(items) ? items : []);
+  sendToOpener('VERI_GELDI_KISI', items);
 }
 
+// --------- Ana Akış ---------
 async function runOwnerFlow() {
   log('Sahip No akışı başladı:', targetKisiNo);
   if (!targetKisiNo) { warn('targetKisiNo boş; çıkış.'); return; }
