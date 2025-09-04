@@ -223,7 +223,7 @@ async function waitForTotalMetaAndParse(timeout = 45000) {
 
 // ---- Scroll Akışı: "yükleme → 1sn bekle → scroll" (beklenen sayıya ulaşana dek) ----
 function sleep(ms){ return new Promise(r => setTimeout(r, ms)); }
-const countRows = () => document.querySelectorAll('tbody.MuiTableBody-root tr').length;
+const countRows = () => document.querySelectorAll('tbody.MuiTableBody-root tr, tbody tr').length;
 const isLoading = () =>
   !!document.querySelector('.MuiCircularProgress-root, [role="progressbar"], .MuiBackdrop-root[aria-hidden="false"]');
 
@@ -332,94 +332,83 @@ function findDetailButton(tr) {
 }
 
 async function parseDetailsFromOpenDialog(dialogRoot) {
-  if (!dialogRoot) return {};
-  
-  const data = {
-    imageDataUrl: null,
-    fields: {},
-    goodsAndServices: [],
-    transactions: []
-  };
+if (!dialogRoot) return {};
 
-  // 1) Mal/Hizmet Listesi (Eşya Listesi)
-  try {
-    // Nice sınıfları ve eşya listelerini bul
-    const goodsSections = dialogRoot.querySelectorAll('*');
-    for (const section of goodsSections) {
-      const text = section.textContent || '';
-      
-      // "Nice 19", "Nice 35" gibi başlıkları ara
-      const niceMatch = text.match(/Nice\s+(\d+)/i);
-      if (niceMatch) {
-        const classNo = parseInt(niceMatch[1]);
-        
-        // Bu sınıf için eşyaları bul
-        let nextElement = section.nextElementSibling;
-        while (nextElement && !nextElement.textContent.match(/Nice\s+\d+/i)) {
-          const goodsText = nextElement.textContent?.trim();
-          if (goodsText && goodsText.length > 10) {
-            // Eşyaları virgül veya noktalı virgülle ayır
-            const items = goodsText.split(/[,;]+/)
-              .map(item => item.trim())
-              .filter(item => item.length > 2);
-            
-            if (items.length > 0) {
-              data.goodsAndServices.push({
-                classNo,
-                items
-              });
-            }
-          }
-          nextElement = nextElement.nextElementSibling;
-        }
-      }
-    }
-  } catch (e) {
-    console.warn('Mal/hizmet listesi parse hatası:', e);
-  }
+const data = {
+  imageDataUrl: null,
+  fields: {},
+  goodsAndServices: [],
+  transactions: []
+};
 
-  // 2) İşlem Geçmişi (Transactions)
-  try {
-    const transactionRows = dialogRoot.querySelectorAll('tbody tr');
-    for (const row of transactionRows) {
-      const cells = row.querySelectorAll('td');
-      if (cells.length >= 3) {
-        const date = cells[0]?.textContent?.trim();
-        const description = cells[2]?.textContent?.trim();
-        const note = cells[3]?.textContent?.trim();
-        
-        if (date && description) {
-          data.transactions.push({
-            date,
-            description,
-            note: note || null
-          });
-        }
-      }
-    }
-  } catch (e) {
-    console.warn('İşlem geçmişi parse hatası:', e);
-  }
-
-  // 3) Genel alan/etiket yakalama (mevcut kod)
+// ---- General field scraping (labels/strong) ----
+try {
   const rows = Array.from(dialogRoot.querySelectorAll('div, li, tr'));
   rows.forEach(node => {
-    const labels = Array.from(node.querySelectorAll('label, .MuiFormLabel-root, .MuiTypography-root')).map(x => (x.textContent||'').trim()).filter(Boolean);
-    const strongs = Array.from(node.querySelectorAll('strong, b')).map(x => (x.textContent||'').trim()).filter(Boolean);
+    const labels = Array.from(node.querySelectorAll('label, .MuiFormLabel-root, .MuiTypography-root'))
+      .map(x => (x.textContent || '').trim())
+      .filter(Boolean);
+    const strongs = Array.from(node.querySelectorAll('strong, b'))
+      .map(x => (x.textContent || '').trim())
+      .filter(Boolean);
     const texts = (node.textContent || '').trim();
-    
+
     if (labels.length === 1) {
       const label = labels[0];
       let value = texts.replace(label, '').trim();
-      if (value && value.length && value.length < 500) data.fields[label] = value;
+      if (value && value.length && value.length < 10000) data.fields[label] = value;
     } else if (strongs.length === 1) {
       const label = strongs[0];
       let value = texts.replace(label, '').trim();
-      if (value && value.length && value.length < 500) data.fields[label] = value;
+      if (value && value.length && value.length < 10000) data.fields[label] = value;
     }
   });
+} catch (e) { console.warn('Genel alan parse hatası:', e); }
 
-  return data;
+// ---- Goods & Services (NiceNo in first TD, text in second TD) ----
+try {
+  const tbodies = Array.from(dialogRoot.querySelectorAll('tbody'));
+  for (const tbody of tbodies) {
+    const trs = Array.from(tbody.querySelectorAll('tr'));
+    for (const tr of trs) {
+      const tds = Array.from(tr.querySelectorAll('td'));
+      if (tds.length === 2) {
+        const classNoRaw = (tds[0].textContent || '').trim();
+        const maybeClassNo = parseInt(classNoRaw, 10);
+        if (!Number.isNaN(maybeClassNo) && maybeClassNo >= 1 && maybeClassNo <= 45) {
+          // Second TD can have multiline items
+          const text = (tds[1].textContent || '').replace(/\r/g, '').trim();
+          const items = text
+            .split(/\n+/)                 // split by line breaks
+            .map(s => s.strip ? s.strip() : s.trim())
+            .map(s => s.replace(/\s+/g, ' '))
+            .filter(Boolean);
+          data.goodsAndServices.push({ classNo: maybeClassNo, items });
+        }
+      }
+    }
+  }
+} catch (e) { console.warn('Goods&Services parse hatası:', e); }
+
+// ---- Transactions (rows with 4 tds & first is DD.MM.YYYY) ----
+try {
+  const isDate = (s) => /\b\d{2}\.\d{2}\.\d{4}\b/.test(s || '');
+  const tbodies = Array.from(dialogRoot.querySelectorAll('tbody'));
+  for (const tbody of tbodies) {
+    const trs = Array.from(tbody.querySelectorAll('tr'));
+    for (const tr of trs) {
+      const tds = Array.from(tr.querySelectorAll('td'));
+      if (tds.length === 4 && isDate(tds[0].textContent)) {
+        const date = (tds[0].textContent || '').trim();
+        const description = (tds[2].textContent || '').trim();
+        const note = (tds[3].textContent || '').trim();
+        data.transactions.push({ date, description, note: note || null });
+      }
+    }
+  }
+} catch (e) { console.warn('Transactions parse hatası:', e); }
+
+return data;
 }
 
 async function openRowModalAndParse(tr, { timeout = 9000 } = {}) {
@@ -432,181 +421,175 @@ async function openRowModalAndParse(tr, { timeout = 9000 } = {}) {
     click(btn);
 
     // Dialogu bekle
-    const dialog = await waitFor('[role="dialog"], .MuiDialog-root, .MuiModal-root, .modal', { timeout }).catch(()=>null);
+    const dialog = await waitFor('[role="dialog"], .MuiDialog-root, .MuiModal-root, .modal', { timeout }).catch(() => null);
     if (!dialog) return null;
 
     // İçerik yüklenmesi için ufak bekleme
     await sleep(350);
 
     // Parse et
-    const { imageDataUrl, fields } = await parseDetailsFromOpenDialog(dialog);
+    const parsed = await parseDetailsFromOpenDialog(dialog);
 
     // Kapat
     closeAnyOpenDialog();
 
-    return { imageDataUrl, fields };
+    return parsed; // { imageDataUrl, fields, goodsAndServices, transactions }
   } catch (e) {
-    warn('openRowModalAndParse hata:', e?.message || e);
+    warn('openRowModalAndParse hata:', (e && e.message) || e);
     return null;
   }
 }
 
-// --------- Sonuç Toplama ---------
+// --------- Satır Parsleme (Base) ---------
 function parseOwnerRowBase(tr, idx) {
-  const get = (role) => {
+  const getByRole = (role) => {
     const td = tr.querySelector(`td[role="${role}"]`);
     return td ? (td.textContent || '').trim() : '';
   };
   const orderTxt = (tr.querySelector('td .MuiTypography-alignCenter') || tr.querySelector('td'))?.textContent || `${idx+1}`;
-  const hold = get('holdName');
+  const hold = getByRole('holdName');
   const ownerName = hold ? hold.replace(/\s*\(\d+\)\s*$/, '') : '';
 
-  // Görsel arama - çeşitli selector'lar deneyelim
+  // Görsel arama
   let imageSrc = null;
-  
-  // 1) Satır içi herhangi bir img
   const img1 = tr.querySelector('img');
-  if (img1 && img1.src) {
-    imageSrc = img1.src;
-    log(`🖼️ Satır ${idx + 1} - img bulundu:`, imageSrc);
+  if (img1 && img1.src) imageSrc = img1.src;
+  if (!imageSrc) {
+    const img2 = tr.querySelector('td img');
+    if (img2 && img2.src) imageSrc = img2.src;
   }
-  
-  // 2) td içindeki img
-  const img2 = tr.querySelector('td img');
-  if (!imageSrc && img2 && img2.src) {
-    imageSrc = img2.src;
-    log(`🖼️ Satır ${idx + 1} - td img bulundu:`, imageSrc);
+  if (!imageSrc) {
+    const imgTd = tr.querySelector('td[role="img"] img, td[role="image"] img');
+    if (imgTd && imgTd.src) imageSrc = imgTd.src;
   }
-  
-  // 3) Belirli role'lü td içindeki img
-  const imgTd = tr.querySelector('td[role="img"] img, td[role="image"] img');
-  if (!imageSrc && imgTd && imgTd.src) {
-    imageSrc = imgTd.src;
-    log(`🖼️ Satır ${idx + 1} - role img bulundu:`, imageSrc);
-  }
-  
-  // 4) Background image kontrol et
-  const allTds = tr.querySelectorAll('td');
-  for (const td of allTds) {
-    const bgImg = getComputedStyle(td).backgroundImage;
-    if (!imageSrc && bgImg && bgImg !== 'none') {
-      const match = bgImg.match(/url\(["']?(.*?)["']?\)/);
-      if (match) {
-        imageSrc = match[1];
-        log(`🖼️ Satır ${idx + 1} - background img bulundu:`, imageSrc);
-        break;
+  if (!imageSrc) {
+    const allTds = tr.querySelectorAll('td');
+    for (const td of allTds) {
+      const bgImg = getComputedStyle(td).backgroundImage;
+      if (bgImg && bgImg !== 'none') {
+        const match = bgImg.match(/url\(["']?(.*?)["']?\)/);
+        if (match) { imageSrc = match[1]; break; }
       }
     }
   }
-  
-  if (!imageSrc) {
-    log(`❌ Satır ${idx + 1} - görsel bulunamadı`);
-  }
 
-  
-  // --- Fallback: role attribute'ları yoksa sütun indekslerinden oku ---
+  const base = {
+    order: Number(orderTxt) || (idx+1),
+    applicationNumber: getByRole('applicationNo') || '',
+    brandName: getByRole('markName') || '',
+    ownerName,
+    applicationDate: getByRole('applicationDate') || '',
+    registrationNumber: getByRole('registrationNo') || '',
+    status: getByRole('state') || '',
+    niceClasses: getByRole('niceClasses') || '',
+    imageSrc: imageSrc || null
+  };
+
+  // Fallback: sabit indeks & regex
   try {
     const tds = Array.from(tr.querySelectorAll('td'));
     const textAt = (i) => (tds[i]?.textContent || '').trim();
-    // Tipik kolon dizilimi: [check/img], Görsel, Başvuru No, Marka Adı, Başvuru Tarihi, Tescil No, Durumu, Nice
-    if (!base.applicationNumber) base.applicationNumber = textAt(2);
-    if (!base.brandName)        base.brandName        = textAt(3);
-    if (!base.applicationDate)  base.applicationDate  = textAt(4);
-    if (!base.registrationNumber) base.registrationNumber = textAt(5);
-    if (!base.status)           base.status           = textAt(6);
-    if (!base.niceClasses)      base.niceClasses      = textAt(7);
+
+    if (!base.applicationNumber && tds.length >= 3) base.applicationNumber = textAt(2);
+    if (!base.brandName && tds.length >= 4)        base.brandName        = textAt(3);
+    if (!base.applicationDate && tds.length >= 5)  base.applicationDate  = textAt(4);
+    if (!base.registrationNumber && tds.length>=6) base.registrationNumber = textAt(5);
+    if (!base.status && tds.length >= 7)           base.status           = textAt(6);
+    if (!base.niceClasses && tds.length >= 8)      base.niceClasses      = textAt(7);
+
+    const txts = tds.map(td => (td.textContent || '').replace(/\s+/g,' ').trim());
+    if (!base.applicationNumber) {
+      const appPattern = /(^|\s)\d{4}\/\d{4,7}(\s|$)/;
+      const appIdx = txts.findIndex(t => appPattern.test(t));
+      if (appIdx >= 0) {
+        base.applicationNumber = txts[appIdx];
+        if (!base.brandName && txts[appIdx+1]) base.brandName = txts[appIdx+1];
+      }
+    }
+    if (!base.applicationDate) {
+      const datePattern = /\b\d{2}\.\d{2}\.\d{4}\b/;
+      const dateCell = txts.find(t => datePattern.test(t));
+      if (dateCell) base.applicationDate = (dateCell.match(datePattern) || [null])[0] || '';
+    }
+    if (!base.niceClasses) {
+      const nc = txts.find(t => /(^|\s)([1-9]|[1-3]\d|4[0-5])(\s*,\s*([1-9]|[1-3]\d|4[0-5]))*/.test(t));
+      if (nc) base.niceClasses = nc;
+    }
+    if (!base.status) {
+      const sc = txts.find(t => /BAŞVURU|TESCİL|GEÇERSİZ|RED|RET|YAYIN|BÜLTEN/i.test(t));
+      if (sc) base.status = sc;
+    }
+    if (!base.registrationNumber) {
+      const rc = txts.find(t => /\b\d{4,}\b/.test(t) && t !== base.applicationNumber);
+      if (rc) base.registrationNumber = rc;
+    }
   } catch (e) {
-    log('Fallback kolon parse hatası:', e?.message || e);
+    log('Fallback kolon parse hatası:', (e && e.message) || e);
   }
-return {
-    order: Number(orderTxt) || (idx+1),
-    applicationNumber: get('applicationNo') || '',
-    brandName: get('markName') || '',
-    ownerName,
-    applicationDate: get('applicationDate') || '',
-    registrationNumber: get('registrationNo') || '',
-    status: get('state') || '',
-    niceClasses: get('niceClasses') || '',
-    imageSrc: imageSrc // Görsel URL'i
-  };
+
+  return base;
 }
 
+// --------- Sonuç Toplama (Detay Dahil) ---------
 async function collectOwnerResultsWithDetails() {
-  const rows = Array.from(document.querySelectorAll('tbody.MuiTableBody-root tr'));
+  const rows = Array.from(document.querySelectorAll('tbody.MuiTableBody-root tr, tbody tr'));
   const items = [];
   for (const [idx, tr] of rows.entries()) {
     const base = parseOwnerRowBase(tr, idx);
-    
-// BOŞ SATIR KONTROLÜ - Sadece başvuru numarası yeterli
-if (!base.applicationNumber) {
-  log(`Başvuru numarası olmayan satır atlandı: satır ${idx + 1}`);
-  continue;
-}
-    
-    // Görsel debug
-    log(`🔍 Satır ${idx + 1} final:`, {
-      appNo: base.applicationNumber,
-      brandName: base.brandName,
-      imageSrc: base.imageSrc,
-      hasImage: !!base.imageSrc
-    });
-    
-    // Görsel zaten parseOwnerRowBase'de alındı
+
+    if (!base.applicationNumber) {
+      log(`Başvuru numarası olmayan satır atlandı: satır ${idx + 1}`);
+      continue;
+    }
+
     if (base.imageSrc) {
       base.brandImageDataUrl = base.imageSrc;
       base.brandImageUrl = base.imageSrc;
-      log(`✅ Görsel set edildi: ${base.imageSrc}`);
-    } else {
-      log(`❌ Görsel yok - satır ${idx + 1}`);
     }
-    items.push(base); // Satırı items'a ekle
+
+    // Detay modalını aç ve verileri al
+    const detail = await openRowModalAndParse(tr, { timeout: 12000 });
+    if (detail) {
+      base.details = detail.fields || {};
+      if (Array.isArray(detail.goodsAndServices)) {
+        base.goodsAndServicesByClass = detail.goodsAndServices;
+      }
+      if (Array.isArray(detail.transactions)) {
+        base.transactions = detail.transactions;
+      }
+      if (!base.imageSrc && detail.imageDataUrl) {
+        base.brandImageDataUrl = detail.imageDataUrl;
+        base.brandImageUrl = detail.imageDataUrl;
+      }
+    }
+
+    items.push(base);
   }
-    return items; // ✅ RETURN STATEMENT EKLENDİ
+  return items;
 }
 
+// --------- Yükle & Gönder ---------
 async function waitAndSendOwnerResults() {
-  // 1) Önce meta: "... kayıt bulundu" gelene kadar bekle ve oku
-  let expected = await waitForTotalMetaAndParse(60000); // 60s'e kadar bekle
-  if (typeof expected !== 'number' || !(expected > 0)) {
-    // Meta bulunamazsa yine de tabloya göre ilerleyelim (fallback)
-    try { await waitFor('tbody.MuiTableBody-root tr', { timeout: 20000 }); } catch {}
-    expected = getExpectedTotalCount(); // son bir kez daha dene
-  }
-  log('Beklenen toplam kayıt:', expected);
+  let expected = await waitForTotalMetaAndParse(60000); // meta varsa al
+  try { await waitFor('tbody tr', { timeout: 30000 }); } catch {}
 
-  // 2) Tablo en az bir satır gözüksün
-  try { await waitFor('tbody.MuiTableBody-root tr', { timeout: 30000 }); } catch {}
-
-  // 3) Sonsuz Liste gerekiyorsa aç
   try {
-    const initialCount = document.querySelectorAll('tbody.MuiTableBody-root tr').length;
+    const initialCount = document.querySelectorAll('tbody tr').length;
     const needInfinite = (typeof expected === 'number' ? expected >= 20 : initialCount >= 20);
     if (needInfinite) {
       const ok = await ensureInfiniteOn();
       if (ok && typeof expected === 'number' && expected > 0) {
-        // 4) STRICT: beklenen sayıya ulaşana kadar yükleme→bekle→scroll
-        const loaded = await infiniteScrollAllRowsSTRICT(expected, { overallTimeoutMs: 360000 });
-        if (typeof loaded === 'number' && loaded < expected) {
-          log('Uyarı: beklenen sayıya ulaşılamadı. loaded:', loaded, 'expected:', expected);
-        }
+        await infiniteScrollAllRowsSTRICT(expected, { overallTimeoutMs: 360000 });
       }
     }
-  } catch (e) { /* yoksay */ }
-
-  // 4) Beklenen sayıya ulaşmadan ERKEN GÖNDERMEYİ ÖNLE! (meta biliniyorsa)
-  const finalCount = document.querySelectorAll('tbody.MuiTableBody-root tr').length;
-  if (typeof expected === 'number' && expected > 0 && finalCount < expected) {
-    log('Beklenen sayıya ulaşılmadı, veri gönderilmeyecek. final:', finalCount, 'expected:', expected);
-    sendToOpener('HATA_KISI', { message: 'Sonuçların tam listelemesi tamamlanmadı.', loaded: finalCount, expected });
-    return;
+  } catch (e) {
+    log('Infinite scroll hatası:', (e && e.message) || e);
   }
 
-  // 5) Satırları MODAL ile detaylı parse et (görsel dahil)
   const items = await collectOwnerResultsWithDetails();
-  sendToOpener('VERI_GELDI_KISI', items);
+  sendToOpener('VERI_GELDI_KISI', Array.isArray(items) ? items : []);
 }
 
-// --------- Ana Akış ---------
 async function runOwnerFlow() {
   log('Sahip No akışı başladı:', targetKisiNo);
   if (!targetKisiNo) { warn('targetKisiNo boş; çıkış.'); return; }
