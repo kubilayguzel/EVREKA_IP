@@ -520,11 +520,24 @@ async function openRowModalAndParse(tr, { timeout = 10000 } = {}) {
 
 // --------- Sonuç Toplama ---------
 
+// SİL: parseOwnerRowBase fonksiyonunu
+
+// DEĞIŞTIR/EKLE:
 function parseOwnerRowBase(tr, idx) {
   const orderTxt = (tr.querySelector('td .MuiTypography-alignCenter') || tr.querySelector('td'))?.textContent || `${idx+1}`;
   
   // Tüm hücreleri al
   const tds = Array.from(tr.querySelectorAll('td'));
+  
+  // DEBUG: İlk 3 satır için detaylı log
+  if (idx < 3) {
+    console.log(`🔍 DETAY - Satır ${idx + 1}:`);
+    console.log(`   Toplam hücre: ${tds.length}`);
+    tds.forEach((td, i) => {
+      const text = td.textContent.trim();
+      console.log(`   Hücre ${i}: "${text}" (${text.length} karakter)`);
+    });
+  }
   
   let applicationNumber = '';
   let brandName = '';
@@ -539,83 +552,84 @@ function parseOwnerRowBase(tr, idx) {
   const img1 = tr.querySelector('img');
   if (img1?.src) imageSrc = img1.src;
 
-  // SADECE owner name'i role'dan al - başka hiçbir yere basma
+  // Owner name'i role'dan al
   const ownerElement = tr.querySelector('td[role="holdName"]');
   if (ownerElement) {
     ownerName = ownerElement.textContent.trim().replace(/\s*\(\d+\)\s*$/, '');
   }
 
-  // Hücre içeriklerini TAM OLARAK parse et - boş bırak boşsa
-  if (tds.length >= 7) {
-    const cell2 = (tds[2]?.textContent || '').trim();
-    const cell3 = (tds[3]?.textContent || '').trim();
-    const cell4 = (tds[4]?.textContent || '').trim();
-    const cell5 = (tds[5]?.textContent || '').trim();
-    const cell6 = (tds[6]?.textContent || '').trim();
-    const cell7 = tds[7] ? (tds[7].textContent || '').trim() : '';
-
-    // Başvuru numarası: 2022/125224 formatı
-    if (/^\d{4}\/\d+$/.test(cell2)) {
-      applicationNumber = cell2;
-    }
-
-    // Marka adı: başvuru numarasından sonraki hücre, owner name değilse
-    if (cell3 && cell3 !== ownerName && !cell3.includes('LİMİTED') && !cell3.includes('ŞİRKETİ')) {
-      brandName = cell3;
-    }
-
-    // Başvuru tarihi: DD.MM.YYYY formatı
-    if (/^\d{2}\.\d{2}\.\d{4}$/.test(cell4)) {
-      applicationDate = cell4;
-    }
-
-    // Tescil numarası: YYYY NNNNN formatı
-    if (/^\d{4}\s+\d+$/.test(cell5)) {
-      registrationNumber = cell5;
-    }
-
-    // Durum: Sadece geçerli durum metinleri kabul et
-    if (cell6 && 
-        !cell6.includes('LİMİTED') && 
-        !cell6.includes('ŞİRKETİ') && 
-        !cell6.includes('TİCARET') &&
-        cell6 !== ownerName &&
-        cell6.length < 100) { // Çok uzun metinler durum değil
+  // TÜM HÜCRELERİ TARA - başvuru numarası formatını ara
+  for (let i = 0; i < tds.length; i++) {
+    const cellText = (tds[i]?.textContent || '').trim();
+    
+    // Başvuru numarası: 2022/125224 gibi formatlar
+    if (!applicationNumber && /^\d{4}\/\d+$/.test(cellText)) {
+      applicationNumber = cellText;
+      if (idx < 3) console.log(`   ✅ Başvuru no ${i}. hücrede bulundu: "${applicationNumber}"`);
       
-      // Bilinen durum metinleri
-      const validStatuses = [
-        'MARKA BAŞVURUSU/TESCİLİ GEÇERSİZ',
-        'TESCİL EDİLDİ',
-        'BAŞVURU KABUL EDİLDİ',
-        'BAŞVURU REDDEDİLDİ',
-        'YAYIN KARARI'
-      ];
-      
-      const isValidStatus = validStatuses.some(s => cell6.includes(s)) || 
-                           cell6.includes('BAŞVURU') || 
-                           cell6.includes('TESCİL') ||
-                           cell6.includes('GEÇERSİZ');
-      
-      if (isValidStatus) {
-        status = cell6;
+      // Başvuru numarası bulunduysa, diğer alanları sırayla dene
+      if (tds[i + 1] && !brandName) {
+        const nextCell = tds[i + 1].textContent.trim();
+        if (nextCell && !nextCell.includes('LİMİTED') && !nextCell.includes('ŞİRKETİ')) {
+          brandName = nextCell;
+        }
       }
-      // Değilse boş bırak - owner name basma!
+      
+      if (tds[i + 2] && !applicationDate) {
+        const dateCell = tds[i + 2].textContent.trim();
+        if (/^\d{2}\.\d{2}\.\d{4}$/.test(dateCell)) {
+          applicationDate = dateCell;
+        }
+      }
+      
+      continue;
     }
+    
+    // Tarih formatı: DD.MM.YYYY
+    if (!applicationDate && /^\d{2}\.\d{2}\.\d{4}$/.test(cellText)) {
+      applicationDate = cellText;
+      continue;
+    }
+    
+    // Tescil numarası: 2022 125224 formatı
+    if (!registrationNumber && /^\d{4}\s+\d+$/.test(cellText)) {
+      registrationNumber = cellText;
+      continue;
+    }
+    
+    // Nice sınıfları: sayısal değerler içeren
+    if (!niceClasses && /\d+/.test(cellText) && cellText.includes('/')) {
+      niceClasses = cellText;
+      continue;
+    }
+  }
+  
+  // Eğer hala başvuru numarası bulunamadıysa, daha esnek pattern dene
+  if (!applicationNumber) {
+    for (let i = 0; i < tds.length; i++) {
+      const cellText = (tds[i]?.textContent || '').trim();
+      
+      // Daha esnek pattern: herhangi bir yıl/sayı kombinasyonu
+      if (/\d{4}\/\d/.test(cellText) || /\d{4}-\d/.test(cellText)) {
+        applicationNumber = cellText;
+        if (idx < 3) console.log(`   ✅ Esnek pattern ile başvuru no bulundu: "${applicationNumber}"`);
+        break;
+      }
+    }
+  }
 
-    // Nice sınıfları: sayı/sayı formatı
-    if (cell7 && /\d+/.test(cell7)) {
-      niceClasses = cell7;
-    }
+  if (idx < 3) {
+    console.log(`   🔍 Parse sonucu - Başvuru No: "${applicationNumber}", Marka: "${brandName}", Tarih: "${applicationDate}"`);
   }
 
   return {
     order: Number(orderTxt) || (idx+1),
     applicationNumber,
     brandName,
-    ownerName, // Sadece role'dan gelir
+    ownerName,
     applicationDate,
     registrationNumber,
-    status, // Boşsa boş kalır
+    status,
     niceClasses,
     imageSrc
   };
