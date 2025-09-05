@@ -657,20 +657,20 @@ function renderOwnerResults(items) {
   const table = document.createElement('table');
   table.className = 'table table-hover table-striped tp-results-table';
   table.innerHTML = `
-    <thead>
-      <tr>
-        <th><input type="checkbox" id="selectAllRecords" checked></th>
-        <th>Görsel</th>
-        <th>Başvuru Numarası</th>
-        <th>Marka Adı</th>
-        <th>Başvuru Tarihi</th>
-        <th>Tescil No</th>
-        <th>Durumu</th>
-        <th>Nice Sınıfları</th>
-      </tr>
-    </thead>
-    <tbody></tbody>
-  `;
+      <thead>
+        <tr>
+          <th><input type="checkbox" id="selectAllRecords" checked></th>
+          <th>Görsel</th>
+          <th>Başvuru Numarası</th>
+          <th>Marka Adı</th>
+          <th>Başvuru Tarihi</th>
+          <th>Tescil No</th>
+          <th>Durumu</th>
+          <th>Nice Sınıfları</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    `;
   
   const tbody = table.querySelector('tbody');
   
