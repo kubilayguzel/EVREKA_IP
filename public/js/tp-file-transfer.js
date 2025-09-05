@@ -366,34 +366,63 @@ async function queryByOwnerNumber(sahipNo) {
     _showBlock(loadingEl);
     _hideBlock(singleResultContainer);
     
+    // ✅ OTOMATİK SAHİP EŞLEŞTİRME
+    autoMatchOwnerByTpeNo(sahipNo);
+    
     // TÜRKPATENT sayfasını aç
     const turkPatentUrl = `https://www.turkpatent.gov.tr/arastirma-yap?form=trademark&auto_query=${encodeURIComponent(sahipNo)}&query_type=sahip&source=${encodeURIComponent(window.location.origin)}`;
-    
-    console.log('[DEBUG] TÜRKPATENT URL açılıyor:', turkPatentUrl);
-    
-    // Yeni sekme aç
-    const newWindow = window.open(turkPatentUrl, '_blank'); // opener kalsın (mesaj için gerekli)
-    
-    if (newWindow) {
-      showToast('TÜRKPATENT sayfası açıldı. Eklenti çalışacak ve sonuçları gönderecek.', 'info');
-      
-      // Timeout
-      setTimeout(() => {
-        _hideBlock(loadingEl);
-      }, 45000);
-      
-    } else {
-      _hideBlock(loadingEl);
-      showToast('Pop-up engellendi. Tarayıcı ayarlarından pop-up\'ları açın.', 'danger');
-    }
 
-  } catch (err) {
-    _hideBlock(loadingEl);
-    console.error('[DEBUG] Sahip numarası sorgulama hatası:', err);
-    showToast('İşlem hatası: ' + (err.message || err), 'danger');
+// OTOMATİK SAHİP EŞLEŞTİRME
+// ===============================
+
+function autoMatchOwnerByTpeNo(searchedTpeNo) {
+  console.log('[DEBUG] Otomatik sahip eşleştirme başladı:', searchedTpeNo);
+  
+  if (!searchedTpeNo || !allPersons?.length) {
+    console.log('[DEBUG] Sahip no yok veya kişi listesi boş');
+    return;
+  }
+  
+  // TPE No ile eşleşen kişi ara
+  const matchedPerson = allPersons.find(person => {
+    const personTpeNo = (person.tpeNo || '').toString().trim();
+    const searchTpeNo = searchedTpeNo.toString().trim();
+    
+    return personTpeNo && searchTpeNo && personTpeNo === searchTpeNo;
+  });
+  
+  if (matchedPerson) {
+    console.log('[DEBUG] ✅ Eşleşen kişi bulundu:', matchedPerson.name, 'TPE No:', matchedPerson.tpeNo);
+    
+    // Zaten listede var mı kontrol et
+    const alreadyAdded = selectedRelatedParties.find(p => p.id === matchedPerson.id);
+    
+    if (!alreadyAdded) {
+      // Listeye ekle
+      selectedRelatedParties.push({
+        id: matchedPerson.id,
+        name: matchedPerson.name,
+        email: matchedPerson.email || '',
+        phone: matchedPerson.phone || '',
+        tpeNo: matchedPerson.tpeNo || ''
+      });
+      
+      // UI'ı güncelle
+      renderSelectedRelatedParties();
+      
+      // Kullanıcıya bildirim
+      showToast(`✅ ${matchedPerson.name} otomatik olarak sahip listesine eklendi`, 'success');
+      
+      console.log('[DEBUG] ✅ Kişi sahip listesine eklendi');
+    } else {
+      console.log('[DEBUG] ⚠️ Kişi zaten listede mevcut');
+      showToast(`${matchedPerson.name} zaten sahip listesinde`, 'info');
+    }
+  } else {
+    console.log('[DEBUG] ❌ Bu TPE No ile eşleşen kişi bulunamadı');
+    showToast(`TPE No ${searchedTpeNo} ile kayıtlı kişi bulunamadı`, 'warning');
   }
 }
-
 // ===============================
 // EKLENTİ MESAJ DİNLEYİCİSİ
 // ===============================
