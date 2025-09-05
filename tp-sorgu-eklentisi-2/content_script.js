@@ -641,59 +641,89 @@ async function collectOwnerResultsWithDetails() {
   const rows = Array.from(document.querySelectorAll('tbody.MuiTableBody-root tr, tbody tr'));
   console.log(`🔍 Toplam ${rows.length} satır bulundu`);
   
-  const items = [];
-  const processedApplicationNumbers = new Set(); // Çift kayıt önleme
+  const processedApplicationNumbers = new Set();
+  const batchSize = 100; // 100'er 100'er işle
   
-  for (const [idx, tr] of rows.entries()) {
-    console.log(`🔍 Satır ${idx + 1}/${rows.length} işleniyor...`);
+  for (let batchStart = 0; batchStart < rows.length; batchStart += batchSize) {
+    const batchEnd = Math.min(batchStart + batchSize, rows.length);
+    const currentBatch = rows.slice(batchStart, batchEnd);
     
-    const base = parseOwnerRowBase(tr, idx);
-
-    // Başvuru numarası yoksa atla
-    if (!base.applicationNumber) {
-      console.log(`⚠️ Başvuru numarası olmayan satır atlandı: satır ${idx + 1}`);
-      continue;
-    }
-
-    // Çift kayıt kontrolü
-    if (processedApplicationNumbers.has(base.applicationNumber)) {
-      console.log(`⚠️ Çift kayıt atlandı: ${base.applicationNumber}`);
-      continue;
-    }
-    processedApplicationNumbers.add(base.applicationNumber);
-
-    if (base.imageSrc) {
-      base.brandImageDataUrl = base.imageSrc;
-      base.brandImageUrl = base.imageSrc;
-    }
-
-    console.log(`🔄 Satır ${idx + 1} için modal açılıyor...`);
+    console.log(`🔄 Batch ${Math.floor(batchStart/batchSize) + 1}: ${batchStart + 1}-${batchEnd} satırları işleniyor...`);
     
-    // Detayları modal üzerinden çek
-    const detail = await openRowModalAndParse(tr, { timeout: 10000 }); // Timeout azaltıldı
+    const batchItems = [];
     
-    if (detail) {
-      base.details = detail.fields || {};
-      if (Array.isArray(detail.goodsAndServices)) {
-        base.goodsAndServicesByClass = detail.goodsAndServices;
-        console.log(`✅ GoodsAndServices eklendi: ${detail.goodsAndServices.length} sınıf`);
+    for (const [localIdx, tr] of currentBatch.entries()) {
+      const globalIdx = batchStart + localIdx;
+      console.log(`🔍 Satır ${globalIdx + 1}/${rows.length} işleniyor...`);
+      
+      const base = parseOwnerRowBase(tr, globalIdx);
+
+      if (!base.applicationNumber) {
+        console.log(`⚠️ Başvuru numarası olmayan satır atlandı: satır ${globalIdx + 1}`);
+        continue;
       }
-      if (Array.isArray(detail.transactions)) {
-        base.transactions = detail.transactions;
-        console.log(`✅ Transactions eklendi: ${detail.transactions.length} işlem`);
+
+      if (processedApplicationNumbers.has(base.applicationNumber)) {
+        console.log(`⚠️ Çift kayıt atlandı: ${base.applicationNumber}`);
+        continue;
       }
-      if (!base.imageSrc && detail.imageDataUrl) {
-        base.brandImageDataUrl = detail.imageDataUrl;
-        base.brandImageUrl = detail.imageDataUrl;
+      processedApplicationNumbers.add(base.applicationNumber);
+
+      if (base.imageSrc) {
+        base.brandImageDataUrl = base.imageSrc;
+        base.brandImageUrl = base.imageSrc;
       }
+
+      console.log(`🔄 Satır ${globalIdx + 1} için modal açılıyor...`);
+      
+      const detail = await openRowModalAndParse(tr, { timeout: 8000 });
+      
+      if (detail) {
+        base.details = detail.fields || {};
+        if (Array.isArray(detail.goodsAndServices)) {
+          base.goodsAndServicesByClass = detail.goodsAndServices;
+        }
+        if (Array.isArray(detail.transactions)) {
+          base.transactions = detail.transactions;
+        }
+        if (!base.imageSrc && detail.imageDataUrl) {
+          base.brandImageDataUrl = detail.imageDataUrl;
+          base.brandImageUrl = detail.imageDataUrl;
+        }
+      }
+
+      batchItems.push(base);
+      console.log(`✅ Satır ${globalIdx + 1} tamamlandı - ${base.applicationNumber}`);
     }
 
-    items.push(base);
-    console.log(`✅ Satır ${idx + 1} tamamlandı - ${base.applicationNumber}`);
+    // Batch tamamlandı - arayüze gönder
+    if (batchItems.length > 0) {
+      console.log(`📤 Batch ${Math.floor(batchStart/batchSize) + 1} gönderiliyor: ${batchItems.length} kayıt`);
+      
+      // Progressive data gönderimi
+      sendToOpener('BATCH_VERI_GELDI_KISI', {
+        batch: batchItems,
+        batchNumber: Math.floor(batchStart/batchSize) + 1,
+        totalBatches: Math.ceil(rows.length / batchSize),
+        processedCount: batchEnd,
+        totalCount: rows.length,
+        isComplete: batchEnd >= rows.length
+      });
+      
+      // Batch'ler arası kısa molası (DOM'un nefes alması için)
+      if (batchEnd < rows.length) {
+        await sleep(1000);
+      }
+    }
   }
 
-  console.log(`🎉 collectOwnerResultsWithDetails tamamlandı: ${items.length} kayıt`);
-  return items;
+  // Final mesaj - tüm process tamamlandı
+  console.log(`🎉 collectOwnerResultsWithDetails tamamlandı: Toplam ${processedApplicationNumbers.size} kayıt işlendi`);
+  
+  sendToOpener('VERI_GELDI_KISI_COMPLETE', {
+    totalProcessed: processedApplicationNumbers.size,
+    totalRows: rows.length
+  });
 }
 
 async function waitAndSendOwnerResults() {
