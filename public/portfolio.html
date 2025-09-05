@@ -612,6 +612,19 @@ tr.group-row[aria-hidden="true"]{ display:none !important; }
             return allCountries.find(c => c.code === code)?.name || code || '-';
         }
 
+        function fmtDate(d) {
+            try {
+                if (!d) return '-';
+                let dt;
+                if (typeof d === 'string') dt = new Date(d);
+                else if (typeof d?.toDate === 'function') dt = d.toDate();
+                else if ('seconds' in (d||{})) dt = new Date(d.seconds*1000);
+                else if (d instanceof Date) dt = d;
+                else return String(d);
+                if (isNaN(dt.getTime())) return String(d);
+                return dt.toLocaleDateString('tr-TR');
+            } catch { return String(d); }
+        }
 
         class PortfolioModule {
         // Normalize status for display (avoid showing origin like WIPO/ARIPO as status)
@@ -1549,6 +1562,46 @@ tr.group-row[aria-hidden="true"]{ display:none !important; }
                         icon.classList.add('expanded');
                     }
                 }
+            }
+
+            // ✅ Eksik metot: setupImageHoverEffect
+            setupImageHoverEffect() {
+                const tableBody = document.getElementById('portfolioTableBody');
+                let hoverElement = null;
+
+                tableBody.addEventListener('mouseover', (e) => {
+                    const thumbnail = e.target.closest('.trademark-image-thumbnail');
+                    if (!thumbnail) return;
+
+                    // Daha önce oluşturulan elementi temizle
+                    if (hoverElement) {
+                        hoverElement.remove();
+                    }
+
+                    // Yeni büyük resmi oluştur
+                    hoverElement = document.createElement('img');
+                    hoverElement.src = thumbnail.src;
+                    hoverElement.alt = thumbnail.alt;
+                    hoverElement.classList.add('trademark-image-hover-full');
+                    document.body.appendChild(hoverElement);
+
+                    // Görünür yap
+                    setTimeout(() => {
+                        if (hoverElement) hoverElement.style.display = 'block';
+                    }, 10);
+                });
+
+                tableBody.addEventListener('mouseout', (e) => {
+                    const thumbnail = e.target.closest('.trademark-image-thumbnail');
+                    if (!thumbnail) return;
+
+                    // Büyük resmi gizle ve kaldır
+                    if (hoverElement) {
+                        hoverElement.style.display = 'none';
+                        hoverElement.remove();
+                        hoverElement = null;
+                    }
+                });
             }
 
         async loadObjectionRows() {
