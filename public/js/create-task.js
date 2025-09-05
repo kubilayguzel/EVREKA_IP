@@ -4,6 +4,8 @@ import { initializeNiceClassification, getSelectedNiceClasses } from './nice-cla
 import { ref, uploadBytes, getStorage, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
 import { getFirestore, collection, getDocs, getDoc, doc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { ORIGIN_TYPES } from '../utils.js';
+
 // === ID-based configuration (added by assistant) ===
 export const TASK_IDS = {
   DEVIR: '5',
@@ -362,6 +364,22 @@ async initIpRecordSearchSelector() {
     if (!results.contains(e.target) && e.target !== input) results.style.display = 'none';
   });
 }
+
+populateOriginDropdown(dropdownId, selectedValue = 'TÜRKPATENT') {
+        const dropdown = document.getElementById(dropdownId);
+        if (!dropdown) return;
+        dropdown.innerHTML = '';
+        ORIGIN_TYPES.forEach(origin => {
+            const option = document.createElement('option');
+            option.value = origin.value;
+            option.textContent = origin.text;
+            if (origin.value === selectedValue) {
+                option.selected = true;
+            }
+            dropdown.appendChild(option);
+        });
+    }
+
 async updateAssignedToDropdown(taskTypeId) {
         const assignedToSelect = document.getElementById('assignedTo');
         if (!assignedToSelect) {
@@ -665,6 +683,7 @@ setupBaseFormListeners() {
         } else {
             specificTypeSelect.disabled = true;
         }
+        this.populateOriginDropdown('originSelect');
     }
 
       renderBaseForm(container, taskTypeName, taskTypeId) {
