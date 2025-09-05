@@ -491,8 +491,8 @@ tr.group-row[aria-hidden="true"]{ display:none !important; }
     <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.2/dist/js/bootstrap.bundle.min.js"></script>
 
-    <script type="module">
-        import Pagination from './js/pagination.js'; 
+<script type="module">
+        import Pagination from './js/pagination.js';
         import { ipRecordsService, personService, transactionTypeService, auth, monitoringService, taskService } from './firebase-config.js';
         import { showNotification, formatFileSize } from './utils.js';
         import { loadSharedLayout } from './js/layout-loader.js';
@@ -524,9 +524,9 @@ tr.group-row[aria-hidden="true"]{ display:none !important; }
         return REQUEST_RESULT_STATUS[key] ?? `Bilinmiyor (ID: ${key})`;
         }
 
-        let allPersons = []; 
+        let allPersons = [];
         let pagination;
-        let portfolioModule; 
+        let portfolioModule;
         let allCountries = [];
         import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
@@ -567,7 +567,48 @@ tr.group-row[aria-hidden="true"]{ display:none !important; }
             else window.location.replace('index.html');
         });
         });
-                
+
+        // ✅ Eksik fonksiyonlar: getCountryName, loadTransactionTypes, loadPersons, getCountries
+        async function loadTransactionTypes() {
+            const result = await transactionTypeService.getTransactionTypes();
+            if (result.success) {
+                result.data.forEach(type => {
+                    transactionTypesMap.set(String(type.id), type);
+                    if (type.code) transactionTypesMap.set(String(type.code), type);
+                });
+            }
+        }
+
+        async function loadPersons() {
+            const result = await personService.getPersons();
+            if (result.success) allPersons = result.data;
+        }
+
+        async function getCountries() {
+            try {
+                const db = getFirestore();
+                const docRef = doc(db, 'common', 'countries');
+                const docSnap = await getDoc(docRef);
+
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    allCountries = data.list || [];
+                    return allCountries;
+                } else {
+                    console.log("common/countries belgesi bulunamadı!");
+                    return [];
+                }
+            } catch (error) {
+                console.error("Ülke listesi çekilirken hata oluştu:", error);
+                return [];
+            }
+        }
+
+        function getCountryName(code) {
+            return allCountries.find(c => c.code === code)?.name || code || '-';
+        }
+
+
         class PortfolioModule {
         // Normalize status for display (avoid showing origin like WIPO/ARIPO as status)
         getDisplayStatus(r) {
@@ -582,10 +623,10 @@ tr.group-row[aria-hidden="true"]{ display:none !important; }
         }
 
             constructor() {
-                this.allRecords = []; 
+                this.allRecords = [];
                 this.filteredAndSortedRecords = [];
-                this.activeTypeFilter = 'all'; 
-                this.columnFilters = {}; 
+                this.activeTypeFilter = 'all';
+                this.columnFilters = {};
                 this.sortBy = { column: 'applicationDate', direction: 'desc' };
                 this.selectedRecords = new Set();
                 this.objectionRows = [];
@@ -622,9 +663,9 @@ tr.group-row[aria-hidden="true"]{ display:none !important; }
                 try {
                     const recordsResult = await ipRecordsService.getRecords();
                     this.allRecords = this.pickArray(recordsResult);
-                    
-                    this.initialRenderTableStructure(); 
-                    this.applyFiltersAndSort(); 
+
+                    this.initialRenderTableStructure();
+                    this.applyFiltersAndSort();
                 } catch (error) {
                     console.error('❌ Veri yükleme hatası:', error);
                     showNotification('Veriler yüklenirken bir hata oluştu: ' + error.message, 'error');
@@ -633,8 +674,8 @@ tr.group-row[aria-hidden="true"]{ display:none !important; }
                     document.getElementById('loadingIndicator').style.display = 'none';
                 }
             }
-            
-renderCurrentPage() {
+
+        renderCurrentPage() {
             const tableBody = document.getElementById('portfolioTableBody');
             if (!tableBody || !pagination) return;
             tableBody.innerHTML = '';
@@ -868,62 +909,22 @@ renderCurrentPage() {
             wireAccordion();
         }
 
-        // ... PortfolioModule sınıfının içinde ...
-
-        setupImageHoverEffect() {
-            const tableBody = document.getElementById('portfolioTableBody');
-            let hoverElement = null;
-
-            tableBody.addEventListener('mouseover', (e) => {
-                const thumbnail = e.target.closest('.trademark-image-thumbnail');
-                if (!thumbnail) return;
-
-                // Daha önce oluşturulan elementi temizle
-                if (hoverElement) {
-                    hoverElement.remove();
-                }
-
-                // Yeni büyük resmi oluştur
-                hoverElement = document.createElement('img');
-                hoverElement.src = thumbnail.src;
-                hoverElement.alt = thumbnail.alt;
-                hoverElement.classList.add('trademark-image-hover-full');
-                document.body.appendChild(hoverElement);
-
-                // Görünür yap
-                setTimeout(() => {
-                    if (hoverElement) hoverElement.style.display = 'block';
-                }, 10);
-            });
-
-            tableBody.addEventListener('mouseout', (e) => {
-                const thumbnail = e.target.closest('.trademark-image-thumbnail');
-                if (!thumbnail) return;
-                
-                // Büyük resmi gizle ve kaldır
-                if (hoverElement) {
-                    hoverElement.style.display = 'none';
-                    hoverElement.remove();
-                    hoverElement = null;
-                }
-            });
-        }
             applyFiltersAndSort() {
             const globalSearchTerm = (document.getElementById('searchBar').value || '').toLowerCase();
-            
+
             // ✅ İtirazlar sekmesi için özel işlem
             if (this.activeTypeFilter === 'objections') {
-                // İtirazlar için objectionRows kullan, allRecords değil
+                // İtirazlar: objectionRows'u kullan ve filtreleri uygula
                 let filtered = (this.objectionRows || []).filter(row => {
                     if (globalSearchTerm) {
                         const searchableText = `
-                            ${row.transactionTypeName || ''} 
-                            ${row.applicationNumber || ''} 
-                            ${row.applicantName || ''} 
+                            ${row.transactionTypeName || ''}
+                            ${row.applicationNumber || ''}
+                            ${row.applicantName || ''}
                             ${row.opponent || ''}
                             ${row.statusText || ''}
                         `.toLowerCase();
-                        
+
                         if (!searchableText.includes(globalSearchTerm)) return false;
                     }
 
@@ -931,7 +932,7 @@ renderCurrentPage() {
                     return Object.keys(this.columnFilters).every(key => {
                         const filterValue = this.columnFilters[key];
                         if (!filterValue) return true;
-                        
+
                         let recordValue = String(row[key] || '');
                         return recordValue.toLowerCase().includes(filterValue);
                     });
@@ -943,28 +944,28 @@ renderCurrentPage() {
                     filtered.sort((a, b) => {
                         let valA = a[column] || '';
                         let valB = b[column] || '';
-                        
+
                         if (column.includes('Date')) {
                             valA = new Date(valA || 0);
                             valB = new Date(valB || 0);
                         }
-                        
+
                         if (valA < valB) return direction === 'asc' ? -1 : 1;
                         if (valA > valB) return direction === 'asc' ? 1 : -1;
                         return 0;
                     });
                 }
-                
+
                 // ✅ İtirazlar için filteredAndSortedRecords yerine pagination'a direkt veriyi ver
                 if (pagination) pagination.update(filtered.length);
-                
+
                 document.getElementById('portfolioTableBody').style.display = filtered.length > 0 ? 'table-row-group' : 'none';
                 document.getElementById('noRecordsMessage').style.display = filtered.length === 0 ? 'block' : 'none';
 
                 this.renderCurrentPage();
                 return;
             }
-            
+
             // ✅ Diğer sekmeler için mevcut kod (değişiklik yok)
             let filtered = this.allRecords.filter(record => {
                 let tabMatch = false;
@@ -977,26 +978,26 @@ renderCurrentPage() {
                 } else {
                     tabMatch = record.type === this.activeTypeFilter;
                 }
-                
+
                 if (!tabMatch) return false;
 
                 if (globalSearchTerm) {
                     const searchableText = `
-                        ${record.title || ''} 
-                        ${record.brandText || ''} 
-                        ${record.applicationNumber || ''} 
-                        ${record.status || ''} 
+                        ${record.title || ''}
+                        ${record.brandText || ''}
+                        ${record.applicationNumber || ''}
+                        ${record.status || ''}
                         ${record.type || ''}
                         ${record.applicants?.map(a => a.name).join(' ') || ''}
                     `.toLowerCase();
-                    
+
                     if (!searchableText.includes(globalSearchTerm)) return false;
                 }
 
                 return Object.keys(this.columnFilters).every(key => {
                     const filterValue = this.columnFilters[key];
                     if (!filterValue) return true;
-                    
+
                     let recordValue = '';
                     if (key === 'owners' || key === 'applicants') {
                         recordValue = record.applicants?.map(a => a.name).join(' ') || '';
@@ -1007,7 +1008,7 @@ renderCurrentPage() {
                     } else {
                         recordValue = String(record[key] || '');
                     }
-                    
+
                     return recordValue.toLowerCase().includes(filterValue);
                 });
             });
@@ -1016,7 +1017,7 @@ renderCurrentPage() {
                 const { column, direction } = this.sortBy;
                 filtered.sort((a, b) => {
                     let valA, valB;
-                    
+
                     if (column === 'title') {
                         valA = a.title || a.brandText || '';
                         valB = b.title || b.brandText || '';
@@ -1030,27 +1031,27 @@ renderCurrentPage() {
                         valA = a[column] || '';
                         valB = b[column] || '';
                     }
-                    
+
                     if (column.includes('Date')) {
                         valA = new Date(valA || 0);
                         valB = new Date(valB || 0);
                     }
-                    
+
                     if (valA < valB) return direction === 'asc' ? -1 : 1;
                     if (valA > valB) return direction === 'asc' ? 1 : -1;
                     return 0;
                 });
             }
-            
+
             this.filteredAndSortedRecords = filtered;
             if (pagination) pagination.update(this.filteredAndSortedRecords.length);
-            
+
             document.getElementById('portfolioTableBody').style.display = this.filteredAndSortedRecords.length > 0 ? 'table-row-group' : 'none';
             document.getElementById('noRecordsMessage').style.display = this.filteredAndSortedRecords.length === 0 ? 'block' : 'none';
 
             this.renderCurrentPage();
             }
-            
+
             setupEventListeners() {
                 document.querySelectorAll('.tab-menu .tab-button').forEach(button => {
                     button.addEventListener('click', (e) => {
@@ -1119,7 +1120,7 @@ renderCurrentPage() {
                 document.getElementById('addToMonitoringBtn').addEventListener('click', () => this.addSelectedToMonitoring());
                 document.getElementById('closeRecordDetailModal').addEventListener('click', () => this.closeModal('recordDetailModal'));
 
-                document.getElementById('portfolioTableBody').addEventListener('click', (e) => { 
+                document.getElementById('portfolioTableBody').addEventListener('click', (e) => {
                     const button = e.target.closest('.action-btn');
                     if (!button) return;
                     e.preventDefault();
@@ -1146,9 +1147,9 @@ renderCurrentPage() {
                         header.classList.add(this.sortBy.direction);
                     }
                 });
-                this.applyFiltersAndSort(); 
+                this.applyFiltersAndSort();
             }
-            
+
             toggleRecordSelection(recordId, isChecked) {
                 if (isChecked) this.selectedRecords.add(recordId);
                 else this.selectedRecords.delete(recordId);
@@ -1185,7 +1186,7 @@ renderCurrentPage() {
                 btn.className = 'btn-status-toggle';
             }
             }
-        
+
             updateAddToMonitoringButtonState() {
                 const btn = document.getElementById('addToMonitoringBtn');
                 btn.disabled = this.selectedRecords.size === 0;
@@ -1228,7 +1229,7 @@ renderCurrentPage() {
                 showNotification('Kayıtlar güncellenirken bir hata oluştu.', 'error');
             }
             }
-            
+
             async addSelectedToMonitoring() {
                 const selectedIds = Array.from(this.selectedRecords);
                 if (selectedIds.length === 0) return;
@@ -1238,14 +1239,14 @@ renderCurrentPage() {
                     const record = this.allRecords.find(r => r.id === id);
                     if (!record) { failed++; continue; }
                     if (record.type !== 'trademark') { skipped++; continue; }
-                    
+
                     // `brandTextSearch` ve `niceClassSearch` alanlarını doldur
                     const monitoringData = {
                         ...record,
                         brandTextSearch: [record.title || record.brandText || ''].filter(Boolean),
                         niceClassSearch: (record.goodsAndServicesByClass || []).map(item => Number(item.classNo)).filter(n => !isNaN(n))
                     };
-                    
+
                     const res = await monitoringService.addMonitoringItem(monitoringData);
                     if (res.success) successful++;
                     else failed++;
@@ -1253,7 +1254,7 @@ renderCurrentPage() {
                 if (successful > 0) showNotification(`${successful} kayıt başarıyla izlemeye eklendi.`, 'success');
                 if (failed > 0) showNotification(`${failed} kayıt izlemeye eklenirken hata oluştu.`, 'error');
                 if (skipped > 0) showNotification(`${skipped} marka olmayan kayıt atlandı.`, 'info');
-                
+
                 this.selectedRecords.clear();
                 this.updateAddToMonitoringButtonState();
                 this.renderCurrentPage();
@@ -1276,16 +1277,16 @@ renderCurrentPage() {
                     try {
                         const recordResult = await ipRecordsService.getRecordById(recordId);
                         if (!recordResult.success || !recordResult.data) throw new Error('Kayıt bulunamadı.');
-                        
+
                         const record = recordResult.data;
 
                     document.getElementById('modalRecordTitle').textContent = `Kayıt Detayı: ${record.title || record.brandText || 'N/A'}`;
-                    
+
                     const getOwnerNames = (applicants) => {
                         if (!applicants || applicants.length === 0) return 'Belirtilmemiş';
                         return applicants.map(a => a.name || 'Bilinmeyen').join(', ');
                     };
-                    
+
                     let imageHtml = '';
                     const imageSrc = (record.type === 'trademark') ? (record.brandImageUrl || record.details?.brandInfo?.brandImage) : null;
                     if (imageSrc) {
@@ -1308,18 +1309,18 @@ renderCurrentPage() {
                     }
 
                     let transactionsHtml = '<div class="accordion-transaction-history">';
-                                
+
                                 try {
                                     // 1. Transaction türlerini yükle
                                     const transactionTypesResult = await transactionTypeService.getTransactionTypes();
-                                    const allTransactionTypes = Array.isArray(transactionTypesResult?.data) 
-                                                                     ? transactionTypesResult.data 
+                                    const allTransactionTypes = Array.isArray(transactionTypesResult?.data)
+                                                                     ? transactionTypesResult.data
                                                                      : [];
 
-                                    // 2. Transaction geçmişini al 
+                                    // 2. Transaction geçmişini al
                                     const transResult = await ipRecordsService.getTransactionsForRecord(recordId);
-                                    const allTransactions = transResult.success && Array.isArray(transResult.transactions) 
-                                                                     ? transResult.transactions 
+                                    const allTransactions = transResult.success && Array.isArray(transResult.transactions)
+                                                                     ? transResult.transactions
                                                                      : [];
 
                                     if (allTransactions.length === 0) {
@@ -1328,15 +1329,15 @@ renderCurrentPage() {
                                         // Parent-Child yapısını organize et
                                         const parentTransactions = [];
                                         const childrenMap = {};
-                                        
+
                                         // Önce parent transaction'ları topla
                                         allTransactions.forEach(tx => {
                                             if (tx.transactionHierarchy === 'parent' || !tx.parentId) {
                                                 parentTransactions.push(tx);
-                                                childrenMap[tx.id] = [];
+                                                childrenMap[tx.id] = []; // Her parent için boş child array'i hazırla
                                             }
                                         });
-                                        
+
                                         // Sonra child transaction'ları parent'larına ata
                                         allTransactions.forEach(tx => {
                                             if (tx.transactionHierarchy === 'child' && tx.parentId) {
@@ -1345,29 +1346,29 @@ renderCurrentPage() {
                                                 }
                                             }
                                         });
-                                        
+
                                         // Her parent'ın child'larını tarihe göre sırala (en eski en üstte)
                                         Object.keys(childrenMap).forEach(parentId => {
                                             childrenMap[parentId].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
                                         });
-                                        
+
                                         // Parent transaction'ları tarihe göre sırala (en eski en üstte)
                                         parentTransactions.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-                                        
+
                                         // Accordion yapısında render et
                                         parentTransactions.forEach((parent, index) => {
                                             const parentType = allTransactionTypes.find(t => t.id === parent.type || t.id === String(parent.type));
                                             const parentName = parentType ? (parentType.alias || parentType.name) : `Bilinmeyen İşlem (ID: ${parent.type})`;
-                                            
+
                                             const parentDate = new Date(parent.timestamp).toLocaleDateString('tr-TR');
                                             const parentTime = new Date(parent.timestamp).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
-                                            
+
                                             const children = childrenMap[parent.id] || [];
                                             const hasChildren = children.length > 0;
-                                            
+
                                             transactionsHtml += `
                                                 <div class="accordion-transaction-item">
-                                                    <div class="accordion-transaction-header ${hasChildren ? 'has-children' : ''}" 
+                                                    <div class="accordion-transaction-header ${hasChildren ? 'has-children' : ''}"
                                                         data-parent-id="${parent.id}" style="cursor: pointer;">
                                                         <div class="transaction-main-info">
                                                             <div class="transaction-details">
@@ -1381,16 +1382,16 @@ renderCurrentPage() {
                                                             ${hasChildren ? `<span class="child-count">${children.length} alt işlem</span>` : ''}
                                                         </div>
                                                     </div>
-                                                    
+
                                                     ${hasChildren ? `
                                                         <div class="accordion-transaction-children" id="children-${parent.id}" style="display: none;">
                                                             ${children.map(child => {
                                                                 const childType = allTransactionTypes.find(t => t.id === child.type || t.id === String(child.type));
                                                                 const childName = childType ? (childType.alias || childType.name) : `Bilinmeyen İşlem (ID: ${child.type})`;
-                                                                
+
                                                                 const childDate = new Date(child.timestamp).toLocaleDateString('tr-TR');
                                                                 const childTime = new Date(child.timestamp).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
-                                                                
+
                                                                 return `
                                                                     <div class="child-transaction-item">
                                                                         <div class="child-transaction-content">
@@ -1409,7 +1410,7 @@ renderCurrentPage() {
                                     console.error('Transaction geçmişi yüklenirken hata:', txError);
                                     transactionsHtml += '<p class="error-message">İşlem geçmişi yüklenirken hata oluştu.</p>';
                                 }
-                                
+
                                 transactionsHtml += '</div>';
 
                                 // Modal içeriğini oluştur (önceki gibi, sadece transaction kısmı değişti)
@@ -1440,14 +1441,14 @@ renderCurrentPage() {
                                 headers.forEach(header => {
                                     header.addEventListener('click', function() {
                                         const parentId = this.getAttribute('data-parent-id');
-                                        
+
                                         // Toggle accordion
                                         const childrenContainer = document.getElementById(`children-${parentId}`);
                                         const icon = this.querySelector('.accordion-icon');
-                                        
+
                                         if (childrenContainer && icon) {
                                             const isVisible = childrenContainer.style.display !== 'none';
-                                            
+
                                             if (isVisible) {
                                                 // Kapat
                                                 childrenContainer.style.display = 'none';
@@ -1479,7 +1480,7 @@ renderCurrentPage() {
             async organizeTransactionHierarchy(transactions) {
                 const parentTransactions = [];
                 const childrenMap = {};
-                
+
                 // Önce parent transaction'ları topla
                 transactions.forEach(tx => {
                     if (tx.transactionHierarchy === 'parent' || !tx.parentId) {
@@ -1487,7 +1488,7 @@ renderCurrentPage() {
                         childrenMap[tx.id] = []; // Her parent için boş child array'i hazırla
                     }
                 });
-                
+
                 // Sonra child transaction'ları parent'larına ata
                 transactions.forEach(tx => {
                     if (tx.transactionHierarchy === 'child' && tx.parentId) {
@@ -1496,12 +1497,12 @@ renderCurrentPage() {
                         }
                     }
                 });
-                
+
                 // Her parent'ın child'larını tarihe göre sırala (en eski en üstte)
                 Object.keys(childrenMap).forEach(parentId => {
                     childrenMap[parentId].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
                 });
-                
+
                 return { parentTransactions, childrenMap };
             }
 
@@ -1510,10 +1511,10 @@ renderCurrentPage() {
                 return children.map(child => {
                     const childType = allTransactionTypes.find(t => t.id === child.type || t.id === String(child.type));
                     const childName = childType ? (childType.alias || childType.name) : `Bilinmeyen İşlem (ID: ${child.type})`;
-                    
+
                     const childDate = new Date(child.timestamp).toLocaleDateString('tr-TR');
                     const childTime = new Date(child.timestamp).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
-                    
+
                     return `
                         <div class="child-transaction-item">
                             <div class="child-transaction-content">
@@ -1528,10 +1529,10 @@ renderCurrentPage() {
             async toggleTransactionAccordion(parentId) {
                 const childrenContainer = document.getElementById(`children-${parentId}`);
                 const icon = document.querySelector(`[onclick="toggleTransactionAccordion('${parentId}')"] .accordion-icon`);
-                
+
                 if (childrenContainer) {
                     const isVisible = childrenContainer.style.display !== 'none';
-                    
+
                     if (isVisible) {
                         // Kapat
                         childrenContainer.style.display = 'none';
@@ -1548,7 +1549,7 @@ renderCurrentPage() {
 
         async loadObjectionRows() {
             console.log('🔄 FIXED loadObjectionRows başladı');
-            
+
             // Sadece objections sekmesi görünürken çağıracağız
             const TYPE_SET = new Set(['7','19','20', 7, 19, 20]);
             console.log('🎯 Aranacak task tipleri:', Array.from(TYPE_SET));
@@ -1569,11 +1570,11 @@ renderCurrentPage() {
             // 2) Her task için ilgili IP kaydını topla
             console.log('🔄 Task detayları işleniyor...');
             const rows = [];
-            
+
             for (const t of tasks) {
                 try {
                     console.log('🔄 Task işleniyor:', t.id);
-                    
+
                     // İlgili portföy kaydı
                     let rec = null;
                     if (t.relatedIpRecordId) {
@@ -1594,7 +1595,7 @@ renderCurrentPage() {
 
                     const fmtDate = (d) => {
                         if (!d) return '-';
-                        
+
                         try {
                             // ISO string formatı (2025-08-09T00:00:00.000Z) için özel işlem
                             if (typeof d === 'string') {
@@ -1605,16 +1606,16 @@ renderCurrentPage() {
                                         return date.toLocaleDateString('tr-TR');
                                     }
                                 }
-                                
+
                                 // Diğer string formatları
                                 const parsed = new Date(d);
                                 if (!isNaN(parsed.getTime())) {
                                     return parsed.toLocaleDateString('tr-TR');
                                 }
-                                
+
                                 return d;
                             }
-                            
+
                             // Firestore Timestamp
                             if (typeof d === 'object') {
                                 if (typeof d.toDate === 'function') {
@@ -1625,14 +1626,14 @@ renderCurrentPage() {
                                     return new Date(d.seconds * 1000).toLocaleDateString('tr-TR');
                                 }
                             }
-                            
+
                             // Date objesi
                             if (d instanceof Date && !isNaN(d.getTime())) {
                                 return d.toLocaleDateString('tr-TR');
                             }
-                            
+
                             return String(d);
-                            
+
                         } catch (error) {
                             console.warn('Tarih formatlama hatası:', error, 'Değer:', d);
                             return String(d);
@@ -1657,7 +1658,7 @@ renderCurrentPage() {
                         opposedDateRaw
                         ? fmtDate(opposedDateRaw)
                         : fmtDate(details.bulletinDate ?? t.bulletinDate ?? null);
-                    
+
                     const opponentName =
                         (details?.opponent?.name) ||
                         (t?.opponent?.name) ||
@@ -1668,41 +1669,41 @@ renderCurrentPage() {
 
                     // ✅ DÜZELTME: Durum = parent transaction.requestResult
                     let statusText = 'Karar Bekleniyor'; // varsayılan değer
-                    
+
                     console.log('🔍 Task analiz ediliyor:', {
                         taskId: t.id,
                         applicationNumber,
                         hasRecord: !!rec,
                         recordId: rec?.id
                     });
-                    
+
                     try {
                         if (rec?.id) {
                             console.log('📡 Transactions çekiliyor için record:', rec.id);
                             const txRes = await ipRecordsService.getTransactionsForRecord(rec.id);
                             const txList = (txRes?.success && Array.isArray(txRes.transactions)) ? txRes.transactions : [];
-                            
+
                             console.log('📊 Transaction sayısı:', txList.length);
-                            
+
                             // ✅ DÜZELTME: Önce bu task'ın hangi transaction'a ait olduğunu bul
                             let targetTransactionId = null;
                             let foundRequestResult = null;
-                            
+
                             // 1. Task details'den parent transaction ID'sini al
                             const parentTxId = details?.parentTransactionId || details?.selectedTransactionId;
-                            
+
                             // 2. Eğer parentTxId varsa, sadece o transaction'ı kontrol et
                             if (parentTxId) {
                                 targetTransactionId = parentTxId;
                                 const specificTx = txList.find(x => x.id === parentTxId);
-                                
+
                                 if (specificTx) {
                                     console.log('✅ Spesifik parent transaction bulundu:', {
                                         id: specificTx.id,
                                         requestResult: specificTx.requestResult,
                                         type: typeof specificTx.requestResult
                                     });
-                                    
+
                                     // ✅ SADECE BU TRANSACTION'IN requestResult'ını al
                                     if (specificTx.requestResult !== null && specificTx.requestResult !== undefined && specificTx.requestResult !== '') {
                                         foundRequestResult = specificTx.requestResult;
@@ -1715,16 +1716,16 @@ renderCurrentPage() {
                                     console.log('📊 Mevcut transaction ID\'leri:', txList.map(tx => tx.id));
                                 }
                             }
-                            
+
                             // 3. Eğer parentTxId yoksa, task type'ına göre ilgili transaction'ı bul
                             else {
                                 console.log('⚠️ parentTxId yok, task type\'ına göre transaction aranıyor...');
-                                
+
                                 // Task type'ına göre ilgili transaction'ı bul
                                 // Örneğin: task type 7 ise, type 7 olan transaction'ı ara
                                 const taskTypeStr = String(t.taskType);
                                 const relatedTx = txList.find(tx => String(tx.type) === taskTypeStr);
-                                
+
                                 if (relatedTx) {
                                     targetTransactionId = relatedTx.id;
                                     console.log('✅ Task type\'ına göre transaction bulundu:', {
@@ -1732,7 +1733,7 @@ renderCurrentPage() {
                                         transactionId: relatedTx.id,
                                         requestResult: relatedTx.requestResult
                                     });
-                                    
+
                                     if (relatedTx.requestResult !== null && relatedTx.requestResult !== undefined && relatedTx.requestResult !== '') {
                                         foundRequestResult = relatedTx.requestResult;
                                         console.log('✅ İlgili TX\'den requestResult bulundu:', foundRequestResult);
@@ -1741,7 +1742,7 @@ renderCurrentPage() {
                                     console.log('❌ Task type\'ına göre transaction bulunamadı');
                                 }
                             }
-                            
+
                             // 4. requestResult değerini kontrol et ve statusText belirle
                             if (foundRequestResult !== null && foundRequestResult !== undefined && foundRequestResult !== '') {
                                 console.log('🔍 requestResult bulundu:', foundRequestResult, '->', formatObjectionStatus(foundRequestResult));
@@ -1749,13 +1750,13 @@ renderCurrentPage() {
                             } else {
                                 console.log('⚠️ İlgili transaction\'da requestResult yok; varsayılan kullanılacak:', statusText);
                             }
-                            
+
                             // 5. Debug: Tüm transaction'ların requestResult'larını göster
                             console.log('📊 Tüm transactions debug:');
                             txList.forEach((tx, index) => {
                                 console.log(`  ${index + 1}. TX ID: ${tx.id}, Type: ${tx.type}, requestResult: ${tx.requestResult}`);
                             });
-                            
+
                         } else {
                             console.log('⚠️ IP record ID yok, transaction kontrol edilemiyor');
                         }
@@ -1775,10 +1776,10 @@ renderCurrentPage() {
                         epatsDate,
                         statusText                                            // ✅ Düzeltilmiş durum
                     };
-                    
+
                     console.log('✅ Final row data:', rowData);
                     rows.push(rowData);
-                    
+
                 } catch (e) {
                     console.warn('❌ Task satırı oluşturulamadı', t?.id, e);
                 }
@@ -1786,10 +1787,10 @@ renderCurrentPage() {
 
             console.log('✅ loadObjectionRows tamamlandı, toplam satır:', rows.length);
             console.log('📊 Oluşturulan satırlar:', rows);
-            
+
             this.objectionRows = rows;
         }
-            
+
             buildObjectionGroups() {
             // this.objectionRows: render ettiğiniz ham satırlar
             const groupsMap = {};
@@ -1816,12 +1817,12 @@ renderCurrentPage() {
             initialRenderTableStructure() {
                 const headerRow = document.getElementById('portfolioTableHeaderRow');
                 const filterRow = document.getElementById('portfolioTableFilterRow');
-                headerRow.innerHTML = ''; 
+                headerRow.innerHTML = '';
                 filterRow.innerHTML = '';
 
                 const isObjections = (this.activeTypeFilter === 'objections');
                 const isTrademark = (this.activeTypeFilter === 'trademark');
-                
+
                 let columns = isObjections
                     ? [
                         { key: 'toggle', label: '', sortable: false, width: '44px' },
@@ -1854,7 +1855,7 @@ renderCurrentPage() {
                 if (!isObjections && !isTrademark) {
                     columns = columns.filter(col => col.key !== 'brandImage' && col.key !== 'origin' && col.key !== 'country' && col.key !== 'toggle');
                 }
-                
+
                 // Diğer sekmeler için 'Kayıt Tipi' sütununu ekleyelim
                 if (!isObjections && !isTrademark) {
                     columns.splice(2, 0, { key: 'ipType', label: 'Kayıt Tipi', sortable: true, width: '100px' });
@@ -1880,123 +1881,6 @@ renderCurrentPage() {
                 });
             }
         }
-        
-        async function loadTransactionTypes() {
-        const result = await transactionTypeService.getTransactionTypes();
-        if (result.success) {
-            result.data.forEach(type => {
-            transactionTypesMap.set(String(type.id), type);
-            if (type.code) transactionTypesMap.set(String(type.code), type); // <-- kod ile de eriş
-            });
-        }
-        }
-
-        async function loadPersons() {
-            const result = await personService.getPersons();
-            if (result.success) allPersons = result.data;
-        }
-
-        async function getCountries() {
-            try {
-                const db = getFirestore();
-                const docRef = doc(db, 'common', 'countries');
-                const docSnap = await getDoc(docRef);
-
-                if (docSnap.exists()) {
-                    const data = docSnap.data();
-                    allCountries = data.list || [];
-                    return allCountries;
-                } else {
-                    console.log("common/countries belgesi bulunamadı!");
-                    return [];
-                }
-            } catch (error) {
-                console.error("Ülke listesi çekilirken hata oluştu:", error);
-                return [];
-            }
-        }
     </script>
-<script id="accordion-fix-script">
-(function(){
-  try{
-    var bound = false;
-    function wireAccordion(){
-      var tbody = document.getElementById('portfolioTableBody') || document.querySelector('#portfolioTableBody, tbody');
-      if(!tbody || bound){ return; }
-      bound = true;
-
-      function findChildren(gid){
-        var sel1 = 'tr.group-row[data-parent-id="'+gid+'"]';
-        var sel2 = 'tr.group-row[data-parent="'+gid+'"]';
-        var sel3 = 'tr.group-row.child-of-'+gid;
-        var list = tbody.querySelectorAll(sel1);
-        if(list.length===0){ list = tbody.querySelectorAll(sel2); }
-        if(list.length===0){ list = tbody.querySelectorAll(sel3); }
-        return list;
-      }
-
-      function setExpanded(gid, next){
-        var btn = tbody.querySelector('.accordion-toggle[data-group-id="'+gid+'"], .row-caret[data-group-id="'+gid+'"]');
-        if(btn){ btn.setAttribute('aria-expanded', String(next)); }
-        var kids = findChildren(gid);
-        for(var i=0;i<kids.length;i++){ kids[i].setAttribute('aria-hidden', next ? 'false' : 'true'); }
-      }
-
-      // Normalize buttons: ensure toggle buttons inside headers carry data-group-id
-      var headers = tbody.querySelectorAll('tr.group-header');
-      for(var h=0; h<headers.length; h++){
-        var header = headers[h];
-        var gid = header.getAttribute('data-group-id') || (header.dataset ? header.dataset.groupId : '');
-        var btn  = header.querySelector('.accordion-toggle, .row-caret');
-        if(btn && !btn.getAttribute('data-group-id')){
-          btn.setAttribute('data-group-id', gid || '');
-        }
-        // Default closed: hide any children initially
-        if(gid){
-          var kids = findChildren(gid);
-          for(var k=0;k<kids.length;k++){
-            if(!kids[k].hasAttribute('aria-hidden')){ kids[k].setAttribute('aria-hidden','true'); }
-          }
-          if(btn){ btn.setAttribute('aria-expanded','false'); }
-        }
-      }
-
-      // Delegated click handling
-      tbody.addEventListener('click', function(e){
-        var t = e.target;
-        var caret = t.closest ? t.closest('.accordion-toggle, .row-caret') : null;
-        if(caret){
-          var gid = caret.getAttribute('data-group-id') || (caret.dataset ? caret.dataset.groupId : '');
-          if(!gid) return;
-          var expanded = caret.getAttribute('aria-expanded') === 'true';
-          setExpanded(gid, !expanded);
-          return;
-        }
-        var header = t.closest ? t.closest('tr.group-header') : null;
-        if(header){
-          if(t.closest && t.closest('button,.action-btn,a,input[type="checkbox"]')) return;
-          var gid = header.getAttribute('data-group-id') || (header.dataset ? header.dataset.groupId : '');
-          var hbtn = header.querySelector('.accordion-toggle, .row-caret');
-          var expanded = hbtn ? (hbtn.getAttribute('aria-expanded') === 'true') : false;
-          if(!gid && hbtn){ gid = hbtn.getAttribute('data-group-id') || (hbtn.dataset ? hbtn.dataset.groupId : ''); }
-          if(gid){ setExpanded(gid, !expanded); }
-        }
-      });
-    }
-
-    // Attempt binding now and on ready
-    if(document.readyState === 'complete' || document.readyState === 'interactive'){
-      setTimeout(wireAccordion, 0);
-    } else {
-      document.addEventListener('DOMContentLoaded', wireAccordion);
-    }
-    // Also try once more shortly in case rows render async
-    setTimeout(wireAccordion, 200);
-  }catch(err){
-    console.error('Accordion fix error:', err);
-  }
-})();
-</script>
-
 </body>
 </html>
