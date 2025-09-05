@@ -1421,238 +1421,238 @@ populateFormFields(recordData) {
 // data-entry.js dosyasındaki saveTrademarkPortfolio fonksiyonunda yapılacak değişiklik:
 
 async saveTrademarkPortfolio(portfolioData) {
-    // Form verilerini al
-    const brandText = document.getElementById('brandExampleText').value.trim();
-    const applicationNumber = document.getElementById('applicationNumber').value.trim();
-    const applicationDate = document.getElementById('applicationDate').value;
-    const registrationNumber = document.getElementById('registrationNumber').value.trim();
-    const registrationDate = document.getElementById('registrationDate').value;
-    const renewalDate = document.getElementById('renewalDate').value;
-    const description = document.getElementById('brandDescription').value.trim();
-    
-    const goodsAndServices = getSelectedNiceClasses();
-    if (!Array.isArray(goodsAndServices) || goodsAndServices.length === 0) {
-        alert('Lütfen en az bir mal veya hizmet seçin.');
-        return;
-    }
-
-    // ✅ YENİ: Menşe ve ülke verilerini yakala
-    const origin = document.getElementById('originSelect')?.value;
-    let selectedCountry = null;
-    let selectedCountries = [];
-
-    if (origin === 'Yurtdışı Ulusal') {
-        selectedCountry = document.getElementById('countrySelect')?.value;
-    } else if (origin === 'WIPO' || origin === 'ARIPO') {
-        const multiSelect = document.getElementById('countriesMultiSelect');
-        if (multiSelect) {
-            selectedCountries = Array.from(multiSelect.options)
-                                   .filter(option => option.selected)
-                                   .map(option => option.value);
-        }
-    }
-
-    // ✅ MARKA GÖRSELİ UPLOAD İŞLEMİ
-    let brandImageUrl = null;
-    if (this.uploadedBrandImage && typeof this.uploadedBrandImage === 'object' && this.uploadedBrandImage instanceof File) {
-        try {
-            console.log('📤 Marka görseli yükleniyor...', this.uploadedBrandImage.name);
-            const timestamp = Date.now();
-            const storagePath = `brand-examples/${timestamp}_${this.uploadedBrandImage.name}`;
-            const storageRef = ref(storage, storagePath);
-            await uploadBytes(storageRef, this.uploadedBrandImage);
-            brandImageUrl = await getDownloadURL(storageRef);
-            console.log('✅ Marka görseli başarıyla yüklendi:', brandImageUrl);
-        } catch (error) {
-            console.error('❌ Marka görseli yükleme hatası:', error);
-            alert('Marka görseli yüklenirken bir hata oluştu. Lütfen tekrar deneyin.');
+        // Form verilerini al
+        const brandText = document.getElementById('brandExampleText').value.trim();
+        const applicationNumber = document.getElementById('applicationNumber').value.trim();
+        const applicationDate = document.getElementById('applicationDate').value;
+        const registrationNumber = document.getElementById('registrationNumber').value.trim();
+        const registrationDate = document.getElementById('registrationDate').value;
+        const renewalDate = document.getElementById('renewalDate').value;
+        const description = document.getElementById('brandDescription').value.trim();
+        
+        const goodsAndServices = getSelectedNiceClasses();
+        if (!Array.isArray(goodsAndServices) || goodsAndServices.length === 0) {
+            alert('Lütfen en az bir mal veya hizmet seçin.');
             return;
         }
-    } else if (this.uploadedBrandImage && typeof this.uploadedBrandImage === 'string') {
-        brandImageUrl = this.uploadedBrandImage;
-    } else {
-        brandImageUrl = null;
-    }
 
-    // 2) Yardımcılar (blok içi; fonksiyon dışına alma zorunluluğu yok)
-    const parseClassNo = (val) => {
-        if (val == null) return null;
-        if (typeof val === 'number') return Number(val);
-        if (typeof val === 'object') {
-            const cand = val.classNo ?? val.class ?? val.classNumber ?? val.niceClass ?? val.k ?? null;
-            if (cand != null) return Number(cand);
-            val = val.text ?? val.name ?? val.label ?? '';
+        // ✅ GÜNCELLENMİŞ: Menşe ve ülke verilerini yakalama mantığı
+        const origin = document.getElementById('originSelect')?.value;
+        let selectedCountry = null;
+        let selectedCountries = [];
+        
+        if (origin === 'Yurtdışı Ulusal') {
+            selectedCountry = document.getElementById('countrySelect')?.value;
+            // Diğer menşe tipleri için array boş kalacak
+            selectedCountries = [];
+        } else if (origin === 'WIPO' || origin === 'ARIPO') {
+            selectedCountries = this.selectedCountries.map(c => c.code);
+            // Diğer menşe tipleri için string alan boş kalacak
+            selectedCountry = null;
         }
-        const s = String(val);
-        const m = s.match(/(?:^|\b)([1-9]|[12]\d|3\d|4[0-5])(?:\b|[^\d])/);
-        return m ? Number(m[1]) : null;
-    };
 
-    const deriveNiceClasses = (gas) => {
-      const set = new Set();
-      const visit = (v) => {
-        if (v == null) return;
-        if (Array.isArray(v)) { v.forEach(visit); return; }
-        if (typeof v === 'object') {
-          const cls = parseClassNo(v); if (cls != null) set.add(cls);
-          if (Array.isArray(v.items)) v.items.forEach(visit);
-          return;
+        // ✅ MARKA GÖRSELİ UPLOAD İŞLEMİ
+        let brandImageUrl = null;
+        if (this.uploadedBrandImage && typeof this.uploadedBrandImage === 'object' && this.uploadedBrandImage instanceof File) {
+            try {
+                console.log('📤 Marka görseli yükleniyor...', this.uploadedBrandImage.name);
+                const timestamp = Date.now();
+                const storagePath = `brand-examples/${timestamp}_${this.uploadedBrandImage.name}`;
+                const storageRef = ref(storage, storagePath);
+                await uploadBytes(storageRef, this.uploadedBrandImage);
+                brandImageUrl = await getDownloadURL(storageRef);
+                console.log('✅ Marka görseli başarıyla yüklendi:', brandImageUrl);
+            } catch (error) {
+                console.error('❌ Marka görseli yükleme hatası:', error);
+                alert('Marka görseli yüklenirken bir hata oluştu. Lütfen tekrar deneyin.');
+                return;
+            }
+        } else if (this.uploadedBrandImage && typeof this.uploadedBrandImage === 'string') {
+            brandImageUrl = this.uploadedBrandImage;
+        } else {
+            brandImageUrl = null;
         }
-        const cls = parseClassNo(v); if (cls != null) set.add(cls);
-      };
-      visit(gas);
-      return Array.from(set).sort((a,b)=>a-b);
-    };
 
-    const groupGoodsByClass = (gas) => {
-      const groups = new Map();
-      const add = (cls, text) => {
-        if (cls == null) return;
-        const key = Number(cls);
-        if (!groups.has(key)) groups.set(key, []);
-        const t = String(text ?? '').trim();
-        if (t) groups.get(key).push(t);
-      };
-      const visit = (v, currentClass=null) => {
-        if (v == null) return;
-        if (Array.isArray(v)) { v.forEach(e => visit(e, currentClass)); return; }
-        if (typeof v === 'object') {
-          const cls = parseClassNo(v) ?? currentClass;
-          const maybeText = v.text ?? v.name ?? v.label ?? null;
-          if (maybeText) add(cls, maybeText);
-          if (Array.isArray(v.items)) {
-            v.items.forEach(it => {
-              if (typeof it === 'object') {
-                const t = it.text ?? it.name ?? it.label ?? JSON.stringify(it);
-                const itCls = parseClassNo(it) ?? cls;
-                add(itCls, t);
-              } else {
-                const itCls = parseClassNo(it) ?? cls;
-                add(itCls, it);
-              }
-            });
-          }
-          return;
-        }
-        const cls = parseClassNo(v) ?? currentClass;
-        add(cls, v);
-      };
-      visit(gas);
-      return Array.from(groups.entries())
-        .sort((a,b)=>a[0]-b[0])
-        .map(([classNo, items]) => ({ classNo, items }));
-    };
-
-    // 3) Bağı kuran alanlar
-    const niceClass = deriveNiceClasses(goodsAndServices);
-    const goodsAndServicesByClass = groupGoodsByClass(goodsAndServices);
-
-    // 4) Kayıt payload’u
-    const dataToSave = {
-      // Temel bilgiler
-      title: brandText,
-      type: 'trademark',
-      portfoyStatus: 'active',
-      status: document.getElementById('trademarkStatus')?.value || 'filed',
-      recordOwnerType: this.recordOwnerTypeSelect.value,
-      origin: origin || 'TÜRKPATENT',
-      country: selectedCountry || null,
-      countries: this.selectedCountries.map(c => c.code) || [],
-      
-      // Başvuru bilgileri
-      applicationNumber: applicationNumber || null,
-      applicationDate: applicationDate || null,
-      registrationNumber: registrationNumber || null,
-      registrationDate: registrationDate || null,
-      renewalDate: renewalDate || null,
-      
-      // Marka özeli
-      brandText: brandText,
-      brandImageUrl: brandImageUrl,
-      description: description || null,
-      
-      // Ana seviyeye taşınan alanlar
-      brandType: document.getElementById('brandType')?.value || 'Şekil + Kelime',
-      brandCategory: document.getElementById('brandCategory')?.value || 'Ticaret/Hizmet Markası',
-      consentRequest: document.querySelector('input[name="consentRequest"]:checked')?.value || null,
-      coverLetterRequest: document.querySelector('input[name="coverLetterRequest"]:checked')?.value || null,
-      nonLatinAlphabet: document.getElementById('nonLatinAlphabet')?.value || null,
-      goodsAndServicesByClass: goodsAndServicesByClass,
-
-      // 📌 Bülten alanları
-      bulletins: (() => {
-        const no = document.getElementById('bulletinNo')?.value?.trim();
-        const dt = document.getElementById('bulletinDate')?.value?.trim();
-        return (no || dt) ? [{ bulletinNo: no || null, bulletinDate: dt || null }] : [];
-      })(),
-      
-      // Ana seviye
-      applicants: this.selectedApplicants.map(p => ({ id: p.id, name: p.name, email: p.email || null })),
-      priorities: this.priorities,
-      
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
-    // Kaydet
-    let result;
-    let usedId = null;
-    let isExisting = false;
-
-    // 1) update mi create mi?
-    if (this.editingRecordId) {
-      result = await ipRecordsService.updateRecord(this.editingRecordId, dataToSave);
-      usedId = this.editingRecordId;
-    } else {
-      result = await ipRecordsService.createRecordFromDataEntry(dataToSave);
-      usedId = result?.id || result?.existingRecordId || null;
-      isExisting = !!(result?.isExistingRecord || result?.isDuplicate);
-    }
-
-    // 2) başarı kriteri:
-    if ((this.editingRecordId && result?.success) || (!this.editingRecordId && (result?.success || isExisting))) {
-      const shouldAddTransaction = !this.editingRecordId && !isExisting && dataToSave.recordOwnerType === 'self';
-
-      if (shouldAddTransaction) {
-        const CODE_BY_IP = {
-          trademark: 'TRADEMARK_APPLICATION',
-          patent: 'PATENT_APPLICATION',
-          design: 'DESIGN_APPLICATION'
+        // 2) Yardımcılar (blok içi; fonksiyon dışına alma zorunluluğu yok)
+        const parseClassNo = (val) => {
+            if (val == null) return null;
+            if (typeof val === 'number') return Number(val);
+            if (typeof val === 'object') {
+                const cand = val.classNo ?? val.class ?? val.classNumber ?? val.niceClass ?? val.k ?? null;
+                if (cand != null) return Number(cand);
+                val = val.text ?? val.name ?? val.label ?? '';
+            }
+            const s = String(val);
+            const m = s.match(/(?:^|\b)([1-9]|[12]\d|3\d|4[0-5])(?:\b|[^\d])/);
+            return m ? Number(m[1]) : null;
         };
-        const targetCode = CODE_BY_IP[dataToSave.ipType || 'trademark'];
-        let txTypeId = null;
-        try {
-          const res = await transactionTypeService.getTransactionTypes();
-          const list = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
-          const map = new Map(list.map(t => [String((t.code || '').toUpperCase()), String(t.id)]));
-          txTypeId = map.get(targetCode);
-        } catch (e) {
-          console.warn('TxTypes yüklenemedi, fallback kullanılacak:', e);
-        }
-        if (!txTypeId) {
-          const TX_IDS = { trademark: '2', patent: '5', design: '8' };
-          txTypeId = TX_IDS[dataToSave.ipType || 'trademark'] || '2';
-        }
-        await ipRecordsService.addTransactionToRecord(String(usedId), {
-          type: String(txTypeId),
-          transactionTypeId: String(txTypeId),
-          description: 'Başvuru işlemi.',
-          parentId: null,
-          transactionHierarchy: 'parent'
-        });
-      }
 
-      const msg = this.editingRecordId
-        ? 'Marka portföy kaydı başarıyla güncellendi!'
-        : (isExisting
-            ? 'Bu başvuru zaten kayıtlıydı; mevcut verilerle yeni bir başvuru oluşturulmadı. Başvuru numarasını lütfen kontrol edin.'
-            : 'Marka portföy kaydı başarıyla oluşturuldu!');
+        const deriveNiceClasses = (gas) => {
+            const set = new Set();
+            const visit = (v) => {
+                if (v == null) return;
+                if (Array.isArray(v)) { v.forEach(visit); return; }
+                if (typeof v === 'object') {
+                    const cls = parseClassNo(v); if (cls != null) set.add(cls);
+                    if (Array.isArray(v.items)) v.items.forEach(visit);
+                    return;
+                }
+                const cls = parseClassNo(v); if (cls != null) set.add(cls);
+            };
+            visit(gas);
+            return Array.from(set).sort((a,b)=>a-b);
+        };
 
-      alert(msg);
-      window.location.href = 'portfolio.html';
-    } else {
-      alert('Portföy kaydı oluşturulamadı: ' + (result?.error || 'Bilinmeyen hata'));
+        const groupGoodsByClass = (gas) => {
+            const groups = new Map();
+            const add = (cls, text) => {
+                if (cls == null) return;
+                const key = Number(cls);
+                if (!groups.has(key)) groups.set(key, []);
+                const t = String(text ?? '').trim();
+                if (t) groups.get(key).push(t);
+            };
+            const visit = (v, currentClass=null) => {
+                if (v == null) return;
+                if (Array.isArray(v)) { v.forEach(e => visit(e, currentClass)); return; }
+                if (typeof v === 'object') {
+                    const cls = parseClassNo(v) ?? currentClass;
+                    const maybeText = v.text ?? v.name ?? v.label ?? null;
+                    if (maybeText) add(cls, maybeText);
+                    if (Array.isArray(v.items)) {
+                        v.items.forEach(it => {
+                            if (typeof it === 'object') {
+                                const t = it.text ?? it.name ?? it.label ?? JSON.stringify(it);
+                                const itCls = parseClassNo(it) ?? cls;
+                                add(itCls, t);
+                            } else {
+                                const itCls = parseClassNo(it) ?? cls;
+                                add(itCls, it);
+                            }
+                        });
+                    }
+                    return;
+                }
+                const cls = parseClassNo(v) ?? currentClass;
+                add(cls, v);
+            };
+            visit(gas);
+            return Array.from(groups.entries())
+                .sort((a,b)=>a[0]-b[0])
+                .map(([classNo, items]) => ({ classNo, items }));
+        };
+
+        // 3) Bağı kuran alanlar
+        const niceClass = deriveNiceClasses(goodsAndServices);
+        const goodsAndServicesByClass = groupGoodsByClass(goodsAndServices);
+
+        // 4) Kayıt payload’u
+        const dataToSave = {
+            // Temel bilgiler
+            title: brandText,
+            type: 'trademark',
+            portfoyStatus: 'active',
+            status: document.getElementById('trademarkStatus')?.value || 'filed',
+            recordOwnerType: this.recordOwnerTypeSelect.value,
+            origin: origin || 'TÜRKPATENT',
+            country: selectedCountry || null, // ✅ GÜNCELLENMİŞ: Tekil ülke alanı
+            countries: selectedCountries || [], // ✅ GÜNCELLENMİŞ: Çoklu ülke alanı
+            
+            // Başvuru bilgileri
+            applicationNumber: applicationNumber || null,
+            applicationDate: applicationDate || null,
+            registrationNumber: registrationNumber || null,
+            registrationDate: registrationDate || null,
+            renewalDate: renewalDate || null,
+            
+            // Marka özeli
+            brandText: brandText,
+            brandImageUrl: brandImageUrl,
+            description: description || null,
+            
+            // Ana seviyeye taşınan alanlar
+            brandType: document.getElementById('brandType')?.value || 'Şekil + Kelime',
+            brandCategory: document.getElementById('brandCategory')?.value || 'Ticaret/Hizmet Markası',
+            consentRequest: document.querySelector('input[name="consentRequest"]:checked')?.value || null,
+            coverLetterRequest: document.querySelector('input[name="coverLetterRequest"]:checked')?.value || null,
+            nonLatinAlphabet: document.getElementById('nonLatinAlphabet')?.value || null,
+            goodsAndServicesByClass: goodsAndServicesByClass,
+
+            // 📌 Bülten alanları
+            bulletins: (() => {
+                const no = document.getElementById('bulletinNo')?.value?.trim();
+                const dt = document.getElementById('bulletinDate')?.value?.trim();
+                return (no || dt) ? [{ bulletinNo: no || null, bulletinDate: dt || null }] : [];
+            })(),
+            
+            // Ana seviye
+            applicants: this.selectedApplicants.map(p => ({ id: p.id, name: p.name, email: p.email || null })),
+            priorities: this.priorities,
+            
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+        };
+        // Kaydet
+        let result;
+        let usedId = null;
+        let isExisting = false;
+
+        // 1) update mi create mi?
+        if (this.editingRecordId) {
+            result = await ipRecordsService.updateRecord(this.editingRecordId, dataToSave);
+            usedId = this.editingRecordId;
+        } else {
+            result = await ipRecordsService.createRecordFromDataEntry(dataToSave);
+            usedId = result?.id || result?.existingRecordId || null;
+            isExisting = !!(result?.isExistingRecord || result?.isDuplicate);
+        }
+
+        // 2) başarı kriteri:
+        if ((this.editingRecordId && result?.success) || (!this.editingRecordId && (result?.success || isExisting))) {
+            const shouldAddTransaction = !this.editingRecordId && !isExisting && dataToSave.recordOwnerType === 'self';
+
+            if (shouldAddTransaction) {
+                const CODE_BY_IP = {
+                    trademark: 'TRADEMARK_APPLICATION',
+                    patent: 'PATENT_APPLICATION',
+                    design: 'DESIGN_APPLICATION'
+                };
+                const targetCode = CODE_BY_IP[dataToSave.ipType || 'trademark'];
+                let txTypeId = null;
+                try {
+                    const res = await transactionTypeService.getTransactionTypes();
+                    const list = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
+                    const map = new Map(list.map(t => [String((t.code || '').toUpperCase()), String(t.id)]));
+                    txTypeId = map.get(targetCode);
+                } catch (e) {
+                    console.warn('TxTypes yüklenemedi, fallback kullanılacak:', e);
+                }
+                if (!txTypeId) {
+                    const TX_IDS = { trademark: '2', patent: '5', design: '8' };
+                    txTypeId = TX_IDS[dataToSave.ipType || 'trademark'] || '2';
+                }
+                await ipRecordsService.addTransactionToRecord(String(usedId), {
+                    type: String(txTypeId),
+                    transactionTypeId: String(txTypeId),
+                    description: 'Başvuru işlemi.',
+                    parentId: null,
+                    transactionHierarchy: 'parent'
+                });
+            }
+
+            const msg = this.editingRecordId
+                ? 'Marka portföy kaydı başarıyla güncellendi!'
+                : (isExisting
+                    ? 'Bu başvuru zaten kayıtlıydı; mevcut verilerle yeni bir başvuru oluşturulmadı. Başvuru numarasını lütfen kontrol edin.'
+                    : 'Marka portföy kaydı başarıyla oluşturuldu!');
+
+            alert(msg);
+            window.location.href = 'portfolio.html';
+        } else {
+            alert('Portföy kaydı oluşturulamadı: ' + (result?.error || 'Bilinmeyen hata'));
+        }
     }
-}
+
 // Patent için
 async savePatentPortfolio(portfolioData) {
     const patentTitle = document.getElementById('patentTitle').value.trim();
