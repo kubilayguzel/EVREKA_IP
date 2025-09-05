@@ -401,7 +401,7 @@ async function queryByOwnerNumber(sahipNo) {
 function setupExtensionMessageListener() {
   console.log('[DEBUG] Eklenti mesaj dinleyicisi kuruluyor...');
   
-  // Global batch state
+  // Global batch state - temizle
   window.batchResults = [];
   window.batchProgress = null;
   
@@ -426,13 +426,21 @@ function setupExtensionMessageListener() {
       }
       
       else if (event.data.type === 'BATCH_VERI_GELDI_KISI') {
-        // Batch veri geldi - progressive loading
+        // YENİ: Progressive batch loading
         const { batch, batchNumber, totalBatches, processedCount, totalCount, isComplete } = event.data.data;
         
         console.log(`[DEBUG] Batch ${batchNumber}/${totalBatches} alındı: ${batch.length} kayıt`);
         
-        // Batch'i global array'e ekle
-        window.batchResults = window.batchResults.concat(batch);
+        // Duplicate kontrolü ile batch'i ekle
+        batch.forEach(item => {
+          const exists = window.batchResults.some(existing => 
+            existing.applicationNumber && 
+            existing.applicationNumber === item.applicationNumber
+          );
+          if (!exists) {
+            window.batchResults.push(item);
+          }
+        });
         
         // Loading güncelle
         if (window.currentLoading) {
@@ -443,19 +451,36 @@ function setupExtensionMessageListener() {
           );
         }
         
-        // İlk batch geldiğinde tabloyu başlat
+        // İlk batch geldiğinde tabloyu başlat, sonrakiler için append
         if (batchNumber === 1) {
           renderOwnerResults(window.batchResults);
         } else {
-          // Sonraki batch'leri mevcut tabloya ekle
-          appendBatchToTable(batch);
+          // Tabloyu güncelle ama tekrar render etme
+          currentOwnerResults = window.batchResults;
+          updateTableRowCount();
         }
         
-        showToast(`Batch ${batchNumber}/${totalBatches} yüklendi (${window.batchResults.length} kayıt)`, 'info');
+        showToast(`Batch ${batchNumber}/${totalBatches} yüklendi`, 'info');
+        
+        // Son batch ise complete olarak işaretle
+        if (isComplete) {
+          setTimeout(() => {
+            window.dispatchEvent(new CustomEvent('message', {
+              detail: {
+                origin: event.origin,
+                data: {
+                  source: 'tp-extension-sahip',
+                  type: 'VERI_GELDI_KISI_COMPLETE',
+                  data: { totalProcessed: window.batchResults.length }
+                }
+              }
+            }));
+          }, 500);
+        }
       }
       
       else if (event.data.type === 'VERI_GELDI_KISI_COMPLETE') {
-        // Tüm process tamamlandı
+        // Tüm process tamamlandı - SADECE EVENT LISTENERS GÜNCELLE
         console.log('[DEBUG] Tüm batch işlemi tamamlandı');
         
         if (window.currentLoading) {
@@ -465,14 +490,14 @@ function setupExtensionMessageListener() {
         
         showToast(`Tüm veriler yüklendi: ${window.batchResults.length} kayıt`, 'success');
         
-        // Final table update
+        // SADECE event listeners'ı güncelle, tekrar render etme
         currentOwnerResults = window.batchResults;
         setupCheckboxListeners();
         updateSaveButton();
       }
       
       else if (event.data.type === 'VERI_GELDI_KISI') {
-        // Eski format - geriye uyumluluk
+        // Eski format - geriye uyumluluk - TEK RENDER
         _hideBlock(loadingEl);
         const data = event.data.data || [];
         
@@ -487,6 +512,7 @@ function setupExtensionMessageListener() {
           }
           showToast('Bu sahip numarası için sonuç bulunamadı.', 'warning');
         } else {
+          // TEK SEFER RENDER - başka render çağrısı YOK
           renderOwnerResults(data);
           
           if (window.currentLoading) {
@@ -506,11 +532,22 @@ function setupExtensionMessageListener() {
           window.currentLoading = null;
         }
         showToast('Eklenti hatası: ' + errorMsg, 'danger');
+        
+        // Batch state'i temizle
+        window.batchResults = [];
       }
     }
   });
   
   console.log('[DEBUG] ✅ Eklenti mesaj dinleyicisi kuruldu.');
+}
+
+// Yardımcı fonksiyon - tablo sayacını güncelle
+function updateTableRowCount() {
+  const bulkMeta = document.getElementById('bulkMeta');
+  if (bulkMeta && currentOwnerResults?.length) {
+    bulkMeta.textContent = `(${currentOwnerResults.length} kayıt)`;
+  }
 }
 
 // ===============================
@@ -622,9 +659,7 @@ function renderSingleResult(payload) {
   _showBlock(singleResultContainer);
 }
 
-// SİL: renderOwnerResults fonksiyonunu
 
-// DEĞIŞTIR/EKLE:
 function renderOwnerResults(items) {
   if (!items?.length) return;
   
