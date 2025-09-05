@@ -526,6 +526,7 @@ function setupExtensionMessageListener() {
       }
       
       else if (event.data.type === 'BATCH_VERI_GELDI_KISI') {
+        window.isProgressiveMode = true; // progressive mode aktif
         // YENİ: Progressive batch loading
         const { batch, batchNumber, totalBatches, processedCount, totalCount, isComplete } = event.data.data;
         
@@ -598,6 +599,8 @@ function setupExtensionMessageListener() {
       }
       
       else if (event.data.type === 'VERI_GELDI_KISI') {
+        // Eğer progressive mod aktifse, legacy mesajı yok say
+        if (window.isProgressiveMode) { console.log('[DEBUG] Legacy VERI_GELDI_KISI progressive modda yok sayıldı'); return; }
         // Eski format - geriye uyumluluk - TEK RENDER
         _hideBlock(loadingEl);
         const data = event.data.data || [];
