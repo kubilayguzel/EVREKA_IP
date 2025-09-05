@@ -525,3 +525,11 @@ export function findNextWorkingDay(startDate, holidays) {
     }
     return currentDate;
 }
+export const ORIGIN_TYPES = [
+    { value: 'TÜRKPATENT', text: 'TÜRKPATENT' },
+    { value: 'WIPO', text: 'WIPO' },
+    { value: 'EUIPO', text: 'EUIPO' },
+    { value: 'ARIPO', text: 'ARIPO' },
+    { value: 'OAPI', text: 'OAPI' },
+    { value: 'Yurtdışı Ulusal', text: 'Yurtdışı Ulusal' }
+];
