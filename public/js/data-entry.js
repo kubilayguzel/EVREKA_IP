@@ -24,10 +24,15 @@ class DataEntryModule {
         this.selectedCountries = [];
     }
 
-    async init() {
+async init() {
         console.log('🚀 Data Entry Module başlatılıyor...');
         try {
             await this.loadAllData();
+            
+            // ✅ YENİ: Menşe açılır listesini doldur ve varsayılan değeri ayarla.
+            this.populateOriginDropdown('originSelect');
+            this.handleOriginChange(document.getElementById('originSelect').value);
+
             this.setupEventListeners();
             this.setupModalCloseButtons();
 
