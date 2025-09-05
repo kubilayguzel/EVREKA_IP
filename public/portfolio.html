@@ -763,6 +763,9 @@ renderCurrentPage() {
         const appDate   = r.applicationDate || r.basvuruTarihi || '';
         const appStatus = r.applicationStatus || r.status || '';
         const applicants = Array.isArray(r.applicants) ? r.applicants.map(a => a.name).join(', ') : (r.applicantName || '');
+        const origin = r.origin || '-';
+        const country = (r.origin === 'EUIPO' || r.origin === 'OAPI' || (r.origin === 'WIPO' && r.transactionHierarchy === 'parent') || (r.origin === 'ARIPO' && r.transactionHierarchy === 'parent')) ? '' : r.country || '-';
+
 
         // ✅ DÜZELTME: Marka görseli sadece trademark sekmesinde ve sadece trademark kayıtları için
         let brandImgCell = '';
@@ -789,9 +792,10 @@ renderCurrentPage() {
             tr.innerHTML = `
                 <td><input type="checkbox" class="record-checkbox" data-id="${idAttr}"></td>
                 <td>${safe(status)}</td>
-                <td>${safe(ipType)}</td>
                 <td>${safe(title)}</td>
                 ${brandImgCell}
+                <td>${safe(origin)}</td>
+                <td>${safe(country)}</td>
                 <td>${safe(appNo)}</td>
                 <td>${fmtDate(appDate)}</td>
                 <td>${safe(appStatus)}</td>
@@ -1768,6 +1772,8 @@ async loadObjectionRows() {
                 filterRow.innerHTML = '';
 
                 const isObjections = (this.activeTypeFilter === 'objections');
+                const isTrademark = (this.activeTypeFilter === 'trademark');
+                
                 let columns = isObjections
                     ? [
                         { key: 'toggle', label: '', sortable: false, width: '44px' },
@@ -1784,9 +1790,10 @@ async loadObjectionRows() {
                     : [
                         { key: 'selection', label: '', sortable: false, isCheckbox: true, width: '40px' },
                         { key: 'status', label: 'Kayıt Durumu', sortable: true, width: '110px' },
-                        { key: 'ipType', label: 'Kayıt Tipi', sortable: true, width: '100px' },
                         { key: 'title', label: 'M/T/B Adı', sortable: true, width: '200px' },
                         { key: 'brandImage', label: 'Görsel', sortable: false, width: '80px' },
+                        { key: 'origin', label: 'Menşe', sortable: true, width: '100px' },
+                        { key: 'country', label: 'Ülke', sortable: true, width: '80px' },
                         { key: 'applicationNumber', label: 'Başvuru No', sortable: true, width: '120px' },
                         { key: 'applicationDate', label: 'Başvuru Tarihi', sortable: true, width: '120px' },
                         { key: 'applicationStatus', label: 'Başvuru Durumu', sortable: false, width: '120px' },
@@ -1795,8 +1802,13 @@ async loadObjectionRows() {
                     ];
 
                 // ✅ TEMİZLENMİŞ ÇÖZÜM: Marka görseli kolonunu sadece trademark sekmesinde göster
-                if (!isObjections && this.activeTypeFilter !== 'trademark') {
-                    columns = columns.filter(col => col.key !== 'brandImage');
+                if (!isObjections && !isTrademark) {
+                    columns = columns.filter(col => col.key !== 'brandImage' && col.key !== 'origin' && col.key !== 'country');
+                }
+                
+                // Diğer sekmeler için 'Kayıt Tipi' sütununu ekleyelim
+                if (!isObjections && !isTrademark) {
+                    columns.splice(2, 0, { key: 'ipType', label: 'Kayıt Tipi', sortable: true, width: '100px' });
                 }
 
                 columns.forEach(col => {
