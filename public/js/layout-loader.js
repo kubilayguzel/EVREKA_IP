@@ -418,8 +418,8 @@ export function ensurePersonModal() {
         </div>
 
         <div class="form-group">
-          <label for="pm_tpeMn" class="form-label">TPE Müşteri No</label>
-          <input id="pm_tpeMn" type="text" class="form-input">
+          <label for="pm_tpeNo" class="form-label">TPE Müşteri No</label>
+          <input id="pm_tpeNo" type="text" class="form-input">
         </div>
 
         <div class="form-group">
@@ -500,7 +500,7 @@ async function handlePersonSubmit(e) {
     type: document.getElementById('pm_personType').value,                                  // 'gercek' | 'tuzel'
     name: document.getElementById('pm_name').value.trim(),
     nationalIdOrVkn: document.getElementById('pm_tckn').value.trim() || document.getElementById('pm_vkn').value.trim() || '',
-    tpeMn: document.getElementById('pm_tpeMn').value.trim(),
+    tpeNo: document.getElementById('pm_tpeMn').value.trim(),
     email: document.getElementById('pm_email').value.trim(),
     phone: document.getElementById('pm_phone').value.trim(),
     countryCode: document.getElementById('pm_country').value || '',
