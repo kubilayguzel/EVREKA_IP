@@ -21,6 +21,7 @@ class DataEntryModule {
         this.editingRecordId = null;
         this.allCountries = [];
         this.currentIpType = null;
+        this.selectedCountries = [];
     }
 
     async init() {
@@ -59,19 +60,19 @@ class DataEntryModule {
     setupEventListeners() {
             console.log('🎯 Event listener kuruluyor...');
             
-            if (this.ipTypeSelect) {
-                this.ipTypeSelect.addEventListener('change', (e) => {
-                    this.handleIPTypeChange(e.target.value);
-                });
-            }
-            
-            // ✅ YENİ: Origin değiştiğinde tetiklenecek event
-            const originSelect = document.getElementById('originSelect');
-            if(originSelect){
-                originSelect.addEventListener('change', (e) => {
-                    this.handleOriginChange(e.target.value);
-                });
-            }
+        if (this.ipTypeSelect) {
+            this.ipTypeSelect.addEventListener('change', (e) => {
+                this.handleIPTypeChange(e.target.value);
+            });
+        }
+        
+        // ✅ YENİ: Origin değiştiğinde tetiklenecek event
+        const originSelect = document.getElementById('originSelect');
+        if(originSelect){
+            originSelect.addEventListener('change', (e) => {
+                this.handleOriginChange(e.target.value);
+            });
+        }
 
             if (this.saveBtn) {
                 this.saveBtn.addEventListener('click', () => {
@@ -99,34 +100,29 @@ class DataEntryModule {
             dropdown.appendChild(option);
         });
     }
+   
     handleOriginChange(originType) {
         const container = document.getElementById('countrySelectionContainer');
-        if (!container) return;
-        
-        // Önce önceki içeriği ve dinleyicileri temizle
-        container.innerHTML = '';
+        const singleSelectWrapper = document.getElementById('singleCountrySelectWrapper');
+        const multiSelectWrapper = document.getElementById('multiCountrySelectWrapper');
+        const title = document.getElementById('countrySelectionTitle');
+        if (!container || !singleSelectWrapper || !multiSelectWrapper || !title) return;
+
+        this.selectedCountries = [];
         container.style.display = 'none';
-        
+        singleSelectWrapper.style.display = 'none';
+        multiSelectWrapper.style.display = 'none';
+
         if (originType === 'Yurtdışı Ulusal') {
+            title.textContent = 'Menşe Ülke Seçimi';
             container.style.display = 'block';
-            container.innerHTML = `
-                <h3 class="section-title">Ulusal Menşe Ülke Seçimi</h3>
-                <div class="form-group full-width">
-                    <label for="countrySelect" class="form-label">Ülke</label>
-                    <select id="countrySelect" class="form-select"></select>
-                </div>
-            `;
+            singleSelectWrapper.style.display = 'block';
             this.populateCountriesDropdown('countrySelect');
         } else if (originType === 'WIPO' || originType === 'ARIPO') {
+            title.textContent = `Seçim Yapılacak Ülkeler (${originType})`;
             container.style.display = 'block';
-            container.innerHTML = `
-                <h3 class="section-title">${originType} Ülke Seçimi</h3>
-                <div class="form-group full-width">
-                    <label for="countriesMultiSelect" class="form-label">Ülkeler (Birden fazla seçilebilir)</label>
-                    <select multiple id="countriesMultiSelect" class="form-select" size="5"></select>
-                </div>
-            `;
-            this.populateCountriesDropdown('countriesMultiSelect');
+            multiSelectWrapper.style.display = 'block';
+            this.setupMultiCountrySelect();
         }
     }
 
@@ -1091,6 +1087,107 @@ async loadRecordForEditing() {
         this.handleIPTypeChange(this.currentIpType);
     }
 }
+// ✅ YENİ: Çoklu ülke seçimi için arayüzü ve dinleyicileri ayarlar
+    setupMultiCountrySelect() {
+        const input = document.getElementById('countriesMultiSelectInput');
+        const resultsContainer = document.getElementById('countriesMultiSelectResults');
+        const selectedList = document.getElementById('selectedCountriesList');
+        const countBadge = document.getElementById('selectedCountriesCount');
+        
+        // Dinleyicileri temizle (önceki render'lardan kalanları)
+        if (this._multiCountryInputListener) {
+            input.removeEventListener('input', this._multiCountryInputListener);
+        }
+        if (this._multiCountryResultsListener) {
+            resultsContainer.removeEventListener('click', this._multiCountryResultsListener);
+        }
+        if (this._multiCountryListListener) {
+            selectedList.removeEventListener('click', this._multiCountryListListener);
+        }
+
+        this.renderSelectedCountries();
+        
+        // Arama mantığı
+        this._multiCountryInputListener = (e) => {
+            const query = e.target.value.toLowerCase();
+            if (query.length < 2) {
+                resultsContainer.style.display = 'none';
+                return;
+            }
+            const filtered = this.allCountries.filter(c => 
+                c.name.toLowerCase().includes(query) || c.code.toLowerCase().includes(query)
+            );
+            this.renderCountrySearchResults(filtered);
+        };
+        input.addEventListener('input', this._multiCountryInputListener);
+
+        // Sonuç listesinden seçim yapma
+        this._multiCountryResultsListener = (e) => {
+            const item = e.target.closest('.search-result-item');
+            if (item) {
+                const countryCode = item.dataset.code;
+                const countryName = item.dataset.name;
+                const existing = this.selectedCountries.find(c => c.code === countryCode);
+                if (!existing) {
+                    this.selectedCountries.push({ code: countryCode, name: countryName });
+                    this.renderSelectedCountries();
+                }
+                input.value = '';
+                resultsContainer.style.display = 'none';
+            }
+        };
+        resultsContainer.addEventListener('click', this._multiCountryResultsListener);
+
+        // Seçilen ülkeler listesinden silme
+        this._multiCountryListListener = (e) => {
+            const removeBtn = e.target.closest('.remove-selected-item-btn');
+            if (removeBtn) {
+                const countryCode = removeBtn.dataset.code;
+                this.selectedCountries = this.selectedCountries.filter(c => c.code !== countryCode);
+                this.renderSelectedCountries();
+            }
+        };
+        selectedList.addEventListener('click', this._multiCountryListListener);
+    }
+
+    // ✅ YENİ: Arama sonuçlarını render eder
+    renderCountrySearchResults(countries) {
+        const resultsContainer = document.getElementById('countriesMultiSelectResults');
+        if (!resultsContainer) return;
+
+        resultsContainer.innerHTML = countries.map(c => `
+            <div class="search-result-item" data-code="${c.code}" data-name="${c.name}">
+                ${c.name} (${c.code})
+            </div>
+        `).join('');
+        resultsContainer.style.display = countries.length > 0 ? 'block' : 'none';
+    }
+
+    // ✅ YENİ: Seçilen ülkeler listesini render eder
+    renderSelectedCountries() {
+        const selectedList = document.getElementById('selectedCountriesList');
+        const countBadge = document.getElementById('selectedCountriesCount');
+        if (!selectedList || !countBadge) return;
+
+        countBadge.textContent = this.selectedCountries.length;
+
+        if (this.selectedCountries.length === 0) {
+            selectedList.innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-flag fa-3x text-muted mb-3"></i>
+                    <p class="text-muted">Henüz ülke eklenmedi.</p>
+                </div>`;
+        } else {
+            selectedList.innerHTML = this.selectedCountries.map(c => `
+                <div class="selected-item d-flex justify-content-between align-items-center">
+                    <span>${c.name} (${c.code})</span>
+                    <button type="button" class="remove-selected-item-btn" data-code="${c.code}">
+                        &times;
+                    </button>
+                </div>
+            `).join('');
+        }
+    }
 
 // ✅ Yeni veri yapısına uygun populateFormFields fonksiyonu
 populateFormFields(recordData) {
@@ -1137,7 +1234,7 @@ populateFormFields(recordData) {
                 this.populateOriginDropdown('originSelect', recordData.origin);
             }
             
-            // ✅ YENİ: Origin değerine göre ülke seçimini ayarla
+        // ✅ YENİ: Origin değerine göre ülke seçimini ayarla
             if (recordData.origin === 'Yurtdışı Ulusal') {
                 this.handleOriginChange(recordData.origin);
                 setTimeout(() => {
@@ -1148,17 +1245,15 @@ populateFormFields(recordData) {
                 }, 50);
             } else if (recordData.origin === 'WIPO' || recordData.origin === 'ARIPO') {
                 this.handleOriginChange(recordData.origin);
-                setTimeout(() => {
-                    const multiSelect = document.getElementById('countriesMultiSelect');
-                    if (multiSelect && Array.isArray(recordData.countries)) {
-                        recordData.countries.forEach(countryCode => {
-                            const option = multiSelect.querySelector(`option[value="${countryCode}"]`);
-                            if (option) option.selected = true;
-                        });
-                    }
-                }, 50);
+                // Çoklu seçim için veriyi state'e yükle ve render et
+                if (Array.isArray(recordData.countries)) {
+                    this.selectedCountries = recordData.countries.map(code => {
+                        const country = this.allCountries.find(c => c.code === code);
+                        return country || { code, name: code };
+                    });
+                    this.renderSelectedCountries();
+                }
             }
-
         // Marka özel alanları
         if (this.currentIpType === 'trademark') {
             const brandType = document.getElementById('brandType');
@@ -1457,7 +1552,7 @@ async saveTrademarkPortfolio(portfolioData) {
       recordOwnerType: this.recordOwnerTypeSelect.value,
       origin: origin || 'TÜRKPATENT',
       country: selectedCountry || null,
-      countries: selectedCountries || [],
+      countries: this.selectedCountries.map(c => c.code) || [],
       
       // Başvuru bilgileri
       applicationNumber: applicationNumber || null,
