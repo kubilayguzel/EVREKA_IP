@@ -532,6 +532,18 @@
         });
                 
         class PortfolioModule {
+  // Normalize status for display (avoid showing origin like WIPO/ARIPO as status)
+  getDisplayStatus(r) {
+    const rawStatus = (r.portfoyStatus || r.status || r.applicationStatus || r.statusText || '').toString();
+    const rawOrigin = (r.origin || '').toString().toUpperCase();
+    const ORG_SET = new Set(['WIPO','ARIPO','EUIPO','OAPI']);
+    if (ORG_SET.has(rawStatus.toUpperCase())) {
+      const alt = (r.applicationStatus || r.statusText || '').toString();
+      return alt || '-';
+    }
+    return rawStatus || '-';
+  }
+
             constructor() {
                 this.allRecords = []; 
                 this.filteredAndSortedRecords = [];
@@ -779,7 +791,7 @@ renderCurrentPage() {
     });
 
     pageData.forEach(r => {
-        const status    = r.portfoyStatus || r.status || '';
+        const status = this.getDisplayStatus(r);
         const ipType    = r.type || r.recordType || r.ipType || '';
         const title     = r.title || r.brandText || r.name || '';
         const appNo     = r.applicationNumber || r.applicationNo || r.basvuruNo || r.application_number || '';
@@ -884,7 +896,7 @@ renderCurrentPage() {
                     childTr.dataset.parentId = internationalRegNo;
                     childTr.setAttribute('aria-hidden', 'true');
 
-                    const childStatus    = childR.portfoyStatus || childR.status || '';
+                    const childStatus = this.getDisplayStatus(childR);
                     const childTitle     = childR.title || childR.brandText || childR.name || '';
                     const childAppNo     = childR.applicationNumber || childR.applicationNo || childR.basvuruNo || childR.application_number || '';
                     const childAppDate   = childR.applicationDate || childR.basvuruTarihi || '';
