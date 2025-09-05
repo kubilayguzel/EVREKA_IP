@@ -498,6 +498,10 @@ tr.group-row[aria-hidden="true"]{ display:none !important; }
         import { loadSharedLayout } from './js/layout-loader.js';
         import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
+        // === Yardımcı Fonksiyonlar ===
+        const safe = (v) => (v ?? '').toString();
+        const safeId = (v) => safe(v).replace(/[^a-zA-Z0-9_]+/g, '_');
+
         let transactionTypesMap = new Map();
         // === İTİRAZ DURUM HARİTASI ===
         const REQUEST_RESULT_STATUS = {
@@ -1786,7 +1790,6 @@ tr.group-row[aria-hidden="true"]{ display:none !important; }
             }
 
             console.log('✅ loadObjectionRows tamamlandı, toplam satır:', rows.length);
-            console.log('📊 Oluşturulan satırlar:', rows);
 
             this.objectionRows = rows;
         }
