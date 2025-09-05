@@ -304,6 +304,7 @@ async function handleQuery() {
     );
 
     console.log('[DEBUG] Sahip numarası eklentiye yönlendiriliyor:', sahipNo);
+    
     window.searchedOwnerNumber = sahipNo;
     const url = `https://www.turkpatent.gov.tr/arastirma-yap?form=trademark&auto_query=${encodeURIComponent(sahipNo)}&query_type=sahip&source=${encodeURIComponent(window.location.origin)}`;
     console.log('[DEBUG] TÜRKPATENT URL açılıyor:', url);
@@ -474,10 +475,8 @@ function tryAutoAddOwner(searchedTpeNo) {
     }
     const searchTpeNo = String(searchedTpeNo || window.searchedOwnerNumber || '').trim();
     console.log('[DEBUG] AutoAddOwner - aranan TPE No:', searchTpeNo);
-
     const matchedPerson = allPersons.find(p => String(p.tpeNo || '').trim() === searchTpeNo);
     console.log('[DEBUG] AutoAddOwner - eşleşen kişi:', matchedPerson || 'Bulunamadı');
-
     if (matchedPerson) {
       const already = selectedRelatedParties.find(x => x.id === matchedPerson.id);
       if (!already) {
@@ -553,14 +552,9 @@ function setupExtensionMessageListener() {
         }
         
         // İlk batch geldiğinde tabloyu başlat, sonrakiler için append
-        if (batchNumber === 1) {
-          renderOwnerResults(window.batchResults);
-  try { if (window.searchedOwnerNumber) { tryAutoAddOwner(window.searchedOwnerNumber); } } catch (e) { console.warn('Owner autofill failed:', e); }
-        } else {
-          // Tabloyu güncelle ama tekrar render etme
-          currentOwnerResults = window.batchResults;
-          updateTableRowCount();
-        }
+        /* Progressive batch: always re-render full list to avoid missing rows */
+renderOwnerResults(window.batchResults);
+try { setupCheckboxListeners(); updateSaveButton(); } catch (e) { console.warn('listeners refresh failed', e); }
         
         showToast(`Batch ${batchNumber}/${totalBatches} yüklendi`, 'info');
         
@@ -618,8 +612,8 @@ function setupExtensionMessageListener() {
         } else {
           // TEK SEFER RENDER - başka render çağrısı YOK
           renderOwnerResults(data);
-      try { if (window.searchedOwnerNumber) { tryAutoAddOwner(window.searchedOwnerNumber); } } catch (e) { console.warn('Owner autofill failed:', e); }
-
+          
+          try { if (window.searchedOwnerNumber) { tryAutoAddOwner(window.searchedOwnerNumber); } } catch (e) { console.warn('Owner autofill failed:', e); }
       if (window.currentLoading) {
             window.currentLoading.showSuccess(`${data.length} kayıt başarıyla alındı!`);
             window.currentLoading = null;
