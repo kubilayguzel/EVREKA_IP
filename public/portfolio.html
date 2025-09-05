@@ -260,7 +260,7 @@
     align-items: center;
     padding: 8px 20px 8px 48px; /* Sol padding parent'tan daha fazla */
     border-bottom: 1px solid #e8e8e8;
-    border-left: 4px solid #f39c12;
+    border-left: 44px solid #f39c12;
     background: white;
     margin: 0 8px;
     margin-bottom: 2px;
@@ -349,6 +349,7 @@
   background: #f7f9fc;
   border-top: 1px solid #edf1f7;
   border-bottom: 1px solid #edf1f7;
+  cursor: pointer;
 }
 .group-header:hover { background:#f2f6fb; }
 .group-title { font-size: 0.95rem; color:#24324a; padding: 14px 8px; }
@@ -489,6 +490,7 @@
         let allPersons = []; 
         let pagination;
         let portfolioModule; 
+        let allCountries = [];
         import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
         let started = false;
@@ -502,6 +504,7 @@
         // 2) Lookup verilerini paralel başlat
         const txTypesPromise = loadTransactionTypes().catch(console.error);
         const personsPromise = loadPersons().catch(console.error);
+        const countriesPromise = getCountries().catch(console.error);
 
         // 3) Sayfa modülünü hemen başlat
         portfolioModule = new PortfolioModule();
@@ -509,7 +512,7 @@
         window.portfolioModule = portfolioModule;
 
         // 4) Lookup'lar tamamlanınca modülü bilgilendir
-        Promise.all([txTypesPromise, personsPromise]).then(() => {
+        Promise.all([txTypesPromise, personsPromise, countriesPromise]).then(() => {
             if (portfolioModule && typeof portfolioModule.onLookupsReady === 'function') {
             portfolioModule.onLookupsReady();
             }
@@ -538,13 +541,15 @@
                 this.selectedRecords = new Set();
                 this.objectionRows = [];
             }
+            onLookupsReady() {
+                this.loadAllData();
+            }
 
             init() {
             this.currentUser = auth.currentUser;
             if (!this.currentUser) { return; } // Guard dışarıda; burada sessizce çık
             this.initializePagination();
             this.setupEventListeners();
-            this.loadAllData();
             }
 
             initializePagination() {
@@ -656,6 +661,8 @@ renderCurrentPage() {
             return d.toLocaleDateString('tr-TR');
         } catch { return safe(v); }
     };
+    const getCountryName = (code) => allCountries.find(c => c.code === code)?.name || code || '-';
+
 
     // Objections: başvuru no bazlı gruplama
     if (isObjections) {
@@ -752,10 +759,26 @@ renderCurrentPage() {
 
     // ——— İtirazlar dışındaki sekmeler: tabloda tanımlı kolonlara hizalı render ———
     const frag = document.createDocumentFragment();
-    pageData.forEach(r => {
-        const tr = document.createElement('tr');
-        tr.dataset.recordId = r.id || '';
+    
+    // WIPO/ARIPO parent-child ilişkisini kur
+    const parents = new Map();
+    const children = new Map();
 
+    pageData.forEach(r => {
+        if (r.origin === 'WIPO' || r.origin === 'ARIPO') {
+            const internationalRegNo = r.wipoIR || r.aripoIR;
+            if (r.transactionHierarchy === 'parent' && internationalRegNo) {
+                parents.set(internationalRegNo, r);
+            } else if (r.transactionHierarchy === 'child' && internationalRegNo) {
+                if (!children.has(internationalRegNo)) {
+                    children.set(internationalRegNo, []);
+                }
+                children.get(internationalRegNo).push(r);
+            }
+        }
+    });
+
+    pageData.forEach(r => {
         const status    = r.portfoyStatus || r.status || '';
         const ipType    = r.type || r.recordType || r.ipType || '';
         const title     = r.title || r.brandText || r.name || '';
@@ -764,62 +787,154 @@ renderCurrentPage() {
         const appStatus = r.applicationStatus || r.status || '';
         const applicants = Array.isArray(r.applicants) ? r.applicants.map(a => a.name).join(', ') : (r.applicantName || '');
         const origin = r.origin || '-';
-        const country = (r.origin === 'EUIPO' || r.origin === 'OAPI' || (r.origin === 'WIPO' && r.transactionHierarchy === 'parent') || (r.origin === 'ARIPO' && r.transactionHierarchy === 'parent')) ? '' : r.country || '-';
+        const countryCode = r.country || '-';
+        const countryName = getCountryName(countryCode);
 
-
-        // ✅ DÜZELTME: Marka görseli sadece trademark sekmesinde ve sadece trademark kayıtları için
-        let brandImgCell = '';
-        if (this.activeTypeFilter === 'trademark' && ipType === 'trademark') {
-            const imgSrc = r.brandImageUrl || r.details?.brandInfo?.brandImage || '';
-            if (imgSrc) {
-                brandImgCell = `<td><div class="trademark-image-wrapper"><img class="trademark-image-thumbnail" src="${imgSrc}" alt="logo"></div></td>`;
-            } else {
-                brandImgCell = `<td></td>`;
+        // WIPO ve ARIPO için özel durum
+        let isAccordionParent = false;
+        if ((r.origin === 'WIPO' || r.origin === 'ARIPO') && r.transactionHierarchy === 'parent') {
+            const internationalRegNo = r.wipoIR || r.aripoIR;
+            if (children.has(internationalRegNo)) {
+                isAccordionParent = true;
             }
         }
-
-        // actions
-        const idAttr = r.id || '';
-        const actions = `
-            <button class="action-btn view-btn" data-id="${idAttr}">Görüntüle</button>
-            <button class="action-btn edit-btn" data-id="${idAttr}">Düzenle</button>
-            <button class="action-btn delete-btn" data-id="${idAttr}">Sil</button>
-        `;
-
-        // ✅ DÜZELTME: Satır HTML'ini sekmeye göre oluştur
-        if (this.activeTypeFilter === 'trademark') {
-            // Trademark sekmesi: marka görseli kolonu var
-            tr.innerHTML = `
-                <td><input type="checkbox" class="record-checkbox" data-id="${idAttr}"></td>
-                <td>${safe(status)}</td>
-                <td>${safe(title)}</td>
-                ${brandImgCell}
-                <td>${safe(origin)}</td>
-                <td>${safe(country)}</td>
-                <td>${safe(appNo)}</td>
-                <td>${fmtDate(appDate)}</td>
-                <td>${safe(appStatus)}</td>
-                <td>${safe(applicants)}</td>
-                <td>${actions}</td>
-            `;
-        } else {
-            // Diğer tüm sekmeler (all, patent, design): marka görseli kolonu yok
-            tr.innerHTML = `
-                <td><input type="checkbox" class="record-checkbox" data-id="${idAttr}"></td>
-                <td>${safe(status)}</td>
-                <td>${safe(ipType)}</td>
-                <td>${safe(title)}</td>
-                <td>${safe(appNo)}</td>
-                <td>${fmtDate(appDate)}</td>
-                <td>${safe(appStatus)}</td>
-                <td>${safe(applicants)}</td>
-                <td>${actions}</td>
-            `;
+        
+        let shouldRender = true;
+        if ((r.origin === 'WIPO' || r.origin === 'ARIPO') && r.transactionHierarchy === 'child') {
+            shouldRender = false;
         }
 
-        frag.appendChild(tr);
+        if (shouldRender) {
+            const tr = document.createElement('tr');
+            tr.dataset.recordId = r.id || '';
+            tr.dataset.parentId = r.id || '';
+            if (isAccordionParent) {
+                const internationalRegNo = r.wipoIR || r.aripoIR;
+                tr.className = 'group-header';
+                tr.dataset.groupId = internationalRegNo;
+            }
+
+            // actions
+            const idAttr = r.id || '';
+            const actions = `
+                <button class="action-btn view-btn" data-id="${idAttr}">Görüntüle</button>
+                <button class="action-btn edit-btn" data-id="${idAttr}">Düzenle</button>
+                <button class="action-btn delete-btn" data-id="${idAttr}">Sil</button>
+            `;
+
+            let brandImgCell = '';
+            if (this.activeTypeFilter === 'trademark' && ipType === 'trademark') {
+                const imgSrc = r.brandImageUrl || r.details?.brandInfo?.brandImage || '';
+                if (imgSrc) {
+                    brandImgCell = `<td><div class="trademark-image-wrapper"><img class="trademark-image-thumbnail" src="${imgSrc}" alt="logo"></div></td>`;
+                } else {
+                    brandImgCell = `<td></td>`;
+                }
+            }
+            
+            let toggleIcon = '';
+            let toggleCell = '';
+            if (isAccordionParent) {
+                toggleIcon = `
+                    <td class="toggle-cell">
+                        <button class="accordion-toggle" aria-expanded="false" aria-controls="grp-${safeId(r.wipoIR || r.aripoIR)}">
+                            <i class="fas fa-chevron-right"></i>
+                        </button>
+                    </td>
+                `;
+            } else {
+                toggleCell = `<td></td>`;
+            }
+
+            if (this.activeTypeFilter === 'trademark') {
+                const countryDisplay = (origin === 'EUIPO' || origin === 'OAPI' || (origin === 'WIPO' && isAccordionParent) || (origin === 'ARIPO' && isAccordionParent)) ? '' : countryName;
+
+                tr.innerHTML = `
+                    <td><input type="checkbox" class="record-checkbox" data-id="${idAttr}"></td>
+                    <td>${isAccordionParent ? `<span class="badge badge-soft">${origin}</span>` : safe(status)}</td>
+                    <td>${safe(title)}</td>
+                    ${brandImgCell}
+                    <td>${safe(origin)}</td>
+                    <td>${countryDisplay}</td>
+                    <td>${safe(appNo)}</td>
+                    <td>${fmtDate(appDate)}</td>
+                    <td>${safe(appStatus)}</td>
+                    <td>${safe(applicants)}</td>
+                    <td>${actions}</td>
+                `;
+            } else {
+                tr.innerHTML = `
+                    <td><input type="checkbox" class="record-checkbox" data-id="${idAttr}"></td>
+                    <td>${safe(status)}</td>
+                    <td>${safe(ipType)}</td>
+                    <td>${safe(title)}</td>
+                    <td>${safe(appNo)}</td>
+                    <td>${fmtDate(appDate)}</td>
+                    <td>${safe(appStatus)}</td>
+                    <td>${safe(applicants)}</td>
+                    <td>${actions}</td>
+                `;
+            }
+            frag.appendChild(tr);
+
+            if (isAccordionParent) {
+                const internationalRegNo = r.wipoIR || r.aripoIR;
+                const childRecords = children.get(internationalRegNo) || [];
+
+                childRecords.forEach((childR, idx) => {
+                    const childTr = document.createElement('tr');
+                    childTr.className = 'group-row child-row';
+                    childTr.dataset.parentId = internationalRegNo;
+                    childTr.setAttribute('aria-hidden', 'true');
+
+                    const childStatus    = childR.portfoyStatus || childR.status || '';
+                    const childTitle     = childR.title || childR.brandText || childR.name || '';
+                    const childAppNo     = childR.applicationNumber || childR.applicationNo || childR.basvuruNo || childR.application_number || '';
+                    const childAppDate   = childR.applicationDate || childR.basvuruTarihi || '';
+                    const childAppStatus = childR.applicationStatus || childR.status || '';
+                    const childApplicants = Array.isArray(childR.applicants) ? childR.applicants.map(a => a.name).join(', ') : (childR.applicantName || '');
+                    const childOrigin = childR.origin || '-';
+                    const childCountryCode = childR.country || '-';
+                    const childCountryName = getCountryName(childCountryCode);
+
+
+                    const childActions = `
+                        <button class="action-btn view-btn" data-id="${childR.id}">Görüntüle</button>
+                        <button class="action-btn edit-btn" data-id="${childR.id}">Düzenle</button>
+                        <button class="action-btn delete-btn" data-id="${childR.id}">Sil</button>
+                    `;
+                    
+                    let childBrandImgCell = '';
+                    if (this.activeTypeFilter === 'trademark') {
+                        const imgSrc = childR.brandImageUrl || childR.details?.brandInfo?.brandImage || '';
+                        if (imgSrc) {
+                            childBrandImgCell = `<td><div class="trademark-image-wrapper"><img class="trademark-image-thumbnail" src="${imgSrc}" alt="logo"></div></td>`;
+                        } else {
+                            childBrandImgCell = `<td></td>`;
+                        }
+                    }
+
+                    childTr.innerHTML = `
+                        <td></td>
+                        <td>${safe(childStatus)}</td>
+                        <td>${safe(childTitle)}</td>
+                        ${childBrandImgCell}
+                        <td>${safe(childOrigin)}</td>
+                        <td>${childCountryName}</td>
+                        <td>${safe(childAppNo)}</td>
+                        <td>${fmtDate(childAppDate)}</td>
+                        <td>${safe(childAppStatus)}</td>
+                        <td>${safe(childApplicants)}</td>
+                        <td>${childActions}</td>
+                    `;
+                    frag.appendChild(childTr);
+                });
+            }
+        }
     });
+
     tableBody.appendChild(frag);
+    wireAccordion();
 }
 // ... PortfolioModule sınıfının içinde ...
 
@@ -1846,6 +1961,26 @@ async loadObjectionRows() {
             const result = await personService.getPersons();
             if (result.success) allPersons = result.data;
         }
+
+        async function getCountries() {
+            try {
+                const db = getFirestore();
+                const docRef = doc(db, 'common', 'countries');
+                const docSnap = await getDoc(docRef);
+
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    allCountries = data.list || [];
+                    return allCountries;
+                } else {
+                    console.log("common/countries belgesi bulunamadı!");
+                    return [];
+                }
+            } catch (error) {
+                console.error("Ülke listesi çekilirken hata oluştu:", error);
+                return [];
+            }
+        }
     </script>
     <script>
 (function () {
@@ -1858,53 +1993,39 @@ async loadObjectionRows() {
   function saveState(state) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   }
-
-  function setGroupVisibility(groupId, expanded) {
-    const rows = document.querySelectorAll(`.group-row[data-parent-id="${groupId}"]`);
-    rows.forEach(r => r.setAttribute('aria-hidden', expanded ? 'false' : 'true'));
-    const headerBtn = document.querySelector(`.group-header[data-group-id="${groupId}"] .accordion-toggle`);
-    if (headerBtn) headerBtn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
-  }
-
-  window.wireObjectionsAccordion = function wireObjectionsAccordion() {
+  
+  function wireAccordion() {
     const state = loadState();
 
-    // İlk bağlama: butonlara click + klavye
     document.querySelectorAll('#portfolioTableBody .group-header').forEach(header => {
       const groupId = header.getAttribute('data-group-id');
-      const btn = header.querySelector('.accordion-toggle');
-      if (!btn) return;
-
-      // Başlangıç durumu
       const expanded = state[groupId] === true;
-      setGroupVisibility(groupId, expanded);
-
+      
       const toggle = () => {
-        const isOpen = btn.getAttribute('aria-expanded') === 'true';
-        const next = !isOpen;
-        setGroupVisibility(groupId, next);
-        state[groupId] = next;
+        const isOpen = header.classList.toggle('expanded');
+        state[groupId] = isOpen;
         saveState(state);
+        
+        const childRows = document.querySelectorAll(`tr[data-parent-id="${groupId}"]`);
+        childRows.forEach(row => {
+          row.style.display = isOpen ? '' : 'none';
+        });
       };
-
-      // buton tıklama
-      btn.addEventListener('click', toggle);
-
-      // başlık satırının tamamı tıklanabilir olsun
-      header.addEventListener('click', (e) => {
-        if (e.target.closest('.accordion-toggle')) return;
-        toggle();
+      
+      header.addEventListener('click', toggle);
+      
+      const childRows = document.querySelectorAll(`tr[data-parent-id="${groupId}"]`);
+      childRows.forEach(row => {
+        row.style.display = expanded ? '' : 'none';
       });
 
-      // klavye erişimi
-      header.setAttribute('tabindex', '0');
-      header.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }
-        if (e.key === 'ArrowRight') { setGroupVisibility(groupId, true); state[groupId]=true; saveState(state); }
-        if (e.key === 'ArrowLeft')  { setGroupVisibility(groupId, false); state[groupId]=false; saveState(state); }
-      });
+      if (expanded) {
+        header.classList.add('expanded');
+      }
     });
-  };
+  }
+
+  window.wireAccordion = wireAccordion;
 })();
 </script>
 
