@@ -1143,18 +1143,19 @@ button.action-btn[data-action="edit"]:hover {
 }
 /* --- Yenilenen tablo ve akordeon stilleri --- */
 .group-header {
-    background-color: #f0f4f8; /* Hafif mavi-gri */
-    border-top: 1px solid #dcdfe6;
-    border-bottom: 1px solid #dcdfe6;
+    background-color: #e6f1f8; /* Açık mavi */
+    border-top: 1px solid #d0e0e9;
+    border-bottom: 1px solid #d0e0e9;
+    font-weight: 600;
 }
 
 .group-header:hover {
-    background-color: #e8ecf2;
+    background-color: #dbeaf2;
 }
 
 .child-row {
-    background-color: #f8f9fa; /* Çok hafif gri */
-    border-left: 3px solid #6c757d; /* Parent ile hizalı, daha ince bir çizgi */
+    background-color: #f8f9fa; /* Çok açık gri */
+    border-left: 3px solid #86b7d2; /* Mavi çizgi */
     font-size: 0.9em;
 }
 
