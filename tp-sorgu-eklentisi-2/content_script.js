@@ -48,6 +48,37 @@ function pressEnter(el){
   el.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
 }
 
+
+// --------- EVREKA PATCH HELPERS (appNo normalize & label extraction) ---------
+function normalizeAppNo(appNo) {
+  try {
+    const raw = String(appNo || '').trim();
+    if (!raw) return '';
+    const parts = raw.split('/');
+    if (parts.length != 2) return raw;
+    let [yy, rest] = parts;
+    yy = String(yy || '').trim();
+    rest = String(rest || '').trim();
+    if (/^\d{2}$/.test(yy)) {
+      const n = parseInt(yy, 10);
+      const fullYear = (n <= 24 ? 2000 + n : 1900 + n);
+      return `${fullYear}/${rest}`;
+    }
+    return `${yy}/${rest}`;
+  } catch { return String(appNo || '').trim(); }
+}
+function extractByLabel(root, label) {
+  try {
+    const tds = Array.from(root.querySelectorAll('td, .MuiTableCell-root, .MuiTableCell-body'));
+    for (let i = 0; i < tds.length - 1; i++) {
+      const k = (tds[i].textContent || '').trim().toLowerCase();
+      if (k === String(label || '').trim().toLowerCase()) {
+        return (tds[i + 1].textContent || '').trim();
+      }
+    }
+  } catch {}
+  return '';
+}
 // --------- Messaging ---------
 function sendToOpener(type, data) {
   const payload = { source: 'tp-extension-sahip', type, data };
@@ -340,6 +371,22 @@ async function parseDetailsFromOpenDialog(dialogRoot) {
     goodsAndServices: [],
     transactions: []
   };
+  // --- EVREKA PATCH: Extract Application No & Date early (label-based) ---
+  try {
+    const labeledAppNo = extractByLabel(dialogRoot, 'Başvuru Numarası');
+    if (labeledAppNo) {
+      data.fields['Başvuru Numarası'] = normalizeAppNo(labeledAppNo);
+    } else {
+      const txtAll = (dialogRoot.textContent || '').replace(/\s+/g, ' ').trim();
+      const m = txtAll.match(/\b((?:19|20)\d{2}|\d{2})\/\d{4,}\b/);
+      if (m) data.fields['Başvuru Numarası'] = normalizeAppNo(m[0]);
+    }
+    const labeledAppDate = extractByLabel(dialogRoot, 'Başvuru Tarihi');
+    if (labeledAppDate) {
+      data.fields['Başvuru Tarihi'] = labeledAppDate;
+    }
+  } catch (e) { /* ignore */ }
+
 
   try {
     // Hızlı tablo parsing - tek geçişte her şeyi topla
@@ -563,9 +610,11 @@ function parseOwnerRowBase(tr, idx) {
     const cellText = (tds[i]?.textContent || '').trim();
     
     // Başvuru numarası: 2022/125224 gibi formatlar
-    if (!applicationNumber && /^\d{4}\/\d+$/.test(cellText)) {
+    if (!applicationNumber && /^((?:19|20)\d{2}|\d{2})\/\d+$/.test(cellText)) {
       applicationNumber = cellText;
+        applicationNumber = normalizeAppNo(applicationNumber);
       if (idx < 3) console.log(`   ✅ Başvuru no ${i}. hücrede bulundu: "${applicationNumber}"`);
+      applicationNumber = normalizeAppNo(applicationNumber);
       
       // Başvuru numarası bulunduysa, diğer alanları sırayla dene
       if (tds[i + 1] && !brandName) {
@@ -610,7 +659,7 @@ function parseOwnerRowBase(tr, idx) {
       const cellText = (tds[i]?.textContent || '').trim();
       
       // Daha esnek pattern: herhangi bir yıl/sayı kombinasyonu
-      if (/\d{4}\/\d/.test(cellText) || /\d{4}-\d/.test(cellText)) {
+      if (/(?:\d{4}|\d{2})\/\d/.test(cellText) || /\d{4}-\d/.test(cellText)) {
         applicationNumber = cellText;
         if (idx < 3) console.log(`   ✅ Esnek pattern ile başvuru no bulundu: "${applicationNumber}"`);
         break;
@@ -659,15 +708,24 @@ async function collectOwnerResultsWithDetails() {
       const base = parseOwnerRowBase(tr, globalIdx);
 
       if (!base.applicationNumber) {
-        console.log(`⚠️ Başvuru numarası olmayan satır atlandı: satır ${globalIdx + 1}`);
-        continue;
+        console.log(`ℹ️ Satır ${globalIdx + 1} için modal üzerinden appNo deneniyor...`);
+        const detailForAppNo = await openRowModalAndParse(tr, { timeout: 9000 });
+        if (detailForAppNo && detailForAppNo.fields) {
+          const cand = detailForAppNo.fields['Başvuru Numarası'];
+          if (cand) base.applicationNumber = normalizeAppNo(cand);
+        }
+        if (!base.applicationNumber) {
+          console.log(`⚠️ Başvuru numarası bulunamadı: satır ${globalIdx + 1} (modal fallback da başarısız)`);
+          continue;
+        }
       }
 
+      base.applicationNumber = normalizeAppNo(base.applicationNumber);
       if (processedApplicationNumbers.has(base.applicationNumber)) {
         console.log(`⚠️ Çift kayıt atlandı: ${base.applicationNumber}`);
         continue;
       }
-      processedApplicationNumbers.add(base.applicationNumber);
+      processedApplicationNumbers.add(normalizeAppNo(base.applicationNumber));
 
       if (base.imageSrc) {
         base.brandImageDataUrl = base.imageSrc;
