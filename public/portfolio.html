@@ -390,6 +390,27 @@ td.caret-host { position: relative; padding-left: 28px; }
 }
 .row-caret i{ transition: transform .18s ease; }
 .row-caret[aria-expanded="true"] i{ transform: rotate(90deg); }
+
+/* Portfolio sayfası için CSS override */
+.portfolio-table th::after,
+.portfolio-table .accordion-header::after,
+.modal .accordion-header::after {
+    display: none !important;
+    content: none !important;
+}
+
+/* Sadece sidebar accordion'ları için ok simgesi */
+.sidebar-nav .accordion-header::after {
+    content: '▶';
+    margin-left: auto;
+    font-size: 0.8em;
+    transition: transform 0.3s ease;
+    display: inline-block !important;
+}
+
+.sidebar-nav .accordion-header.active::after {
+    transform: rotate(90deg);
+}
 </style>
 
 <style id="accordion-fix-style">
@@ -1514,7 +1535,8 @@ tr.group-row[aria-hidden="true"]{ display:none !important; }
                                 `;
 
                                 // Event listener'ları ekle (HTML render'dan sonra)
-                                const headers = document.querySelectorAll('.accordion-transaction-header[data-parent-id]');
+                                const modal = document.getElementById('recordDetailModal');
+                                const headers = modal.querySelectorAll('.accordion-transaction-header[data-parent-id]');
                                 headers.forEach(header => {
                                     header.addEventListener('click', function() {
                                         const parentId = this.getAttribute('data-parent-id');
