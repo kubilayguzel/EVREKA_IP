@@ -1141,30 +1141,5 @@ button.action-btn[data-action="edit"]:hover {
     background-color: #e9ecef;
     border-color: #6c757d;
 }
-/* --- Portfolio Parent-Child Renklendirmesi --- */
-table.portfolio-table tr.group-header {
-    background-color: #ff8c00 !important; /* Turuncu parent */
-    color: #fff !important;
-    border-top: 1px solid #e6790e !important;
-    border-bottom: 1px solid #e6790e !important;
-    font-weight: 600 !important;
-}
-
-table.portfolio-table tr.group-header:hover {
-    background-color: #e6790e !important;
-}
-
-table.portfolio-table tr.child-row,
-table.portfolio-table tr.group-row {
-    background-color: #ffd4a3 !important; /* Açık turuncu child */
-    color: #333 !important;
-    border-left: 3px solid #ff8c00 !important;
-    font-size: 0.9em !important;
-}
-
-table.portfolio-table tr.child-row:hover,
-table.portfolio-table tr.group-row:hover {
-    background-color: #ffbe57 !important;
-}
     
   }
