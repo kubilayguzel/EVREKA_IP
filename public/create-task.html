@@ -552,8 +552,33 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333
                                 <select id="originSelect" class="form-select"></select>
                             </div>
                         </div>
+                        <div id="countrySelectionContainer" class="form-section" style="display:none;">
+                            <h3 class="section-title" id="countrySelectionTitle">Ulusal Menşe Ülke Seçimi</h3>
+                            <div id="singleCountrySelectWrapper" class="form-group full-width">
+                                <label for="countrySelect" class="form-label">Ülke</label>
+                                <select id="countrySelect" class="form-select"></select>
+                            </div>
+                            
+                            <div id="multiCountrySelectWrapper" style="display: none;">
+                                <div class="form-group full-width">
+                                    <label for="countriesMultiSelectInput" class="form-label">Ülke Ara ve Ekle</label>
+                                    <div class="position-relative">
+                                        <input type="text" id="countriesMultiSelectInput" class="form-input" placeholder="Ülke adı veya kodu ile arayın...">
+                                        <div id="countriesMultiSelectResults" class="search-results-list" style="display:none;"></div>
+                                    </div>
+                                </div>
+                                <div class="form-group full-width mt-3">
+                                    <label class="form-label">Seçilen Ülkeler <span class="badge badge-light" id="selectedCountriesCount">0</span></label>
+                                    <div id="selectedCountriesList" class="selected-items-list">
+                                        <div class="empty-state">
+                                            <i class="fas fa-flag fa-3x text-muted mb-3"></i>
+                                            <p class="text-muted">Henüz ülke eklenmedi.</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-
                     <div id="conditionalFieldsContainer"></div>
                     
                     <div class="form-section" id="goodsServicesSection" style="display:none;">
