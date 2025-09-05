@@ -401,8 +401,11 @@ async function queryByOwnerNumber(sahipNo) {
 function setupExtensionMessageListener() {
   console.log('[DEBUG] Eklenti mesaj dinleyicisi kuruluyor...');
   
+  // Global batch state
+  window.batchResults = [];
+  window.batchProgress = null;
+  
   window.addEventListener('message', (event) => {
-    // Güvenlik kontrolü
     const allowedOrigins = [
       window.location.origin,
       'https://www.turkpatent.gov.tr',
@@ -422,7 +425,54 @@ function setupExtensionMessageListener() {
         showToast('TÜRKPATENT sayfasında sorgu başladı...', 'info');
       }
       
+      else if (event.data.type === 'BATCH_VERI_GELDI_KISI') {
+        // Batch veri geldi - progressive loading
+        const { batch, batchNumber, totalBatches, processedCount, totalCount, isComplete } = event.data.data;
+        
+        console.log(`[DEBUG] Batch ${batchNumber}/${totalBatches} alındı: ${batch.length} kayıt`);
+        
+        // Batch'i global array'e ekle
+        window.batchResults = window.batchResults.concat(batch);
+        
+        // Loading güncelle
+        if (window.currentLoading) {
+          const progress = Math.round((processedCount / totalCount) * 100);
+          window.currentLoading.updateText(
+            `Veriler işleniyor (${progress}%)`,
+            `${processedCount}/${totalCount} kayıt işlendi - Batch ${batchNumber}/${totalBatches}`
+          );
+        }
+        
+        // İlk batch geldiğinde tabloyu başlat
+        if (batchNumber === 1) {
+          renderOwnerResults(window.batchResults);
+        } else {
+          // Sonraki batch'leri mevcut tabloya ekle
+          appendBatchToTable(batch);
+        }
+        
+        showToast(`Batch ${batchNumber}/${totalBatches} yüklendi (${window.batchResults.length} kayıt)`, 'info');
+      }
+      
+      else if (event.data.type === 'VERI_GELDI_KISI_COMPLETE') {
+        // Tüm process tamamlandı
+        console.log('[DEBUG] Tüm batch işlemi tamamlandı');
+        
+        if (window.currentLoading) {
+          window.currentLoading.showSuccess(`${window.batchResults.length} kayıt başarıyla yüklendi!`);
+          window.currentLoading = null;
+        }
+        
+        showToast(`Tüm veriler yüklendi: ${window.batchResults.length} kayıt`, 'success');
+        
+        // Final table update
+        currentOwnerResults = window.batchResults;
+        setupCheckboxListeners();
+        updateSaveButton();
+      }
+      
       else if (event.data.type === 'VERI_GELDI_KISI') {
+        // Eski format - geriye uyumluluk
         _hideBlock(loadingEl);
         const data = event.data.data || [];
         
@@ -445,7 +495,6 @@ function setupExtensionMessageListener() {
           }
           showToast(`${data.length} kayıt başarıyla alındı.`, 'success');
         }
-        
       } 
       
       else if (event.data.type === 'HATA_KISI') {
@@ -817,6 +866,43 @@ function renderSelectedRelatedParties() {
   }
 
   if (countEl) countEl.textContent = selectedRelatedParties.length;
+}
+
+// EKLE: tp-file-transfer.js'e
+function appendBatchToTable(batchItems) {
+  const tbody = document.querySelector('.tp-results-table tbody');
+  if (!tbody) return;
+  
+  const startIndex = window.batchResults.length - batchItems.length;
+  
+  const fragment = document.createDocumentFragment();
+  
+  batchItems.forEach((item, localIdx) => {
+    const globalIdx = startIndex + localIdx;
+    const imgSrc = item.brandImageDataUrl || item.brandImageUrl || item.imageSrc;
+    
+    const row = document.createElement('tr');
+    row.innerHTML = `
+      <td><input type="checkbox" class="record-checkbox" data-index="${globalIdx}" checked></td>
+      <td>${imgSrc ? `<img src="${imgSrc}" alt="" style="height:56px;max-width:120px;border:1px solid #eee;border-radius:6px;" />` : ''}</td>
+      <td>${item.applicationNumber || ''}</td>
+      <td>${item.brandName || ''}</td>
+      <td>${fmtDateToTR(item.applicationDate || '')}</td>
+      <td>${item.registrationNumber || ''}</td>
+      <td>${item.status || ''}</td>
+      <td>${item.niceClasses || ''}</td>
+    `;
+    
+    fragment.appendChild(row);
+  });
+  
+  tbody.appendChild(fragment);
+  
+  // Sonuç sayısını güncelle
+  const resultsHeader = document.querySelector('.results-header strong');
+  if (resultsHeader) {
+    resultsHeader.textContent = `${window.batchResults.length} sonuç bulundu`;
+  }
 }
 
 // ===============================
