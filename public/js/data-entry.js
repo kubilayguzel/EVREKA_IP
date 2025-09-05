@@ -1443,12 +1443,8 @@ async saveTrademarkPortfolio(portfolioData) {
         
         if (origin === 'Yurtdışı Ulusal') {
             selectedCountry = document.getElementById('countrySelect')?.value;
-            // Diğer menşe tipleri için array boş kalacak
-            selectedCountries = [];
         } else if (origin === 'WIPO' || origin === 'ARIPO') {
             selectedCountries = this.selectedCountries.map(c => c.code);
-            // Diğer menşe tipleri için string alan boş kalacak
-            selectedCountry = null;
         }
 
         // ✅ MARKA GÖRSELİ UPLOAD İŞLEMİ
@@ -1555,8 +1551,8 @@ async saveTrademarkPortfolio(portfolioData) {
             status: document.getElementById('trademarkStatus')?.value || 'filed',
             recordOwnerType: this.recordOwnerTypeSelect.value,
             origin: origin || 'TÜRKPATENT',
-            country: selectedCountry || null, // ✅ GÜNCELLENMİŞ: Tekil ülke alanı
-            countries: selectedCountries || [], // ✅ GÜNCELLENMİŞ: Çoklu ülke alanı
+            country: selectedCountry || null,
+            countries: selectedCountries || [],
             
             // Başvuru bilgileri
             applicationNumber: applicationNumber || null,
