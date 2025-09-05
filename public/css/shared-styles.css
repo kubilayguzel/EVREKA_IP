@@ -1141,5 +1141,34 @@ button.action-btn[data-action="edit"]:hover {
     background-color: #e9ecef;
     border-color: #6c757d;
 }
+/* --- Yenilenen tablo ve akordeon stilleri --- */
+.group-header {
+    background-color: #f0f4f8; /* Hafif mavi-gri */
+    border-top: 1px solid #dcdfe6;
+    border-bottom: 1px solid #dcdfe6;
+}
+
+.group-header:hover {
+    background-color: #e8ecf2;
+}
+
+.child-row {
+    background-color: #f8f9fa; /* Çok hafif gri */
+    border-left: 3px solid #6c757d; /* Parent ile hizalı, daha ince bir çizgi */
+    font-size: 0.9em;
+}
+
+.child-row:hover {
+    background-color: #e9ecef;
+}
+
+.row-caret {
+    background-color: #f0f0f0;
+}
+
+/* Tüm sekmeler için genel akordeon stilleri */
+.portfolio-table .group-row[aria-hidden="true"] {
+    display: none;
+}
     
   }
