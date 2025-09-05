@@ -371,7 +371,33 @@ async function queryByOwnerNumber(sahipNo) {
     
     // TÜRKPATENT sayfasını aç
     const turkPatentUrl = `https://www.turkpatent.gov.tr/arastirma-yap?form=trademark&auto_query=${encodeURIComponent(sahipNo)}&query_type=sahip&source=${encodeURIComponent(window.location.origin)}`;
+    
+    console.log('[DEBUG] TÜRKPATENT URL açılıyor:', turkPatentUrl);
+    
+    // Yeni sekme aç
+    const newWindow = window.open(turkPatentUrl, '_blank'); // opener kalsın (mesaj için gerekli)
+    
+    if (newWindow) {
+      showToast('TÜRKPATENT sayfası açıldı. Eklenti çalışacak ve sonuçları gönderecek.', 'info');
+      
+      // Timeout
+      setTimeout(() => {
+        _hideBlock(loadingEl);
+      }, 45000);
+      
+    } else {
+      _hideBlock(loadingEl);
+      showToast('Pop-up engellendi. Tarayıcı ayarlarından pop-up\'ları açın.', 'danger');
+    }
 
+  } catch (err) {
+    _hideBlock(loadingEl);
+    console.error('[DEBUG] Sahip numarası sorgulama hatası:', err);
+    showToast('İşlem hatası: ' + (err.message || err), 'danger');
+  }
+}
+
+// ===============================
 // OTOMATİK SAHİP EŞLEŞTİRME
 // ===============================
 
@@ -420,7 +446,8 @@ function autoMatchOwnerByTpeNo(searchedTpeNo) {
     }
   } else {
     console.log('[DEBUG] ❌ Bu TPE No ile eşleşen kişi bulunamadı');
-    showToast(`TPE No ${searchedTpeNo} ile kayıtlı kişi bulunamadı`, 'warning');
+    // Bu mesajı göstermeyebiliriz çünkü çoğu zaman normal
+    // showToast(`TPE No ${searchedTpeNo} ile kayıtlı kişi bulunamadı`, 'warning');
   }
 }
 // ===============================
