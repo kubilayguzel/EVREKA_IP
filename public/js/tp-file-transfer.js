@@ -304,7 +304,7 @@ async function handleQuery() {
     );
 
     console.log('[DEBUG] Sahip numarası eklentiye yönlendiriliyor:', sahipNo);
-    
+    window.searchedOwnerNumber = sahipNo;
     const url = `https://www.turkpatent.gov.tr/arastirma-yap?form=trademark&auto_query=${encodeURIComponent(sahipNo)}&query_type=sahip&source=${encodeURIComponent(window.location.origin)}`;
     console.log('[DEBUG] TÜRKPATENT URL açılıyor:', url);
     
@@ -424,7 +424,7 @@ function autoMatchOwnerByTpeNo(searchedTpeNo) {
   // TPE No ile eşleşen kişi ara
   const matchedPerson = allPersons.find(person => {
     const personTpeNo = String(person.tpeNo || '').trim();
-    const searchTpeNo = String(searchedTpeNo || '').trim();
+    const searchTpeNo = String(searchedTpeNo || window.searchedOwnerNumber || '').trim();
     
     console.log(`[DEBUG] Karşılaştırma: "${personTpeNo}" === "${searchTpeNo}"`);
     
@@ -463,6 +463,41 @@ function autoMatchOwnerByTpeNo(searchedTpeNo) {
 // EKLENTİ MESAJ DİNLEYİCİSİ
 // ===============================
 
+
+// === Auto add owner helper ===
+function tryAutoAddOwner(searchedTpeNo) {
+  try {
+    if (!Array.isArray(allPersons) || !allPersons.length) {
+      console.log('[DEBUG] ❌ Kişi listesi boş veya yüklenmemiş');
+      showToast('Kişi listesi henüz yüklenmemiş. Lütfen bekleyin.', 'warning');
+      return;
+    }
+    const searchTpeNo = String(searchedTpeNo || window.searchedOwnerNumber || '').trim();
+    console.log('[DEBUG] AutoAddOwner - aranan TPE No:', searchTpeNo);
+
+    const matchedPerson = allPersons.find(p => String(p.tpeNo || '').trim() === searchTpeNo);
+    console.log('[DEBUG] AutoAddOwner - eşleşen kişi:', matchedPerson || 'Bulunamadı');
+
+    if (matchedPerson) {
+      const already = selectedRelatedParties.find(x => x.id === matchedPerson.id);
+      if (!already) {
+        selectedRelatedParties.push({
+          id: matchedPerson.id,
+          name: matchedPerson.name,
+          email: matchedPerson.email || '',
+          phone: matchedPerson.phone || '',
+          tpeNo: matchedPerson.tpeNo || ''
+        });
+        renderSelectedRelatedParties();
+        showToast(`✅ ${matchedPerson.name} otomatik olarak sahip listesine eklendi`, 'success');
+      } else {
+        showToast(`${matchedPerson.name} zaten sahip listesinde`, 'info');
+      }
+    }
+  } catch (err) {
+    console.warn('tryAutoAddOwner error:', err);
+  }
+}
 function setupExtensionMessageListener() {
   console.log('[DEBUG] Eklenti mesaj dinleyicisi kuruluyor...');
   
@@ -490,68 +525,61 @@ function setupExtensionMessageListener() {
         showToast('TÜRKPATENT sayfasında sorgu başladı...', 'info');
       }
       
-else if (event.data.type === 'BATCH_VERI_GELDI_KISI') {
-  // Batch veri geldi - progressive loading
-  const { batch, batchNumber, totalBatches, processedCount, totalCount, isComplete } = event.data.data;
-  
-  console.log(`[DEBUG] Batch ${batchNumber}/${totalBatches} alındı: ${batch.length} kayıt`);
-  
-  // Duplicate kontrolü ile batch'i ekle
-  batch.forEach(item => {
-    const exists = window.batchResults.some(existing => 
-      existing.applicationNumber && 
-      existing.applicationNumber === item.applicationNumber
-    );
-    if (!exists) {
-      window.batchResults.push(item);
-    }
-  });
-  
-  // Loading güncelle
-  if (window.currentLoading) {
-    const progress = Math.round((processedCount / totalCount) * 100);
-    window.currentLoading.updateText(
-      `Veriler işleniyor (${progress}%)`,
-      `${processedCount}/${totalCount} kayıt işlendi - Batch ${batchNumber}/${totalBatches}`
-    );
-  }
-  
-  // İlk batch geldiğinde tabloyu başlat
-  if (batchNumber === 1) {
-    renderOwnerResults(window.batchResults);
-    
-    // ✅ İLK BATCH'TE SAHİP EŞLEŞTİRME YAP
-    if (window.searchedOwnerNumber) {
-      console.log('[DEBUG] İlk batch geldi, sahip eşleştirme yapılıyor...', window.searchedOwnerNumber);
-      setTimeout(() => {
-        autoMatchOwnerByTpeNo(window.searchedOwnerNumber);
-        window.searchedOwnerNumber = null; // Temizle
-      }, 200); // UI'ın tam yüklenmesi için biraz bekle
-    }
-  } else {
-    // Tabloyu güncelle ama tekrar render etme
-    currentOwnerResults = window.batchResults;
-    updateTableRowCount();
-  }
-  
-  showToast(`Batch ${batchNumber}/${totalBatches} yüklendi`, 'info');
-  
-  // Son batch ise complete olarak işaretle
-  if (isComplete) {
-    setTimeout(() => {
-      window.dispatchEvent(new CustomEvent('message', {
-        detail: {
-          origin: event.origin,
-          data: {
-            source: 'tp-extension-sahip',
-            type: 'VERI_GELDI_KISI_COMPLETE',
-            data: { totalProcessed: window.batchResults.length }
+      else if (event.data.type === 'BATCH_VERI_GELDI_KISI') {
+        // YENİ: Progressive batch loading
+        const { batch, batchNumber, totalBatches, processedCount, totalCount, isComplete } = event.data.data;
+        
+        console.log(`[DEBUG] Batch ${batchNumber}/${totalBatches} alındı: ${batch.length} kayıt`);
+        
+        // Duplicate kontrolü ile batch'i ekle
+        batch.forEach(item => {
+          const exists = window.batchResults.some(existing => 
+            existing.applicationNumber && 
+            existing.applicationNumber === item.applicationNumber
+          );
+          if (!exists) {
+            window.batchResults.push(item);
           }
+        });
+        
+        // Loading güncelle
+        if (window.currentLoading) {
+          const progress = Math.round((processedCount / totalCount) * 100);
+          window.currentLoading.updateText(
+            `Veriler işleniyor (${progress}%)`,
+            `${processedCount}/${totalCount} kayıt işlendi - Batch ${batchNumber}/${totalBatches}`
+          );
         }
-      }));
-    }, 500);
-  }
-}      
+        
+        // İlk batch geldiğinde tabloyu başlat, sonrakiler için append
+        if (batchNumber === 1) {
+          renderOwnerResults(window.batchResults);
+  try { if (window.searchedOwnerNumber) { tryAutoAddOwner(window.searchedOwnerNumber); } } catch (e) { console.warn('Owner autofill failed:', e); }
+        } else {
+          // Tabloyu güncelle ama tekrar render etme
+          currentOwnerResults = window.batchResults;
+          updateTableRowCount();
+        }
+        
+        showToast(`Batch ${batchNumber}/${totalBatches} yüklendi`, 'info');
+        
+        // Son batch ise complete olarak işaretle
+        if (isComplete) {
+          setTimeout(() => {
+            window.dispatchEvent(new CustomEvent('message', {
+              detail: {
+                origin: event.origin,
+                data: {
+                  source: 'tp-extension-sahip',
+                  type: 'VERI_GELDI_KISI_COMPLETE',
+                  data: { totalProcessed: window.batchResults.length }
+                }
+              }
+            }));
+          }, 500);
+        }
+      }
+      
       else if (event.data.type === 'VERI_GELDI_KISI_COMPLETE') {
         // Tüm process tamamlandı - SADECE EVENT LISTENERS GÜNCELLE
         console.log('[DEBUG] Tüm batch işlemi tamamlandı');
@@ -587,8 +615,9 @@ else if (event.data.type === 'BATCH_VERI_GELDI_KISI') {
         } else {
           // TEK SEFER RENDER - başka render çağrısı YOK
           renderOwnerResults(data);
-          
-          if (window.currentLoading) {
+      try { if (window.searchedOwnerNumber) { tryAutoAddOwner(window.searchedOwnerNumber); } } catch (e) { console.warn('Owner autofill failed:', e); }
+
+      if (window.currentLoading) {
             window.currentLoading.showSuccess(`${data.length} kayıt başarıyla alındı!`);
             window.currentLoading = null;
           }
@@ -820,6 +849,15 @@ function renderOwnerResults(items) {
   
   const endTime = performance.now();
   console.log(`✅ renderOwnerResults tamamlandı: ${(endTime - startTime).toFixed(2)}ms`);
+  
+  // ✅ SONUÇLAR RENDER EDİLDİKTEN SONRA SAHİP EŞLEŞTİRME
+  if (window.searchedOwnerNumber) {
+    console.log('[DEBUG] UI hazır, şimdi sahip eşleştirme yapılıyor...');
+    setTimeout(() => {
+      autoMatchOwnerByTpeNo(window.searchedOwnerNumber);
+      window.searchedOwnerNumber = null; // Temizle
+    }, 100); // UI'ın tam yüklenmesi için kısa bekleme
+  }
   
   // Event listeners - requestAnimationFrame ile asenkron yap
   requestAnimationFrame(() => {
