@@ -1141,38 +1141,30 @@ button.action-btn[data-action="edit"]:hover {
     background-color: #e9ecef;
     border-color: #6c757d;
 }
-/* --- Yenilenen tablo ve akordeon stilleri --- */
-/* --- Belirgin parent ve child tablo satırı stilleri (Yüksek Öncelik) --- */
+/* --- Portfolio Parent-Child Renklendirmesi --- */
 table.portfolio-table tr.group-header {
-    background-color: #ffde94 !important; /* Daha belirgin açık turuncu */
-    color: #333 !important;
-    border-top: 1px solid #ffbe57 !important;
-    border-bottom: 1px solid #ffbe57 !important;
+    background-color: #ff8c00 !important; /* Turuncu parent */
+    color: #fff !important;
+    border-top: 1px solid #e6790e !important;
+    border-bottom: 1px solid #e6790e !important;
     font-weight: 600 !important;
 }
 
 table.portfolio-table tr.group-header:hover {
-    background-color: #ffbe57 !important;
+    background-color: #e6790e !important;
 }
 
-table.portfolio-table tr.child-row {
-    background-color: #fff6b2 !important; /* Daha belirgin açık sarı */
+table.portfolio-table tr.child-row,
+table.portfolio-table tr.group-row {
+    background-color: #ffd4a3 !important; /* Açık turuncu child */
     color: #333 !important;
-    border-left: 3px solid #ffeb3b !important;
+    border-left: 3px solid #ff8c00 !important;
     font-size: 0.9em !important;
 }
 
-table.portfolio-table tr.child-row:hover {
-    background-color: #ffe87c !important;
-}
-
-/* Diğer akordeon ve tablo stilleri */
-.row-caret {
-    background-color: #f0f0f0;
-}
-
-.portfolio-table .group-row[aria-hidden="true"] {
-    display: none;
+table.portfolio-table tr.child-row:hover,
+table.portfolio-table tr.group-row:hover {
+    background-color: #ffbe57 !important;
 }
     
   }
