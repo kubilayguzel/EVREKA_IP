@@ -460,6 +460,7 @@
         import { ipRecordsService, personService, transactionTypeService, auth, monitoringService, taskService } from './firebase-config.js';
         import { showNotification, formatFileSize } from './utils.js';
         import { loadSharedLayout } from './js/layout-loader.js';
+        import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
         let transactionTypesMap = new Map();
         // === İTİRAZ DURUM HARİTASI ===
