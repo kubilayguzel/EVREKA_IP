@@ -4,7 +4,7 @@ import { personService, ipRecordsService, storage, auth } from '../firebase-conf
 import { ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
 import { loadSharedLayout, openPersonModal, ensurePersonModal } from './layout-loader.js';
 import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-import { STATUSES } from '../utils.js';
+import { STATUSES, ORIGIN_TYPES } from '../utils.js';
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
 class DataEntryModule {
@@ -75,6 +75,21 @@ class DataEntryModule {
                 this.updateSaveButtonState();
             });
         }
+    }
+
+    populateOriginDropdown(dropdownId, selectedValue = 'TÜRKPATENT') {
+        const dropdown = document.getElementById(dropdownId);
+        if (!dropdown) return;
+        dropdown.innerHTML = ''; // Önceki seçenekleri temizle
+        ORIGIN_TYPES.forEach(origin => {
+            const option = document.createElement('option');
+            option.value = origin.value;
+            option.textContent = origin.text;
+            if (origin.value === selectedValue) {
+                option.selected = true;
+            }
+            dropdown.appendChild(option);
+        });
     }
 
     setupModalCloseButtons() {
@@ -421,6 +436,7 @@ class DataEntryModule {
         this.setupClearClassesButton(); // Temizle butonu setup'ını ekle
         this.populateCountriesDropdown();
         this.updateSaveButtonState();
+        this.populateOriginDropdown('originSelect');
     }
 
     renderPatentForm() {
@@ -446,6 +462,7 @@ class DataEntryModule {
 
         this.dynamicFormContainer.innerHTML = html;
         this.updateSaveButtonState();
+        this.populateOriginDropdown('originSelect');
     }
 
     renderDesignForm() {
@@ -471,6 +488,7 @@ class DataEntryModule {
 
         this.dynamicFormContainer.innerHTML = html;
         this.updateSaveButtonState();
+        this.populateOriginDropdown('originSelect');
     }
 
     setupDynamicFormListeners() {
@@ -1074,6 +1092,11 @@ populateFormFields(recordData) {
         
         const renewalDate = document.getElementById('renewalDate');
         if (renewalDate) renewalDate.value = recordData.renewalDate || '';
+        
+        const originSelect = document.getElementById('originSelect');
+        if (originSelect) {
+            this.populateOriginDropdown('originSelect', recordData.origin);
+        }
 
         // Marka özel alanları
         if (this.currentIpType === 'trademark') {
