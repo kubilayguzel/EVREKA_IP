@@ -859,6 +859,7 @@ renderCurrentPage() {
                 const countryDisplay = (origin === 'EUIPO' || origin === 'OAPI' || (origin === 'WIPO' && isAccordionParent) || (origin === 'ARIPO' && isAccordionParent)) ? '' : countryName;
 
                 tr.innerHTML = `
+                    ${toggleCell}
                     <td><input type="checkbox" class="record-checkbox" data-id="${idAttr}"></td>
                     <td>${safe(status)}</td>
                     <td>${safe(title)}</td>
@@ -873,6 +874,7 @@ renderCurrentPage() {
                 `;
             } else {
                 tr.innerHTML = `
+                    ${toggleCell}
                     <td><input type="checkbox" class="record-checkbox" data-id="${idAttr}"></td>
                     <td>${safe(status)}</td>
                     <td>${safe(ipType)}</td>
@@ -969,7 +971,7 @@ setupImageHoverEffect() {
 
         // Görünür yap
         setTimeout(() => {
-            hoverElement.style.display = 'block';
+            if (hoverElement) hoverElement.style.display = 'block';
         }, 10);
     });
 
