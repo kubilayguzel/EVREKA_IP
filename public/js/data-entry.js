@@ -129,8 +129,6 @@ async init() {
             multiSelectWrapper.style.display = 'block';
             this.setupMultiCountrySelect();
         }
-
-        // ✅ YENİ: Marka formundaki alanları menşeiye göre güncelle
         this.updateFormFieldsBasedOnOrigin();
     }
 
@@ -1601,7 +1599,7 @@ async saveTrademarkPortfolio(portfolioData) {
                 status: document.getElementById('trademarkStatus')?.value || 'filed',
                 recordOwnerType: this.recordOwnerTypeSelect.value,
                 origin: origin,
-                countries: selectedCountries, // Ana kayıtta ülkeler listesi
+                countries: selectedCountries,
                 
                 // International Registration Numarası
                 wipoIR: origin === 'WIPO' ? internationalRegNumber : null,
@@ -1632,16 +1630,53 @@ async saveTrademarkPortfolio(portfolioData) {
                 goodsAndServicesByClass: goodsAndServicesByClass,
                 
                 createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString()
+                updatedAt: new Date().toISOString(),
+                transactionHierarchy: 'parent',
+                parentId: null
             };
             recordsToSave.push(mainRecord);
 
-            // Her ülke için ayrı kayıt
+            // Her ülke için ayrı çocuk kayıt
             this.selectedCountries.forEach(country => {
                 const countryRecord = {
-                    ...mainRecord,
+                    title: brandText,
+                    type: 'trademark',
+                    portfoyStatus: 'active',
+                    status: document.getElementById('trademarkStatus')?.value || 'filed',
+                    recordOwnerType: this.recordOwnerTypeSelect.value,
+                    origin: origin,
                     country: country.code,
-                    countries: null // Alt kayıtta ülkeler listesi yok
+                    
+                    wipoIR: origin === 'WIPO' ? internationalRegNumber : null,
+                    aripoIR: origin === 'ARIPO' ? internationalRegNumber : null,
+                    
+                    applicationNumber: null,
+                    registrationNumber: null,
+                    applicationDate: applicationDate || null,
+                    registrationDate: registrationDate || null,
+                    renewalDate: renewalDate || null,
+                    
+                    brandText: brandText,
+                    brandImageUrl: brandImageUrl,
+                    description: description || null,
+                    
+                    brandType: document.getElementById('brandType')?.value || 'Şekil + Kelime',
+                    brandCategory: document.getElementById('brandCategory')?.value || 'Ticaret/Hizmet Markası',
+                    
+                    bulletins: (() => {
+                        const no = document.getElementById('bulletinNo')?.value?.trim();
+                        const dt = document.getElementById('bulletinDate')?.value?.trim();
+                        return (no || dt) ? [{ bulletinNo: no || null, bulletinDate: dt || null }] : [];
+                    })(),
+                    
+                    applicants: this.selectedApplicants.map(p => ({ id: p.id, name: p.name, email: p.email || null })),
+                    priorities: this.priorities,
+                    goodsAndServicesByClass: goodsAndServicesByClass,
+                    
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString(),
+                    transactionHierarchy: 'child',
+                    parentId: null
                 };
                 recordsToSave.push(countryRecord);
             });
@@ -1682,7 +1717,9 @@ async saveTrademarkPortfolio(portfolioData) {
                 goodsAndServicesByClass: goodsAndServicesByClass,
 
                 createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString()
+                updatedAt: new Date().toISOString(),
+                transactionHierarchy: 'single', // Tekil kayıtlar için "single"
+                parentId: null
             };
             recordsToSave.push(singleRecord);
         }
@@ -1693,8 +1730,9 @@ async saveTrademarkPortfolio(portfolioData) {
         let isExisting = false;
         let mainRecordId = null;
 
-        for (const recordData of recordsToSave) {
-            const isMainRecord = (recordData.origin === 'WIPO' || recordData.origin === 'ARIPO') && recordData.countries;
+        for (let i = 0; i < recordsToSave.length; i++) {
+            let recordData = recordsToSave[i];
+            const isMainRecord = recordData.transactionHierarchy === 'parent';
             
             let result;
             if (this.editingRecordId) {
@@ -1708,6 +1746,16 @@ async saveTrademarkPortfolio(portfolioData) {
             if (result.isExistingRecord || result.isDuplicate) isExisting = true;
             if (isMainRecord) mainRecordId = result?.id;
         }
+
+        // ParentId'leri güncelle
+        if (!this.editingRecordId && mainRecordId) {
+            const childRecords = recordsToSave.filter(r => r.transactionHierarchy === 'child');
+            const childIds = results.filter(r => r.id !== mainRecordId).map(r => r.id);
+            for(const childId of childIds) {
+                 await ipRecordsService.updateRecord(childId, { parentId: mainRecordId });
+            }
+        }
+
 
         if (success) {
             const msg = this.editingRecordId
