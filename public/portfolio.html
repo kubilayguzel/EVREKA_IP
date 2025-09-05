@@ -500,7 +500,7 @@ tr.group-row[aria-hidden="true"]{ display:none !important; }
         // === Yardımcı Fonksiyonlar ===
         const safe = (v) => (v ?? '').toString();
         const safeId = (v) => safe(v).replace(/[^a-zA-Z0-9_]+/g, '_');
-
+        
         function fmtDate(d) {
             try {
                 if (!d) return '-';
@@ -696,6 +696,7 @@ tr.group-row[aria-hidden="true"]{ display:none !important; }
             tableBody.innerHTML = '';
 
             const isObjections = (this.activeTypeFilter === 'objections');
+            const isAccordionTab = (this.activeTypeFilter === 'all' || this.activeTypeFilter === 'trademark');
 
             // ✅ DÜZELTME: İtirazlar için doğru veri kaynağını kullan
             let baseData;
@@ -764,7 +765,7 @@ tr.group-row[aria-hidden="true"]{ display:none !important; }
             const children = new Map();
 
             this.filteredAndSortedRecords.forEach(r => {
-                if (r.origin === 'WIPO' || r.origin === 'ARIPO') {
+                if ((r.origin === 'WIPO' || r.origin === 'ARIPO') && isAccordionTab) {
                     const internationalRegNo = r.wipoIR || r.aripoIR;
                     if (r.transactionHierarchy === 'parent' && internationalRegNo) {
                         parents.set(internationalRegNo, r);
@@ -777,7 +778,9 @@ tr.group-row[aria-hidden="true"]{ display:none !important; }
                 }
             });
 
-            this.filteredAndSortedRecords.forEach(r => {
+            const pageData = pagination.getCurrentPageData(this.filteredAndSortedRecords);
+
+            pageData.forEach(r => {
                 const status = this.getDisplayStatus(r);
                 const ipType = r.type || r.recordType || r.ipType || '';
                 const title = r.title || r.brandText || r.name || '';
@@ -790,7 +793,7 @@ tr.group-row[aria-hidden="true"]{ display:none !important; }
                 const countryName = getCountryName(countryCode);
 
                 let isAccordionParent = false;
-                if ((r.origin === 'WIPO' || r.origin === 'ARIPO') && r.transactionHierarchy === 'parent') {
+                if (isAccordionTab && (r.origin === 'WIPO' || r.origin === 'ARIPO') && r.transactionHierarchy === 'parent') {
                     const internationalRegNo = r.wipoIR || r.aripoIR;
                     if (children.has(internationalRegNo)) {
                         isAccordionParent = true;
@@ -798,7 +801,7 @@ tr.group-row[aria-hidden="true"]{ display:none !important; }
                 }
 
                 let shouldRender = true;
-                if ((r.origin === 'WIPO' || r.origin === 'ARIPO') && r.transactionHierarchy === 'child') {
+                if (isAccordionTab && (r.origin === 'WIPO' || r.origin === 'ARIPO') && r.transactionHierarchy === 'child') {
                     shouldRender = false;
                 }
 
@@ -832,6 +835,9 @@ tr.group-row[aria-hidden="true"]{ display:none !important; }
                     const caretCellContent = isAccordionParent ? caretBtn : '';
                     const caretCellClass = isAccordionParent ? 'caret-host' : '';
 
+                    // ✅ DÜZELTME: applicationNumber alanı WIPO kayıtları için wipoIR'ı kullanacak
+                    const appNoDisplay = (r.origin === 'WIPO' && r.wipoIR) ? r.wipoIR : safe(appNo);
+
                     if (this.activeTypeFilter === 'trademark') {
                         const countryDisplay = (origin === 'EUIPO' || origin === 'OAPI' || (origin === 'WIPO' && isAccordionParent) || (origin === 'ARIPO' && isAccordionParent)) ? '' : countryName;
 
@@ -843,7 +849,7 @@ tr.group-row[aria-hidden="true"]{ display:none !important; }
                             ${brandImgCell}
                             <td>${safe(origin)}</td>
                             <td>${countryDisplay}</td>
-                            <td>${safe(appNo)}</td>
+                            <td>${appNoDisplay}</td>
                             <td>${fmtDate(appDate)}</td>
                             <td>${safe(appStatus)}</td>
                             <td>${safe(applicants)}</td>
@@ -851,13 +857,13 @@ tr.group-row[aria-hidden="true"]{ display:none !important; }
                         `;
                     } else {
                         // Diğer sekmeler için toggle hücresinin içeriğini boş bırak
-                        const toggleCell = `<td></td>`;
+                        const toggleCell = `<td class="${caretCellClass}">${caretCellContent}</td>`;
                         tr.innerHTML = `
                             <td><input type="checkbox" class="record-checkbox" data-id="${idAttr}"></td>
                             ${toggleCell}
                             <td>${safe(ipType)}</td>
                             <td>${safe(title)}</td>
-                            <td>${safe(appNo)}</td>
+                            <td>${appNoDisplay}</td>
                             <td>${fmtDate(appDate)}</td>
                             <td>${safe(appStatus)}</td>
                             <td>${safe(applicants)}</td>
@@ -901,20 +907,36 @@ tr.group-row[aria-hidden="true"]{ display:none !important; }
                                 childBrandImgCell = `<td></td>`;
                             }
 
-                            childTr.innerHTML = `
-                                <td><input type="checkbox" class="record-checkbox" data-id="${childR.id}"></td>
-                                <td class="${caretCellClass}"></td>
-                                <td>${safe(childStatus)}</td>
-                                <td>${safe(childTitle)}</td>
-                                ${childBrandImgCell}
-                                <td>${safe(childOrigin)}</td>
-                                <td>${childCountryName}</td>
-                                <td>${safe(childAppNo)}</td>
-                                <td>${fmtDate(childAppDate)}</td>
-                                <td>${safe(childAppStatus)}</td>
-                                <td>${safe(childApplicants)}</td>
-                                <td>${childActions}</td>
-                            `;
+                            const childAppNoDisplay = (childR.origin === 'WIPO' && childR.wipoIR) ? childR.wipoIR : safe(childAppNo);
+
+                            if (this.activeTypeFilter === 'trademark') {
+                                childTr.innerHTML = `
+                                    <td></td>
+                                    <td></td>
+                                    <td>${safe(childStatus)}</td>
+                                    <td>${safe(childTitle)}</td>
+                                    ${childBrandImgCell}
+                                    <td>${safe(childOrigin)}</td>
+                                    <td>${childCountryName}</td>
+                                    <td>${childAppNoDisplay}</td>
+                                    <td>${fmtDate(childAppDate)}</td>
+                                    <td>${safe(childAppStatus)}</td>
+                                    <td>${safe(childApplicants)}</td>
+                                    <td>${childActions}</td>
+                                `;
+                            } else {
+                                childTr.innerHTML = `
+                                    <td></td>
+                                    <td></td>
+                                    <td>${safe(childR.type || '-')}</td>
+                                    <td>${safe(childTitle)}</td>
+                                    <td>${childAppNoDisplay}</td>
+                                    <td>${fmtDate(childAppDate)}</td>
+                                    <td>${safe(childAppStatus)}</td>
+                                    <td>${safe(childApplicants)}</td>
+                                    <td>${childActions}</td>
+                                `;
+                            }
                             frag.appendChild(childTr);
                         });
                     }
@@ -1739,6 +1761,7 @@ tr.group-row[aria-hidden="true"]{ display:none !important; }
                 filterRow.innerHTML = '';
                 const isObjections = (this.activeTypeFilter === 'objections');
                 const isTrademark = (this.activeTypeFilter === 'trademark');
+                const isAllTab = (this.activeTypeFilter === 'all');
                 let columns = isObjections
                     ? [
                         { key: 'toggle', label: '', sortable: false, width: '44px' },
@@ -1766,12 +1789,19 @@ tr.group-row[aria-hidden="true"]{ display:none !important; }
                         { key: 'applicants', label: 'Baş.Sahibi', sortable: true, width: '200px' },
                         { key: 'actions', label: 'İşlemler', sortable: false, width: '250px' }
                     ];
+
                 if (!isObjections && !isTrademark) {
-                    columns = columns.filter(col => col.key !== 'brandImage' && col.key !== 'origin' && col.key !== 'country' && col.key !== 'toggle');
+                    columns = columns.filter(col => col.key !== 'brandImage' && col.key !== 'origin' && col.key !== 'country');
                 }
                 if (!isObjections && !isTrademark) {
                     columns.splice(2, 0, { key: 'ipType', label: 'Kayıt Tipi', sortable: true, width: '100px' });
                 }
+                
+                // "Tümü" tabı için toggle sütunu ekle
+                if (isAllTab && !columns.find(col => col.key === 'toggle')) {
+                    columns.splice(1, 0, { key: 'toggle', label: '', sortable: false, width: '40px' });
+                }
+
                 columns.forEach(col => {
                     const th = document.createElement('th');
                     th.style.width = col.width;
