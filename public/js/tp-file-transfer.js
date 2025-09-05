@@ -403,19 +403,37 @@ async function queryByOwnerNumber(sahipNo) {
 
 function autoMatchOwnerByTpeNo(searchedTpeNo) {
   console.log('[DEBUG] Otomatik sahip eşleştirme başladı:', searchedTpeNo);
+  console.log('[DEBUG] allPersons sayısı:', allPersons?.length || 0);
+  console.log('[DEBUG] selectedRelatedParties mevcut:', selectedRelatedParties?.length || 0);
   
-  if (!searchedTpeNo || !allPersons?.length) {
-    console.log('[DEBUG] Sahip no yok veya kişi listesi boş');
+  if (!searchedTpeNo) {
+    console.log('[DEBUG] ❌ Sahip no boş');
     return;
   }
   
-  // TPE No ile eşleşen kişi ara
+  if (!allPersons?.length) {
+    console.log('[DEBUG] ❌ Kişi listesi boş veya yüklenmemiş');
+    showToast('Kişi listesi henüz yüklenmemiş. Lütfen bekleyin.', 'warning');
+    return;
+  }
+  
+  console.log('[DEBUG] Kişi listesindeki TPE No\'lar:', allPersons.map(p => ({
+    name: p.name,
+    tpeNo: p.tpeNo,
+    type: typeof p.tpeNo
+  })));
+  
+  // TPE No ile eşleşen kişi ara - DAHA ESNEKLİK
   const matchedPerson = allPersons.find(person => {
-    const personTpeNo = (person.tpeNo || '').toString().trim();
-    const searchTpeNo = searchedTpeNo.toString().trim();
+    const personTpeNo = String(person.tpeNo || '').trim();
+    const searchTpeNo = String(searchedTpeNo || '').trim();
+    
+    console.log(`[DEBUG] Karşılaştırma: "${personTpeNo}" === "${searchTpeNo}"`);
     
     return personTpeNo && searchTpeNo && personTpeNo === searchTpeNo;
   });
+  
+  console.log('[DEBUG] Eşleşen kişi:', matchedPerson || 'Bulunamadı');
   
   if (matchedPerson) {
     console.log('[DEBUG] ✅ Eşleşen kişi bulundu:', matchedPerson.name, 'TPE No:', matchedPerson.tpeNo);
@@ -446,10 +464,11 @@ function autoMatchOwnerByTpeNo(searchedTpeNo) {
     }
   } else {
     console.log('[DEBUG] ❌ Bu TPE No ile eşleşen kişi bulunamadı');
-    // Bu mesajı göstermeyebiliriz çünkü çoğu zaman normal
-    // showToast(`TPE No ${searchedTpeNo} ile kayıtlı kişi bulunamadı`, 'warning');
+    console.log('[DEBUG] Aranılan TPE No:', searchedTpeNo);
+    console.log('[DEBUG] Mevcut TPE No\'lar:', allPersons.map(p => p.tpeNo));
   }
 }
+
 // ===============================
 // EKLENTİ MESAJ DİNLEYİCİSİ
 // ===============================
