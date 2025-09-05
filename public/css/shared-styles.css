@@ -1142,32 +1142,35 @@ button.action-btn[data-action="edit"]:hover {
     border-color: #6c757d;
 }
 /* --- Yenilenen tablo ve akordeon stilleri --- */
-.group-header {
-    background-color: #ffe0b2; /* Açık turuncu */
-    border-top: 1px solid #ffcc80;
-    border-bottom: 1px solid #ffcc80;
-    font-weight: 600;
+/* --- Belirgin parent ve child tablo satırı stilleri (Yüksek Öncelik) --- */
+table.portfolio-table tr.group-header {
+    background-color: #ffde94 !important; /* Daha belirgin açık turuncu */
+    color: #333 !important;
+    border-top: 1px solid #ffbe57 !important;
+    border-bottom: 1px solid #ffbe57 !important;
+    font-weight: 600 !important;
 }
 
-.group-header:hover {
-    background-color: #ffcc80;
+table.portfolio-table tr.group-header:hover {
+    background-color: #ffbe57 !important;
 }
 
-.child-row {
-    background-color: #fff9c4; /* Açık sarı */
-    border-left: 3px solid #ffeb3b; /* Sarı çizgi */
-    font-size: 0.9em;
+table.portfolio-table tr.child-row {
+    background-color: #fff6b2 !important; /* Daha belirgin açık sarı */
+    color: #333 !important;
+    border-left: 3px solid #ffeb3b !important;
+    font-size: 0.9em !important;
 }
 
-.child-row:hover {
-    background-color: #ffeb3b;
+table.portfolio-table tr.child-row:hover {
+    background-color: #ffe87c !important;
 }
 
+/* Diğer akordeon ve tablo stilleri */
 .row-caret {
     background-color: #f0f0f0;
 }
 
-/* Tüm sekmeler için genel akordeon stilleri */
 .portfolio-table .group-row[aria-hidden="true"] {
     display: none;
 }
