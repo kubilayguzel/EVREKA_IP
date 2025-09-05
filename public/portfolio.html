@@ -349,7 +349,6 @@
   background: #f7f9fc;
   border-top: 1px solid #edf1f7;
   border-bottom: 1px solid #edf1f7;
-  cursor: pointer;
 }
 .group-header:hover { background:#f2f6fb; }
 .group-title { font-size: 0.95rem; color:#24324a; padding: 14px 8px; }
@@ -790,8 +789,7 @@ renderCurrentPage() {
         const origin = r.origin || '-';
         const countryCode = r.country || '-';
         const countryName = getCountryName(countryCode);
-
-        // WIPO ve ARIPO için özel durum
+        
         let isAccordionParent = false;
         if ((r.origin === 'WIPO' || r.origin === 'ARIPO') && r.transactionHierarchy === 'parent') {
             const internationalRegNo = r.wipoIR || r.aripoIR;
@@ -815,7 +813,6 @@ renderCurrentPage() {
                 tr.dataset.groupId = internationalRegNo;
             }
 
-            // actions
             const idAttr = r.id || '';
             const actions = `
                 <button class="action-btn view-btn" data-id="${idAttr}">Görüntüle</button>
@@ -833,10 +830,9 @@ renderCurrentPage() {
                 }
             }
             
-            let toggleIcon = '';
             let toggleCell = '';
             if (isAccordionParent) {
-                toggleIcon = `
+                toggleCell = `
                     <td class="toggle-cell">
                         <button class="accordion-toggle" aria-expanded="false" aria-controls="grp-${safeId(r.wipoIR || r.aripoIR)}">
                             <i class="fas fa-chevron-right"></i>
@@ -852,7 +848,7 @@ renderCurrentPage() {
 
                 tr.innerHTML = `
                     <td><input type="checkbox" class="record-checkbox" data-id="${idAttr}"></td>
-                    <td>${isAccordionParent ? `<span class="badge badge-soft">${origin}</span>` : safe(status)}</td>
+                    <td>${safe(status)}</td>
                     <td>${safe(title)}</td>
                     ${brandImgCell}
                     <td>${safe(origin)}</td>
@@ -916,7 +912,7 @@ renderCurrentPage() {
                     }
 
                     childTr.innerHTML = `
-                        <td></td>
+                        <td class="toggle-cell"></td>
                         <td>${safe(childStatus)}</td>
                         <td>${safe(childTitle)}</td>
                         ${childBrandImgCell}
@@ -1905,6 +1901,7 @@ async loadObjectionRows() {
                     ]
                     : [
                         { key: 'selection', label: '', sortable: false, isCheckbox: true, width: '40px' },
+                        { key: 'toggle', label: '', sortable: false, width: '40px' },
                         { key: 'status', label: 'Kayıt Durumu', sortable: true, width: '110px' },
                         { key: 'title', label: 'M/T/B Adı', sortable: true, width: '200px' },
                         { key: 'brandImage', label: 'Görsel', sortable: false, width: '80px' },
@@ -1919,7 +1916,7 @@ async loadObjectionRows() {
 
                 // ✅ TEMİZLENMİŞ ÇÖZÜM: Marka görseli kolonunu sadece trademark sekmesinde göster
                 if (!isObjections && !isTrademark) {
-                    columns = columns.filter(col => col.key !== 'brandImage' && col.key !== 'origin' && col.key !== 'country');
+                    columns = columns.filter(col => col.key !== 'brandImage' && col.key !== 'origin' && col.key !== 'country' && col.key !== 'toggle');
                 }
                 
                 // Diğer sekmeler için 'Kayıt Tipi' sütununu ekleyelim
