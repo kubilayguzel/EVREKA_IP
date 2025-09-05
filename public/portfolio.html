@@ -490,7 +490,6 @@ tr.group-row[aria-hidden="true"]{ display:none !important; }
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.2/dist/js/bootstrap.bundle.min.js"></script>
-
 <script type="module">
         import Pagination from './js/pagination.js';
         import { ipRecordsService, personService, transactionTypeService, auth, monitoringService, taskService } from './firebase-config.js';
@@ -501,7 +500,7 @@ tr.group-row[aria-hidden="true"]{ display:none !important; }
         // === Yardımcı Fonksiyonlar ===
         const safe = (v) => (v ?? '').toString();
         const safeId = (v) => safe(v).replace(/[^a-zA-Z0-9_]+/g, '_');
-        
+
         function fmtDate(d) {
             try {
                 if (!d) return '-';
@@ -621,6 +620,9 @@ tr.group-row[aria-hidden="true"]{ display:none !important; }
             }
         }
 
+        function getCountryName(code) {
+            return allCountries.find(c => c.code === code)?.name || code || '-';
+        }
 
         class PortfolioModule {
         // Normalize status for display (avoid showing origin like WIPO/ARIPO as status)
@@ -1787,7 +1789,7 @@ tr.group-row[aria-hidden="true"]{ display:none !important; }
                 });
             }
         }
-        
+
         (function () {
             const STORAGE_KEY = 'objections_accordion_state';
             function loadState() {
@@ -1797,7 +1799,7 @@ tr.group-row[aria-hidden="true"]{ display:none !important; }
             function saveState(state) {
                 localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
             }
-            
+
             window.wireAccordion = function(){
                 const tbody = document.getElementById('portfolioTableBody');
                 if(!tbody) return;
@@ -1828,7 +1830,7 @@ tr.group-row[aria-hidden="true"]{ display:none !important; }
                     tbody.__accordionBound = true;
                 }
             };
-            
+
             window.wireObjectionsAccordion = function(){
                 const tbody = document.getElementById('portfolioTableBody');
                 if(!tbody) return;
