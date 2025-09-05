@@ -366,11 +366,7 @@ async function queryByOwnerNumber(sahipNo) {
     _showBlock(loadingEl);
     _hideBlock(singleResultContainer);
     
-    // ✅ OTOMATİK SAHİP EŞLEŞTİRME - BU SATIR MUTLAKA OLMALI
-    console.log('[DEBUG] autoMatchOwnerByTpeNo çağrılıyor...');
-    autoMatchOwnerByTpeNo(sahipNo);
-    console.log('[DEBUG] autoMatchOwnerByTpeNo çağrısı tamamlandı');
-    
+    window.searchedOwnerNumber = sahipNo;
     // TÜRKPATENT sayfasını aç
     const turkPatentUrl = `https://www.turkpatent.gov.tr/arastirma-yap?form=trademark&auto_query=${encodeURIComponent(sahipNo)}&query_type=sahip&source=${encodeURIComponent(window.location.origin)}`;
     
@@ -728,7 +724,6 @@ function renderSingleResult(payload) {
   _showBlock(singleResultContainer);
 }
 
-
 function renderOwnerResults(items) {
   if (!items?.length) return;
   
@@ -761,20 +756,20 @@ function renderOwnerResults(items) {
   const table = document.createElement('table');
   table.className = 'table table-hover table-striped tp-results-table';
   table.innerHTML = `
-      <thead>
-        <tr>
-          <th><input type="checkbox" id="selectAllRecords" checked></th>
-          <th>Görsel</th>
-          <th>Başvuru Numarası</th>
-          <th>Marka Adı</th>
-          <th>Başvuru Tarihi</th>
-          <th>Tescil No</th>
-          <th>Durumu</th>
-          <th>Nice Sınıfları</th>
-        </tr>
-      </thead>
-      <tbody></tbody>
-    `;
+    <thead>
+      <tr>
+        <th><input type="checkbox" id="selectAllRecords" checked></th>
+        <th>Görsel</th>
+        <th>Başvuru Numarası</th>
+        <th>Marka Adı</th>
+        <th>Başvuru Tarihi</th>
+        <th>Tescil No</th>
+        <th>Durumu</th>
+        <th>Nice Sınıfları</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  `;
   
   const tbody = table.querySelector('tbody');
   
@@ -818,6 +813,15 @@ function renderOwnerResults(items) {
   const endTime = performance.now();
   console.log(`✅ renderOwnerResults tamamlandı: ${(endTime - startTime).toFixed(2)}ms`);
   
+  // ✅ SONUÇLAR RENDER EDİLDİKTEN SONRA SAHİP EŞLEŞTİRME
+  if (window.searchedOwnerNumber) {
+    console.log('[DEBUG] UI hazır, şimdi sahip eşleştirme yapılıyor...');
+    setTimeout(() => {
+      autoMatchOwnerByTpeNo(window.searchedOwnerNumber);
+      window.searchedOwnerNumber = null; // Temizle
+    }, 100); // UI'ın tam yüklenmesi için kısa bekleme
+  }
+  
   // Event listeners - requestAnimationFrame ile asenkron yap
   requestAnimationFrame(() => {
     setupCheckboxListeners();
@@ -830,7 +834,6 @@ function renderOwnerResults(items) {
     }
   });
 }
-
 
 function setupCheckboxListeners() {
   const selectAll = document.getElementById('selectAllRecords');
