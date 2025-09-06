@@ -203,8 +203,7 @@ async initIpRecordSearchSelector() {
         ? (r.imagePath || '')
         : (r.brandImageUrl || r.markImageUrl || r.brandSampleUrl || r.markSampleUrl || r.imageUrl || r.brandSamplePath || '');
 
-      const ir = r.wipoIR || r.aripoIR || '';
-      const line = `${appNo ? (appNo + ' - ') : ''}${ir ? (ir + ' - ') : ''}${title}`;
+      const line = `${appNo ? (appNo + ' — ') : ''}${title}`;
       const imgHtml = img
         ? (img.startsWith('http')
             ? `<img src="${img}" class="ip-thumb" style="width:96px;height:96px;object-fit:contain;border-radius:4px;border:1px solid #eee;background:#fff;">`
@@ -360,11 +359,7 @@ async initIpRecordSearchSelector() {
     // ✨ YENİ SONU
 
     selectedBox.style.display = 'block';
-    const ir = rec.wipoIR || rec.aripoIR || '';
-    const prefixParts = [];
-    if (appNo) prefixParts.push(`<strong>${appNo}</strong>`);
-    if (ir)    prefixParts.push(`<strong>${ir}</strong>`);
-    selectedLabel.innerHTML = `${prefixParts.length ? prefixParts.join(' - ') + ' - ' : ''}${title}`;
+    selectedLabel.innerHTML = `${appNo ? `<strong>${appNo}</strong> — ` : ''}${title}`;
     selectedMeta.textContent = owner || '';
 
     const host  = selectedBox.querySelector('.p-2') || selectedBox;
@@ -3009,14 +3004,31 @@ async handleFormSubmit(e) {
             }
         }
         
-        // ✨ GÜNCELLEME: WIPO/ARIPO dosyaları için hem parent hem de child'lar için transaction oluştur
+        // ✨ GÜNCELLEME: WIPO/ARIPO parent seçiliyken: parent + "Eklenen Ülkeler"de KALAN child kayıtlar için işlem oluştur
         if (['WIPO', 'ARIPO'].includes(this.selectedIpRecord.origin)) {
-            const allRecordsToCreateTransactionsFor = [
-                { ...this.selectedIpRecord, transactionHierarchy: 'parent' },
-                ...this.selectedWipoAripoChildren
-            ];
+            // 1) Hedef kayıtları belirle
+            const isTrademarkApplication = (selectedTransactionType?.ipType === 'trademark' && (selectedTransactionType?.alias === 'Başvuru' || selectedTransactionType?.name === 'Başvuru'));
+            // "Eklenen Ülkeler" listesi arayüzde kaldırılmış/eklenmiş child kayıtları temsil eder
+            const childTargets = Array.isArray(this.selectedWipoAripoChildren) ? this.selectedWipoAripoChildren.slice() : [];
 
-            for (const record of allRecordsToCreateTransactionsFor) {
+            // 2) Parent + child hedeflerini birleştir
+            const allTargets = [{ ...this.selectedIpRecord, transactionHierarchy: 'parent' }, ...childTargets];
+
+            // 3) Aynı işlem tipinden tekrarlı kayıt açmamak için, ilgili kayıtta zaten bu tip varsa atla
+            for (const record of allTargets) {
+                // Yayına itiraz özel durumu: portföye/child'a işlem ekleme
+                const isPublicationOpposition = this.isPublicationOpposition(selectedTransactionType.id);
+                if (isPublicationOpposition) {
+                    console.log('⏩ Yayına itiraz işlemi olduğu için transaction ekleme atlandı (WIPO/ARIPO):', { recordId: record.id });
+                    continue;
+                }
+                const alreadyHasType = Array.isArray(record.transactions) && record.transactions.some(tx => String(tx?.type) === String(selectedTransactionType.id));
+                if (alreadyHasType) {
+                    console.log('⏩ Bu kayıtta aynı işlem zaten var, atlanıyor:', { recordId: record.id, type: selectedTransactionType.id });
+                    continue;
+                }
+
+                // 4) Parent/Child hiyerarşi ve parentId ilişkisi
                 const transactionData = {
                     type: selectedTransactionType.id,
                     description: `${selectedTransactionType.name} işlemi.`,
