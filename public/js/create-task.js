@@ -3021,6 +3021,11 @@ async handleFormSubmit(e) {
         } else {
             console.log('❌ WIPO/ARIPO koşulu YANLIŞ - child transaction kodu çalışmayacak');
         }
+
+        // 🔍 DEBUG: WIPO/ARIPO child transaction kontrol
+console.log('🔍 DEBUG selectedIpRecord.origin:', this.selectedIpRecord.origin);
+console.log('🔍 DEBUG selectedWipoAripoChildren:', this.selectedWipoAripoChildren);
+console.log('🔍 DEBUG koşul sonucu:', ['WIPO', 'ARIPO'].includes(this.selectedIpRecord.origin));
         if (['WIPO', 'ARIPO'].includes(this.selectedIpRecord.origin)) {
             const allRecordsToCreateTransactionsFor = [
                 { ...this.selectedIpRecord, transactionHierarchy: 'parent' },
