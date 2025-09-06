@@ -3032,6 +3032,7 @@ console.log('🔍 DEBUG koşul sonucu:', ['WIPO', 'ARIPO'].includes(this.selecte
                 ...this.selectedWipoAripoChildren
             ];
 
+            console.log('🔍 DEBUG allRecordsToCreateTransactionsFor:', allRecordsToCreateTransactionsFor);
             for (const record of allRecordsToCreateTransactionsFor) {
                 const transactionData = {
                     type: selectedTransactionType.id,
