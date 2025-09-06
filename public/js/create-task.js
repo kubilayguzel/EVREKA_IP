@@ -3109,56 +3109,25 @@ async handleFormSubmit(e) {
             }
         }
         
-        // ✨ GÜNCELLEME: WIPO/ARIPO dosyaları için hem parent hem de child'lar için transaction oluştur
-        if (['WIPO', 'ARIPO'].includes(this.selectedIpRecord.origin)) {
-            const allTransactionsToCreate = [
-                {
-                    type: selectedTransactionType.id,
-                    description: `${selectedTransactionType.name} işlemi.`,
-                    parentId: null,
-                    transactionHierarchy: "parent",
-                    id: this.selectedIpRecord.id
-                },
-                ...this.selectedWipoAripoChildren.map(child => ({
-                    type: selectedTransactionType.id,
-                    description: `${selectedTransactionType.name} işlemi.`,
-                    parentId: this.selectedIpRecord.id,
-                    transactionHierarchy: "child",
-                    id: child.id
-                }))
-            ];
-        
-            for (const txData of allTransactionsToCreate) {
-                const addTransactionResult = await ipRecordsService.addTransactionToRecord(this.selectedIpRecord.id, txData);
-                if (!addTransactionResult.success) {
-                    console.error("WIPO/ARIPO IP kaydına işlem eklenirken hata oluştu:", txData, addTransactionResult.error);
-                    // Hata durumunda devam et, diğer işlemler oluşturulabilsin
-                }
-            }
+        // Normal işler için portföye işlem ekle
+        const isPublicationOpposition = this.isPublicationOpposition(selectedTransactionType.id);
+        if (!isPublicationOpposition) {
+            const transactionData = {
+                type: selectedTransactionType.id,
+                description: `${selectedTransactionType.name} işlemi.`,
+                parentId: null,
+                transactionHierarchy: "parent"
+            };
 
-        } else {
-            // ✅ ÇÖZÜM: Yayına itiraz işleri için portföye işlem eklemeyi atla
-            const isPublicationOpposition = this.isPublicationOpposition(selectedTransactionType.id);
-            
-            if (!isPublicationOpposition) {
-                // Normal işler için portföye işlem ekle
-                const transactionData = {
-                    type: selectedTransactionType.id,
-                    description: `${selectedTransactionType.name} işlemi.`,
-                    parentId: null,
-                    transactionHierarchy: "parent"
-                };
-
-                const addResult = await ipRecordsService.addTransactionToRecord(this.selectedIpRecord.id, transactionData);
-                if (!addResult.success) {
-                    alert('İş oluşturuldu ama işlem kaydedilemedi: ' + addResult.error);
-                    return;
-                }
+            const addResult = await ipRecordsService.addTransactionToRecord(this.selectedIpRecord.id, transactionData);
+            if (addResult && addResult.success) {
+                this._lastCreatedParentTransactionId = addResult.id || this.selectedIpRecord.id;
             } else {
-                console.log('🔄 Yayına itiraz işi: Portföye işlem ekleme atlandı, otomatik 3.taraf portföy oluşturulacak');
+                console.error("IP kaydına işlem eklenirken hata oluştu:", transactionData, addResult?.error);
             }
+        } else {
+            console.log('🔄 Yayına itiraz işi: Portföye işlem ekleme atlandı');
         }
-        // ✨ GÜNCELLEME SONU
 
         // ✅ Yayına itiraz işleri için otomatik 3.taraf portföy oluşturma
         if (window.portfolioByOppositionCreator) {
