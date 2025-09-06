@@ -2622,7 +2622,16 @@ async loadBulletinRecordsOnce() {
     this.allBulletinRecords = [];
   }
 }
-
+// Başvuru işlemi olup olmadığını kontrol eden yardımcı metod
+    isApplicationProcess(transactionTypeId) {
+        const applicationTypes = [
+            'patent_application',
+            'design_application',
+            'trademark_application',
+            'utility_application'
+        ];
+        return applicationTypes.includes(transactionTypeId);
+    }
 
 checkFormCompleteness() {
     const taskTypeId = document.getElementById('specificTaskType')?.value;
@@ -3023,38 +3032,64 @@ async handleFormSubmit(e) {
         }
 
         // 🔍 DEBUG: WIPO/ARIPO child transaction kontrol
-console.log('🔍 DEBUG selectedIpRecord.origin:', this.selectedIpRecord.origin);
-console.log('🔍 DEBUG selectedWipoAripoChildren:', this.selectedWipoAripoChildren);
-console.log('🔍 DEBUG koşul sonucu:', ['WIPO', 'ARIPO'].includes(this.selectedIpRecord.origin));
         if (['WIPO', 'ARIPO'].includes(this.selectedIpRecord.origin)) {
-    // Basit kural:
-    // - Parent her zaman işlem alır.
-    // - Child'lar için aynısı, sadece listedeki (this.selectedWipoAripoChildren) kayıtlar için oluşturulur.
-    //   (Başvuru dışı işlemlerde listeden çıkarılan ülkeler transaction almaz.)
+            // İşlem tipinin başvuru olup olmadığını kontrol et
+            const isApplicationProcess = this.isApplicationProcess(selectedTransactionType.id);
+            
+            console.log('🔍 DEBUG İşlem tipi başvuru mu?:', isApplicationProcess);
+            console.log('🔍 DEBUG Seçilen işlem tipi:', selectedTransactionType.id, selectedTransactionType.name);
 
-    const allRecordsToCreateTransactionsFor = [
-        { ...this.selectedIpRecord, transactionHierarchy: 'parent' },
-        ...this.selectedWipoAripoChildren // burada kalanlar = işlem alacak child'lar
-    ];
+            // Parent'a her zaman transaction oluştur
+            const parentTransactionData = {
+                type: selectedTransactionType.id,
+                description: `${selectedTransactionType.name} işlemi.`,
+                parentId: null,
+                transactionHierarchy: 'parent'
+            };
 
-    console.log('🔍 DEBUG allRecordsToCreateTransactionsFor:', allRecordsToCreateTransactionsFor);
+            const parentResult = await ipRecordsService.addTransactionToRecord(this.selectedIpRecord.id, parentTransactionData);
+            if (!parentResult.success) {
+                console.error("WIPO/ARIPO Parent IP kaydına işlem eklenirken hata oluştu:", parentTransactionData, parentResult.error);
+            }
 
-    for (const record of allRecordsToCreateTransactionsFor) {
-        const isChild = record.transactionHierarchy === 'child';
+            // Child'lar için mantık:
+            // - Başvuru işlemlerinde: TÜM child'lar (seçili ülkeler) transaction alır
+            // - Başvuru dışı işlemlerde: SADECE listede kalan child'lar transaction alır
+            let childrenToProcess = [];
+            
+            if (isApplicationProcess) {
+                // Başvuru işlemlerinde tüm child'ları al
+                const allChildren = this.allIpRecords.filter(rec => {
+                    const isWipo = !!this.selectedIpRecord.wipoIR;
+                    const irNumber = isWipo ? this.selectedIpRecord.wipoIR : this.selectedIpRecord.aripoIR;
+                    return rec.transactionHierarchy === 'child' &&
+                        (isWipo ? rec.wipoIR === irNumber : rec.aripoIR === irNumber);
+                });
+                childrenToProcess = allChildren;
+                console.log('🔍 DEBUG Başvuru işlemi: Tüm child\'lar işleme alınacak:', childrenToProcess.length);
+            } else {
+                // Başvuru dışı işlemlerde sadece seçili child'lar
+                childrenToProcess = this.selectedWipoAripoChildren;
+                console.log('🔍 DEBUG Başvuru dışı işlem: Sadece seçili child\'lar işleme alınacak:', childrenToProcess.length);
+            }
 
-        const transactionData = {
-            type: selectedTransactionType.id, // AYNI işlem tipi
-            description: `${selectedTransactionType.name} işlemi.`,
-            parentId: isChild ? this.selectedIpRecord.id : null,
-            transactionHierarchy: record.transactionHierarchy,
-        };
+            // Child transaction'ları oluştur
+            for (const child of childrenToProcess) {
+                const childTransactionData = {
+                    type: selectedTransactionType.id, // AYNI işlem tipi
+                    description: `${selectedTransactionType.name} işlemi.`,
+                    parentId: this.selectedIpRecord.id,
+                    transactionHierarchy: 'child'
+                };
 
-        const addTransactionResult = await ipRecordsService.addTransactionToRecord(record.id, transactionData);
-        if (!addTransactionResult.success) {
-            console.error("WIPO/ARIPO IP kaydına işlem eklenirken hata oluştu:", transactionData, addTransactionResult.error);
-        }
-    }
-} else {
+                const childResult = await ipRecordsService.addTransactionToRecord(child.id, childTransactionData);
+                if (!childResult.success) {
+                    console.error("WIPO/ARIPO Child IP kaydına işlem eklenirken hata oluştu:", child, childTransactionData, childResult.error);
+                }
+            }
+
+            console.log(`✅ WIPO/ARIPO işlemi tamamlandı: Parent + ${childrenToProcess.length} child transaction oluşturuldu`);
+        } else {
             // Normal IP kayıtları için tek transaction oluşturma
             // ✅ ÇÖZÜM: Yayına itiraz işleri için portföye işlem eklemeyi atla
             const isPublicationOpposition = this.isPublicationOpposition(selectedTransactionType.id);
@@ -3222,6 +3257,7 @@ function wrapCardsWithoutBreakingEvents() {
     console.log(`✅ Kart ${index + 1} wrapper ile sarıldı (DOM-safe)`);
   });
 }
+
 function setupChangeListener() {
   const specificTaskType = document.getElementById('specificTaskType');
   if (specificTaskType && !specificTaskType.dataset.changeListenerAdded) {
