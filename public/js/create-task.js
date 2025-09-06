@@ -3010,7 +3010,7 @@ async handleFormSubmit(e) {
         }
         
         // ✨ GÜNCELLEME: WIPO/ARIPO dosyaları için child transaction oluşturma (parent zaten ekleniyor)
-if (['WIPO', 'ARIPO'].includes(this.selectedIpRecord.origin)) {
+if ((this.selectedIpRecord && (this.selectedIpRecord.wipoIR || this.selectedIpRecord.aripoIR))) {
     const isOpposition = this.isPublicationOpposition && this.isPublicationOpposition(selectedTransactionType.id);
     if (!isOpposition) {
         const isTrademarkApplication = (selectedTransactionType.alias === 'Başvuru' && selectedTransactionType.ipType === 'trademark');
@@ -3028,6 +3028,7 @@ if (['WIPO', 'ARIPO'].includes(this.selectedIpRecord.origin)) {
         if (!isTrademarkApplication && childTargets.length === 0) {
             console.log('ℹ️ WIPO/ARIPO: Başvuru dışı işlemde seçili ülke yok; sadece parent transaction oluşturuldu.');
         }
+        console.log('👶 WIPO/ARIPO child hedefleri:', childTargets.map(c => c.id));
         for (const child of childTargets) {
             const payload = {
                 type: selectedTransactionType.id,
@@ -3035,7 +3036,9 @@ if (['WIPO', 'ARIPO'].includes(this.selectedIpRecord.origin)) {
                 parentId: (this._lastCreatedParentTransactionId ?? this.selectedIpRecord.id),
                 transactionHierarchy: "child"
             };
+            console.log('➕ Child TX ekleniyor => recordId:', child.id, 'payload:', payload);
             const addTransactionResult = await ipRecordsService.addTransactionToRecord(child.id, payload);
+            console.log('✅ Child TX sonucu:', addTransactionResult);
             if (!addTransactionResult.success) {
                 console.error("WIPO/ARIPO child işlem ekleme hatası:", child.id, payload, addTransactionResult.error);
             }
