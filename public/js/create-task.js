@@ -253,6 +253,14 @@ async initIpRecordSearchSelector() {
     }
 
     const filtered = pool.filter(r => {
+      // ✨ GÜNCELLEME: WIPO/ARIPO kayıtları için sadece 'parent' hiyerarşisine sahip olanları göster
+      const isWipoAripo = !!r.wipoIR || !!r.aripoIR;
+      const isParent = r.transactionHierarchy === 'parent';
+      if (isWipoAripo && !isParent) {
+          return false;
+      }
+      // ✨ GÜNCELLEME SONU
+      
       // Kaynağa göre aranan alanlar
       const hay = (this.searchSource === 'bulletin'
         ? [
@@ -264,9 +272,7 @@ async initIpRecordSearchSelector() {
             r.ownerName, r.owner, r.applicantName,
             r.applicationNo, r.applicationNumber, r.appNo,
             r.fileNo, r.registrationNo,
-            // ✨ YENİ: WIPO ve ARIPO veritabanı alanlarını da aramaya dahil et
-            r.wipoIR, r.aripoIR,
-            // ✨ YENİ SONU
+            r.wipoIR, r.aripoIR
           ])
         .map(norm).join(' ');
 
@@ -448,7 +454,7 @@ renderWipoAripoChildRecords() {
         html += `
             <div class="selected-item d-flex justify-content-between align-items-center mb-2">
                 <span>
-                    ${country} (${child.transactionHierarchy})
+                    ${country}
                 </span>
                 <button type="button" class="btn btn-sm btn-danger remove-wipo-child-btn" data-id="${child.id}">
                     &times;
