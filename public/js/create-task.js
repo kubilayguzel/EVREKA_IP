@@ -3008,7 +3008,6 @@ async handleFormSubmit(e) {
                 return;
             }
         }
-}
         
         // 🔍 DEBUG: WIPO/ARIPO kontrol
         console.log('🔍 DEBUG selectedIpRecord:', this.selectedIpRecord);
@@ -3022,8 +3021,6 @@ async handleFormSubmit(e) {
         } else {
             console.log('❌ WIPO/ARIPO koşulu YANLIŞ - child transaction kodu çalışmayacak');
         }
-        
-        // ✨ GÜNCELLEME: WIPO/ARIPO dosyaları için hem parent hem de child'lar için transaction oluştur
         if (['WIPO', 'ARIPO'].includes(this.selectedIpRecord.origin)) {
             const allRecordsToCreateTransactionsFor = [
                 { ...this.selectedIpRecord, transactionHierarchy: 'parent' },
