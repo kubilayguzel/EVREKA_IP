@@ -55,9 +55,9 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333
 
 /* Eski düz bölümler varsa etkisiz kalsın (opsiyonel) */
 .form-section{
-  background: transparent !important;
   border: 0 !important;
   box-shadow: none !important;
+  background: transparent !important;
 }
 
 /* Kartlar üst üste geldiğinde gölge “kaybolmasın” */
@@ -335,7 +335,11 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333
 }
 /* Dropdown açıkken parent container'ın overflow'unu düzelt */
 .section-card:has(.search-results-list[style*="block"]),
-.card-content-wrapper:has(.search-results-list[style*="block"]) {
+.section-card:has(.search-results-list[style*="block"]),
+.section-card:has(#personSearchResults[style*="block"]),
+.section-card:has(#ipRecordSearch:focus),
+.section-card:has(#personSearch:focus) {
+  z-index: 100 !important;
   overflow: visible !important;
 }
 
@@ -382,113 +386,6 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333
 }
 
 .section-card[data-wrapped] {
-  padding: 12px !important; /* wrapper varken fazla boşluk olmasın */
-}
-
-</style>
-<style>
-    /* Task Detail dosyasından alınan özel stiller */
-    .section-card {
-        background: #ffffff;
-        padding: 30px;
-        border-radius: 20px;
-        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-        margin-bottom: 25px;
-    }
-    
-    .section-title {
-        font-size: 1.3em;
-        color: #1e3c72;
-        margin-bottom: 20px;
-        padding-bottom: 10px;
-        border-bottom: 1px solid #e1e8ed;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-    }
-
-    .form-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-        gap: 20px;
-    }
-    .form-group.full-width {
-        grid-column: 1 / -1;
-    }
-    .search-result-display { 
-        background: #e9f5ff; 
-        border: 1px solid #bde0fe; 
-        padding: 15px; 
-        border-radius: 8px; 
-        margin-top: 10px; 
-        display: flex; 
-        justify-content: space-between;
-        align-items: center;
-        gap: 15px; 
-    }
-    .search-result-display-content {
-        flex-grow: 1;
-    }
-    .remove-item-btn {
-        background: #ff6b6b;
-        color: white;
-        border: none;
-        border-radius: 50%;
-        width: 30px;
-        height: 30px;
-        font-size: 1.2em;
-        cursor: pointer;
-        transition: background-color 0.3s ease;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
-    .remove-item-btn:hover {
-        background: #ff5252;
-    }
-    
-    .input-with-currency { display: flex; gap: 10px; }
-    .input-with-currency .form-input { flex-grow: 1; }
-    .currency-select {
-        padding: 12px 8px;
-        border: 2px solid #e1e8ed;
-        border-radius: 10px;
-        background-color: #f8f9fa;
-        font-weight: bold;
-    }
-    .total-amount-display {
-        font-size: 1.2em;
-        font-weight: bold;
-        color: #1e3c72;
-        text-align: right;
-        margin-top: 10px;
-        padding: 12px 15px;
-        background-color: #f0f4f8;
-        border-radius: 10px;
-    }
-/* Kart içerik wrapper'ı için gölge */
-.card-content-wrapper {
-  background: #ffffff;
-  padding: 20px;
-  border-radius: 12px;
-  box-shadow: 0 6px 20px rgba(0,0,0,0.08), 
-              0 2px 8px rgba(0,0,0,0.04);
-  border: 1px solid rgba(0,0,0,0.02);
-  transition: all 0.3s ease;
-
-  /* YENİ EKLENDİ → kart kenarından yarım cm içeride olsun */
-  margin: 8px; 
-}
-
-.card-content-wrapper:hover {
-  box-shadow: 0 10px 30px rgba(0,0,0,0.12), 
-              0 4px 12px rgba(0,0,0,0.06);
-  transform: translateY(-1px);
-}
-
-/* Kartın kendi gölgesini sadece wrapper varsa kaldır */
-.section-card[data-wrapped] {
-  box-shadow: none !important;
   padding: 8px; /* azaltıldı çünkü wrapper zaten margin + padding veriyor */
 }
 
