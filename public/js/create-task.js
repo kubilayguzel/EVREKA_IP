@@ -93,6 +93,8 @@ class CreateTaskModule {
         this.allBulletinRecords = [];          // itiraz aramaları için
         this.allCountries = [];
         this.selectedCountries = [];
+        // Yeni eklenen WIPO/ARIPO için alt kayıt listesi
+        this.selectedWipoAripoChildren = [];
     }
 
 async init() {
@@ -261,7 +263,10 @@ async initIpRecordSearchSelector() {
             r.title, r.name, r.markName, r.applicationTitle,
             r.ownerName, r.owner, r.applicantName,
             r.applicationNo, r.applicationNumber, r.appNo,
-            r.fileNo, r.registrationNo
+            r.fileNo, r.registrationNo,
+            // ✨ YENİ: WIPO ve ARIPO veritabanı alanlarını da aramaya dahil et
+            r.wipoIR, r.aripoIR,
+            // ✨ YENİ SONU
           ])
         .map(norm).join(' ');
 
@@ -303,7 +308,7 @@ async initIpRecordSearchSelector() {
       ? (rec.markName || 'Başlık yok')
       : (rec.title || rec.name || rec.markName || rec.applicationTitle || 'Başlık yok');
     const owner = (this.searchSource === 'bulletin')
-      ? (Array.isArray(rec.holders) && rec.holders[0]?.name ? rec.holders[0].name : '')
+      ? (Array.isArray(rec.holders) && r.holders[0]?.name ? r.holders[0].name : '')
       : (rec.ownerName || rec.owner || rec.applicantName || '');
     const appNo = (this.searchSource === 'bulletin')
       ? (rec.applicationNo || rec.applicationNumber || '')
@@ -317,8 +322,25 @@ async initIpRecordSearchSelector() {
         title,
         ownerName: owner,
         applicationNo: appNo,
-        source: this.searchSource
+        source: this.searchSource,
+        // ✨ YENİ: WIPO/ARIPO verilerini de sakla
+        wipoIR: rec.wipoIR || null,
+        aripoIR: rec.aripoIR || null,
+        transactionHierarchy: rec.transactionHierarchy || null
+        // ✨ YENİ SONU
         };
+    
+    // ✨ YENİ: WIPO/ARIPO özel işleme mantığı
+    if (this.selectedIpRecord.wipoIR || this.selectedIpRecord.aripoIR) {
+        if (this.selectedIpRecord.transactionHierarchy === 'parent') {
+            this.handleWipoAripoParentSelection(this.selectedIpRecord);
+        }
+    } else {
+        // Normal bir kayıt seçildiğinde listeyi temizle
+        this.selectedWipoAripoChildren = [];
+        this.renderWipoAripoChildRecords();
+    }
+    // ✨ YENİ SONU
 
     selectedBox.style.display = 'block';
     selectedLabel.innerHTML = `${appNo ? `<strong>${appNo}</strong> — ` : ''}${title}`;
@@ -358,6 +380,10 @@ async initIpRecordSearchSelector() {
       if (t) t.remove();
       this.checkFormCompleteness();
     if (this.selectedIpRecord && this.selectedIpRecord.id) { this.handleIpRecordChange(this.selectedIpRecord.id); }
+    // ✨ YENİ: Parent kayıt kaldırılınca alt kayıtları da temizle
+    this.selectedWipoAripoChildren = [];
+    this.renderWipoAripoChildRecords();
+    // ✨ YENİ SONU
   });
   }
 
@@ -366,7 +392,7 @@ async initIpRecordSearchSelector() {
   });
 }
 
-populateOriginDropdown(dropdownId, selectedValue = 'TÜRKPATENT') {
+    populateOriginDropdown(dropdownId, selectedValue = 'TÜRKPATENT') {
         const dropdown = document.getElementById(dropdownId);
         if (!dropdown) return;
         dropdown.innerHTML = '';
@@ -380,6 +406,69 @@ populateOriginDropdown(dropdownId, selectedValue = 'TÜRKPATENT') {
             dropdown.appendChild(option);
         });
     }
+    
+// ✨ YENİ: WIPO/ARIPO alt kayıtlarını işleme ve ekranda gösterme
+handleWipoAripoParentSelection(selectedRecord) {
+    console.log('🔄 WIPO/ARIPO parent seçildi:', selectedRecord);
+    
+    const isWipo = !!selectedRecord.wipoIR;
+    const irNumber = isWipo ? selectedRecord.wipoIR : selectedRecord.aripoIR;
+    
+    // Aynı IR numarasına sahip, transactionHierarchy 'child' olan kayıtları bul
+    this.selectedWipoAripoChildren = this.allIpRecords.filter(rec => 
+        rec.transactionHierarchy === 'child' &&
+        (isWipo ? rec.wipoIR === irNumber : rec.aripoIR === irNumber)
+    );
+    
+    console.log('🔍 Bulunan child kayıtlar:', this.selectedWipoAripoChildren);
+    
+    this.renderWipoAripoChildRecords();
+}
+
+renderWipoAripoChildRecords() {
+    const container = document.getElementById('wipoAripoChildList');
+    const countBadge = document.getElementById('wipoAripoChildCount');
+    if (!container || !countBadge) return;
+    
+    const parent = document.getElementById('wipoAripoParentContainer');
+    
+    if (this.selectedWipoAripoChildren.length === 0) {
+        if (parent) parent.style.display = 'none';
+        countBadge.textContent = 0;
+        container.innerHTML = '';
+        return;
+    }
+    
+    if (parent) parent.style.display = 'block';
+    countBadge.textContent = this.selectedWipoAripoChildren.length;
+
+    let html = '';
+    this.selectedWipoAripoChildren.forEach(child => {
+        const country = this.allCountries.find(c => c.code === child.country)?.name || child.country || 'Ülke Bilgisi Yok';
+        html += `
+            <div class="selected-item d-flex justify-content-between align-items-center mb-2">
+                <span>
+                    ${country} (${child.transactionHierarchy})
+                </span>
+                <button type="button" class="btn btn-sm btn-danger remove-wipo-child-btn" data-id="${child.id}">
+                    &times;
+                </button>
+            </div>
+        `;
+    });
+    container.innerHTML = html;
+    
+    // Kaldırma butonlarına dinleyici ekle
+    container.querySelectorAll('.remove-wipo-child-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const childId = e.target.dataset.id;
+            this.selectedWipoAripoChildren = this.selectedWipoAripoChildren.filter(c => c.id !== childId);
+            this.renderWipoAripoChildRecords();
+            this.checkFormCompleteness();
+        });
+    });
+}
+// ✨ YENİ SONU
 
 async updateAssignedToDropdown(taskTypeId) {
         const assignedToSelect = document.getElementById('assignedTo');
@@ -524,19 +613,24 @@ async updateAssignedToDropdown(taskTypeId) {
         const singleSelectWrapper = document.getElementById('singleCountrySelectWrapper');
         const multiSelectWrapper = document.getElementById('multiCountrySelectWrapper');
         const title = document.getElementById('countrySelectionTitle');
-        if (!container || !singleSelectWrapper || !multiSelectWrapper || !title) return;
+        const specificTaskType = document.getElementById('specificTaskType');
+
+        if (!container || !singleSelectWrapper || !multiSelectWrapper || !title || !specificTaskType) return;
+        
+        const selectedTask = this.allTransactionTypes.find(t => t.id === specificTaskType.value);
+        const isTrademarkApplication = selectedTask?.alias === 'Başvuru' && selectedTask?.ipType === 'trademark';
 
         this.selectedCountries = [];
         container.style.display = 'none';
         singleSelectWrapper.style.display = 'none';
         multiSelectWrapper.style.display = 'none';
 
-        if (originType === 'Yurtdışı Ulusal') {
+        if (originType === 'Yurtdışı Ulusal' && isTrademarkApplication) {
             title.textContent = 'Menşe Ülke Seçimi';
             container.style.display = 'block';
             singleSelectWrapper.style.display = 'block';
             this.populateCountriesDropdown('countrySelect');
-        } else if (originType === 'WIPO' || originType === 'ARIPO') {
+        } else if ((originType === 'WIPO' || originType === 'ARIPO') && isTrademarkApplication) {
             title.textContent = `Seçim Yapılacak Ülkeler (${originType})`;
             container.style.display = 'block';
             multiSelectWrapper.style.display = 'block';
@@ -851,7 +945,6 @@ setupBaseFormListeners() {
             `;
         }
         container.innerHTML = `
-        <!-- 2) İŞLEME KONU VARLIK — KART -->
         <div class="section-card" id="card-asset">
             <h3 class="section-title">2. İşleme Konu Varlık</h3>
             <div class="form-group full-width">
@@ -872,9 +965,17 @@ setupBaseFormListeners() {
                 </div>
             </div>
             </div>
-        </div>
+            <div id="wipoAripoParentContainer" class="form-group full-width mt-4" style="display:none;">
+                <label class="form-label">Eklenen Ülkeler <span class="badge badge-light" id="wipoAripoChildCount">0</span></label>
+                <div id="wipoAripoChildList" class="selected-items-list">
+                    <div class="empty-state">
+                        <i class="fas fa-flag fa-3x text-muted mb-3"></i>
+                        <p class="text-muted">Bu işleme bağlı ülke kaydı bulunamadı.</p>
+                    </div>
+                </div>
+            </div>
+            </div>
 
-        <!-- 3) İLGİLİ TARAF — KART (KOŞULLU) -->
         ${needsRelatedParty ? `
             <div class="section-card" id="relatedPartySection">
             <h3 class="section-title" id="relatedPartyTitle">3. ${partyLabel}</h3>
@@ -906,7 +1007,6 @@ setupBaseFormListeners() {
             </div>
         ` : ''}
 
-        <!-- 4) TAHAKKUK BİLGİLERİ — KART -->
         ${specificFieldsHtml}
         <div class="section-card" id="card-accrual">
             <h3 class="section-title">Tahakkuk Bilgileri</h3>
@@ -964,7 +1064,6 @@ setupBaseFormListeners() {
             </div>
         </div>
 
-        <!-- 5) İŞ DETAYLARI VE ATAMA — KART -->
         <div class="section-card" id="card-job">
             <h3 class="section-title">İş Detayları ve Atama</h3>
             <div class="form-grid">
@@ -1207,7 +1306,7 @@ async handleSpecificTypeChange(e) {
     });
 
     try {
-        const tIdStr = String(selectedTaskType?.id ?? '');
+        const tIdStr = String(selectedTaskType?.id || '');
         this.searchSource = (tIdStr === TASK_IDS.ITIRAZ_YAYIN) ? 'bulletin' : 'portfolio';
         this.updateRelatedPartySectionVisibility(selectedTaskType);
     } catch (e) {
@@ -1266,6 +1365,13 @@ async handleSpecificTypeChange(e) {
     }
 
     await this.initIpRecordSearchSelector();
+    
+    // ✨ YENİ: Origin select'in kontrolü için çağır
+    const originSelect = document.getElementById('originSelect');
+    if (originSelect) {
+        this.handleOriginChange(originSelect.value);
+    }
+    // ✨ YENİ SONU
 
     try {
         const tIdStr = String(document.getElementById('specificTaskType')?.value || '');
@@ -2059,6 +2165,7 @@ async handleSpecificTypeChange(e) {
         this.uploadedFiles = [];
         this.selectedApplicants = [];
         this.priorities = [];
+        this.selectedWipoAripoChildren = [];
     }
     searchPortfolio(query) {
         const container = document.getElementById('portfolioSearchResults');
@@ -2513,9 +2620,21 @@ checkFormCompleteness() {
         const brandText = document.getElementById('brandExampleText')?.value?.trim();
         const hasNiceClasses = typeof getSelectedNiceClasses === 'function' && getSelectedNiceClasses().length > 0;
         const hasApplicants = this.selectedApplicants && this.selectedApplicants.length > 0;
+        
+        // ✨ YENİ: Başvuru formu için ülke seçimini kontrol et
+        const originType = document.getElementById('originSelect')?.value;
+        let hasCountrySelection = false;
+        if (originType === 'Yurtdışı Ulusal') {
+            hasCountrySelection = !!document.getElementById('countrySelect')?.value;
+        } else if (originType === 'WIPO' || originType === 'ARIPO') {
+            hasCountrySelection = this.selectedCountries.length > 0;
+        } else {
+            hasCountrySelection = true; // TÜRKPATENT için ülke seçimi gerekmez
+        }
+        // ✨ YENİ SONU
 
         const assignedTo = document.getElementById('assignedTo')?.value;
-        isComplete = !!(assignedTo && brandText && hasNiceClasses && hasApplicants);
+        isComplete = !!(assignedTo && brandText && hasNiceClasses && hasApplicants && hasCountrySelection);
     } else {
         const taskTitle = document.getElementById('taskTitle')?.value?.trim() || selectedTaskType?.alias || selectedTaskType?.name;
         const hasIpRecord = !!this.selectedIpRecord;
