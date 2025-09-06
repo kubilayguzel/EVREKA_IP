@@ -203,7 +203,8 @@ async initIpRecordSearchSelector() {
         ? (r.imagePath || '')
         : (r.brandImageUrl || r.markImageUrl || r.brandSampleUrl || r.markSampleUrl || r.imageUrl || r.brandSamplePath || '');
 
-      const line = `${appNo ? (appNo + ' — ') : ''}${title}`;
+      const ir = r.wipoIR || r.aripoIR || '';
+      const line = `${appNo ? (appNo + ' - ') : ''}${ir ? (ir + ' - ') : ''}${title}`;
       const imgHtml = img
         ? (img.startsWith('http')
             ? `<img src="${img}" class="ip-thumb" style="width:96px;height:96px;object-fit:contain;border-radius:4px;border:1px solid #eee;background:#fff;">`
@@ -359,7 +360,11 @@ async initIpRecordSearchSelector() {
     // ✨ YENİ SONU
 
     selectedBox.style.display = 'block';
-    selectedLabel.innerHTML = `${appNo ? `<strong>${appNo}</strong> — ` : ''}${title}`;
+    const ir = rec.wipoIR || rec.aripoIR || '';
+    const prefixParts = [];
+    if (appNo) prefixParts.push(`<strong>${appNo}</strong>`);
+    if (ir)    prefixParts.push(`<strong>${ir}</strong>`);
+    selectedLabel.innerHTML = `${prefixParts.length ? prefixParts.join(' - ') + ' - ' : ''}${title}`;
     selectedMeta.textContent = owner || '';
 
     const host  = selectedBox.querySelector('.p-2') || selectedBox;
@@ -3006,42 +3011,46 @@ async handleFormSubmit(e) {
         
         // ✨ GÜNCELLEME: WIPO/ARIPO dosyaları için hem parent hem de child'lar için transaction oluştur
         if (['WIPO', 'ARIPO'].includes(this.selectedIpRecord.origin)) {
-            const allTransactionsToCreate = [
-                {
+            const allRecordsToCreateTransactionsFor = [
+                { ...this.selectedIpRecord, transactionHierarchy: 'parent' },
+                ...this.selectedWipoAripoChildren
+            ];
+
+            for (const record of allRecordsToCreateTransactionsFor) {
+                const transactionData = {
+                    type: selectedTransactionType.id,
+                    description: `${selectedTransactionType.name} işlemi.`,
+                    parentId: record.transactionHierarchy === 'child' ? this.selectedIpRecord.id : null,
+                    transactionHierarchy: record.transactionHierarchy,
+                };
+
+                const addTransactionResult = await ipRecordsService.addTransactionToRecord(record.id, transactionData);
+                if (!addTransactionResult.success) {
+                    console.error("WIPO/ARIPO IP kaydına işlem eklenirken hata oluştu:", transactionData, addTransactionResult.error);
+                }
+            }
+
+        } else {
+            // Normal IP kayıtları için tek transaction oluşturma
+            // ✅ ÇÖZÜM: Yayına itiraz işleri için portföye işlem eklemeyi atla
+            const isPublicationOpposition = this.isPublicationOpposition(selectedTransactionType.id);
+
+            if (!isPublicationOpposition) {
+                // Normal işler için portföye işlem ekle
+                const transactionData = {
                     type: selectedTransactionType.id,
                     description: `${selectedTransactionType.name} işlemi.`,
                     parentId: null,
-                    transactionHierarchy: "parent",
-                    id: newIpRecordData.id // Parent transaction için kendi ID'si
-                },
-                ...this.selectedWipoAripoChildren.map(child => ({
-                    type: selectedTransactionType.id,
-                    description: `${selectedTransactionType.name} işlemi.`,
-                    parentId: newIpRecordData.id,
-                    transactionHierarchy: "child",
-                    id: child.id // Child transaction için kendi ID'si
-                }))
-            ];
-        
-            for (const txData of allTransactionsToCreate) {
-                const addTransactionResult = await ipRecordsService.addTransactionToRecord(newRecordResult.id, txData);
-                if (!addTransactionResult.success) {
-                    console.error("WIPO/ARIPO IP kaydına işlem eklenirken hata oluştu:", txData, addTransactionResult.error);
-                    // Hata durumunda devam et, diğer işlemler oluşturulabilsin
+                    transactionHierarchy: "parent"
+                };
+
+                const addResult = await ipRecordsService.addTransactionToRecord(this.selectedIpRecord.id, transactionData);
+                if (!addResult.success) {
+                    alert('İş oluşturuldu ama işlem kaydedilemedi: ' + addResult.error);
+                    return;
                 }
-            }
-            
-        } else {
-            // Normal IP kayıtları için tek transaction oluşturma
-            const transactionData = {
-                type: selectedTransactionType.id,
-                description: `${selectedTransactionType.name} işlemi.`,
-                parentId: null,
-                transactionHierarchy: "parent"
-            };
-            const addTransactionResult = await ipRecordsService.addTransactionToRecord(newRecordResult.id, transactionData);
-            if (!addTransactionResult.success) {
-                console.error("Yeni IP kaydına işlem eklenirken hata oluştu:", addTransactionResult.error);
+            } else {
+                console.log('🔄 Yayına itiraz işi: Portföye işlem ekleme atlandı, otomatik 3.taraf portföy oluşturulacak');
             }
         }
         // ✨ GÜNCELLEME SONU
