@@ -3047,7 +3047,9 @@ if ((this.selectedIpRecord && (this.selectedIpRecord.wipoIR || this.selectedIpRe
         console.log('🔄 Yayına itiraz işi: WIPO/ARIPO için portföye işlem ekleme atlandı.');
     }
 }
- else {
+             // Reset: yeni işte parent transaction ID'yi sıfırla (stale bağ engeli)
+            this._lastCreatedParentTransactionId = null;
+else {
             // Normal IP kayıtları için tek transaction oluşturma
             // ✅ ÇÖZÜM: Yayına itiraz işleri için portföye işlem eklemeyi atla
             const isPublicationOpposition = this.isPublicationOpposition(selectedTransactionType.id);
@@ -3064,6 +3066,14 @@ if ((this.selectedIpRecord && (this.selectedIpRecord.wipoIR || this.selectedIpRe
                 if (addResult && addResult.success) {
                     // Son oluşturulan parent transaction ID'sini kaydet; child'lar buna bağlanacak
                     this._lastCreatedParentTransactionId = addResult.id || null;
+                    if (!this._lastCreatedParentTransactionId && ipRecordsService.getRecordTransactions) {
+                        try {
+                            const txs = await ipRecordsService.getRecordTransactions(this.selectedIpRecord.id);
+                            // En yeni parent, aynı type olanı bul
+                            const cand = Array.isArray(txs) ? txs.filter(tx => tx.type == selectedTransactionType.id && tx.transactionHierarchy === 'parent').pop() : null;
+                            if (cand && cand.id) this._lastCreatedParentTransactionId = cand.id;
+                        } catch (e) { console.warn('Parent TX ID backfill başarısız:', e); }
+                    }
                 } else {
                     alert('İş oluşturuldu ama işlem kaydedilemedi: ' + (addResult && addResult.error));
                     return;
