@@ -3008,6 +3008,20 @@ async handleFormSubmit(e) {
                 return;
             }
         }
+}
+        
+        // 🔍 DEBUG: WIPO/ARIPO kontrol
+        console.log('🔍 DEBUG selectedIpRecord:', this.selectedIpRecord);
+        console.log('🔍 DEBUG wipoIR:', this.selectedIpRecord?.wipoIR);
+        console.log('🔍 DEBUG aripoIR:', this.selectedIpRecord?.aripoIR);
+        console.log('🔍 DEBUG origin:', this.selectedIpRecord?.origin);
+        console.log('🔍 DEBUG selectedWipoAripoChildren:', this.selectedWipoAripoChildren);
+
+        if ((this.selectedIpRecord && (this.selectedIpRecord.wipoIR || this.selectedIpRecord.aripoIR))) {
+            console.log('✅ WIPO/ARIPO koşulu DOĞRU - child transaction kodu çalışacak');
+        } else {
+            console.log('❌ WIPO/ARIPO koşulu YANLIŞ - child transaction kodu çalışmayacak');
+        }
         
         // ✨ GÜNCELLEME: WIPO/ARIPO dosyaları için hem parent hem de child'lar için transaction oluştur
         if (['WIPO', 'ARIPO'].includes(this.selectedIpRecord.origin)) {
