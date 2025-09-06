@@ -3137,6 +3137,68 @@ console.log('🔍 DEBUG İşlem tipi başvuru mu?:', isApplicationProcess);
         // Tahakkuk işlemleri
         const officialFee = parseFloat(document.getElementById('officialFee')?.value) || 0;
         const serviceFee = parseFloat(document.getElementById('serviceFee')?.value) || 0;
+        // 🔥 WIPO/ARIPO Transaction oluşturma - Normal task creation dalı
+        if (this.selectedIpRecord && ['WIPO', 'ARIPO'].includes(this.selectedIpRecord.origin)) {
+            console.log('🔥 Normal task - WIPO/ARIPO transaction oluşturuluyor');
+            
+            const isApplicationProcess = this.isApplicationProcess(selectedTransactionType.id);
+            console.log('🔍 DEBUG İşlem tipi başvuru mu?:', isApplicationProcess);
+            console.log('🔍 DEBUG this.selectedWipoAripoChildren:', this.selectedWipoAripoChildren);
+
+            // Parent'a transaction oluştur
+            const parentTransactionData = {
+                type: selectedTransactionType.id,
+                description: `${selectedTransactionType.name} işlemi.`,
+                parentId: null,
+                transactionHierarchy: 'parent'
+            };
+
+            const parentResult = await ipRecordsService.addTransactionToRecord(this.selectedIpRecord.id, parentTransactionData);
+            if (!parentResult.success) {
+                console.error("WIPO/ARIPO Parent transaction eklenemedi:", parentResult.error);
+            }
+
+            // Child'lar için mantık
+            let childrenToProcess = [];
+            
+            if (isApplicationProcess) {
+                // Başvuru işlemlerinde tüm child'lar
+                const isWipo = !!this.selectedIpRecord.wipoIR;
+                const irNumber = isWipo ? this.selectedIpRecord.wipoIR : this.selectedIpRecord.aripoIR;
+                
+                childrenToProcess = this.allIpRecords.filter(rec => {
+                    return rec.transactionHierarchy === 'child' &&
+                           (isWipo ? rec.wipoIR === irNumber : rec.aripoIR === irNumber);
+                });
+                console.log('🔍 DEBUG Başvuru işlemi: Tüm child\'lar işleme alınacak:', childrenToProcess.length);
+            } else {
+                // Başvuru dışı işlemlerde sadece seçili child'lar
+                childrenToProcess = this.selectedWipoAripoChildren;
+                console.log('🔍 DEBUG Başvuru dışı işlem: Sadece seçili child\'lar işleme alınacak:', childrenToProcess.length);
+            }
+
+            console.log('🔍 DEBUG Final childrenToProcess:', childrenToProcess);
+
+            // Child transaction'ları oluştur
+            for (const child of childrenToProcess) {
+                const childTransactionData = {
+                    type: selectedTransactionType.id,
+                    description: `${selectedTransactionType.name} işlemi.`,
+                    parentId: this.selectedIpRecord.id,
+                    transactionHierarchy: 'child'
+                };
+
+                const childResult = await ipRecordsService.addTransactionToRecord(child.id, childTransactionData);
+                if (!childResult.success) {
+                    console.error("WIPO/ARIPO Child transaction eklenemedi:", child, childResult.error);
+                } else {
+                    console.log(`✅ Child transaction oluşturuldu: ${child.country || child.id}`);
+                }
+            }
+
+            console.log(`✅ WIPO/ARIPO işlemi tamamlandı: Parent + ${childrenToProcess.length} child transaction oluşturuldu`);
+        }
+        // 🔥 WIPO/ARIPO Transaction oluşturma SONU
 
         if (officialFee > 0 || serviceFee > 0) {
             const vatRate = parseFloat(document.getElementById('vatRate')?.value) || 0;
