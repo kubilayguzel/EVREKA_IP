@@ -3027,33 +3027,23 @@ console.log('🔍 DEBUG selectedIpRecord.origin:', this.selectedIpRecord.origin)
 console.log('🔍 DEBUG selectedWipoAripoChildren:', this.selectedWipoAripoChildren);
 console.log('🔍 DEBUG koşul sonucu:', ['WIPO', 'ARIPO'].includes(this.selectedIpRecord.origin));
         if (['WIPO', 'ARIPO'].includes(this.selectedIpRecord.origin)) {
+    // Basit kural:
+    // - Parent her zaman işlem alır.
+    // - Child'lar için aynısı, sadece listedeki (this.selectedWipoAripoChildren) kayıtlar için oluşturulur.
+    //   (Başvuru dışı işlemlerde listeden çıkarılan ülkeler transaction almaz.)
+
     const allRecordsToCreateTransactionsFor = [
         { ...this.selectedIpRecord, transactionHierarchy: 'parent' },
-        ...this.selectedWipoAripoChildren
+        ...this.selectedWipoAripoChildren // burada kalanlar = işlem alacak child'lar
     ];
 
-    // Başvuru mu? (Marka)
-    const isApplication = (selectedTransactionType && selectedTransactionType.alias === 'Başvuru' && selectedTransactionType.ipType === 'trademark');
-    // Ulusal başvuru (child) tip ID'sini tespit et
-    let nationalChildTypeId = null;
-    if (isApplication && Array.isArray(this.allTransactionTypes)) {
-        const candidate = this.allTransactionTypes.find(t =>
-            t && t.ipType === 'trademark' &&
-            t.hierarchy === 'child' &&
-            ((t.alias && /başvuru/i.test(String(t.alias))) || (t.name && /başvuru/i.test(String(t.name))))
-        );
-        nationalChildTypeId = candidate ? candidate.id : null;
-    }
-
     console.log('🔍 DEBUG allRecordsToCreateTransactionsFor:', allRecordsToCreateTransactionsFor);
+
     for (const record of allRecordsToCreateTransactionsFor) {
         const isChild = record.transactionHierarchy === 'child';
-        const typeForThisRecord = (isChild && isApplication)
-            ? (nationalChildTypeId || selectedTransactionType.id)
-            : selectedTransactionType.id;
 
         const transactionData = {
-            type: typeForThisRecord,
+            type: selectedTransactionType.id, // AYNI işlem tipi
             description: `${selectedTransactionType.name} işlemi.`,
             parentId: isChild ? this.selectedIpRecord.id : null,
             transactionHierarchy: record.transactionHierarchy,
@@ -3064,7 +3054,6 @@ console.log('🔍 DEBUG koşul sonucu:', ['WIPO', 'ARIPO'].includes(this.selecte
             console.error("WIPO/ARIPO IP kaydına işlem eklenirken hata oluştu:", transactionData, addTransactionResult.error);
         }
     }
-
 } else {
             // Normal IP kayıtları için tek transaction oluşturma
             // ✅ ÇÖZÜM: Yayına itiraz işleri için portföye işlem eklemeyi atla
