@@ -3036,8 +3036,10 @@ async handleFormSubmit(e) {
             // İşlem tipinin başvuru olup olmadığını kontrol et
             const isApplicationProcess = this.isApplicationProcess(selectedTransactionType.id);
             
-            console.log('🔍 DEBUG İşlem tipi başvuru mu?:', isApplicationProcess);
-            console.log('🔍 DEBUG Seçilen işlem tipi:', selectedTransactionType.id, selectedTransactionType.name);
+console.log('🔍 DEBUG İşlem tipi başvuru mu?:', isApplicationProcess);
+    console.log('🔍 DEBUG Seçilen işlem tipi:', selectedTransactionType.id, selectedTransactionType.name);
+    console.log('🔍 DEBUG this.selectedWipoAripoChildren:', this.selectedWipoAripoChildren);
+    console.log('🔍 DEBUG this.allIpRecords toplam:', this.allIpRecords.length);
 
             // Parent'a her zaman transaction oluştur
             const parentTransactionData = {
@@ -3074,6 +3076,8 @@ async handleFormSubmit(e) {
             }
 
             // Child transaction'ları oluştur
+            console.log('🔍 DEBUG Final childrenToProcess:', childrenToProcess);
+    console.log('🔍 DEBUG Child sayısı:', childrenToProcess.length);
             for (const child of childrenToProcess) {
                 const childTransactionData = {
                     type: selectedTransactionType.id, // AYNI işlem tipi
