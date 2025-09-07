@@ -456,8 +456,29 @@ async function loadRecord(){
       return;
     }
     currentData = res.data;
+    updateTpQueryBtnVisibility(currentData);
     // Bu kaydı butonun ulaşabileceği global alana da verelim:
-    window.currentRecord = {
+    
+    // --- Visibility control for "TÜRKPATENT’te Sorgula" button ---
+    function _normalize(str){ return (str || '').toString().toUpperCase().replace('Ü','U').replace('İ','I'); }
+    function _isTurkPatentOrigin(rec){
+      const candidates = [
+        rec?.origin,
+        rec?.requestOrigin,
+        rec?.source,
+        rec?.sourceSystem,
+        rec?.details?.origin,
+        rec?.details?.requestOrigin
+      ].map(_normalize);
+      return candidates.some(v => v && (v.includes('TURKPATENT') || v.includes('TURK PATENT') || v.includes('TÜRKPATENT') || v.includes('TÜRKPATENT')));
+    }
+    function updateTpQueryBtnVisibility(rec){
+      const btn = document.getElementById('tpQueryBtn');
+      if (!btn) return;
+      const show = _isTurkPatentOrigin(rec);
+      btn.style.display = show ? '' : 'none';
+    }
+window.currentRecord = {
       applicationNumber: (currentData?.applicationNumber || '').trim(),
       ipType: currentData?.ipType || 'trademark'
     };
