@@ -1939,12 +1939,18 @@ if (typeof this.renderDocuments === 'function') {
                 }
                 this.ensureApplicationDataModal(prefill);
                 const modal = document.getElementById('applicationDataModal');
-                if (modal) modal.classList.add('show');
+                if (modal) {
+                    modal.classList.add('show');
+                    modal.style.display = 'flex';
+                }
             }
 
             closeApplicationDataModal() {
                 const modal = document.getElementById('applicationDataModal');
-                if (modal) modal.classList.remove('show');
+                if (modal) {
+                    modal.classList.remove('show');
+                    modal.style.display = 'none';
+                }
             }
 
             async saveApplicationDataToIpRecord() {
