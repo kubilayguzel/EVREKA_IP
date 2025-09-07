@@ -32,6 +32,20 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333
     border-radius: 20px;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
     margin-bottom: 25px;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); /* ✅ EKLENDİ: Yumuşak geçiş */
+    transform: translateZ(0); /* ✅ EKLENDİ: 3D layer tetikleyici */
+}
+
+/* ✅ EKLENDİ: Hover efektleri */
+.section-card:hover {
+    transform: translateY(-8px) translateZ(0);
+    box-shadow: 0 25px 50px rgba(0, 0, 0, 0.15), 0 15px 35px rgba(30, 60, 114, 0.1);
+    background: #fefefe;
+}
+
+/* ✅ EKLENDİ: Hover sırasında içerikte hafif parlaklık */
+.section-card:hover .section-title {
+    color: #1a3570;
 }
 /* Kartların gölgesini ve ayrımını her yerde garanti et */
 #conditionalFieldsContainer > .section-card,
@@ -372,14 +386,7 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333
     .modal-backdrop.show {
         z-index: 1050 !important;
     }
-    
-    
-
-/* === OVERRIDE: Kart ve iç container arası mesafe === */
-.section-card {
-  padding: 24px !important; /* Kartın genel iç boşluğu */
-}
-
+   
 .section-card .card-content-wrapper {
   margin: 18px !important; /* Karttan ~0.5 cm içeride olsun */
   border-radius: 14px;
