@@ -2,21 +2,18 @@
    Colors are adjustable via CSS variables for easy theming. */
 
 :root {
+ 
+  --evr-due-overdue-bg: #ffcdd2;
+  --evr-due-overdue-br: #c62828;
+  
+  --evr-due-today-bg:   #ffd5d9;
+  --evr-due-today-br:   #ef5350;
+  
+  --evr-due-3d-bg:      #ffcc80;
+  --evr-due-3d-br:      #fb8c00;
 
-  --evr-due-overdue-bg: #ffcdd2;  
-  --evr-due-overdue-br: #c62828;  
-
-  --evr-due-today-bg:   #ffebee;  
-  --evr-due-today-br:   #ef5350;  
-
-  --evr-due-3d-bg: #ffecb3;
-  --evr-due-3d-br: #f9a825; 
-
-  --evr-due-7d-bg:      #e8f5e9;   /* light green */
-  --evr-due-7d-br:      #66bb6a;
-
-  --evr-due-30d-bg:     #e3f2fd;   /* light blue */
-  --evr-due-30d-br:     #42a5f5;
+  --evr-due-7d-bg:      #ffe082;
+  --evr-due-7d-br:      #f9a825;
 }
 
 /* Row highlights */
