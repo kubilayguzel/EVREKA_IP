@@ -1847,12 +1847,28 @@ if (typeof this.renderDocuments === 'function') {
                     historyList.appendChild(historyItem);
                 });
             }
-        
             // ---- Başvuru (application) tipi kontrolü ----
             isApplicationTask() {
-                const t = (this.currentTask?.taskType || '').toString().toLowerCase();
-                // "application_*" ya da Türkçe varyant "başvuru" içeren tipler
-                return t.startsWith('application') || t.includes('başvuru') || t.includes('basvuru');
+                const taskType = this.currentTask?.taskType;
+                
+                // String kontrolü
+                if (typeof taskType === 'string') {
+                    const t = taskType.toLowerCase();
+                    return t.startsWith('application') || t.includes('başvuru') || t.includes('basvuru');
+                }
+                
+                // Number/ID kontrolü - Transaction types'tan alias kontrol et
+                if (taskType && this.allTransactionTypes) {
+                    const transaction = this.allTransactionTypes.find(t => t.id == taskType || String(t.id) === String(taskType));
+                    if (transaction) {
+                        const alias = (transaction.alias || '').toLowerCase();
+                        const name = (transaction.name || '').toLowerCase();
+                        return alias === 'başvuru' || name === 'başvuru' || 
+                               alias.includes('application') || name.includes('application');
+                    }
+                }
+                
+                return false;
             }
 
             // ---- Modal iskeletini oluştur (tek sefer) ----
