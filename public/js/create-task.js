@@ -468,7 +468,7 @@ renderWipoAripoChildRecords() {
         html += `
             <div class="selected-item d-flex justify-content-between align-items-center mb-2">
                 <span>
-                    ${country} (${child.transactionHierarchy})
+                    ${country}
                 </span>
                 <button type="button" class="btn btn-sm btn-danger remove-wipo-child-btn" data-id="${child.id}">
                     &times;
