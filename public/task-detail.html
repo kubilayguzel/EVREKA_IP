@@ -433,25 +433,35 @@
                             <p style="text-align: center; color: #666; padding: 20px;">Bu işe ait belge bulunmamaktadır.</p>
                         </div>
                     </div>
-
                     <div class="section-card">
                         <h3 class="section-title">EPATS Evrakı</h3>
-                        <div class="form-group">
-                            <label for="turkpatentEvrakNo" class="form-label">TURKPATENT Evrak No:</label>
-                            <input type="text" id="turkpatentEvrakNo" class="form-input">
-                        </div>
                         <div class="file-upload-area" id="epatsFileUploadArea">
                             <input type="file" id="epatsFileInput" hidden accept=".pdf,.doc,.docx,.jpg,.jpeg,.png">
                             <div class="upload-icon">📄</div>
                             <div class="upload-text">EPATS Evrakını Yüklemek İçin Tıklayın veya Sürükleyin</div>
                         </div>
                         <div class="file-list-container" id="epatsFileListContainer"></div>
+                        
                         <div class="form-group" style="margin-top: 20px;">
+                            <label for="turkpatentEvrakNo" class="form-label">TURKPATENT Evrak No</label>
+                            <input type="text" id="turkpatentEvrakNo" class="form-input" placeholder="Evrak numarası">
+                        </div>
+                        <div class="form-group">
                             <label for="epatsDocumentDate" class="form-label">İşlem Tarihi</label>
                             <input type="date" id="epatsDocumentDate" class="form-input">
                         </div>
+                        <div id="applicationDataSection" class="application-data-section" style="display: none; margin-top: 15px; padding: 15px; background-color: #f8f9fa; border-radius: 8px; border-left: 4px solid #1e3c72;">
+                            <h4 style="margin: 0 0 15px 0; color: #1e3c72; font-size: 1.1em;">Başvuru Bilgileri</h4>
+                            <div class="form-group">
+                                <label for="modalApplicationNumber" class="form-label">Başvuru Numarası</label>
+                                <input type="text" id="modalApplicationNumber" class="form-input" placeholder="2025/12345">
+                            </div>
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label for="modalApplicationDate" class="form-label">Başvuru Tarihi</label>
+                                <input type="date" id="modalApplicationDate" class="form-input">
+                            </div>
+                        </div>
                     </div>
-
                     <div class="section-card">
                         <h3 class="section-title">İşlem Geçmişi</h3>
                         <div id="historyList" class="history-list">
@@ -802,6 +812,38 @@ if (typeof this.renderDocuments === 'function') {
                         this.uploadedEpatsFile = task.details.epatsDocument;
                         this.statusBeforeEpatsUpload = task.details.statusBeforeEpatsUpload || null;
                         this.renderEpatsDocument();
+
+                        // İlgili IP kaydının başvuru bilgilerini göster
+                        const ipId = this.currentTask?.relatedIpRecordId || this.selectedRelatedIpRecord?.id;
+                        if (ipId && this.isApplicationTask()) {
+                            const rec = this.allIpRecords.find(r => String(r.id) == String(ipId));
+                            if (rec && (rec.applicationNumber || rec.applicationDate)) {
+                                const formAppNumber = document.getElementById('modalApplicationNumber');
+                                const formAppDate = document.getElementById('modalApplicationDate');
+                                
+                                if (formAppNumber && rec.applicationNumber) {
+                                    formAppNumber.value = rec.applicationNumber;
+                                }
+                                if (formAppDate && rec.applicationDate) {
+                                    const fmt = (d) => {
+                                        if (!d) return '';
+                                        if (typeof d === 'string') return d.slice(0, 10);
+                                        try {
+                                            const dt = d.toDate ? d.toDate() : new Date(d);
+                                            if (!isNaN(dt)) {
+                                                const y = dt.getFullYear();
+                                                const m = String(dt.getMonth()+1).padStart(2,'0');
+                                                const da = String(dt.getDate()).padStart(2,'0');
+                                                return `${y}-${m}-${da}`;
+                                            }
+                                        } catch(e){}
+                                        return '';
+                                    };
+                                    formAppDate.value = fmt(rec.applicationDate);
+                                }
+                                this.showApplicationDataSection();
+                            }
+                        }
                 // Eğer bu iş bir "başvuru işlemi" ise kullanıcıdan başvuru bilgilerini al
                 try {
                     if (this.isApplicationTask()) {
@@ -1996,6 +2038,15 @@ if (typeof this.renderDocuments === 'function') {
                         return;
                     }
 
+                    // Form alanlarına da kopyala
+                    const formAppNumber = document.getElementById('modalApplicationNumber');
+                    const formAppDate = document.getElementById('modalApplicationDate');
+                    if (formAppNumber) formAppNumber.value = applicationNumber;
+                    if (formAppDate) formAppDate.value = applicationDate;
+
+                    // Başvuru bilgileri bölümünü göster
+                    this.showApplicationDataSection();
+
                     // Hangi IP kaydı?
                     const ipId = this.currentTask?.relatedIpRecordId || this.selectedRelatedIpRecord?.id;
                     if (!ipId) {
@@ -2026,7 +2077,20 @@ if (typeof this.renderDocuments === 'function') {
                 }
             }
 
-}
+            showApplicationDataSection() {
+                const section = document.getElementById('applicationDataSection');
+                if (section) {
+                    section.style.display = 'block';
+                }
+            }
+
+            hideApplicationDataSection() {
+                const section = document.getElementById('applicationDataSection');
+                if (section) {
+                    section.style.display = 'none';
+                }
+            }
+        }
 
         const taskDetailModule = new TaskDetailModule();
         taskDetailModule.init();
