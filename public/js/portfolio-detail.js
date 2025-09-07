@@ -271,7 +271,7 @@ function organizeTransactions(txList){
   return {parents, childrenMap};
 }
 
-// 📌 YENİ: İlgili tüm kayıtların işlemlerini toplayan fonksiyon
+// 📌 DÜZELTME: İlgili tüm kayıtların işlemlerini toplayan fonksiyon
 async function fetchTransactionsForRecords(recordIds) {
   if (!Array.isArray(recordIds) || recordIds.length === 0) {
       return [];
