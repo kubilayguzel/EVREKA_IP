@@ -272,13 +272,15 @@ function organizeTransactions(txList){
 }
 
 // 📌 YENİ: İlgili tüm kayıtların işlemlerini toplayan fonksiyon
-async function fetchAllRelatedTransactions(mainRecordId, childRecordIds) {
-    const allRecordIds = [mainRecordId, ...childRecordIds];
-    const transactionsCollectionRef = collection(db, 'transactions');
-    const q = query(transactionsCollectionRef, where('recordId', 'in', allRecordIds));
-    const querySnapshot = await getDocs(q);
-    const transactions = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    return transactions;
+async function fetchTransactionsForRecords(recordIds) {
+  if (!Array.isArray(recordIds) || recordIds.length === 0) {
+      return [];
+  }
+  const transactionsCollectionRef = collection(db, 'transactions');
+  const q = query(transactionsCollectionRef, where('recordId', 'in', recordIds));
+  const querySnapshot = await getDocs(q);
+  const transactions = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  return transactions;
 }
 
 
@@ -494,41 +496,28 @@ async function loadRecord(){
     // Documents
     renderDocuments(currentData.documents);
 
-    // 📌 DÜZELTME: İşlemleri getirmeden önce ilgili tüm kayıtları bul
-    let allRelatedRecords = [currentData];
-    const recordsCollection = collection(db, 'ipRecords');
-    let parentId = currentData.parentId;
+    // 📌 DÜZELTME: İlişkili tüm kayıt kimliklerini bulma ve işlemlerini getirme
+    const allRelatedRecordIds = new Set();
+    allRelatedRecordIds.add(recordId);
 
-    if (currentData.transactionHierarchy === 'parent') {
-        const q = query(recordsCollection, where('parentId', '==', recordId));
-        const childSnaps = await getDocs(q);
-        childSnaps.forEach(doc => allRelatedRecords.push(doc.data()));
-    } else if (currentData.transactionHierarchy === 'child' && parentId) {
-        // Alt kayıt ise, önce ana kaydı bul
-        const parentRecord = await ipRecordsService.getRecordById(parentId);
-        if (parentRecord?.success && parentRecord.data) {
-            allRelatedRecords.push(parentRecord.data);
-            // Sonra kardeş alt kayıtları bul
-            const q = query(recordsCollection, where('parentId', '==', parentId), where('id', '!=', recordId));
-            const siblingSnaps = await getDocs(q);
-            siblingSnaps.forEach(doc => allRelatedRecords.push(doc.data()));
-        }
+    // Eğer bir alt kayıtsa, ana kaydın kimliğini ekle
+    if (currentData.transactionHierarchy === 'child' && currentData.parentId) {
+      allRelatedRecordIds.add(currentData.parentId);
     }
 
-    const allRecordIds = Array.from(new Set(allRelatedRecords.map(rec => rec.id)));
+    // Ana kayıtsa veya ana kayıt kimliği varsa, tüm alt kayıtların kimliklerini bul ve ekle
+    const parentId = currentData.transactionHierarchy === 'parent' ? recordId : currentData.parentId;
+    if (parentId) {
+      const recordsCollection = collection(db, 'ipRecords');
+      const q = query(recordsCollection, where('parentId', '==', parentId));
+      const childSnaps = await getDocs(q);
+      childSnaps.forEach(doc => allRelatedRecordIds.add(doc.id));
+    }
     
-    // 📌 YENİ: Topladığımız tüm kayıt kimlikleri için işlemleri çek
-    if (allRecordIds.length > 0) {
-      const allTransactions = await ipRecordsService.getTransactionsForRecord(allRecordIds);
-      // Bu fonksiyon tek bir ID aldığı için (mevcut kodunuzda),
-      // ya bu fonksiyonu değiştirin ya da manuel olarak birden fazla sorgu yapın.
-      // Basitlik için, yeni bir `fetchAllRelatedTransactions` fonksiyonu ekledim ve onu kullanacağım.
-      const fetchedTransactions = await fetchAllRelatedTransactions(allRecordIds[0], allRecordIds.slice(1));
-      await renderTransactionsAccordion(fetchedTransactions);
-    } else {
-      await renderTransactionsAccordion([]);
-    }
+    const recordIdsToFetch = Array.from(allRelatedRecordIds);
 
+    const allTransactions = await fetchTransactionsForRecords(recordIdsToFetch);
+    await renderTransactionsAccordion(allTransactions);
 
     // UI
     if (loadingEl) loadingEl.classList.add('d-none');
