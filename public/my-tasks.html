@@ -912,7 +912,22 @@
                 { name: 'operationalDue', selector: '[data-field="operationalDue"]' },
                 { name: 'officialDue',    selector: '[data-field="officialDue"]' }
             ],
-            strategy: 'earliest',   // en yakın tarih baz alınır
+            strategy: function(dates, row, fieldNames) {
+            const opIdx = fieldNames.indexOf('operationalDue');
+            const offIdx = fieldNames.indexOf('officialDue');
+            const op  = opIdx > -1 ? dates[opIdx] : null;
+            const off = offIdx > -1 ? dates[offIdx] : null;
+
+            // İkisi birden varsa OPERASYONEL tarih öncelikli
+            if (op instanceof Date && !isNaN(op)) return op;
+
+            // Sadece resmi tarih varsa onu kullan
+            if (off instanceof Date && !isNaN(off)) return off;
+
+            // Hiçbiri yoksa renklendirme uygulanmaz
+            return null;
+            },
+
             applyTo: 'row',         // tüm satırı renklendir
             showLegend: true        // üstte küçük açıklama şeridi
             });
