@@ -2,11 +2,12 @@
    Colors are adjustable via CSS variables for easy theming. */
 
 :root {
-  --evr-due-overdue-bg: #ffebee;   /* light red */
-  --evr-due-overdue-br: #ef5350;
 
-  --evr-due-today-bg:   #fff8e1;   /* light amber */
-  --evr-due-today-br:   #ffb300;
+  --evr-due-overdue-bg: #ffcdd2;  
+  --evr-due-overdue-br: #c62828;  
+
+  --evr-due-today-bg:   #ffebee;  
+  --evr-due-today-br:   #ef5350;  
 
   --evr-due-3d-bg:      #fffde7;   /* pale yellow */
   --evr-due-3d-br:      #fbc02d;
