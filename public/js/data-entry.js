@@ -1716,7 +1716,6 @@ async saveTrademarkPortfolio(portfolioData) {
 
                 createdAt: new Date().toISOString(),
                 updatedAt: new Date().toISOString(),
-                transactionHierarchy: 'single', // Tekil kayıtlar için "single"
             };
             recordsToSave.push(singleRecord);
         }
