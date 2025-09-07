@@ -1633,9 +1633,7 @@ async saveTrademarkPortfolio(portfolioData) {
                 
                 createdAt: new Date().toISOString(),
                 updatedAt: new Date().toISOString(),
-                transactionHierarchy: 'parent',
-                parentId: null
-            };
+                transactionHierarchy: 'parent'};
             recordsToSave.push(mainRecord);
 
             // Her ülke için ayrı çocuk kayıt
@@ -1677,9 +1675,7 @@ async saveTrademarkPortfolio(portfolioData) {
                     
                     createdAt: new Date().toISOString(),
                     updatedAt: new Date().toISOString(),
-                    transactionHierarchy: 'child',
-                    parentId: null
-                };
+                    transactionHierarchy: 'child'};
                 recordsToSave.push(countryRecord);
             });
 
@@ -1721,7 +1717,6 @@ async saveTrademarkPortfolio(portfolioData) {
                 createdAt: new Date().toISOString(),
                 updatedAt: new Date().toISOString(),
                 transactionHierarchy: 'single', // Tekil kayıtlar için "single"
-                parentId: null
             };
             recordsToSave.push(singleRecord);
         }
@@ -1754,7 +1749,6 @@ async saveTrademarkPortfolio(portfolioData) {
             const childRecords = recordsToSave.filter(r => r.transactionHierarchy === 'child');
             const childIds = results.filter(r => r.id !== mainRecordId).map(r => r.id);
             for(const childId of childIds) {
-                 await ipRecordsService.updateRecord(childId, { parentId: mainRecordId });
             }
         }
 
@@ -1793,7 +1787,6 @@ async saveTrademarkPortfolio(portfolioData) {
                     type: String(txTypeId),
                     transactionTypeId: String(txTypeId),
                     description: 'Başvuru işlemi.',
-                    parentId: null,
                     transactionHierarchy: 'parent'
                 });
 
@@ -1804,9 +1797,7 @@ async saveTrademarkPortfolio(portfolioData) {
                         await ipRecordsService.addTransactionToRecord(String(childId), {
                             type: String(txTypeId),
                             transactionTypeId: String(txTypeId),
-                            description: 'Ülke başvurusu işlemi.',
-                            parentId: String(mainRecordId),
-                            transactionHierarchy: 'child'
+                            description: 'Ülke başvurusu işlemi.',                            transactionHierarchy: 'child'
                         });
                     }
                 }
@@ -1889,7 +1880,6 @@ async savePatentPortfolio(portfolioData) {
             await ipRecordsService.addTransactionToRecord(result.id, {
             type: String(txTypeId), // ✅ Artık ID yazıyoruz
             description: 'Başvuru işlemi.',
-            parentId: null,
             transactionHierarchy: 'parent'
             });
         }
