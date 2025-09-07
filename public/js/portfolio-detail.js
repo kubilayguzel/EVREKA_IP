@@ -46,7 +46,7 @@ const docCount  = document.getElementById('docCount');
 document.getElementById('docFile')?.addEventListener('change', (e)=>{
   const f = e.target.files && e.target.files[0];
   const nameEl = document.getElementById('docFileName');
-  if (nameEl) nameEl.textContent = f ? f.name : 'Dosya seçin...';
+  if (nameEl) nameEl.value = f ? f.name : '';
 });
 // Transactions
 const txAccordion = document.getElementById('txAccordion');
@@ -271,22 +271,10 @@ function organizeTransactions(txList){
   return {parents, childrenMap};
 }
 
-// 📌 DÜZELTME: İlgili tüm kayıtların işlemlerini toplayan fonksiyon
-async function fetchTransactionsForRecords(recordIds) {
-  if (!Array.isArray(recordIds) || recordIds.length === 0) {
-      return [];
-  }
-  const transactionsCollectionRef = collection(db, 'transactions');
-  const q = query(transactionsCollectionRef, where('recordId', 'in', recordIds));
-  const querySnapshot = await getDocs(q);
-  const transactions = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-  return transactions;
-}
-
-
-async function renderTransactionsAccordion(transactions){
+async function renderTransactionsAccordion(recordId){
   try{
-    const list = Array.isArray(transactions) ? transactions : [];
+    const txRes = await ipRecordsService.getTransactionsForRecord(recordId);
+    const list = (txRes?.success && Array.isArray(txRes.transactions)) ? txRes.transactions : [];
     cachedTransactions = list;
     if (txCount) txCount.textContent = String(list.length);
 
@@ -496,28 +484,8 @@ async function loadRecord(){
     // Documents
     renderDocuments(currentData.documents);
 
-    // 📌 DÜZELTME: İlişkili tüm kayıt kimliklerini bulma ve işlemlerini getirme
-    const allRelatedRecordIds = new Set();
-    allRelatedRecordIds.add(recordId);
-
-    // Eğer bir alt kayıtsa, ana kaydın kimliğini ekle
-    if (currentData.transactionHierarchy === 'child' && currentData.parentId) {
-      allRelatedRecordIds.add(currentData.parentId);
-    }
-
-    // Ana kayıtsa veya ana kayıt kimliği varsa, tüm alt kayıtların kimliklerini bul ve ekle
-    const parentId = currentData.transactionHierarchy === 'parent' ? recordId : currentData.parentId;
-    if (parentId) {
-      const recordsCollection = collection(db, 'ipRecords');
-      const q = query(recordsCollection, where('parentId', '==', parentId));
-      const childSnaps = await getDocs(q);
-      childSnaps.forEach(doc => allRelatedRecordIds.add(doc.id));
-    }
-    
-    const recordIdsToFetch = Array.from(allRelatedRecordIds);
-
-    const allTransactions = await fetchTransactionsForRecords(recordIdsToFetch);
-    await renderTransactionsAccordion(allTransactions);
+    // Transactions accordion
+    await renderTransactionsAccordion(recordId);
 
     // UI
     if (loadingEl) loadingEl.classList.add('d-none');
@@ -658,3 +626,4 @@ if (tpQueryBtn) {
     }
   });
 }
+
