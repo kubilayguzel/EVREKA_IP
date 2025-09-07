@@ -345,10 +345,9 @@ async initIpRecordSearchSelector() {
         this.handleOriginChange(this.selectedIpRecord.origin);
         alert(`Seçilen varlığın menşei (${this.selectedIpRecord.origin}) olduğu için Menşe alanı otomatik olarak değiştirildi.`);
     }
-    // ✨ YENİ SONU
     
     // ✨ YENİ: WIPO/ARIPO özel işleme mantığı
-    if (__currentRecord?.wipoIR || __currentRecord?.aripoIR) {
+    if (this.selectedIpRecord?.wipoIR || this.selectedIpRecord?.aripoIR) {
         if (this.selectedIpRecord.transactionHierarchy === 'parent') {
             this.handleWipoAripoParentSelection(this.selectedIpRecord);
         }
@@ -357,7 +356,6 @@ async initIpRecordSearchSelector() {
         this.selectedWipoAripoChildren = [];
         this.renderWipoAripoChildRecords();
     }
-    // ✨ YENİ SONU
 
     selectedBox.style.display = 'block';
     const ir = rec.wipoIR || rec.aripoIR || '';
