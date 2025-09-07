@@ -385,7 +385,7 @@ async initIpRecordSearchSelector() {
     this.checkFormCompleteness();
     // Yalnızca portföy kaydı seçildiyse (gerçek IP record id'si varsa) parent/transaction vb. kontrolleri yap
     if (this.searchSource === 'portfolio' && this.selectedIpRecord?.id) {
-    this.handleIpRecordChange(__currentRecord?.id);
+        this.handleIpRecordChange(this.selectedIpRecord?.id);
     }
   });
 
@@ -398,7 +398,7 @@ async initIpRecordSearchSelector() {
       const t = selectedBox.querySelector('.ip-thumb');
       if (t) t.remove();
       this.checkFormCompleteness();
-    if (this.selectedIpRecord && __currentRecord?.id) { this.handleIpRecordChange(__currentRecord?.id); }
+    if (this.selectedIpRecord && this.selectedIpRecord?.id) {this.handleIpRecordChange(this.selectedIpRecord?.id); }
     // ✨ YENİ: Parent kayıt kaldırılınca alt kayıtları da temizle
     this.selectedWipoAripoChildren = [];
     this.renderWipoAripoChildRecords();
