@@ -9,11 +9,13 @@
   --evr-due-today-bg:   #ffe3e6;
   --evr-due-today-br:   #e57373;
   
-  --evr-due-7d-bg: #fff9c4;  /* önce: #fff59d */
-  --evr-due-7d-br: #ffd54f;  /* önce: #fbc02d */
+  /* ≤ 7 gün: çok açık sarı */
+  --evr-due-7d-bg: #fffde7;  /* daha açık */
+  --evr-due-7d-br: #ffecb3;  /* yumuşak sınır rengi */
 
-  --evr-due-3d-bg: #ffe082;  /* önce: #ffca28 */
-  --evr-due-3d-br: #ffca28;  /* önce: #fb8c00 */
+  /* ≤ 3 gün: 7g'den bir ton koyu (yine de önceye göre daha açık) */
+  --evr-due-3d-bg: #ffecb3;  /* önce: #ffe082 */
+  --evr-due-3d-br: #ffcc80;  /* önce: #ffca28 */
 
 }
 
