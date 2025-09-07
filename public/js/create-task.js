@@ -348,7 +348,7 @@ async initIpRecordSearchSelector() {
     // ✨ YENİ SONU
     
     // ✨ YENİ: WIPO/ARIPO özel işleme mantığı
-    if (this.selectedIpRecord.wipoIR || this.selectedIpRecord.aripoIR) {
+    if (__currentRecord?.wipoIR || __currentRecord?.aripoIR) {
         if (this.selectedIpRecord.transactionHierarchy === 'parent') {
             this.handleWipoAripoParentSelection(this.selectedIpRecord);
         }
@@ -387,7 +387,7 @@ async initIpRecordSearchSelector() {
     this.checkFormCompleteness();
     // Yalnızca portföy kaydı seçildiyse (gerçek IP record id'si varsa) parent/transaction vb. kontrolleri yap
     if (this.searchSource === 'portfolio' && this.selectedIpRecord?.id) {
-    this.handleIpRecordChange(this.selectedIpRecord.id);
+    this.handleIpRecordChange(__currentRecord?.id);
     }
   });
 
@@ -400,7 +400,7 @@ async initIpRecordSearchSelector() {
       const t = selectedBox.querySelector('.ip-thumb');
       if (t) t.remove();
       this.checkFormCompleteness();
-    if (this.selectedIpRecord && this.selectedIpRecord.id) { this.handleIpRecordChange(this.selectedIpRecord.id); }
+    if (this.selectedIpRecord && __currentRecord?.id) { this.handleIpRecordChange(__currentRecord?.id); }
     // ✨ YENİ: Parent kayıt kaldırılınca alt kayıtları da temizle
     this.selectedWipoAripoChildren = [];
     this.renderWipoAripoChildRecords();
@@ -2554,15 +2554,14 @@ async handleParentSelection(selectedParentId) {
     const childTransactionData = {
         type: String(childTypeId),
         description: 'İtiraz geri çekme işlemi',
-        parentId: String(parentId),
         transactionHierarchy: 'child'
     };
-    if (!this.selectedIpRecord || !this.selectedIpRecord.id) {
+    if (!this.selectedIpRecord || !__currentRecord?.id) {
         alert('Portföy kaydı bulunamadı. Lütfen bir portföy seçin.');
         return;
     }
     try {
-        const addResult = await ipRecordsService.addTransactionToRecord(this.selectedIpRecord.id, childTransactionData);
+        const addResult = await ipRecordsService.addTransactionToRecord(__currentRecord?.id, childTransactionData);
         if (addResult && addResult.success) {
             alert('Alt işlem başarıyla kaydedildi.');
         } else {
@@ -2770,7 +2769,7 @@ async handleFormSubmit(e) {
         assignedTo_email: assignedToUser ? assignedToUser.email : null,
         dueDate: document.getElementById('taskDueDate')?.value || null,
         status: 'open',
-        relatedIpRecordId: this.selectedIpRecord ? this.selectedIpRecord.id : null,
+        relatedIpRecordId: this.selectedIpRecord ? __currentRecord?.id : null,
         relatedIpRecordTitle: this.selectedIpRecord ? this.selectedIpRecord.title : taskTitle,
         details: {}
     };
@@ -3025,14 +3024,16 @@ async handleFormSubmit(e) {
         console.log('🔍 DEBUG origin:', this.selectedIpRecord?.origin);
         console.log('🔍 DEBUG selectedWipoAripoChildren:', this.selectedWipoAripoChildren);
 
-        if ((this.selectedIpRecord && (this.selectedIpRecord.wipoIR || this.selectedIpRecord.aripoIR))) {
+        if ((this.selectedIpRecord && (__currentRecord?.wipoIR || __currentRecord?.aripoIR))) {
             console.log('✅ WIPO/ARIPO koşulu DOĞRU - child transaction kodu çalışacak');
         } else {
             console.log('❌ WIPO/ARIPO koşulu YANLIŞ - child transaction kodu çalışmayacak');
         }
 
         // 🔍 DEBUG: WIPO/ARIPO child transaction kontrol
-        if (['WIPO', 'ARIPO'].includes(this.selectedIpRecord.origin)) {
+        const __currentRecord = this.selectedIpRecord || (newRecordResult && newRecordResult.id ? { id: newRecordResult.id, ...newIpRecordData } : null);
+const __currentOrigin = __currentRecord?.origin || null;
+if (__currentOrigin && ['WIPO', 'ARIPO'].includes(__currentOrigin)) {
             // İşlem tipinin başvuru olup olmadığını kontrol et
             const isApplicationProcess = this.isApplicationProcess(selectedTransactionType.id);
             
@@ -3045,11 +3046,10 @@ console.log('🔍 DEBUG İşlem tipi başvuru mu?:', isApplicationProcess);
             const parentTransactionData = {
                 type: selectedTransactionType.id,
                 description: `${selectedTransactionType.name} işlemi.`,
-                parentId: null,
                 transactionHierarchy: 'parent'
             };
 
-            const parentResult = await ipRecordsService.addTransactionToRecord(this.selectedIpRecord.id, parentTransactionData);
+            const parentResult = await ipRecordsService.addTransactionToRecord(__currentRecord?.id, parentTransactionData);
             if (!parentResult.success) {
                 console.error("WIPO/ARIPO Parent IP kaydına işlem eklenirken hata oluştu:", parentTransactionData, parentResult.error);
             }
@@ -3062,8 +3062,8 @@ console.log('🔍 DEBUG İşlem tipi başvuru mu?:', isApplicationProcess);
             if (isApplicationProcess) {
                 // Başvuru işlemlerinde tüm child'ları al
                 const allChildren = this.allIpRecords.filter(rec => {
-                    const isWipo = !!this.selectedIpRecord.wipoIR;
-                    const irNumber = isWipo ? this.selectedIpRecord.wipoIR : this.selectedIpRecord.aripoIR;
+                    const isWipo = !!__currentRecord?.wipoIR;
+                    const irNumber = isWipo ? __currentRecord?.wipoIR : __currentRecord?.aripoIR;
                     return rec.transactionHierarchy === 'child' &&
                         (isWipo ? rec.wipoIR === irNumber : rec.aripoIR === irNumber);
                 });
@@ -3082,7 +3082,6 @@ console.log('🔍 DEBUG İşlem tipi başvuru mu?:', isApplicationProcess);
                 const childTransactionData = {
                     type: selectedTransactionType.id, // AYNI işlem tipi
                     description: `${selectedTransactionType.name} işlemi.`,
-                    parentId: this.selectedIpRecord.id,
                     transactionHierarchy: 'child'
                 };
 
@@ -3103,11 +3102,10 @@ console.log('🔍 DEBUG İşlem tipi başvuru mu?:', isApplicationProcess);
                 const transactionData = {
                     type: selectedTransactionType.id,
                     description: `${selectedTransactionType.name} işlemi.`,
-                    parentId: null,
                     transactionHierarchy: "parent"
                 };
 
-                const addResult = await ipRecordsService.addTransactionToRecord(this.selectedIpRecord.id, transactionData);
+                const addResult = await ipRecordsService.addTransactionToRecord(__currentRecord?.id, transactionData);
                 if (!addResult.success) {
                     alert('İş oluşturuldu ama işlem kaydedilemedi: ' + addResult.error);
                     return;
@@ -3149,11 +3147,10 @@ console.log('🔍 DEBUG İşlem tipi başvuru mu?:', isApplicationProcess);
             const parentTransactionData = {
                 type: selectedTransactionType.id,
                 description: `${selectedTransactionType.name} işlemi.`,
-                parentId: null,
                 transactionHierarchy: 'parent'
             };
 
-            const parentResult = await ipRecordsService.addTransactionToRecord(this.selectedIpRecord.id, parentTransactionData);
+            const parentResult = await ipRecordsService.addTransactionToRecord(__currentRecord?.id, parentTransactionData);
             if (!parentResult.success) {
                 console.error("WIPO/ARIPO Parent transaction eklenemedi:", parentResult.error);
             }
@@ -3163,8 +3160,8 @@ console.log('🔍 DEBUG İşlem tipi başvuru mu?:', isApplicationProcess);
             
             if (isApplicationProcess) {
                 // Başvuru işlemlerinde tüm child'lar
-                const isWipo = !!this.selectedIpRecord.wipoIR;
-                const irNumber = isWipo ? this.selectedIpRecord.wipoIR : this.selectedIpRecord.aripoIR;
+                const isWipo = !!__currentRecord?.wipoIR;
+                const irNumber = isWipo ? __currentRecord?.wipoIR : __currentRecord?.aripoIR;
                 
                 childrenToProcess = this.allIpRecords.filter(rec => {
                     return rec.transactionHierarchy === 'child' &&
@@ -3184,7 +3181,6 @@ console.log('🔍 DEBUG İşlem tipi başvuru mu?:', isApplicationProcess);
                 const childTransactionData = {
                     type: selectedTransactionType.id,
                     description: `${selectedTransactionType.name} işlemi.`,
-                    parentId: this.selectedIpRecord.id,
                     transactionHierarchy: 'child'
                 };
 
@@ -3240,13 +3236,12 @@ console.log('🔍 DEBUG İşlem tipi başvuru mu?:', isApplicationProcess);
             const transactionData = {
                 type: selectedTransactionType.id,
                 description: `${selectedTransactionType.name} işlemi.`,
-                parentId: null,
                 transactionHierarchy: "parent"
             };
 
-            const addResult = await ipRecordsService.addTransactionToRecord(this.selectedIpRecord.id, transactionData);
+            const addResult = await ipRecordsService.addTransactionToRecord(__currentRecord?.id, transactionData);
             if (addResult && addResult.success) {
-                this._lastCreatedParentTransactionId = addResult.id || this.selectedIpRecord.id;
+                this._lastCreatedParentTransactionId = addResult.id || __currentRecord?.id;
             } else {
                 console.error("IP kaydına işlem eklenirken hata oluştu:", transactionData, addResult?.error);
             }
