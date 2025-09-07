@@ -512,7 +512,10 @@ tr.group-row[aria-hidden="true"]{ display:none !important; }
 
         // === Yardımcı Fonksiyonlar ===
         const safe = (v) => (v ?? '').toString();
-        const safeId = (v) => safe(v).replace(/[^a-zA-Z0-9_]+/g, '_');
+        
+        function safeId(str) {
+            return String(str || '').replace(/[^a-zA-Z0-9]/g, '_');
+        }
 
         function fmtDate(d) {
             try {
@@ -899,7 +902,7 @@ tr.group-row[aria-hidden="true"]{ display:none !important; }
                         childRecords.forEach((childR, idx) => {
                             const childTr = document.createElement('tr');
                             childTr.className = 'group-row child-row';
-                            childTr.dataset.parentId = internationalRegNo;
+                            childTr.dataset.parentId = safeId(internationalRegNo);
                             childTr.setAttribute('aria-hidden', 'true');
 
                             const childStatus = this.getDisplayStatus(childR);
