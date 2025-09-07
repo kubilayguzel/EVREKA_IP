@@ -512,7 +512,7 @@ tr.group-row[aria-hidden="true"]{ display:none !important; }
 
         // === Yardımcı Fonksiyonlar ===
         const safe = (v) => (v ?? '').toString();
-        
+
         function safeId(str) {
             return String(str || '').replace(/[^a-zA-Z0-9]/g, '_');
         }
@@ -530,6 +530,15 @@ tr.group-row[aria-hidden="true"]{ display:none !important; }
                 return dt.toLocaleDateString('tr-TR');
             } catch { return String(d); }
         }
+
+        function normalizeAppNo(appNo) {
+            return (appNo || '')
+                .toString()
+                .trim()
+                .toUpperCase()
+                .replace(/[\s.\-_/]/g, '');
+        }
+
 
         let transactionTypesMap = new Map();
         // === İTİRAZ DURUM HARİTASI ===
@@ -1298,24 +1307,49 @@ tr.group-row[aria-hidden="true"]{ display:none !important; }
             async addSelectedToMonitoring() {
                 const selectedIds = Array.from(this.selectedRecords);
                 if (selectedIds.length === 0) return;
+
                 let successful = 0, failed = 0, skipped = 0;
 
                 for (const id of selectedIds) {
-                    const record = this.allRecords.find(r => r.id === id);
-                    if (!record) { failed++; continue; }
-                    if (record.type !== 'trademark') { skipped++; continue; }
+                    const r = this.allRecords.find(x => x.id === id);
+                    if (!r) { failed++; continue; }
+                    if (r.type !== 'trademark') { skipped++; continue; }
 
-                    // `brandTextSearch` ve `niceClassSearch` alanlarını doldur
-                    const monitoringData = {
-                        ...record,
-                        brandTextSearch: [record.title || record.brandText || ''].filter(Boolean),
-                        niceClassSearch: (record.goodsAndServicesByClass || []).map(item => Number(item.classNo)).filter(n => !isNaN(n))
+                    // Portföy kaydından minimal veri + arama alanları
+                    const markName = r.title || r.brandText || r.name || '';
+                    const applicationNumber = r.applicationNumber || r.applicationNo || r.basvuruNo || '';
+
+                    const monitoringDoc = {
+                        // monitoringTrademarks docID = ipRecordId (sunucudaki addMonitoringItem buna göre çalışıyor)
+                        id: r.id,
+                        ipRecordId: r.id,
+
+                        // Dinamik join için anahtar alanlar
+                        markName,
+                        applicationNumber,
+                        applicationNumberNorm: normalizeAppNo(applicationNumber),
+
+                        // Mevcut arama/filter yapınızla uyumlu ekstra alanlar
+                        brandTextSearch: [markName].filter(Boolean),
+                        niceClassSearch: (r.goodsAndServicesByClass || [])
+                            .map(item => Number(item.classNo))
+                            .filter(n => !Number.isNaN(n)),
+
+                        // meta
+                        createdAt: new Date().toISOString(),
+                        updatedAt: new Date().toISOString()
                     };
 
-                    const res = await monitoringService.addMonitoringItem(monitoringData);
-                    if (res.success) successful++;
-                    else failed++;
+                    try {
+                        const res = await monitoringService.addMonitoringItem(monitoringDoc);
+                        if (res.success) successful++;
+                        else failed++;
+                    } catch (e) {
+                        console.error('İzlemeye ekleme hatası:', e);
+                        failed++;
+                    }
                 }
+
                 if (successful > 0) showNotification(`${successful} kayıt başarıyla izlemeye eklendi.`, 'success');
                 if (failed > 0) showNotification(`${failed} kayıt izlemeye eklenirken hata oluştu.`, 'error');
                 if (skipped > 0) showNotification(`${skipped} marka olmayan kayıt atlandı.`, 'info');
