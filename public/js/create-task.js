@@ -2621,16 +2621,28 @@ async loadBulletinRecordsOnce() {
     this.allBulletinRecords = [];
   }
 }
-// Başvuru işlemi olup olmadığını kontrol eden yardımcı metod
-    isApplicationProcess(transactionTypeId) {
-        const applicationTypes = [
-            'patent_application',
-            'design_application',
-            'trademark_application',
-            'utility_application'
-        ];
-        return applicationTypes.includes(transactionTypeId);
-    }
+isApplicationProcess(transactionTypeId) {
+    const applicationTypes = [
+        'patent_application',
+        'design_application', 
+        'trademark_application',
+        'utility_application'
+    ];
+    
+    // Marka başvuru işlemini de kontrol et
+    const selectedTaskType = this.allTransactionTypes.find(t => t.id === transactionTypeId);
+    const isTrademarkApplication = selectedTaskType?.alias === 'Başvuru' && selectedTaskType?.ipType === 'trademark';
+    
+    const result = applicationTypes.includes(transactionTypeId) || isTrademarkApplication;
+    console.log('🔍 DEBUG isApplicationProcess:', {
+        transactionTypeId,
+        selectedTaskType: selectedTaskType?.alias,
+        ipType: selectedTaskType?.ipType,
+        isApplication: result
+    });
+    
+    return result;
+}
 
 checkFormCompleteness() {
     const taskTypeId = document.getElementById('specificTaskType')?.value;
@@ -2677,6 +2689,12 @@ checkFormCompleteness() {
     }
 
     saveTaskBtn.disabled = !isComplete;
+}
+
+// Geçici WIPO/ARIPO IR numarası oluşturur
+generateTemporaryIR(originType) {
+    const randomNumber = Math.floor(Math.random() * 999999) + 100000; // 6 haneli rastgele sayı
+    return `Geçici - ${randomNumber}`;
 }
 
 async uploadFileToStorage(file, path) {
@@ -2913,6 +2931,9 @@ async handleFormSubmit(e) {
         country: (document.getElementById('originSelect')?.value === 'Yurtdışı Ulusal') ? document.getElementById('countrySelect')?.value : null,
         countries: (['WIPO', 'ARIPO'].includes(document.getElementById('originSelect')?.value))? this.selectedCountries.map(c => c.code): [], 
         applicationNumber: null,
+        // WIPO/ARIPO için geçici IR numarası üret
+        wipoIR: document.getElementById('originSelect')?.value === 'WIPO' ? this.generateTemporaryIR('WIPO') : null,
+        aripoIR: document.getElementById('originSelect')?.value === 'ARIPO' ? this.generateTemporaryIR('ARIPO') : null,
         applicationDate: new Date().toISOString().split('T')[0],
         registrationNumber: null,
         registrationDate: null,
@@ -2958,18 +2979,43 @@ async handleFormSubmit(e) {
                     const pc = Array.isArray(__parentRecord?.countries) ? __parentRecord.countries : [];
                     const selectedCodes = Array.from(new Set([ ...sc, ...nc, ...pc ].filter(Boolean)));
                     const isWipo = (__parentOrigin === 'WIPO');
-                    // Try to get IR from parent or from a form input if provided
-                    const irInput = document.getElementById('internationalRegNumber')?.value?.trim() || null;
-                    const irNumber = isWipo ? (__parentRecord?.wipoIR || irInput || null) : (__parentRecord?.aripoIR || irInput || null);
+
+                    // IR numarasını al veya geçici üret
+                    let irNumber = isWipo ? __parentRecord?.wipoIR : __parentRecord?.aripoIR;
+                    if (!irNumber) {
+                        irNumber = this.generateTemporaryIR(__parentOrigin);
+                        console.log(`📝 Geçici IR numarası üretildi: ${irNumber}`);
+                        
+                        // Parent record'a geçici IR numarasını ekle
+                        if (isWipo) {
+                            __parentRecord.wipoIR = irNumber;
+                        } else {
+                            __parentRecord.aripoIR = irNumber;
+                        }
+                    }
+
+                    console.log('🔍 DEBUG: selectedCodes için child record oluşturma başlıyor');
+                    console.log('🔍 DEBUG: selectedCodes:', selectedCodes);
+                    console.log('🔍 DEBUG: irNumber:', irNumber);
+                    console.log('🔍 DEBUG: isWipo:', isWipo);
+
+                    if (selectedCodes.length === 0) {
+                        console.warn('⚠️ UYARI: Hiç ülke seçilmemiş, child record oluşturulmayacak');
+                    } else {
+                        console.log(`✅ ${selectedCodes.length} ülke için child record oluşturulacak`);
+                    }
                     
+                    // Child record oluşturma döngüsü için:
                     for (const code of selectedCodes) {
+                        console.log(`🌍 ${code} için child record oluşturuluyor...`);
+                        
                         const childRecordData = {
                             title: newIpRecordData.title,
                             type: selectedTransactionType.ipType,
                             portfoyStatus: 'active',
                             status: 'filed',
-                            recordOwnerType: __parentRecord.recordOwnerType || 'self',
-                            origin: __parentOrigin,
+                            recordOwnerType,
+                            origin: __currentOrigin,
                             country: code,
                             wipoIR: isWipo ? irNumber : null,
                             aripoIR: isWipo ? null : irNumber,
@@ -2993,20 +3039,29 @@ async handleFormSubmit(e) {
                             createdAt: new Date().toISOString(),
                             updatedAt: new Date().toISOString()
                         };
+                        
+                        console.log(`🏗️ Child record data hazırlandı:`, {
+                            country: code,
+                            wipoIR: childRecordData.wipoIR,
+                            aripoIR: childRecordData.aripoIR,
+                            origin: childRecordData.origin
+                        });
+                        
                         const childCreate = await ipRecordsService.createRecord(childRecordData);
                         if (childCreate?.success) {
-                            // Add child application transaction
+                            // Child transaction'ı da oluştur
                             const childTransactionData = {
                                 type: selectedTransactionType.id,
                                 description: `${selectedTransactionType.name} işlemi.`,
                                 transactionHierarchy: 'child'
                             };
                             await ipRecordsService.addTransactionToRecord(childCreate.id, childTransactionData);
-                            // Update memory for UI consistency
+                            
+                            // Memory'ye ekle
                             this.allIpRecords.push({ id: childCreate.id, ...childRecordData });
-                            console.log('🧩 NEW FLOW: Child IP record + application tx created:', code, childCreate.id);
+                            console.log(`✅ Child IP record + transaction oluşturuldu: ${code} (ID: ${childCreate.id})`);
                         } else {
-                            console.error('❌ NEW FLOW: Child IP record create failed for', code, childCreate?.error);
+                            console.error(`❌ Child IP record oluşturulamadı: ${code}`, childCreate?.error);
                         }
                     }
                 }
