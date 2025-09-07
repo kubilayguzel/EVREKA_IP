@@ -3158,8 +3158,8 @@ async handleFormSubmit(e) {
 
         // 🔍 DEBUG: WIPO/ARIPO child transaction kontrol
         const __currentRecord = this.selectedIpRecord || (newRecordResult && newRecordResult.id ? { id: newRecordResult.id, ...newIpRecordData } : null);
-const __currentOrigin = __currentRecord?.origin || null;
-if (__currentOrigin && ['WIPO', 'ARIPO'].includes(__currentOrigin)) {
+        const __currentOrigin = __currentRecord?.origin || null;
+        if (__currentOrigin && ['WIPO', 'ARIPO'].includes(__currentOrigin)) {
             // İşlem tipinin başvuru olup olmadığını kontrol et
             const isApplicationProcess = this.isApplicationProcess(selectedTransactionType.id);
             
@@ -3264,8 +3264,6 @@ if (__currentOrigin && ['WIPO', 'ARIPO'].includes(__currentOrigin)) {
             }
 
             // Child transaction'ları oluştur
-            console.log('🔍 DEBUG Final childrenToProcess:', childrenToProcess);
-    console.log('🔍 DEBUG Child sayısı:', childrenToProcess.length);
             for (const child of childrenToProcess) {
                 const childTransactionData = {
                     type: selectedTransactionType.id, // AYNI işlem tipi
@@ -3338,7 +3336,7 @@ if (__currentOrigin && ['WIPO', 'ARIPO'].includes(__currentOrigin)) {
                 transactionHierarchy: 'parent'
             };
 
-            const parentResult = await ipRecordsService.addTransactionToRecord(__currentRecord?.id, parentTransactionData);
+            const parentResult = await ipRecordsService.addTransactionToRecord(this.selectedIpRecord?.id, parentTransactionData);
             if (!parentResult.success) {
                 console.error("WIPO/ARIPO Parent transaction eklenemedi:", parentResult.error);
             }
@@ -3347,9 +3345,9 @@ if (__currentOrigin && ['WIPO', 'ARIPO'].includes(__currentOrigin)) {
             let childrenToProcess = [];
             
             if (isApplicationProcess) {
-                // Başvuru işlemlerinde tüm child'lar
-                const isWipo = !!__currentRecord?.wipoIR;
-                const irNumber = isWipo ? __currentRecord?.wipoIR : __currentRecord?.aripoIR;
+            // Başvuru işlemlerinde tüm child'lar
+            const isWipo = !!this.selectedIpRecord?.wipoIR;
+            const irNumber = isWipo ? this.selectedIpRecord?.wipoIR : this.selectedIpRecord?.aripoIR;
                 
                 childrenToProcess = this.allIpRecords.filter(rec => {
                     return rec.transactionHierarchy === 'child' &&
