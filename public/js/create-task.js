@@ -2945,6 +2945,77 @@ async handleFormSubmit(e) {
 
         taskData.relatedIpRecordId = newRecordResult.id;
         taskData.relatedIpRecordTitle = newIpRecordData.title;
+        // === WIPO/ARIPO NEW APPLICATION: ensure child IP records + child application transactions ===
+        try {
+            const __parentRecord = { id: newRecordResult.id, ...newIpRecordData };
+            const __parentOrigin = __parentRecord?.origin || null;
+            if (__parentOrigin && ['WIPO', 'ARIPO'].includes(__parentOrigin)) {
+                const isApplicationProcess = this.isApplicationProcess(selectedTransactionType.id);
+                if (isApplicationProcess) {
+                    // Collect countries
+                    const sc = Array.isArray(this.selectedCountries) ? this.selectedCountries.map(c => c.code) : [];
+                    const nc = Array.isArray(newIpRecordData?.countries) ? newIpRecordData.countries : [];
+                    const pc = Array.isArray(__parentRecord?.countries) ? __parentRecord.countries : [];
+                    const selectedCodes = Array.from(new Set([ ...sc, ...nc, ...pc ].filter(Boolean)));
+                    const isWipo = (__parentOrigin === 'WIPO');
+                    // Try to get IR from parent or from a form input if provided
+                    const irInput = document.getElementById('internationalRegNumber')?.value?.trim() || null;
+                    const irNumber = isWipo ? (__parentRecord?.wipoIR || irInput || null) : (__parentRecord?.aripoIR || irInput || null);
+                    
+                    for (const code of selectedCodes) {
+                        const childRecordData = {
+                            title: newIpRecordData.title,
+                            type: selectedTransactionType.ipType,
+                            portfoyStatus: 'active',
+                            status: 'filed',
+                            recordOwnerType: __parentRecord.recordOwnerType || 'self',
+                            origin: __parentOrigin,
+                            country: code,
+                            wipoIR: isWipo ? irNumber : null,
+                            aripoIR: isWipo ? null : irNumber,
+                            applicationNumber: null,
+                            applicationDate: new Date().toISOString().split('T')[0],
+                            registrationNumber: null,
+                            registrationDate: null,
+                            renewalDate: null,
+                            brandText: document.getElementById('brandExampleText')?.value || null,
+                            brandImageUrl: brandImageUrl,
+                            description: null,
+                            applicants: this.selectedApplicants.map(p => ({ id: p.id, name: p.name, email: p.email || null })),
+                            priorities: this.priorities.length > 0 ? this.priorities : [],
+                            brandType: document.getElementById('brandType')?.value || null,
+                            brandCategory: document.getElementById('brandCategory')?.value || null,
+                            nonLatinAlphabet: document.getElementById('nonLatinAlphabet')?.value || null,
+                            coverLetterRequest: document.querySelector('input[name="coverLetterRequest"]:checked')?.value || null,
+                            consentRequest: document.querySelector('input[name="consentRequest"]:checked')?.value || null,
+                            goodsAndServicesByClass: goodsAndServicesByClass,
+                            transactionHierarchy: 'child',
+                            createdAt: new Date().toISOString(),
+                            updatedAt: new Date().toISOString()
+                        };
+                        const childCreate = await ipRecordsService.createRecord(childRecordData);
+                        if (childCreate?.success) {
+                            // Add child application transaction
+                            const childTransactionData = {
+                                type: selectedTransactionType.id,
+                                description: `${selectedTransactionType.name} işlemi.`,
+                                transactionHierarchy: 'child'
+                            };
+                            await ipRecordsService.addTransactionToRecord(childCreate.id, childTransactionData);
+                            // Update memory for UI consistency
+                            this.allIpRecords.push({ id: childCreate.id, ...childRecordData });
+                            console.log('🧩 NEW FLOW: Child IP record + application tx created:', code, childCreate.id);
+                        } else {
+                            console.error('❌ NEW FLOW: Child IP record create failed for', code, childCreate?.error);
+                        }
+                    }
+                }
+            }
+        } catch (e) {
+            console.error('NEW FLOW ensure child records failed:', e);
+        }
+        // === END ensure block ===
+
    
         // Çoklu ilgili tarafları ekle
         try {
