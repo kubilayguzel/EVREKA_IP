@@ -802,6 +802,15 @@ if (typeof this.renderDocuments === 'function') {
                         this.uploadedEpatsFile = task.details.epatsDocument;
                         this.statusBeforeEpatsUpload = task.details.statusBeforeEpatsUpload || null;
                         this.renderEpatsDocument();
+                // Eğer bu iş bir "başvuru işlemi" ise kullanıcıdan başvuru bilgilerini al
+                try {
+                    if (this.isApplicationTask()) {
+                        this.openApplicationDataModal();
+                    }
+                } catch (e) {
+                    console.warn('Application data modal could not be opened:', e);
+                }
+
                         if (task.details.epatsDocument.documentDate) {
                             const v = task.details.epatsDocument.documentDate;
                             document.getElementById('epatsDocumentDate').value = (typeof v === 'string')
@@ -1836,7 +1845,150 @@ if (typeof this.renderDocuments === 'function') {
                     historyList.appendChild(historyItem);
                 });
             }
-        }
+        
+            // ---- Başvuru (application) tipi kontrolü ----
+            isApplicationTask() {
+                const t = (this.currentTask?.taskType || '').toString().toLowerCase();
+                // "application_*" ya da Türkçe varyant "başvuru" içeren tipler
+                return t.startsWith('application') || t.includes('başvuru') || t.includes('basvuru');
+            }
+
+            // ---- Modal iskeletini oluştur (tek sefer) ----
+            ensureApplicationDataModal(prefill = {}) {
+                if (document.getElementById('applicationDataModal')) {
+                    // Önceden var ise değerleri güncelle
+                    const num = document.getElementById('appNumberInput');
+                    const date = document.getElementById('appDateInput');
+                    if (num && prefill.applicationNumber) num.value = prefill.applicationNumber;
+                    if (date && prefill.applicationDate) date.value = prefill.applicationDate;
+                    return;
+                }
+                const modal = document.createElement('div');
+                modal.id = 'applicationDataModal';
+                modal.className = 'modal';
+                modal.innerHTML = `
+                    <div class="modal-content">
+                        <button class="close-modal-btn" id="closeApplicationDataModal">&times;</button>
+                        <h3 class="modal-title">Başvuru Bilgilerini Kaydet</h3>
+                        <p style="color:#555;margin-top:-8px;">EPATS evrakı yüklendi. Lütfen başvuru numarası ve tarihini girin.</p>
+                        <div class="form-grid" style="margin-top:15px;">
+                            <div class="form-group">
+                                <label class="form-label" for="appNumberInput">Başvuru Numarası</label>
+                                <input type="text" id="appNumberInput" class="form-input" placeholder="2025/12345">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label" for="appDateInput">Başvuru Tarihi</label>
+                                <input type="date" id="appDateInput" class="form-input">
+                            </div>
+                        </div>
+                        <div class="form-actions">
+                            <button type="button" class="btn btn-secondary" id="cancelAppDataBtn">İptal</button>
+                            <button type="button" class="btn btn-primary" id="saveAppDataBtn">Kaydet</button>
+                        </div>
+                    </div>`;
+                document.body.appendChild(modal);
+
+                // Event listeners
+                const closeBtn = document.getElementById('closeApplicationDataModal');
+                const cancelBtn = document.getElementById('cancelAppDataBtn');
+                [closeBtn, cancelBtn].forEach(btn => btn && btn.addEventListener('click', () => this.closeApplicationDataModal()));
+                const saveBtn = document.getElementById('saveAppDataBtn');
+                if (saveBtn) saveBtn.addEventListener('click', () => this.saveApplicationDataToIpRecord());
+                modal.addEventListener('click', (e) => {
+                    if (e.target.id === 'applicationDataModal') this.closeApplicationDataModal();
+                });
+
+                // Prefill
+                const num = document.getElementById('appNumberInput');
+                const date = document.getElementById('appDateInput');
+                if (prefill.applicationNumber) num.value = prefill.applicationNumber;
+                if (prefill.applicationDate) date.value = prefill.applicationDate;
+            }
+
+            openApplicationDataModal() {
+                // İlgili ipRecord'ı bul ve mevcut değerleri doldur
+                const ipId = this.currentTask?.relatedIpRecordId || this.selectedRelatedIpRecord?.id;
+                let prefill = {};
+                if (ipId) {
+                    const rec = this.allIpRecords.find(r => String(r.id) == String(ipId));
+                    if (rec) {
+                        const fmt = (d) => {
+                            if (!d) return '';
+                            if (typeof d === 'string') {
+                                // 'YYYY-MM-DD' veya ISO
+                                return d.slice(0, 10);
+                            }
+                            try {
+                                const dt = d.toDate ? d.toDate() : new Date(d);
+                                if (!isNaN(dt)) {
+                                    const y = dt.getFullYear();
+                                    const m = String(dt.getMonth()+1).padStart(2,'0');
+                                    const da = String(dt.getDate()).padStart(2,'0');
+                                    return `${y}-${m}-${da}`;
+                                }
+                            } catch(e){}
+                            return '';
+                        };
+                        prefill = {
+                            applicationNumber: rec.applicationNumber || '',
+                            applicationDate: fmt(rec.applicationDate)
+                        };
+                    }
+                }
+                this.ensureApplicationDataModal(prefill);
+                const modal = document.getElementById('applicationDataModal');
+                if (modal) modal.classList.add('show');
+            }
+
+            closeApplicationDataModal() {
+                const modal = document.getElementById('applicationDataModal');
+                if (modal) modal.classList.remove('show');
+            }
+
+            async saveApplicationDataToIpRecord() {
+                try {
+                    const numEl = document.getElementById('appNumberInput');
+                    const dateEl = document.getElementById('appDateInput');
+                    const applicationNumber = (numEl?.value || '').trim();
+                    const applicationDate = (dateEl?.value || '').trim(); // YYYY-MM-DD
+
+                    if (!applicationNumber || !applicationDate) {
+                        showNotification('Lütfen hem başvuru numarası hem de başvuru tarihini giriniz.', 'error');
+                        return;
+                    }
+
+                    // Hangi IP kaydı?
+                    const ipId = this.currentTask?.relatedIpRecordId || this.selectedRelatedIpRecord?.id;
+                    if (!ipId) {
+                        showNotification('İlgili IP kaydı bulunamadı. Önce ilgili kaydı seçiniz.', 'error');
+                        return;
+                    }
+
+                    // Güncelle
+                    const updateData = {
+                        applicationNumber,
+                        applicationDate // string formatında saklıyoruz (utils içinde parse ediliyor)
+                    };
+                    const res = await ipRecordsService.updateRecord(ipId, updateData);
+                    if (res?.success !== false) {
+                        // Lokalde de güncelle
+                        const idx = this.allIpRecords.findIndex(r => String(r.id) == String(ipId));
+                        if (idx >= 0) {
+                            this.allIpRecords[idx] = { ...this.allIpRecords[idx], ...updateData };
+                        }
+                        showNotification('Başvuru numarası ve tarihi kaydedildi.', 'success');
+                        this.closeApplicationDataModal();
+                    } else {
+                        throw new Error(res?.error || 'Güncelleme başarısız');
+                    }
+                } catch (e) {
+                    console.error('saveApplicationDataToIpRecord error:', e);
+                    showNotification('Kaydedilirken bir hata oluştu: ' + e.message, 'error');
+                }
+            }
+
+}
+
         const taskDetailModule = new TaskDetailModule();
         taskDetailModule.init();
         window.taskDetailModule = taskDetailModule;
