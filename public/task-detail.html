@@ -2033,8 +2033,8 @@ document.addEventListener('DOMContentLoaded', function(){
         if (document.getElementById('fileUploadArea') && document.getElementById('fileInput') && typeof pageInstance.handleTaskDocumentsUpload === 'function') {
           setupDropZone('fileUploadArea', 'fileInput', function(files){ pageInstance.handleTaskDocumentsUpload(files); });
         }
-        if (document.getElementById('epatsFileUploadArea') && document.getElementById('epatsFileInput') && typeof pageInstance.handleEpatsUpload === 'function') {
-          setupDropZone('epatsFileUploadArea', 'epatsFileInput', function(files){ if (files && files.length) pageInstance.handleEpatsUpload(files[0]); });
+        if (document.getElementById('epatsFileUploadArea') && document.getElementById('epatsFileInput') && typeof pageInstance.handleEpatsDocumentUpload === 'function') {
+          setupDropZone('epatsFileUploadArea', 'epatsFileInput', function(files){ if (files && files.length) pageInstance.handleEpatsDocumentUpload(files[0]); });
         }
       }
     }
