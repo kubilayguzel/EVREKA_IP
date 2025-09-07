@@ -1,6 +1,6 @@
 // js/trademark-similarity-search.js
 
-import { db, personService, searchRecordService, similarityService } from '../firebase-config.js';
+import { db, personService, searchRecordService, similarityService, ipRecordsService } from '../firebase-config.js';
 import { collection, getDocs, doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-functions.js';
 import { runTrademarkSearch } from './trademark-similarity/run-search.js';
@@ -240,42 +240,110 @@ function applyMonitoringListFilters() {
     checkCacheAndToggleButtonStates();
 }
 
-function renderMonitoringList() {
-    const tbody = document.getElementById('monitoringListBody');
-    
-    // Pagination varsa ondan veri al, yoksa tüm veriyi göster
-    const currentPageData = monitoringPagination ? 
-        monitoringPagination.getCurrentPageData(filteredMonitoringTrademarks) : 
-        filteredMonitoringTrademarks;
-    
-    if (currentPageData.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" class="no-records">Filtreye uygun izlenecek marka bulunamadı.</td></tr>';
-        return;
-    }
-    
-    tbody.innerHTML = currentPageData.map(tm => {
-        // Marka görseli - 2 kat büyük göster
-        const imgSrc = tm.brandImageUrl || tm.details?.brandInfo?.brandImage || '';
-        let brandImgCell = '';
-        if (imgSrc) {
-            brandImgCell = `<div class="trademark-image-wrapper-large"><img class="trademark-image-thumbnail-large" src="${imgSrc}" alt="Marka Görseli"></div>`;
-        } else {
-            brandImgCell = '<div class="no-image-placeholder-large">Resim Yok</div>';
-        }
-        
-        return `
-            <tr>
-                <td style="text-align: left;">${tm.title || tm.markName || tm.brandText || '-'}</td>
-                <td>${brandImgCell}</td>
-                <td>${tm.applicationNumber || '-'}</td>
-                <td>${getOwnerNames(tm)}</td>
-                <td>${getNiceClassNumbers(tm)}</td>
-                <td>${getApplicationDateFormatted(tm)}</td>
-            </tr>`;
-    }).join('');
-    
-    // Hover efektini kurulum
-    setupImageHoverEffect();
+// ipRecords hızlı erişim için basit cache
+const _ipCache = new Map();
+async function _getIp(recordId) {
+  if (!recordId) return null;
+  if (_ipCache.has(recordId)) return _ipCache.get(recordId);
+  try {
+    const { success, data } = await ipRecordsService.getRecordById(recordId);
+    _ipCache.set(recordId, success ? data : null);
+    return success ? data : null;
+  } catch {
+    _ipCache.set(recordId, null);
+    return null;
+  }
+}
+function _uniqNice(obj) {
+  const set = new Set();
+  (obj?.goodsAndServicesByClass || []).forEach(c => c?.classNo != null && set.add(String(c.classNo)));
+  (obj?.niceClasses || []).forEach(n => set.add(String(n)));
+  if (obj?.niceClass) String(obj.niceClass).split(/[,\s]+/).forEach(n => n && set.add(n));
+  return Array.from(set).sort((a,b) => Number(a) - Number(b)).join(', ');
+}
+function _pickName(ip, tm) {
+  return ip?.markName || ip?.title || ip?.brandText || tm?.title || tm?.markName || tm?.brandText || '-';
+}
+function _pickImg(ip, tm) {
+  return ip?.brandImageUrl || tm?.brandImageUrl || tm?.details?.brandInfo?.brandImage || '';
+}
+function _pickAppNo(ip, tm) {
+  return ip?.applicationNumber || ip?.applicationNo || tm?.applicationNumber || tm?.applicationNo || '-';
+}
+function _pickAppDate(ip, tm) {
+  const v = ip?.applicationDate || tm?.applicationDate;
+  if (!v) return '-';
+  try {
+    const d = (v && typeof v === 'object' && typeof v.toDate === 'function') ? v.toDate()
+            : (v && typeof v === 'object' && 'seconds' in v) ? new Date(v.seconds * 1000)
+            : new Date(v);
+    return isNaN(+d) ? '-' : d.toLocaleDateString('tr-TR');
+  } catch { return '-'; }
+}
+function _pickOwners(ip, tm, persons=[]) {
+  if (Array.isArray(ip?.applicants) && ip.applicants.length) {
+    return ip.applicants.map(a => a?.name).filter(Boolean).join(', ');
+  }
+  if (Array.isArray(ip?.owners) && ip.owners.length) {
+    return ip.owners.map(o => (typeof o==='object' ? (o.name || o.displayName || persons.find(p=>p.id===o.id)?.name) : String(o))).filter(Boolean).join(', ');
+  }
+  if (ip?.ownerName) return ip.ownerName;
+  // monitoring dokümanında varsa
+  if (Array.isArray(tm?.applicants) && tm.applicants.length) {
+    return tm.applicants.map(a => a?.name).filter(Boolean).join(', ');
+  }
+  if (Array.isArray(tm?.owners) && tm.owners.length) {
+    return tm.owners.map(o => (typeof o==='object' ? (o.name || o.displayName || persons.find(p=>p.id===o.id)?.name) : String(o))).filter(Boolean).join(', ');
+  }
+  if (typeof tm?.holders === 'string') return tm.holders;
+  return '-';
+}
+
+async function renderMonitoringList() {
+  const tbody = document.getElementById('monitoringListBody');
+
+  // Pagination varsa ondan veri al, yoksa tüm veriyi göster
+  const list = monitoringPagination
+    ? monitoringPagination.getCurrentPageData(filteredMonitoringTrademarks)
+    : filteredMonitoringTrademarks;
+
+  if (!list.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="no-records">Filtreye uygun izlenecek marka bulunamadı.</td></tr>';
+    return;
+  }
+
+  // Anlık sayfayı ipRecords ile zenginleştir
+  const rows = [];
+  for (const tm of list) {
+    const ipId = tm.ipRecordId || tm.sourceRecordId || tm.id; // ipRecord bağlantı anahtarı
+    const ip = await _getIp(ipId);
+
+    const markName = _pickName(ip, tm);
+    const imgSrc = _pickImg(ip, tm);
+    const appNo = _pickAppNo(ip, tm);
+    const owners = _pickOwners(ip, tm, allPersons);
+    const nices = _uniqNice(ip || tm);
+    const appDate = _pickAppDate(ip, tm);
+
+    rows.push(`
+      <tr>
+        <td style="text-align:left;">${markName}</td>
+        <td>${
+          imgSrc
+            ? `<div class="trademark-image-wrapper-large"><img class="trademark-image-thumbnail-large" src="${imgSrc}" alt="Marka Görseli"></div>`
+            : '<div class="no-image-placeholder-large">Resim Yok</div>'
+        }</td>
+        <td>${appNo}</td>
+        <td title="${owners}">${owners}</td>
+        <td>${nices || '-'}</td>
+        <td>${appDate}</td>
+      </tr>
+    `);
+  }
+
+  tbody.innerHTML = rows.join('');
+  // Hover büyütme davranışı
+  setupImageHoverEffect();
 }
 
 function getApplicationDateFormatted(item) {
