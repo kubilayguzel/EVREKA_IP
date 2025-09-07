@@ -2028,7 +2028,7 @@ function setupDropZone(areaId, inputId, onFiles) {
 document.addEventListener('DOMContentLoaded', function(){
   try {
     if (typeof setupDropZone === 'function') {
-      var pageInstance = window.page || window.taskPage || window.detailPage || window.TaskDetailPageInstance;
+      var pageInstance = window.taskDetailModule || window.page || window.taskPage || window.detailPage || window.TaskDetailPageInstance;
       if (pageInstance) {
         if (document.getElementById('fileUploadArea') && document.getElementById('fileInput') && typeof pageInstance.handleTaskDocumentsUpload === 'function') {
           setupDropZone('fileUploadArea', 'fileInput', function(files){ pageInstance.handleTaskDocumentsUpload(files); });
