@@ -95,6 +95,7 @@ class CreateTaskModule {
         this.selectedCountries = [];
         // Yeni eklenen WIPO/ARIPO için alt kayıt listesi
         this.selectedWipoAripoChildren = [];
+        this._wipoAripoTransactionProcessed = false; // ✅ YENİ: WIPO/ARIPO transaction flag
     }
 
 async init() {
@@ -2185,6 +2186,7 @@ async handleSpecificTypeChange(e) {
         this.selectedApplicants = [];
         this.priorities = [];
         this.selectedWipoAripoChildren = [];
+        this._wipoAripoTransactionProcessed = false; 
     }
     searchPortfolio(query) {
         const container = document.getElementById('portfolioSearchResults');
@@ -3276,9 +3278,10 @@ async handleFormSubmit(e) {
                     console.error("WIPO/ARIPO Child IP kaydına işlem eklenirken hata oluştu:", child, childTransactionData, childResult.error);
                 }
             }
-
             console.log(`✅ WIPO/ARIPO işlemi tamamlandı: Parent + ${childrenToProcess.length} child transaction oluşturuldu`);
-        } else {
+            // ✅ YENİ: WIPO/ARIPO işlemi tamamlandı flag'i
+            this._wipoAripoTransactionProcessed = true;
+            } else {
             // Normal IP kayıtları için tek transaction oluşturma
             // ✅ ÇÖZÜM: Yayına itiraz işleri için portföye işlem eklemeyi atla
             const isPublicationOpposition = this.isPublicationOpposition(selectedTransactionType.id);
@@ -3416,9 +3419,9 @@ async handleFormSubmit(e) {
             }
         }
         
-        // Normal işler için portföye işlem ekle
-        const isPublicationOpposition = this.isPublicationOpposition(selectedTransactionType.id);
-        if (!isPublicationOpposition) {
+            // Normal işler için portföye işlem ekle (WIPO/ARIPO zaten işlenmişse atla)
+            const isPublicationOpposition = this.isPublicationOpposition(selectedTransactionType.id);
+            if (!isPublicationOpposition && !this._wipoAripoTransactionProcessed) {
             const transactionData = {
                 type: selectedTransactionType.id,
                 description: `${selectedTransactionType.name} işlemi.`,
