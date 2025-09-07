@@ -1457,6 +1457,8 @@ populateFormFields(recordData) {
 }
 // data-entry.js dosyasındaki saveTrademarkPortfolio fonksiyonunda yapılacak değişiklik:
 
+// js/data-entry.js dosyasındaki saveTrademarkPortfolio fonksiyonunda yapılacak değişiklik:
+
 async saveTrademarkPortfolio(portfolioData) {
         // Form verilerini al
         const origin = document.getElementById('originSelect')?.value;
@@ -1785,6 +1787,8 @@ async saveTrademarkPortfolio(portfolioData) {
                     const TX_IDS = { trademark: '2', patent: '5', design: '8' };
                     txTypeId = TX_IDS[portfolioData.ipType || 'trademark'] || '2';
                 }
+                
+                // Ana kayıt için transaction ekle
                 await ipRecordsService.addTransactionToRecord(String(mainRecordId), {
                     type: String(txTypeId),
                     transactionTypeId: String(txTypeId),
@@ -1792,6 +1796,20 @@ async saveTrademarkPortfolio(portfolioData) {
                     parentId: null,
                     transactionHierarchy: 'parent'
                 });
+
+                // ✅ YENİ: Her bir çocuk kayıt için de transaction ekle (WIPO/ARIPO için)
+                if (recordsToSave.length > 1 && origin !== 'Yurtdışı Ulusal') {
+                    const childIds = results.filter(r => r.id !== mainRecordId).map(r => r.id);
+                    for (const childId of childIds) {
+                        await ipRecordsService.addTransactionToRecord(String(childId), {
+                            type: String(txTypeId),
+                            transactionTypeId: String(txTypeId),
+                            description: 'Ülke başvurusu işlemi.',
+                            parentId: String(mainRecordId),
+                            transactionHierarchy: 'child'
+                        });
+                    }
+                }
             }
 
             alert(msg);
