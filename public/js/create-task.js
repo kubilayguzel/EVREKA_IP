@@ -2554,12 +2554,12 @@ async handleParentSelection(selectedParentId) {
         description: 'İtiraz geri çekme işlemi',
         transactionHierarchy: 'child'
     };
-    if (!this.selectedIpRecord || !__currentRecord?.id) {
+    if (!this.selectedIpRecord || !this.selectedIpRecord?.id) {
         alert('Portföy kaydı bulunamadı. Lütfen bir portföy seçin.');
         return;
     }
     try {
-        const addResult = await ipRecordsService.addTransactionToRecord(__currentRecord?.id, childTransactionData);
+        const addResult = await ipRecordsService.addTransactionToRecord(this.selectedIpRecord?.id, childTransactionData);
         if (addResult && addResult.success) {
             alert('Alt işlem başarıyla kaydedildi.');
         } else {
@@ -2785,7 +2785,7 @@ async handleFormSubmit(e) {
         assignedTo_email: assignedToUser ? assignedToUser.email : null,
         dueDate: document.getElementById('taskDueDate')?.value || null,
         status: 'open',
-        relatedIpRecordId: this.selectedIpRecord ? __currentRecord?.id : null,
+        relatedIpRecordId: this.selectedIpRecord ? this.selectedIpRecord.id : null,
         relatedIpRecordTitle: this.selectedIpRecord ? this.selectedIpRecord.title : taskTitle,
         details: {}
     };
@@ -3150,7 +3150,7 @@ async handleFormSubmit(e) {
         console.log('🔍 DEBUG origin:', this.selectedIpRecord?.origin);
         console.log('🔍 DEBUG selectedWipoAripoChildren:', this.selectedWipoAripoChildren);
 
-        if ((this.selectedIpRecord && (__currentRecord?.wipoIR || __currentRecord?.aripoIR))) {
+        if ((this.selectedIpRecord && (this.selectedIpRecord?.wipoIR || this.selectedIpRecord?.aripoIR))) {
             console.log('✅ WIPO/ARIPO koşulu DOĞRU - child transaction kodu çalışacak');
         } else {
             console.log('❌ WIPO/ARIPO koşulu YANLIŞ - child transaction kodu çalışmayacak');
@@ -3229,11 +3229,6 @@ if (__currentOrigin && ['WIPO', 'ARIPO'].includes(__currentOrigin)) {
                 }
             }
             // --- End ensure ---
-
-console.log('🔍 DEBUG İşlem tipi başvuru mu?:', isApplicationProcess);
-    console.log('🔍 DEBUG Seçilen işlem tipi:', selectedTransactionType.id, selectedTransactionType.name);
-    console.log('🔍 DEBUG this.selectedWipoAripoChildren:', this.selectedWipoAripoChildren);
-    console.log('🔍 DEBUG this.allIpRecords toplam:', this.allIpRecords.length);
 
             // Parent'a her zaman transaction oluştur
             const parentTransactionData = {
