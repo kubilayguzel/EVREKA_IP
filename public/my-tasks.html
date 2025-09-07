@@ -8,6 +8,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
     <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
     <link rel="stylesheet" href="./css/shared-styles.css">
+    <link rel="stylesheet" href="public/css/deadline-highlighter.css">
     <style>
         /* Bu sayfaya özel stiller */
         /* Genel body, page-wrapper, main-container stilleri shared-styles.css'ten gelecektir. */
@@ -328,7 +329,7 @@
                     </div>
                 </div>
                 <div class="table-container">
-                    <table class="tasks-table">
+                    <table class="tasks-table" id="myTasksTable">
                         <thead>
                             <tr>
                                 <th>İş No.</th>
@@ -430,11 +431,12 @@
             </form>
         </div>
     </div>
-
+    <script src="public/js/deadline-highlighter.js"></script>
     <script type="module">
         import { authService, taskService, ipRecordsService, accrualService, personService, auth, transactionTypeService } from './firebase-config.js';
         import { showNotification, TASK_STATUSES } from './utils.js';
         import { loadSharedLayout } from './js/layout-loader.js';
+    
 
         document.addEventListener('DOMContentLoaded', async () => {
             await loadSharedLayout({ activeMenuLink: 'my-tasks.html' });
@@ -612,8 +614,15 @@
                             <td>${relatedRecordDisplay}</td>
                             <td>${taskTypeDisplayName}</td>
                             <td><span class="priority-badge ${priorityClass}">${task.priority}</span></td>
-                            <td>${task.dueDate ? new Date(task.dueDate).toLocaleDateString('tr-TR') : 'Belirtilmemiş'}</td>
-                            <td>${task.officialDueDate ? new Date(task.officialDueDate.seconds * 1000).toLocaleDateString('tr-TR') : 'Belirtilmemiş'}</td>
+                            <td data-field="operationalDue" 
+                                data-date="${task.dueDate ? new Date(task.dueDate).toISOString().slice(0,10) : ''}">
+                            ${task.dueDate ? new Date(task.dueDate).toLocaleDateString('tr-TR') : 'Belirtilmemiş'}
+                            </td>
+                            <td data-field="officialDue" 
+                                data-date="${task.officialDueDate ? new Date(task.officialDueDate.seconds * 1000).toISOString().slice(0,10) : ''}">
+                            ${task.officialDueDate ? new Date(task.officialDueDate.seconds * 1000).toLocaleDateString('tr-TR') : 'Belirtilmemiş'}
+                            </td>
+
                             <td><span class="status-badge ${statusClass}">${this.statusDisplayMap[task.status] || task.status}</span></td>
                             <td>
                                 <button class="action-btn" data-id="${task.id}" data-action="view">Görüntüle</button>
@@ -623,6 +632,8 @@
                         `;
                         tableBody.appendChild(row);
                     });
+                    // Satırlar basıldıktan sonra renklendirmeyi uygula
+                    DeadlineHighlighter.refresh('islerim');
                 }
 
                 cleanHistoryAction(action) {
@@ -891,6 +902,21 @@
 
             const myTasksModule = new MyTasksModule();
             myTasksModule.init();
+            // Son tarih renklendirme: İşlerim
+            DeadlineHighlighter.init(); // TZ varsayılan Europe/Istanbul
+
+            DeadlineHighlighter.registerList('islerim', {
+            container: '#myTasksTable',
+            rowSelector: 'tbody tr',
+            dateFields: [
+                { name: 'operationalDue', selector: '[data-field="operationalDue"]' },
+                { name: 'officialDue',    selector: '[data-field="officialDue"]' }
+            ],
+            strategy: 'earliest',   // en yakın tarih baz alınır
+            applyTo: 'row',         // tüm satırı renklendir
+            showLegend: true        // üstte küçük açıklama şeridi
+            });
+
         });
     </script>
 </body>
