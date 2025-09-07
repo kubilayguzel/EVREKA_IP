@@ -2921,7 +2921,7 @@ async handleFormSubmit(e) {
             }
         }
 
-        const newIpRecordData = {
+    const newIpRecordData = {
         title: taskData.title,
         type: selectedTransactionType.ipType,
         portfoyStatus: 'active',
@@ -2930,6 +2930,8 @@ async handleFormSubmit(e) {
         origin: document.getElementById('originSelect')?.value || 'TÜRKPATENT',
         country: (document.getElementById('originSelect')?.value === 'Yurtdışı Ulusal') ? document.getElementById('countrySelect')?.value : null,
         countries: (['WIPO', 'ARIPO'].includes(document.getElementById('originSelect')?.value))? this.selectedCountries.map(c => c.code): [], 
+        // ✅ YENİ: WIPO/ARIPO parent record için hierarchy ekle
+        transactionHierarchy: (['WIPO', 'ARIPO'].includes(document.getElementById('originSelect')?.value)) ? 'parent' : null,
         applicationNumber: null,
         // WIPO/ARIPO için geçici IR numarası üret
         wipoIR: document.getElementById('originSelect')?.value === 'WIPO' ? this.generateTemporaryIR('WIPO') : null,
