@@ -5,15 +5,15 @@
  
   --evr-due-overdue-bg: #ffcdd2;
   --evr-due-overdue-br: #c62828;
+   
+  --evr-due-today-bg:   #ffe3e6; /* önce: #ffd5d9 */
+  --evr-due-today-br:   #e57373; /* önce: #ef5350 */
   
-  --evr-due-today-bg:   #ffd5d9;
-  --evr-due-today-br:   #ef5350;
-  
-  --evr-due-3d-bg:      #ffcc80;
-  --evr-due-3d-br:      #fb8c00;
+  --evr-due-3d-bg:      #ffe0b2; /* önce: #ffcc80 */
+  --evr-due-3d-br:      #ffa726; /* önce: #fb8c00 */
 
-  --evr-due-7d-bg:      #ffe082;
-  --evr-due-7d-br:      #f9a825;
+  --evr-due-7d-bg:      #ffecb3; /* önce: #ffe082 */
+  --evr-due-7d-br:      #fbc02d; /* önce: #f9a825 */
 }
 
 /* Row highlights */
