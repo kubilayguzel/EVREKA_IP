@@ -1307,43 +1307,61 @@ tr.group-row[aria-hidden="true"]{ display:none !important; }
             async addSelectedToMonitoring() {
                 const selectedIds = Array.from(this.selectedRecords);
                 if (selectedIds.length === 0) return;
-
                 let successful = 0, failed = 0, skipped = 0;
 
+                const extractNiceFromRecord = (rec) => {
+                    const set = new Set();
+                    // goodsAndServicesByClass: [{classNo, ...}]
+                    if (Array.isArray(rec?.goodsAndServicesByClass)) {
+                        rec.goodsAndServicesByClass.forEach(c => {
+                            const n = Number(c?.classNo);
+                            if (!Number.isNaN(n)) set.add(n);
+                        });
+                    }
+                    // niceClasses: [10, 35, ...]
+                    if (Array.isArray(rec?.niceClasses)) {
+                        rec.niceClasses.forEach(n => {
+                            n = Number(n);
+                            if (!Number.isNaN(n)) set.add(n);
+                        });
+                    }
+                    // niceClass: "01,05" gibi string alan
+                    if (rec?.niceClass && typeof rec.niceClass === 'string') {
+                        rec.niceClass.split(/[,\s]+/).forEach(s => {
+                            const n = Number(s);
+                            if (!Number.isNaN(n)) set.add(n);
+                        });
+                    }
+                    return Array.from(set).sort((a,b)=>a-b);
+                };
+
                 for (const id of selectedIds) {
-                    const r = this.allRecords.find(x => x.id === id);
-                    if (!r) { failed++; continue; }
-                    if (r.type !== 'trademark') { skipped++; continue; }
+                    const record = this.allRecords.find(r => r.id === id);
+                    if (!record) { failed++; continue; }
+                    if (record.type !== 'trademark') { skipped++; continue; }
 
-                    // Portföy kaydından minimal veri + arama alanları
-                    const markName = r.title || r.brandText || r.name || '';
-                    const applicationNumber = r.applicationNumber || r.applicationNo || r.basvuruNo || '';
+                    // Kriter: 1–34 varsa 35'i de ekle
+                    const classes = extractNiceFromRecord(record);
+                    const has1to34 = classes.some(n => n >= 1 && n <= 34);
+                    const niceClassSearch = [...classes];
+                    if (has1to34 && !niceClassSearch.includes(35)) niceClassSearch.push(35);
 
-                    const monitoringDoc = {
-                        // monitoringTrademarks docID = ipRecordId (sunucudaki addMonitoringItem buna göre çalışıyor)
-                        id: r.id,
-                        ipRecordId: r.id,
-
-                        // Dinamik join için anahtar alanlar
-                        markName,
-                        applicationNumber,
-                        applicationNumberNorm: normalizeAppNo(applicationNumber),
-
-                        // Mevcut arama/filter yapınızla uyumlu ekstra alanlar
-                        brandTextSearch: [markName].filter(Boolean),
-                        niceClassSearch: (r.goodsAndServicesByClass || [])
-                            .map(item => Number(item.classNo))
-                            .filter(n => !Number.isNaN(n)),
-
-                        // meta
+                    // Kayıt
+                    const monitoringData = {
+                        id: record.id,
+                        ipRecordId: record.id,
+                        applicationNumber: record.applicationNumber || record.applicationNo || '',
+                        applicationNumberNorm: (record.applicationNumber || record.applicationNo || '').toString().trim().toUpperCase().replace(/[\s.\-_/]/g, ''),
+                        markName: record.title || record.brandText || record.name || '',
+                        brandTextSearch: [record.title || record.brandText || ''].filter(Boolean),
+                        niceClassSearch,
                         createdAt: new Date().toISOString(),
                         updatedAt: new Date().toISOString()
                     };
 
                     try {
-                        const res = await monitoringService.addMonitoringItem(monitoringDoc);
-                        if (res.success) successful++;
-                        else failed++;
+                        const res = await monitoringService.addMonitoringItem(monitoringData);
+                        if (res.success) successful++; else failed++;
                     } catch (e) {
                         console.error('İzlemeye ekleme hatası:', e);
                         failed++;
