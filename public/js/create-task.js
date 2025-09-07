@@ -3427,12 +3427,12 @@ if (__currentOrigin && ['WIPO', 'ARIPO'].includes(__currentOrigin)) {
                 transactionHierarchy: "parent"
             };
 
-            const addResult = await ipRecordsService.addTransactionToRecord(__currentRecord?.id, transactionData);
-            if (addResult && addResult.success) {
-                this._lastCreatedParentTransactionId = addResult.id || __currentRecord?.id;
-            } else {
-                console.error("IP kaydına işlem eklenirken hata oluştu:", transactionData, addResult?.error);
-            }
+        const addResult = await ipRecordsService.addTransactionToRecord(this.selectedIpRecord?.id, transactionData);
+        if (addResult && addResult.success) {
+            this._lastCreatedParentTransactionId = addResult.id || this.selectedIpRecord?.id;
+        } else {
+            console.error("IP kaydına işlem eklenirken hata oluştu:", transactionData, addResult?.error);
+        }
         } else {
             console.log('🔄 Yayına itiraz işi: Portföye işlem ekleme atlandı');
         }
