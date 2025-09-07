@@ -1731,6 +1731,11 @@ async saveTrademarkPortfolio(portfolioData) {
             let recordData = recordsToSave[i];
             const isMainRecord = recordData.transactionHierarchy === 'parent';
             
+            // ✅ EKLENDİ: Transaction oluşturulması için ipType alanını ekle
+            if (!recordData.ipType) {
+                recordData.ipType = 'trademark';
+            }
+            
             let result;
             if (this.editingRecordId) {
                 // Düzenleme modunda sadece bir kayıt güncellenir
