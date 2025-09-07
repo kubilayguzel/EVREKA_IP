@@ -1729,6 +1729,7 @@ async saveTrademarkPortfolio(portfolioData) {
         for (let i = 0; i < recordsToSave.length; i++) {
             let recordData = recordsToSave[i];
             const isMainRecord = recordData.transactionHierarchy === 'parent';
+            const isSingleRecord = !recordData.transactionHierarchy; // ✅ TÜRKPATENT/Yurtdışı kayıtları
             
             // ✅ EKLENDİ: Transaction oluşturulması için ipType alanını ekle
             if (!recordData.ipType) {
@@ -1745,7 +1746,11 @@ async saveTrademarkPortfolio(portfolioData) {
             results.push(result);
             if (!result.success) success = false;
             if (result.isExistingRecord || result.isDuplicate) isExisting = true;
-            if (isMainRecord) mainRecordId = result?.id;
+            
+            // ✅ DÜZELTİLDİ: Hem parent hem single kayıtlar için mainRecordId set et
+            if (isMainRecord || isSingleRecord) {
+                mainRecordId = result?.id;
+            }
         }
 
         // ParentId'leri güncelle
