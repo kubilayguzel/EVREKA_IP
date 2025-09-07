@@ -102,7 +102,6 @@
     { key: 'today',   label: 'Bugün',    daysFrom: 0,      daysTo: 0,   className: 'evr-due-today',    priority: 90 },
     { key: 'd3',      label: '≤ 3 gün',  daysFrom: 1,      daysTo: 3,   className: 'evr-due-3d',       priority: 80 },
     { key: 'd7',      label: '≤ 7 gün',  daysFrom: 4,      daysTo: 7,   className: 'evr-due-7d',       priority: 70 },
-    { key: 'd30',     label: '≤ 30 gün', daysFrom: 8,      daysTo: 30,  className: 'evr-due-30d',      priority: 60 },
   ];
 
   function pickThreshold(thresholds, diffDays) {
