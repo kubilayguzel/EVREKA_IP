@@ -767,11 +767,11 @@
                             display.style.display = 'flex';
                             document.getElementById('relatedIpRecordSearch').value = '';
 
-// Initialize documents list and render on page load
-this.currentTaskDocuments = Array.isArray(this.currentTask?.documents) ? [...this.currentTask.documents] : [];
-if (typeof this.renderDocuments === 'function') {
-  this.renderDocuments();
-}
+                    // Initialize documents list and render on page load
+                    this.currentTaskDocuments = Array.isArray(this.currentTask?.documents) ? [...this.currentTask.documents] : [];
+                    if (typeof this.renderDocuments === 'function') {
+                    this.renderDocuments();
+                    }
 
                         }
                     } else {
@@ -993,6 +993,14 @@ if (typeof this.renderDocuments === 'function') {
                 };
 
                 this.renderEpatsDocument();
+                // EPATS yüklendikten sonra modalı tetikle
+                try {
+                if (this.isApplicationTask()) {
+                    this.openApplicationDataModal();
+                }
+                } catch (e) {
+                console.warn('EPATS yüklemesi sonrası modal açılamadı:', e);
+                }
 
                 if (taskStatusSelect && taskStatusSelect.value === 'completed') {
                     taskStatusSelect.value = this.statusBeforeEpatsUpload || 'open';
