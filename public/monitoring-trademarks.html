@@ -547,7 +547,7 @@
 <script type="module">
     import Pagination from './js/pagination.js'; // <- DIŞARIDAN İÇERİ AKTARILDI
     import { loadSharedLayout } from './js/layout-loader.js';
-    import { monitoringService, personService } from './firebase-config.js';
+    import { monitoringService, personService, ipRecordsService } from './firebase-config.js';
     import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
     import { showNotification } from './utils.js';
 
@@ -558,6 +558,50 @@
     let pagination = null;
     let allMonitoringData = [];
     let filteredData = [];
+    // --- Dinamik Join için IP Record önbelleği ---
+    const ipRecordCache = new Map();
+
+    const MERGE_FIELDS = [
+        'markName', 'brandImageUrl', 'applicationNumber', 'applicationNo', 'applicationDate',
+        'status', 'niceClasses', 'owners', 'applicants', 'goodsAndServicesByClass'
+    ];
+
+    function pick(obj, fields) {
+        const out = {};
+        if (!obj) return out;
+        for (const f of fields) if (Object.prototype.hasOwnProperty.call(obj, f)) out[f] = obj[f];
+        return out;
+    }
+
+    async function fetchIpRecordByIdCached(recordId) {
+        if (!recordId) return null;
+        if (ipRecordCache.has(recordId)) return ipRecordCache.get(recordId);
+        try {
+            const { success, data } = await ipRecordsService.getRecordById(recordId);
+            const rec = success ? data : null;
+            ipRecordCache.set(recordId, rec);
+            return rec;
+        } catch (e) {
+            console.error('ipRecord getirilemedi:', recordId, e);
+            ipRecordCache.set(recordId, null);
+            return null;
+        }
+    }
+
+    async function enrichItemsWithIpRecords(items) {
+        const enriched = [];
+        for (const it of items) {
+            const ipId = it.ipRecordId || it.sourceRecordId || it.id; // doc id monitoringte genelde ipRecordId oluyor
+            const ipRec = await fetchIpRecordByIdCached(ipId);
+            if (ipRec) {
+                enriched.push({ ...it, ...pick(ipRec, MERGE_FIELDS), ipRecordId: ipId });
+            } else {
+                enriched.push({ ...it, ipRecordId: ipId });
+            }
+        }
+        return enriched;
+    }
+
     let currentFilters = {
         search: '',
         status: 'all',
@@ -679,7 +723,7 @@
     }
 
     // Mevcut sayfadaki veriyi render et
-    function renderCurrentPage() {
+    async function renderCurrentPage() {
         const container = document.getElementById('monitoringTableContainer');
         if (!container) return;
 
@@ -687,8 +731,12 @@
         updateSelectedButtonState();
 
         const currentPageData = pagination ? pagination.getCurrentPageData(filteredData) : filteredData;
+        container.innerHTML = '<div class="loading">Sayfa verileri yükleniyor...</div>';
 
-        if (currentPageData.length === 0) {
+        
+        // Sayfadaki kayıtları ipRecords ile zenginleştir
+        const currentPageDataEnriched = await enrichItemsWithIpRecords(currentPageData);
+if (currentPageData.length === 0) {
             const hasFilters = currentFilters.search || currentFilters.status !== 'all' ||
                               currentFilters.niceClass || currentFilters.owner;
             container.innerHTML = `<div class="no-records">${hasFilters ? 'Filtreleme kriterlerinize uygun kayıt bulunamadı.' : 'İzleme listeniz boş.'}</div>`;
@@ -706,7 +754,7 @@
                         <th>Durum</th>
                     </tr></thead><tbody>`;
 
-        currentPageData.forEach(r => {
+        currentPageDataEnriched.forEach(r => {
             const isSelected = selectedMonitoringItems.has(r.id) ? 'checked' : '';
             const trademarkImageHtml = (() => {
                 // Firebase Storage tam URL'i kontrol et
