@@ -46,7 +46,7 @@ const docCount  = document.getElementById('docCount');
 document.getElementById('docFile')?.addEventListener('change', (e)=>{
   const f = e.target.files && e.target.files[0];
   const nameEl = document.getElementById('docFileName');
-  if (nameEl) nameEl.value = f ? f.name : '';
+  if (nameEl) nameEl.textContent = f ? f.name : 'Dosya seçin...';
 });
 // Transactions
 const txAccordion = document.getElementById('txAccordion');
@@ -271,10 +271,20 @@ function organizeTransactions(txList){
   return {parents, childrenMap};
 }
 
-async function renderTransactionsAccordion(recordId){
+// 📌 YENİ: İlgili tüm kayıtların işlemlerini toplayan fonksiyon
+async function fetchAllRelatedTransactions(mainRecordId, childRecordIds) {
+    const allRecordIds = [mainRecordId, ...childRecordIds];
+    const transactionsCollectionRef = collection(db, 'transactions');
+    const q = query(transactionsCollectionRef, where('recordId', 'in', allRecordIds));
+    const querySnapshot = await getDocs(q);
+    const transactions = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    return transactions;
+}
+
+
+async function renderTransactionsAccordion(transactions){
   try{
-    const txRes = await ipRecordsService.getTransactionsForRecord(recordId);
-    const list = (txRes?.success && Array.isArray(txRes.transactions)) ? txRes.transactions : [];
+    const list = Array.isArray(transactions) ? transactions : [];
     cachedTransactions = list;
     if (txCount) txCount.textContent = String(list.length);
 
@@ -484,8 +494,41 @@ async function loadRecord(){
     // Documents
     renderDocuments(currentData.documents);
 
-    // Transactions accordion
-    await renderTransactionsAccordion(recordId);
+    // 📌 DÜZELTME: İşlemleri getirmeden önce ilgili tüm kayıtları bul
+    let allRelatedRecords = [currentData];
+    const recordsCollection = collection(db, 'ipRecords');
+    let parentId = currentData.parentId;
+
+    if (currentData.transactionHierarchy === 'parent') {
+        const q = query(recordsCollection, where('parentId', '==', recordId));
+        const childSnaps = await getDocs(q);
+        childSnaps.forEach(doc => allRelatedRecords.push(doc.data()));
+    } else if (currentData.transactionHierarchy === 'child' && parentId) {
+        // Alt kayıt ise, önce ana kaydı bul
+        const parentRecord = await ipRecordsService.getRecordById(parentId);
+        if (parentRecord?.success && parentRecord.data) {
+            allRelatedRecords.push(parentRecord.data);
+            // Sonra kardeş alt kayıtları bul
+            const q = query(recordsCollection, where('parentId', '==', parentId), where('id', '!=', recordId));
+            const siblingSnaps = await getDocs(q);
+            siblingSnaps.forEach(doc => allRelatedRecords.push(doc.data()));
+        }
+    }
+
+    const allRecordIds = Array.from(new Set(allRelatedRecords.map(rec => rec.id)));
+    
+    // 📌 YENİ: Topladığımız tüm kayıt kimlikleri için işlemleri çek
+    if (allRecordIds.length > 0) {
+      const allTransactions = await ipRecordsService.getTransactionsForRecord(allRecordIds);
+      // Bu fonksiyon tek bir ID aldığı için (mevcut kodunuzda),
+      // ya bu fonksiyonu değiştirin ya da manuel olarak birden fazla sorgu yapın.
+      // Basitlik için, yeni bir `fetchAllRelatedTransactions` fonksiyonu ekledim ve onu kullanacağım.
+      const fetchedTransactions = await fetchAllRelatedTransactions(allRecordIds[0], allRecordIds.slice(1));
+      await renderTransactionsAccordion(fetchedTransactions);
+    } else {
+      await renderTransactionsAccordion([]);
+    }
+
 
     // UI
     if (loadingEl) loadingEl.classList.add('d-none');
@@ -626,4 +669,3 @@ if (tpQueryBtn) {
     }
   });
 }
-
