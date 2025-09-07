@@ -1328,6 +1328,37 @@ if (typeof this.renderDocuments === 'function') {
                 
                 console.log('🔧 DEBUG: Final updatedTaskData:', JSON.stringify(updatedTaskData, null, 2));
                 
+                // Başvuru bilgilerini IP kaydına kaydet (eğer varsa)
+                if (this.isApplicationTask()) {
+                    const appNumber = document.getElementById('modalApplicationNumber')?.value?.trim();
+                    const appDate = document.getElementById('modalApplicationDate')?.value?.trim();
+                    
+                    if (appNumber && appDate) {
+                        const ipId = this.currentTask?.relatedIpRecordId || this.selectedRelatedIpRecord?.id;
+                        if (ipId) {
+                            try {
+                                const updateData = {
+                                    applicationNumber: appNumber,
+                                    applicationDate: appDate
+                                };
+                                const ipResult = await ipRecordsService.updateRecord(ipId, updateData);
+                                if (ipResult?.success !== false) {
+                                    // Lokalde de güncelle
+                                    const idx = this.allIpRecords.findIndex(r => String(r.id) == String(ipId));
+                                    if (idx >= 0) {
+                                        this.allIpRecords[idx] = { ...this.allIpRecords[idx], ...updateData };
+                                    }
+                                    console.log('✅ DEBUG: Başvuru bilgileri IP kaydına kaydedildi');
+                                } else {
+                                    console.warn('⚠️ DEBUG: IP kaydı güncellenirken hata:', ipResult?.error);
+                                }
+                            } catch (ipError) {
+                                console.error('❌ DEBUG: IP kaydı güncelleme hatası:', ipError);
+                            }
+                        }
+                    }
+                }
+                
                 try {
                     console.log('🔧 DEBUG: taskService.updateTask çağrılıyor...', this.taskId);
                     const result = await taskService.updateTask(this.taskId, updatedTaskData);
@@ -2025,7 +2056,7 @@ if (typeof this.renderDocuments === 'function') {
                 }
             }
 
-            async saveApplicationDataToIpRecord() {
+async saveApplicationDataToIpRecord() {
                 try {
                     const numEl = document.getElementById('appNumberInput');
                     const dateEl = document.getElementById('appDateInput');
@@ -2037,45 +2068,24 @@ if (typeof this.renderDocuments === 'function') {
                         return;
                     }
 
-                    // Form alanlarına da kopyala
+                    // Form alanlarına kopyala (henüz kaydetme)
                     const formAppNumber = document.getElementById('modalApplicationNumber');
                     const formAppDate = document.getElementById('modalApplicationDate');
                     if (formAppNumber) formAppNumber.value = applicationNumber;
                     if (formAppDate) formAppDate.value = applicationDate;
 
-                    // Başvuru bilgileri bölümünü göster
+                    // Başvuru alanlarını göster
                     this.showApplicationFields();
 
-                    // Hangi IP kaydı?
-                    const ipId = this.currentTask?.relatedIpRecordId || this.selectedRelatedIpRecord?.id;
-                    if (!ipId) {
-                        showNotification('İlgili IP kaydı bulunamadı. Önce ilgili kaydı seçiniz.', 'error');
-                        return;
-                    }
-
-                    // Güncelle
-                    const updateData = {
-                        applicationNumber,
-                        applicationDate // string formatında saklıyoruz (utils içinde parse ediliyor)
-                    };
-                    const res = await ipRecordsService.updateRecord(ipId, updateData);
-                    if (res?.success !== false) {
-                        // Lokalde de güncelle
-                        const idx = this.allIpRecords.findIndex(r => String(r.id) == String(ipId));
-                        if (idx >= 0) {
-                            this.allIpRecords[idx] = { ...this.allIpRecords[idx], ...updateData };
-                        }
-                        showNotification('Başvuru numarası ve tarihi kaydedildi.', 'success');
-                        this.closeApplicationDataModal();
-                    } else {
-                        throw new Error(res?.error || 'Güncelleme başarısız');
-                    }
+                    // Modal'ı kapat - kaydetme işlemi "Değişiklikleri Kaydet" butonuna bırak
+                    this.closeApplicationDataModal();
+                    
+                    showNotification('Başvuru bilgileri forma eklendi. Kaydetmek için "Değişiklikleri Kaydet" butonuna basın.', 'info');
                 } catch (e) {
                     console.error('saveApplicationDataToIpRecord error:', e);
-                    showNotification('Kaydedilirken bir hata oluştu: ' + e.message, 'error');
+                    showNotification('Bir hata oluştu: ' + e.message, 'error');
                 }
             }
-
             showApplicationFields() {
                 const appNumberField = document.getElementById('applicationNumberField');
                 const appDateField = document.getElementById('applicationDateField');
