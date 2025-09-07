@@ -3037,6 +3037,73 @@ if (__currentOrigin && ['WIPO', 'ARIPO'].includes(__currentOrigin)) {
             // İşlem tipinin başvuru olup olmadığını kontrol et
             const isApplicationProcess = this.isApplicationProcess(selectedTransactionType.id);
             
+
+
+            // --- Ensure country IP records exist for WIPO/ARIPO (Application only) ---
+            if (isApplicationProcess) {
+                const list1 = Array.isArray(this.selectedCountries) ? this.selectedCountries.map(c => c.code) : [];
+                const list2 = Array.isArray(newIpRecordData?.countries) ? newIpRecordData.countries : [];
+                const list3 = Array.isArray(__currentRecord?.countries) ? __currentRecord.countries : [];
+                const selectedCodes = Array.from(new Set([ ...list1, ...list2, ...list3 ].filter(Boolean)));
+                console.log('🌍 Selected country codes (WIPO/ARIPO):', selectedCodes);
+
+                const isWipo = (__currentOrigin === 'WIPO');
+                const irNumber = isWipo ? (__currentRecord?.wipoIR || null) : (__currentRecord?.aripoIR || null);
+                const recordOwnerType = __currentRecord?.recordOwnerType || 'self';
+
+                for (const code of selectedCodes) {
+                    let existingChild = this.allIpRecords.find(rec =>
+                        rec.transactionHierarchy === 'child' &&
+                        rec.country === code &&
+                        (isWipo ? (rec.wipoIR === irNumber) : (rec.aripoIR === irNumber))
+                    );
+
+                    if (!existingChild) {
+                        const childRecordData = {
+                            title: newIpRecordData.title,
+                            type: selectedTransactionType.ipType,
+                            portfoyStatus: 'active',
+                            status: 'filed',
+                            recordOwnerType,
+                            origin: __currentOrigin,
+                            country: code,
+                            wipoIR: isWipo ? irNumber : null,
+                            aripoIR: isWipo ? null : irNumber,
+                            applicationNumber: null,
+                            applicationDate: new Date().toISOString().split('T')[0],
+                            registrationNumber: null,
+                            registrationDate: null,
+                            renewalDate: null,
+                            brandText: document.getElementById('brandExampleText')?.value || null,
+                            brandImageUrl: brandImageUrl,
+                            description: null,
+                            applicants: this.selectedApplicants.map(p => ({ id: p.id, name: p.name, email: p.email || null })),
+                            priorities: this.priorities.length > 0 ? this.priorities : [],
+                            brandType: document.getElementById('brandType')?.value || null,
+                            brandCategory: document.getElementById('brandCategory')?.value || null,
+                            nonLatinAlphabet: document.getElementById('nonLatinAlphabet')?.value || null,
+                            coverLetterRequest: document.querySelector('input[name="coverLetterRequest"]:checked')?.value || null,
+                            consentRequest: document.querySelector('input[name="consentRequest"]:checked')?.value || null,
+                            goodsAndServicesByClass: goodsAndServicesByClass,
+                            transactionHierarchy: 'child',
+                            createdAt: new Date().toISOString(),
+                            updatedAt: new Date().toISOString()
+                        };
+                        const childCreate = await ipRecordsService.createRecord(childRecordData);
+                        if (childCreate?.success) {
+                            existingChild = { id: childCreate.id, ...childRecordData };
+                            this.allIpRecords.push(existingChild);
+                            console.log('🧩 Child IP record created:', existingChild);
+                        } else {
+                            console.error('❌ Child IP record create failed for', code, childCreate?.error);
+                        }
+                    } else {
+                        console.log('ℹ️ Child IP record exists:', code, existingChild?.id);
+                    }
+                }
+            }
+            // --- End ensure ---
+
 console.log('🔍 DEBUG İşlem tipi başvuru mu?:', isApplicationProcess);
     console.log('🔍 DEBUG Seçilen işlem tipi:', selectedTransactionType.id, selectedTransactionType.name);
     console.log('🔍 DEBUG this.selectedWipoAripoChildren:', this.selectedWipoAripoChildren);
@@ -3053,168 +3120,6 @@ console.log('🔍 DEBUG İşlem tipi başvuru mu?:', isApplicationProcess);
             if (!parentResult.success) {
                 console.error("WIPO/ARIPO Parent IP kaydına işlem eklenirken hata oluştu:", parentTransactionData, parentResult.error);
             }
-            // ✅ Ensure country IP records exist for WIPO/ARIPO Application
-            
-            try {
-                if (isApplicationProcess) {
-                    // Collect selected country codes robustly
-                    const list1 = Array.isArray(this.selectedCountries) ? this.selectedCountries.map(c => c.code) : [];
-                    const list2 = Array.isArray(newIpRecordData?.countries) ? newIpRecordData.countries : [];
-                    const list3 = Array.isArray(__currentRecord?.countries) ? __currentRecord.countries : [];
-                    const selectedCodes = Array.from(new Set([ ...list1, ...list2, ...list3 ].filter(Boolean)));
-                    console.log('🌍 WIPO/ARIPO selected country codes:', selectedCodes);
-                    if (selectedCodes.length === 0) {
-                        console.warn('⚠️ No selected countries detected; skip child record creation.');
-                    }
-
-                    const isWipo = (__currentOrigin === 'WIPO');
-                    const irNumber = isWipo ? (__currentRecord?.wipoIR || null) : (__currentRecord?.aripoIR || null);
-                    const recordOwnerType = __currentRecord?.recordOwnerType || 'self';
-
-                    // Create missing child records like Data Entry (no parentId, use transactionHierarchy='child')
-                    for (const code of selectedCodes) {
-                        let existingChild = this.allIpRecords.find(rec =>
-                            rec.transactionHierarchy === 'child' &&
-                            rec.country === code &&
-                            (isWipo ? (rec.wipoIR === irNumber) : (rec.aripoIR === irNumber))
-                        );
-
-                        if (!existingChild) {
-                            const childRecordData = {
-                                title: newIpRecordData.title,
-                                type: selectedTransactionType.ipType,
-                                portfoyStatus: 'active',
-                                status: 'filed',
-                                recordOwnerType,
-                                origin: __currentOrigin,
-                                country: code,
-
-                                // IR number alignment
-                                wipoIR: isWipo ? irNumber : null,
-                                aripoIR: isWipo ? null : irNumber,
-
-                                applicationNumber: null,
-                                applicationDate: new Date().toISOString().split('T')[0],
-                                registrationNumber: null,
-                                registrationDate: null,
-                                renewalDate: null,
-
-                                brandText: document.getElementById('brandExampleText')?.value || null,
-                                brandImageUrl: brandImageUrl,
-                                description: null,
-
-                                applicants: this.selectedApplicants.map(p => ({ id: p.id, name: p.name, email: p.email || null })),
-                                priorities: this.priorities.length > 0 ? this.priorities : [],
-
-                                // Top-level attributes
-                                brandType: document.getElementById('brandType')?.value || null,
-                                brandCategory: document.getElementById('brandCategory')?.value || null,
-                                nonLatinAlphabet: document.getElementById('nonLatinAlphabet')?.value || null,
-                                coverLetterRequest: document.querySelector('input[name="coverLetterRequest"]:checked')?.value || null,
-                                consentRequest: document.querySelector('input[name="consentRequest"]:checked')?.value || null,
-                                goodsAndServicesByClass: goodsAndServicesByClass,
-
-                                transactionHierarchy: 'child',
-                                createdAt: new Date().toISOString(),
-                                updatedAt: new Date().toISOString()
-                            };
-
-                            const childCreate = await ipRecordsService.createRecord(childRecordData);
-                            if (childCreate?.success) {
-                                existingChild = { id: childCreate.id, ...childRecordData };
-                                this.allIpRecords.push(existingChild);
-                                console.log('🧩 WIPO/ARIPO child IP record created:', existingChild);
-                            } else {
-                                console.error('❌ Child IP record creation failed for', code, childCreate?.error);
-                            }
-                        } else {
-                            console.log('ℹ️ Child IP record already exists for', code, existingChild?.id);
-                        }
-                    }
-
-                    // Refresh selectedWipoAripoChildren list for UI consistency
-                    try {
-                        const refreshed = this.allIpRecords.filter(rec =>
-                            rec.transactionHierarchy === 'child' &&
-                            (isWipo ? (rec.wipoIR === irNumber) : (rec.aripoIR === irNumber))
-                        );
-                        this.selectedWipoAripoChildren = refreshed;
-                        console.log('🔄 Refreshed child list:', refreshed.length);
-                    } catch (subErr) {
-                        console.warn('Child list refresh failed:', subErr);
-                    }
-                }
-            } catch (e) {
-                console.error('WIPO/ARIPO child record ensure failed:', e);
-            }
-
-                    const selectedCodes = Array.isArray(this.selectedCountries) ? this.selectedCountries.map(c => c.code) : [];
-                    const isWipo = (__currentOrigin === 'WIPO');
-                    const irNumber = isWipo ? (__currentRecord?.wipoIR || null) : (__currentRecord?.aripoIR || null);
-
-                    // Create missing child records like Data Entry (no parentId, use transactionHierarchy='child')
-                    for (const code of selectedCodes) {
-                        let existingChild = this.allIpRecords.find(rec =>
-                            rec.transactionHierarchy === 'child' &&
-                            rec.country === code &&
-                            (isWipo ? (rec.wipoIR === irNumber) : (rec.aripoIR === irNumber))
-                        );
-
-                        if (!existingChild) {
-                            const childRecordData = {
-                                title: newIpRecordData.title,
-                                type: selectedTransactionType.ipType,
-                                portfoyStatus: 'active',
-                                status: 'filed',
-                                recordOwnerType: 'self',
-                                origin: __currentOrigin,
-                                country: code,
-
-                                // IR number alignment
-                                wipoIR: isWipo ? irNumber : null,
-                                aripoIR: isWipo ? null : irNumber,
-
-                                applicationNumber: null,
-                                applicationDate: new Date().toISOString().split('T')[0],
-                                registrationNumber: null,
-                                registrationDate: null,
-                                renewalDate: null,
-
-                                brandText: document.getElementById('brandExampleText')?.value || null,
-                                brandImageUrl: brandImageUrl,
-                                description: null,
-
-                                applicants: this.selectedApplicants.map(p => ({ id: p.id, name: p.name, email: p.email || null })),
-                                priorities: this.priorities.length > 0 ? this.priorities : [],
-
-                                // Top-level attributes
-                                brandType: document.getElementById('brandType')?.value || null,
-                                brandCategory: document.getElementById('brandCategory')?.value || null,
-                                nonLatinAlphabet: document.getElementById('nonLatinAlphabet')?.value || null,
-                                coverLetterRequest: document.querySelector('input[name="coverLetterRequest"]:checked')?.value || null,
-                                consentRequest: document.querySelector('input[name="consentRequest"]:checked')?.value || null,
-                                goodsAndServicesByClass: goodsAndServicesByClass,
-
-                                transactionHierarchy: 'child',
-                                createdAt: new Date().toISOString(),
-                                updatedAt: new Date().toISOString()
-                            };
-
-                            const childCreate = await ipRecordsService.createRecord(childRecordData);
-                            if (childCreate?.success) {
-                                existingChild = { id: childCreate.id, ...childRecordData };
-                                this.allIpRecords.push(existingChild);
-                                console.log('🧩 WIPO/ARIPO child IP record created:', existingChild);
-                            } else {
-                                console.error('❌ Child IP record creation failed for', code, childCreate?.error);
-                            }
-                        }
-                    }
-                }
-            } catch (e) {
-                console.error('WIPO/ARIPO child record ensure failed:', e);
-            }
-
 
             // Child'lar için mantık:
             // - Başvuru işlemlerinde: TÜM child'lar (seçili ülkeler) transaction alır
