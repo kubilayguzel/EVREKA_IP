@@ -84,31 +84,41 @@ function tssShowResumeBannerIfAny() {
     let tries = 0;
     const iv = setInterval(() => {
       tries++;
-        const go = (p) => {
-        if (!pagination) return false;
-        if (typeof pagination.goToPage === 'function') { pagination.goToPage(p); return true; }
-        if (typeof pagination.setCurrentPage === 'function') { pagination.setCurrentPage(p); return true; }
-        if (typeof pagination.setPage === 'function') { pagination.setPage(p); return true; }
-        return false;
-      };
-      if (go(targetPage)) {
-        clearInterval(iv);
-        bar.style.background = '#28a745';
-        bar.firstElementChild.textContent = `Devam edildi: Sayfa ${targetPage}`;
-        setTimeout(() => bar.remove(), 2000);
-      } else if (tries > 150) { // ~15sn
-        clearInterval(iv);
-      }
+    const go = (p) => {
+            if (!pagination) return false;
+            if (typeof pagination.goToPage === 'function') { 
+            pagination.goToPage(p); 
+            // Sayfa değişikliğinden sonra sonuçları render et
+            renderCurrentPageOfResults();
+            return true; 
+            }
+            if (typeof pagination.setCurrentPage === 'function') { 
+            pagination.setCurrentPage(p); 
+            renderCurrentPageOfResults();
+            return true; 
+            }
+            if (typeof pagination.setPage === 'function') { 
+            pagination.setPage(p); 
+            renderCurrentPageOfResults();
+            return true; 
+            }
+            return false;
+        };
+        if (go(targetPage)) {
+            clearInterval(iv);
+            bar.style.background = '#28a745';
+            bar.firstElementChild.textContent = `Devam edildi: Sayfa ${targetPage}`;
+            setTimeout(() => bar.remove(), 2000);
+        } else if (tries > 150) { // ~15sn
+            clearInterval(iv);
+        }
     }, 100);
   };
 }
 
 document.addEventListener('DOMContentLoaded', () => { tssShowResumeBannerIfAny(); });
 
-
-
 // === Inline Resume Controls (results header içine küçük buton) ===
-
 
 window.addEventListener('beforeunload', () => {
   const page = (typeof pagination?.getCurrentPage === 'function') ? pagination.getCurrentPage() : undefined;
@@ -165,7 +175,7 @@ function initializePagination() {
 try {
                 if (window.__tssPendingResumeForBulletin) {
                   const p = window.__tssPendingResumeForBulletin; window.__tssPendingResumeForBulletin = null;
-                  if (typeof this.goTo === 'function') this.goToPage(p); else if (typeof this.setCurrentPage === 'function') this.setCurrentPage(p);
+                if (typeof this.goToPage === 'function') this.goToPage(p); else if (typeof this.setCurrentPage === 'function') this.setCurrentPage(p);                
                 } else { tssAutoResumeIfMatchingBulletin(); }
               } catch(e){}
           } catch(e){}
