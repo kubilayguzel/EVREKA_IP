@@ -1173,16 +1173,32 @@ function renderCurrentPageOfResults() {
             groupHeaderRow.dataset.needsImg = '1';
             groupHeaderRow.dataset.appNo = applicationNumber;
         }
-
-        // attach meta for async header-image enhancement
+resultsTableBody.appendChild(groupHeaderRow);
+// Header <img> 404 verirse ipRecords'tan getir ve değiştir
+(() => {
+  try {
+    const headerImgEl = groupHeaderRow.querySelector('img.group-header-img') || groupHeaderRow.querySelector('img');
+    if (headerImgEl) {
+      headerImgEl.addEventListener('error', async () => {
+        const appNo = groupHeaderRow.dataset.appNo || '';
         try {
-            groupHeaderRow.dataset.tmId = String(trademarkKey);
-            groupHeaderRow.dataset.appNo = String(_pickAppNo(null, tmMeta) || '');
-            if (!headerImg) groupHeaderRow.dataset.needsImg = '1';
-        } catch (e) {
-            console.warn('[TSS] header dataset attach failed', e);
+          const url = await _getBrandImageByAppNo(appNo);
+          if (url) {
+            headerImgEl.src = url;                 // ipRecords görseliyle değiştir
+          } else {
+            headerImgEl.remove();                  // hâlâ yoksa placeholder'a dön
+            groupHeaderRow.dataset.needsImg = '1';
+            if (typeof enhanceGroupHeaderImages === 'function') {
+              enhanceGroupHeaderImages();          // mevcut asenkron doldurucu
+            }
+          }
+        } catch (err) {
+          console.warn('[TSS] header fallback image load failed', err);
         }
-                resultsTableBody.appendChild(groupHeaderRow);
+      }, { once: true });
+    }
+  } catch (e) { console.warn('[TSS] header error handler attach failed', e); }
+})();
 
         // Grup içeriği
         groupResults.forEach((hit) => {
@@ -1192,15 +1208,7 @@ function renderCurrentPageOfResults() {
         });
     })
     // Enhance group headers with images fetched by applicationNumber
-    // attach meta for async header-image enhancement
-    try {
-        groupHeaderRow.dataset.tmId = String(trademarkKey);
-        groupHeaderRow.dataset.appNo = String(_pickAppNo(null, tmMeta) || '');
-        if (!headerImg) groupHeaderRow.dataset.needsImg = '1';
-    } catch (e) {
-        console.warn('[TSS] header dataset attach failed', e);
-    }
-    ;
+;
     // Grup başlıklarına asenkron olarak görsel ekle
     setTimeout(async () => {
         const placeholders = document.querySelectorAll('.group-header-placeholder[data-app-no]');
