@@ -868,7 +868,6 @@ async function loadDataFromCacheWithDebug(bulletinKey) {
             
             // Sonuçları render et
             console.log("🎨 Sonuçlar render ediliyor...");
-            \1
     try { const firstPage = 1; tssSaveState(tssBuildStateFromUI({ page: firstPage, itemsPerPage: pagination?.getItemsPerPage?.() || 10, totalResults: allSimilarResults.length })); } catch(e) {}
     
             
@@ -905,7 +904,6 @@ async function loadDataFromCache(bulletinKey) {
     if (allSimilarResults.length > 0) {
         infoMessageContainer.innerHTML = `<div class="info-message">Önbellekten ${allSimilarResults.length} benzer sonuç yüklendi.</div>`;
         pagination.update(allSimilarResults.length);
-        \1
     try { const firstPage = 1; tssSaveState(tssBuildStateFromUI({ page: firstPage, itemsPerPage: pagination?.getItemsPerPage?.() || 10, totalResults: allSimilarResults.length })); } catch(e) {}
     
     const firstPage = 1;
@@ -1029,7 +1027,6 @@ async function performSearch(fromCacheOnly = false) {
     loadingIndicator.style.display = 'none';
     infoMessageContainer.innerHTML = `<div class="info-message">Toplam ${allSimilarResults.length} benzer sonuç bulundu.</div>`;
     pagination.update(allSimilarResults.length);
-    \1
     try { const firstPage = 1; tssSaveState(tssBuildStateFromUI({ page: firstPage, itemsPerPage: pagination?.getItemsPerPage?.() || 10, totalResults: allSimilarResults.length })); } catch(e) {}
     
 
