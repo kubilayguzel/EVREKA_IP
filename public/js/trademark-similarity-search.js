@@ -165,7 +165,7 @@ function initializePagination() {
 try {
                 if (window.__tssPendingResumeForBulletin) {
                   const p = window.__tssPendingResumeForBulletin; window.__tssPendingResumeForBulletin = null;
-                  if (typeof this.goTo === 'function') this.goToPage(p); else else if (typeof this.setCurrentPage === 'function') this.setCurrentPage(p);
+                  if (typeof this.goTo === 'function') this.goToPage(p); else if (typeof this.setCurrentPage === 'function') this.setCurrentPage(p);
                 } else { tssAutoResumeIfMatchingBulletin(); }
               } catch(e){}
           } catch(e){}
