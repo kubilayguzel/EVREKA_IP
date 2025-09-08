@@ -85,7 +85,7 @@ function tssShowResumeBannerIfAny() {
       tries++;
       const go = (p) => {
         if (!pagination) return false;
-        if (typeof pagination.goTo === 'function') { pagination.goTo(p); return true; }
+        if (typeof pagination.goTo === 'function') { pagination.goToPage(p); return true; }
         if (typeof pagination.setCurrentPage === 'function') { pagination.setCurrentPage(p); return true; }
         if (typeof pagination.setPage === 'function') { pagination.setPage(p); return true; }
         return false;
@@ -164,7 +164,7 @@ function initializePagination() {
               try {
                 if (window.__tssPendingResumeForBulletin) {
                   const p = window.__tssPendingResumeForBulletin; window.__tssPendingResumeForBulletin = null;
-                  if (typeof this.goTo === 'function') this.goTo(p); else if (typeof this.setCurrentPage === 'function') this.setCurrentPage(p);
+                  if (typeof this.goTo === 'function') this.goToPage(p); else if (typeof this.setCurrentPage === 'function') this.setCurrentPage(p);
                 } else { tssAutoResumeIfMatchingBulletin(); }
               } catch(e){}
           } catch(e){}
@@ -810,7 +810,9 @@ async function loadDataFromCacheWithDebug(bulletinKey) {
             if (pagination) {
                 console.log("📄 Pagination güncelleniyor...");
                 pagination.update(allSimilarResults.length);
-            }
+    try { pagination.goToPage(1); } catch(e) {}
+    try { renderCurrentPageOfResults(); } catch(e) {}
+}
             
             // Sonuçları render et
             console.log("🎨 Sonuçlar render ediliyor...");
@@ -828,7 +830,9 @@ async function loadDataFromCacheWithDebug(bulletinKey) {
             resultsTableBody.innerHTML = '';
             infoMessageContainer.innerHTML = '';
             if (pagination) pagination.update(0);
-        }
+    try { pagination.goToPage(1); } catch(e) {}
+    try { renderCurrentPageOfResults(); } catch(e) {}
+}
         
     } catch (error) {
         console.error("❌ loadDataFromCacheWithDebug hatası:", error);
@@ -851,8 +855,9 @@ async function loadDataFromCache(bulletinKey) {
     if (allSimilarResults.length > 0) {
         infoMessageContainer.innerHTML = `<div class="info-message">Önbellekten ${allSimilarResults.length} benzer sonuç yüklendi.</div>`;
         pagination.update(allSimilarResults.length);
-        
-    try { const firstPage = 1; tssSaveState(tssBuildStateFromUI({ page: firstPage, itemsPerPage: pagination?.getItemsPerPage?.() || 10, totalResults: allSimilarResults.length })); } catch(e) {}
+    try { pagination.goToPage(1); } catch(e) {}
+    try { renderCurrentPageOfResults(); } catch(e) {}
+try { const firstPage = 1; tssSaveState(tssBuildStateFromUI({ page: firstPage, itemsPerPage: pagination?.getItemsPerPage?.() || 10, totalResults: allSimilarResults.length })); } catch(e) {}
     
     const firstPage = 1;
     tssSaveState(tssBuildStateFromUI({ page: firstPage, itemsPerPage: pagination?.getItemsPerPage?.() || 10, totalResults: allSimilarResults.length }));
@@ -863,7 +868,9 @@ async function loadDataFromCache(bulletinKey) {
         resultsTableBody.innerHTML = '';
         infoMessageContainer.innerHTML = '';
         if (pagination) pagination.update(0);
-    }
+    try { pagination.goToPage(1); } catch(e) {}
+    try { renderCurrentPageOfResults(); } catch(e) {}
+}
 }
 
 async function performSearch(fromCacheOnly = false) {
@@ -975,8 +982,9 @@ async function performSearch(fromCacheOnly = false) {
     loadingIndicator.style.display = 'none';
     infoMessageContainer.innerHTML = `<div class="info-message">Toplam ${allSimilarResults.length} benzer sonuç bulundu.</div>`;
     pagination.update(allSimilarResults.length);
-    
-    try { const firstPage = 1; tssSaveState(tssBuildStateFromUI({ page: firstPage, itemsPerPage: pagination?.getItemsPerPage?.() || 10, totalResults: allSimilarResults.length })); } catch(e) {}
+    try { pagination.goToPage(1); } catch(e) {}
+    try { renderCurrentPageOfResults(); } catch(e) {}
+try { const firstPage = 1; tssSaveState(tssBuildStateFromUI({ page: firstPage, itemsPerPage: pagination?.getItemsPerPage?.() || 10, totalResults: allSimilarResults.length })); } catch(e) {}
     
 
     // ✅ Buton durumlarını güncelle
@@ -1509,8 +1517,9 @@ async function performResearchWithCacheClear() {
         noRecordsMessage.style.display = 'none';
         infoMessageContainer.innerHTML = '';
         if (pagination) pagination.update(0);
-        
-        // Yeni arama yap
+    try { pagination.goToPage(1); } catch(e) {}
+    try { renderCurrentPageOfResults(); } catch(e) {}
+// Yeni arama yap
         loadingIndicator.textContent = 'Yeniden arama yapılıyor...';
         await performSearch(false);
         
@@ -1579,7 +1588,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 noRecordsMessage.style.display = 'none';
                 infoMessageContainer.innerHTML = '';
                 if (pagination) pagination.update(0);
-            }
+    try { pagination.goToPage(1); } catch(e) {}
+    try { renderCurrentPageOfResults(); } catch(e) {}
+}
         });
         
         // Sayfa yüklendiğinde eğer bir bülten seçiliyse cache kontrol et
