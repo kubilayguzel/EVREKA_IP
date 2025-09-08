@@ -187,6 +187,62 @@ const _getIp = async (recordId) => {
 const _pickName = (ip, tm) => ip?.markName || ip?.title || ip?.brandText || tm?.title || tm?.markName || tm?.brandText || '-';
 const _pickImg = (ip, tm) => ip?.brandImageUrl || tm?.brandImageUrl || tm?.details?.brandInfo?.brandImage || '';
 const _pickAppNo = (ip, tm) => ip?.applicationNumber || ip?.applicationNo || tm?.applicationNumber || tm?.applicationNo || '-';
+
+// === Added Helpers: total count per monitored mark & header image resolver ===
+const getTotalCountForMonitoredId = (monitoredTrademarkId) => {
+    try {
+        if (!monitoredTrademarkId) return 0;
+        return allSimilarResults.reduce((acc, r) => acc + (r.monitoredTrademarkId === monitoredTrademarkId ? 1 : 0), 0);
+    } catch (e) {
+        console.warn('[TSS] getTotalCountForMonitoredId error:', e);
+        return 0;
+    }
+};
+
+const resolveGroupHeaderImage = async (tmMeta, rowEl) => {
+    try {
+        if (!tmMeta || !rowEl) return;
+        let imgEl = rowEl.querySelector('.group-header-img');
+        const placeholder = rowEl.querySelector('.group-header-placeholder');
+        if (imgEl?.dataset.resolved === '1' || placeholder?.dataset.resolved == '1') return;
+
+        let src = _pickImg(null, tmMeta);
+
+        if (!src) {
+            const ip = await _getIp(tmMeta.ipRecordId || tmMeta.sourceRecordId || tmMeta.id);
+            src = _pickImg(ip, tmMeta);
+            if (!src) {
+                const appNo = _pickAppNo(ip, tmMeta);
+                if (appNo && appNo !== '-') {
+                    src = await _getBrandImageByAppNo(appNo);
+                }
+            }
+        }
+        if (src) {
+            if (!imgEl) {
+                const container = rowEl.querySelector('.group-trademark-image');
+                const newImg = document.createElement('img');
+                newImg.className = 'group-header-img';
+                newImg.alt = _pickName(null, tmMeta) || 'Marka Görseli';
+                newImg.dataset.resolved = '1';
+                newImg.src = src;
+                if (placeholder) container.replaceChild(newImg, placeholder);
+                else container.appendChild(newImg);
+            } else {
+                imgEl.src = src;
+                imgEl.dataset.resolved = '1';
+                if (placeholder) placeholder.remove();
+            }
+        } else {
+            if (placeholder) placeholder.dataset.resolved = '1';
+            if (imgEl) imgEl.dataset.resolved = '1';
+        }
+    } catch (e) {
+        console.warn('[TSS] resolveGroupHeaderImage error:', e);
+    }
+};
+
+
 const _pickAppDate = (ip, tm) => {
     const v = ip?.applicationDate || tm?.applicationDate;
     if (!v) return '-';
@@ -450,6 +506,8 @@ const renderCurrentPageOfResults = () => {
             </td>
         `;
         resultsTableBody.appendChild(groupHeaderRow);
+        // Ensure header image is resolved from the most reliable source
+        try { resolveGroupHeaderImage(tmMeta, groupHeaderRow); } catch(e) { console.warn(e); }
         groupResults.forEach((hit, index) => resultsTableBody.appendChild(createResultRow(hit, pagination.getStartIndex() + index + 1)));
     });
     attachEventListeners();
@@ -699,6 +757,20 @@ const handleNoteCellClick = (cell) => {
 };
 
 const attachEventListeners = () => {
+    // Kriterleri Düzenle bağlantıları
+    resultsTableBody.querySelectorAll('.edit-criteria-link').forEach(a => {
+        a.addEventListener('click', (e) => {
+            e.preventDefault();
+            const tmId = a.dataset.tmid;
+            if (typeof window.openCriteriaEditorFor === 'function') {
+                window.openCriteriaEditorFor(tmId);
+            } else {
+                try { localStorage.setItem('OPEN_CRITERIA_FOR_TM_ID', tmId); } catch {}
+                window.location.href = 'monitoring-trademarks.html#openCriteria';
+            }
+        });
+    });
+    
     resultsTableBody.querySelectorAll('.action-btn').forEach(btn => btn.addEventListener('click', handleSimilarityToggle));
     resultsTableBody.querySelectorAll('.bs-select').forEach(select => select.addEventListener('change', handleBsChange));
     resultsTableBody.querySelectorAll('.note-cell').forEach(cell => cell.addEventListener('click', () => handleNoteCellClick(cell)));
