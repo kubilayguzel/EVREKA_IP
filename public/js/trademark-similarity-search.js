@@ -148,6 +148,18 @@ const debounce = (func, delay) => {
     };
 };
 
+function getMonitoredMetaById(id) {
+  const tm = monitoringTrademarks.find(t => t.id === id) 
+         || filteredMonitoringTrademarks.find(t => t.id === id);
+  const name = tm?.title || tm?.markName || tm?.brandText || tm?.name || '—';
+  const img  = tm?.brandImageUrl 
+            || tm?.brandImage 
+            || tm?.details?.brandInfo?.brandImage 
+            || '';
+  return { name, img };
+}
+
+
 function initializePagination() {
 
 
@@ -1059,18 +1071,18 @@ function renderCurrentPageOfResults() {
         const groupResults = pageGroups[trademarkKey];
         const monitoredTrademark = groupResults[0].monitoredTrademark || 'Bilinmeyen Marka';
         
-        // Grup başlığı
-        const totalCountForThisMark = allSimilarResults.filter(
-            item => (item.monitoredTrademarkId || 'unknown') === trademarkKey
-        ).length;
-
+        const { name: headerName, img: headerImg } = getMonitoredMetaById(trademarkKey);
         const groupHeaderRow = document.createElement('tr');
         groupHeaderRow.classList.add('group-header');
         groupHeaderRow.innerHTML = `
-            <td colspan="9">
-                📋 <strong>${monitoredTrademark}</strong> markası için bulunan benzer sonuçlar (${totalCountForThisMark} adet)
-            </td>
+        <td colspan="9" class="text-left">
+            <div class="group-title">
+            ${headerImg ? `<img src="${headerImg}" alt="${headerName}">` : ''}
+            <span><strong>${headerName}</strong> markası için bulunan benzer sonuçlar (${totalCountForThisMark} adet)</span>
+            </div>
+        </td>
         `;
+
         resultsTableBody.appendChild(groupHeaderRow);
 
         // Grup içeriği
