@@ -1099,7 +1099,7 @@ function renderCurrentPageOfResults() {
     const tmMeta = (filteredMonitoringTrademarks || []).find(t => String(t.id) === String(trademarkKey))
                 || (monitoringTrademarks || []).find(t => String(t.id) === String(trademarkKey)) || null;
     const headerName = _pickName(null, tmMeta) || monitoredTrademark;
-    const headerImg  = _pickImg(null, tmMeta);
+    const headerImg  = _pickImg(null, tmMeta) || (groupResults[0]?.brandImageUrl || groupResults[0]?.imagePath || groupResults[0]?.brandImage || '');
 
 const groupHeaderRow = document.createElement('tr');
         groupHeaderRow.classList.add('group-header');
@@ -1228,51 +1228,53 @@ function createResultRow(hit, rowIndex) {
     const resultId = hit.objectID || hit.applicationNo;
 
     const row = document.createElement('tr');
-    row.innerHTML = `
-        <td>${rowIndex}</td> 
-        <td>${hit.applicationNo || '-'}</td>
-        <td><strong>${hit.markName || '-'}</strong></td>
-        <td>${holders}</td>
-        <td>${niceClassHtml}</td>
-        <td>${similarityScore}</td>
-        <td>
-            <button class="action-btn ${similarityBtnClass}" 
-                    data-result-id="${resultId}" 
-                    data-monitored-trademark-id="${hit.monitoredTrademarkId}" 
-                    data-bulletin-id="${bulletinSelect.value}">
-                ${similarityBtnText}
-            </button>
-        </td>
-        <td>
-            <select class="bs-select" 
-                    data-result-id="${resultId}" 
-                    data-monitored-trademark-id="${hit.monitoredTrademarkId}" 
-                    data-bulletin-id="${bulletinSelect.value}">
-                <option value="">B.Ş</option>
-                <option value="%0" ${hit.bs === '%0' ? 'selected' : ''}>%0</option>
-                <option value="%20" ${hit.bs === '%20' ? 'selected' : ''}>%20</option>
-                <option value="%30" ${hit.bs === '%30' ? 'selected' : ''}>%30</option>
-                <option value="%40" ${hit.bs === '%40' ? 'selected' : ''}>%40</option>
-                <option value="%45" ${hit.bs === '%45' ? 'selected' : ''}>%45</option>
-                <option value="%50" ${hit.bs === '%50' ? 'selected' : ''}>%50</option>
-                <option value="%55" ${hit.bs === '%55' ? 'selected' : ''}>%55</option>
-                <option value="%60" ${hit.bs === '%60' ? 'selected' : ''}>%60</option>
-                <option value="%70" ${hit.bs === '%70' ? 'selected' : ''}>%70</option>
-                <option value="%80" ${hit.bs === '%80' ? 'selected' : ''}>%80</option>
-            </select>
-        </td>
-        <td class="note-cell" 
+    row.innerHTML = `<td>${rowIndex}</td> 
+<td>
+    <button class="action-btn ${similarityBtnClass}" 
             data-result-id="${resultId}" 
             data-monitored-trademark-id="${hit.monitoredTrademarkId}" 
             data-bulletin-id="${bulletinSelect.value}">
-            <div class="note-cell-content">
-                <span class="note-icon">📝</span>
-                ${hit.note 
-                    ? `<span class="note-text">${hit.note}</span>` 
-                    : `<span class="note-placeholder">Not ekle</span>`}
-            </div>
-        </td>
-    `;
+        ${similarityBtnText}
+    </button>
+</td>
+<td><strong>${hit.markName || '-'}</strong></td>
+<td>${holders}</td>
+<td>${niceClassHtml}</td>
+<td>${
+    hit.applicationNo 
+        ? `<a href="#" class="tp-appno-link" data-tp-appno="${String(hit.applicationNo).replace(/"/g,'&quot;')}">${hit.applicationNo}</a>` 
+        : '-'
+}</td>
+<td>${similarityScore}</td>
+<td>
+    <select class="bs-select" 
+            data-result-id="${resultId}" 
+            data-monitored-trademark-id="${hit.monitoredTrademarkId}" 
+            data-bulletin-id="${bulletinSelect.value}">
+        <option value="">B.Ş</option>
+        <option value="%0" ${hit.bs === '%0' ? 'selected' : ''}>%0</option>
+        <option value="%20" ${hit.bs === '%20' ? 'selected' : ''}>%20</option>
+        <option value="%30" ${hit.bs === '%30' ? 'selected' : ''}>%30</option>
+        <option value="%40" ${hit.bs === '%40' ? 'selected' : ''}>%40</option>
+        <option value="%45" ${hit.bs === '%45' ? 'selected' : ''}>%45</option>
+        <option value="%50" ${hit.bs === '%50' ? 'selected' : ''}>%50</option>
+        <option value="%55" ${hit.bs === '%55' ? 'selected' : ''}>%55</option>
+        <option value="%60" ${hit.bs === '%60' ? 'selected' : ''}>%60</option>
+        <option value="%70" ${hit.bs === '%70' ? 'selected' : ''}>%70</option>
+        <option value="%80" ${hit.bs === '%80' ? 'selected' : ''}>%80</option>
+    </select>
+</td>
+<td class="note-cell" 
+    data-result-id="${resultId}" 
+    data-monitored-trademark-id="${hit.monitoredTrademarkId}" 
+    data-bulletin-id="${bulletinSelect.value}">
+    <div class="note-cell-content">
+        <span class="note-icon">📝</span>
+        ${hit.note 
+            ? `<span class="note-text">${hit.note}</span>` 
+            : `<span class="note-placeholder">Not ekle</span>`}
+    </div>
+</td>`;
     return row;
 }
 
@@ -1670,3 +1672,35 @@ document.addEventListener('DOMContentLoaded', async () => {
 
        }
     });
+
+// === TÜRKPATENT Araması: Başvuru No ile eklenti/kurulum akışı ===
+window.triggerTpQuery = function(applicationNo){
+    const appNo = (applicationNo || '').toString().trim();
+    if (!appNo){
+        alert('Başvuru numarası bulunamadı.');
+        return;
+    }
+    const eklentiID = 'bbcpnpgglakoagjakgigmgjpdpiigpah';
+    function openInstall(){
+        if (confirm("Bu özellik için Chrome tabanlı bir tarayıcı ve 'Evreka IP Sorgu Yardımcısı' eklentisi gereklidir. Kurulum sayfasına gitmek ister misiniz?")){
+            window.open('eklenti-kurulum.html', '_blank');
+        }
+    }
+    try {
+        if (typeof chrome !== 'undefined' && chrome.runtime && eklentiID){
+            chrome.runtime.sendMessage(eklentiID, { type: 'SORGULA', data: appNo }, (response) => {
+                if (chrome.runtime.lastError){
+                    console.error(chrome.runtime.lastError.message);
+                    openInstall();
+                } else {
+                    console.log('Eklentiden gelen yanıt:', response?.status);
+                }
+            });
+        } else {
+            openInstall();
+        }
+    } catch (e){
+        console.error('Eklenti mesaj hatası:', e);
+        openInstall();
+    }
+};
