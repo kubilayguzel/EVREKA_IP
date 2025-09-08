@@ -1241,7 +1241,7 @@ function createResultRow(hit, rowIndex) {
 <td>${niceClassHtml}</td>
 <td>${
     hit.applicationNo 
-        ? `<a href="#" class="tp-appno-link" data-tp-appno="${String(hit.applicationNo).replace(/"/g,'&quot;')}" onclick="event.preventDefault(); queryApplicationNumberWithExtension('${hit.applicationNo}');" style="color: #007bff; text-decoration: underline; cursor: pointer;">${hit.applicationNo}</a>` 
+        ? `<a href="#" class="tp-appno-link" data-tp-appno="${String(hit.applicationNo).replace(/"/g,'&quot;')}" onclick="event.preventDefault(); triggerTpQuery('${hit.applicationNo}');" style="color: #007bff; text-decoration: underline; cursor: pointer;">${hit.applicationNo}</a>` 
         : '-'
 }</td>
 <td>${similarityScore}</td>
@@ -1616,7 +1616,14 @@ async function performResearchWithCacheClear() {
 }
 // === INITIALIZATION ===
 document.addEventListener('DOMContentLoaded', async () => {
-    console.log(">>> DOM yüklendi, başlatılıyor...");
+    console.log(">>> DOM yüklendi, başlatılıyor...");// ✅ Kırık görsel fallback'i: trademark küçük görselleri 404 verirse placeholder göster
+    document.addEventListener('error', function(e){
+      const img = e.target;
+      if (img && img.tagName === 'IMG' && img.classList.contains('trademark-image-thumbnail-large')) {
+        const wrap = img.closest('.trademark-image-wrapper-large');
+        if (wrap) wrap.innerHTML = '<div class="no-image-placeholder-large">Resim Yok</div>';
+      }
+    }, true);
     
     initializePagination();
     await loadInitialData();
