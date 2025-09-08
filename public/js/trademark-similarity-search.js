@@ -835,7 +835,7 @@ async function loadDataFromCacheWithDebug(bulletinKey) {
             if (pagination) {
                 console.log("📄 Pagination güncelleniyor...");
                 pagination.update(allSimilarResults.length);
-    try { if (!window.__tssPendingResumeForBulletin) { renderCurrentPageOfResults(); } } catch(e) {}
+    try { if (!window.__tssPendingResumeForBulletin) { await renderCurrentPageOfResults(); } } catch(e) {}
 }
             
             // Sonuçları render et
@@ -854,7 +854,7 @@ async function loadDataFromCacheWithDebug(bulletinKey) {
             resultsTableBody.innerHTML = '';
             infoMessageContainer.innerHTML = '';
             if (pagination) pagination.update(0);
-    try { if (!window.__tssPendingResumeForBulletin) { renderCurrentPageOfResults(); } } catch(e) {}
+    try { if (!window.__tssPendingResumeForBulletin) { await renderCurrentPageOfResults(); } } catch(e) {}
 }
         
     } catch (error) {
@@ -878,7 +878,7 @@ async function loadDataFromCache(bulletinKey) {
     if (allSimilarResults.length > 0) {
         infoMessageContainer.innerHTML = `<div class="info-message">Önbellekten ${allSimilarResults.length} benzer sonuç yüklendi.</div>`;
         pagination.update(allSimilarResults.length);
-    try { if (!window.__tssPendingResumeForBulletin) { renderCurrentPageOfResults(); } } catch(e) {}
+    try { if (!window.__tssPendingResumeForBulletin) { await renderCurrentPageOfResults(); } } catch(e) {}
 try { const firstPage = 1; tssSaveState(tssBuildStateFromUI({ page: firstPage, itemsPerPage: pagination?.getItemsPerPage?.() || 10, totalResults: allSimilarResults.length })); } catch(e) {}
     
     const firstPage = 1;
@@ -890,7 +890,7 @@ try { const firstPage = 1; tssSaveState(tssBuildStateFromUI({ page: firstPage, i
         resultsTableBody.innerHTML = '';
         infoMessageContainer.innerHTML = '';
         if (pagination) pagination.update(0);
-    try { if (!window.__tssPendingResumeForBulletin) { renderCurrentPageOfResults(); } } catch(e) {}
+    try { if (!window.__tssPendingResumeForBulletin) { await renderCurrentPageOfResults(); } } catch(e) {}
 }
 }
 
@@ -1003,7 +1003,7 @@ async function performSearch(fromCacheOnly = false) {
     loadingIndicator.style.display = 'none';
     infoMessageContainer.innerHTML = `<div class="info-message">Toplam ${allSimilarResults.length} benzer sonuç bulundu.</div>`;
     pagination.update(allSimilarResults.length);
-    try { if (!window.__tssPendingResumeForBulletin) { renderCurrentPageOfResults(); } } catch(e) {}
+    try { if (!window.__tssPendingResumeForBulletin) { await renderCurrentPageOfResults(); } } catch(e) {}
 try { const firstPage = 1; tssSaveState(tssBuildStateFromUI({ page: firstPage, itemsPerPage: pagination?.getItemsPerPage?.() || 10, totalResults: allSimilarResults.length })); } catch(e) {}
     
 
@@ -1042,7 +1042,7 @@ function groupAndSortResults() {
     sortedIds.forEach(id => allSimilarResults.push(...groupedByTrademark[id]));
 }
 // === RENDERING FUNCTIONS ===
-function renderCurrentPageOfResults() {
+async function renderCurrentPageOfResults() {
     resultsTableBody.innerHTML = '';
     if (!pagination) {
         console.error("Pagination objesi başlatılmamış.");
@@ -1099,8 +1099,14 @@ function renderCurrentPageOfResults() {
     const tmMeta = (filteredMonitoringTrademarks || []).find(t => String(t.id) === String(trademarkKey))
                 || (monitoringTrademarks || []).find(t => String(t.id) === String(trademarkKey)) || null;
     const headerName = _pickName(null, tmMeta) || monitoredTrademark;
-    const headerImg  = _pickImg(null, tmMeta) || (groupResults[0]?.brandImageUrl || groupResults[0]?.imagePath || groupResults[0]?.brandImage || '');
-
+    const headerImg = await (async () => {
+            if (tmMeta) {
+                const ipId = tmMeta.ipRecordId || tmMeta.sourceRecordId || tmMeta.id;
+                const ip = await _getIp(ipId);
+                return _pickImg(ip, tmMeta);
+            }
+            return groupResults[0]?.brandImageUrl || groupResults[0]?.imagePath || groupResults[0]?.brandImage || '';
+        })();
 const groupHeaderRow = document.createElement('tr');
         groupHeaderRow.classList.add('group-header');
         const totalCountForThisMark = totalCountsByTrademark[trademarkKey] || groupResults.length;
@@ -1242,7 +1248,7 @@ function createResultRow(hit, rowIndex) {
 <td>${niceClassHtml}</td>
 <td>${
     hit.applicationNo 
-        ? `<a href="#" class="tp-appno-link" data-tp-appno="${String(hit.applicationNo).replace(/"/g,'&quot;')}" onclick="event.preventDefault(); window.open('https://www.turkpatent.gov.tr/arastirma-yap?form=trademark&auto_query=${encodeURIComponent(hit.applicationNo)}&query_type=application', '_blank');" style="color: #007bff; text-decoration: underline; cursor: pointer;">${hit.applicationNo}</a>` 
+        ? `<a href="#" class="tp-appno-link" data-tp-appno="${String(hit.applicationNo).replace(/"/g,'&quot;')}" onclick="event.preventDefault(); queryApplicationNumberWithExtension('${hit.applicationNo}');" style="color: #007bff; text-decoration: underline; cursor: pointer;">${hit.applicationNo}</a>` 
         : '-'
 }</td>
 <td>${similarityScore}</td>
@@ -1449,6 +1455,40 @@ function updateSearchResultsHeader() {
     }
 }
 
+// TÜRKPATENT eklenti sorgulaması (portföy detay sayfasından uyarlama)
+function queryApplicationNumberWithExtension(applicationNo) {
+    if (!applicationNo) {
+        alert('Başvuru numarası bulunamadı.');
+        return;
+    }
+
+    const eklentiID = 'bbcpnpgglakoagjakgigmgjpdpiigpah';
+
+    if (typeof chrome !== 'undefined' && chrome.runtime && eklentiID) {
+        chrome.runtime.sendMessage(
+            eklentiID,
+            {
+                type: 'SORGULA',
+                data: applicationNo
+            },
+            (response) => {
+                if (chrome.runtime.lastError) {
+                    console.error(chrome.runtime.lastError.message);
+                    if (confirm("TÜRKPATENT'ten anlık ve otomatik sorgulama yapabilmek için 'Evreka IP Sorgu Yardımcısı' eklentisini kurmalısınız. Kurulum sayfasına gitmek ister misiniz?")) {
+                        window.open('eklenti-kurulum.html', '_blank');
+                    }
+                } else {
+                    console.log('Eklentiden gelen yanıt:', response.status);
+                }
+            }
+        );
+    } else {
+        if (confirm("Bu özellik için Chrome tabanlı bir tarayıcı ve 'Evreka IP Sorgu Yardımcısı' eklentisi gereklidir. Kurulum sayfasına gitmek ister misiniz?")) {
+            window.open('eklenti-kurulum.html', '_blank');
+        }
+    }
+}
+
 function getAllSearchResults() {
     return allSimilarResults
         .filter(r => r.isSimilar === true)
@@ -1556,7 +1596,7 @@ async function performResearchWithCacheClear() {
         noRecordsMessage.style.display = 'none';
         infoMessageContainer.innerHTML = '';
         if (pagination) pagination.update(0);
-    try { if (!window.__tssPendingResumeForBulletin) { renderCurrentPageOfResults(); } } catch(e) {}
+    try { if (!window.__tssPendingResumeForBulletin) { await renderCurrentPageOfResults(); } } catch(e) {}
 // Yeni arama yap
         loadingIndicator.textContent = 'Yeniden arama yapılıyor...';
         await performSearch(false);
@@ -1626,7 +1666,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 noRecordsMessage.style.display = 'none';
                 infoMessageContainer.innerHTML = '';
                 if (pagination) pagination.update(0);
-    try { if (!window.__tssPendingResumeForBulletin) { renderCurrentPageOfResults(); } } catch(e) {}
+    try { if (!window.__tssPendingResumeForBulletin) { await renderCurrentPageOfResults(); } } catch(e) {}
 }
         });
         
