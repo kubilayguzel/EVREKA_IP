@@ -356,9 +356,8 @@ searchRecords(query, tabContext) {
             item.innerHTML = `
                 <div class="record-info" style="display: flex; align-items: center; padding: 10px; border-bottom: 1px solid #eee; cursor: pointer;">
                     ${imageHtml}
-                    <div>
-                        <div style="font-weight: 500; margin-bottom: 2px;">${record.title}</div>
-                        <small style="color: #666;">${record.applicationNumber}</small>
+                    <div style="flex-grow: 1;"> <div style="font-weight: 500; margin-bottom: 2px;">${record.title}</div>
+                        <small style="color: #666;">${this.getDisplayNumberAndOrigin(record)}</small>
                     </div>
                 </div>
             `;
@@ -728,56 +727,88 @@ searchRecords(query, tabContext) {
         return extractedNumbers.length > 0 ? extractedNumbers[0] : null;
     }
 
-    findMatchingRecord(applicationNumber) {
-        if (!applicationNumber) return null;
-        
-        console.log('Eşleşme aranıyor:', applicationNumber, 'Portföy kayıtları:', this.allRecords.length);
-        
-        // Çeşitli eşleşme stratejileri dene
-        for (const record of this.allRecords) {
-            if (!record.applicationNumber) continue;
-            
-            const recordAppNum = record.applicationNumber;
-            console.log('Karşılaştırma:', applicationNumber, 'vs', recordAppNum);
-            
-            // 1. Tam eşleşme
-            if (recordAppNum === applicationNumber) {
-                console.log('✅ Tam eşleşme bulundu:', record.title);
-                return record;
-            }
-            
-            // 2. Normalize edilmiş eşleşme (-, /, space'leri kaldır)
-            const normalizedExtracted = applicationNumber.replace(/[-\/\s]/g, '');
-            const normalizedRecord = recordAppNum.replace(/[-\/\s]/g, '');
-            
-            if (normalizedRecord === normalizedExtracted) {
-                console.log('✅ Normalize edilmiş eşleşme bulundu:', record.title);
-                return record;
-            }
-            
-            // 3. Partial eşleşme - bir taraf diğerini içeriyor
-            if (recordAppNum.includes(applicationNumber) || applicationNumber.includes(recordAppNum)) {
-                console.log('✅ Partial eşleşme bulundu:', record.title);
-                return record;
-            }
-            
-            // 4. Flexible pattern matching
-            // "2025-1" ile "2025/1" gibi formatlar
-            const flexPattern1 = applicationNumber.replace(/[-\/\s]/g, '[-\/\\s]?');
-            const flexPattern2 = recordAppNum.replace(/[-\/\s]/g, '[-\/\\s]?');
-            
-            const regex1 = new RegExp(flexPattern1, 'i');
-            const regex2 = new RegExp(flexPattern2, 'i');
-            
-            if (regex1.test(recordAppNum) || regex2.test(applicationNumber)) {
-                console.log('✅ Flexible pattern eşleşme bulundu:', record.title);
+findMatchingRecord(applicationNumber) {
+    if (!applicationNumber) return null;
+    
+    console.log('Eşleşme aranıyor:', applicationNumber, 'Portföy kayıtları:', this.allRecords.length);
+    
+    for (const record of this.allRecords) {
+        // İlk olarak applicationNumber'ı kontrol et
+        if (record.applicationNumber && this.normalizeAndCheckMatch(applicationNumber, record.applicationNumber)) {
+            console.log('✅ Standart eşleşme bulundu:', record.title);
+            return record;
+        }
+
+        // Eğer applicationNumber yoksa veya eşleşmiyorsa, WIPO/ARIPO numaralarını kontrol et
+        if (record.recordOwnerType === 'wipo' && record.wipoIR) {
+            if (this.normalizeAndCheckMatch(applicationNumber, record.wipoIR)) {
+                console.log('✅ WIPO eşleşmesi bulundu:', record.title);
                 return record;
             }
         }
         
-        console.log('❌ Eşleşme bulunamadı');
-        return null;
+        if (record.recordOwnerType === 'aripo' && record.aripoIR) {
+            if (this.normalizeAndCheckMatch(applicationNumber, record.aripoIR)) {
+                console.log('✅ ARIPO eşleşmesi bulundu:', record.title);
+                return record;
+            }
+        }
     }
+    
+    console.log('❌ Eşleşme bulunamadı');
+    return null;
+}
+
+    // Yeni yardımcı fonksiyon: normalizeAndCheckMatch
+normalizeAndCheckMatch(extractedNumber, recordNumber) {
+    if (!extractedNumber || !recordNumber) return false;
+
+    // 1. Tam eşleşme
+    if (recordNumber === extractedNumber) return true;
+
+    // 2. Normalize edilmiş eşleşme (-, /, space'leri kaldır)
+    const normalizedExtracted = extractedNumber.replace(/[-\/\s]/g, '');
+    const normalizedRecord = recordNumber.replace(/[-\/\s]/g, '');
+    if (normalizedRecord === normalizedExtracted) return true;
+
+    // 3. Partial eşleşme - bir taraf diğerini içeriyor
+    if (recordNumber.includes(extractedNumber) || extractedNumber.includes(recordNumber)) {
+        return true;
+    }
+
+    // 4. Flexible pattern matching
+    const flexPattern1 = extractedNumber.replace(/[-\/\s]/g, '[-\/\\s]?');
+    const flexPattern2 = recordNumber.replace(/[-\/\s]/g, '[-\/\\s]?');
+    const regex1 = new RegExp(flexPattern1, 'i');
+    const regex2 = new RegExp(flexPattern2, 'i');
+    if (regex1.test(recordNumber) || regex2.test(extractedNumber)) {
+        return true;
+    }
+    
+    return false;
+}
+
+// Yeni yardımcı fonksiyon: getDisplayNumberAndOrigin
+getDisplayNumberAndOrigin(record) {
+    let displayNum = record.applicationNumber || 'Numara Yok';
+    let displayOrigin = '';
+
+    // Kayıt türüne göre doğru numarayı seç
+    if (record.recordOwnerType === 'wipo' && record.wipoIR) {
+        displayNum = record.wipoIR;
+    } else if (record.recordOwnerType === 'aripo' && record.aripoIR) {
+        displayNum = record.aripoIR;
+    }
+
+    // Hiyerarşiye göre ülke veya menşei bilgisini ekle
+    if (record.transactionHierarchy === 'child' && record.country) {
+        displayOrigin = ` - ${record.country}`;
+    } else if (record.transactionHierarchy === 'parent' && record.origin) {
+        displayOrigin = ` - ${record.origin}`;
+    }
+
+    return `${displayNum}${displayOrigin}`;
+}
 
     switchFileTab(targetPane) {
         document.querySelectorAll('#fileListSection .tab-btn').forEach(btn => {
