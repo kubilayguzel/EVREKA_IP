@@ -1,11 +1,21 @@
 // js/etebs-module.js
 // ETEBS Tebligatları Yönetim Modülü
-
 import { etebsService, etebsAutoProcessor, firebaseServices, authService } from '../firebase-config.js';
-import { collection, query, where, getDocs, doc, getDoc} from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
-import { ref, getDownloadURL } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js';
+import { collection, query, where, getDocs, doc, getDoc, addDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+import { ref, getDownloadURL, uploadBytes, getStorage } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js';
 
+// EKLENECEK KISIM (import'ların hemen altına):
+// Storage referansını initialize et
+let storage = null;
 
+// Firebase storage'ı initialize et
+async function initializeStorage() {
+    if (!storage) {
+        const { app } = await import('../firebase-config.js');
+        storage = getStorage(app);
+    }
+    return storage;
+}
 // Notification helper - mevcut sisteminizi kullanır
 function showNotification(message, type = 'info') {
     // Önce mevcut showNotification fonksiyonunu kontrol et
@@ -56,36 +66,53 @@ export class ETEBSManager {
 
 async uploadDocumentsToFirebase(documents, userId, evrakNo) {
     const uploadResults = [];
+    
+    // Storage'ı initialize et
+    await initializeStorage();
 
     for (const doc of documents) {
         try {
-            // Upload to Firebase Storage
-            const storagePath = `etebs_documents/${userId}/${evrakNo}/${doc.fileName}`;
-            const storageRef = ref(storage, storagePath);
-            await uploadBytesResumable(storageRef, doc.file);
-            const downloadURL = await getDownloadURL(storageRef);
+            console.log('📁 Upload ediliyor:', doc.fileName, 'Evrak:', doc.evrakNo);
 
-            // Save metadata to Firestore - HEM etebs_documents HEM DE unindexed_pdfs'e kaydet
+            // Firebase Storage'a yükle
+            const storagePath = `etebs_documents/${userId}/${doc.evrakNo || evrakNo}/${doc.fileName}`;
+            console.log('📂 Storage path:', storagePath);
+            
+            const storageRef = ref(storage, storagePath);
+            
+            if (!doc.file) {
+                throw new Error('File objesi bulunamadı');
+            }
+
+            console.log('⬆️ Storage\'a yükleniyor...');
+            await uploadBytes(storageRef, doc.file);
+            
+            console.log('🔗 Download URL alınıyor...');
+            const downloadURL = await getDownloadURL(storageRef);
+            console.log('✅ Download URL:', downloadURL);
+
+            // Firestore metadata hazırla
             const docData = {
-                evrakNo: doc.evrakNo,
-                belgeAciklamasi: doc.belgeAciklamasi,
+                evrakNo: doc.evrakNo || evrakNo,
+                belgeAciklamasi: doc.belgeAciklamasi || 'ETEBS Belgesi',
                 fileName: doc.fileName,
                 fileUrl: downloadURL,
-                storagePath: storagePath,
+                filePath: storagePath,
                 fileSize: doc.file.size,
-                uploadedAt: serverTimestamp(),
+                uploadedAt: new Date(),
                 userId: userId,
                 source: 'etebs',
-                status: 'pending', // İndeksleme için
-                extractedAppNumber: doc.evrakNo, // Evrak numarasını da uygulama numarası olarak kullan
+                status: 'pending',
+                extractedAppNumber: doc.evrakNo || evrakNo,
                 matchedRecordId: null,
                 matchedRecordDisplay: null
             };
 
-            // Eşleşme kontrolü yap
+            // Portfolio eşleştirmesi yap
+            console.log('🔍 Portfolio eşleştirmesi yapılıyor...');
             try {
-                const matchResult = await this.matchWithPortfolio(doc.evrakNo);
-                if (matchResult.matched) {
+                const matchResult = await etebsService.matchWithPortfolio(doc.evrakNo || evrakNo);
+                if (matchResult && matchResult.matched) {
                     docData.matchedRecordId = matchResult.record.id;
                     docData.matchedRecordDisplay = `${matchResult.record.title} - ${matchResult.record.applicationNumber}`;
                     console.log('✅ ETEBS Eşleştirme başarılı:', doc.fileName, '→', docData.matchedRecordDisplay);
@@ -96,37 +123,38 @@ async uploadDocumentsToFirebase(documents, userId, evrakNo) {
                 console.error('Eşleştirme hatası:', matchError);
             }
 
-            // 1. etebs_documents koleksiyonuna kaydet (mevcut)
-            const etebsDocRef = await addDoc(collection(db, 'etebs_documents'), docData);
+            // Firestore'a kaydet - HEM etebs_documents HEM DE unindexed_pdfs'e
+            console.log('💾 Firestore\'a kaydediliyor...');
+            
+            // etebs_documents koleksiyonuna kaydet
+            const etebsDocRef = await addDoc(collection(firebaseServices.db, 'etebs_documents'), docData);
+            console.log('✅ etebs_documents\'a kaydedildi:', etebsDocRef.id);
 
-            // 2. unindexed_pdfs koleksiyonuna da kaydet (YENİ - indeksleme sayfası için)
-            const unindexedDocRef = await addDoc(collection(db, 'unindexed_pdfs'), docData);
+            // unindexed_pdfs koleksiyonuna da kaydet (indeksleme için)
+            const unindexedDocRef = await addDoc(collection(firebaseServices.db, 'unindexed_pdfs'), docData);
+            console.log('✅ unindexed_pdfs\'e kaydedildi:', unindexedDocRef.id);
 
             uploadResults.push({
                 ...docData,
                 id: etebsDocRef.id,
-                unindexedPdfId: unindexedDocRef.id, // İndeksleme sayfası için
+                unindexedPdfId: unindexedDocRef.id,
                 success: true
             });
 
-            console.log('📄 ETEBS Document uploaded:', {
-                fileName: doc.fileName,
-                etebsId: etebsDocRef.id,
-                unindexedId: unindexedDocRef.id,
-                matched: !!docData.matchedRecordId
-            });
+            console.log('✅ Upload tamamlandı:', doc.fileName);
 
         } catch (error) {
-            console.error(`Upload failed for ${doc.fileName}:`, error);
+            console.error(`❌ Upload failed for ${doc.fileName}:`, error);
             uploadResults.push({
                 fileName: doc.fileName,
-                evrakNo: doc.evrakNo,
+                evrakNo: doc.evrakNo || evrakNo,
                 success: false,
                 error: error.message
             });
         }
     }
 
+    console.log('📤 uploadDocumentsToFirebase tamamlandı. Sonuçlar:', uploadResults);
     return uploadResults;
 }
 
