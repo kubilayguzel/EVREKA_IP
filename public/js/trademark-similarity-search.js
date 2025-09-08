@@ -1142,14 +1142,18 @@ function renderCurrentPageOfResults() {
     const tmMeta = (filteredMonitoringTrademarks || []).find(t => String(t.id) === String(trademarkKey))
                 || (monitoringTrademarks || []).find(t => String(t.id) === String(trademarkKey)) || null;
     const headerName = _pickName(null, tmMeta) || monitoredTrademark;
-    const headerImg = tmMeta?.brandImageUrl || tmMeta?.details?.brandInfo?.brandImage || tmMeta?.imagePath || groupResults[0]?.brandImageUrl || groupResults[0]?.imagePath || groupResults[0]?.brandImage || '';
+    // monitoringTrademarks'ta brandImageUrl yok, placeholder kullan
+    const headerImg = '';
+    const applicationNumber = tmMeta?.applicationNumber || tmMeta?.applicationNo || '';
     const groupHeaderRow = document.createElement('tr');
         groupHeaderRow.classList.add('group-header');
         const totalCountForThisMark = totalCountsByTrademark[trademarkKey] || groupResults.length;
         groupHeaderRow.innerHTML = `
         <td colspan="9" class="text-left" style="padding: 15px 20px; background-color: #f8f9fa; border-left: 4px solid #007bff;">
             <div class="group-title" style="display: flex; align-items: center; gap: 15px;">
-            ${headerImg ? `<img src="${headerImg}" alt="${headerName}" style="width: 45px; height: 45px; object-fit: contain; border-radius: 6px; border: 1px solid #dee2e6; background: white; padding: 2px;" onerror="this.style.display='none';">` : '<div style="width: 45px; height: 45px; background-color: #e9ecef; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 20px; color: #6c757d; border: 1px solid #dee2e6;">📋</div>'}
+            <div class="trademark-placeholder" data-app-no="${applicationNumber}" style="width: 45px; height: 45px; background: linear-gradient(135deg, #e9ecef 0%, #f8f9fa 100%); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 20px; color: #6c757d; border: 2px solid #dee2e6; font-weight: bold;">
+                ${headerName.charAt(0).toUpperCase()}
+            </div>
             <span style="font-size: 16px; font-weight: 600; color: #495057;"><strong>${headerName}</strong> markası için bulunan benzer sonuçlar (${totalCountForThisMark} adet)</span>
             </div>
         </td>
@@ -1175,6 +1179,23 @@ function renderCurrentPageOfResults() {
     // Enhance group headers with images fetched by applicationNumber
     try { enhanceGroupHeaderImages(); } catch(e) { console.warn('[TSS] enhanceGroupHeaderImages failed', e); }
 ;
+    // Grup başlıklarına asenkron olarak görsel ekle
+    setTimeout(async () => {
+        const placeholders = document.querySelectorAll('.trademark-placeholder[data-app-no]');
+        for (const placeholder of placeholders) {
+            const appNo = placeholder.dataset.appNo;
+            if (!appNo) continue;
+            
+            try {
+                const imageUrl = await _getBrandImageByAppNo(appNo);
+                if (imageUrl) {
+                    placeholder.innerHTML = `<img src="${imageUrl}" alt="Marka" style="width: 45px; height: 45px; object-fit: contain; border-radius: 6px;">`;
+                }
+            } catch (err) {
+                console.warn('Grup görseli yüklenemedi:', appNo, err);
+            }
+        }
+    }, 500);
 
     // Event listener'ları ekle
     attachEventListeners();
