@@ -8,6 +8,7 @@
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
     <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+    <link rel="stylesheet" href="./css/deadline-highlighter.css">
     <style>
         /* Bu sayfaya özel stiller */
         /* Genel body, page-wrapper, main-container stilleri shared-styles.css'ten gelecektir. */
@@ -330,7 +331,7 @@
                     </div>
                 </div>
                 <div class="table-container">
-                    <table class="tasks-table">
+                    <table class="tasks-table" id="triggeredTasksTable">
                         <thead>
                             <tr>
                                 <th>İş No.</th>
@@ -452,7 +453,7 @@
             </div>
         </div>
     </div>
-
+    <script src="./js/deadline-highlighter.js"></script>
     <script type="module">
         import { db, taskService, ipRecordsService, accrualService, personService, auth, transactionTypeService } from './firebase-config.js';
         import { showNotification } from './utils.js'; // showNotification utils.js'ten geliyor
@@ -637,14 +638,35 @@
 
                         // Resmi Son Tarihi formatla
                         const officialDueDateDisplay = task.officialDueDate ? task.officialDueDate.toDate().toLocaleDateString('tr-TR') : '-';
+                        const dueDateObj =
+                        task.dueDate
+                            ? (task.dueDate.toDate ? task.dueDate.toDate() : new Date(task.dueDate))
+                            : null;
+                        const dueISO = dueDateObj ? dueDateObj.toISOString().slice(0, 10) : '';
+                        const dueDisplay = dueDateObj ? dueDateObj.toLocaleDateString('tr-TR') : 'Belirtilmemiş';
+
+                        const officialDateObj =
+                        task.officialDueDate
+                            ? (task.officialDueDate.toDate
+                                ? task.officialDueDate.toDate()
+                                : (task.officialDueDate.seconds
+                                    ? new Date(task.officialDueDate.seconds * 1000)
+                                    : new Date(task.officialDueDate)))
+                            : null;
+                        const officialISO = officialDateObj ? officialDateObj.toISOString().slice(0, 10) : '';
+                        const officialDisplay = officialDateObj ? officialDateObj.toLocaleDateString('tr-TR') : 'Belirtilmemiş';
 
                         row.innerHTML = `
                             <td>${task.id}</td>
                             <td>${task.relatedIpRecordTitle || 'N/A'}</td>
                             <td>${taskTypeDisplayName}</td>
                             <td><span class="priority-badge ${priorityClass}">${task.priority}</span></td>
-                            <td>${task.dueDate ? new Date(task.dueDate).toLocaleDateString('tr-TR') : 'Belirtilmemiş'}</td>
-                            <td>${officialDueDateDisplay}</td> <!-- Yeni kolon: Resmi Son Tarih -->
+                                <td data-field="operationalDue" data-date="${dueISO}">
+                                ${dueDisplay}
+                                </td>
+                                <td data-field="officialDue" data-date="${officialISO}">
+                                ${officialDisplay}
+                            </td>
                             <td><span class="status-badge ${statusClass}">${this.statusDisplayMap[task.status] || task.status}</span></td>
                             <td>
                                 <button class="action-btn" data-id="${task.id}" data-action="view">Görüntüle</button>
@@ -655,6 +677,7 @@
                         `;
                         tableBody.appendChild(row);
                     });
+                    DeadlineHighlighter.refresh('triggeredTasks');
                 }
 
                 cleanHistoryAction(action) {
@@ -1036,6 +1059,35 @@
 } // BU SATIR class MyTasksModule {}’yi kapatır
 const myTasksModule = new MyTasksModule();
     await myTasksModule.init();
+    // === DEADLINE HIGHLIGHTER: register ===
+    DeadlineHighlighter.init();
+
+    DeadlineHighlighter.registerList('triggeredTasks', {
+    container: '#triggeredTasksTable',
+    rowSelector: 'tbody tr',
+    dateFields: [
+        { name: 'operationalDue', selector: '[data-field="operationalDue"]' },
+        { name: 'officialDue',    selector: '[data-field="officialDue"]' }
+    ],
+    // Kural: İkisi doluysa operasyonel; değilse hangisi doluysa o
+    strategy: function(dates, row, fieldNames) {
+        const op  = dates[fieldNames.indexOf('operationalDue')] || null;
+        const off = dates[fieldNames.indexOf('officialDue')] || null;
+        if (op  instanceof Date && !isNaN(op))  return op;
+        if (off instanceof Date && !isNaN(off)) return off;
+        return null;
+    },
+    // 30 gün eşiği YOK
+    thresholds: [
+        { key: 'overdue', label: 'Geçti',   daysFrom: -99999, daysTo: -1, className: 'evr-due-overdue', priority: 100 },
+        { key: 'today',   label: 'Bugün',   daysFrom: 0,      daysTo: 0,  className: 'evr-due-today',   priority: 90  },
+        { key: 'd3',      label: '≤ 3 gün', daysFrom: 1,      daysTo: 3,  className: 'evr-due-3d',      priority: 80  },
+        { key: 'd7',      label: '≤ 7 gün', daysFrom: 4,      daysTo: 7,  className: 'evr-due-7d',      priority: 70  }
+    ],
+    applyTo: 'row',
+    showLegend: true
+    });
+
     window.triggeredTasksModule = myTasksModule;
 });
 </script>
