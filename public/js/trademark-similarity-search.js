@@ -1,6 +1,6 @@
 // js/trademark-similarity-search.js
 
-import { db, personService, searchRecordService, ipRecordsService, firebaseServices } from '../firebase-config.js';
+import { db, personService, searchRecordService, similarityService, ipRecordsService, firebaseServices } from '../firebase-config.js';
 import { collection, doc, getDoc, getDocs, limit, query, setDoc, where } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-functions.js';
 import { runTrademarkSearch } from './trademark-similarity/run-search.js';
@@ -29,7 +29,6 @@ const tssSaveState = (partial) => {
         const prev = tssLoadState();
         const next = { ...prev, ...partial, updatedAt: new Date().toISOString() };
         localStorage.setItem(TSS_RESUME_KEY, JSON.stringify(next));
-        // Firestore'a da yazma opsiyonu
         try {
             const uid = firebaseServices?.auth?.currentUser?.uid;
             if (uid) {
@@ -220,6 +219,7 @@ const _uniqNice = (obj) => {
     if (obj?.niceClass) String(obj.niceClass).split(/[,\s]+/).forEach(n => n && set.add(n));
     return Array.from(set).sort((a, b) => Number(a) - Number(b)).join(', ');
 };
+
 const getNiceClassNumbers = (item) => {
     if (item.goodsAndServicesByClass && Array.isArray(item.goodsAndServicesByClass)) {
         return item.goodsAndServicesByClass.map(classItem => String(classItem.classNo)).filter(classNo => classNo !== null && classNo !== undefined && classNo !== 'null');
@@ -234,6 +234,48 @@ const getApplicationDateFormatted = (item) => {
         return '-';
     }
 };
+
+// --- Hover Efektleri (DOM) ---
+const setupImageHoverEffect = () => {
+    const tbody = document.getElementById('monitoringListBody');
+    if (tbody._imageHoverSetup) return;
+    tbody._imageHoverSetup = true;
+
+    const style = document.createElement('style');
+    style.textContent = `
+        .trademark-image-thumbnail-large:hover {
+            transform: none !important;
+            z-index: initial !important;
+            position: static !important;
+        }
+    `;
+    document.head.appendChild(style);
+
+    let hoverElement = null;
+    const handleMouseEnter = (e) => {
+        const thumbnail = e.target.closest('.trademark-image-thumbnail-large');
+        if (!thumbnail) return;
+        if (hoverElement) hoverElement.remove();
+        hoverElement = document.createElement('img');
+        hoverElement.src = thumbnail.src;
+        hoverElement.alt = thumbnail.alt;
+        hoverElement.classList.add('trademark-image-hover-full');
+        hoverElement.style.display = 'block';
+        document.body.appendChild(hoverElement);
+    };
+    const handleMouseLeave = (e) => {
+        const thumbnail = e.target.closest('.trademark-image-thumbnail-large');
+        if (!thumbnail) return;
+        if (hoverElement) {
+            hoverElement.remove();
+            hoverElement = null;
+        }
+    };
+
+    tbody.addEventListener('mouseenter', handleMouseEnter, true);
+    tbody.addEventListener('mouseleave', handleMouseLeave, true);
+};
+
 
 // --- Initialization and Data Loading (Başlangıç ve Veri Yükleme) ---
 const initializePagination = () => {
@@ -416,9 +458,23 @@ const renderCurrentPageOfResults = () => {
 const createResultRow = (hit, rowIndex) => {
     const holders = Array.isArray(hit.holders) ? hit.holders.map(h => h.name || h.id).filter(Boolean).join(', ') : (hit.holders || '');
     const monitoredTrademark = monitoringTrademarks.find(tm => tm.id === hit.monitoredTrademarkId) || {};
+    
+    // Nice Sınıfı Renklendirme Mantığı
     const niceClassesArray = (Array.isArray(hit.niceClasses) ? hit.niceClasses : (hit.niceClasses?.split('/')?.map(c => c.trim()) || [])).filter(Boolean);
-    const monitoredNiceClassNumbers = monitoredTrademark.niceClassSearch || getNiceClassNumbers(monitoredTrademark);
-    const niceClassHtml = niceClassesArray.map(cls => `<span class="nice-class-badge ${monitoredNiceClassNumbers.includes(String(cls)) ? 'match' : ''}">${cls}</span>`).join('');
+    const monitoredNiceClassNumbers = (monitoredTrademark?.niceClassSearch || []).map(String);
+    const goodsAndServicesByClassNumbers = getNiceClassNumbers(monitoredTrademark).map(String);
+    
+    const niceClassHtml = niceClassesArray.map(cls => {
+        const clsString = String(cls).trim();
+        let cssClass = '';
+        if (goodsAndServicesByClassNumbers.includes(clsString)) {
+            cssClass = 'match';
+        } else if (monitoredNiceClassNumbers.includes(clsString)) {
+            cssClass = 'partial-match';
+        }
+        return `<span class="nice-class-badge ${cssClass}">${cls}</span>`;
+    }).join('');
+
     const similarityScore = hit.similarityScore ? `${(hit.similarityScore * 100).toFixed(0)}%` : '-';
     const similarityBtnClass = hit.isSimilar === true ? 'similar' : 'not-similar';
     const similarityBtnText = hit.isSimilar === true ? 'Benzer' : 'Benzemez';
@@ -455,8 +511,8 @@ const updateMonitoringCount = () => {
 const applyMonitoringListFilters = () => {
     const [ownerFilter, niceFilter, brandFilter] = [ownerSearchInput.value, niceClassSearchInput.value, brandNameSearchInput.value].map(s => s.toLowerCase());
     filteredMonitoringTrademarks = monitoringTrademarks.filter(data =>
-        getOwnerNames(data).toLowerCase().includes(ownerFilter) &&
-        getNiceClassNumbers(data).join(', ').includes(niceFilter) &&
+        _pickOwners(data).toLowerCase().includes(ownerFilter) &&
+        _uniqNice(data).includes(niceFilter) &&
         (data.title || data.markName || data.brandText || '').toLowerCase().includes(brandFilter)
     );
     monitoringPagination.update(filteredMonitoringTrademarks.length);
@@ -471,6 +527,7 @@ const checkCacheAndToggleButtonStates = async () => {
     if (!bulletinKey || filteredMonitoringTrademarks.length === 0) {
         startSearchBtn.disabled = true;
         researchBtn.disabled = true;
+        infoMessageContainer.innerHTML = '';
         return;
     }
     
@@ -718,7 +775,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('closeNoteModal').addEventListener('click', () => document.getElementById('noteModal').classList.remove('show'));
     document.getElementById('cancelNoteBtn').addEventListener('click', () => document.getElementById('noteModal').classList.remove('show'));
     
-    // Initial check if a bulletin is already selected (e.g., from resume state)
     if (bulletinSelect.value) {
         checkCacheAndToggleButtonStates();
     }
