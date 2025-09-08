@@ -67,7 +67,7 @@ function tssShowResumeBannerIfAny() {
 
   document.getElementById('tssClearBtn').onclick = () => { tssClearState(); bar.remove(); };
 
-  document.getElementById('tssResumeBtn').onclick = async () => {
+  document.getElementById('tssResumeBtn').onclick = async () => { window.__tssPendingResumeForBulletin = (tssLoadState()?.page || 1);
     const state = tssLoadState();
     const sel = document.getElementById('bulletinSelect');
     if (sel && sel.value !== state.bulletinValue) {
@@ -148,18 +148,6 @@ const debounce = (func, delay) => {
     };
 };
 
-function getMonitoredMetaById(id) {
-  const tm = monitoringTrademarks.find(t => t.id === id) 
-         || filteredMonitoringTrademarks.find(t => t.id === id);
-  const name = tm?.title || tm?.markName || tm?.brandText || tm?.name || '—';
-  const img  = tm?.brandImageUrl 
-            || tm?.brandImage 
-            || tm?.details?.brandInfo?.brandImage 
-            || '';
-  return { name, img };
-}
-
-
 function initializePagination() {
 
 
@@ -173,11 +161,11 @@ function initializePagination() {
           const r = _upd(len);
           try {
             const firstPage = 1;
-            tssSaveState(tssBuildStateFromUI({ page: firstPage, itemsPerPage: this?.getItemsPerPage?.() || 10, totalResults: Array.isArray(allSimilarResults) ? allSimilarResults.length : (len || 0) }));
-              try {
+            tssSaveState(tssBuildStateFromUI({ page: 1, itemsPerPage: this?.getItemsPerPage?.() || 10, totalResults: Array.isArray(allSimilarResults) ? allSimilarResults.length : (len || 0) }));
+try {
                 if (window.__tssPendingResumeForBulletin) {
                   const p = window.__tssPendingResumeForBulletin; window.__tssPendingResumeForBulletin = null;
-                  if (typeof this.goTo === 'function') this.goToPage(p); else if (typeof this.setCurrentPage === 'function') this.setCurrentPage(p);
+                  if (typeof this.goTo === 'function') this.goToPage(p); else else if (typeof this.setCurrentPage === 'function') this.setCurrentPage(p);
                 } else { tssAutoResumeIfMatchingBulletin(); }
               } catch(e){}
           } catch(e){}
@@ -1040,6 +1028,17 @@ function renderCurrentPageOfResults() {
     const currentPageData = pagination.getCurrentPageData(allSimilarResults);
     const startIndex = pagination.getStartIndex();
 
+    // Toplam adetleri tüm sonuçlar üzerinden hesapla (grup başlığı için)
+    const totalCountsByTrademark = (function(){
+        const map = {};
+        (allSimilarResults || []).forEach(r => {
+            const key = r.monitoredTrademarkId || 'unknown';
+            map[key] = (map[key] || 0) + 1;
+        });
+        return map;
+    })();
+
+
     if (allSimilarResults.length === 0) {
         noRecordsMessage.textContent = 'Arama sonucu bulunamadı.';
         noRecordsMessage.style.display = 'block';
@@ -1071,9 +1070,14 @@ function renderCurrentPageOfResults() {
         const groupResults = pageGroups[trademarkKey];
         const monitoredTrademark = groupResults[0].monitoredTrademark || 'Bilinmeyen Marka';
         
-        const { name: headerName, img: headerImg } = getMonitoredMetaById(trademarkKey);
+        // Grup başlığı
+        const totalCountForThisMark = allSimilarResults.filter(
+            item => (item.monitoredTrademarkId || 'unknown') === trademarkKey
+        ).length;
+
         const groupHeaderRow = document.createElement('tr');
         groupHeaderRow.classList.add('group-header');
+        const totalCountForThisMark = totalCountsByTrademark[trademarkKey] || groupResults.length;
         groupHeaderRow.innerHTML = `
         <td colspan="9" class="text-left">
             <div class="group-title">
@@ -1082,7 +1086,6 @@ function renderCurrentPageOfResults() {
             </div>
         </td>
         `;
-
         resultsTableBody.appendChild(groupHeaderRow);
 
         // Grup içeriği
