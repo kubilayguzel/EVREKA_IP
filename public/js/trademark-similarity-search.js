@@ -80,6 +80,7 @@ function tssShowResumeBannerIfAny() {
 
     // Arama sonuçları yüklendikten sonra hedef sayfaya git
     const targetPage = state.page || 1;
+    window.__tssPendingResumeForBulletin = targetPage;
     let tries = 0;
     const iv = setInterval(() => {
       tries++;
@@ -810,8 +811,7 @@ async function loadDataFromCacheWithDebug(bulletinKey) {
             if (pagination) {
                 console.log("📄 Pagination güncelleniyor...");
                 pagination.update(allSimilarResults.length);
-    try { pagination.goToPage(1); } catch(e) {}
-    try { renderCurrentPageOfResults(); } catch(e) {}
+    try { if (!window.__tssPendingResumeForBulletin) { renderCurrentPageOfResults(); } } catch(e) {}
 }
             
             // Sonuçları render et
@@ -830,8 +830,7 @@ async function loadDataFromCacheWithDebug(bulletinKey) {
             resultsTableBody.innerHTML = '';
             infoMessageContainer.innerHTML = '';
             if (pagination) pagination.update(0);
-    try { pagination.goToPage(1); } catch(e) {}
-    try { renderCurrentPageOfResults(); } catch(e) {}
+    try { if (!window.__tssPendingResumeForBulletin) { renderCurrentPageOfResults(); } } catch(e) {}
 }
         
     } catch (error) {
@@ -855,8 +854,7 @@ async function loadDataFromCache(bulletinKey) {
     if (allSimilarResults.length > 0) {
         infoMessageContainer.innerHTML = `<div class="info-message">Önbellekten ${allSimilarResults.length} benzer sonuç yüklendi.</div>`;
         pagination.update(allSimilarResults.length);
-    try { pagination.goToPage(1); } catch(e) {}
-    try { renderCurrentPageOfResults(); } catch(e) {}
+    try { if (!window.__tssPendingResumeForBulletin) { renderCurrentPageOfResults(); } } catch(e) {}
 try { const firstPage = 1; tssSaveState(tssBuildStateFromUI({ page: firstPage, itemsPerPage: pagination?.getItemsPerPage?.() || 10, totalResults: allSimilarResults.length })); } catch(e) {}
     
     const firstPage = 1;
@@ -868,8 +866,7 @@ try { const firstPage = 1; tssSaveState(tssBuildStateFromUI({ page: firstPage, i
         resultsTableBody.innerHTML = '';
         infoMessageContainer.innerHTML = '';
         if (pagination) pagination.update(0);
-    try { pagination.goToPage(1); } catch(e) {}
-    try { renderCurrentPageOfResults(); } catch(e) {}
+    try { if (!window.__tssPendingResumeForBulletin) { renderCurrentPageOfResults(); } } catch(e) {}
 }
 }
 
@@ -982,8 +979,7 @@ async function performSearch(fromCacheOnly = false) {
     loadingIndicator.style.display = 'none';
     infoMessageContainer.innerHTML = `<div class="info-message">Toplam ${allSimilarResults.length} benzer sonuç bulundu.</div>`;
     pagination.update(allSimilarResults.length);
-    try { pagination.goToPage(1); } catch(e) {}
-    try { renderCurrentPageOfResults(); } catch(e) {}
+    try { if (!window.__tssPendingResumeForBulletin) { renderCurrentPageOfResults(); } } catch(e) {}
 try { const firstPage = 1; tssSaveState(tssBuildStateFromUI({ page: firstPage, itemsPerPage: pagination?.getItemsPerPage?.() || 10, totalResults: allSimilarResults.length })); } catch(e) {}
     
 
@@ -1517,8 +1513,7 @@ async function performResearchWithCacheClear() {
         noRecordsMessage.style.display = 'none';
         infoMessageContainer.innerHTML = '';
         if (pagination) pagination.update(0);
-    try { pagination.goToPage(1); } catch(e) {}
-    try { renderCurrentPageOfResults(); } catch(e) {}
+    try { if (!window.__tssPendingResumeForBulletin) { renderCurrentPageOfResults(); } } catch(e) {}
 // Yeni arama yap
         loadingIndicator.textContent = 'Yeniden arama yapılıyor...';
         await performSearch(false);
@@ -1588,8 +1583,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 noRecordsMessage.style.display = 'none';
                 infoMessageContainer.innerHTML = '';
                 if (pagination) pagination.update(0);
-    try { pagination.goToPage(1); } catch(e) {}
-    try { renderCurrentPageOfResults(); } catch(e) {}
+    try { if (!window.__tssPendingResumeForBulletin) { renderCurrentPageOfResults(); } } catch(e) {}
 }
         });
         
