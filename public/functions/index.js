@@ -2703,9 +2703,8 @@ allResults.push({
             // *** FRONTEND İÇİN GEREKLİ ALANLAR ***
             monitoredTrademark: markName, // Frontend'in eşleştirme için kullandığı alan
             monitoredNiceClasses: monitoredMark.niceClassSearch || [],
-            monitoredTrademarkId: monitoredMark.id // Eski uyumluluk için
-          
-            isEarlier: isEarlier,
+            monitoredTrademarkId: monitoredMark.id, // Eski uyumluluk için
+            isEarlier: isEarlier
 });
         }
 
