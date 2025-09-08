@@ -546,7 +546,7 @@ const createResultRow = (hit, rowIndex) => {
         <td><strong>${hit.markName || '-'}</strong></td>
         <td>${holders}</td>
         <td>${niceClassHtml}</td>
-        <td>${hit.applicationNo ? `<a href="#" class="tp-appno-link" data-tp-appno="${hit.applicationNo}" onclick="event.preventDefault(); window.queryApplicationNumberWithExtension('${hit.applicationNo}');">${hit.applicationNo}</a>` : '-'}</td>
+        <td>${hit.applicationNo ? `<a href="#" class="tp-appno-link" data-appno="${hit.applicationNo}">${hit.applicationNo}</a>` : '-'}</td>
         <td>${similarityScore}</td>
         <td>
             <select class="bs-select" data-result-id="${resultId}" data-monitored-trademark-id="${hit.monitoredTrademarkId}" data-bulletin-id="${bulletinSelect.value}">
@@ -757,6 +757,15 @@ const handleNoteCellClick = (cell) => {
 };
 
 const attachEventListeners = () => {
+    // Tek sekme: Başvuru No bağlantısı
+    resultsTableBody.querySelectorAll('.tp-appno-link').forEach(a => {
+        a.addEventListener('click', (e) => {
+            e.preventDefault();
+            const appNo = a.getAttribute('data-appno');
+            if (appNo) { window.queryApplicationNumberWithExtension(appNo); }
+        });
+    });
+    
     // Kriterleri Düzenle bağlantıları
     resultsTableBody.querySelectorAll('.edit-criteria-link').forEach(a => {
         a.addEventListener('click', (e) => {
@@ -792,7 +801,16 @@ window.queryApplicationNumberWithExtension = (applicationNo) => {
 
 // --- Main Entry Point (Ana Giriş Noktası) ---
 document.addEventListener('DOMContentLoaded', async () => {
-    initializePagination();
+    
+    // Inject highlight style for high similarity rows (>= 0.7)
+    (function(){
+        if (!document.getElementById('tss-high-sim-style')) {
+            const st = document.createElement('style');
+            st.id = 'tss-high-sim-style';
+            st.textContent = '.tss-high-sim { background-color: #fff7cc !important; }';
+            document.head.appendChild(st);
+        }
+    })();initializePagination();
     await loadInitialData();
     tssShowResumeBannerIfAny();
 
