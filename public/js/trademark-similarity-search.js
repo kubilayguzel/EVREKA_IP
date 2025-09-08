@@ -1069,13 +1069,15 @@ function renderCurrentPageOfResults() {
     sortedGroupKeys.forEach(trademarkKey => {
         const groupResults = pageGroups[trademarkKey];
         const monitoredTrademark = groupResults[0].monitoredTrademark || 'Bilinmeyen Marka';
-        
-        // Grup başlığı
-        const totalCountForThisMark = allSimilarResults.filter(
-            item => (item.monitoredTrademarkId || 'unknown') === trademarkKey
-        ).length;
+    // Grup başlığı
 
-        const groupHeaderRow = document.createElement('tr');
+            // Grup başlığı meta (isim + küçük görsel)
+    const tmMeta = (filteredMonitoringTrademarks || []).find(t => String(t.id) === String(trademarkKey))
+                || (monitoringTrademarks || []).find(t => String(t.id) === String(trademarkKey)) || null;
+    const headerName = _pickName(null, tmMeta) || monitoredTrademark;
+    const headerImg  = _pickImg(null, tmMeta);
+
+const groupHeaderRow = document.createElement('tr');
         groupHeaderRow.classList.add('group-header');
         const totalCountForThisMark = totalCountsByTrademark[trademarkKey] || groupResults.length;
         groupHeaderRow.innerHTML = `
