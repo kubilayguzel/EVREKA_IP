@@ -1,7 +1,7 @@
 // js/trademark-similarity-search.js
 
 import { db, personService, searchRecordService, similarityService, ipRecordsService, firebaseServices } from '../firebase-config.js';
-import { collection, doc, getDoc, getDocs, limit, query, setDoc, where } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+import { collection, getDocs, doc, getDoc, setDoc, query, where, limit } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-functions.js';
 import { runTrademarkSearch } from './trademark-similarity/run-search.js';
 import Pagination from './pagination.js';
@@ -406,49 +406,6 @@ function applyMonitoringListFilters() {
     checkCacheAndToggleButtonStates();
 }
 
-
-// === Application Number -> Brand Image lookup (ipRecords) ===
-const _appNoImgCache = new Map();
-
-function _normalizeImageSrc(u) {
-  if (!u) return '';
-  if (typeof u !== 'string') return '';
-  if (/^(https?:|data:|blob:)/i.test(u)) return u;
-  // Likely raw base64 content:
-  if (/^[A-Za-z0-9+/=]+$/.test(u.slice(0, 100))) return 'data:image/png;base64,' + u;
-  return u;
-}
-
-async function _getBrandImageByAppNo(appNo) {
-  if (!appNo) return '';
-  if (_appNoImgCache.has(appNo)) return _appNoImgCache.get(appNo) || '';
-  let url = '';
-  try {
-    const col = collection(db, 'ipRecords');
-
-    const tryField = async (field) => {
-      const q = query(col, where(field, '==', appNo), limit(1));
-      const snap = await getDocs(q);
-      if (!snap.empty) {
-        const data = snap.docs[0].data() || {};
-        const candidate = data.brandImageUrl
-          || data.brandImage
-          || (data.details && data.details.brandInfo && data.details.brandInfo.brandImage)
-          || (data.trademarkImage && (data.trademarkImage.url || data.trademarkImage.content))
-          || '';
-        return _normalizeImageSrc(candidate || '');
-      }
-      return '';
-    };
-
-    url = await tryField('applicationNumber');
-    if (!url) url = await tryField('applicationNo');
-  } catch (err) {
-    console.error('[TSS] _getBrandImageByAppNo error:', err);
-  }
-  _appNoImgCache.set(appNo, url || '');
-  return url || '';
-}
 // ipRecords hızlı erişim için basit cache
 const _ipCache = new Map();
 async function _getIp(recordId) {
@@ -1154,16 +1111,53 @@ function renderCurrentPageOfResults() {
             </div>
         </td>
         `;
+        resultsTableBody.appendChild(groupHeaderRow);
 
-        // attach meta for async header-image enhancement
+        // --- Patch: Ensure header image/placeholder and async resolve from ipRecords ---
         try {
-            groupHeaderRow.dataset.tmId = String(trademarkKey);
-            groupHeaderRow.dataset.appNo = String(_pickAppNo(null, tmMeta) || '');
-            if (!headerImg) groupHeaderRow.dataset.needsImg = '1';
-        } catch (e) {
-            console.warn('[TSS] header dataset attach failed', e);
+          const titleEl = groupHeaderRow.querySelector('.group-title');
+          if (titleEl) {
+            const hasImg = !!titleEl.querySelector('img');
+            const hasPH  = !!titleEl.querySelector('.no-image-badge');
+            if (!hasImg && !hasPH) {
+              const ph = document.createElement('div');
+              ph.className = 'no-image-badge';
+              ph.textContent = '📋';
+              ph.style.cssText = 'width:45px;height:45px;display:flex;align-items:center;justify-content:center;font-size:20px;color:#6c757d;border:1px solid #dee2e6;border-radius:6px;';
+              titleEl.insertBefore(ph, titleEl.firstChild);
+            }
+          }
+          const candidateAppNo = (tmMeta && tmMeta.applicationNumber) || (groupResults[0] && (groupResults[0].applicationNo || groupResults[0].monitoredTrademark));
+          if (!headerImg && candidateAppNo) {
+            _getBrandImageByAppNo(candidateAppNo).then((url) => {
+              if (!url) return;
+              const t = groupHeaderRow.querySelector('.group-title');
+              if (!t) return;
+              // Avoid duplicate
+              if (t.querySelector('img')) return;
+              // Remove placeholder if any
+              const ph = t.querySelector('.no-image-badge');
+              if (ph) ph.remove();
+              const img = document.createElement('img');
+              img.src = url;
+              img.alt = (headerName || 'Marka görseli');
+              img.style.cssText = 'width:45px;height:45px;object-fit:contain;border-radius:6px;border:1px solid #dee2e6;';
+              img.onerror = () => {
+                // fallback to placeholder
+                const ph2 = document.createElement('div');
+                ph2.className = 'no-image-badge';
+                ph2.textContent = '📋';
+                ph2.style.cssText = 'width:45px;height:45px;display:flex;align-items:center;justify-content:center;font-size:20px;color:#6c757d;border:1px solid #dee2e6;border-radius:6px;';
+                img.replaceWith(ph2);
+              };
+              t.insertBefore(img, t.firstChild);
+            }).catch((e) => console.error('[TSS] async header image resolve failed:', e));
+          }
+        } catch(e) {
+          console.error('[TSS] header image placeholder/resolve error:', e);
         }
-                resultsTableBody.appendChild(groupHeaderRow);
+        // --- /Patch ---
+
 
         // Grup içeriği
         groupResults.forEach((hit) => {
@@ -1171,10 +1165,7 @@ function renderCurrentPageOfResults() {
             const row = createResultRow(hit, currentRowIndex);
             resultsTableBody.appendChild(row);
         });
-    })
-    // Enhance group headers with images fetched by applicationNumber
-    try { enhanceGroupHeaderImages(); } catch(e) { console.warn('[TSS] enhanceGroupHeaderImages failed', e); }
-;
+    });
 
     // Event listener'ları ekle
     attachEventListeners();
@@ -1536,9 +1527,6 @@ function queryApplicationNumberWithExtension(applicationNo) {
         }
     }
 }
-// Make extension query callable from inline onclick attributes
-window.queryApplicationNumberWithExtension = queryApplicationNumberWithExtension;
-
 
 function getAllSearchResults() {
     return allSimilarResults
@@ -1797,27 +1785,44 @@ window.triggerTpQuery = function(applicationNo){
     }
 };
 
-// Fill missing group header images using ipRecords brandImageUrl via applicationNumber
-async function enhanceGroupHeaderImages() {
+// === Added by patch: brand image lookup by application number and global onclick export ===
+const _brandImgByAppNoCache = new Map();
+
+async function _getBrandImageByAppNo(appNo) {
+  const key = String(appNo || '').trim();
+  if (!key) return null;
+  if (_brandImgByAppNoCache.has(key)) return _brandImgByAppNoCache.get(key);
   try {
-    const headers = Array.from(document.querySelectorAll('#resultsTableBody tr.group-header[data-needs-img="1"]'));
-    for (const row of headers) {
-      const appNo = row?.dataset?.appNo;
-      if (!appNo) continue;
-      const url = await _getBrandImageByAppNo(appNo);
-      if (!url) continue;
-      const title = row.querySelector('.group-title');
-      if (!title) continue;
-      if (!title.querySelector('img')) {
-        const img = document.createElement('img');
-        img.src = url;
-        img.alt = 'Marka';
-        img.style.cssText = 'width:45px;height:45px;border-radius:6px;object-fit:contain;border:1px solid #dee2e6;background:white;padding:2px;';
-        title.insertBefore(img, title.firstChild);
-        row.dataset.needsImg = '0';
-      }
+    const col = collection(db, 'ipRecords');
+    let q = query(col, where('applicationNumber', '==', key), limit(1));
+    let snap = await getDocs(q);
+    if (snap.empty) {
+      q = query(col, where('applicationNo', '==', key), limit(1));
+      snap = await getDocs(q);
     }
+    if (snap.empty) {
+      _brandImgByAppNoCache.set(key, null);
+      return null;
+    }
+    const data = snap.docs[0].data() || {};
+    let url = data.brandImageUrl 
+      || (data.details && data.details.brandInfo && data.details.brandInfo.brandImage)
+      || (data.trademarkImage && (data.trademarkImage.url || (data.trademarkImage.content ? `data:${data.trademarkImage.type || 'image/png'};base64,${data.trademarkImage.content}` : null)));
+
+    _brandImgByAppNoCache.set(key, url || null);
+    return url || null;
   } catch (err) {
-    console.warn('[TSS] enhanceGroupHeaderImages error', err);
+    console.error('[TSS] _getBrandImageByAppNo failed for', key, err);
+    _brandImgByAppNoCache.set(key, null);
+    return null;
   }
+}
+
+// Export inline onclick target when module-loaded
+try {
+  if (typeof window !== 'undefined' && typeof queryApplicationNumberWithExtension === 'function') {
+    window.queryApplicationNumberWithExtension = queryApplicationNumberWithExtension;
+  }
+} catch (e) {
+  console.warn('[TSS] Could not export queryApplicationNumberWithExtension:', e);
 }
