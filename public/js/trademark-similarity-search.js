@@ -1105,10 +1105,10 @@ const groupHeaderRow = document.createElement('tr');
         groupHeaderRow.classList.add('group-header');
         const totalCountForThisMark = totalCountsByTrademark[trademarkKey] || groupResults.length;
         groupHeaderRow.innerHTML = `
-        <td colspan="9" class="text-left">
-            <div class="group-title">
-            ${headerImg ? `<img src="${headerImg}" alt="${headerName}" onerror="this.style.display=\'none\'">` : ''}
-            <span><strong>${headerName}</strong> markası için bulunan benzer sonuçlar (${totalCountForThisMark} adet)</span>
+        <td colspan="9" class="text-left" style="padding: 15px 20px; background-color: #f8f9fa; border-left: 4px solid #007bff;">
+            <div class="group-title" style="display: flex; align-items: center; gap: 15px;">
+            ${headerImg ? `<img src="${headerImg}" alt="${headerName}" style="width: 45px; height: 45px; object-fit: contain; border-radius: 6px; border: 1px solid #dee2e6; background: white; padding: 2px;" onerror="this.style.display='none';">` : '<div style="width: 45px; height: 45px; background-color: #e9ecef; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 20px; color: #6c757d; border: 1px solid #dee2e6;">📋</div>'}
+            <span style="font-size: 16px; font-weight: 600; color: #495057;"><strong>${headerName}</strong> markası için bulunan benzer sonuçlar (${totalCountForThisMark} adet)</span>
             </div>
         </td>
         `;
@@ -1242,7 +1242,7 @@ function createResultRow(hit, rowIndex) {
 <td>${niceClassHtml}</td>
 <td>${
     hit.applicationNo 
-        ? `<a href="#" class="tp-appno-link" data-tp-appno="${String(hit.applicationNo).replace(/"/g,'&quot;')}">${hit.applicationNo}</a>` 
+        ? `<a href="#" class="tp-appno-link" data-tp-appno="${String(hit.applicationNo).replace(/"/g,'&quot;')}" onclick="event.preventDefault(); window.open('https://www.turkpatent.gov.tr/arastirma-yap?form=trademark&auto_query=${encodeURIComponent(hit.applicationNo)}&query_type=application', '_blank');" style="color: #007bff; text-decoration: underline; cursor: pointer;">${hit.applicationNo}</a>` 
         : '-'
 }</td>
 <td>${similarityScore}</td>
