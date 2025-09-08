@@ -2616,9 +2616,8 @@ export const performTrademarkSimilaritySearch = onCall(
           const hasNiceClassOverlap = hasOverlappingNiceClasses(monitoredMark, hit.niceClasses);
 
           // Eğer Nice sınıf kesişimi yoksa atla
-          if (!hasNiceClassOverlap) {
-            continue;
-          }
+          // NOTE: Previously skipped when no Nice class overlap.
+// if (!hasNiceClassOverlap) { continue; }
 
           // Benzerlik skoru
           const { finalScore: similarityScore, positionalExactMatchScore } = calculateSimilarityScoreInternal(
@@ -2676,7 +2675,19 @@ export const performTrademarkSimilaritySearch = onCall(
           matchCount++;
 
           // *** ÖNEMLİ: Tüm gerekli alanları ekle ***
-          allResults.push({
+          
+// Compute 'isEarlier' (hit earlier than monitored application date)
+let isEarlier = false;
+try {
+  const searchDate = applicationDate ? new Date(applicationDate) : null;
+  const hitDate = hit.applicationDate ? new Date(hit.applicationDate) : null;
+  if (searchDate && hitDate) {
+    isEarlier = hitDate.getTime() < searchDate.getTime();
+  }
+} catch (e) {
+  isEarlier = false;
+}
+allResults.push({
             objectID: hit.id,
             markName: hit.markName,
             applicationNo: hit.applicationNo,
@@ -2693,7 +2704,9 @@ export const performTrademarkSimilaritySearch = onCall(
             monitoredTrademark: markName, // Frontend'in eşleştirme için kullandığı alan
             monitoredNiceClasses: monitoredMark.niceClassSearch || [],
             monitoredTrademarkId: monitoredMark.id // Eski uyumluluk için
-          });
+          
+            isEarlier: isEarlier,
+});
         }
 
         logger.log(`📊 '${markName}' (ID: ${monitoredMark.id}) için ${matchCount} eşleşme bulundu`);
