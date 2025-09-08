@@ -1,7 +1,7 @@
 // js/trademark-similarity-search.js
 
 import { db, personService, searchRecordService, similarityService, ipRecordsService, firebaseServices } from '../firebase-config.js';
-import { collection, getDocs, doc, getDoc , setDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+import { collection, doc, getDoc, getDocs, limit, query, setDoc, where } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-functions.js';
 import { runTrademarkSearch } from './trademark-similarity/run-search.js';
 import Pagination from './pagination.js';
@@ -406,6 +406,49 @@ function applyMonitoringListFilters() {
     checkCacheAndToggleButtonStates();
 }
 
+
+// === Application Number -> Brand Image lookup (ipRecords) ===
+const _appNoImgCache = new Map();
+
+function _normalizeImageSrc(u) {
+  if (!u) return '';
+  if (typeof u !== 'string') return '';
+  if (/^(https?:|data:|blob:)/i.test(u)) return u;
+  // Likely raw base64 content:
+  if (/^[A-Za-z0-9+/=]+$/.test(u.slice(0, 100))) return 'data:image/png;base64,' + u;
+  return u;
+}
+
+async function _getBrandImageByAppNo(appNo) {
+  if (!appNo) return '';
+  if (_appNoImgCache.has(appNo)) return _appNoImgCache.get(appNo) || '';
+  let url = '';
+  try {
+    const col = collection(db, 'ipRecords');
+
+    const tryField = async (field) => {
+      const q = query(col, where(field, '==', appNo), limit(1));
+      const snap = await getDocs(q);
+      if (!snap.empty) {
+        const data = snap.docs[0].data() || {};
+        const candidate = data.brandImageUrl
+          || data.brandImage
+          || (data.details && data.details.brandInfo && data.details.brandInfo.brandImage)
+          || (data.trademarkImage && (data.trademarkImage.url || data.trademarkImage.content))
+          || '';
+        return _normalizeImageSrc(candidate || '');
+      }
+      return '';
+    };
+
+    url = await tryField('applicationNumber');
+    if (!url) url = await tryField('applicationNo');
+  } catch (err) {
+    console.error('[TSS] _getBrandImageByAppNo error:', err);
+  }
+  _appNoImgCache.set(appNo, url || '');
+  return url || '';
+}
 // ipRecords hızlı erişim için basit cache
 const _ipCache = new Map();
 async function _getIp(recordId) {
@@ -431,13 +474,7 @@ function _pickName(ip, tm) {
   return ip?.markName || ip?.title || ip?.brandText || tm?.title || tm?.markName || tm?.brandText || '-';
 }
 function _pickImg(ip, tm) {
-  return ip?.brandImageUrl
-      || ip?.brandImage
-      || tm?.brandImageUrl
-      || tm?.imagePath
-      || tm?.details?.brandInfo?.brandImage
-      || (tm?.trademarkImage && (tm.trademarkImage.content || tm.trademarkImage.url))
-      || "";
+  return ip?.brandImageUrl || tm?.brandImageUrl || tm?.details?.brandInfo?.brandImage || '';
 }
 function _pickAppNo(ip, tm) {
   return ip?.applicationNumber || ip?.applicationNo || tm?.applicationNumber || tm?.applicationNo || '-';
@@ -1105,7 +1142,7 @@ function renderCurrentPageOfResults() {
     const tmMeta = (filteredMonitoringTrademarks || []).find(t => String(t.id) === String(trademarkKey))
                 || (monitoringTrademarks || []).find(t => String(t.id) === String(trademarkKey)) || null;
     const headerName = _pickName(null, tmMeta) || monitoredTrademark;
-    const headerImg = _pickImg(groupResults[0], tmMeta);
+    const headerImg = tmMeta?.brandImageUrl || tmMeta?.details?.brandInfo?.brandImage || tmMeta?.imagePath || groupResults[0]?.brandImageUrl || groupResults[0]?.imagePath || groupResults[0]?.brandImage || '';
     const groupHeaderRow = document.createElement('tr');
         groupHeaderRow.classList.add('group-header');
         const totalCountForThisMark = totalCountsByTrademark[trademarkKey] || groupResults.length;
@@ -1117,7 +1154,16 @@ function renderCurrentPageOfResults() {
             </div>
         </td>
         `;
-        resultsTableBody.appendChild(groupHeaderRow);
+
+        // attach meta for async header-image enhancement
+        try {
+            groupHeaderRow.dataset.tmId = String(trademarkKey);
+            groupHeaderRow.dataset.appNo = String(_pickAppNo(null, tmMeta) || '');
+            if (!headerImg) groupHeaderRow.dataset.needsImg = '1';
+        } catch (e) {
+            console.warn('[TSS] header dataset attach failed', e);
+        }
+                resultsTableBody.appendChild(groupHeaderRow);
 
         // Grup içeriği
         groupResults.forEach((hit) => {
@@ -1125,7 +1171,10 @@ function renderCurrentPageOfResults() {
             const row = createResultRow(hit, currentRowIndex);
             resultsTableBody.appendChild(row);
         });
-    });
+    })
+    // Enhance group headers with images fetched by applicationNumber
+    try { enhanceGroupHeaderImages(); } catch(e) { console.warn('[TSS] enhanceGroupHeaderImages failed', e); }
+;
 
     // Event listener'ları ekle
     attachEventListeners();
@@ -1487,6 +1536,9 @@ function queryApplicationNumberWithExtension(applicationNo) {
         }
     }
 }
+// Make extension query callable from inline onclick attributes
+window.queryApplicationNumberWithExtension = queryApplicationNumberWithExtension;
+
 
 function getAllSearchResults() {
     return allSimilarResults
@@ -1744,3 +1796,28 @@ window.triggerTpQuery = function(applicationNo){
         console.warn('Eklenti mesajı gönderilemedi:', e);
     }
 };
+
+// Fill missing group header images using ipRecords brandImageUrl via applicationNumber
+async function enhanceGroupHeaderImages() {
+  try {
+    const headers = Array.from(document.querySelectorAll('#resultsTableBody tr.group-header[data-needs-img="1"]'));
+    for (const row of headers) {
+      const appNo = row?.dataset?.appNo;
+      if (!appNo) continue;
+      const url = await _getBrandImageByAppNo(appNo);
+      if (!url) continue;
+      const title = row.querySelector('.group-title');
+      if (!title) continue;
+      if (!title.querySelector('img')) {
+        const img = document.createElement('img');
+        img.src = url;
+        img.alt = 'Marka';
+        img.style.cssText = 'width:45px;height:45px;border-radius:6px;object-fit:contain;border:1px solid #dee2e6;background:white;padding:2px;';
+        title.insertBefore(img, title.firstChild);
+        row.dataset.needsImg = '0';
+      }
+    }
+  } catch (err) {
+    console.warn('[TSS] enhanceGroupHeaderImages error', err);
+  }
+}
