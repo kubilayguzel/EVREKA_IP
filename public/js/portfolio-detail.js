@@ -418,7 +418,7 @@ docSaveBtn?.addEventListener('click', async () => {
     };
 
     // Update record
-    const docs = Array.isArray(currentData.documents) ? [...currentData.documents] : [];
+    const docs = Array.isArray(currentData.documents) ? [currentData.documents] : [];
     docs.push(newDoc);
     const res = await ipRecordsService.updateRecord(recordId, { documents: docs, updatedAt: new Date() });
     
@@ -598,6 +598,38 @@ docsTbody?.addEventListener('click', async (ev) => {
     alert('Belge kaldırılamadı.');
   }
 });
+// === Paylaşılan Fonksiyon: TÜRKPATENT'te Başvuru No ile Sorgu ===
+window.triggerTpQuery = function(applicationNo){
+    const appNo = (applicationNo || '').toString().trim();
+    if (!appNo){
+        alert('Başvuru numarası bulunamadı.');
+        return;
+    }
+    const eklentiID = 'bbcpnpgglakoagjakgigmgjpdpiigpah';
+    function openInstall(){
+        if (confirm("Bu özellik için Chrome tabanlı bir tarayıcı ve 'Evreka IP Sorgu Yardımcısı' eklentisi gereklidir. Kurulum sayfasına gitmek ister misiniz?")){
+            window.open('eklenti-kurulum.html', '_blank');
+        }
+    }
+    try {
+        if (typeof chrome !== 'undefined' && chrome.runtime && eklentiID){
+            chrome.runtime.sendMessage(eklentiID, { type: 'SORGULA', data: appNo }, (response) => {
+                if (chrome.runtime.lastError){
+                    console.error(chrome.runtime.lastError.message);
+                    openInstall();
+                } else {
+                    console.log('Eklentiden gelen yanıt:', response?.status);
+                }
+            });
+        } else {
+            openInstall();
+        }
+    } catch (e){
+        console.error('Eklenti mesaj hatası:', e);
+        openInstall();
+    }
+};
+
 // ===================================================================
 // YENİ EKLENEN KOD: TÜRKPATENT SORGULAMA BUTONU İÇİN EKLENTİ İLETİŞİMİ
 // ===================================================================
@@ -608,42 +640,15 @@ const tpQueryBtn = document.getElementById('tpQueryBtn');
 // Buton varsa ve tıklandığında çalışacak fonksiyonu tanımla
 if (tpQueryBtn) {
   tpQueryBtn.addEventListener('click', () => {
-    // 1. Başvuru numarasını daha önce oluşturduğumuz global değişkenden alıyoruz.
     const applicationNo = (window.currentRecord?.applicationNumber || '').trim();
     if (!applicationNo) {
       alert('Başvuru numarası bulunamadı.');
       return;
     }
-
-    // Geliştirme aşamasında bu ID'yi tarayıcınızın Eklentiler sayfasından öğrenebilirsiniz.
-    const eklentiID = 'bbcpnpgglakoagjakgigmgjpdpiigpah';
-
-    // 2. Tarayıcıda 'chrome.runtime.sendMessage' fonksiyonunun varlığını kontrol et.
-    if (typeof chrome !== 'undefined' && chrome.runtime && eklentiID) {
-      // 3. Eklentiye mesaj gönder.
-      chrome.runtime.sendMessage(
-        eklentiID,
-        {
-          type: 'SORGULA',
-          data: applicationNo
-        },
-        (response) => {
-          // 4. Eklentiden yanıt gelip gelmediğini kontrol et.
-          if (chrome.runtime.lastError) {
-              console.error(chrome.runtime.lastError.message);
-              // DÜZELTME: Doğrudan eklenti kurulum sayfasına yönlendir
-              if (confirm("TÜRKPATENT'ten anlık ve otomatik sorgulama yapabilmek için 'Evreka IP Sorgu Yardımcısı' eklentisini kurmalısınız. Kurulum sayfasına gitmek ister misiniz?")) {
-                  window.open('eklenti-kurulum.html', '_blank');
-              }
-          } else {
-            console.log('Eklentiden gelen yanıt:', response.status);
-          }
-        }
-      );
+    if (window.triggerTpQuery) {
+      window.triggerTpQuery(applicationNo);
     } else {
-       if (confirm("Bu özellik için Chrome tabanlı bir tarayıcı ve 'Evreka IP Sorgu Yardımcısı' eklentisi gereklidir. Kurulum sayfasına gitmek ister misiniz?")) {
-        window.open('eklenti-kurulum.html', '_blank');
-      }
+      alert('Sorgu fonksiyonu yüklenemedi.');
     }
   });
 }
