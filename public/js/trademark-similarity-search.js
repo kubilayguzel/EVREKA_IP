@@ -792,16 +792,7 @@ window.queryApplicationNumberWithExtension = (applicationNo) => {
 
 // --- Main Entry Point (Ana Giriş Noktası) ---
 document.addEventListener('DOMContentLoaded', async () => {
-    
-    // Inject highlight style for high similarity rows (>= 0.7)
-    (function(){
-        if (!document.getElementById('tss-high-sim-style')) {
-            const st = document.createElement('style');
-            st.id = 'tss-high-sim-style';
-            st.textContent = '.tss-high-sim { background-color: #fff7cc !important; }';
-            document.head.appendChild(st);
-        }
-    })();initializePagination();
+    initializePagination();
     await loadInitialData();
     tssShowResumeBannerIfAny();
 
