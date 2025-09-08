@@ -66,7 +66,7 @@ function tssShowResumeBannerIfAny() {
   `;
 
   document.getElementById('tssClearBtn').onclick = () => { tssClearState(); bar.remove(); };
-  document.getElementById('tssResumeBtn').onclick = async () => {
+document.getElementById('tssResumeBtn').onclick = async () => {
     const state = tssLoadState();
     const targetPage = state.page || 1;
     window.__tssPendingResumeForBulletin = targetPage;
@@ -128,6 +128,7 @@ function tssShowResumeBannerIfAny() {
       }, 100);
     }
   };
+}
 
 document.addEventListener('DOMContentLoaded', () => { tssShowResumeBannerIfAny(); });
 
