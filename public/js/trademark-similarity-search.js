@@ -21,8 +21,7 @@ function tssSaveState(partial) {
   try {
     const prev = tssLoadState();
     const next = { ...prev, ...partial, updatedAt: new Date().toISOString() };
-    localStorage.setItem(TSS_RESUME_KEY, JSON.stringify(next)); tssEnsureInlineResumeControls();
-    // (Opsiyonel) Firestore'a da yaz (kullanıcı girişliyse)
+    localStorage.setItem(TSS_RESUME_KEY, JSON.stringify(next)); // (Opsiyonel) Firestore'a da yaz (kullanıcı girişliyse)
     try {
       const uid = firebaseServices?.auth?.currentUser?.uid;
       if (uid) {
@@ -108,60 +107,7 @@ document.addEventListener('DOMContentLoaded', () => { tssShowResumeBannerIfAny()
 
 
 // === Inline Resume Controls (results header içine küçük buton) ===
-function tssEnsureInlineResumeControls() {
-  try {
-    let container = document.querySelector('.results-header');
-    if (!container) return; // header yoksa geç
 
-    let wrap = document.getElementById('tssInlineResume');
-    if (!wrap) {
-      wrap = document.createElement('div');
-      wrap.id = 'tssInlineResume';
-      wrap.style.cssText = 'display:flex; gap:8px; align-items:center; margin-left:auto;';
-      container.style.display = 'flex';
-      container.style.alignItems = 'center';
-      container.appendChild(wrap);
-    }
-
-    const state = tssLoadState();
-    wrap.innerHTML = '';
-
-    // "Devam Et" sadece state varsa görünür
-    if (state?.bulletinValue) {
-      const btnGo = document.createElement('button');
-      btnGo.textContent = `Devam Et (Sayfa ${state.page || 1})`;
-      btnGo.className = 'btn btn-sm btn-primary';
-      btnGo.onclick = () => {
-        const sel = document.getElementById('bulletinSelect');
-        if (sel && sel.value !== state.bulletinValue) {
-          sel.value = state.bulletinValue;
-          sel.dispatchEvent(new Event('change', { bubbles: true }));
-        }
-        const startBtn = document.getElementById('startSearchBtn') || document.getElementById('researchBtn');
-        if (startBtn) startBtn.click();
-
-        let tries = 0;
-        const targetPage = state.page || 1;
-        const iv = setInterval(() => {
-          tries++;
-          if (pagination && typeof pagination.goTo === 'function') {
-            clearInterval(iv);
-            pagination.goTo(targetPage);
-          } else if (tries > 150) {
-            clearInterval(iv);
-          }
-        }, 100);
-      };
-      wrap.appendChild(btnGo);
-
-      const btnClear = document.createElement('button');
-      btnClear.textContent = 'Sıfırla';
-      btnClear.className = 'btn btn-sm btn-outline-secondary';
-      btnClear.onclick = () => { tssClearState(); tssEnsureInlineResumeControls(); };
-      wrap.appendChild(btnClear);
-    }
-  } catch (e) { /* sessiz */ }
-}
 
 window.addEventListener('beforeunload', () => {
   const page = (typeof pagination?.getCurrentPage === 'function') ? pagination.getCurrentPage() : undefined;
@@ -868,6 +814,7 @@ async function loadDataFromCacheWithDebug(bulletinKey) {
             
             // Sonuçları render et
             console.log("🎨 Sonuçlar render ediliyor...");
+            
     try { const firstPage = 1; tssSaveState(tssBuildStateFromUI({ page: firstPage, itemsPerPage: pagination?.getItemsPerPage?.() || 10, totalResults: allSimilarResults.length })); } catch(e) {}
     
             
@@ -904,6 +851,7 @@ async function loadDataFromCache(bulletinKey) {
     if (allSimilarResults.length > 0) {
         infoMessageContainer.innerHTML = `<div class="info-message">Önbellekten ${allSimilarResults.length} benzer sonuç yüklendi.</div>`;
         pagination.update(allSimilarResults.length);
+        
     try { const firstPage = 1; tssSaveState(tssBuildStateFromUI({ page: firstPage, itemsPerPage: pagination?.getItemsPerPage?.() || 10, totalResults: allSimilarResults.length })); } catch(e) {}
     
     const firstPage = 1;
@@ -1027,6 +975,7 @@ async function performSearch(fromCacheOnly = false) {
     loadingIndicator.style.display = 'none';
     infoMessageContainer.innerHTML = `<div class="info-message">Toplam ${allSimilarResults.length} benzer sonuç bulundu.</div>`;
     pagination.update(allSimilarResults.length);
+    
     try { const firstPage = 1; tssSaveState(tssBuildStateFromUI({ page: firstPage, itemsPerPage: pagination?.getItemsPerPage?.() || 10, totalResults: allSimilarResults.length })); } catch(e) {}
     
 
