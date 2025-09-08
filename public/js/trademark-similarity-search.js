@@ -67,9 +67,8 @@ function tssShowResumeBannerIfAny() {
 
   document.getElementById('tssClearBtn').onclick = () => { tssClearState(); bar.remove(); };
 
-  document.getElementById('tssResumeBtn').onclick = async () => {
-    window.__tssPendingResumeForBulletin = (tssLoadState()?.page || 1);
-const state = tssLoadState();
+  document.getElementById('tssResumeBtn').onclick = async () => { window.__tssPendingResumeForBulletin = (tssLoadState()?.page || 1);
+    const state = tssLoadState();
     const sel = document.getElementById('bulletinSelect');
     if (sel && sel.value !== state.bulletinValue) {
       sel.value = state.bulletinValue;
@@ -86,12 +85,12 @@ const state = tssLoadState();
     const iv = setInterval(() => {
       tries++;
       const go = (p) => {
-  if (!pagination) return false;
-  if (typeof pagination.goToPage === 'function') { pagination.goToPage(p); return true; }
-  if (typeof pagination.setCurrentPage === 'function') { pagination.setCurrentPage(p); return true; }
-  if (typeof pagination.setPage === 'function') { pagination.setPage(p); return true; }
-  return false;
-};;
+        if (!pagination) return false;
+        if (typeof pagination.goTo === 'function') { pagination.goToPage(p); return true; }
+        if (typeof pagination.setCurrentPage === 'function') { pagination.setCurrentPage(p); return true; }
+        if (typeof pagination.setPage === 'function') { pagination.setPage(p); return true; }
+        return false;
+      };
       if (go(targetPage)) {
         clearInterval(iv);
         bar.style.background = '#28a745';
@@ -159,25 +158,19 @@ function initializePagination() {
       const _upd = pagination.update?.bind(pagination);
       if (typeof _upd === 'function') {
         pagination.update = function(len) {
-  const r = _upd(len);
-  try {
-    tssSaveState(tssBuildStateFromUI({
-      page: 1,
-      itemsPerPage: this?.getItemsPerPage?.() || 10,
-      totalResults: Array.isArray(allSimilarResults) ? allSimilarResults.length : (len || 0)
-    }));
-    try {
-      if (window.__tssPendingResumeForBulletin) {
-        const p = window.__tssPendingResumeForBulletin; window.__tssPendingResumeForBulletin = null;
-        if (typeof this.goToPage === 'function') this.goToPage(p);
-        else if (typeof this.setCurrentPage === 'function') this.setCurrentPage(p);
-        else if (typeof this.setPage === 'function') this.setPage(p);
-      } else { tssAutoResumeIfMatchingBulletin(); }
-    } catch(e){}
-  } catch(e){}
-  return r;
-}
-;
+          const r = _upd(len);
+          try {
+            const firstPage = 1;
+            tssSaveState(tssBuildStateFromUI({ page: 1, itemsPerPage: this?.getItemsPerPage?.() || 10, totalResults: Array.isArray(allSimilarResults) ? allSimilarResults.length : (len || 0) }));
+try {
+                if (window.__tssPendingResumeForBulletin) {
+                  const p = window.__tssPendingResumeForBulletin; window.__tssPendingResumeForBulletin = null;
+                  if (typeof this.goTo === 'function') this.goToPage(p); else if (typeof this.setCurrentPage === 'function') this.setCurrentPage(p);
+                } else { tssAutoResumeIfMatchingBulletin(); }
+              } catch(e){}
+          } catch(e){}
+          return r;
+        };
         pagination.__tssPatched = true;
       }
     }
@@ -824,7 +817,7 @@ async function loadDataFromCacheWithDebug(bulletinKey) {
             // Sonuçları render et
             console.log("🎨 Sonuçlar render ediliyor...");
             
-    try { const firstPage = 1; tssSaveState(tssBuildStateFromUI({ page: 1, itemsPerPage: this?.getItemsPerPage?.() || 10, totalResults: Array.isArray(allSimilarResults) ? allSimilarResults.length : (len || 0) })); } catch(e) {}
+    try { const firstPage = 1; tssSaveState(tssBuildStateFromUI({ page: firstPage, itemsPerPage: pagination?.getItemsPerPage?.() || 10, totalResults: allSimilarResults.length })); } catch(e) {}
     
             
             // No records mesajını gizle
@@ -862,10 +855,10 @@ async function loadDataFromCache(bulletinKey) {
         infoMessageContainer.innerHTML = `<div class="info-message">Önbellekten ${allSimilarResults.length} benzer sonuç yüklendi.</div>`;
         pagination.update(allSimilarResults.length);
     try { if (!window.__tssPendingResumeForBulletin) { renderCurrentPageOfResults(); } } catch(e) {}
-try { const firstPage = 1; tssSaveState(tssBuildStateFromUI({ page: 1, itemsPerPage: this?.getItemsPerPage?.() || 10, totalResults: Array.isArray(allSimilarResults) ? allSimilarResults.length : (len || 0) })); } catch(e) {}
+try { const firstPage = 1; tssSaveState(tssBuildStateFromUI({ page: firstPage, itemsPerPage: pagination?.getItemsPerPage?.() || 10, totalResults: allSimilarResults.length })); } catch(e) {}
     
     const firstPage = 1;
-    tssSaveState(tssBuildStateFromUI({ page: 1, itemsPerPage: this?.getItemsPerPage?.() || 10, totalResults: Array.isArray(allSimilarResults) ? allSimilarResults.length : (len || 0) }));
+    tssSaveState(tssBuildStateFromUI({ page: firstPage, itemsPerPage: pagination?.getItemsPerPage?.() || 10, totalResults: allSimilarResults.length }));
 
         noRecordsMessage.style.display = 'none';
     } else {
@@ -987,7 +980,7 @@ async function performSearch(fromCacheOnly = false) {
     infoMessageContainer.innerHTML = `<div class="info-message">Toplam ${allSimilarResults.length} benzer sonuç bulundu.</div>`;
     pagination.update(allSimilarResults.length);
     try { if (!window.__tssPendingResumeForBulletin) { renderCurrentPageOfResults(); } } catch(e) {}
-try { const firstPage = 1; tssSaveState(tssBuildStateFromUI({ page: 1, itemsPerPage: this?.getItemsPerPage?.() || 10, totalResults: Array.isArray(allSimilarResults) ? allSimilarResults.length : (len || 0) })); } catch(e) {}
+try { const firstPage = 1; tssSaveState(tssBuildStateFromUI({ page: firstPage, itemsPerPage: pagination?.getItemsPerPage?.() || 10, totalResults: allSimilarResults.length })); } catch(e) {}
     
 
     // ✅ Buton durumlarını güncelle
@@ -1035,6 +1028,17 @@ function renderCurrentPageOfResults() {
     const currentPageData = pagination.getCurrentPageData(allSimilarResults);
     const startIndex = pagination.getStartIndex();
 
+    // Toplam adetleri tüm sonuçlar üzerinden hesapla (grup başlığı için)
+    const totalCountsByTrademark = (function(){
+        const map = {};
+        (allSimilarResults || []).forEach(r => {
+            const key = r.monitoredTrademarkId || 'unknown';
+            map[key] = (map[key] || 0) + 1;
+        });
+        return map;
+    })();
+
+
     if (allSimilarResults.length === 0) {
         noRecordsMessage.textContent = 'Arama sonucu bulunamadı.';
         noRecordsMessage.style.display = 'block';
@@ -1065,18 +1069,24 @@ function renderCurrentPageOfResults() {
     sortedGroupKeys.forEach(trademarkKey => {
         const groupResults = pageGroups[trademarkKey];
         const monitoredTrademark = groupResults[0].monitoredTrademark || 'Bilinmeyen Marka';
-        
-        // Grup başlığı
-        const totalCountForThisMark = allSimilarResults.filter(
-            item => (item.monitoredTrademarkId || 'unknown') === trademarkKey
-        ).length;
+    // Grup başlığı
 
-        const groupHeaderRow = document.createElement('tr');
+            // Grup başlığı meta (isim + küçük görsel)
+    const tmMeta = (filteredMonitoringTrademarks || []).find(t => String(t.id) === String(trademarkKey))
+                || (monitoringTrademarks || []).find(t => String(t.id) === String(trademarkKey)) || null;
+    const headerName = _pickName(null, tmMeta) || monitoredTrademark;
+    const headerImg  = _pickImg(null, tmMeta);
+
+const groupHeaderRow = document.createElement('tr');
         groupHeaderRow.classList.add('group-header');
+        const totalCountForThisMark = totalCountsByTrademark[trademarkKey] || groupResults.length;
         groupHeaderRow.innerHTML = `
-            <td colspan="9">
-                📋 <strong>${monitoredTrademark}</strong> markası için bulunan benzer sonuçlar (${totalCountForThisMark} adet)
-            </td>
+        <td colspan="9" class="text-left">
+            <div class="group-title">
+            ${headerImg ? `<img src="${headerImg}" alt="${headerName}">` : ''}
+            <span><strong>${headerName}</strong> markası için bulunan benzer sonuçlar (${totalCountForThisMark} adet)</span>
+            </div>
+        </td>
         `;
         resultsTableBody.appendChild(groupHeaderRow);
 
