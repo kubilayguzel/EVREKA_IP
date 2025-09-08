@@ -27,7 +27,21 @@
         .kv-grid{ display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:12px 20px; }
 
         /* indexing-detail'e özel stiller */
-        .main-container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+
+        .main-container { max-width: 1600px; margin: 0 auto; padding: 20px; }
+
+        /* Eşleşen kayıtlar bölümünün boyutunu artır */
+        .matched-record-section {
+            min-height: 400px;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+
+        /* Arama sonuçları konteynerinin boyutunu artır */
+        .search-results {
+            max-height: 350px;
+            overflow-y: auto;
+        }
         .pdf-viewer-section { background: white; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); overflow: hidden; height: calc(100vh - 140px); }
         .pdf-viewer-header { background: linear-gradient(45deg, #1e3c72, #2a5298); color: white; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; }
         
