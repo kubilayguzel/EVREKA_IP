@@ -1141,22 +1141,25 @@ function renderCurrentPageOfResults() {
         const tmMeta = (filteredMonitoringTrademarks || []).find(t => String(t.id) === String(trademarkKey))
                     || (monitoringTrademarks || []).find(t => String(t.id) === String(trademarkKey)) || null;
         const headerName = _pickName(null, tmMeta) || monitoredTrademark;
-        // monitoringTrademarks'ta brandImageUrl yok, placeholder kullan
-        const headerImg = '';
+        // Gerçek marka görseli için kaynak belirleme
+        const headerImg = tmMeta?.brandImageUrl || tmMeta?.details?.brandInfo?.brandImage || tmMeta?.imagePath || groupResults[0]?.brandImageUrl || groupResults[0]?.imagePath || groupResults[0]?.brandImage || '';
         const applicationNumber = tmMeta?.applicationNumber || tmMeta?.applicationNo || '';
 
         const groupHeaderRow = document.createElement('tr');
         groupHeaderRow.classList.add('group-header');
         const totalCountForThisMark = totalCountsByTrademark[trademarkKey] || groupResults.length;
 
-        // Güncellenmiş grup başlığı - 1.5 kat büyük ve hover efektli
+        // Gerçek görsel varsa onu kullan, yoksa placeholder
         groupHeaderRow.innerHTML = `
         <td colspan="9" class="text-left" style="padding: 36px 16px !important; background-color: #fff3cd !important; text-align: left;">
             <div class="group-title" style="display: flex; align-items: center; gap: 15px;">
                 <div class="group-trademark-image">
-                    <div class="group-header-placeholder" data-app-no="${applicationNumber}">
-                        <strong>${headerName.charAt(0).toUpperCase()}</strong>
-                    </div>
+                    ${headerImg ? 
+                        `<img src="${headerImg}" alt="${headerName}" class="group-header-img">` : 
+                        `<div class="group-header-placeholder" data-app-no="${applicationNumber}">
+                            <strong>${headerName.charAt(0).toUpperCase()}</strong>
+                        </div>`
+                    }
                 </div>
                 <span style="font-size: 16px; font-weight: 600; color: #495057;">
                     <strong>${headerName}</strong> markası için bulunan benzer sonuçlar (${totalCountForThisMark} adet)
@@ -1164,6 +1167,12 @@ function renderCurrentPageOfResults() {
             </div>
         </td>
         `;
+
+        // Gerçek görsel yoksa ipRecords'dan asenkron olarak yükle
+        if (!headerImg && applicationNumber) {
+            groupHeaderRow.dataset.needsImg = '1';
+            groupHeaderRow.dataset.appNo = applicationNumber;
+        }
 
         // attach meta for async header-image enhancement
         try {
@@ -1209,6 +1218,12 @@ function renderCurrentPageOfResults() {
             }
         }
     }, 500);
+    // Grup başlıklarına asenkron olarak gerçek görselleri ekle
+    try { 
+        enhanceGroupHeaderImages(); 
+    } catch(e) { 
+        console.warn('[TSS] enhanceGroupHeaderImages failed', e); 
+    }
 
     // Event listener'ları ekle
     attachEventListeners();
