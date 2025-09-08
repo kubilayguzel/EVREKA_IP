@@ -1203,7 +1203,7 @@ function renderCurrentPageOfResults() {
     ;
     // Grup başlıklarına asenkron olarak görsel ekle
     setTimeout(async () => {
-        const placeholders = document.querySelectorAll('.trademark-placeholder[data-app-no]');
+        const placeholders = document.querySelectorAll('.group-header-placeholder[data-app-no]');
         for (const placeholder of placeholders) {
             const appNo = placeholder.dataset.appNo;
             if (!appNo) continue;
