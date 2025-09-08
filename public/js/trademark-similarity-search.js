@@ -1183,8 +1183,15 @@ function renderCurrentPageOfResults() {
         });
     })
     // Enhance group headers with images fetched by applicationNumber
-    try { enhanceGroupHeaderImages(); } catch(e) { console.warn('[TSS] enhanceGroupHeaderImages failed', e); }
-;
+    // attach meta for async header-image enhancement
+    try {
+        groupHeaderRow.dataset.tmId = String(trademarkKey);
+        groupHeaderRow.dataset.appNo = String(_pickAppNo(null, tmMeta) || '');
+        if (!headerImg) groupHeaderRow.dataset.needsImg = '1';
+    } catch (e) {
+        console.warn('[TSS] header dataset attach failed', e);
+    }
+    ;
     // Grup başlıklarına asenkron olarak görsel ekle
     setTimeout(async () => {
         const placeholders = document.querySelectorAll('.trademark-placeholder[data-app-no]');
