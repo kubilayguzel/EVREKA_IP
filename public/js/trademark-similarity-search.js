@@ -1,13 +1,175 @@
 // js/trademark-similarity-search.js
 
-import { db, personService, searchRecordService, similarityService, ipRecordsService } from '../firebase-config.js';
-import { collection, getDocs, doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+import { db, personService, searchRecordService, similarityService, ipRecordsService, firebaseServices } from '../firebase-config.js';
+import { collection, getDocs, doc, getDoc , setDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-functions.js';
 import { runTrademarkSearch } from './trademark-similarity/run-search.js';
 import Pagination from './pagination.js';
 import { loadSharedLayout } from './layout-loader.js';
 
 console.log("### trademark-similarity-search.js yüklendi ###");
+
+// === Kaldığın Yerden Devam Et: Durum Yönetimi ===
+const TSS_RESUME_KEY = 'TSS_LAST_STATE_V1';
+
+function tssLoadState() {
+  try { return JSON.parse(localStorage.getItem(TSS_RESUME_KEY) || '{}'); }
+  catch { return {}; }
+}
+
+function tssSaveState(partial) {
+  try {
+    const prev = tssLoadState();
+    const next = { ...prev, ...partial, updatedAt: new Date().toISOString() };
+    localStorage.setItem(TSS_RESUME_KEY, JSON.stringify(next)); tssEnsureInlineResumeControls();
+    // (Opsiyonel) Firestore'a da yaz (kullanıcı girişliyse)
+    try {
+      const uid = firebaseServices?.auth?.currentUser?.uid;
+      if (uid) {
+        setDoc(doc(db, 'userPreferences', uid + '_tss_last_state'), next, { merge: true });
+      }
+    } catch (e) { /* sessiz */ }
+  } catch (e) { /* sessiz */ }
+}
+
+function tssClearState() {
+  try { localStorage.removeItem(TSS_RESUME_KEY); } catch (e) { /* sessiz */ }
+}
+
+function tssBuildStateFromUI(extra = {}) {
+  const bulletinSelect = document.getElementById('bulletinSelect');
+  const bulletinValue  = bulletinSelect?.value || '';
+  const bulletinText   = bulletinSelect?.options?.[bulletinSelect.selectedIndex]?.text || '';
+  return { bulletinValue, bulletinText, ...extra };
+}
+
+function tssShowResumeBannerIfAny() {
+  const state = tssLoadState();
+  if (!state?.bulletinValue) return;
+
+  let bar = document.getElementById('tssResumeBar');
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.id = 'tssResumeBar';
+    bar.style.cssText = [
+      'position: fixed', 'right: 20px', 'bottom: 20px', 'z-index: 9999',
+      'background: #1e3c72', 'color: #fff', 'padding: 12px 16px',
+      'border-radius: 12px', 'box-shadow: 0 8px 20px rgba(0,0,0,0.2)',
+      'display: flex', 'gap: 8px', 'align-items: center', 'font-size: 14px'
+    ].join(';') + ';';
+    document.body.appendChild(bar);
+  }
+
+  bar.innerHTML = `
+    <span>“${state.bulletinText || 'Seçili bülten'}” → Sayfa ${state.page || 1}</span>
+    <button id="tssResumeBtn" style="background:#fff;color:#1e3c72;border:none;padding:6px 10px;border-radius:8px;cursor:pointer">Devam Et</button>
+    <button id="tssClearBtn"  style="background:#ff5a5f;color:#fff;border:none;padding:6px 10px;border-radius:8px;cursor:pointer">Sıfırla</button>
+  `;
+
+  document.getElementById('tssClearBtn').onclick = () => { tssClearState(); bar.remove(); };
+
+  document.getElementById('tssResumeBtn').onclick = async () => {
+    const state = tssLoadState();
+    const sel = document.getElementById('bulletinSelect');
+    if (sel && sel.value !== state.bulletinValue) {
+      sel.value = state.bulletinValue;
+      sel.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    const startBtn = document.getElementById('startSearchBtn') || document.getElementById('researchBtn');
+    if (startBtn) startBtn.click();
+
+    // Arama sonuçları yüklendikten sonra hedef sayfaya git
+    const targetPage = state.page || 1;
+    let tries = 0;
+    const iv = setInterval(() => {
+      tries++;
+      const go = (p) => {
+        if (!pagination) return false;
+        if (typeof pagination.goTo === 'function') { pagination.goTo(p); return true; }
+        if (typeof pagination.setCurrentPage === 'function') { pagination.setCurrentPage(p); return true; }
+        if (typeof pagination.setPage === 'function') { pagination.setPage(p); return true; }
+        return false;
+      };
+      if (go(targetPage)) {
+        clearInterval(iv);
+        bar.style.background = '#28a745';
+        bar.firstElementChild.textContent = `Devam edildi: Sayfa ${targetPage}`;
+        setTimeout(() => bar.remove(), 2000);
+      } else if (tries > 150) { // ~15sn
+        clearInterval(iv);
+      }
+    }, 100);
+  };
+}
+
+document.addEventListener('DOMContentLoaded', () => { tssShowResumeBannerIfAny(); });
+
+
+
+// === Inline Resume Controls (results header içine küçük buton) ===
+function tssEnsureInlineResumeControls() {
+  try {
+    let container = document.querySelector('.results-header');
+    if (!container) return; // header yoksa geç
+
+    let wrap = document.getElementById('tssInlineResume');
+    if (!wrap) {
+      wrap = document.createElement('div');
+      wrap.id = 'tssInlineResume';
+      wrap.style.cssText = 'display:flex; gap:8px; align-items:center; margin-left:auto;';
+      container.style.display = 'flex';
+      container.style.alignItems = 'center';
+      container.appendChild(wrap);
+    }
+
+    const state = tssLoadState();
+    wrap.innerHTML = '';
+
+    // "Devam Et" sadece state varsa görünür
+    if (state?.bulletinValue) {
+      const btnGo = document.createElement('button');
+      btnGo.textContent = `Devam Et (Sayfa ${state.page || 1})`;
+      btnGo.className = 'btn btn-sm btn-primary';
+      btnGo.onclick = () => {
+        const sel = document.getElementById('bulletinSelect');
+        if (sel && sel.value !== state.bulletinValue) {
+          sel.value = state.bulletinValue;
+          sel.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+        const startBtn = document.getElementById('startSearchBtn') || document.getElementById('researchBtn');
+        if (startBtn) startBtn.click();
+
+        let tries = 0;
+        const targetPage = state.page || 1;
+        const iv = setInterval(() => {
+          tries++;
+          if (pagination && typeof pagination.goTo === 'function') {
+            clearInterval(iv);
+            pagination.goTo(targetPage);
+          } else if (tries > 150) {
+            clearInterval(iv);
+          }
+        }, 100);
+      };
+      wrap.appendChild(btnGo);
+
+      const btnClear = document.createElement('button');
+      btnClear.textContent = 'Sıfırla';
+      btnClear.className = 'btn btn-sm btn-outline-secondary';
+      btnClear.onclick = () => { tssClearState(); tssEnsureInlineResumeControls(); };
+      wrap.appendChild(btnClear);
+    }
+  } catch (e) { /* sessiz */ }
+}
+
+window.addEventListener('beforeunload', () => {
+  const page = (typeof pagination?.getCurrentPage === 'function') ? pagination.getCurrentPage() : undefined;
+  const itemsPerPage = (typeof pagination?.getItemsPerPage === 'function') ? pagination.getItemsPerPage() : undefined;
+  const totalResults = Array.isArray(allSimilarResults) ? allSimilarResults.length : 0;
+  tssSaveState(tssBuildStateFromUI({ page, itemsPerPage, totalResults }));
+});
+
 
 let allSimilarResults = [];
 let monitoringTrademarks = [];
@@ -40,10 +202,39 @@ const debounce = (func, delay) => {
 };
 
 function initializePagination() {
+
+
+// Patch pagination.update to also persist state after updates
+(function() {
+  try {
+    if (pagination && !pagination.__tssPatched) {
+      const _upd = pagination.update?.bind(pagination);
+      if (typeof _upd === 'function') {
+        pagination.update = function(len) {
+          const r = _upd(len);
+          try {
+            const firstPage = 1;
+            tssSaveState(tssBuildStateFromUI({ page: firstPage, itemsPerPage: this?.getItemsPerPage?.() || 10, totalResults: Array.isArray(allSimilarResults) ? allSimilarResults.length : (len || 0) }));
+              try {
+                if (window.__tssPendingResumeForBulletin) {
+                  const p = window.__tssPendingResumeForBulletin; window.__tssPendingResumeForBulletin = null;
+                  if (typeof this.goTo === 'function') this.goTo(p); else if (typeof this.setCurrentPage === 'function') this.setCurrentPage(p);
+                } else { tssAutoResumeIfMatchingBulletin(); }
+              } catch(e){}
+          } catch(e){}
+          return r;
+        };
+        pagination.__tssPatched = true;
+      }
+    }
+  } catch (e) {}
+})();
+/*__TSS_PATCH_PAGINATION_UPDATE_V3__*/
+
     pagination = new Pagination({
         containerId: 'paginationContainer',
         itemsPerPage: 10,
-        onPageChange: renderCurrentPageOfResults
+        onPageChange: (page, itemsPerPage) => { renderCurrentPageOfResults(page, itemsPerPage); const totalResults = Array.isArray(allSimilarResults) ? allSimilarResults.length : 0; tssSaveState(tssBuildStateFromUI({ page, itemsPerPage, totalResults })); }
     });
 }
 
@@ -677,7 +868,9 @@ async function loadDataFromCacheWithDebug(bulletinKey) {
             
             // Sonuçları render et
             console.log("🎨 Sonuçlar render ediliyor...");
-            renderCurrentPageOfResults();
+            \1
+    try { const firstPage = 1; tssSaveState(tssBuildStateFromUI({ page: firstPage, itemsPerPage: pagination?.getItemsPerPage?.() || 10, totalResults: allSimilarResults.length })); } catch(e) {}
+    
             
             // No records mesajını gizle
             noRecordsMessage.style.display = 'none';
@@ -712,7 +905,12 @@ async function loadDataFromCache(bulletinKey) {
     if (allSimilarResults.length > 0) {
         infoMessageContainer.innerHTML = `<div class="info-message">Önbellekten ${allSimilarResults.length} benzer sonuç yüklendi.</div>`;
         pagination.update(allSimilarResults.length);
-        renderCurrentPageOfResults();
+        \1
+    try { const firstPage = 1; tssSaveState(tssBuildStateFromUI({ page: firstPage, itemsPerPage: pagination?.getItemsPerPage?.() || 10, totalResults: allSimilarResults.length })); } catch(e) {}
+    
+    const firstPage = 1;
+    tssSaveState(tssBuildStateFromUI({ page: firstPage, itemsPerPage: pagination?.getItemsPerPage?.() || 10, totalResults: allSimilarResults.length }));
+
         noRecordsMessage.style.display = 'none';
     } else {
         noRecordsMessage.style.display = 'block';
@@ -831,7 +1029,9 @@ async function performSearch(fromCacheOnly = false) {
     loadingIndicator.style.display = 'none';
     infoMessageContainer.innerHTML = `<div class="info-message">Toplam ${allSimilarResults.length} benzer sonuç bulundu.</div>`;
     pagination.update(allSimilarResults.length);
-    renderCurrentPageOfResults();
+    \1
+    try { const firstPage = 1; tssSaveState(tssBuildStateFromUI({ page: firstPage, itemsPerPage: pagination?.getItemsPerPage?.() || 10, totalResults: allSimilarResults.length })); } catch(e) {}
+    
 
     // ✅ Buton durumlarını güncelle
     try {
