@@ -605,28 +605,29 @@ window.triggerTpQuery = function(applicationNo){
         alert('Başvuru numarası bulunamadı.');
         return;
     }
-    const eklentiID = 'bbcpnpgglakoagjakgigmgjpdpiigpah';
-    function openInstall(){
-        if (confirm("Bu özellik için Chrome tabanlı bir tarayıcı ve 'Evreka IP Sorgu Yardımcısı' eklentisi gereklidir. Kurulum sayfasına gitmek ister misiniz?")){
-            window.open('eklenti-kurulum.html', '_blank');
-        }
+    const base = 'https://www.turkpatent.gov.tr/arastirma-yap';
+    const url = `${base}?form=trademark&auto_query=${encodeURIComponent(appNo)}&query_type=basvuru&source=${encodeURIComponent(window.location.origin)}`;
+
+    // 1) Her durumda yeni sekme aç (kullanıcı tıklaması ile tetiklendiği için pop-up engellenmez)
+    const newTab = window.open(url, '_blank');
+    if (!newTab) {
+        alert('Pop-up engellendi. Lütfen bu site için pop-up izni verin.');
     }
+
+    // 2) (Opsiyonel) Eklentiye mesaj gönder — varsa desteklesin.
     try {
-        if (typeof chrome !== 'undefined' && chrome.runtime && eklentiID){
+        const eklentiID = 'bbcpnpgglakoagjakgigmgjpdpiigpah';
+        if (typeof chrome !== 'undefined' && chrome.runtime && eklentiID) {
             chrome.runtime.sendMessage(eklentiID, { type: 'SORGULA', data: appNo }, (response) => {
-                if (chrome.runtime.lastError){
-                    console.error(chrome.runtime.lastError.message);
-                    openInstall();
+                if (chrome.runtime.lastError) {
+                    console.warn('Eklenti mesaj hatası:', chrome.runtime.lastError.message);
                 } else {
-                    console.log('Eklentiden gelen yanıt:', response?.status);
+                    console.log('Eklenti yanıtı:', response?.status);
                 }
             });
-        } else {
-            openInstall();
         }
-    } catch (e){
-        console.error('Eklenti mesaj hatası:', e);
-        openInstall();
+    } catch (e) {
+        console.warn('Eklenti mesajı gönderilemedi:', e);
     }
 };
 
