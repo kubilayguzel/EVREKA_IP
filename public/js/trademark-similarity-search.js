@@ -431,7 +431,13 @@ function _pickName(ip, tm) {
   return ip?.markName || ip?.title || ip?.brandText || tm?.title || tm?.markName || tm?.brandText || '-';
 }
 function _pickImg(ip, tm) {
-  return ip?.brandImageUrl || tm?.brandImageUrl || tm?.details?.brandInfo?.brandImage || '';
+  return ip?.brandImageUrl
+      || ip?.brandImage
+      || tm?.brandImageUrl
+      || tm?.imagePath
+      || tm?.details?.brandInfo?.brandImage
+      || (tm?.trademarkImage && (tm.trademarkImage.content || tm.trademarkImage.url))
+      || "";
 }
 function _pickAppNo(ip, tm) {
   return ip?.applicationNumber || ip?.applicationNo || tm?.applicationNumber || tm?.applicationNo || '-';
@@ -1099,7 +1105,7 @@ function renderCurrentPageOfResults() {
     const tmMeta = (filteredMonitoringTrademarks || []).find(t => String(t.id) === String(trademarkKey))
                 || (monitoringTrademarks || []).find(t => String(t.id) === String(trademarkKey)) || null;
     const headerName = _pickName(null, tmMeta) || monitoredTrademark;
-    const headerImg = tmMeta?.brandImageUrl || tmMeta?.details?.brandInfo?.brandImage || tmMeta?.imagePath || groupResults[0]?.brandImageUrl || groupResults[0]?.imagePath || groupResults[0]?.brandImage || '';
+    const headerImg = _pickImg(groupResults[0], tmMeta);
     const groupHeaderRow = document.createElement('tr');
         groupHeaderRow.classList.add('group-header');
         const totalCountForThisMark = totalCountsByTrademark[trademarkKey] || groupResults.length;
@@ -1241,7 +1247,7 @@ function createResultRow(hit, rowIndex) {
 <td>${niceClassHtml}</td>
 <td>${
     hit.applicationNo 
-        ? `<a href="#" class="tp-appno-link" data-tp-appno="${String(hit.applicationNo).replace(/"/g,'&quot;')}" onclick="event.preventDefault(); triggerTpQuery('${hit.applicationNo}');" style="color: #007bff; text-decoration: underline; cursor: pointer;">${hit.applicationNo}</a>` 
+        ? `<a href="#" class="tp-appno-link" data-tp-appno="${String(hit.applicationNo).replace(/"/g,'&quot;')}" onclick="event.preventDefault(); queryApplicationNumberWithExtension('${hit.applicationNo}');" style="color: #007bff; text-decoration: underline; cursor: pointer;">${hit.applicationNo}</a>` 
         : '-'
 }</td>
 <td>${similarityScore}</td>
@@ -1616,14 +1622,7 @@ async function performResearchWithCacheClear() {
 }
 // === INITIALIZATION ===
 document.addEventListener('DOMContentLoaded', async () => {
-    console.log(">>> DOM yüklendi, başlatılıyor...");// ✅ Kırık görsel fallback'i: trademark küçük görselleri 404 verirse placeholder göster
-    document.addEventListener('error', function(e){
-      const img = e.target;
-      if (img && img.tagName === 'IMG' && img.classList.contains('trademark-image-thumbnail-large')) {
-        const wrap = img.closest('.trademark-image-wrapper-large');
-        if (wrap) wrap.innerHTML = '<div class="no-image-placeholder-large">Resim Yok</div>';
-      }
-    }, true);
+    console.log(">>> DOM yüklendi, başlatılıyor...");
     
     initializePagination();
     await loadInitialData();
