@@ -1136,25 +1136,31 @@ function renderCurrentPageOfResults() {
     sortedGroupKeys.forEach(trademarkKey => {
         const groupResults = pageGroups[trademarkKey];
         const monitoredTrademark = groupResults[0].monitoredTrademark || 'Bilinmeyen Marka';
-    // Grup başlığı
 
-            // Grup başlığı meta (isim + küçük görsel)
-    const tmMeta = (filteredMonitoringTrademarks || []).find(t => String(t.id) === String(trademarkKey))
-                || (monitoringTrademarks || []).find(t => String(t.id) === String(trademarkKey)) || null;
-    const headerName = _pickName(null, tmMeta) || monitoredTrademark;
-    // monitoringTrademarks'ta brandImageUrl yok, placeholder kullan
-    const headerImg = '';
-    const applicationNumber = tmMeta?.applicationNumber || tmMeta?.applicationNo || '';
-    const groupHeaderRow = document.createElement('tr');
+        // Grup başlığı meta (isim + küçük görsel)
+        const tmMeta = (filteredMonitoringTrademarks || []).find(t => String(t.id) === String(trademarkKey))
+                    || (monitoringTrademarks || []).find(t => String(t.id) === String(trademarkKey)) || null;
+        const headerName = _pickName(null, tmMeta) || monitoredTrademark;
+        // monitoringTrademarks'ta brandImageUrl yok, placeholder kullan
+        const headerImg = '';
+        const applicationNumber = tmMeta?.applicationNumber || tmMeta?.applicationNo || '';
+
+        const groupHeaderRow = document.createElement('tr');
         groupHeaderRow.classList.add('group-header');
         const totalCountForThisMark = totalCountsByTrademark[trademarkKey] || groupResults.length;
+
+        // Güncellenmiş grup başlığı - 1.5 kat büyük ve hover efektli
         groupHeaderRow.innerHTML = `
-        <td colspan="9" class="text-left" style="padding: 15px 20px; background-color: #f8f9fa; border-left: 4px solid #007bff;">
+        <td colspan="9" class="text-left" style="padding: 36px 16px !important; background-color: #fff3cd !important; text-align: left;">
             <div class="group-title" style="display: flex; align-items: center; gap: 15px;">
-            <div class="trademark-placeholder" data-app-no="${applicationNumber}" style="width: 45px; height: 45px; background: linear-gradient(135deg, #e9ecef 0%, #f8f9fa 100%); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 20px; color: #6c757d; border: 2px solid #dee2e6; font-weight: bold;">
-                ${headerName.charAt(0).toUpperCase()}
-            </div>
-            <span style="font-size: 16px; font-weight: 600; color: #495057;"><strong>${headerName}</strong> markası için bulunan benzer sonuçlar (${totalCountForThisMark} adet)</span>
+                <div class="group-trademark-image">
+                    <div class="group-header-placeholder" data-app-no="${applicationNumber}">
+                        <strong>${headerName.charAt(0).toUpperCase()}</strong>
+                    </div>
+                </div>
+                <span style="font-size: 16px; font-weight: 600; color: #495057;">
+                    <strong>${headerName}</strong> markası için bulunan benzer sonuçlar (${totalCountForThisMark} adet)
+                </span>
             </div>
         </td>
         `;
