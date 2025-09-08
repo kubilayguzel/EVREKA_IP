@@ -116,6 +116,30 @@
             padding: 15px !important;
             color: #495057;
         }
+        /* Grup başlığı – sarı, yüksek ve sola hizalı */
+        .results-table .group-header td {
+        background-color: #fff3cd !important; /* sarı */
+        color: #212529;
+        padding: 18px 16px !important;        /* ~yüksek */
+        text-align: left;                     /* sola yasla */
+        }
+
+        /* Başlık içeriği (ikon + metin yan yana) */
+        .group-header .group-title {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        }
+
+        /* Markanın küçük görseli */
+        .group-header .group-title img {
+        width: 28px;
+        height: 28px;
+        object-fit: contain;
+        border-radius: 4px;
+        border: 1px solid rgba(0,0,0,.08);
+        background: #fff;
+        }
         
         /* B.Ş. Select Box stili - create-task.html'den esinlenerek */
         .bs-select { 
