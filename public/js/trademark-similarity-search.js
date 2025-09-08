@@ -84,9 +84,9 @@ function tssShowResumeBannerIfAny() {
     let tries = 0;
     const iv = setInterval(() => {
       tries++;
-      const go = (p) => {
+        const go = (p) => {
         if (!pagination) return false;
-        if (typeof pagination.goTo === 'function') { pagination.goToPage(p); return true; }
+        if (typeof pagination.goToPage === 'function') { pagination.goToPage(p); return true; }
         if (typeof pagination.setCurrentPage === 'function') { pagination.setCurrentPage(p); return true; }
         if (typeof pagination.setPage === 'function') { pagination.setPage(p); return true; }
         return false;
