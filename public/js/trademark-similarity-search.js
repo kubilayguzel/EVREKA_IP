@@ -720,6 +720,8 @@ const renderCurrentPageOfResults = () => {
             niceClassSearch: tmMeta.niceClassSearch || []
         };
         groupHeaderRow.dataset.markData = JSON.stringify(modalData);
+        
+        const totalCount = getTotalCountForMonitoredId(trademarkKey); // Toplam sonuç sayısını alın
 
         groupHeaderRow.innerHTML = `
             <td colspan="9">
@@ -729,7 +731,7 @@ const renderCurrentPageOfResults = () => {
                     </div>
                     <span>
                         <a href="#" class="edit-criteria-link" data-tmid="${tmMeta.id}"><strong>${headerName}</strong></a>
-                        markası için bulunan benzer sonuçlar (${groupResults.length} adet)
+                        markası için bulunan benzer sonuçlar (${totalCount} adet)
                     </span>
                 </div>
             </td>
