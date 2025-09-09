@@ -6,6 +6,7 @@ import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/
 import { runTrademarkSearch } from './trademark-similarity/run-search.js';
 import Pagination from './pagination.js';
 import { loadSharedLayout } from './layout-loader.js';
+import { showNotification } from '../utils.js';
 
 console.log("### trademark-similarity-search.js yüklendi ###");
 
@@ -291,6 +292,218 @@ const getApplicationDateFormatted = (item) => {
     }
 };
 
+// --- MODAL İÇİN YARDIMCI FONKSİYONLAR - monitoring-trademarks.html'den kopyalandı ---
+function setupEditCriteriaModal() {
+    const brandTextSearchInput = document.getElementById('brandTextSearchInput');
+    const addBrandTextBtn = document.getElementById('addBrandTextBtn');
+    const brandTextSearchList = document.getElementById('brandTextSearchList');
+    const niceClassSelectionContainer = document.getElementById('niceClassSelectionContainer');
+    const niceClassSearchList = document.getElementById('niceClassSearchList');
+    const saveCriteriaBtn = document.getElementById('saveCriteriaBtn');
+    
+    // Nice Sınıfı kutularını dinamik olarak oluştur
+    for (let i = 1; i <= 45; i++) {
+        const box = document.createElement('div');
+        box.className = 'nice-class-box';
+        box.textContent = i;
+        box.dataset.classNo = i;
+        niceClassSelectionContainer.appendChild(box);
+    }
+    
+    // Nice Sınıfı kutularına tıklama olayı
+    niceClassSelectionContainer.addEventListener('click', (e) => {
+        if (e.target.classList.contains('nice-class-box')) {
+            const classNo = e.target.dataset.classNo;
+            const isPermanent = e.target.classList.contains('permanent-item'); // Kalıcı olup olmadığını kontrol et
+            
+            if (isPermanent) {
+                showNotification('Bu sınıf orijinal marka sınıfı olduğu için kaldırılamaz.', 'warning');
+                return;
+            }
+            
+            e.target.classList.toggle('selected');
+            
+            if (e.target.classList.contains('selected')) {
+                addListItem(niceClassSearchList, classNo);
+            } else {
+                removeListItem(niceClassSearchList, classNo);
+            }
+        }
+    });
+
+    // Marka Adı ekle
+    const addBrandText = () => {
+        const value = brandTextSearchInput.value.trim();
+        if (value) {
+            addListItem(brandTextSearchList, value);
+            brandTextSearchInput.value = '';
+        }
+    };
+    addBrandTextBtn.addEventListener('click', addBrandText);
+    brandTextSearchInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            addBrandText();
+        }
+    });
+
+    // Kayıtları silme (tüm listeler için genel)
+    document.querySelectorAll('.list-group').forEach(list => {
+        list.addEventListener('click', (e) => {
+            const listItem = e.target.closest('li');
+            if (listItem && e.target.classList.contains('remove-item')) {
+                if (listItem.classList.contains('permanent-item')) {
+                    showNotification('Bu öğe orijinal marka bilgisi olduğu için kaldırılamaz.', 'warning');
+                    return;
+                }
+                const textContent = listItem.querySelector('.list-item-text').textContent;
+                listItem.remove();
+                if (list.id === 'niceClassSearchList') {
+                    const box = document.querySelector(`.nice-class-box[data-class-no="${textContent}"]`);
+                    if (box) box.classList.remove('selected');
+                }
+                if (list.children.length === 0) {
+                    const emptyItem = document.createElement('li');
+                    emptyItem.className = "list-group-item text-muted";
+                    emptyItem.textContent = list.id === 'brandTextSearchList' ? 'Aranacak marka adı listesi.' : 'Aranacak Nice Sınıfı listesi.';
+                    list.appendChild(emptyItem);
+                }
+            }
+        });
+    });
+    
+    // Kaydetme İşlemi
+    saveCriteriaBtn.addEventListener('click', async () => {
+        const modal = document.getElementById('editCriteriaModal');
+        const brandTextArray = Array.from(modal.querySelector('#brandTextSearchList').querySelectorAll('.list-item-text')).map(el => el.textContent);
+        const niceClassArray = Array.from(modal.querySelector('#niceClassSearchList').querySelectorAll('.list-item-text')).map(el => parseInt(el.textContent)).filter(n => !isNaN(n));
+        const originalMarkId = modal.dataset.markId;
+
+        if (!originalMarkId) {
+            showNotification('Orijinal marka kimliği bulunamadı. İşlem iptal edildi.', 'error');
+            return;
+        }
+
+        try {
+            const res = await monitoringService.updateMonitoringItem(originalMarkId, {
+                brandTextSearch: brandTextArray,
+                niceClassSearch: niceClassArray
+            });
+            if (res.success) {
+                showNotification('İzleme kriterleri başarıyla güncellendi.', 'success');
+                $('#editCriteriaModal').modal('hide');
+            } else {
+                showNotification('Kriterler güncellenirken hata oluştu: ' + res.error, 'error');
+            }
+        } catch (error) {
+            console.error('Kriter kaydetme hatası:', error);
+            showNotification('Kriterler güncellenirken beklenmeyen bir hata oluştu.', 'error');
+        }
+    });
+}
+
+function populateNiceClassBoxes(selectedClasses, permanentClasses = []) {
+    document.querySelectorAll('.nice-class-box').forEach(box => {
+        if (box) {
+            box.classList.remove('selected');
+            box.classList.remove('permanent-item');
+        }
+    });
+
+    const selectedClassesString = (selectedClasses || []).map(cls => String(cls)).filter(cls => cls !== 'null' && cls !== 'undefined' && cls.trim() !== '');
+    const permanentClassesString = (permanentClasses || []).map(cls => String(cls)).filter(cls => cls !== 'null' && cls !== 'undefined' && cls.trim() !== '');
+    const allNiceClasses = new Set([...selectedClassesString, ...permanentClassesString]);
+
+    const niceClassSearchList = document.getElementById('niceClassSearchList');
+    if (niceClassSearchList) {
+        populateList(niceClassSearchList, [], permanentClassesString);
+    }
+
+    allNiceClasses.forEach(cls => {
+        const classNum = parseInt(cls);
+        if (isNaN(classNum) || (classNum < 1 || classNum > 45) && classNum !== 99) {
+            console.warn(`Geçersiz sınıf numarası: ${cls}`);
+            return;
+        }
+
+        const box = document.querySelector(`.nice-class-box[data-class-no="${cls}"]`);
+        if (box) {
+            box.classList.add('selected');
+            
+            if (permanentClassesString.includes(cls)) {
+                box.classList.add('permanent-item');
+            }
+            
+            if (niceClassSearchList) {
+                const listItem = addListItem(niceClassSearchList, cls);
+                if (listItem && permanentClassesString.includes(cls)) {
+                    listItem.classList.add('permanent-item');
+                }
+            }
+        } else {
+            console.warn(`Nice class number ${cls} could not be found in the UI.`);
+        }
+    });
+}
+
+function addListItem(listElement, text, isPermanent = false) {
+    const emptyItem = listElement.querySelector('.list-group-item.text-muted');
+    if (emptyItem) {
+        emptyItem.remove();
+    }
+    
+    const existingItems = Array.from(listElement.querySelectorAll('.list-item-text')).map(el => el.textContent);
+    if (existingItems.includes(text)) {
+        return;
+    }
+
+    const li = document.createElement('li');
+    li.className = 'list-group-item d-flex justify-content-between align-items-center';
+    if (isPermanent) {
+        li.classList.add('permanent-item');
+    }
+    li.innerHTML = `<span class="list-item-text">${text}</span><button type="button" class="btn btn-sm btn-danger remove-item">&times;</button>`;
+    listElement.appendChild(li);
+    return li;
+}
+
+function removeListItem(listElement, text) {
+    const items = listElement.querySelectorAll('li');
+    for (let item of items) {
+        if (item.querySelector('.list-item-text').textContent === text) {
+            if (item.classList.contains('permanent-item')) {
+                 showNotification('Bu öğe orijinal marka bilgisi olduğu için kaldırılamaz.', 'warning');
+                 return;
+            }
+            item.remove();
+            break;
+        }
+    }
+    if (listElement.children.length === 0) {
+         const emptyItem = document.createElement('li');
+         emptyItem.className = "list-group-item text-muted";
+         emptyItem.textContent = listElement.id === 'brandTextSearchList' ? 'Aranacak marka adı listesi.' : 'Aranacak Nice Sınıfı listesi.';
+         listElement.appendChild(emptyItem);
+    }
+}
+
+function populateList(listElement, items, permanentItems = []) {
+    listElement.innerHTML = '';
+    const allItems = new Set([...items.map(String), ...permanentItems.map(String)]);
+    if (allItems.size > 0) {
+        allItems.forEach(item => {
+            const isPermanent = permanentItems.includes(item);
+            addListItem(listElement, item, isPermanent);
+        });
+    } else {
+        const emptyItem = document.createElement('li');
+        emptyItem.className = "list-group-item text-muted";
+        emptyItem.textContent = listElement.id === 'brandTextSearchList' ? 'Aranacak marka adı listesi.' : 'Aranacak Nice Sınıfı listesi.';
+        listElement.appendChild(emptyItem);
+    }
+}
+// --- MODAL İÇİN YARDIMCI FONKSİYONLARIN SONU ---
+
 // --- Hover Efektleri (DOM) ---
 const setupImageHoverEffect = () => {
     const tbody = document.getElementById('monitoringListBody');
@@ -331,7 +544,6 @@ const setupImageHoverEffect = () => {
     tbody.addEventListener('mouseenter', handleMouseEnter, true);
     tbody.addEventListener('mouseleave', handleMouseLeave, true);
 };
-
 
 // --- Initialization and Data Loading (Başlangıç ve Veri Yükleme) ---
 const initializePagination = () => {
@@ -495,6 +707,20 @@ const renderCurrentPageOfResults = () => {
         const applicationNumber = _pickAppNo(null, tmMeta);
         const groupHeaderRow = document.createElement('tr');
         groupHeaderRow.classList.add('group-header');
+        
+        // Modal için veriyi hazırlama
+        const modalData = {
+            id: tmMeta.id,
+            markName: headerName,
+            applicationNumber: applicationNumber,
+            owner: _pickOwners(null, tmMeta, allPersons),
+            niceClasses: getNiceClassNumbers(tmMeta),
+            brandImageUrl: headerImg,
+            brandTextSearch: tmMeta.brandTextSearch || [],
+            niceClassSearch: tmMeta.niceClassSearch || []
+        };
+        groupHeaderRow.dataset.markData = JSON.stringify(modalData);
+
         groupHeaderRow.innerHTML = `
             <td colspan="9">
                 <div class="group-title">
@@ -502,11 +728,11 @@ const renderCurrentPageOfResults = () => {
                         ${headerImg ? `<img src="${headerImg}" alt="${headerName}" class="group-header-img">` : `<div class="group-header-placeholder"><strong>${headerName.charAt(0).toUpperCase()}</strong></div>`}
                     </div>
                     <span><strong>${headerName}</strong> markası için bulunan benzer sonuçlar (${groupResults.length} adet)</span>
+                    <button class="btn btn-sm btn-secondary edit-criteria-btn">Kriteri Düzenle</button>
                 </div>
             </td>
         `;
         resultsTableBody.appendChild(groupHeaderRow);
-        // Ensure header image is resolved from the most reliable source
         try { resolveGroupHeaderImage(tmMeta, groupHeaderRow); } catch(e) { console.warn(e); }
         groupResults.forEach((hit, index) => resultsTableBody.appendChild(createResultRow(hit, pagination.getStartIndex() + index + 1)));
     });
@@ -517,7 +743,6 @@ const createResultRow = (hit, rowIndex) => {
     const holders = Array.isArray(hit.holders) ? hit.holders.map(h => h.name || h.id).filter(Boolean).join(', ') : (hit.holders || '');
     const monitoredTrademark = monitoringTrademarks.find(tm => tm.id === hit.monitoredTrademarkId) || {};
     
-    // Nice Sınıfı Renklendirme Mantığı
     const niceClassesArray = (Array.isArray(hit.niceClasses) ? hit.niceClasses : (hit.niceClasses?.split('/')?.map(c => c.trim()) || [])).filter(Boolean);
     const monitoredNiceClassNumbers = (monitoredTrademark?.niceClassSearch || []).map(String);
     const goodsAndServicesByClassNumbers = getNiceClassNumbers(monitoredTrademark).map(String);
@@ -757,20 +982,6 @@ const handleNoteCellClick = (cell) => {
 };
 
 const attachEventListeners = () => {
-    // Kriterleri Düzenle bağlantıları
-    resultsTableBody.querySelectorAll('.edit-criteria-link').forEach(a => {
-        a.addEventListener('click', (e) => {
-            e.preventDefault();
-            const tmId = a.dataset.tmid;
-            if (typeof window.openCriteriaEditorFor === 'function') {
-                window.openCriteriaEditorFor(tmId);
-            } else {
-                try { localStorage.setItem('OPEN_CRITERIA_FOR_TM_ID', tmId); } catch {}
-                window.location.href = 'monitoring-trademarks.html#openCriteria';
-            }
-        });
-    });
-    
     resultsTableBody.querySelectorAll('.action-btn').forEach(btn => btn.addEventListener('click', handleSimilarityToggle));
     resultsTableBody.querySelectorAll('.bs-select').forEach(select => select.addEventListener('change', handleBsChange));
     resultsTableBody.querySelectorAll('.note-cell').forEach(cell => cell.addEventListener('click', () => handleNoteCellClick(cell)));
@@ -847,7 +1058,72 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('closeNoteModal').addEventListener('click', () => document.getElementById('noteModal').classList.remove('show'));
     document.getElementById('cancelNoteBtn').addEventListener('click', () => document.getElementById('noteModal').classList.remove('show'));
     
+    // Kriterleri Düzenle modalı için listener
+    document.getElementById('resultsTableBody').addEventListener('click', (e) => {
+        const editButton = e.target.closest('.edit-criteria-btn');
+        if (editButton) {
+            e.stopPropagation();
+            const row = editButton.closest('tr.group-header');
+            if (row && row.dataset.markData) {
+                const markData = JSON.parse(row.dataset.markData);
+                openEditCriteriaModal(markData);
+            }
+        }
+    });
+
     if (bulletinSelect.value) {
         checkCacheAndToggleButtonStates();
     }
+
+    setupEditCriteriaModal(); // Modal'ı başlat
 });
+
+/**
+ * Modalı açmak ve verileri yüklemek için yeni fonksiyon.
+ */
+function openEditCriteriaModal(markData) {
+    const modal = document.getElementById('editCriteriaModal');
+    const modalTitle = document.getElementById('editCriteriaModalLabel');
+    const trademarkNameEl = document.getElementById('modalTrademarkName');
+    const applicationNoEl = document.getElementById('modalApplicationNo');
+    const ownerEl = document.getElementById('modalOwner');
+    const niceClassEl = document.getElementById('modalNiceClass');
+    const brandTextList = document.getElementById('brandTextSearchList');
+    const niceClassSelectionContainer = document.getElementById('niceClassSelectionContainer');
+    const modalImage = document.getElementById('modalTrademarkImage');
+
+    modalTitle.textContent = `Kriterleri Düzenle: ${markData.markName}`;
+    trademarkNameEl.textContent = markData.markName || '-';
+    applicationNoEl.textContent = markData.applicationNumber || '-';
+    ownerEl.textContent = markData.owner || '-';
+    niceClassEl.textContent = Array.isArray(markData.niceClasses) ? markData.niceClasses.join(', ') : '-';
+    
+    const imageUrl = markData.brandImageUrl && markData.brandImageUrl.startsWith('http')
+        ? markData.brandImageUrl
+        : `https://firebasestorage.googleapis.com/v0/b/ip-manager-production-aab4b.appspot.com/o/${encodeURIComponent(markData.brandImageUrl)}?alt=media`;
+    modalImage.src = imageUrl;
+    modalImage.alt = markData.markName;
+
+    modal.dataset.markId = markData.id;
+
+    const permanentBrandText = [markData.markName].filter(Boolean);
+    const permanentNiceClasses = markData.niceClasses.map(String);
+
+    const existingBrandTextSearch = markData.brandTextSearch || [];
+    const existingNiceClassSearch = markData.niceClassSearch || [];
+
+    populateList(brandTextList, existingBrandTextSearch, permanentBrandText);
+    
+    niceClassSelectionContainer.innerHTML = '';
+    for (let i = 1; i <= 45; i++) {
+        const box = document.createElement('div');
+        box.className = 'nice-class-box';
+        box.textContent = i;
+        box.dataset.classNo = i;
+        niceClassSelectionContainer.appendChild(box);
+    }
+    
+    populateNiceClassBoxes(existingNiceClassSearch, permanentNiceClasses);
+    
+    $('#editCriteriaModal').modal('show');
+}
