@@ -1608,7 +1608,7 @@ async saveTrademarkPortfolio(portfolioData) {
                 aripoIR: origin === 'ARIPO' ? internationalRegNumber : null,
 
                 // Başvuru numarası yok
-                applicationNumber: null,
+                applicationNumber: internationalRegNumber,
                 registrationNumber: null,
                 applicationDate: applicationDate || null,
                 registrationDate: registrationDate || null,
