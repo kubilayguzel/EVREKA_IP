@@ -727,8 +727,10 @@ const renderCurrentPageOfResults = () => {
                     <div class="group-trademark-image">
                         ${headerImg ? `<img src="${headerImg}" alt="${headerName}" class="group-header-img">` : `<div class="group-header-placeholder"><strong>${headerName.charAt(0).toUpperCase()}</strong></div>`}
                     </div>
-                    <span><strong>${headerName}</strong> markası için bulunan benzer sonuçlar (${groupResults.length} adet)</span>
-                    <button class="btn btn-sm btn-secondary edit-criteria-btn">Kriteri Düzenle</button>
+                    <span>
+                        <a href="#" class="edit-criteria-link" data-tmid="${tmMeta.id}"><strong>${headerName}</strong></a>
+                        markası için bulunan benzer sonuçlar (${groupResults.length} adet)
+                    </span>
                 </div>
             </td>
         `;
@@ -1060,9 +1062,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     // Kriterleri Düzenle modalı için listener
     document.getElementById('resultsTableBody').addEventListener('click', (e) => {
-        const editButton = e.target.closest('.edit-criteria-btn');
+        const editButton = e.target.closest('.edit-criteria-link');
         if (editButton) {
-            e.stopPropagation();
+            e.preventDefault(); // Varsayılan link davranışını engelle
             const row = editButton.closest('tr.group-header');
             if (row && row.dataset.markData) {
                 const markData = JSON.parse(row.dataset.markData);
