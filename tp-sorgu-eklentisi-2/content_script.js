@@ -474,7 +474,28 @@ async function parseDetailsFromOpenDialog(dialogRoot) {
         }
       }
     }
-    
+        
+    // Ekstra: Tüm tr'lerde Key-Value arama (table dışında da olabilir)
+    const allRows = dialogRoot.querySelectorAll('tr');
+    for (const row of allRows) {
+      const cells = row.querySelectorAll('td');
+      if (cells.length === 4) {
+        // 4 hücreli: Key1, Value1, Key2, Value2
+        const key1 = cells[0].textContent.trim();
+        const value1 = cells[1].textContent.trim();
+        const key2 = cells[2].textContent.trim();
+        const value2 = cells[3].textContent.trim();
+        
+        if (key1 && value1 && !data.fields[key1]) data.fields[key1] = value1;
+        if (key2 && value2 && !data.fields[key2]) data.fields[key2] = value2;
+      } else if (cells.length === 2) {
+        // 2 hücreli: Key, Value
+        const key = cells[0].textContent.trim();
+        const value = cells[1].textContent.trim();
+        
+        if (key && value && !data.fields[key]) data.fields[key] = value;
+      }
+    }
     // Hızlı genel bilgi toplama
     const fieldsets = dialogRoot.querySelectorAll('fieldset');
     for (const fieldset of fieldsets) {
