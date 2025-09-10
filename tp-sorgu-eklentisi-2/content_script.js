@@ -447,6 +447,32 @@ async function parseDetailsFromOpenDialog(dialogRoot) {
           }
         }
       }
+      // GENEL BİLGİ TABLOSU kontrolü (Key-Value tarzı: "Durumu", "Koruma Tarihi" vb.)
+      else {
+        // 2 kolonlu Key-Value tablolarını kontrol et
+        for (const row of rows) {
+          const cells = row.querySelectorAll('td, .MuiTableCell-body');
+          if (cells.length === 4 || cells.length === 2) {
+            // 4 kolonlu: Key1, Value1, Key2, Value2 formatı
+            if (cells.length === 4) {
+              const key1 = cells[0].textContent.trim();
+              const value1 = cells[1].textContent.trim();
+              const key2 = cells[2].textContent.trim();
+              const value2 = cells[3].textContent.trim();
+              
+              if (key1 && value1) data.fields[key1] = value1;
+              if (key2 && value2) data.fields[key2] = value2;
+            }
+            // 2 kolonlu: Key, Value formatı
+            else if (cells.length === 2) {
+              const key = cells[0].textContent.trim();
+              const value = cells[1].textContent.trim();
+              
+              if (key && value) data.fields[key] = value;
+            }
+          }
+        }
+      }
     }
     
     // Hızlı genel bilgi toplama
