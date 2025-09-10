@@ -320,6 +320,7 @@ export async function mapTurkpatentToIPRecord(turkpatentData, selectedApplicants
     title: brandName || 'Başlıksız Marka',
     type: 'trademark',
     portfoyStatus: 'active',
+    origin: 'TÜRKPATENT',
 
     // Durum - Sadece GEÇERSİZ ise "rejected", yoksa null
     status: mappedStatus,
