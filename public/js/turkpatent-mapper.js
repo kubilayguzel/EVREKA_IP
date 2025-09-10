@@ -299,17 +299,31 @@ export async function mapTurkpatentToIPRecord(turkpatentData, selectedApplicants
     }
   }
 
-  // 2) STATUS - TÜRKPATENT statusunu utils'deki mapper ile dönüştür
-  let turkpatentStatus = details?.['Durumu'] || details?.['Status'] || details?.['Durum'] || status;
+// 2) STATUS - TÜRKPATENT statusunu utils'deki mapper ile dönüştür
 
-  console.log('🔍 Status kaynakları:');
-  console.log('  - details.Durumu:', details?.['Durumu']);
-  console.log('  - details.Status:', details?.['Status']);  
-  console.log('  - details.Durum:', details?.['Durum']);
-  console.log('  - status parametresi:', status);
-  console.log('  - Seçilen turkpatentStatus:', turkpatentStatus);
+let turkpatentStatus = details?.['Durumu'] || details?.['Status'] || details?.['Durum'] || status;
 
-  const mappedStatus = mapStatusToUtils(turkpatentStatus);
+// Eğer details'ta durum yoksa, transactions'tan çıkar
+if (!turkpatentStatus && Array.isArray(transactions)) {
+  // Son transaction'da "GEÇERSİZ" varsa rejected
+  const lastTransaction = transactions[transactions.length - 1];
+  if (lastTransaction?.description) {
+    const desc = lastTransaction.description.toUpperCase();
+    if (desc.includes('BAŞVURU/TESCİL GEÇERSİZ') || desc.includes('GEÇERSİZ')) {
+      turkpatentStatus = 'MARKA BAŞVURUSU/TESCİLİ GEÇERSİZ';
+    }
+  }
+}
+
+console.log('🔍 Status kaynakları:');
+console.log('  - details.Durumu:', details?.['Durumu']);
+console.log('  - details.Status:', details?.['Status']);  
+console.log('  - details.Durum:', details?.['Durum']);
+console.log('  - status parametresi:', status);
+console.log('  - transactions son kayıt:', transactions?.[transactions.length - 1]?.description);
+console.log('  - Seçilen turkpatentStatus:', turkpatentStatus);
+
+const mappedStatus = mapStatusToUtils(turkpatentStatus);
   
   // 3) BULLETINS - Bülten bilgilerini details'tan al
   const bulletins = [];
