@@ -555,18 +555,26 @@ cursor: pointer;
             window.indexingDetailModule = new IndexingDetailModule();
             loadSharedLayout({ activeMenuLink: 'bulk-indexing-page.html' });
 
-            const kickoff = () => {
-                const rec = window.indexingDetailModule?.matchedRecord;
-                if (rec?.id && window.IndexingPortfolioUpdate?.init) {
-                    window.IndexingPortfolioUpdate.init({ ipRecordId: rec.id });
-                    const sec = document.getElementById('portfolio-hero-nice-module');
-                    if (sec) sec.style.display = 'block';
-                    return;
-                }
+        const kickoff = () => {
+            const rec = window.indexingDetailModule?.matchedRecord;
+            if (rec?.id && window.IndexingPortfolioUpdate?.init) {
+                console.log('✅ Kayıt bulundu, portfolio update başlatılıyor:', rec.id);
+                window.IndexingPortfolioUpdate.init({ ipRecordId: rec.id });
+                const sec = document.getElementById('portfolio-hero-nice-module');
+                if (sec) sec.style.display = 'block';
+                return;
+            }
+            // Sürekli tekrar yerine sadece 5 kez dene ve dur
+            if (!window.kickoffAttempts) window.kickoffAttempts = 0;
+            window.kickoffAttempts++;
+            
+            if (window.kickoffAttempts < 5) {
                 setTimeout(kickoff, 400);
-            };
-            kickoff();
-        });
+            } else {
+                console.log('⚠️ Kickoff maksimum deneme sayısına ulaştı, durduruluyor');
+            }
+        };
+      });
     </script>
 </body>
 </html>
