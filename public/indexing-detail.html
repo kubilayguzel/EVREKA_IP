@@ -259,13 +259,49 @@
     font-size: 14px;    /* yazı boyutu biraz büyüsün */
     padding: 8px 10px;  /* iç boşluk */
 }
-        #wipoAripoSelectModal .modal-dialog {
-            max-width: 600px;
-        }
-        #wipoAripoSelectModal .list-group-item.list-group-item-action {
-            cursor: pointer;
-        }
-    </style>
+#wipoAripoSelectModal .modal-dialog {
+max-width: 600px;
+}
+#wipoAripoSelectModal .list-group-item.list-group-item-action {
+cursor: pointer;
+}
+
+/* WIPO/ARIPO Select Modal için özel CSS */
+#wipoAripoSelectModal.modal {
+    background-color: rgba(0, 0, 0, 0.5) !important;
+}
+
+#wipoAripoSelectModal .modal-dialog {
+    z-index: 1057;
+}
+
+#wipoAripoSelectModal.fade:not(.show) {
+    opacity: 0;
+}
+
+#wipoAripoSelectModal.fade.show {
+    opacity: 1;
+}
+
+/* Bootstrap modal backdrop için */
+.modal-backdrop {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    z-index: 1055 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    background-color: rgba(0, 0, 0, 0.5) !important;
+}
+
+.modal-backdrop.fade {
+    opacity: 0;
+}
+
+.modal-backdrop.show {
+    opacity: 0.5;
+}
+</style>
 </head>
 <body>
     <div id="notification-container" class="notification-container"></div>
@@ -460,8 +496,7 @@
         </div>
     </div>
 
-    <div class="modal fade" id="wipoAripoSelectModal" tabindex="-1" role="dialog" aria-labelledby="wipoAripoSelectModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered" role="document">
+    <div class="modal fade" id="wipoAripoSelectModal" tabindex="-1" role="dialog" aria-labelledby="wipoAripoSelectModalLabel" aria-hidden="true" style="z-index: 1056;"></div>        <div class="modal-dialog modal-dialog-centered" role="document">
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title" id="wipoAripoSelectModalLabel">İşlem Yapılacak Portföy Kaydını Seçin</h5>
