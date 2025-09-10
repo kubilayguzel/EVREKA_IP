@@ -299,12 +299,9 @@ export async function mapTurkpatentToIPRecord(turkpatentData, selectedApplicants
     }
   }
 
-  // 2) STATUS - Sadece GEÇERSİZ durumunda "rejected", yoksa null
-  let mappedStatus = null;
-  if (status && status.toUpperCase().includes('GEÇERSİZ')) {
-    mappedStatus = 'rejected';
-  }
-
+  // 2) STATUS - TÜRKPATENT statusunu utils'deki mapper ile dönüştür
+  const mappedStatus = mapStatusToUtils(status);
+  
   // 3) BULLETINS - Bülten bilgilerini details'tan al
   const bulletins = [];
   
@@ -322,7 +319,7 @@ export async function mapTurkpatentToIPRecord(turkpatentData, selectedApplicants
     portfoyStatus: 'active',
     origin: 'TÜRKPATENT',
 
-    // Durum - Sadece GEÇERSİZ ise "rejected", yoksa null
+    // Durum
     status: mappedStatus,
     recordOwnerType: 'self',
 
@@ -330,7 +327,7 @@ export async function mapTurkpatentToIPRecord(turkpatentData, selectedApplicants
     applicationNumber: applicationNumber || null,
     applicationDate: formatDate(applicationDate),
     registrationNumber: registrationNumber || details?.['Tescil Numarası'] || null,
-    registrationDate: registrationDate, // ✅ Düzeltildi
+    registrationDate: registrationDate,
     renewalDate: formatDate(details?.['Yenileme Tarihi']),
 
     // Marka bilgileri
@@ -348,7 +345,7 @@ export async function mapTurkpatentToIPRecord(turkpatentData, selectedApplicants
       details
     ),
 
-    // Bültenler - ✅ Düzeltildi
+    // Bültenler
     bulletins: bulletins,
 
     // Rüçhan (varsa)
