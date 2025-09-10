@@ -71,7 +71,7 @@ export function mapStatusToUtils(turkpatentStatus) {
   console.log('🔍 İşlenecek string:', s);
 
   // Sadece geçersiz durumu kontrol et
-  if (/geçersiz/i.test(s)) {
+  if (/GEÇERSİZ/i.test(s)) {
     console.log('✅ REJECTED dönülüyor (geçersiz bulundu)');
     return 'rejected';
   }
