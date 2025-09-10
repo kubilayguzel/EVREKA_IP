@@ -300,7 +300,16 @@ export async function mapTurkpatentToIPRecord(turkpatentData, selectedApplicants
   }
 
   // 2) STATUS - TÜRKPATENT statusunu utils'deki mapper ile dönüştür
-  const mappedStatus = mapStatusToUtils(status);
+  let turkpatentStatus = details?.['Durumu'] || details?.['Status'] || details?.['Durum'] || status;
+
+  console.log('🔍 Status kaynakları:');
+  console.log('  - details.Durumu:', details?.['Durumu']);
+  console.log('  - details.Status:', details?.['Status']);  
+  console.log('  - details.Durum:', details?.['Durum']);
+  console.log('  - status parametresi:', status);
+  console.log('  - Seçilen turkpatentStatus:', turkpatentStatus);
+
+  const mappedStatus = mapStatusToUtils(turkpatentStatus);
   
   // 3) BULLETINS - Bülten bilgilerini details'tan al
   const bulletins = [];
