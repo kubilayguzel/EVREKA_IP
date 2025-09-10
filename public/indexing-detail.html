@@ -574,7 +574,15 @@ cursor: pointer;
                 console.log('⚠️ Kickoff maksimum deneme sayısına ulaştı, durduruluyor');
             }
         };
-      });
-    </script>
+        // Modal sadece kullanıcı aksiyonu ile açılsın
+        window.manualKickoff = () => {
+            window.kickoffAttempts = 0;
+            kickoff();
+        };
+
+        // Debugging için
+        console.log('🔍 İndeksleme detay sayfası yüklendi. Manual başlatma için: window.manualKickoff()');
+    });
+</script>
 </body>
 </html>
