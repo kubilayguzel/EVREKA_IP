@@ -522,13 +522,44 @@ searchRecords(query) {
     }
 
     clearSelectedRecord() {
-        this.matchedRecord = null;
-        this.selectedTransactionId = null;
-        this.currentTransactions = [];
-        // selectedRecordDisplay ile ilgili kod kaldırıldı
-        document.getElementById('transactionSection').style.display = 'none';
-        document.getElementById('childTransactionInputs').style.display = 'none';
-        this.checkFormCompleteness();
+    // state’i sıfırla
+    this.matchedRecord = null;
+    this.selectedTransactionId = null;
+    this.currentTransactions = [];
+
+    // seçili kartı tamamen kaldır
+    const selected = document.getElementById('selectedRecordDisplay');
+    if (selected) {
+        selected.innerHTML = '';
+        selected.style.display = 'none';
+    }
+
+    // ana işlem bölümü gizle ve içeriğini sıfırla
+    const txSection = document.getElementById('transactionSection');
+    const txList    = document.getElementById('transactionsList');
+    if (txSection) txSection.style.display = 'none';
+    if (txList)    txList.innerHTML = '<p class="text-muted">Lütfen önce bir kayıt seçin.</p>';
+
+    // alt işlem alanını gizle ve alanları sıfırla
+    const childWrap = document.getElementById('childTransactionInputs');
+    const childSel  = document.getElementById('childTransactionType');
+    const delInput  = document.getElementById('deliveryDate');
+    if (childWrap) childWrap.style.display = 'none';
+    if (childSel) {
+        childSel.innerHTML = '<option value="" disabled selected>Alt işlem türü seçin...</option>';
+        childSel.value = '';
+    }
+    if (delInput) delInput.value = '';
+
+    // arama kutusunu hazırla
+    const search = document.getElementById('recordSearchInput');
+    if (search) {
+        search.value = '';
+        search.focus();
+        search.style.display = 'block';
+    }
+
+    this.checkFormCompleteness();
     }
 
     async loadTransactionsForRecord() {
