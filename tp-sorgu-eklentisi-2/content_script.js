@@ -392,15 +392,32 @@ async function parseDetailsFromOpenDialog(dialogRoot) {
     // Hızlı tablo parsing - tek geçişte her şeyi topla
     const allTables = dialogRoot.querySelectorAll('table, .MuiTable-root');
     
-    for (const table of allTables) {
-      const headers = table.querySelectorAll('th, .MuiTableCell-head');
-      const headerTexts = Array.from(headers).map(h => h.textContent.trim());
-      
-      const tbody = table.querySelector('tbody, .MuiTableBody-root');
-      if (!tbody) continue;
-      
-      const rows = tbody.querySelectorAll('tr, .MuiTableRow-root');
-      
+  for (const table of allTables) {
+    const headers = table.querySelectorAll('th, .MuiTableCell-head');
+    const headerTexts = Array.from(headers).map(h => h.textContent.trim());
+    
+    const tbody = table.querySelector('tbody, .MuiTableBody-root');
+    if (!tbody) continue;
+    
+    const rows = tbody.querySelectorAll('tr, .MuiTableRow-root');
+    
+    // ÖNCELİK: Key-Value tablo parsing (Durumu vs. bilgiler için)
+    console.log('🔍 Toplam tablo satırı:', rows.length);
+    for (const row of rows) {
+      const cells = row.querySelectorAll('td, .MuiTableCell-body');
+      if (cells.length === 4) {
+        // 4 hücreli: Key1, Value1, Key2, Value2
+        const key1 = cells[0].textContent.trim();
+        const value1 = cells[1].textContent.trim();
+        const key2 = cells[2].textContent.trim();
+        const value2 = cells[3].textContent.trim();
+        
+        console.log('🔍 4 hücreli satır:', key1, '=', value1, '|', key2, '=', value2);
+        
+        if (key1 && value1) data.fields[key1] = value1;
+        if (key2 && value2) data.fields[key2] = value2;
+      }
+    }      
       // EŞYA TABLOSU kontrolü
       if (headerTexts.some(h => h.includes('Sınıf')) && 
           headerTexts.some(h => h.includes('Mal') || h.includes('Hizmet'))) {
