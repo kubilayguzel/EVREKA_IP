@@ -363,6 +363,8 @@ function findDetailButton(tr) {
 }
 
 async function parseDetailsFromOpenDialog(dialogRoot) {
+  console.log('🔍 parseDetailsFromOpenDialog çağrıldı');
+  
   if (!dialogRoot) return {};
 
   const data = {
@@ -533,7 +535,7 @@ async function parseDetailsFromOpenDialog(dialogRoot) {
   } catch (e) {
     console.warn('Modal parse hatası:', e);
   }
-  
+ console.log('🔍 Final data.fields:', data.fields);
   return data;
 }
 
