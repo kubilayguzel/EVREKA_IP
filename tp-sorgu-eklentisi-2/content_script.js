@@ -567,105 +567,99 @@ async function openRowModalAndParse(tr, { timeout = 10000 } = {}) {
 
 // --------- Sonuç Toplama ---------
 
-// SİL: parseOwnerRowBase fonksiyonunu
-
-// DEĞIŞTIR/EKLE:
 function parseOwnerRowBase(tr, idx) {
   const orderTxt = (tr.querySelector('td .MuiTypography-alignCenter') || tr.querySelector('td'))?.textContent || `${idx+1}`;
-  
-  // Tüm hücreleri al
   const tds = Array.from(tr.querySelectorAll('td'));
-  
+
   // DEBUG: İlk 3 satır için detaylı log
   if (idx < 3) {
     console.log(`🔍 DETAY - Satır ${idx + 1}:`);
     console.log(`   Toplam hücre: ${tds.length}`);
     tds.forEach((td, i) => {
-      const text = td.textContent.trim();
+      const text = (td.textContent || '').trim();
       console.log(`   Hücre ${i}: "${text}" (${text.length} karakter)`);
     });
   }
-  
+
   let applicationNumber = '';
   let brandName = '';
   let ownerName = '';
   let applicationDate = '';
   let registrationNumber = '';
-  let status = '';
+  let status = ''; // <-- ham TÜRKPATENT metni olarak tutulacak
   let niceClasses = '';
   let imageSrc = null;
 
-  // Görsel arama
+  // Görsel
   const img1 = tr.querySelector('img');
   if (img1?.src) imageSrc = img1.src;
 
-  // Owner name'i role'dan al
+  // Owner name (role)
   const ownerElement = tr.querySelector('td[role="holdName"]');
   if (ownerElement) {
     ownerName = ownerElement.textContent.trim().replace(/\s*\(\d+\)\s*$/, '');
   }
 
-  // TÜM HÜCRELERİ TARA - başvuru numarası formatını ara
+  // TÜM HÜCRELERİ TARA (önce STATÜ, sonra diğer alanlar)
   for (let i = 0; i < tds.length; i++) {
     const cellText = (tds[i]?.textContent || '').trim();
-    
-    // Başvuru numarası: 2022/125224 gibi formatlar
+
+    // --- STATÜ YAKALAMA (ham metinle) ---
+    if (!status) {
+      // En net kalıp: MARKA BAŞVURUSU/TESCİLİ GEÇERSİZ
+      if (/MARKA\s*BAŞVURUSU\/TESCİLİ\s*GEÇERSİZ/i.test(cellText)) {
+        status = 'MARKA BAŞVURUSU/TESCİLİ GEÇERSİZ';
+      }
+    }
+
+    // Başvuru numarası: 2022/125224 gibi
     if (!applicationNumber && /^((?:19|20)\d{2}|\d{2})\/\d+$/.test(cellText)) {
-      applicationNumber = cellText;
-        applicationNumber = normalizeAppNo(applicationNumber);
+      applicationNumber = normalizeAppNo(cellText);
       if (idx < 3) console.log(`   ✅ Başvuru no ${i}. hücrede bulundu: "${applicationNumber}"`);
-      applicationNumber = normalizeAppNo(applicationNumber);
-      
-      // Başvuru numarası bulunduysa, diğer alanları sırayla dene
+
+      // Marka adı (bir sonraki hücre)
       if (tds[i + 1] && !brandName) {
-        const nextCell = tds[i + 1].textContent.trim();
-        if (nextCell && !nextCell.includes('LİMİTED') && !nextCell.includes('ŞİRKETİ')) {
+        const nextCell = (tds[i + 1].textContent || '').trim();
+        if (nextCell && !/LİMİTED|ŞİRKETİ/i.test(nextCell)) {
           brandName = nextCell;
         }
       }
 
-    if (!status && /MARKA BAŞVURUSU\/TESCİLİ GEÇERSİZ/i.test(cellText)) {
-      status = 'rejected';
-      continue;
-    }
-      
+      // Başvuru tarihi (iki sonraki hücre)
       if (tds[i + 2] && !applicationDate) {
-        const dateCell = tds[i + 2].textContent.trim();
+        const dateCell = (tds[i + 2].textContent || '').trim();
         if (/^\d{2}\.\d{2}\.\d{4}$/.test(dateCell)) {
           applicationDate = dateCell;
         }
       }
-      
       continue;
     }
-    
+
     // Tarih formatı: DD.MM.YYYY
     if (!applicationDate && /^\d{2}\.\d{2}\.\d{4}$/.test(cellText)) {
       applicationDate = cellText;
       continue;
     }
-    
-    // Tescil numarası: 2022 125224 formatı
+
+    // Tescil numarası: "2022 125224" gibi
     if (!registrationNumber && /^\d{4}\s+\d+$/.test(cellText)) {
       registrationNumber = cellText;
       continue;
     }
-    
-    // Nice sınıfları: sayısal değerler içeren
+
+    // Nice sınıfları (metin içinde eğik çizgi vb. varsa)
     if (!niceClasses && /\d+/.test(cellText) && cellText.includes('/')) {
       niceClasses = cellText;
       continue;
     }
   }
-  
-  // Eğer hala başvuru numarası bulunamadıysa, daha esnek pattern dene
+
+  // Başvuru no hâlâ yoksa daha esnek tarama
   if (!applicationNumber) {
     for (let i = 0; i < tds.length; i++) {
       const cellText = (tds[i]?.textContent || '').trim();
-      
-      // Daha esnek pattern: herhangi bir yıl/sayı kombinasyonu
       if (/(?:\d{4}|\d{2})\/\d/.test(cellText) || /\d{4}-\d/.test(cellText)) {
-        applicationNumber = cellText;
+        applicationNumber = normalizeAppNo(cellText);
         if (idx < 3) console.log(`   ✅ Esnek pattern ile başvuru no bulundu: "${applicationNumber}"`);
         break;
       }
@@ -673,21 +667,22 @@ function parseOwnerRowBase(tr, idx) {
   }
 
   if (idx < 3) {
-    console.log(`   🔍 Parse sonucu - Başvuru No: "${applicationNumber}", Marka: "${brandName}", Tarih: "${applicationDate}"`);
+    console.log(`   🔍 Parse sonucu - Başvuru No: "${applicationNumber}", Marka: "${brandName}", Tarih: "${applicationDate}", Statü: "${status}"`);
   }
 
   return {
-    order: Number(orderTxt) || (idx+1),
+    order: Number(orderTxt) || (idx + 1),
     applicationNumber,
     brandName,
     ownerName,
     applicationDate,
     registrationNumber,
-    status,
+    status,        // <-- mapper'a ham metin gidecek
     niceClasses,
     imageSrc
   };
 }
+
 
 async function collectOwnerResultsWithDetails() {
   console.log('🔍 collectOwnerResultsWithDetails başladı');
