@@ -439,6 +439,69 @@ searchRecords(query) {
         if (this.matchedRecord) {
             document.getElementById('searchResultsContainer').style.display = 'none';
             document.getElementById('recordSearchInput').value = '';
+
+            // ✅ YENİ: Eğer seçilen kayıt bir WIPO/ARIPO parent kaydıysa, modal aç
+            if (this.matchedRecord.transactionHierarchy === 'parent' && (this.matchedRecord.wipoIR || this.matchedRecord.aripoIR)) {
+                this.showWipoAripoSelectModal(this.matchedRecord);
+            } else {
+                // Değilse normal akışa devam et
+                this.handleWipoAripoSelection(recordId);
+            }
+        }
+    }
+    
+    // ✅ YENİ FONKSİYON: WIPO/ARIPO kayıtları için modal göster
+    showWipoAripoSelectModal(parentRecord) {
+        const modal = document.getElementById('wipoAripoSelectModal');
+        const list = document.getElementById('wipoAripoRecordList');
+        if (!modal || !list) return;
+
+        const irNumber = parentRecord.wipoIR || parentRecord.aripoIR;
+        const matchingRecords = this.allRecords.filter(r => (r.wipoIR === irNumber || r.aripoIR === irNumber));
+        
+        list.innerHTML = '';
+        matchingRecords.forEach(record => {
+            const isParent = record.transactionHierarchy === 'parent';
+            const countryName = isParent ? record.origin : record.country;
+            const item = document.createElement('li');
+            item.className = 'list-group-item list-group-item-action';
+            item.dataset.id = record.id;
+            item.innerHTML = `
+                <div>
+                    <strong>${record.title}</strong>
+                    <span class="badge badge-secondary ml-2">${countryName}</span>
+                </div>
+                <small>${record.applicationNumber || record.wipoIR || record.aripoIR}</small>
+            `;
+            item.onclick = () => this.handleWipoAripoSelection(record.id);
+            list.appendChild(item);
+        });
+
+        // Modalı göster
+        $('#wipoAripoSelectModal').modal('show');
+    }
+
+    // ✅ YENİ FONKSİYON: WIPO/ARIPO modalından seçim yapıldığında çalışır
+    async handleWipoAripoSelection(recordId) {
+        // Modalı kapat
+        $('#wipoAripoSelectModal').modal('hide');
+
+        this.matchedRecord = this.allRecords.find(r => r.id === recordId);
+        if (this.matchedRecord) {
+            const recordDisplay = document.getElementById('selectedRecordDisplay');
+            recordDisplay.innerHTML = `
+                <div class="selected-item d-flex justify-content-between align-items-center">
+                    <span>
+                        <strong>${this.matchedRecord.title}</strong>
+                        (${this.matchedRecord.applicationNumber || this.matchedRecord.wipoIR || this.matchedRecord.aripoIR})
+                        <span class="badge badge-primary ml-2">${this.matchedRecord.country || this.matchedRecord.origin}</span>
+                    </span>
+                    <button type="button" class="remove-selected-item-btn" onclick="window.indexingDetailModule.clearSelectedRecord()">
+                        &times;
+                    </button>
+                </div>
+            `;
+            recordDisplay.style.display = 'block';
             await this.loadTransactionsForRecord();
         }
     }
@@ -893,10 +956,7 @@ async handleIndexing(opts = {}) { try {
     console.log("📌 Tetiklenen işlem bir child ve top-level selectable.");
 
     const recordTransactionsResult = await ipRecordsService.getRecordTransactions(this.matchedRecord.id);
-    if (!recordTransactionsResult.success) {
-        console.error("Portföy geçmişi alınamadı:", recordTransactionsResult.error);
-        showNotification("İşlem geçmişi yüklenemedi.", "error");
-    } else {
+    if (recordTransactionsResult.success) {
         const existingTransactions = recordTransactionsResult.data || [];
         console.log("🟢 Portföydeki mevcut işlemler:", existingTransactions);
 
@@ -957,6 +1017,9 @@ async handleIndexing(opts = {}) { try {
                 showNotification("Alt işlem kaydedilemedi.", "error");
             }
         }
+    } else {
+        console.error("Portföy geçmişi alınamadı:", recordTransactionsResult.error);
+        showNotification("İşlem geçmişi yüklenemedi.", "error");
     }
 }
                 } else {
@@ -1025,4 +1088,4 @@ async handleIndexing(opts = {}) { try {
     try { showNotification('İndeksleme sırasında hata: ' + (error?.message || error), 'error'); } catch(e) {}
     }
 }
-} 
+}
