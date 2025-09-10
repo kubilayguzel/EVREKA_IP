@@ -623,6 +623,11 @@ function parseOwnerRowBase(tr, idx) {
           brandName = nextCell;
         }
       }
+
+    if (!status && /MARKA BAŞVURUSU\/TESCİLİ GEÇERSİZ/i.test(cellText)) {
+      status = 'rejected';
+      continue;
+    }
       
       if (tds[i + 2] && !applicationDate) {
         const dateCell = tds[i + 2].textContent.trim();
