@@ -551,9 +551,12 @@ cursor: pointer;
         import { IndexingDetailModule } from './js/indexing-detail-module.js';
         import { loadSharedLayout } from './js/layout-loader.js';
 
-        document.addEventListener('DOMContentLoaded', () => {
-            window.indexingDetailModule = new IndexingDetailModule();
-            loadSharedLayout({ activeMenuLink: 'bulk-indexing-page.html' });
+    document.addEventListener('DOMContentLoaded', () => {
+        window.indexingDetailModule = new IndexingDetailModule();
+        loadSharedLayout({ activeMenuLink: 'bulk-indexing-page.html' });
+        
+        // Manuel init çağırma
+        window.indexingDetailModule.init();
 
         const kickoff = () => {
             const rec = window.indexingDetailModule?.matchedRecord;
