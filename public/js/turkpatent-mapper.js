@@ -58,20 +58,25 @@ function deriveStatusFromTransactions(transactions) {
  * - İçerikte "başvuru" ve net sonuç yoksa -> pending
  * - Aksi durumda null (boş bırak)
  */
-export function mapStatusToUtils(turkpatentStatus) {
-  if (!turkpatentStatus) return null;
-  const s = normalizeText(turkpatentStatus);
 
-  if (s.includes('geçersiz') || s.includes('redd') || /\bret\b/.test(s)) {
+export function mapStatusToUtils(turkpatentStatus) {
+  console.log('🔍 mapStatusToUtils çağrıldı:', turkpatentStatus);
+  
+  if (!turkpatentStatus) {
+    console.log('❌ turkpatentStatus boş');
+    return null;
+  }
+
+  const s = turkpatentStatus.toString().trim();
+  console.log('🔍 İşlenecek string:', s);
+
+  // Sadece geçersiz durumu kontrol et
+  if (/geçersiz/i.test(s)) {
+    console.log('✅ REJECTED dönülüyor (geçersiz bulundu)');
     return 'rejected';
   }
-  // "MARKA BAŞVURUSU/TESCİLİ GEÇERSİZ" özelini zaten yukarıdaki kapsıyor.
-  if (s.includes('tescil') && !s.includes('iptal') && !s.includes('hükümsüz') && !s.includes('geçersiz')) {
-    return 'registered';
-  }
-  if (s.includes('başvuru') || s.includes('başvurusu')) {
-    return 'pending';
-  }
+  
+  console.log('❌ Geçersiz bulunamadı, null dönülüyor');
   return null;
 }
 
