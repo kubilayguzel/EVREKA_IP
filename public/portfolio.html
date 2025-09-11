@@ -661,10 +661,10 @@ tr.group-row[aria-hidden="true"]{ display:none !important; }
             const statusList = STATUSES[ipType];
 
             // 1. Adım: Durumun menşe (origin) olup olmadığını kontrol et
-            const ORG_SET = new Set(['WIPO', 'ARIPO', 'EUIPO', 'OAPI']);
+            const ORG_SET = new Set(['wipo','aripo','euipo','oapi']); // hepsi küçük
             if (ORG_SET.has(rawStatus)) {
-                const alt = (r.applicationStatus || r.statusText || '').toString();
-                return alt || '-';
+            const alt = (r.applicationStatus || r.statusText || '').toString();
+            return alt || '-';
             }
 
             // 2. Adım: Belirlenen IP türü için STATUSES listesinde eşleşme ara
