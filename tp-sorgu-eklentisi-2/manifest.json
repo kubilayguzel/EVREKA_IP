@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Evreka IP • Sahip Verileri Kıyaslama",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Marka Araştırması ekranında Kişi Numarası ile otomatik sorgu yapar (modal kapatma + input doldurma + Sorgula tıklama).",
   "permissions": [],
   "host_permissions": [
