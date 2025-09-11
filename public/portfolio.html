@@ -506,7 +506,7 @@ tr.group-row[aria-hidden="true"]{ display:none !important; }
 <script type="module">
         import Pagination from './js/pagination.js';
         import { ipRecordsService, personService, transactionTypeService, auth, monitoringService, taskService } from './firebase-config.js';
-        import { showNotification, formatFileSize } from './utils.js';
+        import { showNotification, formatFileSize, STATUSES } from './utils.js';
         import { loadSharedLayout } from './js/layout-loader.js';
         import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
@@ -653,12 +653,25 @@ tr.group-row[aria-hidden="true"]{ display:none !important; }
         // Normalize status for display (avoid showing origin like WIPO/ARIPO as status)
         getDisplayStatus(r) {
             const rawStatus = (r.portfoyStatus || r.status || r.applicationStatus || r.statusText || '').toString();
-            const rawOrigin = (r.origin || '').toString().toUpperCase();
+            const ipType = (r.type || r.recordType || r.ipType || '').toString();
+
+            // 1. Durumun bir menşe (WIPO, EUIPO vb.) olup olmadığını kontrol et
             const ORG_SET = new Set(['WIPO','ARIPO','EUIPO','OAPI']);
             if (ORG_SET.has(rawStatus.toUpperCase())) {
-            const alt = (r.applicationStatus || r.statusText || '').toString();
-            return alt || '-';
+                const alt = (r.applicationStatus || r.statusText || '').toString();
+                return alt || '-';
             }
+
+            // 2. Ham durum değerini, utils.js'deki STATUSES objesiyle eşleştir
+            const statusList = STATUSES[ipType];
+            if (statusList) {
+                const match = statusList.find(s => s.value === rawStatus);
+                if (match) {
+                    return match.text;
+                }
+            }
+
+            // 3. Eşleşme yoksa ham değeri döndür
             return rawStatus || '-';
         }
 
