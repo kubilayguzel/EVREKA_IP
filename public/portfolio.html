@@ -652,8 +652,8 @@ tr.group-row[aria-hidden="true"]{ display:none !important; }
         class PortfolioModule {
         // Normalize status for display (avoid showing origin like WIPO/ARIPO as status)
         getDisplayStatus(r) {
-            // Hem durum hem de IP türü değerlerini küçük harfe çevirerek karşılaştırmayı tutarlı hale getirir.
-            const rawStatus = (r.portfoyStatus || r.status || r.applicationStatus || r.statusText || '').toString().toLowerCase();
+        // Hem durum hem de IP türü değerlerini küçük harfe çevirerek karşılaştırmayı tutarlı hale getirir.
+            const rawStatus = (r.status || r.applicationStatus || r.statusText || '').toString().toLowerCase();
             const ipType = (r.type || r.recordType || r.ipType || '').toString().toLowerCase();
 
             // utils.js dosyasından STATUSES objesini içe aktardığınızı varsayalım.
