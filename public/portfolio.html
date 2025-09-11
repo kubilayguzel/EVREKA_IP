@@ -652,26 +652,30 @@ tr.group-row[aria-hidden="true"]{ display:none !important; }
         class PortfolioModule {
         // Normalize status for display (avoid showing origin like WIPO/ARIPO as status)
         getDisplayStatus(r) {
-            const rawStatus = (r.portfoyStatus || r.status || r.applicationStatus || r.statusText || '').toString();
-            const ipType = (r.type || r.recordType || r.ipType || '').toString();
+            // Hem durum hem de IP türü değerlerini küçük harfe çevirerek karşılaştırmayı tutarlı hale getirir.
+            const rawStatus = (r.portfoyStatus || r.status || r.applicationStatus || r.statusText || '').toString().toLowerCase();
+            const ipType = (r.type || r.recordType || r.ipType || '').toString().toLowerCase();
 
-            // 1. Durumun bir menşe (WIPO, EUIPO vb.) olup olmadığını kontrol et
-            const ORG_SET = new Set(['WIPO','ARIPO','EUIPO','OAPI']);
-            if (ORG_SET.has(rawStatus.toUpperCase())) {
+            // utils.js dosyasından STATUSES objesini içe aktardığınızı varsayalım.
+            // Eğer içe aktarma başarısız olursa, aşağıdaki kod çalışmaz.
+            const statusList = STATUSES[ipType];
+
+            // 1. Adım: Durumun menşe (origin) olup olmadığını kontrol et
+            const ORG_SET = new Set(['WIPO', 'ARIPO', 'EUIPO', 'OAPI']);
+            if (ORG_SET.has(rawStatus)) {
                 const alt = (r.applicationStatus || r.statusText || '').toString();
                 return alt || '-';
             }
 
-            // 2. Ham durum değerini, utils.js'deki STATUSES objesiyle eşleştir
-            const statusList = STATUSES[ipType];
+            // 2. Adım: Belirlenen IP türü için STATUSES listesinde eşleşme ara
             if (statusList) {
-                const match = statusList.find(s => s.value === rawStatus);
+                const match = statusList.find(s => s.value.toLowerCase() === rawStatus);
                 if (match) {
                     return match.text;
                 }
             }
 
-            // 3. Eşleşme yoksa ham değeri döndür
+            // 3. Adım: Herhangi bir eşleşme bulunamazsa ham değeri döndür
             return rawStatus || '-';
         }
 
