@@ -828,7 +828,10 @@ tr.group-row[aria-hidden="true"]{ display:none !important; }
                 const title = r.title || r.brandText || r.name || '';
                 const appNo = r.applicationNumber || r.applicationNo || r.basvuruNo || r.application_number || '';
                 const appDate = r.applicationDate || r.basvuruTarihi || '';
-                const appStatus = r.applicationStatus || r.status || '';
+                const appStatusDisplay = this.getDisplayStatus({
+                ...r,
+                status: (r.applicationStatus || r.status || r.statusText || '')
+                });
                 const applicants = Array.isArray(r.applicants) ? r.applicants.map(a => a.name).join(', ') : (r.applicantName || '');
                 const origin = r.origin || '-';
                 const countryCode = r.country || '-';
@@ -899,7 +902,7 @@ tr.group-row[aria-hidden="true"]{ display:none !important; }
                             <td>${countryDisplay}</td>
                             <td>${appNoDisplay}</td>
                             <td>${fmtDate(appDate)}</td>
-                            <td>${safe(appStatus)}</td>
+                            <td>${safe(appStatusDisplay)}</td>
                             <td>${safe(applicants)}</td>
                             <td>${actions}</td>
                         `;
@@ -914,7 +917,7 @@ tr.group-row[aria-hidden="true"]{ display:none !important; }
                             <td>${safe(title)}</td>
                             <td>${appNoDisplay}</td>
                             <td>${fmtDate(appDate)}</td>
-                            <td>${safe(appStatus)}</td>
+                            <td>${safe(appStatusDisplay)}</td>
                             <td>${safe(applicants)}</td>
                             <td>${actions}</td>
                         `;
@@ -935,7 +938,10 @@ tr.group-row[aria-hidden="true"]{ display:none !important; }
                             const childTitle = childR.title || childR.brandText || childR.name || '';
                             const childAppNo = childR.applicationNumber || childR.applicationNo || childR.basvuruNo || childR.application_number || '';
                             const childAppDate = childR.applicationDate || childR.basvuruTarihi || '';
-                            const childAppStatus = childR.applicationStatus || childR.status || '';
+                            const childAppStatusDisplay = this.getDisplayStatus({
+                            ...childR,
+                            status: (childR.applicationStatus || childR.status || childR.statusText || '')
+                            });
                             const childApplicants = Array.isArray(childR.applicants) ? childR.applicants.map(a => a.name).join(', ') : (childR.applicantName || '');
                             const childOrigin = childR.origin || '-';
                             const childCountryCode = childR.country || '-';
@@ -973,7 +979,7 @@ tr.group-row[aria-hidden="true"]{ display:none !important; }
                                     <td>${childCountryName}</td>
                                     <td>${childAppNoDisplay}</td>
                                     <td>${fmtDate(childAppDate)}</td>
-                                    <td>${safe(childAppStatus)}</td>
+                                    <td>${safe(childAppStatusDisplay)}</td>
                                     <td>${safe(childApplicants)}</td>
                                     <td>${childActions}</td>
                                 `;
@@ -986,7 +992,7 @@ tr.group-row[aria-hidden="true"]{ display:none !important; }
                                     <td>${safe(childTitle)}</td>
                                     <td>${childAppNoDisplay}</td>
                                     <td>${fmtDate(childAppDate)}</td>
-                                    <td>${safe(childAppStatus)}</td>
+                                    <td>${safe(childAppStatusDisplay)}</td>
                                     <td>${safe(childApplicants)}</td>
                                     <td>${childActions}</td>
                                 `;
