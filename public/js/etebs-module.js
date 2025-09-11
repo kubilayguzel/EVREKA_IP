@@ -158,13 +158,12 @@ async uploadDocumentsToFirebase(documents, userId, evrakNo) {
     return uploadResults;
 }
 
-// ===== 3. js/etebs-module.js'deki indexNotification fonksiyonunu güncelleyin =====
-
+// ===== Güncellenmiş indexNotification fonksiyonu =====
 async indexNotification(token, notification) {
     try {
         showNotification('Evrak indiriliyor ve indeksleme sayfasına yönlendiriliyor...', 'info');
-
-        // Önce yerel kopya var mı kontrol et (unindexed_pdfs → yoksa etebs_documents)
+        
+        // Önce yerel kopya var mı kontrol et
         let unindexedDoc = await this.findUnindexedDocument(notification.evrakNo);
         if (unindexedDoc) {
             showNotification('Yerel kopya bulundu. İndeksleme sayfasına yönlendiriliyor...', 'success');
@@ -209,7 +208,7 @@ async indexNotification(token, notification) {
     }
 }
 
-// ===== 4. js/etebs-module.js'deki showNotificationPDF fonksiyonunu güncelleyin =====
+// ===== Güncellenmiş showNotificationPDF fonksiyonu =====
 async showNotificationPDF(token, notification) {
     try {
         showNotification("📄 PDF aranıyor...", "info");
@@ -254,34 +253,22 @@ async showNotificationPDF(token, notification) {
         showNotification("PDF açılırken hata oluştu.", "error");
     }
 }
+async handleNotificationAction(action, notification) {
+    const tokenInput = document.getElementById('etebsTokenInput');
+    if (!tokenInput) return;
 
-// ===== 5. js/indexing-detail-module.js'i ETEBS parametrelerini destekleyecek şekilde güncelleyin =====
-// init fonksiyonunu güncelleyin:
-async init() {
-    // URL parametrelerini kontrol et
-    const urlParams = new URLSearchParams(window.location.search);
-    const pdfId = urlParams.get('pdfId');
-    const source = urlParams.get('source');
-    const evrakNo = urlParams.get('evrakNo');
-
-    if (pdfId) {
-        // Normal PDF ID yöntemi
-        this.setupEventListeners();
-        await this.loadPdfData(pdfId);
-        await this.loadRecordsAndTransactionTypes();
-        this.displayPdf();
-        this.findMatchingRecord();
-    } else if (source === 'etebs' && evrakNo) {
-        // ETEBS'ten gelen parametreler
-        this.setupEventListeners();
-        await this.loadETEBSData(urlParams);
-        await this.loadRecordsAndTransactionTypes();
-        this.displayPdf();
-        this.findMatchingRecord();
-    } else {
-        showNotification('PDF ID veya ETEBS parametreleri bulunamadı.', 'error');
-        window.close();
-        return;
+    const token = tokenInput.value.trim();
+    
+    switch (action) {
+        case 'index':
+            await this.indexNotification(token, notification);
+            break;
+        case 'show':
+            await this.showNotificationPDF(token, notification);
+            break;
+        case 'preview':
+            await this.previewNotification(token, notification);
+            break;
     }
 }
 
@@ -832,256 +819,11 @@ createNotificationHTML(notification, isMatched) {
     }
 }
 
-async indexNotification(token, notification) {
+
+async previewNotification(token, notification) {
     try {
-        showNotification('Evrak indiriliyor ve indeksleme sayfasına yönlendiriliyor...', 'info');
-
-        const downloadResult = await etebsService.downloadDocument(token, notification.evrakNo);
-
-        if (downloadResult.success) {
-            // Yeni indirilen dosya varsa unindexed_pdfs kaydından yönlendir
-            if (downloadResult.data && downloadResult.data.length > 0 && downloadResult.data[0].unindexedPdfId) {
-                const pdfId = downloadResult.data[0].unindexedPdfId;
-                
-                showNotification('Evrak indirildi. İndeksleme sayfasına yönlendiriliyor...', 'success');
-                
-                setTimeout(() => {
-                    window.open(`indexing-detail.html?pdfId=${pdfId}`, '_blank');
-                }, 1000);
-                return;
-            } else {
-                showNotification('Evrak indirildi ancak indeksleme kaydı bulunamadı.', 'error');
-                return;
-            }
-        }
-
-        // ETEBS download başarısız olduysa ve sebep daha önce indirilmişse Firestore'dan bul
-        if (
-            downloadResult.success === false &&
-            (
-            downloadResult.errorCode === '005' || 
-            (downloadResult.error && /daha önce indir(ilmiş|ildi)/i.test(downloadResult.error))
-            )
-        ) {
-            console.log("📂 Daha önce indirilen evrak Firestore'dan bulunuyor...");
-
-            // Önce unindexed_pdfs'te ara
-            let unindexedDoc = await this.findUnindexedDocument(notification.evrakNo);
-            
-            if (unindexedDoc) {
-                const pdfId = unindexedDoc.id;
-                showNotification('Daha önce indirilen evrak bulundu. İndeksleme sayfasına yönlendiriliyor...', 'success');
-                
-                setTimeout(() => {
-                    window.open(`indexing-detail.html?pdfId=${pdfId}`, '_blank');
-                }, 1000);
-                return;
-            }
-
-            // Eğer unindexed_pdfs'te yoksa etebs_documents'ta ara
-            let etebsDoc = await this.findETEBSDocument(notification.evrakNo);
-            
-            if (etebsDoc) {
-                // etebs_documents'ta bulundu, unindexed_pdfs'e kopyala
-                const newUnindexedDoc = await this.copyToUnindexedPdfs(etebsDoc.data);
-                
-                if (newUnindexedDoc) {
-                    showNotification('Evrak indeksleme listesine eklendi. İndeksleme sayfasına yönlendiriliyor...', 'success');
-                    
-                    setTimeout(() => {
-                        window.open(`indexing-detail.html?pdfId=${newUnindexedDoc.id}`, '_blank');
-                    }, 1000);
-                    return;
-                }
-            }
-
-            showNotification('Bu evrak daha önce indirildi ama kaydı bulunamadı.', 'error');
-            return;
-        }
-
-        // Beklenmeyen durum
-        showNotification(`İndirme hatası: ${downloadResult.error || 'Bilinmeyen hata'}`, 'error');
-        
-    } catch (error) {
-        console.error('Index error:', error);
-        showNotification('İndeksleme sırasında hata oluştu.', 'error');
-    }
-}
-
-async showNotificationPDF(token, notification) {
-    try {
-        showNotification('PDF açılıyor...', 'info');
-        
-        const downloadResult = await etebsService.downloadDocument(token, notification.evrakNo);
-        
-        if (downloadResult.success) {
-            console.log('Download result:', downloadResult); // Debug için
-            
-            // PDF'i yeni pencerede aç
-            if (downloadResult.pdfBlob) {
-                // Blob'dan URL oluştur
-                const pdfUrl = URL.createObjectURL(downloadResult.pdfBlob);
-                
-                // Yeni pencerede aç
-                const newWindow = window.open(pdfUrl, '_blank');
-                if (newWindow) {
-                    showNotification('PDF başarıyla açıldı', 'success');
-                    
-                    // Temizlik için bir süre sonra URL'yi iptal et
-                    setTimeout(() => {
-                        URL.revokeObjectURL(pdfUrl);
-                    }, 60000); // 1 dakika sonra temizle
-                } else {
-                    showNotification('Popup engellenmiş olabilir. Tarayıcı ayarlarınızı kontrol edin.', 'warning');
-                }
-                
-            } else if (downloadResult.pdfData) {
-                // Base64 data ise Blob'a çevir
-                try {
-                    const binaryString = atob(downloadResult.pdfData);
-                    const bytes = new Uint8Array(binaryString.length);
-                    for (let i = 0; i < binaryString.length; i++) {
-                        bytes[i] = binaryString.charCodeAt(i);
-                    }
-                    const pdfBlob = new Blob([bytes], { type: 'application/pdf' });
-                    const pdfUrl = URL.createObjectURL(pdfBlob);
-                    
-                    const newWindow = window.open(pdfUrl, '_blank');
-                    if (newWindow) {
-                        showNotification('PDF başarıyla açıldı', 'success');
-                        
-                        setTimeout(() => {
-                            URL.revokeObjectURL(pdfUrl);
-                        }, 60000);
-                    } else {
-                        showNotification('Popup engellenmiş olabilir. Tarayıcı ayarlarınızı kontrol edin.', 'warning');
-                    }
-                } catch (conversionError) {
-                    console.error('PDF conversion error:', conversionError);
-                    showNotification('PDF dönüştürülemedi', 'error');
-                }
-                
-            } else if (downloadResult.data && downloadResult.data.length > 0 && downloadResult.data[0].fileUrl) {
-                // Firebase Storage URL'si varsa direkt aç
-                const fileUrl = downloadResult.data[0].fileUrl;
-                const newWindow = window.open(fileUrl, '_blank');
-                if (newWindow) {
-                    showNotification('PDF başarıyla açıldı', 'success');
-                } else {
-                    showNotification('Popup engellenmiş olabilir. Tarayıcı ayarlarınızı kontrol edin.', 'warning');
-                }
-                
-            } else {
-                showNotification('PDF açılamadı. Veri yapısı beklenen formatta değil.', 'error');
-                console.error('Unexpected download result structure:', downloadResult);
-            }
-            
-        } else {
-            showNotification(`PDF açma hatası: ${downloadResult.error}`, 'error');
-        }
-        
-    } catch (error) {
-        console.error('Show PDF error:', error);
-        showNotification('PDF açılırken hata oluştu', 'error');
-    }
-}
-async handleNotificationAction(action, notification) {
-    const tokenInput = document.getElementById('etebsTokenInput');
-    if (!tokenInput) return;
-
-    const token = tokenInput.value.trim();
-    
-    switch (action) {
-        case 'index':
-            await this.indexNotification(token, notification);
-            break;
-        case 'show':
-            await this.showNotificationPDF(token, notification);
-            break;
-        case 'preview':
-            await this.previewNotification(token, notification);
-            break;
-        case 'downloadAndIndex':
-            // Yeni mantıkta bu fonksiyonu kullanmayacağız, 'index' kullanıyoruz
-            break;
-        case 'download':
-            // Yeni mantıkta bu fonksiyonu kullanmayacağız, 'show' kullanıyoruz
-            break;
-    }
-}
-    async downloadAndIndexNotification(token, notification) {
-        try {
-            showNotification('Evrak indiriliyor ve indeksleniyor...', 'info');
-            
-            // Download document
-            const downloadResult = await etebsService.downloadDocument(token, notification.evrakNo);
-            
-            if (downloadResult.success) {
-                // Auto-process the matched notification
-                const currentUser = authService.getCurrentUser();
-                if (!currentUser) {
-                    showNotification('Kullanıcı girişi gerekli', 'error');
-                    return;
-                }
-
-                const processResult = await etebsAutoProcessor.autoProcessMatched([notification], currentUser.uid);
-                
-                if (processResult[0]?.success) {
-                    showNotification('Evrak başarıyla indekslendi!', 'success');
-                    
-                    // Update notification status
-                    notification.processStatus = 'completed';
-                    this.displayNotifications();
-                } else {
-                    showNotification(`İndeksleme hatası: ${processResult[0]?.error || 'Bilinmeyen hata'}`, 'error');
-                }
-            } else {
-                showNotification(`İndirme hatası: ${downloadResult.error}`, 'error');
-            }
-            
-        } catch (error) {
-            console.error('Download and index error:', error);
-            showNotification('Beklenmeyen bir hata oluştu', 'error');
-        }
-    }
-
-    async downloadNotification(token, notification) {
-        try {
-            showNotification('Evrak indiriliyor...', 'info');
-            
-            const downloadResult = await etebsService.downloadDocument(token, notification.evrakNo);
-            
-            if (downloadResult.success) {
-                // Redirect to indexing detail page for manual processing
-                const queryParams = new URLSearchParams({
-                    source: 'etebs',
-                    evrakNo: notification.evrakNo,
-                    dosyaNo: notification.dosyaNo,
-                    description: notification.belgeAciklamasi,
-                    dosyaTuru: notification.dosyaTuru
-                });
-                
-                showNotification('Evrak indirildi. İndeksleme sayfasına yönlendiriliyor...', 'success');
-                
-                // Open in new tab
-                setTimeout(() => {
-                    window.open(`indexing-detail.html?${queryParams.toString()}`, '_blank');
-                }, 1000);
-                
-            } else {
-                showNotification(`İndirme hatası: ${downloadResult.error}`, 'error');
-            }
-            
-        } catch (error) {
-            console.error('Download error:', error);
-            showNotification('İndirme sırasında hata oluştu', 'error');
-        }
-    }
-
-    async previewNotification(token, notification) {
-        try {
-            // Create a detailed preview modal or alert
-            const details = `
+        // Create a detailed preview modal or alert
+        const details = `
 📄 ETEBS Tebligat Detayları
 
 🆔 Evrak No: ${notification.evrakNo}
@@ -1098,15 +840,15 @@ ${notification.matched ?
 
 ${notification.ilgiliVekil ? `👤 İlgili Vekil: ${notification.ilgiliVekil}` : ''}
 ${notification.tebellugeden ? `📨 Tebellüğ Eden: ${notification.tebellugeden}` : ''}
-            `;
-            
-            alert(details.trim());
-            
-        } catch (error) {
-            console.error('Preview error:', error);
-            showNotification('Önizleme hatası', 'error');
-        }
+        `;
+        
+        alert(details.trim());
+        
+    } catch (error) {
+        console.error('Preview error:', error);
+        showNotification('Önizleme hatası', 'error');
     }
+}
 
 updateStatistics() {
     try {
