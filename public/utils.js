@@ -139,10 +139,9 @@ export const STATUSES = {
         { value: 'registered', text: 'Tescilli' },
         { value: 'refused', text: 'Reddedildi' },
         { value: 'partial_refusal', text: 'Kısmen Yayınlandı' },
-        { value: 'rejected', text: 'Marka Başvurusu Geçersiz' },
-        { value: 'expired', text: 'Koruma Süresi Bitti (Geçersiz)' },
-        { value: 'invalidated', text: 'Hükümsüz' },
-        { value: 'invalid_not_renewed', text: 'Yenilenmedi (Geçersiz)' }
+        { value: 'rejected', text: 'Geçersiz' },
+        { value: 'expired', text: 'Geçersiz (Yenilenmedi)'},
+        { value: 'invalidated', text: 'Hükümsüz' }
     ],
     design: [
         { value: 'filed', text: 'Başvuru' },
