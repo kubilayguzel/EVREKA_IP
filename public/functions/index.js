@@ -149,7 +149,7 @@ export const etebsProxyV2 = onRequest(
             try {
                 console.log('🔥 ETEBS Proxy request:', req.body);
 
-                const { action, token, documentNo } = req.body;
+                const { action, token, documentNo, userId } = req.body;
 
                 if (!action || !token) {
                     return res.status(400).json({
@@ -160,10 +160,21 @@ export const etebsProxyV2 = onRequest(
 
                 let apiUrl = '';
                 let requestBody = { TOKEN: token };
+                let etebsData;
 
                 switch (action) {
                     case 'daily-notifications':
                         apiUrl = 'https://epats.turkpatent.gov.tr/service/TP/DAILY_NOTIFICATIONS?apikey=etebs';
+                        const etebsResponse = await fetch(apiUrl, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(requestBody),
+                            timeout: 30000
+                        });
+                        if (!etebsResponse.ok) {
+                            throw new Error(`ETEBS API HTTP ${etebsResponse.status}: ${etebsResponse.statusText}`);
+                        }
+                        etebsData = await etebsResponse.json();
                         break;
 
                     case 'download-document':
@@ -175,32 +186,69 @@ export const etebsProxyV2 = onRequest(
                         }
                         apiUrl = 'https://epats.turkpatent.gov.tr/service/TP/DOWNLOAD_DOCUMENT?apikey=etebs';
                         requestBody.DOCUMENT_NO = documentNo;
-                        break;
+                        
+                        const etebsDownloadResponse = await fetch(apiUrl, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'User-Agent': 'IP-Manager-ETEBS-Proxy/1.0'
+                            },
+                            body: JSON.stringify(requestBody),
+                            timeout: 30000
+                        });
+                        if (!etebsDownloadResponse.ok) {
+                            throw new Error(`ETEBS API HTTP ${etebsDownloadResponse.status}: ${etebsDownloadResponse.statusText}`);
+                        }
+                        
+                        const etebsRawData = await etebsDownloadResponse.json();
+                        const downloadResult = etebsRawData.DownloadDocumentResult || [];
+                        
+                        if (downloadResult.length > 0) {
+                            const firstDoc = downloadResult[0];
+                            const base64Data = firstDoc.BASE64;
+                            const belgeAciklamasi = firstDoc.BELGE_ACIKLAMASI;
+                            
+                            // Base64'ten Buffer'a dönüştür
+                            const pdfBuffer = Buffer.from(base64Data, 'base64');
+                            
+                            // Dosya adı ve yolu oluştur
+                            const fileName = `${documentNo}_${belgeAciklamasi.replace(/[^a-zA-Z0-9_]/g, '')}.pdf`;
+                            const storagePath = `etebs_documents/${userId || 'anonymous'}/${documentNo}/${fileName}`;
+                            
+                            // Dosyayı Firebase Storage'a yükle
+                            const file = admin.storage().bucket().file(storagePath);
+                            await file.save(pdfBuffer, { contentType: 'application/pdf' });
+                            
+                            // Firestore'a dosya bilgisini kaydet
+                            const firestoreDocRef = adminDb.collection('unindexed_pdfs').doc();
+                            await firestoreDocRef.set({
+                                evrakNo: documentNo,
+                                belgeAciklamasi: belgeAciklamasi,
+                                fileName: fileName,
+                                filePath: storagePath,
+                                fileUrl: `https://storage.googleapis.com/${admin.storage().bucket().name}/${storagePath}`,
+                                createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                                status: 'pending',
+                                source: 'etebs'
+                            });
+                            
+                            // İstemciye başarı durumunu ve dosya URL'ini döndür
+                            etebsData = {
+                                fileUrl: `https://storage.googleapis.com/${admin.storage().bucket().name}/${storagePath}`,
+                                unindexedPdfId: firestoreDocRef.id,
+                                message: 'Evrak başarıyla kaydedildi'
+                            };
 
+                        } else {
+                             etebsData = { success: false, error: 'Evraka ait ek bulunamadı.', errorCode: '006' };
+                        }
+                        break;
                     default:
                         return res.status(400).json({
                             success: false,
                             error: 'Invalid action'
                         });
                 }
-
-                console.log('📡 ETEBS API call:', apiUrl);
-
-                const etebsResponse = await fetch(apiUrl, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'User-Agent': 'IP-Manager-ETEBS-Proxy/1.0'
-                    },
-                    body: JSON.stringify(requestBody),
-                    timeout: 30000
-                });
-
-                if (!etebsResponse.ok) {
-                    throw new Error(`ETEBS API HTTP ${etebsResponse.status}: ${etebsResponse.statusText}`);
-                }
-
-                const etebsData = await etebsResponse.json();
 
                 console.log('✅ ETEBS API response received');
 
@@ -212,26 +260,12 @@ export const etebsProxyV2 = onRequest(
 
             } catch (error) {
                 console.error('❌ ETEBS Proxy Error:', error);
-
-                if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
-                    res.status(503).json({
-                        success: false,
-                        error: 'ETEBS service unavailable',
-                        code: 'SERVICE_UNAVAILABLE'
-                    });
-                } else if (error.name === 'AbortError') {
-                    res.status(408).json({
-                        success: false,
-                        error: 'Request timeout',
-                    });
-                } else {
-                    res.status(500).json({
-                        success: false,
-                        error: 'Internal proxy error',
-                        code: 'PROXY_ERROR',
-                        message: process.env.NODE_ENV === 'development' ? error.message : undefined
-                    });
-                }
+                res.status(500).json({
+                    success: false,
+                    error: 'Internal proxy error',
+                    code: 'PROXY_ERROR',
+                    message: process.env.NODE_ENV === 'development' ? error.message : undefined
+                });
             }
         });
     }
