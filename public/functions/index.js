@@ -4606,7 +4606,17 @@ export const checkAndCreateRenewalTasks = onCall({ region: "europe-west1" }, asy
             }
 
             // Yenileme tarihini belirle (önce renewalDate, sonra applicationDate + 10 yıl)
-            let renewalDate = ipRecord.renewalDate?.toDate() || null;
+            let renewalDate = null;
+            if (ipRecord.renewalDate) {
+                if (typeof ipRecord.renewalDate?.toDate === 'function') {
+                    // Firestore Timestamp
+                    renewalDate = ipRecord.renewalDate.toDate();
+                } else if (typeof ipRecord.renewalDate === 'string') {
+                    // String tarih
+                    renewalDate = new Date(ipRecord.renewalDate);
+                    if (isNaN(renewalDate.getTime())) renewalDate = null;
+                }
+            }
             if (!renewalDate && ipRecord.applicationDate) {
                 const appDate = ipRecord.applicationDate.toDate ? ipRecord.applicationDate.toDate() : new Date(ipRecord.applicationDate);
                 renewalDate = new Date(appDate);
