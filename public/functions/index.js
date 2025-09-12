@@ -4586,185 +4586,207 @@ async function resolveApprovalAssignee(adminDb, taskTypeId = "22") {
 }
 
 export const checkAndCreateRenewalTasks = onCall({ region: "europe-west1" }, async (request) => {
-    logger.log('🔄 Renewal task check started manually with updated rules');
+  logger.log('🔄 Renewal task check started manually with updated rules');
 
-    // TaskType ID'sini tanımla
-    const taskTypeId = "22";
-    
-    const TODAY = new Date();
-    // 6 aylık pencerenin başlangıç ve bitiş tarihlerini hesapla
-    const sixMonthsAgo = new Date();
-    sixMonthsAgo.setMonth(TODAY.getMonth() - 6);
-    const sixMonthsLater = new Date();
-    sixMonthsLater.setMonth(TODAY.getMonth() + 6);
-    
-    // Yalnızca approvalStateAssigneeIds üzerinden atama (renewal -> awaiting_client_approval)
-    let assignedTo_uid = null;
-    let assignedTo_email = null;
+  // TaskType ID'sini tanımla
+  const taskTypeId = "22";
 
-    try {
-      const ruleSnap = await adminDb.collection("taskAssignments").doc("22").get();
-      if (ruleSnap.exists) {
-        const rule = ruleSnap.data() || {};
-        const approvalIds = Array.isArray(rule.approvalStateAssigneeIds) ? rule.approvalStateAssigneeIds : [];
-        if (approvalIds.length > 0) {
-          const uid = String(approvalIds[0]);
-          const userSnap = await adminDb.collection("users").doc(uid).get();
-          if (userSnap.exists) {
-            const userData = userSnap.data() || {};
-            if (userData.email) {
-              assignedTo_uid = uid;
-              assignedTo_email = userData.email;
-            } else {
-              logger.warn("⚠️ User found but email missing", { uid });
-            }
+  const TODAY = new Date();
+  // 6 aylık pencerenin başlangıç ve bitiş tarihlerini hesapla
+  const sixMonthsAgo = new Date();
+  sixMonthsAgo.setMonth(TODAY.getMonth() - 6);
+  const sixMonthsLater = new Date();
+  sixMonthsLater.setMonth(TODAY.getMonth() + 6);
+
+  // Yalnızca approvalStateAssigneeIds üzerinden atama (renewal -> awaiting_client_approval)
+  let assignedTo_uid = null;
+  let assignedTo_email = null;
+
+  try {
+    const ruleSnap = await adminDb.collection("taskAssignments").doc(taskTypeId).get();
+    if (ruleSnap.exists) {
+      const rule = ruleSnap.data() || {};
+      const approvalIds = Array.isArray(rule.approvalStateAssigneeIds) ? rule.approvalStateAssigneeIds : [];
+      if (approvalIds.length > 0) {
+        const uid = String(approvalIds[0]);
+        const userSnap = await adminDb.collection("users").doc(uid).get();
+        if (userSnap.exists) {
+          const userData = userSnap.data() || {};
+          if (userData.email) {
+            assignedTo_uid = uid;
+            assignedTo_email = userData.email;
           } else {
-            logger.warn("⚠️ User not found for approvalStateAssigneeId", { uid });
+            logger.warn("⚠️ User found but email missing", { uid });
           }
         } else {
-          logger.warn("⚠️ approvalStateAssigneeIds boş", { taskTypeId: "22" });
+          logger.warn("⚠️ User not found for approvalStateAssigneeId", { uid });
         }
       } else {
-        logger.warn("⚠️ TaskAssignment rule bulunamadı", { taskTypeId: "22" });
+        logger.warn("⚠️ approvalStateAssigneeIds boş", { taskTypeId });
       }
-    } catch (err) {
-      logger.error("❌ Approval assignee resolution error (renewal):", err);
+    } else {
+      logger.warn("⚠️ TaskAssignment rule bulunamadı", { taskTypeId });
     }
-    
-    try {
-        // Durumu 'rejected' veya 'geçersiz' olmayan tüm IP kayıtlarını al
-        const allIpRecordsSnap = await adminDb.collection('ipRecords').get();
+  } catch (err) {
+    logger.error("❌ Approval assignee resolution error (renewal):", err);
+  }
 
-        const batch = adminDb.batch(); // ✅ adminDb.batch() kullan
-        const createdTaskIds = [];
-        let recordsProcessed = 0;
+  try {
+    // Durumu 'rejected' veya 'geçersiz' olmayan tüm IP kayıtlarını al
+    const allIpRecordsSnap = await adminDb.collection('ipRecords').get();
 
-        for (const doc of allIpRecordsSnap.docs) {
-            const ipRecord = doc.data();
-            const ipRecordId = doc.id;
-            recordsProcessed++;
+    // ✅ COUNTER hazırlığı (blok ayırma)
+    const counterRef = adminDb.collection('counters').doc('tasks');
+    const counterSnap = await counterRef.get();
+    let lastNo = 0; // mevcut sayaç
+    if (counterSnap.exists) {
+      const c = Number(counterSnap.data()?.count ?? 0);
+      lastNo = Number.isFinite(c) ? c : 0;
+    }
 
-            // Durum filtrelemesi: 'geçersiz' veya 'rejected' olanları atla
-            if (ipRecord.status === 'geçersiz' || ipRecord.status === 'rejected') {
-                logger.log(`⏩ IP Record ${ipRecordId} status is '${ipRecord.status}', skipping renewal task creation.`);
-                continue;
-            }
+    const batch = adminDb.batch();
+    const createdTaskIds = [];
+    const createdTaskNos = [];
+    let recordsProcessed = 0;
+    let createdCount = 0;
 
-            // WIPO/ARIPO kontrolü: Eğer varsa ve 'parent' değilse atla
-            if ((ipRecord.wipoIR || ipRecord.aripoIR) && ipRecord.transactionHierarchy !== 'parent') {
-                logger.log(`⏩ IP Record ${ipRecordId} is a child of WIPO/ARIPO, skipping renewal task creation.`);
-                continue;
-            }
+    for (const doc of allIpRecordsSnap.docs) {
+      const ipRecord = doc.data();
+      const ipRecordId = doc.id;
+      recordsProcessed++;
 
-            // Yenileme tarihini belirle (önce renewalDate, sonra applicationDate + 10 yıl)
-            let renewalDate = null;
+      // Durum filtrelemesi: 'geçersiz' veya 'rejected' olanları atla
+      if (ipRecord.status === 'geçersiz' || ipRecord.status === 'rejected') {
+        logger.log(`⏩ IP Record ${ipRecordId} status is '${ipRecord.status}', skipping renewal task creation.`);
+        continue;
+      }
 
-            if (ipRecord.renewalDate) {
-                if (typeof ipRecord.renewalDate?.toDate === 'function') {
-                    renewalDate = ipRecord.renewalDate.toDate();
-                } else if (typeof ipRecord.renewalDate === 'string' || ipRecord.renewalDate instanceof Date) {
-                    renewalDate = new Date(ipRecord.renewalDate);
-                    if (isNaN(renewalDate.getTime())) renewalDate = null;
-                }
-            }
+      // WIPO/ARIPO kontrolü: Eğer varsa ve 'parent' değilse atla
+      if ((ipRecord.wipoIR || ipRecord.aripoIR) && ipRecord.transactionHierarchy !== 'parent') {
+        logger.log(`⏩ IP Record ${ipRecordId} is a child of WIPO/ARIPO, skipping renewal task creation.`);
+        continue;
+      }
 
-            if (!renewalDate && ipRecord.applicationDate) {
-                let appDate = null;
-                if (typeof ipRecord.applicationDate?.toDate === 'function') {
-                    appDate = ipRecord.applicationDate.toDate();
-                } else if (typeof ipRecord.applicationDate === 'string' || ipRecord.applicationDate instanceof Date) {
-                    appDate = new Date(ipRecord.applicationDate);
-                    if (isNaN(appDate.getTime())) appDate = null;
-                }
-                
-                if (appDate) {
-                    renewalDate = new Date(appDate);
-                    renewalDate.setFullYear(renewalDate.getFullYear() + 10);
-                }
-            }
+      // Yenileme tarihini belirle (önce renewalDate, sonra applicationDate + 10 yıl)
+      let renewalDate = null;
 
-            if (!renewalDate) {
-                logger.warn(`⚠️ IP Record ${ipRecordId} has no valid renewalDate or applicationDate, skipping.`);
-                continue;
-            }
-            
-            // Tarih aralığı kontrolü
-            if (renewalDate < sixMonthsAgo || renewalDate > sixMonthsLater) {
-                logger.log(`⏩ IP Record ${ipRecordId} renewal date (${renewalDate.toISOString().slice(0, 10)}) is outside the 6-month window, skipping.`);
-                continue;
-            }
-            
-            // Bu kayıt için zaten ilgili bir görev var mı kontrol et
-            const existingTaskSnap = await adminDb.collection('tasks')
-                .where('relatedIpRecordId', '==', ipRecordId)
-                .where('taskType', '==', taskTypeId)
-                .where('status', 'in', ['awaiting_client_approval', 'open', 'in-progress'])
-                .limit(1)
-                .get();
+      if (ipRecord.renewalDate) {
+        if (typeof ipRecord.renewalDate?.toDate === 'function') {
+          renewalDate = ipRecord.renewalDate.toDate();
+        } else if (typeof ipRecord.renewalDate === 'string' || ipRecord.renewalDate instanceof Date) {
+          renewalDate = new Date(ipRecord.renewalDate);
+          if (isNaN(renewalDate.getTime())) renewalDate = null;
+        }
+      }
 
-            if (!existingTaskSnap.empty) {
-                logger.log(`ℹ️ IP Record ${ipRecordId} için zaten bir yenileme görevi mevcut, atlanıyor.`);
-                continue;
-            }
-
-            // ******************************************************
-            // ✅ Burası değiştirildi: Counter koleksiyonunu kullan
-            const counterRef = adminDb.collection('counters').doc('tasks');
-            const counterSnap = await counterRef.get();
-            const lastTaskNumber = counterSnap.exists ? counterSnap.data().currentNumber : 0;
-            const newTaskId = lastTaskNumber + 1;
-            
-            batch.update(counterRef, { currentNumber: newTaskId });
-
-            // Yeni görev verisini oluştur
-            const renewalTaskData = {
-                taskId: newTaskId, // ✅ Yeni taskId alanını ekledik
-                title: `${ipRecord.title} Marka Yenileme`,
-                description: `${ipRecord.title} adlı markanın yenileme süreci için müvekkil onayı bekleniyor. Yenileme tarihi: ${renewalDate.toLocaleDateString('tr-TR')}.`,
-                taskType: taskTypeId,
-                relatedIpRecordId: ipRecordId,
-                relatedIpRecordTitle: ipRecord.title,
-                status: 'awaiting_client_approval',
-                priority: 'medium',
-                dueDate: renewalDate.toISOString().slice(0, 10),
-                assignedTo_uid: assignedTo_uid,
-                assignedTo_email: assignedTo_email,
-                createdAt: admin.firestore.FieldValue.serverTimestamp(),
-                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-                history: [{
-                    action: `Yenileme görevi otomatik olarak oluşturuldu. Müvekkil onayı bekleniyor.`,
-                    timestamp: new Date().toISOString(),
-                    userEmail: assignedTo_email || 'sistem@evrekapatent.com'
-                }]
-            };
-
-            logger.log('🔍 Oluşturulan task verisi:', {
-                assignedTo_uid: renewalTaskData.assignedTo_uid,
-                assignedTo_email: renewalTaskData.assignedTo_email,
-                title: renewalTaskData.title,
-                taskType: renewalTaskData.taskType,
-                status: renewalTaskData.status,
-                taskId: newTaskId // ✅ Yeni taskId'yi logluyoruz
-            });
-
-            const newTaskRef = adminDb.collection('tasks').doc(String(newTaskId));
-            batch.set(newTaskRef, renewalTaskData);
-            createdTaskIds.push(String(newTaskId));
-
-            logger.log(`✅ Yeni yenileme görevi oluşturuldu: ${String(newTaskId)} for ${ipRecord.title}`);
+      if (!renewalDate && ipRecord.applicationDate) {
+        let appDate = null;
+        if (typeof ipRecord.applicationDate?.toDate === 'function') {
+          appDate = ipRecord.applicationDate.toDate();
+        } else if (typeof ipRecord.applicationDate === 'string' || ipRecord.applicationDate instanceof Date) {
+          appDate = new Date(ipRecord.applicationDate);
+          if (isNaN(appDate.getTime())) appDate = null;
         }
 
-        if (createdTaskIds.length > 0) {
-            await batch.commit();
-            logger.log(`🎉 Toplam ${createdTaskIds.length} adet yeni yenileme görevi oluşturuldu. Toplam işlenen kayıt: ${recordsProcessed}`);
-        } else {
-            logger.log(`ℹ️ Yenileme dönemi yaklaşan yeni bir kayıt bulunamadı. Toplam işlenen kayıt: ${recordsProcessed}`);
+        if (appDate) {
+          renewalDate = new Date(appDate);
+          renewalDate.setFullYear(renewalDate.getFullYear() + 10);
         }
-        
-        return { success: true, count: createdTaskIds.length, taskIds: createdTaskIds };
+      }
 
-    } catch (error) {
-        logger.error('❌ Renewal task creation failed:', error);
-        throw new HttpsError('internal', 'Yenileme görevleri oluşturulurken bir hata oluştu.', error.message);
+      if (!renewalDate) {
+        logger.warn(`⚠️ IP Record ${ipRecordId} has no valid renewalDate or applicationDate, skipping.`);
+        continue;
+      }
+
+      // Tarih aralığı kontrolü
+      if (renewalDate < sixMonthsAgo || renewalDate > sixMonthsLater) {
+        logger.log(`⏩ IP Record ${ipRecordId} renewal date (${renewalDate.toISOString().slice(0, 10)}) is outside the 6-month window, skipping.`);
+        continue;
+      }
+
+      // Bu kayıt için zaten ilgili bir görev var mı kontrol et
+      const existingTaskSnap = await adminDb.collection('tasks')
+        .where('relatedIpRecordId', '==', ipRecordId)
+        .where('taskType', '==', taskTypeId)
+        .where('status', 'in', ['awaiting_client_approval', 'open', 'in-progress'])
+        .limit(1)
+        .get();
+
+      if (!existingTaskSnap.empty) {
+        logger.log(`ℹ️ IP Record ${ipRecordId} için zaten bir yenileme görevi mevcut, atlanıyor.`);
+        continue;
+      }
+
+      // ✅ Bu task için sıra numarasını ayır (bloktan)
+      lastNo += 1;
+      const newTaskNo = lastNo;
+
+      // Yeni görev verisini oluştur
+      const renewalTaskData = {
+        title: `${ipRecord.title} Marka Yenileme`,
+        description: `${ipRecord.title} adlı markanın yenileme süreci için müvekkil onayı bekleniyor. Yenileme tarihi: ${renewalDate.toLocaleDateString('tr-TR')}.`,
+        taskType: taskTypeId,
+        taskNo: newTaskNo, // ✅ COUNTER'DAN ALINAN NO
+        relatedIpRecordId: ipRecordId,
+        relatedIpRecordTitle: ipRecord.title,
+        status: 'awaiting_client_approval',
+        priority: 'medium',
+        dueDate: renewalDate.toISOString().slice(0, 10),
+        assignedTo_uid: assignedTo_uid,     // field isimleri korunuyor
+        assignedTo_email: assignedTo_email, // field isimleri korunuyor
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        // Tarihçe
+        history: [{
+          action: `Yenileme görevi otomatik olarak oluşturuldu. Müvekkil onayı bekleniyor.`,
+          timestamp: new Date().toISOString(),
+          userEmail: assignedTo_email || 'sistem@evrekapatent.com'
+        }]
+      };
+
+      // ⚠️ DEBUG: Task data'yı kontrol et
+      logger.log('🔍 Oluşturulan task verisi:', {
+        assignedTo_uid: renewalTaskData.assignedTo_uid,
+        assignedTo_email: renewalTaskData.assignedTo_email,
+        title: renewalTaskData.title,
+        taskType: renewalTaskData.taskType,
+        status: renewalTaskData.status,
+        taskNo: renewalTaskData.taskNo
+      });
+
+      const newTaskRef = adminDb.collection('tasks').doc();
+      batch.set(newTaskRef, renewalTaskData);
+      createdTaskIds.push(newTaskRef.id);
+      createdTaskNos.push(newTaskNo);
+      createdCount += 1;
+
+      logger.log(`✅ Yeni yenileme görevi oluşturuldu: ${newTaskRef.id} (#${newTaskNo}) for ${ipRecord.title}`);
     }
+
+    // ✅ Sayaç artışını batch'e ekle (tek adım)
+    if (createdCount > 0) {
+      batch.set(
+        counterRef,
+        { count: admin.firestore.FieldValue.increment(createdCount) },
+        { merge: true }
+      );
+      await batch.commit();
+      logger.log(`🎉 Toplam ${createdCount} adet yeni yenileme görevi oluşturuldu. Toplam işlenen kayıt: ${recordsProcessed}`);
+    } else {
+      logger.log(`ℹ️ Yenileme dönemi yaklaşan yeni bir kayıt bulunamadı. Toplam işlenen kayıt: ${recordsProcessed}`);
+    }
+
+    return {
+      success: true,
+      count: createdCount,
+      taskIds: createdTaskIds,
+      taskNos: createdTaskNos,
+      processed: recordsProcessed
+    };
+
+  } catch (error) {
+    logger.error('❌ Renewal task creation failed:', error);
+    throw new HttpsError('internal', 'Yenileme görevleri oluşturulurken bir hata oluştu.', error?.message || String(error));
+  }
 });
