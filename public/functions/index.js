@@ -4554,56 +4554,54 @@ export const scrapeOwnerTrademarks = onCall(
 // =========================================================
 //              YENİ: YENİLEME OTOMASYON FONKSİYONU
 // =========================================================
-
-/**
- * Portföy kayıtlarındaki yenileme tarihlerini kontrol ederek
- * yeni yenileme görevleri oluşturan callable fonksiyon.
- * Kurallar:
- * - taskType: '22'
- * - ipRecords status "geçersiz" veya "rejected" olmamalı
- * - Yenileme tarihi bugünden 6 ay önce veya sonraki aralığa girmeli
- * - WIPO/ARIPO kayıtları için sadece 'parent' hiyerarşisindekiler işleme alınır.
- * - Atama, taskAssignments koleksiyonundaki kurala göre yapılır.
- */
 export const checkAndCreateRenewalTasks = onCall({ region: "europe-west1" }, async (request) => {
-    logger.log('🔄 Renewal task check started manually with updated rules');
+    logger.log('🔄 Renewal task check started with detailed logging.');
 
     const TODAY = new Date();
-    // 6 aylık pencerenin başlangıç ve bitiş tarihlerini hesapla
     const sixMonthsAgo = new Date();
     sixMonthsAgo.setMonth(TODAY.getMonth() - 6);
     const sixMonthsLater = new Date();
     sixMonthsLater.setMonth(TODAY.getMonth() + 6);
     
-    // Otomatik atama kuralını al
     const taskTypeId = '22';
     let assignedToUid = null;
     let assignedToEmail = null;
 
+    logger.log('🔍 Atama kuralı aranıyor: taskAssignments/' + taskTypeId);
     try {
         const ruleDocSnap = await adminDb.collection('taskAssignments').doc(taskTypeId).get();
-        if (ruleDocSnap.exists()) {
+        
+        if (!ruleDocSnap.exists()) {
+            logger.warn('⚠️ Atama kuralı bulunamadı. Görev atanmamış olarak oluşturulacak.');
+        } else {
+            logger.log('✅ Atama kuralı bulundu.');
             const rule = ruleDocSnap.data();
             const assigneeIds = Array.isArray(rule.assigneeIds) ? rule.assigneeIds : [];
+            
             if (assigneeIds.length > 0) {
-                // Kurala göre ilk atananı bul
+                logger.log('✅ Atanan kullanıcı listesi boş değil. İlk kullanıcı ID aranıyor: ' + assigneeIds[0]);
                 const assigneeUid = String(assigneeIds[0]);
                 const userSnap = await adminDb.collection('users').doc(assigneeUid).get();
+                
                 if (userSnap.exists()) {
                     const userData = userSnap.data();
                     assignedToUid = assigneeUid;
                     assignedToEmail = userData.email;
+                    logger.log('✅ Atanan kullanıcı bulundu. UID: ' + assignedToUid + ', Email: ' + assignedToEmail);
+                } else {
+                    logger.warn('⚠️ Atama kuralındaki kullanıcı (' + assigneeUid + ') "users" koleksiyonunda bulunamadı. Görev atanmamış olarak oluşturulacak.');
                 }
+            } else {
+                logger.warn('⚠️ Atama kuralı var ancak "assigneeIds" listesi boş. Görev atanmamış olarak oluşturulacak.');
             }
         }
     } catch (e) {
-        logger.error('❌ Atama kuralı yüklenirken hata oluştu:', e);
+        logger.error('❌ Atama kuralı yüklenirken kritik hata oluştu:', e);
     }
     
+    // ... (geri kalan kodunuz aynı kalabilir)
     try {
-        // Durumu 'rejected' veya 'geçersiz' olmayan tüm IP kayıtlarını al
         const allIpRecordsSnap = await adminDb.collection('ipRecords').get();
-
         const batch = db.batch();
         const createdTaskIds = [];
         let recordsProcessed = 0;
@@ -4613,21 +4611,17 @@ export const checkAndCreateRenewalTasks = onCall({ region: "europe-west1" }, asy
             const ipRecordId = doc.id;
             recordsProcessed++;
 
-            // Durum filtrelemesi: 'geçersiz' veya 'rejected' olanları atla
             if (ipRecord.status === 'geçersiz' || ipRecord.status === 'rejected') {
                 logger.log(`⏩ IP Record ${ipRecordId} status is '${ipRecord.status}', skipping renewal task creation.`);
                 continue;
             }
 
-            // WIPO/ARIPO kontrolü: Eğer varsa ve 'parent' değilse atla
             if ((ipRecord.wipoIR || ipRecord.aripoIR) && ipRecord.transactionHierarchy !== 'parent') {
                 logger.log(`⏩ IP Record ${ipRecordId} is a child of WIPO/ARIPO, skipping renewal task creation.`);
                 continue;
             }
 
-            // Yenileme tarihini belirle (önce renewalDate, sonra applicationDate + 10 yıl)
             let renewalDate = null;
-
             if (ipRecord.renewalDate) {
                 if (typeof ipRecord.renewalDate?.toDate === 'function') {
                     renewalDate = ipRecord.renewalDate.toDate();
@@ -4636,7 +4630,6 @@ export const checkAndCreateRenewalTasks = onCall({ region: "europe-west1" }, asy
                     if (isNaN(renewalDate.getTime())) renewalDate = null;
                 }
             }
-
             if (!renewalDate && ipRecord.applicationDate) {
                 let appDate = null;
                 if (typeof ipRecord.applicationDate?.toDate === 'function') {
@@ -4656,13 +4649,11 @@ export const checkAndCreateRenewalTasks = onCall({ region: "europe-west1" }, asy
                 logger.warn(`⚠️ IP Record ${ipRecordId} has no valid renewalDate or applicationDate, skipping.`);
                 continue;
             }
-            // Tarih aralığı kontrolü
             if (renewalDate < sixMonthsAgo || renewalDate > sixMonthsLater) {
                 logger.log(`⏩ IP Record ${ipRecordId} renewal date (${renewalDate.toISOString().slice(0, 10)}) is outside the 6-month window, skipping.`);
                 continue;
             }
             
-            // Bu kayıt için zaten ilgili bir görev var mı kontrol et
             const existingTaskSnap = await adminDb.collection('tasks')
                 .where('relatedIpRecordId', '==', ipRecordId)
                 .where('taskType', '==', taskTypeId)
@@ -4675,7 +4666,6 @@ export const checkAndCreateRenewalTasks = onCall({ region: "europe-west1" }, asy
                 continue;
             }
             
-            // Yeni görev verisini oluştur
             const renewalTaskData = {
                 title: `${ipRecord.title} Marka Yenileme`,
                 description: `${ipRecord.title} adlı markanın yenileme süreci için müvekkil onayı bekleniyor. Yenileme tarihi: ${renewalDate.toLocaleDateString('tr-TR')}.`,
@@ -4689,7 +4679,6 @@ export const checkAndCreateRenewalTasks = onCall({ region: "europe-west1" }, asy
                 assignedTo_email: assignedToEmail,
                 createdAt: admin.firestore.FieldValue.serverTimestamp(),
                 updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-                // Tarihçe
                 history: [{
                     action: `Yenileme görevi otomatik olarak oluşturuldu. Müvekkil onayı bekleniyor.`,
                     timestamp: new Date().toISOString(),
