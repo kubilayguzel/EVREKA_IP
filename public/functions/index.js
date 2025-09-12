@@ -4565,6 +4565,26 @@ export const scrapeOwnerTrademarks = onCall(
  * - WIPO/ARIPO kayıtları için sadece 'parent' hiyerarşisindekiler işleme alınır.
  * - Atama, taskAssignments koleksiyonundaki kurala göre yapılır.
  */
+async function resolveApprovalAssignee(adminDb, taskTypeId = "22") {
+  const out = { uid: null, email: null, reason: "unknown" };
+
+  const snap = await adminDb.collection("taskAssignments").doc(String(taskTypeId)).get();
+  if (!snap.exists) { out.reason = "rule-missing"; return out; }
+
+  const rule = snap.data() || {};
+  const list = Array.isArray(rule.approvalStateAssigneeIds) ? rule.approvalStateAssigneeIds : [];
+  if (!list.length) { out.reason = "approvalStateAssigneeIds-empty"; return out; }
+
+  const uid = String(list[0]);
+  const userSnap = await adminDb.collection("users").doc(uid).get();
+  if (!userSnap.exists) { out.reason = "user-missing"; return out; }
+
+  const email = userSnap.data()?.email || null;
+  if (!email) { out.reason = "email-missing"; return out; }
+
+  return { uid, email, reason: "ok" };
+}
+
 export const checkAndCreateRenewalTasks = onCall({ region: "europe-west1" }, async (request) => {
     logger.log('🔄 Renewal task check started manually with updated rules');
 
@@ -4575,41 +4595,43 @@ export const checkAndCreateRenewalTasks = onCall({ region: "europe-west1" }, asy
     const sixMonthsLater = new Date();
     sixMonthsLater.setMonth(TODAY.getMonth() + 6);
     
-    // Basit ve direkt atama
-    const taskTypeId = '22';
-    let assignedToUid = null;
-    let assignedToEmail = null;
+    // Yalnızca approvalStateAssigneeIds üzerinden atama (renewal -> awaiting_client_approval)
+    let assignedTo_uid = null;
+    let assignedTo_email = null;
 
     try {
-        logger.log('🔍 taskAssignments/22 dokümanı okunuyor...');
-        const ruleDoc = await adminDb.collection('taskAssignments').doc('22').get();
-        
-        if (ruleDoc.exists()) {
-            const rule = ruleDoc.data();
-            logger.log('✅ Kural bulundu:', JSON.stringify(rule));
-            
-            if (rule.approvalStateAssigneeIds && rule.approvalStateAssigneeIds.length > 0) {
-                const uid = rule.approvalStateAssigneeIds[0];
-                logger.log('👤 Seçilen UID:', uid);
-                
-                const userDoc = await adminDb.collection('users').doc(uid).get();
-                if (userDoc.exists()) {
-                    const userData = userDoc.data();
-                    assignedToUid = uid;
-                    assignedToEmail = userData.email;
-                    logger.log('✅ Kullanıcı atandı:', { uid: assignedToUid, email: assignedToEmail });
-                } else {
-                    logger.warn('⚠️ User bulunamadı');
-                }
+      const ruleSnap = await adminDb.collection("taskAssignments").doc("22").get();
+      if (ruleSnap.exists) {
+        const rule = ruleSnap.data() || {};
+        const approvalIds = Array.isArray(rule.approvalStateAssigneeIds) ? rule.approvalStateAssigneeIds : [];
+        if (approvalIds.length > 0) {
+          const uid = String(approvalIds[0]);
+          const userSnap = await adminDb.collection("users").doc(uid).get();
+          if (userSnap.exists) {
+            const userData = userSnap.data() || {};
+            if (userData.email) {
+              assignedTo_uid = uid;
+              assignedTo_email = userData.email;
             } else {
-                logger.warn('⚠️ approvalStateAssigneeIds boş');
+              logger.warn("⚠️ User found but email missing", { uid });
             }
+          } else {
+            logger.warn("⚠️ User not found for approvalStateAssigneeId", { uid });
+          }
         } else {
-            logger.warn('⚠️ taskAssignments/22 dokümanı bulunamadı');
+          logger.warn("⚠️ approvalStateAssigneeIds boş", { taskTypeId: "22" });
         }
-    } catch (error) {
-        logger.error('❌ Atama hatası:', error);
+      } else {
+        logger.warn("⚠️ TaskAssignment rule bulunamadı", { taskTypeId: "22" });
+      }
+    } catch (err) {
+      logger.error("❌ Approval assignee resolution error (renewal):", err);
     }
+
+    // Task dokümanına set et
+    renewalTaskData.assignedTo_uid = assignedTo_uid;
+    renewalTaskData.assignedTo_email = assignedTo_email;
+
     
     try {
         // Durumu 'rejected' veya 'geçersiz' olmayan tüm IP kayıtlarını al
