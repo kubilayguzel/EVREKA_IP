@@ -699,25 +699,38 @@
                         // Görünen adı alias veya name'den al, yoksa task.taskType'ı kullan
                         const taskTypeDisplayName = transactionTypeObj ? (transactionTypeObj.alias || transactionTypeObj.name) : (task.taskType || 'Bilinmiyor');
 
-                        // Resmi Son Tarihi formatla
-                        const officialDueDateDisplay = task.officialDueDate ? task.officialDueDate.toDate().toLocaleDateString('tr-TR') : '-';
-                        const dueDateObj =
-                        task.dueDate
-                            ? (task.dueDate.toDate ? task.dueDate.toDate() : new Date(task.dueDate))
-                            : null;
-                        const dueISO = dueDateObj ? dueDateObj.toISOString().slice(0, 10) : '';
-                        const dueDisplay = dueDateObj ? dueDateObj.toLocaleDateString('tr-TR') : 'Belirtilmemiş';
+                        // ✅ Resmi Son Tarih = ipRecord.renewalDate
+                        // ✅ Son Tarih = ipRecord.renewalDate - 3 gün
+                        let officialISO = '';
+                        let officialDisplay = 'Belirtilmemiş';
+                        let dueISO = '';
+                        let dueDisplay = 'Belirtilmemiş';
 
-                        const officialDateObj =
-                        task.officialDueDate
-                            ? (task.officialDueDate.toDate
-                                ? task.officialDueDate.toDate()
-                                : (task.officialDueDate.seconds
-                                    ? new Date(task.officialDueDate.seconds * 1000)
-                                    : new Date(task.officialDueDate)))
-                            : null;
-                        const officialISO = officialDateObj ? officialDateObj.toISOString().slice(0, 10) : '';
-                        const officialDisplay = officialDateObj ? officialDateObj.toLocaleDateString('tr-TR') : 'Belirtilmemiş';
+                        const renewalRaw = ipRecord?.renewalDate || null;
+                        let renewalDateObj = null;
+                        if (renewalRaw) {
+                        if (typeof renewalRaw?.toDate === 'function') {
+                            renewalDateObj = renewalRaw.toDate();
+                        } else if (renewalRaw.seconds) {
+                            // Firestore Timestamp benzeri obje desteği
+                            renewalDateObj = new Date(renewalRaw.seconds * 1000);
+                        } else {
+                            renewalDateObj = new Date(renewalRaw);
+                        }
+                        }
+
+                        if (renewalDateObj && !isNaN(renewalDateObj.getTime())) {
+                        // Resmi: doğrudan renewalDate
+                        officialISO = renewalDateObj.toISOString().slice(0, 10);
+                        officialDisplay = renewalDateObj.toLocaleDateString('tr-TR');
+
+                        // Operasyonel: renewalDate - 3 gün
+                        const opDate = new Date(renewalDateObj);
+                        opDate.setDate(opDate.getDate() - 3);
+                        dueISO = opDate.toISOString().slice(0, 10);
+                        dueDisplay = opDate.toLocaleDateString('tr-TR');
+                        }
+
                         const ipRecord = this.allIpRecords.find(r => r.id === task.relatedIpRecordId);
                         const applicantName = ipRecord?.applicants?.length ? ipRecord.applicants.map(a => a.name).join(', '): 'N/A';
                         const applicationNumber = ipRecord?.applicationNumber || 'N/A';
