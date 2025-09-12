@@ -12,6 +12,7 @@ import { getFirestore, collection, addDoc,
     query, orderBy, where, getDoc, setDoc, arrayUnion, writeBatch, documentId, serverTimestamp, Timestamp, FieldValue }
 from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 import { getStorage, ref, uploadBytes, uploadBytesResumable, getDownloadURL, deleteObject } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js';
+import { getFunctions } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-functions.js';
 
 // --- Firebase App Initialization ---
 const firebaseConfig = {
@@ -2209,7 +2210,7 @@ export const similarityService = {
     }
 };
 // --- Exports ---
-export {auth, storage, db, app}; 
+export {auth, storage, db, functions, app}; 
 export const firebaseServices = { 
     auth: auth,
     db: db,
