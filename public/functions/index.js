@@ -4550,3 +4550,133 @@ export const scrapeOwnerTrademarks = onCall(
     throw new HttpsError('internal', 'Tüm denemeler başarısız oldu');
   }
 );
+
+// =========================================================
+//              YENİ: YENİLEME OTOMASYON FONKSİYONU
+// =========================================================
+
+/**
+ * Portföy kayıtlarındaki yenileme tarihlerini kontrol ederek
+ * yeni yenileme görevleri oluşturan callable fonksiyon.
+ * Kurallar:
+ * - taskType: '22'
+ * - ipRecords status "geçersiz" veya "rejected" olmamalı
+ * - Yenileme tarihi bugünden 6 ay önce veya sonraki aralığa girmeli
+ * - WIPO/ARIPO kayıtları için sadece 'parent' hiyerarşisindekiler işleme alınır.
+ */
+export const checkAndCreateRenewalTasks = onCall({ region: "europe-west1" }, async (request) => {
+    logger.log('🔄 Renewal task check started manually with updated rules');
+
+    const TODAY = new Date();
+    // 6 aylık pencerenin başlangıç ve bitiş tarihlerini hesapla
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(TODAY.getMonth() - 6);
+    const sixMonthsLater = new Date();
+    sixMonthsLater.setMonth(TODAY.getMonth() + 6);
+
+    // Otomatik atama için bir default kullanıcı belirle (örneğin sistem yöneticisi)
+    const defaultAssigneeUid = 'SELÇAN_KULLANICI_ID'; // <<< BU ALANI GÜNCELLEYİN
+    const defaultAssigneeEmail = 'selcanakoglu@evrekapatent.com'; // <<< BU ALANI GÜNCELLEYİN
+
+    try {
+        // 1. Durumu 'rejected' veya 'geçersiz' olmayan tüm IP kayıtlarını al
+        // Firestore'da '!=' operatörü olmadığı için, tüm kayıtları alıp kod içinde filtreleme yapıyoruz.
+        // Bu, veritabanı boyutuna bağlı olarak maliyetli olabilir, ancak doğru sonucu verir.
+        const allIpRecordsSnap = await adminDb.collection('ipRecords').get();
+
+        const batch = db.batch();
+        const createdTaskIds = [];
+        let recordsProcessed = 0;
+
+        for (const doc of allIpRecordsSnap.docs) {
+            const ipRecord = doc.data();
+            const ipRecordId = doc.id;
+            recordsProcessed++;
+
+            // 2. Durum filtrelemesi: 'geçersiz' veya 'rejected' olanları atla
+            if (ipRecord.status === 'geçersiz' || ipRecord.status === 'rejected') {
+                logger.log(`⏩ IP Record ${ipRecordId} status is '${ipRecord.status}', skipping renewal task creation.`);
+                continue;
+            }
+
+            // 3. WIPO/ARIPO kontrolü: Eğer varsa ve 'parent' değilse atla
+            if ((ipRecord.wipoIR || ipRecord.aripoIR) && ipRecord.transactionHierarchy !== 'parent') {
+                logger.log(`⏩ IP Record ${ipRecordId} is a child of WIPO/ARIPO, skipping renewal task creation.`);
+                continue;
+            }
+
+            // Yenileme tarihini belirle (önce renewalDate, sonra applicationDate + 10 yıl)
+            let renewalDate = ipRecord.renewalDate?.toDate() || null;
+            if (!renewalDate && ipRecord.applicationDate) {
+                const appDate = ipRecord.applicationDate.toDate ? ipRecord.applicationDate.toDate() : new Date(ipRecord.applicationDate);
+                renewalDate = new Date(appDate);
+                renewalDate.setFullYear(renewalDate.getFullYear() + 10);
+            }
+
+            if (!renewalDate) {
+                logger.warn(`⚠️ IP Record ${ipRecordId} has no valid renewalDate or applicationDate, skipping.`);
+                continue;
+            }
+
+            // 4. Tarih aralığı kontrolü
+            if (renewalDate < sixMonthsAgo || renewalDate > sixMonthsLater) {
+                logger.log(`⏩ IP Record ${ipRecordId} renewal date (${renewalDate.toISOString().slice(0, 10)}) is outside the 6-month window, skipping.`);
+                continue;
+            }
+            
+            // Bu kayıt için zaten "Müvekkil Onayı Bekliyor" statüsünde bir görev var mı kontrol et
+            const existingTaskSnap = await adminDb.collection('tasks')
+                .where('relatedIpRecordId', '==', ipRecordId)
+                .where('taskType', '==', '22')
+                .where('status', 'in', ['awaiting_client_approval', 'open', 'in-progress'])
+                .limit(1)
+                .get();
+
+            if (!existingTaskSnap.empty) {
+                logger.log(`ℹ️ IP Record ${ipRecordId} için zaten bir yenileme görevi mevcut, atlanıyor.`);
+                continue;
+            }
+            
+            // Yeni görev verisini oluştur
+            const renewalTaskData = {
+                title: `${ipRecord.title} Marka Yenileme`,
+                description: `${ipRecord.title} adlı markanın yenileme süreci için müvekkil onayı bekleniyor. Yenileme tarihi: ${renewalDate.toLocaleDateString('tr-TR')}.`,
+                taskType: '22',
+                relatedIpRecordId: ipRecordId,
+                relatedIpRecordTitle: ipRecord.title,
+                status: 'awaiting_client_approval',
+                priority: 'medium',
+                dueDate: renewalDate.toISOString().slice(0, 10),
+                assignedTo_uid: defaultAssigneeUid,
+                assignedTo_email: defaultAssigneeEmail,
+                createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                // Tarihçe
+                history: [{
+                    action: `Yenileme görevi otomatik olarak oluşturuldu. Müvekkil onayı bekleniyor.`,
+                    timestamp: new Date().toISOString(),
+                    userEmail: 'sistem@evrekapatent.com'
+                }]
+            };
+
+            const newTaskRef = adminDb.collection('tasks').doc();
+            batch.set(newTaskRef, renewalTaskData);
+            createdTaskIds.push(newTaskRef.id);
+
+            logger.log(`✅ Yeni yenileme görevi oluşturuldu: ${newTaskRef.id} for ${ipRecord.title}`);
+        }
+
+        if (createdTaskIds.length > 0) {
+            await batch.commit();
+            logger.log(`🎉 Toplam ${createdTaskIds.length} adet yeni yenileme görevi oluşturuldu. Toplam işlenen kayıt: ${recordsProcessed}`);
+        } else {
+            logger.log(`ℹ️ Yenileme dönemi yaklaşan yeni bir kayıt bulunamadı. Toplam işlenen kayıt: ${recordsProcessed}`);
+        }
+        
+        return { success: true, count: createdTaskIds.length, taskIds: createdTaskIds };
+
+    } catch (error) {
+        logger.error('❌ Renewal task creation failed:', error);
+        throw new HttpsError('internal', 'Yenileme görevleri oluşturulurken bir hata oluştu.', error.message);
+    }
+});
