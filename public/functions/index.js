@@ -4588,6 +4588,9 @@ async function resolveApprovalAssignee(adminDb, taskTypeId = "22") {
 export const checkAndCreateRenewalTasks = onCall({ region: "europe-west1" }, async (request) => {
     logger.log('🔄 Renewal task check started manually with updated rules');
 
+    // TaskType ID'sini tanımla
+    const taskTypeId = "22";
+    
     const TODAY = new Date();
     // 6 aylık pencerenin başlangıç ve bitiş tarihlerini hesapla
     const sixMonthsAgo = new Date();
