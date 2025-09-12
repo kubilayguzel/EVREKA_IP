@@ -4575,50 +4575,41 @@ export const checkAndCreateRenewalTasks = onCall({ region: "europe-west1" }, asy
     const sixMonthsLater = new Date();
     sixMonthsLater.setMonth(TODAY.getMonth() + 6);
     
-    // Otomatik atama kuralını al
+    // Basit ve direkt atama
     const taskTypeId = '22';
     let assignedToUid = null;
     let assignedToEmail = null;
 
-    // indexing-detail-module.js'deki mantığı aynen kullan
-    let assigned = { uid: null, email: null };
     try {
-        if (taskTypeId) {
-            const ruleSnap = await adminDb.collection('taskAssignments').doc(String(taskTypeId)).get();
-            if (ruleSnap.exists()) {
-                const rule = ruleSnap.data() || {};
-                logger.log('📋 taskAssignments kuralı bulundu:', rule);
+        logger.log('🔍 taskAssignments/22 dokümanı okunuyor...');
+        const ruleDoc = await adminDb.collection('taskAssignments').doc('22').get();
+        
+        if (ruleDoc.exists()) {
+            const rule = ruleDoc.data();
+            logger.log('✅ Kural bulundu:', JSON.stringify(rule));
+            
+            if (rule.approvalStateAssigneeIds && rule.approvalStateAssigneeIds.length > 0) {
+                const uid = rule.approvalStateAssigneeIds[0];
+                logger.log('👤 Seçilen UID:', uid);
                 
-                // Onay durumu için approvalStateAssigneeIds kullan
-                const approvalAssigneeIds = Array.isArray(rule.approvalStateAssigneeIds) ? rule.approvalStateAssigneeIds : [];
-                
-                if (approvalAssigneeIds.length > 0) {
-                    const uid = String(approvalAssigneeIds[0]); // İlk kişiye ata
-                    logger.log('👤 Onay durumu için atanan UID:', uid);
-                    
-                    // users koleksiyonundan email bilgisini al
-                    const userSnap = await adminDb.collection('users').doc(uid).get();
-                    if (userSnap.exists()) {
-                        const userData = userSnap.data() || {};
-                        const email = userData.email || null;
-                        assigned = { uid, email };
-                        logger.log('✅ Onay durumu ataması başarılı:', assigned);
-                    } else {
-                        logger.warn('⚠️ Kullanıcı bulunamadı, null olarak kalacak');
-                    }
+                const userDoc = await adminDb.collection('users').doc(uid).get();
+                if (userDoc.exists()) {
+                    const userData = userDoc.data();
+                    assignedToUid = uid;
+                    assignedToEmail = userData.email;
+                    logger.log('✅ Kullanıcı atandı:', { uid: assignedToUid, email: assignedToEmail });
                 } else {
-                    logger.warn('⚠️ approvalStateAssigneeIds listesi boş, null olarak kalacak');
+                    logger.warn('⚠️ User bulunamadı');
                 }
             } else {
-                logger.warn('⚠️ taskAssignments kuralı bulunamadı, null olarak kalacak');
+                logger.warn('⚠️ approvalStateAssigneeIds boş');
             }
+        } else {
+            logger.warn('⚠️ taskAssignments/22 dokümanı bulunamadı');
         }
-    } catch (err) {
-        logger.warn('❌ Atama kuralı çözümlenirken hata:', err?.message || err);
+    } catch (error) {
+        logger.error('❌ Atama hatası:', error);
     }
-
-    assignedToUid = assigned.uid;
-    assignedToEmail = assigned.email;
     
     try {
         // Durumu 'rejected' veya 'geçersiz' olmayan tüm IP kayıtlarını al
