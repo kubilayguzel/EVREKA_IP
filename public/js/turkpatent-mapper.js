@@ -356,16 +356,26 @@ const mappedStatus = mapStatusToUtils(turkpatentStatus);
     applicationDate: formatDate(applicationDate),
     registrationNumber: registrationNumber || details?.['Tescil Numarası'] || null,
     registrationDate: registrationDate,
-    renewalDate: (() => {     
+    renewalDate: (() => {
+
       // Koruma Tarihi'ni al ve üzerine 10 yıl ekle
       if (details?.['Koruma Tarihi']) {
         console.log('🔍 Koruma Tarihi bulundu:', details['Koruma Tarihi']);
-        const korumaDate = new Date(details['Koruma Tarihi']);
-        if (!isNaN(korumaDate.getTime())) {
-          korumaDate.setFullYear(korumaDate.getFullYear() + 10);
-          console.log('✅ Renewal Date hesaplandı:', korumaDate);
-          return korumaDate; // Date objesi olarak döner
+        
+        // TÜRKPATENT tarih formatını düzelt: "24.03.2010" -> "2010-03-24"
+        const korumaDateStr = details['Koruma Tarihi'];
+        const dateFormatted = formatDate(korumaDateStr); // formatDate fonksiyonunu kullan
+        
+        if (dateFormatted) {
+          const korumaDate = new Date(dateFormatted);
+          if (!isNaN(korumaDate.getTime())) {
+            korumaDate.setFullYear(korumaDate.getFullYear() + 10);
+            console.log('✅ Renewal Date hesaplandı:', korumaDate);
+            return korumaDate;
+          }
         }
+        
+        console.log('❌ Koruma Tarihi parse edilemedi:', korumaDateStr);
       }
       
       console.log('❌ Ne Yenileme Tarihi ne de Koruma Tarihi bulunamadı');
