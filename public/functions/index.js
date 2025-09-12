@@ -4580,6 +4580,7 @@ export const checkAndCreateRenewalTasks = onCall({ region: "europe-west1" }, asy
     let assignedToUid = null;
     let assignedToEmail = null;
 
+    logger.log('🔍 Atama kuralı aranıyor: taskAssignments/' + taskTypeId);
     try {
         const ruleDocSnap = await adminDb.collection('taskAssignments').doc(taskTypeId).get();
         
@@ -4588,6 +4589,10 @@ export const checkAndCreateRenewalTasks = onCall({ region: "europe-west1" }, asy
         } else {
             logger.log('✅ Atama kuralı bulundu.');
             const rule = ruleDocSnap.data();
+            
+            // ⚠️ DEBUG: Kuralın içeriğini logla
+            logger.log('🔍 Kural içeriği:', JSON.stringify(rule, null, 2));
+            
             // Yenileme görevi "awaiting_client_approval" statusu ile oluşturulduğu için approvalStateAssigneeIds kullan
             const assigneeIds = Array.isArray(rule.approvalStateAssigneeIds) ? rule.approvalStateAssigneeIds : [];
             
@@ -4601,6 +4606,13 @@ export const checkAndCreateRenewalTasks = onCall({ region: "europe-west1" }, asy
                     assignedToUid = assigneeUid;
                     assignedToEmail = userData.email;
                     logger.log('✅ Atanan kullanıcı bulundu. UID: ' + assignedToUid + ', Email: ' + assignedToEmail);
+                    
+                    // ⚠️ DEBUG: Final atama değerleri
+                    logger.log('🔍 Final atama değerleri:', {
+                        assignedToUid: assignedToUid,
+                        assignedToEmail: assignedToEmail,
+                        taskTypeId: taskTypeId
+                    });
                 } else {
                     logger.warn('⚠️ Atama kuralındaki kullanıcı (' + assigneeUid + ') "users" koleksiyonunda bulunamadı. Görev atanmamış olarak oluşturulacak.');
                 }
@@ -4616,7 +4628,7 @@ export const checkAndCreateRenewalTasks = onCall({ region: "europe-west1" }, asy
         // Durumu 'rejected' veya 'geçersiz' olmayan tüm IP kayıtlarını al
         const allIpRecordsSnap = await adminDb.collection('ipRecords').get();
 
-        const batch = db.batch();
+        const batch = adminDb.batch(); // ✅ adminDb.batch() kullan
         const createdTaskIds = [];
         let recordsProcessed = 0;
 
@@ -4668,6 +4680,7 @@ export const checkAndCreateRenewalTasks = onCall({ region: "europe-west1" }, asy
                 logger.warn(`⚠️ IP Record ${ipRecordId} has no valid renewalDate or applicationDate, skipping.`);
                 continue;
             }
+            
             // Tarih aralığı kontrolü
             if (renewalDate < sixMonthsAgo || renewalDate > sixMonthsLater) {
                 logger.log(`⏩ IP Record ${ipRecordId} renewal date (${renewalDate.toISOString().slice(0, 10)}) is outside the 6-month window, skipping.`);
@@ -4709,11 +4722,13 @@ export const checkAndCreateRenewalTasks = onCall({ region: "europe-west1" }, asy
                 }]
             };
 
-            // Debug için task data'yı logla
+            // ⚠️ DEBUG: Task data'yı kontrol et
             logger.log('🔍 Oluşturulan task verisi:', {
                 assignedTo_uid: renewalTaskData.assignedTo_uid,
                 assignedTo_email: renewalTaskData.assignedTo_email,
-                title: renewalTaskData.title
+                title: renewalTaskData.title,
+                taskType: renewalTaskData.taskType,
+                status: renewalTaskData.status
             });
 
             const newTaskRef = adminDb.collection('tasks').doc();
