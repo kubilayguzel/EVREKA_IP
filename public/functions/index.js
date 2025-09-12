@@ -4627,11 +4627,6 @@ export const checkAndCreateRenewalTasks = onCall({ region: "europe-west1" }, asy
     } catch (err) {
       logger.error("❌ Approval assignee resolution error (renewal):", err);
     }
-
-    // Task dokümanına set et
-    renewalTaskData.assignedTo_uid = assignedTo_uid;
-    renewalTaskData.assignedTo_email = assignedTo_email;
-
     
     try {
         // Durumu 'rejected' veya 'geçersiz' olmayan tüm IP kayıtlarını al
@@ -4719,15 +4714,15 @@ export const checkAndCreateRenewalTasks = onCall({ region: "europe-west1" }, asy
                 status: 'awaiting_client_approval',
                 priority: 'medium',
                 dueDate: renewalDate.toISOString().slice(0, 10),
-                assignedTo_uid: assignedToUid,
-                assignedTo_email: assignedToEmail,
+                assignedTo_uid: assignedTo_uid, // assignedToUid değil assignedTo_uid kullan
+                assignedTo_email: assignedTo_email, // assignedToEmail değil assignedTo_email kullan
                 createdAt: admin.firestore.FieldValue.serverTimestamp(),
                 updatedAt: admin.firestore.FieldValue.serverTimestamp(),
                 // Tarihçe
                 history: [{
                     action: `Yenileme görevi otomatik olarak oluşturuldu. Müvekkil onayı bekleniyor.`,
                     timestamp: new Date().toISOString(),
-                    userEmail: assignedToEmail || 'sistem@evrekapatent.com'
+                    userEmail: assignedTo_email || 'sistem@evrekapatent.com'
                 }]
             };
 
