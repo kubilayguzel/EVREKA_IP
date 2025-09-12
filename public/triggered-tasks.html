@@ -339,10 +339,11 @@
                             <tr>
                                 <th>İş No.</th>
                                 <th>İlgili Kayıt</th>
+                                <th>Sahip</th>
                                 <th>Tip</th>
                                 <th>Öncelik</th>
                                 <th>Son Tarih</th>
-                                <th>Resmi Son Tarih</th> <!-- Yeni Kolon Eklendi -->
+                                <th>Resmi Son Tarih</th>
                                 <th>Durum</th>
                                 <th>İşlemler</th>
                             </tr>
@@ -706,10 +707,13 @@
                             : null;
                         const officialISO = officialDateObj ? officialDateObj.toISOString().slice(0, 10) : '';
                         const officialDisplay = officialDateObj ? officialDateObj.toLocaleDateString('tr-TR') : 'Belirtilmemiş';
-
+                        const ipRecord = this.allIpRecords.find(r => r.id === task.relatedIpRecordId);
+                        // Applicant bilgisini al (hepsini virgül ile yazdır)
+                        const applicantName = ipRecord?.applicants?.length ? ipRecord.applicants.map(a => a.name).join(', '): 'N/A';
                         row.innerHTML = `
                             <td>${task.id}</td>
                             <td>${task.relatedIpRecordTitle || 'N/A'}</td>
+                            <td>${applicantName}</td>
                             <td>${taskTypeDisplayName}</td>
                             <td><span class="priority-badge ${priorityClass}">${task.priority}</span></td>
                                 <td data-field="operationalDue" data-date="${dueISO}">
