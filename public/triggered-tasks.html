@@ -545,19 +545,47 @@
                     // Yeni: Manuel tetikleme butonu için listener eklendi
                     document.getElementById('manualRenewalTriggerBtn')?.addEventListener('click', async () => {
                         try {
-                            showNotification('Yenileme görevleri kontrol ediliyor...', 'info');
-                            const callable = httpsCallable(functions, 'checkAndCreateRenewalTasks');                            
-                            const result = await callable();
+                            // Kullanıcı oturumu kontrolü
+                            const user = auth.currentUser;
+                            if (!user) {
+                                showNotification('Lütfen önce giriş yapın.', 'error');
+                                return;
+                            }
+
+                            // Token yenileme
+                            await user.getIdToken(true);
                             
-                            if (result.data.success) {
+                            showNotification('Yenileme görevleri kontrol ediliyor...', 'info');
+                            
+                            // Functions referansını yeniden başlat
+                            const callable = httpsCallable(functions, 'checkAndCreateRenewalTasks');
+                            
+                            // Boş obje parametresi ile çağır
+                            const result = await callable({});
+                            
+                            if (result.data && result.data.success) {
                                 showNotification(`Başarıyla ${result.data.count} adet yeni yenileme görevi oluşturuldu.`, 'success');
                                 await this.loadAllData();
                             } else {
-                                showNotification('Yenileme görevleri oluşturulurken bir hata oluştu.', 'error');
+                                const errorMsg = result.data?.error || 'Bilinmeyen hata';
+                                showNotification(`Yenileme görevleri oluşturulurken hata: ${errorMsg}`, 'error');
                             }
                         } catch (error) {
                             console.error('Manuel yenileme tetiklemesi hatası:', error);
-                            showNotification('Yenileme görevleri kontrol edilemedi: ' + error.message, 'error');
+                            
+                            // Hata türüne göre özel mesajlar
+                            let errorMessage = 'Yenileme görevleri kontrol edilemedi.';
+                            if (error.code === 'unauthenticated') {
+                                errorMessage = 'Oturum süresi dolmuş. Lütfen tekrar giriş yapın.';
+                            } else if (error.code === 'permission-denied') {
+                                errorMessage = 'Bu işlem için yetkiniz yok.';
+                            } else if (error.code === 'internal') {
+                                errorMessage = 'Sunucu hatası. Lütfen daha sonra tekrar deneyin.';
+                            } else if (error.message) {
+                                errorMessage = error.message;
+                            }
+                            
+                            showNotification(errorMessage, 'error');
                         }
                     });
 
