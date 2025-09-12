@@ -545,12 +545,11 @@
                     document.getElementById('manualRenewalTriggerBtn')?.addEventListener('click', async () => {
                         try {
                             showNotification('Yenileme görevleri kontrol ediliyor...', 'info');
-                            const callable = firebase.functions().httpsCallable('checkAndCreateRenewalTasks');
+                            const callable = functions.httpsCallable('checkAndCreateRenewalTasks'); // Değiştirilen satır
                             const result = await callable();
                             
                             if (result.data.success) {
                                 showNotification(`Başarıyla ${result.data.count} adet yeni yenileme görevi oluşturuldu.`, 'success');
-                                // İşlem tamamlandıktan sonra tabloyu yenile
                                 await this.loadAllData();
                             } else {
                                 showNotification('Yenileme görevleri oluşturulurken bir hata oluştu.', 'error');
