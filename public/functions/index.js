@@ -4580,49 +4580,45 @@ export const checkAndCreateRenewalTasks = onCall({ region: "europe-west1" }, asy
     let assignedToUid = null;
     let assignedToEmail = null;
 
-    logger.log('🔍 Atama kuralı aranıyor: taskAssignments/' + taskTypeId);
+    // indexing-detail-module.js'deki mantığı aynen kullan
+    let assigned = { uid: null, email: null };
     try {
-        const ruleDocSnap = await adminDb.collection('taskAssignments').doc(taskTypeId).get();
-        
-        if (!ruleDocSnap.exists()) {
-            logger.warn('⚠️ Atama kuralı bulunamadı. Görev atanmamış olarak oluşturulacak.');
-        } else {
-            logger.log('✅ Atama kuralı bulundu.');
-            const rule = ruleDocSnap.data();
-            
-            // ⚠️ DEBUG: Kuralın içeriğini logla
-            logger.log('🔍 Kural içeriği:', JSON.stringify(rule, null, 2));
-            
-            // Yenileme görevi "awaiting_client_approval" statusu ile oluşturulduğu için approvalStateAssigneeIds kullan
-            const assigneeIds = Array.isArray(rule.approvalStateAssigneeIds) ? rule.approvalStateAssigneeIds : [];
-            
-            if (assigneeIds.length > 0) {
-                logger.log('✅ Onay durumu atanan kullanıcı listesi boş değil. İlk kullanıcı ID aranıyor: ' + assigneeIds[0]);
-                const assigneeUid = String(assigneeIds[0]);
-                const userSnap = await adminDb.collection('users').doc(assigneeUid).get();
+        if (taskTypeId) {
+            const ruleSnap = await adminDb.collection('taskAssignments').doc(String(taskTypeId)).get();
+            if (ruleSnap.exists()) {
+                const rule = ruleSnap.data() || {};
+                logger.log('📋 taskAssignments kuralı bulundu:', rule);
                 
-                if (userSnap.exists()) {
-                    const userData = userSnap.data();
-                    assignedToUid = assigneeUid;
-                    assignedToEmail = userData.email;
-                    logger.log('✅ Atanan kullanıcı bulundu. UID: ' + assignedToUid + ', Email: ' + assignedToEmail);
+                // Onay durumu için approvalStateAssigneeIds kullan
+                const approvalAssigneeIds = Array.isArray(rule.approvalStateAssigneeIds) ? rule.approvalStateAssigneeIds : [];
+                
+                if (approvalAssigneeIds.length > 0) {
+                    const uid = String(approvalAssigneeIds[0]); // İlk kişiye ata
+                    logger.log('👤 Onay durumu için atanan UID:', uid);
                     
-                    // ⚠️ DEBUG: Final atama değerleri
-                    logger.log('🔍 Final atama değerleri:', {
-                        assignedToUid: assignedToUid,
-                        assignedToEmail: assignedToEmail,
-                        taskTypeId: taskTypeId
-                    });
+                    // users koleksiyonundan email bilgisini al
+                    const userSnap = await adminDb.collection('users').doc(uid).get();
+                    if (userSnap.exists()) {
+                        const userData = userSnap.data() || {};
+                        const email = userData.email || null;
+                        assigned = { uid, email };
+                        logger.log('✅ Onay durumu ataması başarılı:', assigned);
+                    } else {
+                        logger.warn('⚠️ Kullanıcı bulunamadı, null olarak kalacak');
+                    }
                 } else {
-                    logger.warn('⚠️ Atama kuralındaki kullanıcı (' + assigneeUid + ') "users" koleksiyonunda bulunamadı. Görev atanmamış olarak oluşturulacak.');
+                    logger.warn('⚠️ approvalStateAssigneeIds listesi boş, null olarak kalacak');
                 }
             } else {
-                logger.warn('⚠️ Atama kuralı var ancak "approvalStateAssigneeIds" listesi boş. Görev atanmamış olarak oluşturulacak.');
+                logger.warn('⚠️ taskAssignments kuralı bulunamadı, null olarak kalacak');
             }
         }
-    } catch (e) {
-        logger.error('❌ Atama kuralı yüklenirken hata oluştu:', e);
+    } catch (err) {
+        logger.warn('❌ Atama kuralı çözümlenirken hata:', err?.message || err);
     }
+
+    assignedToUid = assigned.uid;
+    assignedToEmail = assigned.email;
     
     try {
         // Durumu 'rejected' veya 'geçersiz' olmayan tüm IP kayıtlarını al
