@@ -356,7 +356,16 @@ const mappedStatus = mapStatusToUtils(turkpatentStatus);
     applicationDate: formatDate(applicationDate),
     registrationNumber: registrationNumber || details?.['Tescil Numarası'] || null,
     registrationDate: registrationDate,
-    renewalDate: formatDate(details?.['Yenileme Tarihi']),
+    renewalDate: (() => {
+    if (details?.['Koruma Tarihi']) {
+      const korumaDate = new Date(details['Koruma Tarihi']);
+      if (!isNaN(korumaDate.getTime())) {
+        korumaDate.setFullYear(korumaDate.getFullYear() + 10);
+        return formatDate(korumaDate.toISOString().split('T')[0]);
+      }
+    }
+  return null;
+})(),
 
     // Marka bilgileri
     brandText: brandName || '',
