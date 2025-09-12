@@ -668,11 +668,21 @@
                     const noTasksMessage = document.getElementById('noTasksMessage');
                     tableBody.innerHTML = '';
 
-                    const filteredTasks = this.allTasks.filter(task => 
+                    let filteredTasks = this.allTasks.filter(task => 
                         (filterStatus === 'all' || task.status === filterStatus) &&
                         this.triggeredTaskStatuses.includes(task.status) // Sadece tetiklenen görev statülerine sahip olanları göster
                     );
-                    
+
+                    // 🔢 Task ID’yi numerik sıraya çevirerek küçükten büyüğe sırala
+                    filteredTasks = filteredTasks.sort((a, b) => {
+                        const idA = parseInt(a.id, 10);
+                        const idB = parseInt(b.id, 10);
+                        if (isNaN(idA) && isNaN(idB)) return 0;
+                        if (isNaN(idA)) return 1;
+                        if (isNaN(idB)) return -1;
+                        return idB - idA;
+                    });
+
                     if (filteredTasks.length === 0) {
                         noTasksMessage.style.display = 'block';
                         return;
