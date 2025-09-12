@@ -12,7 +12,7 @@ import { getFirestore, collection, addDoc,
     query, orderBy, where, getDoc, setDoc, arrayUnion, writeBatch, documentId, serverTimestamp, Timestamp, FieldValue }
 from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 import { getStorage, ref, uploadBytes, uploadBytesResumable, getDownloadURL, deleteObject } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js';
-import { getFunctions } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-functions.js';
+import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-functions.js';
 
 // --- Firebase App Initialization ---
 const firebaseConfig = {
@@ -38,7 +38,6 @@ try {
 } catch (error) {
     console.error('⚠️ Firebase initialization failed:', error.message);
 }
-import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-functions.js';
 
 let functions;
 if (isFirebaseAvailable) {
