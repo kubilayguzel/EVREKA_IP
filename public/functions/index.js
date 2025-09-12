@@ -4759,3 +4759,114 @@ export const checkAndCreateRenewalTasks = onCall({ region: "europe-west1" }, asy
     throw new HttpsError('internal', 'Yenileme görevleri oluşturulurken bir hata oluştu.', error?.message || String(error));
   }
 });
+renderTasks(filterStatus = 'all') { 
+  const tableBody = document.getElementById('myTasksTableBody');
+  const noTasksMessage = document.getElementById('noTasksMessage');
+  tableBody.innerHTML = '';
+
+  let filteredTasks = this.allTasks.filter(task => 
+    (filterStatus === 'all' || task.status === filterStatus) &&
+    this.triggeredTaskStatuses.includes(task.status) // Sadece tetiklenen görev statülerine sahip olanları göster
+  );
+
+  // 🔢 Task ID’yi numerik sıraya çevirerek BÜYÜKTEN KÜÇÜĞE sırala
+  filteredTasks = filteredTasks.sort((a, b) => {
+    const idA = parseInt(a.id, 10);
+    const idB = parseInt(b.id, 10);
+    if (isNaN(idA) && isNaN(idB)) return 0;
+    if (isNaN(idA)) return 1;
+    if (isNaN(idB)) return -1;
+    return idB - idA; // büyük → küçük
+  });
+
+  if (filteredTasks.length === 0) {
+    noTasksMessage.style.display = 'block';
+    return;
+  }
+  noTasksMessage.style.display = 'none';
+
+  filteredTasks.forEach(task => {
+    const row = document.createElement('tr');
+    const statusClass = `status-${task.status.replace(/ /g, '_').toLowerCase()}`;
+    const priorityClass = `priority-${task.priority.toLowerCase()}`;
+
+    // İşlem tipi adı
+    const transactionTypeObj = this.allTransactionTypes.find(t => t.id === task.taskType);
+    const taskTypeDisplayName = transactionTypeObj ? (transactionTypeObj.alias || transactionTypeObj.name) : (task.taskType || 'Bilinmiyor');
+
+    // --- ipRecord, başvuru no, applicant ve tarihler (renewalDate tabanlı) ---
+    // İlgili IP kaydı (ÖNCE tanımlıyoruz → TDZ hatası yok)
+    const ipRecord = this.allIpRecords.find(r => r.id === task.relatedIpRecordId) || null;
+
+    // Başvuru No
+    const applicationNumber = ipRecord?.applicationNumber || 'N/A';
+
+    // Applicant(lar)
+    const applicantName = (Array.isArray(ipRecord?.applicants) && ipRecord.applicants.length)
+      ? ipRecord.applicants.map(a => a?.name || '').filter(Boolean).join(', ')
+      : 'N/A';
+
+    // Resmi Son Tarih = renewalDate
+    // Son Tarih = renewalDate - 3 gün
+    let officialISO = '';
+    let officialDisplay = 'Belirtilmemiş';
+    let dueISO = '';
+    let dueDisplay = 'Belirtilmemiş';
+
+    // renewalDate'i güvenli biçimde Date'e çevir
+    let renewalDateObj = null;
+    const renewalRaw = ipRecord?.renewalDate ?? null;
+    if (renewalRaw) {
+      if (typeof renewalRaw?.toDate === 'function') {
+        // Firestore Timestamp
+        renewalDateObj = renewalRaw.toDate();
+      } else if (typeof renewalRaw === 'object' && typeof renewalRaw.seconds === 'number') {
+        // seconds alanı olan timestamp benzeri
+        renewalDateObj = new Date(renewalRaw.seconds * 1000);
+      } else {
+        // ISO/string/Date
+        renewalDateObj = new Date(renewalRaw);
+      }
+    }
+
+    if (renewalDateObj && !isNaN(renewalDateObj.getTime())) {
+      // Resmi son tarih (doğrudan renewalDate)
+      officialISO = renewalDateObj.toISOString().slice(0, 10);
+      officialDisplay = renewalDateObj.toLocaleDateString('tr-TR');
+
+      // Operasyonel son tarih = 3 gün önce
+      const dueDate = new Date(renewalDateObj);
+      dueDate.setDate(dueDate.getDate() - 3);
+      dueISO = dueDate.toISOString().slice(0, 10);
+      dueDisplay = dueDate.toLocaleDateString('tr-TR');
+    }
+
+    // Satır
+    row.innerHTML = `
+      <td>${task.id}</td>
+      <td>${applicationNumber}</td>
+      <td>${task.relatedIpRecordTitle || 'N/A'}</td>
+      <td>${applicantName}</td>
+      <td>${taskTypeDisplayName}</td>
+      <td><span class="priority-badge ${priorityClass}">${task.priority}</span></td>
+      <td data-field="operationalDue" data-date="${dueISO}">
+        ${dueDisplay}
+      </td>
+      <td data-field="officialDue" data-date="${officialISO}">
+        ${officialDisplay}
+      </td>
+      <td><span class="status-badge ${statusClass}">${this.statusDisplayMap[task.status] || task.status}</span></td>
+      <td>
+        <button class="action-btn" data-id="${task.id}" data-action="view">Görüntüle</button>
+        <button class="action-btn" data-id="${task.id}" data-action="edit">Düzenle</button>
+        <button class="action-btn add-accrual-btn" data-id="${task.id}">Ek Tahakkuk Oluştur</button>
+        <button class="action-btn change-status-btn" data-id="${task.id}">Durum Değiştir</button>
+      </td>
+    `;
+    tableBody.appendChild(row);
+  });
+
+  // Tarih renklendirici vb. yardımcılar
+  DeadlineHighlighter.refresh('triggeredTasks');
+}
+
