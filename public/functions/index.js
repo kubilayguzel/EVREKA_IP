@@ -4759,114 +4759,97 @@ export const checkAndCreateRenewalTasks = onCall({ region: "europe-west1" }, asy
     throw new HttpsError('internal', 'Yenileme görevleri oluşturulurken bir hata oluştu.', error?.message || String(error));
   }
 });
-renderTasks(filterStatus = 'all') { 
-  const tableBody = document.getElementById('myTasksTableBody');
-  const noTasksMessage = document.getElementById('noTasksMessage');
-  tableBody.innerHTML = '';
+// Yeni: Yenileme (taskType=22) işi oluşturulduğunda müşteri mail taslağı aç
+export const createClientNotificationOnRenewalTaskCreated = onDocumentCreated(
+  { document: "tasks/{taskId}", region: "europe-west1" },
+  async (event) => {
+    const snap = event.data;
+    const task = snap?.data() || {};
+    const taskId = event.params.taskId;
 
-  let filteredTasks = this.allTasks.filter(task => 
-    (filterStatus === 'all' || task.status === filterStatus) &&
-    this.triggeredTaskStatuses.includes(task.status) // Sadece tetiklenen görev statülerine sahip olanları göster
-  );
+    // Yalnızca yenileme + müvekkil onayı bekliyor
+    if (String(task.taskType) !== "22") return null;
+    if (task.status !== "awaiting_client_approval") return null;
 
-  // 🔢 Task ID’yi numerik sıraya çevirerek BÜYÜKTEN KÜÇÜĞE sırala
-  filteredTasks = filteredTasks.sort((a, b) => {
-    const idA = parseInt(a.id, 10);
-    const idB = parseInt(b.id, 10);
-    if (isNaN(idA) && isNaN(idB)) return 0;
-    if (isNaN(idA)) return 1;
-    if (isNaN(idB)) return -1;
-    return idB - idA; // büyük → küçük
-  });
+    try {
+      // 1) İlgili IP kaydı ve applicants
+      const relatedIpRecordId = task.relatedIpRecordId;
+      if (!relatedIpRecordId) return null;
 
-  if (filteredTasks.length === 0) {
-    noTasksMessage.style.display = 'block';
-    return;
-  }
-  noTasksMessage.style.display = 'none';
+      const ipRef = adminDb.collection("ipRecords").doc(relatedIpRecordId);
+      const ipDoc = await ipRef.get();
+      if (!ipDoc.exists) return null;
 
-  filteredTasks.forEach(task => {
-    const row = document.createElement('tr');
-    const statusClass = `status-${task.status.replace(/ /g, '_').toLowerCase()}`;
-    const priorityClass = `priority-${task.priority.toLowerCase()}`;
+      const ipData = ipDoc.data() || {};
+      const applicants = ipData.applicants || [];
 
-    // İşlem tipi adı
-    const transactionTypeObj = this.allTransactionTypes.find(t => t.id === task.taskType);
-    const taskTypeDisplayName = transactionTypeObj ? (transactionTypeObj.alias || transactionTypeObj.name) : (task.taskType || 'Bilinmiyor');
+      // 2) Alıcılar (mevcut yardımcıyı kullan)
+      // notificationType sisteminizde 'marka' / 'trademark' gibi; sizde kullanılan key'i geçin
+      const notificationType = (task.mainProcessType || "marka");
+      const { to: toList = [], cc: ccList = [] } = await getRecipientsByApplicantIds(applicants, notificationType); // :contentReference[oaicite:4]{index=4}
 
-    // --- ipRecord, başvuru no, applicant ve tarihler (renewalDate tabanlı) ---
-    // İlgili IP kaydı (ÖNCE tanımlıyoruz → TDZ hatası yok)
-    const ipRecord = this.allIpRecords.find(r => r.id === task.relatedIpRecordId) || null;
-
-    // Başvuru No
-    const applicationNumber = ipRecord?.applicationNumber || 'N/A';
-
-    // Applicant(lar)
-    const applicantName = (Array.isArray(ipRecord?.applicants) && ipRecord.applicants.length)
-      ? ipRecord.applicants.map(a => a?.name || '').filter(Boolean).join(', ')
-      : 'N/A';
-
-    // Resmi Son Tarih = renewalDate
-    // Son Tarih = renewalDate - 3 gün
-    let officialISO = '';
-    let officialDisplay = 'Belirtilmemiş';
-    let dueISO = '';
-    let dueDisplay = 'Belirtilmemiş';
-
-    // renewalDate'i güvenli biçimde Date'e çevir
-    let renewalDateObj = null;
-    const renewalRaw = ipRecord?.renewalDate ?? null;
-    if (renewalRaw) {
-      if (typeof renewalRaw?.toDate === 'function') {
-        // Firestore Timestamp
-        renewalDateObj = renewalRaw.toDate();
-      } else if (typeof renewalRaw === 'object' && typeof renewalRaw.seconds === 'number') {
-        // seconds alanı olan timestamp benzeri
-        renewalDateObj = new Date(renewalRaw.seconds * 1000);
-      } else {
-        // ISO/string/Date
-        renewalDateObj = new Date(renewalRaw);
+      // 3) Şablon kuralı (taskType’a göre) - veritabanınızda zaten tanımlı
+      // Örn: template_rules[sourceType='task', taskType='22'] → templateId
+      let templateId = null;
+      try {
+        const ruleSnap = await adminDb.collection("template_rules")
+          .where("sourceType", "==", "task")
+          .where("taskType", "==", "22")
+          .limit(1)
+          .get();
+        if (!ruleSnap.empty) {
+          templateId = ruleSnap.docs[0].data()?.templateId || null;
+        }
+      } catch (e) {
+        console.warn("template_rules lookup failed:", e?.message || e);
       }
+
+      // 4) Konu/Gövde (İsterseniz burada template body/subject’i resolve edebilirsiniz;
+      // yoksa boş geçin, UI zaten taslak üzerinde düzenliyor)
+      const subject = task.title || `${ipData.title || "Marka"} Yenileme – Onay Talebi`;
+      const body    = task.description || "Yenileme işlemi için onayınızı rica ederiz.";
+
+      // 5) Eksik alan kontrolü → ortak statü mantığına uygun missing_info/awaiting… (örneğe paralel)
+      const hasRecipients = (toList.length + ccList.length) > 0;
+      const missingFields = [];
+      if (!hasRecipients) missingFields.push("recipients");
+      if (!templateId)    missingFields.push("template");
+      const finalStatus = missingFields.length ? "missing_info" : "awaiting_client_approval";
+
+      // 6) mail_notifications kaydını oluştur (ortak şemayla bire bir)
+      const notificationDoc = {
+        toList, ccList,                                 // ✔ alıcılar
+        clientId: task.clientId || (applicants?.[0]?.id || null),
+        subject, body,
+        status: finalStatus,
+        mode: "draft",
+        isDraft: true,
+
+        assignedTo_uid: task.assignedTo_uid || null,    // ✔ mevcut atamayı taşı
+        assignedTo_email: task.assignedTo_email || null,
+
+        sourceDocumentId: null,
+        relatedIpRecordId,                               // ✔ işinizin ilişkilendiği IP kaydı
+        associatedTaskId: taskId,                        // ✔ bu task’a bağlı
+        associatedTransactionId: null,
+
+        templateId,
+        notificationType,
+        source: "task_renewal_auto",
+        missingFields,
+
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      };
+
+      await adminDb.collection("mail_notifications").add(notificationDoc); // :contentReference[oaicite:5]{index=5}
+      console.log("✅ Renewal task notification draft created", { taskId });
+
+      return null;
+    } catch (err) {
+      console.error("❌ renewal notification create failed:", err);
+      return null;
     }
-
-    if (renewalDateObj && !isNaN(renewalDateObj.getTime())) {
-      // Resmi son tarih (doğrudan renewalDate)
-      officialISO = renewalDateObj.toISOString().slice(0, 10);
-      officialDisplay = renewalDateObj.toLocaleDateString('tr-TR');
-
-      // Operasyonel son tarih = 3 gün önce
-      const dueDate = new Date(renewalDateObj);
-      dueDate.setDate(dueDate.getDate() - 3);
-      dueISO = dueDate.toISOString().slice(0, 10);
-      dueDisplay = dueDate.toLocaleDateString('tr-TR');
-    }
-
-    // Satır
-    row.innerHTML = `
-      <td>${task.id}</td>
-      <td>${applicationNumber}</td>
-      <td>${task.relatedIpRecordTitle || 'N/A'}</td>
-      <td>${applicantName}</td>
-      <td>${taskTypeDisplayName}</td>
-      <td><span class="priority-badge ${priorityClass}">${task.priority}</span></td>
-      <td data-field="operationalDue" data-date="${dueISO}">
-        ${dueDisplay}
-      </td>
-      <td data-field="officialDue" data-date="${officialISO}">
-        ${officialDisplay}
-      </td>
-      <td><span class="status-badge ${statusClass}">${this.statusDisplayMap[task.status] || task.status}</span></td>
-      <td>
-        <button class="action-btn" data-id="${task.id}" data-action="view">Görüntüle</button>
-        <button class="action-btn" data-id="${task.id}" data-action="edit">Düzenle</button>
-        <button class="action-btn add-accrual-btn" data-id="${task.id}">Ek Tahakkuk Oluştur</button>
-        <button class="action-btn change-status-btn" data-id="${task.id}">Durum Değiştir</button>
-      </td>
-    `;
-    tableBody.appendChild(row);
-  });
-
-  // Tarih renklendirici vb. yardımcılar
-  DeadlineHighlighter.refresh('triggeredTasks');
-}
+  }
+);
 
