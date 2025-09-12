@@ -4563,6 +4563,7 @@ export const scrapeOwnerTrademarks = onCall(
  * - ipRecords status "geçersiz" veya "rejected" olmamalı
  * - Yenileme tarihi bugünden 6 ay önce veya sonraki aralığa girmeli
  * - WIPO/ARIPO kayıtları için sadece 'parent' hiyerarşisindekiler işleme alınır.
+ * - Atama, taskAssignments koleksiyonundaki kurala göre yapılır.
  */
 export const checkAndCreateRenewalTasks = onCall({ region: "europe-west1" }, async (request) => {
     logger.log('🔄 Renewal task check started manually with updated rules');
@@ -4573,15 +4574,34 @@ export const checkAndCreateRenewalTasks = onCall({ region: "europe-west1" }, asy
     sixMonthsAgo.setMonth(TODAY.getMonth() - 6);
     const sixMonthsLater = new Date();
     sixMonthsLater.setMonth(TODAY.getMonth() + 6);
-
-    // Otomatik atama için bir default kullanıcı belirle (örneğin sistem yöneticisi)
-    const defaultAssigneeUid = 'SELÇAN_KULLANICI_ID'; // <<< BU ALANI GÜNCELLEYİN
-    const defaultAssigneeEmail = 'selcanakoglu@evrekapatent.com'; // <<< BU ALANI GÜNCELLEYİN
+    
+    // Otomatik atama kuralını al
+    const taskTypeId = '22';
+    let assignedToUid = null;
+    let assignedToEmail = null;
 
     try {
-        // 1. Durumu 'rejected' veya 'geçersiz' olmayan tüm IP kayıtlarını al
-        // Firestore'da '!=' operatörü olmadığı için, tüm kayıtları alıp kod içinde filtreleme yapıyoruz.
-        // Bu, veritabanı boyutuna bağlı olarak maliyetli olabilir, ancak doğru sonucu verir.
+        const ruleDocSnap = await adminDb.collection('taskAssignments').doc(taskTypeId).get();
+        if (ruleDocSnap.exists()) {
+            const rule = ruleDocSnap.data();
+            const assigneeIds = Array.isArray(rule.assigneeIds) ? rule.assigneeIds : [];
+            if (assigneeIds.length > 0) {
+                // Kurala göre ilk atananı bul
+                const assigneeUid = String(assigneeIds[0]);
+                const userSnap = await adminDb.collection('users').doc(assigneeUid).get();
+                if (userSnap.exists()) {
+                    const userData = userSnap.data();
+                    assignedToUid = assigneeUid;
+                    assignedToEmail = userData.email;
+                }
+            }
+        }
+    } catch (e) {
+        logger.error('❌ Atama kuralı yüklenirken hata oluştu:', e);
+    }
+    
+    try {
+        // Durumu 'rejected' veya 'geçersiz' olmayan tüm IP kayıtlarını al
         const allIpRecordsSnap = await adminDb.collection('ipRecords').get();
 
         const batch = db.batch();
@@ -4593,13 +4613,13 @@ export const checkAndCreateRenewalTasks = onCall({ region: "europe-west1" }, asy
             const ipRecordId = doc.id;
             recordsProcessed++;
 
-            // 2. Durum filtrelemesi: 'geçersiz' veya 'rejected' olanları atla
+            // Durum filtrelemesi: 'geçersiz' veya 'rejected' olanları atla
             if (ipRecord.status === 'geçersiz' || ipRecord.status === 'rejected') {
                 logger.log(`⏩ IP Record ${ipRecordId} status is '${ipRecord.status}', skipping renewal task creation.`);
                 continue;
             }
 
-            // 3. WIPO/ARIPO kontrolü: Eğer varsa ve 'parent' değilse atla
+            // WIPO/ARIPO kontrolü: Eğer varsa ve 'parent' değilse atla
             if ((ipRecord.wipoIR || ipRecord.aripoIR) && ipRecord.transactionHierarchy !== 'parent') {
                 logger.log(`⏩ IP Record ${ipRecordId} is a child of WIPO/ARIPO, skipping renewal task creation.`);
                 continue;
@@ -4608,19 +4628,15 @@ export const checkAndCreateRenewalTasks = onCall({ region: "europe-west1" }, asy
             // Yenileme tarihini belirle (önce renewalDate, sonra applicationDate + 10 yıl)
             let renewalDate = null;
 
-            // renewalDate field kontrolü - hem Timestamp hem string destekle
             if (ipRecord.renewalDate) {
                 if (typeof ipRecord.renewalDate?.toDate === 'function') {
-                    // Firestore Timestamp
                     renewalDate = ipRecord.renewalDate.toDate();
                 } else if (typeof ipRecord.renewalDate === 'string' || ipRecord.renewalDate instanceof Date) {
-                    // String tarih veya Date objesi
                     renewalDate = new Date(ipRecord.renewalDate);
                     if (isNaN(renewalDate.getTime())) renewalDate = null;
                 }
             }
 
-            // renewalDate yoksa applicationDate + 10 yıl kullan
             if (!renewalDate && ipRecord.applicationDate) {
                 let appDate = null;
                 if (typeof ipRecord.applicationDate?.toDate === 'function') {
@@ -4636,16 +4652,20 @@ export const checkAndCreateRenewalTasks = onCall({ region: "europe-west1" }, asy
                 }
             }
 
-            // 4. Tarih aralığı kontrolü
+            if (!renewalDate) {
+                logger.warn(`⚠️ IP Record ${ipRecordId} has no valid renewalDate or applicationDate, skipping.`);
+                continue;
+            }
+            // Tarih aralığı kontrolü
             if (renewalDate < sixMonthsAgo || renewalDate > sixMonthsLater) {
                 logger.log(`⏩ IP Record ${ipRecordId} renewal date (${renewalDate.toISOString().slice(0, 10)}) is outside the 6-month window, skipping.`);
                 continue;
             }
             
-            // Bu kayıt için zaten "Müvekkil Onayı Bekliyor" statüsünde bir görev var mı kontrol et
+            // Bu kayıt için zaten ilgili bir görev var mı kontrol et
             const existingTaskSnap = await adminDb.collection('tasks')
                 .where('relatedIpRecordId', '==', ipRecordId)
-                .where('taskType', '==', '22')
+                .where('taskType', '==', taskTypeId)
                 .where('status', 'in', ['awaiting_client_approval', 'open', 'in-progress'])
                 .limit(1)
                 .get();
@@ -4659,21 +4679,21 @@ export const checkAndCreateRenewalTasks = onCall({ region: "europe-west1" }, asy
             const renewalTaskData = {
                 title: `${ipRecord.title} Marka Yenileme`,
                 description: `${ipRecord.title} adlı markanın yenileme süreci için müvekkil onayı bekleniyor. Yenileme tarihi: ${renewalDate.toLocaleDateString('tr-TR')}.`,
-                taskType: '22',
+                taskType: taskTypeId,
                 relatedIpRecordId: ipRecordId,
                 relatedIpRecordTitle: ipRecord.title,
                 status: 'awaiting_client_approval',
                 priority: 'medium',
                 dueDate: renewalDate.toISOString().slice(0, 10),
-                assignedTo_uid: defaultAssigneeUid,
-                assignedTo_email: defaultAssigneeEmail,
+                assignedTo_uid: assignedToUid,
+                assignedTo_email: assignedToEmail,
                 createdAt: admin.firestore.FieldValue.serverTimestamp(),
                 updatedAt: admin.firestore.FieldValue.serverTimestamp(),
                 // Tarihçe
                 history: [{
                     action: `Yenileme görevi otomatik olarak oluşturuldu. Müvekkil onayı bekleniyor.`,
                     timestamp: new Date().toISOString(),
-                    userEmail: 'sistem@evrekapatent.com'
+                    userEmail: assignedToEmail || 'sistem@evrekapatent.com'
                 }]
             };
 
