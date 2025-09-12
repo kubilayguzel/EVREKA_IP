@@ -462,6 +462,7 @@
         import { showNotification } from './utils.js'; // showNotification utils.js'ten geliyor
         import { loadSharedLayout } from './js/layout-loader.js';
         import { doc, getDoc, arrayUnion } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+        import { httpsCallable } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-functions.js';
 
         document.addEventListener('DOMContentLoaded', async () => {
             await loadSharedLayout({ activeMenuLink: 'triggered-tasks.html' }); // Güncellendi
@@ -545,7 +546,7 @@
                     document.getElementById('manualRenewalTriggerBtn')?.addEventListener('click', async () => {
                         try {
                             showNotification('Yenileme görevleri kontrol ediliyor...', 'info');
-                            const callable = functions.httpsCallable('checkAndCreateRenewalTasks'); // Değiştirilen satır
+                            const callable = httpsCallable(functions, 'checkAndCreateRenewalTasks');                            
                             const result = await callable();
                             
                             if (result.data.success) {
