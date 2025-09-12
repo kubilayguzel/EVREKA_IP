@@ -4705,9 +4705,16 @@ export const checkAndCreateRenewalTasks = onCall({ region: "europe-west1" }, asy
                 history: [{
                     action: `Yenileme görevi otomatik olarak oluşturuldu. Müvekkil onayı bekleniyor.`,
                     timestamp: new Date().toISOString(),
-                    userEmail: 'sistem@evrekapatent.com'
+                    userEmail: assignedToEmail || 'sistem@evrekapatent.com'
                 }]
             };
+
+            // Debug için task data'yı logla
+            logger.log('🔍 Oluşturulan task verisi:', {
+                assignedTo_uid: renewalTaskData.assignedTo_uid,
+                assignedTo_email: renewalTaskData.assignedTo_email,
+                title: renewalTaskData.title
+            });
 
             const newTaskRef = adminDb.collection('tasks').doc();
             batch.set(newTaskRef, renewalTaskData);
