@@ -4706,9 +4706,19 @@ export const checkAndCreateRenewalTasks = onCall({ region: "europe-west1" }, asy
                 logger.log(`ℹ️ IP Record ${ipRecordId} için zaten bir yenileme görevi mevcut, atlanıyor.`);
                 continue;
             }
+
+            // ******************************************************
+            // ✅ Burası değiştirildi: Counter koleksiyonunu kullan
+            const counterRef = adminDb.collection('counters').doc('tasks');
+            const counterSnap = await counterRef.get();
+            const lastTaskNumber = counterSnap.exists ? counterSnap.data().currentNumber : 0;
+            const newTaskId = lastTaskNumber + 1;
             
+            batch.update(counterRef, { currentNumber: newTaskId });
+
             // Yeni görev verisini oluştur
             const renewalTaskData = {
+                taskId: newTaskId, // ✅ Yeni taskId alanını ekledik
                 title: `${ipRecord.title} Marka Yenileme`,
                 description: `${ipRecord.title} adlı markanın yenileme süreci için müvekkil onayı bekleniyor. Yenileme tarihi: ${renewalDate.toLocaleDateString('tr-TR')}.`,
                 taskType: taskTypeId,
@@ -4717,11 +4727,10 @@ export const checkAndCreateRenewalTasks = onCall({ region: "europe-west1" }, asy
                 status: 'awaiting_client_approval',
                 priority: 'medium',
                 dueDate: renewalDate.toISOString().slice(0, 10),
-                assignedTo_uid: assignedTo_uid, // assignedToUid değil assignedTo_uid kullan
-                assignedTo_email: assignedTo_email, // assignedToEmail değil assignedTo_email kullan
+                assignedTo_uid: assignedTo_uid,
+                assignedTo_email: assignedTo_email,
                 createdAt: admin.firestore.FieldValue.serverTimestamp(),
                 updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-                // Tarihçe
                 history: [{
                     action: `Yenileme görevi otomatik olarak oluşturuldu. Müvekkil onayı bekleniyor.`,
                     timestamp: new Date().toISOString(),
@@ -4729,20 +4738,20 @@ export const checkAndCreateRenewalTasks = onCall({ region: "europe-west1" }, asy
                 }]
             };
 
-            // ⚠️ DEBUG: Task data'yı kontrol et
             logger.log('🔍 Oluşturulan task verisi:', {
                 assignedTo_uid: renewalTaskData.assignedTo_uid,
                 assignedTo_email: renewalTaskData.assignedTo_email,
                 title: renewalTaskData.title,
                 taskType: renewalTaskData.taskType,
-                status: renewalTaskData.status
+                status: renewalTaskData.status,
+                taskId: newTaskId // ✅ Yeni taskId'yi logluyoruz
             });
 
-            const newTaskRef = adminDb.collection('tasks').doc();
+            const newTaskRef = adminDb.collection('tasks').doc(String(newTaskId));
             batch.set(newTaskRef, renewalTaskData);
-            createdTaskIds.push(newTaskRef.id);
+            createdTaskIds.push(String(newTaskId));
 
-            logger.log(`✅ Yeni yenileme görevi oluşturuldu: ${newTaskRef.id} for ${ipRecord.title}`);
+            logger.log(`✅ Yeni yenileme görevi oluşturuldu: ${String(newTaskId)} for ${ipRecord.title}`);
         }
 
         if (createdTaskIds.length > 0) {
