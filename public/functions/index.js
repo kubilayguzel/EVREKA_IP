@@ -4607,25 +4607,33 @@ export const checkAndCreateRenewalTasks = onCall({ region: "europe-west1" }, asy
 
             // Yenileme tarihini belirle (önce renewalDate, sonra applicationDate + 10 yıl)
             let renewalDate = null;
+
+            // renewalDate field kontrolü - hem Timestamp hem string destekle
             if (ipRecord.renewalDate) {
                 if (typeof ipRecord.renewalDate?.toDate === 'function') {
                     // Firestore Timestamp
                     renewalDate = ipRecord.renewalDate.toDate();
-                } else if (typeof ipRecord.renewalDate === 'string') {
-                    // String tarih
+                } else if (typeof ipRecord.renewalDate === 'string' || ipRecord.renewalDate instanceof Date) {
+                    // String tarih veya Date objesi
                     renewalDate = new Date(ipRecord.renewalDate);
                     if (isNaN(renewalDate.getTime())) renewalDate = null;
                 }
             }
-            if (!renewalDate && ipRecord.applicationDate) {
-                const appDate = ipRecord.applicationDate.toDate ? ipRecord.applicationDate.toDate() : new Date(ipRecord.applicationDate);
-                renewalDate = new Date(appDate);
-                renewalDate.setFullYear(renewalDate.getFullYear() + 10);
-            }
 
-            if (!renewalDate) {
-                logger.warn(`⚠️ IP Record ${ipRecordId} has no valid renewalDate or applicationDate, skipping.`);
-                continue;
+            // renewalDate yoksa applicationDate + 10 yıl kullan
+            if (!renewalDate && ipRecord.applicationDate) {
+                let appDate = null;
+                if (typeof ipRecord.applicationDate?.toDate === 'function') {
+                    appDate = ipRecord.applicationDate.toDate();
+                } else if (typeof ipRecord.applicationDate === 'string' || ipRecord.applicationDate instanceof Date) {
+                    appDate = new Date(ipRecord.applicationDate);
+                    if (isNaN(appDate.getTime())) appDate = null;
+                }
+                
+                if (appDate) {
+                    renewalDate = new Date(appDate);
+                    renewalDate.setFullYear(renewalDate.getFullYear() + 10);
+                }
             }
 
             // 4. Tarih aralığı kontrolü
