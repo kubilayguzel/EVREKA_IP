@@ -1461,130 +1461,106 @@ populateFormFields(recordData) {
  *  - Eklenen ülkeler için child ipRecords oluşturur
  *  - Silinen ülkeler için ilgili child ipRecords'u siler
  */
-async syncWipoAripoChildren(parentId, updatedParentData) {
-  try {
-    if (!parentId) return;
+async syncWipoAripoChildren(parentId, parentDataFromForm) {
+  if (!parentId) return;
 
-    // Parent kaydı çek
-    const res = await ipRecordsService.getRecordById(parentId);
-    if (!res?.success || !res?.data) return;
-    const parent = res.data;
+  // Parent’ı veritabanından çek
+  const parentRes = await ipRecordsService.getRecordById(parentId);
+  if (!parentRes?.success || !parentRes?.data) return;
+  const parent = parentRes.data;
 
-    const origin = parent?.origin || updatedParentData?.origin;
-    const hierarchy = parent?.transactionHierarchy || updatedParentData?.transactionHierarchy;
-    if (!['WIPO','ARIPO'].includes(origin)) return;
-    if (hierarchy !== 'parent') return;
+  const origin = String(parent?.origin || parentDataFromForm?.origin || '');
+  if (!['WIPO','ARIPO'].includes(origin)) return;
 
-    // Hedef ülke listesi (form state > updatedParentData.countries > parent.countries)
-    const desiredCountries = Array.isArray(this.selectedCountries) && this.selectedCountries.length
-      ? this.selectedCountries.map(c => c.code)
-      : (Array.isArray(updatedParentData?.countries) && updatedParentData.countries.length
-          ? updatedParentData.countries
-          : (Array.isArray(parent?.countries) ? parent.countries : []));
-    
-    // IR numarası ve filtre alanı
-    const isWipo = (origin === 'WIPO');
-    const irNumber = isWipo ? (parent?.wipoIR || updatedParentData?.wipoIR) 
-                            : (parent?.aripoIR || updatedParentData?.aripoIR);
-    if (!irNumber) return;
+  // IR numarası
+  const isWipo = origin === 'WIPO';
+  const irNumber = isWipo
+    ? (parent?.wipoIR || parentDataFromForm?.wipoIR || null)
+    : (parent?.aripoIR || parentDataFromForm?.aripoIR || null);
+  if (!irNumber) return;
 
-    // Mevcut child'ları çek
-    const db = getFirestore();
-    const colRef = collection(db, 'ipRecords');
+  // Hedef ülke listesi (UI state öncelikli)
+  const desiredCountries = Array.isArray(this.selectedCountries) && this.selectedCountries.length
+    ? this.selectedCountries.map(c => c.code)
+    : (Array.isArray(parentDataFromForm?.countries) && parentDataFromForm.countries.length
+        ? parentDataFromForm.countries
+        : []);
 
-    const q = query(
-      colRef,
-      where('transactionHierarchy', '==', 'child'),
-      where('origin', '==', origin),
-      where(isWipo ? 'wipoIR' : 'aripoIR', '==', irNumber)
-    );
-    const snap = await getDocs(q);
+  // Mevcut child’ları çek
+  const db = getFirestore();
+  const colRef = collection(db, 'ipRecords');
+  const q = query(
+    colRef,
+    where('transactionHierarchy', '==', 'child'),
+    where('origin', '==', origin),
+    where(isWipo ? 'wipoIR' : 'aripoIR', '==', String(irNumber))
+  );
+  const snap = await getDocs(q);
 
-    const existingChildren = [];
-    snap.forEach(d => {
-      const data = d.data();
-      existingChildren.push({ id: d.id, ...data });
-    });
+  const existingChildren = [];
+  snap.forEach(d => existingChildren.push({ id: d.id, ...d.data() }));
+  const existingCountries = existingChildren.map(c => c.country).filter(Boolean);
 
-    const existingCountries = existingChildren.map(c => c.country).filter(Boolean);
+  // Farklar
+  const desiredSet = new Set((desiredCountries || []).filter(Boolean));
+  const existingSet = new Set((existingCountries || []).filter(Boolean));
 
-    // Farkları hesapla
-    const desiredSet = new Set((desiredCountries || []).filter(Boolean));
-    const existingSet = new Set((existingCountries || []).filter(Boolean));
+  const toAdd = [...desiredSet].filter(c => !existingSet.has(c));
+  const toRemove = existingChildren.filter(c => !desiredSet.has(c.country));
 
-    const toAdd = [...desiredSet].filter(c => !existingSet.has(c));
-    const toRemove = existingChildren.filter(c => !desiredSet.has(c.country));
+  // Parent'tan kopyalanacak temel alanlar
+  const baseCopy = {
+    title: parent.title || parent.brandText || '',
+    type: parent.type || 'trademark',
+    portfoyStatus: parent.portfoyStatus || 'active',
+    status: parent.status || 'filed',
+    recordOwnerType: parent.recordOwnerType || 'self',
+    origin,
+    wipoIR: isWipo ? String(irNumber) : null,
+    aripoIR: isWipo ? null : String(irNumber),
+    transactionHierarchy: 'child',
+    parentId: String(parentId),
 
-    // Ortak parent verilerinden kopyalayacağımız alanlar
-    const baseCopy = {
-      title: parent.title || parent.brandText || '',
-      type: parent.type || 'trademark',
-      portfoyStatus: parent.portfoyStatus || 'active',
-      status: parent.status || 'filed',
-      recordOwnerType: parent.recordOwnerType || 'self',
-      origin,
-      // IR alanları:
-      wipoIR: isWipo ? String(irNumber) : null,
-      aripoIR: isWipo ? null : String(irNumber),
-      transactionHierarchy: 'child',
-      parentId: String(parentId),
+    brandText: parent.brandText || null,
+    brandImageUrl: parent.brandImageUrl || null,
+    brandType: parent.brandType || null,
+    brandCategory: parent.brandCategory || null,
+    nonLatinAlphabet: parent.nonLatinAlphabet || null,
 
-      // Marka/alan kopyaları
-      brandText: parent.brandText || null,
-      brandImageUrl: parent.brandImageUrl || null,
-      brandType: parent.brandType || null,
-      brandCategory: parent.brandCategory || null,
-      nonLatinAlphabet: parent.nonLatinAlphabet || null,
+    goodsAndServicesByClass: parent.goodsAndServicesByClass || null,
+    applicants: Array.isArray(parent.applicants) ? parent.applicants : [],
+    priorities: Array.isArray(parent.priorities) ? parent.priorities : [],
 
-      // Nice & rüçhan & başvuru sahipleri
-      goodsAndServicesByClass: parent.goodsAndServicesByClass || null,
-      applicants: Array.isArray(parent.applicants) ? parent.applicants : [],
-      priorities: Array.isArray(parent.priorities) ? parent.priorities : [],
+    applicationNumber: parent.applicationNumber || null,
+    applicationDate: parent.applicationDate || null,
+    registrationNumber: parent.registrationNumber || null,
+    registrationDate: parent.registrationDate || null,
+    renewalDate: parent.renewalDate || null,
 
-      // Tarihler/numaralar
-      applicationNumber: parent.applicationNumber || null,
-      applicationDate: parent.applicationDate || null,
-      registrationNumber: parent.registrationNumber || null,
-      registrationDate: parent.registrationDate || null,
-      renewalDate: parent.renewalDate || null,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
 
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
+  // ✅ Eklenen ülkeler için child oluştur
+  for (const code of toAdd) {
+    const childData = { ...baseCopy, country: code };
+    const createRes = await ipRecordsService.createRecord(childData);
+    if (!createRes?.success) {
+      console.error('Child oluşturulamadı:', code, createRes?.error);
+    }
+  }
 
-    // ✅ Eklenen ülkeler için child oluştur
-    for (const code of toAdd) {
-      const childData = { ...baseCopy, country: code };
-      const createRes = await ipRecordsService.createRecord(childData);
-      if (!createRes?.success) {
-        console.error('Child oluşturulamadı:', code, createRes?.error);
+  // ✅ Silinen ülkeler için child sil
+  for (const child of toRemove) {
+    if (child?.id) {
+      const delRes = await ipRecordsService.deleteRecord(child.id);
+      if (!delRes?.success) {
+        console.error('Child silinemedi:', child.id, delRes?.error);
       }
     }
-
-    // ✅ Silinen ülkeler için child sil
-    for (const child of toRemove) {
-      // Not: child document id lazım
-      if (child?.id) {
-        const delRes = await ipRecordsService.deleteRecord(child.id);
-        if (!delRes?.success) {
-          console.error('Child silinemedi:', child.id, delRes?.error);
-        }
-      }
-    }
-
-    // Son olarak parent.countries alanını güncel tutalım (UI’den gelen liste öncelik)
-    if (Array.isArray(desiredCountries)) {
-      await ipRecordsService.updateRecord(String(parentId), {
-        countries: desiredCountries,
-        updatedAt: new Date().toISOString()
-      });
-    }
-
-  } catch (err) {
-    console.error('syncWipoAripoChildren hata:', err);
-    throw err;
   }
 }
+
 
 // js/data-entry.js dosyasındaki saveTrademarkPortfolio fonksiyonunda yapılacak değişiklik:
 
@@ -1866,12 +1842,45 @@ async saveTrademarkPortfolio(portfolioData) {
             }
             
             let result;
+
             if (this.editingRecordId) {
-                // Düzenleme modunda sadece bir kayıt güncellenir
-                result = await ipRecordsService.updateRecord(this.editingRecordId, recordData);
-            } else {
-                result = await ipRecordsService.createRecordFromDataEntry(recordData);
+            // ✅ Düzenlemede sadece PARENT kaydı güncelle
+            const parentData =
+                recordsToSave.find(r => r.transactionHierarchy === 'parent') ||
+                recordsToSave[0]; // (Tekli TÜRKPATENT/Yurtdışı Ulusal kayıtlarda parent yoksa ilkini al)
+
+            // ✅ Parent olduğunu garanti et ve parent’a ülke yazılmasını engelle
+            const safeParentData = { ...parentData };
+            if (['WIPO', 'ARIPO'].includes(String(safeParentData.origin))) {
+                safeParentData.transactionHierarchy = 'parent';
+                if ('country' in safeParentData) delete safeParentData.country;
             }
+
+            result = await ipRecordsService.updateRecord(this.editingRecordId, safeParentData);
+            results.push(result);
+            if (!result.success) success = false;
+            mainRecordId = this.editingRecordId;
+
+            // ✅ WIPO/ARIPO ise child senkronizasyonu yap
+            try {
+                await this.syncWipoAripoChildren(this.editingRecordId, safeParentData);
+            } catch (e) {
+                console.warn('WIPO/ARIPO child senkronizasyonu uyarısı:', e);
+            }
+
+            // 🔚 Düzenleme modunda tek update yapıp döngüyü bitir
+            break;
+
+            } else {
+            // (Oluşturma akışı aynen devam)
+            result = await ipRecordsService.createRecordFromDataEntry(recordData);
+            results.push(result);
+            if (!result.success) success = false;
+            if (recordData.transactionHierarchy === 'parent' || !recordData.transactionHierarchy) {
+                mainRecordId = result?.id || mainRecordId;
+            }
+            }
+
             // ✅ WIPO/ARIPO parent güncellemesinde child'ları senkronize et
             try {
             await this.syncWipoAripoChildren(this.editingRecordId, recordData);
@@ -1954,6 +1963,12 @@ async saveTrademarkPortfolio(portfolioData) {
             console.error(results);
         }
     }
+
+    /**
+ * WIPO/ARIPO parent kaydında ülke listesi değiştiyse:
+ *  - Eklenen ülkeler için child ipRecords oluşturur
+ *  - Silinen ülkeler için ilgili child ipRecords'u siler
+ */
 
 // Patent için
 async savePatentPortfolio(portfolioData) {
