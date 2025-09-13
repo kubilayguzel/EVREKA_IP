@@ -1474,6 +1474,28 @@ async syncWipoAripoChildren(parentId, parentDataFromForm) {
 
   // IR numarası
   const isWipo = origin === 'WIPO';
+  // Transaction type resolution (application) for child transactions
+  let txTypeId = null;
+  try {
+    const resTx = await transactionTypeService.getTransactionTypes();
+    const listTx = Array.isArray(resTx?.data) ? resTx.data : (Array.isArray(resTx) ? resTx : []);
+    const mapTx = new Map(listTx.map(t => [String((t.code || '').toUpperCase()), String(t.id)]));
+    const ip = String(parent?.ipType || parent?.type || 'trademark');
+    const CODE_BY_IP = {
+      trademark: 'TRADEMARK_APPLICATION',
+      patent: 'PATENT_APPLICATION',
+      design: 'DESIGN_APPLICATION'
+    };
+    txTypeId = mapTx.get(CODE_BY_IP[ip]) || null;
+  } catch (e) {
+    console.warn('TxTypes yüklenemedi (child sync), fallback kullanılacak:', e);
+  }
+  if (!txTypeId) {
+    const TX_IDS = { trademark: '2', patent: '5', design: '8' };
+    const ip = String(parent?.ipType || parent?.type || 'trademark');
+    txTypeId = TX_IDS[ip] || '2';
+  }
+
   const irNumber = isWipo
     ? (parent?.wipoIR || parentDataFromForm?.wipoIR || null)
     : (parent?.aripoIR || parentDataFromForm?.aripoIR || null);
@@ -1547,8 +1569,22 @@ async syncWipoAripoChildren(parentId, parentDataFromForm) {
     const createRes = await ipRecordsService.createRecordFromDataEntry(childData);
     if (!createRes?.success) {
       console.error('Child oluşturulamadı:', code, createRes?.error);
+    } else {
+      const newChildId = String(createRes.id || createRes.docId || '');
+      if (newChildId) {
+        try {
+          await ipRecordsService.addTransactionToRecord(newChildId, {
+            type: String(txTypeId),
+            transactionTypeId: String(txTypeId),
+            description: 'Ülke başvurusu işlemi.',
+            transactionHierarchy: 'child'
+          });
+        } catch (e) {
+          console.warn('Child için transaction eklenemedi:', newChildId, e);
+        }
+      }
     }
-  }
+}
 
   // ✅ Silinen ülkeler için child sil
   for (const child of toRemove) {
