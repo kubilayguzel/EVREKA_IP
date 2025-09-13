@@ -1543,7 +1543,7 @@ async syncWipoAripoChildren(parentId, parentDataFromForm) {
 
   // ✅ Eklenen ülkeler için child oluştur
   for (const code of toAdd) {
-    const childData = { ...baseCopy, country: code };
+    const childData = { ...baseCopy, country: code, applicationNumber: null, registrationNumber: null, createdFrom: "wipo_aripo_child_sync" };
     const createRes = await ipRecordsService.createRecordFromDataEntry(childData);
     if (!createRes?.success) {
       console.error('Child oluşturulamadı:', code, createRes?.error);
