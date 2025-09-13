@@ -1507,6 +1507,18 @@ async syncWipoAripoChildren(parentId, parentDataFromForm) {
     : (Array.isArray(parentDataFromForm?.countries) && parentDataFromForm.countries.length
         ? parentDataFromForm.countries
         : []);
+    // Fallback: desiredCountries empty ise parent'ı tekrar okuyup countries'i al
+    if (!desiredCountries || !desiredCountries.length) {
+      try {
+        const p2 = await ipRecordsService.getRecordById(String(parentId));
+        if (p2?.success && Array.isArray(p2.data?.countries)) {
+          desiredCountries = p2.data.countries;
+        }
+      } catch (e) {
+        console.warn('desiredCountries fallback okunamadı:', e);
+      }
+    }
+
 
   // Mevcut child’ları çek
   const db = getFirestore();
@@ -1538,6 +1550,7 @@ async syncWipoAripoChildren(parentId, parentDataFromForm) {
     status: parent.status || 'filed',
     recordOwnerType: parent.recordOwnerType || 'self',
     origin,
+      ipType: parent.ipType || parent.type || 'trademark',
     wipoIR: isWipo ? String(irNumber) : null,
     aripoIR: isWipo ? null : String(irNumber),
     transactionHierarchy: 'child',
