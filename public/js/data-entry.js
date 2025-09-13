@@ -3,7 +3,7 @@ import { initializeNiceClassification, getSelectedNiceClasses, setSelectedNiceCl
 import { personService, ipRecordsService, storage, auth, transactionTypeService } from '../firebase-config.js';
 import { ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
 import { loadSharedLayout, openPersonModal, ensurePersonModal } from './layout-loader.js';
-import { getFirestore, doc, getDoc,collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { collection, doc, getDoc, getDocs, getFirestore, query, where } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { STATUSES, ORIGIN_TYPES } from '../utils.js';
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
@@ -1544,7 +1544,7 @@ async syncWipoAripoChildren(parentId, parentDataFromForm) {
   // ✅ Eklenen ülkeler için child oluştur
   for (const code of toAdd) {
     const childData = { ...baseCopy, country: code };
-    const createRes = await ipRecordsService.createRecord(childData);
+    const createRes = await ipRecordsService.createRecordFromDataEntry(childData);
     if (!createRes?.success) {
       console.error('Child oluşturulamadı:', code, createRes?.error);
     }
