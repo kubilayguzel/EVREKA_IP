@@ -48,6 +48,36 @@ function initTaskDatePickers(root=document) {
     });
   } catch(err) { console.warn('initTaskDatePickers error:', err); }
 }
+// Auto-init date pickers whenever relevant inputs appear in DOM
+function installDateObserver() {
+  const IDS = ['taskDueDate','priorityDate','lawsuitDate'];
+  const tryInit = (root) => {
+    IDS.forEach(id => {
+      const el = (root && root.querySelector) ? root.querySelector('#' + id) : document.getElementById(id);
+      if (el && !el._flatpickr) {
+        // If native type=date slipped in by re-render, convert to text to avoid overlay conflicts
+        try { if (el.type && el.type.toLowerCase() === 'date') el.type = 'text'; } catch(e) {}
+        if (typeof flatpickr === 'function') {
+          initTaskDatePickers(document);
+        }
+      }
+    });
+  };
+  tryInit(document);
+  if (typeof MutationObserver !== 'undefined') {
+    const mo = new MutationObserver(muts => {
+      muts.forEach(m => {
+        m.addedNodes && m.addedNodes.forEach(node => {
+          if (node.nodeType === 1) { // ELEMENT_NODE
+            tryInit(node);
+          }
+        });
+      });
+    });
+    mo.observe(document.body || document.documentElement, { childList: true, subtree: true });
+  }
+}
+
 
 
 // === ID-based configuration (added by assistant) ===
