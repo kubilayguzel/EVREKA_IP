@@ -337,7 +337,9 @@
                                 <th>Tip</th>
                                 <th>Öncelik</th>
                                 <th>Operasyonel Son Tarih</th> 
-                                <th>Resmi Son Tarih</th> 
+                                <th>Resmi Son Tarih</th>
+                                <th>Oluşturma</th>
+                                <th>Atama</th> 
                                 <th>Durum</th>
                                 <th>İşlemler</th>
                             </tr>
@@ -603,8 +605,16 @@
                         const relatedRecordDisplay = ipRecord ? (ipRecord.applicationNumber || ipRecord.title || 'Kayıt Bulunamadı') : 'N/A';
                         const row = document.createElement('tr');
                         const statusClass = `status-${task.status.replace(/ /g, '_').toLowerCase()}`;
-                        const priorityClass = `priority-${task.priority.toLowerCase()}`;
-                        
+                        const createdAtText = task.createdAt ? new Date(task.createdAt).toLocaleString('tr-TR') : '-';
+                        let assignedAtText = '-';
+                        if (Array.isArray(task.history)) {
+                            const assigns = task.history.filter(h => h && typeof h.action === 'string' && h.action.includes('atandı'));
+                            const lastAssign = assigns.length ? assigns[assigns.length - 1] : null;
+                            if (lastAssign && lastAssign.timestamp) {
+                                assignedAtText = new Date(lastAssign.timestamp).toLocaleString('tr-TR');
+                            }
+                        }
+
                         // İşlem tipi adını bul
                         const transactionType = this.allTransactionTypes.find(type => type.id === task.taskType);
                         const taskTypeDisplayName = transactionType ? (transactionType.alias || transactionType.name) : 'Bilinmeyen Tip';
@@ -622,6 +632,9 @@
                                 data-date="${task.officialDueDate ? new Date(task.officialDueDate.seconds * 1000).toISOString().slice(0,10) : ''}">
                             ${task.officialDueDate ? new Date(task.officialDueDate.seconds * 1000).toLocaleDateString('tr-TR') : 'Belirtilmemiş'}
                             </td>
+
+                            <td>${createdAtText}</td>
+                            <td>${assignedAtText}</td>
 
                             <td><span class="status-badge ${statusClass}">${this.statusDisplayMap[task.status] || task.status}</span></td>
                             <td>
