@@ -7,47 +7,70 @@ import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/fi
 import { ORIGIN_TYPES } from '../utils.js';
 
 // === Date Picker (Flatpickr) — same behavior as data-entry.js ===
+
 function initTaskDatePickers(root=document) {
   try {
-    const ids = ['taskDueDate','priorityDate','lawsuitDate'];
+    const IDS = ['taskDueDate','priorityDate','lawsuitDate'];
     const dateRegex = /^\d{2}\.\d{2}\.\d{4}$/;
-    ids.forEach(id => {
-      const el = (root && root.getElementById) ? root.getElementById(id) : document.getElementById(id);
-      if (!el) return;
-      if (typeof flatpickr !== 'function') return;
-      if (el.type && el.type.toLowerCase() === 'date') { try { el.type = 'text'; } catch(e) {} }
-      const instance = flatpickr(el, {
-        dateFormat: "Y-m-d",     // stored value (stable)
-        altInput: true,          // show user-friendly format
-        altFormat: "d.m.Y",      // visible format
-        allowInput: true,
-        clickOpens: false,
-        locale: (window.flatpickr && window.flatpickr.l10ns && window.flatpickr.l10ns.tr) ? window.flatpickr.l10ns.tr : "tr",
-        onClose: (selectedDates, dateStr, inst) => {
-          // dateStr is in "Y-m-d"; visible input has altInput value "d.m.Y"
-          if (inst && inst.altInput && inst.altInput.value && !/^\d{2}\.\d{2}\.\d{4}$/.test(inst.altInput.value)) {
-            inst.clear();
+
+    const findAllById = (docOrNode, id) => {
+      try {
+        if (docOrNode && docOrNode.querySelectorAll) {
+          return Array.from(docOrNode.querySelectorAll(`#${id}`));
+        }
+      } catch(e) {}
+      const el = document.getElementById(id);
+      return el ? [el] : [];
+    };
+
+    IDS.forEach(id => {
+      const elements = findAllById(root, id);
+      elements.forEach(el => {
+        if (!el) return;
+        // Normalize type
+        try { if (el.type && el.type.toLowerCase() === 'date') el.type = 'text'; } catch(e) {}
+
+        // avoid double-init
+        if (el._flatpickr) return;
+        if (typeof flatpickr !== 'function') return;
+
+        const fp = flatpickr(el, {
+          dateFormat: "Y-m-d",      // stored value
+          altInput: true,           // user-visible
+          altFormat: "d.m.Y",
+          allowInput: true,
+          clickOpens: true,         // open directly on click
+          appendTo: document.body,  // avoid clipping in overflow containers
+          locale: (window.flatpickr && window.flatpickr.l10ns && window.flatpickr.l10ns.tr) ? window.flatpickr.l10ns.tr : "tr",
+          onClose: (selectedDates, dateStr, inst) => {
+            const vis = inst && inst.altInput ? inst.altInput.value : '';
+            if (vis && !dateRegex.test(vis)) { inst.clear(); }
+          },
+          onKeydown: (selectedDates, dateStr, inst, event) => {
+            if (event.key === 'Enter') (inst && inst.altInput ? inst.altInput.blur() : el.blur());
           }
-        },
-        onKeydown: (selectedDates, dateStr, inst, event) => {
-          if (event.key === 'Enter') (inst && inst.altInput ? inst.altInput.blur() : el.blur());
-          const valid = ['Backspace','Delete','ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Tab'];
-          if (!valid.includes(event.key) && event.key.length === 1 && inst.latestSelectedDateObj) { inst.clear(); }
+        });
+
+        // Input mask on visible field (altInput)
+        const maskTarget = (el._flatpickr && el._flatpickr.altInput) ? el._flatpickr.altInput : el;
+        if (maskTarget && !maskTarget.__maskBound) {
+          maskTarget.addEventListener('input', (ev) => {
+            const input = ev.target;
+            let value = input.value.replace(/[^\d.]/g, '');
+            if (value.length === 2 && value.indexOf('.') === -1) value += '.';
+            else if (value.length === 5 && value.split('.').length === 2) value += '.';
+            if (value.length > 10) value = value.substring(0, 10);
+            input.value = value;
+          });
+          maskTarget.__maskBound = true;
         }
       });
-      const maskTarget = (instance && instance.altInput) ? instance.altInput : el;
-      maskTarget.addEventListener('input', (event) => {
-        const input = event.target;
-        let value = input.value.replace(/[^\d.]/g, '');
-        if (value.length === 2 && value.indexOf('.') === -1) value += '.';
-        else if (value.length === 5 && value.split('.').length === 2) value += '.';
-        if (value.length > 10) value = value.substring(0, 10);
-        input.value = value;
-      });
-      maskTarget.addEventListener('click', () => { if (el._flatpickr) el._flatpickr.open(); });
     });
-  } catch(err) { console.warn('initTaskDatePickers error:', err); }
+  } catch(err) {
+    console.warn('initTaskDatePickers error:', err);
+  }
 }
+
 // Auto-init date pickers whenever relevant inputs appear in DOM
 function installDateObserver() {
   const IDS = ['taskDueDate','priorityDate','lawsuitDate'];
