@@ -884,9 +884,10 @@ tr.group-row[aria-hidden="true"]{ display:none !important; }
                     const appNoDisplay = (r.origin === 'WIPO' && r.wipoIR) ? r.wipoIR : safe(appNo);
 
                     // ✅ YENİ: Kayıt Durumu ve Aktif/Pasif durumlarını birleştiren hücre
-                    const statusAndPortfoyStatus = `
-                        <div>${safe(status)}</div>
-                        <div class="text-muted" style="font-size:0.8em">${r.portfoyStatus === 'inactive' ? 'Pasif' : 'Aktif'}</div>
+                    const statusCellHtml = `
+                        <div class="text-muted" style="font-size:.85em;">
+                          ${r.portfoyStatus === 'inactive' ? 'Pasif' : 'Aktif'}
+                        </div>
                     `;
 
                     if (this.activeTypeFilter === 'trademark') {
@@ -895,7 +896,7 @@ tr.group-row[aria-hidden="true"]{ display:none !important; }
                         tr.innerHTML = `
                             <td><input type="checkbox" class="record-checkbox" data-id="${idAttr}"></td>
                             <td class="${caretCellClass}">${caretCellContent}</td>
-                            <td>${statusAndPortfoyStatus}</td>
+                            <td>${statusCellHtml}</td>
                             <td>${safe(title)}</td>
                             ${brandImgCell}
                             <td>${safe(origin)}</td>
@@ -911,8 +912,8 @@ tr.group-row[aria-hidden="true"]{ display:none !important; }
                         const toggleCell = `<td class="${caretCellClass}">${caretCellContent}</td>`;
                         tr.innerHTML = `
                             <td><input type="checkbox" class="record-checkbox" data-id="${idAttr}"></td>
-                            <td>${statusAndPortfoyStatus}</td>
                             ${toggleCell}
+                            <td>${statusCellHtml}</td>
                             <td>${safe(ipType)}</td>
                             <td>${safe(title)}</td>
                             <td>${appNoDisplay}</td>
