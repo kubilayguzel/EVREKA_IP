@@ -1461,7 +1461,6 @@ populateFormFields(recordData) {
  *  - Eklenen ülkeler için child ipRecords oluşturur
  *  - Silinen ülkeler için ilgili child ipRecords'u siler
  */
-// DataEntryModule sınıfının içinde bir metottur
 async syncWipoAripoChildren(parentId, parentDataFromForm) {
   if (!parentId) return;
 
@@ -1472,7 +1471,7 @@ async syncWipoAripoChildren(parentId, parentDataFromForm) {
 
   // 2) Origin ve IR kontrolü
   const origin = String(parent?.origin || parentDataFromForm?.origin || '').toUpperCase();
-  if (!['WIPO', 'ARIPO'].includes(origin)) return;
+  if (!['WIPO','ARIPO'].includes(origin)) return;
 
   const isWipo = origin === 'WIPO';
   const irNumber = isWipo
@@ -1503,8 +1502,8 @@ async syncWipoAripoChildren(parentId, parentDataFromForm) {
   const existingCountries = existingChildren.map(c => c.country).filter(Boolean);
 
   // 5) Fark kümeleri
-  const desiredSet = new Set(desiredCountries);
-  const existingSet = new Set(existingCountries);
+  const desiredSet = new Set((desiredCountries || []).filter(Boolean));
+  const existingSet = new Set((existingCountries || []).filter(Boolean));
 
   const toAdd = [...desiredSet].filter(code => !existingSet.has(code));
   const toRemove = existingChildren.filter(c => !desiredSet.has(c.country));
@@ -1512,7 +1511,7 @@ async syncWipoAripoChildren(parentId, parentDataFromForm) {
   // 6) Parent'tan kopyalanacak temel alanlar
   const baseCopy = {
     title: parent.title || parent.brandText || '',
-    type: parent.type || 'trademark',                 // kayıt tipi: trademark/patent/design
+    type: parent.type || 'trademark',
     portfoyStatus: parent.portfoyStatus || 'active',
     status: parent.status || 'filed',
     recordOwnerType: parent.recordOwnerType || 'self',
@@ -1522,14 +1521,22 @@ async syncWipoAripoChildren(parentId, parentDataFromForm) {
     transactionHierarchy: 'child',
     parentId: String(parentId),
 
-    // Marka alanları
     brandText: parent.brandText || null,
     brandImageUrl: parent.brandImageUrl || null,
     brandType: parent.brandType || null,
     brandCategory: parent.brandCategory || null,
     nonLatinAlphabet: parent.nonLatinAlphabet || null,
 
-    // Zaman damgaları
+    goodsAndServicesByClass: parent.goodsAndServicesByClass || null,
+    applicants: Array.isArray(parent.applicants) ? parent.applicants : [],
+    priorities: Array.isArray(parent.priorities) ? parent.priorities : [],
+
+    applicationNumber: null,           // ⚠️ child'ta IR veya başvuru no tutulmaz
+    applicationDate: parent.applicationDate || null,
+    registrationNumber: null,
+    registrationDate: parent.registrationDate || null,
+    renewalDate: parent.renewalDate || null,
+
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
   };
@@ -1568,7 +1575,7 @@ async syncWipoAripoChildren(parentId, parentDataFromForm) {
       if (!createRes?.success || !createRes?.id) {
         console.error('Child oluşturulamadı:', code, createRes?.error || createRes);
         continue;
-        }
+      }
       const childId = String(createRes.id);
 
       // Başvuru transaction'ı (child)
@@ -1792,7 +1799,7 @@ async saveTrademarkPortfolio(portfolioData) {
                     wipoIR: origin === 'WIPO' ? internationalRegNumber : null,
                     aripoIR: origin === 'ARIPO' ? internationalRegNumber : null,
                     
-                    applicationNumber: internationalRegNumber,
+                    applicationNumber: null,
                     registrationNumber: null,
                     applicationDate: applicationDate || null,
                     registrationDate: registrationDate || null,
@@ -1938,7 +1945,8 @@ async saveTrademarkPortfolio(portfolioData) {
         if (!this.editingRecordId && mainRecordId) {
             const childRecords = recordsToSave.filter(r => r.transactionHierarchy === 'child');
             const childIds = results.filter(r => r.id !== mainRecordId).map(r => r.id);
-            for(const childId of childIds) {
+            for (const childId of childIds) {
+                await ipRecordsService.updateRecord(String(childId), { parentId: String(mainRecordId) });
             }
         }
 
