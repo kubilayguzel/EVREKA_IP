@@ -6,6 +6,50 @@ import { getFirestore, collection, getDocs, getDoc, doc } from "https://www.gsta
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { ORIGIN_TYPES } from '../utils.js';
 
+// === Date Picker (Flatpickr) — same behavior as data-entry.js ===
+function initTaskDatePickers(root=document) {
+  try {
+    const ids = ['taskDueDate','priorityDate','lawsuitDate'];
+    const dateRegex = /^\d{2}\.\d{2}\.\d{4}$/;
+    ids.forEach(id => {
+      const el = (root && root.getElementById) ? root.getElementById(id) : document.getElementById(id);
+      if (!el) return;
+      if (typeof flatpickr !== 'function') return;
+      if (el.type && el.type.toLowerCase() === 'date') { try { el.type = 'text'; } catch(e) {} }
+      const instance = flatpickr(el, {
+        dateFormat: "Y-m-d",     // stored value (stable)
+        altInput: true,          // show user-friendly format
+        altFormat: "d.m.Y",      // visible format
+        allowInput: true,
+        clickOpens: false,
+        locale: (window.flatpickr && window.flatpickr.l10ns && window.flatpickr.l10ns.tr) ? window.flatpickr.l10ns.tr : "tr",
+        onClose: (selectedDates, dateStr, inst) => {
+          // dateStr is in "Y-m-d"; visible input has altInput value "d.m.Y"
+          if (inst && inst.altInput && inst.altInput.value && !/^\d{2}\.\d{2}\.\d{4}$/.test(inst.altInput.value)) {
+            inst.clear();
+          }
+        },
+        onKeydown: (selectedDates, dateStr, inst, event) => {
+          if (event.key === 'Enter') (inst && inst.altInput ? inst.altInput.blur() : el.blur());
+          const valid = ['Backspace','Delete','ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Tab'];
+          if (!valid.includes(event.key) && event.key.length === 1 && inst.latestSelectedDateObj) { inst.clear(); }
+        }
+      });
+      const maskTarget = (instance && instance.altInput) ? instance.altInput : el;
+      maskTarget.addEventListener('input', (event) => {
+        const input = event.target;
+        let value = input.value.replace(/[^\d.]/g, '');
+        if (value.length === 2 && value.indexOf('.') === -1) value += '.';
+        else if (value.length === 5 && value.split('.').length === 2) value += '.';
+        if (value.length > 10) value = value.substring(0, 10);
+        input.value = value;
+      });
+      maskTarget.addEventListener('click', () => { if (el._flatpickr) el._flatpickr.open(); });
+    });
+  } catch(err) { console.warn('initTaskDatePickers error:', err); }
+}
+
+
 // === ID-based configuration (added by assistant) ===
 export const TASK_IDS = {
   DEVIR: '5',
@@ -959,7 +1003,7 @@ setupBaseFormListeners() {
                     </div>
                     <div class="form-group date-picker-group">
                         <label for="lawsuitDate" class="form-label">Dava Tarihi</label>
-                        <input type="date" id="lawsuitDate" name="lawsuitDate" class="form-input">
+                        <input type="text" id="lawsuitDate" name="lawsuitDate" class="form-input">
                     </div>
                 </div>
             `;
@@ -1103,7 +1147,7 @@ setupBaseFormListeners() {
             </div>
             <div class="form-group full-width">
                 <label for="taskDueDate" class="form-label">Operasyonel Son Tarih</label>
-                <input type="date" id="taskDueDate" class="form-input">
+                <input type="text" id="taskDueDate" class="form-input">
             </div>
             </div>
         </div>
@@ -1113,6 +1157,7 @@ setupBaseFormListeners() {
             <button type="submit" id="saveTaskBtn" class="btn btn-primary" disabled>İşi Oluştur ve Kaydet</button>
         </div>
         `;
+        initTaskDatePickers(document);
         const selectedTaskTypeObj = this.allTransactionTypes.find(t => asId(t.id) === asId(taskTypeId));
         this.updateRelatedPartySectionVisibility(selectedTaskTypeObj);
         this.renderSelectedRelatedParties();
@@ -1663,7 +1708,7 @@ async handleSpecificTypeChange(e) {
                             <div class="form-group row">
                                 <label for="priorityDate" class="col-sm-3 col-form-label" id="priorityDateLabel">Rüçhan Tarihi</label>
                                 <div class="col-sm-9">
-                                    <input type="date" class="form-control" id="priorityDate">
+                                    <input type="text" class="form-control" id="priorityDate">
                                 </div>
                             </div>
                             <div class="form-group row">
@@ -1775,7 +1820,7 @@ async handleSpecificTypeChange(e) {
                                 </div>
                                 <div class="form-group full-width">
                                     <label for="taskDueDate" class="form-label">Operasyonel Son Tarih</label>
-                                    <input type="date" id="taskDueDate" class="form-input">
+                                    <input type="text" id="taskDueDate" class="form-input">
                                 </div>
                             </div>
                         </div>
