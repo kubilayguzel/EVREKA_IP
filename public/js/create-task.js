@@ -72,6 +72,7 @@ function initTaskDatePickers(root=document) {
 }
 
 // Auto-init date pickers whenever relevant inputs appear in DOM
+// Auto-init date pickers whenever relevant inputs appear in DOM
 function installDateObserver() {
   const IDS = ['taskDueDate','priorityDate','lawsuitDate'];
   const tryInit = (root) => {
@@ -81,12 +82,19 @@ function installDateObserver() {
         // If native type=date slipped in by re-render, convert to text to avoid overlay conflicts
         try { if (el.type && el.type.toLowerCase() === 'date') el.type = 'text'; } catch(e) {}
         if (typeof flatpickr === 'function') {
+          console.log(`Flatpickr başlatılıyor: ${id}`);
           initTaskDatePickers(document);
+        } else {
+          console.warn('Flatpickr kütüphanesi bulunamadı');
         }
       }
     });
   };
+  
+  // İlk yükleme
   tryInit(document);
+  
+  // DOM değişikliklerini izle
   if (typeof MutationObserver !== 'undefined') {
     const mo = new MutationObserver(muts => {
       muts.forEach(m => {
@@ -99,10 +107,20 @@ function installDateObserver() {
     });
     mo.observe(document.body || document.documentElement, { childList: true, subtree: true });
   }
+  
+  // priorityDate için özel kontrol - tab değişiminde tetikle
+  document.addEventListener('shown.bs.tab', function (e) {
+    if (e.target.getAttribute('href') === '#priority') {
+      setTimeout(() => {
+        const priorityDateEl = document.getElementById('priorityDate');
+        if (priorityDateEl && !priorityDateEl._flatpickr && typeof flatpickr === 'function') {
+          console.log('Priority tab açıldı, Flatpickr başlatılıyor');
+          initTaskDatePickers(document);
+        }
+      }, 100);
+    }
+  });
 }
-
-
-
 // === ID-based configuration (added by assistant) ===
 export const TASK_IDS = {
   DEVIR: '5',
