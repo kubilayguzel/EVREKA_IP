@@ -112,6 +112,7 @@
                 <th>Evrak</th>
                 <th>Son Tarih</th>  
                 <th>Son Hatırlatma</th> 
+                <th>Oluşturma</th>
                 <th>Gönderim Tarihi</th>
                 <th>İşlem</th>
               </tr>
@@ -862,7 +863,7 @@ function startNotificationListener() {
         loader.style.display = "none";
         if (snapshot.empty) {
           notificationsData = [];
-          tableBody.innerHTML = '<tr><td colspan="10" class="no-records">Gösterilecek bildirim bulunamadı.</td></tr>';
+          tableBody.innerHTML = '<tr><td colspan="11" class="no-records">Gösterilecek bildirim bulunamadı.</td></tr>';
           if (pagination) pagination.update(0);
           return;
         }
@@ -957,7 +958,7 @@ async function renderCurrentPage() {
   const slice = pagination.getCurrentPageData(notificationsData || []);
 
   if (!slice.length) {
-    tableBody.innerHTML = '<tr><td colspan="10" class="no-records">Gösterilecek bildirim bulunamadı.</td></tr>';
+    tableBody.innerHTML = '<tr><td colspan="11" class="no-records">Gösterilecek bildirim bulunamadı.</td></tr>';
     __isRendering = false;
     if (__rerenderPending) { __rerenderPending = false; renderCurrentPage(); }
     return;
@@ -1041,6 +1042,9 @@ async function renderCurrentPage() {
     const lastReminderText = (notification.lastReminderAt && typeof notification.lastReminderAt.toDate === 'function')
       ? notification.lastReminderAt.toDate().toLocaleString('tr-TR') : '-';
 
+    const createdAtText = (notification.createdAt && typeof notification.createdAt.toDate === 'function')
+      ? notification.createdAt.toDate().toLocaleString('tr-TR') : (notification.createdAt ? new Date(notification.createdAt).toLocaleString('tr-TR') : '-');
+
     tr.innerHTML = `
       <td><span class="status-badge ${statusClass}">${notification.status || '-'}</span></td>
       <td>${applicantName || '-'}</td>
@@ -1050,6 +1054,7 @@ async function renderCurrentPage() {
       <td>${fileCellHtml}</td>
       <td>${deliveryDateText || '-'}</td>
       <td>${lastReminderText}</td>
+      <td>${createdAtText}</td>
       <td>${sentAtText}</td>
       <td class="actions-cell"></td>
     `;
