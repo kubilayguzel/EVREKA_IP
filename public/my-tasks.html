@@ -605,6 +605,8 @@
                         const relatedRecordDisplay = ipRecord ? (ipRecord.applicationNumber || ipRecord.title || 'Kayıt Bulunamadı') : 'N/A';
                         const row = document.createElement('tr');
                         const statusClass = `status-${task.status.replace(/ /g, '_').toLowerCase()}`;
+                        const priorityClass = `priority-${task.priority.toLowerCase()}`;
+
                         const createdAtText = task.createdAt ? new Date(task.createdAt).toLocaleString('tr-TR') : '-';
                         let assignedAtText = '-';
                         if (Array.isArray(task.history)) {
