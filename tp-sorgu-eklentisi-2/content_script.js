@@ -48,7 +48,16 @@ function pressEnter(el){
   el.dispatchEvent(new KeyboardEvent('keypress', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
   el.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
 }
-
+function findButtonByTextFast(text) {
+  // Çok hızlı text yakalama (span->button da dahil)
+  const btns = document.querySelectorAll('button');
+  for (const b of btns) {
+    if ((b.textContent || '').trim().includes(text)) return b;
+    const spanBtn = b.querySelector('span');
+    if (spanBtn && (spanBtn.textContent || '').trim().includes(text)) return b;
+  }
+  return null;
+}
 
 // --------- EVREKA PATCH HELPERS (appNo normalize & label extraction) ---------
 function normalizeAppNo(appNo) {
@@ -239,7 +248,7 @@ async function waitForTotalMetaAndParse(timeout = 45000) {
   let expected = getExpectedTotalCount();
   if (typeof expected === 'number') return expected;
 
-  // Yoksa "kayıt bulundu" metni gelene kadar bekle
+  // Yoksa "kayıt bulundu" metni gelene kadar bekle ve oku
   const start = performance.now();
   while (performance.now() - start < timeout) {
     const nodes = Array.from(document.querySelectorAll('p, span, div'));
@@ -934,39 +943,47 @@ async function runApplicationFlow() {
 
   try { await closeFraudModalIfAny(); } catch {}
 
-  // input[placeholder="Başvuru Numarası"]
-  let appInput =
-    document.querySelector('input.MuiInputBase-input.MuiInput-input[placeholder="Başvuru Numarası"]') ||
-    document.querySelector('input[placeholder="Başvuru Numarası"]');
-
-  if (!appInput) {
-    appInput = await waitFor('input[placeholder=\"Başvuru Numarası\"]', { timeout: 6000 }).catch(()=>null);
+  // 2) “Dosya Takibi” sekmesine geç (EKLENEN DÜZELTME)
+  let tabBtn = findButtonByTextFast('Dosya Takibi');
+  if (!tabBtn) {
+    tabBtn = await waitFor('button[role="tab"]', {
+      timeout: 4000,
+      test: (el) => (el.textContent || '').includes('Dosya Takibi')
+    });
   }
-  if (!appInput) {
-    err('Başvuru Numarası alanı bulunamadı.');
-    sendToOpener('HATA_BASVURU_ALANI_YOK', { message: 'Başvuru Numarası alanı bulunamadı.' });
+  if (tabBtn && tabBtn.getAttribute('aria-selected') !== 'true') {
+    click(tabBtn);
+    log('Dosya Takibi sekmesine tıklandı.');
+  } else if (tabBtn) {
+    log('Dosya Takibi zaten aktif.');
+  } else {
+    err('Dosya Takibi sekmesi bulunamadı.');
     return;
   }
-
-  // Aynı bloktaki Sorgula butonu → yoksa globalde bul → en sonda Enter
-  let container = appInput.closest('.MuiFormControl-root') || appInput.closest('form') || document;
-  let sorgulaBtn = Array.from(container.querySelectorAll('button')).find(b => /sorgula/i.test(b.textContent || ''));
+  
+  // 3) Formu doldur + Sorgula (DÜZENLEME)
+  const input = await waitFor('input[placeholder="Başvuru Numarası"]', { timeout: 4000 });
+  
+  // Sorgula butonu
+  let sorgulaBtn = findButtonByTextFast('Sorgula');
   if (!sorgulaBtn) {
-    const allButtons = Array.from(document.querySelectorAll('button'));
-    sorgulaBtn = allButtons.find(b => /sorgula/i.test(b.textContent || ''));
+    sorgulaBtn = await waitFor('button', {
+      timeout: 3000,
+      test: (el) => (el.textContent || '').includes('Sorgula')
+    });
   }
 
-  appInput.focus();
-  setReactInputValue(appInput, String(targetAppNo));
-  log('Başvuru No yazıldı.');
+  // Değer yaz (React controlled için event’ler)
+  input.focus();
+  input.value = targetAppNo;
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  input.dispatchEvent(new Event('change', { bubbles: true }));
+  log('Başvuru No yazıldı:', targetAppNo);
 
-  sendToOpener('SORGU_BASLADI');
-  if (sorgulaBtn && click(sorgulaBtn)) {
-    log('Sorgula tıklandı. ✔');
-  } else {
-    pressEnter(appInput);
-    log('Sorgula butonu yok; Enter gönderildi. ✔');
-  }
+  // Tıkla
+  click(sorgulaBtn);
+  log('Sorgula butonuna tıklandı. ✔');
+
 
   // Sonuçları topla ve gönder (mevcut owner mantığını yeniden kullanıyoruz)
   await waitAndSendApplicationResults();
