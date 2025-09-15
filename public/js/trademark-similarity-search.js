@@ -702,6 +702,18 @@ const renderCurrentPageOfResults = () => {
     Object.keys(groupedByTrademark).sort((a, b) => (groupedByTrademark[a][0]?.monitoredTrademark || '').localeCompare(groupedByTrademark[b][0]?.monitoredTrademark || '')).forEach(trademarkKey => {
         const groupResults = groupedByTrademark[trademarkKey];
         const tmMeta = monitoringTrademarks.find(t => String(t.id) === String(trademarkKey)) || null;
+
+        if (!tmMeta) {
+            // Monitored trademark cannot be found, handle gracefully
+            const fallbackName = groupResults[0]?.monitoredTrademark || 'Bilinmeyen Marka';
+            const groupHeaderRow = document.createElement('tr');
+            groupHeaderRow.classList.add('group-header');
+            groupHeaderRow.innerHTML = `<td colspan="9"><div class="group-title"><span><strong>${fallbackName}</strong> markası için bulunan benzer sonuçlar (${groupResults.length} adet)</span></div></td>`;
+            resultsTableBody.appendChild(groupHeaderRow);
+            groupResults.forEach((hit, index) => resultsTableBody.appendChild(createResultRow(hit, pagination.getStartIndex() + index + 1)));
+            return; // Skip to next iteration
+        }
+
         const headerName = _pickName(null, tmMeta);
         const headerImg = _pickImg(null, tmMeta);
         const applicationNumber = _pickAppNo(null, tmMeta);
@@ -721,7 +733,7 @@ const renderCurrentPageOfResults = () => {
         };
         groupHeaderRow.dataset.markData = JSON.stringify(modalData);
         
-        const totalCount = getTotalCountForMonitoredId(trademarkKey); // Toplam sonuç sayısını alın
+        const totalCount = getTotalCountForMonitoredId(trademarkKey);
 
         groupHeaderRow.innerHTML = `
             <td colspan="9">
