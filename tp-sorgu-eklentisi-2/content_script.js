@@ -647,45 +647,23 @@ async function runApplicationFlow() {
   await scrapeAndSendSingleApplicationResult();
 }
 
-// Dış mesajlar: AUTO_FILL (geri uyum) ve AUTO_FILL_BASVURU
+// --------- Dış Mesajlar ve URL Tetikleyicileri (Birleştirilmiş) ---------
 chrome.runtime?.onMessage?.addListener?.((request, sender, sendResponse) => {
-  if (request?.type === 'AUTO_FILL' && request?.data) {
+  if (request?.type === 'AUTO_FILL' || request?.type === 'AUTO_FILL_BASVURU') {
     targetAppNo = request.data;
     runApplicationFlow().catch(err);
     sendResponse?.({ status: 'OK' });
     return true;
   }
-  // DÜZELTME: AUTO_FILL_BASVURU mesajını dinle
-  if (request?.type === 'AUTO_FILL_BASVURU' && request?.data) {
-    targetAppNo = request.data;
-    runApplicationFlow().catch(err);
-    sendResponse?.({ status: 'OK' });
-    return true;
-  }
-  return true;
-});
-// --------- Background ve URL tetikleyicileri ---------
-chrome.runtime?.onMessage?.addListener?.((request, sender, sendResponse) => {
   if (request?.type === 'AUTO_FILL_KISI' && request?.data) {
     targetKisiNo = request.data;
     runOwnerFlow().catch(err);
     sendResponse?.({ status: 'OK' });
+    return true;
   }
   return true;
 });
 
-// Parent → iframe köprüsü
-function broadcastAutoQueryToFrames(value) {
-  try {
-    const payload = { source: 'EVREKA', type: 'EVREKA_AUTO_QUERY', queryType: 'sahip', value };
-    const frames = window.frames || [];
-    for (let i = 0; i < frames.length; i++) {
-      try { frames[i].postMessage(payload, '*'); } catch {}
-    }
-    window.postMessage(payload, '*');
-    log('auto_query yayınlandı:', payload);
-  } catch (e) { warn('broadcastAutoQueryToFrames hata:', e?.message); }
-}
 window.addEventListener('message', (e) => {
   const msg = e?.data;
   if (!msg || msg.source !== 'EVREKA' || msg.type !== 'EVREKA_AUTO_QUERY') return;
@@ -704,9 +682,13 @@ function captureUrlParams() {
     if (src) sourceOrigin = src;
     if (autoQuery && (queryType === 'sahip' || queryType === 'basvuru' || queryType === 'application')) {
       log('URL üzerinden auto_query alındı:', autoQuery, 'queryType:', queryType, 'sourceOrigin:', sourceOrigin);
-      broadcastAutoQueryToFrames(autoQuery);
-      if (queryType === 'sahip') { targetKisiNo = autoQuery; runOwnerFlow().catch(err); }
-      else { targetAppNo = autoQuery; runApplicationFlow().catch(err); }
+      if (queryType === 'sahip') {
+        targetKisiNo = autoQuery;
+        runOwnerFlow().catch(err);
+      } else {
+        targetAppNo = autoQuery;
+        runApplicationFlow().catch(err);
+      }
       return true;
     }
   } catch (e) { warn('URL param hatası:', e?.message); }
