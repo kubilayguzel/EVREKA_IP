@@ -655,6 +655,7 @@ chrome.runtime?.onMessage?.addListener?.((request, sender, sendResponse) => {
     sendResponse?.({ status: 'OK' });
     return true;
   }
+  // DÜZELTME: AUTO_FILL_BASVURU mesajını dinle
   if (request?.type === 'AUTO_FILL_BASVURU' && request?.data) {
     targetAppNo = request.data;
     runApplicationFlow().catch(err);
