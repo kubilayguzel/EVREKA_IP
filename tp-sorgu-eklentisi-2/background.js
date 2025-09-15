@@ -4,7 +4,7 @@ chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => 
   if ((request.type === 'SORGULA' || request.type === 'SORGULA_BASVURU') && request.data) {
     const appNo = request.data;
     const targetUrl = "https://www.turkpatent.gov.tr/arastirma-yap?form=trademark";
-    
+
     chrome.tabs.create({ url: targetUrl }, (newTab) => {
       const listener = (tabId, changeInfo) => {
         if (tabId === newTab.id && changeInfo.status === 'complete') {
@@ -23,7 +23,7 @@ chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => 
   if (request.type === 'SORGULA_KISI' && request.data) {
     const ownerId = request.data;
     const targetUrl = "https://www.turkpatent.gov.tr/arastirma-yap?form=trademark";
-    
+
     chrome.tabs.create({ url: targetUrl }, (newTab) => {
       const listener = (tabId, changeInfo) => {
         if (tabId === newTab.id && changeInfo.status === 'complete') {
@@ -38,5 +38,5 @@ chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => 
     return true;
   }
   
-  return true; 
+  return true;
 });
