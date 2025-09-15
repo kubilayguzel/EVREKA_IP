@@ -454,7 +454,84 @@ async function scrapeAndSendSingleApplicationResult() {
 }
 
 // --------- Sonsuz Liste & Scroll Yardımcıları (Sahip No akışı için) ---------
-// ... bu kısım değişmeden kalıyor ...
+function parseOwnerRowBase(tr, globalIdx) {
+  const base = {
+    order: globalIdx + 1,
+    applicationNumber: null,
+    brandName: null,
+    ownerName: null,
+    applicationDate: null,
+    registrationNumber: null,
+    status: null,
+    niceClasses: null,
+    imageSrc: null
+  };
+
+  try {
+    const cells = Array.from(tr.querySelectorAll('td, [role="cell"]'));
+    
+    if (cells.length >= 6) {
+      // Tipik MUI tablosu format: [görsel/img, başvuru no, marka adı, başvuru tarihi, tescil no, durum, nice, ...]
+      
+      // Görsel (genellikle 1. kolon)
+      const imgCell = cells[0];
+      const img = imgCell?.querySelector('img');
+      if (img && img.src) {
+        base.imageSrc = img.src;
+      }
+
+      // Başvuru numarası (genellikle 2. kolon)
+      const appNoText = cells[1]?.textContent?.trim();
+      if (appNoText && appNoText !== '-') {
+        base.applicationNumber = normalizeAppNo(appNoText);
+      }
+
+      // Marka adı (genellikle 3. kolon)
+      const brandNameText = cells[2]?.textContent?.trim();
+      if (brandNameText && brandNameText !== '-') {
+        base.brandName = brandNameText;
+      }
+
+      // Başvuru tarihi (genellikle 4. kolon)
+      const appDateText = cells[3]?.textContent?.trim();
+      if (appDateText && appDateText !== '-') {
+        base.applicationDate = appDateText;
+      }
+
+      // Tescil numarası (genellikle 5. kolon)
+      const regNoText = cells[4]?.textContent?.trim();
+      if (regNoText && regNoText !== '-') {
+        base.registrationNumber = regNoText;
+      }
+
+      // Durum (genellikle 6. kolon)
+      const statusText = cells[5]?.textContent?.trim();
+      if (statusText && statusText !== '-') {
+        base.status = statusText;
+      }
+
+      // Nice sınıfları (genellikle 7. kolon, varsa)
+      if (cells[6]) {
+        const niceText = cells[6]?.textContent?.trim();
+        if (niceText && niceText !== '-') {
+          base.niceClasses = niceText;
+        }
+      }
+    }
+
+    console.log(`📋 parseOwnerRowBase ${globalIdx + 1}:`, {
+      applicationNumber: base.applicationNumber,
+      brandName: base.brandName?.substring(0, 30) + '...',
+      cells: cells.length
+    });
+
+  } catch (e) {
+    console.warn(`❌ parseOwnerRowBase hatası (${globalIdx + 1}):`, e);
+  }
+
+  return base;
+}
+
 async function collectOwnerResultsWithDetails() {
   console.log('🔍 collectOwnerResultsWithDetails başladı');
   const rows = Array.from(document.querySelectorAll('tbody.MuiTableBody-root tr, tbody tr'));
