@@ -4,6 +4,7 @@
 
 const TAG = '[Evreka SahipNo]';
 let targetKisiNo = null;
+let targetAppNo = null; // Başvuru No (Application Number) hedefi
 let sourceOrigin = null; // opener target origin (from ?source=...)
 
 // --------- Log Helpers ---------
@@ -925,6 +926,73 @@ async function runOwnerFlow() {
   await waitAndSendOwnerResults();
 }
 
+
+// Yeni: Başvuru No akışı
+async function runApplicationFlow() {
+  log('Başvuru No akışı başladı:', targetAppNo);
+  if (!targetAppNo) { warn('targetAppNo boş; çıkış.'); return; }
+
+  try { await closeFraudModalIfAny(); } catch {}
+
+  // input[placeholder="Başvuru Numarası"]
+  let appInput =
+    document.querySelector('input.MuiInputBase-input.MuiInput-input[placeholder="Başvuru Numarası"]') ||
+    document.querySelector('input[placeholder="Başvuru Numarası"]');
+
+  if (!appInput) {
+    appInput = await waitFor('input[placeholder=\"Başvuru Numarası\"]', { timeout: 6000 }).catch(()=>null);
+  }
+  if (!appInput) {
+    err('Başvuru Numarası alanı bulunamadı.');
+    sendToOpener('HATA_BASVURU_ALANI_YOK', { message: 'Başvuru Numarası alanı bulunamadı.' });
+    return;
+  }
+
+  // Aynı bloktaki Sorgula butonu → yoksa globalde bul → en sonda Enter
+  let container = appInput.closest('.MuiFormControl-root') || appInput.closest('form') || document;
+  let sorgulaBtn = Array.from(container.querySelectorAll('button')).find(b => /sorgula/i.test(b.textContent || ''));
+  if (!sorgulaBtn) {
+    const allButtons = Array.from(document.querySelectorAll('button'));
+    sorgulaBtn = allButtons.find(b => /sorgula/i.test(b.textContent || ''));
+  }
+
+  appInput.focus();
+  setReactInputValue(appInput, String(targetAppNo));
+  log('Başvuru No yazıldı.');
+
+  sendToOpener('SORGU_BASLADI');
+  if (sorgulaBtn && click(sorgulaBtn)) {
+    log('Sorgula tıklandı. ✔');
+  } else {
+    pressEnter(appInput);
+    log('Sorgula butonu yok; Enter gönderildi. ✔');
+  }
+
+  // Sonuçları topla ve gönder (mevcut owner mantığını yeniden kullanıyoruz)
+  await waitAndSendApplicationResults();
+}
+
+// Owner sonuç toplayıcısını yeniden adlandırılmış bir sarmalayıcı ile kullan
+async function waitAndSendApplicationResults() {
+  await waitAndSendOwnerResults();
+}
+
+// Dış mesajlar: AUTO_FILL (geri uyum) ve AUTO_FILL_BASVURU
+chrome.runtime?.onMessage?.addListener?.((request, sender, sendResponse) => {
+  if (request?.type === 'AUTO_FILL' && request?.data) {
+    targetAppNo = request.data;
+    runApplicationFlow().catch(err);
+    sendResponse?.({ status: 'OK' });
+    return true;
+  }
+  if (request?.type === 'AUTO_FILL_BASVURU' && request?.data) {
+    targetAppNo = request.data;
+    runApplicationFlow().catch(err);
+    sendResponse?.({ status: 'OK' });
+    return true;
+  }
+  return true;
+});
 // --------- Background ve URL tetikleyicileri ---------
 chrome.runtime?.onMessage?.addListener?.((request, sender, sendResponse) => {
   if (request?.type === 'AUTO_FILL_KISI' && request?.data) {
@@ -963,11 +1031,11 @@ function captureUrlParams() {
     const queryType = url.searchParams.get('query_type');
     const src = url.searchParams.get('source');
     if (src) sourceOrigin = src;
-    if (autoQuery && queryType === 'sahip') {
-      log('URL üzerinden sahip no bulundu:', autoQuery, 'sourceOrigin:', sourceOrigin);
+    if (autoQuery && (queryType === 'sahip' || queryType === 'basvuru' || queryType === 'application')) {
+      log('URL üzerinden auto_query alındı:', autoQuery, 'queryType:', queryType, 'sourceOrigin:', sourceOrigin);
       broadcastAutoQueryToFrames(autoQuery);
-      targetKisiNo = autoQuery;
-      runOwnerFlow().catch(err);
+      if (queryType === 'sahip') { targetKisiNo = autoQuery; runOwnerFlow().catch(err); }
+      else { targetAppNo = autoQuery; runApplicationFlow().catch(err); }
       return true;
     }
   } catch (e) { warn('URL param hatası:', e?.message); }
