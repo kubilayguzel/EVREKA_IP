@@ -424,7 +424,7 @@ async function parseTrademarkDetails(root) {
   return data;
 }
 
-// --------- Yeni: Tek Başvuru Sonucunu Topla ve Göster ---------
+// --------- Yeni: Tek Başvuru Sonucunu Topla ve Gönder ---------
 async function scrapeAndSendSingleApplicationResult() {
   log('Tekil başvuru sonucu toplanıyor...');
   try {
@@ -437,8 +437,10 @@ async function scrapeAndSendSingleApplicationResult() {
     if (scrapedData && scrapedData.fields['Başvuru Numarası']) {
       log('Başvuru verisi başarıyla kazındı.', scrapedData);
       
-      // Sonucu göster ve kaydetme butonu ekle
-      showResultAndSaveButton([scrapedData]);
+      // Veriyi direkt olarak ana uygulamaya gönder
+      sendToOpener('VERI_GELDI_BASVURU', {
+        applicationData: scrapedData
+      });
       
     } else {
       err('Başvuru verisi kazınamadı.');
@@ -670,108 +672,6 @@ chrome.runtime?.onMessage?.addListener?.((request, sender, sendResponse) => {
   }
   return true;
 });
-
-// Portföye Kaydet butonu ve sonuç önizleme paneli için yeni fonksiyonlar
-function showResultAndSaveButton(items) {
-  const existingPanel = document.getElementById('evreka-result-panel');
-  if (existingPanel) {
-    existingPanel.remove();
-  }
-
-  const panel = document.createElement('div');
-  panel.id = 'evreka-result-panel';
-  panel.style.cssText = `
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    width: 350px;
-    max-height: 80vh;
-    overflow-y: auto;
-    background-color: #fff;
-    border: 1px solid #ddd;
-    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-    border-radius: 8px;
-    z-index: 10000;
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    padding: 15px;
-    box-sizing: border-box;
-    transition: transform 0.3s ease-in-out;
-    transform: translateX(0);
-  `;
-
-  // Başlık ve kapatma butonu
-  const header = document.createElement('div');
-  header.style.cssText = `
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    border-bottom: 1px solid #eee;
-    padding-bottom: 10px;
-    margin-bottom: 15px;
-  `;
-  const title = document.createElement('h3');
-  title.textContent = 'Evreka IP - Sorgu Sonucu';
-  title.style.cssText = 'margin: 0; font-size: 1.2em;';
-  const closeBtn = document.createElement('button');
-  closeBtn.textContent = '×';
-  closeBtn.style.cssText = `
-    background: none;
-    border: none;
-    font-size: 1.5em;
-    cursor: pointer;
-    color: #999;
-    padding: 5px;
-  `;
-  closeBtn.onclick = () => {
-    panel.style.transform = 'translateX(120%)';
-    setTimeout(() => panel.remove(), 300);
-  };
-  header.appendChild(title);
-  header.appendChild(closeBtn);
-  panel.appendChild(header);
-
-  // Sonuç içeriği
-  const content = document.createElement('div');
-  items.forEach(item => {
-    const itemDiv = document.createElement('div');
-    itemDiv.style.marginBottom = '10px';
-    const appNo = item.fields['Başvuru Numarası'] || 'N/A';
-    const brandName = item.fields['Marka Adı'] || 'N/A';
-    const ownerName = item.owners[0]?.name || 'N/A';
-
-    itemDiv.innerHTML = `
-      <h4 style="margin: 0 0 5px; font-size: 1.1em; color: #333;">Başvuru No: ${appNo}</h4>
-      <p style="margin: 0 0 3px; font-size: 0.9em;"><strong>Marka Adı:</strong> ${brandName}</p>
-      <p style="margin: 0 0 3px; font-size: 0.9em;"><strong>Sahip:</strong> ${ownerName}</p>
-      <hr style="border: 0; border-top: 1px solid #eee; margin-top: 10px;">
-    `;
-    content.appendChild(itemDiv);
-  });
-  panel.appendChild(content);
-
-  // Portföye Kaydet butonu
-  const saveBtn = document.createElement('button');
-  saveBtn.textContent = 'Portföye Kaydet';
-  saveBtn.style.cssText = `
-    width: 100%;
-    padding: 10px;
-    background-color: #007bff;
-    color: white;
-    border: none;
-    border-radius: 5px;
-    font-size: 1em;
-    cursor: pointer;
-    margin-top: 10px;
-  `;
-  saveBtn.onclick = () => {
-    sendToOpener('PORTFOYE_KAYDET', { data: items });
-    closeBtn.click();
-  };
-  panel.appendChild(saveBtn);
-
-  document.body.appendChild(panel);
-}
-
 
 // Parent → iframe köprüsü
 function broadcastAutoQueryToFrames(value) {
