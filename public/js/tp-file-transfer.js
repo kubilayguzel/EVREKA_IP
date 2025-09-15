@@ -333,26 +333,44 @@ async function handleQuery() {
 // ===============================
 
 async function queryByApplicationNumber(basvuruNo) {
-  console.log('[DEBUG] Başvuru numarası sorgulanıyor:', basvuruNo);
-  
+  console.log('[DEBUG] Başvuru numarası eklentiye yönlendiriliyor:', basvuruNo);
+
   try {
     _showBlock(loadingEl);
     _hideBlock(singleResultContainer);
-    
-    const result = await scrapeTrademarkFunction({ basvuruNo });
-    const data = result?.data || {};
-    
-    if (!data || data.found === false) {
-      showToast(data?.message || 'Bu başvuru numarası için sonuç bulunamadı.', 'warning');
-    } else {
-      renderSingleResult(data);
-      showToast('Başvuru bilgileri başarıyla alındı.', 'success');
+
+    // TÜRKPATENT sayfasını aç (eklentinin otomatik akışı için)
+    const turkPatentUrl = `https://www.turkpatent.gov.tr/arastirma-yap?form=trademark&auto_query=${encodeURIComponent(basvuruNo)}&query_type=basvuru&source=${encodeURIComponent(window.location.origin)}`;
+    console.log('[DEBUG] TÜRKPATENT URL açılıyor (başvuru):', turkPatentUrl);
+
+    // Simple Loading ile kontrol
+    let loading = window.showLoadingWithCancel?.(
+      'TÜRKPATENT sorgulanıyor',
+      'Başvuru numarası ile kayıt araştırılıyor...',
+      () => {
+        console.log('[DEBUG] Sorgu iptal edildi (basvuru)');
+        if (window.currentLoading) window.currentLoading = null;
+      }
+    );
+
+    const newWindow = window.open(turkPatentUrl, '_blank');
+    if (!newWindow) {
+      if (loading && loading.showError) loading.showError('Pop-up engellendi. Tarayıcı ayarlarından pop-up\'ları açın.');
+      _hideBlock(loadingEl);
+      return;
     }
+
+    // Loading referansını global'e kaydet
+    window.currentLoading = loading || null;
+
+    // Zaman aşımı emniyeti
+    setTimeout(() => { try { _hideBlock(loadingEl); } catch {} }, 45000);
+
+    showToast('TÜRKPATENT sayfası açıldı. Eklenti çalışacak ve sonuçları gönderecek.', 'info');
   } catch (err) {
-    console.error('[DEBUG] Başvuru numarası sorgulama hatası:', err);
-    showToast('Sorgulama hatası: ' + (err?.message || err), 'danger');
-  } finally {
     _hideBlock(loadingEl);
+    console.error('[DEBUG] Başvuru numarası sorgulama hatası (eklentili):', err);
+    showToast('İşlem hatası: ' + (err?.message || err), 'danger');
   }
 }
 
