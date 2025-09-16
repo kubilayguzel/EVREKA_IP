@@ -474,14 +474,6 @@
             z-index: 1000;
             margin-bottom: -5px;
         }
-.trademark-image-wrapper-large {
-    position: relative;
-    display: inline-block;
-    overflow: visible;
-    height: 75px; /* 50px'den 75px'e çıkarıldı (1.5 kat) */
-    width: 75px; /* 50px'den 75px'e çıkarıldı (1.5 kat) */
-    z-index: 1;
-}
 
 .trademark-image-thumbnail-large {
     width: 100%;
@@ -506,18 +498,6 @@
     transition: all 0.2s ease-in-out !important;
 }
 
-/* Wrapper container'ı hover için optimize et */
-.trademark-image-wrapper-large {
-    position: relative;
-    display: inline-block;
-    overflow: visible;
-    height: 75px;
-    width: 75px;
-    z-index: 1;
-    /* Hover alanını biraz büyüt */
-    padding: 5px;
-    margin: -5px;
-}
 
 .trademark-image-wrapper-large:hover {
     z-index: 99999;
@@ -581,9 +561,12 @@
 .trademark-image-wrapper-large {
     position: relative;
     display: inline-block;
-    height: 100px;
-    width: 100px;
+    overflow: visible;
+    height: 100px; /* 75px'den 100px'e çıkarıldı (2 kat) */
+    width: 100px; /* 75px'den 100px'e çıkarıldı (2 kat) */
     z-index: 1;
+    padding: 5px;
+    margin: -5px;
 }
 
 .trademark-image-thumbnail-large {
