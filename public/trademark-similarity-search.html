@@ -494,14 +494,33 @@
     border: 1px solid #ddd;
 }
 
-/* Hover efekti - büyük görüntüleme */
-.trademark-image-thumbnail-large:hover {
-    transform: scale(4); /* 6'dan 4'e küçültüldü, daha makul */
-    z-index: 9999;
+/* Hover efekti - büyük görüntüleme (CSS ve JS ile çalışır) */
+.trademark-image-thumbnail-large:hover,
+.trademark-image-thumbnail-large.hover-active {
+    transform: scale(4) translateZ(0) !important;
+    z-index: 99999 !important;
+    position: relative !important;
+    box-shadow: 0 15px 40px rgba(0, 0, 0, 0.5) !important;
+    border-color: #1e3c72 !important;
+    border-width: 2px !important;
+    transition: all 0.2s ease-in-out !important;
+}
+
+/* Wrapper container'ı hover için optimize et */
+.trademark-image-wrapper-large {
     position: relative;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
-    border-color: #1e3c72;
-    border-width: 2px;
+    display: inline-block;
+    overflow: visible;
+    height: 75px;
+    width: 75px;
+    z-index: 1;
+    /* Hover alanını biraz büyüt */
+    padding: 5px;
+    margin: -5px;
+}
+
+.trademark-image-wrapper-large:hover {
+    z-index: 99999;
 }
 
 .trademark-image-hover-full {
