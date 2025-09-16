@@ -753,6 +753,19 @@ const renderCurrentPageOfResults = () => {
         groupResults.forEach((hit, index) => resultsTableBody.appendChild(createResultRow(hit, pagination.getStartIndex() + index + 1)));
     });
     attachEventListeners();
+
+    // Yeni eklenen kısım: Görselleri asenkron olarak yükle
+    const loadImages = () => {
+        resultsTableBody.querySelectorAll('.trademark-image-cell').forEach(async cell => {
+            const appNo = cell.dataset.appno;
+            if (!appNo) return;
+            const imgUrl = await _getBrandImageByAppNo(appNo);
+            if (imgUrl) {
+                cell.innerHTML = `<img src="${imgUrl}" alt="Marka Görseli" style="width: 50px; height: 50px; object-fit: contain; border-radius: 4px; border: 1px solid #eee;">`;
+            }
+        });
+    };
+    loadImages();
 };
 
 const createResultRow = (hit, rowIndex) => {
@@ -779,11 +792,20 @@ const createResultRow = (hit, rowIndex) => {
     const similarityBtnText = hit.isSimilar === true ? 'Benzer' : 'Benzemez';
     const resultId = hit.objectID || hit.applicationNo;
     const noteContent = hit.note ? `<span class="note-text">${hit.note}</span>` : `<span class="note-placeholder">Not ekle</span>`;
+    
+    const imagePlaceholderHtml = `
+      <div style="width: 50px; height: 50px; border: 1px solid #ddd; display: flex; align-items: center; justify-content: center; background: #f9f9f9; border-radius: 4px; font-size: 10px; color: #999;">
+        Görsel<br>Yok
+      </div>
+    `;
 
     const row = document.createElement('tr');
     row.innerHTML = `
         <td>${rowIndex}</td>
         <td><button class="action-btn ${similarityBtnClass}" data-result-id="${resultId}" data-monitored-trademark-id="${hit.monitoredTrademarkId}" data-bulletin-id="${bulletinSelect.value}">${similarityBtnText}</button></td>
+        <td data-appno="${hit.applicationNo}" class="trademark-image-cell">
+            ${imagePlaceholderHtml}
+        </td>
         <td><strong>${hit.markName || '-'}</strong></td>
         <td>${holders}</td>
         <td>${niceClassHtml}</td>
