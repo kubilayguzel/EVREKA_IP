@@ -1057,14 +1057,16 @@ async function extractApplicationDetailsFromPage() {
       }
     }
     
-    // Mal ve Hizmet Bilgileri
+// Mal ve Hizmet Bilgileri
     const malHizmetFieldset = Array.from(document.querySelectorAll('fieldset')).find(fs => 
       fs.querySelector('legend')?.textContent?.includes('Mal ve Hizmet')
     );
     
     if (malHizmetFieldset) {
       const goodsAndServices = [];
+      const niceClassesSet = new Set();
       const rows = malHizmetFieldset.querySelectorAll('tbody tr');
+      
       rows.forEach(row => {
         const cells = row.querySelectorAll('td');
         if (cells.length >= 2) {
@@ -1072,13 +1074,16 @@ async function extractApplicationDetailsFromPage() {
           const description = cells[1].textContent.trim();
           if (classNum && description) {
             goodsAndServices.push({
-              class: classNum,
-              description: description
+              classNo: parseInt(classNum),
+              items: description.split('\n').filter(item => item.trim() !== '')
             });
+            niceClassesSet.add(classNum);
           }
         }
       });
+      
       details.goodsAndServicesByClass = goodsAndServices;
+      details.niceClasses = Array.from(niceClassesSet).join(' / ');
     }
     
     // İşlem Bilgileri - son durumu bul
