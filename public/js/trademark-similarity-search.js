@@ -160,28 +160,27 @@ const _getBrandImageByAppNo = async (appNo) => {
     const bulletinDocId = document.getElementById('bulletinSelect')?.value;
 
     try {
+        // 1. monitoringTrademarkRecords alt koleksiyonunda ara
         if (bulletinDocId) {
-            // trademarks alt koleksiyonunu tarayarak ilgili başvuru numarasını bul
             const trademarksRef = collection(db, 'monitoringTrademarkRecords', bulletinDocId, 'trademarks');
-            const snap = await getDocs(trademarksRef);
+            const q = query(trademarksRef, where('applicationNo', '==', appNo), limit(1));
+            const snap = await getDocs(q);
             
-            for (const docSnap of snap.docs) {
-                const data = docSnap.data();
-                if (data.results && Array.isArray(data.results)) {
-                    const resultItem = data.results.find(res => String(res.applicationNo) === String(appNo));
-                    if (resultItem && resultItem.imagePath) {
-                        const storageRef = ref(storage, resultItem.imagePath);
-                        url = await getDownloadURL(storageRef);
-                        break; 
-                    }
+            if (!snap.empty) {
+                const data = snap.docs[0].data();
+                if (data.imagePath) {
+                    // Firebase Storage yolunu oluştur
+                    const storageRef = ref(storage, data.imagePath);
+                    url = await getDownloadURL(storageRef);
                 }
             }
         }
     } catch (err) {
-        console.error('[TSS] _getBrandImageByAppNo (monitoring) error:', err);
+            // Hata durumunda konsola uyarı basabilirsin
+            console.error('[TSS] _getBrandImageByAppNo (monitoring) error:', err);
     }
     
-    // Eğer üstteki yol başarısız olursa, ipRecords koleksiyonunda ara
+    // 2. Eğer üstteki yol başarısız olursa, ipRecords koleksiyonunda ara
     if (!url) {
         try {
             const col = collection(db, 'ipRecords');
@@ -193,6 +192,7 @@ const _getBrandImageByAppNo = async (appNo) => {
                 url = _normalizeImageSrc(candidate);
             }
         } catch (err) {
+            // Hata durumunda konsola uyarı basabilirsin
             console.error('[TSS] _getBrandImageByAppNo (ipRecords) error:', err);
         }
     }
