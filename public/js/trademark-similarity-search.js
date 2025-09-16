@@ -708,7 +708,7 @@ const renderCurrentPageOfResults = () => {
             const fallbackName = groupResults[0]?.monitoredTrademark || 'Bilinmeyen Marka';
             const groupHeaderRow = document.createElement('tr');
             groupHeaderRow.classList.add('group-header');
-            groupHeaderRow.innerHTML = `<td colspan="9"><div class="group-title"><span><strong>${fallbackName}</strong> markası için bulunan benzer sonuçlar (${groupResults.length} adet)</span></div></td>`;
+            groupHeaderRow.innerHTML = `<td colspan="10"><div class="group-title"><span><strong>${fallbackName}</strong> markası için bulunan benzer sonuçlar (${groupResults.length} adet)</span></div></td>`;
             resultsTableBody.appendChild(groupHeaderRow);
             groupResults.forEach((hit, index) => resultsTableBody.appendChild(createResultRow(hit, pagination.getStartIndex() + index + 1)));
             return; // Skip to next iteration
@@ -736,7 +736,7 @@ const renderCurrentPageOfResults = () => {
         const totalCount = getTotalCountForMonitoredId(trademarkKey);
 
         groupHeaderRow.innerHTML = `
-            <td colspan="9">
+            <td colspan="10">
                 <div class="group-title">
                     <div class="group-trademark-image">
                         ${headerImg ? `<img src="${headerImg}" alt="${headerName}" class="group-header-img">` : `<div class="group-header-placeholder"><strong>${headerName.charAt(0).toUpperCase()}</strong></div>`}
@@ -762,6 +762,12 @@ const renderCurrentPageOfResults = () => {
             const imgUrl = await _getBrandImageByAppNo(appNo);
             if (imgUrl) {
                 cell.innerHTML = `<img src="${imgUrl}" alt="Marka Görseli" style="width: 50px; height: 50px; object-fit: contain; border-radius: 4px; border: 1px solid #eee;">`;
+            } else {
+                cell.innerHTML = `
+                    <div style="width: 50px; height: 50px; border: 1px solid #ddd; display: flex; align-items: center; justify-content: center; background: #f9f9f9; border-radius: 4px; font-size: 10px; color: #999;">
+                        Görsel<br>Yok
+                    </div>
+                `;
             }
         });
     };
