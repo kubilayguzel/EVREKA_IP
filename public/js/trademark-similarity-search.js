@@ -784,26 +784,6 @@ const renderCurrentPageOfResults = () => {
     });
     attachEventListeners();
 
-    // Yeni eklenen kısım: Görselleri asenkron olarak yükle
-    const loadImages = () => {
-        resultsTableBody.querySelectorAll('.trademark-image-cell').forEach(async cell => {
-            const appNo = cell.dataset.appno;
-            if (!appNo) return;
-            const imgUrl = await _getBrandImageByAppNo(appNo);
-            if (imgUrl) {
-                cell.innerHTML = `<img src="${imgUrl}" alt="Marka Görseli" style="width: 50px; height: 50px; object-fit: contain; border-radius: 4px; border: 1px solid #eee;">`;
-            } else {
-                cell.innerHTML = `
-                    <div style="width: 50px; height: 50px; border: 1px solid #ddd; display: flex; align-items: center; justify-content: center; background: #f9f9f9; border-radius: 4px; font-size: 10px; color: #999;">
-                        Görsel<br>Yok
-                    </div>
-                `;
-            }
-        });
-    };
-    loadImages();
-};
-
 const createResultRow = (hit, rowIndex) => {
     const holders = Array.isArray(hit.holders) ? hit.holders.map(h => h.name || h.id).filter(Boolean).join(', ') : (hit.holders || '');
     const monitoredTrademark = monitoringTrademarks.find(tm => tm.id === hit.monitoredTrademarkId) || {};
