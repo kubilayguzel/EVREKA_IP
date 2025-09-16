@@ -151,23 +151,49 @@ const _normalizeImageSrc = (u) => {
     if (/^[A-Za-z0-9+/=]+$/.test(u.slice(0, 100))) return 'data:image/png;base64,' + u;
     return u;
 };
+
 const _getBrandImageByAppNo = async (appNo) => {
     if (!appNo) return '';
     if (_appNoImgCache.has(appNo)) return _appNoImgCache.get(appNo) || '';
     
     let url = '';
+    let bulletinDocId = document.getElementById('bulletinSelect')?.value;
+
     try {
-        const col = collection(db, 'ipRecords');
-        const q = query(col, where('applicationNumber', '==', appNo), limit(1));
-        const snap = await getDocs(q);
-        if (!snap.empty) {
-            const data = snap.docs[0].data();
-            const candidate = data.brandImageUrl || data.brandImage || (data.details?.brandInfo?.brandImage) || (data.trademarkImage?.url || data.trademarkImage?.content) || '';
-            url = _normalizeImageSrc(candidate);
+        // 1. Önce monitoringTrademarkRecords koleksiyonunda ara
+        if (bulletinDocId) {
+            const monitoringTradmarksRef = collection(db, `monitoringTrademarkRecords/${bulletinDocId}/trademarks`);
+            const q = query(monitoringTradmarksRef, where('applicationNo', '==', appNo), limit(1));
+            const snap = await getDocs(q);
+            
+            if (!snap.empty) {
+                const data = snap.docs[0].data();
+                if (data.imagePath) {
+                    const storageRef = ref(storage, data.imagePath);
+                    url = await getDownloadURL(storageRef);
+                }
+            }
         }
     } catch (err) {
-        console.error('[TSS] _getBrandImageByAppNo error:', err);
+        console.error('[TSS] _getBrandImageByAppNo (monitoring) error:', err);
     }
+    
+    // 2. Eğer ilk deneme başarısız olursa, mevcut ipRecords mantığına dön
+    if (!url) {
+        try {
+            const col = collection(db, 'ipRecords');
+            const q = query(col, where('applicationNumber', '==', appNo), limit(1));
+            const snap = await getDocs(q);
+            if (!snap.empty) {
+                const data = snap.docs[0].data();
+                const candidate = data.brandImageUrl || data.brandImage || (data.details?.brandInfo?.brandImage) || (data.trademarkImage?.url || data.trademarkImage?.content) || '';
+                url = _normalizeImageSrc(candidate);
+            }
+        } catch (err) {
+            console.error('[TSS] _getBrandImageByAppNo (ipRecords) error:', err);
+        }
+    }
+
     _appNoImgCache.set(appNo, url);
     return url;
 };
