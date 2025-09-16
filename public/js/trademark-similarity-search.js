@@ -157,28 +157,30 @@ const _getBrandImageByAppNo = async (appNo) => {
     if (_appNoImgCache.has(appNo)) return _appNoImgCache.get(appNo) || '';
     
     let url = '';
-    let bulletinDocId = document.getElementById('bulletinSelect')?.value;
+    const bulletinDocId = document.getElementById('bulletinSelect')?.value;
 
     try {
-        // 1. Önce monitoringTrademarkRecords koleksiyonunda ara
+        // 1. monitoringTrademarkRecords alt koleksiyonunda ara
         if (bulletinDocId) {
-            const monitoringTradmarksRef = collection(db, `monitoringTrademarkRecords/${bulletinDocId}/trademarks`);
-            const q = query(monitoringTradmarksRef, where('applicationNo', '==', appNo), limit(1));
+            const trademarksRef = collection(db, 'monitoringTrademarkRecords', bulletinDocId, 'trademarks');
+            const q = query(trademarksRef, where('applicationNo', '==', appNo), limit(1));
             const snap = await getDocs(q);
             
             if (!snap.empty) {
                 const data = snap.docs[0].data();
                 if (data.imagePath) {
+                    // Firebase Storage yolunu oluştur
                     const storageRef = ref(storage, data.imagePath);
                     url = await getDownloadURL(storageRef);
                 }
             }
         }
     } catch (err) {
-        console.error('[TSS] _getBrandImageByAppNo (monitoring) error:', err);
+            // Hata durumunda konsola uyarı basabilirsin
+            console.error('[TSS] _getBrandImageByAppNo (monitoring) error:', err);
     }
     
-    // 2. Eğer ilk deneme başarısız olursa, mevcut ipRecords mantığına dön
+    // 2. Eğer üstteki yol başarısız olursa, ipRecords koleksiyonunda ara
     if (!url) {
         try {
             const col = collection(db, 'ipRecords');
@@ -190,6 +192,7 @@ const _getBrandImageByAppNo = async (appNo) => {
                 url = _normalizeImageSrc(candidate);
             }
         } catch (err) {
+            // Hata durumunda konsola uyarı basabilirsin
             console.error('[TSS] _getBrandImageByAppNo (ipRecords) error:', err);
         }
     }
@@ -197,6 +200,7 @@ const _getBrandImageByAppNo = async (appNo) => {
     _appNoImgCache.set(appNo, url);
     return url;
 };
+
 const _ipCache = new Map();
 const _getIp = async (recordId) => {
     if (!recordId) return null;
