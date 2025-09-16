@@ -818,7 +818,6 @@ function renderOwnerResults(items) {
         <th>Tescil No</th>
         <th>Durumu</th>
         <th>Nice Sınıfları</th>
-        <th>Marka Sahibi</th>
       </tr>
     </thead>
     <tbody></tbody>
