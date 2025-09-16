@@ -522,6 +522,7 @@ function tryAutoAddOwner(searchedTpeNo) {
     console.warn('tryAutoAddOwner error:', err);
   }
 }
+
 function setupExtensionMessageListener() {
   console.log('[DEBUG] Eklenti mesaj dinleyicisi kuruluyor...');
   
@@ -536,7 +537,7 @@ function setupExtensionMessageListener() {
       'https://turkpatent.gov.tr'
     ];
     
-    if (event.origin && !allowedOrigins.includes(event.origin)) return;
+    if (!allowedOrigins.includes(event.origin)) return;
     
     if (event.data && event.data.source === 'tp-extension-sahip') {
       console.log('[DEBUG] Eklenti mesajı alındı:', event.data);
@@ -578,8 +579,8 @@ function setupExtensionMessageListener() {
         
         // İlk batch geldiğinde tabloyu başlat, sonrakiler için append
         /* Progressive batch: always re-render full list to avoid missing rows */
-renderOwnerResults(window.batchResults);
-try { setupCheckboxListeners(); updateSaveButton(); } catch (e) { console.warn('listeners refresh failed', e); }
+        renderOwnerResults(window.batchResults);
+        try { setupCheckboxListeners(); updateSaveButton(); } catch (e) { console.warn('listeners refresh failed', e); }
         
         showToast(`Batch ${batchNumber}/${totalBatches} yüklendi`, 'info');
         
@@ -639,7 +640,7 @@ try { setupCheckboxListeners(); updateSaveButton(); } catch (e) { console.warn('
           renderOwnerResults(data);
           
           try { if (window.searchedOwnerNumber) { tryAutoAddOwner(window.searchedOwnerNumber); } } catch (e) { console.warn('Owner autofill failed:', e); }
-      if (window.currentLoading) {
+          if (window.currentLoading) {
             window.currentLoading.showSuccess(`${data.length} kayıt başarıyla alındı!`);
             window.currentLoading = null;
           }
@@ -659,7 +660,9 @@ try { setupCheckboxListeners(); updateSaveButton(); } catch (e) { console.warn('
         
         // Batch state'i temizle
         window.batchResults = [];
-            else if (event.data.type === 'VERI_GELDI_BASVURU') {
+      }
+      
+      else if (event.data.type === 'VERI_GELDI_BASVURU') {
         _hideBlock(loadingEl);
         window.skipScrapeTrademark = false;
         const data = event.data.data;
@@ -679,8 +682,6 @@ try { setupCheckboxListeners(); updateSaveButton(); } catch (e) { console.warn('
           showToast('Bu başvuru numarası için sonuç bulunamadı.', 'warning');
         } else {
           // Tek sonuç için renderSingleResult kullan
-          console.log('[DEBUG] VERI_GELDI_BASVURU - data yapısı:', data);
-          console.log('[DEBUG] data[0] yapısı:', data[0]);
           renderSingleResult(data[0]);
           
           if (window.currentLoading) {
@@ -689,8 +690,9 @@ try { setupCheckboxListeners(); updateSaveButton(); } catch (e) { console.warn('
           }
           showToast('Başvuru numarası sonucu başarıyla alındı.', 'success');
         }
-        
-      } else if (event.data.type === 'HATA_BASVURU') {
+      } 
+      
+      else if (event.data.type === 'HATA_BASVURU') {
         _hideBlock(loadingEl);
         window.skipScrapeTrademark = false;
         const errorMsg = event.data.data?.message || 'Başvuru numarası sorgulama hatası';
@@ -700,6 +702,7 @@ try { setupCheckboxListeners(); updateSaveButton(); } catch (e) { console.warn('
           window.currentLoading = null;
         }
         showToast(errorMsg, 'danger');
+      }
     }
   });
   
