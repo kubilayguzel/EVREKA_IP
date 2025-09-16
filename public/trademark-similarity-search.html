@@ -521,22 +521,6 @@
     transition: transform 0.3s ease-out, opacity 0.3s ease-out;
 }
 
-.no-image-placeholder-large {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 75px; /* 50px'den 75px'e çıkarıldı (1.5 kat) */
-    height: 75px; /* 50px'den 75px'e çıkarıldı (1.5 kat) */
-    background-color: #f8f9fa;
-    border: 1px solid #ddd;
-    border-radius: 8px; /* 5px'den 8px'e büyütüldü */
-    color: #6c757d;
-    font-size: 0.8em; /* 0.7em'den büyütüldü */
-    text-align: center;
-    line-height: 1.2;
-    font-weight: 500;
-}
-
 /* Tablo hücresi genişlikleri - küçük görsel için */
 .results-table th:nth-child(1) { width: 25%; } /* Marka Adı */
 .results-table th:nth-child(2) { width: 8%; }  /* Marka Görseli - küçültüldü */
@@ -598,15 +582,16 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 100px;
-    height: 100px;
+    width: 100px; /* 75px'den 100px'e çıkarıldı (2 kat) */
+    height: 100px; /* 75px'den 100px'e çıkarıldı (2 kat) */
     background-color: #f8f9fa;
     border: 1px solid #ddd;
-    border-radius: 8px;
+    border-radius: 10px; /* 8px'den 10px'e büyütüldü */
     color: #6c757d;
-    font-size: 0.9em;
+    font-size: 0.9em; /* 0.8em'den büyütüldü */
     text-align: center;
     line-height: 1.2;
+    font-weight: 500;
 }
 }
 /* Nice Class Legend Stilleri */
