@@ -868,24 +868,37 @@ const createResultRow = (hit, rowIndex) => {
         </td>
     `;
 
-    // Eğer görsel yok ve applicationNo varsa, asenkron olarak yükle
-    if (!hit.imagePath && !hit.brandImageUrl && hit.applicationNo) {
-        _getBrandImageByAppNo(hit.applicationNo).then(imgUrl => {
-            if (imgUrl) {
+// Görsel yükleme: Önce mevcut veri alanlarını kontrol et, sonra asenkron yükleme yap
+    setTimeout(async () => {
+        if (!hit.imagePath && !hit.brandImageUrl && hit.applicationNo) {
+            try {
+                const imgUrl = await _getBrandImageByAppNo(hit.applicationNo);
+                if (imgUrl) {
+                    const imageCell = row.querySelector('.trademark-image-cell');
+                    if (imageCell && imageCell.isConnected) {
+                        imageCell.innerHTML = `
+                          <div class="trademark-image-wrapper-large">
+                            <img src="${imgUrl}" alt="Marka Görseli" class="trademark-image-thumbnail-large"
+                                 onerror="this.parentElement.innerHTML='<div class=\\"no-image-placeholder-large\\">Görsel<br>Yok</div>'">
+                          </div>
+                        `;
+                    }
+                }
+            } catch (err) {
+                console.warn('[TSS] Görsel yüklenirken hata:', hit.applicationNo, err);
                 const imageCell = row.querySelector('.trademark-image-cell');
-                if (imageCell) {
+                if (imageCell && imageCell.isConnected) {
                     imageCell.innerHTML = `
                       <div class="trademark-image-wrapper-large">
-                        <img src="${imgUrl}" alt="Marka Görseli" class="trademark-image-thumbnail-large"
-                             onerror="this.parentElement.innerHTML='${imagePlaceholderHtml.replace(/'/g, '&apos;')}'">
+                        <div class="no-image-placeholder-large">
+                          Görsel<br>Yüklenemedi
+                        </div>
                       </div>
                     `;
                 }
             }
-        }).catch(err => {
-            console.warn('[TSS] Görsel yüklenirken hata:', err);
-        });
-    }
+        }
+    }, 100);
 
     return row;
 };
