@@ -34,13 +34,8 @@ function fmtDateToTR(isoOrDDMMYYYY) {
 
 // --- Firebase Imports ---
 import { app, personService, ipRecordsService } from '../firebase-config.js';
-import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-functions.js';
 import { loadSharedLayout, ensurePersonModal, openPersonModal } from './layout-loader.js';
 import { mapTurkpatentResultsToIPRecords } from './turkpatent-mapper.js';
-
-// --- Firebase Functions ---
-const functions = getFunctions(app, 'europe-west1');
-const scrapeTrademarkFunction = httpsCallable(functions, 'scrapeTrademark', { timeout: 120000 });
 
 // --- DOM Elements ---
 const basvuruNoInput = _el('basvuruNoInput');
