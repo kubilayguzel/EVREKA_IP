@@ -130,13 +130,15 @@
         align-items: center;
         gap: 10px;
         }
-
-/* Grup başlığı görsel container */
+/* Grup başlığı container - hover için stabil alan */
 .group-trademark-image {
     position: relative;
     display: inline-block;
     overflow: visible;
     z-index: 1;
+    /* Hover alanını büyütük - titremeyi önler */
+    padding: 20px;
+    margin: -20px;
 }
 
 /* Grup başlığı görseli - 1.5 kat büyük (28px * 1.5 = 42px) */
@@ -149,24 +151,26 @@
     background: white;
     padding: 2px;
     cursor: pointer;
-    transition: transform 0.3s cubic-bezier(0.23, 1, 0.32, 1), 
-                box-shadow 0.3s ease-out, 
-                border-color 0.3s ease-out,
-                z-index 0.3s ease;
-}
-.group-trademark-image:hover {
-    z-index: 99999 !important;
+    /* Titremeyi önleyen smooth transition */
+    transition: all 0.2s ease-in-out;
+    transform-origin: center center;
+    backface-visibility: hidden; /* GPU acceleration */
+    will-change: transform; /* Browser optimizasyonu */
 }
 
-/* Hover efekti - görsel büyüme */
-.group-header-img:hover {
-    transform: scale(3.5);
-    z-index: 99999 !important; /* Çok yüksek z-index */
-    position: fixed !important; /* relative yerine fixed */
+/* Hover efekti - smooth ve stabil */
+.group-trademark-image:hover .group-header-img {
+    transform: scale(3.5) translateZ(0); /* translateZ GPU için */
+    z-index: 99999;
+    position: relative;
     box-shadow: 0 15px 40px rgba(0, 0, 0, 0.5);
     border-color: #1e3c72;
     border-width: 3px;
-    transform-origin: center center;
+}
+
+/* Hover sırasında container'ı da yükselt */
+.group-trademark-image:hover {
+    z-index: 99999 !important;
 }
 
 /* Placeholder (görsel yokken) - 1.5 kat büyük */
