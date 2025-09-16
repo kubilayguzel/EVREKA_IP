@@ -80,6 +80,100 @@ function extractByLabel(root, label) {
   } catch {}
   return '';
 }
+
+// --------- Inline Detail Parse (Fallback for Application flow) ---------
+async function parseInlineDetailsFromPage() {
+  try {
+    // Try to find fieldsets like "Marka Bilgileri", "Mal ve Hizmet Bilgileri", "İşlem Geçmişi"
+    const root = document;
+    const fields = {};
+    // Generic key-value extraction across TD grids
+    const tds = Array.from(root.querySelectorAll('td, .MuiTableCell-root, .MuiTableCell-body'));
+    for (let i = 0; i < tds.length - 1; i++) {
+      const k = (tds[i].textContent || '').trim();
+      const v = (tds[i+1].textContent || '').trim();
+      if (k && v && k.length < 64 && !/^[0-9]+$/.test(k)) {
+        fields[k] = v;
+      }
+    }
+
+    // Brand image
+    let imageDataUrl = null;
+    const img = root.querySelector('img[alt*="Marka"], img[alt*="Örneği"], img');
+    if (img && img.src) {
+      imageDataUrl = img.src;
+    }
+
+    // Goods and Services by parsing "Mal ve Hizmet Bilgileri" tables/lists
+    const goodsAndServices = [];
+    const goodsFields = Array.from(root.querySelectorAll('fieldset, .MuiTableContainer-root, table')).filter(el => {
+      const lg = (el.querySelector('legend')?.textContent || '').toLowerCase();
+      return /mal ve hizmet/.test(lg);
+    });
+    for (const g of goodsFields) {
+      // Look for rows like "35 - Perakendecilik; ..."
+      const rows = Array.from(g.querySelectorAll('tr'));
+      for (const r of rows) {
+        const tds = r.querySelectorAll('td, .MuiTableCell-root, .MuiTableCell-body');
+        if (tds.length >= 2) {
+          const clsText = (tds[0].textContent || '').trim();
+          const itemsText = (tds[1].textContent || '').trim();
+          const classNo = parseInt(clsText.replace(/[^0-9]/g,''),10);
+          if (!Number.isNaN(classNo)) {
+            goodsAndServices.push({ classNo, items: itemsText ? itemsText.split(/[,;\n]+/).map(s=>s.trim()).filter(Boolean) : [] });
+          }
+        }
+      }
+    }
+
+    // Transactions table: any table with "İşlem" / "Tarih" headers
+    const transactions = [];
+    const txTables = Array.from(root.querySelectorAll('table')).filter(t => {
+      const th = t.querySelector('thead')?.textContent?.toLowerCase() || '';
+      return /işlem|tarih/.test(th);
+    });
+    for (const t of txTables) {
+      const rows = Array.from(t.querySelectorAll('tbody tr'));
+      for (const r of rows) {
+        const cols = r.querySelectorAll('td, .MuiTableCell-root, .MuiTableCell-body');
+        if (cols.length >= 2) {
+          const date = (cols[0].textContent || '').trim();
+          const description = (cols[1].textContent || '').trim();
+          if (description) transactions.push({ date, description });
+        }
+      }
+    }
+
+    // Base line values
+    const base = {
+      order: 1,
+      applicationNumber: normalizeAppNo(fields['Başvuru Numarası'] || extractByLabel(document, 'Başvuru Numarası') || ''),
+      brandName: fields['Marka Adı'] || extractByLabel(document, 'Marka Adı') || '',
+      ownerName: fields['Marka Sahibi'] || fields['Sahibi'] || extractByLabel(document, 'Marka Sahibi') || '',
+      applicationDate: fields['Başvuru Tarihi'] || extractByLabel(document, 'Başvuru Tarihi') || '',
+      registrationNumber: fields['Tescil No'] || fields['Tescil Numarası'] || extractByLabel(document, 'Tescil No') || '',
+      status: fields['Durumu'] || fields['Durum'] || '',
+      niceClasses: fields['Nice Sınıfları'] || fields['Nice Sınıfı'] || '',
+      brandImageDataUrl: imageDataUrl,
+      brandImageUrl: imageDataUrl,
+      details: fields,
+      goodsAndServicesByClass: goodsAndServices.length ? goodsAndServices : undefined,
+      transactions: transactions.length ? transactions : undefined,
+    };
+
+    if (!base.applicationNumber && fields['Başvuru No']) {
+      base.applicationNumber = normalizeAppNo(fields['Başvuru No']);
+    }
+
+    if (base.applicationNumber || base.brandName) {
+      return base;
+    }
+    return null;
+  } catch (e) {
+    console.error('parseInlineDetailsFromPage hata:', e);
+    return null;
+  }
+}
 // --------- Messaging ---------
 function sendToOpener(type, data) {
   const payload = { source: 'tp-extension-sahip', type, data };
