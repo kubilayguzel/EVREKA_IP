@@ -665,6 +665,13 @@ try { setupCheckboxListeners(); updateSaveButton(); } catch (e) { console.warn('
         window.skipScrapeTrademark = false;
         const data = event.data.data;
         
+        // DEBUG: Veri yapısını kontrol et
+        console.log('[DEBUG] VERI_GELDI_BASVURU - data yapısı:', data);
+        if (data && data.length > 0) {
+          console.log('[DEBUG] data[0] yapısı:', data[0]);
+          console.log('[DEBUG] data[0] keys:', Object.keys(data[0]));
+        }
+
         if (!data || !data.length) {
           if (window.currentLoading) {
             window.currentLoading.showError('Bu başvuru numarası için sonuç bulunamadı.');
