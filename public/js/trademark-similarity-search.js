@@ -819,7 +819,7 @@ const createResultRow = (hit, rowIndex) => {
       </div>
     `;
 
-    // Hit objesinden görsel URL'sini al ve düzgün görsel HTML'i oluştur
+// Hit objesinden görsel URL'sini al ve düzgün görsel HTML'i oluştur
     let imageCellContent = imagePlaceholderHtml;
     
     // Önce hit.imagePath kontrolü
@@ -828,7 +828,7 @@ const createResultRow = (hit, rowIndex) => {
         imageCellContent = `
           <div class="trademark-image-wrapper-large">
             <img src="${imgSrc}" alt="Marka Görseli" class="trademark-image-thumbnail-large" 
-                 onerror="this.parentElement.innerHTML='${imagePlaceholderHtml.replace(/'/g, '&apos;')}'">
+                 onerror="this.parentElement.innerHTML='<div class=&quot;no-image-placeholder-large&quot;>Görsel<br>Yok</div>'">
           </div>
         `;
     }
@@ -837,7 +837,7 @@ const createResultRow = (hit, rowIndex) => {
         imageCellContent = `
           <div class="trademark-image-wrapper-large">
             <img src="${hit.brandImageUrl}" alt="Marka Görseli" class="trademark-image-thumbnail-large"
-                 onerror="this.parentElement.innerHTML='${imagePlaceholderHtml.replace(/'/g, '&apos;')}'">
+                 onerror="this.parentElement.innerHTML='<div class=&quot;no-image-placeholder-large&quot;>Görsel<br>Yok</div>'">
           </div>
         `;
     }
@@ -879,7 +879,7 @@ const createResultRow = (hit, rowIndex) => {
                         imageCell.innerHTML = `
                           <div class="trademark-image-wrapper-large">
                             <img src="${imgUrl}" alt="Marka Görseli" class="trademark-image-thumbnail-large"
-                                 onerror="this.parentElement.innerHTML='<div class=\\"no-image-placeholder-large\\">Görsel<br>Yok</div>'">
+                                 onerror="this.parentElement.innerHTML='<div class=&quot;no-image-placeholder-large&quot;>Görsel<br>Yok</div>'">
                           </div>
                         `;
                     }
@@ -898,7 +898,7 @@ const createResultRow = (hit, rowIndex) => {
                 }
             }
         }
-    }, 100);
+    }, 100); // Kısa bir delay ile asenkron çalıştır
 
     return row;
 };
