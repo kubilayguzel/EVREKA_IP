@@ -1536,8 +1536,8 @@ async handleSpecificTypeChange(e) {
 }
     renderTrademarkApplicationForm(container) {
         container.innerHTML = `
-        <div class="section-card">  // <-- Bu satırı ekleyin
-            <h3 class="section-title">Marka Başvuru Bilgileri</h3> // <-- Bu satırı ekleyin 
+        <div class="section-card">
+            <h3 class="section-title">Marka Başvuru Bilgileri</h3>
              <div class="card-body">
                 <ul class="nav nav-tabs" id="myTaskTabs" role="tablist">
                     <li class="nav-item">
