@@ -333,11 +333,14 @@ async function handleQuery() {
 // ===============================
 
 async function queryByApplicationNumber(basvuruNo) {
-  console.log('[DEBUG] Başvuru numarası eklentiye yönlendiriliyor:', basvuruNo);
+  console.log('[DEBUG] Başvuru numarası eklentiye yönlendiriliyor (scrapeTrademark DEVREDİŞI):', basvuruNo);
 
   try {
     _showBlock(loadingEl);
     _hideBlock(singleResultContainer);
+
+    // ÖNEMLİ: scrapeTrademark fonksiyonunu devre dışı bırak
+    window.skipScrapeTrademark = true;
 
     // TÜRKPATENT sayfasını aç (eklentinin otomatik akışı için)
     const turkPatentUrl = `https://www.turkpatent.gov.tr/arastirma-yap?form=trademark&auto_query=${encodeURIComponent(basvuruNo)}&query_type=basvuru&source=${encodeURIComponent(window.location.origin)}`;
@@ -346,10 +349,12 @@ async function queryByApplicationNumber(basvuruNo) {
     // Simple Loading ile kontrol
     let loading = window.showLoadingWithCancel?.(
       'TÜRKPATENT sorgulanıyor',
-      'Başvuru numarası ile kayıt araştırılıyor...',
+      'Başvuru numarası ile kayıt araştırılıyor (sadece eklenti)...',
       () => {
         console.log('[DEBUG] Sorgu iptal edildi (basvuru)');
         if (window.currentLoading) window.currentLoading = null;
+        // İptal edilince flag'i temizle
+        window.skipScrapeTrademark = false;
       }
     );
 
@@ -357,18 +362,25 @@ async function queryByApplicationNumber(basvuruNo) {
     if (!newWindow) {
       if (loading && loading.showError) loading.showError('Pop-up engellendi. Tarayıcı ayarlarından pop-up\'ları açın.');
       _hideBlock(loadingEl);
+      // Hata durumunda flag'i temizle
+      window.skipScrapeTrademark = false;
       return;
     }
 
     // Loading referansını global'e kaydet
     window.currentLoading = loading || null;
 
-    // Zaman aşımı emniyeti
-    setTimeout(() => { try { _hideBlock(loadingEl); } catch {} }, 45000);
+    // Zaman aşımı emniyeti (flag'i de temizle)
+    setTimeout(() => { 
+      try { _hideBlock(loadingEl); } catch {} 
+      window.skipScrapeTrademark = false;
+    }, 45000);
 
     showToast('TÜRKPATENT sayfası açıldı. Eklenti çalışacak ve sonuçları gönderecek.', 'info');
   } catch (err) {
     _hideBlock(loadingEl);
+    // Hata durumunda flag'i temizle
+    window.skipScrapeTrademark = false;
     console.error('[DEBUG] Başvuru numarası sorgulama hatası (eklentili):', err);
     showToast('İşlem hatası: ' + (err?.message || err), 'danger');
   }
@@ -655,6 +667,7 @@ try { setupCheckboxListeners(); updateSaveButton(); } catch (e) { console.warn('
       }
       } else if (event.data.type === 'VERI_GELDI_BASVURU') {
         _hideBlock(loadingEl);
+        window.skipScrapeTrademark = false;
         const data = event.data.data;
         
         if (!data || !data.length) {
@@ -676,6 +689,7 @@ try { setupCheckboxListeners(); updateSaveButton(); } catch (e) { console.warn('
         
       } else if (event.data.type === 'HATA_BASVURU') {
         _hideBlock(loadingEl);
+        window.skipScrapeTrademark = false;
         const errorMsg = event.data.data?.message || 'Başvuru numarası sorgulama hatası';
         
         if (window.currentLoading) {
