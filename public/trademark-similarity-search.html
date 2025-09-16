@@ -217,75 +217,53 @@
         .note-placeholder { color: #888; font-style: italic; }
         
         /* --- Kolon Genişlik Override --- */
-
-        /* Sıra No (1. kolon) */
+        /* Yeni tablo yapısına göre güncellendi */
+        
+        /* Sıra No */
         .results-table th:nth-child(1),
-        .results-table td:nth-child(1) {
-            width: 60px !important;
-            max-width: 60px !important;
-            text-align: center;
-        }
+        .results-table td:nth-child(1) { width: 4% !important; max-width: 4% !important; text-align: center; }
 
-        /* Başvuru No (2. kolon) */
+        /* Karar */
         .results-table th:nth-child(2),
-        .results-table td:nth-child(2) {
-            width: 120px !important;
-            max-width: 120px !important;
-        }
-
-        /* Marka Adı (3. kolon) */
+        .results-table td:nth-child(2) { width: 8% !important; max-width: 8% !important; text-align: center; }
+        
+        /* Görsel */
         .results-table th:nth-child(3),
-        .results-table td:nth-child(3) {
-            width: 250px !important;
-            max-width: 250px !important;
-        }
+        .results-table td:nth-child(3) { width: 6% !important; max-width: 6% !important; text-align: center; }
 
-        /* Sahip (4. kolon) - GENİŞLETİLDİ */
+        /* Marka Adı */
         .results-table th:nth-child(4),
-        .results-table td:nth-child(4) {
-            width: 300px !important;
-            max-width: 300px !important;
+        .results-table td:nth-child(4) { width: 18% !important; max-width: 18% !important; }
+
+        /* Sahip */
+        .results-table th:nth-child(5),
+        .results-table td:nth-child(5) {
+            width: 18% !important;
+            max-width: 18% !important;
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
         }
 
-        /* Nice Sınıfı (5. kolon) - GENİŞLETİLDİ */
-        .results-table th:nth-child(5),
-        .results-table td:nth-child(5) {
-            width: 200px !important;
-            max-width: 200px !important;
-        }
-
-        /* Benzerlik (6. kolon) */
+        /* Nice Sınıfı */
         .results-table th:nth-child(6),
-        .results-table td:nth-child(6) {
-            width: 80px !important;
-            max-width: 80px !important;
-            text-align: center;
-        }
+        .results-table td:nth-child(6) { width: 12% !important; max-width: 12% !important; }
 
-        /* Karar (7. kolon) */
+        /* Başvuru No */
         .results-table th:nth-child(7),
-        .results-table td:nth-child(7) {
-            width: 120px !important; /* Daha dar bir genişlik */
-            max-width: 120px !important;
-            text-align: center; /* Butonların ortalanması için */
-        }
+        .results-table td:nth-child(7) { width: 10% !important; max-width: 10% !important; }
 
-        /* B.Ş (8. kolon) */
+        /* Benzerlik */
         .results-table th:nth-child(8),
-        .results-table td:nth-child(8) {
-            width: 90px !important;
-            max-width: 90px !important;
-        }
+        .results-table td:nth-child(8) { width: 8% !important; max-width: 8% !important; text-align: center; }
 
-        /* Not (9. kolon) */
+        /* B.Ş */
         .results-table th:nth-child(9),
-        .results-table td:nth-child(9) {
-            width: 150px !important; /* Not alanı için biraz daha geniş */
-            max-width: 150px !important;
-        }
+        .results-table td:nth-child(9) { width: 8% !important; max-width: 8% !important; }
+
+        /* Not */
+        .results-table th:nth-child(10),
+        .results-table td:nth-child(10) { width: 8% !important; max-width: 8% !important; }
 
         /* Not hücresindeki placeholder ve ikon için stil */
         .note-cell-content {
@@ -801,18 +779,19 @@
                 <div style="overflow-x: auto;">
                     <table class="results-table">
                         <thead>
-                    <tr>
-                        <th>Sıra No</th>
-                        <th>Karar</th>
-                        <th>Marka Adı</th>
-                        <th>Sahip</th>
-                        <th>Nice Sınıfı</th>
-                        <th>Başvuru No</th>
-                        <th>Benzerlik</th>
-                        <th>B.Ş</th>
-                        <th>Not</th>
-                    </tr>
-                </thead>
+                            <tr>
+                                <th style="width: 4%;">Sıra No</th>
+                                <th style="width: 8%;">Karar</th>
+                                <th style="width: 6%;">Görsel</th>
+                                <th style="width: 18%;">Marka Adı</th>
+                                <th style="width: 18%;">Sahip</th>
+                                <th style="width: 12%;">Nice Sınıfı</th>
+                                <th style="width: 10%;">Başvuru No</th>
+                                <th style="width: 8%;">Benzerlik</th>
+                                <th style="width: 8%;">B.Ş</th>
+                                <th style="width: 8%;">Not</th>
+                            </tr>
+                        </thead>
                         <tbody id="resultsTableBody"></tbody>
                     </table>
                     <div id="loadingIndicator" class="loading" style="display: none;"></div>
