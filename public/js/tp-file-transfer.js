@@ -32,6 +32,22 @@ function fmtDateToTR(isoOrDDMMYYYY) {
   return String(isoOrDDMMYYYY);
 }
 
+// Tarih parse yardımcı fonksiyonu - dosyanın en üstüne ekleyin
+function parseDate(dateStr) {
+  if (!dateStr) return null;
+  
+  // DD.MM.YYYY formatı
+  const match = dateStr.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+  if (match) {
+    const [, day, month, year] = match;
+    return new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+  }
+  
+  // Diğer formatları dene
+  const date = new Date(dateStr);
+  return isNaN(date.getTime()) ? null : date;
+}
+
 // --- Firebase Imports ---
 import { app, personService, ipRecordsService } from '../firebase-config.js';
 import { loadSharedLayout, ensurePersonModal, openPersonModal } from './layout-loader.js';
@@ -681,8 +697,40 @@ function setupExtensionMessageListener() {
           }
           showToast('Bu başvuru numarası için sonuç bulunamadı.', 'warning');
         } else {
+          // Başvuru numarası verilerini zenginleştir
+          const enrichedData = data.map(item => {
+            // renewalDate hesapla
+            let renewalDate = null;
+            
+            // Koruma tarihi varsa + 10 yıl
+            if (item.details && item.details['Koruma Tarihi']) {
+              const korumaDateStr = item.details['Koruma Tarihi'];
+              const korumaDate = parseDate(korumaDateStr); // DD.MM.YYYY -> Date
+              if (korumaDate) {
+                const renewal = new Date(korumaDate);
+                renewal.setFullYear(renewal.getFullYear() + 10);
+                renewalDate = renewal.toISOString().split('T')[0]; // YYYY-MM-DD format
+              }
+            }
+            
+            // Tescil tarihi varsa + 10 yıl (koruma tarihi yoksa)
+            if (!renewalDate && item.registrationDate) {
+              const regDate = new Date(item.registrationDate);
+              if (!isNaN(regDate.getTime())) {
+                const renewal = new Date(regDate);
+                renewal.setFullYear(renewal.getFullYear() + 10);
+                renewalDate = renewal.toISOString().split('T')[0];
+              }
+            }
+            
+            return {
+              ...item,
+              renewalDate: renewalDate
+            };
+          });
+          
           // Tek sonuç için renderSingleResult kullan
-          renderSingleResult(data[0]);
+          renderSingleResult(enrichedData[0]);
           
           if (window.currentLoading) {
             window.currentLoading.showSuccess('Başvuru numarası sonucu başarıyla alındı!');
