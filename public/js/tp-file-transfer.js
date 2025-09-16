@@ -653,6 +653,36 @@ try { setupCheckboxListeners(); updateSaveButton(); } catch (e) { console.warn('
         // Batch state'i temizle
         window.batchResults = [];
       }
+      } else if (event.data.type === 'VERI_GELDI_BASVURU') {
+        _hideBlock(loadingEl);
+        const data = event.data.data;
+        
+        if (!data || !data.length) {
+          if (window.currentLoading) {
+            window.currentLoading.showError('Bu başvuru numarası için sonuç bulunamadı.');
+            window.currentLoading = null;
+          }
+          showToast('Bu başvuru numarası için sonuç bulunamadı.', 'warning');
+        } else {
+          // Tek sonuç için renderSingleResult kullan
+          renderSingleResult(data[0]);
+          
+          if (window.currentLoading) {
+            window.currentLoading.showSuccess('Başvuru numarası sonucu başarıyla alındı!');
+            window.currentLoading = null;
+          }
+          showToast('Başvuru numarası sonucu başarıyla alındı.', 'success');
+        }
+        
+      } else if (event.data.type === 'HATA_BASVURU') {
+        _hideBlock(loadingEl);
+        const errorMsg = event.data.data?.message || 'Başvuru numarası sorgulama hatası';
+        
+        if (window.currentLoading) {
+          window.currentLoading.showError(errorMsg);
+          window.currentLoading = null;
+        }
+        showToast(errorMsg, 'danger');
     }
   });
   
