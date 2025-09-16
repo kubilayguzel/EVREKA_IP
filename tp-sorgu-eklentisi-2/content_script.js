@@ -1001,9 +1001,198 @@ async function runApplicationFlow() {
   await waitAndSendApplicationResults();
 }
 
-// Owner sonuç toplayıcısını yeniden adlandırılmış bir sarmalayıcı ile kullan
+// Başvuru numarası sayfasından doğrudan detay çıkarımı (Optimized)
+async function extractApplicationDetailsFromPage() {
+  const details = {};
+  
+  try {
+    log('HTML yapısından detaylar çıkarılıyor...');
+    
+    // Marka Bilgileri fieldset'ini bul
+    const markaBilgileriFieldset = Array.from(document.querySelectorAll('fieldset')).find(fs => 
+      fs.querySelector('legend')?.textContent?.includes('Marka Bilgileri')
+    );
+    
+    if (markaBilgileriFieldset) {
+      // Table hücrelerinden bilgi çıkar
+      const extractFromTable = (label) => {
+        const cells = Array.from(markaBilgileriFieldset.querySelectorAll('td'));
+        for (let i = 0; i < cells.length - 1; i++) {
+          if (cells[i].textContent.trim() === label) {
+            return cells[i + 1].textContent.trim();
+          }
+        }
+        return null;
+      };
+      
+      // Temel bilgileri çıkar
+      details.applicationNumber = normalizeAppNo(extractFromTable('Başvuru Numarası')) || '';
+      details.applicationDate = extractFromTable('Başvuru Tarihi') || '';
+      details.registrationNumber = extractFromTable('Tescil Numarası') || '';
+      details.registrationDate = extractFromTable('Tescil Tarihi') || '';
+      details.brandName = extractFromTable('Marka Adı') || '';
+      details.niceClasses = extractFromTable('Nice Sınıfları') || '';
+      details.brandType = extractFromTable('Türü') || '';
+      details.protectionDate = extractFromTable('Koruma Tarihi') || '';
+      details.status = extractFromTable('Durumu') || 'TESCİL EDİLDİ'; // Default değer
+      
+      // Sahip bilgileri - çok satırlı olabilir
+      const sahipCell = Array.from(markaBilgileriFieldset.querySelectorAll('td')).find((cell, i, cells) => 
+        cells[i-1]?.textContent?.trim() === 'Sahip Bilgileri'
+      );
+      if (sahipCell) {
+        const sahipTexts = Array.from(sahipCell.querySelectorAll('p')).map(p => p.textContent.trim());
+        if (sahipTexts.length > 1) {
+          details.ownerName = sahipTexts[1]; // İkinci satır genellikle şirket adı
+          details.ownerId = sahipTexts[0]; // İlk satır genellikle TPE numarası
+        }
+      }
+      
+      // Marka görseli
+      const img = markaBilgileriFieldset.querySelector('img[src*="data:image"]');
+      if (img && img.src) {
+        details.brandImageUrl = img.src;
+        details.brandImageDataUrl = img.src;
+        details.imageSrc = img.src;
+      }
+    }
+    
+    // Mal ve Hizmet Bilgileri
+    const malHizmetFieldset = Array.from(document.querySelectorAll('fieldset')).find(fs => 
+      fs.querySelector('legend')?.textContent?.includes('Mal ve Hizmet')
+    );
+    
+    if (malHizmetFieldset) {
+      const goodsAndServices = [];
+      const rows = malHizmetFieldset.querySelectorAll('tbody tr');
+      rows.forEach(row => {
+        const cells = row.querySelectorAll('td');
+        if (cells.length >= 2) {
+          const classNum = cells[0].textContent.trim();
+          const description = cells[1].textContent.trim();
+          if (classNum && description) {
+            goodsAndServices.push({
+              class: classNum,
+              description: description
+            });
+          }
+        }
+      });
+      details.goodsAndServicesByClass = goodsAndServices;
+    }
+    
+    // İşlem Bilgileri - son durumu bul
+    const islemFieldset = Array.from(document.querySelectorAll('fieldset')).find(fs => 
+      fs.querySelector('legend')?.textContent?.includes('İşlem Bilgileri')
+    );
+    
+    if (islemFieldset) {
+      const transactions = [];
+      const rows = islemFieldset.querySelectorAll('tbody tr');
+      rows.forEach(row => {
+        const cells = row.querySelectorAll('td');
+        if (cells.length >= 3) {
+          const tarih = cells[0].textContent.trim();
+          const islem = cells[2].textContent.trim();
+          if (tarih && islem && !cells[0].hasAttribute('colspan')) { // colspan olanları skip et
+            transactions.push({
+              date: tarih,
+              action: islem,
+              description: cells[3]?.textContent?.trim() || ''
+            });
+          }
+        }
+      });
+      details.transactions = transactions;
+      
+      // En son işlemden durumu belirle
+      if (transactions.length > 0) {
+        const lastAction = transactions[transactions.length - 1].action;
+        if (lastAction.includes('TESCİL')) {
+          details.status = 'TESCİL EDİLDİ';
+        } else if (lastAction.includes('YAYIN')) {
+          details.status = 'YAYINLANDI';
+        }
+      }
+    }
+    
+    log('HTML yapısından çıkarılan detaylar:', details);
+    return details;
+    
+  } catch (e) {
+    warn('Sayfa detay çıkarımında hata:', e?.message);
+    // Fallback - basit text-based extraction
+    return extractDetailsFromText();
+  }
+}
+
+// Fallback fonksiyon
+function extractDetailsFromText() {
+  const details = {};
+  const pageText = document.body.textContent || '';
+  
+  const appNoMatch = pageText.match(/Başvuru Numarası[:\s]*((?:\d{4}|\d{2})\/\d+)/i);
+  if (appNoMatch) details.applicationNumber = normalizeAppNo(appNoMatch[1]);
+  
+  const brandNameMatch = pageText.match(/Marka Adı[:\s]*([^\n\r]+)/i);
+  if (brandNameMatch) details.brandName = brandNameMatch[1].trim();
+  
+  const statusMatch = pageText.match(/TESCİL EDİLDİ|YAYINLANDI|KABUL|RET/i);
+  if (statusMatch) details.status = statusMatch[0];
+  
+  const img = document.querySelector('img[src*="data:image"]');
+  if (img && img.src) {
+    details.brandImageUrl = img.src;
+    details.brandImageDataUrl = img.src;
+  }
+  
+  return details;
+}
+
+// Başvuru numarası için özelleştirilmiş sonuç toplama
 async function waitAndSendApplicationResults() {
-  await waitAndSendOwnerResults();
+  log('Başvuru numarası sonuçları toplanıyor...');
+  
+  // Tek kayıt beklentisi ile basit bekleme
+  try { 
+    await waitFor('tbody.MuiTableBody-root tr, tbody tr', { timeout: 15000 }); 
+  } catch {
+    log('Sonuç tablosu bulunamadı, sayfa yapısı kontrol ediliyor...');
+    // Alternatif: doğrudan sayfa içeriğinden parse et
+    await parseApplicationResultFromPage();
+    return;
+  }
+
+  // Tablo varsa basit parse (modal açmadan)
+  const rows = Array.from(document.querySelectorAll('tbody.MuiTableBody-root tr, tbody tr'));
+  if (rows.length === 0) {
+    log('Hiç sonuç bulunamadı');
+    sendToOpener('HATA_BASVURU', { message: 'Bu başvuru numarası için sonuç bulunamadı.' });
+    return;
+  }
+
+  log(`${rows.length} sonuç bulundu, parse ediliyor...`);
+  const items = [];
+  
+  for (let i = 0; i < rows.length; i++) {
+    const tr = rows[i];
+    const item = parseOwnerRowBase(tr, i);
+    
+    if (item.applicationNumber) {
+      // Başvuru numarası için ek detayları sayfadan topla
+      const pageDetails = await extractApplicationDetailsFromPage();
+      if (pageDetails) {
+        Object.assign(item, pageDetails);
+      }
+      items.push(item);
+    }
+  }
+
+  if (items.length > 0) {
+    sendToOpener('VERI_GELDI_BASVURU', items);
+  } else {
+    sendToOpener('HATA_BASVURU', { message: 'Başvuru numarası sonuçları işlenirken hata oluştu.' });
+  }
 }
 
 // Dış mesajlar: AUTO_FILL (geri uyum) ve AUTO_FILL_BASVURU
