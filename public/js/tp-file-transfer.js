@@ -673,6 +673,8 @@ try { setupCheckboxListeners(); updateSaveButton(); } catch (e) { console.warn('
           showToast('Bu başvuru numarası için sonuç bulunamadı.', 'warning');
         } else {
           // Tek sonuç için renderSingleResult kullan
+          console.log('[DEBUG] VERI_GELDI_BASVURU - data yapısı:', data);
+          console.log('[DEBUG] data[0] yapısı:', data[0]);
           renderSingleResult(data[0]);
           
           if (window.currentLoading) {
@@ -711,7 +713,9 @@ function updateTableRowCount() {
 // ===============================
 
 function renderSingleResult(payload) {
+  console.log('[DEBUG] renderSingleResult çağrıldı, payload:', payload);
   const d = payload.data && typeof payload.data === 'object' ? payload.data : payload;
+  console.log('[DEBUG] renderSingleResult - parsed d:', d);
   
   const trademarkName = d.trademarkName || '';
   const status = d.status || '';
