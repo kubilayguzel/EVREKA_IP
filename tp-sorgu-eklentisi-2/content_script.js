@@ -926,6 +926,32 @@ async function runOwnerFlow() {
   await waitAndSendOwnerResults();
 }
 
+// Yeni: "Dosya Takibi" sekmesine geçişi sağlayan yardımcı fonksiyon
+async function ensureDosyaTakibiTab() {
+  let tabBtn = document.querySelector('button[role="tab"]') || await waitFor('button[role="tab"]', { timeout: 4000 });
+  if (!tabBtn) {
+    log('Dosya Takibi/Marka Araştırma sekmeleri bulunamadı, bekleniyor...');
+    tabBtn = await waitFor('button[role="tab"]', { timeout: 6000 });
+  }
+
+  // Doğru sekme metnini bul
+  let dosyaTakibiBtn = Array.from(document.querySelectorAll('button[role="tab"]'))
+    .find(btn => (btn.textContent || '').trim().toLowerCase().includes('dosya takibi'));
+  
+  if (dosyaTakibiBtn) {
+    if (dosyaTakibiBtn.getAttribute('aria-selected') !== 'true') {
+      click(dosyaTakibiBtn);
+      log('[Evreka Eklenti] "Dosya Takibi" sekmesine tıklandı.');
+      await sleep(500); // Sekme geçişi için kısa bekleme
+    } else {
+      log('[Evreka Eklenti] "Dosya Takibi" zaten aktif.');
+    }
+  } else {
+    warn('[Evreka Eklenti] "Dosya Takibi" sekmesi bulunamadı.');
+    // Hata durumunda akışı durdurabiliriz veya devam edebiliriz
+    // Devam etmek, marka araştırması formunda sorgu yapmaya çalışır ki bu istenmeyen bir durum olabilir
+  }
+}
 
 // Yeni: Başvuru No akışı
 async function runApplicationFlow() {
@@ -934,10 +960,10 @@ async function runApplicationFlow() {
 
   try { await closeFraudModalIfAny(); } catch {}
 
-  
-  // Make sure we're on 'Dosya Takibi' tab
+  // 1) Önce doğru sekmeye geçiş yap
   await ensureDosyaTakibiTab();
-// input[placeholder="Başvuru Numarası"]
+  
+  // input[placeholder="Başvuru Numarası"]
   let appInput =
     document.querySelector('input.MuiInputBase-input.MuiInput-input[placeholder="Başvuru Numarası"]') ||
     document.querySelector('input[placeholder="Başvuru Numarası"]');
