@@ -7,6 +7,7 @@ import { runTrademarkSearch } from './trademark-similarity/run-search.js';
 import Pagination from './pagination.js';
 import { loadSharedLayout } from './layout-loader.js';
 import { showNotification } from '../utils.js';
+import { getStorage, ref, getDownloadURL } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js';
 
 console.log("### trademark-similarity-search.js yüklendi ###");
 
@@ -848,77 +849,60 @@ const createResultRow = (hit, rowIndex) => {
         </td>
     `;
 
-// Asenkron görsel yükleme - tüm görsel kaynaklarını dene
+// Basit asenkron görsel yükleme
     setTimeout(async () => {
         const imageCell = row.querySelector('.trademark-image-cell');
         if (!imageCell || !imageCell.isConnected) return;
 
-        let imgUrl = '';
-        
         try {
-            // 1. Önce hit objesindeki mevcut görsel alanlarını kontrol et
+            let imgUrl = '';
+            
+            // 1. imagePath varsa Firebase Storage'dan al
             if (hit.imagePath) {
-                console.log(`[TSS] imagePath bulundu: ${hit.imagePath}`);
-                // Firebase Storage URL oluştur
-                imgUrl = `https://firebasestorage.googleapis.com/v0/b/ip-manager-production-aab4b.appspot.com/o/${encodeURIComponent(hit.imagePath)}?alt=media`;
-            } else if (hit.brandImageUrl) {
-                console.log(`[TSS] brandImageUrl bulundu: ${hit.brandImageUrl}`);
+                console.log(`[TSS] imagePath ile görsel alınıyor: ${hit.imagePath}`);
+                const storage = getStorage();
+                const storageRef = ref(storage, hit.imagePath);
+                imgUrl = await getDownloadURL(storageRef);
+                console.log(`[TSS] Firebase Storage URL alındı: ${imgUrl.substring(0, 80)}...`);
+            }
+            // 2. brandImageUrl varsa direkt kullan
+            else if (hit.brandImageUrl) {
+                console.log(`[TSS] brandImageUrl kullanılıyor: ${hit.brandImageUrl.substring(0, 80)}...`);
                 imgUrl = hit.brandImageUrl;
-            } 
-            // 2. Hiçbiri yoksa applicationNo ile ara
+            }
+            // 3. Son çare: applicationNo ile ara
             else if (hit.applicationNo) {
-                console.log(`[TSS] AppNo ile görsel aranıyor: ${hit.applicationNo}`);
+                console.log(`[TSS] applicationNo ile arama yapılıyor: ${hit.applicationNo}`);
                 imgUrl = await _getBrandImageByAppNo(hit.applicationNo);
             }
 
-            // 3. Görsel URL bulunduysa test et ve yükle
+            // Görsel bulunduysa yükle
             if (imgUrl) {
-                console.log(`[TSS] Görsel URL bulundu, test ediliyor: ${imgUrl.substring(0, 100)}...`);
-                
-                // Görsel yükleme testi
-                const testImg = new Image();
-                testImg.onload = () => {
-                    console.log(`[TSS] Görsel başarıyla yüklendi: ${hit.applicationNo}`);
-                    if (imageCell && imageCell.isConnected) {
-                        imageCell.innerHTML = `
-                          <div class="trademark-image-wrapper-large">
-                            <img src="${imgUrl}" alt="Marka Görseli" class="trademark-image-thumbnail-large"
-                                 onload="console.log('[TSS] IMG onload: ${hit.applicationNo}')"
-                                 onerror="console.warn('[TSS] IMG onerror: ${hit.applicationNo}'); this.parentElement.innerHTML='<div class=\\"no-image-placeholder-large\\">Görsel<br>Hata</div>'">
-                          </div>
-                        `;
-                    }
-                };
-                testImg.onerror = () => {
-                    console.warn(`[TSS] Görsel yükleme hatası: ${hit.applicationNo} -> ${imgUrl.substring(0, 100)}...`);
-                    if (imageCell && imageCell.isConnected) {
-                        imageCell.innerHTML = `
-                          <div class="trademark-image-wrapper-large">
-                            <div class="no-image-placeholder-large">
-                              Görsel<br>Hata
-                            </div>
-                          </div>
-                        `;
-                    }
-                };
-                testImg.src = imgUrl;
+                imageCell.innerHTML = `
+                  <div class="trademark-image-wrapper-large">
+                    <img src="${imgUrl}" alt="Marka Görseli" class="trademark-image-thumbnail-large"
+                         onload="console.log('[TSS] ✅ Görsel yüklendi: ${hit.applicationNo || hit.markName}')"
+                         onerror="console.warn('[TSS] ❌ Görsel yüklenemedi: ${hit.applicationNo || hit.markName}'); this.parentElement.innerHTML='<div class=\\"no-image-placeholder-large\\">Görsel<br>Hata</div>'">
+                  </div>
+                `;
+                console.log(`[TSS] HTML güncellendi: ${hit.applicationNo || hit.markName}`);
             } else {
-                console.log(`[TSS] Hiç görsel bulunamadı: ${hit.applicationNo}`);
+                console.log(`[TSS] Hiç görsel bulunamadı: ${hit.applicationNo || hit.markName}`);
             }
 
         } catch (err) {
-            console.error('[TSS] Görsel yükleme exception:', hit.applicationNo, err);
+            console.error(`[TSS] Görsel yükleme hatası: ${hit.applicationNo || hit.markName}`, err);
             if (imageCell && imageCell.isConnected) {
                 imageCell.innerHTML = `
                   <div class="trademark-image-wrapper-large">
                     <div class="no-image-placeholder-large">
-                      Görsel<br>Yüklenemedi
+                      Görsel<br>Hata
                     </div>
                   </div>
                 `;
             }
         }
-    }, 100);
+    }, 50);
 
     return row;
 };
