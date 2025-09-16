@@ -904,7 +904,32 @@ const createResultRow = (hit, rowIndex) => {
             }
         }
     }, 50);
-
+// Satır görsellerine hover efekti ekle
+    setTimeout(() => {
+        const img = row.querySelector('.trademark-image-thumbnail-large');
+        if (img) {
+            // Hover event listeners ekle
+            img.addEventListener('mouseenter', function() {
+                this.style.transform = 'scale(4) translateZ(0)';
+                this.style.zIndex = '99999';
+                this.style.position = 'relative';
+                this.style.boxShadow = '0 15px 40px rgba(0, 0, 0, 0.5)';
+                this.style.borderColor = '#1e3c72';
+                this.style.borderWidth = '2px';
+                console.log('[TSS] Hover IN:', hit.applicationNo || hit.markName);
+            });
+            
+            img.addEventListener('mouseleave', function() {
+                this.style.transform = 'scale(1) translateZ(0)';
+                this.style.zIndex = '1';
+                this.style.position = 'static';
+                this.style.boxShadow = 'none';
+                this.style.borderColor = '#ddd';
+                this.style.borderWidth = '1px';
+                console.log('[TSS] Hover OUT:', hit.applicationNo || hit.markName);
+            });
+        }
+    }, 200);
     return row;
 };
 
