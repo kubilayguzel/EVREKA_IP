@@ -536,7 +536,7 @@ function setupExtensionMessageListener() {
       'https://turkpatent.gov.tr'
     ];
     
-    if (!allowedOrigins.includes(event.origin)) return;
+    if (event.origin && !allowedOrigins.includes(event.origin)) return;
     
     if (event.data && event.data.source === 'tp-extension-sahip') {
       console.log('[DEBUG] Eklenti mesajı alındı:', event.data);
@@ -659,8 +659,7 @@ try { setupCheckboxListeners(); updateSaveButton(); } catch (e) { console.warn('
         
         // Batch state'i temizle
         window.batchResults = [];
-      }
-      } else if (event.data.type === 'VERI_GELDI_BASVURU') {
+            else if (event.data.type === 'VERI_GELDI_BASVURU') {
         _hideBlock(loadingEl);
         window.skipScrapeTrademark = false;
         const data = event.data.data;
