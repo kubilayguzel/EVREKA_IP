@@ -1536,7 +1536,9 @@ async handleSpecificTypeChange(e) {
 }
     renderTrademarkApplicationForm(container) {
         container.innerHTML = `
-            <div class="card-body">
+        <div class="section-card">  // <-- Bu satırı ekleyin
+            <h3 class="section-title">Marka Başvuru Bilgileri</h3> // <-- Bu satırı ekleyin 
+             <div class="card-body">
                 <ul class="nav nav-tabs" id="myTaskTabs" role="tablist">
                     <li class="nav-item">
                         <a class="nav-link active" id="brand-info-tab" data-toggle="tab" href="#brand-info" role="tab" aria-controls="brand-info" aria-selected="true">Marka Bilgileri</a>
@@ -1917,6 +1919,7 @@ async handleSpecificTypeChange(e) {
                 </div>
             </div>
             <div id="formActionsContainer" class="form-actions"></div>
+            </div>
     `;
         this.setupDynamicFormListeners();
         this.setupBrandExampleUploader();
