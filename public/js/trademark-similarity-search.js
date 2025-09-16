@@ -881,8 +881,9 @@ const createResultRow = (hit, rowIndex) => {
                 imageCell.innerHTML = `
                   <div class="trademark-image-wrapper-large">
                     <img src="${imgUrl}" alt="Marka Görseli" class="trademark-image-thumbnail-large"
-                         onload="console.log('[TSS] ✅ Görsel yüklendi: ${hit.applicationNo || hit.markName}')"
-                         onerror="console.warn('[TSS] ❌ Görsel yüklenemedi: ${hit.applicationNo || hit.markName}'); this.parentElement.innerHTML='<div class=\\"no-image-placeholder-large\\">Görsel<br>Hata</div>'">
+                         onload="console.log('[TSS] ✅ Görsel yüklendi: ${hit.applicationNo || hit.markName}'); this.style.display='block';"
+                         onerror="console.warn('[TSS] ❌ Görsel yüklenemedi, gizleniyor: ${hit.applicationNo || hit.markName}'); this.style.display='none';"
+                         style="display:none;">
                   </div>
                 `;
                 console.log(`[TSS] HTML güncellendi: ${hit.applicationNo || hit.markName}`);
