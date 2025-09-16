@@ -1490,6 +1490,16 @@ async handleSpecificTypeChange(e) {
         this.renderBaseForm(container, selectedTaskType.alias || selectedTaskType.name, selectedTaskType.id);
     }
 
+    setTimeout(() => {
+        initTaskDatePickers(container);
+        // Takvimin açılması için bir listener daha ekleyebiliriz
+        document.getElementById('priorityDate')?.addEventListener('click', (ev) => {
+            if (ev.target._flatpickr) {
+                ev.target._flatpickr.open();
+            }
+        });
+    }, 100); 
+
     // === YENİ MANTIĞIN ENTEGRASYONU ===
     // Form render edildikten sonra atama dropdown'ını kurala göre doldur.
     await this.updateAssignedToDropdown(taskTypeId);
