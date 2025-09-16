@@ -136,6 +136,7 @@
     position: relative;
     display: inline-block;
     overflow: visible;
+    z-index: 1;
 }
 
 /* Grup başlığı görseli - 1.5 kat büyük (28px * 1.5 = 42px) */
@@ -150,17 +151,22 @@
     cursor: pointer;
     transition: transform 0.3s cubic-bezier(0.23, 1, 0.32, 1), 
                 box-shadow 0.3s ease-out, 
-                border-color 0.3s ease-out;
+                border-color 0.3s ease-out,
+                z-index 0.3s ease;
+}
+.group-trademark-image:hover {
+    z-index: 99999 !important;
 }
 
 /* Hover efekti - görsel büyüme */
 .group-header-img:hover {
     transform: scale(3.5);
-    z-index: 9999;
-    position: relative;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    z-index: 99999 !important; /* Çok yüksek z-index */
+    position: fixed !important; /* relative yerine fixed */
+    box-shadow: 0 15px 40px rgba(0, 0, 0, 0.5);
     border-color: #1e3c72;
     border-width: 3px;
+    transform-origin: center center;
 }
 
 /* Placeholder (görsel yokken) - 1.5 kat büyük */
@@ -468,8 +474,8 @@
     position: relative;
     display: inline-block;
     overflow: visible;
-    height: 50px; /* 100px'den 50px'e küçültüldü */
-    width: 50px; /* 100px'den 50px'e küçültüldü */
+    height: 75px; /* 50px'den 75px'e çıkarıldı (1.5 kat) */
+    width: 75px; /* 50px'den 75px'e çıkarıldı (1.5 kat) */
     z-index: 1;
 }
 
@@ -477,20 +483,21 @@
     width: 100%;
     height: 100%;
     object-fit: contain;
-    border-radius: 5px; /* 8px'den 5px'e küçültüldü */
+    border-radius: 8px; /* 5px'den 8px'e büyütüldü */
     vertical-align: middle;
-    transition: transform 0.5s cubic-bezier(0.23, 1, 0.32, 1), box-shadow 0.5s ease-out, border 0.5s ease-out;
+    transition: transform 0.3s cubic-bezier(0.23, 1, 0.32, 1), box-shadow 0.3s ease-out, border 0.3s ease-out, z-index 0.3s ease;
     cursor: pointer;
     border: 1px solid #ddd;
 }
 
 /* Hover efekti - büyük görüntüleme */
 .trademark-image-thumbnail-large:hover {
-    transform: scale(6); /* Hover'da büyütme */
+    transform: scale(4); /* 6'dan 4'e küçültüldü, daha makul */
     z-index: 9999;
     position: relative;
-    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
     border-color: #1e3c72;
+    border-width: 2px;
 }
 
 .trademark-image-hover-full {
@@ -515,15 +522,15 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 50px; /* 100px'den 50px'e küçültüldü */
-    height: 50px; /* 100px'den 50px'e küçültüldü */
+    width: 75px; /* 50px'den 75px'e çıkarıldı (1.5 kat) */
+    height: 75px; /* 50px'den 75px'e çıkarıldı (1.5 kat) */
     background-color: #f8f9fa;
     border: 1px solid #ddd;
-    border-radius: 5px; /* 8px'den 5px'e küçültüldü */
+    border-radius: 8px; /* 5px'den 8px'e büyütüldü */
     color: #6c757d;
-    font-size: 0.7em; /* 0.9em'den küçültüldü */
+    font-size: 0.8em; /* 0.7em'den büyütüldü */
     text-align: center;
-    line-height: 1.1;
+    line-height: 1.2;
     font-weight: 500;
 }
 
