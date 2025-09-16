@@ -357,28 +357,56 @@ const mappedStatus = mapStatusToUtils(turkpatentStatus);
     registrationNumber: registrationNumber || details?.['Tescil Numarası'] || null,
     registrationDate: registrationDate,
     renewalDate: (() => {
+      // 0) Eğer üst düzey turkpatentData içinde hazır renewalDate varsa onu kullan
+      try {
+        const topLevelRenewal = turkpatentData?.renewalDate || details?.['Yenileme Tarihi'] || details?.['Renewal Date'];
+        if (topLevelRenewal) {
+          const d = new Date(formatDate(topLevelRenewal) || topLevelRenewal);
+          if (!isNaN(d.getTime())) return d;
+        }
+      } catch (e) {
+        console.warn('renewalDate (top-level) parse error:', e);
+      }
 
-      // Koruma Tarihi'ni al ve üzerine 10 yıl ekle
+      // 1) Details içindeki Yenileme Tarihi doğrudan varsa onu kullan
+      if (details?.['Yenileme Tarihi'] || details?.['Renewal Date']) {
+        const s = details['Yenileme Tarihi'] || details['Renewal Date'];
+        const d = new Date(formatDate(s) || s);
+        if (!isNaN(d.getTime())) return d;
+      }
+
+      // 2) Koruma Tarihi'ni al ve üzerine 10 yıl ekle
       if (details?.['Koruma Tarihi']) {
-        console.log('🔍 Koruma Tarihi bulundu:', details['Koruma Tarihi']);
-        
-        // TÜRKPATENT tarih formatını düzelt: "24.03.2010" -> "2010-03-24"
         const korumaDateStr = details['Koruma Tarihi'];
-        const dateFormatted = formatDate(korumaDateStr); // formatDate fonksiyonunu kullan
-        
+        const dateFormatted = formatDate(korumaDateStr);
         if (dateFormatted) {
           const korumaDate = new Date(dateFormatted);
           if (!isNaN(korumaDate.getTime())) {
             korumaDate.setFullYear(korumaDate.getFullYear() + 10);
-            console.log('✅ Renewal Date hesaplandı:', korumaDate);
             return korumaDate;
           }
         }
-        
-        console.log('❌ Koruma Tarihi parse edilemedi:', korumaDateStr);
       }
-      
-      console.log('❌ Ne Yenileme Tarihi ne de Koruma Tarihi bulunamadı');
+
+      // 3) RegistrationDate (yukarıda hesaplanan) varsa +10 yıl
+      if (registrationDate) {
+        const rd = new Date(registrationDate);
+        if (!isNaN(rd.getTime())) {
+          rd.setFullYear(rd.getFullYear() + 10);
+          return rd;
+        }
+      }
+
+      // 4) Gönderide gelen applicationDate varsa +10 yıl (son çare)
+      if (applicationDate) {
+        const ad = new Date(formatDate(applicationDate) || applicationDate);
+        if (!isNaN(ad.getTime())) {
+          ad.setFullYear(ad.getFullYear() + 10);
+          return ad;
+        }
+      }
+
+      // Hiçbirini bulamazsak null
       return null;
     })(),
 
