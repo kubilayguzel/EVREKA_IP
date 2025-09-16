@@ -829,18 +829,37 @@ const createResultRow = (hit, rowIndex) => {
     const resultId = hit.objectID || hit.applicationNo;
     const noteContent = hit.note ? `<span class="note-text">${hit.note}</span>` : `<span class="note-placeholder">Not ekle</span>`;
     
+    // Görsel için placeholder HTML
     const imagePlaceholderHtml = `
-      <div style="width: 50px; height: 50px; border: 1px solid #ddd; display: flex; align-items: center; justify-content: center; background: #f9f9f9; border-radius: 4px; font-size: 10px; color: #999;">
-        Görsel<br>Yok
+      <div class="trademark-image-wrapper-large">
+        <div class="no-image-placeholder-large">
+          Görsel<br>Yok
+        </div>
       </div>
     `;
 
-    // hit.imagePath'i kullanarak resmin kaynağını belirle
-    const imgSrc = hit.imagePath ? `https://firebasestorage.googleapis.com/v0/b/ip-manager-production-aab4b.appspot.com/o/${encodeURIComponent(hit.imagePath)}?alt=media` : '';
+    // Hit objesinden görsel URL'sini al ve düzgün görsel HTML'i oluştur
+    let imageCellContent = imagePlaceholderHtml;
     
-    const imageCellContent = imgSrc
-        ? `<img src="${imgSrc}" alt="Marka Görseli" style="width: 50px; height: 50px; object-fit: contain; border-radius: 4px; border: 1px solid #eee;">`
-        : imagePlaceholderHtml;
+    // Önce hit.imagePath kontrolü
+    if (hit.imagePath) {
+        const imgSrc = `https://firebasestorage.googleapis.com/v0/b/ip-manager-production-aab4b.appspot.com/o/${encodeURIComponent(hit.imagePath)}?alt=media`;
+        imageCellContent = `
+          <div class="trademark-image-wrapper-large">
+            <img src="${imgSrc}" alt="Marka Görseli" class="trademark-image-thumbnail-large" 
+                 onerror="this.parentElement.innerHTML='${imagePlaceholderHtml.replace(/'/g, '&apos;')}'">
+          </div>
+        `;
+    }
+    // Sonra diğer görsel alanları kontrol et
+    else if (hit.brandImageUrl) {
+        imageCellContent = `
+          <div class="trademark-image-wrapper-large">
+            <img src="${hit.brandImageUrl}" alt="Marka Görseli" class="trademark-image-thumbnail-large"
+                 onerror="this.parentElement.innerHTML='${imagePlaceholderHtml.replace(/'/g, '&apos;')}'">
+          </div>
+        `;
+    }
 
     const row = document.createElement('tr');
     row.innerHTML = `
@@ -861,9 +880,32 @@ const createResultRow = (hit, rowIndex) => {
             </select>
         </td>
         <td class="note-cell" data-result-id="${resultId}" data-monitored-trademark-id="${hit.monitoredTrademarkId}" data-bulletin-id="${bulletinSelect.value}">
-            <div class="note-cell-content"><span class="note-icon">📝</span>${noteContent}</div>
+            <div class="note-cell-content">
+                <span class="note-icon">📝</span>
+                ${noteContent}
+            </div>
         </td>
     `;
+
+    // Eğer görsel yok ve applicationNo varsa, asenkron olarak yükle
+    if (!hit.imagePath && !hit.brandImageUrl && hit.applicationNo) {
+        _getBrandImageByAppNo(hit.applicationNo).then(imgUrl => {
+            if (imgUrl) {
+                const imageCell = row.querySelector('.trademark-image-cell');
+                if (imageCell) {
+                    imageCell.innerHTML = `
+                      <div class="trademark-image-wrapper-large">
+                        <img src="${imgUrl}" alt="Marka Görseli" class="trademark-image-thumbnail-large"
+                             onerror="this.parentElement.innerHTML='${imagePlaceholderHtml.replace(/'/g, '&apos;')}'">
+                      </div>
+                    `;
+                }
+            }
+        }).catch(err => {
+            console.warn('[TSS] Görsel yüklenirken hata:', err);
+        });
+    }
+
     return row;
 };
 
