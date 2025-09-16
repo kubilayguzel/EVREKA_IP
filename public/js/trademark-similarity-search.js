@@ -160,27 +160,28 @@ const _getBrandImageByAppNo = async (appNo) => {
     const bulletinDocId = document.getElementById('bulletinSelect')?.value;
 
     try {
-        // 1. monitoringTrademarkRecords alt koleksiyonunda ara
         if (bulletinDocId) {
+            // trademarks alt koleksiyonunu tarayarak ilgili başvuru numarasını bul
             const trademarksRef = collection(db, 'monitoringTrademarkRecords', bulletinDocId, 'trademarks');
-            const q = query(trademarksRef, where('applicationNo', '==', appNo), limit(1));
-            const snap = await getDocs(q);
+            const snap = await getDocs(trademarksRef);
             
-            if (!snap.empty) {
-                const data = snap.docs[0].data();
-                if (data.imagePath) {
-                    // Firebase Storage yolunu oluştur
-                    const storageRef = ref(storage, data.imagePath);
-                    url = await getDownloadURL(storageRef);
+            for (const docSnap of snap.docs) {
+                const data = docSnap.data();
+                if (data.results && Array.isArray(data.results)) {
+                    const resultItem = data.results.find(res => String(res.applicationNo) === String(appNo));
+                    if (resultItem && resultItem.imagePath) {
+                        const storageRef = ref(storage, resultItem.imagePath);
+                        url = await getDownloadURL(storageRef);
+                        break; 
+                    }
                 }
             }
         }
     } catch (err) {
-            // Hata durumunda konsola uyarı basabilirsin
-            console.error('[TSS] _getBrandImageByAppNo (monitoring) error:', err);
+        console.error('[TSS] _getBrandImageByAppNo (monitoring) error:', err);
     }
     
-    // 2. Eğer üstteki yol başarısız olursa, ipRecords koleksiyonunda ara
+    // Eğer üstteki yol başarısız olursa, ipRecords koleksiyonunda ara
     if (!url) {
         try {
             const col = collection(db, 'ipRecords');
@@ -192,7 +193,6 @@ const _getBrandImageByAppNo = async (appNo) => {
                 url = _normalizeImageSrc(candidate);
             }
         } catch (err) {
-            // Hata durumunda konsola uyarı basabilirsin
             console.error('[TSS] _getBrandImageByAppNo (ipRecords) error:', err);
         }
     }
@@ -835,12 +835,19 @@ const createResultRow = (hit, rowIndex) => {
       </div>
     `;
 
+    // hit.imagePath'i kullanarak resmin kaynağını belirle
+    const imgSrc = hit.imagePath ? `https://firebasestorage.googleapis.com/v0/b/ip-manager-production-aab4b.appspot.com/o/${encodeURIComponent(hit.imagePath)}?alt=media` : '';
+    
+    const imageCellContent = imgSrc
+        ? `<img src="${imgSrc}" alt="Marka Görseli" style="width: 50px; height: 50px; object-fit: contain; border-radius: 4px; border: 1px solid #eee;">`
+        : imagePlaceholderHtml;
+
     const row = document.createElement('tr');
     row.innerHTML = `
         <td>${rowIndex}</td>
         <td><button class="action-btn ${similarityBtnClass}" data-result-id="${resultId}" data-monitored-trademark-id="${hit.monitoredTrademarkId}" data-bulletin-id="${bulletinSelect.value}">${similarityBtnText}</button></td>
         <td data-appno="${hit.applicationNo}" class="trademark-image-cell">
-            ${imagePlaceholderHtml}
+            ${imageCellContent}
         </td>
         <td><strong>${hit.markName || '-'}</strong></td>
         <td>${holders}</td>
