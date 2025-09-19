@@ -733,6 +733,24 @@
     height: 200px;
   }
 }
+/* Arama sonuç listesi: görseli biraz küçült */
+#resultsTableBody .trademark-image-wrapper-large,
+#resultsTableBody .no-image-placeholder-large {
+  width: 180px;   /* 200-260’dan 180’e çekildi */
+  height: 180px;
+}
+
+#resultsTableBody .trademark-image-thumbnail-large {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;    /* taşma/kırpma olmasın */
+}
+
+/* Hücreyi rahatlat (opsiyonel) */
+#resultsTableBody .trademark-image-cell {
+  width: 200px;
+  vertical-align: middle;
+}
 
     </style>
 </head>
