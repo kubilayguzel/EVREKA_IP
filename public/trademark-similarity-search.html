@@ -773,6 +773,32 @@
   max-height: 68vh;           /* kutu içi sınır */
 }
 
+
+/* === Hover popup (1.5x, right side, non-blocking) === */
+.tm-hover-popup {
+  position: fixed;
+  z-index: 99999;
+  pointer-events: none;
+  background: #fff;
+  border: 1px solid rgba(0,0,0,.14);
+  box-shadow: 0 8px 24px rgba(0,0,0,.18);
+  border-radius: 10px;
+  padding: 8px;
+  max-width: 45vw;
+  max-height: 70vh;
+  overflow: hidden;
+}
+.tm-hover-popup img {
+  display: block;
+  height: auto;
+  max-width: 100%;
+  max-height: 68vh;
+}
+.trademark-image-hover-full { 
+  max-width: 45vw !important; 
+  max-height: 70vh !important; 
+}
+
 </style>
 </head>
 <body>
