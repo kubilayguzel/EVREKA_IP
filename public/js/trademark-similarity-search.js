@@ -536,55 +536,90 @@ function populateList(listElement, items, permanentItems = []) {
 // --- MODAL İÇİN YARDIMCI FONKSİYONLARIN SONU ---
 
 // --- Hover Efektleri (DOM) ---
+// Hover efektini tablo gövdesi ID'sine göre kurar (monitoringListBody / resultsTableBody)
 const setupImageHoverEffect = (tbodyId = 'monitoringListBody') => {
   const tbody = document.getElementById(tbodyId);
   if (!tbody || tbody._imageHoverSetup) return;
   tbody._imageHoverSetup = true;
 
-  const style = document.createElement('style');
-  style.textContent = `
-    .trademark-image-thumbnail-large:hover {
-      transform: none !important;
-      z-index: initial !important;
-      position: static !important;
+  // Eski büyük önizleme stillerini etkisiz bırakmak için (varsa) kendi sınıfımıza geçeceğiz.
+  // Aşırı büyümeyi engellemek için max-* sınırları da CSS tarafında düşük tutulacak.
+
+  let popup = null;
+
+  const cleanup = () => {
+    if (popup) {
+      popup.remove();
+      popup = null;
     }
-  `;
-  document.head.appendChild(style);
+  };
 
-  let hoverElement = null;
+  const showPopup = (thumbnail) => {
+    cleanup();
 
-  const handleMouseEnter = (e) => {
+    // Thumbnail geometrisi
+    const rect = thumbnail.getBoundingClientRect();
+    const scale = 1.5; // 1.5× büyüt
+
+    // Pop-up kapsayıcı
+    popup = document.createElement('div');
+    popup.className = 'tm-hover-popup'; // CSS’ini aşağıda vereceğiz
+
+    // Görseli kopyala
+    const img = document.createElement('img');
+    img.src = thumbnail.src;
+    img.alt = thumbnail.alt || '';
+    img.draggable = false;
+    img.style.width = Math.round(rect.width * scale) + 'px';
+    img.style.height = 'auto';
+    img.style.display = 'block';
+
+    popup.appendChild(img);
+    document.body.appendChild(popup);
+
+    // Konum: orijinalin SAĞI (kapamadan)
+    const gap = 12; // küçük boşluk
+    let left = rect.right + gap;
+    let top  = rect.top;
+
+    // Görüntü boyutlarına göre ekran taşmasını önle
+    const popupRect = popup.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+
+    // Sağdan taşıyorsa, SOLA yerleştir
+    if (left + popupRect.width > vw - 8) {
+      left = rect.left - gap - popupRect.width;
+    }
+    // Yukarıdan/aşağıdan taşıyorsa küçük düzeltmeler
+    if (top + popupRect.height > vh - 8) {
+      top = Math.max(8, vh - 8 - popupRect.height);
+    }
+    if (top < 8) top = 8;
+
+    // Uygula
+    popup.style.left = `${Math.round(left)}px`;
+    popup.style.top  = `${Math.round(top)}px`;
+  };
+
+  const handleEnter = (e) => {
     const thumbnail = e.target.closest('.trademark-image-thumbnail-large');
     if (!thumbnail) return;
-    if (hoverElement) hoverElement.remove();
-    hoverElement = document.createElement('img');
-    hoverElement.src = thumbnail.src;
-    hoverElement.alt = thumbnail.alt || '';
-    hoverElement.classList.add('trademark-image-hover-full');
-    hoverElement.style.display = 'block';
-    document.body.appendChild(hoverElement);
+    showPopup(thumbnail);
   };
 
-  const handleMouseMove = (e) => {
-    if (!hoverElement) return;
-    // imajı imlecin yanında göster (küçük bir offset ile)
-    hoverElement.style.position = 'fixed';
-    hoverElement.style.left = (e.clientX + 16) + 'px';
-    hoverElement.style.top  = (e.clientY + 16) + 'px';
-    hoverElement.style.pointerEvents = 'none';
+  const handleMove = (e) => {
+    // imleç hareketinde yeniden hesaplamak gerekmiyor; sabit sağda kalsın.
+    // istersen burada "sağ" hizasını tekrar ölçüp oynatabilirsin.
   };
 
-  const handleMouseLeave = () => {
-    if (hoverElement) {
-      hoverElement.remove();
-      hoverElement = null;
-    }
-  };
+  const handleLeave = () => cleanup();
 
-  tbody.addEventListener('mouseenter', handleMouseEnter, true);
-  tbody.addEventListener('mousemove',  handleMouseMove,  true);
-  tbody.addEventListener('mouseleave', handleMouseLeave, true);
+  tbody.addEventListener('mouseenter', handleEnter, true);
+  tbody.addEventListener('mousemove',  handleMove,  true);
+  tbody.addEventListener('mouseleave', handleLeave, true);
 };
+
 
 // --- Initialization and Data Loading (Başlangıç ve Veri Yükleme) ---
 const initializePagination = () => {
