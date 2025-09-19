@@ -9,20 +9,22 @@ function setupImageHoverEffect(tbodyId = 'monitoringListBody') {
 
   let popup = null;
 
+  function removeLegacyPopups() {
+    document.querySelectorAll('.trademark-image-hover-full').forEach(el => el.remove());
+  }
+
   function cleanup() {
-    if (popup) {
-      popup.remove();
-      popup = null;
-    }
+    if (popup) { popup.remove(); popup = null; }
+    removeLegacyPopups();
   }
 
   function showPopup(thumbnail) {
     cleanup();
     const rect = thumbnail.getBoundingClientRect();
-    const scale = 1.5; // 1.5× büyüt
+    const scale = 1.5;
 
-    const popupEl = document.createElement('div');
-    popupEl.className = 'tm-hover-popup';
+    const p = document.createElement('div');
+    p.className = 'tm-hover-popup';
 
     const img = document.createElement('img');
     img.src = thumbnail.src;
@@ -31,11 +33,10 @@ function setupImageHoverEffect(tbodyId = 'monitoringListBody') {
     img.style.width  = Math.round(rect.width * scale) + 'px';
     img.style.height = 'auto';
 
-    popupEl.appendChild(img);
-    document.body.appendChild(popupEl);
-    popup = popupEl;
+    p.appendChild(img);
+    document.body.appendChild(p);
+    popup = p;
 
-    // Konum: orijinalin sağı (kapamadan)
     const gap = 12;
     let left = rect.right + gap;
     let top  = rect.top;
@@ -64,10 +65,7 @@ function setupImageHoverEffect(tbodyId = 'monitoringListBody') {
     if (!thumbnail) return;
     showPopup(thumbnail);
   }
-
-  function handleLeave() {
-    cleanup();
-  }
+  function handleLeave() { cleanup(); }
 
   tbody.addEventListener('mouseenter', handleEnter, true);
   tbody.addEventListener('mouseleave', handleLeave, true);
