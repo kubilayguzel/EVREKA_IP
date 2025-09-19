@@ -692,6 +692,48 @@
         .modal-xl {
             max-width: 900px !important;
         }
+
+        /* 1) Arama sonuç listesinde marka örneklerini büyüt (tablo satırındaki görsel hücresi) */
+#resultsTableBody .trademark-image-wrapper-large,
+#resultsTableBody .no-image-placeholder-large {
+  width: 260px;   /* önce 200px idi; daha da büyük istersen 280-300 yapabilirsin */
+  height: 260px;
+}
+
+#resultsTableBody .trademark-image-thumbnail-large {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;   /* taşmayı önler, logolar kırpılmaz */
+}
+
+/* Geniş görseller için hücreyi rahatlat */
+#resultsTableBody .trademark-image-cell {
+  width: 280px;          /* tablo kolonuna biraz alan aç */
+  vertical-align: middle;
+}
+
+/* 2) İzlenen markalar listesinde marka örneklerini mevcut boyutun yarısına indir */
+#monitoringListBody .trademark-image-wrapper-large,
+#monitoringListBody .no-image-placeholder-large {
+  width: 100px;   /* 200px'in yarısı */
+  height: 100px;
+}
+
+#monitoringListBody .trademark-image-thumbnail-large {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+/* (İsteğe bağlı) Mobilde çok büyümesin */
+@media (max-width: 768px) {
+  #resultsTableBody .trademark-image-wrapper-large,
+  #resultsTableBody .no-image-placeholder-large {
+    width: 200px;
+    height: 200px;
+  }
+}
+
     </style>
 </head>
 <body>
