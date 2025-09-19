@@ -666,8 +666,6 @@ const setupImageHoverEffect = (tbodyId = 'monitoringListBody') => {
   tbody.addEventListener('mouseenter', handleEnter, true);
   tbody.addEventListener('mousemove',  handleMove,  true);
   tbody.addEventListener('mouseleave', handleLeave, true);
-};
-
 
 // --- Initialization and Data Loading (Başlangıç ve Veri Yükleme) ---
 const initializePagination = () => {
