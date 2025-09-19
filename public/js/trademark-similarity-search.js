@@ -537,13 +537,11 @@ function populateList(listElement, items, permanentItems = []) {
 
 // --- Hover Efektleri (DOM) ---
 // Hover efektini tablo gövdesi ID'sine göre kurar (monitoringListBody / resultsTableBody)
+
 const setupImageHoverEffect = (tbodyId = 'monitoringListBody') => {
   const tbody = document.getElementById(tbodyId);
   if (!tbody || tbody._imageHoverSetup) return;
   tbody._imageHoverSetup = true;
-
-  // Eski büyük önizleme stillerini etkisiz bırakmak için (varsa) kendi sınıfımıza geçeceğiz.
-  // Aşırı büyümeyi engellemek için max-* sınırları da CSS tarafında düşük tutulacak.
 
   let popup = null;
 
@@ -553,6 +551,56 @@ const setupImageHoverEffect = (tbodyId = 'monitoringListBody') => {
       popup = null;
     }
   };
+
+  const showPopup = (thumbnail) => {
+    cleanup();
+    const rect = thumbnail.getBoundingClientRect();
+    const scale = 1.5; // 1.5× büyüt
+
+    popup = document.createElement('div');
+    popup.className = 'tm-hover-popup';
+
+    const img = document.createElement('img');
+    img.src = thumbnail.src;
+    img.alt = thumbnail.alt || '';
+    img.draggable = false;
+    img.style.width  = Math.round(rect.width * scale) + 'px';
+    img.style.height = 'auto';
+    popup.appendChild(img);
+    document.body.appendChild(popup);
+
+    const gap = 12;
+    let left = rect.right + gap;
+    let top  = rect.top;
+
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const pr = popup.getBoundingClientRect();
+
+    if (left + pr.width > vw - 8) {
+      left = rect.left - gap - pr.width;
+    }
+    if (top + pr.height > vh - 8) {
+      top = Math.max(8, vh - 8 - pr.height);
+    }
+    if (top < 8) top = 8;
+
+    popup.style.left = `${Math.round(left)}px`;
+    popup.style.top  = `${Math.round(top)}px`;
+  };
+
+  const handleEnter = (e) => {
+    const thumbnail = e.target.closest('.trademark-image-thumbnail-large');
+    if (!thumbnail) return;
+    showPopup(thumbnail);
+  };
+
+  const handleLeave = () => cleanup();
+
+  tbody.addEventListener('mouseenter', handleEnter, true);
+  tbody.addEventListener('mouseleave', handleLeave, true);
+};
+
 
   const showPopup = (thumbnail) => {
     cleanup();
@@ -831,6 +879,8 @@ const renderCurrentPageOfResults = () => {
         groupResults.forEach((hit, index) => resultsTableBody.appendChild(createResultRow(hit, pagination.getStartIndex() + index + 1)));
     });
     attachEventListeners();
+  try { setupImageHoverEffect('resultsTableBody'); } catch(e) {}
+
 };
 
 const createResultRow = (hit, rowIndex) => {
