@@ -536,44 +536,54 @@ function populateList(listElement, items, permanentItems = []) {
 // --- MODAL İÇİN YARDIMCI FONKSİYONLARIN SONU ---
 
 // --- Hover Efektleri (DOM) ---
-const setupImageHoverEffect = () => {
-    const tbody = document.getElementById('monitoringListBody');
-    if (tbody._imageHoverSetup) return;
-    tbody._imageHoverSetup = true;
+const setupImageHoverEffect = (tbodyId = 'monitoringListBody') => {
+  const tbody = document.getElementById(tbodyId);
+  if (!tbody || tbody._imageHoverSetup) return;
+  tbody._imageHoverSetup = true;
 
-    const style = document.createElement('style');
-    style.textContent = `
-        .trademark-image-thumbnail-large:hover {
-            transform: none !important;
-            z-index: initial !important;
-            position: static !important;
-        }
-    `;
-    document.head.appendChild(style);
+  const style = document.createElement('style');
+  style.textContent = `
+    .trademark-image-thumbnail-large:hover {
+      transform: none !important;
+      z-index: initial !important;
+      position: static !important;
+    }
+  `;
+  document.head.appendChild(style);
 
-    let hoverElement = null;
-    const handleMouseEnter = (e) => {
-        const thumbnail = e.target.closest('.trademark-image-thumbnail-large');
-        if (!thumbnail) return;
-        if (hoverElement) hoverElement.remove();
-        hoverElement = document.createElement('img');
-        hoverElement.src = thumbnail.src;
-        hoverElement.alt = thumbnail.alt;
-        hoverElement.classList.add('trademark-image-hover-full');
-        hoverElement.style.display = 'block';
-        document.body.appendChild(hoverElement);
-    };
-    const handleMouseLeave = (e) => {
-        const thumbnail = e.target.closest('.trademark-image-thumbnail-large');
-        if (!thumbnail) return;
-        if (hoverElement) {
-            hoverElement.remove();
-            hoverElement = null;
-        }
-    };
+  let hoverElement = null;
 
-    tbody.addEventListener('mouseenter', handleMouseEnter, true);
-    tbody.addEventListener('mouseleave', handleMouseLeave, true);
+  const handleMouseEnter = (e) => {
+    const thumbnail = e.target.closest('.trademark-image-thumbnail-large');
+    if (!thumbnail) return;
+    if (hoverElement) hoverElement.remove();
+    hoverElement = document.createElement('img');
+    hoverElement.src = thumbnail.src;
+    hoverElement.alt = thumbnail.alt || '';
+    hoverElement.classList.add('trademark-image-hover-full');
+    hoverElement.style.display = 'block';
+    document.body.appendChild(hoverElement);
+  };
+
+  const handleMouseMove = (e) => {
+    if (!hoverElement) return;
+    // imajı imlecin yanında göster (küçük bir offset ile)
+    hoverElement.style.position = 'fixed';
+    hoverElement.style.left = (e.clientX + 16) + 'px';
+    hoverElement.style.top  = (e.clientY + 16) + 'px';
+    hoverElement.style.pointerEvents = 'none';
+  };
+
+  const handleMouseLeave = () => {
+    if (hoverElement) {
+      hoverElement.remove();
+      hoverElement = null;
+    }
+  };
+
+  tbody.addEventListener('mouseenter', handleMouseEnter, true);
+  tbody.addEventListener('mousemove',  handleMouseMove,  true);
+  tbody.addEventListener('mouseleave', handleMouseLeave, true);
 };
 
 // --- Initialization and Data Loading (Başlangıç ve Veri Yükleme) ---
@@ -710,7 +720,9 @@ const renderMonitoringList = async () => {
         `;
     }));
     tbody.innerHTML = rows.join('');
-    setupImageHoverEffect();
+    setupImageHoverEffect('monitoringListBody'); 
+    setupImageHoverEffect('resultsTableBody');
+
 };
 
 const renderCurrentPageOfResults = () => {
