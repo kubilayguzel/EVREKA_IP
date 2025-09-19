@@ -1,6 +1,79 @@
 // js/trademark-similarity-search.js
 
 import { db, personService, searchRecordService, similarityService, ipRecordsService, firebaseServices } from '../firebase-config.js';
+
+function setupImageHoverEffect(tbodyId = 'monitoringListBody') {
+  const tbody = document.getElementById(tbodyId);
+  if (!tbody || tbody._imageHoverSetup) return;
+  tbody._imageHoverSetup = true;
+
+  let popup = null;
+
+  function cleanup() {
+    if (popup) {
+      popup.remove();
+      popup = null;
+    }
+  }
+
+  function showPopup(thumbnail) {
+    cleanup();
+    const rect = thumbnail.getBoundingClientRect();
+    const scale = 1.5; // 1.5× büyüt
+
+    const popupEl = document.createElement('div');
+    popupEl.className = 'tm-hover-popup';
+
+    const img = document.createElement('img');
+    img.src = thumbnail.src;
+    img.alt = thumbnail.alt || '';
+    img.draggable = false;
+    img.style.width  = Math.round(rect.width * scale) + 'px';
+    img.style.height = 'auto';
+
+    popupEl.appendChild(img);
+    document.body.appendChild(popupEl);
+    popup = popupEl;
+
+    // Konum: orijinalin sağı (kapamadan)
+    const gap = 12;
+    let left = rect.right + gap;
+    let top  = rect.top;
+
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const pr = popup.getBoundingClientRect();
+
+    if (left + pr.width > vw - 8) {
+      left = rect.left - gap - pr.width;
+    }
+    if (top + pr.height > vh - 8) {
+      top = Math.max(8, vh - 8 - pr.height);
+    }
+    if (top < 8) top = 8;
+
+    popup.style.position = 'fixed';
+    popup.style.left = String(Math.round(left)) + 'px';
+    popup.style.top  = String(Math.round(top)) + 'px';
+    popup.style.pointerEvents = 'none';
+    popup.style.zIndex = '99999';
+  }
+
+  function handleEnter(e) {
+    const thumbnail = e.target.closest('.trademark-image-thumbnail-large');
+    if (!thumbnail) return;
+    showPopup(thumbnail);
+  }
+
+  function handleLeave() {
+    cleanup();
+  }
+
+  tbody.addEventListener('mouseenter', handleEnter, true);
+  tbody.addEventListener('mouseleave', handleLeave, true);
+}
+
+
 import { collection, doc, getDoc, getDocs, limit, query, setDoc, where } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-functions.js';
 import { runTrademarkSearch } from './trademark-similarity/run-search.js';
@@ -537,72 +610,7 @@ function populateList(listElement, items, permanentItems = []) {
 
 // --- Hover Efektleri (DOM) ---
 // Hover efektini tablo gövdesi ID'sine göre kurar (monitoringListBody / resultsTableBody)
-
-const setupImageHoverEffect = (tbodyId = 'monitoringListBody') => {
-  const tbody = document.getElementById(tbodyId);
-  if (!tbody || tbody._imageHoverSetup) return;
-  tbody._imageHoverSetup = true;
-
-  let popup = null;
-
-  const cleanup = () => {
-    if (popup) {
-      popup.remove();
-      popup = null;
-    }
-  };
-
-  const showPopup = (thumbnail) => {
-    cleanup();
-    const rect = thumbnail.getBoundingClientRect();
-    const scale = 1.5; // 1.5× büyüt
-
-    popup = document.createElement('div');
-    popup.className = 'tm-hover-popup';
-
-    const img = document.createElement('img');
-    img.src = thumbnail.src;
-    img.alt = thumbnail.alt || '';
-    img.draggable = false;
-    img.style.width  = Math.round(rect.width * scale) + 'px';
-    img.style.height = 'auto';
-    popup.appendChild(img);
-    document.body.appendChild(popup);
-
-    const gap = 12;
-    let left = rect.right + gap;
-    let top  = rect.top;
-
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    const pr = popup.getBoundingClientRect();
-
-    if (left + pr.width > vw - 8) {
-      left = rect.left - gap - pr.width;
-    }
-    if (top + pr.height > vh - 8) {
-      top = Math.max(8, vh - 8 - pr.height);
-    }
-    if (top < 8) top = 8;
-
-    popup.style.left = `${Math.round(left)}px`;
-    popup.style.top  = `${Math.round(top)}px`;
-  };
-
-  const handleEnter = (e) => {
-    const thumbnail = e.target.closest('.trademark-image-thumbnail-large');
-    if (!thumbnail) return;
-    showPopup(thumbnail);
-  };
-
-  const handleLeave = () => cleanup();
-
-  tbody.addEventListener('mouseenter', handleEnter, true);
-  tbody.addEventListener('mouseleave', handleLeave, true);
-};
-
-
-  const showPopup = (thumbnail) => {
+const showPopup = (thumbnail) => {
     cleanup();
 
     // Thumbnail geometrisi
@@ -662,10 +670,6 @@ const setupImageHoverEffect = (tbodyId = 'monitoringListBody') => {
   };
 
   const handleLeave = () => cleanup();
-
-  tbody.addEventListener('mouseenter', handleEnter, true);
-  tbody.addEventListener('mousemove',  handleMove,  true);
-  tbody.addEventListener('mouseleave', handleLeave, true);
 
 // --- Initialization and Data Loading (Başlangıç ve Veri Yükleme) ---
 const initializePagination = () => {
