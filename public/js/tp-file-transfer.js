@@ -217,22 +217,22 @@ async function handleSaveToPortfolio() {
         
         if (result.success) {
           console.log('✅ Portföy kaydı oluşturuldu:', result.id);
-          
+       
         // Self kayıtlar için başvuru transaction'ı oluştur
         if (mappedRecord.recordOwnerType === 'self') {
           try {
-            // Transaction type ID'sini doğrudan kullan
+            // Firebase'deki mevcut transaction type ID'lerini kullan
             const TRANSACTION_TYPE_IDS = {
-              trademark: 'trademark_application',
-              patent: 'patent_application', 
-              design: 'design_application'
+              trademark: '2',    // Firebase'de görünen ID
+              patent: '5',       // Eğer varsa patent için
+              design: '8'        // Eğer varsa design için
             };
-            const txTypeId = TRANSACTION_TYPE_IDS[mappedRecord.type] || 'trademark_application';
+            const txTypeId = TRANSACTION_TYPE_IDS[mappedRecord.type] || '2';
             
             // Başvuru transaction'ı oluştur
             const transactionData = {
               type: String(txTypeId),
-              description: 'Başvuru işlemi.',
+              description: 'Başvuru',
               timestamp: mappedRecord.applicationDate || new Date(),
               transactionHierarchy: 'parent'
             };
@@ -246,7 +246,7 @@ async function handleSaveToPortfolio() {
           } catch (txError) {
             console.error('❌ Transaction oluşturma hatası:', txError);
           }
-        }          
+        }
           successCount++;
         } else if (result.isDuplicate) {
           console.log('⚠️ Kayıt zaten mevcut:', mappedRecord.applicationNumber);
