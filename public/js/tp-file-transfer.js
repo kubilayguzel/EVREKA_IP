@@ -161,7 +161,6 @@ const relatedPartySearchResults = _el('relatedPartySearchResults');
 const addNewPersonBtn = _el('addNewPersonBtn');
 const relatedPartyList = _el('relatedPartyList');
 const relatedPartyCount = _el('relatedPartyCount');
-const db = getFirestore(app);
 
 // --- Global State ---
 let allPersons = [];
