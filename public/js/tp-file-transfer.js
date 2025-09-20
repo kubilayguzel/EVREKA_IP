@@ -49,9 +49,9 @@ function parseDate(dateStr) {
 }
 
 // --- Firebase Imports ---
-import { app, personService, ipRecordsService } from '../firebase-config.js';
+import { app, personService, ipRecordsService, transactionTypeService } from '../firebase-config.js';
 import { loadSharedLayout, ensurePersonModal, openPersonModal } from './layout-loader.js';
-import { mapTurkpatentResultsToIPRecords, mapTurkpatentToIPRecord } from './turkpatent-mapper.js';
+import { mapTurkpatentResultsToIPRecords, mapTurkpatentToIPRecord} from './turkpatent-mapper.js';
 
 // --- DOM Elements ---
 const basvuruNoInput = _el('basvuruNoInput');
@@ -205,8 +205,7 @@ async function handleSaveToPortfolio() {
     
     for (const record of selectedRecords) {
       try {
-        const mappedRecord = await mapTurkpatentToIpRecord(record, relatedParties);
-        
+      const mappedRecord = await mapTurkpatentToIPRecord(record, relatedParties);        
         if (!mappedRecord) {
           console.warn('Kayıt haritalandırılamadı:', record);
           errorCount++;
