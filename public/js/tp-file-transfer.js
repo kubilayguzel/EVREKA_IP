@@ -1,6 +1,22 @@
 import { collection, addDoc, serverTimestamp, writeBatch, doc, getDocs, query, where, getFirestore  } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js';
 
 
+
+
+// === TP→TX: Safe Firestore handle (fallback) ===
+let __tpdb = null;
+try {
+  // Prefer named export from firebase-config.js if available
+  if (typeof db !== 'undefined' && db) {
+    __tpdb = db;
+  } else {
+    // Fall back to default app's Firestore
+    __tpdb = getFirestore();
+  }
+} catch (e) {
+  console.warn('[TP→TX] Firestore init fallback failed', e);
+  __tpdb = null;
+}
 // === TP Import → transaction helpers (embedded) ===
 function buildTpImportTransaction({ recordId, recordData, user, hierarchy = 'parent', parentTransactionId = null, countryCode = null }) {
   return {
@@ -309,27 +325,26 @@ async function handleSaveToPortfolio() {
         );
         
         const result = await ipRecordsService.createRecord(record);
-        results.push(result);
-        if (result && result.success && result.id) {
+        \1
+        else if ((result && (result.isDuplicate || result.isExistingRecord)) && (result.existingId || result.id)) {
+          const existingRecordId = result.existingId || result.id;
           try {
-            console.log('[TP→TX] Transaction oluşturuluyor:', result.id);
-            const txResult = await createTransactionsForTpImport({ 
-              db: db, 
-              recordId: result.id, 
-              recordData: record, 
-              user: (typeof currentUser !== 'undefined' ? currentUser : null) 
+            console.log('[TP→TX] Duplicate/existing record - creating transaction for', existingRecordId);
+            const txResultDup = await createTransactionsForTpImport({
+              db: __tpdb,
+              recordId: existingRecordId,
+              recordData: record,
+              user: (typeof currentUser !== 'undefined' ? currentUser : null)
             });
-            
-            if (txResult.error) {
-              console.error('[TP→TX] Transaction oluşturulamadı:', txResult.error);
+            if (txResultDup?.error) {
+              console.error('[TP→TX] Duplicate TX error:', txResultDup.error);
             } else {
-              console.log('[TP→TX] Transactions created for', result.id, txResult);
+              console.log('[TP→TX] Duplicate TX created for', existingRecordId, txResultDup);
             }
-          } catch (e) { 
-            console.error('[TP→TX] Transaction creation failed for', result?.id, e); 
+          } catch (e) {
+            console.error('[TP→TX] Duplicate TX creation failed for', existingRecordId, e);
           }
         }
-        
         if (result.success) {
           savedCount++;
         } else if (result.isDuplicate || result.isExistingRecord) {
