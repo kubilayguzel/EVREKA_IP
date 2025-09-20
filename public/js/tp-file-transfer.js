@@ -167,9 +167,6 @@ function setupEventListeners() {
   console.log('[DEBUG] Event listeners kuruldu');
 }
 
-// SİL: handleSaveToPortfolio fonksiyonunu
-
-// DEĞIŞTIR/EKLE:
 async function handleSaveToPortfolio() {
   const checkedBoxes = document.querySelectorAll('.record-checkbox:checked');
   
@@ -182,60 +179,105 @@ async function handleSaveToPortfolio() {
   const selectedRecords = selectedIndexes.map(index => currentOwnerResults[index]).filter(Boolean);
   
   if (selectedRecords.length === 0) {
-    showToast('Seçili kayıtlar bulunamadı.', 'danger');
+    showToast('Seçili kayıtlar bulunamadı.', 'warning');
     return;
   }
-
-  // Simple Loading ile kaydetme progress
-  const saveLoading = window.showSimpleLoading(
+  
+  // Seçili kişilerden sahip/başvuran bilgilerini hazırla
+  const relatedParties = selectedRelatedParties.map(person => ({
+    id: person.id,
+    name: person.name,
+    email: person.email || null
+  }));
+  
+  const saveLoading = window.showLoadingWithCancel(
     'Portföye kaydediliyor',
-    `${selectedRecords.length} kayıt veritabanına aktarılıyor...`
+    'Kayıtlar portföye aktarılıyor...',
+    () => {
+      console.log('Kaydetme işlemi iptal edildi');
+    }
   );
-
+  
   try {
-    console.log('Kaydetme işlemi başladı:', selectedRecords.length, 'kayıt');
-    
-    saveLoading.updateText('Veriler hazırlanıyor', 'TÜRKPATENT formatı dönüştürülüyor...');
-    
-    const ipRecords = await mapTurkpatentResultsToIPRecords(selectedRecords, selectedRelatedParties);
-    
-    saveLoading.updateText('Veritabanına kaydediliyor', 'Kayıtlar tek tek işleniyor...');
-    
-    const results = [];
-    let savedCount = 0;
+    let successCount = 0;
     let skippedCount = 0;
     let errorCount = 0;
     
-    for (let i = 0; i < ipRecords.length; i++) {
-      const record = ipRecords[i];
+    for (const record of selectedRecords) {
       try {
-        saveLoading.updateText(
-          'Kaydediliyor', 
-          `${i + 1}/${ipRecords.length} kayıt işleniyor...`
-        );
+        const mappedRecord = await mapTurkpatentToIpRecord(record, relatedParties);
         
-        const result = await ipRecordsService.createRecord(record);
-        results.push(result);
+        if (!mappedRecord) {
+          console.warn('Kayıt haritalandırılamadı:', record);
+          errorCount++;
+          continue;
+        }
+        
+        // Kayıt oluştur
+        const result = await ipRecordsService.createRecordFromDataEntry(mappedRecord);
         
         if (result.success) {
-          savedCount++;
-        } else if (result.isDuplicate || result.isExistingRecord) {
+          console.log('✅ Portföy kaydı oluşturuldu:', result.id);
+          
+          // Self kayıtlar için başvuru transaction'ı oluştur
+          if (mappedRecord.recordOwnerType === 'self') {
+            try {
+              // Trademark başvuru transaction type ID'sini al
+              const CODE_BY_IP = {
+                trademark: 'TRADEMARK_APPLICATION',
+                patent: 'PATENT_APPLICATION', 
+                design: 'DESIGN_APPLICATION'
+              };
+              const targetCode = CODE_BY_IP[mappedRecord.type] || 'TRADEMARK_APPLICATION';
+              
+              let txTypeId = null;
+              try {
+                const typeRes = await transactionTypeService.getByCode?.(targetCode);
+                txTypeId = typeRes?.id || null;
+              } catch (err) {
+                console.error('Transaction type bulunamadı:', err);
+              }
+              
+              if (txTypeId) {
+                // Başvuru transaction'ı oluştur
+                const transactionData = {
+                  type: String(txTypeId),
+                  description: 'Başvuru işlemi.',
+                  timestamp: mappedRecord.applicationDate || new Date(),
+                  transactionHierarchy: 'parent'
+                };
+                
+                const txResult = await ipRecordsService.addTransactionToRecord(result.id, transactionData);
+                if (txResult.success) {
+                  console.log('✅ Başvuru transaction\'ı oluşturuldu:', result.id);
+                } else {
+                  console.warn('⚠️ Transaction oluşturulamadı:', txResult.error);
+                }
+              } else {
+                console.warn('⚠️ Transaction type ID bulunamadı:', targetCode);
+              }
+            } catch (txError) {
+              console.error('❌ Transaction oluşturma hatası:', txError);
+            }
+          }
+          
+          successCount++;
+        } else if (result.isDuplicate) {
+          console.log('⚠️ Kayıt zaten mevcut:', mappedRecord.applicationNumber);
           skippedCount++;
         } else {
+          console.error('❌ Kayıt oluşturulamadı:', result.error);
           errorCount++;
         }
+        
       } catch (error) {
-        console.error('Kayıt hatası:', error);
-        results.push({ success: false, error: error.message });
+        console.error('Kayıt işlenirken hata:', error);
         errorCount++;
       }
     }
     
-    console.log('Kaydetme sonuçları:', results);
-    
     // Sonuç mesajı
-    let message = '';
-    if (savedCount > 0) message += `${savedCount} kayıt başarıyla kaydedildi. `;
+    let message = `${successCount} kayıt başarıyla portföye eklendi. `;
     if (skippedCount > 0) message += `${skippedCount} kayıt zaten mevcut olduğu için atlandı. `;
     if (errorCount > 0) message += `${errorCount} kayıtta hata oluştu. `;
     
@@ -253,7 +295,6 @@ async function handleSaveToPortfolio() {
     showToast('Kaydetme işlemi sırasında hata oluştu: ' + error.message, 'danger');
   }
 }
-
 // ===============================
 // RADIO BUTTON YÖNETİMİ
 // ===============================
