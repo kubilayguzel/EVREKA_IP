@@ -1,34 +1,4 @@
-import { getApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-import { collection, addDoc, serverTimestamp, writeBatch, doc, getDocs, query, where, getFirestore  } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
-
-
-// === TP→TX: minimal parent transaction creator (post-save hook) ===
-async function __tpCreateParentTx({ db, recordId, user }) {
-  try {
-    const coll = collection(db, 'ipRecords', recordId, 'transactions');
-    const payload = {
-      transactionTypeId: 'tp_transfer',
-      transactionSource: 'tp_import',
-      transactionHierarchy: 'parent',
-      parentTransactionId: null,
-      recordId,
-      note: 'Kayıt TurkPatent portföy transferi ile oluşturuldu.',
-      state: 'completed',
-      isSystemGenerated: true,
-      createdAt: serverTimestamp(),
-      createdBy_uid: user && user.uid || null,
-      createdBy_email: user && user.email || null,
-      createdBy_displayName: user && user.displayName || null,
-    };
-    const ref = await addDoc(coll, payload);
-    console.log('[TP→TX] Parent TX created:', recordId, ref.id);
-    return { ok: true, id: ref.id };
-  } catch (e) {
-    console.error('[TP→TX] __tpCreateParentTx failed for', recordId, e);
-    return { ok: false, error: e?.message || String(e) };
-  }
-}
-
+import { collection, addDoc, serverTimestamp, writeBatch, doc, getDocs, query, where, getFirestore  } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js';
 // --- Firebase Imports ---
 import { app, db, personService, ipRecordsService } from '../firebase-config.js';
 import { loadSharedLayout, ensurePersonModal, openPersonModal } from './layout-loader.js';
