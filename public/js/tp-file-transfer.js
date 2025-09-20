@@ -30,68 +30,17 @@ function buildTpImportTransaction({ recordId, recordData, user, hierarchy = 'par
 }
 
 async function findChildrenForRecord({ db, parentRecordId, parentData }) {
-  const candidates = [];
+  // TurkPatent origin: WIPO/ARIPO zinciri kullanılmıyor.
+  // Sadece senin veri modelindeki AÇIK bağa göre child buluyoruz (parentRecordId).
   try {
-    const q1 = query(collection(db, 'ipRecords'), where('parentRecordId', '==', parentRecordId));
-    (await getDocs(q1)).forEach(d => candidates.push({ id: d.id, data: d.data() }));
-  } catch (e) {}
-  try {
-    const q2 = query(collection(db, 'ipRecords'), where('wipoParentId', '==', parentRecordId));
-    (await getDocs(q2)).forEach(d => candidates.push({ id: d.id, data: d.data() }));
-  } catch (e) {}
-  try {
-    const q3 = query(collection(db, 'ipRecords'), where('aripoParentId', '==', parentRecordId));
-    (await getDocs(q3)).forEach(d => candidates.push({ id: d.id, data: d.data() }));
-  } catch (e) {}
-
-  const irFields = ['wipoIR', 'aripoIR', 'wipoIRNo', 'aripoIRNo'];
-  const parentIR = irFields.map(f => parentData && parentData[f]).find(Boolean);
-  if (parentIR) {
-    for (const f of irFields) {
-      try {
-        const q = query(collection(db, 'ipRecords'), where(f, '==', parentIR));
-        (await getDocs(q)).forEach(d => candidates.push({ id: d.id, data: d.data() }));
-      } catch (e) {}
-    }
-  }
-  const seen = new Set();
-  return candidates.filter(x => !seen.has(x.id) && seen.add(x.id));
-}
-
-async function createTransactionsForTpImport({ db, recordId, recordData, user }) {
-  try {
-    const parentColl = collection(db, 'ipRecords', recordId, 'transactions');
-    const parentPayload = buildTpImportTransaction({ recordId, recordData, user, hierarchy: 'parent' });
-    const parentRef = await addDoc(parentColl, parentPayload);
-
-    const children = await findChildrenForRecord({ db, parentRecordId: recordId, parentData: recordData });
-    console.log('[TP→TX] Found children:', children?.length || 0);
-    
-    if (!children || children.length === 0) {
-      console.log('[TP→TX] Parent transaction created, no children.');
-      return { parentTransactionId: parentRef.id, childTransactionIds: [] };
-    }
-    const batch = writeBatch(db);
-    const childIds = [];
-    for (const child of children) {
-      const childTxRef = doc(collection(db, 'ipRecords', child.id, 'transactions'));
-      const childPayload = buildTpImportTransaction({
-        recordId: child.id,
-        recordData: child.data,
-        user,
-        hierarchy: 'child',
-        parentTransactionId: parentRef.id,
-        countryCode: (child.data && (child.data.countryCode || child.data.country)) || null,
-      });
-      batch.set(childTxRef, childPayload);
-      childIds.push(childTxRef.id);
-    }
-    await batch.commit();
-    console.log('[TP→TX] Parent+child transactions created:', { parent: parentRef.id, children: childIds.length });
-    return { parentTransactionId: parentRef.id, childTransactionIds: childIds };
+    const q = query(collection(db, 'ipRecords'), where('parentRecordId', '==', parentRecordId));
+    const snap = await getDocs(q);
+    const out = [];
+    snap.forEach(d => out.push({ id: d.id, data: d.data() }));
+    return out;
   } catch (e) {
-    console.warn('[TP→TX] createTransactionsForTpImport failed', e);
-    return { error: e?.message || String(e) };
+    console.warn('[TP→TX] findChildrenForRecord failed (parentRecordId query):', e);
+    return [];
   }
 }
 // === /TP Import → transaction helpers ===
