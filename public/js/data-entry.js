@@ -341,7 +341,7 @@ async init() {
                             '<div class="form-group row">' +
                                 '<label for="priorityDate" class="col-sm-3 col-form-label" id="priorityDateLabel">Rüçhan Tarihi</label>' +
                                 '<div class="col-sm-9">' +
-                                    '<input type="date" id="priorityDate" class="form-input">' +
+                                    '<input type="date" class="form-control" id="priorityDate">' +
                                 '</div>' +
                             '</div>' +
                             
@@ -357,7 +357,7 @@ async init() {
                             '<div class="form-group row">' +
                                 '<label for="priorityNumber" class="col-sm-3 col-form-label">Rüçhan Numarası</label>' +
                                 '<div class="col-sm-9">' +
-                                    '<input type="text" id="priorityNumber" class="form-input" placeholder="Örn: 2023/12345">' +
+                                    '<input type="text" class="form-control" id="priorityNumber" placeholder="Örn: 2023/12345">' +
                                 '</div>' +
                             '</div>' +
                             
@@ -1113,10 +1113,6 @@ async loadRecordForEditing() {
             const recordResult = await ipRecordsService.getRecordById(this.editingRecordId);
             if (recordResult.success) {
                 this.populateFormFields(recordResult.data);
-                // Yeni: Eğer parent kayıt ise alt kayıtları yükle
-                if (recordResult.data?.origin === 'WIPO' || recordResult.data?.origin === 'ARIPO') {
-                    await this.loadChildRecords(this.editingRecordId);
-                }
             } else {
                 console.error('Kayıt yüklenemedi: ' + (recordResult.message || 'Bilinmeyen hata'));
             }
@@ -1462,8 +1458,8 @@ populateFormFields(recordData) {
 
 /**
  * WIPO/ARIPO parent kaydında ülke listesi değiştiyse:
- * - Eklenen ülkeler için child ipRecords oluşturur
- * - Silinen ülkeler için ilgili child ipRecords'u siler
+ *  - Eklenen ülkeler için child ipRecords oluşturur
+ *  - Silinen ülkeler için ilgili child ipRecords'u siler
  */
 async syncWipoAripoChildren(parentId, parentDataFromForm) {
   if (!parentId) return;
@@ -2015,8 +2011,8 @@ async saveTrademarkPortfolio(portfolioData) {
 
     /**
  * WIPO/ARIPO parent kaydında ülke listesi değiştiyse:
- * - Eklenen ülkeler için child ipRecords oluşturur
- * - Silinen ülkeler için ilgili child ipRecords'u siler
+ *  - Eklenen ülkeler için child ipRecords oluşturur
+ *  - Silinen ülkeler için ilgili child ipRecords'u siler
  */
 
 // Patent için
