@@ -325,23 +325,29 @@ async function handleSaveToPortfolio() {
         );
         
         const result = await ipRecordsService.createRecord(record);
-        if ((result && (result.isDuplicate || result.isExistingRecord)) && (result.existingId || result.id)) {
-          const existingRecordId = result.existingId || result.id;
-          try {
-            console.log('[TP→TX] Duplicate/existing record - creating transaction for', existingRecordId);
-            const txResultDup = await createTransactionsForTpImport({
-              db: __tpdb,
-              recordId: existingRecordId,
-              recordData: record,
-              user: (typeof currentUser !== 'undefined' ? currentUser : null)
-            });
-            if (txResultDup?.error) {
-              console.error('[TP→TX] Duplicate TX error:', txResultDup.error);
-            } else {
-              console.log('[TP→TX] Duplicate TX created for', existingRecordId, txResultDup);
+        results.push(result);
+        
+        // Transaction oluştur - hem yeni hem existing kayıtlar için
+        if (result && (result.success || result.isDuplicate || result.isExistingRecord)) {
+          const recordId = result.id || result.existingId;
+          if (recordId) {
+            try {
+              console.log('[TP→TX] Creating transaction for record:', recordId);
+              const txResult = await createTransactionsForTpImport({
+                db: __tpdb,
+                recordId: recordId,
+                recordData: record,
+                user: (typeof currentUser !== 'undefined' ? currentUser : null)
+              });
+              
+              if (txResult?.error) {
+                console.error('[TP→TX] Transaction creation error:', txResult.error);
+              } else {
+                console.log('[TP→TX] Transaction created successfully for', recordId, txResult);
+              }
+            } catch (e) {
+              console.error('[TP→TX] Transaction creation failed for', recordId, e);
             }
-          } catch (e) {
-            console.error('[TP→TX] Duplicate TX creation failed for', existingRecordId, e);
           }
         }
         if (result.success) {
