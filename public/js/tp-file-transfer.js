@@ -60,6 +60,8 @@ async function createTransactionsForTpImport({ db, recordId, recordData, user })
     const parentRef = await addDoc(parentColl, parentPayload);
 
     const children = await findChildrenForRecord({ db, parentRecordId: recordId, parentData: recordData });
+    console.log('[TP→TX] Found children:', children?.length || 0);
+    
     if (!children || children.length === 0) {
       console.log('[TP→TX] Parent transaction created, no children.');
       return { parentTransactionId: parentRef.id, childTransactionIds: [] };
@@ -141,7 +143,7 @@ function parseDate(dateStr) {
 }
 
 // --- Firebase Imports ---
-import { app, personService, ipRecordsService } from '../firebase-config.js';
+import { app, db, personService, ipRecordsService } from '../firebase-config.js';
 import { loadSharedLayout, ensurePersonModal, openPersonModal } from './layout-loader.js';
 import { mapTurkpatentResultsToIPRecords } from './turkpatent-mapper.js';
 
@@ -310,9 +312,22 @@ async function handleSaveToPortfolio() {
         results.push(result);
         if (result && result.success && result.id) {
           try {
-            await createTransactionsForTpImport({ db, recordId: result.id, recordData: record, user: (typeof currentUser !== 'undefined' ? currentUser : null) });
-            console.log('[TP→TX] Transactions created for', result.id);
-          } catch (e) { console.warn('[TP→TX] init failed for', result?.id, e); }
+            console.log('[TP→TX] Transaction oluşturuluyor:', result.id);
+            const txResult = await createTransactionsForTpImport({ 
+              db, 
+              recordId: result.id, 
+              recordData: record, 
+              user: (typeof currentUser !== 'undefined' ? currentUser : null) 
+            });
+            
+            if (txResult.error) {
+              console.error('[TP→TX] Transaction oluşturulamadı:', txResult.error);
+            } else {
+              console.log('[TP→TX] Transactions created for', result.id, txResult);
+            }
+          } catch (e) { 
+            console.error('[TP→TX] Transaction creation failed for', result?.id, e); 
+          }
         }
         
         if (result.success) {
