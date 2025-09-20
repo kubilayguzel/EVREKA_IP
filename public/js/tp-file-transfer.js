@@ -1,23 +1,24 @@
 import { collection, addDoc, serverTimestamp, writeBatch, doc, getDocs, query, where } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js';
 
+
 // === TP Import → transaction helpers (embedded) ===
 function buildTpImportTransaction({ recordId, recordData, user, hierarchy = 'parent', parentTransactionId = null, countryCode = null }) {
   return {
     transactionTypeId: 'tp_transfer',
     transactionSource: 'tp_import',
     transactionHierarchy: hierarchy,
-    parentTransactionId: parentTransactionId,
+    parentTransactionId,
     recordId,
-    countryCode: countryCode || (recordData && (recordData.countryCode || recordData.country)) || null,
+    countryCode: (recordData && (recordData.countryCode || recordData.country)) || null,
     niceClasses: Array.isArray(recordData && recordData.niceClasses) ? recordData.niceClasses : null,
     applicationNumber: (recordData && (recordData.applicationNumber || recordData.basvuruNo)) || null,
     applicationDate: (recordData && (recordData.applicationDate || recordData.basvuruTarihi)) || null,
     bulletinNo: recordData && recordData.bulletinNo || null,
     note: 'Kayıt TurkPatent portföy transferi ile oluşturuldu.',
     createdAt: serverTimestamp(),
-    createdBy_uid: (user && user.uid) || null,
-    createdBy_email: (user && user.email) || null,
-    createdBy_displayName: (user && user.displayName) || null,
+    createdBy_uid: (typeof currentUser !== 'undefined' && currentUser && currentUser.uid) || null,
+    createdBy_email: (typeof currentUser !== 'undefined' && currentUser && currentUser.email) || null,
+    createdBy_displayName: (typeof currentUser !== 'undefined' && currentUser && currentUser.displayName) || null,
     state: 'completed',
     isSystemGenerated: true,
   };
@@ -53,31 +54,38 @@ async function findChildrenForRecord({ db, parentRecordId, parentData }) {
 }
 
 async function createTransactionsForTpImport({ db, recordId, recordData, user }) {
-  const parentColl = collection(db, 'ipRecords', recordId, 'transactions');
-  const parentPayload = buildTpImportTransaction({ recordId, recordData, user, hierarchy: 'parent' });
-  const parentRef = await addDoc(parentColl, parentPayload);
+  try {
+    const parentColl = collection(db, 'ipRecords', recordId, 'transactions');
+    const parentPayload = buildTpImportTransaction({ recordId, recordData, user, hierarchy: 'parent' });
+    const parentRef = await addDoc(parentColl, parentPayload);
 
-  const children = await findChildrenForRecord({ db, parentRecordId: recordId, parentData: recordData });
-  if (!children || children.length === 0) {
-    return { parentTransactionId: parentRef.id, childTransactionIds: [] };
+    const children = await findChildrenForRecord({ db, parentRecordId: recordId, parentData: recordData });
+    if (!children || children.length === 0) {
+      console.log('[TP→TX] Parent transaction created, no children.');
+      return { parentTransactionId: parentRef.id, childTransactionIds: [] };
+    }
+    const batch = writeBatch(db);
+    const childIds = [];
+    for (const child of children) {
+      const childTxRef = doc(collection(db, 'ipRecords', child.id, 'transactions'));
+      const childPayload = buildTpImportTransaction({
+        recordId: child.id,
+        recordData: child.data,
+        user,
+        hierarchy: 'child',
+        parentTransactionId: parentRef.id,
+        countryCode: (child.data && (child.data.countryCode || child.data.country)) || null,
+      });
+      batch.set(childTxRef, childPayload);
+      childIds.push(childTxRef.id);
+    }
+    await batch.commit();
+    console.log('[TP→TX] Parent+child transactions created:', { parent: parentRef.id, children: childIds.length });
+    return { parentTransactionId: parentRef.id, childTransactionIds: childIds };
+  } catch (e) {
+    console.warn('[TP→TX] createTransactionsForTpImport failed', e);
+    return { error: e?.message || String(e) };
   }
-  const batch = writeBatch(db);
-  const childIds = [];
-  for (const child of children) {
-    const childTxRef = doc(collection(db, 'ipRecords', child.id, 'transactions'));
-    const childPayload = buildTpImportTransaction({
-      recordId: child.id,
-      recordData: child.data,
-      user,
-      hierarchy: 'child',
-      parentTransactionId: parentRef.id,
-      countryCode: (child.data && (child.data.countryCode || child.data.country)) || null,
-    });
-    batch.set(childTxRef, childPayload);
-    childIds.push(childTxRef.id);
-  }
-  await batch.commit();
-  return { parentTransactionId: parentRef.id, childTransactionIds: childIds };
 }
 // === /TP Import → transaction helpers ===
 
@@ -300,6 +308,12 @@ async function handleSaveToPortfolio() {
         
         const result = await ipRecordsService.createRecord(record);
         results.push(result);
+        if (result && result.success && result.id) {
+          try {
+            await createTransactionsForTpImport({ db, recordId: result.id, recordData: record, user: (typeof currentUser !== 'undefined' ? currentUser : null) });
+            console.log('[TP→TX] Transactions created for', result.id);
+          } catch (e) { console.warn('[TP→TX] init failed for', result?.id, e); }
+        }
         
         if (result.success) {
           savedCount++;
