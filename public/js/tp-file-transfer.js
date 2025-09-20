@@ -1,10 +1,11 @@
-import { collection, addDoc, serverTimestamp, writeBatch, doc, getDocs, query, where, getFirestore  } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js';
+import { getApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+import { collection, addDoc, serverTimestamp, writeBatch, doc, getDocs, query, where, getFirestore  } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 // --- Firebase Imports ---
 import { app, db, personService, ipRecordsService } from '../firebase-config.js';
 import { loadSharedLayout, ensurePersonModal, openPersonModal } from './layout-loader.js';
 import { mapTurkpatentResultsToIPRecords } from './turkpatent-mapper.js';
 
-const dbInstance = db || getFirestore(app);
+const dbInstance = getFirestore(getApp());
 
 // === TP Import → transaction helpers (embedded) ===
 function buildTpImportTransaction({ recordId, recordData, user, hierarchy = 'parent', parentTransactionId = null, countryCode = null }) {
@@ -318,7 +319,7 @@ async function handleSaveToPortfolio() {
             try {
               console.log('[TP→TX] Creating transaction for record:', recordId);
               const txResult = await createTransactionsForTpImport({
-                db: dbInstance,
+                db: dbInstanceInstance,
                 recordId: recordId,
                 recordData: record,
                 user: (typeof currentUser !== 'undefined' ? currentUser : null)
