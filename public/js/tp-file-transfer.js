@@ -325,8 +325,7 @@ async function handleSaveToPortfolio() {
         );
         
         const result = await ipRecordsService.createRecord(record);
-        \1
-        else if ((result && (result.isDuplicate || result.isExistingRecord)) && (result.existingId || result.id)) {
+        if ((result && (result.isDuplicate || result.isExistingRecord)) && (result.existingId || result.id)) {
           const existingRecordId = result.existingId || result.id;
           try {
             console.log('[TP→TX] Duplicate/existing record - creating transaction for', existingRecordId);
