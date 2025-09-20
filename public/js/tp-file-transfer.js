@@ -1,4 +1,4 @@
-import { collection, addDoc, serverTimestamp, writeBatch, doc, getDocs, query, where } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js';
+import { collection, addDoc, serverTimestamp, writeBatch, doc, getDocs, query, where, getFirestore  } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js';
 
 
 // === TP Import → transaction helpers (embedded) ===
@@ -161,6 +161,7 @@ const relatedPartySearchResults = _el('relatedPartySearchResults');
 const addNewPersonBtn = _el('addNewPersonBtn');
 const relatedPartyList = _el('relatedPartyList');
 const relatedPartyCount = _el('relatedPartyCount');
+const db = getFirestore(app);
 
 // --- Global State ---
 let allPersons = [];
@@ -314,7 +315,7 @@ async function handleSaveToPortfolio() {
           try {
             console.log('[TP→TX] Transaction oluşturuluyor:', result.id);
             const txResult = await createTransactionsForTpImport({ 
-              db, 
+              db: db, 
               recordId: result.id, 
               recordData: record, 
               user: (typeof currentUser !== 'undefined' ? currentUser : null) 
