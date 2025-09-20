@@ -218,48 +218,35 @@ async function handleSaveToPortfolio() {
         if (result.success) {
           console.log('✅ Portföy kaydı oluşturuldu:', result.id);
           
-          // Self kayıtlar için başvuru transaction'ı oluştur
-          if (mappedRecord.recordOwnerType === 'self') {
-            try {
-              // Trademark başvuru transaction type ID'sini al
-              const CODE_BY_IP = {
-                trademark: 'TRADEMARK_APPLICATION',
-                patent: 'PATENT_APPLICATION', 
-                design: 'DESIGN_APPLICATION'
-              };
-              const targetCode = CODE_BY_IP[mappedRecord.type] || 'TRADEMARK_APPLICATION';
-              
-              let txTypeId = null;
-              try {
-                const typeRes = await transactionTypeService.getByCode?.(targetCode);
-                txTypeId = typeRes?.id || null;
-              } catch (err) {
-                console.error('Transaction type bulunamadı:', err);
-              }
-              
-              if (txTypeId) {
-                // Başvuru transaction'ı oluştur
-                const transactionData = {
-                  type: String(txTypeId),
-                  description: 'Başvuru işlemi.',
-                  timestamp: mappedRecord.applicationDate || new Date(),
-                  transactionHierarchy: 'parent'
-                };
-                
-                const txResult = await ipRecordsService.addTransactionToRecord(result.id, transactionData);
-                if (txResult.success) {
-                  console.log('✅ Başvuru transaction\'ı oluşturuldu:', result.id);
-                } else {
-                  console.warn('⚠️ Transaction oluşturulamadı:', txResult.error);
-                }
-              } else {
-                console.warn('⚠️ Transaction type ID bulunamadı:', targetCode);
-              }
-            } catch (txError) {
-              console.error('❌ Transaction oluşturma hatası:', txError);
+        // Self kayıtlar için başvuru transaction'ı oluştur
+        if (mappedRecord.recordOwnerType === 'self') {
+          try {
+            // Transaction type ID'sini doğrudan kullan
+            const TRANSACTION_TYPE_IDS = {
+              trademark: 'trademark_application',
+              patent: 'patent_application', 
+              design: 'design_application'
+            };
+            const txTypeId = TRANSACTION_TYPE_IDS[mappedRecord.type] || 'trademark_application';
+            
+            // Başvuru transaction'ı oluştur
+            const transactionData = {
+              type: String(txTypeId),
+              description: 'Başvuru işlemi.',
+              timestamp: mappedRecord.applicationDate || new Date(),
+              transactionHierarchy: 'parent'
+            };
+            
+            const txResult = await ipRecordsService.addTransactionToRecord(result.id, transactionData);
+            if (txResult.success) {
+              console.log('✅ Başvuru transaction\'ı oluşturuldu:', result.id);
+            } else {
+              console.warn('⚠️ Transaction oluşturulamadı:', txResult.error);
             }
+          } catch (txError) {
+            console.error('❌ Transaction oluşturma hatası:', txError);
           }
-          
+        }          
           successCount++;
         } else if (result.isDuplicate) {
           console.log('⚠️ Kayıt zaten mevcut:', mappedRecord.applicationNumber);
