@@ -1,22 +1,11 @@
 import { collection, addDoc, serverTimestamp, writeBatch, doc, getDocs, query, where, getFirestore  } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js';
+// --- Firebase Imports ---
+import { app, db, personService, ipRecordsService } from '../firebase-config.js';
+import { loadSharedLayout, ensurePersonModal, openPersonModal } from './layout-loader.js';
+import { mapTurkpatentResultsToIPRecords } from './turkpatent-mapper.js';
 
+const dbInstance = db || getFirestore(app);
 
-
-
-// === TP→TX: Safe Firestore handle (fallback) ===
-let __tpdb = null;
-try {
-  // Prefer named export from firebase-config.js if available
-  if (typeof db !== 'undefined' && db) {
-    __tpdb = db;
-  } else {
-    // Fall back to default app's Firestore
-    __tpdb = getFirestore();
-  }
-} catch (e) {
-  console.warn('[TP→TX] Firestore init fallback failed', e);
-  __tpdb = null;
-}
 // === TP Import → transaction helpers (embedded) ===
 function buildTpImportTransaction({ recordId, recordData, user, hierarchy = 'parent', parentTransactionId = null, countryCode = null }) {
   return {
@@ -157,11 +146,6 @@ function parseDate(dateStr) {
   const date = new Date(dateStr);
   return isNaN(date.getTime()) ? null : date;
 }
-
-// --- Firebase Imports ---
-import { app, db, personService, ipRecordsService } from '../firebase-config.js';
-import { loadSharedLayout, ensurePersonModal, openPersonModal } from './layout-loader.js';
-import { mapTurkpatentResultsToIPRecords } from './turkpatent-mapper.js';
 
 // --- DOM Elements ---
 const basvuruNoInput = _el('basvuruNoInput');
@@ -334,7 +318,7 @@ async function handleSaveToPortfolio() {
             try {
               console.log('[TP→TX] Creating transaction for record:', recordId);
               const txResult = await createTransactionsForTpImport({
-                db: __tpdb,
+                db: dbInstance,
                 recordId: recordId,
                 recordData: record,
                 user: (typeof currentUser !== 'undefined' ? currentUser : null)
