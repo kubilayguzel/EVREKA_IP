@@ -3,12 +3,151 @@ import { initializeNiceClassification, getSelectedNiceClasses, setSelectedNiceCl
 import { personService, ipRecordsService, storage, auth, transactionTypeService } from '../firebase-config.js';
 import { ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
 import { loadSharedLayout, openPersonModal, ensurePersonModal } from './layout-loader.js';
-import { collection, doc, getDoc, getDocs, getFirestore, query, where } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { collection, doc, getDoc, getDocs, getFirestore, query, where, updateDoc} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { STATUSES, ORIGIN_TYPES } from '../utils.js';
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
 class DataEntryModule {
-    constructor() {
+    
+
+    // === BEGIN: WIPO/ARIPO Child Propagation Helpers (self-contained modal) ===
+    ensureChildModalDOM() {
+      if (document.getElementById('childPropagationModal')) return;
+      const tpl = document.createElement('template');
+      tpl.innerHTML = `
+        <div id="childPropagationBackdrop" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1040"></div>
+        <div id="childPropagationModal" style="display:none;position:fixed;inset:0;z-index:1050;display:flex;align-items:center;justify-content:center;">
+          <div style="width:min(700px,92vw);max-height:min(82vh,900px);overflow:auto;background:#fff;border-radius:16px;box-shadow:0 16px 48px rgba(0,0,0,.25)">
+            <div style="display:flex;align-items:center;justify-content:space-between;background:#0a7a5f;color:#fff;padding:16px 20px;border-radius:16px 16px 0 0">
+              <div>
+                <h5 style="margin:0">Güncelleme Uygulanacak Ülkeleri Seçin</h5>
+                <small class="d-block mt-1">Bu kayıt WIPO/ARIPO <b>parent</b>. Aşağıdaki child ülke kayıtlarına da aynı güncelleme uygulansın mı?</small>
+              </div>
+              <button id="childPropCloseBtn" class="btn btn-light btn-sm">Kapat</button>
+            </div>
+            <div style="padding:18px 20px">
+              <div class="mb-2">
+                <span class="text-muted">IR Numarası: </span><span id="childPropIR" style="font-weight:600"></span>
+                <span class="text-muted ml-3">Orjin: </span><span id="childPropOrigin" style="font-weight:600"></span>
+              </div>
+              <div id="childPropListEmpty" class="alert alert-info" style="display:none;">Bu parent'a bağlı herhangi bir child ülke kaydı bulunamadı.</div>
+              <div id="childPropList" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:flex-end;gap:10px;border-top:1px solid #e9ecef;padding:14px 20px">
+              <div class="mr-auto">
+                <label style="display:flex;align-items:center;gap:8px;margin:0;">
+                  <input type="checkbox" id="childPropSelectAll"/> Tümünü seç
+                </label>
+              </div>
+              <button id="childPropCancel" class="btn btn-secondary">Sadece Parent'ı Güncelle</button>
+              <button id="childPropApply" class="btn btn-primary">Seçilen Child'lara da uygula</button>
+            </div>
+          </div>
+        </div>
+      `.trim();
+      document.body.appendChild(tpl.content);
+    },
+
+    setupChildPropagationModal() {
+      this.ensureChildModalDOM();
+      this._childModal = {
+        root: document.getElementById('childPropagationModal'),
+        backdrop: document.getElementById('childPropagationBackdrop'),
+        list: document.getElementById('childPropList'),
+        listEmpty: document.getElementById('childPropListEmpty'),
+        btnApply: document.getElementById('childPropApply'),
+        btnCancel: document.getElementById('childPropCancel'),
+        btnClose: document.getElementById('childPropCloseBtn'),
+        checkAll: document.getElementById('childPropSelectAll'),
+        txtIR: document.getElementById('childPropIR'),
+        txtOrigin: document.getElementById('childPropOrigin')
+      };
+      const hide = () => {
+        this._childModal.root.style.display = 'none';
+        this._childModal.backdrop.style.display = 'none';
+      };
+      const onCancel = () => { hide(); if (this._childModal._resolver) this._childModal._resolver([]); };
+      this._childModal.btnCancel?.addEventListener('click', onCancel);
+      this._childModal.btnClose?.addEventListener('click', onCancel);
+      this._childModal.checkAll?.addEventListener('change', (e) => {
+        this._childModal.list.querySelectorAll('input[type="checkbox"]').forEach(cb => { cb.checked = e.target.checked; });
+      });
+      this._childModal.btnApply?.addEventListener('click', () => {
+        const selected = Array.from(this._childModal.list.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
+        hide();
+        if (this._childModal._resolver) this._childModal._resolver(selected);
+      });
+    },
+
+    async openChildPropagationModalAndWait(parentRecord) {
+      this.ensureChildModalDOM();
+      if (!this._childModal) this.setupChildPropagationModal();
+
+      const origin = String(parentRecord.origin || '').toUpperCase();
+      const isWipo = origin === 'WIPO';
+      const irNumber = isWipo ? parentRecord.wipoIR : parentRecord.aripoIR;
+      if (!irNumber) return [];
+
+      const children = await this.fetchChildrenByIR(origin, String(irNumber));
+      this._childModal.txtIR.textContent = irNumber || '-';
+      this._childModal.txtOrigin.textContent = origin;
+      this._childModal.list.innerHTML = '';
+
+      if (!children.length) {
+        this._childModal.listEmpty.style.display = 'block';
+      } else {
+        this._childModal.listEmpty.style.display = 'none';
+        const html = children.map(ch => {
+          const name = this.findCountryName?.(ch.country) || ch.country;
+          return `<label style="display:flex;align-items:center;gap:8px;border:1.5px solid #e1e8ed;border-radius:999px;padding:8px 12px;margin:6px 8px 0 0"><input type="checkbox" value="${ch.country}" checked> ${name}</label>`;
+        }).join('');
+        this._childModal.list.innerHTML = html;
+      }
+      this._childModal.backdrop.style.display = 'block';
+      this._childModal.root.style.display = 'flex';
+
+      return new Promise((resolve) => { this._childModal._resolver = resolve; });
+    },
+
+    async fetchChildrenByIR(origin, irNumber) {
+      if (!['WIPO','ARIPO'].includes(String(origin).toUpperCase()) || !irNumber) return [];
+      const db = getFirestore();
+      const colRef = collection(db, 'ipRecords');
+      const isWipo = String(origin).toUpperCase() === 'WIPO';
+      const qy = query(
+        colRef,
+        where('transactionHierarchy', '==', 'child'),
+        where('origin', '==', String(origin).toUpperCase()),
+        where(isWipo ? 'wipoIR' : 'aripoIR', '==', String(irNumber))
+      );
+      const snap = await getDocs(qy);
+      const out = [];
+      snap.forEach(d => out.push({ id: d.id, ...d.data() }));
+      // unique by country
+      const seen = new Set();
+      return out.filter(x => {
+        const key = String(x.country || '').toUpperCase();
+        if (!key || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+    },
+
+    findCountryName(code) {
+      const arr = this.allCountries || [];
+      const c = arr.find(x => String(x.code).toUpperCase() === String(code).toUpperCase());
+      return c?.name || code;
+    },
+
+    mapParentFieldsForChildForPropagation(parentFields) {
+      const allowed = ['status','brandText','description','renewalDate','goodsAndServices','updatedAt'];
+      const out = {};
+      for (const k of allowed) if (k in parentFields) out[k] = parentFields[k];
+      return out;
+    },
+    // === END: WIPO/ARIPO Child Propagation Helpers ===
+
+constructor() {
         this.ipTypeSelect = document.getElementById('ipTypeSelect');
         this.dynamicFormContainer = document.getElementById('dynamicFormContainer');
         this.saveBtn = document.getElementById('savePortfolioBtn');
@@ -25,6 +164,7 @@ class DataEntryModule {
     }
 
 async init() {
+        this.setupChildPropagationModal && this.setupChildPropagationModal();
         console.log('🚀 Data Entry Module başlatılıyor...');
         try {
             await this.loadAllData();
@@ -1426,7 +1566,29 @@ populateFormFields(recordData) {
     }, 500); // Form render edilmesini bekle
 }
  async handleSavePortfolio() {
-    const ipType = this.ipTypeSelect.value;
+    // --- Child propagation pre-check (edit + WIPO/ARIPO parent) ---
+        this.__childProp = { isParentWipoAripo: false, selectedChildCountries: [], parentRecord: null, oldIr: null, origin: null };
+        try {
+          if (this.editingRecordId) {
+            const res = await ipRecordsService.getRecordById(this.editingRecordId);
+            if (res?.success && res.data) {
+              const rec = res.data;
+              const origin = String(rec.origin || '').toUpperCase();
+              const hierarchy = String(rec.transactionHierarchy || '').toLowerCase();
+              const isParent = hierarchy === 'parent';
+              const isWipoAripo = origin === 'WIPO' || origin === 'ARIPO';
+              this.__childProp.origin = origin;
+              this.__childProp.parentRecord = rec;
+              this.__childProp.isParentWipoAripo = isParent && isWipoAripo;
+              this.__childProp.oldIr = (origin === 'WIPO') ? (rec.wipoIR || null) : (rec.aripoIR || null);
+              if (this.__childProp.isParentWipoAripo) {
+                // Open modal now to collect selection
+                this.__childProp.selectedChildCountries = await this.openChildPropagationModalAndWait(rec);
+              }
+            }
+          }
+        } catch (e) { console.warn('Pre-save child propagation check error:', e); }
+        const ipType = this.ipTypeSelect.value;
     
     if (!ipType) {
         alert('Lütfen bir IP türü seçin');
@@ -1909,7 +2071,42 @@ async saveTrademarkPortfolio(portfolioData) {
             }
 
             result = await ipRecordsService.updateRecord(this.editingRecordId, safeParentData);
-            results.push(result);
+            
+        // --- Propagate to selected child countries (if any) ---
+        try {
+          const __cp = this.__childProp || {};
+          if (__cp.isParentWipoAripo && Array.isArray(__cp.selectedChildCountries) && __cp.selectedChildCountries.length) {
+            const originUP = String(__cp.origin || '').toUpperCase();
+            const isWipo = originUP === 'WIPO';
+            // Parent fields prepared from current form
+            const parentUpdateFields = {
+              status: document.getElementById('trademarkStatus')?.value || 'filed',
+              brandText: document.getElementById('brandExampleText')?.value?.trim() || '',
+              description: document.getElementById('brandDescription')?.value?.trim() || '',
+              renewalDate: document.getElementById('renewalDate')?.value || null,
+              goodsAndServices: (typeof getSelectedNiceClasses === 'function') ? getSelectedNiceClasses() : null,
+              updatedAt: new Date().toISOString()
+            };
+            // IR changes
+            const newIR = document.getElementById('registrationNumber')?.value?.trim() || null;
+            const oldIR = __cp.oldIr || null;
+            if (newIR && newIR !== oldIR) {
+              if (isWipo) parentUpdateFields.wipoIR = String(newIR);
+              else parentUpdateFields.aripoIR = String(newIR);
+            }
+
+            // Fetch children by oldIR (or newIR if old empty)
+            const children = await this.fetchChildrenByIR(originUP, String(oldIR || newIR || ''));
+            const selectedSet = new Set(__cp.selectedChildCountries.map(c => String(c).toUpperCase()));
+            for (const ch of children) {
+              if (!ch?.id || !ch?.country) continue;
+              if (!selectedSet.has(String(ch.country).toUpperCase())) continue;
+              await ipRecordsService.updateRecord(String(ch.id), { ...this.mapParentFieldsForChildForPropagation(parentUpdateFields) });
+            }
+            console.debug('Child propagation done.');
+          }
+        } catch (e) { console.warn('Child propagation failed:', e); }
+results.push(result);
             if (!result.success) success = false;
             mainRecordId = this.editingRecordId;
 
