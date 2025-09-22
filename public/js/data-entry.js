@@ -91,37 +91,57 @@ class DataEntryModule {
     }
 
     mapParentFieldsForChildForPropagation(parentFields) {
-      const allowed = ['status','brandText','description','renewalDate','goodsAndServices','updatedAt'];
-      const out = {};
-      for (const k of allowed) if (k in parentFields) out[k] = parentFields[k];
-      return out;
+    const allowed = [
+        'status','brandText','description','renewalDate','goodsAndServices','updatedAt',
+        'applicationDate','registrationDate','wipoIR','aripoIR' // Bu alanları ekle
+    ];
+    const out = {};
+    for (const k of allowed) {
+        if (k in parentFields && parentFields[k] !== null && parentFields[k] !== undefined) {
+        out[k] = parentFields[k];
+        }
+    }
+    console.log('🎯 Child\'lara aktarılacak alanlar:', out);
+    return out;
     }
 
     // Collect current form fields relevant for parent/child propagation
+
+    // Collect current form fields relevant for parent/child propagation
     collectPortfolioFields() {
-      const origin = String(document.getElementById('originSelect')?.value || '').toUpperCase();
-      const isWipo = origin === 'WIPO';
-      const registrationNumber = document.getElementById('registrationNumber')?.value?.trim() || null;
-      const status = document.getElementById('trademarkStatus')?.value || null;
-      const brandText = document.getElementById('brandExampleText')?.value?.trim() || null;
-      const description = document.getElementById('brandDescription')?.value?.trim() || null;
-      const renewalDate = document.getElementById('renewalDate')?.value || null;
-      let goodsAndServices = null;
-      try {
+    const origin = String(document.getElementById('originSelect')?.value || '').toUpperCase();
+    const isWipo = origin === 'WIPO';
+    const registrationNumber = document.getElementById('registrationNumber')?.value?.trim() || null;
+    const status = document.getElementById('trademarkStatus')?.value || null;
+    const brandText = document.getElementById('brandExampleText')?.value?.trim() || null;
+    const description = document.getElementById('brandDescription')?.value?.trim() || null;
+    const renewalDate = document.getElementById('renewalDate')?.value || null;
+    
+    // ÖNEMLİ: Tarih alanlarını da ekle
+    const applicationDate = document.getElementById('applicationDate')?.value || null;
+    const registrationDate = document.getElementById('registrationDate')?.value || null;
+    
+    let goodsAndServices = null;
+    try {
         if (typeof getSelectedNiceClasses === 'function') goodsAndServices = getSelectedNiceClasses();
-      } catch(e) {}
-      const out = {
+    } catch(e) {}
+    
+    const out = {
         origin: origin || null,
-        status, brandText, description, renewalDate, goodsAndServices
-      };
-      if (registrationNumber) {
+        status, brandText, description, renewalDate,
+        applicationDate, registrationDate, // Bu alanları ekle
+        goodsAndServices,
+        updatedAt: new Date().toISOString()
+    };
+    
+    if (registrationNumber) {
         if (isWipo) out.wipoIR = registrationNumber;
         else if (origin === 'ARIPO') out.aripoIR = registrationNumber;
-      }
-      return out;
     }
     
-    
+    console.log('📊 Toplanan form alanları:', out);
+    return out;
+    }
     // Apply updates from parent to selected child countries (WIPO/ARIPO)
     async propagateToSelectedChildren(parentRecord, selectedCountries, parentUpdateFields) {
       try {
@@ -2085,14 +2105,21 @@ async saveTrademarkPortfolio(portfolioData) {
             result = await ipRecordsService.updateRecord(this.editingRecordId, safeParentData);
             
         
-    // --- after parent update: propagate to selected children if requested
+    // --- Child propagation modaldan seçilen ülkelere
     try {
-      const __cp = this.__childProp || {};
-      if (__cp.isParentWipoAripo && Array.isArray(__cp.selectedChildCountries) && __cp.selectedChildCountries.length) {
+    const __cp = this.__childProp || {};
+    if (__cp.isParentWipoAripo && Array.isArray(__cp.selectedChildCountries) && __cp.selectedChildCountries.length > 0) {
+        console.log('🔄 Modal seçimlerine göre child propagation başlatılıyor:', __cp.selectedChildCountries);
         const parentUpdateFields = this.collectPortfolioFields();
-        await this.propagateToSelectedChildren(__cp.parentRecord || {}, __cp.selectedChildCountries, parentUpdateFields);
-      }
-    } catch(e) { console.warn('post-update propagation failed:', e); }
+        const propagationResult = await this.propagateToSelectedChildren(__cp.parentRecord || {}, __cp.selectedChildCountries, parentUpdateFields);
+        console.log('✅ Child propagation tamamlandı:', propagationResult);
+    } else {
+        console.log('ℹ️ Child propagation atlandı - modal seçimi yok veya parent WIPO/ARIPO değil');
+    }
+    } catch(e) { 
+    console.warn('❌ Child propagation hatası:', e); 
+    alert('Parent güncellendi ancak bazı child kayıtlar güncellenemedi.');
+    }
     // --- Propagate to selected child countries (if any) ---
         results.push(result);
             if (!result.success) success = false;
@@ -2119,11 +2146,6 @@ async saveTrademarkPortfolio(portfolioData) {
             }
 
             // ✅ WIPO/ARIPO parent güncellemesinde child'ları senkronize et
-            try {
-            await this.syncWipoAripoChildren(this.editingRecordId, recordData);
-            } catch (e) {
-            console.warn('WIPO/ARIPO child senkronizasyonunda uyarı:', e);
-            }
             results.push(result);
             if (!result.success) success = false;
             if (result.isExistingRecord || result.isDuplicate) isExisting = true;
