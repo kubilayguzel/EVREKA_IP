@@ -11,47 +11,7 @@ class DataEntryModule {
     
 
     // === BEGIN: WIPO/ARIPO Child Propagation Helpers ===
-
-    ensureChildModalDOM() {
-      if (document.getElementById('childPropagationModal')) return;
-      const tpl = document.createElement('template');
-      tpl.innerHTML = `
-        <div id="childPropagationBackdrop" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1040"></div>
-        <div id="childPropagationModal" style="display:none;position:fixed;inset:0;z-index:1050;display:flex;align-items:center;justify-content:center;">
-          <div style="width:min(700px,92vw);max-height:min(82vh,900px);overflow:auto;background:#fff;border-radius:16px;box-shadow:0 16px 48px rgba(0,0,0,.25)">
-            <div style="display:flex;align-items:center;justify-content:space-between;background:#0a7a5f;color:#fff;padding:16px 20px;border-radius:16px 16px 0 0">
-              <div>
-                <h5 style="margin:0">Güncelleme Uygulanacak Ülkeleri Seçin</h5>
-                <small class="d-block mt-1">Bu kayıt WIPO/ARIPO <b>parent</b>. Aşağıdaki child ülke kayıtlarına da aynı güncelleme uygulansın mı?</small>
-              </div>
-              <button id="childPropCloseBtn" class="btn btn-light btn-sm">Kapat</button>
-            </div>
-            <div style="padding:18px 20px">
-              <div class="mb-2">
-                <span class="text-muted">IR Numarası: </span><span id="childPropIR" style="font-weight:600"></span>
-                <span class="text-muted ml-3">Orjin: </span><span id="childPropOrigin" style="font-weight:600"></span>
-              </div>
-              <div id="childPropListEmpty" class="alert alert-info" style="display:none;">Bu parent'a bağlı herhangi bir child ülke kaydı bulunamadı.</div>
-              <div id="childPropList" style="display:flex;flex-wrap:wrap;gap:8px"></div>
-            </div>
-            <div style="display:flex;align-items:center;justify-content:flex-end;gap:10px;border-top:1px solid #e9ecef;padding:14px 20px">
-              <div class="mr-auto">
-                <label style="display:flex;align-items:center;gap:8px;margin:0;">
-                  <input type="checkbox" id="childPropSelectAll"/> Tümünü seç
-                </label>
-              </div>
-              <button id="childPropCancel" class="btn btn-secondary">Sadece Parent'ı Güncelle</button>
-              <button id="childPropApply" class="btn btn-primary">Seçilen Child'lara da uygula</button>
-            </div>
-          </div>
-        </div>
-      `.trim();
-      document.body.appendChild(tpl.content);
-    }
-    
-
     setupChildPropagationModal() {
-      this.ensureChildModalDOM && this.ensureChildModalDOM();
       this._childModal = {
         root: document.getElementById('childPropagationModal'),
         backdrop: document.getElementById('childPropagationBackdrop'),
@@ -82,7 +42,6 @@ class DataEntryModule {
     }
 
     async openChildPropagationModalAndWait(parentRecord) {
-      this.ensureChildModalDOM && this.ensureChildModalDOM();
       const origin = String(parentRecord.origin || '').toUpperCase();
       const isWipo = origin === 'WIPO';
       const irNumber = isWipo ? parentRecord.wipoIR : parentRecord.aripoIR;
@@ -137,43 +96,67 @@ class DataEntryModule {
       for (const k of allowed) if (k in parentFields) out[k] = parentFields[k];
       return out;
     }
-    // === END: WIPO/ARIPO Child Propagation Helpers ===
-    
 
-    // Toplam prop için: formdaki TÜM alanları topla
-    collectAllFormFields() {
-      const data = {};
-      const els = document.querySelectorAll('input[name], select[name], textarea[name]');
-      els.forEach(el => {
-        const name = el.name;
-        if (!name) return;
-        if (el.type === 'checkbox') {
-          if (!data[name]) data[name] = [];
-          if (el.checked) data[name].push(el.value ?? true);
-        } else if (el.type === 'radio') {
-          if (el.checked) data[name] = el.value;
-        } else {
-          const v = (el.value ?? '').trim();
-          data[name] = v === '' ? null : v;
-        }
-      });
-      // Nice sınıfları
-      try { if (typeof getSelectedNiceClasses === 'function') data.goodsAndServices = getSelectedNiceClasses(); } catch(e) {}
-      // Tarih normalize
-      const toISO = (k) => { if (data[k]) { try { const parts = String(data[k]); if (/^\d{2}\.\d{2}\.\d{4}$/.test(parts)) { const [d,m,y]=parts.split('.'); data[k]=`${y}-${m}-${d}`; } const dt=new Date(data[k]); if(!isNaN(+dt)) data[k]=dt.toISOString().slice(0,10); } catch(_){} } };
-      ['applicationDate','registrationDate','renewalDate','bulletinDate','priorityDate'].forEach(toISO);
-      // Origin/IR eşlemesi
-      const originEl = document.getElementById('originSelect');
-      const regNo = data.registrationNumber || null;
-      const originUP = String(originEl?.value || data.origin || '').toUpperCase();
-      if (regNo) {
-        if (originUP === 'WIPO') data.wipoIR = regNo;
-        if (originUP === 'ARIPO') data.aripoIR = regNo;
+    // Collect current form fields relevant for parent/child propagation
+    collectPortfolioFields() {
+      const origin = String(document.getElementById('originSelect')?.value || '').toUpperCase();
+      const isWipo = origin === 'WIPO';
+      const registrationNumber = document.getElementById('registrationNumber')?.value?.trim() || null;
+      const status = document.getElementById('trademarkStatus')?.value || null;
+      const brandText = document.getElementById('brandExampleText')?.value?.trim() || null;
+      const description = document.getElementById('brandDescription')?.value?.trim() || null;
+      const renewalDate = document.getElementById('renewalDate')?.value || null;
+      let goodsAndServices = null;
+      try {
+        if (typeof getSelectedNiceClasses === 'function') goodsAndServices = getSelectedNiceClasses();
+      } catch(e) {}
+      const out = {
+        origin: origin || null,
+        status, brandText, description, renewalDate, goodsAndServices
+      };
+      if (registrationNumber) {
+        if (isWipo) out.wipoIR = registrationNumber;
+        else if (origin === 'ARIPO') out.aripoIR = registrationNumber;
       }
-      data.origin = originUP || data.origin || null;
-      data.updatedAt = new Date().toISOString();
-      return data;
+      return out;
     }
+    
+    
+    // Apply updates from parent to selected child countries (WIPO/ARIPO)
+    async propagateToSelectedChildren(parentRecord, selectedCountries, parentUpdateFields) {
+      try {
+        const origin = String(parentRecord.origin || '').toUpperCase();
+        if (!['WIPO','ARIPO'].includes(origin)) return {updated:0};
+        const isWipo = origin === 'WIPO';
+        const oldIR = (isWipo ? parentRecord.wipoIR : parentRecord.aripoIR) || null;
+        const newIR = isWipo ? parentUpdateFields.wipoIR : parentUpdateFields.aripoIR;
+        const irToQuery = String(oldIR || newIR || '');
+        if (!irToQuery) return {updated:0};
+
+        const children = await this.fetchChildrenByIR(origin, irToQuery);
+        const setSel = new Set((selectedCountries||[]).map(c => String(c).toUpperCase()));
+        const patchBase = this.mapParentFieldsForChildForPropagation(parentUpdateFields);
+        // also map IR if changed
+        if (newIR && newIR !== oldIR) {
+          if (isWipo) patchBase.wipoIR = String(newIR);
+          else patchBase.aripoIR = String(newIR);
+        }
+        let updated = 0;
+        for (const ch of children) {
+          if (!ch?.id || !ch?.country) continue;
+          if (!setSel.has(String(ch.country).toUpperCase())) continue;
+          await ipRecordsService.updateRecord(String(ch.id), { ...patchBase, updatedAt: new Date().toISOString() });
+          updated++;
+        }
+        console.debug('Child propagation done. Updated:', updated);
+        return {updated};
+      } catch (e) {
+        console.warn('propagateToSelectedChildren error:', e);
+        return {updated:0, error:String(e)};
+      }
+    }
+    
+// === END: WIPO/ARIPO Child Propagation Helpers ===
     
 constructor() {
         this.ipTypeSelect = document.getElementById('ipTypeSelect');
@@ -1615,6 +1598,15 @@ populateFormFields(recordData) {
         }
       } catch (e) { console.warn('Parent fetch failed:', e); }
     }
+    // Persist selection/state for cross-method usage
+    this.__childProp = {
+      isParentWipoAripo: _isParentWipoAripo,
+      selectedChildCountries: Array.isArray(_selectedChildCountries) ? _selectedChildCountries : [],
+      parentRecord: _parentRecord,
+      oldIr: _oldIr,
+      origin: _origin
+    };
+    
     
     const ipType = this.ipTypeSelect.value;
     
@@ -2093,15 +2085,15 @@ async saveTrademarkPortfolio(portfolioData) {
             result = await ipRecordsService.updateRecord(this.editingRecordId, safeParentData);
             
         
-        // --- post-update propagation (ALL fields) ---
-        try {
-          const __cp = this.__childProp || {};
-          if (__cp.isParentWipoAripo && Array.isArray(__cp.selectedChildCountries) && __cp.selectedChildCountries.length) {
-            const allFields = this.collectAllFormFields ? this.collectAllFormFields() : {};
-            await this.propagateToSelectedChildren(__cp.parentRecord || {}, __cp.selectedChildCountries, allFields);
-          }
-        } catch(e) { console.warn('post-update propagation failed', e); }
-// --- Propagate to selected child countries (if any) ---
+    // --- after parent update: propagate to selected children if requested
+    try {
+      const __cp = this.__childProp || {};
+      if (__cp.isParentWipoAripo && Array.isArray(__cp.selectedChildCountries) && __cp.selectedChildCountries.length) {
+        const parentUpdateFields = this.collectPortfolioFields();
+        await this.propagateToSelectedChildren(__cp.parentRecord || {}, __cp.selectedChildCountries, parentUpdateFields);
+      }
+    } catch(e) { console.warn('post-update propagation failed:', e); }
+    // --- Propagate to selected child countries (if any) ---
         results.push(result);
             if (!result.success) success = false;
             mainRecordId = this.editingRecordId;
