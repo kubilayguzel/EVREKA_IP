@@ -2015,24 +2015,8 @@ async saveTrademarkPortfolio(portfolioData) {
 
             result = await ipRecordsService.updateRecord(this.editingRecordId, safeParentData);
             
-// --- Propagate to selected child countries (if any) ---
-if (_isParentWipoAripo && Array.isArray(_selectedChildCountries) && _selectedChildCountries.length) {
-  try {
-    const parentUpdateFields = this.collectPortfolioFields ? this.collectPortfolioFields() : {};
-    const mapped = this.mapParentFieldsForChildForPropagation ? this.mapParentFieldsForChildForPropagation(parentUpdateFields) : parentUpdateFields;
-    const _newIr = (_origin === 'WIPO') ? parentUpdateFields.wipoIR : parentUpdateFields.aripoIR;
-    if (_newIr && _newIr !== _oldIr) { if (_origin === 'WIPO') mapped.wipoIR = String(_newIr); else mapped.aripoIR = String(_newIr); }
-    const children = await this.fetchChildrenByIR(_origin, String(_oldIr || _newIr || ''));
-    const selectedSet = new Set(_selectedChildCountries.map(c => String(c).toUpperCase()));
-    for (const ch of children) {
-      if (!ch?.country) continue;
-      if (!selectedSet.has(String(ch.country).toUpperCase())) continue;
-      await ipRecordsService.updateRecord(String(ch.id), { ...mapped });
-    }
-    console.debug('Child propagation done.');
-  } catch (e) { console.warn('Child propagation failed:', e); }
-}
-results.push(result);
+        // --- Propagate to selected child countries (if any) ---
+        results.push(result);
             if (!result.success) success = false;
             mainRecordId = this.editingRecordId;
 
