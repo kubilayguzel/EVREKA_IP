@@ -786,5 +786,52 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333
     <script type="module" src="./js/layout-loader.js"></script>
     <script type="module" src="./js/data-entry.js"></script>
     <script type="module" src="./js/nice-classification.js"></script>
+
+    <!-- BEGIN: Child Country Selection Modal (WIPO/ARIPO Parent Propagation) -->
+    <div id="childPropagationBackdrop" class="modal-backdrop-like" style="display:none;"></div>
+    <div id="childPropagationModal" class="child-prop-modal" role="dialog" aria-modal="true" aria-labelledby="childPropTitle" style="display:none;">
+      <div class="child-prop-card">
+        <div class="child-prop-header">
+          <div>
+            <h5 id="childPropTitle" class="mb-0">Güncelleme Uygulanacak Ülkeleri Seçin</h5>
+            <small class="d-block mt-1">Bu kayıt WIPO/ARIPO <strong>parent</strong>. Aşağıdaki child ülke kayıtlarına da aynı güncelleme uygulansın mı?</small>
+          </div>
+          <button id="childPropCloseBtn" class="btn btn-light btn-sm">Kapat</button>
+        </div>
+        <div class="child-prop-body">
+          <div class="mb-2">
+            <span class="muted">IR Numarası: </span><span id="childPropIR" class="font-weight-bold"></span>
+            <span class="muted ml-3">Orjin: </span><span id="childPropOrigin" class="font-weight-bold"></span>
+          </div>
+          <div id="childPropListEmpty" class="alert alert-info" style="display:none;">
+            Bu parent'a bağlı herhangi bir child ülke kaydı bulunamadı.
+          </div>
+          <div id="childPropList" class="country-list"></div>
+        </div>
+        <div class="child-prop-footer">
+          <div class="mr-auto">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" id="childPropSelectAll" />
+              <label class="form-check-label" for="childPropSelectAll">Tümünü seç</label>
+            </div>
+          </div>
+          <button id="childPropCancel" class="btn btn-secondary">Sadece Parent'ı Güncelle</button>
+          <button id="childPropApply" class="btn btn-primary">Seçilen Child'lara da uygula</button>
+        </div>
+      </div>
+    </div>
+    <style>
+      .modal-backdrop-like{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1040}
+      .child-prop-modal{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:1050}
+      .child-prop-card{width:min(700px,92vw);max-height:min(82vh,900px);overflow:auto;background:#fff;border-radius:16px;box-shadow:0 16px 48px rgba(0,0,0,.25)}
+      .child-prop-header{display:flex;align-items:center;justify-content:space-between;background:#0a7a5f;color:#fff;padding:16px 20px;border-radius:16px 16px 0 0}
+      .child-prop-body{padding:18px 20px}
+      .child-prop-footer{display:flex;align-items:center;justify-content:flex-end;gap:10px;border-top:1px solid #e9ecef;padding:14px 20px}
+      .country-chip{display:flex;align-items:center;gap:8px;border:1.5px solid #e1e8ed;border-radius:999px;padding:8px 12px;margin:6px 8px 0 0}
+      .country-list{display:flex;flex-wrap:wrap}
+      .muted{color:#6c757d}
+    </style>
+    <!-- END: Child Country Selection Modal -->
+    
 </body>
 </html>
