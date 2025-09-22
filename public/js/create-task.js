@@ -313,7 +313,7 @@ async initIpRecordSearchSelector() {
         ? (r.markName || 'Başlık yok')
         : (r.title || r.name || r.markName || r.applicationTitle || 'Başlık yok');
       const owner = this.searchSource === 'bulletin'
-        ? (Array.isArray(r.holders) && r.holders[0]?.name ? r.holders[0].name : '')
+        ? (Array.isArray(r.holders) && r.holders[0]?.name ? rec.holders[0].name : '')
         : (r.ownerName || r.owner || r.applicantName || '');
       const img   = this.searchSource === 'bulletin'
         ? (r.imagePath || '')
@@ -436,7 +436,7 @@ async initIpRecordSearchSelector() {
       ? (rec.markName || 'Başlık yok')
       : (rec.title || rec.name || rec.markName || rec.applicationTitle || 'Başlık yok');
     const owner = (this.searchSource === 'bulletin')
-      ? (Array.isArray(rec.holders) && r.holders[0]?.name ? r.holders[0].name : '')
+      ? (Array.isArray(rec.holders) && r.holders[0]?.name ? rec.holders[0].name : '')
       : (rec.ownerName || rec.owner || rec.applicantName || '');
     const appNo = (this.searchSource === 'bulletin')
       ? (rec.applicationNo || rec.applicationNumber || '')
