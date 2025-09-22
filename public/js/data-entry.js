@@ -3,160 +3,46 @@ import { initializeNiceClassification, getSelectedNiceClasses, setSelectedNiceCl
 import { personService, ipRecordsService, storage, auth, transactionTypeService } from '../firebase-config.js';
 import { ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
 import { loadSharedLayout, openPersonModal, ensurePersonModal } from './layout-loader.js';
-import {collection, doc, getDoc, getDocs, getFirestore, query, where , updateDoc} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { collection, doc, getDoc, getDocs, getFirestore, query, where } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { STATUSES, ORIGIN_TYPES } from '../utils.js';
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
 class DataEntryModule {
     
 
-    // === BEGIN: WIPO/ARIPO Child Propagation Helpers ===
-    setupChildPropagationModal() {
-      this._childModal = {
-        root: document.getElementById('childPropagationModal'),
-        backdrop: document.getElementById('childPropagationBackdrop'),
-        list: document.getElementById('childPropList'),
-        listEmpty: document.getElementById('childPropListEmpty'),
-        btnApply: document.getElementById('childPropApply'),
-        btnCancel: document.getElementById('childPropCancel'),
-        btnClose: document.getElementById('childPropCloseBtn'),
-        checkAll: document.getElementById('childPropSelectAll'),
-        txtIR: document.getElementById('childPropIR'),
-        txtOrigin: document.getElementById('childPropOrigin')
-      };
-      const hide = () => {
-        this._childModal.root.style.display = 'none';
-        this._childModal.backdrop.style.display = 'none';
-      };
-      const onCancel = () => { hide(); if (this._childModal._resolver) this._childModal._resolver([]); };
-      this._childModal.btnCancel?.addEventListener('click', onCancel);
-      this._childModal.btnClose?.addEventListener('click', onCancel);
-      this._childModal.checkAll?.addEventListener('change', (e) => {
-        this._childModal.list.querySelectorAll('input[type="checkbox"]').forEach(cb => { cb.checked = e.target.checked; });
-      });
-      this._childModal.btnApply?.addEventListener('click', () => {
-        const selected = Array.from(this._childModal.list.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
-        hide();
-        if (this._childModal._resolver) this._childModal._resolver(selected);
-      });
-    }
-
-    async openChildPropagationModalAndWait(parentRecord) {
-      const origin = String(parentRecord.origin || '').toUpperCase();
-      const isWipo = origin === 'WIPO';
-      const irNumber = isWipo ? parentRecord.wipoIR : parentRecord.aripoIR;
-      if (!irNumber) return [];
-      const children = await this.fetchChildrenByIR(origin, String(irNumber || ''));
-      this._childModal.txtIR.textContent = irNumber || '-';
-      this._childModal.txtOrigin.textContent = origin;
-      this._childModal.list.innerHTML = '';
-
-      if (!children.length) {
-        this._childModal.listEmpty.style.display = 'block';
-      } else {
-        this._childModal.listEmpty.style.display = 'none';
-        const html = children.map(ch => {
-          const name = this.findCountryName?.(ch.country) || ch.country;
-          return `<label class="country-chip"><input type="checkbox" value="${ch.country}" checked> ${name}</label>`;
-        }).join('');
-        this._childModal.list.innerHTML = html;
-      }
-      this._childModal.backdrop.style.display = 'block';
-      this._childModal.root.style.display = 'flex';
-
-      return new Promise((resolve) => { this._childModal._resolver = resolve; });
-    }
-
-    async fetchChildrenByIR(origin, irNumber) {
-      if (!['WIPO','ARIPO'].includes(String(origin).toUpperCase()) || !irNumber) return [];
-      const db = getFirestore();
-      const colRef = collection(db, 'ipRecords');
-      const isWipo = String(origin).toUpperCase() === 'WIPO';
-      const qy = query(
-        colRef,
-        where('transactionHierarchy', '==', 'child'),
-        where('origin', '==', String(origin).toUpperCase()),
-        where(isWipo ? 'wipoIR' : 'aripoIR', '==', String(irNumber))
-      );
-      const snap = await getDocs(qy);
-      const out = [];
-      snap.forEach(d => out.push({ id: d.id, ...d.data() }));
-      return out;
-    }
-
-    findCountryName(code) {
-      const arr = this.allCountries || [];
-      const c = arr.find(x => String(x.code).toUpperCase() === String(code).toUpperCase());
-      return c?.name;
-    }
-
-    mapParentFieldsForChildForPropagation(parentFields) {
-      const allowed = ['status','brandText','description','renewalDate','goodsAndServices','updatedAt'];
-      const out = {};
-      for (const k of allowed) if (k in parentFields) out[k] = parentFields[k];
-      return out;
-    }
-
-    // Collect current form fields relevant for parent/child propagation
-    collectPortfolioFields() {
-      const origin = String(document.getElementById('originSelect')?.value || '').toUpperCase();
-      const isWipo = origin === 'WIPO';
-      const registrationNumber = document.getElementById('registrationNumber')?.value?.trim() || null;
-      const status = document.getElementById('trademarkStatus')?.value || null;
-      const brandText = document.getElementById('brandExampleText')?.value?.trim() || null;
-      const description = document.getElementById('brandDescription')?.value?.trim() || null;
-      const renewalDate = document.getElementById('renewalDate')?.value || null;
-      let goodsAndServices = null;
-      try {
-        if (typeof getSelectedNiceClasses === 'function') goodsAndServices = getSelectedNiceClasses();
-      } catch(e) {}
-      const out = {
-        origin: origin || null,
-        status, brandText, description, renewalDate, goodsAndServices
-      };
-      if (registrationNumber) {
-        if (isWipo) out.wipoIR = registrationNumber;
-        else if (origin === 'ARIPO') out.aripoIR = registrationNumber;
-      }
-      return out;
-    }
-    
-    
-    // Apply updates from parent to selected child countries (WIPO/ARIPO)
-    async propagateToSelectedChildren(parentRecord, selectedCountries, parentUpdateFields) {
-      try {
-        const origin = String(parentRecord.origin || '').toUpperCase();
-        if (!['WIPO','ARIPO'].includes(origin)) return {updated:0};
-        const isWipo = origin === 'WIPO';
-        const oldIR = (isWipo ? parentRecord.wipoIR : parentRecord.aripoIR) || null;
-        const newIR = isWipo ? parentUpdateFields.wipoIR : parentUpdateFields.aripoIR;
-        const irToQuery = String(oldIR || newIR || '');
-        if (!irToQuery) return {updated:0};
-
-        const children = await this.fetchChildrenByIR(origin, irToQuery);
-        const setSel = new Set((selectedCountries||[]).map(c => String(c).toUpperCase()));
-        const patchBase = this.mapParentFieldsForChildForPropagation(parentUpdateFields);
-        // also map IR if changed
-        if (newIR && newIR !== oldIR) {
-          if (isWipo) patchBase.wipoIR = String(newIR);
-          else patchBase.aripoIR = String(newIR);
+    // Collect ALL form fields (inputs/selects/textareas) into an object
+    collectAllFormFields() {
+      const data = {};
+      const els = document.querySelectorAll('input[name], select[name], textarea[name]');
+      els.forEach(el => {
+        const name = el.name;
+        if (!name) return;
+        if (el.type === 'checkbox') {
+          if (!data[name]) data[name] = [];
+          if (el.checked) data[name].push(el.value ?? true);
+        } else if (el.type === 'radio') {
+          if (el.checked) data[name] = el.value;
+        } else {
+          const v = (el.value ?? '').trim();
+          data[name] = v === '' ? null : v;
         }
-        let updated = 0;
-        for (const ch of children) {
-          if (!ch?.id || !ch?.country) continue;
-          if (!setSel.has(String(ch.country).toUpperCase())) continue;
-          await ipRecordsService.updateRecord(String(ch.id), { ...patchBase, updatedAt: new Date().toISOString() });
-          updated++;
-        }
-        console.debug('Child propagation done. Updated:', updated);
-        return {updated};
-      } catch (e) {
-        console.warn('propagateToSelectedChildren error:', e);
-        return {updated:0, error:String(e)};
+      });
+      // Known derived values used elsewhere
+      try { if (typeof getSelectedNiceClasses === 'function') data.goodsAndServices = getSelectedNiceClasses(); } catch(e) {}
+      // Normalize some dates to ISO-YYYY-MM-DD where possible
+      const toISO = (k) => { if (data[k]) { try { const d = new Date(data[k]); if (!isNaN(+d)) data[k] = d.toISOString().slice(0,10); } catch(_){} } };
+      ['applicationDate','registrationDate','renewalDate','bulletinDate'].forEach(toISO);
+      // Map registrationNumber to WIPO/ARIPO IR fields based on origin select if present
+      const originEl = document.getElementById('originSelect');
+      const regNo = data.registrationNumber || null;
+      const originUP = String(originEl?.value || data.origin || '').toUpperCase();
+      if (regNo) {
+        if (originUP === 'WIPO') data.wipoIR = regNo;
+        if (originUP === 'ARIPO') data.aripoIR = regNo;
       }
+      data.updatedAt = new Date().toISOString();
+      return data;
     }
-    
-// === END: WIPO/ARIPO Child Propagation Helpers ===
     
 constructor() {
         this.ipTypeSelect = document.getElementById('ipTypeSelect');
@@ -175,8 +61,7 @@ constructor() {
     }
 
 async init() {
-        this.setupChildPropagationModal && this.setupChildPropagationModal();
-console.log('🚀 Data Entry Module başlatılıyor...');
+        console.log('🚀 Data Entry Module başlatılıyor...');
         try {
             await this.loadAllData();
             
@@ -1577,37 +1462,6 @@ populateFormFields(recordData) {
     }, 500); // Form render edilmesini bekle
 }
  async handleSavePortfolio() {
-    // --- Child propagation pre-check (edit + WIPO/ARIPO parent) ---
-    let _selectedChildCountries = [];
-    let _isParentWipoAripo = false;
-    let _parentRecord = null;
-    let _oldIr = null;
-    let _origin = null;
-    if (this.editingRecordId) {
-      try {
-        const res = await ipRecordsService.getRecordById(this.editingRecordId);
-        if (res?.success && res.data) {
-          _parentRecord = res.data;
-          _origin = String(_parentRecord.origin || '').toUpperCase();
-          const hierarchy = String(_parentRecord.transactionHierarchy || '').toLowerCase();
-          _isParentWipoAripo = (hierarchy === 'parent') && (_origin === 'WIPO' || _origin === 'ARIPO');
-          _oldIr = (_origin === 'WIPO') ? _parentRecord.wipoIR : _parentRecord.aripoIR;
-          if (_isParentWipoAripo) {
-            _selectedChildCountries = await this.openChildPropagationModalAndWait(_parentRecord);
-          }
-        }
-      } catch (e) { console.warn('Parent fetch failed:', e); }
-    }
-    // Persist selection/state for cross-method usage
-    this.__childProp = {
-      isParentWipoAripo: _isParentWipoAripo,
-      selectedChildCountries: Array.isArray(_selectedChildCountries) ? _selectedChildCountries : [],
-      parentRecord: _parentRecord,
-      oldIr: _oldIr,
-      origin: _origin
-    };
-    
-    
     const ipType = this.ipTypeSelect.value;
     
     if (!ipType) {
@@ -1791,6 +1645,14 @@ async syncWipoAripoChildren(parentId, parentDataFromForm) {
 // js/data-entry.js dosyasındaki saveTrademarkPortfolio fonksiyonunda yapılacak değişiklik:
 
 async saveTrademarkPortfolio(portfolioData) {
+    // --- child propagation context guard (prevents ReferenceError) ---
+    const __cp = (this && this.__childProp) ? this.__childProp : {};
+    let _isParentWipoAripo = !!__cp.isParentWipoAripo;
+    let _selectedChildCountries = Array.isArray(__cp.selectedChildCountries) ? __cp.selectedChildCountries : [];
+    let _parentRecord = __cp.parentRecord || null;
+    let _oldIr = __cp.oldIr || null;
+    let _origin = __cp.origin || null;
+    
         // Form verilerini al
         const origin = document.getElementById('originSelect')?.value;
         const brandText = document.getElementById('brandExampleText').value.trim();
@@ -2084,16 +1946,14 @@ async saveTrademarkPortfolio(portfolioData) {
 
             result = await ipRecordsService.updateRecord(this.editingRecordId, safeParentData);
             
-        
-    // --- after parent update: propagate to selected children if requested
-    try {
-      const __cp = this.__childProp || {};
-      if (__cp.isParentWipoAripo && Array.isArray(__cp.selectedChildCountries) && __cp.selectedChildCountries.length) {
-        const parentUpdateFields = this.collectPortfolioFields();
-        await this.propagateToSelectedChildren(__cp.parentRecord || {}, __cp.selectedChildCountries, parentUpdateFields);
-      }
-    } catch(e) { console.warn('post-update propagation failed:', e); }
-    // --- Propagate to selected child countries (if any) ---
+        // --- post-update propagation (ALL fields) ---
+        try {
+          const __cp = this.__childProp || {};
+          if (__cp.isParentWipoAripo && Array.isArray(__cp.selectedChildCountries) && __cp.selectedChildCountries.length) {
+            const allFields = this.collectAllFormFields ? this.collectAllFormFields() : {};
+            await this.propagateToSelectedChildren(__cp.parentRecord || {}, __cp.selectedChildCountries, allFields);
+          }
+        } catch(e) { console.warn('post-update propagation failed', e); }
         results.push(result);
             if (!result.success) success = false;
             mainRecordId = this.editingRecordId;
