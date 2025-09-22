@@ -96,7 +96,67 @@ class DataEntryModule {
       for (const k of allowed) if (k in parentFields) out[k] = parentFields[k];
       return out;
     }
-    // === END: WIPO/ARIPO Child Propagation Helpers ===
+
+    // Collect current form fields relevant for parent/child propagation
+    collectPortfolioFields() {
+      const origin = String(document.getElementById('originSelect')?.value || '').toUpperCase();
+      const isWipo = origin === 'WIPO';
+      const registrationNumber = document.getElementById('registrationNumber')?.value?.trim() || null;
+      const status = document.getElementById('trademarkStatus')?.value || null;
+      const brandText = document.getElementById('brandExampleText')?.value?.trim() || null;
+      const description = document.getElementById('brandDescription')?.value?.trim() || null;
+      const renewalDate = document.getElementById('renewalDate')?.value || null;
+      let goodsAndServices = null;
+      try {
+        if (typeof getSelectedNiceClasses === 'function') goodsAndServices = getSelectedNiceClasses();
+      } catch(e) {}
+      const out = {
+        origin: origin || null,
+        status, brandText, description, renewalDate, goodsAndServices
+      };
+      if (registrationNumber) {
+        if (isWipo) out.wipoIR = registrationNumber;
+        else if (origin === 'ARIPO') out.aripoIR = registrationNumber;
+      }
+      return out;
+    }
+    
+    
+    // Apply updates from parent to selected child countries (WIPO/ARIPO)
+    async propagateToSelectedChildren(parentRecord, selectedCountries, parentUpdateFields) {
+      try {
+        const origin = String(parentRecord.origin || '').toUpperCase();
+        if (!['WIPO','ARIPO'].includes(origin)) return {updated:0};
+        const isWipo = origin === 'WIPO';
+        const oldIR = (isWipo ? parentRecord.wipoIR : parentRecord.aripoIR) || null;
+        const newIR = isWipo ? parentUpdateFields.wipoIR : parentUpdateFields.aripoIR;
+        const irToQuery = String(oldIR || newIR || '');
+        if (!irToQuery) return {updated:0};
+
+        const children = await this.fetchChildrenByIR(origin, irToQuery);
+        const setSel = new Set((selectedCountries||[]).map(c => String(c).toUpperCase()));
+        const patchBase = this.mapParentFieldsForChildForPropagation(parentUpdateFields);
+        // also map IR if changed
+        if (newIR && newIR !== oldIR) {
+          if (isWipo) patchBase.wipoIR = String(newIR);
+          else patchBase.aripoIR = String(newIR);
+        }
+        let updated = 0;
+        for (const ch of children) {
+          if (!ch?.id || !ch?.country) continue;
+          if (!setSel.has(String(ch.country).toUpperCase())) continue;
+          await ipRecordsService.updateRecord(String(ch.id), { ...patchBase, updatedAt: new Date().toISOString() });
+          updated++;
+        }
+        console.debug('Child propagation done. Updated:', updated);
+        return {updated};
+      } catch (e) {
+        console.warn('propagateToSelectedChildren error:', e);
+        return {updated:0, error:String(e)};
+      }
+    }
+    
+// === END: WIPO/ARIPO Child Propagation Helpers ===
     
 constructor() {
         this.ipTypeSelect = document.getElementById('ipTypeSelect');
@@ -1538,6 +1598,15 @@ populateFormFields(recordData) {
         }
       } catch (e) { console.warn('Parent fetch failed:', e); }
     }
+    // Persist selection/state for cross-method usage
+    this.__childProp = {
+      isParentWipoAripo: _isParentWipoAripo,
+      selectedChildCountries: Array.isArray(_selectedChildCountries) ? _selectedChildCountries : [],
+      parentRecord: _parentRecord,
+      oldIr: _oldIr,
+      origin: _origin
+    };
+    
     
     const ipType = this.ipTypeSelect.value;
     
@@ -2015,7 +2084,16 @@ async saveTrademarkPortfolio(portfolioData) {
 
             result = await ipRecordsService.updateRecord(this.editingRecordId, safeParentData);
             
-        // --- Propagate to selected child countries (if any) ---
+        
+    // --- after parent update: propagate to selected children if requested
+    try {
+      const __cp = this.__childProp || {};
+      if (__cp.isParentWipoAripo && Array.isArray(__cp.selectedChildCountries) && __cp.selectedChildCountries.length) {
+        const parentUpdateFields = this.collectPortfolioFields();
+        await this.propagateToSelectedChildren(__cp.parentRecord || {}, __cp.selectedChildCountries, parentUpdateFields);
+      }
+    } catch(e) { console.warn('post-update propagation failed:', e); }
+    // --- Propagate to selected child countries (if any) ---
         results.push(result);
             if (!result.success) success = false;
             mainRecordId = this.editingRecordId;
