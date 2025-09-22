@@ -371,34 +371,38 @@ async initIpRecordSearchSelector() {
     }
 
     const filtered = pool.filter(r => {
-      // ✨ GÜNCELLEME: WIPO/ARIPO kayıtları için sadece 'parent' hiyerarşisine sahip olanları göster
-      const isWipoAripo = !!r.wipoIR || !!r.aripoIR;
-      const isParent = r.transactionHierarchy === 'parent';
-      if (isWipoAripo && !isParent) {
-          return false;
-      }
-      // ✨ GÜNCELLEME SONU
-      
-      // Kaynağa göre aranan alanlar
-      const hay = (this.searchSource === 'bulletin'
+    // WIPO/ARIPO kayıtları için sadece 'parent' hiyerarşisine sahip olanları göster
+    const isWipoAripo = !!r.wipoIR || !!r.aripoIR;
+    const isParent = r.transactionHierarchy === 'parent';
+    if (isWipoAripo && !isParent) {
+        return false;
+    }
+    
+    // Kaynağa göre aranan alanlar
+    const hay = (this.searchSource === 'bulletin'
         ? [
             r.markName,
-            r.applicationNo || r.applicationNumber
-          ]
+            r.applicationNo || r.applicationNumber,
+            // Sahipleri de aramaya dahil et
+            ...(Array.isArray(r.holders) ? r.holders.map(h => h.name || h.holderName || h) : [])
+        ]
         : [
             r.title, r.name, r.markName, r.applicationTitle,
             r.ownerName, r.owner, r.applicantName,
             r.applicationNo, r.applicationNumber, r.appNo,
             r.fileNo, r.registrationNo,
             r.wipoIR, r.aripoIR
-          ])
+        ])
         .map(norm).join(' ');
 
-      if (hay.includes(term)) return true;
-
-      // Şemalar değişkense son güvenlik
-      try { return Object.values(r).map(norm).join(' ').includes(term); }
-      catch { return false; }
+    if (hay.includes(term)) return true;
+    
+    // Şemalar değişkense son güvenlik
+    try { 
+        return Object.values(r).map(norm).join(' ').includes(term); 
+    } catch { 
+        return false; 
+    }
     });
 
     renderResults(filtered);
