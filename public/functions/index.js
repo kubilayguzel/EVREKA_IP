@@ -1805,41 +1805,28 @@ export const deleteBulletinV2 = onCall(
   { timeoutSeconds: 60, memory: "1GiB", region: "europe-west1" },
   async (request) => {
     try {
-      const { bulletinId } = request.data;
+      const { bulletinId } = request.data || {};
       if (!bulletinId) {
         throw new HttpsError('invalid-argument', 'BulletinId gerekli.');
       }
 
-      // İşlem durumu için benzersiz ID oluştur
       const operationId = `delete_${bulletinId}_${Date.now()}`;
-      
-      // İşlem durumunu kaydet
       const statusRef = db.collection('operationStatus').doc(operationId);
       await statusRef.set({
         operationId,
         bulletinId,
-        status: 'started',
-        message: 'Silme işlemi başlatıldı...',
+        status: 'queued',
+        message: 'Silme kuyruğa alındı...',
         progress: 0,
         startTime: admin.firestore.FieldValue.serverTimestamp(),
-        userId: request.auth?.uid
+        userId: request.auth?.uid || null
       });
 
-      // Hemen operationId döndür (kullanıcı beklemez)
-      // Silme işlemini arka planda başlat
-      setImmediate(async () => {
-        await performBulletinDeletion(bulletinId, operationId);
-      });
-
-      return {
-        success: true,
-        operationId,
-        message: 'Silme işlemi başlatıldı. İlerleme durumunu takip edebilirsiniz.'
-      };
-      
+      await pubsubClient.topic('bulletin-deletion').publishMessage({ json: { bulletinId, operationId } });
+      return { success: true, operationId, message: 'Silme işlemi kuyruğa alındı.' };
     } catch (error) {
       console.error('❌ deleteBulletinV2 error:', error);
-      return { success: false, error: error.message };
+      throw new HttpsError('internal', String(error?.message || error));
     }
   }
 );
@@ -4878,3 +4865,21 @@ export const createClientNotificationOnRenewalTaskCreated = onDocumentCreated(
   }
 );
 
+
+
+export const handleBulletinDeletion = onMessagePublished(
+  { topic: 'bulletin-deletion', region: 'europe-west1', memory: '1GiB', cpu: 1, timeoutSeconds: 540 },
+  async (event) => {
+    const { bulletinId, operationId } = event.data.message.json || {};
+    if (!bulletinId || !operationId) {
+      console.warn('⚠️ handleBulletinDeletion: eksik payload', event?.data?.message?.json);
+      return null;
+    }
+    try {
+      await performBulletinDeletion(bulletinId, operationId);
+    } catch (e) {
+      console.error('💥 handleBulletinDeletion failed:', e?.message || e);
+    }
+    return null;
+  }
+);
