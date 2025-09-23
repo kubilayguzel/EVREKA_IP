@@ -1594,6 +1594,21 @@ populateFormFields(recordData) {
                 this.renderPriorities();
             }
         }
+        //// 🔒 Düzenleme modunda IP türü ve menşe alanlarını kilitle
+        if (this.editingRecordId) {
+        // IP türü select
+        if (this.ipTypeSelect) {
+            this.ipTypeSelect.disabled = true;
+            this.ipTypeSelect.classList.add('disabled'); // (opsiyonel görsel ipucu)
+        }
+
+        // Menşe select
+        const originSelectEl = document.getElementById('originSelect');
+        if (originSelectEl) {
+            originSelectEl.disabled = true;
+            originSelectEl.classList.add('disabled'); // (opsiyonel görsel ipucu)
+        }
+        }
 
         // Kaydet butonunun durumunu güncelle
         this.updateSaveButtonState();
