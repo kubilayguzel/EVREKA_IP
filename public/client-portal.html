@@ -397,6 +397,21 @@
 }
 </style>
 
+
+<style>
+/* Menşe filtresi tabs listesinin sonunda nav-item olarak yer alır */
+#portfolioTopTabs {
+  display:flex;
+  align-items:center;
+}
+#portfolioTopTabs #portfolioFiltersNavItem label{
+  white-space: nowrap;
+}
+#portfolioTopTabs #portfolioFiltersNavItem select{
+  min-height: calc(1.5em + .5rem + 2px);
+}
+</style>
+
 </head>
 <body>
     <div class="theme-toggle custom-control custom-switch">
@@ -502,17 +517,8 @@
 
 <!-- Portföyüm sekmeleri + Menşe filtresi (yan yana) -->
 <div class="d-flex align-items-center justify-content-between flex-wrap mb-2" id="portfolioTabsBar">
-  <div class="d-flex align-items-center ml-auto" id="portfolioFilters">
-    <label for="menseFilter" class="mb-0 mr-2">Menşe:</label>
-    <select id="menseFilter" class="form-control form-control-sm" style="max-width:220px">
-      <option value="HEPSI">Hepsi</option>
-      <option value="TÜRKPATENT">TÜRKPATENT</option>
-      <option value="YURTDIŞI">YURTDIŞI</option>
-    </select>
-  </div>
-
-  <ul class="nav nav-tabs mb-2 mb-sm-0" id="portfolioTopTabs" role="tablist">
-    <li class="nav-item">
+<ul class="nav nav-tabs mb-2 mb-sm-0" id="portfolioTopTabs" role="tablist">
+<li class="nav-item">
       <a class="nav-link active" id="tab-marka" data-toggle="tab" href="#marka-list" role="tab" aria-controls="marka-list" aria-selected="true">Marka</a>
     </li>
     <li class="nav-item">
@@ -524,7 +530,15 @@
     <li class="nav-item">
       <a class="nav-link" id="tab-dava" data-toggle="tab" href="#dava-itiraz-list" role="tab" aria-controls="dava-itiraz-list" aria-selected="false">Dava/İtiraz</a>
     </li>
-  </ul>
+<li class="nav-item d-flex align-items-center pl-2" id="portfolioFiltersNavItem" style="margin-left: .75rem;">
+      <label for="menseFilter" class="mb-0 mr-2">Menşe:</label>
+      <select id="menseFilter" class="form-control form-control-sm" style="max-width:220px">
+        <option value="HEPSI">Hepsi</option>
+        <option value="TÜRKPATENT">TÜRKPATENT</option>
+        <option value="YURTDIŞI">YURTDIŞI</option>
+      </select>
+    </li>
+</ul>
 
   
 </div>
