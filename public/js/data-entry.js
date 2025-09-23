@@ -1465,6 +1465,11 @@ populateFormFields(recordData) {
                         return country || { code, name: code };
                     });
                     this.renderSelectedCountries();
+                    // Ülke listesi ilk yüklemedeki "referans" durum
+                    this._initialCountryCodes = (this.selectedCountries || [])
+                    .map(c => String(c.code).toUpperCase())
+                    .sort()
+                    .join(',');
                 }
             }
         // Marka özel alanları
@@ -1612,9 +1617,29 @@ populateFormFields(recordData) {
           const hierarchy = String(_parentRecord.transactionHierarchy || '').toLowerCase();
           _isParentWipoAripo = (hierarchy === 'parent') && (_origin === 'WIPO' || _origin === 'ARIPO');
           _oldIr = (_origin === 'WIPO') ? _parentRecord.wipoIR : _parentRecord.aripoIR;
-          if (_isParentWipoAripo) {
-            _selectedChildCountries = await this.openChildPropagationModalAndWait(_parentRecord);
-          }
+            let _hasCountryListChanged = false;
+            if (_isParentWipoAripo) {
+            // Mevcut (UI'daki) ülke kodlarını normalize et
+            const _currentCountryCodes = (this.selectedCountries || [])
+                .map(c => String(c.code).toUpperCase())
+                .sort()
+                .join(',');
+
+            // İlk hal ile şimdi aynı mı?
+            _hasCountryListChanged =
+                !!this._initialCountryCodes &&
+                _currentCountryCodes !== this._initialCountryCodes;
+
+            // Ülke listesi değiştiyse modal AÇMA
+            if (!_hasCountryListChanged) {
+                _selectedChildCountries = await this.openChildPropagationModalAndWait(_parentRecord);
+            } else {
+                _selectedChildCountries = []; // modal yok → propagasyon seçimi yok
+            }
+            }
+
+            // Bilgiyi ileride de kullanmak istersen sakla
+            this.__childProp.hasCountryListChanged = _hasCountryListChanged;
         }
       } catch (e) { console.warn('Parent fetch failed:', e); }
     }
