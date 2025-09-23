@@ -1867,27 +1867,44 @@ async function performBulletinDeletion(bulletinId, operationId) {
       progress: 10
     });
 
-    // === 2. İlişkili trademarkBulletinRecords silme ===
+    // === 2. İlişkili trademarkBulletinRecords silme (BulkWriter, hızlı) ===
     let totalRecordsDeleted = 0;
-    const recordsQuery = db.collection('trademarkBulletinRecords').where('bulletinId', '==', bulletinId);
-    let snapshot = await recordsQuery.limit(500).get();
 
-    while (!snapshot.empty) {
-      const batch = db.batch();
-      snapshot.docs.forEach(doc => batch.delete(doc.ref));
-      await batch.commit();
-      totalRecordsDeleted += snapshot.size;
-      
-      console.log(`✅ ${totalRecordsDeleted} kayıt silindi`);
-      
-      // İlerlemeyi güncelle
+    // Sadece referans/id yeterli; network yükünü azaltmak için select() kullan
+    const baseQuery = db.collection('trademarkBulletinRecords')
+      .where('bulletinId', '==', bulletinId)
+      .select();
+
+    const writer = admin.firestore().bulkWriter({
+      throttling: { initialOpsPerSecond: 500, maxOpsPerSecond: 2000 }
+    });
+
+    let lastDoc = null;
+    while (true) {
+      let q = baseQuery.limit(1000);
+      if (lastDoc) q = q.startAfter(lastDoc);
+
+      const snap = await q.get();
+      if (snap.empty) break;
+
+      for (const d of snap.docs) {
+        writer.delete(d.ref);
+      }
+      totalRecordsDeleted += snap.size;
+      lastDoc = snap.docs[snap.docs.length - 1];
+
+      console.log(`✅ ${totalRecordsDeleted} kayıt silme kuyruğa alındı`);
+
+      // İlerlemeyi güncelle (80'e kadar)
       await statusRef.update({
-        message: `${totalRecordsDeleted} kayıt silindi...`,
-        progress: Math.min(30 + (totalRecordsDeleted / 100), 80)
+        message: `${totalRecordsDeleted} kayıt siliniyor...`,
+        progress: Math.min(30 + Math.floor(totalRecordsDeleted / 100), 80)
       });
-      
-      snapshot = await recordsQuery.limit(500).get();
     }
+
+    // Kuyruğun bitmesini bekle
+    await writer.close();
+    console.log(`✅ Toplam silinen kayıt: ${totalRecordsDeleted}`);
 
     await statusRef.update({
       message: 'Storage dosyaları siliniyor...',
