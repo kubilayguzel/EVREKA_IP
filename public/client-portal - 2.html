@@ -313,15 +313,15 @@
         <ul class="nav flex-column">
             <li class="nav-item"><a class="nav-link active" href="#dashboard" data-toggle="tab"><i class="fas fa-tachometer-alt mr-2"></i>Dashboard</a></li>
             <li class="nav-item">
-                <a class="nav-link" href="#portfolio-content" data-toggle="collapse" data-target="#portfoy-accordion" aria-expanded="false" aria-controls="portfoy-accordion">
+                <a class="nav-link" href="#portfoy-accordion" data-toggle="collapse" data-target="#portfoy-accordion" aria-expanded="false" aria-controls="portfoy-accordion">
                     <i class="fas fa-folder-open mr-2"></i>Portföyüm
                 </a>
                 <div class="collapse" id="portfoy-accordion" data-parent="#sidebar">
                     <ul class="nav flex-column ml-3">
-                        <li class="nav-item"><a class="nav-link" href="#marka-list">Marka</a></li>
-                        <li class="nav-item"><a class="nav-link" href="#patent-list">Patent</a></li>
-                        <li class="nav-item"><a class="nav-link" href="#tasarim-list">Tasarım</a></li>
-                        <li class="nav-item"><a class="nav-link" href="#dava-itiraz-list">Dava/İtiraz</a></li>
+                        <li class="nav-item"><a class="nav-link" href="#marka-list" data-toggle="tab">Marka</a></li>
+                        <li class="nav-item"><a class="nav-link" href="#patent-list" data-toggle="tab">Patent</a></li>
+                        <li class="nav-item"><a class="nav-link" href="#tasarim-list" data-toggle="tab">Tasarım</a></li>
+                        <li class="nav-item"><a class="nav-link" href="#dava-itiraz-list" data-toggle="tab">Dava/İtiraz</a></li>
                     </ul>
                 </div>
             </li>
@@ -390,13 +390,24 @@
                             </select>
                         </div>
                         <div class="form-group col-md-3">
+                            <label for="tip" class="text-muted">Tip</label>
+                            <select id="tip" class="form-control">
+                                <option selected>Tümü</option>
+                                <option>Marka</option>
+                                <option>Patent</option>
+                                <option>Tasarım</option>
+                            </select>
+                        </div>
+                        <div class="form-group col-md-3 d-flex align-items-end">
                             <label for="menşe" class="text-muted">Menşe</label>
                             <select id="menşe" class="form-control">
                                 <option selected>TÜRKPATENT</option>
                                 <option>YURTDIŞI</option>
                             </select>
                         </div>
-                        <div class="form-group col-md-3 d-flex align-items-end">
+                    </div>
+                    <div class="form-row mt-3">
+                        <div class="col-md-12 d-flex justify-content-end">
                             <button class="btn btn-primary btn-block">Filtrele</button>
                         </div>
                     </div>
@@ -874,44 +885,21 @@
                 }
             });
             
-            // Tab navigasyonu için aktif sınıfı yönetme
-            $('#sidebar a').on('click', function (e) {
-                const href = $(this).attr('href');
-                if (href && href.startsWith('#')) {
-                    e.preventDefault();
-                    
-                    const isAccordionToggle = $(this).attr('data-toggle') === 'collapse';
-                    
-                    // Akordeon başlığı değilse normal tab geçişini yap
-                    if (!isAccordionToggle) {
-                        $('#sidebar a').removeClass('active');
-                        $(this).addClass('active');
-                        $('.tab-pane').removeClass('show active');
-                        $(href).addClass('show active');
-                    } else {
-                        // Akordeon başlığı ise aktif sınıfını yönet
-                        if ($(this).hasClass('active')) {
-                            $(this).removeClass('active');
-                        } else {
-                            $('#sidebar a').removeClass('active');
-                            $(this).addClass('active');
-                        }
-                    }
-                }
-            });
-
-            // Alt menü linkleri için tab geçişi
+            // Portföy alt menü linklerine tıklama işlevi
             $('#portfoy-accordion a').on('click', function(e) {
                 e.preventDefault();
                 $('#portfoy-accordion a').removeClass('active');
                 $(this).addClass('active');
-                
-                // Ana portföy içeriğini aktif yap
-                $('#portfolio-content').addClass('show active');
 
-                const tabId = $(this).attr('href');
+                // Tüm ana panelleri gizle
                 $('.tab-pane').removeClass('show active');
-                $(tabId).addClass('show active');
+
+                // Sadece portföy ana panelini göster
+                $('#portfolio-content').addClass('show active');
+                
+                // Tıklanan alt menü linkine ait listeyi aktif yap
+                const targetListId = $(this).attr('href');
+                $(targetListId).addClass('show active');
             });
             
             // Akordeon açılma ve kapanma ikon yönetimi
@@ -923,6 +911,9 @@
                     icon.removeClass('fa-chevron-up').addClass('fa-chevron-down');
                 }
             });
+
+            // Sayfa yüklendiğinde varsayılan olarak Dashboard'u aktif yap
+            $('#dashboard').addClass('show active');
         });
     </script>
 </body>
