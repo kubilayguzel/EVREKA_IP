@@ -7,9 +7,15 @@ import {collection, doc, getDoc, getDocs, getFirestore, query, where , updateDoc
 import { STATUSES, ORIGIN_TYPES } from '../utils.js';
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
+function __pathFromDownloadURL(url) {
+  try {
+    const m = String(url).match(/\/o\/(.+?)\?/);
+    return m ? decodeURIComponent(m[1]) : null;
+  } catch (e) { return null; }
+}
+
 class DataEntryModule {
     
-
     // === BEGIN: WIPO/ARIPO Child Propagation Helpers ===
     setupChildPropagationModal() {
       this._childModal = {
@@ -1080,18 +1086,35 @@ initializeDatePickers() {
 
         // Kaldır butonu
         const removeBtn = document.getElementById('removeBrandExampleBtn');
-        if (removeBtn) {
-            removeBtn.addEventListener('click', () => {
-                const previewContainer = document.getElementById('brandExamplePreviewContainer');
-                const previewImage = document.getElementById('brandExamplePreview');
-                
-                if (previewContainer) previewContainer.style.display = 'none';
-                if (previewImage) previewImage.src = '';
-                if (fileInput) fileInput.value = '';
-                
-                this.uploadedBrandImage = null;
-                this.updateSaveButtonState();
-            });
+        if (removeBtn && !removeBtn.dataset.listenerAttached) {
+        removeBtn.addEventListener('click', async () => {
+            const previewContainer = document.getElementById('brandExamplePreviewContainer');
+            const previewImage = document.getElementById('brandExamplePreview');
+            const fileInput = document.getElementById('brandExample'); // ← input'u al
+
+            // brand-examples altındaki dosyayı Storage'dan da sil
+            try {
+            const url = (typeof this.uploadedBrandImage === 'string') ? this.uploadedBrandImage : null;
+            const path = url ? __pathFromDownloadURL(url) : null;
+            if (path && path.startsWith('brand-examples/')) {
+                const sref = ref(storage, path);
+                await deleteObject(sref);
+                console.log('🗑️ brand-examples temizlendi:', path);
+            }
+            } catch (e) {
+            console.warn('brand-examples silme uyarısı:', e?.message || e);
+            }
+
+            if (previewContainer) previewContainer.style.display = 'none';
+            if (previewImage) previewImage.src = '';
+            if (fileInput) fileInput.value = '';
+
+            this.uploadedBrandImage = null;
+            if (typeof this.updateSaveButtonState === 'function') {
+            this.updateSaveButtonState();
+            }
+        });
+        removeBtn.dataset.listenerAttached = '1';
         }
     }
 
