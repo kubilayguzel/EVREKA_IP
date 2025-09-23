@@ -103,6 +103,18 @@ if (!admin.apps.length) {
 const pubsubClient = new PubSub(); // pubsubClient'ı burada tanımlayın
 
 // ********************************************************************************
+async function ensureTopic(name) {
+  try {
+    const [exists] = await pubsubClient.topic(name).exists();
+    if (!exists) {
+      await pubsubClient.createTopic(name);
+      console.log(`🆕 Pub/Sub topic created: ${name}`);
+    }
+  } catch (err) {
+    console.error(`⚠️ ensureTopic error for ${name}:`, err.message || err);
+    throw err;
+  }
+}
 
 // CORS ayarları
 const corsOptions = {
@@ -1822,7 +1834,10 @@ export const deleteBulletinV2 = onCall(
         userId: request.auth?.uid || null
       });
 
-      await pubsubClient.topic('bulletin-deletion').publishMessage({ json: { bulletinId, operationId } });
+      await ensureTopic('bulletin-deletion');
+      await pubsubClient.topic('bulletin-deletion').publishMessage({
+        json: { bulletinId, operationId }
+      });
       return { success: true, operationId, message: 'Silme işlemi kuyruğa alındı.' };
     } catch (error) {
       console.error('❌ deleteBulletinV2 error:', error);
