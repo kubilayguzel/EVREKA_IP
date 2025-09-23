@@ -1,10 +1,18 @@
 import { authService, taskService, ipRecordsService, personService, accrualService, auth, transactionTypeService, db, storage } from '../firebase-config.js';
 import { loadSharedLayout, openPersonModal, ensurePersonModal } from './layout-loader.js';
 import { initializeNiceClassification, getSelectedNiceClasses } from './nice-classification.js';
-import { ref, uploadBytes, getStorage, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
+import { ref, uploadBytes, getStorage, deleteObject, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
 import { getFirestore, collection, getDocs, getDoc, doc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { ORIGIN_TYPES } from '../utils.js';
+
+
+function __pathFromDownloadURL(url) {
+  try {
+    const m = String(url).match(/\/o\/(.+?)\?/);
+    return m ? decodeURIComponent(m[1]) : null; // örn: brand-examples/1727040100000_x.jpg
+  } catch { return null; }
+}
 
 // === Date Picker (Flatpickr) — same behavior as data-entry.js ===
 
@@ -980,16 +988,37 @@ setupBaseFormListeners() {
             }
         });
         const removeBtn = document.getElementById('removeBrandExampleBtn');
-        if (removeBtn) {
-            removeBtn.addEventListener('click', () => {
-                const previewContainer = document.getElementById('brandExamplePreviewContainer');
-                const previewImage = document.getElementById('brandExamplePreview');
-                const fileInput = document.getElementById('brandExample');
-                if (previewContainer) previewContainer.style.display = 'none';
-                if (previewImage) previewImage.src = '';
-                if (fileInput) fileInput.value = '';
-            });
+        if (removeBtn && !removeBtn.dataset.listenerAttached) {
+        removeBtn.addEventListener('click', async () => {
+            const previewContainer = document.getElementById('brandExamplePreviewContainer');
+            const previewImage = document.getElementById('brandExamplePreview');
+            const fileInput = document.getElementById('brandExample');
+
+            // Storage'dan da sil (brand-examples altındaysa)
+            try {
+            const url = (typeof this?.uploadedBrandImage === 'string') ? this.uploadedBrandImage : null;
+            const path = url ? __pathFromDownloadURL(url) : null;
+            if (path && path.startsWith('brand-examples/')) {
+                const sref = ref(storage, path);
+                await deleteObject(sref);
+                console.log('🗑️ brand-examples silindi:', path);
+            }
+            } catch (e) {
+            console.warn('brand-examples silme uyarısı:', e?.message || e);
+            }
+
+            if (previewContainer) previewContainer.style.display = 'none';
+            if (previewImage) previewImage.src = '';
+            if (fileInput) fileInput.value = '';
+
+            this.uploadedBrandImage = null;
+            if (typeof this?.updateSaveButtonState === 'function') {
+            this.updateSaveButtonState();
+            }
+        });
+        removeBtn.dataset.listenerAttached = '1';
         }
+
     }
     handleNextTab() {
         const currentTab = $(`#myTaskTabs a[href="#${this.activeTab}"]`);
