@@ -1,7 +1,7 @@
 // js/data-entry.js
 import { initializeNiceClassification, getSelectedNiceClasses, setSelectedNiceClasses } from './nice-classification.js';
 import { personService, ipRecordsService, storage, auth, transactionTypeService } from '../firebase-config.js';
-import { ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
+import { getStorage, ref, uploadBytes, deleteObjectref, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
 import { loadSharedLayout, openPersonModal, ensurePersonModal } from './layout-loader.js';
 import {collection, doc, getDoc, getDocs, getFirestore, query, where , updateDoc} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { STATUSES, ORIGIN_TYPES } from '../utils.js';
