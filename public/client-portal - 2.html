@@ -924,7 +924,101 @@
                 // İsteğe bağlı: Portföy akordeonunu açık tut
                 $('#portfoy-accordion').collapse('show');
             });
+            // === Menşe filtreleme: Marka listesinde TR / WIPO görünürlüğü ===
             
+            // Not: "Marka Adı" hücresindeki "(TR)" ve "(WIPO)" ibarelerini kullanıyoruz.
+            function filterMarkaListByMense(menseValue) {
+                const isTR = (menseValue === 'TÜRKPATENT');
+                const isYD = (menseValue === 'YURTDIŞI');
+
+                const $tbody = $('#marka-list tbody');
+                const $rows = $tbody.children('tr');
+
+                // Önce hepsini göster (başlangıç temizliği)
+                $rows.show();
+
+                // WIPO parent satırlarını ve hemen arkasındaki detay (collapse container) satırlarını yakalamak için yardımcı:
+                function toggleWipoGroup($headerRow, show) {
+                    // headerRow: class="accordion-header-row" ve "(WIPO)" içeren satır
+                    const $detailRow = $headerRow.next('tr'); // colspan="6" olan satır
+                    if (show) {
+                        $headerRow.show();
+                        $detailRow.show();
+                    } else {
+                        // Kapat ve gizle
+                        const collapseId = $headerRow.attr('data-target');
+                        if (collapseId) { $(collapseId).collapse('hide'); }
+                        $headerRow.hide();
+                        $detailRow.hide();
+                    }
+                }
+
+                // Eğer TR seçiliyse: yalnızca "(TR)" içeren düz satırları göster,
+                // "(WIPO)" parent gruplarını bütünüyle gizle.
+                if (isTR) {
+                    $rows.each(function () {
+                        const $tr = $(this);
+
+                        // WIPO parent?
+                        if ($tr.hasClass('accordion-header-row')) {
+                            const cellText = $tr.find('td:nth-child(2)').text() || '';
+                            if (cellText.includes('(WIPO)')) {
+                                toggleWipoGroup($tr, false);
+                            }
+                            return;
+                        }
+
+                        // Düz (TR) satır kontrolü
+                        const text = $tr.find('td:nth-child(2)').text() || '';
+                        // Bu satır WIPO detay satırıysa (colspan'lı) zaten bir üstte kapattık
+                        if (text.includes('(TR)')) {
+                            $tr.show();
+                        } else {
+                            // "(WIPO)" içermeyen düz satırları (örn. child satırları) gizle
+                            $tr.hide();
+                        }
+                    });
+                }
+
+                // Eğer YURTDIŞI seçiliyse: yalnızca "(WIPO)" parent gruplarını (ve detay satırlarını) göster,
+                // "(TR)" satırlarını gizle.
+                if (isYD) {
+                    $rows.each(function () {
+                        const $tr = $(this);
+
+                        // WIPO parent?
+                        if ($tr.hasClass('accordion-header-row')) {
+                            const cellText = $tr.find('td:nth-child(2)').text() || '';
+                            if (cellText.includes('(WIPO)')) {
+                                toggleWipoGroup($tr, true);   // parent + detail görünür
+                            } else {
+                                // TR parent gibi davranan header varsa (şu an yok), kapat
+                                toggleWipoGroup($tr, false);
+                            }
+                            return;
+                        }
+
+                        // Düz (TR) satırlar ve WIPO child içerikleri:
+                        // WIPO child’lar collapse table içinde, parent’ın hemen sonraki detail satırında.
+                        // Bu dış seviyedeki düz TR satırlarını gizle:
+                        const text = $tr.find('td:nth-child(2)').text() || '';
+                        if (text.includes('(TR)')) {
+                            $tr.hide();
+                        }
+                        // WIPO child’lar zaten detail satırın içinde; parent’ı gösterince birlikte görünür.
+                    });
+                }
+            }
+
+            // Menşe select değişince filtreyi uygula
+            $('#menşe').on('change', function() {
+                // Sadece marka seketi açıksa çalıştırmak isteyebilirsin; ama sade tutuyoruz:
+                filterMarkaListByMense(this.value);
+            });
+
+            // İlk yüklemede menşe varsayılanı uygula
+            filterMarkaListByMense($('#menşe').val());
+
             // Akordeon başlıklarındaki ok ikonunu yönet
             $('.accordion-header-row').on('click', function() {
                 const icon = $(this).find('i.fa-chevron-down, i.fa-chevron-up');
