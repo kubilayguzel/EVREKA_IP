@@ -355,6 +355,48 @@
 }
 </style>
 
+
+<style>
+/* Portföy sekmeleri sola yaslı ve filtre yanında */
+#portfolioTabsBar{
+  display:flex !important;
+  align-items:center !important;
+  justify-content:flex-start !important; /* sola hizala */
+  flex-wrap:wrap;
+  width:100%;
+}
+#portfolioTabsBar #portfolioTopTabs{
+  flex-grow:0;
+  margin-right:1rem; /* sekmeler ile filtre arasında boşluk */
+}
+#portfolioTabsBar #portfolioFilters{
+  flex-grow:0;
+}
+</style>
+
+
+<style>
+/* Force tabs to left; filter sits next with small space */
+#portfolioTabsBar{
+  display:flex !important;
+  align-items:center !important;
+  justify-content:flex-start !important;
+  flex-wrap:wrap;
+  gap:.5rem 1rem;
+}
+#portfolioTopTabs{
+  margin:0 !important;
+  margin-right:1rem !important; /* small gap before filter */
+}
+#portfolioFilters{
+  margin:0 !important;
+}
+/* neutralize any justify-content utilities that might be applied */
+#portfolioTabsBar .nav-tabs{
+  justify-content:flex-start !important;
+}
+</style>
+
 </head>
 <body>
     <div class="theme-toggle custom-control custom-switch">
