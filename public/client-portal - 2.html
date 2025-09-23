@@ -409,7 +409,7 @@
                 </div>
 
                 <div class="tab-content table-responsive mt-3">
-                    <div class="tab-pane fade" id="marka-list">
+                    <div class="tab-pane fade show active" id="marka-list">
                         <table class="table table-hover">
                             <thead>
                                 <tr>
@@ -876,6 +876,11 @@
             
             // Sidebar navigasyonu için jQuery
             $('#sidebar a').on('click', function (e) {
+                // Portföy alt menü linklerine özel handler zaten var; çakışmayı önleyelim.
+                if ($(this).closest('#portfoy-accordion').length) {
+                    return; // Bu tıklamayı aşağıdaki özel handler yönetecek
+                }
+
                 const href = $(this).attr('href');
                 const targetId = $(this).attr('data-target') || href;
 
@@ -904,17 +909,20 @@
                 $('#portfoy-accordion a').removeClass('active');
                 $(this).addClass('active');
 
-                // Ana portföy içeriğini aktif yap ve göster
+                // Portföy bölümünü görünür yap
                 const mainPortfolioTab = $('#portfolio-content');
-                if (!mainPortfolioTab.hasClass('show active')) {
-                    $('.tab-pane').removeClass('show active');
-                    mainPortfolioTab.addClass('show active');
-                }
-                
-                // Tıklanan alt menü linkine ait listeyi göster
-                const targetListId = $(this).attr('href');
-                $('.tab-content .tab-pane').removeClass('show active');
+                // Üst seviye tablarda sadece portfolio-content'i aktif yapalım
+                $('.tab-content > .tab-pane').removeClass('show active');
+                mainPortfolioTab.addClass('show active');
+
+                // Sadece portfolio içindeki tab-content'i temizleyip hedef listeyi aç
+                const targetListId = $(this).attr('href'); // #marka-list / #patent-list / ...
+                const innerTabContent = $('#portfolio-content .tab-content'); // iç tab-content
+                innerTabContent.find('.tab-pane').removeClass('show active');
                 $(targetListId).addClass('show active');
+
+                // İsteğe bağlı: Portföy akordeonunu açık tut
+                $('#portfoy-accordion').collapse('show');
             });
             
             // Akordeon başlıklarındaki ok ikonunu yönet
