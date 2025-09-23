@@ -315,6 +315,22 @@
 }
 </style>
 
+
+<style>
+/* İşlem Geçmişi: Açıklama kolonunu sola yasla */
+#modal-islemler table thead th:nth-child(2),
+#modal-islemler table tbody td:nth-child(2){
+  text-align: left !important;
+}
+
+/* İşlem Geçmişi: Akordeon alt (child) girdiler daha küçük puntoda */
+#modal-islemler .accordion-table th,
+#modal-islemler .accordion-table td{
+  font-size: 0.875rem; /* ~14px */
+  line-height: 1.35;
+}
+</style>
+
 </head>
 <body>
     <div class="theme-toggle custom-control custom-switch">
@@ -403,13 +419,7 @@
                                 <option>Reddedildi</option>
                             </select>
                         </div>
-                        <div class="form-group col-md-3">
-                            <label for="menşe" class="text-muted">Menşe</label>
-                            <select id="menşe" class="form-control">
-                                <option value="TÜRKPATENT" selected>TÜRKPATENT</option>
-                                <option value="YURTDIŞI">YURTDIŞI</option>
-                            </select>
-                        </div>
+                        
                         <div class="form-group col-md-3 d-flex align-items-end">
                             <button class="btn btn-primary btn-block">Filtrele</button>
                         </div>
@@ -426,6 +436,15 @@
 
 <!-- Portföyüm sekmeleri + Menşe filtresi (yan yana) -->
 <div class="d-flex align-items-center justify-content-between flex-wrap mb-2" id="portfolioTabsBar">
+  <div class="d-flex align-items-center ml-auto" id="portfolioFilters">
+    <label for="menseFilter" class="mb-0 mr-2">Menşe:</label>
+    <select id="menseFilter" class="form-control form-control-sm" style="max-width:220px">
+      <option value="HEPSI">Hepsi</option>
+      <option value="TÜRKPATENT">TÜRKPATENT</option>
+      <option value="YURTDIŞI">YURTDIŞI</option>
+    </select>
+  </div>
+
   <ul class="nav nav-tabs mb-2 mb-sm-0" id="portfolioTopTabs" role="tablist">
     <li class="nav-item">
       <a class="nav-link active" id="tab-marka" data-toggle="tab" href="#marka-list" role="tab" aria-controls="marka-list" aria-selected="true">Marka</a>
@@ -441,14 +460,7 @@
     </li>
   </ul>
 
-  <div class="d-flex align-items-center" id="portfolioFilters">
-    <label for="menseFilter" class="mb-0 mr-2">Menşe:</label>
-    <select id="menseFilter" class="form-control form-control-sm" style="max-width:220px">
-      <option value="HEPSI">Hepsi</option>
-      <option value="TÜRKPATENT">TÜRKPATENT</option>
-      <option value="YURTDIŞI">YURTDIŞI</option>
-    </select>
-  </div>
+  
 </div>
 
 
