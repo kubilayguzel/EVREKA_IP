@@ -299,7 +299,7 @@
             font-weight: 600;
             text-align: center; /* Kolon başlıklarını ortala */
         }
-
+        
     </style>
 </head>
 <body>
@@ -714,14 +714,110 @@
             <div class="tab-content tab-content-card mt-3">
               <div class="tab-pane fade show active" id="modal-islemler" role="tabpanel">
                 <h5 class="header-title">İşlem Geçmişi</h5>
-                <ul class="list-unstyled">
-                    <li class="border-bottom py-2">
-                        <i class="fas fa-check-circle text-success mr-2"></i> Marka başvuru yenileme işlemi tamamlandı. <small class="float-right text-muted">25.10.2023</small>
-                    </li>
-                    <li class="border-bottom py-2">
-                        <i class="fas fa-hourglass-half text-warning mr-2"></i> Onayınız bekleniyor: Marka devir işlemi. <small class="float-right text-muted">10.09.2023</small>
-                    </li>
-                </ul>
+                <div class="table-responsive mt-3">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>İşlem Açıklaması</th>
+                                <th>Durum</th>
+                                <th>Tarih</th>
+                                <th>Evrak</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr class="accordion-header-row" data-toggle="collapse" data-target="#islem-1" aria-expanded="false" aria-controls="islem-1">
+                                <td><i class="fas fa-chevron-down mr-2"></i>1</td>
+                                <td>Marka Başvurusu Hazırlığı</td>
+                                <td><span class="badge badge-success">Tamamlandı</span></td>
+                                <td>15.01.2023</td>
+                                <td><a href="#" class="btn btn-sm btn-info" target="_blank" title="Evrakı Görüntüle"><i class="fas fa-file-pdf"></i></a></td>
+                            </tr>
+                            <tr>
+                                <td colspan="5" class="p-0">
+                                    <div class="collapse" id="islem-1">
+                                        <table class="table mb-0 accordion-table">
+                                            <thead>
+                                                <tr>
+                                                    <th>#</th>
+                                                    <th>İşlem Açıklaması</th>
+                                                    <th>Durum</th>
+                                                    <th>Tarih</th>
+                                                    <th>Evrak</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <tr>
+                                                    <td>1.1</td>
+                                                    <td>Evrakların Toplanması</td>
+                                                    <td><span class="badge badge-success">Tamamlandı</span></td>
+                                                    <td>10.01.2023</td>
+                                                    <td><a href="#" class="btn btn-sm btn-info" target="_blank" title="Evrakı Görüntüle"><i class="fas fa-file-pdf"></i></a></td>
+                                                </tr>
+                                                <tr>
+                                                    <td>1.2</td>
+                                                    <td>Başvuru Formunun Doldurulması</td>
+                                                    <td><span class="badge badge-success">Tamamlandı</span></td>
+                                                    <td>12.01.2023</td>
+                                                    <td><a href="#" class="btn btn-sm btn-info" target="_blank" title="Evrakı Görüntüle"><i class="fas fa-file-pdf"></i></a></td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </td>
+                            </tr>
+                            
+                            <tr class="accordion-header-row" data-toggle="collapse" data-target="#islem-2" aria-expanded="false" aria-controls="islem-2">
+                                <td><i class="fas fa-chevron-down mr-2"></i>2</td>
+                                <td>Marka Tescil Başvurusu</td>
+                                <td><span class="badge badge-primary">Devam Ediyor</span></td>
+                                <td>20.01.2023</td>
+                                <td><a href="#" class="btn btn-sm btn-info" target="_blank" title="Evrakı Görüntüle"><i class="fas fa-file-pdf"></i></a></td>
+                            </tr>
+                            <tr>
+                                <td colspan="5" class="p-0">
+                                    <div class="collapse" id="islem-2">
+                                        <table class="table mb-0 accordion-table">
+                                            <thead>
+                                                <tr>
+                                                    <th>#</th>
+                                                    <th>İşlem Açıklaması</th>
+                                                    <th>Durum</th>
+                                                    <th>Tarih</th>
+                                                    <th>Evrak</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <tr>
+                                                    <td>2.1</td>
+                                                    <td>TÜRKPATENT'e Bildirim</td>
+                                                    <td><span class="badge badge-success">Tamamlandı</span></td>
+                                                    <td>21.01.2023</td>
+                                                    <td><a href="#" class="btn btn-sm btn-info" target="_blank" title="Evrakı Görüntüle"><i class="fas fa-file-pdf"></i></a></td>
+                                                </tr>
+                                                <tr>
+                                                    <td>2.2</td>
+                                                    <td>İnceleme Aşaması</td>
+                                                    <td><span class="badge badge-primary">Beklemede</span></td>
+                                                    <td>25.01.2023</td>
+                                                    <td><a href="#" class="btn btn-sm btn-info" target="_blank" title="Evrakı Görüntüle"><i class="fas fa-file-pdf"></i></a></td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </td>
+                            </tr>
+
+                            <tr class="accordion-header-row">
+                                <td>3</td>
+                                <td>Yenileme Hizmet Bedeli Tahakkuku</td>
+                                <td><span class="badge badge-warning">Onay Bekliyor</span></td>
+                                <td>10.03.2023</td>
+                                <td><a href="#" class="btn btn-sm btn-info" target="_blank" title="Evrakı Görüntüle"><i class="fas fa-file-pdf"></i></a></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
               </div>
               <div class="tab-pane fade" id="modal-tahakkuklar" role="tabpanel">
                 <h5 class="header-title">Tahakkuk ve Fatura Bilgileri</h5>
