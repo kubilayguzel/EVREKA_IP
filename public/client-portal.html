@@ -331,6 +331,30 @@
 }
 </style>
 
+
+<style>
+/* Tabs sola yaslansın, filtre yanında boşlukla dursun */
+#portfolioTabsBar{
+  display:flex;
+  align-items:center;
+  justify-content:flex-start; /* sola yasla */
+  flex-wrap:wrap;
+  gap:.5rem 1rem; /* satırlar ve sütunlar arası boşluk */
+  margin-bottom:.5rem;
+}
+#portfolioTabsBar #portfolioTopTabs{
+  margin-bottom:0 !important;
+}
+#portfolioTabsBar #portfolioFilters{
+  margin-left:1rem; /* tabların yanında boşluk */
+}
+/* Küçük ekranlarda filtre tabların altına geçebilir, boşlukları koru */
+@media (max-width:576px){
+  #portfolioTabsBar{ gap:.5rem; }
+  #portfolioTabsBar #portfolioFilters{ margin-left:0; }
+}
+</style>
+
 </head>
 <body>
     <div class="theme-toggle custom-control custom-switch">
