@@ -1822,8 +1822,12 @@ export const deleteBulletinV2 = onCall(
         throw new HttpsError('invalid-argument', 'BulletinId gerekli.');
       }
 
+      console.log(`🗑️ Silme işlemi başlatılıyor: ${bulletinId}`);
+
       const operationId = `delete_${bulletinId}_${Date.now()}`;
       const statusRef = db.collection('operationStatus').doc(operationId);
+      
+      // İlk durumu kaydet
       await statusRef.set({
         operationId,
         bulletinId,
@@ -1834,13 +1838,51 @@ export const deleteBulletinV2 = onCall(
         userId: request.auth?.uid || null
       });
 
-      await ensureTopic('bulletin-deletion');
-      await pubsubClient.topic('bulletin-deletion').publishMessage({
-        json: { bulletinId, operationId }
-      });
+      console.log(`✅ Operation status created: ${operationId}`);
+
+      // Topic oluştur/kontrol et
+      try {
+        await ensureTopic('bulletin-deletion');
+        console.log('✅ Topic ensured: bulletin-deletion');
+      } catch (topicError) {
+        console.error('❌ Topic creation failed:', topicError);
+        await statusRef.update({
+          status: 'error',
+          message: `Topic oluşturulamadı: ${topicError.message}`,
+          endTime: admin.firestore.FieldValue.serverTimestamp()
+        });
+        throw new HttpsError('internal', `Topic oluşturulamadı: ${topicError.message}`);
+      }
+
+      // Pub/Sub mesajını yayınla
+      try {
+        const messageId = await pubsubClient.topic('bulletin-deletion').publishMessage({
+          json: { bulletinId, operationId }
+        });
+        console.log(`✅ Pub/Sub message published: ${messageId}`);
+        
+        await statusRef.update({
+          message: 'Mesaj kuyruğa gönderildi, işlem başlatılıyor...',
+          progress: 5,
+          pubsubMessageId: messageId
+        });
+        
+      } catch (publishError) {
+        console.error('❌ Pub/Sub publish failed:', publishError);
+        await statusRef.update({
+          status: 'error',
+          message: `Mesaj gönderilemedi: ${publishError.message}`,
+          endTime: admin.firestore.FieldValue.serverTimestamp()
+        });
+        throw new HttpsError('internal', `Mesaj gönderilemedi: ${publishError.message}`);
+      }
+
       return { success: true, operationId, message: 'Silme işlemi kuyruğa alındı.' };
     } catch (error) {
       console.error('❌ deleteBulletinV2 error:', error);
+      if (error instanceof HttpsError) {
+        throw error;
+      }
       throw new HttpsError('internal', String(error?.message || error));
     }
   }
@@ -4880,20 +4922,46 @@ export const createClientNotificationOnRenewalTaskCreated = onDocumentCreated(
   }
 );
 
-
-
 export const handleBulletinDeletion = onMessagePublished(
   { topic: 'bulletin-deletion', region: 'europe-west1', memory: '1GiB', cpu: 1, timeoutSeconds: 540 },
   async (event) => {
+    console.log('🎯 handleBulletinDeletion triggered');
+    console.log('📨 Event data:', JSON.stringify(event.data, null, 2));
+    
     const { bulletinId, operationId } = event.data.message.json || {};
     if (!bulletinId || !operationId) {
-      console.warn('⚠️ handleBulletinDeletion: eksik payload', event?.data?.message?.json);
+      console.warn('⚠️ handleBulletinDeletion: eksik payload', {
+        bulletinId,
+        operationId,
+        rawJson: event?.data?.message?.json
+      });
       return null;
     }
+    
+    console.log(`🚀 Starting bulletin deletion: bulletinId=${bulletinId}, operationId=${operationId}`);
+    
     try {
       await performBulletinDeletion(bulletinId, operationId);
+      console.log(`✅ Bulletin deletion completed: ${bulletinId}`);
     } catch (e) {
-      console.error('💥 handleBulletinDeletion failed:', e?.message || e);
+      console.error('💥 handleBulletinDeletion failed:', {
+        bulletinId,
+        operationId,
+        error: e?.message || e,
+        stack: e?.stack
+      });
+      
+      // Hata durumunu operationStatus'a yaz
+      try {
+        const statusRef = db.collection('operationStatus').doc(operationId);
+        await statusRef.update({
+          status: 'error',
+          message: `Handler hatası: ${e?.message || e}`,
+          endTime: admin.firestore.FieldValue.serverTimestamp()
+        });
+      } catch (statusError) {
+        console.error('Status update failed:', statusError);
+      }
     }
     return null;
   }
