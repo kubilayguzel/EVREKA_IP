@@ -307,6 +307,14 @@
 #portfoy-accordion { display: none !important; }
 </style>
 
+
+<style>
+#portfolioTabsBar .nav-tabs .nav-link { white-space: nowrap; }
+@media (max-width: 576px){
+  #portfolioTabsBar { gap: .5rem; }
+}
+</style>
+
 </head>
 <body>
     <div class="theme-toggle custom-control custom-switch">
@@ -415,31 +423,34 @@
                 </div>
 
                 
-<!-- Üst seviye Portföyüm sekmeleri -->
-<ul class="nav nav-tabs" id="portfolioTopTabs" role="tablist">
-  <li class="nav-item">
-    <a class="nav-link active" id="tab-marka" data-toggle="tab" href="#marka-list" role="tab" aria-controls="marka-list" aria-selected="true">Marka</a>
-  </li>
-  <li class="nav-item">
-    <a class="nav-link" id="tab-patent" data-toggle="tab" href="#patent-list" role="tab" aria-controls="patent-list" aria-selected="false">Patent</a>
-  </li>
-  <li class="nav-item">
-    <a class="nav-link" id="tab-tasarim" data-toggle="tab" href="#tasarim-list" role="tab" aria-controls="tasarim-list" aria-selected="false">Tasarım</a>
-  </li>
-  <li class="nav-item">
-    <a class="nav-link" id="tab-dava" data-toggle="tab" href="#dava-itiraz-list" role="tab" aria-controls="dava-itiraz-list" aria-selected="false">Dava/İtiraz</a>
-  </li>
-</ul>
 
-<!-- Filtre barı: Menşe -->
-<div class="d-flex align-items-center mt-3" id="portfolioFilters">
-  <label for="menseFilter" class="mb-0 mr-2">Menşe:</label>
-  <select id="menseFilter" class="form-control form-control-sm" style="max-width:220px">
-    <option value="HEPSI">Hepsi</option>
-    <option value="TÜRKPATENT">TÜRKPATENT</option>
-    <option value="YURTDIŞI">YURTDIŞI</option>
-  </select>
+<!-- Portföyüm sekmeleri + Menşe filtresi (yan yana) -->
+<div class="d-flex align-items-center justify-content-between flex-wrap mb-2" id="portfolioTabsBar">
+  <ul class="nav nav-tabs mb-2 mb-sm-0" id="portfolioTopTabs" role="tablist">
+    <li class="nav-item">
+      <a class="nav-link active" id="tab-marka" data-toggle="tab" href="#marka-list" role="tab" aria-controls="marka-list" aria-selected="true">Marka</a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link" id="tab-patent" data-toggle="tab" href="#patent-list" role="tab" aria-controls="patent-list" aria-selected="false">Patent</a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link" id="tab-tasarim" data-toggle="tab" href="#tasarim-list" role="tab" aria-controls="tasarim-list" aria-selected="false">Tasarım</a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link" id="tab-dava" data-toggle="tab" href="#dava-itiraz-list" role="tab" aria-controls="dava-itiraz-list" aria-selected="false">Dava/İtiraz</a>
+    </li>
+  </ul>
+
+  <div class="d-flex align-items-center" id="portfolioFilters">
+    <label for="menseFilter" class="mb-0 mr-2">Menşe:</label>
+    <select id="menseFilter" class="form-control form-control-sm" style="max-width:220px">
+      <option value="HEPSI">Hepsi</option>
+      <option value="TÜRKPATENT">TÜRKPATENT</option>
+      <option value="YURTDIŞI">YURTDIŞI</option>
+    </select>
+  </div>
 </div>
+
 
 <div class="tab-content table-responsive mt-3">
                     <div class="tab-pane fade show active" id="marka-list">
@@ -926,6 +937,21 @@
                 $('#sidebar a').removeClass('active');
                 $(this).addClass('active');
                 
+                // Portföyüm ana menüsü özel durum: her zaman portföy sayfasını aç
+                if (href === '#portfolio-content') {
+                    e.preventDefault();
+                    // Üst seviye portföy tabını görünür yap
+                    $('.tab-pane').removeClass('show active');
+                    $('#portfolio-content').addClass('show active');
+                    // Üstteki nav-tab'larda Marka sekmesini aktif et
+                    $('#portfolioTopTabs a[href="#marka-list"]').tab('show');
+                    // Menşe filtresini aktif panele uygula
+                    if (typeof applyMenseFilterToActivePane === 'function') {
+                        applyMenseFilterToActivePane();
+                    }
+                    return;
+                }
+
                 // collapse toggler için özel durum
                 if ($(this).attr('data-toggle') === 'collapse') {
                     $(targetId).collapse('toggle');
@@ -1068,6 +1094,40 @@
   // İlk yüklemede varsayılan uygula
   $(function(){
     applyMenseFilterToActivePane();
+  });
+})();
+</script>
+
+
+<script>
+// Zorlayıcı Portföyüm açma: diğer click handler'ları bypass etmek için namespace'li delegated handler
+(function(){
+  $(document).off('click.portfoyumOpen')
+  .on('click.portfoyumOpen', 'a[href="#portfolio-content"], #sidebar a[data-target="#portfolio-content"]', function(e){
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+
+      // Üst panelleri kapat ve Portföyü aç
+      $('.tab-pane').removeClass('show active');
+      $('#portfolio-content').addClass('show active');
+
+      // Üst sekmelerde (varsa) Marka sekmesini aktif et
+      var $markaTab = $('#portfolioTopTabs a[href="#marka-list"]');
+      if ($markaTab.length && $markaTab.tab) {
+        $markaTab.tab('show');
+      } else {
+        // Bootstrap tab metodu yoksa sınıf tabanlı aktive et
+        $('#portfolioTopTabs a').removeClass('active');
+        $markaTab.addClass('active');
+        $('#marka-list').addClass('show active');
+      }
+
+      // Menşe filtresini uygula
+      if (typeof applyMenseFilterToActivePane === 'function') {
+        try { applyMenseFilterToActivePane(); } catch(_) {}
+      }
+      return false;
   });
 })();
 </script>
