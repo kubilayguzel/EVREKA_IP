@@ -1894,33 +1894,41 @@ async function performBulletinDeletion(bulletinId, operationId) {
       progress: 85
     });
 
-    // === 3. Storage'dan görselleri sil ===
-    let totalImagesDeleted = 0;
-    try {
-      const bucket = admin.storage().bucket();
-      const folderPrefix = `trademark_images/${bulletinNo}/`;
-      const [files] = await bucket.getFiles({ prefix: folderPrefix });
-      
-      console.log(`🖼️ ${files.length} görsel dosyası bulundu`);
-      
-      if (files.length > 0) {
-        for (const file of files) {
-          try {
-            await file.delete();
-            totalImagesDeleted++;
-          } catch (delError) {
-            console.warn(`⚠️ Dosya silinemedi: ${file.name}`, delError.message);
-          }
-        }
-      }
-    } catch (storageError) {
-      console.warn('⚠️ Storage silme hatası:', storageError.message);
-    }
+  // === 3. Storage'dan görselleri sil (hızlı, toplu) ===
+  let totalImagesDeleted = 0;
+  try {
+    const bucket = admin.storage().bucket();
 
-    await statusRef.update({
-      message: 'Ana bülten kaydı siliniyor...',
-      progress: 95
-    });
+    // Yükleme ile uyumlu gerçek klasör + geçmiş/yanlış path için ek prefix
+    const prefixes = [
+      `bulletins/trademark_${bulletinNo}_images/`,
+      `trademark_images/${bulletinNo}/`
+    ];
+
+    for (const pfx of prefixes) {
+      try {
+        // Önce sayıyı ölç (log/istatistik için), sonra toplu sil
+        const [files] = await bucket.getFiles({ prefix: pfx });
+        if (files.length > 0) {
+          console.log(`🖼️ ${pfx} altında ${files.length} dosya bulundu — toplu siliniyor...`);
+          await bucket.deleteFiles({ prefix: pfx, force: true }); // ✅ çok daha hızlı
+          totalImagesDeleted += files.length;
+          console.log(`✅ ${pfx} temizlendi`);
+        } else {
+          console.log(`ℹ️ ${pfx} altında dosya yok`);
+        }
+      } catch (delErr) {
+        console.warn(`⚠️ ${pfx} temizleme hatası:`, delErr?.message || delErr);
+      }
+    }
+  } catch (storageError) {
+    console.warn('⚠️ Storage silme hatası:', storageError?.message || storageError);
+  }
+
+  await statusRef.update({
+    message: 'Ana bülten kaydı siliniyor...',
+    progress: 95
+  });
 
     // === 4. Ana bülten dokümanını sil ===
     await bulletinDoc.ref.delete();
