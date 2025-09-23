@@ -318,10 +318,10 @@
                 </a>
                 <div class="collapse" id="portfoy-accordion" data-parent="#sidebar">
                     <ul class="nav flex-column ml-3">
-                        <li class="nav-item"><a class="nav-link" href="#marka" data-toggle="tab">Marka</a></li>
-                        <li class="nav-item"><a class="nav-link" href="#patent" data-toggle="tab">Patent</a></li>
-                        <li class="nav-item"><a class="nav-link" href="#tasarim" data-toggle="tab">Tasarım</a></li>
-                        <li class="nav-item"><a class="nav-link" href="#dava-itiraz" data-toggle="tab">Dava/İtiraz</a></li>
+                        <li class="nav-item"><a class="nav-link" href="#marka-list">Marka</a></li>
+                        <li class="nav-item"><a class="nav-link" href="#patent-list">Patent</a></li>
+                        <li class="nav-item"><a class="nav-link" href="#tasarim-list">Tasarım</a></li>
+                        <li class="nav-item"><a class="nav-link" href="#dava-itiraz-list">Dava/İtiraz</a></li>
                     </ul>
                 </div>
             </li>
@@ -410,15 +410,8 @@
                     </div>
                 </div>
 
-                <ul class="nav nav-tabs">
-                    <li class="nav-item"><a class="nav-link active" href="#marka" data-toggle="tab">Marka</a></li>
-                    <li class="nav-item"><a class="nav-link" href="#patent" data-toggle="tab">Patent</a></li>
-                    <li class="nav-item"><a class="nav-link" href="#tasarim" data-toggle="tab">Tasarım</a></li>
-                    <li class="nav-item"><a class="nav-link" href="#dava-itiraz" data-toggle="tab">Dava/İtiraz</a></li>
-                </ul>
-                
                 <div class="tab-content table-responsive mt-3">
-                    <div class="tab-pane fade show active" id="marka">
+                    <div class="tab-pane fade show active" id="marka-list">
                         <table class="table table-hover">
                             <thead>
                                 <tr>
@@ -431,7 +424,7 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr class="accordion-header-row" data-toggle="collapse" data-target="#accordion-1" aria-expanded="false" aria-controls="accordion-1">
+                                <tr class="accordion-header-row" data-toggle="collapse" data-target="#accordion-marka-1" aria-expanded="false" aria-controls="accordion-marka-1">
                                     <td><i class="fas fa-chevron-down mr-2"></i>1</td>
                                     <td><a href="#">Marka Adı 1 (Ana Kayıt)</a></td>
                                     <td>2023/IR001</td>
@@ -441,7 +434,7 @@
                                 </tr>
                                 <tr>
                                     <td colspan="6" class="p-0">
-                                        <div class="collapse" id="accordion-1">
+                                        <div class="collapse" id="accordion-marka-1">
                                             <table class="table mb-0 accordion-table">
                                                 <thead>
                                                     <tr>
@@ -494,7 +487,7 @@
                             </tbody>
                         </table>
                     </div>
-                    <div class="tab-pane fade" id="patent">
+                    <div class="tab-pane fade" id="patent-list">
                          <table class="table table-hover">
                             <thead>
                                 <tr>
@@ -518,7 +511,7 @@
                             </tbody>
                         </table>
                     </div>
-                    <div class="tab-pane fade" id="tasarim">
+                    <div class="tab-pane fade" id="tasarim-list">
                         <table class="table table-hover">
                             <thead>
                                 <tr>
@@ -542,7 +535,7 @@
                             </tbody>
                         </table>
                     </div>
-                    <div class="tab-pane fade" id="dava-itiraz">
+                    <div class="tab-pane fade" id="dava-itiraz-list">
                          <table class="table table-hover">
                             <thead>
                                 <tr>
@@ -883,27 +876,27 @@
                 }
             });
             
-            // Sidebar ve tab navigasyonu için jQuery
+            // Tab navigasyonu için aktif sınıfı yönetme
             $('#sidebar a').on('click', function (e) {
                 const href = $(this).attr('href');
                 if (href && href.startsWith('#')) {
                     e.preventDefault();
-                    if ($(this).hasClass('collapsed')) {
-                        $(this).removeClass('collapsed');
-                        $(href).collapse('hide');
-                    } else {
-                        $('#sidebar a').not(this).removeClass('active').addClass('collapsed');
+                    
+                    const isAccordionToggle = $(this).attr('data-toggle') === 'collapse';
+                    
+                    // Akordeon başlığı değilse normal tab geçişini yap
+                    if (!isAccordionToggle) {
+                        $('#sidebar a').removeClass('active');
                         $(this).addClass('active');
-                        $('.collapse').not(href).collapse('hide');
-                        $(href).collapse('show');
-
-                        const tabId = $(this).attr('data-target') || $(this).attr('href');
                         $('.tab-pane').removeClass('show active');
-                        if (tabId === '#portfoy-accordion') {
-                            $('#portfolio-content').addClass('show active');
-                            $('#marka').addClass('show active');
+                        $(href).addClass('show active');
+                    } else {
+                        // Akordeon başlığı ise aktif sınıfını yönet
+                        if ($(this).hasClass('active')) {
+                            $(this).removeClass('active');
                         } else {
-                             $(tabId).addClass('show active');
+                            $('#sidebar a').removeClass('active');
+                            $(this).addClass('active');
                         }
                     }
                 }
@@ -914,14 +907,18 @@
                 e.preventDefault();
                 $('#portfoy-accordion a').removeClass('active');
                 $(this).addClass('active');
+                
+                // Ana portföy içeriğini aktif yap
+                $('#portfolio-content').addClass('show active');
+
                 const tabId = $(this).attr('href');
                 $('.tab-pane').removeClass('show active');
                 $(tabId).addClass('show active');
             });
-
+            
             // Akordeon açılma ve kapanma ikon yönetimi
             $('.accordion-header-row').on('click', function() {
-                const icon = $(this).find('i');
+                const icon = $(this).find('i.fa-chevron-down, i.fa-chevron-up');
                 if(icon.hasClass('fa-chevron-down')) {
                     icon.removeClass('fa-chevron-down').addClass('fa-chevron-up');
                 } else {
