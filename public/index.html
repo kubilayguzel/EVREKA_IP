@@ -663,26 +663,27 @@
             }
         }
 
-    async handleSignUp() {
-        const name = document.getElementById('signup-name').value.trim();
-        const email = document.getElementById('signup-email').value.trim();
-        const password = document.getElementById('signup-password').value;
+async handleSignUp() {
+    const name = document.getElementById('signup-name').value.trim();
+    const email = document.getElementById('signup-email').value.trim();
+    const password = document.getElementById('signup-password').value;
 
-        if (!this.validateSignUp(name, email, password)) return;
+    if (!this.validateSignUp(name, email, password)) return;
 
-        this.setLoading('signup', true);
-        sessionStorage.setItem('signup_flow', '1');
-        
-        // Kullanıcıya bilgi ver
-        showNotification('Hesap oluşturuluyor, lütfen bekleyin...', 'info', 3000);
+    this.setLoading('signup', true);
+    sessionStorage.setItem('signup_flow', '1');
+    
+    console.log('📝 Kayıt işlemi başladı:', { name, email }); // DEBUG
 
-        try {
+    try {
         const result = await authService.signUp(email, password, name, 'user');
-                if (result.success) {
-                    const user = auth.currentUser;
-                    if (user) {
-                        // Ad-soyad bilgisini Firebase Auth'a kaydet
-                        await updateProfile(user, {displayName: name});
+        if (result.success) {
+            const user = auth.currentUser;
+            if (user) {
+                console.log('👤 User created, setting displayName:', name); // DEBUG
+                // Ad-soyad bilgisini kaydetmek için updateProfile fonksiyonunu kullanın.
+                await updateProfile(user, { displayName: name });
+                console.log('✅ DisplayName set successfully'); // DEBUG
 
                         try {
                             await sendEmailVerification(user);
