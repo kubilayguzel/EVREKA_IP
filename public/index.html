@@ -587,11 +587,20 @@
                 }
 
                 // Kullanıcı doğrulanmış ve kayıt akışında değil → Portfolio'ya git
-                sessionStorage.removeItem('signup_flow');
-                showNotification('Giriş başarılı! Yönlendiriliyorsunuz...', 'success');
-                setTimeout(() => {
-                    window.location.href = 'portfolio.html';
-                }, 1000);
+                const tokenResult = await user.getIdTokenResult();
+                const userRole = tokenResult.claims.role;
+
+                if (userRole === 'belirsiz') {
+                    showNotification('Rolünüz henüz tanımlanmamış. Yönetici onayı bekleniyor.', 'info');
+                    window.location.href = 'client-pending.html';
+                } else {
+                    // Kullanıcı doğrulanmış ve kayıt akışında değil → Portfolio'ya git
+                    sessionStorage.removeItem('signup_flow');
+                    showNotification('Giriş başarılı! Yönlendiriliyorsunuz...', 'success');
+                    setTimeout(() => {
+                        window.location.href = 'portfolio.html';
+                    }, 1000);
+                }
             });
         }
 
