@@ -460,22 +460,22 @@
             <div class="tab" data-tab="signup">Kayıt Ol</div>
         </div>
         <div class="form-section active" id="signin-section">
-            <form id="signinForm"autocomplete="off"></form>
+            <form id="signinForm" autocomplete="off" novalidate>
                 <div class="form-group">
                     <label class="form-label" for="signin-email">E-posta Adresi</label>
-                        <input autocomplete="off" class="form-input" id="signin-email" required="" type="email"/>
+                        <input  class="form-input" id="signin-email" required="" type="email"/ autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" required>
                         <div class="error-message" id="signin-email-error"></div>
                         </div>
                         <div class="form-group">
                         <label class="form-label" for="signin-password">Şifre</label>
-                        <input autocomplete="new-password" class="form-input" id="signin-password" required=""
-                    type="password"/>
+                        <input  class="form-input" id="signin-password" required=""
+                    type="password"/ autocomplete="current-password" required>
                     <div class="error-message" id="signin-password-error"></div>
                 </div>
                 <div class="helper-links">
                     <button class="link-btn" id="forgotPasswordBtn" type="button">Şifremi Unuttum</button>
                 </div>
-                <button class="auth-btn" id="signinBtn" type="submit">
+                <button class="auth-btn" id="signinBtn" type="button">
                     <span id="signinText">Giriş Yap</span>
                     <span class="loading" id="signinLoading"></span>
                 </button>
@@ -853,5 +853,41 @@
     });
 </script>
 <div class="notification-container" id="notification-container"></div>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  var signinForm = document.getElementById('signinForm');
+  if (signinForm) {
+    signinForm.addEventListener('submit', function(e) {
+      e.preventDefault(); // block Enter/auto-submit
+    });
+  }
+  var signinBtn = document.getElementById('signinBtn');
+  if (signinBtn) {
+    // If a global handleSignIn exists on window or in a module context, try to call it safely
+    signinBtn.addEventListener('click', function(e) {
+      e.preventDefault();
+      try {
+        if (typeof handleSignIn === 'function') {
+          handleSignIn();
+        } else if (typeof window !== 'undefined' && typeof window.handleSignIn === 'function') {
+          window.handleSignIn();
+        } else if (typeof app !== 'undefined' && typeof app.handleSignIn === 'function') {
+          app.handleSignIn();
+        }
+      } catch (err) {
+        console.error('handleSignIn error:', err);
+      }
+    });
+  }
+  // Block Enter key in inputs to avoid implicit submit
+  ['signin-email','signin-password'].forEach(function(id){
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('keydown', function(e){
+      if (e.key === 'Enter') e.preventDefault();
+    });
+  });
+});
+</script>
 </body>
 </html>
