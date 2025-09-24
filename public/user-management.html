@@ -3,19 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>IP Manager - KullanÄ±cÄ± YÃ¶netimi</title>
+    <title>IP Manager - Kullanıcı Yönetimi</title>
     <link rel="stylesheet" href="css/shared-styles.css">
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
     <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
     <style>
-        /* Bu sayfaya Ã¶zel stiller */
+        /* Bu sayfaya özel stiller */
         /* Genel body, page-wrapper, main-container stilleri shared-styles.css'ten gelecektir. */
-        /* Sadece bu sayfaya Ã¶zgÃ¼ ve Ã§akÄ±ÅŸmayan stilleri burada tutun */
+        /* Sadece bu sayfaya özgü ve çakışmayan stilleri burada tutun */
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333; display: flex; }
         .page-wrapper { flex-grow: 1; display: flex; flex-direction: column; height: 100vh; overflow-y: auto; background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%); }
         .main-container { width: 100%; padding: 30px; padding-top: 120px; }
-       
+        
         /* User Management specific styles */
         .page-header { background: rgba(255, 255, 255, 0.95); padding: 30px; border-radius: 20px; margin-bottom: 30px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1); }
         .page-title { font-size: 2em; color: #1e3c72; margin-bottom: 10px; }
@@ -42,8 +42,8 @@
             display: flex;
             gap: 10px;
             align-items: center;
-            flex-grow: 1; /* Arama Ã§ubuÄŸunun geniÅŸlemesini saÄŸlar */
-            max-width: 400px; /* Maksimum geniÅŸlik atayabiliriz */
+            flex-grow: 1; /* Arama çubuğunun genişlemesini sağlar */
+            max-width: 400px; /* Maksimum genişlik atayabiliriz */
         }
 
         .search-input {
@@ -226,16 +226,16 @@
     <div class="page-wrapper">
         <main class="main-container">
             <section class="page-header">
-                <h1 class="page-title">KullanÄ±cÄ± YÃ¶netimi</h1>
-                <p class="page-subtitle">Uygulama kullanÄ±cÄ±larÄ±nÄ± yÃ¶netin, yetkilendirin ve yeni kullanÄ±cÄ±lar ekleyin.</p>
+                <h1 class="page-title">Kullanıcı Yönetimi</h1>
+                <p class="page-subtitle">Uygulama kullanıcılarını yönetin, yetkilendirin ve yeni kullanıcılar ekleyin.</p>
             </section>
     
             <div class="users-container">
                 <div class="users-header">
                     <div class="search-group">
-                        <input type="text" id="userSearchInput" class="search-input" placeholder="Ä°sim veya E-posta Ara...">
+                        <input type="text" id="userSearchInput" class="search-input" placeholder="İsim veya E-posta Ara...">
                         <button class="btn-add-user" id="addNewUserBtn">
-                            <span>&#x2795;</span> Yeni KullanÄ±cÄ± Ekle
+                            <span>&#x2795;</span> Yeni Kullanıcı Ekle
                         </button>
                     </div>
                 </div>
@@ -246,25 +246,25 @@
                                 <th>Ad Soyad</th>
                                 <th>E-posta</th>
                                 <th>Rol</th>
-                                <th>OluÅŸturulma Tarihi</th>
-                                <th>Son GiriÅŸ</th>
-                                <th>Ä°ÅŸlemler</th>
+                                <th>Oluşturulma Tarihi</th>
+                                <th>Son Giriş</th>
+                                <th>İşlemler</th>
                             </tr>
                         </thead>
                         <tbody id="usersTableBody">
-                            </tbody>
+                        </tbody>
                     </table>
                 </div>
-                <div id="loadingIndicator" class="loading">YÃ¼kleniyor...</div>
-                <div id="noUsersMessage" class="no-users">HenÃ¼z kayÄ±tlÄ± kullanÄ±cÄ± bulunmamaktadÄ±r.</div>
+                <div id="loadingIndicator" class="loading">Yükleniyor...</div>
+                <div id="noUsersMessage" class="no-users">Henüz kayıtlı kullanıcı bulunmamaktadır.</div>
             </div>
         </main>
     </div>
 
- <div id="userModal" class="modal">
+<div id="userModal" class="modal">
     <div class="modal-content">
         <span class="close-modal-btn" id="closeUserModal">&times;</span>
-        <h3 class="modal-title" id="userModalTitle">Yeni KullanÄ±cÄ± Ekle</h3>
+        <h3 class="modal-title" id="userModalTitle">Yeni Kullanıcı Ekle</h3>
         <form id="userForm">
             <input type="hidden" id="userId" name="userId">
             <div class="form-group">
@@ -276,338 +276,338 @@
                 <input type="email" id="formUserEmail" name="formUserEmail" class="form-input" required autocomplete="email">
             </div>
             <div class="form-group" id="passwordGroup">
-                <label for="formUserPassword" class="form-label">Åžifre:</label>
+                <label for="formUserPassword" class="form-label">Şifre:</label>
                 <input type="password" id="formUserPassword" name="formUserPassword" class="form-input" autocomplete="new-password">
             </div>
             <div class="form-group">
                 <label for="formUserRole" class="form-label">Rol:</label>
-                  <select id="formUserRole" name="formUserRole" class="form-select" required>
-                      <option value="">SeÃ§iniz...</option>
-                      <option value="belirsiz">Belirsiz</option>
-                      <option value="client">Client</option>
-                      <option value="user">KullanÄ±cÄ±</option>
-                      <option value="admin">Admin</option>
-                      <option value="superadmin">Super Admin</option>
-                  </select>
+                <select id="formUserRole" name="formUserRole" class="form-select" required>
+                    <option value="">Seçiniz...</option>
+                    <option value="belirsiz">Belirsiz</option>
+                    <option value="client">Client</option>
+                    <option value="user">Kullanıcı</option>
+                    <option value="admin">Admin</option>
+                    <option value="superadmin">Super Admin</option>
+                </select>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" id="cancelUserBtn">Ä°ptal</button>
+                <button type="button" class="btn btn-secondary" id="cancelUserBtn">İptal</button>
                 <button type="submit" class="btn btn-primary" id="saveUserBtn">Kaydet</button>
             </div>
         </form>
     </div>
 </div>
 <script type="module">
-  import { authService, auth, db, app } from './firebase-config.js';
-  import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-functions.js';
-  import { collection, getDocs } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
-  import { showNotification } from './utils.js';
-  import { loadSharedLayout } from './js/layout-loader.js';
+    import { authService, auth, db, app } from './firebase-config.js';
+    import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-functions.js';
+    import { collection, getDocs } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+    import { showNotification } from './utils.js';
+    import { loadSharedLayout } from './js/layout-loader.js';
 
-  const functions = getFunctions(app, 'europe-west1');
-  const upsertUser = httpsCallable(functions, 'adminUpsertUser');
-  const deleteUserFn = httpsCallable(functions, 'adminDeleteUser');
-  const strip = (s) => String(s ?? '').trim().replace(/^["'\s]+|["'\s]+$/g, '');
+    const functions = getFunctions(app, 'europe-west1');
+    const upsertUser = httpsCallable(functions, 'adminUpsertUser');
+    const deleteUserFn = httpsCallable(functions, 'adminDeleteUser');
+    const strip = (s) => String(s ?? '').trim().replace(/^["'\s]+|["'\s]+$/g, '');
 
-  document.addEventListener('DOMContentLoaded', async () => {
-    // Ortak layout'u yÃ¼kle ve bu sayfanÄ±n aktif linkini belirt
-    await loadSharedLayout({ activeMenuLink: 'user-management.html' });
+    document.addEventListener('DOMContentLoaded', async () => {
+        // Ortak layout'u yükle ve bu sayfanın aktif linkini belirt
+        await loadSharedLayout({ activeMenuLink: 'user-management.html' });
 
-    class UserManagementModule {
-      constructor() {
-        this.currentUser = null;
-        this.allUsers = [];
-      }
-
-      init() {
-        authService.auth.onAuthStateChanged(async (user) => {
-          if (user || authService.getCurrentUser()) {
-            this.currentUser = authService.getCurrentUser();
-            // Super Admin kontrolÃ¼
-            if (this.currentUser.role !== 'superadmin') {
-              showNotification('Bu sayfaya eriÅŸim yetkiniz yoktur.', 'error');
-              window.location.href = 'dashboard.html'; // Yetkisiz giriÅŸte yÃ¶nlendir
-              return;
+        class UserManagementModule {
+            constructor() {
+                this.currentUser = null;
+                this.allUsers = [];
             }
-            await this.loadUsers();
-            this.setupEventListeners();
-          } else {
-            window.location.href = 'index.html';
-          }
-        });
-      }
 
-      setupEventListeners() {
-        document.getElementById('addNewUserBtn').addEventListener('click', () => this.showAddUserModal());
-        document.getElementById('closeUserModal').addEventListener('click', () => this.closeUserModal());
-        document.getElementById('cancelUserBtn').addEventListener('click', () => this.closeUserModal());
-        document.getElementById('userForm').addEventListener('submit', (e) => this.handleUserFormSubmit(e));
-        document.getElementById('userSearchInput').addEventListener('input', (e) => this.filterUsers(e.target.value));
-
-        // Tablo iÃ§i dÃ¼zenle / sil butonlarÄ± (event delegation)
-        document.getElementById('usersTableBody').addEventListener('click', (e) => {
-          if (e.target.classList.contains('edit-btn')) {
-            this.showEditUserModal(e.target.dataset.id);
-          } else if (e.target.classList.contains('delete-btn')) {
-            this.deleteUser(e.target.dataset.id);
-          }
-        });
-      }
-
-      async loadUsers() {
-        document.getElementById('loadingIndicator').style.display = 'block';
-        try {
-          const usersCol = collection(db, 'users');
-          const userSnapshot = await getDocs(usersCol);
-          this.allUsers = userSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-          this.renderUsers();
-        } catch (error) {
-          showNotification('KullanÄ±cÄ±lar yÃ¼klenirken hata: ' + error.message, 'error');
-        } finally {
-          document.getElementById('loadingIndicator').style.display = 'none';
-        }
-      }
-
-      filterUsers(text) {
-        this.renderUsers(text || '');
-      }
-
-      renderUsers(filterText = '') {
-        const tableBody = document.getElementById('usersTableBody');
-        const noUsersMessage = document.getElementById('noUsersMessage');
-        tableBody.innerHTML = '';
-
-        const lowerFilterText = filterText.toLowerCase();
-
-        const filteredUsers = this.allUsers.filter(user =>
-          (user.email || '').toLowerCase().includes(lowerFilterText) ||
-          (user.displayName && user.displayName.toLowerCase().includes(lowerFilterText))
-        );
-
-        if (filteredUsers.length === 0) {
-          noUsersMessage.style.display = 'block';
-          return;
-        }
-        noUsersMessage.style.display = 'none';
-
-        filteredUsers.forEach(user => {
-          const row = document.createElement('tr');
-
-          row.innerHTML = `
-            <td>${user.displayName || '-'}</td>
-            <td>${user.email || '-'}</td>
-            <td>
-              <select class="role-select" data-user-id="${user.id}">
-                <option value="belirsiz" ${user.role === 'belirsiz' ? 'selected' : ''}>Belirsiz</option>
-                <option value="client" ${user.role === 'client' ? 'selected' : ''}>Client</option>
-                <option value="user" ${user.role === 'user' ? 'selected' : ''}>Kullanıcı</option>
-                <option value="admin" ${user.role === 'admin' ? 'selected' : ''}>Yönetici</option>
-                <option value="superadmin" ${user.role === 'superadmin' ? 'selected' : ''}>Süper Admin</option>
-              </select>
-            </td>
-            <td>${user.createdAt ? new Date(user.createdAt).toLocaleDateString('tr-TR') : '-'}</td>
-            <td>${user.lastLoginAt ? new Date(user.lastLoginAt).toLocaleDateString('tr-TR') : '-'}</td>
-            <td>
-              <button class="action-btn edit-btn" data-id="${user.id}">DÃ¼zenle</button>
-              <button class="action-btn delete-btn" data-id="${user.id}" ${user.id === this.currentUser.uid ? 'disabled' : ''}>Sil</button>
-            </td>
-          `;
-
-          tableBody.appendChild(row);
-        });
-
-        // Rol deÄŸiÅŸimi dinleyicileri
-        document.querySelectorAll('.role-select').forEach(select => {
-          select.addEventListener('change', async (e) => {
-            const userId  = e.target.dataset.userId;
-            const newRole = e.target.value;
-
-            const u = this.allUsers.find(x => x.id === userId);
-            if (!u) { showNotification('KullanÄ±cÄ± bulunamadÄ±.', 'error'); return; }
-
-            try {
-              const { data } = await upsertUser({
-                uid: userId,
-                displayName: u.displayName || '',
-                email: (u.email || '').toLowerCase(),
-                role: newRole
-              });
-
-              showNotification('KullanÄ±cÄ± rolÃ¼ baÅŸarÄ±yla gÃ¼ncellendi.', 'success');
-              // Lokal listede rolÃ¼ gÃ¼ncelle
-              u.role = newRole;
-            } catch (error) {
-              showNotification('Rol gÃ¼ncellenemedi: ' + (error.message || error.code), 'error');
-              // Hata olursa seÃ§imi eski hÃ¢line al
-              e.target.value = u.role || 'user';
+            init() {
+                authService.auth.onAuthStateChanged(async (user) => {
+                    if (user || authService.getCurrentUser()) {
+                        this.currentUser = authService.getCurrentUser();
+                        // Super Admin kontrolü
+                        if (this.currentUser.role !== 'superadmin') {
+                            showNotification('Bu sayfaya erişim yetkiniz yoktur.', 'error');
+                            window.location.href = 'dashboard.html'; // Yetkisiz girişte yönlendir
+                            return;
+                        }
+                        await this.loadUsers();
+                        this.setupEventListeners();
+                    } else {
+                        window.location.href = 'index.html';
+                    }
+                });
             }
-          });
-        });
-      }
 
-      showAddUserModal() {
-        document.getElementById('userModalTitle').textContent = 'Yeni KullanÄ±cÄ± Ekle';
-        document.getElementById('userForm').reset();
-        document.getElementById('userId').value = '';
-        document.getElementById('passwordGroup').style.display = 'flex';
-        document.getElementById('formUserEmail').removeAttribute('readonly');
-        document.getElementById('userModal').classList.add('show');
-      }
+            setupEventListeners() {
+                document.getElementById('addNewUserBtn').addEventListener('click', () => this.showAddUserModal());
+                document.getElementById('closeUserModal').addEventListener('click', () => this.closeUserModal());
+                document.getElementById('cancelUserBtn').addEventListener('click', () => this.closeUserModal());
+                document.getElementById('userForm').addEventListener('submit', (e) => this.handleUserFormSubmit(e));
+                document.getElementById('userSearchInput').addEventListener('input', (e) => this.filterUsers(e.target.value));
 
-      showEditUserModal(userId) {
-        const user = this.allUsers.find(u => u.id === userId);
-        if (!user) {
-          showNotification('KullanÄ±cÄ± bulunamadÄ±.', 'error');
-          return;
+                // Tablo içi düzenle / sil butonları (event delegation)
+                document.getElementById('usersTableBody').addEventListener('click', (e) => {
+                    if (e.target.classList.contains('edit-btn')) {
+                        this.showEditUserModal(e.target.dataset.id);
+                    } else if (e.target.classList.contains('delete-btn')) {
+                        this.deleteUser(e.target.dataset.id);
+                    }
+                });
+            }
+
+            async loadUsers() {
+                document.getElementById('loadingIndicator').style.display = 'block';
+                try {
+                    const usersCol = collection(db, 'users');
+                    const userSnapshot = await getDocs(usersCol);
+                    this.allUsers = userSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    this.renderUsers();
+                } catch (error) {
+                    showNotification('Kullanıcılar yüklenirken hata: ' + error.message, 'error');
+                } finally {
+                    document.getElementById('loadingIndicator').style.display = 'none';
+                }
+            }
+
+            filterUsers(text) {
+                this.renderUsers(text || '');
+            }
+
+            renderUsers(filterText = '') {
+                const tableBody = document.getElementById('usersTableBody');
+                const noUsersMessage = document.getElementById('noUsersMessage');
+                tableBody.innerHTML = '';
+
+                const lowerFilterText = filterText.toLowerCase();
+
+                const filteredUsers = this.allUsers.filter(user =>
+                    (user.email || '').toLowerCase().includes(lowerFilterText) ||
+                    (user.displayName && user.displayName.toLowerCase().includes(lowerFilterText))
+                );
+
+                if (filteredUsers.length === 0) {
+                    noUsersMessage.style.display = 'block';
+                    return;
+                }
+                noUsersMessage.style.display = 'none';
+
+                filteredUsers.forEach(user => {
+                    const row = document.createElement('tr');
+
+                    row.innerHTML = `
+                        <td>${user.displayName || '-'}</td>
+                        <td>${user.email || '-'}</td>
+                        <td>
+                          <select class="role-select" data-user-id="${user.id}">
+                            <option value="belirsiz" ${user.role === 'belirsiz' ? 'selected' : ''}>Belirsiz</option>
+                            <option value="client" ${user.role === 'client' ? 'selected' : ''}>Client</option>
+                            <option value="user" ${user.role === 'user' ? 'selected' : ''}>Kullanıcı</option>
+                            <option value="admin" ${user.role === 'admin' ? 'selected' : ''}>Yönetici</option>
+                            <option value="superadmin" ${user.role === 'superadmin' ? 'selected' : ''}>Süper Admin</option>
+                          </select>
+                        </td>
+                        <td>${user.createdAt ? new Date(user.createdAt).toLocaleDateString('tr-TR') : '-'}</td>
+                        <td>${user.lastLoginAt ? new Date(user.lastLoginAt).toLocaleDateString('tr-TR') : '-'}</td>
+                        <td>
+                          <button class="action-btn edit-btn" data-id="${user.id}">Düzenle</button>
+                          <button class="action-btn delete-btn" data-id="${user.id}" ${user.id === this.currentUser.uid ? 'disabled' : ''}>Sil</button>
+                        </td>
+                      `;
+
+                    tableBody.appendChild(row);
+                });
+
+                // Rol değişimi dinleyicileri
+                document.querySelectorAll('.role-select').forEach(select => {
+                    select.addEventListener('change', async (e) => {
+                        const userId  = e.target.dataset.userId;
+                        const newRole = e.target.value;
+
+                        const u = this.allUsers.find(x => x.id === userId);
+                        if (!u) { showNotification('Kullanıcı bulunamadı.', 'error'); return; }
+
+                        try {
+                            const { data } = await upsertUser({
+                                uid: userId,
+                                displayName: u.displayName || '',
+                                email: (u.email || '').toLowerCase(),
+                                role: newRole
+                            });
+
+                            showNotification('Kullanıcı rolü başarıyla güncellendi.', 'success');
+                            // Lokal listede rolü güncelle
+                            u.role = newRole;
+                        } catch (error) {
+                            showNotification('Rol güncellenemedi: ' + (error.message || error.code), 'error');
+                            // Hata olursa seçimi eski hâline al
+                            e.target.value = u.role || 'user';
+                        }
+                    });
+                });
+            }
+
+            showAddUserModal() {
+                document.getElementById('userModalTitle').textContent = 'Yeni Kullanıcı Ekle';
+                document.getElementById('userForm').reset();
+                document.getElementById('userId').value = '';
+                document.getElementById('passwordGroup').style.display = 'flex';
+                document.getElementById('formUserEmail').removeAttribute('readonly');
+                document.getElementById('userModal').classList.add('show');
+            }
+
+            showEditUserModal(userId) {
+                const user = this.allUsers.find(u => u.id === userId);
+                if (!user) {
+                    showNotification('Kullanıcı bulunamadı.', 'error');
+                    return;
+                }
+                document.getElementById('userModalTitle').textContent = 'Kullanıcıyı Düzenle';
+                document.getElementById('userId').value = user.id;
+                document.getElementById('formUserName').value = user.displayName || '';
+                document.getElementById('formUserEmail').value = user.email || '';
+                document.getElementById('formUserEmail').setAttribute('readonly', true);
+                document.getElementById('passwordGroup').style.display = 'none';
+                document.getElementById('formUserRole').value = user.role || 'user';
+                document.getElementById('userModal').classList.add('show');
+            }
+
+            closeUserModal() {
+                document.getElementById('userModal').classList.remove('show');
+            }
+
+            async handleUserFormSubmit(event) {
+                event.preventDefault();
+
+                console.log("🔥 Form submit başladı");
+
+                // Doğru ID'lerle elementleri al
+                const userId         = document.getElementById('userId')?.value || '';
+                const userNameEl     = document.getElementById('formUserName');
+                const userEmailEl    = document.getElementById('formUserEmail');
+                const userPasswordEl = document.getElementById('formUserPassword');
+                const userRoleEl     = document.getElementById('formUserRole');
+
+                console.log("🧐 Elements check:", {
+                    userId,
+                    userNameEl:      userNameEl ? "✅ Found" : "❌ Missing",
+                    userEmailEl:     userEmailEl ? "✅ Found" : "❌ Missing",
+                    userPasswordEl:  userPasswordEl ? "✅ Found" : "❌ Missing",
+                    userRoleEl:      userRoleEl ? "✅ Found" : "❌ Missing"
+                });
+
+                // Değerleri al
+                const userName     = userNameEl?.value?.trim() || '';
+                const userEmail    = userEmailEl?.value?.trim() || '';
+                const userPassword = userPasswordEl?.value || '';
+                const userRole     = userRoleEl?.value || '';
+
+                console.log("📝 Form values:", {
+                    userName:    `"${userName}"`,
+                    userEmail:   `"${userEmail}"`,
+                    userRole:    `"${userRole}"`,
+                    userPassword: userPassword ? "***" : "empty",
+                    isEdit: !!userId
+                });
+
+                // Validasyonlar
+                if (!userName) {
+                    console.error("❌ Ad-soyad boş!");
+                    showNotification('Lütfen ad-soyad girin.', 'error');
+                    userNameEl?.focus();
+                    return;
+                }
+                if (!userEmail) {
+                    console.error("❌ E-posta boş!");
+                    showNotification('Lütfen geçerli bir e-posta girin.', 'error');
+                    userEmailEl?.focus();
+                    return;
+                }
+                if (!userRole) {
+                    console.error("❌ Rol seçilmemiş!");
+                    showNotification('Lütfen bir rol seçin.', 'error');
+                    userRoleEl?.focus();
+                    return;
+                }
+                // Yeni kullanıcıda şifre opsiyonel; verilirse 6+ olmalı
+                if (!userId && userPassword && userPassword.length > 0 && userPassword.length < 6) {
+                    console.error("❌ Şifre geçersiz!");
+                    showNotification('Yeni kullanıcı için şifre en az 6 karakter olmalı (ya da boş bırakın).', 'error');
+                    userPasswordEl?.focus();
+                    return;
+                }
+
+                console.log("✅ Tüm validasyonlar geçti, işlem başlıyor...");
+
+                try {
+                    // Payload
+                    const payload = {
+                        uid: userId || '',
+                        email: strip(userEmail).toLowerCase(),
+                        displayName: strip(userName),
+                        role: strip(userRole)
+                    };
+
+                    // (Opsiyonel) Yeni e-posta alanı kullandıysan:
+                    const newEmailEl = document.getElementById('newEmail');
+                    if (newEmailEl && newEmailEl.value) {
+                        payload.newEmail = strip(newEmailEl.value).toLowerCase();
+                    }
+
+                    // (Opsiyonel) Devre dışı bırakma checkbox’ı kullandıysan:
+                    const disabledEl = document.getElementById('userDisabledCheckbox');
+                    if (disabledEl) payload.disabled = !!disabledEl.checked;
+
+                    // Şifre verildiyse gönder; verilmediyse dokunmayız
+                    if (userPassword && userPassword.length >= 6) {
+                        payload.password = userPassword;
+                    }
+
+                    const { data } = await upsertUser(payload);
+
+                    showNotification(
+                        (data.existed ? 'Kullanıcı güncellendi' : 'Yeni kullanıcı oluşturuldu') + ` (UID: ${data.uid})`,
+                        'success'
+                    );
+
+                    console.log("🎉 İşlem tamamlandı, modal kapatılıyor ve liste yenileniyor...");
+                    this.closeUserModal();
+                    await this.loadUsers();
+
+                } catch (error) {
+                    console.error('❌ Kullanıcı işlemi hatası:', error);
+                    const errorMessage = error?.message || error?.code || 'Bilinmeyen hata';
+                    showNotification(errorMessage, 'error');
+                }
+            }
+
+            async deleteUser(userId) {
+                if (userId === this.currentUser.uid) {
+                    showNotification('Kendi hesabınızı silemezsiniz.', 'error');
+                    return;
+                }
+
+                const u = this.allUsers.find(x => x.id === userId);
+                const name = u?.displayName || u?.email || userId;
+
+                if (!confirm(`"${name}" kullanıcısını silmek istediğinize emin misiniz? Bu işlem geri alınamaz.`)) {
+                    return;
+                }
+
+                try {
+                    // Auth + Firestore silme: adminDeleteUser callable
+                    const { data } = await deleteUserFn({ uid: userId });
+                    showNotification('Kullanıcı silindi.', 'success');
+                    await this.loadUsers();
+                } catch (error) {
+                    console.error('Silme hatası:', error);
+                    const msg = error?.message || error?.code || 'Bilinmeyen hata';
+                    showNotification('Kullanıcı silinemedi: ' + msg, 'error');
+                }
+            }
         }
-        document.getElementById('userModalTitle').textContent = 'KullanÄ±cÄ±yÄ± DÃ¼zenle';
-        document.getElementById('userId').value = user.id;
-        document.getElementById('formUserName').value = user.displayName || '';
-        document.getElementById('formUserEmail').value = user.email || '';
-        document.getElementById('formUserEmail').setAttribute('readonly', true);
-        document.getElementById('passwordGroup').style.display = 'none';
-        document.getElementById('formUserRole').value = user.role || 'user';
-        document.getElementById('userModal').classList.add('show');
-      }
 
-      closeUserModal() {
-        document.getElementById('userModal').classList.remove('show');
-      }
-
-      async handleUserFormSubmit(event) {
-        event.preventDefault();
-
-        console.log("ðŸ”¥ Form submit baÅŸladÄ±");
-
-        // DoÄŸru ID'lerle elementleri al
-        const userId         = document.getElementById('userId')?.value || '';
-        const userNameEl     = document.getElementById('formUserName');
-        const userEmailEl    = document.getElementById('formUserEmail');
-        const userPasswordEl = document.getElementById('formUserPassword');
-        const userRoleEl     = document.getElementById('formUserRole');
-
-        console.log("ðŸ§ª Elements check:", {
-          userId,
-          userNameEl:     userNameEl ? "âœ… Found" : "âŒ Missing",
-          userEmailEl:    userEmailEl ? "âœ… Found" : "âŒ Missing",
-          userPasswordEl: userPasswordEl ? "âœ… Found" : "âŒ Missing",
-          userRoleEl:     userRoleEl ? "âœ… Found" : "âŒ Missing"
-        });
-
-        // DeÄŸerleri al
-        const userName     = userNameEl?.value?.trim() || '';
-        const userEmail    = userEmailEl?.value?.trim() || '';
-        const userPassword = userPasswordEl?.value || '';
-        const userRole     = userRoleEl?.value || '';
-
-        console.log("ðŸ“Š Form values:", {
-          userName:    `"${userName}"`,
-          userEmail:   `"${userEmail}"`,
-          userRole:    `"${userRole}"`,
-          userPassword: userPassword ? "***" : "empty",
-          isEdit: !!userId
-        });
-
-        // Validasyonlar
-        if (!userName) {
-          console.error("âŒ Ad-soyad boÅŸ!");
-          showNotification('LÃ¼tfen ad-soyad girin.', 'error');
-          userNameEl?.focus();
-          return;
-        }
-        if (!userEmail) {
-          console.error("âŒ E-posta boÅŸ!");
-          showNotification('LÃ¼tfen geÃ§erli bir e-posta girin.', 'error');
-          userEmailEl?.focus();
-          return;
-        }
-        if (!userRole) {
-          console.error("âŒ Rol seÃ§ilmemiÅŸ!");
-          showNotification('LÃ¼tfen bir rol seÃ§in.', 'error');
-          userRoleEl?.focus();
-          return;
-        }
-        // Yeni kullanÄ±cÄ±da ÅŸifre opsiyonel; verilirse 6+ olmalÄ±
-        if (!userId && userPassword && userPassword.length > 0 && userPassword.length < 6) {
-          console.error("âŒ Åžifre geÃ§ersiz!");
-          showNotification('Yeni kullanÄ±cÄ± iÃ§in ÅŸifre en az 6 karakter olmalÄ± (ya da boÅŸ bÄ±rakÄ±n).', 'error');
-          userPasswordEl?.focus();
-          return;
-        }
-
-        console.log("âœ… TÃ¼m validasyonlar geÃ§ti, iÅŸlem baÅŸlÄ±yor...");
-
-        try {
-          // Payload
-          const payload = {
-            uid: userId || '',
-            email: strip(userEmail).toLowerCase(),
-            displayName: strip(userName),
-            role: strip(userRole)
-          };
-
-          // (Opsiyonel) Yeni e-posta alanÄ± kullandÄ±ysan:
-          const newEmailEl = document.getElementById('newEmail');
-          if (newEmailEl && newEmailEl.value) {
-            payload.newEmail = strip(newEmailEl.value).toLowerCase();
-          }
-
-          // (Opsiyonel) Devre dÄ±ÅŸÄ± bÄ±rakma checkboxâ€™Ä± kullandÄ±ysan:
-          const disabledEl = document.getElementById('userDisabledCheckbox');
-          if (disabledEl) payload.disabled = !!disabledEl.checked;
-
-          // Åžifre verildiyse gÃ¶nder; verilmediyse dokunmayÄ±z
-          if (userPassword && userPassword.length >= 6) {
-            payload.password = userPassword;
-          }
-
-          const { data } = await upsertUser(payload);
-
-          showNotification(
-            (data.existed ? 'KullanÄ±cÄ± gÃ¼ncellendi' : 'Yeni kullanÄ±cÄ± oluÅŸturuldu') + ` (UID: ${data.uid})`,
-            'success'
-          );
-
-          console.log("ðŸŽ¯ Ä°ÅŸlem tamamlandÄ±, modal kapatÄ±lÄ±yor ve liste yenileniyor...");
-          this.closeUserModal();
-          await this.loadUsers();
-
-        } catch (error) {
-          console.error('âŒ KullanÄ±cÄ± iÅŸlemi hatasÄ±:', error);
-          const errorMessage = error?.message || error?.code || 'Bilinmeyen hata';
-          showNotification(errorMessage, 'error');
-        }
-      }
-
-      async deleteUser(userId) {
-        if (userId === this.currentUser.uid) {
-          showNotification('Kendi hesabÄ±nÄ±zÄ± silemezsiniz.', 'error');
-          return;
-        }
-
-        const u = this.allUsers.find(x => x.id === userId);
-        const name = u?.displayName || u?.email || userId;
-
-        if (!confirm(`"${name}" kullanÄ±cÄ±sÄ±nÄ± silmek istediÄŸinize emin misiniz? Bu iÅŸlem geri alÄ±namaz.`)) {
-          return;
-        }
-
-        try {
-          // Auth + Firestore silme: adminDeleteUser callable
-          const { data } = await deleteUserFn({ uid: userId });
-          showNotification('KullanÄ±cÄ± silindi.', 'success');
-          await this.loadUsers();
-        } catch (error) {
-          console.error('Silme hatasÄ±:', error);
-          const msg = error?.message || error?.code || 'Bilinmeyen hata';
-          showNotification('KullanÄ±cÄ± silinemedi: ' + msg, 'error');
-        }
-      }
-    }
-
-    const userManagementModule = new UserManagementModule();
-    userManagementModule.init();
-  });
+        const userManagementModule = new UserManagementModule();
+        userManagementModule.init();
+    });
 </script>
 <div id="notification-container" class="notification-container"></div>
 </body>
