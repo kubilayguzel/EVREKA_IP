@@ -143,7 +143,7 @@ export const authService = {
             return { success: false, error: errorMessage };
         }
     },
-    async signUp(email, password, displayName, initialRole = 'user') {
+    async signUp(email, password, displayName, initialRole = 'belirsiz') {
         if (!isFirebaseAvailable) return this.localSignUp(email, password, displayName, initialRole);
         try {
             const result = await createUserWithEmailAndPassword(auth, email, password);
@@ -209,7 +209,7 @@ export const authService = {
         }
         return { success: false, error: 'Hatalı yerel kimlik bilgileri.' };
     },
-    localSignUp(email, password, displayName, initialRole) {
+    localSignUp(email, password, displayName, initialRole = 'belirsiz') {
         const userData = { uid: `local_${Date.now()}`, email, displayName, role: initialRole, isSuperAdmin: initialRole === 'superadmin' };
         localStorage.setItem('currentUser', JSON.stringify(userData));
         return { success: true, user: userData, message: "Yerel kayıt başarılı!" };
