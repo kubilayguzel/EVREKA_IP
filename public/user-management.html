@@ -367,11 +367,30 @@
                     document.getElementById('loadingIndicator').style.display = 'none';
                 }
             }
-
+            
             filterUsers(text) {
                 this.renderUsers(text || '');
             }
-
+            
+            formatTimestamp(timestamp) {
+              if (!timestamp) return '-';
+              
+              try {
+                  if (timestamp?.toDate && typeof timestamp.toDate === 'function') {
+                      return timestamp.toDate().toLocaleDateString('tr-TR');
+                  }
+                  
+                  const date = new Date(timestamp);
+                  if (!isNaN(date.getTime())) {
+                      return date.toLocaleDateString('tr-TR');
+                  }
+                  
+                  return '-';
+              } catch (e) {
+                  console.warn('Tarih parse hatası:', e);
+                  return '-';
+              }
+          }
             renderUsers(filterText = '') {
                 const tableBody = document.getElementById('usersTableBody');
                 const noUsersMessage = document.getElementById('noUsersMessage');
@@ -407,8 +426,8 @@
                   <td>${user.displayName || '-'}</td>
                   <td>${user.email || '-'}</td>
                   <td>${roleText}</td>
-                  <td>${user.createdAt ? new Date(user.createdAt).toLocaleDateString('tr-TR') : '-'}</td>
-                  <td>${user.lastLoginAt ? new Date(user.lastLoginAt).toLocaleDateString('tr-TR') : '-'}</td>
+                  <td>${formatTimestamp(user.createdAt)}</td>
+                  <td>${formatTimestamp(user.lastLoginAt)}</td>
                   <td>
                     <button class="action-btn edit-btn" data-id="${user.id}">Düzenle</button>
                     <button class="action-btn delete-btn" data-id="${user.id}" ${user.id === this.currentUser.uid ? 'disabled' : ''}>Sil</button>
@@ -534,7 +553,9 @@
                     if (userPassword && userPassword.length >= 6) {
                         payload.password = userPassword;
                     }
-
+                    if (!payload.displayName && userNameEl?.value) {
+                        payload.displayName = strip(userNameEl.value);
+                    }
                     const { data } = await upsertUser(payload);
 
                     showNotification(
