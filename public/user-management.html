@@ -418,35 +418,6 @@
                     tableBody.appendChild(row);
                 });
 
-                // Rol değişimi dinleyicileri
-                document.querySelectorAll('.role-select').forEach(select => {
-                    select.addEventListener('change', async (e) => {
-                        const userId  = e.target.dataset.userId;
-                        const newRole = e.target.value;
-
-                        const u = this.allUsers.find(x => x.id === userId);
-                        if (!u) { showNotification('Kullanıcı bulunamadı.', 'error'); return; }
-
-                        try {
-                            const { data } = await upsertUser({
-                                uid: userId,
-                                displayName: u.displayName || '',
-                                email: (u.email || '').toLowerCase(),
-                                role: newRole
-                            });
-
-                            showNotification('Kullanıcı rolü başarıyla güncellendi.', 'success');
-                            // Lokal listede rolü güncelle
-                            u.role = newRole;
-                        } catch (error) {
-                            showNotification('Rol güncellenemedi: ' + (error.message || error.code), 'error');
-                            // Hata olursa seçimi eski hâline al
-                            e.target.value = u.role || 'user';
-                        }
-                    });
-                });
-            }
-
             showAddUserModal() {
                 document.getElementById('userModalTitle').textContent = 'Yeni Kullanıcı Ekle';
                 document.getElementById('userForm').reset();
