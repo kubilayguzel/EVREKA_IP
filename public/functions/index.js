@@ -3550,6 +3550,11 @@ export const adminUpsertUser = onCall({ region: "europe-west1" }, async (req) =>
   const emailInput    = strip(req.data?.email).toLowerCase();
   const newEmailInput = strip(req.data?.newEmail).toLowerCase();   // opsiyonel
   const displayName   = strip(req.data?.displayName);
+  console.log('🔍 Backend received:', { 
+    displayName, 
+    emailInput,
+    hasDisplayName: !!displayName 
+});
   const role          = strip(req.data?.role || "user");
   const password      = String(req.data?.password || "");          // opsiyonel
   const disabledFlag  = req.data?.disabled;                         // opsiyonel (true/false)
