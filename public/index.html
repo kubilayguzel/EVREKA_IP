@@ -587,7 +587,7 @@
                 }
 
                 // Kullanıcı doğrulanmış ve kayıt akışında değil → Portfolio'ya git
-                const tokenResult = await user.getIdTokenResult();
+                const tokenResult = await user.getIdTokenResult(true);
                 const userRole = tokenResult.claims.role;
 
                 if (userRole === 'belirsiz') {
