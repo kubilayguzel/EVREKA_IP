@@ -393,25 +393,27 @@
                 filteredUsers.forEach(user => {
                     const row = document.createElement('tr');
 
-                    row.innerHTML = `
-                        <td>${user.displayName || '-'}</td>
-                        <td>${user.email || '-'}</td>
-                        <td>
-                          <select class="role-select" data-user-id="${user.id}">
-                            <option value="belirsiz" ${user.role === 'belirsiz' ? 'selected' : ''}>Belirsiz</option>
-                            <option value="client" ${user.role === 'client' ? 'selected' : ''}>Client</option>
-                            <option value="user" ${user.role === 'user' ? 'selected' : ''}>Kullanıcı</option>
-                            <option value="admin" ${user.role === 'admin' ? 'selected' : ''}>Yönetici</option>
-                            <option value="superadmin" ${user.role === 'superadmin' ? 'selected' : ''}>Süper Admin</option>
-                          </select>
-                        </td>
-                        <td>${user.createdAt ? new Date(user.createdAt).toLocaleDateString('tr-TR') : '-'}</td>
-                        <td>${user.lastLoginAt ? new Date(user.lastLoginAt).toLocaleDateString('tr-TR') : '-'}</td>
-                        <td>
-                          <button class="action-btn edit-btn" data-id="${user.id}">Düzenle</button>
-                          <button class="action-btn delete-btn" data-id="${user.id}" ${user.id === this.currentUser.uid ? 'disabled' : ''}>Sil</button>
-                        </td>
-                      `;
+                // Rol metni
+                const roleTexts = {
+                  'belirsiz': 'Belirsiz',
+                  'client': 'Client',
+                  'user': 'Kullanıcı',
+                  'admin': 'Yönetici',
+                  'superadmin': 'Süper Admin'
+                };
+                const roleText = roleTexts[user.role] || user.role || 'Kullanıcı';
+
+                row.innerHTML = `
+                  <td>${user.displayName || '-'}</td>
+                  <td>${user.email || '-'}</td>
+                  <td>${roleText}</td>
+                  <td>${user.createdAt ? new Date(user.createdAt).toLocaleDateString('tr-TR') : '-'}</td>
+                  <td>${user.lastLoginAt ? new Date(user.lastLoginAt).toLocaleDateString('tr-TR') : '-'}</td>
+                  <td>
+                    <button class="action-btn edit-btn" data-id="${user.id}">Düzenle</button>
+                    <button class="action-btn delete-btn" data-id="${user.id}" ${user.id === this.currentUser.uid ? 'disabled' : ''}>Sil</button>
+                  </td>
+                `;
 
                     tableBody.appendChild(row);
                 });
