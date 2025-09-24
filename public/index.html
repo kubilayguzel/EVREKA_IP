@@ -663,18 +663,21 @@
             }
         }
 
-        async handleSignUp() {
-            const name = document.getElementById('signup-name').value.trim();
-            const email = document.getElementById('signup-email').value.trim();
-            const password = document.getElementById('signup-password').value;
+    async handleSignUp() {
+        const name = document.getElementById('signup-name').value.trim();
+        const email = document.getElementById('signup-email').value.trim();
+        const password = document.getElementById('signup-password').value;
 
-            if (!this.validateSignUp(name, email, password)) return;
+        if (!this.validateSignUp(name, email, password)) return;
 
-            this.setLoading('signup', true);
-            sessionStorage.setItem('signup_flow', '1');
+        this.setLoading('signup', true);
+        sessionStorage.setItem('signup_flow', '1');
+        
+        // Kullanıcıya bilgi ver
+        showNotification('Hesap oluşturuluyor, lütfen bekleyin...', 'info', 3000);
 
-            try {
-                const result = await authService.signUp(email, password, name, 'user');
+        try {
+        const result = await authService.signUp(email, password, name, 'user');
                 if (result.success) {
                     const user = auth.currentUser;
                     if (user) {
@@ -779,64 +782,17 @@
             if (loading) loading.style.display = isLoading ? 'inline-block' : 'none';
         }
     }
-
-    // Initialize when DOM is ready
-    document.addEventListener('DOMContentLoaded', () => {
-        new AuthController();
-    });
-
-
-    // Kayıt işlemi başladığında kısa bilgi bildirimi
-    document.addEventListener('DOMContentLoaded', () => {
-        const signupForm = document.getElementById('signupForm');
-        if (signupForm) {
-            signupForm.addEventListener('submit', () => {
-                try {
-                    showNotification('Hesap oluşturuluyor, lütfen bekleyin...', 'info', 3000);
-                } catch (e) {
-                }
-            });
-        }
-    });
-
-    // Sticky verification info: if another toast replaces it immediately, show an alert fallback
-    document.addEventListener('DOMContentLoaded', () => {
-        const nc = document.getElementById('notification-container');
-        if (!nc) return;
-        const VERIF_PART = 'Doğrulama e-postası gönderildi';
-        const obs = new MutationObserver((mutations) => {
-            for (const m of mutations) {
-                for (const node of m.addedNodes) {
-                    if (node && node.nodeType === 1) {
-                        const text = (node.textContent || '').trim();
-                        if (text.includes(VERIF_PART)) {
-                            setTimeout(() => {
-                                // if it's gone or hidden very quickly, alert as fallback
-                                const stillThere = document.body.contains(node) && node.offsetParent !== null;
-                                if (!stillThere) {
-                                    alert('Doğrulama e-postası gönderildi. Lütfen e-postanızı doğrulayın.');
-                                }
-                            }, 1800);
-                        }
-                    }
-                }
-            }
-        });
-        obs.observe(nc, {childList: true});
-    });
-
-
-    // Persist verification toast across reloads (e.g., after signOut redirect)
-    document.addEventListener('DOMContentLoaded', () => {
-        try {
-            if (sessionStorage.getItem('toast_verif_sent') === '1') {
-                sessionStorage.removeItem('toast_verif_sent');
-                showNotification('Doğrulama e-postası gönderildi. Lütfen e-postanızı doğrulayıp giriş yapın.', 'success', 15000);
-            }
-        } catch (e) {
-            alert('Doğrulama e-postası gönderildi. Lütfen e-postanızı doğrulayın.');
-        }
-    });
+// Tek ve düzenli initialization
+document.addEventListener('DOMContentLoaded', () => {
+    // AuthController'ı başlat
+    new AuthController();
+    
+    // Verification toast kontrolü (sayfa yenilendikten sonra)
+    if (sessionStorage.getItem('toast_verif_sent') === '1') {
+        sessionStorage.removeItem('toast_verif_sent');
+        showNotification('Doğrulama e-postası gönderildi. Lütfen e-postanızı doğrulayıp giriş yapın.', 'success', 15000);
+    }
+});
 </script>
 <div class="notification-container" id="notification-container"></div>
 </body>
