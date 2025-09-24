@@ -566,18 +566,23 @@
                     return;
                 }
 
-                // Eğer kayıt akışı sürüyorsa ve kullanıcı henüz doğrulanmadıysa:
                 const inSignupFlow = sessionStorage.getItem('signup_flow') === '1';
                 if (inSignupFlow && !user.emailVerified) {
-                    // Kayıt akışında "Giriş başarılı..." mesajını bastırıyoruz.
                     console.log('🟡 Signup flow in progress, suppressing success notification.');
-                    return; // Bildirim ve yönlendirme YOK
+                    return;
                 }
 
-                // Genel doğrulama koruması (opsiyonel ama tavsiye):
                 if (!inSignupFlow && !user.emailVerified) {
                     showNotification('Lütfen e-posta adresinizi doğrulayın. Doğrulama e-postası az önce gönderilmiş olabilir.', 'warning');
                     await authService.signOut();
+                    return;
+                }
+                
+                // YENİ ROL KONTROLÜ
+                const currentUser = authService.getCurrentUser();
+                if (currentUser && currentUser.role === 'belirsiz') {
+                    showNotification('Rolünüz henüz tanımlanmamış. Yönetici onayı bekleniyor.', 'info');
+                    window.location.href = 'client-pending.html'; // YÖNLENDİRME SAYFASI
                     return;
                 }
 
