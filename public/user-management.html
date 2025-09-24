@@ -373,26 +373,27 @@
             }
             
             formatTimestamp(timestamp) {
-              if (!timestamp) return '-';
-              
-              try {
-                  if (timestamp?.toDate && typeof timestamp.toDate === 'function') {
-                      return timestamp.toDate().toLocaleDateString('tr-TR');
-                  }
-                  
-                  const date = new Date(timestamp);
-                  if (!isNaN(date.getTime())) {
-                      return date.toLocaleDateString('tr-TR');
-                  }
-                  
-                  return '-';
-              } catch (e) {
-                  console.warn('Tarih parse hatası:', e);
-                  return '-';
-              }
-          }
+                if (!timestamp) return '-';
+                
+                try {
+                    if (timestamp?.toDate && typeof timestamp.toDate === 'function') {
+                        return timestamp.toDate().toLocaleDateString('tr-TR');
+                    }
+                    
+                    const date = new Date(timestamp);
+                    if (!isNaN(date.getTime())) {
+                        return date.toLocaleDateString('tr-TR');
+                    }
+                    
+                    return '-';
+                } catch (e) {
+                    console.warn('Tarih parse hatası:', e);
+                    return '-';
+                }
+            }
+
             renderUsers(filterText = '') {
-                const tableBody = document.getElementById('usersTableBody');
+    const tableBody = document.getElementById('usersTableBody');
                 const noUsersMessage = document.getElementById('noUsersMessage');
                 tableBody.innerHTML = '';
 
