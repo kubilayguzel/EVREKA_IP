@@ -3638,7 +3638,8 @@ export const adminUpsertUser = onCall({ region: "europe-west1" }, async (req) =>
 });
 
 export const onAuthUserCreate = auth.user().onCreate(async (user) => {
-  // displayName boş olursa email'den fallback oluştur
+  // displayName zaten Auth'tan geliyor (signup sırasında updateProfile ile set ediliyor)
+  // Eğer yoksa email'den fallback oluştur
   let displayName = user.displayName;
   
   if (!displayName || displayName.trim() === '') {
@@ -3649,6 +3650,13 @@ export const onAuthUserCreate = auth.user().onCreate(async (user) => {
         .split(' ')
         .map(word => word.charAt(0).toUpperCase() + word.slice(1))
         .join(' ');
+      
+      // Fallback displayName'i Auth kaydına da yaz
+      try {
+        await adminAuth.updateUser(user.uid, { displayName });
+      } catch (e) {
+        console.warn(`Auth displayName update failed: ${e.message}`);
+      }
     } else {
       displayName = 'Kullanıcı';
     }
@@ -3667,7 +3675,7 @@ export const onAuthUserCreate = auth.user().onCreate(async (user) => {
         _source: 'auth.user().onCreate'
     }, { merge: true });
   
-  // 2. Custom claim olarak da "belirsiz" rolü ata (KRİTİK!)
+  // 2. Custom claim olarak da "belirsiz" rolü ata
   await adminAuth.setCustomUserClaims(user.uid, { role: 'belirsiz' });
   
   console.log(`✅ User profile created successfully for ${user.uid} with role: belirsiz`);
