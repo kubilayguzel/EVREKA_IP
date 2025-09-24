@@ -3659,14 +3659,14 @@ export const onAuthUserCreate = auth.user().onCreate(async (user) => {
   console.log(`🆔 Creating user profile: ${user.uid}, email: ${user.email}, displayName: "${displayName}"`);
   
   await adminDb.collection('users').doc(user.uid).set({
-    email: user.email || '',
-    displayName: displayName,  // Artık boş olmayacak
-    role: 'user',              // default rol
-    disabled: !!user.disabled,
-    createdAt: FieldValue.serverTimestamp(),
-    updatedAt: FieldValue.serverTimestamp(),
-    _source: 'auth.user().onCreate'
-  }, { merge: true });
+        email: user.email || '',
+        displayName: displayName,
+        role: 'belirsiz',
+        disabled: !!user.disabled,
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+        _source: 'auth.user().onCreate'
+    }, { merge: true });
   
   console.log(`✅ User profile created successfully for ${user.uid}`);
 });
