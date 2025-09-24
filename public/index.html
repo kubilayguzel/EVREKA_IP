@@ -460,24 +460,22 @@
             <div class="tab" data-tab="signup">Kayıt Ol</div>
         </div>
         <div class="form-section active" id="signin-section">
-            <form id="signinForm" autocomplete="off" novalidate>
-                <input type="text" name="email_fake" style="display: none;">
-                <input type="password" name="password_fake" style="display: none;">
-                
+            <form id="signinForm"autocomplete="off"></form>
                 <div class="form-group">
                     <label class="form-label" for="signin-email">E-posta Adresi</label>
-                    <input  class="form-input" id="signin-email" required="" type="email" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false">
-                    <div class="error-message" id="signin-email-error"></div>
-                </div>
-                <div class="form-group">
-                    <label class="form-label" for="signin-password">Şifre</label>
-                    <input  class="form-input" id="signin-password" required="" type="password" autocomplete="current-password">
+                        <input autocomplete="off" class="form-input" id="signin-email" required="" type="email"/>
+                        <div class="error-message" id="signin-email-error"></div>
+                        </div>
+                        <div class="form-group">
+                        <label class="form-label" for="signin-password">Şifre</label>
+                        <input autocomplete="new-password" class="form-input" id="signin-password" required=""
+                    type="password"/>
                     <div class="error-message" id="signin-password-error"></div>
                 </div>
                 <div class="helper-links">
                     <button class="link-btn" id="forgotPasswordBtn" type="button">Şifremi Unuttum</button>
                 </div>
-                <button class="auth-btn" id="signinBtn" type="button">
+                <button class="auth-btn" id="signinBtn" type="submit">
                     <span id="signinText">Giriş Yap</span>
                     <span class="loading" id="signinLoading"></span>
                 </button>
@@ -519,6 +517,9 @@
     import {showNotification, showFieldError, clearAllFieldErrors} from './utils.js';
     import {sendPasswordResetEmail, sendEmailVerification, updateProfile} from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
 
+    // User Management sayfasındaki notification sistemini kopyala
+
+
     class AuthController {
         constructor() {
             this.currentTab = 'signin';
@@ -540,21 +541,27 @@
                 });
             });
 
-            // Sign in form submit'ini yakala ve otomatik gönderimi engelle
+            // Otomatik submit'i engelle
             const signinForm = document.getElementById('signinForm');
+            
+            // Enter tuşunu kontrol et
+            signinForm.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    // Manuel submit flag'i set et
+                    sessionStorage.setItem('manual_login', '1');
+                    this.handleSignIn();
+                }
+            });
+
+            // Sign in
             signinForm.addEventListener('submit', (e) => {
                 e.preventDefault();
-                e.stopImmediatePropagation();
+                sessionStorage.setItem('manual_login', '1');
                 this.handleSignIn();
             });
 
-            // Sign in butonu için
-            document.getElementById('signinBtn').addEventListener('click', (e) => {
-                e.preventDefault();
-                this.handleSignIn();
-            });
-
-            // Sign up form submit
+            // Sign up
             document.getElementById('signupForm').addEventListener('submit', (e) => {
                 e.preventDefault();
                 this.handleSignUp();
@@ -573,15 +580,13 @@
                     return;
                 }
 
-                // Check for signup flow. If so, return immediately to prevent redirect.
                 const inSignupFlow = sessionStorage.getItem('signup_flow') === '1';
-                if (inSignupFlow) {
+                if (inSignupFlow && !user.emailVerified) {
                     console.log('🟡 Signup flow in progress, suppressing success notification.');
                     return;
                 }
 
-                // E-posta doğrulaması yapılmamışsa uyarı göster ve çıkış yap
-                if (!user.emailVerified) {
+                if (!inSignupFlow && !user.emailVerified) {
                     showNotification('Lütfen e-posta adresinizi doğrulayın. Doğrulama e-postası az önce gönderilmiş olabilir.', 'warning');
                     await authService.signOut();
                     return;
@@ -609,6 +614,7 @@
                 }
 
                 // Normal kullanıcılar için ana sayfaya yönlendir
+                sessionStorage.removeItem('signup_flow');
                 showNotification('Giriş başarılı! Yönlendiriliyorsunuz...', 'success');
                 setTimeout(() => {
                     window.location.href = 'portfolio.html';
@@ -618,12 +624,17 @@
 
         switchTab(tabName) {
             if (tabName === this.currentTab) return;
+
+            // Tab butonlarını güncelle
             document.querySelectorAll('.tab').forEach(tab => {
                 tab.classList.toggle('active', tab.dataset.tab === tabName);
             });
+
+            // Form bölümlerini güncelle
             document.querySelectorAll('.form-section').forEach(section => {
                 section.classList.toggle('active', section.id === `${tabName}-section`);
             });
+
             this.currentTab = tabName;
             clearAllFieldErrors();
         }
@@ -631,6 +642,7 @@
         checkFirebaseConnectionStatus() {
             const statusEl = document.getElementById('firebaseStatus');
             if (!statusEl) return;
+
             if (authService.isFirebaseAvailable) {
                 statusEl.textContent = '✅ Firebase bağlandı';
                 statusEl.className = 'firebase-status connected';
@@ -648,6 +660,7 @@
             if (!this.validateSignIn(email, password)) return;
 
             this.setLoading('signin', true);
+
             try {
                 const result = await authService.signIn(email, password);
                 if (result.success) {
@@ -655,6 +668,7 @@
                 } else {
                     showNotification(result.error || 'Giriş başarısız.', 'error', 10000);
                 }
+                // onAuthStateChanged gerekli aksiyonları alacak
             } catch (err) {
                 console.error('Final sign in error catch:', err);
                 showNotification('Giriş sırasında beklenmeyen bir hata oluştu.', 'error', 10000);
@@ -671,25 +685,25 @@
             if (!this.validateSignUp(name, email, password)) return;
 
             this.setLoading('signup', true);
+            sessionStorage.setItem('signup_flow', '1');
 
             try {
                 const result = await authService.signUp(email, password, name, 'user');
                 if (result.success) {
                     const user = auth.currentUser;
                     if (user) {
+                        // Ad-soyad bilgisini Firebase Auth'a kaydet
                         await updateProfile(user, {displayName: name});
 
                         try {
                             await sendEmailVerification(user);
+
                             sessionStorage.setItem('toast_verif_sent', '1');
                             showNotification('Doğrulama e-postası gönderildi. Lütfen e-postanızı doğrulayıp giriş yapın.', 'success', 10000);
                         } catch (ve) {
                             console.error('sendEmailVerification error:', ve);
                             showNotification('Doğrulama e-postası gönderilemedi. Daha sonra tekrar deneyin.', 'error', 10000);
                         }
-                        
-                        // Yönlendirmeyi engellemek için signup_flow flag'ini ayarla
-                        sessionStorage.setItem('signup_flow', '1');
                         await authService.signOut();
                         this.switchTab('signin');
                     } else {
@@ -704,6 +718,7 @@
                 showNotification('Kayıt sırasında beklenmeyen bir hata oluştu.', 'error', 8000);
             } finally {
                 this.setLoading('signup', false);
+                sessionStorage.removeItem('signup_flow');
             }
         }
 
@@ -781,12 +796,9 @@
 
     // Initialize when DOM is ready
     document.addEventListener('DOMContentLoaded', () => {
-        // Clear signup_flow on initial page load if not coming from a redirect
-        if (!document.referrer.includes('your-domain.com') && sessionStorage.getItem('signup_flow')) {
-            sessionStorage.removeItem('signup_flow');
-        }
         new AuthController();
     });
+
 
     // Kayıt işlemi başladığında kısa bilgi bildirimi
     document.addEventListener('DOMContentLoaded', () => {
@@ -813,6 +825,7 @@
                         const text = (node.textContent || '').trim();
                         if (text.includes(VERIF_PART)) {
                             setTimeout(() => {
+                                // if it's gone or hidden very quickly, alert as fallback
                                 const stillThere = document.body.contains(node) && node.offsetParent !== null;
                                 if (!stillThere) {
                                     alert('Doğrulama e-postası gönderildi. Lütfen e-postanızı doğrulayın.');
@@ -825,6 +838,7 @@
         });
         obs.observe(nc, {childList: true});
     });
+
 
     // Persist verification toast across reloads (e.g., after signOut redirect)
     document.addEventListener('DOMContentLoaded', () => {
@@ -839,9 +853,5 @@
     });
 </script>
 <div class="notification-container" id="notification-container"></div>
-<script>
-    // Sayfanın en altındaki önceki denemeler kaldırıldı.
-    // AuthController içindeki listenerlar yeterli.
-</script>
 </body>
 </html>
