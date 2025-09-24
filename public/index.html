@@ -570,21 +570,25 @@
                     return;
                 }
 
+                // Check for signup flow. If so, return immediately to prevent redirect.
                 const inSignupFlow = sessionStorage.getItem('signup_flow') === '1';
-                if (inSignupFlow && !user.emailVerified) {
+                if (inSignupFlow) {
                     console.log('🟡 Signup flow in progress, suppressing success notification.');
                     return;
                 }
 
-                if (!inSignupFlow && !user.emailVerified) {
+                // E-posta doğrulaması yapılmamışsa uyarı göster ve çıkış yap
+                if (!user.emailVerified) {
                     showNotification('Lütfen e-posta adresinizi doğrulayın. Doğrulama e-postası az önce gönderilmiş olabilir.', 'warning');
                     await authService.signOut();
                     return;
                 }
-
+                
+                // ROL KONTROLÜ - Firebase token'dan al (en güncel)
                 const tokenResult = await user.getIdTokenResult(true);
                 const userRole = tokenResult.claims.role || 'belirsiz';
 
+                // LocalStorage'a güncel rol ile kaydet
                 const userData = {
                     uid: user.uid,
                     email: user.email,
@@ -594,13 +598,14 @@
                 };
                 localStorage.setItem('currentUser', JSON.stringify(userData));
 
+                // Rol bazlı yönlendirme
                 if (userRole === 'belirsiz') {
                     showNotification('Hesabınız oluşturuldu. Yönetici onayı bekleniyor...', 'info');
                     window.location.href = 'client-pending.html';
                     return;
                 }
 
-                sessionStorage.removeItem('signup_flow');
+                // Normal kullanıcılar için ana sayfaya yönlendir
                 showNotification('Giriş başarılı! Yönlendiriliyorsunuz...', 'success');
                 setTimeout(() => {
                     window.location.href = 'portfolio.html';
@@ -663,7 +668,6 @@
             if (!this.validateSignUp(name, email, password)) return;
 
             this.setLoading('signup', true);
-            sessionStorage.setItem('signup_flow', '1');
 
             try {
                 const result = await authService.signUp(email, password, name, 'user');
@@ -680,6 +684,9 @@
                             console.error('sendEmailVerification error:', ve);
                             showNotification('Doğrulama e-postası gönderilemedi. Daha sonra tekrar deneyin.', 'error', 10000);
                         }
+                        
+                        // Yönlendirmeyi engellemek için signup_flow flag'ini ayarla
+                        sessionStorage.setItem('signup_flow', '1');
                         await authService.signOut();
                         this.switchTab('signin');
                     } else {
@@ -694,7 +701,6 @@
                 showNotification('Kayıt sırasında beklenmeyen bir hata oluştu.', 'error', 8000);
             } finally {
                 this.setLoading('signup', false);
-                sessionStorage.removeItem('signup_flow');
             }
         }
 
@@ -772,6 +778,10 @@
 
     // Initialize when DOM is ready
     document.addEventListener('DOMContentLoaded', () => {
+        // Clear signup_flow on initial page load if not coming from a redirect
+        if (!document.referrer.includes('your-domain.com') && sessionStorage.getItem('signup_flow')) {
+            sessionStorage.removeItem('signup_flow');
+        }
         new AuthController();
     });
 
