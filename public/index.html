@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8"/>
     <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-    <title>Giriş - IP Manager</title>
+    <title>GiriÅŸ - IP Manager</title>
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
     <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
@@ -25,7 +25,7 @@
             color: #333;
         }
 
-        /* Ana kapsayıcıyı ekledik ve alt alta hizaladık */
+        /* Ana kapsayÄ±cÄ±yÄ± ekledik ve alt alta hizaladÄ±k */
         .main-container {
             display: flex;
             flex-direction: column;
@@ -242,7 +242,7 @@
             }
         }
 
-        /* NOTIFICATION STYLES - User Management sayfasından alınmış */
+        /* NOTIFICATION STYLES - User Management sayfasÄ±ndan alÄ±nmÄ±ÅŸ */
         .notification {
             background-color: #fff;
             color: #333;
@@ -260,7 +260,7 @@
             transform: translateX(120%);
         }
 
-        /* Türlere göre renk ataması */
+        /* TÃ¼rlere gÃ¶re renk atamasÄ± */
         .notification.error {
             border-color: #dc3545;
         }
@@ -448,35 +448,35 @@
     </style>
 </head>
 <body>
-<div class="firebase-status" id="firebaseStatus">🔄 Firebase bağlanıyor...</div>
+<div class="firebase-status" id="firebaseStatus">ðŸ”„ Firebase baÄŸlanÄ±yor...</div>
 <div class="main-container">
     <div class="auth-container">
         <div class="logo-section">
             <div class="app-title">IP Manager</div>
-            <div class="subtitle">Fikri Mülkiyet Yönetim Sistemi</div>
+            <div class="subtitle">Fikri MÃ¼lkiyet YÃ¶netim Sistemi</div>
         </div>
         <div class="tabs">
-            <div class="tab active" data-tab="signin">Giriş Yap</div>
-            <div class="tab" data-tab="signup">Kayıt Ol</div>
+            <div class="tab active" data-tab="signin">GiriÅŸ Yap</div>
+            <div class="tab" data-tab="signup">KayÄ±t Ol</div>
         </div>
         <div class="form-section active" id="signin-section">
-            <form id="signinForm" autocomplete="off" novalidate>
+            <form id="signinForm">
                 <div class="form-group">
                     <label class="form-label" for="signin-email">E-posta Adresi</label>
-                        <input  class="form-input" id="signin-email" required="" type="email"/ autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" required>
-                        <div class="error-message" id="signin-email-error"></div>
-                        </div>
-                        <div class="form-group">
-                        <label class="form-label" for="signin-password">Şifre</label>
-                        <input  class="form-input" id="signin-password" required=""
-                    type="password"/ autocomplete="current-password" required>
+                    <input autocomplete="username" class="form-input" id="signin-email" required="" type="email"/>
+                    <div class="error-message" id="signin-email-error"></div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="signin-password">Åžifre</label>
+                    <input autocomplete="current-password" class="form-input" id="signin-password" required=""
+                           type="password"/>
                     <div class="error-message" id="signin-password-error"></div>
                 </div>
                 <div class="helper-links">
-                    <button class="link-btn" id="forgotPasswordBtn" type="button">Şifremi Unuttum</button>
+                    <button class="link-btn" id="forgotPasswordBtn" type="button">Åžifremi Unuttum</button>
                 </div>
-                <button class="auth-btn" id="signinBtn" type="button">
-                    <span id="signinText">Giriş Yap</span>
+                <button class="auth-btn" id="signinBtn" type="submit">
+                    <span id="signinText">GiriÅŸ Yap</span>
                     <span class="loading" id="signinLoading"></span>
                 </button>
             </form>
@@ -494,13 +494,13 @@
                     <div class="error-message" id="signup-email-error"></div>
                 </div>
                 <div class="form-group">
-                    <label class="form-label" for="signup-password">Şifre (min. 6 karakter)</label>
+                    <label class="form-label" for="signup-password">Åžifre (min. 6 karakter)</label>
                     <input autocomplete="new-password" class="form-input" id="signup-password" minlength="6" required=""
                            type="password"/>
                     <div class="error-message" id="signup-password-error"></div>
                 </div>
                 <button class="auth-btn" id="signupBtn" type="submit">
-                    <span id="signupText">Kayıt Ol</span>
+                    <span id="signupText">KayÄ±t Ol</span>
                     <span class="loading" id="signupLoading"></span>
                 </button>
             </form>
@@ -517,7 +517,7 @@
     import {showNotification, showFieldError, clearAllFieldErrors} from './utils.js';
     import {sendPasswordResetEmail, sendEmailVerification, updateProfile} from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
 
-    // User Management sayfasındaki notification sistemini kopyala
+    // User Management sayfasÄ±ndaki notification sistemini kopyala
 
 
     class AuthController {
@@ -530,7 +530,7 @@
             this.setupEventListeners();
             this.setupAuthStateListener();
             this.checkFirebaseConnectionStatus();
-            console.log('🔐 Auth Controller initialized');
+            console.log('ðŸ” Auth Controller initialized');
         }
 
         setupEventListeners() {
@@ -541,23 +541,9 @@
                 });
             });
 
-            // Otomatik submit'i engelle
-            const signinForm = document.getElementById('signinForm');
-            
-            // Enter tuşunu kontrol et
-            signinForm.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') {
-                    e.preventDefault();
-                    // Manuel submit flag'i set et
-                    sessionStorage.setItem('manual_login', '1');
-                    this.handleSignIn();
-                }
-            });
-
             // Sign in
-            signinForm.addEventListener('submit', (e) => {
+            document.getElementById('signinForm').addEventListener('submit', (e) => {
                 e.preventDefault();
-                sessionStorage.setItem('manual_login', '1');
                 this.handleSignIn();
             });
 
@@ -576,61 +562,57 @@
         setupAuthStateListener() {
             auth.onAuthStateChanged(async (user) => {
                 if (!user) {
-                    console.log('ℹ️ No authenticated Firebase user.');
+                    console.log('â„¹ï¸ No authenticated Firebase user.');
                     return;
                 }
 
                 const inSignupFlow = sessionStorage.getItem('signup_flow') === '1';
                 if (inSignupFlow && !user.emailVerified) {
-                    console.log('🟡 Signup flow in progress, suppressing success notification.');
+                    console.log('ðŸŸ¡ Signup flow in progress, suppressing success notification.');
                     return;
                 }
 
                 if (!inSignupFlow && !user.emailVerified) {
-                    showNotification('Lütfen e-posta adresinizi doğrulayın. Doğrulama e-postası az önce gönderilmiş olabilir.', 'warning');
+                    showNotification('LÃ¼tfen e-posta adresinizi doÄŸrulayÄ±n. DoÄŸrulama e-postasÄ± az Ã¶nce gÃ¶nderilmiÅŸ olabilir.', 'warning');
                     await authService.signOut();
                     return;
                 }
                 
-                // ROL KONTROLÜ - Firebase token'dan al (en güncel)
-                const tokenResult = await user.getIdTokenResult(true);
-                const userRole = tokenResult.claims.role || 'belirsiz';
-
-                // LocalStorage'a güncel rol ile kaydet
-                const userData = {
-                    uid: user.uid,
-                    email: user.email,
-                    displayName: user.displayName,
-                    role: userRole,
-                    isSuperAdmin: userRole === 'superadmin'
-                };
-                localStorage.setItem('currentUser', JSON.stringify(userData));
-
-                // Rol bazlı yönlendirme
-                if (userRole === 'belirsiz') {
-                    showNotification('Hesabınız oluşturuldu. Yönetici onayı bekleniyor...', 'info');
-                    window.location.href = 'client-pending.html';
+                // YENÄ° ROL KONTROLÃœ
+                const currentUser = authService.getCurrentUser();
+                if (currentUser && currentUser.role === 'belirsiz') {
+                    showNotification('RolÃ¼nÃ¼z henÃ¼z tanÄ±mlanmamÄ±ÅŸ. YÃ¶netici onayÄ± bekleniyor.', 'info');
+                    window.location.href = 'client-pending.html'; // YÃ–NLENDÄ°RME SAYFASI
                     return;
                 }
 
-                // Normal kullanıcılar için ana sayfaya yönlendir
-                sessionStorage.removeItem('signup_flow');
-                showNotification('Giriş başarılı! Yönlendiriliyorsunuz...', 'success');
-                setTimeout(() => {
-                    window.location.href = 'portfolio.html';
-                }, 1000);
+                // KullanÄ±cÄ± doÄŸrulanmÄ±ÅŸ ve kayÄ±t akÄ±ÅŸÄ±nda deÄŸil â†’ Portfolio'ya git
+                const tokenResult = await user.getIdTokenResult(true);
+                const userRole = tokenResult.claims.role;
+
+                if (userRole === 'belirsiz') {
+                    showNotification('RolÃ¼nÃ¼z henÃ¼z tanÄ±mlanmamÄ±ÅŸ. YÃ¶netici onayÄ± bekleniyor.', 'info');
+                    window.location.href = 'client-pending.html';
+                } else {
+                    // KullanÄ±cÄ± doÄŸrulanmÄ±ÅŸ ve kayÄ±t akÄ±ÅŸÄ±nda deÄŸil â†’ Portfolio'ya git
+                    sessionStorage.removeItem('signup_flow');
+                    showNotification('GiriÅŸ baÅŸarÄ±lÄ±! YÃ¶nlendiriliyorsunuz...', 'success');
+                    setTimeout(() => {
+                        window.location.href = 'portfolio.html';
+                    }, 1000);
+                }
             });
         }
 
         switchTab(tabName) {
             if (tabName === this.currentTab) return;
 
-            // Tab butonlarını güncelle
+            // Tab butonlarÄ±nÄ± gÃ¼ncelle
             document.querySelectorAll('.tab').forEach(tab => {
                 tab.classList.toggle('active', tab.dataset.tab === tabName);
             });
 
-            // Form bölümlerini güncelle
+            // Form bÃ¶lÃ¼mlerini gÃ¼ncelle
             document.querySelectorAll('.form-section').forEach(section => {
                 section.classList.toggle('active', section.id === `${tabName}-section`);
             });
@@ -644,11 +626,11 @@
             if (!statusEl) return;
 
             if (authService.isFirebaseAvailable) {
-                statusEl.textContent = '✅ Firebase bağlandı';
+                statusEl.textContent = 'âœ… Firebase baÄŸlandÄ±';
                 statusEl.className = 'firebase-status connected';
                 setTimeout(() => statusEl.style.display = 'none', 2000);
             } else {
-                statusEl.textContent = '❌ Firebase bağlanamadı';
+                statusEl.textContent = 'âŒ Firebase baÄŸlanamadÄ±';
                 statusEl.className = 'firebase-status error';
             }
         }
@@ -664,14 +646,14 @@
             try {
                 const result = await authService.signIn(email, password);
                 if (result.success) {
-                    console.log('🟢 Sign in successful, auth state will handle navigation');
+                    console.log('ðŸŸ¢ Sign in successful, auth state will handle navigation');
                 } else {
-                    showNotification(result.error || 'Giriş başarısız.', 'error', 10000);
+                    showNotification(result.error || 'GiriÅŸ baÅŸarÄ±sÄ±z.', 'error', 10000);
                 }
-                // onAuthStateChanged gerekli aksiyonları alacak
+                // onAuthStateChanged gerekli aksiyonlarÄ± alacak
             } catch (err) {
                 console.error('Final sign in error catch:', err);
-                showNotification('Giriş sırasında beklenmeyen bir hata oluştu.', 'error', 10000);
+                showNotification('GiriÅŸ sÄ±rasÄ±nda beklenmeyen bir hata oluÅŸtu.', 'error', 10000);
             } finally {
                 this.setLoading('signin', false);
             }
@@ -699,23 +681,23 @@
                             await sendEmailVerification(user);
 
                             sessionStorage.setItem('toast_verif_sent', '1');
-                            showNotification('Doğrulama e-postası gönderildi. Lütfen e-postanızı doğrulayıp giriş yapın.', 'success', 10000);
+                            showNotification('DoÄŸrulama e-postasÄ± gÃ¶nderildi. LÃ¼tfen e-postanÄ±zÄ± doÄŸrulayÄ±p giriÅŸ yapÄ±n.', 'success', 10000);
                         } catch (ve) {
                             console.error('sendEmailVerification error:', ve);
-                            showNotification('Doğrulama e-postası gönderilemedi. Daha sonra tekrar deneyin.', 'error', 10000);
+                            showNotification('DoÄŸrulama e-postasÄ± gÃ¶nderilemedi. Daha sonra tekrar deneyin.', 'error', 10000);
                         }
                         await authService.signOut();
                         this.switchTab('signin');
                     } else {
-                        showNotification('Hesap oluşturuldu. Lütfen e-postanızı doğrulayın ve giriş yapın.', 'success', 10000);
+                        showNotification('Hesap oluÅŸturuldu. LÃ¼tfen e-postanÄ±zÄ± doÄŸrulayÄ±n ve giriÅŸ yapÄ±n.', 'success', 10000);
                         this.switchTab('signin');
                     }
                 } else {
-                    showNotification(result.error || 'Kayıt başarısız.', 'error', 8000);
+                    showNotification(result.error || 'KayÄ±t baÅŸarÄ±sÄ±z.', 'error', 8000);
                 }
             } catch (err) {
                 console.error('Final sign up error catch:', err);
-                showNotification('Kayıt sırasında beklenmeyen bir hata oluştu.', 'error', 8000);
+                showNotification('KayÄ±t sÄ±rasÄ±nda beklenmeyen bir hata oluÅŸtu.', 'error', 8000);
             } finally {
                 this.setLoading('signup', false);
                 sessionStorage.removeItem('signup_flow');
@@ -723,20 +705,20 @@
         }
 
         async handlePasswordReset() {
-            const email = prompt('Şifre sıfırlama için e-posta adresinizi girin:');
+            const email = prompt('Åžifre sÄ±fÄ±rlama iÃ§in e-posta adresinizi girin:');
             if (!email || !this.isValidEmail(email)) {
-                showNotification('Geçerli bir e-posta adresi girin.', 'error', 10000);
+                showNotification('GeÃ§erli bir e-posta adresi girin.', 'error', 10000);
                 return;
             }
 
             try {
                 await sendPasswordResetEmail(auth, email);
-                showNotification('Şifre sıfırlama e-postası gönderildi. Gelen kutunuzu kontrol edin.', 'success');
+                showNotification('Åžifre sÄ±fÄ±rlama e-postasÄ± gÃ¶nderildi. Gelen kutunuzu kontrol edin.', 'success');
             } catch (err) {
                 console.error('Password reset error:', err);
-                let msg = 'İşlem gerçekleştirilemedi.';
-                if (err?.code === 'auth/user-not-found') msg = 'Bu e-posta ile kullanıcı bulunamadı.';
-                else if (err?.code === 'auth/invalid-email') msg = 'Geçersiz e-posta adresi.';
+                let msg = 'Ä°ÅŸlem gerÃ§ekleÅŸtirilemedi.';
+                if (err?.code === 'auth/user-not-found') msg = 'Bu e-posta ile kullanÄ±cÄ± bulunamadÄ±.';
+                else if (err?.code === 'auth/invalid-email') msg = 'GeÃ§ersiz e-posta adresi.';
                 showNotification(msg, 'error', 10000);
             }
         }
@@ -749,7 +731,7 @@
                 isValid = false;
             }
             if (!password) {
-                showFieldError('signin-password', 'Şifre gerekli');
+                showFieldError('signin-password', 'Åžifre gerekli');
                 isValid = false;
             }
             return isValid;
@@ -766,14 +748,14 @@
                 showFieldError('signup-email', 'E-posta adresi gerekli');
                 isValid = false;
             } else if (!this.isValidEmail(email)) {
-                showFieldError('signup-email', 'Geçerli bir e-posta girin');
+                showFieldError('signup-email', 'GeÃ§erli bir e-posta girin');
                 isValid = false;
             }
             if (!password) {
-                showFieldError('signup-password', 'Şifre gerekli');
+                showFieldError('signup-password', 'Åžifre gerekli');
                 isValid = false;
             } else if (password.length < 6) {
-                showFieldError('signup-password', 'Şifre en az 6 karakter');
+                showFieldError('signup-password', 'Åžifre en az 6 karakter');
                 isValid = false;
             }
             return isValid;
@@ -800,13 +782,13 @@
     });
 
 
-    // Kayıt işlemi başladığında kısa bilgi bildirimi
+    // KayÄ±t iÅŸlemi baÅŸladÄ±ÄŸÄ±nda kÄ±sa bilgi bildirimi
     document.addEventListener('DOMContentLoaded', () => {
         const signupForm = document.getElementById('signupForm');
         if (signupForm) {
             signupForm.addEventListener('submit', () => {
                 try {
-                    showNotification('Hesap oluşturuluyor, lütfen bekleyin...', 'info', 3000);
+                    showNotification('Hesap oluÅŸturuluyor, lÃ¼tfen bekleyin...', 'info', 3000);
                 } catch (e) {
                 }
             });
@@ -817,7 +799,7 @@
     document.addEventListener('DOMContentLoaded', () => {
         const nc = document.getElementById('notification-container');
         if (!nc) return;
-        const VERIF_PART = 'Doğrulama e-postası gönderildi';
+        const VERIF_PART = 'DoÄŸrulama e-postasÄ± gÃ¶nderildi';
         const obs = new MutationObserver((mutations) => {
             for (const m of mutations) {
                 for (const node of m.addedNodes) {
@@ -828,7 +810,7 @@
                                 // if it's gone or hidden very quickly, alert as fallback
                                 const stillThere = document.body.contains(node) && node.offsetParent !== null;
                                 if (!stillThere) {
-                                    alert('Doğrulama e-postası gönderildi. Lütfen e-postanızı doğrulayın.');
+                                    alert('DoÄŸrulama e-postasÄ± gÃ¶nderildi. LÃ¼tfen e-postanÄ±zÄ± doÄŸrulayÄ±n.');
                                 }
                             }, 1800);
                         }
@@ -845,94 +827,13 @@
         try {
             if (sessionStorage.getItem('toast_verif_sent') === '1') {
                 sessionStorage.removeItem('toast_verif_sent');
-                showNotification('Doğrulama e-postası gönderildi. Lütfen e-postanızı doğrulayıp giriş yapın.', 'success', 15000);
+                showNotification('DoÄŸrulama e-postasÄ± gÃ¶nderildi. LÃ¼tfen e-postanÄ±zÄ± doÄŸrulayÄ±p giriÅŸ yapÄ±n.', 'success', 15000);
             }
         } catch (e) {
-            alert('Doğrulama e-postası gönderildi. Lütfen e-postanızı doğrulayın.');
+            alert('DoÄŸrulama e-postasÄ± gÃ¶nderildi. LÃ¼tfen e-postanÄ±zÄ± doÄŸrulayÄ±n.');
         }
     });
 </script>
 <div class="notification-container" id="notification-container"></div>
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-  var signinForm = document.getElementById('signinForm');
-  if (signinForm) {
-    signinForm.addEventListener('submit', function(e) {
-      e.preventDefault(); // block Enter/auto-submit
-    });
-  }
-  var signinBtn = document.getElementById('signinBtn');
-  if (signinBtn) {
-    // If a global handleSignIn exists on window or in a module context, try to call it safely
-    signinBtn.addEventListener('click', function(e) {
-      e.preventDefault();
-      try {
-        if (typeof handleSignIn === 'function') {
-          handleSignIn();
-        } else if (typeof window !== 'undefined' && typeof window.handleSignIn === 'function') {
-          window.handleSignIn();
-        } else if (typeof app !== 'undefined' && typeof app.handleSignIn === 'function') {
-          app.handleSignIn();
-        }
-      } catch (err) {
-        console.error('handleSignIn error:', err);
-      }
-    });
-  }
-  // Block Enter key in inputs to avoid implicit submit
-  ['signin-email','signin-password'].forEach(function(id){
-    var el = document.getElementById(id);
-    if (!el) return;
-    el.addEventListener('keydown', function(e){
-      if (e.key === 'Enter') e.preventDefault();
-    });
-  });
-});
-</script>
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-  var form = document.getElementById('signinForm');
-  if (!form) return;
-  // Belt & suspenders: nuke any submit mechanics
-  form.setAttribute('novalidate', 'novalidate');
-  form.setAttribute('action', '#'); // neutralize any action
-  form.addEventListener('submit', function(e) {
-    e.preventDefault();
-    e.stopPropagation();
-    if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
-    return false;
-  }, true); // capture phase to intercept early
-
-  // Ensure all buttons/inputs inside are non-submit
-  Array.from(form.querySelectorAll('button:not([type]), button[type="submit"], input[type="submit"], input[type="image"]')).forEach(function(el){
-    el.setAttribute('type', 'button');
-  });
-
-  // Block Enter key inside any input to avoid implicit submit
-  form.addEventListener('keydown', function(e){
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      e.stopPropagation();
-    }
-  }, true);
-
-  // Guard the main click to call handleSignIn only
-  var btn = document.getElementById('signinBtn');
-  if (btn) {
-    btn.addEventListener('click', function(e){
-      e.preventDefault();
-      e.stopPropagation();
-      try {
-        if (typeof handleSignIn === 'function') handleSignIn();
-        else if (typeof window !== 'undefined' && typeof window.handleSignIn === 'function') window.handleSignIn();
-        else if (typeof app !== 'undefined' && typeof app.handleSignIn === 'function') app.handleSignIn();
-      } catch (err) {
-        console.error('handleSignIn error:', err);
-      }
-      return false;
-    }, true); // capture to beat other listeners
-  }
-});
-</script>
 </body>
 </html>
