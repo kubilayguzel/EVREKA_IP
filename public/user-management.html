@@ -398,9 +398,11 @@
             <td>${user.email || '-'}</td>
             <td>
               <select class="role-select" data-user-id="${user.id}">
-                <option value="user" ${user.role === 'user' ? 'selected' : ''}>KullanÄ±cÄ±</option>
-                <option value="admin" ${user.role === 'admin' ? 'selected' : ''}>YÃ¶netici</option>
-                <option value="superadmin" ${user.role === 'superadmin' ? 'selected' : ''}>SÃ¼per Admin</option>
+                <option value="belirsiz" ${user.role === 'belirsiz' ? 'selected' : ''}>Belirsiz</option>
+                <option value="client" ${user.role === 'client' ? 'selected' : ''}>Client</option>
+                <option value="user" ${user.role === 'user' ? 'selected' : ''}>Kullanıcı</option>
+                <option value="admin" ${user.role === 'admin' ? 'selected' : ''}>Yönetici</option>
+                <option value="superadmin" ${user.role === 'superadmin' ? 'selected' : ''}>Süper Admin</option>
               </select>
             </td>
             <td>${user.createdAt ? new Date(user.createdAt).toLocaleDateString('tr-TR') : '-'}</td>
