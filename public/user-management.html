@@ -398,6 +398,8 @@
             <td>${user.email || '-'}</td>
             <td>
               <select class="role-select" data-user-id="${user.id}">
+                <option value="belirsiz" ${user.role === 'belirsiz' ? 'selected' : ''}>Belirsiz</option>
+                <option value="client" ${user.role === 'client' ? 'selected' : ''}>Client</option>
                 <option value="user" ${user.role === 'user' ? 'selected' : ''}>Kullanıcı</option>
                 <option value="admin" ${user.role === 'admin' ? 'selected' : ''}>Yönetici</option>
                 <option value="superadmin" ${user.role === 'superadmin' ? 'selected' : ''}>Süper Admin</option>
