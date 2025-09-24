@@ -3638,42 +3638,21 @@ export const adminUpsertUser = onCall({ region: "europe-west1" }, async (req) =>
 });
 
 export const onAuthUserCreate = auth.user().onCreate(async (user) => {
-  // displayName zaten Auth'tan geliyor (signup sırasında updateProfile ile set ediliyor)
-  // Eğer yoksa email'den fallback oluştur
-  let displayName = user.displayName;
-  
-  if (!displayName || displayName.trim() === '') {
-    if (user.email) {
-      displayName = user.email.split('@')[0];
-      displayName = displayName
-        .replace(/[._]/g, ' ')
-        .split(' ')
-        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-        .join(' ');
-      
-      // Fallback displayName'i Auth kaydına da yaz
-      try {
-        await adminAuth.updateUser(user.uid, { displayName });
-      } catch (e) {
-        console.warn(`Auth displayName update failed: ${e.message}`);
-      }
-    } else {
-      displayName = 'Kullanıcı';
-    }
-  }
+  // displayName Auth'tan gelecek (signup sırasında updateProfile ile set edilmiş olmalı)
+  const displayName = user.displayName || 'Kullanıcı';
   
   console.log(`🆔 Creating user profile: ${user.uid}, email: ${user.email}, displayName: "${displayName}"`);
   
   // 1. Firestore'a kaydet
   await adminDb.collection('users').doc(user.uid).set({
-        email: user.email || '',
-        displayName: displayName,
-        role: 'belirsiz',
-        disabled: !!user.disabled,
-        createdAt: FieldValue.serverTimestamp(),
-        updatedAt: FieldValue.serverTimestamp(),
-        _source: 'auth.user().onCreate'
-    }, { merge: true });
+    email: user.email || '',
+    displayName: displayName,
+    role: 'belirsiz',
+    disabled: !!user.disabled,
+    createdAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+    _source: 'auth.user().onCreate'
+  }, { merge: true });
   
   // 2. Custom claim olarak da "belirsiz" rolü ata
   await adminAuth.setCustomUserClaims(user.uid, { role: 'belirsiz' });
