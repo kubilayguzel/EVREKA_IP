@@ -3638,8 +3638,10 @@ export const adminUpsertUser = onCall({ region: "europe-west1" }, async (req) =>
 });
 
 export const onAuthUserCreate = auth.user().onCreate(async (user) => {
-  // displayName Auth'tan gelecek (signup sırasında updateProfile ile set edilmiş olmalı)
-  const displayName = user.displayName || 'Kullanıcı';
+  // Email'den ad çıkar veya varsayılan kullan
+  const displayName = user.displayName || 
+                      user.email?.split('@')[0]?.replace(/[._-]/g, ' ') || 
+                      'Yeni Kullanıcı';
   
   console.log(`🆔 Creating user profile: ${user.uid}, email: ${user.email}, displayName: "${displayName}"`);
   
