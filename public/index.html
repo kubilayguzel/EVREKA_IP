@@ -889,5 +889,50 @@ document.addEventListener('DOMContentLoaded', function() {
   });
 });
 </script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  var form = document.getElementById('signinForm');
+  if (!form) return;
+  // Belt & suspenders: nuke any submit mechanics
+  form.setAttribute('novalidate', 'novalidate');
+  form.setAttribute('action', '#'); // neutralize any action
+  form.addEventListener('submit', function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
+    return false;
+  }, true); // capture phase to intercept early
+
+  // Ensure all buttons/inputs inside are non-submit
+  Array.from(form.querySelectorAll('button:not([type]), button[type="submit"], input[type="submit"], input[type="image"]')).forEach(function(el){
+    el.setAttribute('type', 'button');
+  });
+
+  // Block Enter key inside any input to avoid implicit submit
+  form.addEventListener('keydown', function(e){
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  }, true);
+
+  // Guard the main click to call handleSignIn only
+  var btn = document.getElementById('signinBtn');
+  if (btn) {
+    btn.addEventListener('click', function(e){
+      e.preventDefault();
+      e.stopPropagation();
+      try {
+        if (typeof handleSignIn === 'function') handleSignIn();
+        else if (typeof window !== 'undefined' && typeof window.handleSignIn === 'function') window.handleSignIn();
+        else if (typeof app !== 'undefined' && typeof app.handleSignIn === 'function') app.handleSignIn();
+      } catch (err) {
+        console.error('handleSignIn error:', err);
+      }
+      return false;
+    }, true); // capture to beat other listeners
+  }
+});
+</script>
 </body>
 </html>
