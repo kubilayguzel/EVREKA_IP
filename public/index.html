@@ -463,13 +463,12 @@
             <form id="signinForm" autocomplete="off" novalidate>
                 <div class="form-group">
                     <label class="form-label" for="signin-email">E-posta Adresi</label>
-                        <input  class="form-input" id="signin-email" required="" type="email"/ autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" required>
-                        <div class="error-message" id="signin-email-error"></div>
-                        </div>
-                        <div class="form-group">
-                        <label class="form-label" for="signin-password">Şifre</label>
-                        <input  class="form-input" id="signin-password" required=""
-                    type="password"/ autocomplete="current-password" required>
+                    <input  class="form-input" id="signin-email" required="" type="email" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false">
+                    <div class="error-message" id="signin-email-error"></div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="signin-password">Şifre</label>
+                    <input  class="form-input" id="signin-password" required="" type="password" autocomplete="current-password">
                     <div class="error-message" id="signin-password-error"></div>
                 </div>
                 <div class="helper-links">
@@ -517,9 +516,6 @@
     import {showNotification, showFieldError, clearAllFieldErrors} from './utils.js';
     import {sendPasswordResetEmail, sendEmailVerification, updateProfile} from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
 
-    // User Management sayfasındaki notification sistemini kopyala
-
-
     class AuthController {
         constructor() {
             this.currentTab = 'signin';
@@ -541,27 +537,21 @@
                 });
             });
 
-            // Otomatik submit'i engelle
+            // Sign in form submit'ini yakala ve otomatik gönderimi engelle
             const signinForm = document.getElementById('signinForm');
-            
-            // Enter tuşunu kontrol et
-            signinForm.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') {
-                    e.preventDefault();
-                    // Manuel submit flag'i set et
-                    sessionStorage.setItem('manual_login', '1');
-                    this.handleSignIn();
-                }
-            });
-
-            // Sign in
             signinForm.addEventListener('submit', (e) => {
                 e.preventDefault();
-                sessionStorage.setItem('manual_login', '1');
+                e.stopImmediatePropagation();
                 this.handleSignIn();
             });
 
-            // Sign up
+            // Sign in butonu için
+            document.getElementById('signinBtn').addEventListener('click', (e) => {
+                e.preventDefault();
+                this.handleSignIn();
+            });
+
+            // Sign up form submit
             document.getElementById('signupForm').addEventListener('submit', (e) => {
                 e.preventDefault();
                 this.handleSignUp();
@@ -591,12 +581,10 @@
                     await authService.signOut();
                     return;
                 }
-                
-                // ROL KONTROLÜ - Firebase token'dan al (en güncel)
+
                 const tokenResult = await user.getIdTokenResult(true);
                 const userRole = tokenResult.claims.role || 'belirsiz';
 
-                // LocalStorage'a güncel rol ile kaydet
                 const userData = {
                     uid: user.uid,
                     email: user.email,
@@ -606,14 +594,12 @@
                 };
                 localStorage.setItem('currentUser', JSON.stringify(userData));
 
-                // Rol bazlı yönlendirme
                 if (userRole === 'belirsiz') {
                     showNotification('Hesabınız oluşturuldu. Yönetici onayı bekleniyor...', 'info');
                     window.location.href = 'client-pending.html';
                     return;
                 }
 
-                // Normal kullanıcılar için ana sayfaya yönlendir
                 sessionStorage.removeItem('signup_flow');
                 showNotification('Giriş başarılı! Yönlendiriliyorsunuz...', 'success');
                 setTimeout(() => {
@@ -624,17 +610,12 @@
 
         switchTab(tabName) {
             if (tabName === this.currentTab) return;
-
-            // Tab butonlarını güncelle
             document.querySelectorAll('.tab').forEach(tab => {
                 tab.classList.toggle('active', tab.dataset.tab === tabName);
             });
-
-            // Form bölümlerini güncelle
             document.querySelectorAll('.form-section').forEach(section => {
                 section.classList.toggle('active', section.id === `${tabName}-section`);
             });
-
             this.currentTab = tabName;
             clearAllFieldErrors();
         }
@@ -642,7 +623,6 @@
         checkFirebaseConnectionStatus() {
             const statusEl = document.getElementById('firebaseStatus');
             if (!statusEl) return;
-
             if (authService.isFirebaseAvailable) {
                 statusEl.textContent = '✅ Firebase bağlandı';
                 statusEl.className = 'firebase-status connected';
@@ -660,7 +640,6 @@
             if (!this.validateSignIn(email, password)) return;
 
             this.setLoading('signin', true);
-
             try {
                 const result = await authService.signIn(email, password);
                 if (result.success) {
@@ -668,7 +647,6 @@
                 } else {
                     showNotification(result.error || 'Giriş başarısız.', 'error', 10000);
                 }
-                // onAuthStateChanged gerekli aksiyonları alacak
             } catch (err) {
                 console.error('Final sign in error catch:', err);
                 showNotification('Giriş sırasında beklenmeyen bir hata oluştu.', 'error', 10000);
@@ -692,12 +670,10 @@
                 if (result.success) {
                     const user = auth.currentUser;
                     if (user) {
-                        // Ad-soyad bilgisini Firebase Auth'a kaydet
                         await updateProfile(user, {displayName: name});
 
                         try {
                             await sendEmailVerification(user);
-
                             sessionStorage.setItem('toast_verif_sent', '1');
                             showNotification('Doğrulama e-postası gönderildi. Lütfen e-postanızı doğrulayıp giriş yapın.', 'success', 10000);
                         } catch (ve) {
@@ -799,7 +775,6 @@
         new AuthController();
     });
 
-
     // Kayıt işlemi başladığında kısa bilgi bildirimi
     document.addEventListener('DOMContentLoaded', () => {
         const signupForm = document.getElementById('signupForm');
@@ -825,7 +800,6 @@
                         const text = (node.textContent || '').trim();
                         if (text.includes(VERIF_PART)) {
                             setTimeout(() => {
-                                // if it's gone or hidden very quickly, alert as fallback
                                 const stillThere = document.body.contains(node) && node.offsetParent !== null;
                                 if (!stillThere) {
                                     alert('Doğrulama e-postası gönderildi. Lütfen e-postanızı doğrulayın.');
@@ -838,7 +812,6 @@
         });
         obs.observe(nc, {childList: true});
     });
-
 
     // Persist verification toast across reloads (e.g., after signOut redirect)
     document.addEventListener('DOMContentLoaded', () => {
@@ -854,85 +827,8 @@
 </script>
 <div class="notification-container" id="notification-container"></div>
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-  var signinForm = document.getElementById('signinForm');
-  if (signinForm) {
-    signinForm.addEventListener('submit', function(e) {
-      e.preventDefault(); // block Enter/auto-submit
-    });
-  }
-  var signinBtn = document.getElementById('signinBtn');
-  if (signinBtn) {
-    // If a global handleSignIn exists on window or in a module context, try to call it safely
-    signinBtn.addEventListener('click', function(e) {
-      e.preventDefault();
-      try {
-        if (typeof handleSignIn === 'function') {
-          handleSignIn();
-        } else if (typeof window !== 'undefined' && typeof window.handleSignIn === 'function') {
-          window.handleSignIn();
-        } else if (typeof app !== 'undefined' && typeof app.handleSignIn === 'function') {
-          app.handleSignIn();
-        }
-      } catch (err) {
-        console.error('handleSignIn error:', err);
-      }
-    });
-  }
-  // Block Enter key in inputs to avoid implicit submit
-  ['signin-email','signin-password'].forEach(function(id){
-    var el = document.getElementById(id);
-    if (!el) return;
-    el.addEventListener('keydown', function(e){
-      if (e.key === 'Enter') e.preventDefault();
-    });
-  });
-});
-</script>
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-  var form = document.getElementById('signinForm');
-  if (!form) return;
-  // Belt & suspenders: nuke any submit mechanics
-  form.setAttribute('novalidate', 'novalidate');
-  form.setAttribute('action', '#'); // neutralize any action
-  form.addEventListener('submit', function(e) {
-    e.preventDefault();
-    e.stopPropagation();
-    if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
-    return false;
-  }, true); // capture phase to intercept early
-
-  // Ensure all buttons/inputs inside are non-submit
-  Array.from(form.querySelectorAll('button:not([type]), button[type="submit"], input[type="submit"], input[type="image"]')).forEach(function(el){
-    el.setAttribute('type', 'button');
-  });
-
-  // Block Enter key inside any input to avoid implicit submit
-  form.addEventListener('keydown', function(e){
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      e.stopPropagation();
-    }
-  }, true);
-
-  // Guard the main click to call handleSignIn only
-  var btn = document.getElementById('signinBtn');
-  if (btn) {
-    btn.addEventListener('click', function(e){
-      e.preventDefault();
-      e.stopPropagation();
-      try {
-        if (typeof handleSignIn === 'function') handleSignIn();
-        else if (typeof window !== 'undefined' && typeof window.handleSignIn === 'function') window.handleSignIn();
-        else if (typeof app !== 'undefined' && typeof app.handleSignIn === 'function') app.handleSignIn();
-      } catch (err) {
-        console.error('handleSignIn error:', err);
-      }
-      return false;
-    }, true); // capture to beat other listeners
-  }
-});
+    // Sayfanın en altındaki önceki denemeler kaldırıldı.
+    // AuthController içindeki listenerlar yeterli.
 </script>
 </body>
 </html>
