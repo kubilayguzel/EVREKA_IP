@@ -3643,9 +3643,7 @@ export const onAuthUserCreate = auth.user().onCreate(async (user) => {
   
   if (!displayName || displayName.trim() === '') {
     if (user.email) {
-      // Email'den kullanıcı adını çıkar (@ işaretinden önceki kısım)
       displayName = user.email.split('@')[0];
-      // Nokta ve alt çizgileri boşlukla değiştir, ilk harfleri büyük yap
       displayName = displayName
         .replace(/[._]/g, ' ')
         .split(' ')
@@ -3658,6 +3656,7 @@ export const onAuthUserCreate = auth.user().onCreate(async (user) => {
   
   console.log(`🆔 Creating user profile: ${user.uid}, email: ${user.email}, displayName: "${displayName}"`);
   
+  // 1. Firestore'a kaydet
   await adminDb.collection('users').doc(user.uid).set({
         email: user.email || '',
         displayName: displayName,
@@ -3668,7 +3667,10 @@ export const onAuthUserCreate = auth.user().onCreate(async (user) => {
         _source: 'auth.user().onCreate'
     }, { merge: true });
   
-  console.log(`✅ User profile created successfully for ${user.uid}`);
+  // 2. Custom claim olarak da "belirsiz" rolü ata (KRİTİK!)
+  await adminAuth.setCustomUserClaims(user.uid, { role: 'belirsiz' });
+  
+  console.log(`✅ User profile created successfully for ${user.uid} with role: belirsiz`);
 });
 
 export const onAuthUserDelete = auth.user().onDelete(async (user) => {
