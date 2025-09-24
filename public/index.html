@@ -460,16 +460,16 @@
             <div class="tab" data-tab="signup">Kayıt Ol</div>
         </div>
         <div class="form-section active" id="signin-section">
-            <form id="signinForm">
+            <form id="signinForm"autocomplete="off"></form>
                 <div class="form-group">
                     <label class="form-label" for="signin-email">E-posta Adresi</label>
-                    <input autocomplete="username" class="form-input" id="signin-email" required="" type="email"/>
-                    <div class="error-message" id="signin-email-error"></div>
-                </div>
-                <div class="form-group">
-                    <label class="form-label" for="signin-password">Şifre</label>
-                    <input autocomplete="current-password" class="form-input" id="signin-password" required=""
-                           type="password"/>
+                        <input autocomplete="off" class="form-input" id="signin-email" required="" type="email"/>
+                        <div class="error-message" id="signin-email-error"></div>
+                        </div>
+                        <div class="form-group">
+                        <label class="form-label" for="signin-password">Şifre</label>
+                        <input autocomplete="new-password" class="form-input" id="signin-password" required=""
+                    type="password"/>
                     <div class="error-message" id="signin-password-error"></div>
                 </div>
                 <div class="helper-links">
@@ -541,9 +541,23 @@
                 });
             });
 
+            // Otomatik submit'i engelle
+            const signinForm = document.getElementById('signinForm');
+            
+            // Enter tuşunu kontrol et
+            signinForm.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    // Manuel submit flag'i set et
+                    sessionStorage.setItem('manual_login', '1');
+                    this.handleSignIn();
+                }
+            });
+
             // Sign in
-            document.getElementById('signinForm').addEventListener('submit', (e) => {
+            signinForm.addEventListener('submit', (e) => {
                 e.preventDefault();
+                sessionStorage.setItem('manual_login', '1');
                 this.handleSignIn();
             });
 
