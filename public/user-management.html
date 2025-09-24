@@ -427,8 +427,8 @@
                   <td>${user.displayName || '-'}</td>
                   <td>${user.email || '-'}</td>
                   <td>${roleText}</td>
-                  <td>${formatTimestamp(user.createdAt)}</td>
-                  <td>${formatTimestamp(user.lastLoginAt)}</td>
+                  <td>${this.formatTimestamp(user.createdAt)}</td>
+                  <td>${this.formatTimestamp(user.lastLoginAt)}</td>
                   <td>
                     <button class="action-btn edit-btn" data-id="${user.id}">Düzenle</button>
                     <button class="action-btn delete-btn" data-id="${user.id}" ${user.id === this.currentUser.uid ? 'disabled' : ''}>Sil</button>
