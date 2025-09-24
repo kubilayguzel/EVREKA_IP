@@ -144,11 +144,14 @@ export const authService = {
         }
     },
     async signUp(email, password, displayName, initialRole = 'belirsiz') {
-        if (!isFirebaseAvailable) return this.localSignUp(email, password, displayName, initialRole);
-        try {
-            const result = await createUserWithEmailAndPassword(auth, email, password);
-            const user = result.user;
-            await updateProfile(user, { displayName });
+    if (!isFirebaseAvailable) return this.localSignUp(email, password, displayName, initialRole);
+    try {
+        console.log('🔥 Firebase signUp starting:', { email, displayName }); // DEBUG
+        const result = await createUserWithEmailAndPassword(auth, email, password);
+        const user = result.user;
+        console.log('👤 User created, updating profile with:', displayName); // DEBUG
+        await updateProfile(user, { displayName });
+        console.log('✅ Profile updated successfully'); // DEBUG
             const setRoleResult = await this.setUserRole(user.uid, email, displayName, initialRole);
             if (!setRoleResult.success) throw new Error(setRoleResult.error);
             
