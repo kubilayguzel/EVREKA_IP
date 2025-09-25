@@ -209,10 +209,9 @@
 
         /* Yeni Eklenenler */
         .theme-toggle {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            z-index: 1001;
+            display: flex;
+            align-items: center;
+            gap: 10px;
         }
         .task-card {
             border-left: 5px solid;
@@ -310,7 +309,7 @@
             left: 250px; /* Sidebar width */
             z-index: 1000;
             display: flex;
-            justify-content: flex-end;
+            justify-content: space-between; /* İki tarafı ayır */
             align-items: center;
             padding: 10px 20px;
             height: 60px;
@@ -411,7 +410,7 @@
 }
 /* Küçük ekranlarda filtre tabların altına geçebilir, boşlukları koru */
 @media (max-width:576px){
-  #portfolioTabsBar{ gap:.5rem; }
+  #portfolioTabsBar{ gap: .5rem; }
   #portfolioTabsBar #portfolioFilters{ margin-left:0; }
 }
 </style>
@@ -475,11 +474,11 @@
 
 </head>
 <body>
-    <div class="theme-toggle custom-control custom-switch">
-        <input type="checkbox" class="custom-control-input" id="themeSwitch">
-        <label class="custom-control-label" for="themeSwitch" style="color: #b0b8c0;">Koyu Tema</label>
-    </div>
     <header class="top-header">
+        <div class="theme-toggle custom-control custom-switch">
+            <input type="checkbox" class="custom-control-input" id="themeSwitch">
+            <label class="custom-control-label" for="themeSwitch" style="color: #b0b8c0;">Koyu Tema</label>
+        </div>
         <div class="user-section">
             <div class="user-avatar" id="userAvatar">?</div>
             <div class="user-info">
@@ -1049,350 +1048,272 @@
 <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.2/dist/js/bootstrap.bundle.min.js"></script>
 
-<script type="module">
-import { authService } from './firebase-config.js';
-import { db } from './firebase-config.js';
-import { doc, getDoc, collection, getDocs, query, where, arrayUnion } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
-
-// Kullanıcı bilgilerini üst çubuğa yerleştirme
-function populateUserInfo() {
-    const user = authService.getCurrentUser();
-    if (user) {
-        document.getElementById('userName').textContent = user.displayName || user.email;
-        document.getElementById('userRole').textContent = user.role.toUpperCase();
-        document.getElementById('userAvatar').textContent = user.displayName ? user.displayName.charAt(0).toUpperCase() : user.email.charAt(0).toUpperCase();
-        document.getElementById('welcomeUserName').textContent = user.displayName || user.email;
-    }
-}
-
-// Çıkış işlevi
-document.getElementById('logoutBtn').addEventListener('click', async () => {
-    await authService.signOut();
-});
-
-// Tema değiştirme
-document.addEventListener('DOMContentLoaded', function () {
-    const themeSwitch = document.getElementById('themeSwitch');
-    const body = document.body;
-    const toggleLabel = document.querySelector('.theme-toggle .custom-control-label');
-    const savedTheme = localStorage.getItem('theme') || 'dark';
-
-    if (savedTheme === 'light') {
-        body.classList.add('light-mode');
-        themeSwitch.checked = false;
-        toggleLabel.textContent = 'Beyaz Tema';
-    } else {
-        body.classList.add('dark-mode');
-        themeSwitch.checked = true;
-        toggleLabel.textContent = 'Koyu Tema';
-    }
-
-    themeSwitch.addEventListener('change', function () {
-        if (this.checked) {
-            body.classList.remove('light-mode');
-            body.classList.add('dark-mode');
-            localStorage.setItem('theme', 'dark');
-            toggleLabel.textContent = 'Koyu Tema';
-        } else {
-            body.classList.remove('dark-mode');
-            body.classList.add('light-mode');
-            localStorage.setItem('theme', 'light');
-            toggleLabel.textContent = 'Beyaz Tema';
-        }
-    });
-
-    populateUserInfo();
-    fetchAndDisplayPortfolio();
-});
-
-// Sidebar navigasyonu için jQuery
-$('#sidebar a').on('click', function (e) {
-    if ($(this).closest('#portfoy-accordion').length) {
-        return;
-    }
-    const href = $(this).attr('href');
-    const targetId = $(this).attr('data-target') || href;
-    if (href && href === '#') {
-        e.preventDefault();
-    }
-    $('#sidebar a').removeClass('active');
-    $(this).addClass('active');
-    
-    if (href === '#portfolio-content') {
-        e.preventDefault();
-        $('.tab-pane').removeClass('show active');
-        $('#portfolio-content').addClass('show active');
-        $('#portfolioTopTabs a[href="#marka-list"]').tab('show');
-        if (typeof applyMenseFilterToActivePane === 'function') {
-            applyMenseFilterToActivePane();
-        }
-        return;
-    }
-    if ($(this).attr('data-toggle') === 'collapse') {
-        $(targetId).collapse('toggle');
-    } else {
-        $('.tab-pane').removeClass('show active');
-        $(href).addClass('show active');
-    }
-});
-
-// Akordeon alt menü linkleri için tab geçişi
-$('#portfoy-accordion a').on('click', function(e) {
-    e.preventDefault();
-    $('#portfoy-accordion a').removeClass('active');
-    $(this).addClass('active');
-    const mainPortfolioTab = $('#portfolio-content');
-    $('.tab-content > .tab-pane').removeClass('show active');
-    mainPortfolioTab.addClass('show active');
-    const targetListId = $(this).attr('href');
-    const innerTabContent = $('#portfolio-content .tab-content');
-    innerTabContent.find('.tab-pane').removeClass('show active');
-    $(targetListId).addClass('show active');
-    $('#portfoy-accordion').collapse('show');
-});
-
-// Akordeon başlıklarındaki ok ikonunu yönet
-$('.accordion-header-row').on('click', function() {
-    const icon = $(this).find('i.fa-chevron-down, i.fa-chevron-up');
-    if(icon.length) {
-        icon.toggleClass('fa-chevron-down fa-chevron-up');
-    }
-});
-
-/**
- * Verilen HTML tablosunu, çekilen portföy verileriyle doldurur.
- * @param {string} tableId Doldurulacak tablonun ID'si (#marka-list, #patent-list vb.)
- * @param {Array<Object>} portfolioData Gösterilecek portföy verileri.
- */
-function populatePortfolioTable(tableId, portfolioData) {
-    const tableBody = document.querySelector(`${tableId} tbody`);
-    if (!tableBody) return;
-    tableBody.innerHTML = '';
-
-    portfolioData.forEach((item, index) => {
-        const mainRow = document.createElement('tr');
-        const isInternational = item.origin === 'YURTDISI';
-        
-        const badgeClass = {
-            'Başvuru': 'primary',
-            'Tescilli': 'success',
-            'İtiraz': 'warning',
-            'Reddedildi': 'danger'
-        }[item.statusText] || 'secondary';
-
-        const rowHtml = `
-            <td>${isInternational ? `<i class="fas fa-chevron-down mr-2"></i>` : ''}${index + 1}</td>
-            <td><a href="#" data-toggle="modal" data-target="#portfolioDetailModal">${item.title} (${item.origin})</a></td>
-            <td>${item.applicationNumber}</td>
-            <td><span class="badge badge-${badgeClass}">${item.statusText}</span></td>
-            <td>${item.classes.join(', ')}</td>
-            <td>${item.lastTransactionDate}</td>
-        `;
-
-        mainRow.innerHTML = rowHtml;
-
-        if (isInternational) {
-            mainRow.classList.add('accordion-header-row');
-            mainRow.setAttribute('data-toggle', 'collapse');
-            mainRow.setAttribute('data-target', `#accordion-yurtdisi-${item.id}`);
-            mainRow.setAttribute('aria-expanded', 'false');
-            mainRow.setAttribute('aria-controls', `accordion-yurtdisi-${item.id}`);
-        }
-
-        tableBody.appendChild(mainRow);
-        
-        if (isInternational && item.subRegistrations && item.subRegistrations.length > 0) {
-            const detailRow = document.createElement('tr');
-            detailRow.innerHTML = `
-                <td colspan="6" class="p-0">
-                    <div class="collapse" id="accordion-yurtdisi-${item.id}">
-                        <table class="table mb-0 accordion-table">
-                            <thead>
-                                <tr>
-                                    <th>#</th>
-                                    <th>Marka Adı</th>
-                                    <th>Başvuru No</th>
-                                    <th>Durum</th>
-                                    <th>Sınıflar</th>
-                                    <th>Son İşlem</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                ${item.subRegistrations.map((subItem, subIndex) => `
-                                    <tr>
-                                        <td>${index + 1}.${subIndex + 1}</td>
-                                        <td><a href="#" data-toggle="modal" data-target="#portfolioDetailModal">${subItem.title} (${subItem.country})</a></td>
-                                        <td>${subItem.applicationNumber}</td>
-                                        <td><span class="badge badge-${subItem.statusClass}">${subItem.statusText}</span></td>
-                                        <td>${subItem.classes.join(', ')}</td>
-                                        <td>${subItem.lastTransactionDate}</td>
-                                    </tr>
-                                `).join('')}
-                            </tbody>
-                        </table>
-                    </div>
-                </td>
-            `;
-            tableBody.appendChild(detailRow);
-        }
-    });
-}
-
-
-/**
- * Kullanıcı kimliğine göre portföy verilerini çeker ve tabloyu doldurur.
- */
-async function fetchAndDisplayPortfolio() {
-    // authService.getCurrentUser() fonksiyonunu kullanarak kullanıcının UID'sini al
-    const user = authService.getCurrentUser();
-    const userId = user ? user.uid : null;
-    
-    if (!userId) {
-        console.log("Kullanıcı giriş yapmamış veya UID alınamadı.");
-        return;
-    }
-    
-    if (typeof db === 'undefined' || typeof db.collection === 'undefined') {
-        console.error("Firebase/Firestore kütüphaneleri yüklenmemiş veya yanlış yapılandırılmış.");
-        return;
-    }
-
-    try {
-        // 1. Kullanıcının ilişkili olduğu müvekkil ID'lerini çekme
-        const usersRef = db.collection("users");
-        const userQuery = usersRef.doc(userId); // UID'ye göre doğrudan belgeye eriş
-        const userSnapshot = await userQuery.get();
-
-        if (!userSnapshot.exists) {
-            console.log("Kullanıcıya ait veri bulunamadı.");
-            return;
-        }
-
-        const userData = userSnapshot.data();
-        const linkedPersonIds = userData.linkedPersonIds;
-
-        if (!linkedPersonIds || linkedPersonIds.length === 0) {
-            console.log("Kullanıcı ile ilişkili müvekkil bulunamadı.");
-            return;
-        }
-
-        // 2. İlgili müvekkillere ait tüm portföy verilerini çekme
-        const portfolioRef = db.collection("portfolios");
-        const portfolioQuery = portfolioRef.where("personId", "in", linkedPersonIds);
-        const portfolioSnapshot = await portfolioQuery.get();
-
-        const allPortfolios = portfolioSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
-        // 3. Marka, Patent, Tasarım gibi kategorilere göre filtreleme
-        const markaList = allPortfolios.filter(p => p.type === 'Marka');
-        const patentList = allPortfolios.filter(p => p.type === 'Patent');
-        const tasarimList = allPortfolios.filter(p => p.type === 'Tasarım');
-        const davaIItirazList = allPortfolios.filter(p => p.type === 'Dava/İtiraz');
-
-        // 4. Her bir sekmeyi kendi verisiyle doldurma
-        populatePortfolioTable('#marka-list', markaList);
-        populatePortfolioTable('#patent-list', patentList);
-        populatePortfolioTable('#tasarim-list', tasarimList);
-        populatePortfolioTable('#dava-itiraz-list', davaIItirazList);
-
-    } catch (error) {
-        console.error("Portföy verileri çekilirken bir hata oluştu:", error);
-    }
-}
-</script>
-
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
 
 <script>
-(function(){
-  function rowHasMarker($row, marker){
-    var td = $row.find('td').eq(1);
-    if(td.length === 0) return false;
-    var text = td.text() || "";
-    return text.indexOf(marker) !== -1;
+  // Sizin Firebase projenize ait yapılandırma nesnesini buraya yapıştırın.
+  const firebaseConfig = {
+  apiKey: "AIzaSyDbdqfiVbobnl1BtyiWxhD4bfIcREw8ZRc",
+  authDomain: "ip-manager-production-aab4b.firebaseapp.com",
+  projectId: "ip-manager-production-aab4b",
+  storageBucket: "ip-manager-production-aab4b.firebasestorage.app",
+  messagingSenderId: "594650169512",
+  appId: "1:594650169512:web:43496005e063a40511829d",
+  measurementId: "G-QY1P3ZCMC4"
+};
+  
+  // Firebase'i başlatın
+  if (!firebase.apps.length) {
+    firebase.initializeApp(firebaseConfig);
+  } else {
+    firebase.app(); // Eğer zaten başlatıldıysa kullan
   }
+  
+  const db = firebase.firestore();
 
-  function toggleWipoGroup($headerRow, show){
-    var $detailRow = $headerRow.next('tr');
-    if(show){
-      $headerRow.show();
-      $detailRow.show();
-    }else{
-      var collapseId = $headerRow.attr('data-target');
-      if(collapseId){ try { $(collapseId).collapse('hide'); } catch(e){} }
-      $headerRow.hide();
-      $detailRow.hide();
-    }
-  }
+  /**
+   * Verilen HTML tablosunu, çekilen portföy verileriyle doldurur.
+   * @param {string} tableId Doldurulacak tablonun ID'si (#marka-list, #patent-list vb.)
+   * @param {Array<Object>} portfolioData Gösterilecek portföy verileri.
+   */
+  function populatePortfolioTable(tableId, portfolioData) {
+      const tableBody = document.querySelector(`${tableId} tbody`);
+      if (!tableBody) return;
+      
+      // Mevcut tüm satırları temizle
+      tableBody.innerHTML = '';
 
-  function filterPaneByMense(paneSelector, menseValue){
-    var $tbody = $(paneSelector + " tbody");
-    if($tbody.length === 0) return;
-    var $rows = $tbody.children("tr");
-
-    $rows.show();
-
-    var isTR = (menseValue === 'TÜRKPATENT');
-    var isYD = (menseValue === 'YURTDIŞI');
-
-    if(isTR){
-      $rows.each(function(){
-        var $tr = $(this);
-        if($tr.hasClass('accordion-header-row')){
-          var cellText = $tr.find('td').eq(1).text() || '';
-          if(cellText.indexOf('(WIPO)') !== -1){
-            toggleWipoGroup($tr, false);
-          }
-          return;
-        }
-        var text = $tr.find('td').eq(1).text() || '';
-        if(text.indexOf('(TR)') !== -1){
-          $tr.show();
-        }else{
-          $tr.hide();
-        }
-      });
-    } else if(isYD){
-      $rows.each(function(){
-        var $tr = $(this);
-        if($tr.hasClass('accordion-header-row')){
-          var cellText = $tr.find('td').eq(1).text() || '';
-          if(cellText.indexOf('(WIPO)') !== -1){
-            toggleWipoGroup($tr, true);
+      portfolioData.forEach((item, index) => {
+          // Ana satır yapısını oluştur
+          const mainRow = document.createElement('tr');
+          
+          // Uluslararası (WIPO) kayıtları için özel durum
+          const isInternational = item.origin === 'YURTDISI';
+          if (isInternational) {
+              mainRow.classList.add('accordion-header-row');
+              mainRow.setAttribute('data-toggle', 'collapse');
+              mainRow.setAttribute('data-target', `#accordion-yurtdisi-${item.id}`); // Örnek ID
+              mainRow.setAttribute('aria-expanded', 'false');
+              mainRow.setAttribute('aria-controls', `accordion-yurtdisi-${item.id}`);
+              mainRow.innerHTML = `
+                  <td><i class="fas fa-chevron-down mr-2"></i>${index + 1}</td>
+                  <td><a href="#" data-toggle="modal" data-target="#portfolioDetailModal">${item.title} (${item.origin})</a></td>
+                  <td>${item.applicationNumber}</td>
+                  <td><span class="badge badge-${item.statusClass}">${item.statusText}</span></td>
+                  <td>${item.classes.join(', ')}</td>
+                  <td>${item.lastTransactionDate}</td>
+              `;
           } else {
-            toggleWipoGroup($tr, false);
+              // Yurtiçi (TÜRKPATENT) veya normal kayıtlar
+              mainRow.innerHTML = `
+                  <td>${index + 1}</td>
+                  <td><a href="#" data-toggle="modal" data-target="#portfolioDetailModal">${item.title} (${item.origin})</a></td>
+                  <td>${item.applicationNumber}</td>
+                  <td><span class="badge badge-${item.statusClass}">${item.statusText}</span></td>
+                  <td>${item.classes.join(', ')}</td>
+                  <td>${item.lastTransactionDate}</td>
+              `;
           }
-          return;
-        }
-        var text = $tr.find('td').eq(1).text() || '';
-        if(text.indexOf('(TR)') !== -1){
-          $tr.hide();
-        }
+
+          tableBody.appendChild(mainRow);
+          
+          // Eğer uluslararası bir kayıt ise, alt detay satırını oluştur
+          if (isInternational && item.subRegistrations && item.subRegistrations.length > 0) {
+              const detailRow = document.createElement('tr');
+              detailRow.innerHTML = `
+                  <td colspan="6" class="p-0">
+                      <div class="collapse" id="accordion-yurtdisi-${item.id}">
+                          <table class="table mb-0 accordion-table">
+                              <thead>
+                                  <tr>
+                                      <th>#</th>
+                                      <th>Marka Adı</th>
+                                      <th>Başvuru No</th>
+                                      <th>Durum</th>
+                                      <th>Sınıflar</th>
+                                      <th>Son İşlem</th>
+                                  </tr>
+                              </thead>
+                              <tbody>
+                                  ${item.subRegistrations.map((subItem, subIndex) => `
+                                      <tr>
+                                          <td>${index + 1}.${subIndex + 1}</td>
+                                          <td><a href="#" data-toggle="modal" data-target="#portfolioDetailModal">${subItem.title} (${subItem.country})</a></td>
+                                          <td>${subItem.applicationNumber}</td>
+                                          <td><span class="badge badge-${subItem.statusClass}">${subItem.statusText}</span></td>
+                                          <td>${subItem.classes.join(', ')}</td>
+                                          <td>${subItem.lastTransactionDate}</td>
+                                      </tr>
+                                  `).join('')}
+                              </tbody>
+                          </table>
+                      </div>
+                  </td>
+              `;
+              tableBody.appendChild(detailRow);
+          }
       });
-    }
   }
 
-  function applyMenseFilterToActivePane(){
-    var val = $("#menseFilter").val() || 'HEPSI';
-    var $activePane = $(".tab-content > .tab-pane.show.active");
-    if($activePane.length){
-      filterPaneByMense("#" + $activePane.attr("id"), val);
-    }
+  /**
+   * Kullanıcı kimliğine göre portföy verilerini çeker ve tabloyu doldurur.
+   * @param {string} userId Mevcut kullanıcının kimliği.
+   */
+  async function fetchAndDisplayPortfolio(userId) {
+      if (typeof firebase === 'undefined' || typeof db === 'undefined' || typeof db.collection === 'undefined') {
+        console.error("Firebase/Firestore kütüphaneleri yüklenmemiş veya yanlış yapılandırılmış.");
+        return;
+      }
+
+      try {
+          // 1. Kullanıcının ilişkili olduğu müvekkil ID'lerini çekme
+          const usersRef = db.collection("users");
+          const userQuery = usersRef.where("linkedPersonIds", "array-contains", userId); // Yetkili olunan client ID'sini arayın.
+          const userSnapshot = await userQuery.get();
+
+          if (userSnapshot.empty) {
+              console.log("Kullanıcıya ait veri bulunamadı.");
+              return;
+          }
+
+          const userData = userSnapshot.docs[0].data();
+          const linkedPersonIds = userData.linkedPersonIds;
+
+          if (!linkedPersonIds || linkedPersonIds.length === 0) {
+              console.log("Kullanıcı ile ilişkili müvekkil bulunamadı.");
+              return;
+          }
+
+          // 2. İlgili müvekkillere ait tüm portföy verilerini çekme
+          const portfolioRef = db.collection("portfolios"); // veya "trademarks", "patents"
+          const portfolioQuery = portfolioRef.where("personId", "in", linkedPersonIds);
+          const portfolioSnapshot = await portfolioQuery.get();
+
+          const allPortfolios = portfolioSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+          // 3. Marka, Patent, Tasarım gibi kategorilere göre filtreleme
+          const markaList = allPortfolios.filter(p => p.type === 'Marka');
+          const patentList = allPortfolios.filter(p => p.type === 'Patent');
+          const tasarimList = allPortfolios.filter(p => p.type === 'Tasarım');
+          const davaIItirazList = allPortfolios.filter(p => p.type === 'Dava/İtiraz');
+
+          // 4. Her bir sekmeyi kendi verisiyle doldurma
+          populatePortfolioTable('#marka-list', markaList);
+          populatePortfolioTable('#patent-list', patentList);
+          populatePortfolioTable('#tasarim-list', tasarimList);
+          populatePortfolioTable('#dava-itiraz-list', davaIItirazList);
+
+      } catch (error) {
+          console.error("Portföy verileri çekilirken bir hata oluştu:", error);
+      }
   }
 
-  $(document).on('change', '#menseFilter', function(){
-    applyMenseFilterToActivePane();
+  // Sayfa yüklendiğinde verileri çekme işlemini başlatın
+  document.addEventListener('DOMContentLoaded', function() {
+      // Mevcut kullanıcının UID'sini alma
+      const user = firebase.auth().currentUser;
+      const userId = user ? user.uid : null;
+
+      if (userId) {
+        fetchAndDisplayPortfolio(userId);
+      } else {
+        console.log("Kullanıcı giriş yapmamış.");
+      }
   });
 
-  $(document).on('shown.bs.tab', '#portfolioTopTabs a[data-toggle="tab"]', function (e) {
-    applyMenseFilterToActivePane();
-  });
+  // Diğer tüm scriptler
+  (function(){
+    // Genel: aktif sekmeyi Bootstrap tab ile yönet
+    function rowHasMarker($row, marker){
+      var td = $row.find('td').eq(1);
+      if(td.length === 0) return false;
+      var text = td.text() || "";
+      return text.indexOf(marker) !== -1;
+    }
 
-  $(function(){
-    applyMenseFilterToActivePane();
-  });
-})();
+    function toggleWipoGroup($headerRow, show){
+      var $detailRow = $headerRow.next('tr');
+      if(show){
+        $headerRow.show();
+        $detailRow.show();
+      }else{
+        var collapseId = $headerRow.attr('data-target');
+        if(collapseId){ try { $(collapseId).collapse('hide'); } catch(e){} }
+        $headerRow.hide();
+        $detailRow.hide();
+      }
+    }
 
-(function(){
+    function filterPaneByMense(paneSelector, menseValue){
+      var $tbody = $(paneSelector + " tbody");
+      if($tbody.length === 0) return;
+      var $rows = $tbody.children("tr");
+
+      $rows.show();
+
+      var isTR = (menseValue === 'TÜRKPATENT');
+      var isYD = (menseValue === 'YURTDIŞI');
+
+      if(isTR){
+        $rows.each(function(){
+          var $tr = $(this);
+          if($tr.hasClass('accordion-header-row')){
+            var cellText = $tr.find('td').eq(1).text() || '';
+            if(cellText.indexOf('(WIPO)') !== -1){
+              toggleWipoGroup($tr, false);
+            }
+            return;
+          }
+          var text = $tr.find('td').eq(1).text() || '';
+          if(text.indexOf('(TR)') !== -1){
+            $tr.show();
+          }else{
+            $tr.hide();
+          }
+        });
+      } else if(isYD){
+        $rows.each(function(){
+          var $tr = $(this);
+          if($tr.hasClass('accordion-header-row')){
+            var cellText = $tr.find('td').eq(1).text() || '';
+            if(cellText.indexOf('(WIPO)') !== -1){
+              toggleWipoGroup($tr, true);
+            } else {
+              toggleWipoGroup($tr, false);
+            }
+            return;
+          }
+          var text = $tr.find('td').eq(1).text() || '';
+          if(text.indexOf('(TR)') !== -1){
+            $tr.hide();
+          }
+        });
+      }
+    }
+
+    function applyMenseFilterToActivePane(){
+      var val = $("#menseFilter").val() || 'HEPSI';
+      var $activePane = $(".tab-content > .tab-pane.show.active");
+      if($activePane.length){
+        filterPaneByMense("#" + $activePane.attr("id"), val);
+      }
+    }
+
+    $(document).on('change', '#menseFilter', function(){
+      applyMenseFilterToActivePane();
+    });
+
+    $(document).on('shown.bs.tab', '#portfolioTopTabs a[data-toggle="tab"]', function (e) {
+      applyMenseFilterToActivePane();
+    });
+
+    $(function(){
+      applyMenseFilterToActivePane();
+    });
+  })();
+
+  (function(){
     $(document).off('click.portfoyumOpen')
     .on('click.portfoyumOpen', 'a[href="#portfolio-content"], #sidebar a[data-target="#portfolio-content"]', function(e){
         e.preventDefault();
@@ -1416,7 +1337,7 @@ async function fetchAndDisplayPortfolio() {
         }
         return false;
     });
-})();
+  })();
 </script>
 </body>
 </html>
