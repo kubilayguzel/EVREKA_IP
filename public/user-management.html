@@ -516,17 +516,6 @@
                 this.selectedPersons = [];
             }
 
-            async loadPersonsForSelect() {
-                try {
-                    const result = await personService.getPersons();
-                    if (result.success && Array.isArray(result.data)) {
-                        this.allPersons = result.data;
-                    }
-                } catch (error) {
-                    console.error('Kişiler yüklenirken hata:', error);
-                }
-            }
-
             searchPersons(query) {
                 const searchResults = document.getElementById('personSearchResults');
                 if (!searchResults) return;
@@ -767,23 +756,22 @@
                 });
            }
 
-           async loadPersonsForSelect() {
+            async loadPersonsData() {
                 try {
                     const result = await personService.getPersons();
-                    const select = document.getElementById('linkedPersonSelect');
-                    
-                    // Mevcut options'ları temizle (ilk option hariç)
-                    while (select.children.length > 1) {
-                        select.removeChild(select.lastChild);
-                    }
-                    
                     if (result.success && Array.isArray(result.data)) {
-                        result.data.forEach(person => {
-                            const option = document.createElement('option');
-                            option.value = person.id;
-                            option.textContent = person.name;
-                            select.appendChild(option);
-                        });
+                        this.allPersons = result.data;
+                    }
+                } catch (error) {
+                    console.error('Kişiler yüklenirken hata:', error);
+                }
+            }
+            
+            async loadPersonsForSelect() {
+                try {
+                    const result = await personService.getPersons();
+                    if (result.success && Array.isArray(result.data)) {
+                        this.allPersons = result.data;
                     }
                 } catch (error) {
                     console.error('Kişiler yüklenirken hata:', error);
@@ -796,11 +784,13 @@
                     clientGroup.style.display = 'block';
                 } else {
                     clientGroup.style.display = 'none';
-                    document.getElementById('linkedPersonSelect').value = '';
+                    // Çoklu seçim sisteminde seçilen kişileri temizle
+                    this.clearSelectedPersons();
                 }
             }
+
             async showAddUserModal() {
-                await this.loadPersonsForSelect();
+                await this.loadPersonsData(); // Yeni metod adı
                 this.selectedPersons = [];
                 
                 document.getElementById('userModalTitle').textContent = 'Yeni Kullanıcı Ekle';
@@ -816,14 +806,14 @@
                 document.getElementById('userModal').classList.add('show');
             }
 
-            async showEditUserModal(userId) {
+           async showEditUserModal(userId) {
                 const user = this.allUsers.find(u => u.id === userId);
                 if (!user) {
                     showNotification('Kullanıcı bulunamadı.', 'error');
                     return;
                 }
 
-                await this.loadPersonsForSelect();
+                await this.loadPersonsData(); // Yeni metod adı
 
                 // Mevcut ilişkili kişileri yükle
                 if (user.role === 'client' && user.linkedPersonIds && Array.isArray(user.linkedPersonIds)) {
