@@ -103,8 +103,8 @@ export const authService = {
         try {
             await setDoc(doc(db, 'users', uid), {
                 email, displayName, role,
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString()
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp()
             }, { merge: true });
             return { success: true };
         } catch (error) {
@@ -508,10 +508,95 @@ export const personService = {
             return { success: false, error: error.message };
         }
     },
-    async deletePerson(personId) {
+async deletePerson(personId) {
         if (!isFirebaseAvailable) return { success: false, error: "Firebase kullanılamıyor." };
         try {
+            // İlişkili kullanıcılar varsa önce onları temizle
+            await this.removePersonFromAllUsers(personId);
             await deleteDoc(doc(db, 'persons', personId));
+            return { success: true };
+        } catch (error) {
+            return { success: false, error: error.message };
+        }
+    },
+    
+    // --- YENİ: Kullanıcı-Kişi İlişkilendirme Fonksiyonları ---
+    async linkUserToPerson(userId, personId) {
+        if (!isFirebaseAvailable) return { success: false, error: "Firebase kullanılamıyor." };
+        try {
+            const userRef = doc(db, 'users', userId);
+            await updateDoc(userRef, {
+                linkedPersonId: personId,
+                updatedAt: new Date().toISOString()
+            });
+            return { success: true };
+        } catch (error) {
+            return { success: false, error: error.message };
+        }
+    },
+    
+    async unlinkUserFromPerson(userId) {
+        if (!isFirebaseAvailable) return { success: false, error: "Firebase kullanılamıyor." };
+        try {
+            const userRef = doc(db, 'users', userId);
+            await updateDoc(userRef, {
+                linkedPersonId: null,
+                updatedAt: new Date().toISOString()
+            });
+            return { success: true };
+        } catch (error) {
+            return { success: false, error: error.message };
+        }
+    },
+    
+    async getLinkedPerson(userId) {
+        if (!isFirebaseAvailable) return { success: false, error: "Firebase kullanılamıyor." };
+        try {
+            const userDoc = await getDoc(doc(db, 'users', userId));
+            if (!userDoc.exists() || !userDoc.data().linkedPersonId) {
+                return { success: true, data: null };
+            }
+            
+            const personDoc = await getDoc(doc(db, 'persons', userDoc.data().linkedPersonId));
+            if (!personDoc.exists()) {
+                return { success: true, data: null };
+            }
+            
+            return { success: true, data: { id: personDoc.id, ...personDoc.data() } };
+        } catch (error) {
+            return { success: false, error: error.message };
+        }
+    },
+    
+    async getUsersLinkedToPerson(personId) {
+        if (!isFirebaseAvailable) return { success: false, error: "Firebase kullanılamıyor." };
+        try {
+            const q = query(collection(db, 'users'), where('linkedPersonId', '==', personId));
+            const querySnapshot = await getDocs(q);
+            return { 
+                success: true, 
+                data: querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+            };
+        } catch (error) {
+            return { success: false, error: error.message };
+        }
+    },
+    
+    async removePersonFromAllUsers(personId) {
+        if (!isFirebaseAvailable) return { success: false, error: "Firebase kullanılamıyor." };
+        try {
+            const q = query(collection(db, 'users'), where('linkedPersonId', '==', personId));
+            const querySnapshot = await getDocs(q);
+            
+            const batch = writeBatch(db);
+            querySnapshot.docs.forEach(doc => {
+                batch.update(doc.ref, { 
+                    linkedPersonId: null,
+                    updatedAt: new Date().toISOString()
+                });
+            });
+            
+            await batch.commit();
             return { success: true };
         } catch (error) {
             return { success: false, error: error.message };
