@@ -246,6 +246,146 @@
             font-size: 0.9em;
             margin-top: 5px;
         }
+        /* Kişi Seçimi Stilleri */
+        .position-relative {
+            position: relative;
+        }
+        
+        .search-results-list {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            max-height: 250px;
+            overflow-y: auto;
+            border: 1px solid #ced4da;
+            border-top: none;
+            border-bottom-left-radius: 0.25rem;
+            border-bottom-right-radius: 0.25rem;
+            background: #fff;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+            z-index: 9999;
+        }
+        
+        .search-result-item {
+            padding: 10px 15px;
+            cursor: pointer;
+            border-bottom: 1px solid #f0f0f0;
+            transition: background-color 0.2s;
+        }
+        
+        .search-result-item:hover {
+            background-color: #f8f9fa;
+        }
+        
+        .search-result-item:last-child {
+            border-bottom: none;
+        }
+        
+        .btn-add-item {
+            background: linear-gradient(45deg, #28a745, #34ce57);
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 8px;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-add-item:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(40, 167, 69, 0.3);
+        }
+        
+        /* Seçilen Öğeler Konteyner */
+        .selected-items-container {
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            background: #f8f9fa;
+            margin-top: 10px;
+        }
+        
+        .selected-items-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 15px;
+            border-bottom: 1px solid #dee2e6;
+            background: #e9ecef;
+            border-radius: 7px 7px 0 0;
+        }
+        
+        .selected-items-title {
+            font-weight: 600;
+            color: #495057;
+        }
+        
+        .selected-items-count {
+            background: #007bff;
+            color: white;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.8em;
+            font-weight: bold;
+        }
+        
+        .selected-items-list {
+            min-height: 100px;
+            padding: 15px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        
+        .selected-item {
+            background-color: #e2f0ff;
+            border: 1px solid #a7d9ff;
+            border-radius: 6px;
+            padding: 10px 12px;
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.95rem;
+            color: #343a40;
+        }
+        
+        .selected-item:last-child {
+            margin-bottom: 0;
+        }
+        
+        .remove-selected-item-btn {
+            background: none;
+            border: none;
+            color: #dc3545;
+            font-size: 1.4rem;
+            cursor: pointer;
+            padding: 0 5px;
+            transition: color 0.2s ease;
+            line-height: 1;
+        }
+        
+        .remove-selected-item-btn:hover {
+            color: #c82333;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 20px;
+        }
+        
+        .empty-state i {
+            margin-bottom: 10px;
+        }
+        
+        .empty-state p {
+            margin: 0;
+            font-style: italic;
+        }
     </style>
 </head>
 <body>
@@ -320,11 +460,29 @@
             
             <!-- Client Rolü İçin Kişi İlişkilendirme -->
             <div class="form-group" id="clientPersonGroup" style="display: none;">
-                <label for="linkedPersonSelect" class="form-label">İlişkilendirilecek Kişi:</label>
-                <select id="linkedPersonSelect" name="linkedPersonSelect" class="form-select">
-                    <option value="">Kişi seçiniz...</option>
-                </select>
-                <small class="text-muted">Client rolündeki kullanıcılar kişiler listesindeki bir kişiyle ilişkilendirilebilir.</small>
+                <label class="form-label">İlişkilendirilecek Kişiler:</label>
+                <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                    <div class="position-relative" style="flex: 1;">
+                        <input type="text" id="personSearchInput" class="form-input" placeholder="Kişi adı veya e-posta ara...">
+                        <div id="personSearchResults" class="search-results-list" style="display: none;"></div>
+                    </div>
+                    <button type="button" id="addNewPersonBtn" class="btn-add-item">Yeni Kişi</button>
+                </div>
+                
+                <!-- Seçilen kişiler listesi -->
+                <div class="selected-items-container">
+                    <div class="selected-items-header">
+                        <span class="selected-items-title">Seçilen Kişiler</span>
+                        <span class="selected-items-count" id="selectedPersonsCount">0</span>
+                    </div>
+                    <div id="selectedPersonsList" class="selected-items-list">
+                        <div class="empty-state">
+                            <i class="fas fa-users fa-2x text-muted mb-2"></i>
+                            <p class="text-muted">Henüz kişi eklenmedi.</p>
+                        </div>
+                    </div>
+                </div>
+                <small class="text-muted">Client rolündeki kullanıcılar birden fazla kişiyle ilişkilendirilebilir.</small>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" id="cancelUserBtn">İptal</button>
@@ -350,11 +508,105 @@
         await loadSharedLayout({ activeMenuLink: 'user-management.html' });
 
         class UserManagementModule {
+            // Çoklu kişi seçimi için yeni özellikler
             constructor() {
                 this.currentUser = null;
                 this.allUsers = [];
+                this.allPersons = [];
+                this.selectedPersons = [];
             }
 
+            async loadPersonsForSelect() {
+                try {
+                    const result = await personService.getPersons();
+                    if (result.success && Array.isArray(result.data)) {
+                        this.allPersons = result.data;
+                    }
+                } catch (error) {
+                    console.error('Kişiler yüklenirken hata:', error);
+                }
+            }
+
+            searchPersons(query) {
+                const searchResults = document.getElementById('personSearchResults');
+                if (!searchResults) return;
+
+                if (query.length < 2) {
+                    searchResults.innerHTML = '';
+                    searchResults.style.display = 'none';
+                    return;
+                }
+
+                const filteredPersons = this.allPersons.filter(person =>
+                    person.name.toLowerCase().includes(query.toLowerCase()) ||
+                    (person.email && person.email.toLowerCase().includes(query.toLowerCase()))
+                ).filter(person => 
+                    !this.selectedPersons.some(selected => selected.id === person.id)
+                );
+
+                if (filteredPersons.length === 0) {
+                    searchResults.innerHTML = '<div class="search-result-item text-muted">Sonuç bulunamadı</div>';
+                } else {
+                    searchResults.innerHTML = filteredPersons.map(person => `
+                        <div class="search-result-item" data-id="${person.id}">
+                            <strong>${person.name}</strong>
+                            ${person.email ? `<br><small class="text-muted">${person.email}</small>` : ''}
+                        </div>
+                    `).join('');
+                }
+
+                searchResults.style.display = 'block';
+            }
+
+            addSelectedPerson(person) {
+                if (!this.selectedPersons.some(p => p.id === person.id)) {
+                    this.selectedPersons.push({
+                        id: person.id,
+                        name: person.name,
+                        email: person.email || ''
+                    });
+                    this.renderSelectedPersons();
+                }
+            }
+
+            removeSelectedPerson(personId) {
+                this.selectedPersons = this.selectedPersons.filter(p => p.id !== personId);
+                this.renderSelectedPersons();
+            }
+
+            renderSelectedPersons() {
+                const selectedList = document.getElementById('selectedPersonsList');
+                const countBadge = document.getElementById('selectedPersonsCount');
+                
+                if (!selectedList || !countBadge) return;
+
+                countBadge.textContent = this.selectedPersons.length;
+
+                if (this.selectedPersons.length === 0) {
+                    selectedList.innerHTML = `
+                        <div class="empty-state">
+                            <i class="fas fa-users fa-2x text-muted mb-2"></i>
+                            <p class="text-muted">Henüz kişi eklenmedi.</p>
+                        </div>`;
+                } else {
+                    selectedList.innerHTML = this.selectedPersons.map(person => `
+                        <div class="selected-item">
+                            <div>
+                                <strong>${person.name}</strong>
+                                ${person.email ? `<br><small class="text-muted">${person.email}</small>` : ''}
+                            </div>
+                            <button type="button" class="remove-selected-item-btn" data-id="${person.id}">
+                                &times;
+                            </button>
+                        </div>
+                    `).join('');
+                }
+            }
+
+            clearSelectedPersons() {
+                this.selectedPersons = [];
+                this.renderSelectedPersons();
+            }
             init() {
                 authService.auth.onAuthStateChanged(async (user) => {
                     if (user || authService.getCurrentUser()) {
@@ -380,9 +632,40 @@
                 document.getElementById('userForm').addEventListener('submit', (e) => this.handleUserFormSubmit(e));
                 document.getElementById('userSearchInput').addEventListener('input', (e) => this.filterUsers(e.target.value));
 
-                // Rol değişimi dinleyicisi
+            // Rol değişimi dinleyicisi
                 document.getElementById('formUserRole').addEventListener('change', (e) => {
                     this.toggleClientPersonGroup(e.target.value);
+                });
+
+                // Kişi arama dinleyicisi
+                document.getElementById('personSearchInput').addEventListener('input', (e) => {
+                    this.searchPersons(e.target.value.trim());
+                });
+
+                // Arama sonuçları tıklama dinleyicisi
+                document.getElementById('personSearchResults').addEventListener('click', (e) => {
+                    const item = e.target.closest('.search-result-item');
+                    if (!item || !item.dataset.id) return;
+
+                    const person = this.allPersons.find(p => p.id === item.dataset.id);
+                    if (person) {
+                        this.addSelectedPerson(person);
+                        document.getElementById('personSearchInput').value = '';
+                        document.getElementById('personSearchResults').style.display = 'none';
+                    }
+                });
+
+                // Seçilen kişileri çıkarma dinleyicisi
+                document.getElementById('selectedPersonsList').addEventListener('click', (e) => {
+                    if (e.target.classList.contains('remove-selected-item-btn')) {
+                        this.removeSelectedPerson(e.target.dataset.id);
+                    }
+                });
+
+                // Yeni kişi ekleme butonu (persons.html'deki modal sistemi kullanılacak)
+                document.getElementById('addNewPersonBtn').addEventListener('click', () => {
+                    // Burada persons.html'deki modal sistemi çağrılacak
+                    alert('Yeni kişi ekleme modalı açılacak (persons.html entegrasyonu gerekli)');
                 });
 
                 // Tablo içi düzenle / sil butonları (event delegation)
@@ -463,10 +746,10 @@
                   'superadmin': 'Süper Admin'
                 };
                 const roleText = roleTexts[user.role] || user.role || 'Kullanıcı';
-                // Kişi ilişkilendirme durumu
-                const hasLinkedPerson = user.linkedPersonId ? true : false;
-                const linkIndicator = hasLinkedPerson ? 
-                    '<span class="linked-indicator" title="Bu kullanıcı bir kişiyle ilişkilendirilmiş">✓</span>' : '';
+                // Kişi ilişkilendirme durumu (çoklu kişi desteği)
+                const linkedPersonsCount = user.linkedPersonIds && Array.isArray(user.linkedPersonIds) ? user.linkedPersonIds.length : 0;
+                const linkIndicator = linkedPersonsCount > 0 ? 
+                    `<span class="linked-indicator" title="Bu kullanıcı ${linkedPersonsCount} kişiyle ilişkilendirilmiş">${linkedPersonsCount}</span>` : '';
 
                 row.innerHTML = `
                   <td>${user.displayName || '-'} ${linkIndicator}</td>
@@ -518,6 +801,7 @@
             }
             async showAddUserModal() {
                 await this.loadPersonsForSelect();
+                this.selectedPersons = [];
                 
                 document.getElementById('userModalTitle').textContent = 'Yeni Kullanıcı Ekle';
                 document.getElementById('userForm').reset();
@@ -527,6 +811,7 @@
                 
                 // Client grup gizle
                 document.getElementById('clientPersonGroup').style.display = 'none';
+                this.renderSelectedPersons();
                 
                 document.getElementById('userModal').classList.add('show');
             }
@@ -540,18 +825,32 @@
 
                 await this.loadPersonsForSelect();
 
+                // Mevcut ilişkili kişileri yükle
+                if (user.role === 'client' && user.linkedPersonIds && Array.isArray(user.linkedPersonIds)) {
+                    const linkedPersons = await personService.getLinkedPersons(userId);
+                    if (linkedPersons.success) {
+                        this.selectedPersons = linkedPersons.data.map(p => ({
+                            id: p.id,
+                            name: p.name,
+                            email: p.email || ''
+                        }));
+                    }
+                } else {
+                    this.selectedPersons = [];
+                }
+
                 document.getElementById('userModalTitle').textContent = 'Kullanıcıyı Düzenle';
                 document.getElementById('userId').value = user.id;
                 document.getElementById('formUserName').value = user.displayName || '';
                 document.getElementById('formUserEmail').value = user.email || '';
                 document.getElementById('formUserRole').value = user.role || 'user';
-                document.getElementById('linkedPersonSelect').value = user.linkedPersonId || '';
                 
                 document.getElementById('passwordGroup').style.display = 'none';
                 document.getElementById('formUserEmail').setAttribute('readonly', true);
                 
                 // Client rolü kontrolü
                 this.toggleClientPersonGroup(user.role);
+                this.renderSelectedPersons();
                 
                 document.getElementById('userModal').classList.add('show');
             }
@@ -657,11 +956,12 @@
 
                     // Kullanıcı işlemi başarılıysa, kişi ilişkilendirmesi yap
                     if (data.uid) {
-                        if (payload.role === 'client' && linkedPersonId) {
-                            await personService.linkUserToPerson(data.uid, linkedPersonId);
+                        if (payload.role === 'client' && this.selectedPersons.length > 0) {
+                            const personIds = this.selectedPersons.map(p => p.id);
+                            await personService.linkUserToPersons(data.uid, personIds);
                         } else {
-                            // Client değilse mevcut ilişkilendirmeyi temizle
-                            await personService.unlinkUserFromPerson(data.uid);
+                            // Client değilse mevcut ilişkilendirmeleri temizle
+                            await personService.unlinkUserFromAllPersons(data.uid);
                         }
                     }
 
