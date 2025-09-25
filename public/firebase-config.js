@@ -521,12 +521,14 @@ export const personService = {
     },
     
     // --- YENİ: Kullanıcı-Kişi İlişkilendirme Fonksiyonları ---
-    async linkUserToPersons(userId, personIds) {
+    async linkUserToPersons(userId, personsWithPermissions) {
         if (!isFirebaseAvailable) return { success: false, error: "Firebase kullanılamıyor." };
         try {
             const userRef = doc(db, 'users', userId);
             await updateDoc(userRef, {
-                linkedPersonIds: Array.isArray(personIds) ? personIds : [],
+                linkedPersons: Array.isArray(personsWithPermissions) ? personsWithPermissions : [],
+                // Geriye uyumluluk için eski alanı da güncelle
+                linkedPersonIds: personsWithPermissions.map(p => p.personId),
                 updatedAt: new Date().toISOString()
             });
             return { success: true };
@@ -535,38 +537,74 @@ export const personService = {
         }
     },
     
-    async getLinkedPersons(userId) {
-        if (!isFirebaseAvailable) return { success: false, error: "Firebase kullanılamıyor." };
-        try {
-            const userDoc = await getDoc(doc(db, 'users', userId));
-            if (!userDoc.exists() || !userDoc.data().linkedPersonIds || !Array.isArray(userDoc.data().linkedPersonIds)) {
+   async getLinkedPersons(userId) {
+    if (!isFirebaseAvailable) return { success: false, error: "Firebase kullanılamıyor." };
+    try {
+        const userDoc = await getDoc(doc(db, 'users', userId));
+        if (!userDoc.exists()) {
+            return { success: true, data: [] };
+        }
+        
+        const userData = userDoc.data();
+        
+        // Önce yeni format kontrol et
+        if (userData.linkedPersons && Array.isArray(userData.linkedPersons)) {
+            const linkedPersons = userData.linkedPersons;
+            if (linkedPersons.length === 0) {
                 return { success: true, data: [] };
             }
             
-            const personIds = userDoc.data().linkedPersonIds;
+            // Kişi bilgilerini getir ve yetki bilgileriyle birleştir
+            const personPromises = linkedPersons.map(async (link) => {
+                const personDoc = await getDoc(doc(db, 'persons', link.personId));
+                if (personDoc.exists()) {
+                    return {
+                        id: personDoc.id,
+                        ...personDoc.data(),
+                        permissions: link.permissions || { approval: false, view: false }
+                    };
+                }
+                return null;
+            });
+            
+            const persons = (await Promise.all(personPromises)).filter(p => p !== null);
+            return { success: true, data: persons };
+        }
+        
+        // Eski format için geriye dönük uyumluluk
+        if (userData.linkedPersonIds && Array.isArray(userData.linkedPersonIds)) {
+            const personIds = userData.linkedPersonIds;
             if (personIds.length === 0) {
                 return { success: true, data: [] };
             }
             
-            // Batch olarak kişileri getir
             const personPromises = personIds.map(id => getDoc(doc(db, 'persons', id)));
             const personDocs = await Promise.all(personPromises);
             
             const persons = personDocs
                 .filter(doc => doc.exists())
-                .map(doc => ({ id: doc.id, ...doc.data() }));
+                .map(doc => ({ 
+                    id: doc.id, 
+                    ...doc.data(),
+                    permissions: { approval: true, view: true } // Eski kayıtlar için varsayılan
+                }));
             
             return { success: true, data: persons };
-        } catch (error) {
-            return { success: false, error: error.message };
         }
-    },
+        
+        return { success: true, data: [] };
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+},
+
     async unlinkUserFromAllPersons(userId) {
         if (!isFirebaseAvailable) return { success: false, error: "Firebase kullanılamıyor." };
         try {
             const userRef = doc(db, 'users', userId);
             await updateDoc(userRef, {
-                linkedPersonIds: [],
+                linkedPersons: [],
+                linkedPersonIds: [], // Geriye uyumluluk
                 updatedAt: new Date().toISOString()
             });
             return { success: true };
