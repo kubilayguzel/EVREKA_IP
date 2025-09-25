@@ -429,6 +429,34 @@
     color: #495057;
     font-weight: 500;
 }
+.permission-radio-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 0 10px;
+}
+
+.permission-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 1rem;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.permission-label input[type="radio"] {
+    margin: 0;
+    cursor: pointer;
+    width: 16px;
+    height: 16px;
+}
+
+.permission-label span {
+    color: #495057;
+    font-weight: 500;
+    font-size: 1rem;
+}
     </style>
 </head>
 <body>
@@ -597,8 +625,7 @@
                         name: person.name,
                         email: person.email || '',
                         permissions: {
-                            approval: true,  // Varsayılan: her ikisi de aktif
-                            view: true
+                            type: 'view' // Varsayılan: görüntüleme
                         }
                     });
                     this.renderSelectedPersons();
@@ -632,16 +659,18 @@
                                 ${person.email ? `<br><small class="text-muted">${person.email}</small>` : ''}
                             </div>
                             
-                            <div class="permission-checkboxes">
+                            <div class="permission-radio-group">
                                 <label class="permission-label">
-                                    <input type="checkbox" class="permission-approval" data-person-id="${person.id}" 
-                                        ${person.permissions?.approval !== false ? 'checked' : ''}>
-                                    <span>Onay</span>
+                                    <input type="radio" name="permission_${person.id}" value="view" 
+                                        data-person-id="${person.id}" class="permission-radio"
+                                        ${person.permissions?.type === 'approval' ? '' : 'checked'}>
+                                    <span>Görüntüleme</span>
                                 </label>
                                 <label class="permission-label">
-                                    <input type="checkbox" class="permission-view" data-person-id="${person.id}"
-                                        ${person.permissions?.view !== false ? 'checked' : ''}>
-                                    <span>Görüntüleme</span>
+                                    <input type="radio" name="permission_${person.id}" value="approval"
+                                        data-person-id="${person.id}" class="permission-radio"
+                                        ${person.permissions?.type === 'approval' ? 'checked' : ''}>
+                                    <span>Onay</span>
                                 </label>
                             </div>
                             
@@ -712,11 +741,10 @@
                     }
                 });
 
-                // Yetki checkbox'ları dinleyicisi
+                // Yetki radio button'ları dinleyicisi
                 document.getElementById('selectedPersonsList').addEventListener('change', (e) => {
-                    if (e.target.classList.contains('permission-approval') || 
-                        e.target.classList.contains('permission-view')) {
-                        this.updatePersonPermissions(e.target.dataset.personId, e.target);
+                    if (e.target.classList.contains('permission-radio')) {
+                        this.updatePersonPermissions(e.target.dataset.personId, e.target.value);
                     }
                 });
 
@@ -736,14 +764,10 @@
                 });
             }
 
-            updatePersonPermissions(personId, checkbox) {
+            updatePersonPermissions(personId, permissionType) {
                 const person = this.selectedPersons.find(p => p.id === personId);
                 if (person) {
-                    if (checkbox.classList.contains('permission-approval')) {
-                        person.permissions.approval = checkbox.checked;
-                    } else if (checkbox.classList.contains('permission-view')) {
-                        person.permissions.view = checkbox.checked;
-                    }
+                    person.permissions.type = permissionType; // 'view' veya 'approval'
                 }
             }
 
