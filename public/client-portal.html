@@ -1242,80 +1242,34 @@ async function fetchAndDisplayPortfolio() {
             console.warn("❌ personsRelatedIds query hatası:", error.message);
         }
 
-        // Strateji 2: Eğer personsRelatedIds ile az/hiç sonuç yoksa, applicants ile batch query
-        if (allPortfolios.length < 5) { // Eşik değeri: 5'ten az bulunduysa alternatif dene
-            console.log("🔄 Applicants ile batch query deneniyor...");
-            
-            // Batch halinde query yapmak için linkedPersonIds'yi parçalara böl (Firestore limit: 10)
-            const batchSize = 10;
-            const batches = [];
-            
-            for (let i = 0; i < linkedPersonIds.length; i += batchSize) {
-                const batch = linkedPersonIds.slice(i, i + batchSize);
-                batches.push(batch);
-            }
-            
-            // Her batch için ayrı query
-            for (const batch of batches) {
-                try {
-                    // Bu query applicants array'indeki id field'ına göre arama yapar
-                    const conditions = batch.map(personId => 
-                        where("applicants", "array-contains", { id: personId })
-                    );
-                    
-                    // Birden fazla condition'ı OR ile birleştirmek için her birini ayrı query yap
-                    for (const personId of batch) {
-                        try {
-                            // Bu kesin çalışmayacak çünkü tam obje eşleşmesi gerekiyor
-                            // Bunun yerine tüm kayıtları çekip client-side filter yapalım
-                        } catch (err) {
-                            console.warn("Batch query hatası:", err.message);
-                        }
-                    }
-                } catch (error) {
-                    console.warn("Batch işlem hatası:", error.message);
-                }
-            }
-        }
-
-        // Strateji 3: Eğer hala yetersizse, client-side filtering (son çare)
-        if (allPortfolios.length < 5) {
-            console.log("🔄 Client-side filtering başlatılıyor... (Bu biraz zaman alabilir)");
-            
-            // Sadece gerekli alanları çek (bandwidth tasarrufu)
-            const lightQuery = query(collection(db, "ipRecords"));
-            const lightSnap = await getDocs(lightQuery);
-            console.log("Filtreleme için çekilen kayıt sayısı:", lightSnap.size);
-            
-            lightSnap.forEach(doc => {
-                const data = doc.data();
-                if (data.applicants && Array.isArray(data.applicants)) {
-                    const hasMatch = data.applicants.some(applicant => 
-                        applicant && applicant.id && linkedPersonIds.includes(applicant.id)
-                    );
-                    if (hasMatch) {
-                        // Duplicate kontrolü
-                        if (!allPortfolios.some(p => p.id === doc.id)) {
-                            allPortfolios.push({ id: doc.id, ...data });
-                        }
-                    }
-                }
-            });
-            
-            console.log("✅ Client-side filtering sonucu:", allPortfolios.length);
-        }
-
-        console.log("📊 Final portföy istatistikleri:", {
-            totalFound: allPortfolios.length,
-            sampleTitles: allPortfolios.slice(0, 3).map(p => p.title || p.brandText || 'İsimsiz')
+        console.log("Portföy verilerini çekme başladı...", {
+            linkedPersonIds,
+            linkedPersonCount: linkedPersonIds.length
         });
 
-        // Aynı kayıt birden fazla kez gelirse temizle
-        const seen = new Set();
-        allPortfolios = allPortfolios.filter(p => {
-            if (seen.has(p.id)) return false;
-            seen.add(p.id);
-            return true;
+        // ipRecords'da personsRelatedIds alanı olmadığı tespit edildi
+        // Doğrudan applicants array'i ile client-side filtering yapalım
+        console.log("🔄 Applicants array'i ile filtreleme başlatılıyor...");
+
+        const allIpQuery = query(collection(db, "ipRecords"));
+        const allIpSnap = await getDocs(allIpQuery);
+
+        console.log(`📥 Toplam ${allIpSnap.size} ipRecord çekildi, filtreleme başlıyor...`);
+
+        allIpSnap.forEach(doc => {
+            const data = doc.data();
+            
+            // applicants array'ini kontrol et
+            if (data.applicants && Array.isArray(data.applicants)) {
+                const hasMatch = data.applicants.some(applicant => {
+                    // applicant objesinin id'sini linkedPersonIds ile karşılaştır
+                    return applicant && applicant.id && linkedPersonIds.includes(applicant.id);
+                });
+                
+                if (hasMatch) {
+                    allPortfolios.push({ id: doc.id, ...data });
+                }
+            }
         });
 
         // 3. Marka, Patent, Tasarım gibi kategorilere göre filtreleme
@@ -1345,18 +1299,13 @@ async function fetchAndDisplayPortfolio() {
 }
 
 async function populateDashboardNumbers(linkedPersonIds){
-    const ipQ = query(collection(db, "ipRecords"), where("personsRelatedIds", "array-contains-any", linkedPersonIds));
-    const ipSnap = await getDocs(ipQ);
-    const portfolioCount = ipSnap.size;
-
+    const portfolioCount = allPortfolios.length;
     const taskQ = query(collection(db, "tasks"), where("personsRelatedIds", "array-contains-any", linkedPersonIds), where("status","==","müvekkil onayı bekliyor"));
     const taskSnap = await getDocs(taskQ);
     const pendingTasks = taskSnap.size;
-
     const accrualQ = query(collection(db, "accruals"), where("personsRelatedIds", "array-contains-any", linkedPersonIds), where("isPaid","==", false));
     const accrualSnap = await getDocs(accrualQ);
     const unpaidInvoices = accrualSnap.size;
-
     const statValues = document.querySelectorAll('#dashboard .stat-value');
     if (statValues[0]) statValues[0].textContent = portfolioCount;
     if (statValues[1]) statValues[1].textContent = pendingTasks;
