@@ -1050,10 +1050,17 @@
                                 return { approval: false, view: true };
                             };
 
+                            // 'type' -> exclusive boolean mapping
+                            const mapPerms = (type) => {
+                            if (type === 'approval') return { approval: true, view: false };
+                            return { approval: false, view: true };
+                            };
+
                             const personsWithPermissions = this.selectedPersons.map(p => ({
-                                personId: p.id,
-                                permissions: toBooleanPerms(p?.permissions?.type || 'view')
+                            personId: p.id,
+                            permissions: mapPerms(p?.permissions?.type || 'view')
                             }));
+
                             await personService.linkUserToPersons(data.uid, personsWithPermissions);
                         } else {
                             // Client değilse mevcut ilişkilendirmeleri temizle
