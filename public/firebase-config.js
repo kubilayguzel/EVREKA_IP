@@ -508,7 +508,7 @@ export const personService = {
             return { success: false, error: error.message };
         }
     },
-async deletePerson(personId) {
+    async deletePerson(personId) {
         if (!isFirebaseAvailable) return { success: false, error: "Firebase kullanılamıyor." };
         try {
             // İlişkili kullanıcılar varsa önce onları temizle
@@ -521,20 +521,6 @@ async deletePerson(personId) {
     },
     
     // --- YENİ: Kullanıcı-Kişi İlişkilendirme Fonksiyonları ---
-  
-    async unlinkUserFromAllPersons(userId) {
-        if (!isFirebaseAvailable) return { success: false, error: "Firebase kullanılamıyor." };
-        try {
-            const userRef = doc(db, 'users', userId);
-            await updateDoc(userRef, {
-                linkedPersonIds: [],
-                updatedAt: new Date().toISOString()
-            });
-            return { success: true };
-        } catch (error) {
-            return { success: false, error: error.message };
-        }
-    },
     async linkUserToPersons(userId, personIds) {
         if (!isFirebaseAvailable) return { success: false, error: "Firebase kullanılamıyor." };
         try {
@@ -575,6 +561,20 @@ async deletePerson(personId) {
             return { success: false, error: error.message };
         }
     },
+    async unlinkUserFromAllPersons(userId) {
+        if (!isFirebaseAvailable) return { success: false, error: "Firebase kullanılamıyor." };
+        try {
+            const userRef = doc(db, 'users', userId);
+            await updateDoc(userRef, {
+                linkedPersonIds: [],
+                updatedAt: new Date().toISOString()
+            });
+            return { success: true };
+        } catch (error) {
+            return { success: false, error: error.message };
+        }
+    },
+    
     async getUsersLinkedToPerson(personId) {
         if (!isFirebaseAvailable) return { success: false, error: "Firebase kullanılamıyor." };
         try {
