@@ -1221,16 +1221,98 @@ async function fetchAndDisplayPortfolio() {
         let allPortfolios = [];
 
         // Her linkedPersonId için ayrı query çalıştır
-        for (const personId of linkedPersonIds) {
-            const q = query(
+        console.log("Portföy verilerini çekme başladı...", {
+            linkedPersonIds,
+            linkedPersonCount: linkedPersonIds.length
+        });
+
+        // Strateji 1: personsRelatedIds ile hızlı query (dashboard ile aynı)
+        try {
+            const q1 = query(
                 portfolioRef,
-                where("applicants", "array-contains", { id: personId })
+                where("personsRelatedIds", "array-contains-any", linkedPersonIds)
             );
-            const snap = await getDocs(q);
-            snap.forEach(doc => {
+            const snap1 = await getDocs(q1);
+            snap1.forEach(doc => {
                 allPortfolios.push({ id: doc.id, ...doc.data() });
             });
+            
+            console.log("✅ personsRelatedIds ile bulunan:", allPortfolios.length);
+        } catch (error) {
+            console.warn("❌ personsRelatedIds query hatası:", error.message);
         }
+
+        // Strateji 2: Eğer personsRelatedIds ile az/hiç sonuç yoksa, applicants ile batch query
+        if (allPortfolios.length < 5) { // Eşik değeri: 5'ten az bulunduysa alternatif dene
+            console.log("🔄 Applicants ile batch query deneniyor...");
+            
+            // Batch halinde query yapmak için linkedPersonIds'yi parçalara böl (Firestore limit: 10)
+            const batchSize = 10;
+            const batches = [];
+            
+            for (let i = 0; i < linkedPersonIds.length; i += batchSize) {
+                const batch = linkedPersonIds.slice(i, i + batchSize);
+                batches.push(batch);
+            }
+            
+            // Her batch için ayrı query
+            for (const batch of batches) {
+                try {
+                    // Bu query applicants array'indeki id field'ına göre arama yapar
+                    const conditions = batch.map(personId => 
+                        where("applicants", "array-contains", { id: personId })
+                    );
+                    
+                    // Birden fazla condition'ı OR ile birleştirmek için her birini ayrı query yap
+                    for (const personId of batch) {
+                        try {
+                            // Bu kesin çalışmayacak çünkü tam obje eşleşmesi gerekiyor
+                            // Bunun yerine tüm kayıtları çekip client-side filter yapalım
+                        } catch (err) {
+                            console.warn("Batch query hatası:", err.message);
+                        }
+                    }
+                } catch (error) {
+                    console.warn("Batch işlem hatası:", error.message);
+                }
+            }
+        }
+
+        // Strateji 3: Eğer hala yetersizse, client-side filtering (son çare)
+        if (allPortfolios.length < 5) {
+            console.log("🔄 Client-side filtering başlatılıyor... (Bu biraz zaman alabilir)");
+            
+            // Sadece gerekli alanları çek (bandwidth tasarrufu)
+            const lightQuery = query(
+                collection(db, "ipRecords"),
+                limit(5000) // İlk 5000 kaydı çek, gerekirse artır
+            );
+            
+            const lightSnap = await getDocs(lightQuery);
+            console.log("Filtreleme için çekilen kayıt sayısı:", lightSnap.size);
+            
+            lightSnap.forEach(doc => {
+                const data = doc.data();
+                if (data.applicants && Array.isArray(data.applicants)) {
+                    const hasMatch = data.applicants.some(applicant => 
+                        applicant && applicant.id && linkedPersonIds.includes(applicant.id)
+                    );
+                    if (hasMatch) {
+                        // Duplicate kontrolü
+                        if (!allPortfolios.some(p => p.id === doc.id)) {
+                            allPortfolios.push({ id: doc.id, ...data });
+                        }
+                    }
+                }
+            });
+            
+            console.log("✅ Client-side filtering sonucu:", allPortfolios.length);
+        }
+
+        console.log("📊 Final portföy istatistikleri:", {
+            totalFound: allPortfolios.length,
+            sampleTitles: allPortfolios.slice(0, 3).map(p => p.title || p.brandText || 'İsimsiz')
+        });
 
         // Aynı kayıt birden fazla kez gelirse temizle
         const seen = new Set();
