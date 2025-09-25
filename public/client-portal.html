@@ -1293,7 +1293,7 @@ async function fetchAndDisplayPortfolio() {
         populatePortfolioTable('#dava-itiraz-list', davaIItirazList);
 
         // Dashboard sayaçlarını doldur
-        await populateDashboardNumbers(linkedPersonIds);
+        await populateDashboardNumbers(linkedPersonIds, allPortfolios);
 
         // İşlerim sekmesini doldur
         await fetchAndDisplayTasks(linkedPersonIds);
@@ -1306,7 +1306,7 @@ async function fetchAndDisplayPortfolio() {
     }
 }
 
-async function populateDashboardNumbers(linkedPersonIds){
+async function populateDashboardNumbers(linkedPersonIds, allPortfolios){
     const portfolioCount = allPortfolios.length;
     const taskQ = query(collection(db, "tasks"), where("personsRelatedIds", "array-contains-any", linkedPersonIds), where("status","==","müvekkil onayı bekliyor"));
     const taskSnap = await getDocs(taskQ);
