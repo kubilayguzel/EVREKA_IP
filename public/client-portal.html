@@ -1114,20 +1114,36 @@ function populatePortfolioTable(tableId, portfolioData) {
         const mainRow = document.createElement('tr');
         const isInternational = item.origin === 'YURTDISI';
         
+        // Veritabanından gelen gerçek veri yapısına göre düzelt
+        const title = item.title || item.brandText || 'İsimsiz';
+        const appNumber = item.applicationNumber || item.applicationNo || '-';
+        const origin = item.origin || 'TÜRKPATENT';
+        const statusText = item.status || item.statusText || 'Bilinmiyor';
+        const classes = item.classes 
+            ? (Array.isArray(item.classes) ? item.classes.join(', ') : item.classes)
+            : (item.goodsAndServicesByClass 
+                ? item.goodsAndServicesByClass.map(g => g.classNo).join(', ') 
+                : '-');
+        const lastDate = item.lastTransactionDate || item.applicationDate || '-';
+        
         const badgeClass = {
             'Başvuru': 'primary',
+            'application_filed': 'primary', 
             'Tescilli': 'success',
+            'registered': 'success',
             'İtiraz': 'warning',
-            'Reddedildi': 'danger'
-        }[item.statusText] || 'secondary';
+            'objection': 'warning',
+            'Reddedildi': 'danger',
+            'rejected': 'danger'
+        }[statusText] || 'secondary';
 
         const rowHtml = `
             <td>${isInternational ? `<i class="fas fa-chevron-down mr-2"></i>` : ''}${index + 1}</td>
-            <td><a href="#" data-toggle="modal" data-target="#portfolioDetailModal">${item.title} (${item.origin})</a></td>
-            <td>${item.applicationNumber}</td>
-            <td><span class="badge badge-${badgeClass}">${item.statusText}</span></td>
-            <td>${item.classes.join(', ')}</td>
-            <td>${item.lastTransactionDate}</td>
+            <td><a href="#" data-toggle="modal" data-target="#portfolioDetailModal">${title} (${origin})</a></td>
+            <td>${appNumber}</td>
+            <td><span class="badge badge-${badgeClass}">${statusText}</span></td>
+            <td>${classes}</td>
+            <td>${lastDate}</td>
         `;
 
         mainRow.innerHTML = rowHtml;
@@ -1159,16 +1175,21 @@ function populatePortfolioTable(tableId, portfolioData) {
                                 </tr>
                             </thead>
                             <tbody>
-                                ${item.subRegistrations.map((subItem, subIndex) => `
-                                    <tr>
-                                        <td>${index + 1}.${subIndex + 1}</td>
-                                        <td><a href="#" data-toggle="modal" data-target="#portfolioDetailModal">${subItem.title} (${subItem.country})</a></td>
-                                        <td>${subItem.applicationNumber}</td>
-                                        <td><span class="badge badge-${subItem.statusClass}">${subItem.statusText}</span></td>
-                                        <td>${subItem.classes.join(', ')}</td>
-                                        <td>${subItem.lastTransactionDate}</td>
-                                    </tr>
-                                `).join('')}
+                                ${item.subRegistrations.map((subItem, subIndex) => {
+                                    const subClasses = subItem.classes 
+                                        ? (Array.isArray(subItem.classes) ? subItem.classes.join(', ') : subItem.classes)
+                                        : '-';
+                                    return `
+                                        <tr>
+                                            <td>${index + 1}.${subIndex + 1}</td>
+                                            <td><a href="#" data-toggle="modal" data-target="#portfolioDetailModal">${subItem.title || 'İsimsiz'} (${subItem.country || 'Bilinmiyor'})</a></td>
+                                            <td>${subItem.applicationNumber || '-'}</td>
+                                            <td><span class="badge badge-${subItem.statusClass || 'secondary'}">${subItem.statusText || 'Bilinmiyor'}</span></td>
+                                            <td>${subClasses}</td>
+                                            <td>${subItem.lastTransactionDate || '-'}</td>
+                                        </tr>
+                                    `;
+                                }).join('')}
                             </tbody>
                         </table>
                     </div>
@@ -1178,7 +1199,6 @@ function populatePortfolioTable(tableId, portfolioData) {
         }
     });
 }
-
 
 /**
  * Kullanıcı kimliğine göre portföy verilerini çeker ve tabloyu doldurur.
