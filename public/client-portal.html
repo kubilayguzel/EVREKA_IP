@@ -515,7 +515,6 @@
 
                 
 
-<!-- Portföyüm sekmeleri + Menşe filtresi (yan yana) -->
 <div class="d-flex align-items-center justify-content-between flex-wrap mb-2" id="portfolioTabsBar">
 <ul class="nav nav-tabs mb-2 mb-sm-0" id="portfolioTopTabs" role="tablist">
 <li class="nav-item">
@@ -1222,6 +1221,169 @@
       return false;
   });
 })();
+</script>
+
+<script type="module">
+// Projenizdeki Firebase ve Firestore modüllerini içe aktarın.
+// import { getFirestore, collection, query, where, getDocs } from "firebase/firestore";
+
+// getUserId fonksiyonunu Firebase Authentication'dan alacak şekilde düzenleyin.
+function getUserId() {
+  // Örnek: Gerçek bir kullanıcı kimliği döndürmeli.
+  // const user = firebase.auth().currentUser;
+  // return user ? user.uid : null;
+  return "placeholderUserId123"; // Test için placeholder
+}
+
+/**
+ * Verilen HTML tablosunu, çekilen portföy verileriyle doldurur.
+ * @param {string} tableId Doldurulacak tablonun ID'si (#marka-list, #patent-list vb.)
+ * @param {Array<Object>} portfolioData Gösterilecek portföy verileri.
+ */
+function populatePortfolioTable(tableId, portfolioData) {
+    const tableBody = document.querySelector(`${tableId} tbody`);
+    if (!tableBody) return;
+    
+    // Mevcut tüm satırları temizle
+    tableBody.innerHTML = '';
+
+    portfolioData.forEach((item, index) => {
+        // Ana satır yapısını oluştur
+        const mainRow = document.createElement('tr');
+        
+        // Uluslararası (WIPO) kayıtları için özel durum
+        const isInternational = item.origin === 'YURTDISI';
+        if (isInternational) {
+            mainRow.classList.add('accordion-header-row');
+            mainRow.setAttribute('data-toggle', 'collapse');
+            mainRow.setAttribute('data-target', `#accordion-yurtdisi-${item.id}`); // Örnek ID
+            mainRow.setAttribute('aria-expanded', 'false');
+            mainRow.setAttribute('aria-controls', `accordion-yurtdisi-${item.id}`);
+            mainRow.innerHTML = `
+                <td><i class="fas fa-chevron-down mr-2"></i>${index + 1}</td>
+                <td><a href="#" data-toggle="modal" data-target="#portfolioDetailModal">${item.title} (${item.origin})</a></td>
+                <td>${item.applicationNumber}</td>
+                <td><span class="badge badge-${item.statusClass}">${item.statusText}</span></td>
+                <td>${item.classes.join(', ')}</td>
+                <td>${item.lastTransactionDate}</td>
+            `;
+        } else {
+            // Yurtiçi (TÜRKPATENT) veya normal kayıtlar
+            mainRow.innerHTML = `
+                <td>${index + 1}</td>
+                <td><a href="#" data-toggle="modal" data-target="#portfolioDetailModal">${item.title} (${item.origin})</a></td>
+                <td>${item.applicationNumber}</td>
+                <td><span class="badge badge-${item.statusClass}">${item.statusText}</span></td>
+                <td>${item.classes.join(', ')}</td>
+                <td>${item.lastTransactionDate}</td>
+            `;
+        }
+
+        tableBody.appendChild(mainRow);
+        
+        // Eğer uluslararası bir kayıt ise, alt detay satırını oluştur
+        if (isInternational && item.subRegistrations && item.subRegistrations.length > 0) {
+            const detailRow = document.createElement('tr');
+            detailRow.innerHTML = `
+                <td colspan="6" class="p-0">
+                    <div class="collapse" id="accordion-yurtdisi-${item.id}">
+                        <table class="table mb-0 accordion-table">
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>Marka Adı</th>
+                                    <th>Başvuru No</th>
+                                    <th>Durum</th>
+                                    <th>Sınıflar</th>
+                                    <th>Son İşlem</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${item.subRegistrations.map((subItem, subIndex) => `
+                                    <tr>
+                                        <td>${index + 1}.${subIndex + 1}</td>
+                                        <td><a href="#" data-toggle="modal" data-target="#portfolioDetailModal">${subItem.title} (${subItem.country})</a></td>
+                                        <td>${subItem.applicationNumber}</td>
+                                        <td><span class="badge badge-${subItem.statusClass}">${subItem.statusText}</span></td>
+                                        <td>${subItem.classes.join(', ')}</td>
+                                        <td>${subItem.lastTransactionDate}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </td>
+            `;
+            tableBody.appendChild(detailRow);
+        }
+    });
+}
+
+/**
+ * Kullanıcı kimliğine göre portföy verilerini çeker ve tabloyu doldurur.
+ * @param {string} userId Mevcut kullanıcının kimliği.
+ */
+async function fetchAndDisplayPortfolio(userId) {
+    // Firestore ve diğer kütüphanelerin yüklü olduğundan emin olun.
+    if (typeof firebase === 'undefined' || typeof getFirestore === 'undefined') {
+      console.error("Firebase/Firestore kütüphaneleri yüklenmemiş.");
+      return;
+    }
+    const db = getFirestore();
+
+    try {
+        // 1. Kullanıcının ilişkili olduğu müvekkil ID'lerini çekme
+        const usersRef = collection(db, "users");
+        const userQuery = query(usersRef, where("userId", "==", userId));
+        const userSnapshot = await getDocs(userQuery);
+
+        if (userSnapshot.empty) {
+            console.log("Kullanıcıya ait veri bulunamadı.");
+            return;
+        }
+
+        const userData = userSnapshot.docs[0].data();
+        const linkedPersonIds = userData.linkedPersonIds;
+
+        if (!linkedPersonIds || linkedPersonIds.length === 0) {
+            console.log("Kullanıcı ile ilişkili müvekkil bulunamadı.");
+            return;
+        }
+
+        // 2. İlgili müvekkillere ait tüm portföy verilerini çekme
+        const portfolioRef = collection(db, "portfolios"); // veya "trademarks", "patents"
+        const portfolioQuery = query(portfolioRef, where("personId", "in", linkedPersonIds));
+        const portfolioSnapshot = await getDocs(portfolioQuery);
+
+        const allPortfolios = portfolioSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+        // 3. Marka, Patent, Tasarım gibi kategorilere göre filtreleme
+        const markaList = allPortfolios.filter(p => p.type === 'Marka');
+        const patentList = allPortfolios.filter(p => p.type === 'Patent');
+        const tasarimList = allPortfolios.filter(p => p.type === 'Tasarım');
+        const davaIItirazList = allPortfolios.filter(p => p.type === 'Dava/İtiraz');
+
+        // 4. Her bir sekmeyi kendi verisiyle doldurma
+        populatePortfolioTable('#marka-list', markaList);
+        populatePortfolioTable('#patent-list', patentList);
+        populatePortfolioTable('#tasarim-list', tasarimList);
+        populatePortfolioTable('#dava-itiraz-list', davaIItirazList);
+
+    } catch (error) {
+        console.error("Portföy verileri çekilirken bir hata oluştu:", error);
+    }
+}
+
+// Sayfa yüklendiğinde verileri çekme işlemini başlatın
+document.addEventListener('DOMContentLoaded', function() {
+    // Diğer DOMContentLoaded kodlarınız burada devam ediyor...
+    const userId = getUserId(); // Giriş yapan kullanıcının kimliğini alın
+    if (userId) {
+      fetchAndDisplayPortfolio(userId);
+    } else {
+      console.log("Kullanıcı giriş yapmamış.");
+    }
+});
 </script>
 
 </body>
