@@ -521,12 +521,13 @@ async deletePerson(personId) {
     },
     
     // --- YENİ: Kullanıcı-Kişi İlişkilendirme Fonksiyonları ---
-    async linkUserToPerson(userId, personId) {
+
+async linkUserToPersons(userId, personIds) {
         if (!isFirebaseAvailable) return { success: false, error: "Firebase kullanılamıyor." };
         try {
             const userRef = doc(db, 'users', userId);
             await updateDoc(userRef, {
-                linkedPersonId: personId,
+                linkedPersonIds: Array.isArray(personIds) ? personIds : [],
                 updatedAt: new Date().toISOString()
             });
             return { success: true };
@@ -535,12 +536,12 @@ async deletePerson(personId) {
         }
     },
     
-    async unlinkUserFromPerson(userId) {
+    async unlinkUserFromAllPersons(userId) {
         if (!isFirebaseAvailable) return { success: false, error: "Firebase kullanılamıyor." };
         try {
             const userRef = doc(db, 'users', userId);
             await updateDoc(userRef, {
-                linkedPersonId: null,
+                linkedPersonIds: [],
                 updatedAt: new Date().toISOString()
             });
             return { success: true };
@@ -549,20 +550,28 @@ async deletePerson(personId) {
         }
     },
     
-    async getLinkedPerson(userId) {
+    async getLinkedPersons(userId) {
         if (!isFirebaseAvailable) return { success: false, error: "Firebase kullanılamıyor." };
         try {
             const userDoc = await getDoc(doc(db, 'users', userId));
-            if (!userDoc.exists() || !userDoc.data().linkedPersonId) {
-                return { success: true, data: null };
+            if (!userDoc.exists() || !userDoc.data().linkedPersonIds || !Array.isArray(userDoc.data().linkedPersonIds)) {
+                return { success: true, data: [] };
             }
             
-            const personDoc = await getDoc(doc(db, 'persons', userDoc.data().linkedPersonId));
-            if (!personDoc.exists()) {
-                return { success: true, data: null };
+            const personIds = userDoc.data().linkedPersonIds;
+            if (personIds.length === 0) {
+                return { success: true, data: [] };
             }
             
-            return { success: true, data: { id: personDoc.id, ...personDoc.data() } };
+            // Batch olarak kişileri getir
+            const personPromises = personIds.map(id => getDoc(doc(db, 'persons', id)));
+            const personDocs = await Promise.all(personPromises);
+            
+            const persons = personDocs
+                .filter(doc => doc.exists())
+                .map(doc => ({ id: doc.id, ...doc.data() }));
+            
+            return { success: true, data: persons };
         } catch (error) {
             return { success: false, error: error.message };
         }
@@ -571,7 +580,7 @@ async deletePerson(personId) {
     async getUsersLinkedToPerson(personId) {
         if (!isFirebaseAvailable) return { success: false, error: "Firebase kullanılamıyor." };
         try {
-            const q = query(collection(db, 'users'), where('linkedPersonId', '==', personId));
+            const q = query(collection(db, 'users'), where('linkedPersonIds', 'array-contains', personId));
             const querySnapshot = await getDocs(q);
             return { 
                 success: true, 
@@ -585,13 +594,17 @@ async deletePerson(personId) {
     async removePersonFromAllUsers(personId) {
         if (!isFirebaseAvailable) return { success: false, error: "Firebase kullanılamıyor." };
         try {
-            const q = query(collection(db, 'users'), where('linkedPersonId', '==', personId));
+            const q = query(collection(db, 'users'), where('linkedPersonIds', 'array-contains', personId));
             const querySnapshot = await getDocs(q);
             
             const batch = writeBatch(db);
-            querySnapshot.docs.forEach(doc => {
-                batch.update(doc.ref, { 
-                    linkedPersonId: null,
+            querySnapshot.docs.forEach(userDoc => {
+                const userData = userDoc.data();
+                const currentPersonIds = userData.linkedPersonIds || [];
+                const updatedPersonIds = currentPersonIds.filter(id => id !== personId);
+                
+                batch.update(userDoc.ref, { 
+                    linkedPersonIds: updatedPersonIds,
                     updatedAt: new Date().toISOString()
                 });
             });
