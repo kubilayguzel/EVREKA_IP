@@ -599,17 +599,7 @@
                     return;
                 }
 
-                // Yeni eklenen kısım: Client'lar için müvekkil portalına yönlendirme
-                if (userRole === 'client') {
-                    sessionStorage.removeItem('signup_flow');
-                    showNotification('Giriş başarılı! Müvekkil portalına yönlendiriliyorsunuz...', 'success');
-                    setTimeout(() => {
-                        window.location.href = 'client-portal.html';
-                    }, 1000);
-                    return;
-                }
-
-                // Diğer roller için (admin, superadmin vb.) ana uygulamaya yönlendirme
+                // Normal kullanıcılar için ana sayfaya yönlendir
                 sessionStorage.removeItem('signup_flow');
                 showNotification('Giriş başarılı! Yönlendiriliyorsunuz...', 'success');
                 setTimeout(() => {
