@@ -219,6 +219,33 @@
         .btn-primary:hover { background: #2a5298; }
         .btn-secondary { background: #6c757d; color: white; border: none; }
         .btn-secondary:hover { background: #5a6268; }
+
+        .linked-indicator {
+            display: inline-block;
+            background: #28a745;
+            color: white;
+            border-radius: 50%;
+            width: 18px;
+            height: 18px;
+            text-align: center;
+            line-height: 18px;
+            font-size: 12px;
+            margin-left: 5px;
+            font-weight: bold;
+        }
+        
+        #clientPersonGroup {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #dee2e6;
+            margin-top: 10px;
+        }
+        
+        #clientPersonGroup .text-muted {
+            font-size: 0.9em;
+            margin-top: 5px;
+        }
     </style>
 </head>
 <body>
@@ -290,6 +317,15 @@
                     <option value="superadmin">Super Admin</option>
                 </select>
             </div>
+            
+            <!-- Client Rolü İçin Kişi İlişkilendirme -->
+            <div class="form-group" id="clientPersonGroup" style="display: none;">
+                <label for="linkedPersonSelect" class="form-label">İlişkilendirilecek Kişi:</label>
+                <select id="linkedPersonSelect" name="linkedPersonSelect" class="form-select">
+                    <option value="">Kişi seçiniz...</option>
+                </select>
+                <small class="text-muted">Client rolündeki kullanıcılar kişiler listesindeki bir kişiyle ilişkilendirilebilir.</small>
+            </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" id="cancelUserBtn">İptal</button>
                 <button type="submit" class="btn btn-primary" id="saveUserBtn">Kaydet</button>
@@ -298,7 +334,7 @@
     </div>
 </div>
 <script type="module">
-    import { authService, auth, db, app } from './firebase-config.js';
+    import { authService, personService, auth, db, app } from './firebase-config.js';
     import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-functions.js';
     import { collection, getDocs } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
     import { showNotification } from './utils.js';
@@ -343,6 +379,11 @@
                 document.getElementById('cancelUserBtn').addEventListener('click', () => this.closeUserModal());
                 document.getElementById('userForm').addEventListener('submit', (e) => this.handleUserFormSubmit(e));
                 document.getElementById('userSearchInput').addEventListener('input', (e) => this.filterUsers(e.target.value));
+
+                // Rol değişimi dinleyicisi
+                document.getElementById('formUserRole').addEventListener('change', (e) => {
+                    this.toggleClientPersonGroup(e.target.value);
+                });
 
                 // Tablo içi düzenle / sil butonları (event delegation)
                 document.getElementById('usersTableBody').addEventListener('click', (e) => {
@@ -422,9 +463,13 @@
                   'superadmin': 'Süper Admin'
                 };
                 const roleText = roleTexts[user.role] || user.role || 'Kullanıcı';
+                // Kişi ilişkilendirme durumu
+                const hasLinkedPerson = user.linkedPersonId ? true : false;
+                const linkIndicator = hasLinkedPerson ? 
+                    '<span class="linked-indicator" title="Bu kullanıcı bir kişiyle ilişkilendirilmiş">✓</span>' : '';
 
                 row.innerHTML = `
-                  <td>${user.displayName || '-'}</td>
+                  <td>${user.displayName || '-'} ${linkIndicator}</td>
                   <td>${user.email || '-'}</td>
                   <td>${roleText}</td>
                   <td>${this.formatTimestamp(user.createdAt)}</td>
@@ -439,28 +484,75 @@
                 });
            }
 
-            showAddUserModal() {
+           async loadPersonsForSelect() {
+                try {
+                    const result = await personService.getPersons();
+                    const select = document.getElementById('linkedPersonSelect');
+                    
+                    // Mevcut options'ları temizle (ilk option hariç)
+                    while (select.children.length > 1) {
+                        select.removeChild(select.lastChild);
+                    }
+                    
+                    if (result.success && Array.isArray(result.data)) {
+                        result.data.forEach(person => {
+                            const option = document.createElement('option');
+                            option.value = person.id;
+                            option.textContent = person.name;
+                            select.appendChild(option);
+                        });
+                    }
+                } catch (error) {
+                    console.error('Kişiler yüklenirken hata:', error);
+                }
+            }
+
+            toggleClientPersonGroup(role) {
+                const clientGroup = document.getElementById('clientPersonGroup');
+                if (role === 'client') {
+                    clientGroup.style.display = 'block';
+                } else {
+                    clientGroup.style.display = 'none';
+                    document.getElementById('linkedPersonSelect').value = '';
+                }
+            }
+            async showAddUserModal() {
+                await this.loadPersonsForSelect();
+                
                 document.getElementById('userModalTitle').textContent = 'Yeni Kullanıcı Ekle';
                 document.getElementById('userForm').reset();
                 document.getElementById('userId').value = '';
                 document.getElementById('passwordGroup').style.display = 'flex';
                 document.getElementById('formUserEmail').removeAttribute('readonly');
+                
+                // Client grup gizle
+                document.getElementById('clientPersonGroup').style.display = 'none';
+                
                 document.getElementById('userModal').classList.add('show');
             }
 
-            showEditUserModal(userId) {
+            async showEditUserModal(userId) {
                 const user = this.allUsers.find(u => u.id === userId);
                 if (!user) {
                     showNotification('Kullanıcı bulunamadı.', 'error');
                     return;
                 }
+
+                await this.loadPersonsForSelect();
+
                 document.getElementById('userModalTitle').textContent = 'Kullanıcıyı Düzenle';
                 document.getElementById('userId').value = user.id;
                 document.getElementById('formUserName').value = user.displayName || '';
                 document.getElementById('formUserEmail').value = user.email || '';
-                document.getElementById('formUserEmail').setAttribute('readonly', true);
-                document.getElementById('passwordGroup').style.display = 'none';
                 document.getElementById('formUserRole').value = user.role || 'user';
+                document.getElementById('linkedPersonSelect').value = user.linkedPersonId || '';
+                
+                document.getElementById('passwordGroup').style.display = 'none';
+                document.getElementById('formUserEmail').setAttribute('readonly', true);
+                
+                // Client rolü kontrolü
+                this.toggleClientPersonGroup(user.role);
+                
                 document.getElementById('userModal').classList.add('show');
             }
 
@@ -573,6 +665,20 @@
                     const errorMessage = error?.message || error?.code || 'Bilinmeyen hata';
                     showNotification(errorMessage, 'error');
                 }
+                // Kişi ilişkilendirme işlemi
+                    const linkedPersonId = document.getElementById('linkedPersonSelect')?.value || '';
+
+                    const { data } = await upsertUser(payload);
+
+                    // Kullanıcı işlemi başarılıysa, kişi ilişkilendirmesi yap
+                    if (data.uid) {
+                        if (payload.role === 'client' && linkedPersonId) {
+                            await personService.linkUserToPerson(data.uid, linkedPersonId);
+                        } else {
+                            // Client değilse mevcut ilişkilendirmeyi temizle
+                            await personService.unlinkUserFromPerson(data.uid);
+                        }
+                    }
             }
 
             async deleteUser(userId) {
