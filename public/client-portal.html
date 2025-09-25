@@ -1220,13 +1220,12 @@ async function fetchAndDisplayPortfolio() {
         const portfolioRef = collection(db, "ipRecords");
         let allPortfolios = [];
 
-        // Her linkedPersonId için ayrı query çalıştır
         console.log("Portföy verilerini çekme başladı...", {
             linkedPersonIds,
             linkedPersonCount: linkedPersonIds.length
         });
 
-        // Strateji 1: personsRelatedIds ile hızlı query (dashboard ile aynı)
+        // Strateji 1: personsRelatedIds ile hızlı query dene (muhtemelen boş dönecek)
         try {
             const q1 = query(
                 portfolioRef,
@@ -1242,13 +1241,7 @@ async function fetchAndDisplayPortfolio() {
             console.warn("❌ personsRelatedIds query hatası:", error.message);
         }
 
-        console.log("Portföy verilerini çekme başladı...", {
-            linkedPersonIds,
-            linkedPersonCount: linkedPersonIds.length
-        });
-
-        // ipRecords'da personsRelatedIds alanı olmadığı tespit edildi
-        // Doğrudan applicants array'i ile client-side filtering yapalım
+        // Ana strateji: applicants array'i ile client-side filtering
         console.log("🔄 Applicants array'i ile filtreleme başlatılıyor...");
 
         const allIpQuery = query(collection(db, "ipRecords"));
@@ -1271,6 +1264,21 @@ async function fetchAndDisplayPortfolio() {
                 }
             }
         });
+
+        console.log("📊 Final portföy istatistikleri:", {
+            totalFound: allPortfolios.length,
+            sampleTitles: allPortfolios.slice(0, 3).map(p => p.title || p.brandText || 'İsimsiz')
+        });
+
+        // Duplicate temizleme
+        const seen = new Set();
+        allPortfolios = allPortfolios.filter(p => {
+            if (seen.has(p.id)) return false;
+            seen.add(p.id);
+            return true;
+        });
+
+        console.log("✅ Temizleme sonrası final:", allPortfolios.length);
 
         // 3. Marka, Patent, Tasarım gibi kategorilere göre filtreleme
         const markaList = allPortfolios.filter(p => p.type === 'Marka');
