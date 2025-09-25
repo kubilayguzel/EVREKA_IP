@@ -1280,11 +1280,27 @@ async function fetchAndDisplayPortfolio() {
 
         console.log("✅ Temizleme sonrası final:", allPortfolios.length);
 
-        // 3. Marka, Patent, Tasarım gibi kategorilere göre filtreleme
-        const markaList = allPortfolios.filter(p => p.type === 'Marka');
-        const patentList = allPortfolios.filter(p => p.type === 'Patent');
-        const tasarimList = allPortfolios.filter(p => p.type === 'Tasarım');
-        const davaIItirazList = allPortfolios.filter(p => p.type === 'Dava/İtiraz');
+        // 3. Doğru type değerleri ile filtreleme (veritabanında İngilizce değerler kullanılıyor)
+        const markaList = allPortfolios.filter(p => 
+            p.type === 'trademark' || p.type === 'Marka' || p.type === 'marka'
+        );
+        const patentList = allPortfolios.filter(p => 
+            p.type === 'patent' || p.type === 'Patent'
+        );
+        const tasarimList = allPortfolios.filter(p => 
+            p.type === 'design' || p.type === 'Tasarım' || p.type === 'tasarim'
+        );
+        const davaIItirazList = allPortfolios.filter(p => 
+            p.type === 'litigation' || p.type === 'objection' || 
+            p.type === 'Dava/İtiraz' || p.type === 'dava' || p.type === 'itiraz'
+        );
+
+        console.log("✅ Kategori dağılımı:", {
+            marka: markaList.length,
+            patent: patentList.length,
+            tasarim: tasarimList.length,
+            davaItiraz: davaIItirazList.length
+        });
 
         // 4. Her bir sekmeyi kendi verisiyle doldurma
         populatePortfolioTable('#marka-list', markaList);
