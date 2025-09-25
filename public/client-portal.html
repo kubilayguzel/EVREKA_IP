@@ -1283,11 +1283,7 @@ async function fetchAndDisplayPortfolio() {
             console.log("🔄 Client-side filtering başlatılıyor... (Bu biraz zaman alabilir)");
             
             // Sadece gerekli alanları çek (bandwidth tasarrufu)
-            const lightQuery = query(
-                collection(db, "ipRecords"),
-                limit(5000) // İlk 5000 kaydı çek, gerekirse artır
-            );
-            
+            const lightQuery = query(collection(db, "ipRecords"));
             const lightSnap = await getDocs(lightQuery);
             console.log("Filtreleme için çekilen kayıt sayısı:", lightSnap.size);
             
