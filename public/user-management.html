@@ -767,17 +767,6 @@
                 }
             }
             
-            async loadPersonsForSelect() {
-                try {
-                    const result = await personService.getPersons();
-                    if (result.success && Array.isArray(result.data)) {
-                        this.allPersons = result.data;
-                    }
-                } catch (error) {
-                    console.error('Kişiler yüklenirken hata:', error);
-                }
-            }
-
             toggleClientPersonGroup(role) {
                 const clientGroup = document.getElementById('clientPersonGroup');
                 if (role === 'client') {
@@ -912,9 +901,6 @@
 
                 console.log("✅ Tüm validasyonlar geçti, işlem başlıyor...");
                 try {
-                    // Kişi ilişkilendirme değerini al
-                    const linkedPersonId = document.getElementById('linkedPersonSelect')?.value || '';
-
                     // Payload
                     const payload = {
                         uid: userId || '',
