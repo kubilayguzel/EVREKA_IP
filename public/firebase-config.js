@@ -535,7 +535,46 @@ async deletePerson(personId) {
             return { success: false, error: error.message };
         }
     },
+    async linkUserToPersons(userId, personIds) {
+        if (!isFirebaseAvailable) return { success: false, error: "Firebase kullanılamıyor." };
+        try {
+            const userRef = doc(db, 'users', userId);
+            await updateDoc(userRef, {
+                linkedPersonIds: Array.isArray(personIds) ? personIds : [],
+                updatedAt: new Date().toISOString()
+            });
+            return { success: true };
+        } catch (error) {
+            return { success: false, error: error.message };
+        }
+    },
     
+    async getLinkedPersons(userId) {
+        if (!isFirebaseAvailable) return { success: false, error: "Firebase kullanılamıyor." };
+        try {
+            const userDoc = await getDoc(doc(db, 'users', userId));
+            if (!userDoc.exists() || !userDoc.data().linkedPersonIds || !Array.isArray(userDoc.data().linkedPersonIds)) {
+                return { success: true, data: [] };
+            }
+            
+            const personIds = userDoc.data().linkedPersonIds;
+            if (personIds.length === 0) {
+                return { success: true, data: [] };
+            }
+            
+            // Batch olarak kişileri getir
+            const personPromises = personIds.map(id => getDoc(doc(db, 'persons', id)));
+            const personDocs = await Promise.all(personPromises);
+            
+            const persons = personDocs
+                .filter(doc => doc.exists())
+                .map(doc => ({ id: doc.id, ...doc.data() }));
+            
+            return { success: true, data: persons };
+        } catch (error) {
+            return { success: false, error: error.message };
+        }
+    },
     async getUsersLinkedToPerson(personId) {
         if (!isFirebaseAvailable) return { success: false, error: "Firebase kullanılamıyor." };
         try {
