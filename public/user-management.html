@@ -537,7 +537,6 @@
                         <input type="text" id="personSearchInput" class="form-input" placeholder="Kişi adı veya e-posta ara...">
                         <div id="personSearchResults" class="search-results-list" style="display: none;"></div>
                     </div>
-                    <button type="button" id="addNewPersonBtn" class="btn-add-item">Yeni Kişi</button>
                 </div>
                 
                 <!-- Seçilen kişiler listesi -->
@@ -912,11 +911,24 @@
                 if (user.role === 'client' && user.linkedPersonIds && Array.isArray(user.linkedPersonIds)) {
                     const linkedPersons = await personService.getLinkedPersons(userId);
                     if (linkedPersons.success) {
-                        this.selectedPersons = linkedPersons.data.map(p => ({
+                        this.selectedPersons = linkedPersons.data.map(p => {
+                        // p.permissions iki biçimde gelebilir:
+                        // 1) { type: 'view' | 'approval' }  (yeni)
+                        // 2) { approval: boolean, view: boolean } (eski/kaydedilmiş)
+                        const perms = p.permissions || {};
+                        const type =
+                            perms.type
+                                ? perms.type
+                                : (perms.approval ? 'approval' : 'view');
+
+                        return {
                             id: p.id,
                             name: p.name,
-                            email: p.email || ''
-                        }));
+                            email: p.email || '',
+                            permissions: { type }
+                        };
+                    });
+
                     }
                 } else {
                     this.selectedPersons = [];
@@ -1037,9 +1049,16 @@
                     // Kullanıcı işlemi başarılıysa, kişi ilişkilendirmesi yap
                     if (data.uid) {
                         if (payload.role === 'client' && this.selectedPersons.length > 0) {
+                            // tip ('view' | 'approval') → boolean şeması
+                            const toBooleanPerms = (type) => {
+                                // 'view' = sadece görüntüleme; 'approval' = hem görüntüleme hem onay
+                                if (type === 'approval') return { approval: true, view: true };
+                                return { approval: false, view: true };
+                            };
+
                             const personsWithPermissions = this.selectedPersons.map(p => ({
                                 personId: p.id,
-                                permissions: p.permissions || { approval: false, view: false }
+                                permissions: toBooleanPerms(p?.permissions?.type || 'view')
                             }));
                             await personService.linkUserToPersons(data.uid, personsWithPermissions);
                         } else {
