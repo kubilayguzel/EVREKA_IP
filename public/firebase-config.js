@@ -561,7 +561,7 @@ export const personService = {
                     return {
                         id: personDoc.id,
                         ...personDoc.data(),
-                        permissions: link.permissions || { approval: false, view: false }
+                        permissions: link.permissions || { type: 'view' }
                     };
                 }
                 return null;
