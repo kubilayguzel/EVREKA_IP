@@ -974,417 +974,299 @@
         </div>
       </div>
     </div>
-    
     <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.2/dist/js/bootstrap.bundle.min.js"></script>
-    <script>
-        document.addEventListener('DOMContentLoaded', function () {
-            const themeSwitch = document.getElementById('themeSwitch');
-            const body = document.body;
-            const toggleLabel = document.querySelector('.theme-toggle .custom-control-label');
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.2/dist/js/bootstrap.bundle.min.js"></script>
 
-            const savedTheme = localStorage.getItem('theme') || 'dark';
-
-            if (savedTheme === 'light') {
-                body.classList.add('light-mode');
-                themeSwitch.checked = false;
-                toggleLabel.textContent = 'Beyaz Tema';
-            } else {
-                body.classList.add('dark-mode');
-                themeSwitch.checked = true;
-                toggleLabel.textContent = 'Koyu Tema';
-            }
-
-            themeSwitch.addEventListener('change', function () {
-                if (this.checked) {
-                    body.classList.remove('light-mode');
-                    body.classList.add('dark-mode');
-                    localStorage.setItem('theme', 'dark');
-                    toggleLabel.textContent = 'Koyu Tema';
-                } else {
-                    body.classList.remove('dark-mode');
-                    body.classList.add('light-mode');
-                    localStorage.setItem('theme', 'light');
-                    toggleLabel.textContent = 'Beyaz Tema';
-                }
-            });
-            
-            // Sidebar navigasyonu için jQuery
-            $('#sidebar a').on('click', function (e) {
-                // Portföy alt menü linklerine özel handler zaten var; çakışmayı önleyelim.
-                if ($(this).closest('#portfoy-accordion').length) {
-                    return; // Bu tıklamayı aşağıdaki özel handler yönetecek
-                }
-
-                const href = $(this).attr('href');
-                const targetId = $(this).attr('data-target') || href;
-
-                // Sadece href="#" olan linkler için varsayılan davranışı engelle
-                if (href && href === '#') {
-                    e.preventDefault();
-                }
-
-                // Menüdeki aktif linki yönet
-                $('#sidebar a').removeClass('active');
-                $(this).addClass('active');
-                
-                // Portföyüm ana menüsü özel durum: her zaman portföy sayfasını aç
-                if (href === '#portfolio-content') {
-                    e.preventDefault();
-                    // Üst seviye portföy tabını görünür yap
-                    $('.tab-pane').removeClass('show active');
-                    $('#portfolio-content').addClass('show active');
-                    // Üstteki nav-tab'larda Marka sekmesini aktif et
-                    $('#portfolioTopTabs a[href="#marka-list"]').tab('show');
-                    // Menşe filtresini aktif panele uygula
-                    if (typeof applyMenseFilterToActivePane === 'function') {
-                        applyMenseFilterToActivePane();
-                    }
-                    return;
-                }
-
-                // collapse toggler için özel durum
-                if ($(this).attr('data-toggle') === 'collapse') {
-                    $(targetId).collapse('toggle');
-                } else {
-                    // Normal tab geçişi için
-                    $('.tab-pane').removeClass('show active');
-                    $(href).addClass('show active');
-                }
-            });
-
-            // Akordeon alt menü linkleri için tab geçişi
-            $('#portfoy-accordion a').on('click', function(e) {
-                e.preventDefault();
-                $('#portfoy-accordion a').removeClass('active');
-                $(this).addClass('active');
-
-                // Portföy bölümünü görünür yap
-                const mainPortfolioTab = $('#portfolio-content');
-                // Üst seviye tablarda sadece portfolio-content'i aktif yapalım
-                $('.tab-content > .tab-pane').removeClass('show active');
-                mainPortfolioTab.addClass('show active');
-
-                // Sadece portfolio içindeki tab-content'i temizleyip hedef listeyi aç
-                const targetListId = $(this).attr('href'); // #marka-list / #patent-list / ...
-                const innerTabContent = $('#portfolio-content .tab-content'); // iç tab-content
-                innerTabContent.find('.tab-pane').removeClass('show active');
-                $(targetListId).addClass('show active');
-
-                // İsteğe bağlı: Portföy akordeonunu açık tut
-                $('#portfoy-accordion').collapse('show');
-            });
-            
-            // Akordeon başlıklarındaki ok ikonunu yönet
-            $('.accordion-header-row').on('click', function() {
-                const icon = $(this).find('i.fa-chevron-down, i.fa-chevron-up');
-                if(icon.length) {
-                    icon.toggleClass('fa-chevron-down fa-chevron-up');
-                }
-            });
-            
-            // Sayfa yüklendiğinde varsayılan olarak "Dashboard"u aktif yap
-            $('#dashboard').addClass('show active');
-        });
-    </script>
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
 
 <script>
-(function(){
-  // Genel: aktif sekmeyi Bootstrap tab ile yönet
-  // (Bootstrap 4/5 uyumu: data-toggle="tab" zaten var; aşağısı filtre ve yardımcılar)
+  // Sizin Firebase projenize ait yapılandırma nesnesini buraya yapıştırın.
+  const firebaseConfig = {
+  apiKey: "AIzaSyDbdqfiVbobnl1BtyiWxhD4bfIcREw8ZRc",
+  authDomain: "ip-manager-production-aab4b.firebaseapp.com",
+  projectId: "ip-manager-production-aab4b",
+  storageBucket: "ip-manager-production-aab4b.firebasestorage.app",
+  messagingSenderId: "594650169512",
+  appId: "1:594650169512:web:43496005e063a40511829d",
+  measurementId: "G-QY1P3ZCMC4"
+};
   
-  function rowHasMarker($row, marker){
-    // 2. hücredeki metni kontrol et (Marka Adı / Patent Adı ...)
-    var td = $row.find('td').eq(1);
-    if(td.length === 0) return false;
-    var text = td.text() || "";
-    return text.indexOf(marker) !== -1;
+  // Firebase'i başlatın
+  if (!firebase.apps.length) {
+    firebase.initializeApp(firebaseConfig);
+  } else {
+    firebase.app(); // Eğer zaten başlatıldıysa kullan
   }
+  
+  const db = firebase.firestore();
 
-  function toggleWipoGroup($headerRow, show){
-    var $detailRow = $headerRow.next('tr');
-    if(show){
-      $headerRow.show();
-      $detailRow.show();
-    }else{
-      var collapseId = $headerRow.attr('data-target');
-      if(collapseId){ try { $(collapseId).collapse('hide'); } catch(e){} }
-      $headerRow.hide();
-      $detailRow.hide();
-    }
-  }
+  /**
+   * Verilen HTML tablosunu, çekilen portföy verileriyle doldurur.
+   * @param {string} tableId Doldurulacak tablonun ID'si (#marka-list, #patent-list vb.)
+   * @param {Array<Object>} portfolioData Gösterilecek portföy verileri.
+   */
+  function populatePortfolioTable(tableId, portfolioData) {
+      const tableBody = document.querySelector(`${tableId} tbody`);
+      if (!tableBody) return;
+      
+      // Mevcut tüm satırları temizle
+      tableBody.innerHTML = '';
 
-  function filterPaneByMense(paneSelector, menseValue){
-    var $tbody = $(paneSelector + " tbody");
-    if($tbody.length === 0) return;
-    var $rows = $tbody.children("tr");
-
-    // Başlangıçta hepsini göster
-    $rows.show();
-
-    var isTR = (menseValue === 'TÜRKPATENT');
-    var isYD = (menseValue === 'YURTDIŞI');
-
-    if(isTR){
-      $rows.each(function(){
-        var $tr = $(this);
-        if($tr.hasClass('accordion-header-row')){
-          var cellText = $tr.find('td').eq(1).text() || '';
-          if(cellText.indexOf('(WIPO)') !== -1){
-            toggleWipoGroup($tr, false);
-          }
-          return;
-        }
-        var text = $tr.find('td').eq(1).text() || '';
-        if(text.indexOf('(TR)') !== -1){
-          $tr.show();
-        }else{
-          // WIPO detay satırları da birlikte kapanmış olur
-          $tr.hide();
-        }
-      });
-    } else if(isYD){
-      $rows.each(function(){
-        var $tr = $(this);
-        if($tr.hasClass('accordion-header-row')){
-          var cellText = $tr.find('td').eq(1).text() || '';
-          if(cellText.indexOf('(WIPO)') !== -1){
-            toggleWipoGroup($tr, true);
+      portfolioData.forEach((item, index) => {
+          // Ana satır yapısını oluştur
+          const mainRow = document.createElement('tr');
+          
+          // Uluslararası (WIPO) kayıtları için özel durum
+          const isInternational = item.origin === 'YURTDISI';
+          if (isInternational) {
+              mainRow.classList.add('accordion-header-row');
+              mainRow.setAttribute('data-toggle', 'collapse');
+              mainRow.setAttribute('data-target', `#accordion-yurtdisi-${item.id}`); // Örnek ID
+              mainRow.setAttribute('aria-expanded', 'false');
+              mainRow.setAttribute('aria-controls', `accordion-yurtdisi-${item.id}`);
+              mainRow.innerHTML = `
+                  <td><i class="fas fa-chevron-down mr-2"></i>${index + 1}</td>
+                  <td><a href="#" data-toggle="modal" data-target="#portfolioDetailModal">${item.title} (${item.origin})</a></td>
+                  <td>${item.applicationNumber}</td>
+                  <td><span class="badge badge-${item.statusClass}">${item.statusText}</span></td>
+                  <td>${item.classes.join(', ')}</td>
+                  <td>${item.lastTransactionDate}</td>
+              `;
           } else {
-            toggleWipoGroup($tr, false);
+              // Yurtiçi (TÜRKPATENT) veya normal kayıtlar
+              mainRow.innerHTML = `
+                  <td>${index + 1}</td>
+                  <td><a href="#" data-toggle="modal" data-target="#portfolioDetailModal">${item.title} (${item.origin})</a></td>
+                  <td>${item.applicationNumber}</td>
+                  <td><span class="badge badge-${item.statusClass}">${item.statusText}</span></td>
+                  <td>${item.classes.join(', ')}</td>
+                  <td>${item.lastTransactionDate}</td>
+              `;
           }
-          return;
-        }
-        var text = $tr.find('td').eq(1).text() || '';
-        if(text.indexOf('(TR)') !== -1){
-          $tr.hide();
-        }
+
+          tableBody.appendChild(mainRow);
+          
+          // Eğer uluslararası bir kayıt ise, alt detay satırını oluştur
+          if (isInternational && item.subRegistrations && item.subRegistrations.length > 0) {
+              const detailRow = document.createElement('tr');
+              detailRow.innerHTML = `
+                  <td colspan="6" class="p-0">
+                      <div class="collapse" id="accordion-yurtdisi-${item.id}">
+                          <table class="table mb-0 accordion-table">
+                              <thead>
+                                  <tr>
+                                      <th>#</th>
+                                      <th>Marka Adı</th>
+                                      <th>Başvuru No</th>
+                                      <th>Durum</th>
+                                      <th>Sınıflar</th>
+                                      <th>Son İşlem</th>
+                                  </tr>
+                              </thead>
+                              <tbody>
+                                  ${item.subRegistrations.map((subItem, subIndex) => `
+                                      <tr>
+                                          <td>${index + 1}.${subIndex + 1}</td>
+                                          <td><a href="#" data-toggle="modal" data-target="#portfolioDetailModal">${subItem.title} (${subItem.country})</a></td>
+                                          <td>${subItem.applicationNumber}</td>
+                                          <td><span class="badge badge-${subItem.statusClass}">${subItem.statusText}</span></td>
+                                          <td>${subItem.classes.join(', ')}</td>
+                                          <td>${subItem.lastTransactionDate}</td>
+                                      </tr>
+                                  `).join('')}
+                              </tbody>
+                          </table>
+                      </div>
+                  </td>
+              `;
+              tableBody.appendChild(detailRow);
+          }
       });
-    } // HEPSI ise bir şey yapmaya gerek yok
   }
 
-  function applyMenseFilterToActivePane(){
-    var val = $("#menseFilter").val() || 'HEPSI';
-    // Aktif pane hangisi ise ona uygula
-    var $activePane = $(".tab-content > .tab-pane.show.active");
-    if($activePane.length){
-      filterPaneByMense("#" + $activePane.attr("id"), val);
-    }
+  /**
+   * Kullanıcı kimliğine göre portföy verilerini çeker ve tabloyu doldurur.
+   * @param {string} userId Mevcut kullanıcının kimliği.
+   */
+  async function fetchAndDisplayPortfolio(userId) {
+      if (typeof firebase === 'undefined' || typeof db === 'undefined' || typeof db.collection === 'undefined') {
+        console.error("Firebase/Firestore kütüphaneleri yüklenmemiş veya yanlış yapılandırılmış.");
+        return;
+      }
+
+      try {
+          // 1. Kullanıcının ilişkili olduğu müvekkil ID'lerini çekme
+          const usersRef = db.collection("users");
+          const userQuery = usersRef.where("linkedPersonIds", "array-contains", userId); // Yetkili olunan client ID'sini arayın.
+          const userSnapshot = await userQuery.get();
+
+          if (userSnapshot.empty) {
+              console.log("Kullanıcıya ait veri bulunamadı.");
+              return;
+          }
+
+          const userData = userSnapshot.docs[0].data();
+          const linkedPersonIds = userData.linkedPersonIds;
+
+          if (!linkedPersonIds || linkedPersonIds.length === 0) {
+              console.log("Kullanıcı ile ilişkili müvekkil bulunamadı.");
+              return;
+          }
+
+          // 2. İlgili müvekkillere ait tüm portföy verilerini çekme
+          const portfolioRef = db.collection("portfolios"); // veya "trademarks", "patents"
+          const portfolioQuery = portfolioRef.where("personId", "in", linkedPersonIds);
+          const portfolioSnapshot = await portfolioQuery.get();
+
+          const allPortfolios = portfolioSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+          // 3. Marka, Patent, Tasarım gibi kategorilere göre filtreleme
+          const markaList = allPortfolios.filter(p => p.type === 'Marka');
+          const patentList = allPortfolios.filter(p => p.type === 'Patent');
+          const tasarimList = allPortfolios.filter(p => p.type === 'Tasarım');
+          const davaIItirazList = allPortfolios.filter(p => p.type === 'Dava/İtiraz');
+
+          // 4. Her bir sekmeyi kendi verisiyle doldurma
+          populatePortfolioTable('#marka-list', markaList);
+          populatePortfolioTable('#patent-list', patentList);
+          populatePortfolioTable('#tasarim-list', tasarimList);
+          populatePortfolioTable('#dava-itiraz-list', davaIItirazList);
+
+      } catch (error) {
+          console.error("Portföy verileri çekilirken bir hata oluştu:", error);
+      }
   }
 
-  // Menşe değişiminde filtre uygula
-  $(document).on('change', '#menseFilter', function(){
-    applyMenseFilterToActivePane();
-  });
+  // Sayfa yüklendiğinde verileri çekme işlemini başlatın
+  document.addEventListener('DOMContentLoaded', function() {
+      // Mevcut kullanıcının UID'sini alma
+      const user = firebase.auth().currentUser;
+      const userId = user ? user.uid : null;
 
-  // Sekme değişimlerinde filtreyi yeniden uygula
-  $(document).on('shown.bs.tab', '#portfolioTopTabs a[data-toggle="tab"]', function (e) {
-    applyMenseFilterToActivePane();
-  });
-
-  // İlk yüklemede varsayılan uygula
-  $(function(){
-    applyMenseFilterToActivePane();
-  });
-})();
-</script>
-
-
-<script>
-// Zorlayıcı Portföyüm açma: diğer click handler'ları bypass etmek için namespace'li delegated handler
-(function(){
-  $(document).off('click.portfoyumOpen')
-  .on('click.portfoyumOpen', 'a[href="#portfolio-content"], #sidebar a[data-target="#portfolio-content"]', function(e){
-      e.preventDefault();
-      e.stopPropagation();
-      if (e.stopImmediatePropagation) e.stopImmediatePropagation();
-
-      // Üst panelleri kapat ve Portföyü aç
-      $('.tab-pane').removeClass('show active');
-      $('#portfolio-content').addClass('show active');
-
-      // Üst sekmelerde (varsa) Marka sekmesini aktif et
-      var $markaTab = $('#portfolioTopTabs a[href="#marka-list"]');
-      if ($markaTab.length && $markaTab.tab) {
-        $markaTab.tab('show');
+      if (userId) {
+        fetchAndDisplayPortfolio(userId);
       } else {
-        // Bootstrap tab metodu yoksa sınıf tabanlı aktive et
-        $('#portfolioTopTabs a').removeClass('active');
-        $markaTab.addClass('active');
-        $('#marka-list').addClass('show active');
+        console.log("Kullanıcı giriş yapmamış.");
       }
-
-      // Menşe filtresini uygula
-      if (typeof applyMenseFilterToActivePane === 'function') {
-        try { applyMenseFilterToActivePane(); } catch(_) {}
-      }
-      return false;
   });
-})();
-</script>
 
-<script type="module">
-// Projenizdeki Firebase ve Firestore modüllerini içe aktarın.
-// import { getFirestore, collection, query, where, getDocs } from "firebase/firestore";
+  // Diğer tüm scriptler
+  (function(){
+    // Genel: aktif sekmeyi Bootstrap tab ile yönet
+    function rowHasMarker($row, marker){
+      var td = $row.find('td').eq(1);
+      if(td.length === 0) return false;
+      var text = td.text() || "";
+      return text.indexOf(marker) !== -1;
+    }
 
-// getUserId fonksiyonunu Firebase Authentication'dan alacak şekilde düzenleyin.
-function getUserId() {
-  // Örnek: Gerçek bir kullanıcı kimliği döndürmeli.
-  // const user = firebase.auth().currentUser;
-  // return user ? user.uid : null;
-  return "placeholderUserId123"; // Test için placeholder
-}
+    function toggleWipoGroup($headerRow, show){
+      var $detailRow = $headerRow.next('tr');
+      if(show){
+        $headerRow.show();
+        $detailRow.show();
+      }else{
+        var collapseId = $headerRow.attr('data-target');
+        if(collapseId){ try { $(collapseId).collapse('hide'); } catch(e){} }
+        $headerRow.hide();
+        $detailRow.hide();
+      }
+    }
 
-/**
- * Verilen HTML tablosunu, çekilen portföy verileriyle doldurur.
- * @param {string} tableId Doldurulacak tablonun ID'si (#marka-list, #patent-list vb.)
- * @param {Array<Object>} portfolioData Gösterilecek portföy verileri.
- */
-function populatePortfolioTable(tableId, portfolioData) {
-    const tableBody = document.querySelector(`${tableId} tbody`);
-    if (!tableBody) return;
-    
-    // Mevcut tüm satırları temizle
-    tableBody.innerHTML = '';
+    function filterPaneByMense(paneSelector, menseValue){
+      var $tbody = $(paneSelector + " tbody");
+      if($tbody.length === 0) return;
+      var $rows = $tbody.children("tr");
 
-    portfolioData.forEach((item, index) => {
-        // Ana satır yapısını oluştur
-        const mainRow = document.createElement('tr');
-        
-        // Uluslararası (WIPO) kayıtları için özel durum
-        const isInternational = item.origin === 'YURTDISI';
-        if (isInternational) {
-            mainRow.classList.add('accordion-header-row');
-            mainRow.setAttribute('data-toggle', 'collapse');
-            mainRow.setAttribute('data-target', `#accordion-yurtdisi-${item.id}`); // Örnek ID
-            mainRow.setAttribute('aria-expanded', 'false');
-            mainRow.setAttribute('aria-controls', `accordion-yurtdisi-${item.id}`);
-            mainRow.innerHTML = `
-                <td><i class="fas fa-chevron-down mr-2"></i>${index + 1}</td>
-                <td><a href="#" data-toggle="modal" data-target="#portfolioDetailModal">${item.title} (${item.origin})</a></td>
-                <td>${item.applicationNumber}</td>
-                <td><span class="badge badge-${item.statusClass}">${item.statusText}</span></td>
-                <td>${item.classes.join(', ')}</td>
-                <td>${item.lastTransactionDate}</td>
-            `;
-        } else {
-            // Yurtiçi (TÜRKPATENT) veya normal kayıtlar
-            mainRow.innerHTML = `
-                <td>${index + 1}</td>
-                <td><a href="#" data-toggle="modal" data-target="#portfolioDetailModal">${item.title} (${item.origin})</a></td>
-                <td>${item.applicationNumber}</td>
-                <td><span class="badge badge-${item.statusClass}">${item.statusText}</span></td>
-                <td>${item.classes.join(', ')}</td>
-                <td>${item.lastTransactionDate}</td>
-            `;
-        }
+      $rows.show();
 
-        tableBody.appendChild(mainRow);
-        
-        // Eğer uluslararası bir kayıt ise, alt detay satırını oluştur
-        if (isInternational && item.subRegistrations && item.subRegistrations.length > 0) {
-            const detailRow = document.createElement('tr');
-            detailRow.innerHTML = `
-                <td colspan="6" class="p-0">
-                    <div class="collapse" id="accordion-yurtdisi-${item.id}">
-                        <table class="table mb-0 accordion-table">
-                            <thead>
-                                <tr>
-                                    <th>#</th>
-                                    <th>Marka Adı</th>
-                                    <th>Başvuru No</th>
-                                    <th>Durum</th>
-                                    <th>Sınıflar</th>
-                                    <th>Son İşlem</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                ${item.subRegistrations.map((subItem, subIndex) => `
-                                    <tr>
-                                        <td>${index + 1}.${subIndex + 1}</td>
-                                        <td><a href="#" data-toggle="modal" data-target="#portfolioDetailModal">${subItem.title} (${subItem.country})</a></td>
-                                        <td>${subItem.applicationNumber}</td>
-                                        <td><span class="badge badge-${subItem.statusClass}">${subItem.statusText}</span></td>
-                                        <td>${subItem.classes.join(', ')}</td>
-                                        <td>${subItem.lastTransactionDate}</td>
-                                    </tr>
-                                `).join('')}
-                            </tbody>
-                        </table>
-                    </div>
-                </td>
-            `;
-            tableBody.appendChild(detailRow);
-        }
+      var isTR = (menseValue === 'TÜRKPATENT');
+      var isYD = (menseValue === 'YURTDIŞI');
+
+      if(isTR){
+        $rows.each(function(){
+          var $tr = $(this);
+          if($tr.hasClass('accordion-header-row')){
+            var cellText = $tr.find('td').eq(1).text() || '';
+            if(cellText.indexOf('(WIPO)') !== -1){
+              toggleWipoGroup($tr, false);
+            }
+            return;
+          }
+          var text = $tr.find('td').eq(1).text() || '';
+          if(text.indexOf('(TR)') !== -1){
+            $tr.show();
+          }else{
+            $tr.hide();
+          }
+        });
+      } else if(isYD){
+        $rows.each(function(){
+          var $tr = $(this);
+          if($tr.hasClass('accordion-header-row')){
+            var cellText = $tr.find('td').eq(1).text() || '';
+            if(cellText.indexOf('(WIPO)') !== -1){
+              toggleWipoGroup($tr, true);
+            } else {
+              toggleWipoGroup($tr, false);
+            }
+            return;
+          }
+          var text = $tr.find('td').eq(1).text() || '';
+          if(text.indexOf('(TR)') !== -1){
+            $tr.hide();
+          }
+        });
+      }
+    }
+
+    function applyMenseFilterToActivePane(){
+      var val = $("#menseFilter").val() || 'HEPSI';
+      var $activePane = $(".tab-content > .tab-pane.show.active");
+      if($activePane.length){
+        filterPaneByMense("#" + $activePane.attr("id"), val);
+      }
+    }
+
+    $(document).on('change', '#menseFilter', function(){
+      applyMenseFilterToActivePane();
     });
-}
 
-/**
- * Kullanıcı kimliğine göre portföy verilerini çeker ve tabloyu doldurur.
- * @param {string} userId Mevcut kullanıcının kimliği.
- */
-async function fetchAndDisplayPortfolio(userId) {
-    // Firestore ve diğer kütüphanelerin yüklü olduğundan emin olun.
-    if (typeof firebase === 'undefined' || typeof getFirestore === 'undefined') {
-      console.error("Firebase/Firestore kütüphaneleri yüklenmemiş.");
-      return;
-    }
-    const db = getFirestore();
+    $(document).on('shown.bs.tab', '#portfolioTopTabs a[data-toggle="tab"]', function (e) {
+      applyMenseFilterToActivePane();
+    });
 
-    try {
-        // 1. Kullanıcının ilişkili olduğu müvekkil ID'lerini çekme
-        const usersRef = collection(db, "users");
-        const userQuery = query(usersRef, where("userId", "==", userId));
-        const userSnapshot = await getDocs(userQuery);
+    $(function(){
+      applyMenseFilterToActivePane();
+    });
+  })();
 
-        if (userSnapshot.empty) {
-            console.log("Kullanıcıya ait veri bulunamadı.");
-            return;
+  (function(){
+    $(document).off('click.portfoyumOpen')
+    .on('click.portfoyumOpen', 'a[href="#portfolio-content"], #sidebar a[data-target="#portfolio-content"]', function(e){
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+
+        $('.tab-pane').removeClass('show active');
+        $('#portfolio-content').addClass('show active');
+
+        var $markaTab = $('#portfolioTopTabs a[href="#marka-list"]');
+        if ($markaTab.length && $markaTab.tab) {
+          $markaTab.tab('show');
+        } else {
+          $('#portfolioTopTabs a').removeClass('active');
+          $markaTab.addClass('active');
+          $('#marka-list').addClass('show active');
         }
 
-        const userData = userSnapshot.docs[0].data();
-        const linkedPersonIds = userData.linkedPersonIds;
-
-        if (!linkedPersonIds || linkedPersonIds.length === 0) {
-            console.log("Kullanıcı ile ilişkili müvekkil bulunamadı.");
-            return;
+        if (typeof applyMenseFilterToActivePane === 'function') {
+          try { applyMenseFilterToActivePane(); } catch(_) {}
         }
-
-        // 2. İlgili müvekkillere ait tüm portföy verilerini çekme
-        const portfolioRef = collection(db, "portfolios"); // veya "trademarks", "patents"
-        const portfolioQuery = query(portfolioRef, where("personId", "in", linkedPersonIds));
-        const portfolioSnapshot = await getDocs(portfolioQuery);
-
-        const allPortfolios = portfolioSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
-        // 3. Marka, Patent, Tasarım gibi kategorilere göre filtreleme
-        const markaList = allPortfolios.filter(p => p.type === 'Marka');
-        const patentList = allPortfolios.filter(p => p.type === 'Patent');
-        const tasarimList = allPortfolios.filter(p => p.type === 'Tasarım');
-        const davaIItirazList = allPortfolios.filter(p => p.type === 'Dava/İtiraz');
-
-        // 4. Her bir sekmeyi kendi verisiyle doldurma
-        populatePortfolioTable('#marka-list', markaList);
-        populatePortfolioTable('#patent-list', patentList);
-        populatePortfolioTable('#tasarim-list', tasarimList);
-        populatePortfolioTable('#dava-itiraz-list', davaIItirazList);
-
-    } catch (error) {
-        console.error("Portföy verileri çekilirken bir hata oluştu:", error);
-    }
-}
-
-// Sayfa yüklendiğinde verileri çekme işlemini başlatın
-document.addEventListener('DOMContentLoaded', function() {
-    // Diğer DOMContentLoaded kodlarınız burada devam ediyor...
-    const userId = getUserId(); // Giriş yapan kullanıcının kimliğini alın
-    if (userId) {
-      fetchAndDisplayPortfolio(userId);
-    } else {
-      console.log("Kullanıcı giriş yapmamış.");
-    }
-});
+        return false;
+    });
+  })();
 </script>
-
 </body>
 </html>
