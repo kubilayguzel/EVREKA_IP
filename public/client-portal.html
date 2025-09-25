@@ -1044,13 +1044,13 @@
         </div>
       </div>
     </div>
+
 <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.2/dist/js/bootstrap.bundle.min.js"></script>
 
 <script type="module">
-import { authService } from './firebase-config.js';
-import { db } from './firebase-config.js';
-import { doc, getDoc, collection, getDocs, query, where, arrayUnion } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+import { authService, db } from './firebase-config.js';
+import { doc, getDoc, collection, getDocs, query, where } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
 // Kullanıcı bilgilerini üst çubuğa yerleştirme
 function populateUserInfo() {
@@ -1191,19 +1191,23 @@ async function fetchAndDisplayPortfolio() {
         console.log("Kullanıcı giriş yapmamış veya UID alınamadı.");
         return;
     }
+    
+    if (typeof db === 'undefined' || typeof db.collection === 'undefined') {
+        console.error("Firebase/Firestore kütüphaneleri yüklenmemiş veya yanlış yapılandırılmış.");
+        return;
+    }
 
     try {
-        // 1. Kullanıcının ilişkili olduğu müvekkil ID'lerini çekme
-        const usersRef = collection(db, "users");
-        const userQuery = query(usersRef, where("linkedPersonIds", "array-contains", userId));
-        const userSnapshot = await getDocs(userQuery);
+        // 1. Kullanıcının kendi belgesini UID'si ile çekme
+        const userDocRef = doc(db, "users", userId);
+        const userSnapshot = await getDoc(userDocRef);
 
-        if (userSnapshot.empty) {
+        if (!userSnapshot.exists()) {
             console.log("Kullanıcıya ait veri bulunamadı.");
             return;
         }
 
-        const userData = userSnapshot.docs[0].data();
+        const userData = userSnapshot.data();
         const linkedPersonIds = userData.linkedPersonIds;
 
         if (!linkedPersonIds || linkedPersonIds.length === 0) {
