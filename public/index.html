@@ -599,6 +599,12 @@
                     return;
                 }
 
+                if (userRole === 'client') {
+                    showNotification('Hesabınız oluşturuldu. Yönetici onayı bekleniyor...', 'info');
+                    window.location.href = 'client-portal.html';
+                    return;
+                }
+
                 // Normal kullanıcılar için ana sayfaya yönlendir
                 sessionStorage.removeItem('signup_flow');
                 showNotification('Giriş başarılı! Yönlendiriliyorsunuz...', 'success');
