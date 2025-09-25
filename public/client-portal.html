@@ -1218,9 +1218,27 @@ async function fetchAndDisplayPortfolio() {
 
         // 2. İlgili müvekkillere ait tüm portföy verilerini çekme
         const portfolioRef = collection(db, "ipRecords");
-        const portfolioQuery = query(portfolioRef,where("applicants", "array-contains", { id: linkedPersonIds[0] }));
-        const portfolioSnapshot = await getDocs(portfolioQuery);
-        const allPortfolios = portfolioSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        let allPortfolios = [];
+
+        // Her linkedPersonId için ayrı query çalıştır
+        for (const personId of linkedPersonIds) {
+            const q = query(
+                portfolioRef,
+                where("applicants", "array-contains", { id: personId })
+            );
+            const snap = await getDocs(q);
+            snap.forEach(doc => {
+                allPortfolios.push({ id: doc.id, ...doc.data() });
+            });
+        }
+
+        // Aynı kayıt birden fazla kez gelirse temizle
+        const seen = new Set();
+        allPortfolios = allPortfolios.filter(p => {
+            if (seen.has(p.id)) return false;
+            seen.add(p.id);
+            return true;
+        });
 
         // 3. Marka, Patent, Tasarım gibi kategorilere göre filtreleme
         const markaList = allPortfolios.filter(p => p.type === 'Marka');
