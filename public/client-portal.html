@@ -1057,7 +1057,7 @@ function populateUserInfo() {
     const user = authService.getCurrentUser();
     if (user) {
         document.getElementById('userName').textContent = user.displayName || user.email;
-        document.getElementById('userRole').textContent = user.role.toUpperCase();
+        document.getElementById('userRole').textContent = (user.role ? user.role.toUpperCase() : 'CLIENT');
         document.getElementById('userAvatar').textContent = (user.displayName ? user.displayName.charAt(0).toUpperCase() : user.email.charAt(0).toUpperCase());
         document.getElementById('welcomeUserName').textContent = user.displayName || user.email;
     }
@@ -1192,10 +1192,11 @@ async function fetchAndDisplayPortfolio() {
         return;
     }
     
-    if (typeof db === 'undefined' || typeof db.collection === 'undefined') {
-        console.error("Firebase/Firestore kütüphaneleri yüklenmemiş veya yanlış yapılandırılmış.");
+    if (!db) {
+        console.error("Firestore başlatılamadı. firebase-config.js içindeki getFirestore kurulumunu kontrol edin.");
         return;
     }
+
 
     try {
         // 1. Kullanıcının kendi belgesini UID'si ile çekme
@@ -1216,10 +1217,9 @@ async function fetchAndDisplayPortfolio() {
         }
 
         // 2. İlgili müvekkillere ait tüm portföy verilerini çekme
-        const portfolioRef = collection(db, "portfolios");
-        const portfolioQuery = query(portfolioRef, where("personId", "in", linkedPersonIds));
+        const portfolioRef = collection(db, "ipRecords");
+        const portfolioQuery = query(portfolioRef, where("personsRelatedIds", "array-contains-any", linkedPersonIds));
         const portfolioSnapshot = await getDocs(portfolioQuery);
-
         const allPortfolios = portfolioSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
         // 3. Marka, Patent, Tasarım gibi kategorilere göre filtreleme
@@ -1234,11 +1234,38 @@ async function fetchAndDisplayPortfolio() {
         populatePortfolioTable('#tasarim-list', tasarimList);
         populatePortfolioTable('#dava-itiraz-list', davaIItirazList);
 
+        // Dashboard sayaçlarını doldur
+        await populateDashboardNumbers(linkedPersonIds);
+
+        // İşlerim sekmesini doldur
+        await fetchAndDisplayTasks(linkedPersonIds);
+
+        // Faturalarım sekmesini doldur
+        await fetchAndDisplayInvoices(linkedPersonIds);
+
     } catch (error) {
         console.error("Portföy verileri çekilirken bir hata oluştu:", error);
     }
 }
 
+async function populateDashboardNumbers(linkedPersonIds){
+    const ipQ = query(collection(db, "ipRecords"), where("personsRelatedIds", "array-contains-any", linkedPersonIds));
+    const ipSnap = await getDocs(ipQ);
+    const portfolioCount = ipSnap.size;
+
+    const taskQ = query(collection(db, "tasks"), where("personsRelatedIds", "array-contains-any", linkedPersonIds), where("status","==","müvekkil onayı bekliyor"));
+    const taskSnap = await getDocs(taskQ);
+    const pendingTasks = taskSnap.size;
+
+    const accrualQ = query(collection(db, "accruals"), where("personsRelatedIds", "array-contains-any", linkedPersonIds), where("isPaid","==", false));
+    const accrualSnap = await getDocs(accrualQ);
+    const unpaidInvoices = accrualSnap.size;
+
+    const statValues = document.querySelectorAll('#dashboard .stat-value');
+    if (statValues[0]) statValues[0].textContent = portfolioCount;
+    if (statValues[1]) statValues[1].textContent = pendingTasks;
+    if (statValues[2]) statValues[2].textContent = unpaidInvoices;
+}
 
 // Sayfa yüklendiğinde tüm fonksiyonları başlat
 document.addEventListener('DOMContentLoaded', function () {
@@ -1362,6 +1389,57 @@ document.addEventListener('DOMContentLoaded', function () {
         return false;
     });
 })();
+
+async function fetchAndDisplayTasks(linkedPersonIds){
+    const q = query(collection(db, "tasks"), where("personsRelatedIds", "array-contains-any", linkedPersonIds));
+    const snap = await getDocs(q);
+    const container = document.querySelector('#tasks .row');
+    container.innerHTML = '';
+    snap.forEach(docSnap => {
+        const t = docSnap.data();
+        const card = document.createElement('div');
+        card.className = 'col-md-12 mb-4';
+        card.innerHTML = `
+          <div class="task-card task-card-warning">
+            <h5 class="task-title">${t.title || 'İş'}</h5>
+            <p class="task-description">${t.description || ''}</p>
+            <div class="d-flex justify-content-between align-items-center">
+              <small class="task-meta"><i class="fas fa-clock mr-1"></i>Son Onay Tarihi: ${t.dueDate || '-'}</small>
+              <div>
+                <button class="btn btn-success btn-sm btn-action"><i class="fas fa-check"></i> Onayla</button>
+                <button class="btn btn-danger btn-sm btn-action"><i class="fas fa-times"></i> Reddet</button>
+                <button class="btn btn-info btn-sm btn-action"><i class="fas fa-eye"></i> İncele</button>
+              </div>
+            </div>
+          </div>`;
+        container.appendChild(card);
+    });
+}
+
+async function fetchAndDisplayInvoices(linkedPersonIds){
+    const q = query(collection(db, "accruals"), where("personsRelatedIds", "array-contains-any", linkedPersonIds));
+    const snap = await getDocs(q);
+    const tableBody = document.querySelector('#invoices table tbody');
+    tableBody.innerHTML = '';
+    snap.forEach(d => {
+        const a = d.data();
+        const statusBadge = a.isPaid ? `<span class="badge badge-success">Ödendi</span>` : `<span class="badge badge-warning">Ödenmemiş</span>`;
+        const actions = a.isPaid
+          ? `<button class="btn btn-primary btn-sm btn-action"><i class="fas fa-download"></i> İndir</button>`
+          : `<button class="btn btn-primary btn-sm btn-action"><i class="fas fa-download"></i> İndir</button>
+             <button class="btn btn-success btn-sm btn-action"><i class="fas fa-lira-sign"></i> Öde</button>`;
+        tableBody.insertAdjacentHTML('beforeend', `
+          <tr>
+            <td>${a.invoiceNo || '-'}</td>
+            <td>${a.date || '-'}</td>
+            <td>${a.description || '-'}</td>
+            <td>${a.amount || '-'}</td>
+            <td>${statusBadge}</td>
+            <td>${actions}</td>
+          </tr>
+        `);
+    });
+}
 </script>
 </body>
 </html>
