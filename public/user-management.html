@@ -747,12 +747,6 @@
                     }
                 });
 
-                // Yeni kişi ekleme butonu (persons.html'deki modal sistemi kullanılacak)
-                document.getElementById('addNewPersonBtn').addEventListener('click', () => {
-                    // Burada persons.html'deki modal sistemi çağrılacak
-                    alert('Yeni kişi ekleme modalı açılacak (persons.html entegrasyonu gerekli)');
-                });
-
                 // Tablo içi düzenle / sil butonları (event delegation)
                 document.getElementById('usersTableBody').addEventListener('click', (e) => {
                     if (e.target.classList.contains('edit-btn')) {
