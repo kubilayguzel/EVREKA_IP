@@ -1218,7 +1218,7 @@ async function fetchAndDisplayPortfolio() {
 
         // 2. İlgili müvekkillere ait tüm portföy verilerini çekme
         const portfolioRef = collection(db, "ipRecords");
-        const portfolioQuery = query(portfolioRef, where("personsRelatedIds", "array-contains-any", linkedPersonIds));
+        const portfolioQuery = query(portfolioRef,where("applicants", "array-contains", { id: linkedPersonIds[0] }));
         const portfolioSnapshot = await getDocs(portfolioQuery);
         const allPortfolios = portfolioSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
