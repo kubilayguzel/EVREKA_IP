@@ -622,8 +622,10 @@
                 }
 
                 console.log("✅ Tüm validasyonlar geçti, işlem başlıyor...");
-
                 try {
+                    // Kişi ilişkilendirme değerini al
+                    const linkedPersonId = document.getElementById('linkedPersonSelect')?.value || '';
+
                     // Payload
                     const payload = {
                         uid: userId || '',
@@ -638,7 +640,7 @@
                         payload.newEmail = strip(newEmailEl.value).toLowerCase();
                     }
 
-                    // (Opsiyonel) Devre dışı bırakma checkbox’ı kullandıysan:
+                    // (Opsiyonel) Devre dışı bırakma checkbox'ı kullandıysan:
                     const disabledEl = document.getElementById('userDisabledCheckbox');
                     if (disabledEl) payload.disabled = !!disabledEl.checked;
 
@@ -649,7 +651,19 @@
                     if (!payload.displayName && userNameEl?.value) {
                         payload.displayName = strip(userNameEl.value);
                     }
+
+                    // Kullanıcı oluştur/güncelle
                     const { data } = await upsertUser(payload);
+
+                    // Kullanıcı işlemi başarılıysa, kişi ilişkilendirmesi yap
+                    if (data.uid) {
+                        if (payload.role === 'client' && linkedPersonId) {
+                            await personService.linkUserToPerson(data.uid, linkedPersonId);
+                        } else {
+                            // Client değilse mevcut ilişkilendirmeyi temizle
+                            await personService.unlinkUserFromPerson(data.uid);
+                        }
+                    }
 
                     showNotification(
                         (data.existed ? 'Kullanıcı güncellendi' : 'Yeni kullanıcı oluşturuldu') + ` (UID: ${data.uid})`,
@@ -665,20 +679,6 @@
                     const errorMessage = error?.message || error?.code || 'Bilinmeyen hata';
                     showNotification(errorMessage, 'error');
                 }
-                // Kişi ilişkilendirme işlemi
-                    const linkedPersonId = document.getElementById('linkedPersonSelect')?.value || '';
-
-                    const { data } = await upsertUser(payload);
-
-                    // Kullanıcı işlemi başarılıysa, kişi ilişkilendirmesi yap
-                    if (data.uid) {
-                        if (payload.role === 'client' && linkedPersonId) {
-                            await personService.linkUserToPerson(data.uid, linkedPersonId);
-                        } else {
-                            // Client değilse mevcut ilişkilendirmeyi temizle
-                            await personService.unlinkUserFromPerson(data.uid);
-                        }
-                    }
             }
 
             async deleteUser(userId) {
