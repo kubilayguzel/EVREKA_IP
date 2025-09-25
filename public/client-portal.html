@@ -300,6 +300,67 @@
             text-align: center; /* Kolon başlıklarını ortala */
         }
         
+        /* Top bar styles */
+        .top-header {
+            background: #ffffff;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            position: fixed;
+            top: 0;
+            right: 0;
+            left: 250px; /* Sidebar width */
+            z-index: 1000;
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            padding: 10px 20px;
+            height: 60px;
+            transition: all 0.5s;
+        }
+        .dark-mode .top-header {
+            background-color: #36393e;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+        }
+        .user-section {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background-color: #1e3c72;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+        }
+        .user-name, .user-role {
+            font-weight: 500;
+        }
+        .user-role {
+            color: #888;
+            font-size: 0.8rem;
+        }
+        .dark-mode .user-role {
+            color: #b0b8c0;
+        }
+        .logout-btn {
+            background-color: #d9534f;
+            color: #fff;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .logout-btn:hover {
+            background-color: #c9302c;
+        }
+        .content-with-topbar {
+            margin-top: 60px; /* Height of the top bar */
+        }
     </style>
 
 <style>
@@ -418,6 +479,16 @@
         <input type="checkbox" class="custom-control-input" id="themeSwitch">
         <label class="custom-control-label" for="themeSwitch" style="color: #b0b8c0;">Koyu Tema</label>
     </div>
+    <header class="top-header">
+        <div class="user-section">
+            <div class="user-avatar" id="userAvatar">?</div>
+            <div class="user-info">
+                <div class="user-name" id="userName">Yükleniyor...</div>
+                <div class="user-role" id="userRole">Kullanıcı</div>
+            </div>
+            <button class="logout-btn" id="logoutBtn">Çıkış</button>
+        </div>
+    </header>
 
     <div id="sidebar">
         <h4 class="header-title text-center mb-4">Evreka Portalı</h4>
@@ -442,10 +513,10 @@
         </ul>
     </div>
 
-    <div class="content">
+    <div class="content content-with-topbar">
         <div class="tab-content">
             <div class="tab-pane fade show active" id="dashboard">
-                <h1>Hoş Geldiniz, Müvekkil Adı</h1>
+                <h1 class="header-title">Hoş Geldiniz, <span id="welcomeUserName">Müvekkil Adı</span></h1>
                 <p class="lead">Portalınızda portföyünüzü, işlerinizi ve finansal bilgilerinizi yönetebilirsiniz.</p>
                 
                 <div class="row mt-5">
@@ -974,266 +1045,119 @@
         </div>
       </div>
     </div>
-    
-    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.2/dist/js/bootstrap.bundle.min.js"></script>
-    <script>
-        document.addEventListener('DOMContentLoaded', function () {
-            const themeSwitch = document.getElementById('themeSwitch');
-            const body = document.body;
-            const toggleLabel = document.querySelector('.theme-toggle .custom-control-label');
 
-            const savedTheme = localStorage.getItem('theme') || 'dark';
-
-            if (savedTheme === 'light') {
-                body.classList.add('light-mode');
-                themeSwitch.checked = false;
-                toggleLabel.textContent = 'Beyaz Tema';
-            } else {
-                body.classList.add('dark-mode');
-                themeSwitch.checked = true;
-                toggleLabel.textContent = 'Koyu Tema';
-            }
-
-            themeSwitch.addEventListener('change', function () {
-                if (this.checked) {
-                    body.classList.remove('light-mode');
-                    body.classList.add('dark-mode');
-                    localStorage.setItem('theme', 'dark');
-                    toggleLabel.textContent = 'Koyu Tema';
-                } else {
-                    body.classList.remove('dark-mode');
-                    body.classList.add('light-mode');
-                    localStorage.setItem('theme', 'light');
-                    toggleLabel.textContent = 'Beyaz Tema';
-                }
-            });
-            
-            // Sidebar navigasyonu için jQuery
-            $('#sidebar a').on('click', function (e) {
-                // Portföy alt menü linklerine özel handler zaten var; çakışmayı önleyelim.
-                if ($(this).closest('#portfoy-accordion').length) {
-                    return; // Bu tıklamayı aşağıdaki özel handler yönetecek
-                }
-
-                const href = $(this).attr('href');
-                const targetId = $(this).attr('data-target') || href;
-
-                // Sadece href="#" olan linkler için varsayılan davranışı engelle
-                if (href && href === '#') {
-                    e.preventDefault();
-                }
-
-                // Menüdeki aktif linki yönet
-                $('#sidebar a').removeClass('active');
-                $(this).addClass('active');
-                
-                // Portföyüm ana menüsü özel durum: her zaman portföy sayfasını aç
-                if (href === '#portfolio-content') {
-                    e.preventDefault();
-                    // Üst seviye portföy tabını görünür yap
-                    $('.tab-pane').removeClass('show active');
-                    $('#portfolio-content').addClass('show active');
-                    // Üstteki nav-tab'larda Marka sekmesini aktif et
-                    $('#portfolioTopTabs a[href="#marka-list"]').tab('show');
-                    // Menşe filtresini aktif panele uygula
-                    if (typeof applyMenseFilterToActivePane === 'function') {
-                        applyMenseFilterToActivePane();
-                    }
-                    return;
-                }
-
-                // collapse toggler için özel durum
-                if ($(this).attr('data-toggle') === 'collapse') {
-                    $(targetId).collapse('toggle');
-                } else {
-                    // Normal tab geçişi için
-                    $('.tab-pane').removeClass('show active');
-                    $(href).addClass('show active');
-                }
-            });
-
-            // Akordeon alt menü linkleri için tab geçişi
-            $('#portfoy-accordion a').on('click', function(e) {
-                e.preventDefault();
-                $('#portfoy-accordion a').removeClass('active');
-                $(this).addClass('active');
-
-                // Portföy bölümünü görünür yap
-                const mainPortfolioTab = $('#portfolio-content');
-                // Üst seviye tablarda sadece portfolio-content'i aktif yapalım
-                $('.tab-content > .tab-pane').removeClass('show active');
-                mainPortfolioTab.addClass('show active');
-
-                // Sadece portfolio içindeki tab-content'i temizleyip hedef listeyi aç
-                const targetListId = $(this).attr('href'); // #marka-list / #patent-list / ...
-                const innerTabContent = $('#portfolio-content .tab-content'); // iç tab-content
-                innerTabContent.find('.tab-pane').removeClass('show active');
-                $(targetListId).addClass('show active');
-
-                // İsteğe bağlı: Portföy akordeonunu açık tut
-                $('#portfoy-accordion').collapse('show');
-            });
-            
-            // Akordeon başlıklarındaki ok ikonunu yönet
-            $('.accordion-header-row').on('click', function() {
-                const icon = $(this).find('i.fa-chevron-down, i.fa-chevron-up');
-                if(icon.length) {
-                    icon.toggleClass('fa-chevron-down fa-chevron-up');
-                }
-            });
-            
-            // Sayfa yüklendiğinde varsayılan olarak "Dashboard"u aktif yap
-            $('#dashboard').addClass('show active');
-        });
-    </script>
-
-<script>
-(function(){
-  // Genel: aktif sekmeyi Bootstrap tab ile yönet
-  // (Bootstrap 4/5 uyumu: data-toggle="tab" zaten var; aşağısı filtre ve yardımcılar)
-  
-  function rowHasMarker($row, marker){
-    // 2. hücredeki metni kontrol et (Marka Adı / Patent Adı ...)
-    var td = $row.find('td').eq(1);
-    if(td.length === 0) return false;
-    var text = td.text() || "";
-    return text.indexOf(marker) !== -1;
-  }
-
-  function toggleWipoGroup($headerRow, show){
-    var $detailRow = $headerRow.next('tr');
-    if(show){
-      $headerRow.show();
-      $detailRow.show();
-    }else{
-      var collapseId = $headerRow.attr('data-target');
-      if(collapseId){ try { $(collapseId).collapse('hide'); } catch(e){} }
-      $headerRow.hide();
-      $detailRow.hide();
-    }
-  }
-
-  function filterPaneByMense(paneSelector, menseValue){
-    var $tbody = $(paneSelector + " tbody");
-    if($tbody.length === 0) return;
-    var $rows = $tbody.children("tr");
-
-    // Başlangıçta hepsini göster
-    $rows.show();
-
-    var isTR = (menseValue === 'TÜRKPATENT');
-    var isYD = (menseValue === 'YURTDIŞI');
-
-    if(isTR){
-      $rows.each(function(){
-        var $tr = $(this);
-        if($tr.hasClass('accordion-header-row')){
-          var cellText = $tr.find('td').eq(1).text() || '';
-          if(cellText.indexOf('(WIPO)') !== -1){
-            toggleWipoGroup($tr, false);
-          }
-          return;
-        }
-        var text = $tr.find('td').eq(1).text() || '';
-        if(text.indexOf('(TR)') !== -1){
-          $tr.show();
-        }else{
-          // WIPO detay satırları da birlikte kapanmış olur
-          $tr.hide();
-        }
-      });
-    } else if(isYD){
-      $rows.each(function(){
-        var $tr = $(this);
-        if($tr.hasClass('accordion-header-row')){
-          var cellText = $tr.find('td').eq(1).text() || '';
-          if(cellText.indexOf('(WIPO)') !== -1){
-            toggleWipoGroup($tr, true);
-          } else {
-            toggleWipoGroup($tr, false);
-          }
-          return;
-        }
-        var text = $tr.find('td').eq(1).text() || '';
-        if(text.indexOf('(TR)') !== -1){
-          $tr.hide();
-        }
-      });
-    } // HEPSI ise bir şey yapmaya gerek yok
-  }
-
-  function applyMenseFilterToActivePane(){
-    var val = $("#menseFilter").val() || 'HEPSI';
-    // Aktif pane hangisi ise ona uygula
-    var $activePane = $(".tab-content > .tab-pane.show.active");
-    if($activePane.length){
-      filterPaneByMense("#" + $activePane.attr("id"), val);
-    }
-  }
-
-  // Menşe değişiminde filtre uygula
-  $(document).on('change', '#menseFilter', function(){
-    applyMenseFilterToActivePane();
-  });
-
-  // Sekme değişimlerinde filtreyi yeniden uygula
-  $(document).on('shown.bs.tab', '#portfolioTopTabs a[data-toggle="tab"]', function (e) {
-    applyMenseFilterToActivePane();
-  });
-
-  // İlk yüklemede varsayılan uygula
-  $(function(){
-    applyMenseFilterToActivePane();
-  });
-})();
-</script>
-
-
-<script>
-// Zorlayıcı Portföyüm açma: diğer click handler'ları bypass etmek için namespace'li delegated handler
-(function(){
-  $(document).off('click.portfoyumOpen')
-  .on('click.portfoyumOpen', 'a[href="#portfolio-content"], #sidebar a[data-target="#portfolio-content"]', function(e){
-      e.preventDefault();
-      e.stopPropagation();
-      if (e.stopImmediatePropagation) e.stopImmediatePropagation();
-
-      // Üst panelleri kapat ve Portföyü aç
-      $('.tab-pane').removeClass('show active');
-      $('#portfolio-content').addClass('show active');
-
-      // Üst sekmelerde (varsa) Marka sekmesini aktif et
-      var $markaTab = $('#portfolioTopTabs a[href="#marka-list"]');
-      if ($markaTab.length && $markaTab.tab) {
-        $markaTab.tab('show');
-      } else {
-        // Bootstrap tab metodu yoksa sınıf tabanlı aktive et
-        $('#portfolioTopTabs a').removeClass('active');
-        $markaTab.addClass('active');
-        $('#marka-list').addClass('show active');
-      }
-
-      // Menşe filtresini uygula
-      if (typeof applyMenseFilterToActivePane === 'function') {
-        try { applyMenseFilterToActivePane(); } catch(_) {}
-      }
-      return false;
-  });
-})();
-</script>
+<script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.2/dist/js/bootstrap.bundle.min.js"></script>
 
 <script type="module">
-// Projenizdeki Firebase ve Firestore modüllerini içe aktarın.
-// import { getFirestore, collection, query, where, getDocs } from "firebase/firestore";
+import { authService } from './firebase-config.js';
+import { db } from './firebase-config.js';
+import { doc, getDoc, collection, getDocs, query, where, arrayUnion } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
-// getUserId fonksiyonunu Firebase Authentication'dan alacak şekilde düzenleyin.
-function getUserId() {
-  // Örnek: Gerçek bir kullanıcı kimliği döndürmeli.
-  // const user = firebase.auth().currentUser;
-  // return user ? user.uid : null;
-  return "placeholderUserId123"; // Test için placeholder
+// Kullanıcı bilgilerini üst çubuğa yerleştirme
+function populateUserInfo() {
+    const user = authService.getCurrentUser();
+    if (user) {
+        document.getElementById('userName').textContent = user.displayName || user.email;
+        document.getElementById('userRole').textContent = user.role.toUpperCase();
+        document.getElementById('userAvatar').textContent = user.displayName ? user.displayName.charAt(0).toUpperCase() : user.email.charAt(0).toUpperCase();
+        document.getElementById('welcomeUserName').textContent = user.displayName || user.email;
+    }
 }
+
+// Çıkış işlevi
+document.getElementById('logoutBtn').addEventListener('click', async () => {
+    await authService.signOut();
+});
+
+// Tema değiştirme
+document.addEventListener('DOMContentLoaded', function () {
+    const themeSwitch = document.getElementById('themeSwitch');
+    const body = document.body;
+    const toggleLabel = document.querySelector('.theme-toggle .custom-control-label');
+    const savedTheme = localStorage.getItem('theme') || 'dark';
+
+    if (savedTheme === 'light') {
+        body.classList.add('light-mode');
+        themeSwitch.checked = false;
+        toggleLabel.textContent = 'Beyaz Tema';
+    } else {
+        body.classList.add('dark-mode');
+        themeSwitch.checked = true;
+        toggleLabel.textContent = 'Koyu Tema';
+    }
+
+    themeSwitch.addEventListener('change', function () {
+        if (this.checked) {
+            body.classList.remove('light-mode');
+            body.classList.add('dark-mode');
+            localStorage.setItem('theme', 'dark');
+            toggleLabel.textContent = 'Koyu Tema';
+        } else {
+            body.classList.remove('dark-mode');
+            body.classList.add('light-mode');
+            localStorage.setItem('theme', 'light');
+            toggleLabel.textContent = 'Beyaz Tema';
+        }
+    });
+
+    populateUserInfo();
+    fetchAndDisplayPortfolio();
+});
+
+// Sidebar navigasyonu için jQuery
+$('#sidebar a').on('click', function (e) {
+    if ($(this).closest('#portfoy-accordion').length) {
+        return;
+    }
+    const href = $(this).attr('href');
+    const targetId = $(this).attr('data-target') || href;
+    if (href && href === '#') {
+        e.preventDefault();
+    }
+    $('#sidebar a').removeClass('active');
+    $(this).addClass('active');
+    
+    if (href === '#portfolio-content') {
+        e.preventDefault();
+        $('.tab-pane').removeClass('show active');
+        $('#portfolio-content').addClass('show active');
+        $('#portfolioTopTabs a[href="#marka-list"]').tab('show');
+        if (typeof applyMenseFilterToActivePane === 'function') {
+            applyMenseFilterToActivePane();
+        }
+        return;
+    }
+    if ($(this).attr('data-toggle') === 'collapse') {
+        $(targetId).collapse('toggle');
+    } else {
+        $('.tab-pane').removeClass('show active');
+        $(href).addClass('show active');
+    }
+});
+
+// Akordeon alt menü linkleri için tab geçişi
+$('#portfoy-accordion a').on('click', function(e) {
+    e.preventDefault();
+    $('#portfoy-accordion a').removeClass('active');
+    $(this).addClass('active');
+    const mainPortfolioTab = $('#portfolio-content');
+    $('.tab-content > .tab-pane').removeClass('show active');
+    mainPortfolioTab.addClass('show active');
+    const targetListId = $(this).attr('href');
+    const innerTabContent = $('#portfolio-content .tab-content');
+    innerTabContent.find('.tab-pane').removeClass('show active');
+    $(targetListId).addClass('show active');
+    $('#portfoy-accordion').collapse('show');
+});
+
+// Akordeon başlıklarındaki ok ikonunu yönet
+$('.accordion-header-row').on('click', function() {
+    const icon = $(this).find('i.fa-chevron-down, i.fa-chevron-up');
+    if(icon.length) {
+        icon.toggleClass('fa-chevron-down fa-chevron-up');
+    }
+});
 
 /**
  * Verilen HTML tablosunu, çekilen portföy verileriyle doldurur.
@@ -1243,45 +1167,40 @@ function getUserId() {
 function populatePortfolioTable(tableId, portfolioData) {
     const tableBody = document.querySelector(`${tableId} tbody`);
     if (!tableBody) return;
-    
-    // Mevcut tüm satırları temizle
     tableBody.innerHTML = '';
 
     portfolioData.forEach((item, index) => {
-        // Ana satır yapısını oluştur
         const mainRow = document.createElement('tr');
-        
-        // Uluslararası (WIPO) kayıtları için özel durum
         const isInternational = item.origin === 'YURTDISI';
+        
+        const badgeClass = {
+            'Başvuru': 'primary',
+            'Tescilli': 'success',
+            'İtiraz': 'warning',
+            'Reddedildi': 'danger'
+        }[item.statusText] || 'secondary';
+
+        const rowHtml = `
+            <td>${isInternational ? `<i class="fas fa-chevron-down mr-2"></i>` : ''}${index + 1}</td>
+            <td><a href="#" data-toggle="modal" data-target="#portfolioDetailModal">${item.title} (${item.origin})</a></td>
+            <td>${item.applicationNumber}</td>
+            <td><span class="badge badge-${badgeClass}">${item.statusText}</span></td>
+            <td>${item.classes.join(', ')}</td>
+            <td>${item.lastTransactionDate}</td>
+        `;
+
+        mainRow.innerHTML = rowHtml;
+
         if (isInternational) {
             mainRow.classList.add('accordion-header-row');
             mainRow.setAttribute('data-toggle', 'collapse');
-            mainRow.setAttribute('data-target', `#accordion-yurtdisi-${item.id}`); // Örnek ID
+            mainRow.setAttribute('data-target', `#accordion-yurtdisi-${item.id}`);
             mainRow.setAttribute('aria-expanded', 'false');
             mainRow.setAttribute('aria-controls', `accordion-yurtdisi-${item.id}`);
-            mainRow.innerHTML = `
-                <td><i class="fas fa-chevron-down mr-2"></i>${index + 1}</td>
-                <td><a href="#" data-toggle="modal" data-target="#portfolioDetailModal">${item.title} (${item.origin})</a></td>
-                <td>${item.applicationNumber}</td>
-                <td><span class="badge badge-${item.statusClass}">${item.statusText}</span></td>
-                <td>${item.classes.join(', ')}</td>
-                <td>${item.lastTransactionDate}</td>
-            `;
-        } else {
-            // Yurtiçi (TÜRKPATENT) veya normal kayıtlar
-            mainRow.innerHTML = `
-                <td>${index + 1}</td>
-                <td><a href="#" data-toggle="modal" data-target="#portfolioDetailModal">${item.title} (${item.origin})</a></td>
-                <td>${item.applicationNumber}</td>
-                <td><span class="badge badge-${item.statusClass}">${item.statusText}</span></td>
-                <td>${item.classes.join(', ')}</td>
-                <td>${item.lastTransactionDate}</td>
-            `;
         }
 
         tableBody.appendChild(mainRow);
         
-        // Eğer uluslararası bir kayıt ise, alt detay satırını oluştur
         if (isInternational && item.subRegistrations && item.subRegistrations.length > 0) {
             const detailRow = document.createElement('tr');
             detailRow.innerHTML = `
@@ -1319,30 +1238,37 @@ function populatePortfolioTable(tableId, portfolioData) {
     });
 }
 
+
 /**
  * Kullanıcı kimliğine göre portföy verilerini çeker ve tabloyu doldurur.
- * @param {string} userId Mevcut kullanıcının kimliği.
  */
-async function fetchAndDisplayPortfolio(userId) {
-    // Firestore ve diğer kütüphanelerin yüklü olduğundan emin olun.
-    if (typeof firebase === 'undefined' || typeof getFirestore === 'undefined') {
-      console.error("Firebase/Firestore kütüphaneleri yüklenmemiş.");
-      return;
+async function fetchAndDisplayPortfolio() {
+    // authService.getCurrentUser() fonksiyonunu kullanarak kullanıcının UID'sini al
+    const user = authService.getCurrentUser();
+    const userId = user ? user.uid : null;
+    
+    if (!userId) {
+        console.log("Kullanıcı giriş yapmamış veya UID alınamadı.");
+        return;
     }
-    const db = getFirestore();
+    
+    if (typeof db === 'undefined' || typeof db.collection === 'undefined') {
+        console.error("Firebase/Firestore kütüphaneleri yüklenmemiş veya yanlış yapılandırılmış.");
+        return;
+    }
 
     try {
         // 1. Kullanıcının ilişkili olduğu müvekkil ID'lerini çekme
-        const usersRef = collection(db, "users");
-        const userQuery = query(usersRef, where("userId", "==", userId));
-        const userSnapshot = await getDocs(userQuery);
+        const usersRef = db.collection("users");
+        const userQuery = usersRef.doc(userId); // UID'ye göre doğrudan belgeye eriş
+        const userSnapshot = await userQuery.get();
 
-        if (userSnapshot.empty) {
+        if (!userSnapshot.exists) {
             console.log("Kullanıcıya ait veri bulunamadı.");
             return;
         }
 
-        const userData = userSnapshot.docs[0].data();
+        const userData = userSnapshot.data();
         const linkedPersonIds = userData.linkedPersonIds;
 
         if (!linkedPersonIds || linkedPersonIds.length === 0) {
@@ -1351,9 +1277,9 @@ async function fetchAndDisplayPortfolio(userId) {
         }
 
         // 2. İlgili müvekkillere ait tüm portföy verilerini çekme
-        const portfolioRef = collection(db, "portfolios"); // veya "trademarks", "patents"
-        const portfolioQuery = query(portfolioRef, where("personId", "in", linkedPersonIds));
-        const portfolioSnapshot = await getDocs(portfolioQuery);
+        const portfolioRef = db.collection("portfolios");
+        const portfolioQuery = portfolioRef.where("personId", "in", linkedPersonIds);
+        const portfolioSnapshot = await portfolioQuery.get();
 
         const allPortfolios = portfolioSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
@@ -1373,18 +1299,124 @@ async function fetchAndDisplayPortfolio(userId) {
         console.error("Portföy verileri çekilirken bir hata oluştu:", error);
     }
 }
-
-// Sayfa yüklendiğinde verileri çekme işlemini başlatın
-document.addEventListener('DOMContentLoaded', function() {
-    // Diğer DOMContentLoaded kodlarınız burada devam ediyor...
-    const userId = getUserId(); // Giriş yapan kullanıcının kimliğini alın
-    if (userId) {
-      fetchAndDisplayPortfolio(userId);
-    } else {
-      console.log("Kullanıcı giriş yapmamış.");
-    }
-});
 </script>
 
+
+<script>
+(function(){
+  function rowHasMarker($row, marker){
+    var td = $row.find('td').eq(1);
+    if(td.length === 0) return false;
+    var text = td.text() || "";
+    return text.indexOf(marker) !== -1;
+  }
+
+  function toggleWipoGroup($headerRow, show){
+    var $detailRow = $headerRow.next('tr');
+    if(show){
+      $headerRow.show();
+      $detailRow.show();
+    }else{
+      var collapseId = $headerRow.attr('data-target');
+      if(collapseId){ try { $(collapseId).collapse('hide'); } catch(e){} }
+      $headerRow.hide();
+      $detailRow.hide();
+    }
+  }
+
+  function filterPaneByMense(paneSelector, menseValue){
+    var $tbody = $(paneSelector + " tbody");
+    if($tbody.length === 0) return;
+    var $rows = $tbody.children("tr");
+
+    $rows.show();
+
+    var isTR = (menseValue === 'TÜRKPATENT');
+    var isYD = (menseValue === 'YURTDIŞI');
+
+    if(isTR){
+      $rows.each(function(){
+        var $tr = $(this);
+        if($tr.hasClass('accordion-header-row')){
+          var cellText = $tr.find('td').eq(1).text() || '';
+          if(cellText.indexOf('(WIPO)') !== -1){
+            toggleWipoGroup($tr, false);
+          }
+          return;
+        }
+        var text = $tr.find('td').eq(1).text() || '';
+        if(text.indexOf('(TR)') !== -1){
+          $tr.show();
+        }else{
+          $tr.hide();
+        }
+      });
+    } else if(isYD){
+      $rows.each(function(){
+        var $tr = $(this);
+        if($tr.hasClass('accordion-header-row')){
+          var cellText = $tr.find('td').eq(1).text() || '';
+          if(cellText.indexOf('(WIPO)') !== -1){
+            toggleWipoGroup($tr, true);
+          } else {
+            toggleWipoGroup($tr, false);
+          }
+          return;
+        }
+        var text = $tr.find('td').eq(1).text() || '';
+        if(text.indexOf('(TR)') !== -1){
+          $tr.hide();
+        }
+      });
+    }
+  }
+
+  function applyMenseFilterToActivePane(){
+    var val = $("#menseFilter").val() || 'HEPSI';
+    var $activePane = $(".tab-content > .tab-pane.show.active");
+    if($activePane.length){
+      filterPaneByMense("#" + $activePane.attr("id"), val);
+    }
+  }
+
+  $(document).on('change', '#menseFilter', function(){
+    applyMenseFilterToActivePane();
+  });
+
+  $(document).on('shown.bs.tab', '#portfolioTopTabs a[data-toggle="tab"]', function (e) {
+    applyMenseFilterToActivePane();
+  });
+
+  $(function(){
+    applyMenseFilterToActivePane();
+  });
+})();
+
+(function(){
+    $(document).off('click.portfoyumOpen')
+    .on('click.portfoyumOpen', 'a[href="#portfolio-content"], #sidebar a[data-target="#portfolio-content"]', function(e){
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+
+        $('.tab-pane').removeClass('show active');
+        $('#portfolio-content').addClass('show active');
+
+        var $markaTab = $('#portfolioTopTabs a[href="#marka-list"]');
+        if ($markaTab.length && $markaTab.tab) {
+          $markaTab.tab('show');
+        } else {
+          $('#portfolioTopTabs a').removeClass('active');
+          $markaTab.addClass('active');
+          $('#marka-list').addClass('show active');
+        }
+
+        if (typeof applyMenseFilterToActivePane === 'function') {
+          try { applyMenseFilterToActivePane(); } catch(_) {}
+        }
+        return false;
+    });
+})();
+</script>
 </body>
 </html>
