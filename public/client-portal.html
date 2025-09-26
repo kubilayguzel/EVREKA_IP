@@ -593,7 +593,7 @@
                             <i class="fas fa-folder-open stat-icon text-info mr-4"></i>
                             <div>
                                 <div id="dashPortfolio" class="stat-value">0</div>
-                                <div class="stat-label">Portföy Kaydım</div>
+                                <div class="card" id="cardPortfolio">Portföy Kaydım</div>
                             </div>
                         </div>
                     </div>
@@ -602,7 +602,7 @@
                             <i class="fas fa-tasks stat-icon text-warning mr-4"></i>
                             <div>
                                 <div id="dashPendingApprovals" class="stat-value">0</div>
-                                <div class="stat-label">Onay Bekleyen İşlem</div>
+                                <div class="card" id="cardPending">Onay Bekleyen İşlem</div>
                             </div>
                         </div>
                     </div>
@@ -611,7 +611,7 @@
                             <i class="fas fa-file-invoice-dollar stat-icon text-success mr-4"></i>
                             <div>
                                 <div id="dashUnpaidInvoices" class="stat-value">0</div>
-                                <div class="stat-label">Ödenmemiş Fatura</div>
+                                <div class="card" id="cardInvoices">Ödenmemiş Fatura</div>
                             </div>
                         </div>
                     </div>
@@ -1806,7 +1806,6 @@ window.addEventListener('load', function() {
     }, 1000);
 });
 
-
 // --- Sidebar / Top-level tab behavior ---
 (function(){
   var $ = window.jQuery;
@@ -1837,6 +1836,20 @@ window.addEventListener('load', function() {
   if (window.location.hash) openHashTab();
   else $('#sidebar a[data-toggle="tab"][href="#dashboard"]').tab('show');
 })();
+
+(function(){
+  var $ = window.jQuery;
+  if (!$) return;
+  function openTab(target){
+    var $link = $('#sidebar a[data-toggle="tab"][href="'+target+'"]');
+    if ($link.length){ $link.tab('show'); }
+    try { window.scrollTo({top: 0, behavior: 'smooth'}); } catch(_) {}
+  }
+  $('#cardPortfolio').css('cursor','pointer').on('click', () => openTab('#portfolio-content'));
+  $('#cardPending').css('cursor','pointer').on('click', () => openTab('#tasks-content'));
+  $('#cardInvoices').css('cursor','pointer').on('click', () => openTab('#invoices-content'));
+})();
+
 </script>
 </body>
 </html>
