@@ -1580,31 +1580,44 @@ document.addEventListener('DOMContentLoaded', function () {
   });
 })();
 
-(function(){
-    $(document).off('click.portfoyumOpen')
-    .on('click.portfoyumOpen', 'a[href="#portfolio-content"], #sidebar a[data-target="#portfolio-content"]', function(e){
-        e.preventDefault();
-        e.stopPropagation();
-        if (e.stopImmediatePropagation) e.stopImmediatePropagation();
-
+// Portföyüm menü aktif durumu yönetimi
+$(document).ready(function() {
+    // Menü linklerine click event ekle
+    $('.nav-link[data-toggle="tab"]').on('click', function() {
+        // Tüm nav-link'lerden active sınıfını kaldır
+        $('.nav-link').removeClass('active');
+        // Tıklanan linke active sınıfını ekle
+        $(this).addClass('active');
+    });
+    
+    // Portföyüm dropdown için özel yönetim
+    $('a[data-target="#portfoy-accordion"]').on('click', function() {
+        // Tüm nav-link'lerden active sınıfını kaldır
+        $('.nav-link').removeClass('active');
+        // Portföyüm linkine active sınıfını ekle
+        $(this).addClass('active');
+        
+        // Portfolio content'i göster
         $('.tab-pane').removeClass('show active');
         $('#portfolio-content').addClass('show active');
-
-        var $markaTab = $('#portfolioTopTabs a[href="#marka-list"]');
-        if ($markaTab.length && $markaTab.tab) {
-          $markaTab.tab('show');
-        } else {
-          $('#portfolioTopTabs a').removeClass('active');
-          $markaTab.addClass('active');
-          $('#marka-list').addClass('show active');
-        }
-
+        
+        // İlk tab'ı (Marka) aktif yap
+        setTimeout(() => {
+            $('#portfolioTopTabs a[href="#marka-list"]').tab('show');
+        }, 100);
+        
+        // Menşe filtresi uygula
         if (typeof applyMenseFilterToActivePane === 'function') {
           try { applyMenseFilterToActivePane(); } catch(_) {}
         }
-        return false;
     });
-})();
+    
+    // Portföy alt menüsü linklerine tıklandığında
+    $('#portfoy-accordion a[data-toggle="tab"]').on('click', function() {
+        // Ana portföyüm linkinin active durumunu koru
+        $('a[data-target="#portfoy-accordion"]').addClass('active');
+    });
+});
 
 async function fetchAndDisplayTasks(linkedPersonIds){
     const q = query(collection(db, "tasks"), where("personsRelatedIds", "array-contains-any", linkedPersonIds));
