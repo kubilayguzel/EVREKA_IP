@@ -57,6 +57,32 @@
         .dark-mode .table { color: #e0e0e0; }
         .dark-mode .table thead th { border-bottom: 2px solid #585b63; color: #f8f9fa; font-weight: 600; }
         .dark-mode .table tbody tr:hover { background-color: #40444b; }
+        /* Koyu temada hover'da metin siyahlaşmasın */
+        .dark-mode .table-hover tbody tr:hover {
+        color: #e0e0e0 !important;        /* temel metin */
+        background-color: #40444b !important;
+        }
+
+        /* Linkler de görünür kalsın */
+        .dark-mode .table-hover tbody tr:hover a {
+        color: #4da6ff !important;        /* koyu temadaki link rengiyle uyumlu */
+        text-decoration: none;
+        }
+
+        /* Hücre içindekiler rengi miras alsın */
+        .dark-mode .table-hover tbody tr:hover td,
+        .dark-mode .table-hover tbody tr:hover th,
+        .dark-mode .table-hover tbody tr:hover span,
+        .dark-mode .table-hover tbody tr:hover small {
+        color: inherit !important;
+        }
+
+        /* Badge’ler zaten kendi zıt renklerini kullanıyor; yine de zorlanırsa: */
+        .dark-mode .table-hover tbody tr:hover .badge {
+        filter: none;                      /* renkleri bozulmasın */
+        color: inherit;                    /* badge iç yazı okunur kalsın */
+        }
+
         .dark-mode .badge-filed { background-color: #4da6ff; color: #1e3c72; }
         .dark-mode .badge-registered { background-color: #5cb85c; color: #1a3b1c; }
         .dark-mode .badge-objection { background-color: #f0ad4e; color: #4e351b; }
