@@ -1561,74 +1561,53 @@ async function fetchAndDisplayInvoices(linkedPersonIds){
 }
 </script>
 
-
-
-
 <script type="module">
 import Pagination from './js/pagination.js';
 
-let __markaData = [];
-let __pagination = null;
-let __originalPopulate = null;
-
-function renderMarkaPage(page=1, perPage=10){
-    const start = (page-1) * perPage;
-    const end = start + perPage;
-    const slice = __markaData.slice(start, end);
-    if (__originalPopulate) {
-        __originalPopulate('#marka-list', slice);
-    }
-}
-
-// Global değişkenleri dış scope'da tanımla
+// Global değişkenler
 window.__markaData = [];
 window.__pagination = null;
 window.__originalPopulate = null;
 
-function renderMarkaPage(page=1, perPage=10){
+// Marka sayfası render fonksiyonu
+window.renderMarkaPage = function(page=1, perPage=10){
     const start = (page-1) * perPage;
     const end = start + perPage;
     const slice = window.__markaData.slice(start, end);
     if (window.__originalPopulate) {
         window.__originalPopulate('#marka-list', slice);
     }
-}
+};
 
-// populatePortfolioTable fonksiyonunu doğru şekilde wrap et
-function setupPagination() {
-    // Original function'ı sakla
-    if (window.populatePortfolioTable) {
+// Pagination setup fonksiyonu
+function setupMarkaPagination(){
+    if (typeof window.populatePortfolioTable === 'function') {
         window.__originalPopulate = window.populatePortfolioTable;
         
-        // Override et
-        window.populatePortfolioTable = function(tableId, data) {
+        window.populatePortfolioTable = function(tableId, data){
             if (tableId === '#marka-list') {
                 window.__markaData = Array.isArray(data) ? data : [];
                 
-                // Pagination'ı initialize et
                 if (!window.__pagination) {
                     window.__pagination = new Pagination({
                         itemsPerPage: 10,
                         containerId: 'markaPagination',
-                        onPageChange: ({page, itemsPerPage}) => renderMarkaPage(page, itemsPerPage),
+                        onPageChange: ({page, itemsPerPage}) => window.renderMarkaPage(page, itemsPerPage),
                     });
                 }
                 
-                // Total items'ı set et ve ilk sayfayı render et
                 window.__pagination.setTotalItems(window.__markaData.length);
-                renderMarkaPage(1, window.__pagination.getItemsPerPage());
+                window.renderMarkaPage(1, window.__pagination.getItemsPerPage());
             } else {
-                // Diğer tablolar için orijinal fonksiyonu çağır
                 window.__originalPopulate(tableId, data);
             }
         };
+    } else {
+        setTimeout(setupMarkaPagination, 100);
     }
 }
-
-// DOMContentLoaded event'inde pagination'ı setup et
-document.addEventListener('DOMContentLoaded', function () {
-    setupPagination();
-});
+// Setup'ı başlat
+setupMarkaPagination();
 </script>
 </body>
 </html>
