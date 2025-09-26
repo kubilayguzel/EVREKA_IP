@@ -368,12 +368,77 @@ setupEventListeners() {
     // Manuel kayıt arama
     this.setupRecordSearch();
     
-    // İndeksleme butonu
+    // ⭐ TÜM İNDEKSLEME BUTONLARINA EVENT LISTENER EKLE
     const indexBtn = document.getElementById('indexPdfBtn') || document.getElementById('indexBtn');
+    const saveUpdateBtn = document.getElementById('saveUpdatePdfBtn');
+    const globalSaveBtn = document.getElementById('btn-save-all');
+
     if (indexBtn) {
-    indexBtn.addEventListener('click', () => this.handleIndexing());
+        // Mevcut listener'ları temizle
+        const newIndexBtn = indexBtn.cloneNode(true);
+        indexBtn.parentNode.replaceChild(newIndexBtn, indexBtn);
+        
+        newIndexBtn.addEventListener('click', () => {
+            console.log('🖱️ İndeksleme butonu tıklandı');
+            this.handleIndexing();
+        });
     }
+
+    if (saveUpdateBtn) {
+        // Mevcut listener'ları temizle
+        const newSaveUpdateBtn = saveUpdateBtn.cloneNode(true);
+        saveUpdateBtn.parentNode.replaceChild(newSaveUpdateBtn, saveUpdateBtn);
+        
+        newSaveUpdateBtn.addEventListener('click', () => {
+            console.log('🖱️ Kaydet/Güncelle butonu tıklandı');
+            this.handleIndexing();
+        });
     }
+
+    // ⭐ TESLİMAT TARİHİ ALAN DEĞİŞİKLİĞİNİ İZLE
+    const deliveryDateInput = document.getElementById('deliveryDate');
+    if (deliveryDateInput) {
+        const newDeliveryDateInput = deliveryDateInput.cloneNode(true);
+        deliveryDateInput.parentNode.replaceChild(newDeliveryDateInput, deliveryDateInput);
+        
+        ['change', 'input'].forEach(eventType => {
+            newDeliveryDateInput.addEventListener(eventType, () => {
+                console.log('📅 Tebliğ tarihi değişti:', newDeliveryDateInput.value);
+                this.checkFormCompleteness();
+            });
+        });
+    }
+
+    // ⭐ TRANSACTION SEÇİMİ EVENT LISTENER'I
+    const transactionsList = document.getElementById('transactionsList');
+    if (transactionsList) {
+        const newTransactionsList = transactionsList.cloneNode(true);
+        transactionsList.parentNode.replaceChild(newTransactionsList, transactionsList);
+        
+        newTransactionsList.addEventListener('click', (event) => {
+            const transactionItem = event.target.closest('.transaction-item');
+            if (transactionItem) {
+                // Tüm seçimleri temizle
+                newTransactionsList.querySelectorAll('.transaction-item').forEach(item => {
+                    item.classList.remove('selected');
+                });
+                
+                // Tıklanan öğeyi seçili yap
+                transactionItem.classList.add('selected');
+                
+                // Transaction ID'sini onclick attribute'undan al
+                const onClickAttr = transactionItem.getAttribute('onclick');
+                if (onClickAttr) {
+                    const match = onClickAttr.match(/'([^']+)'/);
+                    if (match) {
+                        const transactionId = match[1];
+                        this.selectTransaction(transactionId);
+                    }
+                }
+            }
+        });
+    }
+}
 
 setupRecordSearch() {
     const searchInput = document.getElementById('recordSearchInput');
@@ -637,116 +702,147 @@ searchRecords(query) {
         this.checkFormCompleteness();
     }
 
+ 
     loadChildTransactionTypes() {
-        if (!this.currentTransactions || !this.selectedTransactionId) return;
+    if (!this.currentTransactions || !this.selectedTransactionId) return;
 
-        const selectedTransaction = this.currentTransactions.find(t => t.id === this.selectedTransactionId);
-        if (!selectedTransaction) return;
+    const selectedTransaction = this.currentTransactions.find(t => t.id === this.selectedTransactionId);
+    if (!selectedTransaction) return;
 
-        const transactionType = this.allTransactionTypes.find(t => t.id === selectedTransaction.type);
-        if (!transactionType || !transactionType.indexFile) {
-            document.getElementById('childTransactionInputs').style.display = 'none';
-            return;
-        }
+    const transactionType = this.allTransactionTypes.find(t => t.id === selectedTransaction.type);
+    if (!transactionType || !transactionType.indexFile) {
+        document.getElementById('childTransactionInputs').style.display = 'none';
+        return;
+    }
 
-        const selectElement = document.getElementById('childTransactionType');
-        selectElement.innerHTML = '<option value="" disabled selected>Alt işlem türü seçin...</option>';
+    const selectElement = document.getElementById('childTransactionType');
+    selectElement.innerHTML = '<option value="" disabled selected>Alt işlem türü seçin...</option>';
 
-        const childTypes = this.allTransactionTypes.filter(type => 
-            type.hierarchy === 'child' &&  
-            transactionType.indexFile && 
-            Array.isArray(transactionType.indexFile) && 
-            transactionType.indexFile.includes(type.id)
-        ).sort((a, b) => (a.order || 999) - (b.order || 999));
+    const childTypes = this.allTransactionTypes.filter(type => 
+        type.hierarchy === 'child' &&  
+        transactionType.indexFile && 
+        Array.isArray(transactionType.indexFile) && 
+        transactionType.indexFile.includes(type.id)
+    ).sort((a, b) => (a.order || 999) - (b.order || 999));
 
-        if (childTypes.length === 0) {
-            const noOption = document.createElement('option');
-            noOption.value = '';
-            noOption.textContent = 'Bu ana işlem için alt işlem bulunamadı';
-            noOption.disabled = true;
-            selectElement.appendChild(noOption);
-            document.getElementById('childTransactionInputs').style.display = 'none';
-            return;
-        }
+    if (childTypes.length === 0) {
+        const noOption = document.createElement('option');
+        noOption.value = '';
+        noOption.textContent = 'Bu ana işlem için alt işlem bulunamadı';
+        noOption.disabled = true;
+        selectElement.appendChild(noOption);
+        document.getElementById('childTransactionInputs').style.display = 'none';
+        return;
+    }
 
-        childTypes.forEach(type => {
-            const option = document.createElement('option');
-            option.value = type.id;
-            option.textContent = type.alias || type.name;
-            selectElement.appendChild(option);
-        });
+    childTypes.forEach(type => {
+        const option = document.createElement('option');
+        option.value = type.id;
+        option.textContent = type.alias || type.name;
+        selectElement.appendChild(option);
+    });
 
-        // ALT İŞLEM SEÇİM EVENT LISTENER'INI EKLE
-        selectElement.addEventListener('change', () => {
-            console.log('Alt işlem seçildi:', selectElement.value);
+    // ⭐ MEVCUT EVENT LISTENER'LARI TEMİZLE
+    const newSelectElement = selectElement.cloneNode(true);
+    selectElement.parentNode.replaceChild(newSelectElement, selectElement);
+
+    // ⭐ YENİ EVENT LISTENER EKLE
+    newSelectElement.addEventListener('change', (event) => {
+        const selectedValue = event.target.value;
+        console.log('Alt işlem seçildi:', selectedValue);
+        // Biraz gecikme ekleyerek DOM güncellemesini bekle
+        setTimeout(() => {
             this.checkFormCompleteness();
-        });
+        }, 50);
+    });
 
-        // Alt işlem bölümünü göster
-        document.getElementById('childTransactionInputs').style.display = 'block';
-    }
+    // Alt işlem bölümünü göster
+    document.getElementById('childTransactionInputs').style.display = 'block';
+    
+    // ⭐ İLK YÜKLEME SONRASI FORM DURUMUNU KONTROL ET
+    setTimeout(() => {
+        this.checkFormCompleteness();
+    }, 100);
+}
 
-    // checkFormCompleteness() fonksiyonunu güncelle
-    checkFormCompleteness() {
-        const hasMatchedRecord = this.matchedRecord !== null;
-        const hasSelectedTransaction = this.selectedTransactionId !== null;
-        
-        const childTransactionInputs = document.getElementById('childTransactionInputs');
-        const childTransactionInputsVisible = childTransactionInputs && childTransactionInputs.style.display !== 'none';
-        
-        let hasSelectedChildType = true;
-        if (childTransactionInputsVisible) {
-            const childTypeSelect = document.getElementById('childTransactionType');
-            if (childTypeSelect) {
-                hasSelectedChildType = childTypeSelect.value !== '';
-                console.log('Child type select value:', childTypeSelect.value);
-            }
+checkFormCompleteness() {
+    const hasMatchedRecord = this.matchedRecord !== null;
+    const hasSelectedTransaction = this.selectedTransactionId !== null;
+    
+    const childTransactionInputs = document.getElementById('childTransactionInputs');
+    const childTransactionInputsVisible = childTransactionInputs && childTransactionInputs.style.display !== 'none';
+    
+    let hasSelectedChildType = true;
+    if (childTransactionInputsVisible) {
+        const childTypeSelect = document.getElementById('childTransactionType');
+        if (childTypeSelect) {
+            const selectedValue = childTypeSelect.value;
+            hasSelectedChildType = selectedValue !== '' && selectedValue !== null && selectedValue !== undefined;
+            console.log('Child type select value:', selectedValue, 'hasSelectedChildType:', hasSelectedChildType);
         }
-
-        const deliveryInput = document.getElementById('deliveryDate');
-        const hasDeliveryDate = !!(deliveryInput && deliveryInput.value && deliveryInput.value.trim() !== '');
-
-        const canSubmit = hasMatchedRecord 
-        && hasSelectedTransaction 
-        && hasSelectedChildType 
-        && hasDeliveryDate;
-        
-        const indexBtn      = document.getElementById('indexPdfBtn') || document.getElementById('indexBtn');
-        const saveUpdateBtn = document.getElementById('saveUpdatePdfBtn');
-        const globalSaveBtn = document.getElementById('btn-save-all');
-
-        [indexBtn, saveUpdateBtn, globalSaveBtn].forEach(btn => {
-            if (btn) {
-                btn.disabled = !canSubmit;
-                btn.classList.toggle('btn-disabled', !canSubmit);
-            }
-        });
-
-        console.log('Buton durumları:', {
-            indexBtn: !indexBtn?.disabled,
-            saveUpdateBtn: !saveUpdateBtn?.disabled,
-            globalSaveBtn: !globalSaveBtn?.disabled
-        });
-
-        console.log('Form completeness check:', {
-            hasMatchedRecord,
-            hasSelectedTransaction,
-            childTransactionInputsVisible,
-            hasSelectedChildType,
-            canSubmit
-        });
     }
+
+    const deliveryInput = document.getElementById('deliveryDate');
+    const hasDeliveryDate = !!(deliveryInput && deliveryInput.value && deliveryInput.value.trim() !== '');
+
+    const canSubmit = hasMatchedRecord 
+    && hasSelectedTransaction 
+    && hasSelectedChildType 
+    && hasDeliveryDate;
+    
+    const indexBtn      = document.getElementById('indexPdfBtn') || document.getElementById('indexBtn');
+    const saveUpdateBtn = document.getElementById('saveUpdatePdfBtn');
+    const globalSaveBtn = document.getElementById('btn-save-all');
+
+    [indexBtn, saveUpdateBtn, globalSaveBtn].forEach(btn => {
+        if (btn) {
+            btn.disabled = !canSubmit;
+            btn.classList.toggle('btn-disabled', !canSubmit);
+        }
+    });
+
+    console.log('Buton durumları:', {
+        indexBtn: !indexBtn?.disabled,
+        saveUpdateBtn: !saveUpdateBtn?.disabled,
+        globalSaveBtn: !globalSaveBtn?.disabled
+    });
+
+    console.log('Form completeness check:', {
+        hasMatchedRecord,
+        hasSelectedTransaction,
+        childTransactionInputsVisible,
+        hasSelectedChildType,
+        hasDeliveryDate,
+        canSubmit
+    });
+}
 
 // js/indexing-detail-module.js dosyasındaki handleIndexing fonksiyonunun tamamını bununla değiştirin.
 
-async handleIndexing(opts = {}) { try {
+async handleIndexing(opts = {}) {
+    try {
+        const noRedirect = !!opts.noRedirect;
 
-    const noRedirect = !!opts.noRedirect;
+        // GÜÇLÜ FORM VALİDASYONU
+        if (!this.matchedRecord || !this.selectedTransactionId) {
+            showNotification('Gerekli seçimler yapılmadı.', 'error');
+            return;
+        }
 
-    if (!this.matchedRecord || !this.selectedTransactionId) {
-        showNotification('Gerekli seçimler yapılmadı.', 'error');
-        return;
-    }
+        const childTypeId = document.getElementById('childTransactionType')?.value;
+        const deliveryDateStr = document.getElementById('deliveryDate')?.value;
+
+        if (!childTypeId || !deliveryDateStr) {
+            showNotification('Alt işlem türü ve tebliğ tarihi seçilmeli.', 'error');
+            return;
+        }
+
+        console.log('Form validasyonu geçti:', {
+            matchedRecord: this.matchedRecord.id,
+            selectedTransaction: this.selectedTransactionId,
+            childType: childTypeId,
+            deliveryDate: deliveryDateStr
+        });
 
     const indexBtn = document.getElementById('indexPdfBtn') || document.getElementById('indexBtn');
     if (indexBtn) indexBtn.disabled = true;
