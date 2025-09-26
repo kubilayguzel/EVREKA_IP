@@ -360,7 +360,20 @@
         .content-with-topbar {
             margin-top: 60px; /* Height of the top bar */
         }
-    </style>
+    
+/* === Client Portal | Marka listesi kolon dağılımı === */
+#marka-list table { table-layout: auto; }
+#marka-list th.col-index, #marka-list td.col-index { width: 56px; white-space: nowrap; }
+#marka-list th.col-brand, #marka-list td.col-brand { width: 28%; }
+#marka-list th.col-sample, #marka-list td.col-sample { width: 120px; text-align:center; }
+#marka-list th.col-appno, #marka-list td.col-appno { width: 14%; white-space: nowrap; }
+#marka-list th.col-appdate, #marka-list td.col-appdate { width: 14%; white-space: nowrap; }
+#marka-list th.col-status, #marka-list td.col-status { width: 10%; white-space: nowrap; }
+#marka-list th.col-classes, #marka-list td.col-classes { width: 16%; white-space: nowrap; }
+#marka-list td, #marka-list th { vertical-align: middle; }
+#marka-list img.brand-thumb { height: 64px; width: auto; border-radius: 6px; object-fit: contain; } /* 2x */
+
+</style>
 
 <style>
 /* Portföyüm alt menüsü kaldırıldı */
@@ -618,13 +631,13 @@
                         <table class="table table-hover">
                             <thead>
                                 <tr>
-                                    <th>#</th>
-                                    <th>Marka</th>
-                                    <th>Örnek</th>
-                                    <th>Başvuru No</th>
-                                    <th>Başvuru Tarihi</th>
-                                    <th>Durum</th>
-                                    <th>Sınıflar</th>
+                                    <th class="col-index">#</th>
+                                    <th class="col-brand">Marka</th>
+                                    <th class="col-sample">Örnek</th>
+                                    <th class="col-appno">Başvuru No</th>
+                                    <th class="col-appdate">Başvuru Tarihi</th>
+                                    <th class="col-status">Durum</th>
+                                    <th class="col-classes">Sınıflar</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -686,6 +699,7 @@
                                                 </tbody>
                                             </table>
 <div id="markaPagination" class="mt-3"></div>
+
                                         </div>
                                     </td>
                                 </tr>
@@ -1548,41 +1562,47 @@ async function fetchAndDisplayInvoices(linkedPersonIds){
 }
 </script>
 
+
+
+
 <script type="module">
 import Pagination from './js/pagination.js';
 
-// Hook after data load
-const originalPopulate = populatePortfolioTable;
 let __markaData = [];
+let __pagination = null;
+let __originalPopulate = null;
 
 function renderMarkaPage(page=1, perPage=10){
-    const start = (page-1)*perPage;
+    const start = (page-1) * perPage;
     const end = start + perPage;
     const slice = __markaData.slice(start, end);
-    // use original renderer but on a temp table? We'll patch populate to accept subset by just calling it with slice
-    originalPopulate('#marka-list', slice);
+    if (__originalPopulate) {
+        __originalPopulate('#marka-list', slice);
+    }
 }
 
-// After allPortfolios is prepared in loadAndRender function, we will initialize pagination.
-// We attempt to detect when markaList is computed by monkey-patching the call site.
-(function(){
-    const _call = originalPopulate;
-    window.populatePortfolioTable = function(tableId, data){
-        if (tableId === '#marka-list') {
-            __markaData = Array.isArray(data) ? data : [];
-            const pag = new Pagination({
-                itemsPerPage: 10,
-                containerId: 'markaPagination',
-                onPageChange: ({page, itemsPerPage}) => {
-                    renderMarkaPage(page, itemsPerPage);
+(function waitForPopulate(){
+    if (typeof window.populatePortfolioTable === 'function') {
+        __originalPopulate = window.populatePortfolioTable;
+        window.populatePortfolioTable = function(tableId, data){
+            if (tableId === '#marka-list') {
+                __markaData = Array.isArray(data) ? data : [];
+                if (!__pagination) {
+                    __pagination = new Pagination({
+                        itemsPerPage: 10,
+                        containerId: 'markaPagination',
+                        onPageChange: ({page, itemsPerPage}) => renderMarkaPage(page, itemsPerPage),
+                    });
                 }
-            });
-            pag.setTotalItems(__markaData.length);
-            renderMarkaPage(1, pag.getItemsPerPage());
-        } else {
-            _call(tableId, data);
-        }
-    };
+                __pagination.setTotalItems(__markaData.length);
+                renderMarkaPage(1, __pagination.getItemsPerPage());
+            } else {
+                __originalPopulate(tableId, data);
+            }
+        };
+    } else {
+        setTimeout(waitForPopulate, 50);
+    }
 })();
 </script>
 
