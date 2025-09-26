@@ -586,10 +586,9 @@
             <div class="tab-pane fade show active" id="dashboard">
                 <h1 class="header-title">Hoş Geldiniz, <span id="welcomeUserName">Müvekkil Adı</span></h1>
                 <p class="lead">Portalınızda portföyünüzü, işlerinizi ve finansal bilgilerinizi yönetebilirsiniz.</p>
-                
                 <div class="row mt-5">
-                    <div class="col-md-12 mb-4">
-                        <div class="card p-4 text-center d-flex align-items-center flex-row justify-content-center">
+                    <div class="col-md-12 mb-4" id="card-portfolio" data-target-tab="portfolio-content">
+                        <div class="card p-4 text-center d-flex align-items-center flex-row justify-content-center" style="cursor: pointer;">
                             <i class="fas fa-folder-open stat-icon text-info mr-4"></i>
                             <div>
                                 <div id="dashPortfolio" class="stat-value">0</div>
@@ -597,8 +596,8 @@
                             </div>
                         </div>
                     </div>
-                    <div class="col-md-12 mb-4">
-                        <div class="card p-4 text-center d-flex align-items-center flex-row justify-content-center">
+                    <div class="col-md-12 mb-4" id="card-tasks" data-target-tab="tasks">
+                        <div class="card p-4 text-center d-flex align-items-center flex-row justify-content-center" style="cursor: pointer;">
                             <i class="fas fa-tasks stat-icon text-warning mr-4"></i>
                             <div>
                                 <div id="dashPendingApprovals" class="stat-value">0</div>
@@ -606,8 +605,8 @@
                             </div>
                         </div>
                     </div>
-                    <div class="col-md-12 mb-4">
-                        <div class="card p-4 text-center d-flex align-items-center flex-row justify-content-center">
+                    <div class="col-md-12 mb-4" id="card-invoices" data-target-tab="invoices">
+                        <div class="card p-4 text-center d-flex align-items-center flex-row justify-content-center" style="cursor: pointer;">
                             <i class="fas fa-file-invoice-dollar stat-icon text-success mr-4"></i>
                             <div>
                                 <div id="dashUnpaidInvoices" class="stat-value">0</div>
@@ -616,8 +615,7 @@
                         </div>
                     </div>
                 </div>
-            </div>
-            
+            </div>          
             <div class="tab-pane fade" id="portfolio-content">
                 <h1 class="header-title">Portföyüm</h1>
                 <p class="lead">Tüm portföy kayıtlarınızın detaylı listesi.</p>
@@ -1653,6 +1651,36 @@ $(document).ready(function() {
     $('#portfoy-accordion a[data-toggle="tab"]').on('click', function() {
         // Ana portföyüm linkinin active durumunu koru
         $('a[data-target="#portfoy-accordion"]').addClass('active');
+    });
+    
+    // Dashboard'daki kartlara tıklama işlevselliği ekleme
+    $('[data-target-tab]').on('click', function() {
+        const targetTabId = $(this).data('target-tab');
+
+        // 1. Sidebar'daki ilgili linki bul ve içeriği göster
+        const $targetLink = $(`a[href="#${targetTabId}"]`); // #sidebar ihtiyacı yok, href'e göre bulması yeterli
+
+        if ($targetLink.length) {
+            $targetLink.tab('show');
+
+            // 2. Tıkladıktan sonra sidebar'daki aktiflik durumunu güncelle
+            $('#sidebar .nav-link').removeClass('active');
+            
+            // Eğer Portföyüm ise portföy linkini, değilse direkt kartın hedefini aktif yap
+            if (targetTabId === 'portfolio-content') {
+                $('a[data-target="#portfoy-accordion"]').addClass('active');
+            } else {
+                $targetLink.addClass('active');
+            }
+            
+            // Portföyüm sekmesine gidiliyorsa, içindeki Marka tab'ını da aktif et
+            if (targetTabId === 'portfolio-content') {
+                 // İlk tab'ı (Marka) aktif yap
+                setTimeout(() => {
+                    $('#portfolioTopTabs a[href="#marka-list"]').tab('show');
+                }, 100);
+            }
+        }
     });
 });
 
