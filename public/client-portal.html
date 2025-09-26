@@ -1122,7 +1122,12 @@
 
 <script type="module">
 import { authService, db } from './firebase-config.js';
-import { doc, getDoc, collection, getDocs, query, where } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+import { doc, getDoc, collection, getDocs, getDocsFromServer, query, where } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+
+// Prefer server data to avoid cache→server jump (42→334).
+// Fallback to getDocs if getDocsFromServer is unavailable.
+const runGetDocs = (typeof getDocsFromServer === 'function') ? getDocsFromServer : getDocs;
+
 import Pagination from './js/pagination.js';
 
 // Kullanıcı bilgilerini üst çubuğa yerleştirme
@@ -1357,7 +1362,7 @@ async function fetchAndDisplayPortfolio() {
                 portfolioRef,
                 where("personsRelatedIds", "array-contains-any", linkedPersonIds)
             );
-            const snap1 = await getDocs(q1);
+            const snap1 = await runGetDocs(q1);
             snap1.forEach(doc => {
                 allPortfolios.push({ id: doc.id, ...doc.data() });
             });
@@ -1371,7 +1376,7 @@ async function fetchAndDisplayPortfolio() {
         console.log("🔄 Applicants array'i ile filtreleme başlatılıyor...");
 
         const allIpQuery = query(collection(db, "ipRecords"));
-        const allIpSnap = await getDocs(allIpQuery);
+        const allIpSnap = await runGetDocs(allIpQuery);
 
         console.log(`📥 Toplam ${allIpSnap.size} ipRecord çekildi, filtreleme başlıyor...`);
 
@@ -1467,10 +1472,10 @@ async function fetchAndDisplayPortfolio() {
 async function populateDashboardNumbers(linkedPersonIds, allPortfolios){
     const portfolioCount = allPortfolios.length;
     const taskQ = query(collection(db, "tasks"), where("personsRelatedIds", "array-contains-any", linkedPersonIds), where("status","==","müvekkil onayı bekliyor"));
-    const taskSnap = await getDocs(taskQ);
+    const taskSnap = await runGetDocs(taskQ);
     const pendingTasks = taskSnap.size;
     const accrualQ = query(collection(db, "accruals"), where("personsRelatedIds", "array-contains-any", linkedPersonIds), where("isPaid","==", false));
-    const accrualSnap = await getDocs(accrualQ);
+    const accrualSnap = await runGetDocs(accrualQ);
     const unpaidInvoices = accrualSnap.size;
     const statValues = document.querySelectorAll('#dashboard .stat-value');
     if (statValues[0]) statValues[0].textContent = portfolioCount;
@@ -1603,7 +1608,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
 async function fetchAndDisplayTasks(linkedPersonIds){
     const q = query(collection(db, "tasks"), where("personsRelatedIds", "array-contains-any", linkedPersonIds));
-    const snap = await getDocs(q);
+    const snap = await runGetDocs(q);
     const container = document.querySelector('#tasks .row');
     container.innerHTML = '';
     snap.forEach(docSnap => {
@@ -1629,7 +1634,7 @@ async function fetchAndDisplayTasks(linkedPersonIds){
 
 async function fetchAndDisplayInvoices(linkedPersonIds){
     const q = query(collection(db, "accruals"), where("personsRelatedIds", "array-contains-any", linkedPersonIds));
-    const snap = await getDocs(q);
+    const snap = await runGetDocs(q);
     const tableBody = document.querySelector('#invoices table tbody');
     tableBody.innerHTML = '';
     snap.forEach(d => {
