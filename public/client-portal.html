@@ -23,18 +23,11 @@
         .dark-mode #sidebar .nav-link { 
             color: #b0b8c0;
         }
-        /* Hover yumuşak, aktif belirgin */
-        .dark-mode #sidebar .nav-link:hover {
-            background-color: #3a3f45;
-            color: #b0b8c0;
-            transform: translateX(3px);
-        }
-        .dark-mode #sidebar .nav-link.active {
+        .dark-mode #sidebar .nav-link:hover, .dark-mode #sidebar .nav-link.active {
             background-color: #40444b;
             color: #4da6ff; 
             transform: translateX(5px);
         }
-
         .dark-mode .header-title { 
             color: #f8f9fa;
         }
@@ -404,6 +397,11 @@
 #marka-list th.col-status, #marka-list td.col-status { width: 10%; white-space: nowrap; }
 #marka-list th.col-classes, #marka-list td.col-classes { width: 16%; white-space: nowrap; }
 #marka-list td, #marka-list th { vertical-align: middle; }
+
+/* Dashboard cards clickable */
+#cardPortfolio, #cardPending, #cardInvoices,
+#dashboard .card.position-relative { cursor: pointer; }
+
 </style>
 
 <style>
@@ -569,15 +567,23 @@
     <div id="sidebar">
         <h4 class="header-title text-center mb-4">Evreka Portalı</h4>
         <ul class="nav flex-column">
-            <li class="nav-item"><a class="nav-link active" href="#dashboard" data-toggle="tab" data-toggle="tab" role="tab" aria-selected="false" aria-controls="dashboard"><i class="fas fa-tachometer-alt mr-2"></i>Dashboard</a></li>
+            <li class="nav-item"><a class="nav-link active" href="#dashboard" data-toggle="tab"><i class="fas fa-tachometer-alt mr-2"></i>Dashboard</a></li>
             <li class="nav-item">
-                <a class="nav-link" href="#portfolio-content" data-toggle="tab" role="tab" aria-selected="false" data-toggle="tab" role="tab" aria-controls="portfolio-content">
+                <a class="nav-link" href="#portfolio-content" data-toggle="collapse" data-target="#portfoy-accordion" aria-expanded="false" aria-controls="portfoy-accordion">
                     <i class="fas fa-folder-open mr-2"></i>Portföyüm
                 </a>
-                </li>
-            <li class="nav-item"><a class="nav-link" href="#tasks" data-toggle="tab" data-toggle="tab" role="tab" aria-selected="false" aria-controls="tasks"><i class="fas fa-tasks mr-2"></i>İşlerim</a></li>
-            <li class="nav-item"><a class="nav-link" href="#invoices" data-toggle="tab" data-toggle="tab" role="tab" aria-selected="false" aria-controls="invoices"><i class="fas fa-file-invoice-dollar mr-2"></i>Faturalarım</a></li>
-            <li class="nav-item"><a class="nav-link" href="#reports" data-toggle="tab" data-toggle="tab" role="tab" aria-selected="false" aria-controls="reports"><i class="fas fa-chart-bar mr-2"></i>Raporlar</a></li>
+                <div class="collapse" id="portfoy-accordion" data-parent="#sidebar">
+                    <ul class="nav flex-column ml-3">
+                        <li class="nav-item"><a class="nav-link" href="#marka-list" data-list-id="marka-list" data-toggle="tab">Marka</a></li>
+                        <li class="nav-item"><a class="nav-link" href="#patent-list" data-list-id="patent-list" data-toggle="tab">Patent</a></li>
+                        <li class="nav-item"><a class="nav-link" href="#tasarim-list" data-list-id="tasarim-list" data-toggle="tab">Tasarım</a></li>
+                        <li class="nav-item"><a class="nav-link" href="#dava-itiraz-list" data-list-id="dava-itiraz-list" data-toggle="tab">Dava/İtiraz</a></li>
+                    </ul>
+                </div>
+            </li>
+            <li class="nav-item"><a class="nav-link" href="#tasks" data-toggle="tab"><i class="fas fa-tasks mr-2"></i>İşlerim</a></li>
+            <li class="nav-item"><a class="nav-link" href="#invoices" data-toggle="tab"><i class="fas fa-file-invoice-dollar mr-2"></i>Faturalarım</a></li>
+            <li class="nav-item"><a class="nav-link" href="#reports" data-toggle="tab"><i class="fas fa-chart-bar mr-2"></i>Raporlar</a></li>
         </ul>
     </div>
 
@@ -589,11 +595,11 @@
                 
                 <div class="row mt-5">
                     <div class="col-md-12 mb-4">
-                        <div class="card p-4 text-center d-flex align-items-center flex-row justify-content-center">
+                        <div class="card position-relative p-4 text-center d-flex align-items-center flex-row justify-content-center" id="cardInvoices" id="cardPending" id="cardPortfolio"><a class="stretched-link" href="#" data-target-tab="#invoices" aria-label="Ödenmemiş Fatura"></a><a class="stretched-link" href="#" data-target-tab="#tasks" aria-label="Onay Bekleyen İşlem"></a><a class="stretched-link" href="#" data-target-tab="#portfolio-content" aria-label="Portföy Kaydım"></a>
                             <i class="fas fa-folder-open stat-icon text-info mr-4"></i>
                             <div>
-                                <div id="dashPortfolio" class="stat-value">0</div>
-                                <div class="card" id="cardPortfolio">Portföy Kaydım</div>
+                                <div class="stat-value">42</div>
+                                <div class="stat-label">Portföy Kaydım</div>
                             </div>
                         </div>
                     </div>
@@ -601,8 +607,8 @@
                         <div class="card p-4 text-center d-flex align-items-center flex-row justify-content-center">
                             <i class="fas fa-tasks stat-icon text-warning mr-4"></i>
                             <div>
-                                <div id="dashPendingApprovals" class="stat-value">0</div>
-                                <div class="card" id="cardPending">Onay Bekleyen İşlem</div>
+                                <div class="stat-value">5</div>
+                                <div class="stat-label">Onay Bekleyen İşlem</div>
                             </div>
                         </div>
                     </div>
@@ -610,8 +616,8 @@
                         <div class="card p-4 text-center d-flex align-items-center flex-row justify-content-center">
                             <i class="fas fa-file-invoice-dollar stat-icon text-success mr-4"></i>
                             <div>
-                                <div id="dashUnpaidInvoices" class="stat-value">0</div>
-                                <div class="card" id="cardInvoices">Ödenmemiş Fatura</div>
+                                <div class="stat-value">2</div>
+                                <div class="stat-label">Ödenmemiş Fatura</div>
                             </div>
                         </div>
                     </div>
@@ -1121,37 +1127,8 @@
 
 <script type="module">
 import { authService, db } from './firebase-config.js';
-import { doc, getDoc, collection, getDocs, getDocsFromServer, query, where } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+import { doc, getDoc, collection, getDocs, query, where } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 import Pagination from './js/pagination.js';
-
-// --- Dashboard sayaç kontrolü ---
-// Destek varsa cache yerine sunucudan oku:
-const runGetDocs = (typeof getDocsFromServer === 'function') ? getDocsFromServer : getDocs;
-
-// Sayfa ilk yüklenirken tüm sayaçları 0'a çek
-function setDashboardZeros() {
-  const map = {
-    // Bu id'leri projendeki gerçek id'lerle eşleştir:
-    '#dashPortfolio': 0,            // Toplam portföy
-    '#dashPendingApprovals': 0,     // Onay bekleyen işlem
-    '#dashUnpaidInvoices': 0        // Ödenmemiş fatura
-  };
-  Object.entries(map).forEach(([sel, val]) => {
-    const el = document.querySelector(sel) || document.querySelector(`[data-dash-key="${sel.replace('#dash','').toLowerCase()}"]`);
-    if (el) el.textContent = val;
-  });
-}
-
-// Veriler tamamlanmadan gelen "erken" güncellemeleri yok saymak için
-let DASH_LOADING = true;
-function setDashboardLoading(v){ DASH_LOADING = !!v; }
-
-// populateDashboardNumbers içinde güvenli yazım
-function writeDashSafe(selector, value) {
-  if (DASH_LOADING) return;  // erken çağrıları görmezden gel
-  const el = document.querySelector(selector) || document.querySelector(`[data-dash-key="${selector.replace('#dash','').toLowerCase()}"]`);
-  if (el) el.textContent = value;
-}
 
 // Kullanıcı bilgilerini üst çubuğa yerleştirme
 function populateUserInfo() {
@@ -1271,13 +1248,13 @@ function populatePortfolioTable(tableId, portfolioData) {
         const brandImg = item.brandImageUrl || item.brandImage || '';
         const imgHtml = brandImg ? `<img src="${brandImg}" alt="marka" class="brand-thumb" style="height:128px !important;width:auto;border-radius:6px;object-fit:contain;"/>` : '-';
         const rowHtml = `
-        <td class="col-index">${isInternational ? `<i class="fas fa-chevron-down mr-2"></i>` : ''}${index + 1}</td>
-        <td class="col-sample">${imgHtml}</td>
-        <td class="col-brand"><a href="#" data-toggle="modal" data-target="#portfolioDetailModal">${title}</a></td>
-        <td class="col-appno">${appNumber}</td>
-        <td class="col-appdate">${applicationDate}</td>
-        <td class="col-status"><span class="badge badge-${badgeClass}">${statusText}</span></td>
-        <td class="col-classes">${classes}</td>
+            <td>${isInternational ? `<i class="fas fa-chevron-down mr-2"></i>` : ''}${index + 1}</td>
+            <td>${imgHtml}</td>
+            <td><a href="#" data-toggle="modal" data-target="#portfolioDetailModal">${title}</a></td>
+            <td>${appNumber}</td>
+            <td>${applicationDate}</td>
+            <td><span class="badge badge-${badgeClass}">${statusText}</span></td>
+            <td>${classes}</td>
         `;
 
         mainRow.innerHTML = rowHtml;
@@ -1378,8 +1355,6 @@ async function fetchAndDisplayPortfolio() {
             linkedPersonIds,
             linkedPersonCount: linkedPersonIds.length
         });
-        setDashboardLoading(true);
-        setDashboardZeros();
 
         // Strateji 1: personsRelatedIds ile hızlı query dene (muhtemelen boş dönecek)
         try {
@@ -1387,7 +1362,7 @@ async function fetchAndDisplayPortfolio() {
                 portfolioRef,
                 where("personsRelatedIds", "array-contains-any", linkedPersonIds)
             );
-            const snap1 = await runGetDocs(q1);
+            const snap1 = await getDocs(q1);
             snap1.forEach(doc => {
                 allPortfolios.push({ id: doc.id, ...doc.data() });
             });
@@ -1401,7 +1376,7 @@ async function fetchAndDisplayPortfolio() {
         console.log("🔄 Applicants array'i ile filtreleme başlatılıyor...");
 
         const allIpQuery = query(collection(db, "ipRecords"));
-        const allIpSnap = await runGetDocs(allIpQuery);
+        const allIpSnap = await getDocs(allIpQuery);
 
         console.log(`📥 Toplam ${allIpSnap.size} ipRecord çekildi, filtreleme başlıyor...`);
 
@@ -1479,7 +1454,6 @@ async function fetchAndDisplayPortfolio() {
         populatePortfolioTable('#patent-list', patentList);
         populatePortfolioTable('#tasarim-list', tasarimList);
         populatePortfolioTable('#dava-itiraz-list', davaIItirazList);
-        setDashboardLoading(false);
 
         // Dashboard sayaçlarını doldur
         await populateDashboardNumbers(linkedPersonIds, allPortfolios);
@@ -1498,14 +1472,15 @@ async function fetchAndDisplayPortfolio() {
 async function populateDashboardNumbers(linkedPersonIds, allPortfolios){
     const portfolioCount = allPortfolios.length;
     const taskQ = query(collection(db, "tasks"), where("personsRelatedIds", "array-contains-any", linkedPersonIds), where("status","==","müvekkil onayı bekliyor"));
-    const taskSnap = await runGetDocs(taskQ);
+    const taskSnap = await getDocs(taskQ);
     const pendingTasks = taskSnap.size;
     const accrualQ = query(collection(db, "accruals"), where("personsRelatedIds", "array-contains-any", linkedPersonIds), where("isPaid","==", false));
-    const accrualSnap = await runGetDocs(accrualQ);
+    const accrualSnap = await getDocs(accrualQ);
     const unpaidInvoices = accrualSnap.size;
-    writeDashSafe('#dashPortfolio',        portfolioCount);
-    writeDashSafe('#dashPendingApprovals', pendingTasks);
-    writeDashSafe('#dashUnpaidInvoices',   unpaidInvoices);
+    const statValues = document.querySelectorAll('#dashboard .stat-value');
+    if (statValues[0]) statValues[0].textContent = portfolioCount;
+    if (statValues[1]) statValues[1].textContent = pendingTasks;
+    if (statValues[2]) statValues[2].textContent = unpaidInvoices;
 }
 
 // Sayfa yüklendiğinde tüm fonksiyonları başlat
@@ -1513,19 +1488,7 @@ document.addEventListener('DOMContentLoaded', function () {
     initTheme();
     populateUserInfo();
     fetchAndDisplayPortfolio();
-
-    // --- Sidebar tab click kontrolü ---
-    const $ = window.jQuery; // bootstrap.bundle yüklü; jQuery globalde mevcut
-    if ($) {
-        // Sidebar içindeki tab linklerine tıklandığında sadece biri aktif kalsın
-        $('#sidebar a[data-toggle="tab"]').on('show.bs.tab', function (e) {
-            $('#sidebar .nav-link').removeClass('active');
-            $(e.target).addClass('active');
-        });
-
-        }
 });
-
 
 // Diğer tüm scriptler
 (function(){
@@ -1617,48 +1580,35 @@ document.addEventListener('DOMContentLoaded', function () {
   });
 })();
 
-// Client Portal menü aktif durumu yönetimi
-$(document).ready(function() {
-    // Ana menü linklerine click event ekle (İşlerim, Faturalarım, Raporlar)
-    $('.nav-link[data-toggle="tab"]:not(#portfoy-accordion .nav-link)').on('click', function() {
-        // Tüm ana menü nav-link'lerden active sınıfını kaldır
-        $('.sidebar .nav-link').removeClass('active');
-        // Tıklanan linke active sınıfını ekle
-        $(this).addClass('active');
-    });
-    
-    // Portföyüm dropdown için özel yönetim
-    $('a[data-target="#portfoy-accordion"]').on('click', function() {
-        // Tüm ana menü nav-link'lerden active sınıfını kaldır
-        $('.sidebar .nav-link').removeClass('active');
-        // Portföyüm linkine active sınıfını ekle
-        $(this).addClass('active');
-        
-        // Portfolio content'i göster
+(function(){
+    $(document).off('click.portfoyumOpen')
+    .on('click.portfoyumOpen', 'a[href="#portfolio-content"], #sidebar a[data-target="#portfolio-content"]', function(e){
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+
         $('.tab-pane').removeClass('show active');
         $('#portfolio-content').addClass('show active');
-        
-        // İlk tab'ı (Marka) aktif yap
-        setTimeout(() => {
-            $('#portfolioTopTabs a[href="#marka-list"]').tab('show');
-        }, 100);
-        
-        // Menşe filtresi uygula
+
+        var $markaTab = $('#portfolioTopTabs a[href="#marka-list"]');
+        if ($markaTab.length && $markaTab.tab) {
+          $markaTab.tab('show');
+        } else {
+          $('#portfolioTopTabs a').removeClass('active');
+          $markaTab.addClass('active');
+          $('#marka-list').addClass('show active');
+        }
+
         if (typeof applyMenseFilterToActivePane === 'function') {
           try { applyMenseFilterToActivePane(); } catch(_) {}
         }
+        return false;
     });
-    
-    // Portföy alt menüsü linklerine tıklandığında
-    $('#portfoy-accordion a[data-toggle="tab"]').on('click', function() {
-        // Ana portföyüm linkinin active durumunu koru
-        $('a[data-target="#portfoy-accordion"]').addClass('active');
-    });
-});
+})();
 
 async function fetchAndDisplayTasks(linkedPersonIds){
     const q = query(collection(db, "tasks"), where("personsRelatedIds", "array-contains-any", linkedPersonIds));
-    const snap = await runGetDocs(q);
+    const snap = await getDocs(q);
     const container = document.querySelector('#tasks .row');
     container.innerHTML = '';
     snap.forEach(docSnap => {
@@ -1684,7 +1634,7 @@ async function fetchAndDisplayTasks(linkedPersonIds){
 
 async function fetchAndDisplayInvoices(linkedPersonIds){
     const q = query(collection(db, "accruals"), where("personsRelatedIds", "array-contains-any", linkedPersonIds));
-    const snap = await runGetDocs(q);
+    const snap = await getDocs(q);
     const tableBody = document.querySelector('#invoices table tbody');
     tableBody.innerHTML = '';
     snap.forEach(d => {
@@ -1806,48 +1756,22 @@ window.addEventListener('load', function() {
     }, 1000);
 });
 
-// --- Sidebar / Top-level tab behavior ---
-(function(){
-  var $ = window.jQuery;
-  if (!$) return;
-  // Click: show tab via Bootstrap and prevent default anchor jump scroll
-  $('#sidebar a[data-toggle="tab"]').on('click', function(e){
-    e.preventDefault();
-    $(this).tab('show');
-  });
-  // When a top-level tab is shown, mark only it as active and update hash
-  $('#sidebar a[data-toggle="tab"]').on('shown.bs.tab', function(e){
-    $('#sidebar .nav-link').removeClass('active');
-    $(e.target).addClass('active');
-    var href = $(e.target).attr('href');
-    if (href && href.startsWith('#')) {
-      history.replaceState(null, '', href);
-    }
-  });
-  // Open tab from URL hash on load / hashchange
-  function openHashTab(){
-    var hash = window.location.hash;
-    if (hash && $('#sidebar a[data-toggle="tab"][href="'+hash+'"]').length) {
-      $('#sidebar a[data-toggle="tab"][href="'+hash+'"]').tab('show');
-    }
-  }
-  $(window).on('hashchange', openHashTab);
-  // Initial: if no hash, show dashboard
-  if (window.location.hash) openHashTab();
-  else $('#sidebar a[data-toggle="tab"][href="#dashboard"]').tab('show');
-})();
 
+// --- Dashboard cards: click anywhere to open related tab ---
 (function(){
   var $ = window.jQuery;
-  if (!$) return;
   function openTab(target){
+    if (!$) { window.location.hash = target; return; }
     var $link = $('#sidebar a[data-toggle="tab"][href="'+target+'"]');
     if ($link.length){ $link.tab('show'); }
     try { window.scrollTo({top: 0, behavior: 'smooth'}); } catch(_) {}
   }
-  $('#cardPortfolio').css('cursor','pointer').on('click', () => openTab('#portfolio-content'));
-  $('#cardPending').css('cursor','pointer').on('click', () => openTab('#tasks-content'));
-  $('#cardInvoices').css('cursor','pointer').on('click', () => openTab('#invoices-content'));
+  document.querySelectorAll('.stretched-link[data-target-tab]').forEach(function(a){
+    a.addEventListener('click', function(e){
+      e.preventDefault();
+      openTab(a.getAttribute('data-target-tab'));
+    });
+  });
 })();
 
 </script>
