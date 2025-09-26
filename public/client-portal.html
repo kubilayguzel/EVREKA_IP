@@ -495,6 +495,24 @@
     z-index: 999;
     position: relative;
 }
+/* Marka Örneği kolonu ortalama */
+#marka-list th.col-sample,
+#marka-list td.col-sample { 
+  text-align: center;
+}
+
+#marka-list td.col-sample {
+  display: flex;               /* görseli tam ortalamak için */
+  align-items: center;
+  justify-content: center;
+}
+
+/* Görselin kendi hizası */
+#marka-list img.brand-thumb {
+  display: block;
+  margin: 0 auto;
+}
+
 
 </style>
 
@@ -645,7 +663,7 @@
                             <thead>
                                 <tr>
                                     <th class="col-index">#</th>
-                                    <th class="col-sample">Marka Örneği</th>
+                                    <th class="col-sample text-center">Marka Örneği</th>
                                     <th class="col-brand">Marka</th>
                                     <th class="col-appno">Başvuru No</th>
                                     <th class="col-appdate">Başvuru Tarihi</th>
