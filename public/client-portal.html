@@ -1379,6 +1379,8 @@ async function fetchAndDisplayPortfolio() {
             linkedPersonIds,
             linkedPersonCount: linkedPersonIds.length
         });
+        setDashboardLoading(true);
+        setDashboardZeros();
 
         // Strateji 1: personsRelatedIds ile hızlı query dene (muhtemelen boş dönecek)
         try {
@@ -1478,6 +1480,7 @@ async function fetchAndDisplayPortfolio() {
         populatePortfolioTable('#patent-list', patentList);
         populatePortfolioTable('#tasarim-list', tasarimList);
         populatePortfolioTable('#dava-itiraz-list', davaIItirazList);
+        setDashboardLoading(false);
 
         // Dashboard sayaçlarını doldur
         await populateDashboardNumbers(linkedPersonIds, allPortfolios);
@@ -1501,10 +1504,9 @@ async function populateDashboardNumbers(linkedPersonIds, allPortfolios){
     const accrualQ = query(collection(db, "accruals"), where("personsRelatedIds", "array-contains-any", linkedPersonIds), where("isPaid","==", false));
     const accrualSnap = await runGetDocs(accrualQ);
     const unpaidInvoices = accrualSnap.size;
-    const statValues = document.querySelectorAll('#dashboard .stat-value');
-    if (statValues[0]) statValues[0].textContent = portfolioCount;
-    if (statValues[1]) statValues[1].textContent = pendingTasks;
-    if (statValues[2]) statValues[2].textContent = unpaidInvoices;
+    writeDashSafe('#dashPortfolio',        portfolioCount);
+    writeDashSafe('#dashPendingApprovals', pendingTasks);
+    writeDashSafe('#dashUnpaidInvoices',   unpaidInvoices);
 }
 
 // Sayfa yüklendiğinde tüm fonksiyonları başlat
