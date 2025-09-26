@@ -1123,12 +1123,36 @@
 <script type="module">
 import { authService, db } from './firebase-config.js';
 import { doc, getDoc, collection, getDocs, getDocsFromServer, query, where } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+import Pagination from './js/pagination.js';
 
-// Prefer server data to avoid cache→server jump (42→334).
-// Fallback to getDocs if getDocsFromServer is unavailable.
+// --- Dashboard sayaç kontrolü ---
+// Destek varsa cache yerine sunucudan oku:
 const runGetDocs = (typeof getDocsFromServer === 'function') ? getDocsFromServer : getDocs;
 
-import Pagination from './js/pagination.js';
+// Sayfa ilk yüklenirken tüm sayaçları 0'a çek
+function setDashboardZeros() {
+  const map = {
+    // Bu id'leri projendeki gerçek id'lerle eşleştir:
+    '#dashPortfolio': 0,            // Toplam portföy
+    '#dashPendingApprovals': 0,     // Onay bekleyen işlem
+    '#dashUnpaidInvoices': 0        // Ödenmemiş fatura
+  };
+  Object.entries(map).forEach(([sel, val]) => {
+    const el = document.querySelector(sel) || document.querySelector(`[data-dash-key="${sel.replace('#dash','').toLowerCase()}"]`);
+    if (el) el.textContent = val;
+  });
+}
+
+// Veriler tamamlanmadan gelen "erken" güncellemeleri yok saymak için
+let DASH_LOADING = true;
+function setDashboardLoading(v){ DASH_LOADING = !!v; }
+
+// populateDashboardNumbers içinde güvenli yazım
+function writeDashSafe(selector, value) {
+  if (DASH_LOADING) return;  // erken çağrıları görmezden gel
+  const el = document.querySelector(selector) || document.querySelector(`[data-dash-key="${selector.replace('#dash','').toLowerCase()}"]`);
+  if (el) el.textContent = value;
+}
 
 // Kullanıcı bilgilerini üst çubuğa yerleştirme
 function populateUserInfo() {
@@ -1580,20 +1604,20 @@ document.addEventListener('DOMContentLoaded', function () {
   });
 })();
 
-// Portföyüm menü aktif durumu yönetimi
+// Client Portal menü aktif durumu yönetimi
 $(document).ready(function() {
-    // Menü linklerine click event ekle
-    $('.nav-link[data-toggle="tab"]').on('click', function() {
-        // Tüm nav-link'lerden active sınıfını kaldır
-        $('.nav-link').removeClass('active');
+    // Ana menü linklerine click event ekle (İşlerim, Faturalarım, Raporlar)
+    $('.nav-link[data-toggle="tab"]:not(#portfoy-accordion .nav-link)').on('click', function() {
+        // Tüm ana menü nav-link'lerden active sınıfını kaldır
+        $('.sidebar .nav-link').removeClass('active');
         // Tıklanan linke active sınıfını ekle
         $(this).addClass('active');
     });
     
     // Portföyüm dropdown için özel yönetim
     $('a[data-target="#portfoy-accordion"]').on('click', function() {
-        // Tüm nav-link'lerden active sınıfını kaldır
-        $('.nav-link').removeClass('active');
+        // Tüm ana menü nav-link'lerden active sınıfını kaldır
+        $('.sidebar .nav-link').removeClass('active');
         // Portföyüm linkine active sınıfını ekle
         $(this).addClass('active');
         
