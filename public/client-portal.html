@@ -495,6 +495,11 @@
     z-index: 999;
     position: relative;
 }
+/* Marka Örneği kolonu ortalama */
+#marka-list th.col-sample, 
+#marka-list td.col-sample { 
+    text-align: center !important; 
+}
 </style>
 
 </head>
@@ -1591,63 +1596,103 @@ async function fetchAndDisplayInvoices(linkedPersonIds){
     });
 }
 </script>
-
-<script type="module">
-import Pagination from './js/pagination.js';
-
-// Global değişkenler
-window.__markaData = [];
-window.__pagination = null;
-window.__originalPopulate = null;
-
-// Marka sayfası render fonksiyonu
-window.renderMarkaPage = function(page=1, perPage=10){
-    const start = (page-1) * perPage;
-    const end = start + perPage;
-    const slice = window.__markaData.slice(start, end);
-    if (window.__originalPopulate) {
-        window.__originalPopulate('#marka-list', slice);
-    }
+<script>
+// Basit pagination implementasyonu - module import sorunu için
+window.markaPaginationData = {
+    allData: [],
+    currentPage: 1,
+    itemsPerPage: 10,
+    totalPages: 0
 };
 
-// Pagination'ı DOMContentLoaded'dan sonra setup et
-document.addEventListener('DOMContentLoaded', function() {
-    // Original populatePortfolioTable fonksiyonunu bekle
-    const waitForFunction = setInterval(() => {
-        if (typeof window.populatePortfolioTable === 'function') {
-            clearInterval(waitForFunction);
+window.renderMarkaPagination = function() {
+    const data = window.markaPaginationData;
+    const container = document.getElementById('markaPagination');
+    
+    if (!container || data.allData.length === 0) return;
+    
+    data.totalPages = Math.ceil(data.allData.length / data.itemsPerPage);
+    
+    let html = '<div class="pagination-wrapper" style="display:flex; justify-content:space-between; align-items:center; padding:15px; background:rgba(255,255,255,0.9); border-radius:12px; margin-top:20px;">';
+    
+    // Sayfa bilgisi
+    const start = (data.currentPage - 1) * data.itemsPerPage + 1;
+    const end = Math.min(data.currentPage * data.itemsPerPage, data.allData.length);
+    html += `<div style="font-size:14px; color:#555;">Toplam ${data.allData.length} kayıt (${start}-${end} arası gösteriliyor)</div>`;
+    
+    // Pagination butonları
+    if (data.totalPages > 1) {
+        html += '<div style="display:flex; gap:5px;">';
+        
+        // İlk sayfa
+        html += `<button onclick="window.goToMarkaPage(1)" ${data.currentPage === 1 ? 'disabled' : ''} style="padding:8px 12px; border:1px solid #ddd; background:white; color:#333; border-radius:6px; cursor:pointer;">İlk</button>`;
+        
+        // Önceki
+        html += `<button onclick="window.goToMarkaPage(${data.currentPage - 1})" ${data.currentPage === 1 ? 'disabled' : ''} style="padding:8px 12px; border:1px solid #ddd; background:white; color:#333; border-radius:6px; cursor:pointer;">Önceki</button>`;
+        
+        // Sayfa numaraları
+        const startPage = Math.max(1, data.currentPage - 2);
+        const endPage = Math.min(data.totalPages, data.currentPage + 2);
+        
+        for (let i = startPage; i <= endPage; i++) {
+            const isActive = i === data.currentPage;
+            html += `<button onclick="window.goToMarkaPage(${i})" style="padding:8px 12px; border:1px solid ${isActive ? '#007bff' : '#ddd'}; background:${isActive ? '#007bff' : 'white'}; color:${isActive ? 'white' : '#333'}; border-radius:6px; cursor:pointer; font-weight:${isActive ? '600' : 'normal'};">${i}</button>`;
+        }
+        
+        // Sonraki
+        html += `<button onclick="window.goToMarkaPage(${data.currentPage + 1})" ${data.currentPage === data.totalPages ? 'disabled' : ''} style="padding:8px 12px; border:1px solid #ddd; background:white; color:#333; border-radius:6px; cursor:pointer;">Sonraki</button>`;
+        
+        // Son sayfa
+        html += `<button onclick="window.goToMarkaPage(${data.totalPages})" ${data.currentPage === data.totalPages ? 'disabled' : ''} style="padding:8px 12px; border:1px solid #ddd; background:white; color:#333; border-radius:6px; cursor:pointer;">Son</button>`;
+        
+        html += '</div>';
+    }
+    
+    html += '</div>';
+    container.innerHTML = html;
+};
+
+window.goToMarkaPage = function(page) {
+    const data = window.markaPaginationData;
+    if (page < 1 || page > data.totalPages || page === data.currentPage) return;
+    
+    data.currentPage = page;
+    
+    // Mevcut sayfadaki verileri render et
+    const start = (page - 1) * data.itemsPerPage;
+    const end = start + data.itemsPerPage;
+    const pageData = data.allData.slice(start, end);
+    
+    if (window.__originalPopulate) {
+        window.__originalPopulate('#marka-list', pageData);
+    }
+    
+    window.renderMarkaPagination();
+};
+
+// populatePortfolioTable'ı intercept et
+window.addEventListener('load', function() {
+    setTimeout(() => {
+        if (typeof populatePortfolioTable === 'function') {
+            window.__originalPopulate = populatePortfolioTable;
             
-            // Original fonksiyonu sakla
-            window.__originalPopulate = window.populatePortfolioTable;
-            
-            // Override et
             window.populatePortfolioTable = function(tableId, data) {
                 if (tableId === '#marka-list') {
-                    window.__markaData = Array.isArray(data) ? data : [];
+                    window.markaPaginationData.allData = Array.isArray(data) ? data : [];
+                    window.markaPaginationData.currentPage = 1;
                     
-                    // Pagination container'ının var olduğunu kontrol et
-                    const paginationContainer = document.getElementById('markaPagination');
-                    if (paginationContainer) {
-                        if (!window.__pagination) {
-                            window.__pagination = new Pagination({
-                                itemsPerPage: 10,
-                                containerId: 'markaPagination',
-                                onPageChange: ({page, itemsPerPage}) => window.renderMarkaPage(page, itemsPerPage),
-                            });
-                        }
-                        
-                        window.__pagination.setTotalItems(window.__markaData.length);
-                        window.renderMarkaPage(1, window.__pagination.getItemsPerPage());
-                    } else {
-                        // Container yoksa normal populate yap
-                        window.__originalPopulate(tableId, data);
-                    }
+                    // İlk sayfayı göster
+                    const firstPageData = window.markaPaginationData.allData.slice(0, window.markaPaginationData.itemsPerPage);
+                    window.__originalPopulate('#marka-list', firstPageData);
+                    
+                    // Pagination'ı render et
+                    window.renderMarkaPagination();
                 } else {
                     window.__originalPopulate(tableId, data);
                 }
             };
         }
-    }, 100);
+    }, 1000);
 });
 </script>
 </body>
