@@ -528,24 +528,19 @@
     z-index: 999;
     position: relative;
 }
-/* Marka Örneği kolonu ortalama */
-#marka-list th.col-sample,
-#marka-list td.col-sample { 
-  text-align: center;
-}
 
+/* Görselin kendi hizası */
 #marka-list td.col-sample {
-  display: flex;               /* görseli tam ortalamak için */
-  align-items: center;
-  justify-content: center;
+  text-align: center;         /* İçindeki metin/görseli yatay ortala */
+  vertical-align: middle;     /* İçeriği dikey ortala (Zaten default olabilir ama emin olmak için) */
+  /* display: flex; ve align-items: center; satırlarını kaldır! */
 }
 
 /* Görselin kendi hizası */
 #marka-list img.brand-thumb {
   display: block;
-  margin: 0 auto;
+  margin: 0 auto;             /* Görseli yatay ortala */
 }
-
 
 </style>
 
@@ -1652,7 +1647,7 @@ $(document).ready(function() {
         // Ana portföyüm linkinin active durumunu koru
         $('a[data-target="#portfoy-accordion"]').addClass('active');
     });
-    
+
     // Dashboard'daki kartlara tıklama işlevselliği ekleme
     $('[data-target-tab]').on('click', function() {
         const targetTabId = $(this).data('target-tab');
