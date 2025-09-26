@@ -569,23 +569,15 @@
     <div id="sidebar">
         <h4 class="header-title text-center mb-4">Evreka Portalı</h4>
         <ul class="nav flex-column">
-            <li class="nav-item"><a class="nav-link active" href="#dashboard" data-toggle="tab"><i class="fas fa-tachometer-alt mr-2"></i>Dashboard</a></li>
+            <li class="nav-item"><a class="nav-link active" href="#dashboard" data-toggle="tab" data-toggle="tab" role="tab" aria-selected="false" aria-controls="dashboard"><i class="fas fa-tachometer-alt mr-2"></i>Dashboard</a></li>
             <li class="nav-item">
-                <a class="nav-link" href="#portfolio-content" data-toggle="tab" role="tab" aria-controls="portfolio-content" aria-selected="false">
+                <a class="nav-link" href="#portfolio-content" data-toggle="tab" role="tab" aria-selected="false" data-toggle="tab" role="tab" aria-controls="portfolio-content">
                     <i class="fas fa-folder-open mr-2"></i>Portföyüm
                 </a>
-                <div class="collapse" id="portfoy-accordion" data-parent="#sidebar">
-                    <ul class="nav flex-column ml-3">
-                        <li class="nav-item"><a class="nav-link" href="#marka-list" data-list-id="marka-list" data-toggle="tab">Marka</a></li>
-                        <li class="nav-item"><a class="nav-link" href="#patent-list" data-list-id="patent-list" data-toggle="tab">Patent</a></li>
-                        <li class="nav-item"><a class="nav-link" href="#tasarim-list" data-list-id="tasarim-list" data-toggle="tab">Tasarım</a></li>
-                        <li class="nav-item"><a class="nav-link" href="#dava-itiraz-list" data-list-id="dava-itiraz-list" data-toggle="tab">Dava/İtiraz</a></li>
-                    </ul>
-                </div>
-            </li>
-            <li class="nav-item"><a class="nav-link" href="#tasks" data-toggle="tab"><i class="fas fa-tasks mr-2"></i>İşlerim</a></li>
-            <li class="nav-item"><a class="nav-link" href="#invoices" data-toggle="tab"><i class="fas fa-file-invoice-dollar mr-2"></i>Faturalarım</a></li>
-            <li class="nav-item"><a class="nav-link" href="#reports" data-toggle="tab"><i class="fas fa-chart-bar mr-2"></i>Raporlar</a></li>
+                </li>
+            <li class="nav-item"><a class="nav-link" href="#tasks" data-toggle="tab" data-toggle="tab" role="tab" aria-selected="false" aria-controls="tasks"><i class="fas fa-tasks mr-2"></i>İşlerim</a></li>
+            <li class="nav-item"><a class="nav-link" href="#invoices" data-toggle="tab" data-toggle="tab" role="tab" aria-selected="false" aria-controls="invoices"><i class="fas fa-file-invoice-dollar mr-2"></i>Faturalarım</a></li>
+            <li class="nav-item"><a class="nav-link" href="#reports" data-toggle="tab" data-toggle="tab" role="tab" aria-selected="false" aria-controls="reports"><i class="fas fa-chart-bar mr-2"></i>Raporlar</a></li>
         </ul>
     </div>
 
@@ -1531,16 +1523,7 @@ document.addEventListener('DOMContentLoaded', function () {
             $(e.target).addClass('active');
         });
 
-        // URL hash ile tab senkronu (sayfa yenileme/derin link)
-        const openHashTab = () => {
-            const hash = window.location.hash;
-            if (hash && $(`a[data-toggle="tab"][href="${hash}"]`).length) {
-                $(`a[data-toggle="tab"][href="${hash}"]`).tab('show');
-            }
-        };
-        $(window).on('hashchange', openHashTab);
-        openHashTab();
-    }
+        }
 });
 
 
@@ -1822,6 +1805,38 @@ window.addEventListener('load', function() {
         }
     }, 1000);
 });
+
+
+// --- Sidebar / Top-level tab behavior ---
+(function(){
+  var $ = window.jQuery;
+  if (!$) return;
+  // Click: show tab via Bootstrap and prevent default anchor jump scroll
+  $('#sidebar a[data-toggle="tab"]').on('click', function(e){
+    e.preventDefault();
+    $(this).tab('show');
+  });
+  // When a top-level tab is shown, mark only it as active and update hash
+  $('#sidebar a[data-toggle="tab"]').on('shown.bs.tab', function(e){
+    $('#sidebar .nav-link').removeClass('active');
+    $(e.target).addClass('active');
+    var href = $(e.target).attr('href');
+    if (href && href.startsWith('#')) {
+      history.replaceState(null, '', href);
+    }
+  });
+  // Open tab from URL hash on load / hashchange
+  function openHashTab(){
+    var hash = window.location.hash;
+    if (hash && $('#sidebar a[data-toggle="tab"][href="'+hash+'"]').length) {
+      $('#sidebar a[data-toggle="tab"][href="'+hash+'"]').tab('show');
+    }
+  }
+  $(window).on('hashchange', openHashTab);
+  // Initial: if no hash, show dashboard
+  if (window.location.hash) openHashTab();
+  else $('#sidebar a[data-toggle="tab"][href="#dashboard"]').tab('show');
+})();
 </script>
 </body>
 </html>
