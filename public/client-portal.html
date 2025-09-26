@@ -619,11 +619,12 @@
                             <thead>
                                 <tr>
                                     <th>#</th>
-                                    <th>Marka Adı</th>
+                                    <th>Marka</th>
+                                    <th>Örnek</th>
                                     <th>Başvuru No</th>
+                                    <th>Başvuru Tarihi</th>
                                     <th>Durum</th>
                                     <th>Sınıflar</th>
-                                    <th>Son İşlem</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -684,6 +685,7 @@
                                                     </tr>
                                                 </tbody>
                                             </table>
+<div id="markaPagination" class="mt-3"></div>
                                         </div>
                                     </td>
                                 </tr>
@@ -1119,12 +1121,24 @@ function populatePortfolioTable(tableId, portfolioData) {
         const appNumber = item.applicationNumber || item.applicationNo || '-';
         const origin = item.origin || 'TÜRKPATENT';
         const statusText = item.status || item.statusText || 'Bilinmiyor';
-        const classes = item.classes 
-            ? (Array.isArray(item.classes) ? item.classes.join(', ') : item.classes)
-            : (item.goodsAndServicesByClass 
-                ? item.goodsAndServicesByClass.map(g => g.classNo).join(', ') 
-                : '-');
-        const lastDate = item.lastTransactionDate || item.applicationDate || '-';
+        const classes = (() => {
+            if (Array.isArray(item.goodsAndServicesByClass) && item.goodsAndServicesByClass.length) {
+                try {
+                    const arr = item.goodsAndServicesByClass
+                        .map(c => parseInt(c.classNo,10))
+                        .filter(n => !isNaN(n));
+                    const uniq = Array.from(new Set(arr)).sort((a,b)=>a-b);
+                    return uniq.join(', ');
+                } catch(_) { /* fallthrough */ }
+            }
+            if (item.classes) {
+                const norm = Array.isArray(item.classes) ? item.classes : String(item.classes).split(',');
+                const uniq = Array.from(new Set(norm.map(x=>parseInt(String(x).trim(),10)).filter(n=>!isNaN(n)))).sort((a,b)=>a-b);
+                return uniq.length ? uniq.join(', ') : '-';
+            }
+            return '-';
+        })();
+        const applicationDate = item.applicationDate || item.application_date || '-';
         
         const badgeClass = {
             'Başvuru': 'primary',
@@ -1137,13 +1151,16 @@ function populatePortfolioTable(tableId, portfolioData) {
             'rejected': 'danger'
         }[statusText] || 'secondary';
 
-        const rowHtml = `
+        const brandImg = item.brandImageUrl || item.brandImage || '';
+const imgHtml = brandImg ? `<img src="${brandImg}" alt="marka" style="height:32px;width:auto;border-radius:4px;object-fit:contain;"/>` : '-';
+const rowHtml = `
             <td>${isInternational ? `<i class="fas fa-chevron-down mr-2"></i>` : ''}${index + 1}</td>
-            <td><a href="#" data-toggle="modal" data-target="#portfolioDetailModal">${title} (${origin})</a></td>
+            <td><a href="#" data-toggle="modal" data-target="#portfolioDetailModal">${title}</a></td>
+            <td>${imgHtml}</td>
             <td>${appNumber}</td>
+            <td>${applicationDate}</td>
             <td><span class="badge badge-${badgeClass}">${statusText}</span></td>
             <td>${classes}</td>
-            <td>${lastDate}</td>
         `;
 
         mainRow.innerHTML = rowHtml;
@@ -1530,5 +1547,44 @@ async function fetchAndDisplayInvoices(linkedPersonIds){
     });
 }
 </script>
+
+<script type="module">
+import Pagination from './js/pagination.js';
+
+// Hook after data load
+const originalPopulate = populatePortfolioTable;
+let __markaData = [];
+
+function renderMarkaPage(page=1, perPage=10){
+    const start = (page-1)*perPage;
+    const end = start + perPage;
+    const slice = __markaData.slice(start, end);
+    // use original renderer but on a temp table? We'll patch populate to accept subset by just calling it with slice
+    originalPopulate('#marka-list', slice);
+}
+
+// After allPortfolios is prepared in loadAndRender function, we will initialize pagination.
+// We attempt to detect when markaList is computed by monkey-patching the call site.
+(function(){
+    const _call = originalPopulate;
+    window.populatePortfolioTable = function(tableId, data){
+        if (tableId === '#marka-list') {
+            __markaData = Array.isArray(data) ? data : [];
+            const pag = new Pagination({
+                itemsPerPage: 10,
+                containerId: 'markaPagination',
+                onPageChange: ({page, itemsPerPage}) => {
+                    renderMarkaPage(page, itemsPerPage);
+                }
+            });
+            pag.setTotalItems(__markaData.length);
+            renderMarkaPage(1, pag.getItemsPerPage());
+        } else {
+            _call(tableId, data);
+        }
+    };
+})();
+</script>
+
 </body>
 </html>
