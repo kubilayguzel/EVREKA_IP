@@ -371,8 +371,7 @@
 #marka-list th.col-status, #marka-list td.col-status { width: 10%; white-space: nowrap; }
 #marka-list th.col-classes, #marka-list td.col-classes { width: 16%; white-space: nowrap; }
 #marka-list td, #marka-list th { vertical-align: middle; }
-#marka-list img.brand-thumb { height: 64px; width: auto; border-radius: 6px; object-fit: contain; } /* 2x */
-
+#marka-list img.brand-thumb { height: 128px; width: auto; border-radius: 6px; object-fit: contain; }
 </style>
 
 <style>
@@ -633,7 +632,7 @@
                                 <tr>
                                     <th class="col-index">#</th>
                                     <th class="col-brand">Marka</th>
-                                    <th class="col-sample">Örnek</th>
+                                    <th class="col-sample">Marka Örneği</th>
                                     <th class="col-appno">Başvuru No</th>
                                     <th class="col-appdate">Başvuru Tarihi</th>
                                     <th class="col-status">Durum</th>
@@ -1581,30 +1580,55 @@ function renderMarkaPage(page=1, perPage=10){
     }
 }
 
-(function waitForPopulate(){
-    if (typeof window.populatePortfolioTable === 'function') {
-        __originalPopulate = window.populatePortfolioTable;
-        window.populatePortfolioTable = function(tableId, data){
+// Global değişkenleri dış scope'da tanımla
+window.__markaData = [];
+window.__pagination = null;
+window.__originalPopulate = null;
+
+function renderMarkaPage(page=1, perPage=10){
+    const start = (page-1) * perPage;
+    const end = start + perPage;
+    const slice = window.__markaData.slice(start, end);
+    if (window.__originalPopulate) {
+        window.__originalPopulate('#marka-list', slice);
+    }
+}
+
+// populatePortfolioTable fonksiyonunu doğru şekilde wrap et
+function setupPagination() {
+    // Original function'ı sakla
+    if (window.populatePortfolioTable) {
+        window.__originalPopulate = window.populatePortfolioTable;
+        
+        // Override et
+        window.populatePortfolioTable = function(tableId, data) {
             if (tableId === '#marka-list') {
-                __markaData = Array.isArray(data) ? data : [];
-                if (!__pagination) {
-                    __pagination = new Pagination({
+                window.__markaData = Array.isArray(data) ? data : [];
+                
+                // Pagination'ı initialize et
+                if (!window.__pagination) {
+                    window.__pagination = new Pagination({
                         itemsPerPage: 10,
                         containerId: 'markaPagination',
                         onPageChange: ({page, itemsPerPage}) => renderMarkaPage(page, itemsPerPage),
                     });
                 }
-                __pagination.setTotalItems(__markaData.length);
-                renderMarkaPage(1, __pagination.getItemsPerPage());
+                
+                // Total items'ı set et ve ilk sayfayı render et
+                window.__pagination.setTotalItems(window.__markaData.length);
+                renderMarkaPage(1, window.__pagination.getItemsPerPage());
             } else {
-                __originalPopulate(tableId, data);
+                // Diğer tablolar için orijinal fonksiyonu çağır
+                window.__originalPopulate(tableId, data);
             }
         };
-    } else {
-        setTimeout(waitForPopulate, 50);
     }
-})();
-</script>
+}
 
+// DOMContentLoaded event'inde pagination'ı setup et
+document.addEventListener('DOMContentLoaded', function () {
+    setupPagination();
+});
+</script>
 </body>
 </html>
