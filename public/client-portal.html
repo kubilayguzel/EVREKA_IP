@@ -23,11 +23,18 @@
         .dark-mode #sidebar .nav-link { 
             color: #b0b8c0;
         }
-        .dark-mode #sidebar .nav-link:hover, .dark-mode #sidebar .nav-link.active {
+        /* Hover yumuşak, aktif belirgin */
+        .dark-mode #sidebar .nav-link:hover {
+            background-color: #3a3f45;
+            color: #b0b8c0;
+            transform: translateX(3px);
+        }
+        .dark-mode #sidebar .nav-link.active {
             background-color: #40444b;
             color: #4da6ff; 
             transform: translateX(5px);
         }
+
         .dark-mode .header-title { 
             color: #f8f9fa;
         }
@@ -564,7 +571,7 @@
         <ul class="nav flex-column">
             <li class="nav-item"><a class="nav-link active" href="#dashboard" data-toggle="tab"><i class="fas fa-tachometer-alt mr-2"></i>Dashboard</a></li>
             <li class="nav-item">
-                <a class="nav-link" href="#portfolio-content" data-toggle="collapse" data-target="#portfoy-accordion" aria-expanded="false" aria-controls="portfoy-accordion">
+                <a class="nav-link" href="#portfolio-content" data-toggle="tab" role="tab" aria-controls="portfolio-content" aria-selected="false">
                     <i class="fas fa-folder-open mr-2"></i>Portföyüm
                 </a>
                 <div class="collapse" id="portfoy-accordion" data-parent="#sidebar">
@@ -1514,7 +1521,28 @@ document.addEventListener('DOMContentLoaded', function () {
     initTheme();
     populateUserInfo();
     fetchAndDisplayPortfolio();
+
+    // --- Sidebar tab click kontrolü ---
+    const $ = window.jQuery; // bootstrap.bundle yüklü; jQuery globalde mevcut
+    if ($) {
+        // Sidebar içindeki tab linklerine tıklandığında sadece biri aktif kalsın
+        $('#sidebar a[data-toggle="tab"]').on('show.bs.tab', function (e) {
+            $('#sidebar .nav-link').removeClass('active');
+            $(e.target).addClass('active');
+        });
+
+        // URL hash ile tab senkronu (sayfa yenileme/derin link)
+        const openHashTab = () => {
+            const hash = window.location.hash;
+            if (hash && $(`a[data-toggle="tab"][href="${hash}"]`).length) {
+                $(`a[data-toggle="tab"][href="${hash}"]`).tab('show');
+            }
+        };
+        $(window).on('hashchange', openHashTab);
+        openHashTab();
+    }
 });
+
 
 // Diğer tüm scriptler
 (function(){
