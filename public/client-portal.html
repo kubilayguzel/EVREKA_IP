@@ -661,20 +661,15 @@
     <li class="nav-item">
       <a class="nav-link" id="tab-dava" data-toggle="tab" href="#dava-itiraz-list" role="tab" aria-controls="dava-itiraz-list" aria-selected="false">Dava/İtiraz</a>
     </li>
-<li class="nav-item d-flex align-items-center pl-2" id="portfolioFiltersNavItem" style="margin-left: .75rem;">
+    <li class="nav-item d-flex align-items-center pl-2" id="portfolioFiltersNavItem" style="margin-left: .75rem;">
       <label for="menseFilter" class="mb-0 mr-2">Menşe:</label>
-      <select id="menseFilter" class="form-control form-control-sm" style="max-width:220px">
+        <select id="menseFilter" class="form-control form-control-sm" style="max-width:220px">
         <option value="HEPSI">Hepsi</option>
-        <option value="TÜRKPATENT">TÜRKPATENT</option>
-        <option value="YURTDIŞI">YURTDIŞI</option>
-      </select>
-    </li>
+        <option value="TÜRKPATENT" selected>TÜRKPATENT</option> <option value="YURTDISI">YURTDISI</option>
+        </select>
+</li>
 </ul>
-
-  
 </div>
-
-
 <div class="tab-content table-responsive mt-3">
                     <div class="tab-pane fade show active" id="marka-list">
                         <table class="table table-hover">
@@ -1519,11 +1514,12 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 });
 
-
 // Diğer tüm scriptler
 (function(){
   function rowHasMarker($row, marker){
-    var td = $row.find('td').eq(1);
+    // Marka Adının bulunduğu 3. sütunu (index 2) kontrol et
+    // Not: Bu satırı Marka Adı metni (TR) veya (WIPO) içeriyorsa doğru çalışır.
+    var td = $row.find('td').eq(2); 
     if(td.length === 0) return false;
     var text = td.text() || "";
     return text.indexOf(marker) !== -1;
@@ -1547,50 +1543,59 @@ document.addEventListener('DOMContentLoaded', function () {
     if($tbody.length === 0) return;
     var $rows = $tbody.children("tr");
 
-    $rows.show();
+    // Varsayılan: Her şeyi göster (HEPSI filtresi)
+    $rows.show(); 
 
     var isTR = (menseValue === 'TÜRKPATENT');
-    var isYD = (menseValue === 'YURTDIŞI');
+    var isYD = (menseValue === 'YURTDISI');
 
-    if(isTR){
-      $rows.each(function(){
-        var $tr = $(this);
-        if($tr.hasClass('accordion-header-row')){
-          var cellText = $tr.find('td').eq(1).text() || '';
-          if(cellText.indexOf('(WIPO)') !== -1){
-            toggleWipoGroup($tr, false);
-          }
-          return;
-        }
-        var text = $tr.find('td').eq(1).text() || '';
-        if(text.indexOf('(TR)') !== -1){
-          $tr.show();
-        }else{
-          $tr.hide();
-        }
-      });
-    } else if(isYD){
-      $rows.each(function(){
-        var $tr = $(this);
-        if($tr.hasClass('accordion-header-row')){
-          var cellText = $tr.find('td').eq(1).text() || '';
-          if(cellText.indexOf('(WIPO)') !== -1){
-            toggleWipoGroup($tr, true);
-          } else {
-            toggleWipoGroup($tr, false);
-          }
-          return;
-        }
-        var text = $tr.find('td').eq(1).text() || '';
-        if(text.indexOf('(TR)') !== -1){
-          $tr.hide();
-        }
-      });
+    if (menseValue === 'HEPSI') {
+        // HEPSI: Tüm satırları göster (toggleWipoGroup ile gizlenenler dahil)
+        $rows.each(function(){
+            var $tr = $(this);
+            if($tr.hasClass('accordion-header-row')){
+                toggleWipoGroup($tr, true); // Akordeon başlıklarını göster
+            }
+            $tr.show(); // Tüm satırları göster
+        });
+        return;
     }
+    
+    // TÜRKPATENT veya YURTDISI filtresi uygulanıyorsa:
+    $rows.each(function(){
+        var $tr = $(this);
+        var isWipo = rowHasMarker($tr, '(WIPO)');
+        var isTr = rowHasMarker($tr, '(TR)');
+        
+        if($tr.hasClass('accordion-header-row')){
+            // Akordeon Başlıklarını Yönet
+            if (isTR) {
+                // TÜRKPATENT seçiliyse: WIPO gruplarını gizle, TR gruplarını göster (TR grupları örneğimizde yok)
+                toggleWipoGroup($tr, !isWipo);
+            } else { // YURTDISI seçiliyse:
+                // WIPO gruplarını göster, TR gruplarını gizle
+                toggleWipoGroup($tr, isWipo);
+            }
+        } else {
+            // Normal Satırları (TR ve Alt Kayıtlar) Yönet
+            if (isTR) {
+                // TÜRKPATENT seçiliyse: Sadece TR olanları göster, diğerlerini gizle
+                if (!isTr) {
+                    $tr.hide();
+                }
+            } else { // YURTDISI seçiliyse:
+                // Sadece WIPO alt kayıtlarını göster, TR olanları gizle
+                if (isTr) {
+                    $tr.hide();
+                }
+            }
+        }
+    });
   }
 
   function applyMenseFilterToActivePane(){
-    var val = $("#menseFilter").val() || 'HEPSI';
+    // TÜRKPATENT varsayılan olduğu için başlangıçta değer alınamama sorunu yaşanmaması için:
+    var val = $("#menseFilter").val() || 'TÜRKPATENT'; 
     var $activePane = $(".tab-content > .tab-pane.show.active");
     if($activePane.length){
       filterPaneByMense("#" + $activePane.attr("id"), val);
@@ -1606,6 +1611,7 @@ document.addEventListener('DOMContentLoaded', function () {
   });
 
   $(function(){
+    // Sayfa yüklendiğinde varsayılan filtreyi uygula
     applyMenseFilterToActivePane();
   });
 })();
