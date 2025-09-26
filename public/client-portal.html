@@ -495,11 +495,7 @@
     z-index: 999;
     position: relative;
 }
-/* Marka Örneği kolonu ortalama */
-#marka-list th.col-sample, 
-#marka-list td.col-sample { 
-    text-align: center !important; 
-}
+
 </style>
 
 </head>
@@ -715,13 +711,12 @@
                                                     </tr>
                                                 </tbody>
                                             </table>
-<div id="markaPagination" class="mt-3"></div>
-
                                         </div>
                                     </td>
                                 </tr>
                             </tbody>
                         </table>
+                        <div id="markaPagination" class="mt-3"></div>
                     </div>
                     <div class="tab-pane fade" id="patent-list">
                         <table class="table table-hover">
@@ -1084,6 +1079,7 @@
 <script type="module">
 import { authService, db } from './firebase-config.js';
 import { doc, getDoc, collection, getDocs, query, where } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+import Pagination from './pagination.js';
 
 // Kullanıcı bilgilerini üst çubuğa yerleştirme
 function populateUserInfo() {
@@ -1389,7 +1385,23 @@ async function fetchAndDisplayPortfolio() {
         });
 
         // 4. Her bir sekmeyi kendi verisiyle doldurma
-        populatePortfolioTable('#marka-list', markaList);
+
+        const __markaData = Array.isArray(markaList) ? markaList : [];
+
+        const __markaPag = new Pagination({
+        itemsPerPage: 10,                 // default 10
+        containerId: 'markaPagination',   // aşağıda ekleyeceğimiz container
+        onPageChange: (page, perPage) => {
+            const start = (page - 1) * perPage;
+            const end   = start + perPage;
+            const slice = __markaData.slice(start, end);
+            populatePortfolioTable('#marka-list', slice);
+        }
+        });
+
+        __markaPag.update(__markaData.length);
+        populatePortfolioTable('#marka-list', __markaData.slice(0, __markaPag.getItemsPerPage()));
+
         populatePortfolioTable('#patent-list', patentList);
         populatePortfolioTable('#tasarim-list', tasarimList);
         populatePortfolioTable('#dava-itiraz-list', davaIItirazList);
