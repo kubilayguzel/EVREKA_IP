@@ -395,6 +395,17 @@ setupEventListeners() {
         });
     }
 
+    // Global save butonu için de listener ekle
+    if (globalSaveBtn) {
+        const newGlobalSaveBtn = globalSaveBtn.cloneNode(true);
+        globalSaveBtn.parentNode.replaceChild(newGlobalSaveBtn, globalSaveBtn);
+        
+        newGlobalSaveBtn.addEventListener('click', () => {
+            console.log('🖱️ Global kaydet butonu tıklandı');
+            this.handleIndexing();
+        });
+    }
+
     // ⭐ TESLİMAT TARİHİ ALAN DEĞİŞİKLİĞİNİ İZLE
     const deliveryDateInput = document.getElementById('deliveryDate');
     if (deliveryDateInput) {
