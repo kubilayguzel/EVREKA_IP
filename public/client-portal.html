@@ -562,6 +562,45 @@
     text-overflow: ellipsis;
 }
 
+/* Child tablo hizalama - Marka listesi parent kolon genişliklerini uygula */
+#marka-list .accordion-table .col-index { width: 56px; }
+#marka-list .accordion-table .col-origin { width: 10%; }
+
+/* CHILD TABLO KOLON BAŞLIKLARINI DÜZELTME VE HİZALAMA */
+/* Bu kural, alt tablonun kolonlarını ana tablonun kolonlarına karşılık gelecek şekilde genişletecektir. */
+#marka-list .accordion-table th:nth-child(1), 
+#marka-list .accordion-table td:nth-child(1) { width: 56px; } /* # */
+#marka-list .accordion-table th:nth-child(2), 
+#marka-list .accordion-table td:nth-child(2) { width: 10%; } /* Menşe */
+
+/* Burası kilit nokta: Child tablonun ilk iki (Örnek, Marka) boş kolonu için genişlik ayarı */
+#marka-list .accordion-table thead tr th:nth-child(3), /* Marka Örneği */
+#marka-list .accordion-table thead tr th:nth-child(4) { 
+    width: calc(120px + 28%); /* Marka Örneği (120px) + Marka (28%) toplam genişliğini birleştirebiliriz. */
+}
+
+/* Bu kural, alt tablonun kolonlarını ana tablonun kolonlarına karşılık gelecek şekilde genişletecektir. */
+#marka-list .accordion-table th.col-index, 
+#marka-list .accordion-table td.col-index { width: 56px; } /* # */
+#marka-list .accordion-table th.col-origin, 
+#marka-list .accordion-table td.col-origin { width: 10%; } /* Menşe */
+
+/* Marka Örneği kolonu (Ana Tabloda 3. kolon) alt tabloda boş (3. kolon) */
+#marka-list .accordion-table thead th:nth-child(3),
+#marka-list .accordion-table tbody td:nth-child(3) { width: 120px; } /* Marka Örneği */
+/* Marka kolonu (Ana Tabloda 4. kolon) alt tabloda boş (4. kolon) */
+#marka-list .accordion-table thead th:nth-child(4),
+#marka-list .accordion-table tbody td:nth-child(4) { width: 28%; } /* Marka */
+
+#marka-list .accordion-table th.col-appno, 
+#marka-list .accordion-table td.col-appno { width: 14%; } /* Başvuru No */
+#marka-list .accordion-table th.col-appdate, 
+#marka-list .accordion-table td.col-appdate { width: 14%; } /* Başvuru Tarihi */
+#marka-list .accordion-table th.col-status, 
+#marka-list .accordion-table td.col-status { width: 10%; } /* Durum */
+#marka-list .accordion-table th.col-classes, 
+#marka-list .accordion-table td.col-classes { width: 16%; } /* Sınıflar */
+
 </style>
 </head>
 <body>
@@ -1210,11 +1249,6 @@ function initTheme() {
     });
 }
 
-/**
- * Verilen HTML tablosunu, çekilen portföy verileriyle doldurur.
- * @param {string} tableId Doldurulacak tablonun ID'si (#marka-list, #patent-list vb.)
- * @param {Array<Object>} portfolioData Gösterilecek portföy verileri.
- */
 function populatePortfolioTable(tableId, portfolioData) {
     const tableBody = document.querySelector(`${tableId} tbody`);
     if (!tableBody) return;
@@ -1262,10 +1296,11 @@ console.log('📍 Origin Debug:', item.title || 'İsimsiz', 'origin:', item.orig
             mainRow.setAttribute('data-is-child', 'true');
         }
 
-        // Veritabanından gelen gerçek veri yapısına göre düzelt
+        // Veritabanından gelen gerçek veri yapısına göre düzelt (Bu kısım zaten doğru)
         const title = item.title || item.brandText || 'İsimsiz';
         const appNumber = item.applicationNumber || item.applicationNo || '-';
         const statusText = item.status || item.statusText || 'Bilinmiyor';
+        // ... (classes, applicationDate, originDisplay, badgeClass hesaplamaları olduğu gibi kalır) ...
         const classes = (() => {
             if (Array.isArray(item.goodsAndServicesByClass) && item.goodsAndServicesByClass.length) {
                 try {
@@ -1327,10 +1362,13 @@ console.log('📍 Origin Debug:', item.title || 'İsimsiz', 'origin:', item.orig
             'Reddedildi': 'danger',
             'rejected': 'danger'
         }[statusText] || 'secondary';
-
+        
+        
         visibleIndex++;
         const brandImg = item.brandImageUrl || item.brandImage || '';
         const imgHtml = brandImg ? `<img src="${brandImg}" alt="marka" class="brand-thumb" style="height:128px !important;width:auto;border-radius:6px;object-fit:contain;"/>` : '-';
+        
+        // DİKKAT: Ana satırda 8 kolon bulunuyor.
         const rowHtml = `
         <td class="col-index">${isInternational ? `<i class="fas fa-chevron-right mr-2"></i>` : ''}${visibleIndex}</td>
         <td class="col-origin">${originDisplay}</td>
@@ -1357,6 +1395,8 @@ console.log('📍 Origin Debug:', item.title || 'İsimsiz', 'origin:', item.orig
         if (isInternational && childRecords.length > 0) {
             const detailRow = document.createElement('tr');
             detailRow.setAttribute('data-origin', originBucket);
+            
+            // colspan="8" kullanıldığı için, tüm kolon genişliklerini çocuk tabloya uygulamamız gerekiyor.
             detailRow.innerHTML = `
                 <td colspan="8" class="p-0">
                     <div class="collapse" id="accordion-yurtdisi-${item.id}">
@@ -1365,9 +1405,7 @@ console.log('📍 Origin Debug:', item.title || 'İsimsiz', 'origin:', item.orig
                                 <tr>
                                     <th class="col-index">#</th>
                                     <th class="col-origin">Menşe</th>
-                                    <th class="col-sample"></th>
-                                    <th class="col-brand"></th>
-                                    <th class="col-appno">Başvuru No</th>
+                                    <th class="col-sample"></th> <th class="col-brand"></th> <th class="col-appno">Başvuru No</th>
                                     <th class="col-appdate">Başvuru Tarihi</th>
                                     <th class="col-status">Durum</th>
                                     <th class="col-classes">Sınıflar</th>
@@ -1375,6 +1413,7 @@ console.log('📍 Origin Debug:', item.title || 'İsimsiz', 'origin:', item.orig
                             </thead>
                             <tbody>
                                 ${childRecords.map((subItem, subIndex) => {
+                                    // ... (Diğer subItem hesaplamaları) ...
                                     const subClasses = (() => {
                                         if (Array.isArray(subItem.goodsAndServicesByClass) && subItem.goodsAndServicesByClass.length) {
                                             const arr = subItem.goodsAndServicesByClass.map(c => parseInt(c.classNo,10)).filter(n => !isNaN(n));
