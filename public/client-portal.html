@@ -1219,21 +1219,29 @@ console.log('📍 Origin Debug:', item.title || 'İsimsiz', 'origin:', item.orig
         const originBucket = (originUpper === 'TÜRKPATENT' || originUpper === 'TURKPATENT')
         ? 'TÜRKPATENT'
         : 'YURTDISI';
-        // Akordeon olması için subRegistrations olmalı, origin'e bakmayalım
-        const isInternational = Array.isArray(item.subRegistrations) && item.subRegistrations.length > 0;
+
+        // Parent-child ilişkisini transactionHierarchy'den belirle
+        const isParent = item.transactionHierarchy === 'parent';
+        const isChild = item.transactionHierarchy === 'child';
         
-        // Debug için ccc kayıtlarını logla
-        if (item.title && (item.title.toLowerCase().includes('ccc'))) {
-            console.log('🔍 CCC kaydı:', {
-                title: item.title,
-                hasSubs: Array.isArray(item.subRegistrations),
-                subCount: item.subRegistrations ? item.subRegistrations.length : 0,
-                isInternational: isInternational,
-                subs: item.subRegistrations
-            });
+        // Parent ise, child kayıtlarını bul
+        let childRecords = [];
+        if (isParent) {
+            childRecords = portfolioData.filter(p => 
+                p.parentId === item.id || 
+                (p.transactionHierarchy === 'child' && p.title === item.title)
+            );
         }
         
+        const isInternational = isParent && childRecords.length > 0;
+        
         mainRow.setAttribute('data-origin', originBucket);
+        
+        // Child kayıtları gizle (sadece parent'ın altında göstereceğiz)
+        if (isChild) {
+            mainRow.style.display = 'none';
+            mainRow.setAttribute('data-is-child', 'true');
+        }
 
         // Veritabanından gelen gerçek veri yapısına göre düzelt
         const title = item.title || item.brandText || 'İsimsiz';
@@ -1311,11 +1319,11 @@ console.log('📍 Origin Debug:', item.title || 'İsimsiz', 'origin:', item.orig
 
         tableBody.appendChild(mainRow);
         
-        if (isInternational && item.subRegistrations && item.subRegistrations.length > 0) {
+        if (isInternational && childRecords.length > 0) {
             const detailRow = document.createElement('tr');
-            detailRow.setAttribute('data-origin', originBucket); // EKLE
+            detailRow.setAttribute('data-origin', originBucket);
             detailRow.innerHTML = `
-                <td colspan="6" class="p-0">
+                <td colspan="7" class="p-0">
                     <div class="collapse" id="accordion-yurtdisi-${item.id}">
                         <table class="table mb-0 accordion-table">
                             <thead>
@@ -1329,18 +1337,50 @@ console.log('📍 Origin Debug:', item.title || 'İsimsiz', 'origin:', item.orig
                                 </tr>
                             </thead>
                             <tbody>
-                                ${item.subRegistrations.map((subItem, subIndex) => {
-                                    const subClasses = subItem.classes 
-                                        ? (Array.isArray(subItem.classes) ? subItem.classes.join(', ') : subItem.classes)
-                                        : '-';
+                                ${childRecords.map((subItem, subIndex) => {
+                                    const subClasses = (() => {
+                                        if (Array.isArray(subItem.goodsAndServicesByClass) && subItem.goodsAndServicesByClass.length) {
+                                            const arr = subItem.goodsAndServicesByClass.map(c => parseInt(c.classNo,10)).filter(n => !isNaN(n));
+                                            return Array.from(new Set(arr)).sort((a,b)=>a-b).join(', ');
+                                        }
+                                        return '-';
+                                    })();
+                                    
+                                    const subAppDate = (() => {
+                                        const rawDate = subItem.applicationDate || '';
+                                        if (!rawDate || rawDate === '-') return '-';
+                                        try {
+                                            const date = new Date(rawDate);
+                                            if (isNaN(date.getTime())) return rawDate;
+                                            const day = String(date.getDate()).padStart(2, '0');
+                                            const month = String(date.getMonth() + 1).padStart(2, '0');
+                                            const year = date.getFullYear();
+                                            return `${day}/${month}/${year}`;
+                                        } catch (error) {
+                                            return rawDate;
+                                        }
+                                    })();
+                                    
+                                    const subStatus = subItem.status || 'Bilinmiyor';
+                                    const subBadgeClass = {
+                                        'Başvuru': 'primary',
+                                        'application_filed': 'primary', 
+                                        'Tescilli': 'success',
+                                        'registered': 'success',
+                                        'İtiraz': 'warning',
+                                        'objection': 'warning',
+                                        'Reddedildi': 'danger',
+                                        'rejected': 'danger'
+                                    }[subStatus] || 'secondary';
+                                    
                                     return `
                                         <tr>
                                             <td>${index + 1}.${subIndex + 1}</td>
-                                            <td><a href="#" data-toggle="modal" data-target="#portfolioDetailModal">${subItem.title || 'İsimsiz'} (${subItem.country || 'Bilinmiyor'})</a></td>
+                                            <td><a href="#" data-toggle="modal" data-target="#portfolioDetailModal">${subItem.title || 'İsimsiz'}</a></td>
                                             <td>${subItem.applicationNumber || '-'}</td>
-                                            <td><span class="badge badge-${subItem.statusClass || 'secondary'}">${subItem.statusText || 'Bilinmiyor'}</span></td>
+                                            <td>${subAppDate}</td>
+                                            <td><span class="badge badge-${subBadgeClass}">${subStatus}</span></td>
                                             <td>${subClasses}</td>
-                                            <td>${subItem.lastTransactionDate || '-'}</td>
                                         </tr>
                                     `;
                                 }).join('')}
