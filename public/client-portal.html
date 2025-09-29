@@ -1221,6 +1221,18 @@ console.log('📍 Origin Debug:', item.title || 'İsimsiz', 'origin:', item.orig
         : 'YURTDISI';
         // Akordeon olması için subRegistrations olmalı, origin'e bakmayalım
         const isInternational = Array.isArray(item.subRegistrations) && item.subRegistrations.length > 0;
+        
+        // Debug için ccc kayıtlarını logla
+        if (item.title && (item.title.toLowerCase().includes('ccc'))) {
+            console.log('🔍 CCC kaydı:', {
+                title: item.title,
+                hasSubs: Array.isArray(item.subRegistrations),
+                subCount: item.subRegistrations ? item.subRegistrations.length : 0,
+                isInternational: isInternational,
+                subs: item.subRegistrations
+            });
+        }
+        
         mainRow.setAttribute('data-origin', originBucket);
 
         // Veritabanından gelen gerçek veri yapısına göre düzelt
@@ -1507,8 +1519,20 @@ async function fetchAndDisplayPortfolio() {
         
         // İlk yüklemede filtreyi uygula
         setTimeout(() => {
-            applyMenseFilterToActivePane();
-        }, 100);
+            if (typeof window.applyMenseFilterToActivePane === 'function') {
+                window.applyMenseFilterToActivePane();
+            } else {
+                // Fonksiyon henüz tanımlanmadıysa, default TÜRKPATENT filtresi uygula
+                const val = 'TÜRKPATENT';
+                const filteredData = __markaData.filter(item => {
+                    var orig = (item.origin || 'TÜRKPATENT').toString().toUpperCase().trim();
+                    return orig === 'TÜRKPATENT' || orig === 'TURKPATENT' || orig === '';
+                });
+                window.markaPaginationData.allData = filteredData;
+                window.markaPaginationData.totalPages = Math.ceil(filteredData.length / window.markaPaginationData.itemsPerPage);
+                populatePortfolioTable('#marka-list', filteredData.slice(0, 10));
+            }
+        }, 500);
 
         populatePortfolioTable('#patent-list', patentList);
         populatePortfolioTable('#tasarim-list', tasarimList);
@@ -1645,8 +1669,7 @@ function filterPaneByMense(paneSelector, menseValue){
     });
 }
 
-
-function applyMenseFilterToActivePane(){
+window.applyMenseFilterToActivePane = function(){
     var val = $("#menseFilter").val() || 'TÃœRKPATENT'; 
     var $activePane = $(".tab-content > .tab-pane.show.active");
     if($activePane.length){
