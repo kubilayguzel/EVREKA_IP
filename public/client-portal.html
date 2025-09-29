@@ -1882,33 +1882,6 @@ window.goToMarkaPage = function(page) {
     window.renderMarkaPagination();
 };
 
-// populatePortfolioTable'ı intercept et
-window.addEventListener('load', function() {
-    setTimeout(() => {
-        if (typeof populatePortfolioTable === 'function') {
-            window.__originalPopulate = populatePortfolioTable;
-            
-            window.populatePortfolioTable = function(tableId, data) {
-                if (tableId === '#marka-list') {
-                    window.markaPaginationData.allData = Array.isArray(data) ? data : [];
-                    window.markaPaginationData.allDataUnfiltered = Array.isArray(data) ? data : []; // Filtresiz tüm veriyi sakla
-                    window.markaPaginationData.currentPage = 1;
-                    
-                    // İlk sayfayı göster
-                    const firstPageData = window.markaPaginationData.allData.slice(0, window.markaPaginationData.itemsPerPage);
-                    window.__originalPopulate('#marka-list', firstPageData);
-                    
-                    // Pagination'ı render et
-                    window.renderMarkaPagination();
-                } else {
-                    window.__originalPopulate(tableId, data);
-                }
-            };
-        }
-    }, 1000);
-});
-
-
 // --- Sidebar / Top-level tab behavior ---
 (function(){
   var $ = window.jQuery;
