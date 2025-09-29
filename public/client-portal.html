@@ -1290,6 +1290,7 @@ function populatePortfolioTable(tableId, portfolioData) {
         
         if (isInternational && item.subRegistrations && item.subRegistrations.length > 0) {
             const detailRow = document.createElement('tr');
+            detailRow.setAttribute('data-origin', originBucket); // EKLE
             detailRow.innerHTML = `
                 <td colspan="6" class="p-0">
                     <div class="collapse" id="accordion-yurtdisi-${item.id}">
