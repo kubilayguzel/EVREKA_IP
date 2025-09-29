@@ -542,6 +542,14 @@
   margin: 0 auto;             /* Görseli yatay ortala */
 }
 
+/* Akordeon ok animasyonu */
+.accordion-header-row .fa-chevron-right {
+    transition: transform 0.3s;
+}
+.accordion-header-row[aria-expanded="true"] .fa-chevron-right {
+    transform: rotate(90deg);
+}
+
 </style>
 
 </head>
@@ -1211,7 +1219,8 @@ console.log('📍 Origin Debug:', item.title || 'İsimsiz', 'origin:', item.orig
         const originBucket = (originUpper === 'TÜRKPATENT' || originUpper === 'TURKPATENT')
         ? 'TÜRKPATENT'
         : 'YURTDISI';
-        const isInternational = (originBucket === 'YURTDISI');
+        // Akordeon olması için subRegistrations olmalı, origin'e bakmayalım
+        const isInternational = Array.isArray(item.subRegistrations) && item.subRegistrations.length > 0;
         mainRow.setAttribute('data-origin', originBucket);
 
         // Veritabanından gelen gerçek veri yapısına göre düzelt
@@ -1269,7 +1278,7 @@ console.log('📍 Origin Debug:', item.title || 'İsimsiz', 'origin:', item.orig
         const brandImg = item.brandImageUrl || item.brandImage || '';
         const imgHtml = brandImg ? `<img src="${brandImg}" alt="marka" class="brand-thumb" style="height:128px !important;width:auto;border-radius:6px;object-fit:contain;"/>` : '-';
         const rowHtml = `
-        <td class="col-index">${isInternational ? `<i class="fas fa-chevron-down mr-2"></i>` : ''}${index + 1}</td>
+        <td class="col-index">${isInternational ? `<i class="fas fa-chevron-right mr-2"></i>` : ''}${index + 1}</td>
         <td class="col-sample">${imgHtml}</td>
         <td class="col-brand"><a href="#" data-toggle="modal" data-target="#portfolioDetailModal">${title}</a></td>
         <td class="col-appno">${appNumber}</td>
@@ -1280,8 +1289,7 @@ console.log('📍 Origin Debug:', item.title || 'İsimsiz', 'origin:', item.orig
 
         mainRow.innerHTML = rowHtml;
 
-        const hasSubs = Array.isArray(item.subRegistrations) && item.subRegistrations.length > 0;
-        if (isInternational && hasSubs) {
+        if (isInternational) {
         mainRow.classList.add('accordion-header-row');
         mainRow.setAttribute('data-toggle', 'collapse');
         mainRow.setAttribute('data-target', `#accordion-yurtdisi-${item.id}`);
@@ -1496,6 +1504,11 @@ async function fetchAndDisplayPortfolio() {
 
         __markaPag.update(__markaData.length);
         populatePortfolioTable('#marka-list', __markaData.slice(0, 10));
+        
+        // İlk yüklemede filtreyi uygula
+        setTimeout(() => {
+            applyMenseFilterToActivePane();
+        }, 100);
 
         populatePortfolioTable('#patent-list', patentList);
         populatePortfolioTable('#tasarim-list', tasarimList);
