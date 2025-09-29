@@ -1235,7 +1235,20 @@ console.log('📍 Origin Debug:', item.title || 'İsimsiz', 'origin:', item.orig
             return; // Bu kayıt için hiçbir şey yapma, bir sonraki kayda geç
         }
         
-        visibleIndex++; // Parent kayıt olduğu için sayacı artır
+        // Menşe filtresine göre görünürlüğü kontrol et ve numaralandırmayı sadece görünür parent için artır
+const activeFilterEl = document.getElementById('menseFilter');
+const activeFilterVal = (activeFilterEl && activeFilterEl.value ? activeFilterEl.value : 'HEPSI').toUpperCase();
+const isVisibleByFilter = (
+  activeFilterVal === 'HEPSI' ||
+  (activeFilterVal === 'TÜRKPATENT' && originBucket === 'TÜRKPATENT') ||
+  (activeFilterVal === 'YURTDISI' && originBucket === 'YURTDISI')
+);
+if (!isVisibleByFilter) {
+    // Filtre dışındaki parent kaydı tamamen atla
+    return;
+}
+// Görünür parent için numarayı artır
+const displayIndex = ++visibleIndex;
         
         // Parent ise, child kayıtlarını bul (tüm listeden)
         let childRecords = [];
@@ -1325,7 +1338,7 @@ console.log('📍 Origin Debug:', item.title || 'İsimsiz', 'origin:', item.orig
         const brandImg = item.brandImageUrl || item.brandImage || '';
         const imgHtml = brandImg ? `<img src="${brandImg}" alt="marka" class="brand-thumb" style="height:128px !important;width:auto;border-radius:6px;object-fit:contain;"/>` : '-';
         const rowHtml = `
-        <td class="col-index">${isInternational ? `<i class="fas fa-chevron-right mr-2"></i>` : ''}${visibleIndex}</td>
+        <td class="col-index">${isInternational ? `<i class="fas fa-chevron-right mr-2"></i>` : ''}${displayIndex}</td>
         <td class="col-origin">${originDisplay}</td>
         <td class="col-sample">${imgHtml}</td>
         <td class="col-brand"><a href="#" data-toggle="modal" data-target="#portfolioDetailModal">${title}</a></td>
@@ -1351,19 +1364,19 @@ console.log('📍 Origin Debug:', item.title || 'İsimsiz', 'origin:', item.orig
             const detailRow = document.createElement('tr');
             detailRow.setAttribute('data-origin', originBucket);
             detailRow.innerHTML = `
-                <td colspan="7" class="p-0">
+                <td colspan="8" class="p-0">
                     <div class="collapse" id="accordion-yurtdisi-${item.id}">
                         <table class="table mb-0 accordion-table">
                             <thead>
                                 <tr>
                                     <th style="width: 56px;">#</th>
                                     <th style="width: 10%;">Menşe</th>
-                                    <th style="width: 120px;"></th> <!-- Boş kolon (marka örneği yerine) -->
-                                    <th style="width: 28%;"></th> <!-- Boş kolon (marka adı yerine) -->
-                                    <th style="width: 14%;">Başvuru No</th>
-                                    <th style="width: 14%;">Başvuru Tarihi</th>
-                                    <th style="width: 10%;">Durum</th>
-                                    <th style="width: 16%;">Sınıflar</th>
+                                    <th class="col-sample"></th> <!-- Boş kolon (marka örneği yerine) -->
+                                    <th class="col-brand"></th> <!-- Boş kolon (marka adı yerine) -->
+                                    <th class="col-appno">Başvuru No</th>
+                                    <th class="col-appdate">Başvuru Tarihi</th>
+                                    <th class="col-status">Durum</th>
+                                    <th class="col-classes">Sınıflar</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -1409,14 +1422,14 @@ console.log('📍 Origin Debug:', item.title || 'İsimsiz', 'origin:', item.orig
 
                                     return `
                                         <tr>
-                                            <td style="width: 56px;">${visibleIndex}.${subIndex + 1}</td>
-                                            <td style="width: 10%;">${childOrigin}</td>
-                                            <td style="width: 120px;"></td>
-                                            <td style="width: 28%;"></td>
-                                            <td style="width: 14%;">${subItem.applicationNumber || '-'}</td>
-                                            <td style="width: 14%;">${subAppDate}</td>
-                                            <td style="width: 10%;"><span class="badge badge-${subBadgeClass}">${subStatus}</span></td>
-                                            <td style="width: 16%;">${subClasses}</td>
+                                            <td class="col-index">${visibleIndex}.${subIndex + 1}</td>
+                                            <td class="col-origin">${childOrigin}</td>
+                                            <td class="col-sample"></td>
+                                            <td class="col-brand"></td>
+                                            <td class="col-appno">${subItem.applicationNumber || '-'}</td>
+                                            <td class="col-appdate">${subAppDate}</td>
+                                            <td class="col-status"><span class="badge badge-${subBadgeClass}">${subStatus}</span></td>
+                                            <td class="col-classes">${subClasses}</td>
                                         </tr>
                                     `;
                                 }).join('')}
