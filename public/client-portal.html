@@ -1209,6 +1209,7 @@ function populatePortfolioTable(tableId, portfolioData) {
     if (!tableBody) return;
     tableBody.innerHTML = '';
 
+    let visibleIndex = 0; // Görünen kayıtlar için sayaç
     portfolioData.forEach((item, index) => {
         const mainRow = document.createElement('tr');
 
@@ -1229,6 +1230,8 @@ console.log('📍 Origin Debug:', item.title || 'İsimsiz', 'origin:', item.orig
         if (isChild) {
             return; // Bu kayıt için hiçbir şey yapma, bir sonraki kayda geç
         }
+        
+        visibleIndex++; // Parent kayıt olduğu için sayacı artır
         
         // Parent ise, child kayıtlarını bul (tüm listeden)
         let childRecords = [];
@@ -1318,7 +1321,7 @@ console.log('📍 Origin Debug:', item.title || 'İsimsiz', 'origin:', item.orig
         const brandImg = item.brandImageUrl || item.brandImage || '';
         const imgHtml = brandImg ? `<img src="${brandImg}" alt="marka" class="brand-thumb" style="height:128px !important;width:auto;border-radius:6px;object-fit:contain;"/>` : '-';
         const rowHtml = `
-        <td class="col-index">${isInternational ? `<i class="fas fa-chevron-right mr-2"></i>` : ''}${index + 1}</td>
+        <td class="col-index">${isInternational ? `<i class="fas fa-chevron-right mr-2"></i>` : ''}${visibleIndex}</td>
         <td class="col-origin">${originDisplay}</td>
         <td class="col-sample">${imgHtml}</td>
         <td class="col-brand"><a href="#" data-toggle="modal" data-target="#portfolioDetailModal">${title}</a></td>
@@ -1397,10 +1400,10 @@ console.log('📍 Origin Debug:', item.title || 'İsimsiz', 'origin:', item.orig
                                     const childOrigin = window.countriesMap && window.countriesMap[subItem.country] 
                                         ? window.countriesMap[subItem.country] 
                                         : (subItem.country || 'Bilinmiyor');
-                                    
+                                        
                                     return `
                                         <tr>
-                                            <td>${index + 1}.${subIndex + 1}</td>
+                                            <td>${visibleIndex}.${subIndex + 1}</td>
                                             <td>${childOrigin}</td>
                                             <td>${subItem.applicationNumber || '-'}</td>
                                             <td>${subAppDate}</td>
