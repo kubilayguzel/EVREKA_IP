@@ -691,6 +691,7 @@
                                     <th class="col-appdate">Başvuru Tarihi</th>
                                     <th class="col-status">Durum</th>
                                     <th class="col-classes">Sınıflar</th>
+                                    <th class="col-origin">Menşe</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -1289,6 +1290,20 @@ console.log('📍 Origin Debug:', item.title || 'İsimsiz', 'origin:', item.orig
             }
         })();
         
+        // Menşe hesaplama
+        const originDisplay = (() => {
+            if (originBucket === 'TÜRKPATENT') {
+                return 'TÜRKPATENT';
+            } else if (item.origin === 'Yurtdışı Ulusal') {
+                const countryCode = item.country || '';
+                return window.countriesMap && window.countriesMap[countryCode] 
+                    ? window.countriesMap[countryCode] 
+                    : countryCode;
+            } else {
+                return item.origin || 'Bilinmiyor';
+            }
+        })();
+        
         const badgeClass = {
             'Başvuru': 'primary',
             'application_filed': 'primary', 
@@ -1310,6 +1325,7 @@ console.log('📍 Origin Debug:', item.title || 'İsimsiz', 'origin:', item.orig
         <td class="col-appdate">${applicationDate}</td>
         <td class="col-status"><span class="badge badge-${badgeClass}">${statusText}</span></td>
         <td class="col-classes">${classes}</td>
+        <td class="col-origin">${originDisplay}</td>
         `;
 
         mainRow.innerHTML = rowHtml;
@@ -1334,11 +1350,11 @@ console.log('📍 Origin Debug:', item.title || 'İsimsiz', 'origin:', item.orig
                             <thead>
                                 <tr>
                                     <th>#</th>
-                                    <th>Marka Adı</th>
                                     <th>Başvuru No</th>
+                                    <th>Başvuru Tarihi</th>
                                     <th>Durum</th>
                                     <th>Sınıflar</th>
-                                    <th>Son İşlem</th>
+                                    <th>Menşe</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -1378,14 +1394,18 @@ console.log('📍 Origin Debug:', item.title || 'İsimsiz', 'origin:', item.orig
                                         'rejected': 'danger'
                                     }[subStatus] || 'secondary';
                                     
+                                    const childOrigin = window.countriesMap && window.countriesMap[subItem.country] 
+                                        ? window.countriesMap[subItem.country] 
+                                        : (subItem.country || 'Bilinmiyor');
+                                    
                                     return `
                                         <tr>
                                             <td>${index + 1}.${subIndex + 1}</td>
-                                            <td><a href="#" data-toggle="modal" data-target="#portfolioDetailModal">${subItem.title || 'İsimsiz'}</a></td>
                                             <td>${subItem.applicationNumber || '-'}</td>
                                             <td>${subAppDate}</td>
                                             <td><span class="badge badge-${subBadgeClass}">${subStatus}</span></td>
                                             <td>${subClasses}</td>
+                                            <td>${childOrigin}</td>
                                         </tr>
                                     `;
                                 }).join('')}
@@ -1434,6 +1454,12 @@ async function fetchAndDisplayPortfolio() {
             console.log("Kullanıcı ile ilişkili müvekkil bulunamadı.");
             return;
         }
+        
+        // Ülke verilerini çek
+        const countriesRef = collection(db, "common");
+        const countriesDoc = await getDoc(doc(db, "common", "countries"));
+        const countriesData = countriesDoc.exists() ? countriesDoc.data() : {};
+        window.countriesMap = countriesData; // Global'e kaydet
 
         // 2. İlgili müvekkillere ait tüm portföy verilerini çekme
         const portfolioRef = collection(db, "ipRecords");
@@ -1712,7 +1738,20 @@ function filterPaneByMense(paneSelector, menseValue){
             }
         }
     });
+
+    // Menşe kolonunu göster/gizle
+    var $originHeaders = $(paneSelector + " th.col-origin");
+    var $originCells = $(paneSelector + " td.col-origin");
+    
+    if (isTR) {
+        $originHeaders.hide();
+        $originCells.hide();
+    } else {
+        $originHeaders.show();
+        $originCells.show();
+    }
 }
+
 
 window.applyMenseFilterToActivePane = function(){
     var val = $("#menseFilter").val() || 'TÃœRKPATENT'; 
