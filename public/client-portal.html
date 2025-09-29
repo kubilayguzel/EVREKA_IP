@@ -1317,11 +1317,11 @@ console.log('📍 Origin Debug:', item.title || 'İsimsiz', 'origin:', item.orig
             'rejected': 'danger'
         }[statusText] || 'secondary';
 
-        visibleIndex++;
+        const displayIndex = ++visibleIndex; // sadece yazacağın parent için artır
         const brandImg = item.brandImageUrl || item.brandImage || '';
         const imgHtml = brandImg ? `<img src="${brandImg}" alt="marka" class="brand-thumb" style="height:128px !important;width:auto;border-radius:6px;object-fit:contain;"/>` : '-';
         const rowHtml = `
-        <td class="col-index">${isInternational ? `<i class="fas fa-chevron-right mr-2"></i>` : ''}${visibleIndex}</td>
+        <td class="col-index">${isInternational ? `<i class="fas fa-chevron-right mr-2"></i>` : ''}${displayIndex}</td>
         <td class="col-origin">${originDisplay}</td>
         <td class="col-sample">${imgHtml}</td>
         <td class="col-brand"><a href="#" data-toggle="modal" data-target="#portfolioDetailModal">${title}</a></td>
@@ -1405,7 +1405,7 @@ console.log('📍 Origin Debug:', item.title || 'İsimsiz', 'origin:', item.orig
 
                                     return `
                                         <tr>
-                                            <td style="width: 56px;">${visibleIndex}.${subIndex + 1}</td>
+                                            <td style="width: 56px;">${displayIndex}.${subIndex + 1}</td>
                                             <td style="width: 10%;">${childOrigin}</td>
                                             <td style="width: 120px;"></td>
                                             <td style="width: 28%;"></td>
@@ -1700,119 +1700,72 @@ function getRowOrigin($row){
   }
 
 function filterPaneByMense(paneSelector, menseValue){
-    var $tbody = $(paneSelector + " tbody");
-    if($tbody.length === 0) return;
-    var $rows = $tbody.children("tr");
+  // Sadece "Menşe" kolonunu göster/gizle. Satır görünürlüğüne dokunmaz.
+  var $pane = $(paneSelector);
+  if($pane.length === 0) return;
 
-    var isTR = (menseValue === 'TÜRKPATENT');
-    var isYD = (menseValue === 'YURTDISI');
-    var isALL = (menseValue === 'HEPSI');
+  // Hepsi seçiliyken Menşe kolonu açık kalsın (istersen true yapıp hep açık tutabilirsin)
+  var showOrigin = (menseValue === 'HEPSI');
 
-    console.log('=== FILTER BAŞLADI ===');
-    console.log('Seçilen menşe:', menseValue);
-    console.log('Toplam satır sayısı:', $rows.length);
+  var $originHeaders = $pane.find("thead th.col-origin, thead th:contains('Menşe')");
+  var $originCells   = $pane.find("tbody td.col-origin");
 
-    $rows.each(function(){
-        var $tr = $(this);
-        var dataOriginAttr = $tr.attr('data-origin');
-        var rowOrigin = getRowOrigin($tr);
-        
-        console.log('Satır:', {
-            text: $tr.find('td:eq(2)').text().substring(0, 30),
-            dataOriginAttr: dataOriginAttr,
-            rowOrigin: rowOrigin,
-            hasAccordionClass: $tr.hasClass('accordion-header-row')
-        });
-
-        // Basit mantık: TÜRKPATENT ise true, değilse false
-        var isTurkpatent = (rowOrigin === 'TÜRKPATENT');
-        var isYurtdisi = (rowOrigin && rowOrigin !== 'TÜRKPATENT');
-    
-
-
-        if($tr.hasClass('accordion-header-row')){
-            // Akordeon Başlıklarını Yönet
-            if (isALL) {
-                toggleWipoGroup($tr, true);
-            } else if (isTR) {
-                toggleWipoGroup($tr, isTurkpatent);
-            } else if (isYD) {
-                toggleWipoGroup($tr, isYurtdisi);
-            }
-        } else {
-            // Normal Satırları Yönet
-            if (isALL) {
-                $tr.show();
-            } else if (isTR) {
-                if (isTurkpatent) {
-                    $tr.show();
-                } else {
-                    $tr.hide();
-                }
-            } else if (isYD) {
-                if (isYurtdisi) {
-                    $tr.show();
-                } else {
-                    $tr.hide();
-                }
-            }
-        }
-    });
-
-    // Menşe kolonunu göster/gizle
-    var $originHeaders = $(paneSelector + " th.col-origin");
-    var $originCells = $(paneSelector + " td.col-origin");
-    
-    if (isTR) {
-        $originHeaders.hide();
-        $originCells.hide();
-    } else {
-        $originHeaders.show();
-        $originCells.show();
-    }
+  if (showOrigin) {
+    $originHeaders.show(); $originCells.show();
+  } else {
+    $originHeaders.hide(); $originCells.hide();
+  }
 }
 
-
 window.applyMenseFilterToActivePane = function(){
-    var val = $("#menseFilter").val() || 'TÃœRKPATENT'; 
-    var $activePane = $(".tab-content > .tab-pane.show.active");
-    if($activePane.length){
-      var paneId = $activePane.attr("id");
-      filterPaneByMense("#" + paneId, val);
-      
-      // Eğer marka listesindeyse ve pagination aktifse, filtrelenmiş veriyi pagination'a ver
-      if (paneId === 'marka-list' && window.markaPaginationData && window.markaPaginationData.allDataUnfiltered) {
-        var allData = window.markaPaginationData.allDataUnfiltered;
-        var filteredData;
-        
-        if (val === 'HEPSI') {
-          filteredData = allData;
-        } else if (val === 'TÃœRKPATENT') {
-          filteredData = allData.filter(item => {
-            var orig = (item.origin || 'TÃœRKPATENT').toString().toUpperCase().trim();
-            return orig === 'TÃœRKPATENT' || orig === 'TURKPATENT' || orig === '';
-          });
-        } else if (val === 'YURTDISI') {
-          filteredData = allData.filter(item => {
-            var orig = (item.origin || 'TÃƒÅ"RKPATENT').toString().toUpperCase().trim();
-            console.log('🔎 Yurtdışı filtre:', item.title, 'origin:', item.origin, 'normalized:', orig);
-            return orig !== 'TÃƒÅ"RKPATENT' && orig !== 'TURKPATENT' && orig !== '';
-          });
-          console.log('✅ Yurtdışı filtreleme sonucu:', filteredData.length, 'kayıt bulundu');
-        }
-        
-        window.markaPaginationData.allData = filteredData;
-        window.markaPaginationData.currentPage = 1;
-        window.markaPaginationData.totalPages = Math.ceil(filteredData.length / window.markaPaginationData.itemsPerPage);
-        
-        var firstPage = filteredData.slice(0, window.markaPaginationData.itemsPerPage);
-        populatePortfolioTable('#marka-list', firstPage);
-        if (window.renderMarkaPagination) {
-          window.renderMarkaPagination();
-        }
-      }
-    }
+  var val = ($("#menseFilter").val() || 'HEPSI').toUpperCase();
+  var $activePane = $(".tab-content > .tab-pane.show.active");
+  if(!$activePane.length) return;
+
+  var paneId = $activePane.attr("id");
+
+  // 1) Menşe kolonunu yönet
+  filterPaneByMense("#" + paneId, val);
+
+  // 2) Marka listesi veri üzerinden filtre + yeniden çiz
+  if (paneId === 'marka-list' && window.markaPaginationData && window.markaPaginationData.allDataUnfiltered) {
+    var allData = window.markaPaginationData.allDataUnfiltered;
+
+    var normalizeOrigin = function(str){
+      var raw = (str || 'TÜRKPATENT').toString().trim().toUpperCase();
+      raw = raw.replace('TURKPATENT','TÜRKPATENT').replace('TÃœRKPATENT','TÜRKPATENT').replace('TÃƒÅ"RKPATENT','TÜRKPATENT');
+      return (raw === 'TÜRKPATENT') ? 'TÜRKPATENT' : 'YURTDISI';
+    };
+
+    var filteredData = allData;
+    if (val === 'TÜRKPATENT') {
+      filteredData = allData.filter(function(item){ return normalizeOrigin(item.origin) === 'TÜRKPATENT'; });
+    } else if (val === 'YURTDISI') {
+      filteredData = allData.filter(function(item){ return normalizeOrigin(item.origin) === 'YURTDISI'; });
+    } // HEPSI => dokunma
+
+    // Pagination state + ilk sayfa render
+    window.markaPaginationData.allData     = filteredData;
+    window.markaPaginationData.currentPage = 1;
+    window.markaPaginationData.totalPages  = Math.ceil(filteredData.length / window.markaPaginationData.itemsPerPage);
+
+    var firstPage = filteredData.slice(0, window.markaPaginationData.itemsPerPage);
+    populatePortfolioTable('#marka-list', firstPage);
+    if (window.renderMarkaPagination) window.renderMarkaPagination();
   }
+};
+
+// Olay bağlama (dosyada yoksa ekle)
+$(document).on('change', '#menseFilter', function(){
+  applyMenseFilterToActivePane();
+});
+$(document).on('shown.bs.tab', '#portfolioTopTabs a[data-toggle="tab"]', function () {
+  applyMenseFilterToActivePane();
+});
+
+// Sayfa açılışında varsayılan uygula
+$(function(){ applyMenseFilterToActivePane(); });
+
 
   $(document).on('change', '#menseFilter', function(){
     applyMenseFilterToActivePane();
