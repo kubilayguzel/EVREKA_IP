@@ -1224,10 +1224,15 @@ console.log('📍 Origin Debug:', item.title || 'İsimsiz', 'origin:', item.orig
         const isParent = item.transactionHierarchy === 'parent';
         const isChild = item.transactionHierarchy === 'child';
         
-        // Parent ise, child kayıtlarını bul
+        // Child kayıtları hiç render etme
+        if (isChild) {
+            return; // Bu kayıt için hiçbir şey yapma, bir sonraki kayda geç
+        }
+        
+        // Parent ise, child kayıtlarını bul (tüm listeden)
         let childRecords = [];
-        if (isParent) {
-            childRecords = portfolioData.filter(p => 
+        if (isParent && window.markaPaginationData && window.markaPaginationData.allDataUnfiltered) {
+            childRecords = window.markaPaginationData.allDataUnfiltered.filter(p => 
                 p.parentId === item.id || 
                 (p.transactionHierarchy === 'child' && p.title === item.title)
             );
