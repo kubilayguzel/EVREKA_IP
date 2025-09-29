@@ -1463,7 +1463,7 @@ async function fetchAndDisplayPortfolio() {
             title: m.title || 'İsimsiz',
             origin: m.origin
         })).slice(0, 10));
-        
+
         const __markaData = Array.isArray(markaList) ? markaList : [];
 
         const __markaPag = new Pagination({
@@ -1616,12 +1616,44 @@ function filterPaneByMense(paneSelector, menseValue){
 }
 
 
-  function applyMenseFilterToActivePane(){
-    // TÜRKPATENT varsayılan olduğu için başlangıçta değer alınamama sorunu yaşanmaması için:
-    var val = $("#menseFilter").val() || 'TÜRKPATENT'; 
+function applyMenseFilterToActivePane(){
+    var val = $("#menseFilter").val() || 'TÃœRKPATENT'; 
     var $activePane = $(".tab-content > .tab-pane.show.active");
     if($activePane.length){
-      filterPaneByMense("#" + $activePane.attr("id"), val);
+      var paneId = $activePane.attr("id");
+      filterPaneByMense("#" + paneId, val);
+      
+      // Eğer marka listesindeyse ve pagination aktifse, filtrelenmiş veriyi pagination'a ver
+      if (paneId === 'marka-list' && window.markaPaginationData && window.markaPaginationData.allDataUnfiltered) {
+        var allData = window.markaPaginationData.allDataUnfiltered;
+        var filteredData;
+        
+        if (val === 'HEPSI') {
+          filteredData = allData;
+        } else if (val === 'TÃœRKPATENT') {
+          filteredData = allData.filter(item => {
+            var orig = (item.origin || 'TÃœRKPATENT').toString().toUpperCase().trim();
+            return orig === 'TÃœRKPATENT' || orig === 'TURKPATENT' || orig === '';
+          });
+        } else if (val === 'YURTDISI') {
+          filteredData = allData.filter(item => {
+            var orig = (item.origin || 'TÃœRKPATENT').toString().toUpperCase().trim();
+            return orig !== 'TÃœRKPATENT' && orig !== 'TURKPATENT' && orig !== '';
+          });
+        }
+        
+        window.markaPaginationData.allData = filteredData;
+        window.markaPaginationData.currentPage = 1;
+        window.markaPaginationData.totalPages = Math.ceil(filteredData.length / window.markaPaginationData.itemsPerPage);
+        
+        var firstPage = filteredData.slice(0, window.markaPaginationData.itemsPerPage);
+        if (window.__originalPopulate) {
+          window.__originalPopulate('#marka-list', firstPage);
+        }
+        if (window.renderMarkaPagination) {
+          window.renderMarkaPagination();
+        }
+      }
     }
   }
 
@@ -1842,6 +1874,7 @@ window.addEventListener('load', function() {
             window.populatePortfolioTable = function(tableId, data) {
                 if (tableId === '#marka-list') {
                     window.markaPaginationData.allData = Array.isArray(data) ? data : [];
+                    window.markaPaginationData.allDataUnfiltered = Array.isArray(data) ? data : []; // Filtresiz tüm veriyi sakla
                     window.markaPaginationData.currentPage = 1;
                     
                     // İlk sayfayı göster
