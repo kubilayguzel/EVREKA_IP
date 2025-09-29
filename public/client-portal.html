@@ -685,13 +685,13 @@
                             <thead>
                                 <tr>
                                     <th class="col-index">#</th>
+                                    <th class="col-origin">Menşe</th>
                                     <th class="col-sample text-center">Marka Örneği</th>
                                     <th class="col-brand">Marka</th>
                                     <th class="col-appno">Başvuru No</th>
                                     <th class="col-appdate">Başvuru Tarihi</th>
                                     <th class="col-status">Durum</th>
                                     <th class="col-classes">Sınıflar</th>
-                                    <th class="col-origin">Menşe</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -1319,13 +1319,13 @@ console.log('📍 Origin Debug:', item.title || 'İsimsiz', 'origin:', item.orig
         const imgHtml = brandImg ? `<img src="${brandImg}" alt="marka" class="brand-thumb" style="height:128px !important;width:auto;border-radius:6px;object-fit:contain;"/>` : '-';
         const rowHtml = `
         <td class="col-index">${isInternational ? `<i class="fas fa-chevron-right mr-2"></i>` : ''}${index + 1}</td>
+        <td class="col-origin">${originDisplay}</td>
         <td class="col-sample">${imgHtml}</td>
         <td class="col-brand"><a href="#" data-toggle="modal" data-target="#portfolioDetailModal">${title}</a></td>
         <td class="col-appno">${appNumber}</td>
         <td class="col-appdate">${applicationDate}</td>
         <td class="col-status"><span class="badge badge-${badgeClass}">${statusText}</span></td>
         <td class="col-classes">${classes}</td>
-        <td class="col-origin">${originDisplay}</td>
         `;
 
         mainRow.innerHTML = rowHtml;
@@ -1350,11 +1350,11 @@ console.log('📍 Origin Debug:', item.title || 'İsimsiz', 'origin:', item.orig
                             <thead>
                                 <tr>
                                     <th>#</th>
+                                    <th>Menşe</th>
                                     <th>Başvuru No</th>
                                     <th>Başvuru Tarihi</th>
                                     <th>Durum</th>
                                     <th>Sınıflar</th>
-                                    <th>Menşe</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -1401,11 +1401,11 @@ console.log('📍 Origin Debug:', item.title || 'İsimsiz', 'origin:', item.orig
                                     return `
                                         <tr>
                                             <td>${index + 1}.${subIndex + 1}</td>
+                                            <td>${childOrigin}</td>
                                             <td>${subItem.applicationNumber || '-'}</td>
                                             <td>${subAppDate}</td>
                                             <td><span class="badge badge-${subBadgeClass}">${subStatus}</span></td>
                                             <td>${subClasses}</td>
-                                            <td>${childOrigin}</td>
                                         </tr>
                                     `;
                                 }).join('')}
@@ -1456,10 +1456,23 @@ async function fetchAndDisplayPortfolio() {
         }
         
         // Ülke verilerini çek
-        const countriesRef = collection(db, "common");
         const countriesDoc = await getDoc(doc(db, "common", "countries"));
-        const countriesData = countriesDoc.exists() ? countriesDoc.data() : {};
-        window.countriesMap = countriesData; // Global'e kaydet
+        if (countriesDoc.exists()) {
+            const countriesData = countriesDoc.data();
+            // Array'i map'e çevir: {code: name}
+            window.countriesMap = {};
+            if (countriesData.list && Array.isArray(countriesData.list)) {
+                countriesData.list.forEach(country => {
+                    if (country.code && country.name) {
+                        window.countriesMap[country.code] = country.name;
+                    }
+                });
+            }
+            console.log('✅ Ülkeler yüklendi:', Object.keys(window.countriesMap).length, 'ülke');
+        } else {
+            window.countriesMap = {};
+            console.warn('⚠️ Ülke verileri bulunamadı');
+        }
 
         // 2. İlgili müvekkillere ait tüm portföy verilerini çekme
         const portfolioRef = collection(db, "ipRecords");
