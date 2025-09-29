@@ -685,6 +685,7 @@
                             <thead>
                                 <tr>
                                     <th class="col-index">#</th>
+                                    <th class="col-origin">Menşe</th>
                                     <th class="col-sample text-center">Marka Örneği</th>
                                     <th class="col-brand">Marka</th>
                                     <th class="col-appno">Başvuru No</th>
@@ -1288,7 +1289,19 @@ console.log('📍 Origin Debug:', item.title || 'İsimsiz', 'origin:', item.orig
                 return rawDate; // Hata durumunda orijinal değeri döndür
             }
         })();
-        
+        // Menşe hesaplama
+        const originDisplay = (() => {
+            if (originBucket === 'TÜRKPATENT') {
+                return 'TÜRKPATENT';
+            } else if (item.origin === 'Yurtdışı Ulusal') {
+                const countryCode = item.country || '';
+                return window.countriesMap && window.countriesMap[countryCode] 
+                    ? window.countriesMap[countryCode] 
+                    : countryCode;
+            } else {
+                return item.origin || 'Bilinmiyor';
+            }
+        })();
         const badgeClass = {
             'Başvuru': 'primary',
             'application_filed': 'primary', 
@@ -1304,6 +1317,7 @@ console.log('📍 Origin Debug:', item.title || 'İsimsiz', 'origin:', item.orig
         const imgHtml = brandImg ? `<img src="${brandImg}" alt="marka" class="brand-thumb" style="height:128px !important;width:auto;border-radius:6px;object-fit:contain;"/>` : '-';
         const rowHtml = `
         <td class="col-index">${isInternational ? `<i class="fas fa-chevron-right mr-2"></i>` : ''}${index + 1}</td>
+        <td class="col-origin">${originDisplay}</td>
         <td class="col-sample">${imgHtml}</td>
         <td class="col-brand"><a href="#" data-toggle="modal" data-target="#portfolioDetailModal">${title}</a></td>
         <td class="col-appno">${appNumber}</td>
@@ -1334,11 +1348,11 @@ console.log('📍 Origin Debug:', item.title || 'İsimsiz', 'origin:', item.orig
                             <thead>
                                 <tr>
                                     <th>#</th>
-                                    <th>Marka Adı</th>
+                                    <th>Menşe</th>
                                     <th>Başvuru No</th>
+                                    <th>Başvuru Tarihi</th>
                                     <th>Durum</th>
                                     <th>Sınıflar</th>
-                                    <th>Son İşlem</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -1378,10 +1392,14 @@ console.log('📍 Origin Debug:', item.title || 'İsimsiz', 'origin:', item.orig
                                         'rejected': 'danger'
                                     }[subStatus] || 'secondary';
                                     
+                                    const childOrigin = window.countriesMap && window.countriesMap[subItem.country] 
+                                        ? window.countriesMap[subItem.country] 
+                                        : (subItem.country || 'Bilinmiyor');
+                                    
                                     return `
                                         <tr>
                                             <td>${index + 1}.${subIndex + 1}</td>
-                                            <td><a href="#" data-toggle="modal" data-target="#portfolioDetailModal">${subItem.title || 'İsimsiz'}</a></td>
+                                            <td>${childOrigin}</td>
                                             <td>${subItem.applicationNumber || '-'}</td>
                                             <td>${subAppDate}</td>
                                             <td><span class="badge badge-${subBadgeClass}">${subStatus}</span></td>
@@ -1434,7 +1452,24 @@ async function fetchAndDisplayPortfolio() {
             console.log("Kullanıcı ile ilişkili müvekkil bulunamadı.");
             return;
         }
-
+        // Ülke verilerini çek
+        const countriesDoc = await getDoc(doc(db, "common", "countries"));
+        if (countriesDoc.exists()) {
+            const countriesData = countriesDoc.data();
+            // Array'i map'e çevir: {code: name}
+            window.countriesMap = {};
+            if (countriesData.list && Array.isArray(countriesData.list)) {
+                countriesData.list.forEach(country => {
+                    if (country.code && country.name) {
+                        window.countriesMap[country.code] = country.name;
+                    }
+                });
+            }
+            console.log('✅ Ülkeler yüklendi:', Object.keys(window.countriesMap).length, 'ülke');
+        } else {
+            window.countriesMap = {};
+            console.warn('⚠️ Ülke verileri bulunamadı');
+        }
         // 2. İlgili müvekkillere ait tüm portföy verilerini çekme
         const portfolioRef = collection(db, "ipRecords");
         let allPortfolios = [];
@@ -1712,6 +1747,17 @@ function filterPaneByMense(paneSelector, menseValue){
             }
         }
     });
+        // Menşe kolonunu göster/gizle
+    var $originHeaders = $(paneSelector + " th.col-origin");
+    var $originCells = $(paneSelector + " td.col-origin");
+    
+    if (isTR) {
+        $originHeaders.hide();
+        $originCells.hide();
+    } else {
+        $originHeaders.show();
+        $originCells.show();
+    }
 }
 
 window.applyMenseFilterToActivePane = function(){
