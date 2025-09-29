@@ -1572,7 +1572,7 @@ function filterPaneByMense(paneSelector, menseValue){
         
         // Basit mantık: TÜRKPATENT ise true, değilse false
         var isTurkpatent = (rowOrigin === 'TÜRKPATENT');
-        var isYurtdisi = !isTurkpatent; // TÜRKPATENT değilse yurtdışı
+        var isYurtdisi = (rowOrigin && rowOrigin !== 'TÜRKPATENT');
         
         if($tr.hasClass('accordion-header-row')){
             // Akordeon Başlıklarını Yönet
