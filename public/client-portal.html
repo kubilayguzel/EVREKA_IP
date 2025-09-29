@@ -549,7 +549,13 @@
 .accordion-header-row[aria-expanded="true"] .fa-chevron-right {
     transform: rotate(90deg);
 }
-
+/* Akordeon detay satırı tam genişlikte */
+.accordion-table {
+    width: 100%;
+}
+#marka-list tbody tr > td[colspan] {
+    padding: 0 !important;
+}
 </style>
 
 </head>
@@ -1210,6 +1216,10 @@ function populatePortfolioTable(tableId, portfolioData) {
     tableBody.innerHTML = '';
 
     let visibleIndex = 0; // Görünen kayıtlar için sayaç
+    const startIndex = window.markaPaginationData && window.markaPaginationData.currentPage 
+        ? (window.markaPaginationData.currentPage - 1) * window.markaPaginationData.itemsPerPage 
+        : 0;
+    visibleIndex = startIndex;
     portfolioData.forEach((item, index) => {
         const mainRow = document.createElement('tr');
 
@@ -1352,12 +1362,14 @@ console.log('📍 Origin Debug:', item.title || 'İsimsiz', 'origin:', item.orig
                         <table class="table mb-0 accordion-table">
                             <thead>
                                 <tr>
-                                    <th>#</th>
-                                    <th>Menşe</th>
-                                    <th>Başvuru No</th>
-                                    <th>Başvuru Tarihi</th>
-                                    <th>Durum</th>
-                                    <th>Sınıflar</th>
+                                    <th style="width: 56px;">#</th>
+                                    <th style="width: 10%;">Menşe</th>
+                                    <th style="width: 120px;"></th> <!-- Boş kolon (marka örneği yerine) -->
+                                    <th style="width: 28%;"></th> <!-- Boş kolon (marka adı yerine) -->
+                                    <th style="width: 14%;">Başvuru No</th>
+                                    <th style="width: 14%;">Başvuru Tarihi</th>
+                                    <th style="width: 10%;">Durum</th>
+                                    <th style="width: 16%;">Sınıflar</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -1400,15 +1412,17 @@ console.log('📍 Origin Debug:', item.title || 'İsimsiz', 'origin:', item.orig
                                     const childOrigin = window.countriesMap && window.countriesMap[subItem.country] 
                                         ? window.countriesMap[subItem.country] 
                                         : (subItem.country || 'Bilinmiyor');
-                                        
+
                                     return `
                                         <tr>
-                                            <td>${visibleIndex}.${subIndex + 1}</td>
-                                            <td>${childOrigin}</td>
-                                            <td>${subItem.applicationNumber || '-'}</td>
-                                            <td>${subAppDate}</td>
-                                            <td><span class="badge badge-${subBadgeClass}">${subStatus}</span></td>
-                                            <td>${subClasses}</td>
+                                            <td style="width: 56px;">${visibleIndex}.${subIndex + 1}</td>
+                                            <td style="width: 10%;">${childOrigin}</td>
+                                            <td style="width: 120px;"></td>
+                                            <td style="width: 28%;"></td>
+                                            <td style="width: 14%;">${subItem.applicationNumber || '-'}</td>
+                                            <td style="width: 14%;">${subAppDate}</td>
+                                            <td style="width: 10%;"><span class="badge badge-${subBadgeClass}">${subStatus}</span></td>
+                                            <td style="width: 16%;">${subClasses}</td>
                                         </tr>
                                     `;
                                 }).join('')}
