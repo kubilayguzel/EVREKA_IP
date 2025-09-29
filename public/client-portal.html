@@ -711,7 +711,7 @@
                                     <td>15.08.2023</td>
                                 </tr>
                                 <tr>
-                                    <td colspan="7" class="p-0">
+                                    <td colspan="6" class="p-0">
                                         <div class="collapse" id="accordion-yurtdisi-1">
                                             <table class="table mb-0 accordion-table">
                                                 <thead>
@@ -1277,12 +1277,13 @@ function populatePortfolioTable(tableId, portfolioData) {
 
         mainRow.innerHTML = rowHtml;
 
-        if (isInternational) {
-            mainRow.classList.add('accordion-header-row');
-            mainRow.setAttribute('data-toggle', 'collapse');
-            mainRow.setAttribute('data-target', `#accordion-yurtdisi-${item.id}`);
-            mainRow.setAttribute('aria-expanded', 'false');
-            mainRow.setAttribute('aria-controls', `accordion-yurtdisi-${item.id}`);
+        const hasSubs = Array.isArray(item.subRegistrations) && item.subRegistrations.length > 0;
+        if (isInternational && hasSubs) {
+        mainRow.classList.add('accordion-header-row');
+        mainRow.setAttribute('data-toggle', 'collapse');
+        mainRow.setAttribute('data-target', `#accordion-yurtdisi-${item.id}`);
+        mainRow.setAttribute('aria-expanded', 'false');
+        mainRow.setAttribute('aria-controls', `accordion-yurtdisi-${item.id}`);
         }
 
         tableBody.appendChild(mainRow);
@@ -1290,7 +1291,7 @@ function populatePortfolioTable(tableId, portfolioData) {
         if (isInternational && item.subRegistrations && item.subRegistrations.length > 0) {
             const detailRow = document.createElement('tr');
             detailRow.innerHTML = `
-                <td colspan="7" class="p-0">
+                <td colspan="6" class="p-0">
                     <div class="collapse" id="accordion-yurtdisi-${item.id}">
                         <table class="table mb-0 accordion-table">
                             <thead>
@@ -1455,50 +1456,23 @@ async function fetchAndDisplayPortfolio() {
 
         // 4. Her bir sekmeyi kendi verisiyle doldurma
 
-        
-const __markaData = Array.isArray(markaList) ? markaList : [];
-// Global tam liste
-window.__markaAll = __markaData.slice();
+        const __markaData = Array.isArray(markaList) ? markaList : [];
 
-function originBucketOf(item){
-  const originRaw = (item.origin || 'TÜRKPATENT').toString().trim().toUpperCase();
-  return (originRaw === 'TÜRKPATENT' || originRaw === 'TURKPATENT') ? 'TÜRKPATENT' : 'YURTDISI';
-}
-function getFilteredMarkaData(){
-  const sel = document.getElementById('menseFilter');
-  const val = (sel && sel.value) ? sel.value : 'TÜRKPATENT';
-  if(val === 'HEPSI') return window.__markaAll || [];
-  return (window.__markaAll || []).filter(it => {
-    const bucket = originBucketOf(it);
-    return (val === 'TÜRKPATENT') ? (bucket === 'TÜRKPATENT') : (bucket !== 'TÜRKPATENT');
-  });
-}
+        const __markaPag = new Pagination({
+        itemsPerPage: 10,                 // default 10
+        containerId: 'markaPagination',   // aşağıda ekleyeceğimiz container
+        onPageChange: (page, perPage) => {
+            const start = (page - 1) * perPage;
+            const end   = start + perPage;
+            const slice = __markaData.slice(start, end);
+            populatePortfolioTable('#marka-list', slice);
+        }
+        });
 
-const __markaPag = new Pagination({
-  itemsPerPage: 10,
-  containerId: 'markaPagination',
-  onPageChange: (page, perPage) => {
-    const data = getFilteredMarkaData();
-    const start = (page - 1) * perPage;
-    const slice = data.slice(start, start + perPage);
-    populatePortfolioTable('#marka-list', slice);
-  }
-});
+        __markaPag.update(__markaData.length);
+        populatePortfolioTable('#marka-list', __markaData.slice(0, __markaPag.getItemsPerPage()));
 
-// İlk yükleme filtreli
-__markaPag.update(getFilteredMarkaData().length);
-__markaPag.goToPage(1);
-
-// Menşe değiştiğinde sayfalamayı güncelle
-const menseSel = document.getElementById('menseFilter');
-if (menseSel && !menseSel.__wired) {
-  menseSel.addEventListener('change', () => {
-    __markaPag.update(getFilteredMarkaData().length);
-    __markaPag.goToPage(1);
-  });
-  menseSel.__wired = true;
-}
-populatePortfolioTable('#patent-list', patentList);
+        populatePortfolioTable('#patent-list', patentList);
         populatePortfolioTable('#tasarim-list', tasarimList);
         populatePortfolioTable('#dava-itiraz-list', davaIItirazList);
         setDashboardLoading(false);
