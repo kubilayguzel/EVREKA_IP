@@ -1521,8 +1521,7 @@ document.addEventListener('DOMContentLoaded', function () {
 function getRowOrigin($row){
     // data-origin attribute'ünü kontrol et
     var origin = $row.attr('data-origin');
-    console.log('🔍 data-origin:', origin, 'Row:', $row.find('td').eq(2).text().substring(0, 30)); // DEBUG
-    
+   
     if(origin && origin !== '') {
         return origin;
     }
