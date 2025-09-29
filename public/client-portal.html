@@ -1232,10 +1232,6 @@ console.log('📍 Origin Debug:', item.title || 'İsimsiz', 'origin:', item.orig
             return; // Bu kayıt için hiçbir şey yapma, bir sonraki kayda geç
         }
         
-        // Görünür kayıtları say
-        visibleIndex++;
-
-        
         // Parent ise, child kayıtlarını bul (tüm listeden)
         let childRecords = [];
         if (isParent && window.markaPaginationData && window.markaPaginationData.allDataUnfiltered) {
@@ -1336,6 +1332,8 @@ console.log('📍 Origin Debug:', item.title || 'İsimsiz', 'origin:', item.orig
 
         mainRow.innerHTML = rowHtml;
 
+        visibleIndex++;
+        
         if (isInternational) {
         mainRow.classList.add('accordion-header-row');
         mainRow.setAttribute('data-toggle', 'collapse');
