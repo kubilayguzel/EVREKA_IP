@@ -1466,19 +1466,36 @@ async function fetchAndDisplayPortfolio() {
 
         const __markaData = Array.isArray(markaList) ? markaList : [];
 
+        // İlk önce tüm veriyi global olarak sakla
+        window.markaPaginationData = window.markaPaginationData || {};
+        window.markaPaginationData.allDataUnfiltered = __markaData;
+        window.markaPaginationData.allData = __markaData;
+        window.markaPaginationData.currentPage = 1;
+        window.markaPaginationData.itemsPerPage = 10;
+
         const __markaPag = new Pagination({
-        itemsPerPage: 10,                 // default 10
-        containerId: 'markaPagination',   // aşağıda ekleyeceğimiz container
+        itemsPerPage: 10,
+        containerId: 'markaPagination',
         onPageChange: (page, perPage) => {
             const start = (page - 1) * perPage;
             const end   = start + perPage;
-            const slice = __markaData.slice(start, end);
+            // allData kullan (filtrelenmiş veri)
+            const slice = window.markaPaginationData.allData.slice(start, end);
             populatePortfolioTable('#marka-list', slice);
+            // Filtre tekrar uygula
+            setTimeout(() => {
+                if (typeof applyMenseFilterToActivePane === 'function') {
+                    var $activePane = $(".tab-content > .tab-pane.show.active");
+                    if ($activePane.attr("id") === 'marka-list') {
+                        filterPaneByMense("#marka-list", $("#menseFilter").val() || 'TÃœRKPATENT');
+                    }
+                }
+            }, 50);
         }
         });
 
         __markaPag.update(__markaData.length);
-        populatePortfolioTable('#marka-list', __markaData.slice(0, __markaPag.getItemsPerPage()));
+        populatePortfolioTable('#marka-list', __markaData.slice(0, 10));
 
         populatePortfolioTable('#patent-list', patentList);
         populatePortfolioTable('#tasarim-list', tasarimList);
