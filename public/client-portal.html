@@ -90,10 +90,6 @@
         color: inherit;                    /* badge iç yazı okunur kalsın */
         }
 
-        .dark-mode .accordion-header-row {
-            border-bottom: 1px solid #585b63;
-        }
-
         .dark-mode .badge-filed { background-color: #4da6ff; color: #1e3c72; }
         .dark-mode .badge-registered { background-color: #5cb85c; color: #1a3b1c; }
         .dark-mode .badge-objection { background-color: #f0ad4e; color: #4e351b; }
@@ -191,10 +187,6 @@
         .light-mode .task-card .task-description { color: #555; }
         .light-mode .task-card .task-meta { color: #fb8c00; }
         .light-mode .form-control { background-color: #fff; border-color: #ccc; color: #333; }
-
-        .light-mode .accordion-header-row {
-            border-bottom: 1px solid #e9ecef;
-        }
 
         /* === Genel Stiller (Temadan bağımsız) === */
         body { 
@@ -1782,43 +1774,6 @@ function filterPaneByMense(paneSelector, menseValue){
         $originHeaders.show();
         $originCells.show();
     }
-
-    /* filterPaneByMense FONKSİYONUNUN İÇİNE EKLE (~satır 910) */
-    // 5. Adım: Görünür Satırları Yeniden Numaralandırma
-    var currentVisibleIndex = 0;
-    $tbody.children("tr").each(function(){
-        var $tr = $(this);
-        
-        // Sadece normal satırları (colspan'lı olmayanları) say
-        if($tr.is(':visible') && $tr.find('td').length > 1){ 
-            currentVisibleIndex++;
-            
-            // İlk kolonu bul ve içeriği güncelle
-            var $indexCell = $tr.find('td:eq(0)'); // İlk <td>
-            
-            // Eğer akordeon başlığı ise, içindeki ok ikonunu koru
-            if ($tr.hasClass('accordion-header-row')) {
-                // Ok ikonunun HTML'ini al (veya boş string)
-                var $icon = $indexCell.find('.fa-chevron-right');
-                var iconHtml = $icon.length ? $icon.prop('outerHTML') : '';
-                
-                // Sadece sayacı güncelle
-                $indexCell.html(iconHtml + currentVisibleIndex);
-            } else {
-                $indexCell.text(currentVisibleIndex);
-            }
-            
-            // Child satırları (akordeonun içindeki) numaralandır
-            var $detailRow = $tr.next('tr');
-            if ($detailRow.is(':visible') && $detailRow.find('.accordion-table').length) {
-                $detailRow.find('.accordion-table tbody tr').each(function(subIndex){
-                    $(this).find('td:eq(0)').text(currentVisibleIndex + '.' + (subIndex + 1));
-                });
-            }
-        }
-    });
-
-    console.log('=== FILTER SONU: Görünür Kayıt Sayısı:', currentVisibleIndex);
 }
 
 
