@@ -395,12 +395,10 @@
         }
     
 /* === Client Portal | Marka listesi kolon dağılımı === */
-
-#marka-list table { table-layout: fixed; } /* auto yerine fixed */
+#marka-list table { table-layout: auto; }
 #marka-list th.col-index, #marka-list td.col-index { width: 56px; white-space: nowrap; }
-#marka-list th.col-origin, #marka-list td.col-origin { width: 10%; white-space: nowrap; }
-#marka-list th.col-sample, #marka-list td.col-sample { width: 120px; text-align:center; }
 #marka-list th.col-brand, #marka-list td.col-brand { width: 28%; }
+#marka-list th.col-sample, #marka-list td.col-sample { width: 120px; text-align:center; }
 #marka-list th.col-appno, #marka-list td.col-appno { width: 14%; white-space: nowrap; }
 #marka-list th.col-appdate, #marka-list td.col-appdate { width: 14%; white-space: nowrap; }
 #marka-list th.col-status, #marka-list td.col-status { width: 10%; white-space: nowrap; }
@@ -551,18 +549,9 @@
 .accordion-header-row[aria-expanded="true"] .fa-chevron-right {
     transform: rotate(90deg);
 }
-/* Child tablo hizalama */
-#marka-list .accordion-table {
-    table-layout: fixed !important;
-    width: 100% !important;
-}
-#marka-list .accordion-table th,
-#marka-list .accordion-table td {
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
 
 </style>
+
 </head>
 <body>
     <header class="top-header">
@@ -693,18 +682,17 @@
 <div class="tab-content table-responsive mt-3">
                     <div class="tab-pane fade show active" id="marka-list">
                         <table class="table table-hover">
-                        <thead>
-                            <tr>
-                                <th class="col-index">#</th>
-                                <th class="col-origin">Menşe</th>
-                                <th class="col-sample text-center">Marka Örneği</th>
-                                <th class="col-brand">Marka</th>
-                                <th class="col-appno">Başvuru No</th>
-                                <th class="col-appdate">Başvuru Tarihi</th>
-                                <th class="col-status">Durum</th>
-                                <th class="col-classes">Sınıflar</th>
-                            </tr>
-                        </thead>
+                            <thead>
+                                <tr>
+                                    <th class="col-index">#</th>
+                                    <th class="col-sample text-center">Marka Örneği</th>
+                                    <th class="col-brand">Marka</th>
+                                    <th class="col-appno">Başvuru No</th>
+                                    <th class="col-appdate">Başvuru Tarihi</th>
+                                    <th class="col-status">Durum</th>
+                                    <th class="col-classes">Sınıflar</th>
+                                </tr>
+                            </thead>
                             <tbody>
                                 <tr>
                                     <td>1</td>
@@ -1220,8 +1208,6 @@ function populatePortfolioTable(tableId, portfolioData) {
     if (!tableBody) return;
     tableBody.innerHTML = '';
 
-    let visibleIndex = 0; // Görünen kayıtlar için sayaç
-    
     portfolioData.forEach((item, index) => {
         const mainRow = document.createElement('tr');
 
@@ -1303,20 +1289,6 @@ console.log('📍 Origin Debug:', item.title || 'İsimsiz', 'origin:', item.orig
             }
         })();
         
-        // Menşe hesaplama
-        const originDisplay = (() => {
-            if (originBucket === 'TÜRKPATENT') {
-                return 'TÜRKPATENT';
-            } else if (item.origin === 'Yurtdışı Ulusal') {
-                const countryCode = item.country || '';
-                return window.countriesMap && window.countriesMap[countryCode] 
-                    ? window.countriesMap[countryCode] 
-                    : countryCode;
-            } else {
-                return item.origin || 'Bilinmiyor';
-            }
-        })();
-        
         const badgeClass = {
             'Başvuru': 'primary',
             'application_filed': 'primary', 
@@ -1328,12 +1300,10 @@ console.log('📍 Origin Debug:', item.title || 'İsimsiz', 'origin:', item.orig
             'rejected': 'danger'
         }[statusText] || 'secondary';
 
-        visibleIndex++;
         const brandImg = item.brandImageUrl || item.brandImage || '';
         const imgHtml = brandImg ? `<img src="${brandImg}" alt="marka" class="brand-thumb" style="height:128px !important;width:auto;border-radius:6px;object-fit:contain;"/>` : '-';
         const rowHtml = `
-        <td class="col-index">${isInternational ? `<i class="fas fa-chevron-right mr-2"></i>` : ''}${visibleIndex}</td>
-        <td class="col-origin">${originDisplay}</td>
+        <td class="col-index">${isInternational ? `<i class="fas fa-chevron-right mr-2"></i>` : ''}${index + 1}</td>
         <td class="col-sample">${imgHtml}</td>
         <td class="col-brand"><a href="#" data-toggle="modal" data-target="#portfolioDetailModal">${title}</a></td>
         <td class="col-appno">${appNumber}</td>
@@ -1343,7 +1313,7 @@ console.log('📍 Origin Debug:', item.title || 'İsimsiz', 'origin:', item.orig
         `;
 
         mainRow.innerHTML = rowHtml;
-             
+
         if (isInternational) {
         mainRow.classList.add('accordion-header-row');
         mainRow.setAttribute('data-toggle', 'collapse');
@@ -1358,19 +1328,17 @@ console.log('📍 Origin Debug:', item.title || 'İsimsiz', 'origin:', item.orig
             const detailRow = document.createElement('tr');
             detailRow.setAttribute('data-origin', originBucket);
             detailRow.innerHTML = `
-                <td colspan="8" class="p-0">
+                <td colspan="7" class="p-0">
                     <div class="collapse" id="accordion-yurtdisi-${item.id}">
                         <table class="table mb-0 accordion-table">
                             <thead>
                                 <tr>
-                                    <th class="col-index">#</th>
-                                    <th class="col-origin">Menşe</th>
-                                    <th class="col-sample"></th>
-                                    <th class="col-brand"></th>
-                                    <th class="col-appno">Başvuru No</th>
-                                    <th class="col-appdate">Başvuru Tarihi</th>
-                                    <th class="col-status">Durum</th>
-                                    <th class="col-classes">Sınıflar</th>
+                                    <th>#</th>
+                                    <th>Marka Adı</th>
+                                    <th>Başvuru No</th>
+                                    <th>Durum</th>
+                                    <th>Sınıflar</th>
+                                    <th>Son İşlem</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -1410,20 +1378,14 @@ console.log('📍 Origin Debug:', item.title || 'İsimsiz', 'origin:', item.orig
                                         'rejected': 'danger'
                                     }[subStatus] || 'secondary';
                                     
-                                    const childOrigin = window.countriesMap && window.countriesMap[subItem.country] 
-                                        ? window.countriesMap[subItem.country] 
-                                        : (subItem.country || 'Bilinmiyor');
-
                                     return `
                                         <tr>
-                                            <td class="col-index">${visibleIndex}.${subIndex + 1}</td>
-                                            <td class="col-origin">${childOrigin}</td>
-                                            <td class="col-sample"></td>
-                                            <td class="col-brand"></td>
-                                            <td class="col-appno">${subItem.applicationNumber || '-'}</td>
-                                            <td class="col-appdate">${subAppDate}</td>
-                                            <td class="col-status"><span class="badge badge-${subBadgeClass}">${subStatus}</span></td>
-                                            <td class="col-classes">${subClasses}</td>
+                                            <td>${index + 1}.${subIndex + 1}</td>
+                                            <td><a href="#" data-toggle="modal" data-target="#portfolioDetailModal">${subItem.title || 'İsimsiz'}</a></td>
+                                            <td>${subItem.applicationNumber || '-'}</td>
+                                            <td>${subAppDate}</td>
+                                            <td><span class="badge badge-${subBadgeClass}">${subStatus}</span></td>
+                                            <td>${subClasses}</td>
                                         </tr>
                                     `;
                                 }).join('')}
@@ -1471,25 +1433,6 @@ async function fetchAndDisplayPortfolio() {
         if (!linkedPersonIds || linkedPersonIds.length === 0) {
             console.log("Kullanıcı ile ilişkili müvekkil bulunamadı.");
             return;
-        }
-        
-        // Ülke verilerini çek
-        const countriesDoc = await getDoc(doc(db, "common", "countries"));
-        if (countriesDoc.exists()) {
-            const countriesData = countriesDoc.data();
-            // Array'i map'e çevir: {code: name}
-            window.countriesMap = {};
-            if (countriesData.list && Array.isArray(countriesData.list)) {
-                countriesData.list.forEach(country => {
-                    if (country.code && country.name) {
-                        window.countriesMap[country.code] = country.name;
-                    }
-                });
-            }
-            console.log('✅ Ülkeler yüklendi:', Object.keys(window.countriesMap).length, 'ülke');
-        } else {
-            window.countriesMap = {};
-            console.warn('⚠️ Ülke verileri bulunamadı');
         }
 
         // 2. İlgili müvekkillere ait tüm portföy verilerini çekme
@@ -1769,20 +1712,7 @@ function filterPaneByMense(paneSelector, menseValue){
             }
         }
     });
-
-    // Menşe kolonunu göster/gizle
-    var $originHeaders = $(paneSelector + " th.col-origin");
-    var $originCells = $(paneSelector + " td.col-origin");
-    
-    if (isTR) {
-        $originHeaders.hide();
-        $originCells.hide();
-    } else {
-        $originHeaders.show();
-        $originCells.show();
-    }
 }
-
 
 window.applyMenseFilterToActivePane = function(){
     var val = $("#menseFilter").val() || 'TÃœRKPATENT'; 
@@ -1817,7 +1747,9 @@ window.applyMenseFilterToActivePane = function(){
         window.markaPaginationData.totalPages = Math.ceil(filteredData.length / window.markaPaginationData.itemsPerPage);
         
         var firstPage = filteredData.slice(0, window.markaPaginationData.itemsPerPage);
-        populatePortfolioTable('#marka-list', firstPage);
+        if (window.__originalPopulate) {
+          window.__originalPopulate('#marka-list', firstPage);
+        }
         if (window.renderMarkaPagination) {
           window.renderMarkaPagination();
         }
