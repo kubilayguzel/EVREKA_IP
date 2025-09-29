@@ -1806,9 +1806,7 @@ window.applyMenseFilterToActivePane = function(){
         window.markaPaginationData.totalPages = Math.ceil(filteredData.length / window.markaPaginationData.itemsPerPage);
         
         var firstPage = filteredData.slice(0, window.markaPaginationData.itemsPerPage);
-        if (window.__originalPopulate) {
-          window.__originalPopulate('#marka-list', firstPage);
-        }
+        populatePortfolioTable('#marka-list', firstPage);
         if (window.renderMarkaPagination) {
           window.renderMarkaPagination();
         }
