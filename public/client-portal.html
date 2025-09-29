@@ -1206,13 +1206,8 @@ function populatePortfolioTable(tableId, portfolioData) {
         const originRaw = (item.origin || 'TÜRKPATENT').toString().trim();
         const originUpper = originRaw.toUpperCase();
 
-        console.log('📍 Origin Debug:', {
-            title: item.title,
-            itemOrigin: item.origin,
-            originRaw: originRaw,
-            originUpper: originUpper
-        });
-        
+console.log('📍 Origin Debug:', item.title || 'İsimsiz', 'origin:', item.origin, 'raw:', originRaw, 'upper:', originUpper);
+
         const originBucket = (originUpper === 'TÜRKPATENT' || originUpper === 'TURKPATENT')
         ? 'TÜRKPATENT'
         : 'YURTDISI';
@@ -1464,7 +1459,11 @@ async function fetchAndDisplayPortfolio() {
         });
 
         // 4. Her bir sekmeyi kendi verisiyle doldurma
-
+        console.log('🔍 Marka listesi origin dağılımı:', markaList.map(m => ({
+            title: m.title || 'İsimsiz',
+            origin: m.origin
+        })).slice(0, 10));
+        
         const __markaData = Array.isArray(markaList) ? markaList : [];
 
         const __markaPag = new Pagination({
