@@ -1320,7 +1320,7 @@ console.log('📍 Origin Debug:', item.title || 'İsimsiz', 'origin:', item.orig
         <td class="col-index">${isInternational ? `<i class="fas fa-chevron-right mr-2"></i>` : ''}${index + 1}</td>
         <td class="col-origin">${originDisplay}</td>
         <td class="col-sample">${imgHtml}</td>
-        <td class="col-brand"><a href="#" data-toggle="modal" data-target="#portfolioDetailModal">${title}</a></td>
+        <td class="col-brand"><a href="#" class="portfolio-detail-link" data-item-id="${item.id}" data-toggle="modal" data-target="#portfolioDetailModal">${title}</a></td>
         <td class="col-appno">${appNumber}</td>
         <td class="col-appdate">${applicationDate}</td>
         <td class="col-status"><span class="badge badge-${badgeClass}">${statusText}</span></td>
@@ -1937,6 +1937,90 @@ async function fetchAndDisplayInvoices(linkedPersonIds){
         `);
     });
 }
+
+// Modal açıldığında verileri set et
+$(document).on('show.bs.modal', '#portfolioDetailModal', function (e) {
+    const triggerLink = $(e.relatedTarget);
+    const itemId = triggerLink.data('item-id');
+    
+    if (!itemId) return;
+    
+    // Tüm verilerden ilgili kaydı bul
+    const allData = window.markaPaginationData?.allDataUnfiltered || [];
+    const item = allData.find(p => p.id === itemId);
+    
+    if (!item) return;
+    
+    // Modal başlığını set et
+    $('#portfolioDetailModalLabel').text((item.title || item.brandText || 'Detaylar'));
+    
+    // Marka görseli
+    const brandImg = item.brandImageUrl || item.brandImage || 'https://via.placeholder.com/150';
+    $('#portfolioDetailModal .card-body img').attr('src', brandImg);
+    
+    // Varlık Detayları
+    const type = item.type === 'trademark' ? 'Marka' : 
+                 item.type === 'patent' ? 'Patent' : 
+                 item.type === 'design' ? 'Tasarım' : 'Diğer';
+    const appNo = item.applicationNumber || item.applicationNo || '-';
+    const regNo = item.registrationNumber || item.registrationNo || '-';
+    const classes = (() => {
+        if (Array.isArray(item.goodsAndServicesByClass) && item.goodsAndServicesByClass.length) {
+            const arr = item.goodsAndServicesByClass.map(c => parseInt(c.classNo,10)).filter(n => !isNaN(n));
+            return Array.from(new Set(arr)).sort((a,b)=>a-b).join(', ');
+        }
+        return item.classes || '-';
+    })();
+    const status = item.status || item.statusText || 'Bilinmiyor';
+    const badgeClass = {
+        'Başvuru': 'primary',
+        'application_filed': 'primary',
+        'Tescilli': 'success',
+        'registered': 'success',
+        'İtiraz': 'warning',
+        'objection': 'warning',
+        'Reddedildi': 'danger',
+        'rejected': 'danger'
+    }[status] || 'secondary';
+    
+    // Tarihleri formatla
+    const formatDate = (dateStr) => {
+        if (!dateStr || dateStr === '-') return '-';
+        try {
+            const date = new Date(dateStr);
+            if (isNaN(date.getTime())) return dateStr;
+            const day = String(date.getDate()).padStart(2, '0');
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const year = date.getFullYear();
+            return `${day}.${month}.${year}`;
+        } catch (error) {
+            return dateStr;
+        }
+    };
+    
+    const appDate = formatDate(item.applicationDate || item.application_date);
+    const regDate = formatDate(item.registrationDate || item.registration_date);
+    const renewalDate = formatDate(item.renewalDate || item.renewal_date);
+    
+    // Varlık Detayları kartını güncelle
+    const detailsCard = $('#portfolioDetailModal .row .col-md-4:eq(1) .card-body');
+    detailsCard.html(`
+        <p><strong>Tür:</strong> ${type}</p>
+        <p><strong>Başvuru No:</strong> ${appNo}</p>
+        <p><strong>Tescil No:</strong> ${regNo}</p>
+        <p><strong>Sınıf:</strong> ${classes}</p>
+        <p><strong>Durum:</strong> <span class="badge badge-${badgeClass}">${status}</span></p>
+    `);
+    
+    // Tarihler kartını güncelle
+    const datesCard = $('#portfolioDetailModal .row .col-md-4:eq(2) .card-body');
+    datesCard.html(`
+        <p><strong>Başvuru Tarihi:</strong> ${appDate}</p>
+        <p><strong>Tescil Tarihi:</strong> ${regDate}</p>
+        <p><strong>Yenileme Tarihi:</strong> ${renewalDate}</p>
+    `);
+});
+
 </script>
 <script>
 // Basit pagination implementasyonu - module import sorunu için
