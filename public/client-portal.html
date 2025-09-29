@@ -1317,6 +1317,7 @@ console.log('📍 Origin Debug:', item.title || 'İsimsiz', 'origin:', item.orig
             'rejected': 'danger'
         }[statusText] || 'secondary';
 
+        visibleIndex++;
         const brandImg = item.brandImageUrl || item.brandImage || '';
         const imgHtml = brandImg ? `<img src="${brandImg}" alt="marka" class="brand-thumb" style="height:128px !important;width:auto;border-radius:6px;object-fit:contain;"/>` : '-';
         const rowHtml = `
@@ -1331,9 +1332,7 @@ console.log('📍 Origin Debug:', item.title || 'İsimsiz', 'origin:', item.orig
         `;
 
         mainRow.innerHTML = rowHtml;
-
-        visibleIndex++;
-        
+             
         if (isInternational) {
         mainRow.classList.add('accordion-header-row');
         mainRow.setAttribute('data-toggle', 'collapse');
