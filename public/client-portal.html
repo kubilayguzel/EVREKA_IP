@@ -395,10 +395,12 @@
         }
     
 /* === Client Portal | Marka listesi kolon dağılımı === */
-#marka-list table { table-layout: auto; }
+
+#marka-list table { table-layout: fixed; } /* auto yerine fixed */
 #marka-list th.col-index, #marka-list td.col-index { width: 56px; white-space: nowrap; }
-#marka-list th.col-brand, #marka-list td.col-brand { width: 28%; }
+#marka-list th.col-origin, #marka-list td.col-origin { width: 10%; white-space: nowrap; }
 #marka-list th.col-sample, #marka-list td.col-sample { width: 120px; text-align:center; }
+#marka-list th.col-brand, #marka-list td.col-brand { width: 28%; }
 #marka-list th.col-appno, #marka-list td.col-appno { width: 14%; white-space: nowrap; }
 #marka-list th.col-appdate, #marka-list td.col-appdate { width: 14%; white-space: nowrap; }
 #marka-list th.col-status, #marka-list td.col-status { width: 10%; white-space: nowrap; }
@@ -549,7 +551,11 @@
 .accordion-header-row[aria-expanded="true"] .fa-chevron-right {
     transform: rotate(90deg);
 }
-
+/* Child tablo hizalama */
+#marka-list .accordion-table {
+    table-layout: fixed;
+    width: 100%;
+}
 
 </style>
 </head>
