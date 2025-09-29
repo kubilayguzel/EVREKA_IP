@@ -1203,7 +1203,7 @@ function populatePortfolioTable(tableId, portfolioData) {
     portfolioData.forEach((item, index) => {
         const mainRow = document.createElement('tr');
         const isInternational = item.origin === 'YURTDISI';
-        
+        mainRow.setAttribute('data-origin', origin);
         // Veritabanından gelen gerçek veri yapısına göre düzelt
         const title = item.title || item.brandText || 'İsimsiz';
         const appNumber = item.applicationNumber || item.applicationNo || '-';
@@ -1517,13 +1517,27 @@ document.addEventListener('DOMContentLoaded', function () {
 
 // Diğer tüm scriptler
 (function(){
-  function rowHasMarker($row, marker){
-    // Marka Adının bulunduğu 3. sütunu (index 2) kontrol et
-    // Not: Bu satırı Marka Adı metni (TR) veya (WIPO) içeriyorsa doğru çalışır.
-    var td = $row.find('td').eq(2); 
-    if(td.length === 0) return false;
+
+function getRowOrigin($row){
+    // data-origin attribute'ünü kontrol et
+    var origin = $row.attr('data-origin');
+    if(origin) return origin;
+    
+    // Eğer data-origin yoksa, marka adı sütunundaki metni kontrol et
+    var td = $row.find('td').eq(2); // Marka adı sütunu
+    if(td.length === 0) return '';
     var text = td.text() || "";
-    return text.indexOf(marker) !== -1;
+    
+    // Metinde (WIPO), (ARIPO), (EUIPO) vb. varsa YURTDIŞI
+    if(text.indexOf('(WIPO)') !== -1 || 
+       text.indexOf('(ARIPO)') !== -1 || 
+       text.indexOf('(EUIPO)') !== -1 ||
+       text.indexOf('(OAPI)') !== -1) {
+      return 'YURTDISI';
+    }
+    
+    // (TR) varsa veya hiçbir işaret yoksa TÜRKPATENT
+    return 'TÜRKPATENT';
   }
 
   function toggleWipoGroup($headerRow, show){
@@ -1550,8 +1564,9 @@ function filterPaneByMense(paneSelector, menseValue){
 
     $rows.each(function(){
         var $tr = $(this);
-        var isWipo = rowHasMarker($tr, '(WIPO)');
-        var isTr = rowHasMarker($tr, '(TR)');
+        var rowOrigin = getRowOrigin($tr);
+        var isTurkpatent = (rowOrigin === 'TÜRKPATENT');
+        var isYurtdisi = (rowOrigin === 'YURTDISI' || rowOrigin === 'WIPO' || rowOrigin === 'EUIPO' || rowOrigin === 'ARIPO' || rowOrigin === 'OAPI' || rowOrigin === 'Yurtdışı Ulusal');
         
         if($tr.hasClass('accordion-header-row')){
             // Akordeon Başlıklarını Yönet
@@ -1559,11 +1574,11 @@ function filterPaneByMense(paneSelector, menseValue){
                 // HEPSI: Tüm akordeon gruplarını göster
                 toggleWipoGroup($tr, true);
             } else if (isTR) {
-                // TÜRKPATENT: Sadece TR akordeonlarını göster, WIPO'ları gizle
-                toggleWipoGroup($tr, isTr);
+                // TÜRKPATENT: Sadece TÜRKPATENT akordeonlarını göster
+                toggleWipoGroup($tr, isTurkpatent);
             } else if (isYD) {
-                // YURTDISI: Sadece WIPO akordeonlarını göster, TR'leri gizle
-                toggleWipoGroup($tr, isWipo);
+                // YURTDISI: Sadece yurtdışı akordeonlarını göster
+                toggleWipoGroup($tr, isYurtdisi);
             }
         } else {
             // Normal Satırları Yönet
@@ -1571,15 +1586,15 @@ function filterPaneByMense(paneSelector, menseValue){
                 // HEPSI: Tüm satırları göster
                 $tr.show();
             } else if (isTR) {
-                // TÜRKPATENT: Sadece TR origin'li kayıtları göster
-                if (isTr) {
+                // TÜRKPATENT: Sadece TÜRKPATENT origin'li kayıtları göster
+                if (isTurkpatent) {
                     $tr.show();
                 } else {
                     $tr.hide();
                 }
             } else if (isYD) {
-                // YURTDISI: TR origin'li olmayanları (WIPO vb.) göster
-                if (!isTr) {
+                // YURTDISI: TÜRKPATENT olmayan kayıtları göster
+                if (isYurtdisi) {
                     $tr.show();
                 } else {
                     $tr.hide();
@@ -1588,7 +1603,6 @@ function filterPaneByMense(paneSelector, menseValue){
         }
     });
   }
-
 
   function applyMenseFilterToActivePane(){
     // TÜRKPATENT varsayılan olduğu için başlangıçta değer alınamama sorunu yaşanmaması için:
