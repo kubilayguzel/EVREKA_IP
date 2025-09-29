@@ -1202,9 +1202,15 @@ function populatePortfolioTable(tableId, portfolioData) {
 
     portfolioData.forEach((item, index) => {
         const mainRow = document.createElement('tr');
-        const origin = item.origin || 'TÜRKPATENT';
-        const isInternational = origin === 'YURTDISI';
-        mainRow.setAttribute('data-origin', origin);
+
+        const originRaw = (item.origin || 'TÜRKPATENT').toString().trim();
+        const originUpper = originRaw.toUpperCase();
+        const originBucket = (originUpper === 'TÜRKPATENT' || originUpper === 'TURKPATENT')
+        ? 'TÜRKPATENT'
+        : 'YURTDISI';
+        const isInternational = (originBucket === 'YURTDISI');
+        mainRow.setAttribute('data-origin', originBucket);
+
         // Veritabanından gelen gerçek veri yapısına göre düzelt
         const title = item.title || item.brandText || 'İsimsiz';
         const appNumber = item.applicationNumber || item.applicationNo || '-';
@@ -1519,29 +1525,12 @@ document.addEventListener('DOMContentLoaded', function () {
 (function(){
 
 function getRowOrigin($row){
-    // data-origin attribute'ünü kontrol et
-    var origin = $row.attr('data-origin');
-   
-    if(origin && origin !== '') {
-        return origin;
-    }
-    
-    // Eğer data-origin yoksa, marka adı sütunundaki metni kontrol et
-    var td = $row.find('td').eq(2); // Marka adı sütunu
-    if(td.length === 0) return 'TÜRKPATENT';
-    var text = td.text() || "";
-    
-    // Metinde (WIPO), (ARIPO), (EUIPO) vb. varsa YURTDIŞI
-    if(text.indexOf('(WIPO)') !== -1 || 
-       text.indexOf('(ARIPO)') !== -1 || 
-       text.indexOf('(EUIPO)') !== -1 ||
-       text.indexOf('(OAPI)') !== -1) {
-      return 'YURTDISI';
-    }
-    
-    // (TR) varsa veya hiçbir işaret yoksa TÜRKPATENT
-    return 'TÜRKPATENT';
-  }
+  // populate sırasında data-origin zaten kovaya çevrildi: 'TÜRKPATENT' | 'YURTDISI'
+  var v = ($row.attr('data-origin') || '').toString().toUpperCase().trim();
+  if (v === 'TÜRKPATENT' || v === 'TURKPATENT') return 'TÜRKPATENT';
+  // Boş veya farklı her değer yabancı muamelesi görsün
+  return 'YURTDISI';
+}
 
   function toggleWipoGroup($headerRow, show){
     var $detailRow = $headerRow.next('tr');
