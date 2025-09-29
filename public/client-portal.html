@@ -1210,10 +1210,7 @@ function populatePortfolioTable(tableId, portfolioData) {
     tableBody.innerHTML = '';
 
     let visibleIndex = 0; // Görünen kayıtlar için sayaç
-    const startIndex = window.markaPaginationData && window.markaPaginationData.currentPage 
-        ? (window.markaPaginationData.currentPage - 1) * window.markaPaginationData.itemsPerPage 
-        : 0;
-    visibleIndex = startIndex;
+    
     portfolioData.forEach((item, index) => {
         const mainRow = document.createElement('tr');
 
@@ -1235,20 +1232,8 @@ console.log('📍 Origin Debug:', item.title || 'İsimsiz', 'origin:', item.orig
             return; // Bu kayıt için hiçbir şey yapma, bir sonraki kayda geç
         }
         
-        // Aktif menşe filtresi
-        const activeFilter = (document.getElementById('menseFilter')?.value || 'TÜRKPATENT').toUpperCase();
-        // Bu satır, seçili filtrede görünmeli mi?
-        const isVisibleByFilter =
-        activeFilter === 'HEPSI' ||
-        (activeFilter === 'TÜRKPATENT' && originBucket === 'TÜRKPATENT') ||
-        (activeFilter === 'YURTDISI' && originBucket === 'YURTDISI');
-
-        if (!isVisibleByFilter) {
-        // Filtre dışında kalan parent'ı tamamen gizle ve numaralandırma artırma
-        mainRow.style.display = 'none';
-        } else {
-        visibleIndex++; // sadece görünür parent'ları say
-        }
+        // Görünür kayıtları say
+        visibleIndex++;
 
         
         // Parent ise, child kayıtlarını bul (tüm listeden)
