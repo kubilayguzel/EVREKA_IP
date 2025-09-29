@@ -1205,6 +1205,14 @@ function populatePortfolioTable(tableId, portfolioData) {
 
         const originRaw = (item.origin || 'TÜRKPATENT').toString().trim();
         const originUpper = originRaw.toUpperCase();
+
+        console.log('📍 Origin Debug:', {
+            title: item.title,
+            itemOrigin: item.origin,
+            originRaw: originRaw,
+            originUpper: originUpper
+        });
+        
         const originBucket = (originUpper === 'TÜRKPATENT' || originUpper === 'TURKPATENT')
         ? 'TÜRKPATENT'
         : 'YURTDISI';
@@ -1571,7 +1579,7 @@ function filterPaneByMense(paneSelector, menseValue){
             rowOrigin: rowOrigin,
             hasAccordionClass: $tr.hasClass('accordion-header-row')
         });
-        
+
         // Basit mantık: TÜRKPATENT ise true, değilse false
         var isTurkpatent = (rowOrigin === 'TÜRKPATENT');
         var isYurtdisi = (rowOrigin && rowOrigin !== 'TÜRKPATENT');
