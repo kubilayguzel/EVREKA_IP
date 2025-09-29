@@ -1202,12 +1202,12 @@ function populatePortfolioTable(tableId, portfolioData) {
 
     portfolioData.forEach((item, index) => {
         const mainRow = document.createElement('tr');
-        const isInternational = item.origin === 'YURTDISI';
+        const origin = item.origin || 'TÜRKPATENT';
+        const isInternational = origin === 'YURTDISI';
         mainRow.setAttribute('data-origin', origin);
         // Veritabanından gelen gerçek veri yapısına göre düzelt
         const title = item.title || item.brandText || 'İsimsiz';
         const appNumber = item.applicationNumber || item.applicationNo || '-';
-        const origin = item.origin || 'TÜRKPATENT';
         const statusText = item.status || item.statusText || 'Bilinmiyor';
         const classes = (() => {
             if (Array.isArray(item.goodsAndServicesByClass) && item.goodsAndServicesByClass.length) {
