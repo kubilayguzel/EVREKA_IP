@@ -553,8 +553,13 @@
 }
 /* Child tablo hizalama */
 #marka-list .accordion-table {
-    table-layout: fixed;
-    width: 100%;
+    table-layout: fixed !important;
+    width: 100% !important;
+}
+#marka-list .accordion-table th,
+#marka-list .accordion-table td {
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 </style>
@@ -1358,14 +1363,14 @@ console.log('📍 Origin Debug:', item.title || 'İsimsiz', 'origin:', item.orig
                         <table class="table mb-0 accordion-table">
                             <thead>
                                 <tr>
-                                    <th style="width: 56px;">#</th>
-                                    <th style="width: 10%;">Menşe</th>
-                                    <th style="width: 120px;"></th> <!-- Boş kolon (marka örneği yerine) -->
-                                    <th style="width: 28%;"></th> <!-- Boş kolon (marka adı yerine) -->
-                                    <th style="width: 14%;">Başvuru No</th>
-                                    <th style="width: 14%;">Başvuru Tarihi</th>
-                                    <th style="width: 10%;">Durum</th>
-                                    <th style="width: 16%;">Sınıflar</th>
+                                    <th class="col-index">#</th>
+                                    <th class="col-origin">Menşe</th>
+                                    <th class="col-sample"></th>
+                                    <th class="col-brand"></th>
+                                    <th class="col-appno">Başvuru No</th>
+                                    <th class="col-appdate">Başvuru Tarihi</th>
+                                    <th class="col-status">Durum</th>
+                                    <th class="col-classes">Sınıflar</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -1411,14 +1416,14 @@ console.log('📍 Origin Debug:', item.title || 'İsimsiz', 'origin:', item.orig
 
                                     return `
                                         <tr>
-                                            <td style="width: 56px;">${visibleIndex}.${subIndex + 1}</td>
-                                            <td style="width: 10%;">${childOrigin}</td>
-                                            <td style="width: 120px;"></td>
-                                            <td style="width: 28%;"></td>
-                                            <td style="width: 14%;">${subItem.applicationNumber || '-'}</td>
-                                            <td style="width: 14%;">${subAppDate}</td>
-                                            <td style="width: 10%;"><span class="badge badge-${subBadgeClass}">${subStatus}</span></td>
-                                            <td style="width: 16%;">${subClasses}</td>
+                                            <td class="col-index">${visibleIndex}.${subIndex + 1}</td>
+                                            <td class="col-origin">${childOrigin}</td>
+                                            <td class="col-sample"></td>
+                                            <td class="col-brand"></td>
+                                            <td class="col-appno">${subItem.applicationNumber || '-'}</td>
+                                            <td class="col-appdate">${subAppDate}</td>
+                                            <td class="col-status"><span class="badge badge-${subBadgeClass}">${subStatus}</span></td>
+                                            <td class="col-classes">${subClasses}</td>
                                         </tr>
                                     `;
                                 }).join('')}
