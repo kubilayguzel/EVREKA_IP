@@ -1654,9 +1654,11 @@ function applyMenseFilterToActivePane(){
           });
         } else if (val === 'YURTDISI') {
           filteredData = allData.filter(item => {
-            var orig = (item.origin || 'TÃœRKPATENT').toString().toUpperCase().trim();
-            return orig !== 'TÃœRKPATENT' && orig !== 'TURKPATENT' && orig !== '';
+            var orig = (item.origin || 'TÃƒÅ"RKPATENT').toString().toUpperCase().trim();
+            console.log('🔎 Yurtdışı filtre:', item.title, 'origin:', item.origin, 'normalized:', orig);
+            return orig !== 'TÃƒÅ"RKPATENT' && orig !== 'TURKPATENT' && orig !== '';
           });
+          console.log('✅ Yurtdışı filtreleme sonucu:', filteredData.length, 'kayıt bulundu');
         }
         
         window.markaPaginationData.allData = filteredData;
