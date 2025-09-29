@@ -665,7 +665,8 @@
       <label for="menseFilter" class="mb-0 mr-2">Menşe:</label>
         <select id="menseFilter" class="form-control form-control-sm" style="max-width:220px">
         <option value="HEPSI">Hepsi</option>
-        <option value="TÜRKPATENT" selected>TÜRKPATENT</option> <option value="YURTDISI">YURTDISI</option>
+        <option value="TÜRKPATENT" selected>TÜRKPATENT</option>
+        <option value="YURTDISI">Yurtdışı</option>
         </select>
 </li>
 </ul>
@@ -1538,30 +1539,15 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   }
 
-  function filterPaneByMense(paneSelector, menseValue){
+function filterPaneByMense(paneSelector, menseValue){
     var $tbody = $(paneSelector + " tbody");
     if($tbody.length === 0) return;
     var $rows = $tbody.children("tr");
 
-    // Varsayılan: Her şeyi göster (HEPSI filtresi)
-    $rows.show(); 
-
     var isTR = (menseValue === 'TÜRKPATENT');
     var isYD = (menseValue === 'YURTDISI');
+    var isALL = (menseValue === 'HEPSI');
 
-    if (menseValue === 'HEPSI') {
-        // HEPSI: Tüm satırları göster (toggleWipoGroup ile gizlenenler dahil)
-        $rows.each(function(){
-            var $tr = $(this);
-            if($tr.hasClass('accordion-header-row')){
-                toggleWipoGroup($tr, true); // Akordeon başlıklarını göster
-            }
-            $tr.show(); // Tüm satırları göster
-        });
-        return;
-    }
-    
-    // TÜRKPATENT veya YURTDISI filtresi uygulanıyorsa:
     $rows.each(function(){
         var $tr = $(this);
         var isWipo = rowHasMarker($tr, '(WIPO)');
@@ -1569,29 +1555,40 @@ document.addEventListener('DOMContentLoaded', function () {
         
         if($tr.hasClass('accordion-header-row')){
             // Akordeon Başlıklarını Yönet
-            if (isTR) {
-                // TÜRKPATENT seçiliyse: WIPO gruplarını gizle, TR gruplarını göster (TR grupları örneğimizde yok)
-                toggleWipoGroup($tr, !isWipo);
-            } else { // YURTDISI seçiliyse:
-                // WIPO gruplarını göster, TR gruplarını gizle
+            if (isALL) {
+                // HEPSI: Tüm akordeon gruplarını göster
+                toggleWipoGroup($tr, true);
+            } else if (isTR) {
+                // TÜRKPATENT: Sadece TR akordeonlarını göster, WIPO'ları gizle
+                toggleWipoGroup($tr, isTr);
+            } else if (isYD) {
+                // YURTDISI: Sadece WIPO akordeonlarını göster, TR'leri gizle
                 toggleWipoGroup($tr, isWipo);
             }
         } else {
-            // Normal Satırları (TR ve Alt Kayıtlar) Yönet
-            if (isTR) {
-                // TÜRKPATENT seçiliyse: Sadece TR olanları göster, diğerlerini gizle
-                if (!isTr) {
+            // Normal Satırları Yönet
+            if (isALL) {
+                // HEPSI: Tüm satırları göster
+                $tr.show();
+            } else if (isTR) {
+                // TÜRKPATENT: Sadece TR origin'li kayıtları göster
+                if (isTr) {
+                    $tr.show();
+                } else {
                     $tr.hide();
                 }
-            } else { // YURTDISI seçiliyse:
-                // Sadece WIPO alt kayıtlarını göster, TR olanları gizle
-                if (isTr) {
+            } else if (isYD) {
+                // YURTDISI: TR origin'li olmayanları (WIPO vb.) göster
+                if (!isTr) {
+                    $tr.show();
+                } else {
                     $tr.hide();
                 }
             }
         }
     });
   }
+
 
   function applyMenseFilterToActivePane(){
     // TÜRKPATENT varsayılan olduğu için başlangıçta değer alınamama sorunu yaşanmaması için:
