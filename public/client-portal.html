@@ -1277,12 +1277,13 @@ function populatePortfolioTable(tableId, portfolioData) {
 
         mainRow.innerHTML = rowHtml;
 
-        if (isInternational) {
-            mainRow.classList.add('accordion-header-row');
-            mainRow.setAttribute('data-toggle', 'collapse');
-            mainRow.setAttribute('data-target', `#accordion-yurtdisi-${item.id}`);
-            mainRow.setAttribute('aria-expanded', 'false');
-            mainRow.setAttribute('aria-controls', `accordion-yurtdisi-${item.id}`);
+        const hasSubs = Array.isArray(item.subRegistrations) && item.subRegistrations.length > 0;
+        if (isInternational && hasSubs) {
+        mainRow.classList.add('accordion-header-row');
+        mainRow.setAttribute('data-toggle', 'collapse');
+        mainRow.setAttribute('data-target', `#accordion-yurtdisi-${item.id}`);
+        mainRow.setAttribute('aria-expanded', 'false');
+        mainRow.setAttribute('aria-controls', `accordion-yurtdisi-${item.id}`);
         }
 
         tableBody.appendChild(mainRow);
