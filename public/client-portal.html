@@ -1556,14 +1556,28 @@ function filterPaneByMense(paneSelector, menseValue){
     var isYD = (menseValue === 'YURTDISI');
     var isALL = (menseValue === 'HEPSI');
 
+    console.log('=== FILTER BAŞLADI ===');
+    console.log('Seçilen menşe:', menseValue);
+    console.log('Toplam satır sayısı:', $rows.length);
+
     $rows.each(function(){
         var $tr = $(this);
+        var dataOriginAttr = $tr.attr('data-origin');
         var rowOrigin = getRowOrigin($tr);
+        
+        console.log('Satır:', {
+            text: $tr.find('td:eq(2)').text().substring(0, 30),
+            dataOriginAttr: dataOriginAttr,
+            rowOrigin: rowOrigin,
+            hasAccordionClass: $tr.hasClass('accordion-header-row')
+        });
         
         // Basit mantık: TÜRKPATENT ise true, değilse false
         var isTurkpatent = (rowOrigin === 'TÜRKPATENT');
         var isYurtdisi = (rowOrigin && rowOrigin !== 'TÜRKPATENT');
-        
+    
+
+
         if($tr.hasClass('accordion-header-row')){
             // Akordeon Başlıklarını Yönet
             if (isALL) {
