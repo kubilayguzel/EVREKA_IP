@@ -1231,6 +1231,8 @@ console.log('📍 Origin Debug:', item.title || 'İsimsiz', 'origin:', item.orig
         if (isChild) {
             return; // Bu kayıt için hiçbir şey yapma, bir sonraki kayda geç
         }
+
+        visibleIndex++;
         
         // Parent ise, child kayıtlarını bul (tüm listeden)
         let childRecords = [];
@@ -1700,65 +1702,8 @@ function getRowOrigin($row){
   }
 
 function filterPaneByMense(paneSelector, menseValue){
-    var $tbody = $(paneSelector + " tbody");
-    if($tbody.length === 0) return;
-    var $rows = $tbody.children("tr");
-
     var isTR = (menseValue === 'TÜRKPATENT');
-    var isYD = (menseValue === 'YURTDISI');
-    var isALL = (menseValue === 'HEPSI');
-
-    console.log('=== FILTER BAŞLADI ===');
-    console.log('Seçilen menşe:', menseValue);
-    console.log('Toplam satır sayısı:', $rows.length);
-
-    $rows.each(function(){
-        var $tr = $(this);
-        var dataOriginAttr = $tr.attr('data-origin');
-        var rowOrigin = getRowOrigin($tr);
-        
-        console.log('Satır:', {
-            text: $tr.find('td:eq(2)').text().substring(0, 30),
-            dataOriginAttr: dataOriginAttr,
-            rowOrigin: rowOrigin,
-            hasAccordionClass: $tr.hasClass('accordion-header-row')
-        });
-
-        // Basit mantık: TÜRKPATENT ise true, değilse false
-        var isTurkpatent = (rowOrigin === 'TÜRKPATENT');
-        var isYurtdisi = (rowOrigin && rowOrigin !== 'TÜRKPATENT');
     
-
-
-        if($tr.hasClass('accordion-header-row')){
-            // Akordeon Başlıklarını Yönet
-            if (isALL) {
-                toggleWipoGroup($tr, true);
-            } else if (isTR) {
-                toggleWipoGroup($tr, isTurkpatent);
-            } else if (isYD) {
-                toggleWipoGroup($tr, isYurtdisi);
-            }
-        } else {
-            // Normal Satırları Yönet
-            if (isALL) {
-                $tr.show();
-            } else if (isTR) {
-                if (isTurkpatent) {
-                    $tr.show();
-                } else {
-                    $tr.hide();
-                }
-            } else if (isYD) {
-                if (isYurtdisi) {
-                    $tr.show();
-                } else {
-                    $tr.hide();
-                }
-            }
-        }
-    });
-
     // Menşe kolonunu göster/gizle
     var $originHeaders = $(paneSelector + " th.col-origin");
     var $originCells = $(paneSelector + " td.col-origin");
@@ -1771,7 +1716,6 @@ function filterPaneByMense(paneSelector, menseValue){
         $originCells.show();
     }
 }
-
 
 window.applyMenseFilterToActivePane = function(){
     var val = $("#menseFilter").val() || 'TÃœRKPATENT'; 
