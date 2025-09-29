@@ -402,7 +402,12 @@
 #marka-list th.col-appno, #marka-list td.col-appno { width: 14%; white-space: nowrap; }
 #marka-list th.col-appdate, #marka-list td.col-appdate { width: 14%; white-space: nowrap; }
 #marka-list th.col-status, #marka-list td.col-status { width: 10%; white-space: nowrap; }
-#marka-list th.col-classes, #marka-list td.col-classes { width: 16%; white-space: nowrap; }
+#marka-list th.col-classes, #marka-list td.col-classes { 
+    width: 16%; 
+    white-space: normal; /* nowrap yerine normal */
+    word-wrap: break-word;
+    line-height: 1.4;
+}
 #marka-list td, #marka-list th { vertical-align: middle; }
 </style>
 
