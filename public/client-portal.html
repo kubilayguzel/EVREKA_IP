@@ -1565,35 +1565,31 @@ function filterPaneByMense(paneSelector, menseValue){
     $rows.each(function(){
         var $tr = $(this);
         var rowOrigin = getRowOrigin($tr);
+        
+        // Basit mantık: TÜRKPATENT ise true, değilse false
         var isTurkpatent = (rowOrigin === 'TÜRKPATENT');
-        var isYurtdisi = (rowOrigin === 'YURTDISI' || rowOrigin === 'WIPO' || rowOrigin === 'EUIPO' || rowOrigin === 'ARIPO' || rowOrigin === 'OAPI' || rowOrigin === 'Yurtdışı Ulusal');
+        var isYurtdisi = !isTurkpatent; // TÜRKPATENT değilse yurtdışı
         
         if($tr.hasClass('accordion-header-row')){
             // Akordeon Başlıklarını Yönet
             if (isALL) {
-                // HEPSI: Tüm akordeon gruplarını göster
                 toggleWipoGroup($tr, true);
             } else if (isTR) {
-                // TÜRKPATENT: Sadece TÜRKPATENT akordeonlarını göster
                 toggleWipoGroup($tr, isTurkpatent);
             } else if (isYD) {
-                // YURTDISI: Sadece yurtdışı akordeonlarını göster
                 toggleWipoGroup($tr, isYurtdisi);
             }
         } else {
             // Normal Satırları Yönet
             if (isALL) {
-                // HEPSI: Tüm satırları göster
                 $tr.show();
             } else if (isTR) {
-                // TÜRKPATENT: Sadece TÜRKPATENT origin'li kayıtları göster
                 if (isTurkpatent) {
                     $tr.show();
                 } else {
                     $tr.hide();
                 }
             } else if (isYD) {
-                // YURTDISI: TÜRKPATENT olmayan kayıtları göster
                 if (isYurtdisi) {
                     $tr.show();
                 } else {
@@ -1602,7 +1598,8 @@ function filterPaneByMense(paneSelector, menseValue){
             }
         }
     });
-  }
+}
+
 
   function applyMenseFilterToActivePane(){
     // TÜRKPATENT varsayılan olduğu için başlangıçta değer alınamama sorunu yaşanmaması için:
