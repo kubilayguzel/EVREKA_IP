@@ -996,7 +996,7 @@
               <li class="nav-item"><a class="nav-link" id="belgeler-tab" data-toggle="tab" href="#modal-belgeler" role="tab" aria-controls="modal-belgeler" aria-selected="false">Belgeler</a></li>
             </ul>
             <div class="tab-content tab-content-card mt-3">
-              <div class="tab-pane fade show active" id="modal-islemler" role="tabpanel">
+              <div class="tab-pane fade" id="modal-islemler" role="tabpanel">
                 <h5 class="header-title">İşlem Geçmişi</h5>
                 <div class="table-responsive mt-3">
                     <table class="table table-hover">
@@ -2055,18 +2055,29 @@ $(document).on('show.bs.modal', '#portfolioDetailModal', function (e) {
         esyaContent.html('<p class="text-muted">Mal ve hizmet bilgisi bulunamadı.</p>');
     }
     
-    // Modal açıldığında ilk tab'ı aktif yap
-    setTimeout(() => {
-        $('#myTab a[href="#modal-islemler"]').tab('show');
-    }, 100);
+// Modal açıldığında tab'ları sıfırla ve ilk tab'ı aktif yap
+    $('#myTab .nav-link').removeClass('active').attr('aria-selected', 'false');
+    $('.tab-content .tab-pane').removeClass('show active');
+    
+    // İlk tab'ı aktif yap
+    $('#myTab a[href="#modal-islemler"]').addClass('active').attr('aria-selected', 'true');
+    $('#modal-islemler').addClass('show active');
 });
 
-// Modal tab'ları için event handler (sadece bir kez tanımla)
-$(document).ready(function() {
+    // Modal tab'ları için event handler (sadece bir kez tanımla)
+    $(document).ready(function() {
     // Tab tıklamalarını düzelt
     $(document).on('click', '#myTab a[data-toggle="tab"]', function (e) {
         e.preventDefault();
-        $(this).tab('show');
+        
+        // Önce tüm tab'ları pasif yap
+        $('#myTab .nav-link').removeClass('active').attr('aria-selected', 'false');
+        $('#portfolioDetailModal .tab-pane').removeClass('show active');
+        
+        // Tıklanan tab'ı aktif yap
+        $(this).addClass('active').attr('aria-selected', 'true');
+        const target = $(this).attr('href');
+        $(target).addClass('show active');
     });
     
     // Tab gösterildiğinde aria attribute'larını güncelle
