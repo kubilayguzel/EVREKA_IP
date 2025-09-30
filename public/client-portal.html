@@ -555,6 +555,29 @@
 .accordion-header-row[aria-expanded="true"] .fa-chevron-right {
     transform: rotate(90deg);
 }
+/* Yeni eklenen iş kartları için Dashboard stili */
+#task-main-cards .card,
+#task-detail-cards .card { 
+    border-radius: 12px; 
+    border: none; 
+    transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1), box-shadow 0.3s;
+}
+#task-main-cards .card:hover,
+#task-detail-cards .card:hover {
+    transform: translateY(-8px);
+    cursor: pointer;
+}
+/* Koyu Tema uyumu */
+.dark-mode #task-main-cards .card:hover,
+.dark-mode #task-detail-cards .card:hover {
+    box-shadow: 0 12px 24px rgba(0,0,0,0.4);
+}
+.dark-mode #task-main-cards .card,
+.dark-mode #task-detail-cards .card { 
+    background-color: #36393e; 
+    color: #e0e0e0;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
 
 </style>
 
@@ -842,37 +865,74 @@
             </div>
 
             <div class="tab-pane fade" id="tasks">
-                <h1 class="header-title">Onay Bekleyen İşlerim</h1>
-                <p class="lead">Aşağıdaki işler için onayınız veya geri bildiriminiz bekleniyor.</p>
-                <div class="row mt-4">
-                    <div class="col-md-12 mb-4">
-                        <div class="task-card task-card-warning">
-                            <h5 class="task-title">Marka Tescil Başvurusu - "Evreka"</h5>
-                            <p class="task-description">Marka tescil başvurusu için gerekli belgeler hazırlandı. Lütfen inceleyip onaylayın.</p>
-                            <div class="d-flex justify-content-between align-items-center">
-                                <small class="task-meta"><i class="fas fa-clock mr-1"></i>Son Onay Tarihi: 15.11.2023</small>
-                                <div>
-                                    <button class="btn btn-success btn-sm btn-action"><i class="fas fa-check"></i> Onayla</button>
-                                    <button class="btn btn-danger btn-sm btn-action"><i class="fas fa-times"></i> Reddet</button>
-                                    <button class="btn btn-info btn-sm btn-action"><i class="fas fa-eye"></i> İncele</button>
-                                </div>
-                            </div>
+                <h1 class="header-title" id="tasksHeaderTitle">İşlerim</h1>
+                <p class="lead" id="tasksLeadText">Lütfen incelemek istediğiniz fikri mülkiyet türünü seçin.</p>
+                
+                <div class="row mt-5" id="task-main-cards">
+                    
+                    <div class="col-md-3 mb-4 task-card-link" data-target-area="marka-tasks" style="cursor: pointer;">
+                        <div class="card p-4 text-center d-flex align-items-center flex-column justify-content-center h-100">
+                            <i class="fas fa-registered stat-icon text-info mb-3"></i>
+                            <div class="stat-label">Marka İşlemleri</div>
                         </div>
                     </div>
-                    <div class="col-md-12 mb-4">
-                        <div class="task-card task-card-warning">
-                            <h5 class="task-title">Marka Başvurusu Devir İşlemi</h5>
-                            <p class="task-description">"Evreka Patent" markasının devri için taslak belgeler hazırlandı.</p>
-                            <div class="d-flex justify-content-between align-items-center">
-                                <small class="task-meta"><i class="fas fa-clock mr-1"></i>Son Onay Tarihi: 01.12.2023</small>
-                                <div>
-                                    <button class="btn btn-success btn-sm btn-action"><i class="fas fa-check"></i> Onayla</button>
-                                    <button class="btn btn-danger btn-sm btn-action"><i class="fas fa-times"></i> Reddet</button>
-                                    <button class="btn btn-info btn-sm btn-action"><i class="fas fa-eye"></i> İncele</button>
-                                </div>
-                            </div>
+                    
+                    <div class="col-md-3 mb-4 task-card-link" data-target-area="patent-tasks" style="cursor: pointer;">
+                        <div class="card p-4 text-center d-flex align-items-center flex-column justify-content-center h-100">
+                            <i class="fas fa-microchip stat-icon text-warning mb-3"></i>
+                            <div class="stat-label">Patent İşlemleri</div>
                         </div>
                     </div>
+                    
+                    <div class="col-md-3 mb-4 task-card-link" data-target-area="tasarim-tasks" style="cursor: pointer;">
+                        <div class="card p-4 text-center d-flex align-items-center flex-column justify-content-center h-100">
+                            <i class="fas fa-palette stat-icon text-success mb-3"></i>
+                            <div class="stat-label">Tasarım İşlemleri</div>
+                        </div>
+                    </div>
+
+                    <div class="col-md-3 mb-4 task-card-link" data-target-area="dava-tasks" style="cursor: pointer;">
+                        <div class="card p-4 text-center d-flex align-items-center flex-column justify-content-center h-100">
+                            <i class="fas fa-gavel stat-icon text-danger mb-3"></i>
+                            <div class="stat-label">Dava & İtiraz</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row mt-5" id="task-detail-cards" style="display: none;">
+                    <div class="col-12 mb-4">
+                        <button id="backToMainTasks" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left mr-1"></i> Geri</button>
+                    </div>
+                    
+                    <div class="col-md-4 mb-4 detail-card-link" data-task-type="pending-approval" style="cursor: pointer;">
+                        <div class="card p-4 text-center d-flex align-items-center flex-column justify-content-center h-100">
+                            <i class="fas fa-tasks stat-icon text-warning mb-3"></i>
+                            <div class="stat-label">Onay Bekleyen İşler</div>
+                            <div class="stat-value" id="taskCount-pending-approval">0</div>
+                        </div>
+                    </div>
+                    <div class="col-md-4 mb-4 detail-card-link" data-task-type="renewal-approval" style="cursor: pointer;">
+                        <div class="card p-4 text-center d-flex align-items-center flex-column justify-content-center h-100">
+                            <i class="fas fa-sync-alt stat-icon text-info mb-3"></i>
+                            <div class="stat-label">Yenileme Onayları</div>
+                            <div class="stat-value" id="taskCount-renewal-approval">0</div>
+                        </div>
+                    </div>
+                    <div class="col-md-4 mb-4 detail-card-link" data-task-type="bulletin-watch" style="cursor: pointer;">
+                        <div class="card p-4 text-center d-flex align-items-center flex-column justify-content-center h-100">
+                            <i class="fas fa-eye stat-icon text-primary mb-3"></i>
+                            <div class="stat-label">Bülten İzleme Bildirim Onayları</div>
+                            <div class="stat-value" id="taskCount-bulletin-watch">0</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row mt-4" id="task-list-details" style="display: none;">
+                    <div class="col-12 mb-4">
+                        <button id="backToDetailCards" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left mr-1"></i> Geri</button>
+                    </div>
+                    <div class="col-12" id="task-list-container">
+                        </div>
                 </div>
             </div>
 
@@ -2404,6 +2464,122 @@ window.goToMarkaPage = function(page) {
   if (window.location.hash) openHashTab();
   else $('#sidebar a[data-toggle="tab"][href="#dashboard"]').tab('show');
 })();
+// --- İşlerim Sayfası Navigasyon Mantığı ---
+
+const $tasksMain = $('#task-main-cards');
+const $tasksDetail = $('#task-detail-cards');
+const $tasksList = $('#task-list-details');
+const $tasksHeader = $('#tasksHeaderTitle');
+const $tasksLead = $('#tasksLeadText');
+
+// Geri Butonu: Detay Kartlardan Ana Kartlara Dönüş
+$(document).on('click', '#backToMainTasks', function() {
+    $tasksMain.show();
+    $tasksDetail.hide();
+    $tasksList.hide();
+    $tasksHeader.text('İşlerim');
+    $tasksLead.text('Lütfen incelemek istediğiniz fikri mülkiyet türünü seçin.');
+});
+
+// Geri Butonu: Detay Listeden Detay Kartlara Dönüş
+$(document).on('click', '#backToDetailCards', function() {
+    $tasksMain.hide();
+    $tasksDetail.show();
+    $tasksList.hide();
+    $tasksHeader.text('Marka İşlemleri'); // Bu, en son seçilen IP türüne göre değişmeli
+    $tasksLead.text('İncelemek istediğiniz işlem türünü seçin.');
+    // Liste alanını temizle
+    $('#task-list-container').empty();
+});
+
+// Ana Kart Tıklaması: Marka, Patent, Tasarım, Dava
+$(document).on('click', '.task-card-link', function() {
+    const targetArea = $(this).data('target-area');
+    
+    // Başlığı ve açıklamayı güncelle
+    const headerText = $(this).find('.stat-label').text();
+    $tasksHeader.text(headerText);
+    $tasksLead.text('İncelemek istediğiniz işlem türünü seçin.');
+    
+    // Sadece Marka'nın alt kartlarını gösteriyoruz (şimdilik)
+    if (targetArea === 'marka-tasks') {
+        $tasksMain.hide();
+        $tasksDetail.show();
+        $tasksList.hide();
+        // İlgili kartların sayılarını güncelle (Bu kısım Firebase sorgularıyla yapılmalı)
+        // updateTaskDetailCounts(linkedPersonIds, 'marka');
+    } else {
+        // Diğer kartlar için de aynı mantığı uygulayabilirsiniz
+        // Şimdilik sadece uyarı verelim
+        $tasksHeader.text(headerText + ' - Yapım Aşamasında');
+        $tasksLead.text('Bu kategoriye ait alt işlemler henüz tanımlanmadı. Lütfen Marka İşlemleri sekmesini kullanın.');
+    }
+});
+
+// Detay Kart Tıklaması: Onay Bekleyen İşler, Yenileme Onayları vb.
+$(document).on('click', '.detail-card-link', function() {
+    const taskType = $(this).data('task-type');
+    
+    // Görünümü Detay İş Listesi'ne geçir
+    $tasksDetail.hide();
+    $tasksList.show();
+    
+    // Başlığı, tıklanan karta göre güncelle
+    const headerText = $(this).find('.stat-label').text();
+    $tasksHeader.text('Detaylı İş Listesi: ' + headerText);
+    $tasksLead.text('Aşağıda seçtiğiniz iş türüne ait tüm işlemler listelenmiştir.');
+    
+    // İlgili işleri yükleme fonksiyonunu çağır
+    // fetchAndDisplayTasks(linkedPersonIds, taskType);
+    // Şimdilik statik veriyi çağırıyoruz:
+    loadSampleTaskDetails(taskType);
+});
+
+// Test/Geliştirme amaçlı örnek listeyi yükleme fonksiyonu
+function loadSampleTaskDetails(taskType) {
+    const container = document.getElementById('task-list-container');
+    container.innerHTML = '';
+    
+    let sampleTasks = [];
+    if (taskType === 'pending-approval') {
+        sampleTasks = [
+            { title: 'Marka Tescil Başvurusu - "Evreka"', description: 'Belgeleri inceleyin.', dueDate: '15.11.2025' },
+            { title: 'Marka Başvurusu Devir İşlemi', description: 'Taslak belgeleri onaylayın.', dueDate: '01.12.2025' },
+        ];
+    } else if (taskType === 'renewal-approval') {
+        sampleTasks = [
+            { title: 'Yenileme Onayı - Marka XYZ', description: 'Marka yenileme ücreti ve süreci onayı.', dueDate: '20.10.2025' }
+        ];
+    } else if (taskType === 'bulletin-watch') {
+        sampleTasks = [
+            { title: 'Bülten Bildirimi - İtiraz Değerlendirmesi', description: 'Benzer marka tespit edildi, itiraz onayı.', dueDate: '05.11.2025' }
+        ];
+    }
+    
+    if (sampleTasks.length === 0) {
+         container.innerHTML = '<p class="lead text-muted text-center mt-5">Bu kategoride onay bekleyen iş bulunmamaktadır.</p>';
+         return;
+    }
+    
+    sampleTasks.forEach(t => {
+        const card = document.createElement('div');
+        card.className = 'col-md-12 mb-4';
+        card.innerHTML = `
+          <div class="task-card task-card-warning">
+            <h5 class="task-title">${t.title}</h5>
+            <p class="task-description">${t.description}</p>
+            <div class="d-flex justify-content-between align-items-center">
+              <small class="task-meta"><i class="fas fa-clock mr-1"></i>Son Onay Tarihi: ${t.dueDate}</small>
+              <div>
+                <button class="btn btn-success btn-sm btn-action"><i class="fas fa-check"></i> Onayla</button>
+                <button class="btn btn-danger btn-sm btn-action"><i class="fas fa-times"></i> Reddet</button>
+                <button class="btn btn-info btn-sm btn-action"><i class="fas fa-eye"></i> İncele</button>
+              </div>
+            </div>
+          </div>`;
+        container.appendChild(card);
+    });
+}
 </script>
 </body>
 </html>
