@@ -2105,7 +2105,17 @@ $(document).ready(function() {
     });
 });
 
-const _ttCache = new Map();
+// Türkçe karakter normalize
+function _normalizeTr(s){
+  if(!s) return '';
+  return String(s)
+    .toLowerCase()
+    .replaceAll('ı','i').replaceAll('ğ','g').replaceAll('ü','u')
+    .replaceAll('ş','s').replaceAll('ö','o').replaceAll('ç','c');
+}
+
+// transactionTypes meta cache'i (zaten varsa tekrar tanımlama)
+const _ttCache = (typeof _ttCache !== 'undefined') ? _ttCache : new Map();
 async function _getTransactionTypeMeta(typeId){
   if(!typeId) return null;
   const key = String(typeId);
@@ -2118,57 +2128,45 @@ async function _getTransactionTypeMeta(typeId){
   }catch(_){ return null; }
 }
 
-function isTaskRelatedToClient(t, linkedPersonIds){
-  if (!Array.isArray(linkedPersonIds) || linkedPersonIds.length === 0) return false;
-
-  // 1) personsRelatedIds (varsa)
-  if (Array.isArray(t.personsRelatedIds) && t.personsRelatedIds.some(id => linkedPersonIds.includes(id))) return true;
-
-  // 2) details.relatedParty.id (sende bu var)
-  const rel1 = t?.details?.relatedParty?.id;
-  if (rel1 && linkedPersonIds.includes(rel1)) return true;
-
-  // 3) olası diğer alan adları (koruma amaçlı)
-  const rel2 = t?.relatedPartyId || t?.clientId || t?.personId;
-  if (rel2 && linkedPersonIds.includes(rel2)) return true;
-
-  return false;
+// Task başlığını/etiketlerini tek stringte topla
+function _taskLabelGuess(t, meta){
+  const pieces = [
+    meta?.alias, meta?.name,
+    t.subType, t.taskSubType, t.category,
+    t.details?.category, t.details?.type,
+    Array.isArray(t.tags) ? t.tags.join(' ') : '',
+    t.title, t.description
+  ].filter(Boolean);
+  return _normalizeTr(pieces.join(' '));
 }
+const RX_BULTEN = /(bulten|izleme|watch|yayin|yayim|yayima|yayıma|gazete)/;
 
 // === SAYAÇLARI DOLDURAN YENİ SÜRÜM ===
-window.fetchAndDisplayTasks = async function(linkedPersonIds){
+window.fetchAndDisplayTasks = async function(){
   try{
+    // Sadece onay bekleyenleri çek
     const q = query(
       collection(db,'tasks'),
-      where('status','==','awaiting_client_approval') // sadece onay bekleyenleri çek
+      where('status','==','awaiting_client_approval')
     );
     const snap = await runGetDocs(q);
 
     const awaitingTasks = [];
-    snap.forEach(d => {
-      const t = { id:d.id, ...d.data() };
-      if (isTaskRelatedToClient(t, linkedPersonIds)) awaitingTasks.push(t);
-    });
+    snap.forEach(d => awaitingTasks.push({ id:d.id, ...d.data() }));
+    window.__allClientTasks = awaitingTasks; // listelemede kullanılıyor
 
-    // hepsini hafızaya da koy (detay listeleri için)
-    window.__allClientTasks = awaitingTasks;
+    let countPending   = awaitingTasks.length; // doğrudan
+    let countRenewal   = 0;
+    let countBulletin  = 0;
 
-    // === sınıflandırma ===
-    let countPending = awaitingTasks.length; // artık doğru
-    let countRenewal = 0;
-    let countBulletin = 0;
-
-    const RX_BULTEN = /(bulten|izleme|watch|yayin|yayim|yayima|yayıma|gazete)/;
-
-    for (const t of awaitingTasks){
-      const meta = await _getTransactionTypeMeta(t.taskType);
-      const label = _taskLabelGuess(t, meta); // önceki yanıtta verdiğim yardımcı
+    for(const t of awaitingTasks){
+      const meta  = await _getTransactionTypeMeta(t.taskType);
+      const label = _taskLabelGuess(t, meta);
 
       if (/yenileme/.test(label)) countRenewal++;
       if (RX_BULTEN.test(label))  countBulletin++;
     }
 
-    // yaz
     $('#taskCount-pending-approval').text(countPending);
     $('#taskCount-renewal-approval').text(countRenewal);
     $('#taskCount-bulletin-watch').text(countBulletin);
@@ -2177,7 +2175,6 @@ window.fetchAndDisplayTasks = async function(linkedPersonIds){
     console.error('Tasks sayaclari doldurulurken hata:', err);
   }
 };
-
 
 // Modal açıldığında verileri set et
 $(document).on('show.bs.modal', '#portfolioDetailModal', async function (e) {
@@ -2987,41 +2984,16 @@ async function rejectTask(taskId) {
 }
 
 // Dashboard task sayacını güncelle
-async function updateDashboardTaskCount() {
-    try {
-        const user = authService.getCurrentUser();
-        if (!user) return;
-
-        const userDocRef = doc(db, "users", user.uid);
-        const userSnapshot = await getDoc(userDocRef);
-        
-        if (!userSnapshot.exists()) return;
-
-        const userData = userSnapshot.data();
-        const linkedPersonIds = userData.linkedPersonIds || [];
-        // LOG: kim için sorgu atıyoruz
-console.log('[Tasks] linkedPersonIds', linkedPersonIds);
-
-
-        if (linkedPersonIds.length === 0) return;
-
-        const taskQ = query(
-        collection(db, "tasks"),
-        where("personsRelatedIds", "array-contains-any", linkedPersonIds),
-        where("status", "==", "awaiting_client_approval")
-        );
-
-        const taskSnap = await runGetDocs(taskQ);
-        const pendingCount = taskSnap.size;
-        
-        // Dashboard'daki sayıyı güncelle
-        $('#dashPendingApprovals').text(pendingCount);
-        $('#taskCount-pending-approval').text(pendingCount);
-        
-    } catch (error) {
-        console.error('Dashboard güncelleme hatası:', error);
-    }
+async function updateDashboardTaskCount(){
+  try{
+    const q = query(collection(db,'tasks'), where('status','==','awaiting_client_approval'));
+    const snap = await runGetDocs(q);
+    const pendingCount = snap.size;
+    $('#dashPendingApprovals').text(pendingCount);
+    $('#taskCount-pending-approval').text(pendingCount);
+  }catch(e){ console.error(e); }
 }
+
 // Task butonları için event listener'lar
 $(document).on('click', '.task-approve', function() {
     const taskId = $(this).data('task-id');
