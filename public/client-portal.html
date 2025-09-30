@@ -1218,6 +1218,9 @@ function initTheme() {
  * @param {string} tableId Doldurulacak tablonun ID'si (#marka-list, #patent-list vb.)
  * @param {Array<Object>} portfolioData Gösterilecek portföy verileri.
  */
+// Global fonksiyon olarak sakla (pagination için)
+window.__originalPopulate = populatePortfolioTable;
+
 function populatePortfolioTable(tableId, portfolioData) {
     const tableBody = document.querySelector(`${tableId} tbody`);
     if (!tableBody) return;
