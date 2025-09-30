@@ -578,7 +578,26 @@
     color: #e0e0e0;
     box-shadow: 0 4px 12px rgba(0,0,0,0.3);
 }
+/* Aktif Kart Vurgusu */
+.task-card-link.active-task-area .card {
+    border: 2px solid #4da6ff; /* Mavi çerçeve (Koyu Tema) */
+    transform: none; /* Hafif yukarı kalkmayı iptal et */
+    box-shadow: 0 0 15px rgba(77, 166, 255, 0.5);
+    opacity: 1;
+}
 
+.dark-mode .task-card-link:not(.active-task-area) {
+    opacity: 0.5; /* Seçili olmayanları hafifçe soluklaştır */
+    transition: opacity 0.3s;
+}
+
+.light-mode .task-card-link.active-task-area .card {
+    border: 2px solid #1e88e5; /* Mavi çerçeve (Beyaz Tema) */
+}
+.light-mode .task-card-link:not(.active-task-area) {
+    opacity: 0.6;
+    transition: opacity 0.3s;
+}
 </style>
 
 </head>
@@ -900,10 +919,7 @@
                 </div>
                 
                 <div class="row mt-5" id="task-detail-cards" style="display: none;">
-                    <div class="col-12 mb-4">
-                        <button id="backToMainTasks" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left mr-1"></i> Geri</button>
-                    </div>
-                    
+                   
                     <div class="col-md-4 mb-4 detail-card-link" data-task-type="pending-approval" style="cursor: pointer;">
                         <div class="card p-4 text-center d-flex align-items-center flex-column justify-content-center h-100">
                             <i class="fas fa-tasks stat-icon text-warning mb-3"></i>
@@ -928,9 +944,6 @@
                 </div>
                 
                 <div class="row mt-4" id="task-list-details" style="display: none;">
-                    <div class="col-12 mb-4">
-                        <button id="backToDetailCards" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left mr-1"></i> Geri</button>
-                    </div>
                     <div class="col-12" id="task-list-container">
                         </div>
                 </div>
@@ -2495,6 +2508,12 @@ $(document).on('click', '.task-card-link', function() {
     const targetArea = $(this).data('target-area');
     window.activeTaskArea = targetArea; // Seçili alanı kaydet
     
+    // Tüm ana kartlardan aktif sınıfını kaldır
+    $('.task-card-link').removeClass('active-task-area');
+
+    // Tıklanan karta aktif sınıfını ekle
+    $(this).addClass('active-task-area');
+
     // 1. Başlığı ve açıklamayı güncelle
     const headerText = $(this).find('.stat-label').text();
     $tasksHeader.text(headerText); // Örn: Marka İşlemleri
