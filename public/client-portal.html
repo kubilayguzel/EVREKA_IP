@@ -1213,6 +1213,13 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.2/dist/js/bootstrap.bundle.min.js"></script>
 
 <script type="module">
+
+// --- Early globals to avoid TDZ/hoisting issues ---
+window._ttCache = window._ttCache || { items: [], counts: {}, meta: {} };
+const _ttCache = window._ttCache;
+window.fetchAndDisplayTasks = window.fetchAndDisplayTasks || (async function(){ /* will be defined below */ });
+window.populateDashboardNumbers = window.populateDashboardNumbers || (function(){});
+
 import { authService, db } from './firebase-config.js';
 import { doc, getDoc, collection, getDocs, getDocsFromServer, query, where, updateDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 import Pagination from './js/pagination.js';
@@ -1750,7 +1757,7 @@ async function fetchAndDisplayPortfolio() {
     }
 }
 
-async function populateDashboardNumbers(linkedPersonIds, allPortfolios){
+async window.populateDashboardNumbers = function (linkedPersonIds, allPortfolios){
     const portfolioCount = allPortfolios.length;
 
     // Firestore'daki gerçek değer: awaiting_client_approval
