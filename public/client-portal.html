@@ -990,10 +990,10 @@
             </div>
 
             <ul class="nav nav-tabs" id="myTab" role="tablist">
-              <li class="nav-item"><a class="nav-link active" id="islemler-tab" data-toggle="tab" href="#modal-islemler" role="tab">İşlemler</a></li>
-              <li class="nav-item"><a class="nav-link" id="esya-tab" data-toggle="tab" href="#modal-esya" role="tab">Eşya Listesi</a></li>
-              <li class="nav-item"><a class="nav-link" id="tahakkuklar-tab" data-toggle="tab" href="#modal-tahakkuklar" role="tab">Tahakkuklar ve Faturalar</a></li>
-              <li class="nav-item"><a class="nav-link" id="belgeler-tab" data-toggle="tab" href="#modal-belgeler" role="tab">Belgeler</a></li>
+              <li class="nav-item"><a class="nav-link active" id="islemler-tab" data-toggle="tab" href="#modal-islemler" role="tab" aria-controls="modal-islemler" aria-selected="true">İşlemler</a></li>
+              <li class="nav-item"><a class="nav-link" id="esya-tab" data-toggle="tab" href="#modal-esya" role="tab" aria-controls="modal-esya" aria-selected="false">Eşya Listesi</a></li>
+              <li class="nav-item"><a class="nav-link" id="tahakkuklar-tab" data-toggle="tab" href="#modal-tahakkuklar" role="tab" aria-controls="modal-tahakkuklar" aria-selected="false">Tahakkuklar ve Faturalar</a></li>
+              <li class="nav-item"><a class="nav-link" id="belgeler-tab" data-toggle="tab" href="#modal-belgeler" role="tab" aria-controls="modal-belgeler" aria-selected="false">Belgeler</a></li>
             </ul>
             <div class="tab-content tab-content-card mt-3">
               <div class="tab-pane fade show active" id="modal-islemler" role="tabpanel">
@@ -2031,7 +2031,6 @@ $(document).on('show.bs.modal', '#portfolioDetailModal', function (e) {
         <p><strong>Tescil Tarihi:</strong> ${regDate}</p>
         <p><strong>Yenileme Tarihi:</strong> ${renewalDate}</p>
     `);
-});
 
     // Eşya Listesi (Mal ve Hizmet Sınıfları)
     const esyaContent = $('#esyaListesiContent');
@@ -2055,6 +2054,7 @@ $(document).on('show.bs.modal', '#portfolioDetailModal', function (e) {
     } else {
         esyaContent.html('<p class="text-muted">Mal ve hizmet bilgisi bulunamadı.</p>');
     }
+});
 
 </script>
 <script>
