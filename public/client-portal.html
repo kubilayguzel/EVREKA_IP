@@ -2016,31 +2016,21 @@ $(document).ready(function() {
     });
 });
 
-async function fetchAndDisplayTasks(linkedPersonIds){
+window.fetchAndDisplayTasks = async function(linkedPersonIds){
     const q = query(collection(db, "tasks"), where("personsRelatedIds", "array-contains-any", linkedPersonIds));
     const snap = await runGetDocs(q);
-    const container = document.querySelector('#tasks .row');
-    container.innerHTML = '';
-    snap.forEach(docSnap => {
-        const t = docSnap.data();
-        const card = document.createElement('div');
-        card.className = 'col-md-12 mb-4';
-        card.innerHTML = `
-          <div class="task-card task-card-warning">
-            <h5 class="task-title">${t.title || 'İş'}</h5>
-            <p class="task-description">${t.description || ''}</p>
-            <div class="d-flex justify-content-between align-items-center">
-              <small class="task-meta"><i class="fas fa-clock mr-1"></i>Son Onay Tarihi: ${t.dueDate || '-'}</small>
-              <div>
-                <button class="btn btn-success btn-sm btn-action"><i class="fas fa-check"></i> Onayla</button>
-                <button class="btn btn-danger btn-sm btn-action"><i class="fas fa-times"></i> Reddet</button>
-                <button class="btn btn-info btn-sm btn-action"><i class="fas fa-eye"></i> İncele</button>
-              </div>
-            </div>
-          </div>`;
-        container.appendChild(card);
-    });
-}
+    
+    // İşlerim sekmesini dinamik kart yapısına çevirdiğiniz için, 
+    // fetchAndDisplayTasks fonksiyonunun artık doğrudan listeyi değil, 
+    // Alt kartlardaki SAYILARI güncellemesi gerekir.
+    
+    // Şimdilik sadece alt kartların sayısını güncelleyelim:
+    const pendingTasks = snap.size; 
+    $('#taskCount-pending-approval').text(pendingTasks);
+    
+    // Bu fonksiyon artık ana listeyi değil, sadece sayaçları güncelliyor.
+    // Detaylı liste, alt karta tıklanınca yükleniyor (loadSampleTaskDetails).
+} 
 
 async function fetchAndDisplayInvoices(linkedPersonIds){
     const q = query(collection(db, "accruals"), where("personsRelatedIds", "array-contains-any", linkedPersonIds));
@@ -2604,14 +2594,13 @@ $(document).on('click', '.detail-card-link', function() {
     }, 500);
 });
 
-// Test/Geliştirme amaçlı örnek listeyi yükleme fonksiyonu
-// Müvekkil onayı bekleyen taskleri Firebase'den yükle
-async function loadSampleTaskDetails(taskType) {
+// Task listesini yükleyen global fonksiyon (ReferenceError: authService/db çözülür)
+window.loadSampleTaskDetails = async function(taskType) {
     const container = document.getElementById('task-list-container');
     container.innerHTML = '<div class="text-center mt-5"><i class="fas fa-spinner fa-spin fa-3x"></i><p class="mt-3">Yükleniyor...</p></div>';
     
     try {
-        const user = authService.getCurrentUser();
+        const user = authService.getCurrentUser(); // Modül içeriği burada erişilebilir
         if (!user) {
             container.innerHTML = '<p class="lead text-muted text-center mt-5">Kullanıcı girişi yapılmamış.</p>';
             return;
@@ -2639,10 +2628,12 @@ async function loadSampleTaskDetails(taskType) {
         const q = query(
             tasksRef,
             where("personsRelatedIds", "array-contains-any", linkedPersonIds),
-            where("status", "==", "müvekkil onayı bekliyor")
+            // Burası sadece "Onay Bekleyen İşler" için çalışır.
+            // Diğer taskType'lar için (yenileme, bülten) query koşulları eklenmeli.
+            where("status", "==", "müvekkil onayı bekliyor") 
         );
         
-        const querySnapshot = await getDocs(q);
+        const querySnapshot = await runGetDocs(q);
         
         if (querySnapshot.empty) {
             container.innerHTML = '<p class="lead text-muted text-center mt-5">Bu kategoride onay bekleyen iş bulunmamaktadır.</p>';
@@ -2698,6 +2689,7 @@ async function loadSampleTaskDetails(taskType) {
         container.innerHTML = '<p class="lead text-danger text-center mt-5">Veriler yüklenirken bir hata oluştu.</p>';
     }
 }
+
 // Task onaylama fonksiyonu
 async function approveTask(taskId) {
     try {
