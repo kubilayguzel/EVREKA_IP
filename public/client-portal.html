@@ -890,12 +890,13 @@
                 <div class="row mt-5" id="task-main-cards">
                     
                     <div class="col-md-3 mb-4 task-card-link" data-target-area="marka-tasks" style="cursor: pointer;">
-                        <div class="card p-4 text-center d-flex align-items-center flex-column justify-content-center h-100">
-                            <i class="fas fa-registered stat-icon text-info mb-3"></i>
-                            <div class="stat-label">Marka İşlemleri</div>
-                        </div>
+                    <div class="card p-4 text-center d-flex align-items-center flex-column justify-content-center h-100">
+                        <i class="fas fa-registered stat-icon text-info mb-3"></i>
+                        <div class="stat-value" id="taskCount-marka-total">0</div>  <!-- ⇦ EKLENDİ -->
+                        <div class="stat-label">Marka İşlemleri</div>
                     </div>
-                    
+                    </div>
+                   
                     <div class="col-md-3 mb-4 task-card-link" data-target-area="patent-tasks" style="cursor: pointer;">
                         <div class="card p-4 text-center d-flex align-items-center flex-column justify-content-center h-100">
                             <i class="fas fa-microchip stat-icon text-warning mb-3"></i>
@@ -2104,16 +2105,81 @@ $(document).ready(function() {
     });
 });
 
-window.fetchAndDisplayTasks = async function(linkedPersonIds){
-  const q = query(
-    collection(db, "tasks"),
-    where("personsRelatedIds", "array-contains-any", linkedPersonIds),
-    where("status","==","awaiting_client_approval")
-  );
-  const snap = await runGetDocs(q);
-  $('#taskCount-pending-approval').text(snap.size || 0);
-};
+// --- Yardımcılar: diakritik temizleyici + transactionType cache ---
+function _normalizeTr(s){
+  if(!s) return '';
+  return String(s)
+    .toLowerCase()
+    .replaceAll('ı','i').replaceAll('ğ','g').replaceAll('ü','u')
+    .replaceAll('ş','s').replaceAll('ö','o').replaceAll('ç','c');
+}
+const _ttCache = new Map();
+async function _getTransactionTypeMeta(typeId){
+  if(!typeId) return null;
+  const key = String(typeId);
+  if(_ttCache.has(key)) return _ttCache.get(key);
+  try{
+    const snap = await getDoc(doc(db,'transactionTypes', key));
+    const meta = snap.exists() ? (snap.data()||{}) : null;
+    _ttCache.set(key, meta);
+    return meta;
+  }catch(_){ return null; }
+}
 
+// === SAYAÇLARI DOLDURAN YENİ SÜRÜM ===
+window.fetchAndDisplayTasks = async function(linkedPersonIds){
+  try{
+    // kişiler yoksa sayaçları sıfırla
+    if(!Array.isArray(linkedPersonIds) || linkedPersonIds.length===0){
+      $('#taskCount-pending-approval').text(0);
+      $('#taskCount-renewal-approval').text(0);
+      $('#taskCount-bulletin-watch').text(0);
+      $('#taskCount-marka-total').text(0);
+      window.__allClientTasks = [];
+      return;
+    }
+
+    // ilgili tüm tasklar
+    const q = query(
+      collection(db,'tasks'),
+      where('personsRelatedIds','array-contains-any', linkedPersonIds)
+    );
+    const snap = await runGetDocs(q);
+
+    const tasks = [];
+    snap.forEach(d => tasks.push({ id:d.id, ...d.data() }));
+    window.__allClientTasks = tasks; // listeler için hafızada tut
+
+    // sınıflandırma
+    let countPending = 0;
+    let countRenewal = 0;
+    let countBulletin = 0;
+
+    // Hepsini asenkron isim/alias ile değerlendir
+    for(const t of tasks){
+      const isAwaiting = (t.status === 'awaiting_client_approval');
+      if(isAwaiting) countPending++;
+
+      // transaction type ad/alias'ını oku
+      const meta = await _getTransactionTypeMeta(t.taskType);
+      const label = _normalizeTr( (meta?.alias || meta?.name || t.title || t.description || '') );
+
+      // "yenileme" kümesi
+      if( /yenileme/.test(label) ) countRenewal += 1;
+
+    // sadece 'awaiting_client_approval' durumundakileri say
+    if( isAwaiting && /bulten|izleme|watch/.test(label) ) countBulletin += 1;
+    }
+
+    // sayaçlara yaz
+    $('#taskCount-pending-approval').text(countPending);
+    $('#taskCount-renewal-approval').text(countRenewal);
+    $('#taskCount-bulletin-watch').text(countBulletin);
+    $('#taskCount-marka-total').text(countPending + countRenewal + countBulletin);
+  }catch(err){
+    console.error('Tasks sayaclari doldurulurken hata:', err);
+  }
+};
 
 
 // Modal açıldığında verileri set et
