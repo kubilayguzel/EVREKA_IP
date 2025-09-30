@@ -920,22 +920,22 @@
                 
                 <div class="row mt-5" id="task-detail-cards" style="display: none;">
                    
-                    <div class="col-md-4 mb-4 detail-card-link" data-task-type="pending-approval" style="cursor: pointer;">
-                        <div class="card p-4 text-center d-flex align-items-center flex-column justify-content-center h-100">
+                    <div class="col-md-3 mb-4 detail-card-link" data-task-type="pending-approval" style="cursor: pointer;">
+                        <div class="card p-3 text-center d-flex align-items-center flex-column justify-content-center h-100">
                             <i class="fas fa-tasks stat-icon text-warning mb-3"></i>
                             <div class="stat-label">Onay Bekleyen İşler</div>
                             <div class="stat-value" id="taskCount-pending-approval">0</div>
                         </div>
                     </div>
-                    <div class="col-md-4 mb-4 detail-card-link" data-task-type="renewal-approval" style="cursor: pointer;">
-                        <div class="card p-4 text-center d-flex align-items-center flex-column justify-content-center h-100">
+                    <div class="col-md-3 mb-4 detail-card-link" data-task-type="renewal-approval" style="cursor: pointer;">
+                        <div class="card p-3 text-center d-flex align-items-center flex-column justify-content-center h-100">
                             <i class="fas fa-sync-alt stat-icon text-info mb-3"></i>
                             <div class="stat-label">Yenileme Onayları</div>
                             <div class="stat-value" id="taskCount-renewal-approval">0</div>
                         </div>
                     </div>
-                    <div class="col-md-4 mb-4 detail-card-link" data-task-type="bulletin-watch" style="cursor: pointer;">
-                        <div class="card p-4 text-center d-flex align-items-center flex-column justify-content-center h-100">
+                    <div class="col-md-3 mb-4 detail-card-link" data-task-type="bulletin-watch" style="cursor: pointer;">
+                        <div class="card p-3 text-center d-flex align-items-center flex-column justify-content-center h-100">
                             <i class="fas fa-eye stat-icon text-primary mb-3"></i>
                             <div class="stat-label">Bülten İzleme Bildirim Onayları</div>
                             <div class="stat-value" id="taskCount-bulletin-watch">0</div>
@@ -2789,7 +2789,17 @@ window.loadSampleTaskDetails = async function(taskType) {
       }[task.status] || task.status;
       
       // Atanan kişi
-      const assignedTo = task.assignedTo_email || '-';
+      let assignedTo = '-';
+      if (task.assignedTo_uid) {
+        try {
+          const assignedUserDoc = await getDoc(doc(db, 'users', task.assignedTo_uid));
+          if (assignedUserDoc.exists()) {
+            assignedTo = assignedUserDoc.data().displayName || assignedUserDoc.data().email || '-';
+          }
+        } catch (e) {
+          assignedTo = task.assignedTo_email || '-';
+        }
+      }
       
       // Tamamlanan işler için farklı butonlar
       const actionButtons = isCompletedView ? `
