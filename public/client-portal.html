@@ -2023,7 +2023,7 @@ $(document).on('show.bs.modal', '#portfolioDetailModal', function (e) {
         <p><strong>Sınıf:</strong> ${classes}</p>
     `);
     
-    // Tarihler/Durum kartını güncelle
+// Tarihler/Durum kartını güncelle
     const datesCard = $('#portfolioDetailModal .row .col-md-4:eq(2) .card-body');
     datesCard.html(`
         <p><strong>Başvuru Tarihi:</strong> ${appDate}</p>
@@ -2031,7 +2031,7 @@ $(document).on('show.bs.modal', '#portfolioDetailModal', function (e) {
         <p><strong>Yenileme Tarihi:</strong> ${renewalDate}</p>
         <p><strong>Durum:</strong> <span class="badge badge-${badgeClass}">${status}</span></p>
     `);
-
+    
     // Eşya Listesi (Mal ve Hizmet Sınıfları)
     const esyaContent = $('#esyaListesiContent');
     if (item.goodsAndServicesByClass && Array.isArray(item.goodsAndServicesByClass) && item.goodsAndServicesByClass.length > 0) {
@@ -2054,6 +2054,26 @@ $(document).on('show.bs.modal', '#portfolioDetailModal', function (e) {
     } else {
         esyaContent.html('<p class="text-muted">Mal ve hizmet bilgisi bulunamadı.</p>');
     }
+    
+    // Modal açıldığında ilk tab'ı aktif yap
+    setTimeout(() => {
+        $('#myTab a[href="#modal-islemler"]').tab('show');
+    }, 100);
+});
+
+// Modal tab'ları için event handler (sadece bir kez tanımla)
+$(document).ready(function() {
+    // Tab tıklamalarını düzelt
+    $(document).on('click', '#myTab a[data-toggle="tab"]', function (e) {
+        e.preventDefault();
+        $(this).tab('show');
+    });
+    
+    // Tab gösterildiğinde aria attribute'larını güncelle
+    $(document).on('shown.bs.tab', '#myTab a[data-toggle="tab"]', function (e) {
+        $('#myTab .nav-link').removeClass('active').attr('aria-selected', 'false');
+        $(e.target).addClass('active').attr('aria-selected', 'true');
+    });
 });
 
 </script>
