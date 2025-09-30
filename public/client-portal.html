@@ -1744,6 +1744,60 @@ async function populateDashboardNumbers(linkedPersonIds, allPortfolios){
     writeDashSafe('#dashUnpaidInvoices',   unpaidInvoices);
 }
 
+// (DOMContentLoaded'dan ÖNCE)
+window.fetchAndDisplayInvoices = async function (linkedPersonIds) {
+  try {
+    if (!Array.isArray(linkedPersonIds) || linkedPersonIds.length === 0) {
+      console.warn('Fatura: linkedPersonIds boş, sorgu atlanıyor.');
+      return;
+    }
+
+    const table = document.querySelector('#invoices table');
+    if (!table) {
+      console.warn('#invoices tablosu henüz DOM’da değil. Çağrı daha sonra tekrar denenecek.');
+      return;
+    }
+
+    const tableBody = table.querySelector('tbody') || table.createTBody();
+    tableBody.innerHTML = '';
+
+    // Firestore sorgusu
+    const q = query(
+      collection(db, 'accruals'),
+      where('personsRelatedIds', 'array-contains-any', linkedPersonIds)
+    );
+    const snap = await runGetDocs(q);
+
+    snap.forEach((d) => {
+      const a = d.data();
+      const statusBadge = a.isPaid
+        ? `<span class="badge badge-success">Ödendi</span>`
+        : `<span class="badge badge-warning">Ödenmemiş</span>`;
+
+      const actions = a.isPaid
+        ? `<button class="btn btn-primary btn-sm btn-action"><i class="fas fa-download"></i> İndir</button>`
+        : `<button class="btn btn-primary btn-sm btn-action"><i class="fas fa-download"></i> İndir</button>
+           <button class="btn btn-success btn-sm btn-action"><i class="fas fa-lira-sign"></i> Öde</button>`;
+
+      tableBody.insertAdjacentHTML(
+        'beforeend',
+        `
+        <tr>
+          <td>${a.invoiceNo || '-'}</td>
+          <td>${a.date || '-'}</td>
+          <td>${a.description || '-'}</td>
+          <td>${a.amount || '-'}</td>
+          <td>${statusBadge}</td>
+          <td>${actions}</td>
+        </tr>
+        `
+      );
+    });
+  } catch (err) {
+    console.error('Faturalar çekilirken hata:', err);
+  }
+};
+
 // Sayfa yüklendiğinde tüm fonksiyonları başlat
 document.addEventListener('DOMContentLoaded', function () {
     initTheme();
@@ -2036,30 +2090,6 @@ window.fetchAndDisplayTasks = async function(linkedPersonIds){
     // Detaylı liste, alt karta tıklanınca yükleniyor (loadSampleTaskDetails).
 } 
 
-window.fetchAndDisplayInvoices = async function(linkedPersonIds){
-    const q = query(collection(db, "accruals"), where("personsRelatedIds", "array-contains-any", linkedPersonIds));
-    const snap = await runGetDocs(q);
-    const tableBody = document.querySelector('#invoices table tbody');
-    tableBody.innerHTML = '';
-    snap.forEach(d => {
-        const a = d.data();
-        const statusBadge = a.isPaid ? `<span class="badge badge-success">Ödendi</span>` : `<span class="badge badge-warning">Ödenmemiş</span>`;
-        const actions = a.isPaid
-          ? `<button class="btn btn-primary btn-sm btn-action"><i class="fas fa-download"></i> İndir</button>`
-          : `<button class="btn btn-primary btn-sm btn-action"><i class="fas fa-download"></i> İndir</button>
-             <button class="btn btn-success btn-sm btn-action"><i class="fas fa-lira-sign"></i> Öde</button>`;
-        tableBody.insertAdjacentHTML('beforeend', `
-          <tr>
-            <td>${a.invoiceNo || '-'}</td>
-            <td>${a.date || '-'}</td>
-            <td>${a.description || '-'}</td>
-            <td>${a.amount || '-'}</td>
-            <td>${statusBadge}</td>
-            <td>${actions}</td>
-          </tr>
-        `);
-    });
-}
 
 // Modal açıldığında verileri set et
 $(document).on('show.bs.modal', '#portfolioDetailModal', async function (e) {
