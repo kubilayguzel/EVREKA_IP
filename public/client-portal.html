@@ -2722,11 +2722,11 @@ window.loadSampleTaskDetails = async function(taskType) {
       const taskId = task.id;
       const due = task.dueDate || task.officialDueDate || task.clientDueDate || task.deadline || null;
       
-      // Transaction type alias'ını al
+    // Transaction type alias'ını al (taskType field'ı transaction type ID'sidir)
       let transactionAlias = 'İşlem';
-      if (task.transactionId) {
+      if (task.taskType) {
         try {
-          const transactionDoc = await getDoc(doc(db, 'transactionTypes', String(task.transactionId)));
+          const transactionDoc = await getDoc(doc(db, 'transactionTypes', String(task.taskType)));
           if (transactionDoc.exists()) {
             transactionAlias = transactionDoc.data().alias || transactionDoc.data().name || 'İşlem';
           }
