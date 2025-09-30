@@ -2122,15 +2122,15 @@ function _normalizeTr(s){
 }
 
 // transactionTypes meta cache'i (zaten varsa tekrar tanımlama)
-const __tt = (window._ttCache = window._ttCache || new Map());
+const __ttMeta = (window._ttMetaCache = window._ttMetaCache || new Map());
 async function _getTransactionTypeMeta(typeId){
   if(!typeId) return null;
   const key = String(typeId);
-  if(__tt.has(key)) return __tt.get(key);
+  if(__ttMeta.has(key)) return __ttMeta.get(key);
   try{
     const snap = await getDoc(doc(db,'transactionTypes', key));
     const meta = snap.exists() ? (snap.data()||{}) : null;
-    __tt.set(key, meta);
+    __ttMeta.set(key, meta);
     return meta;
   }catch(_){ return null; }
 }
