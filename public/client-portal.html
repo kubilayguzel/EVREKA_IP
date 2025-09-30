@@ -2151,15 +2151,45 @@ const RX_BULTEN = /(bulten|izleme|watch|yayin|yayim|yayima|yayıma|gazete)/;
 // === SAYAÇLARI DOLDURAN YENİ SÜRÜM ===
 window.fetchAndDisplayTasks = async function(){
   try{
-    // Sadece onay bekleyenleri çek
-    const q = query(
-      collection(db,'tasks'),
-      where('status','==','awaiting_client_approval')
-    );
-    const snap = await runGetDocs(q);
+    const user = authService.getCurrentUser();
+    if (!user) {
+      console.warn('Kullanıcı girişi yapılmamış');
+      return;
+    }
 
+    const userDocRef = doc(db, 'users', user.uid);
+    const userSnapshot = await getDoc(userDocRef);
+    
+    if (!userSnapshot.exists()) {
+      console.warn('Kullanıcı bilgileri bulunamadı');
+      return;
+    }
+
+    const linkedPersonIds = userSnapshot.data().linkedPersonIds || [];
+    
+    if (linkedPersonIds.length === 0) {
+      console.warn('Bağlı müvekkil bulunamadı');
+      return;
+    }
+
+    // Tüm taskları çek ve client-side filtrele
+    const allTasksQuery = query(collection(db, 'tasks'));
+    const allTasksSnapshot = await runGetDocs(allTasksQuery);
+    
     const awaitingTasks = [];
-    snap.forEach(d => awaitingTasks.push({ id:d.id, ...d.data() }));
+    
+    allTasksSnapshot.forEach(d => {
+      const taskData = d.data();
+      const relatedPartyId = taskData.details?.relatedParty?.id;
+      
+      // Müvekkil ile eşleşme ve status kontrolü
+      if (relatedPartyId && 
+          linkedPersonIds.includes(relatedPartyId) && 
+          taskData.status === 'awaiting_client_approval') {
+        awaitingTasks.push({ id: d.id, ...taskData });
+      }
+    });
+
     window.__allClientTasks = awaitingTasks; // listelemede kullanılıyor
 
     let countPending   = 0;  // Yenileme ve bülten hariç normal onay bekleyenler
@@ -2792,11 +2822,30 @@ window.loadSampleTaskDetails = async function(taskType) {
       
       if (!isRelatedToClient) return;
       
-      // Task type'a göre filtreleme
-      if (taskType === 'pending-approval') {
-        // Sadece onay bekleyenler
-        if (taskData.status === 'awaiting_client_approval') {
-          matchingTasks.push({ id: d.id, ...taskData });
+    // Task type'a göre filtreleme
+      if (taskData.status === 'awaiting_client_approval') {
+        // Transaction type'ı al ve kategorilendir
+        const meta = await _getTransactionTypeMeta(taskData.taskType);
+        const label = _taskLabelGuess(taskData, meta);
+        
+        const isRenewal = /yenileme/.test(label);
+        const isBulletin = RX_BULTEN.test(label);
+        
+        if (taskType === 'pending-approval') {
+          // Yenileme ve bülten olmayan normal onay bekleyenler
+          if (!isRenewal && !isBulletin) {
+            matchingTasks.push({ id: d.id, ...taskData });
+          }
+        } else if (taskType === 'renewal-approval') {
+          // Sadece yenileme işleri
+          if (isRenewal) {
+            matchingTasks.push({ id: d.id, ...taskData });
+          }
+        } else if (taskType === 'bulletin-watch') {
+          // Sadece bülten izleme işleri
+          if (isBulletin) {
+            matchingTasks.push({ id: d.id, ...taskData });
+          }
         }
       } else if (taskType === 'completed-tasks') {
         // Onay bekleyen dışındaki tüm işler
