@@ -2083,6 +2083,34 @@ async function loadTransactions(ipRecordId) {
         transactions.push({ id: doc.id, ...doc.data() });
     });
     
+    // Transaction type'ın alias değerini al (fonksiyonu döngü dışında tanımla)
+    const getTransactionTypeAlias = async (typeId) => {
+        if (!typeId) return 'İşlem';
+        try {
+            const typeDoc = await getDoc(doc(db, 'transactionTypes', String(typeId)));
+            if (typeDoc.exists()) {
+                return typeDoc.data().alias || typeDoc.data().name || 'İşlem';
+            }
+        } catch (e) {
+            console.warn('Type alias alınamadı:', e);
+        }
+        return 'İşlem';
+    };
+    
+    // Tarih formatla (fonksiyonu döngü dışında tanımla)
+    const formatDate = (timestamp) => {
+        if (!timestamp) return '-';
+        try {
+            const date = new Date(timestamp);
+            const day = String(date.getDate()).padStart(2, '0');
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const year = date.getFullYear();
+            return `${day}.${month}.${year}`;
+        } catch (e) {
+            return '-';
+        }
+    };
+    
     // Parent transactions'ları filtrele
     const parentTransactions = transactions.filter(t => t.transactionHierarchy === 'parent');
     
@@ -2091,7 +2119,9 @@ async function loadTransactions(ipRecordId) {
     tableBody.empty();
     
     let rowIndex = 1;
-    parentTransactions.forEach(parent => {
+    
+    // forEach yerine for...of kullan (await çalışması için)
+    for (const parent of parentTransactions) {
         // Child transactions'ları bul
         const children = transactions.filter(t => 
             t.transactionHierarchy === 'child' && t.parentId === parent.id
@@ -2100,35 +2130,7 @@ async function loadTransactions(ipRecordId) {
         const hasChildren = children.length > 0;
         const accordionId = `transaction-${parent.id}`;
         
-        // Transaction type'ın alias değerini al
-        const getTransactionTypeAlias = async (typeId) => {
-            if (!typeId) return 'İşlem';
-            try {
-                const typeDoc = await getDoc(doc(db, 'transactionTypes', String(typeId)));
-                if (typeDoc.exists()) {
-                    return typeDoc.data().alias || typeDoc.data().name || 'İşlem';
-                }
-            } catch (e) {
-                console.warn('Type alias alınamadı:', e);
-            }
-            return 'İşlem';
-        };
-        
         const transactionAlias = await getTransactionTypeAlias(parent.type);
-        
-        // Tarih formatla
-        const formatDate = (timestamp) => {
-            if (!timestamp) return '-';
-            try {
-                const date = new Date(timestamp);
-                const day = String(date.getDate()).padStart(2, '0');
-                const month = String(date.getMonth() + 1).padStart(2, '0');
-                const year = date.getFullYear();
-                return `${day}.${month}.${year}`;
-            } catch (e) {
-                return '-';
-            }
-        };
         
         // Parent satırı
         const parentRow = `
@@ -2146,17 +2148,17 @@ async function loadTransactions(ipRecordId) {
         if (hasChildren) {
             let childTableHtml = `
                 <tr>
-                    <td colspan="5" class="p-0">
+                    <td colspan="4" class="p-0">
                         <div class="collapse" id="${accordionId}">
                             <table class="table mb-0 accordion-table">
-                        <thead>
-                            <tr>
-                                <th>#</th>
-                                <th>İşlem Açıklaması</th>
-                                <th>Tarih</th>
-                                <th>Evrak</th>
-                            </tr>
-                        </thead>
+                                <thead>
+                                    <tr>
+                                        <th>#</th>
+                                        <th>İşlem Açıklaması</th>
+                                        <th>Tarih</th>
+                                        <th>Evrak</th>
+                                    </tr>
+                                </thead>
                                 <tbody>
             `;
             
@@ -2184,7 +2186,7 @@ async function loadTransactions(ipRecordId) {
         }
         
         rowIndex++;
-    });
+    }
 }
 
     // Modal tab'ları için event handler (sadece bir kez tanımla)
