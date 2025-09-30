@@ -2804,6 +2804,33 @@ window.loadSampleTaskDetails = async function(taskType) {
       return;
     }
 
+    // Helper function: Transaction type meta bilgisini al
+    const getTransactionTypeMeta = async (typeId) => {
+      if (!typeId) return null;
+      const key = String(typeId);
+      if (__ttMeta.has(key)) return __ttMeta.get(key);
+      try {
+        const snap = await getDoc(doc(db, 'transactionTypes', key));
+        const meta = snap.exists() ? (snap.data() || {}) : null;
+        __ttMeta.set(key, meta);
+        return meta;
+      } catch (_) {
+        return null;
+      }
+    };
+
+    // Helper function: Task label/kategori tahmini
+    const taskLabelGuess = (t, meta) => {
+      const pieces = [
+        meta?.alias, meta?.name,
+        t.subType, t.taskSubType, t.category,
+        t.details?.category, t.details?.type,
+        Array.isArray(t.tags) ? t.tags.join(' ') : '',
+        t.title, t.description
+      ].filter(Boolean);
+      return _normalizeTr(pieces.join(' '));
+    };
+
     // TÜM TASKLARI ÇEK
     const tasksRef = collection(db, 'tasks');
     const allTasksQuery = query(tasksRef);
@@ -2850,10 +2877,10 @@ window.loadSampleTaskDetails = async function(taskType) {
     if (taskType === 'completed-tasks') {
       filteredTasks = matchingTasks;
     } else {
-      // Onay bekleyen işler için kategori bazlı filtreleme yap
+    // Onay bekleyen işler için kategori bazlı filtreleme yap
       for (const taskData of matchingTasks) {
-        const meta = await _getTransactionTypeMeta(taskData.taskType);
-        const label = _taskLabelGuess(taskData, meta);
+        const meta = await getTransactionTypeMeta(taskData.taskType);
+        const label = taskLabelGuess(taskData, meta);
         
         const isRenewal = /yenileme/.test(label);
         const isBulletin = RX_BULTEN.test(label);
