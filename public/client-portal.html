@@ -1863,61 +1863,78 @@ function filterPaneByMense(paneSelector, menseValue){
 }
 
 window.applyMenseFilterToActivePane = function(){
-    var val = $("#menseFilter").val() || 'TÃœRKPATENT'; 
+    var val = $("#menseFilter").val() || 'TÜRKPATENT'; // Türkçe karakterler bazen bozulabilir, kontrol edin.
     var $activePane = $(".tab-content > .tab-pane.show.active");
+    
     if($activePane.length){
-      var paneId = $activePane.attr("id");
-      filterPaneByMense("#" + paneId, val);
-      
-      // Eğer marka listesindeyse ve pagination aktifse, filtrelenmiş veriyi pagination'a ver
-      if (paneId === 'marka-list' && window.markaPaginationData && window.markaPaginationData.allDataUnfiltered) {
-        var allData = window.markaPaginationData.allDataUnfiltered;
-        var filteredData;
-        
-        if (val === 'HEPSI') {
-          filteredData = allData;
-        } else if (val === 'TÃœRKPATENT') {
-          filteredData = allData.filter(item => {
-            var orig = (item.origin || 'TÃœRKPATENT').toString().toUpperCase().trim();
-            return orig === 'TÃœRKPATENT' || orig === 'TURKPATENT' || orig === '';
-          });
-        } else if (val === 'YURTDISI') {
-          filteredData = allData.filter(item => {
-            var orig = (item.origin || 'TÃƒÅ"RKPATENT').toString().toUpperCase().trim();
-            console.log('🔎 Yurtdışı filtre:', item.title, 'origin:', item.origin, 'normalized:', orig);
-            return orig !== 'TÃƒÅ"RKPATENT' && orig !== 'TURKPATENT' && orig !== '';
-          });
-          console.log('✅ Yurtdışı filtreleme sonucu:', filteredData.length, 'kayıt bulundu');
+        var paneId = $activePane.attr("id");
+
+        // Mense Filtresi sadece Portföyüm sekmesi açıkken çalışmalıdır.
+        if (paneId !== 'portfolio-content') {
+            // Aktif sekme portföy değilse, bu fonksiyondan çık.
+            // Bu, 'tasks' veya 'dashboard' açıkken 'markaPaginationData' erişim hatasını engeller.
+            return;
         }
         
-        window.markaPaginationData.allData = filteredData;
-        window.markaPaginationData.currentPage = 1;
-        window.markaPaginationData.totalPages = Math.ceil(filteredData.length / window.markaPaginationData.itemsPerPage);
+        // Aktif olan Portföy alt sekmesini bul (marka-list, patent-list vb.)
+        var $activePortfolioTab = $('#portfolioTopTabs a.nav-link.active').attr('href');
+        var activeTabId = $activePortfolioTab ? $activePortfolioTab.substring(1) : 'marka-list';
         
-        var firstPage = filteredData.slice(0, window.markaPaginationData.itemsPerPage);
-        if (window.__originalPopulate) {
-          window.__originalPopulate('#marka-list', firstPage);
+        // Önce DOM filtrelemesini uygula (Her zaman)
+        filterPaneByMense("#" + activeTabId, val);
+        
+        // Eğer marka listesindeyse ve pagination aktifse, veriyi yeniden filtrele ve pagination'ı güncelle
+        if (activeTabId === 'marka-list' && window.markaPaginationData && window.markaPaginationData.allDataUnfiltered) {
+            var allData = window.markaPaginationData.allDataUnfiltered;
+            var filteredData;
+            
+            if (val === 'HEPSI') {
+                filteredData = allData;
+            } else if (val === 'TÜRKPATENT') {
+                // Not: Orijinal kodunuzda 'TÜRKPATENT' karakterleri bozuk görünüyor (TÃœRKPATENT),
+                // burada temiz bir değer kullanıyorum. Eğer veritabanında bozuksa, ona uygun düzeltme yapmanız gerekebilir.
+                filteredData = allData.filter(item => {
+                    var orig = (item.origin || 'TÜRKPATENT').toString().toUpperCase().trim();
+                    return orig === 'TÜRKPATENT' || orig === 'TURKPATENT' || orig === '';
+                });
+            } else if (val === 'YURTDISI') {
+                filteredData = allData.filter(item => {
+                    var orig = (item.origin || 'TÜRKPATENT').toString().toUpperCase().trim();
+                    // Buradaki kontrolünüz de muhtemelen karakter hatasından etkileniyordu:
+                    return orig !== 'TÜRKPATENT' && orig !== 'TURKPATENT' && orig !== '';
+                });
+                console.log('✅ Yurtdışı filtreleme sonucu:', filteredData.length, 'kayıt bulundu');
+            }
+            
+            window.markaPaginationData.allData = filteredData;
+            window.markaPaginationData.currentPage = 1;
+            window.markaPaginationData.totalPages = Math.ceil(filteredData.length / window.markaPaginationData.itemsPerPage);
+            
+            var firstPage = filteredData.slice(0, window.markaPaginationData.itemsPerPage);
+            if (window.__originalPopulate) {
+                window.__originalPopulate('#marka-list', firstPage);
+            }
+            if (window.renderMarkaPagination) {
+                window.renderMarkaPagination();
+            }
         }
-        if (window.renderMarkaPagination) {
-          window.renderMarkaPagination();
-        }
-      }
     }
-  }
+};
 
-  $(document).on('change', '#menseFilter', function(){
+// --- Olay Yöneticileri (Bu kısım zaten doğruydu, sadece bağlam için ekledim) ---
+
+$(document).on('change', '#menseFilter', function(){
     applyMenseFilterToActivePane();
-  });
+});
 
-  $(document).on('shown.bs.tab', '#portfolioTopTabs a[data-toggle="tab"]', function (e) {
+$(document).on('shown.bs.tab', '#portfolioTopTabs a[data-toggle="tab"]', function (e) {
     applyMenseFilterToActivePane();
-  });
+});
 
-  $(function(){
+$(function(){
     // Sayfa yüklendiğinde varsayılan filtreyi uygula
     applyMenseFilterToActivePane();
-  });
-})();
+});
 
 // Client Portal menü aktif durumu yönetimi
 $(document).ready(function() {
