@@ -2676,65 +2676,77 @@ window.loadSampleTaskDetails = async function(taskType) {
 
         // "Müvekkil Onayı Bekliyor" statusundeki taskları çek
         const tasksRef = collection(db, "tasks");
-        const q = query(
-            tasksRef,
-            where("personsRelatedIds", "array-contains-any", linkedPersonIds),
-            // Burası sadece "Onay Bekleyen İşler" için çalışır.
-            // Diğer taskType'lar için (yenileme, bülten) query koşulları eklenmeli.
-            where("status", "==", "müvekkil onayı bekliyor") 
-        );
-        
+
+        // Seçilen alt karta göre filtreleri hazırla
+        const filters = [
+        where("personsRelatedIds", "array-contains-any", linkedPersonIds)
+        ];
+
+        if (taskType === 'pending-approval') {
+        // Firestore'daki gerçek değer
+        filters.push(where("status", "==", "awaiting_client_approval"));
+        }
+        // ileride diğer kartlar için uygun filtreleri ekleyebilirsin:
+        // else if (taskType === 'renewal-approval') { ... }
+        // else if (taskType === 'bulletin-watch')   { ... }
+
+        const q = query(tasksRef, ...filters);
         const querySnapshot = await runGetDocs(q);
-        
+
         if (querySnapshot.empty) {
-            container.innerHTML = '<p class="lead text-muted text-center mt-5">Bu kategoride onay bekleyen iş bulunmamaktadır.</p>';
-            return;
+        container.innerHTML = '<p class="lead text-muted text-center mt-5">Bu kategoride onay bekleyen iş bulunmamaktadır.</p>';
+        return;
         }
 
         container.innerHTML = '';
-        
+
+        // Timestamp / string güvenli tarih formatlayıcı
+        const formatDate = (d) => {
+        if (!d) return '-';
+        try {
+            const date = (d && typeof d.toDate === 'function') ? d.toDate() : new Date(d);
+            if (isNaN(date)) return '-';
+            const dd = String(date.getDate()).padStart(2, '0');
+            const mm = String(date.getMonth() + 1).padStart(2, '0');
+            const yy = date.getFullYear();
+            return `${dd}.${mm}.${yy}`;
+        } catch {
+            return '-';
+        }
+        };
+
         querySnapshot.forEach(docSnap => {
-            const task = docSnap.data();
-            const taskId = docSnap.id;
-            
-            // Tarihi formatla
-            const formatDate = (dateStr) => {
-                if (!dateStr) return '-';
-                try {
-                    const date = new Date(dateStr);
-                    const day = String(date.getDate()).padStart(2, '0');
-                    const month = String(date.getMonth() + 1).padStart(2, '0');
-                    const year = date.getFullYear();
-                    return `${day}.${month}.${year}`;
-                } catch (e) {
-                    return dateStr;
-                }
-            };
-            
-            const card = document.createElement('div');
-            card.className = 'col-md-12 mb-4';
-            card.innerHTML = `
-              <div class="task-card task-card-warning" data-task-id="${taskId}">
-                <h5 class="task-title">${task.title || 'İsimsiz İş'}</h5>
-                <p class="task-description">${task.description || 'Açıklama yok'}</p>
-                <div class="d-flex justify-content-between align-items-center">
-                  <small class="task-meta"><i class="fas fa-clock mr-1"></i>Son Onay Tarihi: ${formatDate(task.officialDueDate || task.dueDate)}</small>
-                  <div>
-                    <button class="btn btn-success btn-sm btn-action task-approve" data-task-id="${taskId}">
-                      <i class="fas fa-check"></i> Onayla
-                    </button>
-                    <button class="btn btn-danger btn-sm btn-action task-reject" data-task-id="${taskId}">
-                      <i class="fas fa-times"></i> Reddet
-                    </button>
-                    <button class="btn btn-info btn-sm btn-action task-detail" data-task-id="${taskId}">
-                      <i class="fas fa-eye"></i> İncele
-                    </button>
-                  </div>
+        const task = docSnap.data();
+        const taskId = docSnap.id;
+
+        const card = document.createElement('div');
+        card.className = 'col-md-12 mb-4';
+        card.innerHTML = `
+            <div class="task-card task-card-warning" data-task-id="${taskId}">
+            <h5 class="task-title">${task.title || 'İsimsiz İş'}</h5>
+            <p class="task-description">${task.description || 'Açıklama yok'}</p>
+            <div class="d-flex justify-content-between align-items-center">
+                <small class="task-meta">
+                <i class="fas fa-clock mr-1"></i>
+                Son Onay Tarihi: ${formatDate(task.officialDueDate || task.dueDate)}
+                </small>
+                <div>
+                <button class="btn btn-success btn-sm btn-action task-approve" data-task-id="${taskId}">
+                    <i class="fas fa-check"></i> Onayla
+                </button>
+                <button class="btn btn-danger btn-sm btn-action task-reject" data-task-id="${taskId}">
+                    <i class="fas fa-times"></i> Reddet
+                </button>
+                <button class="btn btn-info btn-sm btn-action task-detail" data-task-id="${taskId}">
+                    <i class="fas fa-eye"></i> İncele
+                </button>
                 </div>
-              </div>`;
-            container.appendChild(card);
+            </div>
+            </div>`;
+        container.appendChild(card);
         });
-        
+
+                
     } catch (error) {
         console.error('Task yükleme hatası:', error);
         container.innerHTML = '<p class="lead text-danger text-center mt-5">Veriler yüklenirken bir hata oluştu.</p>';
