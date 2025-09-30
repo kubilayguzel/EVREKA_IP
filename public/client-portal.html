@@ -1968,16 +1968,16 @@ function filterPaneByMense(paneSelector, menseValue){
 }
 
 window.applyMenseFilterToActivePane = function(){
+    // ensure local vars exist after automated patching
+    var $activePane = $('#portfolio-content');
+    var paneId = 'portfolio-content';
+
     var val = $("#menseFilter").val() || 'TÜRKPATENT'; // Türkçe karakterler bazen bozulabilir, kontrol edin.
     if($activePane.length){
         var paneId = $activePane.attr("id");
 
         // Mense Filtresi sadece Portföyüm sekmesi açıkken çalışmalıdır.
-        if (paneId !== 'portfolio-content') {
-            // Aktif sekme portföy değilse, bu fonksiyondan çık.
-            // Bu, 'tasks' veya 'dashboard' açıkken 'markaPaginationData' erişim hatasını engeller.
-            return;
-        }
+        if (!$('#portfolio-content').hasClass('show active')) { return; }
         
         // Aktif olan Portföy alt sekmesini bul (marka-list, patent-list vb.)
         var $activePortfolioTab = $('#portfolioTopTabs a.nav-link.active').attr('href');
@@ -2525,63 +2525,10 @@ window.markaPaginationData = {
     totalPages: 0
 };
 
-window.renderMarkaPagination = function(){ /* deprecated: replaced by Pagination class */ }; background:${isActive ? '#007bff' : 'white'}; color:${isActive ? 'white' : '#333'}; border-radius:6px; cursor:pointer; font-weight:${isActive ? '600' : 'normal'};">${i}</button>`;
-        }
-        
-        // Sonraki
-        html += `<button onclick="window.goToMarkaPage(${data.currentPage + 1})" ${data.currentPage === data.totalPages ? 'disabled' : ''} style="padding:8px 12px; border:1px solid #ddd; background:white; color:#333; border-radius:6px; cursor:pointer;">Sonraki</button>`;
-        
-        // Son sayfa
-        html += `<button onclick="window.goToMarkaPage(${data.totalPages})" ${data.currentPage === data.totalPages ? 'disabled' : ''} style="padding:8px 12px; border:1px solid #ddd; background:white; color:#333; border-radius:6px; cursor:pointer;">Son</button>`;
-        
-        html += '</div>';
-    }
-    
-    html += '</div>';
-    container.innerHTML = html;
-};
+window.renderMarkaPagination = function(){ /* deprecated: replaced by Pagination class */ };
 
 window.goToMarkaPage = function(){ /* deprecated: replaced by Pagination class */ };
 
-// --- Sidebar / Top-level tab behavior ---
-(function(){
-  var $ = window.jQuery;
-  if (!$) return;
-  // Click: show tab via Bootstrap and prevent default anchor jump scroll
-  $('#sidebar a[data-toggle="tab"]').on('click', function(e){
-    e.preventDefault();
-    $(this).tab('show');
-  });
-  // When a top-level tab is shown, mark only it as active and update hash
-  $('#sidebar a[data-toggle="tab"]').on('shown.bs.tab', function(e){
-    $('#sidebar .nav-link').removeClass('active');
-    $(e.target).addClass('active');
-    var href = $(e.target).attr('href');
-    if (href && href.startsWith('#')) {
-      history.replaceState(null, '', href);
-    }
-  });
-  // Open tab from URL hash on load / hashchange
-  function openHashTab(){
-    var hash = window.location.hash;
-    if (hash && $('#sidebar a[data-toggle="tab"][href="'+hash+'"]').length) {
-      $('#sidebar a[data-toggle="tab"][href="'+hash+'"]').tab('show');
-    }
-  }
-  $(window).on('hashchange', openHashTab);
-  // Initial: if no hash, show dashboard
-  if (window.location.hash) openHashTab();
-  else $('#sidebar a[data-toggle="tab"][href="#dashboard"]').tab('show');
-})();
-// --- İşlerim Sayfası Navigasyon Mantığı ---
-
-const $tasksMain = $('#task-main-cards');
-const $tasksDetail = $('#task-detail-cards');
-const $tasksList = $('#task-list-details');
-const $tasksHeader = $('#tasksHeaderTitle');
-const $tasksLead = $('#tasksLeadText');
-
-// Yeni Global State (Hangi IP türünün seçili olduğunu tutmak için)
 window.activeTaskArea = null;
 
 // Ana Kart Tıklaması: Marka, Patent, Tasarım, Dava
