@@ -399,8 +399,9 @@
 #marka-list th.col-index, #marka-list td.col-index { width: 56px; white-space: nowrap; }
 #marka-list th.col-brand, #marka-list td.col-brand { width: 28%; }
 #marka-list th.col-sample, #marka-list td.col-sample { width: 120px; text-align:center; }
-#marka-list th.col-appno, #marka-list td.col-appno { width: 14%; white-space: nowrap; }
-#marka-list th.col-appdate, #marka-list td.col-appdate { width: 14%; white-space: nowrap; }
+#marka-list th.col-appno, #marka-list td.col-appno { width: 12%; white-space: nowrap; }
+#marka-list th.col-regno, #marka-list td.col-regno { width: 12%; white-space: nowrap; }
+#marka-list th.col-appdate, #marka-list td.col-appdate { width: 12%; white-space: nowrap; }
 #marka-list th.col-status, #marka-list td.col-status { width: 10%; white-space: nowrap; }
 #marka-list th.col-classes, #marka-list td.col-classes { 
     width: 16%; 
@@ -694,6 +695,7 @@
                                     <th class="col-sample text-center">Marka Örneği</th>
                                     <th class="col-brand">Marka</th>
                                     <th class="col-appno">Başvuru No</th>
+                                    <th class="col-regno">Tescil No</th>
                                     <th class="col-appdate">Başvuru Tarihi</th>
                                     <th class="col-status">Durum</th>
                                     <th class="col-classes">Sınıflar</th>
@@ -1327,12 +1329,15 @@ console.log('📍 Origin Debug:', item.title || 'İsimsiz', 'origin:', item.orig
 
         const brandImg = item.brandImageUrl || item.brandImage || '';
         const imgHtml = brandImg ? `<img src="${brandImg}" alt="marka" class="brand-thumb" style="height:128px !important;width:auto;border-radius:6px;object-fit:contain;"/>` : '-';
+        const regNumber = item.registrationNumber || item.registrationNo || '-';
+        
         const rowHtml = `
         <td class="col-index">${isInternational ? `<i class="fas fa-chevron-right mr-2"></i>` : ''}${index + 1}</td>
         <td class="col-origin">${originDisplay}</td>
         <td class="col-sample">${imgHtml}</td>
         <td class="col-brand"><a href="#" class="portfolio-detail-link" data-item-id="${item.id}" data-toggle="modal" data-target="#portfolioDetailModal">${title}</a></td>
         <td class="col-appno">${appNumber}</td>
+        <td class="col-regno">${regNumber}</td>
         <td class="col-appdate">${applicationDate}</td>
         <td class="col-status"><span class="badge badge-${badgeClass}">${statusText}</span></td>
         <td class="col-classes">${classes}</td>
@@ -1354,7 +1359,7 @@ console.log('📍 Origin Debug:', item.title || 'İsimsiz', 'origin:', item.orig
             const detailRow = document.createElement('tr');
             detailRow.setAttribute('data-origin', originBucket);
             detailRow.innerHTML = `
-                <td colspan="8" class="p-0">
+                <td colspan="9" class="p-0">
                     <div class="collapse" id="accordion-yurtdisi-${item.id}">
                         <table class="table mb-0 accordion-table">
                             <thead>
@@ -1362,6 +1367,7 @@ console.log('📍 Origin Debug:', item.title || 'İsimsiz', 'origin:', item.orig
                                     <th>#</th>
                                     <th>Menşe</th>
                                     <th>Başvuru No</th>
+                                    <th>Tescil No</th>
                                     <th>Başvuru Tarihi</th>
                                     <th>Durum</th>
                                     <th>Sınıflar</th>
@@ -1408,11 +1414,13 @@ console.log('📍 Origin Debug:', item.title || 'İsimsiz', 'origin:', item.orig
                                         ? window.countriesMap[subItem.country] 
                                         : (subItem.country || 'Bilinmiyor');
                                     
+                                    const subRegNo = subItem.registrationNumber || subItem.registrationNo || '-';                                  
                                     return `
                                         <tr>
                                             <td>${index + 1}.${subIndex + 1}</td>
                                             <td>${childOrigin}</td>
                                             <td>${subItem.applicationNumber || '-'}</td>
+                                            <td>${subRegNo}</td>
                                             <td>${subAppDate}</td>
                                             <td><span class="badge badge-${subBadgeClass}">${subStatus}</span></td>
                                             <td>${subClasses}</td>
