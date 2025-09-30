@@ -1981,6 +1981,12 @@ async function fetchAndDisplayInvoices(linkedPersonIds){
 
 // Modal açıldığında verileri set et
 $(document).on('show.bs.modal', '#portfolioDetailModal', async function (e) {
+    // Ana sayfanın mevcut durumunu kaydet
+    window._savedPortfolioState = {
+        activeTab: $('.tab-content > .tab-pane.show.active').attr('id'),
+        sidebarActive: $('#sidebar .nav-link.active').attr('href')
+    };
+    
     const triggerLink = $(e.relatedTarget);
     const itemId = triggerLink.data('item-id');
     
@@ -2106,27 +2112,51 @@ $(document).on('show.bs.modal', '#portfolioDetailModal', async function (e) {
 $(document).on('hidden.bs.modal', '#portfolioDetailModal', function (e) {
     // Modal içindeki tab'ları sıfırla
     $('#myTab .nav-link').removeClass('active').attr('aria-selected', 'false');
-    $('.tab-content .tab-pane').removeClass('show active');
+    $('#portfolioDetailModal .tab-pane').removeClass('show active');
     
     // İlk tab'ı hazır hale getir (bir sonraki açılış için)
     $('#myTab a[href="#modal-islemler"]').addClass('active').attr('aria-selected', 'true');
     $('#modal-islemler').addClass('show active');
     
-    // Ana sayfadaki tab durumunu kontrol et ve gerekirse yenile
+    // Ana sayfayı kayıtlı duruma geri yükle
     setTimeout(() => {
-        const $activePane = $('.tab-content > .tab-pane.show.active');
-        if ($activePane.length === 0) {
-            // Hiçbir tab aktif değilse, portföy tab'ını aktif yap
-            $('#sidebar a[href="#portfolio-content"]').tab('show');
-        }
-        
-        // Marka listesi görünürse filtreyi uygula
-        if ($('#marka-list').hasClass('show') && $('#marka-list').hasClass('active')) {
-            if (typeof window.applyMenseFilterToActivePane === 'function') {
-                window.applyMenseFilterToActivePane();
+        if (window._savedPortfolioState) {
+            const savedTab = window._savedPortfolioState.activeTab;
+            const savedSidebar = window._savedPortfolioState.sidebarActive;
+            
+            // Ana content tab'larını sıfırla
+            $('.content > .tab-content > .tab-pane').removeClass('show active');
+            
+            // Kaydedilmiş tab'ı aktif yap
+            if (savedTab) {
+                $('#' + savedTab).addClass('show active');
             }
+            
+            // Sidebar'ı güncelle
+            $('#sidebar .nav-link').removeClass('active');
+            if (savedSidebar) {
+                $(`#sidebar a[href="${savedSidebar}"]`).addClass('active');
+            }
+            
+            // Portföy içindeyse, marka listesini ve filtreleri yenile
+            if (savedTab === 'portfolio-content') {
+                setTimeout(() => {
+                    $('#portfolioTopTabs a[href="#marka-list"]').tab('show');
+                    
+                    if (typeof window.applyMenseFilterToActivePane === 'function') {
+                        window.applyMenseFilterToActivePane();
+                    }
+                    
+                    if (window.renderMarkaPagination) {
+                        window.renderMarkaPagination();
+                    }
+                }, 50);
+            }
+            
+            // State'i temizle
+            delete window._savedPortfolioState;
         }
-    }, 100);
+    }, 50);
 });
 
 // Transactions yükleme fonksiyonu
