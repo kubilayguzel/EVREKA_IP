@@ -2753,11 +2753,10 @@ window.loadSampleTaskDetails = async function(taskType) {
 
       const card = document.createElement('div');
       card.className = 'col-md-12 mb-4';
-      card.innerHTML = `
+        card.innerHTML = `
         <div class="task-card task-card-warning" data-task-id="${taskId}">
           <h5 class="task-title">${taskTitle}</h5>
-          <p class="task-description">${task.description || ''}</p>
-            <div class="d-flex justify-content-between align-items-center">
+          <div class="d-flex justify-content-between align-items-center">
                         <small class="task-meta">
                         <i class="fas fa-clock mr-1"></i>
                         Son Onay Tarihi: ${formatDate(due)}
