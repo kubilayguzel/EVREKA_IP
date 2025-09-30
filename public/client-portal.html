@@ -2605,50 +2605,223 @@ $(document).on('click', '.detail-card-link', function() {
 });
 
 // Test/Geliştirme amaçlı örnek listeyi yükleme fonksiyonu
-function loadSampleTaskDetails(taskType) {
+// Müvekkil onayı bekleyen taskleri Firebase'den yükle
+async function loadSampleTaskDetails(taskType) {
     const container = document.getElementById('task-list-container');
-    container.innerHTML = '';
+    container.innerHTML = '<div class="text-center mt-5"><i class="fas fa-spinner fa-spin fa-3x"></i><p class="mt-3">Yükleniyor...</p></div>';
     
-    let sampleTasks = [];
-    if (taskType === 'pending-approval') {
-        sampleTasks = [
-            { title: 'Marka Tescil Başvurusu - "Evreka"', description: 'Belgeleri inceleyin.', dueDate: '15.11.2025' },
-            { title: 'Marka Başvurusu Devir İşlemi', description: 'Taslak belgeleri onaylayın.', dueDate: '01.12.2025' },
-        ];
-    } else if (taskType === 'renewal-approval') {
-        sampleTasks = [
-            { title: 'Yenileme Onayı - Marka XYZ', description: 'Marka yenileme ücreti ve süreci onayı.', dueDate: '20.10.2025' }
-        ];
-    } else if (taskType === 'bulletin-watch') {
-        sampleTasks = [
-            { title: 'Bülten Bildirimi - İtiraz Değerlendirmesi', description: 'Benzer marka tespit edildi, itiraz onayı.', dueDate: '05.11.2025' }
-        ];
+    try {
+        const user = authService.getCurrentUser();
+        if (!user) {
+            container.innerHTML = '<p class="lead text-muted text-center mt-5">Kullanıcı girişi yapılmamış.</p>';
+            return;
+        }
+
+        // Kullanıcının linkedPersonIds'ini al
+        const userDocRef = doc(db, "users", user.uid);
+        const userSnapshot = await getDoc(userDocRef);
+        
+        if (!userSnapshot.exists()) {
+            container.innerHTML = '<p class="lead text-muted text-center mt-5">Kullanıcı bilgileri bulunamadı.</p>';
+            return;
+        }
+
+        const userData = userSnapshot.data();
+        const linkedPersonIds = userData.linkedPersonIds || [];
+
+        if (linkedPersonIds.length === 0) {
+            container.innerHTML = '<p class="lead text-muted text-center mt-5">Bağlı müvekkil bulunamadı.</p>';
+            return;
+        }
+
+        // "Müvekkil Onayı Bekliyor" statusundeki taskları çek
+        const tasksRef = collection(db, "tasks");
+        const q = query(
+            tasksRef,
+            where("personsRelatedIds", "array-contains-any", linkedPersonIds),
+            where("status", "==", "müvekkil onayı bekliyor")
+        );
+        
+        const querySnapshot = await getDocs(q);
+        
+        if (querySnapshot.empty) {
+            container.innerHTML = '<p class="lead text-muted text-center mt-5">Bu kategoride onay bekleyen iş bulunmamaktadır.</p>';
+            return;
+        }
+
+        container.innerHTML = '';
+        
+        querySnapshot.forEach(docSnap => {
+            const task = docSnap.data();
+            const taskId = docSnap.id;
+            
+            // Tarihi formatla
+            const formatDate = (dateStr) => {
+                if (!dateStr) return '-';
+                try {
+                    const date = new Date(dateStr);
+                    const day = String(date.getDate()).padStart(2, '0');
+                    const month = String(date.getMonth() + 1).padStart(2, '0');
+                    const year = date.getFullYear();
+                    return `${day}.${month}.${year}`;
+                } catch (e) {
+                    return dateStr;
+                }
+            };
+            
+            const card = document.createElement('div');
+            card.className = 'col-md-12 mb-4';
+            card.innerHTML = `
+              <div class="task-card task-card-warning" data-task-id="${taskId}">
+                <h5 class="task-title">${task.title || 'İsimsiz İş'}</h5>
+                <p class="task-description">${task.description || 'Açıklama yok'}</p>
+                <div class="d-flex justify-content-between align-items-center">
+                  <small class="task-meta"><i class="fas fa-clock mr-1"></i>Son Onay Tarihi: ${formatDate(task.dueDate)}</small>
+                  <div>
+                    <button class="btn btn-success btn-sm btn-action task-approve" data-task-id="${taskId}">
+                      <i class="fas fa-check"></i> Onayla
+                    </button>
+                    <button class="btn btn-danger btn-sm btn-action task-reject" data-task-id="${taskId}">
+                      <i class="fas fa-times"></i> Reddet
+                    </button>
+                    <button class="btn btn-info btn-sm btn-action task-detail" data-task-id="${taskId}">
+                      <i class="fas fa-eye"></i> İncele
+                    </button>
+                  </div>
+                </div>
+              </div>`;
+            container.appendChild(card);
+        });
+        
+    } catch (error) {
+        console.error('Task yükleme hatası:', error);
+        container.innerHTML = '<p class="lead text-danger text-center mt-5">Veriler yüklenirken bir hata oluştu.</p>';
     }
-    
-    if (sampleTasks.length === 0) {
-         container.innerHTML = '<p class="lead text-muted text-center mt-5">Bu kategoride onay bekleyen iş bulunmamaktadır.</p>';
-         return;
-    }
-    
-    sampleTasks.forEach(t => {
-        const card = document.createElement('div');
-        card.className = 'col-md-12 mb-4';
-        card.innerHTML = `
-          <div class="task-card task-card-warning">
-            <h5 class="task-title">${t.title}</h5>
-            <p class="task-description">${t.description}</p>
-            <div class="d-flex justify-content-between align-items-center">
-              <small class="task-meta"><i class="fas fa-clock mr-1"></i>Son Onay Tarihi: ${t.dueDate}</small>
-              <div>
-                <button class="btn btn-success btn-sm btn-action"><i class="fas fa-check"></i> Onayla</button>
-                <button class="btn btn-danger btn-sm btn-action"><i class="fas fa-times"></i> Reddet</button>
-                <button class="btn btn-info btn-sm btn-action"><i class="fas fa-eye"></i> İncele</button>
-              </div>
-            </div>
-          </div>`;
-        container.appendChild(card);
-    });
 }
+// Task onaylama fonksiyonu
+async function approveTask(taskId) {
+    try {
+        const taskRef = doc(db, "tasks", taskId);
+        await updateDoc(taskRef, {
+            status: "müvekkil onayı - açıldı",
+            approvalDate: new Date().toISOString(),
+            approvedBy: authService.getCurrentUser()?.uid || null
+        });
+        
+        // Başarı mesajı göster
+        alert('İş başarıyla onaylandı!');
+        
+        // Task kartını DOM'dan kaldır
+        $(`.task-card[data-task-id="${taskId}"]`).closest('.col-md-12').fadeOut(300, function() {
+            $(this).remove();
+            
+            // Eğer hiç kart kalmadıysa bilgi mesajı göster
+            const remainingCards = $('#task-list-container .task-card').length;
+            if (remainingCards === 0) {
+                $('#task-list-container').html('<p class="lead text-muted text-center mt-5">Bu kategoride onay bekleyen iş bulunmamaktadır.</p>');
+            }
+        });
+        
+        // Dashboard sayaçlarını güncelle
+        updateDashboardTaskCount();
+        
+    } catch (error) {
+        console.error('Task onaylama hatası:', error);
+        alert('İş onaylanırken bir hata oluştu. Lütfen tekrar deneyin.');
+    }
+}
+
+// Task reddetme fonksiyonu
+async function rejectTask(taskId) {
+    // Kullanıcıdan red sebebini al
+    const reason = prompt('Red sebebini belirtiniz (opsiyonel):');
+    
+    // İptal edilmişse işlemi durdur
+    if (reason === null) return;
+    
+    try {
+        const taskRef = doc(db, "tasks", taskId);
+        await updateDoc(taskRef, {
+            status: "müvekkil onayı - kapatıldı",
+            rejectionDate: new Date().toISOString(),
+            rejectedBy: authService.getCurrentUser()?.uid || null,
+            rejectionReason: reason || ''
+        });
+        
+        // Başarı mesajı göster
+        alert('İş reddedildi.');
+        
+        // Task kartını DOM'dan kaldır
+        $(`.task-card[data-task-id="${taskId}"]`).closest('.col-md-12').fadeOut(300, function() {
+            $(this).remove();
+            
+            // Eğer hiç kart kalmadıysa bilgi mesajı göster
+            const remainingCards = $('#task-list-container .task-card').length;
+            if (remainingCards === 0) {
+                $('#task-list-container').html('<p class="lead text-muted text-center mt-5">Bu kategoride onay bekleyen iş bulunmamaktadır.</p>');
+            }
+        });
+        
+        // Dashboard sayaçlarını güncelle
+        updateDashboardTaskCount();
+        
+    } catch (error) {
+        console.error('Task reddetme hatası:', error);
+        alert('İş reddedilirken bir hata oluştu. Lütfen tekrar deneyin.');
+    }
+}
+
+// Dashboard task sayacını güncelle
+async function updateDashboardTaskCount() {
+    try {
+        const user = authService.getCurrentUser();
+        if (!user) return;
+
+        const userDocRef = doc(db, "users", user.uid);
+        const userSnapshot = await getDoc(userDocRef);
+        
+        if (!userSnapshot.exists()) return;
+
+        const userData = userSnapshot.data();
+        const linkedPersonIds = userData.linkedPersonIds || [];
+
+        if (linkedPersonIds.length === 0) return;
+
+        const taskQ = query(
+            collection(db, "tasks"), 
+            where("personsRelatedIds", "array-contains-any", linkedPersonIds), 
+            where("status", "==", "müvekkil onayı bekliyor")
+        );
+        
+        const taskSnap = await getDocs(taskQ);
+        const pendingCount = taskSnap.size;
+        
+        // Dashboard'daki sayıyı güncelle
+        $('#dashPendingApprovals').text(pendingCount);
+        $('#taskCount-pending-approval').text(pendingCount);
+        
+    } catch (error) {
+        console.error('Dashboard güncelleme hatası:', error);
+    }
+}
+// Task butonları için event listener'lar
+$(document).on('click', '.task-approve', function() {
+    const taskId = $(this).data('task-id');
+    if (confirm('Bu işi onaylamak istediğinizden emin misiniz?')) {
+        approveTask(taskId);
+    }
+});
+
+$(document).on('click', '.task-reject', function() {
+    const taskId = $(this).data('task-id');
+    rejectTask(taskId);
+});
+
+$(document).on('click', '.task-detail', function() {
+    const taskId = $(this).data('task-id');
+    // TODO: Task detay modalı açılabilir
+    alert('Task detay görüntüleme özelliği yakında eklenecek. Task ID: ' + taskId);
+});
 </script>
 </body>
 </html>
