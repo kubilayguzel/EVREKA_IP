@@ -1222,6 +1222,7 @@ window.getDocs = getDocs;
 // --- Dashboard sayaç kontrolü ---
 // Destek varsa cache yerine sunucudan oku:
 const runGetDocs = (typeof getDocsFromServer === 'function') ? getDocsFromServer : getDocs;
+window.runGetDocs = runGetDocs;
 
 // Sayfa ilk yüklenirken tüm sayaçları 0'a çek
 function setDashboardZeros() {
@@ -2418,10 +2419,7 @@ async function loadTransactions(ipRecordId) {
 });
 })();
 </script>
-
-<script type="module">
-import { doc, getDoc, collection, getDocs, getDocsFromServer, query, where, updateDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
-
+<script>
 // Basit pagination implementasyonu - module import sorunu için
 window.markaPaginationData = {
     allData: [],
@@ -2857,7 +2855,6 @@ $(document).on('click', '.task-detail', function() {
     // TODO: Task detay modalı açılabilir
     alert('Task detay görüntüleme özelliği yakında eklenecek. Task ID: ' + taskId);
 });
-</script>
 </script>
 </body>
 </html>
