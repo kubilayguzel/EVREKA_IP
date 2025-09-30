@@ -2129,49 +2129,37 @@ async function _getTransactionTypeMeta(typeId){
 // === SAYAÇLARI DOLDURAN YENİ SÜRÜM ===
 window.fetchAndDisplayTasks = async function(linkedPersonIds){
   try{
-    // kişiler yoksa sayaçları sıfırla
-    if(!Array.isArray(linkedPersonIds) || linkedPersonIds.length===0){
-      $('#taskCount-pending-approval').text(0);
-      $('#taskCount-renewal-approval').text(0);
-      $('#taskCount-bulletin-watch').text(0);
-      $('#taskCount-marka-total').text(0);
-      window.__allClientTasks = [];
-      return;
-    }
-
-    // ilgili tüm tasklar
     const q = query(
       collection(db,'tasks'),
-      where('personsRelatedIds','array-contains-any', linkedPersonIds)
+      where('status','==','awaiting_client_approval') // sadece onay bekleyenleri çek
     );
     const snap = await runGetDocs(q);
 
-    const tasks = [];
-    snap.forEach(d => tasks.push({ id:d.id, ...d.data() }));
-    window.__allClientTasks = tasks; // listeler için hafızada tut
+    const awaitingTasks = [];
+    snap.forEach(d => {
+      const t = { id:d.id, ...d.data() };
+      if (isTaskRelatedToClient(t, linkedPersonIds)) awaitingTasks.push(t);
+    });
 
-    // sınıflandırma
-    let countPending = 0;
+    // hepsini hafızaya da koy (detay listeleri için)
+    window.__allClientTasks = awaitingTasks;
+
+    // === sınıflandırma ===
+    let countPending = awaitingTasks.length; // artık doğru
     let countRenewal = 0;
     let countBulletin = 0;
 
-    // Hepsini asenkron isim/alias ile değerlendir
-    for(const t of tasks){
-      const isAwaiting = (t.status === 'awaiting_client_approval');
-      if(isAwaiting) countPending++;
+    const RX_BULTEN = /(bulten|izleme|watch|yayin|yayim|yayima|yayıma|gazete)/;
 
-      // transaction type ad/alias'ını oku
+    for (const t of awaitingTasks){
       const meta = await _getTransactionTypeMeta(t.taskType);
-      const label = _normalizeTr( (meta?.alias || meta?.name || t.title || t.description || '') );
+      const label = _taskLabelGuess(t, meta); // önceki yanıtta verdiğim yardımcı
 
-      // "yenileme" kümesi
-      if( /yenileme/.test(label) ) countRenewal += 1;
-
-    // sadece 'awaiting_client_approval' durumundakileri say
-    if( isAwaiting && /bulten|izleme|watch/.test(label) ) countBulletin += 1;
+      if (/yenileme/.test(label)) countRenewal++;
+      if (RX_BULTEN.test(label))  countBulletin++;
     }
 
-    // sayaçlara yaz
+    // yaz
     $('#taskCount-pending-approval').text(countPending);
     $('#taskCount-renewal-approval').text(countRenewal);
     $('#taskCount-bulletin-watch').text(countBulletin);
