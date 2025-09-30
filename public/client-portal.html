@@ -2032,20 +2032,35 @@ $(document).on('show.bs.modal', '#portfolioDetailModal', function (e) {
         <p><strong>Durum:</strong> <span class="badge badge-${badgeClass}">${status}</span></p>
     `);
     
-    // Eşya Listesi (Mal ve Hizmet Sınıfları)
+// Eşya Listesi (Mal ve Hizmet Sınıfları)
     const esyaContent = $('#esyaListesiContent');
     if (item.goodsAndServicesByClass && Array.isArray(item.goodsAndServicesByClass) && item.goodsAndServicesByClass.length > 0) {
         let esyaHtml = '';
-        item.goodsAndServicesByClass.forEach(cls => {
+        
+        // Debug için console'a yazdır
+        console.log('goodsAndServicesByClass:', item.goodsAndServicesByClass);
+        
+        item.goodsAndServicesByClass.forEach((cls, idx) => {
             const classNo = cls.classNo || '-';
-            const description = cls.description || cls.goodsServices || 'Açıklama yok';
+            
+            // Tüm olası alan adlarını kontrol et
+            const description = cls.description || 
+                               cls.goodsServices || 
+                               cls.items || 
+                               cls.text || 
+                               cls.content ||
+                               (cls.items && Array.isArray(cls.items) ? cls.items.join(', ') : null) ||
+                               'Açıklama yok';
+            
+            console.log(`Sınıf ${classNo}:`, cls);
+            
             esyaHtml += `
                 <div class="card mb-3">
                     <div class="card-header">
                         <strong>Sınıf ${classNo}</strong>
                     </div>
                     <div class="card-body">
-                        <p>${description}</p>
+                        <p>${typeof description === 'string' ? description : JSON.stringify(description)}</p>
                     </div>
                 </div>
             `;
