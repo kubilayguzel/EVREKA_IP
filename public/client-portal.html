@@ -991,6 +991,7 @@
 
             <ul class="nav nav-tabs" id="myTab" role="tablist">
               <li class="nav-item"><a class="nav-link active" id="islemler-tab" data-toggle="tab" href="#modal-islemler" role="tab">İşlemler</a></li>
+              <li class="nav-item"><a class="nav-link" id="esya-tab" data-toggle="tab" href="#modal-esya" role="tab">Eşya Listesi</a></li>
               <li class="nav-item"><a class="nav-link" id="tahakkuklar-tab" data-toggle="tab" href="#modal-tahakkuklar" role="tab">Tahakkuklar ve Faturalar</a></li>
               <li class="nav-item"><a class="nav-link" id="belgeler-tab" data-toggle="tab" href="#modal-belgeler" role="tab">Belgeler</a></li>
             </ul>
@@ -1100,6 +1101,12 @@
                             </tr>
                         </tbody>
                     </table>
+                </div>
+            </div>
+              <div class="tab-pane fade" id="modal-esya" role="tabpanel">
+                <h5 class="header-title">Mal ve Hizmet Sınıfları</h5>
+                <div id="esyaListesiContent" class="mt-3">
+                  <p class="text-muted">Yükleniyor...</p>
                 </div>
               </div>
               <div class="tab-pane fade" id="modal-tahakkuklar" role="tabpanel">
@@ -2025,6 +2032,29 @@ $(document).on('show.bs.modal', '#portfolioDetailModal', function (e) {
         <p><strong>Yenileme Tarihi:</strong> ${renewalDate}</p>
     `);
 });
+
+    // Eşya Listesi (Mal ve Hizmet Sınıfları)
+    const esyaContent = $('#esyaListesiContent');
+    if (item.goodsAndServicesByClass && Array.isArray(item.goodsAndServicesByClass) && item.goodsAndServicesByClass.length > 0) {
+        let esyaHtml = '';
+        item.goodsAndServicesByClass.forEach(cls => {
+            const classNo = cls.classNo || '-';
+            const description = cls.description || cls.goodsServices || 'Açıklama yok';
+            esyaHtml += `
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <strong>Sınıf ${classNo}</strong>
+                    </div>
+                    <div class="card-body">
+                        <p>${description}</p>
+                    </div>
+                </div>
+            `;
+        });
+        esyaContent.html(esyaHtml);
+    } else {
+        esyaContent.html('<p class="text-muted">Mal ve hizmet bilgisi bulunamadı.</p>');
+    }
 
 </script>
 <script>
