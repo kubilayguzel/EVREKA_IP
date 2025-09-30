@@ -2715,38 +2715,72 @@ window.loadSampleTaskDetails = async function(taskType) {
       return;
     }
 
-    // Render
+    // Render - Her task için async işlemler gerektiğinden Promise.all kullan
     container.innerHTML = '';
-    matchingTasks.forEach(task => {
+    
+    const taskCards = await Promise.all(matchingTasks.map(async (task) => {
       const taskId = task.id;
       const due = task.dueDate || task.officialDueDate || task.clientDueDate || task.deadline || null;
+      
+      // Transaction type alias'ını al
+      let transactionAlias = 'İşlem';
+      if (task.transactionId) {
+        try {
+          const transactionDoc = await getDoc(doc(db, 'transactionTypes', String(task.transactionId)));
+          if (transactionDoc.exists()) {
+            transactionAlias = transactionDoc.data().alias || transactionDoc.data().name || 'İşlem';
+          }
+        } catch (e) {
+          console.warn('Transaction type alınamadı:', e);
+        }
+      }
+      
+      // IP Record bilgilerini al
+      let taskTitle = transactionAlias;
+      if (task.relatedIpRecordId) {
+        try {
+          const ipDoc = await getDoc(doc(db, 'ipRecords', task.relatedIpRecordId));
+          if (ipDoc.exists()) {
+            const ipData = ipDoc.data();
+            const appNo = ipData.applicationNumber || ipData.applicationNo || '-';
+            const brandText = ipData.brandText || ipData.title || '-';
+            taskTitle = `${appNo} - ${brandText} - ${transactionAlias}`;
+          }
+        } catch (e) {
+          console.warn('IP Record alınamadı:', e);
+        }
+      }
 
       const card = document.createElement('div');
       card.className = 'col-md-12 mb-4';
       card.innerHTML = `
         <div class="task-card task-card-warning" data-task-id="${taskId}">
-          <h5 class="task-title">${task.title || 'İsimsiz İş'}</h5>
-          <p class="task-description">${task.description || 'Açıklama yok'}</p>
-          <div class="d-flex justify-content-between align-items-center">
-            <small class="task-meta">
-              <i class="fas fa-clock mr-1"></i>
-              Son Onay Tarihi: ${formatDate(due)}
-            </small>
-            <div>
-              <button class="btn btn-success btn-sm btn-action task-approve" data-task-id="${taskId}">
-                <i class="fas fa-check"></i> Onayla
-              </button>
-              <button class="btn btn-danger btn-sm btn-action task-reject" data-task-id="${taskId}">
-                <i class="fas fa-times"></i> Reddet
-              </button>
-              <button class="btn btn-info btn-sm btn-action task-detail" data-task-id="${taskId}">
-                <i class="fas fa-eye"></i> İncele
-              </button>
-            </div>
-          </div>
-        </div>`;
-      container.appendChild(card);
-    });
+          <h5 class="task-title">${taskTitle}</h5>
+          <p class="task-description">${task.description || ''}</p>
+            <div class="d-flex justify-content-between align-items-center">
+                        <small class="task-meta">
+                        <i class="fas fa-clock mr-1"></i>
+                        Son Onay Tarihi: ${formatDate(due)}
+                        </small>
+                        <div>
+                        <button class="btn btn-success btn-sm btn-action task-approve" data-task-id="${taskId}">
+                            <i class="fas fa-check"></i> Onayla
+                        </button>
+                        <button class="btn btn-danger btn-sm btn-action task-reject" data-task-id="${taskId}">
+                            <i class="fas fa-times"></i> Reddet
+                        </button>
+                        <button class="btn btn-info btn-sm btn-action task-detail" data-task-id="${taskId}">
+                            <i class="fas fa-eye"></i> İncele
+                        </button>
+                        </div>
+                    </div>
+                    </div>`;
+                
+                return card;
+                }));
+                
+            // Tüm kartları DOM'a ekle
+            taskCards.forEach(card => container.appendChild(card));
 
   } catch (error) {
     console.error('Task yükleme hatası:', error);
