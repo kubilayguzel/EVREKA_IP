@@ -2123,7 +2123,7 @@ function _normalizeTr(s){
 
 // transactionTypes meta cache'i (zaten varsa tekrar tanımlama)
 const __ttMeta = (window._ttMetaCache = window._ttMetaCache || new Map());
-async function _getTransactionTypeMeta(typeId){
+window._getTransactionTypeMeta = async function(typeId){
   if(!typeId) return null;
   const key = String(typeId);
   if(__ttMeta.has(key)) return __ttMeta.get(key);
@@ -2136,7 +2136,7 @@ async function _getTransactionTypeMeta(typeId){
 }
 
 // Task başlığını/etiketlerini tek stringte topla
-function _taskLabelGuess(t, meta){
+window._taskLabelGuess = function(t, meta){
   const pieces = [
     meta?.alias, meta?.name,
     t.subType, t.taskSubType, t.category,
@@ -2146,7 +2146,7 @@ function _taskLabelGuess(t, meta){
   ].filter(Boolean);
   return _normalizeTr(pieces.join(' '));
 }
-const RX_BULTEN = /(bulten|izleme|watch|yayin|yayim|yayima|yayıma|gazete)/;
+window.RX_BULTEN = /(bulten|izleme|watch|yayin|yayim|yayima|yayıma|gazete)/;
 
 window.fetchAndDisplayTasks = async function(){
   try{
@@ -2808,8 +2808,8 @@ window.loadSampleTaskDetails = async function(taskType) {
     } else if (taskType === 'renewal-approval') {
         // Yenileme onayları
         if (taskData.status === 'awaiting_client_approval') {
-        const meta = await _getTransactionTypeMeta(taskData.taskType);
-        const label = _taskLabelGuess(taskData, meta);
+        const meta = await window._getTransactionTypeMeta(taskData.taskType);
+        const label = window._taskLabelGuess(taskData, meta);
         if (/yenileme/.test(label)) {
             matchingTasks.push({ id: d.id, ...taskData });
         }
@@ -2817,9 +2817,9 @@ window.loadSampleTaskDetails = async function(taskType) {
     } else if (taskType === 'bulletin-watch') {
         // Bülten izleme onayları
         if (taskData.status === 'awaiting_client_approval') {
-        const meta = await _getTransactionTypeMeta(taskData.taskType);
-        const label = _taskLabelGuess(taskData, meta);
-        if (RX_BULTEN.test(label)) {
+        const meta = await window._getTransactionTypeMeta(taskData.taskType);
+        const label = window._taskLabelGuess(taskData, meta);
+        if (window.RX_BULTEN.test(label)) {
             matchingTasks.push({ id: d.id, ...taskData });
         }
         }
