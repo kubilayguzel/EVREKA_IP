@@ -1757,7 +1757,7 @@ async function fetchAndDisplayPortfolio() {
     }
 }
 
-async window.populateDashboardNumbers = function (linkedPersonIds, allPortfolios){
+window.populateDashboardNumbers = async function (linkedPersonIds, allPortfolios){
     const portfolioCount = allPortfolios.length;
 
     // Firestore'daki gerçek değer: awaiting_client_approval
