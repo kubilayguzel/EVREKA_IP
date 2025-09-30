@@ -2774,9 +2774,20 @@ console.log('👥 Aranan linkedPersonIds:', linkedPersonIds);
     allTasksSnapshot.forEach(d => {
       const taskData = d.data();
       
+      // relatedParty hem root hem de details içinde olabilir
+      const relatedPartyId = 
+        taskData.relatedParty?.id || 
+        taskData.details?.relatedParty?.id;
+      
+      const hasRelatedParty = !!relatedPartyId;
+      const hasAwaitingStatus = acceptsStatus(taskData.status);
+      
+      if (hasRelatedParty) tasksWithRelatedParty++;
+      if (hasAwaitingStatus) tasksWithAwaitingStatus++;
+      
       // Tüm olası person ID field'larını kontrol et
       const possiblePersonIds = [
-        taskData.relatedParty?.id,
+        relatedPartyId,  // Yukarıda belirlenen ID'yi kullan
         taskData.clientId,
         taskData.personId,
         taskData.relatedPersonId,
