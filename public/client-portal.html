@@ -1863,12 +1863,14 @@ document.addEventListener('DOMContentLoaded', function () {
                 }
                 
                 // Pagination'ı yenile
-                if (window.__markaPag && window.markaPaginationData) {
-                    window.__markaPag.update(window.markaPaginationData.allData.length || 0);
-                    if (typeof window.__markaPag.goTo === 'function') window.__markaPag.goTo(1);
+                if (window.markaPaginationData && window.markaPaginationData.allData.length > 0) {
+                    if (window.renderMarkaPagination) {
+                        window.renderMarkaPagination();
+                    }
                 }
-            });
-        });}
+            }, 100);
+        });
+    }
 });
 
 // Diğer tüm scriptler
@@ -1914,7 +1916,7 @@ function filterPaneByMense(paneSelector, menseValue){
         var rowOrigin = getRowOrigin($tr);
         
         console.log('Satır:', {
-            text: $tr.find('td:eq(4)').text().substring(0, 30),
+            text: $tr.find('td:eq(2)').text().substring(0, 30),
             dataOriginAttr: dataOriginAttr,
             rowOrigin: rowOrigin,
             hasAccordionClass: $tr.hasClass('accordion-header-row')
@@ -1968,16 +1970,18 @@ function filterPaneByMense(paneSelector, menseValue){
 }
 
 window.applyMenseFilterToActivePane = function(){
-    // ensure local vars exist after automated patching
-    var $activePane = $('#portfolio-content');
-    var paneId = 'portfolio-content';
-
     var val = $("#menseFilter").val() || 'TÜRKPATENT'; // Türkçe karakterler bazen bozulabilir, kontrol edin.
+    var $activePane = $(".tab-content > .tab-pane.show.active");
+    
     if($activePane.length){
         var paneId = $activePane.attr("id");
 
         // Mense Filtresi sadece Portföyüm sekmesi açıkken çalışmalıdır.
-        if (!$('#portfolio-content').hasClass('show active')) { return; }
+        if (paneId !== 'portfolio-content') {
+            // Aktif sekme portföy değilse, bu fonksiyondan çık.
+            // Bu, 'tasks' veya 'dashboard' açıkken 'markaPaginationData' erişim hatasını engeller.
+            return;
+        }
         
         // Aktif olan Portföy alt sekmesini bul (marka-list, patent-list vb.)
         var $activePortfolioTab = $('#portfolioTopTabs a.nav-link.active').attr('href');
@@ -2014,10 +2018,12 @@ window.applyMenseFilterToActivePane = function(){
             window.markaPaginationData.totalPages = Math.ceil(filteredData.length / window.markaPaginationData.itemsPerPage);
             
             var firstPage = filteredData.slice(0, window.markaPaginationData.itemsPerPage);
-            if (!(window.__markaPag && typeof window.__markaPag.update==='function')) {
-                if (window.__originalPopulate) { window.__originalPopulate('#marka-list', firstPage); }
+            if (window.__originalPopulate) {
+                window.__originalPopulate('#marka-list', firstPage);
             }
-            if (window.__markaPag && typeof window.__markaPag.update === 'function') { window.__markaPag.update(filteredData.length); if (typeof window.__markaPag.goTo === 'function') window.__markaPag.goTo(1); }
+            if (window.renderMarkaPagination) {
+                window.renderMarkaPagination();
+            }
         }
     }
 };
@@ -2365,7 +2371,9 @@ $(document).on('hidden.bs.modal', '#portfolioDetailModal', function (e) {
                         window.applyMenseFilterToActivePane();
                     }
                     
-                    if (window.__markaPag && typeof window.__markaPag.update === 'function') { window.__markaPag.update(filteredData.length); if (typeof window.__markaPag.goTo === 'function') window.__markaPag.goTo(1); }
+                    if (window.renderMarkaPagination) {
+                        window.renderMarkaPagination();
+                    }
                 }, 50);
             }
             
@@ -2525,10 +2533,120 @@ window.markaPaginationData = {
     totalPages: 0
 };
 
-window.renderMarkaPagination = function(){ /* deprecated: replaced by Pagination class */ };
+window.renderMarkaPagination = function() {
+    const data = window.markaPaginationData;
+    const container = document.getElementById('markaPagination');
+    
+    if (!container || data.allData.length === 0) return;
+    
+    data.totalPages = Math.ceil(data.allData.length / data.itemsPerPage);
+    
+    let html = '<div class="pagination-wrapper" style="display:flex; justify-content:space-between; align-items:center; padding:15px; background:rgba(255,255,255,0.9); border-radius:12px; margin-top:20px;">';
+    
+    // Sayfa bilgisi
+    const start = (data.currentPage - 1) * data.itemsPerPage + 1;
+    const end = Math.min(data.currentPage * data.itemsPerPage, data.allData.length);
+    html += `<div style="font-size:14px; color:#555;">Toplam ${data.allData.length} kayıt (${start}-${end} arası gösteriliyor)</div>`;
+    
+    // Pagination butonları
+    if (data.totalPages > 1) {
+        html += '<div style="display:flex; gap:5px;">';
+        
+        // İlk sayfa
+        html += `<button onclick="window.goToMarkaPage(1)" ${data.currentPage === 1 ? 'disabled' : ''} style="padding:8px 12px; border:1px solid #ddd; background:white; color:#333; border-radius:6px; cursor:pointer;">İlk</button>`;
+        
+        // Önceki
+        html += `<button onclick="window.goToMarkaPage(${data.currentPage - 1})" ${data.currentPage === 1 ? 'disabled' : ''} style="padding:8px 12px; border:1px solid #ddd; background:white; color:#333; border-radius:6px; cursor:pointer;">Önceki</button>`;
+        
+        // Sayfa numaraları
+        const startPage = Math.max(1, data.currentPage - 2);
+        const endPage = Math.min(data.totalPages, data.currentPage + 2);
+        
+        for (let i = startPage; i <= endPage; i++) {
+            const isActive = i === data.currentPage;
+            html += `<button onclick="window.goToMarkaPage(${i})" style="padding:8px 12px; border:1px solid ${isActive ? '#007bff' : '#ddd'}; background:${isActive ? '#007bff' : 'white'}; color:${isActive ? 'white' : '#333'}; border-radius:6px; cursor:pointer; font-weight:${isActive ? '600' : 'normal'};">${i}</button>`;
+        }
+        
+        // Sonraki
+        html += `<button onclick="window.goToMarkaPage(${data.currentPage + 1})" ${data.currentPage === data.totalPages ? 'disabled' : ''} style="padding:8px 12px; border:1px solid #ddd; background:white; color:#333; border-radius:6px; cursor:pointer;">Sonraki</button>`;
+        
+        // Son sayfa
+        html += `<button onclick="window.goToMarkaPage(${data.totalPages})" ${data.currentPage === data.totalPages ? 'disabled' : ''} style="padding:8px 12px; border:1px solid #ddd; background:white; color:#333; border-radius:6px; cursor:pointer;">Son</button>`;
+        
+        html += '</div>';
+    }
+    
+    html += '</div>';
+    container.innerHTML = html;
+};
 
-window.goToMarkaPage = function(){ /* deprecated: replaced by Pagination class */ };
+window.goToMarkaPage = function(page) {
+    const data = window.markaPaginationData;
+    if (page < 1 || page > data.totalPages || page === data.currentPage) return;
+    
+    data.currentPage = page;
+    
+    // Mevcut sayfadaki verileri render et
+    const start = (page - 1) * data.itemsPerPage;
+    const end = start + data.itemsPerPage;
+    const pageData = data.allData.slice(start, end);
+    
+    // populatePortfolioTable direkt çağır
+    if (typeof populatePortfolioTable === 'function') {
+        populatePortfolioTable('#marka-list', pageData);
+    } else if (window.__originalPopulate) {
+        window.__originalPopulate('#marka-list', pageData);
+    }
+    
+    // Filtre uygula
+    setTimeout(() => {
+        if (typeof window.applyMenseFilterToActivePane === 'function') {
+            window.applyMenseFilterToActivePane();
+        }
+    }, 50);
+    
+    window.renderMarkaPagination();
+};
 
+// --- Sidebar / Top-level tab behavior ---
+(function(){
+  var $ = window.jQuery;
+  if (!$) return;
+  // Click: show tab via Bootstrap and prevent default anchor jump scroll
+  $('#sidebar a[data-toggle="tab"]').on('click', function(e){
+    e.preventDefault();
+    $(this).tab('show');
+  });
+  // When a top-level tab is shown, mark only it as active and update hash
+  $('#sidebar a[data-toggle="tab"]').on('shown.bs.tab', function(e){
+    $('#sidebar .nav-link').removeClass('active');
+    $(e.target).addClass('active');
+    var href = $(e.target).attr('href');
+    if (href && href.startsWith('#')) {
+      history.replaceState(null, '', href);
+    }
+  });
+  // Open tab from URL hash on load / hashchange
+  function openHashTab(){
+    var hash = window.location.hash;
+    if (hash && $('#sidebar a[data-toggle="tab"][href="'+hash+'"]').length) {
+      $('#sidebar a[data-toggle="tab"][href="'+hash+'"]').tab('show');
+    }
+  }
+  $(window).on('hashchange', openHashTab);
+  // Initial: if no hash, show dashboard
+  if (window.location.hash) openHashTab();
+  else $('#sidebar a[data-toggle="tab"][href="#dashboard"]').tab('show');
+})();
+// --- İşlerim Sayfası Navigasyon Mantığı ---
+
+const $tasksMain = $('#task-main-cards');
+const $tasksDetail = $('#task-detail-cards');
+const $tasksList = $('#task-list-details');
+const $tasksHeader = $('#tasksHeaderTitle');
+const $tasksLead = $('#tasksLeadText');
+
+// Yeni Global State (Hangi IP türünün seçili olduğunu tutmak için)
 window.activeTaskArea = null;
 
 // Ana Kart Tıklaması: Marka, Patent, Tasarım, Dava
