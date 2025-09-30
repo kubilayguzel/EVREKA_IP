@@ -1951,7 +1951,7 @@ async function fetchAndDisplayInvoices(linkedPersonIds){
 }
 
 // Modal açıldığında verileri set et
-$(document).on('show.bs.modal', '#portfolioDetailModal', function (e) {
+$(document).on('show.bs.modal', '#portfolioDetailModal', async function (e) {
     const triggerLink = $(e.relatedTarget);
     const itemId = triggerLink.data('item-id');
     
