@@ -2753,30 +2753,47 @@ window.loadSampleTaskDetails = async function(taskType) {
     // Client-side filtreleme: relatedParty.id ile eşleşenleri bul
     const matchingTasks = [];
     
-// İlk 5 task'ın relatedParty.id değerlerini logla
-    let sampleCount = 0;
-    allTasksSnapshot.forEach(d => {
-      if (sampleCount < 5) {
-        const taskData = d.data();
-        console.log('🔍 Task örneği:', {
-          id: d.id,
-          title: taskData.title,
-          relatedPartyId: taskData.relatedParty?.id,
-          relatedPartyName: taskData.relatedParty?.name,
-          status: taskData.status
-        });
-        sampleCount++;
-      }
-    });
+console.log('👥 Aranan linkedPersonIds:', linkedPersonIds);
     
-    console.log('👥 Aranan linkedPersonIds:', linkedPersonIds);
+    // Task 207'yi özel olarak kontrol et
+    const task207 = allTasksSnapshot.docs.find(d => d.id === '207');
+    if (task207) {
+      const t207Data = task207.data();
+      console.log('🎯 Task 207 bulundu:', {
+        id: '207',
+        title: t207Data.title,
+        status: t207Data.status,
+        relatedPartyId: t207Data.relatedParty?.id,
+        relatedPartyName: t207Data.relatedParty?.name,
+        allFields: Object.keys(t207Data)
+      });
+    } else {
+      console.log('❌ Task 207 bulunamadı!');
+    }
     
     allTasksSnapshot.forEach(d => {
       const taskData = d.data();
-      const relatedPartyId = taskData.relatedParty?.id;
       
-      // linkedPersonIds içinde bu task'ın relatedParty.id'si var mı kontrol et
-      if (relatedPartyId && linkedPersonIds.includes(relatedPartyId)) {
+      // Tüm olası person ID field'larını kontrol et
+      const possiblePersonIds = [
+        taskData.relatedParty?.id,
+        taskData.clientId,
+        taskData.personId,
+        taskData.relatedPersonId,
+        ...(taskData.personsRelated || []),
+        ...(taskData.relatedPersonIds || [])
+      ].filter(Boolean);
+      
+      // Debug: Eşleşme durumunu logla
+      const hasMatch = possiblePersonIds.some(pid => linkedPersonIds.includes(pid));
+      
+      if (hasMatch) {
+        console.log('✅ Eşleşen task:', {
+          id: d.id,
+          title: taskData.title,
+          status: taskData.status,
+          matchedPersonId: possiblePersonIds.find(pid => linkedPersonIds.includes(pid))
+        });
         matchingTasks.push({ id: d.id, ...taskData });
       }
     });
