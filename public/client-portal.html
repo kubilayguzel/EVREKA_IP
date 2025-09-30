@@ -889,13 +889,13 @@
                 
                 <div class="row mt-5" id="task-main-cards">
                     
-                <div class="col-md-3 mb-4 task-card-link" data-target-area="marka-tasks" style="cursor: pointer;">
+                    <div class="col-md-3 mb-4 task-card-link" data-target-area="marka-tasks" style="cursor: pointer;">
                     <div class="card p-4 text-center d-flex align-items-center flex-column justify-content-center h-100">
                         <i class="fas fa-registered stat-icon text-info mb-3"></i>
+                        <div class="stat-value" id="taskCount-marka-total">0</div>  <!-- ⇦ EKLENDİ -->
                         <div class="stat-label">Marka İşlemleri</div>
-                        <div class="stat-value mt-2" id="taskCount-marka-total">0</div>
                     </div>
-                </div>
+                    </div>
                    
                     <div class="col-md-3 mb-4 task-card-link" data-target-area="patent-tasks" style="cursor: pointer;">
                         <div class="card p-4 text-center d-flex align-items-center flex-column justify-content-center h-100">
@@ -2151,48 +2151,18 @@ const RX_BULTEN = /(bulten|izleme|watch|yayin|yayim|yayima|yayıma|gazete)/;
 // === SAYAÇLARI DOLDURAN YENİ SÜRÜM ===
 window.fetchAndDisplayTasks = async function(){
   try{
-    const user = authService.getCurrentUser();
-    if (!user) {
-      console.warn('Kullanıcı girişi yapılmamış');
-      return;
-    }
+    // Sadece onay bekleyenleri çek
+    const q = query(
+      collection(db,'tasks'),
+      where('status','==','awaiting_client_approval')
+    );
+    const snap = await runGetDocs(q);
 
-    const userDocRef = doc(db, 'users', user.uid);
-    const userSnapshot = await getDoc(userDocRef);
-    
-    if (!userSnapshot.exists()) {
-      console.warn('Kullanıcı bilgileri bulunamadı');
-      return;
-    }
-
-    const linkedPersonIds = userSnapshot.data().linkedPersonIds || [];
-    
-    if (linkedPersonIds.length === 0) {
-      console.warn('Bağlı müvekkil bulunamadı');
-      return;
-    }
-
-    // Tüm taskları çek ve client-side filtrele
-    const allTasksQuery = query(collection(db, 'tasks'));
-    const allTasksSnapshot = await runGetDocs(allTasksQuery);
-    
     const awaitingTasks = [];
-    
-    allTasksSnapshot.forEach(d => {
-      const taskData = d.data();
-      const relatedPartyId = taskData.details?.relatedParty?.id;
-      
-      // Müvekkil ile eşleşme ve status kontrolü
-      if (relatedPartyId && 
-          linkedPersonIds.includes(relatedPartyId) && 
-          taskData.status === 'awaiting_client_approval') {
-        awaitingTasks.push({ id: d.id, ...taskData });
-      }
-    });
-
+    snap.forEach(d => awaitingTasks.push({ id:d.id, ...d.data() }));
     window.__allClientTasks = awaitingTasks; // listelemede kullanılıyor
 
-    let countPending   = 0;  // Yenileme ve bülten hariç normal onay bekleyenler
+    let countPending   = awaitingTasks.length; // doğrudan
     let countRenewal   = 0;
     let countBulletin  = 0;
 
@@ -2200,27 +2170,14 @@ window.fetchAndDisplayTasks = async function(){
       const meta  = await _getTransactionTypeMeta(t.taskType);
       const label = _taskLabelGuess(t, meta);
 
-      const isRenewal = /yenileme/.test(label);
-      const isBulletin = RX_BULTEN.test(label);
-
-      if (isRenewal) {
-        countRenewal++;
-      } else if (isBulletin) {
-        countBulletin++;
-      } else {
-        countPending++;
-      }
+      if (/yenileme/.test(label)) countRenewal++;
+      if (RX_BULTEN.test(label))  countBulletin++;
     }
 
-    // Sayaçları güncelle
     $('#taskCount-pending-approval').text(countPending);
     $('#taskCount-renewal-approval').text(countRenewal);
     $('#taskCount-bulletin-watch').text(countBulletin);
-    
-    // Marka toplam = tüm alt kartların toplamı
-    const markaTotal = countPending + countRenewal + countBulletin;
-    $('#taskCount-marka-total').text(markaTotal);
-    
+    $('#taskCount-marka-total').text(countPending + countRenewal + countBulletin);
   }catch(err){
     console.error('Tasks sayaclari doldurulurken hata:', err);
   }
@@ -2804,33 +2761,6 @@ window.loadSampleTaskDetails = async function(taskType) {
       return;
     }
 
-    // Helper function: Transaction type meta bilgisini al
-    const getTransactionTypeMeta = async (typeId) => {
-      if (!typeId) return null;
-      const key = String(typeId);
-      if (__ttMeta.has(key)) return __ttMeta.get(key);
-      try {
-        const snap = await getDoc(doc(db, 'transactionTypes', key));
-        const meta = snap.exists() ? (snap.data() || {}) : null;
-        __ttMeta.set(key, meta);
-        return meta;
-      } catch (_) {
-        return null;
-      }
-    };
-
-    // Helper function: Task label/kategori tahmini
-    const taskLabelGuess = (t, meta) => {
-      const pieces = [
-        meta?.alias, meta?.name,
-        t.subType, t.taskSubType, t.category,
-        t.details?.category, t.details?.type,
-        Array.isArray(t.tags) ? t.tags.join(' ') : '',
-        t.title, t.description
-      ].filter(Boolean);
-      return _normalizeTr(pieces.join(' '));
-    };
-
     // TÜM TASKLARI ÇEK
     const tasksRef = collection(db, 'tasks');
     const allTasksQuery = query(tasksRef);
@@ -2850,14 +2780,14 @@ window.loadSampleTaskDetails = async function(taskType) {
       if (!isRelatedToClient) return;
       
       // Task type'a göre filtreleme
-      if (taskType === 'completed-tasks') {
-        // Tamamlanan işler için tüm statusleri al (awaiting_client_approval hariç)
-        if (taskData.status !== 'awaiting_client_approval') {
+      if (taskType === 'pending-approval') {
+        // Sadece onay bekleyenler
+        if (taskData.status === 'awaiting_client_approval') {
           matchingTasks.push({ id: d.id, ...taskData });
         }
-      } else {
-        // Diğer tüm kategoriler için sadece onay bekleyenleri al
-        if (taskData.status === 'awaiting_client_approval') {
+      } else if (taskType === 'completed-tasks') {
+        // Onay bekleyen dışındaki tüm işler
+        if (taskData.status !== 'awaiting_client_approval') {
           matchingTasks.push({ id: d.id, ...taskData });
         }
       }
@@ -2870,52 +2800,10 @@ window.loadSampleTaskDetails = async function(taskType) {
       return;
     }
 
-// Task type'a göre filtreleme (async işlemler bittikten sonra)
-    // Completed tasks için filtreleme yapmaya gerek yok, direkt matchingTasks kullan
-    let filteredTasks = [];
-    
-    if (taskType === 'completed-tasks') {
-      filteredTasks = matchingTasks;
-    } else {
-    // Onay bekleyen işler için kategori bazlı filtreleme yap
-      for (const taskData of matchingTasks) {
-        const meta = await getTransactionTypeMeta(taskData.taskType);
-        const label = taskLabelGuess(taskData, meta);
-        
-        const isRenewal = /yenileme/.test(label);
-        const isBulletin = RX_BULTEN.test(label);
-        
-        if (taskType === 'pending-approval') {
-          // Yenileme ve bülten olmayan normal onay bekleyenler
-          if (!isRenewal && !isBulletin) {
-            filteredTasks.push(taskData);
-          }
-        } else if (taskType === 'renewal-approval') {
-          // Sadece yenileme işleri
-          if (isRenewal) {
-            filteredTasks.push(taskData);
-          }
-        } else if (taskType === 'bulletin-watch') {
-          // Sadece bülten izleme işleri
-          if (isBulletin) {
-            filteredTasks.push(taskData);
-          }
-        }
-      }
-    }
-    
-    console.log(`✅ ${filteredTasks.length} filtrelenmiş iş bulundu (${taskType})`);
-
-    if (filteredTasks.length === 0) {
-      container.innerHTML = '<p class="lead text-muted text-center mt-5">Bu kategoride onay bekleyen iş bulunmamaktadır.</p>';
-      return;
-    }
-
     // Render - Her task için async işlemler gerektiğinden Promise.all kullan
     container.innerHTML = '';
     const isCompletedView = (taskType === 'completed-tasks');
-    const tasksToRender = filteredTasks;
-    const taskCards = await Promise.all(tasksToRender.map(async (task) => {
+    const taskCards = await Promise.all(matchingTasks.map(async (task) => {
     const taskId = task.id;
     const due = task.dueDate || task.officialDueDate || task.clientDueDate || task.deadline || null;
       
@@ -2950,7 +2838,7 @@ window.loadSampleTaskDetails = async function(taskType) {
 
       const card = document.createElement('div');
       card.className = 'col-md-12 mb-4';
-    // Status badge'i belirle
+// Status badge'i belirle
       const statusBadgeClass = {
         'open': 'primary',
         'in_progress': 'info',
