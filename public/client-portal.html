@@ -2791,11 +2791,21 @@ window.loadSampleTaskDetails = async function(taskType) {
     for (const d of allTasksSnapshot.docs) {
     const taskData = d.data();
     
-    // details.relatedParty.id ile linkedPersonIds karşılaştır
-    const relatedPartyId = taskData.details?.relatedParty?.id;
+    // Debug: task yapısını kontrol et
+    console.log('Task kontrol:', {
+        taskId: d.id,
+        status: taskData.status,
+        relatedParty: taskData.details?.relatedParty,
+        personsRelatedIds: taskData.personsRelatedIds
+    });
     
-    // Müvekkil ile eşleşme kontrolü
-    const isRelatedToClient = relatedPartyId && linkedPersonIds.includes(relatedPartyId);
+    // Müvekkil ile eşleşme - hem details.relatedParty.id hem de personsRelatedIds kontrol et
+    const relatedPartyId = taskData.details?.relatedParty?.id;
+    const personsRelated = taskData.personsRelatedIds || [];
+    
+    const isRelatedToClient = 
+        (relatedPartyId && linkedPersonIds.includes(relatedPartyId)) ||
+        (Array.isArray(personsRelated) && personsRelated.some(id => linkedPersonIds.includes(id)));
     
     if (!isRelatedToClient) continue;
     
