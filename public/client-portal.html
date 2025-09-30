@@ -2100,8 +2100,8 @@ $(document).on('show.bs.modal', '#portfolioDetailModal', async function (e) {
     await loadTransactions(item.id);
     
     // Modal açıldığında tab'ları sıfırla ve ilk tab'ı aktif yap
-    $('#myTab .nav-link').removeClass('active').attr('aria-selected', 'false');
-    $('.tab-content .tab-pane').removeClass('show active');
+    $('#portfolioDetailModal #myTab .nav-link').removeClass('active').attr('aria-selected', 'false');
+    $('#portfolioDetailModal .tab-content .tab-pane').removeClass('show active');
     
     // İlk tab'ı aktif yap
     $('#myTab a[href="#modal-islemler"]').addClass('active').attr('aria-selected', 'true');
