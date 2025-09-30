@@ -941,6 +941,13 @@
                             <div class="stat-value" id="taskCount-bulletin-watch">0</div>
                         </div>
                     </div>
+                    <div class="col-md-4 mb-4 detail-card-link" data-task-type="completed-tasks" style="cursor: pointer;">
+                        <div class="card p-4 text-center d-flex align-items-center flex-column justify-content-center h-100">
+                            <i class="fas fa-check-circle stat-icon text-success mb-3"></i>
+                            <div class="stat-label">Talimat Verilen/Tamamlanan İşler</div>
+                            <div class="stat-value" id="taskCount-completed-tasks">0</div>
+                        </div>
+                    </div>
                 </div>
                 
                 <div class="row mt-4" id="task-list-details" style="display: none;">
@@ -2700,12 +2707,22 @@ window.loadSampleTaskDetails = async function(taskType) {
       // details.relatedParty.id ile linkedPersonIds karşılaştır
       const relatedPartyId = taskData.details?.relatedParty?.id;
       
-      // Status kontrolü
-      const isAwaiting = taskData.status === 'awaiting_client_approval';
+      // Müvekkil ile eşleşme kontrolü
+      const isRelatedToClient = relatedPartyId && linkedPersonIds.includes(relatedPartyId);
       
-      // Eşleşme kontrolü
-      if (relatedPartyId && linkedPersonIds.includes(relatedPartyId) && isAwaiting) {
-        matchingTasks.push({ id: d.id, ...taskData });
+      if (!isRelatedToClient) return;
+      
+      // Task type'a göre filtreleme
+      if (taskType === 'pending-approval') {
+        // Sadece onay bekleyenler
+        if (taskData.status === 'awaiting_client_approval') {
+          matchingTasks.push({ id: d.id, ...taskData });
+        }
+      } else if (taskType === 'completed-tasks') {
+        // Onay bekleyen dışındaki tüm işler
+        if (taskData.status !== 'awaiting_client_approval') {
+          matchingTasks.push({ id: d.id, ...taskData });
+        }
       }
     });
     
@@ -2718,10 +2735,10 @@ window.loadSampleTaskDetails = async function(taskType) {
 
     // Render - Her task için async işlemler gerektiğinden Promise.all kullan
     container.innerHTML = '';
-    
+    const isCompletedView = (taskType === 'completed-tasks');
     const taskCards = await Promise.all(matchingTasks.map(async (task) => {
-      const taskId = task.id;
-      const due = task.dueDate || task.officialDueDate || task.clientDueDate || task.deadline || null;
+    const taskId = task.id;
+    const due = task.dueDate || task.officialDueDate || task.clientDueDate || task.deadline || null;
       
     // Transaction type alias'ını al (taskType field'ı transaction type ID'sidir)
       let transactionAlias = 'İşlem';
@@ -2754,27 +2771,62 @@ window.loadSampleTaskDetails = async function(taskType) {
 
       const card = document.createElement('div');
       card.className = 'col-md-12 mb-4';
-        card.innerHTML = `
-        <div class="task-card task-card-warning" data-task-id="${taskId}">
+// Status badge'i belirle
+      const statusBadgeClass = {
+        'open': 'primary',
+        'in_progress': 'info',
+        'completed': 'success',
+        'closed': 'secondary',
+        'awaiting_client_approval': 'warning'
+      }[task.status] || 'secondary';
+      
+      const statusText = {
+        'open': 'Açık',
+        'in_progress': 'Devam Ediyor',
+        'completed': 'Tamamlandı',
+        'closed': 'Kapalı',
+        'awaiting_client_approval': 'Onay Bekliyor'
+      }[task.status] || task.status;
+      
+      // Atanan kişi
+      const assignedTo = task.assignedTo_email || '-';
+      
+      // Tamamlanan işler için farklı butonlar
+      const actionButtons = isCompletedView ? `
+        <button class="btn btn-info btn-sm btn-action task-detail" data-task-id="${taskId}">
+          <i class="fas fa-eye"></i> İncele
+        </button>
+      ` : `
+        <button class="btn btn-success btn-sm btn-action task-approve" data-task-id="${taskId}">
+          <i class="fas fa-check"></i> Onayla
+        </button>
+        <button class="btn btn-danger btn-sm btn-action task-reject" data-task-id="${taskId}">
+          <i class="fas fa-times"></i> Reddet
+        </button>
+        <button class="btn btn-info btn-sm btn-action task-detail" data-task-id="${taskId}">
+          <i class="fas fa-eye"></i> İncele
+        </button>
+      `;
+      
+      card.innerHTML = `
+        <div class="task-card task-card-${isCompletedView ? 'success' : 'warning'}" data-task-id="${taskId}">
           <h5 class="task-title">${taskTitle}</h5>
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <small class="task-meta">
+              <span class="badge badge-${statusBadgeClass}">${statusText}</span>
+              ${isCompletedView ? `<span class="ml-2"><i class="fas fa-user"></i> ${assignedTo}</span>` : ''}
+            </small>
+          </div>
           <div class="d-flex justify-content-between align-items-center">
-                        <small class="task-meta">
-                        <i class="fas fa-clock mr-1"></i>
-                        Son Onay Tarihi: ${formatDate(due)}
-                        </small>
-                        <div>
-                        <button class="btn btn-success btn-sm btn-action task-approve" data-task-id="${taskId}">
-                            <i class="fas fa-check"></i> Onayla
-                        </button>
-                        <button class="btn btn-danger btn-sm btn-action task-reject" data-task-id="${taskId}">
-                            <i class="fas fa-times"></i> Reddet
-                        </button>
-                        <button class="btn btn-info btn-sm btn-action task-detail" data-task-id="${taskId}">
-                            <i class="fas fa-eye"></i> İncele
-                        </button>
-                        </div>
-                    </div>
-                    </div>`;
+            <small class="task-meta">
+              <i class="fas fa-clock mr-1"></i>
+              ${isCompletedView ? 'Oluşturma' : 'Son Onay'} Tarihi: ${formatDate(isCompletedView ? task.createdAt : due)}
+            </small>
+            <div>
+              ${actionButtons}
+            </div>
+          </div>
+        </div>`;
                 
                 return card;
                 }));
