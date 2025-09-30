@@ -2036,23 +2036,14 @@ $(document).on('show.bs.modal', '#portfolioDetailModal', function (e) {
     const esyaContent = $('#esyaListesiContent');
     if (item.goodsAndServicesByClass && Array.isArray(item.goodsAndServicesByClass) && item.goodsAndServicesByClass.length > 0) {
         let esyaHtml = '';
-        
-        // Debug için console'a yazdır
-        console.log('goodsAndServicesByClass:', item.goodsAndServicesByClass);
-        
-        item.goodsAndServicesByClass.forEach((cls, idx) => {
+        item.goodsAndServicesByClass.forEach(cls => {
             const classNo = cls.classNo || '-';
             
-            // Tüm olası alan adlarını kontrol et
-            const description = cls.description || 
-                               cls.goodsServices || 
-                               cls.items || 
-                               cls.text || 
-                               cls.content ||
-                               (cls.items && Array.isArray(cls.items) ? cls.items.join(', ') : null) ||
-                               'Açıklama yok';
-            
-            console.log(`Sınıf ${classNo}:`, cls);
+            // items array'ini kontrol et ve birleştir
+            let description = 'Açıklama yok';
+            if (cls.items && Array.isArray(cls.items) && cls.items.length > 0) {
+                description = cls.items.join('; ');
+            }
             
             esyaHtml += `
                 <div class="card mb-3">
@@ -2060,7 +2051,7 @@ $(document).on('show.bs.modal', '#portfolioDetailModal', function (e) {
                         <strong>Sınıf ${classNo}</strong>
                     </div>
                     <div class="card-body">
-                        <p>${typeof description === 'string' ? description : JSON.stringify(description)}</p>
+                        <p>${description}</p>
                     </div>
                 </div>
             `;
