@@ -2013,7 +2013,7 @@ $(document).on('show.bs.modal', '#portfolioDetailModal', function (e) {
     const appDate = formatDate(item.applicationDate || item.application_date);
     const regDate = formatDate(item.registrationDate || item.registration_date);
     const renewalDate = formatDate(item.renewalDate || item.renewal_date);
-    
+
     // Varlık Detayları kartını güncelle
     const detailsCard = $('#portfolioDetailModal .row .col-md-4:eq(1) .card-body');
     detailsCard.html(`
@@ -2021,7 +2021,6 @@ $(document).on('show.bs.modal', '#portfolioDetailModal', function (e) {
         <p><strong>Başvuru No:</strong> ${appNo}</p>
         <p><strong>Tescil No:</strong> ${regNo}</p>
         <p><strong>Sınıf:</strong> ${classes}</p>
-        <p><strong>Durum:</strong> <span class="badge badge-${badgeClass}">${status}</span></p>
     `);
     
     // Tarihler/Durum kartını güncelle
