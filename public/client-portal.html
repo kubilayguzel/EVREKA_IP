@@ -1209,6 +1209,10 @@ import { authService, db } from './firebase-config.js';
 import { doc, getDoc, collection, getDocs, getDocsFromServer, query, where, updateDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 import Pagination from './js/pagination.js';
 
+// importların HEMEN ALTINA
+window.authService = authService;
+window.db = db;
+
 // --- Dashboard sayaç kontrolü ---
 // Destek varsa cache yerine sunucudan oku:
 const runGetDocs = (typeof getDocsFromServer === 'function') ? getDocsFromServer : getDocs;
@@ -1720,7 +1724,7 @@ async function fetchAndDisplayPortfolio() {
         await fetchAndDisplayTasks(linkedPersonIds);
 
         // Faturalarım sekmesini doldur
-        await fetchAndDisplayInvoices(linkedPersonIds);
+        await window.fetchAndDisplayInvoices(linkedPersonIds);
 
     } catch (error) {
         console.error("Portföy verileri çekilirken bir hata oluştu:", error);
@@ -2032,7 +2036,7 @@ window.fetchAndDisplayTasks = async function(linkedPersonIds){
     // Detaylı liste, alt karta tıklanınca yükleniyor (loadSampleTaskDetails).
 } 
 
-async function fetchAndDisplayInvoices(linkedPersonIds){
+window.fetchAndDisplayInvoices = async function(linkedPersonIds){
     const q = query(collection(db, "accruals"), where("personsRelatedIds", "array-contains-any", linkedPersonIds));
     const snap = await runGetDocs(q);
     const tableBody = document.querySelector('#invoices table tbody');
