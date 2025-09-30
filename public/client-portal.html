@@ -2647,111 +2647,155 @@ $(document).on('click', '.detail-card-link', function() {
 
 // Task listesini yükleyen global fonksiyon (ReferenceError: authService/db çözülür)
 window.loadSampleTaskDetails = async function(taskType) {
-    const container = document.getElementById('task-list-container');
-    container.innerHTML = '<div class="text-center mt-5"><i class="fas fa-spinner fa-spin fa-3x"></i><p class="mt-3">Yükleniyor...</p></div>';
-    
-    try {
-        const user = authService.getCurrentUser(); // Modül içeriği burada erişilebilir
-        if (!user) {
-            container.innerHTML = '<p class="lead text-muted text-center mt-5">Kullanıcı girişi yapılmamış.</p>';
-            return;
-        }
+  const container = document.getElementById('task-list-container');
+  container.innerHTML = '<div class="text-center mt-5"><i class="fas fa-spinner fa-spin fa-3x"></i><p class="mt-3">Yükleniyor...</p></div>';
 
-        // Kullanıcının linkedPersonIds'ini al
-        const userDocRef = doc(db, "users", user.uid);
-        const userSnapshot = await getDoc(userDocRef);
-        
-        if (!userSnapshot.exists()) {
-            container.innerHTML = '<p class="lead text-muted text-center mt-5">Kullanıcı bilgileri bulunamadı.</p>';
-            return;
-        }
+  // 1) Task tipine göre kabul edilecek status listesi (TR/EN varyantları birlikte)
+  const STATUS_FILTERS = {
+    'pending-approval': [
+      'awaiting_client_approval',
+      'müvekkil onayı bekliyor',
+      'client_approval_pending',
+      'awaiting approval'
+    ],
+    'renewal-approval': [
+      'renewal_approval_pending',
+      'yenileme onayı bekliyor'
+    ],
+    'bulletin-watch': [
+      'bulletin_watch_pending',
+      'bülten izleme onayı bekliyor'
+    ]
+  };
+  const chosenKey = taskType || 'pending-approval';
+  const acceptedStatuses = STATUS_FILTERS[chosenKey] || STATUS_FILTERS['pending-approval'];
 
-        const userData = userSnapshot.data();
-        const linkedPersonIds = userData.linkedPersonIds || [];
+  // Yardımcılar
+  const normalize = (s) => (s || '').toString().trim().toLowerCase();
+  const accepts = (s) => acceptedStatuses.map(normalize).includes(normalize(s));
+  const toJSDate = (v) => {
+    // Firestore Timestamp ise .toDate() vardır
+    if (v && typeof v === 'object' && typeof v.toDate === 'function') return v.toDate();
+    // ISO/string ise Date parse et
+    if (typeof v === 'string' || typeof v === 'number') return new Date(v);
+    return null;
+  };
+  const formatDate = (v) => {
+    const d = toJSDate(v);
+    if (!d || isNaN(d.getTime())) return '-';
+    const dd = String(d.getDate()).padStart(2,'0');
+    const mm = String(d.getMonth()+1).padStart(2,'0');
+    const yy = d.getFullYear();
+    return `${dd}.${mm}.${yy}`;
+  };
 
-        if (linkedPersonIds.length === 0) {
-            container.innerHTML = '<p class="lead text-muted text-center mt-5">Bağlı müvekkil bulunamadı.</p>';
-            return;
-        }
-
-        // "Müvekkil Onayı Bekliyor" statusundeki taskları çek
-        const tasksRef = collection(db, "tasks");
-
-        // Seçilen alt karta göre filtreleri hazırla
-        const filters = [
-        where("personsRelatedIds", "array-contains-any", linkedPersonIds)
-        ];
-
-        if (taskType === 'pending-approval') {
-        // Firestore'daki gerçek değer
-        filters.push(where("status", "==", "awaiting_client_approval"));
-        }
-        // ileride diğer kartlar için uygun filtreleri ekleyebilirsin:
-        // else if (taskType === 'renewal-approval') { ... }
-        // else if (taskType === 'bulletin-watch')   { ... }
-
-        const q = query(tasksRef, ...filters);
-        const querySnapshot = await runGetDocs(q);
-
-        if (querySnapshot.empty) {
-        container.innerHTML = '<p class="lead text-muted text-center mt-5">Bu kategoride onay bekleyen iş bulunmamaktadır.</p>';
-        return;
-        }
-
-        container.innerHTML = '';
-
-        // Timestamp / string güvenli tarih formatlayıcı
-        const formatDate = (d) => {
-        if (!d) return '-';
-        try {
-            const date = (d && typeof d.toDate === 'function') ? d.toDate() : new Date(d);
-            if (isNaN(date)) return '-';
-            const dd = String(date.getDate()).padStart(2, '0');
-            const mm = String(date.getMonth() + 1).padStart(2, '0');
-            const yy = date.getFullYear();
-            return `${dd}.${mm}.${yy}`;
-        } catch {
-            return '-';
-        }
-        };
-
-        querySnapshot.forEach(docSnap => {
-        const task = docSnap.data();
-        const taskId = docSnap.id;
-
-        const card = document.createElement('div');
-        card.className = 'col-md-12 mb-4';
-        card.innerHTML = `
-            <div class="task-card task-card-warning" data-task-id="${taskId}">
-            <h5 class="task-title">${task.title || 'İsimsiz İş'}</h5>
-            <p class="task-description">${task.description || 'Açıklama yok'}</p>
-            <div class="d-flex justify-content-between align-items-center">
-                <small class="task-meta">
-                <i class="fas fa-clock mr-1"></i>
-                Son Onay Tarihi: ${formatDate(task.officialDueDate || task.dueDate)}
-                </small>
-                <div>
-                <button class="btn btn-success btn-sm btn-action task-approve" data-task-id="${taskId}">
-                    <i class="fas fa-check"></i> Onayla
-                </button>
-                <button class="btn btn-danger btn-sm btn-action task-reject" data-task-id="${taskId}">
-                    <i class="fas fa-times"></i> Reddet
-                </button>
-                <button class="btn btn-info btn-sm btn-action task-detail" data-task-id="${taskId}">
-                    <i class="fas fa-eye"></i> İncele
-                </button>
-                </div>
-            </div>
-            </div>`;
-        container.appendChild(card);
-        });
-
-                
-    } catch (error) {
-        console.error('Task yükleme hatası:', error);
-        container.innerHTML = '<p class="lead text-danger text-center mt-5">Veriler yüklenirken bir hata oluştu.</p>';
+  try {
+    const user = authService.getCurrentUser();
+    if (!user) {
+      container.innerHTML = '<p class="lead text-muted text-center mt-5">Kullanıcı girişi yapılmamış.</p>';
+      return;
     }
-}
+
+    // linkedPersonIds al
+    const userDocRef = doc(db, 'users', user.uid);
+    const userSnapshot = await getDoc(userDocRef);
+    if (!userSnapshot.exists()) {
+      container.innerHTML = '<p class="lead text-muted text-center mt-5">Kullanıcı bilgileri bulunamadı.</p>';
+      return;
+    }
+    const linkedPersonIds = userSnapshot.data().linkedPersonIds || [];
+    if (linkedPersonIds.length === 0) {
+      container.innerHTML = '<p class="lead text-muted text-center mt-5">Bağlı müvekkil bulunamadı.</p>';
+      return;
+    }
+
+    // 2) Önce server-side filtre (status IN) dene — index gerekebilir
+    const tasksRef = collection(db, 'tasks');
+    let tasks = [];
+    let usedFallback = false;
+
+    try {
+      // Firestore 'in' operatörü 10 öğeye kadar destekler.
+      const q = query(
+        tasksRef,
+        where('personsRelatedIds', 'array-contains-any', linkedPersonIds),
+        where('status', 'in', acceptedStatuses)
+      );
+      const snap = await runGetDocs(q);
+      snap.forEach(d => tasks.push({ id: d.id, ...d.data() }));
+
+      console.log('[Tasks] query-IN ok', { taskType: chosenKey, acceptedStatuses, found: tasks.length });
+    } catch (err) {
+      // Composite index yoksa ya da 'in' desteklemez bir kombinasyonsa buraya düşer
+      console.warn('[Tasks] query-IN hata, client-side filtreye düşülüyor:', err?.message || err);
+      usedFallback = true;
+
+      // 3) Fallback: sadece personsRelatedIds ile çek, status’u client-side filtrele
+      const q2 = query(
+        tasksRef,
+        where('personsRelatedIds', 'array-contains-any', linkedPersonIds)
+      );
+      const snap2 = await runGetDocs(q2);
+      snap2.forEach(d => {
+        const t = d.data();
+        if (accepts(t.status)) tasks.push({ id: d.id, ...t });
+      });
+
+      console.log('[Tasks] fallback-client-filter', { taskType: chosenKey, acceptedStatuses, found: tasks.length });
+    }
+
+    // 4) Boşsa mesaj
+    if (!tasks.length) {
+      container.innerHTML = '<p class="lead text-muted text-center mt-5">Bu kategoride onay bekleyen iş bulunmamaktadır.</p>';
+      // debug log
+      console.log('[Tasks] EMPTY after', usedFallback ? 'fallback' : 'in-query', { linkedPersonIds, acceptedStatuses });
+      return;
+    }
+
+    // 5) Render
+    container.innerHTML = '';
+    tasks.forEach(task => {
+      const taskId = task.id;
+      const due =
+        task.dueDate ??
+        task.officialDueDate ??
+        task.clientDueDate ??
+        task.deadline ??
+        null;
+
+      const card = document.createElement('div');
+      card.className = 'col-md-12 mb-4';
+      card.innerHTML = `
+        <div class="task-card task-card-warning" data-task-id="${taskId}">
+          <h5 class="task-title">${task.title || 'İsimsiz İş'}</h5>
+          <p class="task-description">${task.description || 'Açıklama yok'}</p>
+          <div class="d-flex justify-content-between align-items-center">
+            <small class="task-meta">
+              <i class="fas fa-clock mr-1"></i>
+              Son Onay Tarihi: ${formatDate(due)}
+            </small>
+            <div>
+              <button class="btn btn-success btn-sm btn-action task-approve" data-task-id="${taskId}">
+                <i class="fas fa-check"></i> Onayla
+              </button>
+              <button class="btn btn-danger btn-sm btn-action task-reject" data-task-id="${taskId}">
+                <i class="fas fa-times"></i> Reddet
+              </button>
+              <button class="btn btn-info btn-sm btn-action task-detail" data-task-id="${taskId}">
+                <i class="fas fa-eye"></i> İncele
+              </button>
+            </div>
+          </div>
+        </div>`;
+      container.appendChild(card);
+    });
+
+  } catch (error) {
+    console.error('Task yükleme hatası:', error);
+    container.innerHTML = '<p class="lead text-danger text-center mt-5">Veriler yüklenirken bir hata oluştu.</p>';
+  }
+};
+
 
 // Task onaylama fonksiyonu
 async function approveTask(taskId) {
