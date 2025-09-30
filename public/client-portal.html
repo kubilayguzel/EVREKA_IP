@@ -2645,48 +2645,71 @@ $(document).on('click', '.detail-card-link', function() {
     }, 500);
 });
 
-// Task listesini yükleyen global fonksiyon (ReferenceError: authService/db çözülür)
+// Task listesini yükleyen global fonksiyon
 window.loadSampleTaskDetails = async function(taskType) {
   const container = document.getElementById('task-list-container');
   container.innerHTML = '<div class="text-center mt-5"><i class="fas fa-spinner fa-spin fa-3x"></i><p class="mt-3">Yükleniyor...</p></div>';
 
-  // 1) Task tipine göre kabul edilecek status listesi (TR/EN varyantları birlikte)
+  // Normalize fonksiyonu - Türkçe karakter ve boşluk sorunlarını çözer
+  const normalizeStatus = (status) => {
+    if (!status) return '';
+    return status.toString().toLowerCase().trim()
+      .replace(/ı/g, 'i')
+      .replace(/ğ/g, 'g')
+      .replace(/ü/g, 'u')
+      .replace(/ş/g, 's')
+      .replace(/ö/g, 'o')
+      .replace(/ç/g, 'c');
+  };
+
+  // Task tipine göre kabul edilecek status'ler
   const STATUS_FILTERS = {
     'pending-approval': [
-      'awaiting_client_approval',
-      'müvekkil onayı bekliyor',
+      'awaiting_client_approval',        // Veritabanındaki gerçek değer
+      'muvekkil onayi bekliyor',         // Normalize edilmiş Türkçe
       'client_approval_pending',
       'awaiting approval'
     ],
     'renewal-approval': [
       'renewal_approval_pending',
-      'yenileme onayı bekliyor'
+      'yenileme onayi bekliyor'
     ],
     'bulletin-watch': [
       'bulletin_watch_pending',
-      'bülten izleme onayı bekliyor'
+      'bulten izleme onayi bekliyor'
     ]
   };
+
   const chosenKey = taskType || 'pending-approval';
   const acceptedStatuses = STATUS_FILTERS[chosenKey] || STATUS_FILTERS['pending-approval'];
 
-  // Yardımcılar
-  const normalize = (s) => (s || '').toString().trim().toLowerCase();
-  const accepts = (s) => acceptedStatuses.map(normalize).includes(normalize(s));
-  const toJSDate = (v) => {
-    // Firestore Timestamp ise .toDate() vardır
-    if (v && typeof v === 'object' && typeof v.toDate === 'function') return v.toDate();
-    // ISO/string ise Date parse et
-    if (typeof v === 'string' || typeof v === 'number') return new Date(v);
-    return null;
+  // Status kontrolü - hem orijinal hem normalize edilmiş halleriyle
+  const acceptsStatus = (status) => {
+    const original = (status || '').toString().toLowerCase().trim();
+    const normalized = normalizeStatus(status);
+    
+    return acceptedStatuses.some(accepted => {
+      return original === accepted.toLowerCase() || 
+             normalized === normalizeStatus(accepted);
+    });
   };
+
+  // Tarih formatla
   const formatDate = (v) => {
-    const d = toJSDate(v);
-    if (!d || isNaN(d.getTime())) return '-';
-    const dd = String(d.getDate()).padStart(2,'0');
-    const mm = String(d.getMonth()+1).padStart(2,'0');
-    const yy = d.getFullYear();
-    return `${dd}.${mm}.${yy}`;
+    if (!v) return '-';
+    try {
+      // Firestore Timestamp
+      if (v && typeof v === 'object' && typeof v.toDate === 'function') {
+        const d = v.toDate();
+        return `${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}.${d.getFullYear()}`;
+      }
+      // ISO String veya number
+      const d = new Date(v);
+      if (isNaN(d.getTime())) return '-';
+      return `${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}.${d.getFullYear()}`;
+    } catch (e) {
+      return '-';
+    }
   };
 
   try {
@@ -2699,69 +2722,67 @@ window.loadSampleTaskDetails = async function(taskType) {
     // linkedPersonIds al
     const userDocRef = doc(db, 'users', user.uid);
     const userSnapshot = await getDoc(userDocRef);
+    
     if (!userSnapshot.exists()) {
       container.innerHTML = '<p class="lead text-muted text-center mt-5">Kullanıcı bilgileri bulunamadı.</p>';
       return;
     }
+
     const linkedPersonIds = userSnapshot.data().linkedPersonIds || [];
+    
     if (linkedPersonIds.length === 0) {
       container.innerHTML = '<p class="lead text-muted text-center mt-5">Bağlı müvekkil bulunamadı.</p>';
       return;
     }
 
-    // 2) Önce server-side filtre (status IN) dene — index gerekebilir
+    console.log('🔍 Task arama parametreleri:', {
+      taskType: chosenKey,
+      linkedPersonIds,
+      acceptedStatuses
+    });
+
+    // Sadece personsRelatedIds ile çek, status'u client-side filtrele
     const tasksRef = collection(db, 'tasks');
-    let tasks = [];
-    let usedFallback = false;
+    const q = query(
+      tasksRef,
+      where('personsRelatedIds', 'array-contains-any', linkedPersonIds)
+    );
+    
+    const snapshot = await runGetDocs(q);
+    
+    console.log('📊 Toplam task sayısı:', snapshot.size);
 
-    try {
-      // Firestore 'in' operatörü 10 öğeye kadar destekler.
-      const q = query(
-        tasksRef,
-        where('personsRelatedIds', 'array-contains-any', linkedPersonIds),
-        where('status', 'in', acceptedStatuses)
-      );
-      const snap = await runGetDocs(q);
-      snap.forEach(d => tasks.push({ id: d.id, ...d.data() }));
-
-      console.log('[Tasks] query-IN ok', { taskType: chosenKey, acceptedStatuses, found: tasks.length });
-    } catch (err) {
-      // Composite index yoksa ya da 'in' desteklemez bir kombinasyonsa buraya düşer
-      console.warn('[Tasks] query-IN hata, client-side filtreye düşülüyor:', err?.message || err);
-      usedFallback = true;
-
-      // 3) Fallback: sadece personsRelatedIds ile çek, status’u client-side filtrele
-      const q2 = query(
-        tasksRef,
-        where('personsRelatedIds', 'array-contains-any', linkedPersonIds)
-      );
-      const snap2 = await runGetDocs(q2);
-      snap2.forEach(d => {
-        const t = d.data();
-        if (accepts(t.status)) tasks.push({ id: d.id, ...t });
+    // Client-side filtreleme
+    const tasks = [];
+    snapshot.forEach(d => {
+      const taskData = d.data();
+      const taskStatus = taskData.status;
+      
+      console.log('Task kontrolü:', {
+        id: d.id,
+        title: taskData.title,
+        status: taskStatus,
+        accepts: acceptsStatus(taskStatus)
       });
+      
+      if (acceptsStatus(taskStatus)) {
+        tasks.push({ id: d.id, ...taskData });
+      }
+    });
 
-      console.log('[Tasks] fallback-client-filter', { taskType: chosenKey, acceptedStatuses, found: tasks.length });
-    }
+    console.log('✅ Filtrelenmiş task sayısı:', tasks.length);
 
-    // 4) Boşsa mesaj
-    if (!tasks.length) {
+    // Boşsa mesaj
+    if (tasks.length === 0) {
       container.innerHTML = '<p class="lead text-muted text-center mt-5">Bu kategoride onay bekleyen iş bulunmamaktadır.</p>';
-      // debug log
-      console.log('[Tasks] EMPTY after', usedFallback ? 'fallback' : 'in-query', { linkedPersonIds, acceptedStatuses });
       return;
     }
 
-    // 5) Render
+    // Render
     container.innerHTML = '';
     tasks.forEach(task => {
       const taskId = task.id;
-      const due =
-        task.dueDate ??
-        task.officialDueDate ??
-        task.clientDueDate ??
-        task.deadline ??
-        null;
+      const due = task.dueDate || task.officialDueDate || task.clientDueDate || task.deadline || null;
 
       const card = document.createElement('div');
       card.className = 'col-md-12 mb-4';
@@ -2791,8 +2812,8 @@ window.loadSampleTaskDetails = async function(taskType) {
     });
 
   } catch (error) {
-    console.error('Task yükleme hatası:', error);
-    container.innerHTML = '<p class="lead text-danger text-center mt-5">Veriler yüklenirken bir hata oluştu.</p>';
+    console.error('❌ Task yükleme hatası:', error);
+    container.innerHTML = '<p class="lead text-danger text-center mt-5">Veriler yüklenirken bir hata oluştu: ' + error.message + '</p>';
   }
 };
 
@@ -2883,6 +2904,9 @@ async function updateDashboardTaskCount() {
 
         const userData = userSnapshot.data();
         const linkedPersonIds = userData.linkedPersonIds || [];
+        // LOG: kim için sorgu atıyoruz
+console.log('[Tasks] linkedPersonIds', linkedPersonIds);
+
 
         if (linkedPersonIds.length === 0) return;
 
