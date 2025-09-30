@@ -2790,7 +2790,7 @@ window.loadSampleTaskDetails = async function(taskType) {
 // Task onaylama fonksiyonu
 async function approveTask(taskId) {
     try {
-        const taskRef = doc(db, "tasks", taskId);
+        const taskRef = doc(db, "tasks", String(taskId));
         await updateDoc(taskRef, {
             status: "müvekkil onayı - açıldı",
             approvalDate: new Date().toISOString(),
@@ -2829,7 +2829,7 @@ async function rejectTask(taskId) {
     if (reason === null) return;
     
     try {
-        const taskRef = doc(db, "tasks", taskId);
+        const taskRef = doc(db, "tasks", String(taskId));
         await updateDoc(taskRef, {
             status: "müvekkil onayı - kapatıldı",
             rejectionDate: new Date().toISOString(),
