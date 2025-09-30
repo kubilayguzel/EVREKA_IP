@@ -2753,6 +2753,24 @@ window.loadSampleTaskDetails = async function(taskType) {
     // Client-side filtreleme: relatedParty.id ile eşleşenleri bul
     const matchingTasks = [];
     
+// İlk 5 task'ın relatedParty.id değerlerini logla
+    let sampleCount = 0;
+    allTasksSnapshot.forEach(d => {
+      if (sampleCount < 5) {
+        const taskData = d.data();
+        console.log('🔍 Task örneği:', {
+          id: d.id,
+          title: taskData.title,
+          relatedPartyId: taskData.relatedParty?.id,
+          relatedPartyName: taskData.relatedParty?.name,
+          status: taskData.status
+        });
+        sampleCount++;
+      }
+    });
+    
+    console.log('👥 Aranan linkedPersonIds:', linkedPersonIds);
+    
     allTasksSnapshot.forEach(d => {
       const taskData = d.data();
       const relatedPartyId = taskData.relatedParty?.id;
