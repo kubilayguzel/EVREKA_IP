@@ -889,13 +889,13 @@
                 
                 <div class="row mt-5" id="task-main-cards">
                     
-                    <div class="col-md-3 mb-4 task-card-link" data-target-area="marka-tasks" style="cursor: pointer;">
+                <div class="col-md-3 mb-4 task-card-link" data-target-area="marka-tasks" style="cursor: pointer;">
                     <div class="card p-4 text-center d-flex align-items-center flex-column justify-content-center h-100">
                         <i class="fas fa-registered stat-icon text-info mb-3"></i>
-                        <div class="stat-value" id="taskCount-marka-total">0</div>  <!-- ⇦ EKLENDİ -->
                         <div class="stat-label">Marka İşlemleri</div>
+                        <div class="stat-value mt-2" id="taskCount-marka-total">0</div>
                     </div>
-                    </div>
+                </div>
                    
                     <div class="col-md-3 mb-4 task-card-link" data-target-area="patent-tasks" style="cursor: pointer;">
                         <div class="card p-4 text-center d-flex align-items-center flex-column justify-content-center h-100">
@@ -2162,7 +2162,7 @@ window.fetchAndDisplayTasks = async function(){
     snap.forEach(d => awaitingTasks.push({ id:d.id, ...d.data() }));
     window.__allClientTasks = awaitingTasks; // listelemede kullanılıyor
 
-    let countPending   = awaitingTasks.length; // doğrudan
+    let countPending   = 0;  // Yenileme ve bülten hariç normal onay bekleyenler
     let countRenewal   = 0;
     let countBulletin  = 0;
 
@@ -2170,14 +2170,27 @@ window.fetchAndDisplayTasks = async function(){
       const meta  = await _getTransactionTypeMeta(t.taskType);
       const label = _taskLabelGuess(t, meta);
 
-      if (/yenileme/.test(label)) countRenewal++;
-      if (RX_BULTEN.test(label))  countBulletin++;
+      const isRenewal = /yenileme/.test(label);
+      const isBulletin = RX_BULTEN.test(label);
+
+      if (isRenewal) {
+        countRenewal++;
+      } else if (isBulletin) {
+        countBulletin++;
+      } else {
+        countPending++;
+      }
     }
 
+    // Sayaçları güncelle
     $('#taskCount-pending-approval').text(countPending);
     $('#taskCount-renewal-approval').text(countRenewal);
     $('#taskCount-bulletin-watch').text(countBulletin);
-    $('#taskCount-marka-total').text(countPending + countRenewal + countBulletin);
+    
+    // Marka toplam = tüm alt kartların toplamı
+    const markaTotal = countPending + countRenewal + countBulletin;
+    $('#taskCount-marka-total').text(markaTotal);
+    
   }catch(err){
     console.error('Tasks sayaclari doldurulurken hata:', err);
   }
