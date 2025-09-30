@@ -2105,14 +2105,6 @@ $(document).ready(function() {
     });
 });
 
-// --- Yardımcılar: diakritik temizleyici + transactionType cache ---
-function _normalizeTr(s){
-  if(!s) return '';
-  return String(s)
-    .toLowerCase()
-    .replaceAll('ı','i').replaceAll('ğ','g').replaceAll('ü','u')
-    .replaceAll('ş','s').replaceAll('ö','o').replaceAll('ç','c');
-}
 const _ttCache = new Map();
 async function _getTransactionTypeMeta(typeId){
   if(!typeId) return null;
@@ -2124,6 +2116,23 @@ async function _getTransactionTypeMeta(typeId){
     _ttCache.set(key, meta);
     return meta;
   }catch(_){ return null; }
+}
+
+function isTaskRelatedToClient(t, linkedPersonIds){
+  if (!Array.isArray(linkedPersonIds) || linkedPersonIds.length === 0) return false;
+
+  // 1) personsRelatedIds (varsa)
+  if (Array.isArray(t.personsRelatedIds) && t.personsRelatedIds.some(id => linkedPersonIds.includes(id))) return true;
+
+  // 2) details.relatedParty.id (sende bu var)
+  const rel1 = t?.details?.relatedParty?.id;
+  if (rel1 && linkedPersonIds.includes(rel1)) return true;
+
+  // 3) olası diğer alan adları (koruma amaçlı)
+  const rel2 = t?.relatedPartyId || t?.clientId || t?.personId;
+  if (rel2 && linkedPersonIds.includes(rel2)) return true;
+
+  return false;
 }
 
 // === SAYAÇLARI DOLDURAN YENİ SÜRÜM ===
