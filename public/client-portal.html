@@ -2487,45 +2487,67 @@ const $tasksList = $('#task-list-details');
 const $tasksHeader = $('#tasksHeaderTitle');
 const $tasksLead = $('#tasksLeadText');
 
-// Geri Butonu: Detay Kartlardan Ana Kartlara Dönüş
-$(document).on('click', '#backToMainTasks', function() {
-    $tasksMain.show();
-    $tasksDetail.hide();
-    $tasksList.hide();
-    $tasksHeader.text('İşlerim');
-    $tasksLead.text('Lütfen incelemek istediğiniz fikri mülkiyet türünü seçin.');
-});
-
-// Geri Butonu: Detay Listeden Detay Kartlara Dönüş
-$(document).on('click', '#backToDetailCards', function() {
-    $tasksMain.hide();
-    $tasksDetail.show();
-    $tasksList.hide();
-    $tasksHeader.text('Marka İşlemleri'); // Bu, en son seçilen IP türüne göre değişmeli
-    $tasksLead.text('İncelemek istediğiniz işlem türünü seçin.');
-    // Liste alanını temizle
-    $('#task-list-container').empty();
-});
+// Yeni Global State (Hangi IP türünün seçili olduğunu tutmak için)
+window.activeTaskArea = null;
 
 // Ana Kart Tıklaması: Marka, Patent, Tasarım, Dava
 $(document).on('click', '.task-card-link', function() {
     const targetArea = $(this).data('target-area');
+    window.activeTaskArea = targetArea; // Seçili alanı kaydet
     
-    // Başlığı ve açıklamayı güncelle
+    // 1. Başlığı ve açıklamayı güncelle
     const headerText = $(this).find('.stat-label').text();
-    $tasksHeader.text(headerText);
+    $tasksHeader.text(headerText); // Örn: Marka İşlemleri
     $tasksLead.text('İncelemek istediğiniz işlem türünü seçin.');
     
-    // Sadece Marka'nın alt kartlarını gösteriyoruz (şimdilik)
+    // 2. Ana kartların altına alt kartları yerleştir (HTML yapısını dinamik olarak taşıyoruz)
+    // Önce detay kartlarını gizleyelim ve task listesini temizleyelim
+    $tasksDetail.hide();
+    $tasksList.hide();
+    $('#task-list-container').empty(); 
+
+    // 3. Alt kartları ilgili ana kartın hemen altına taşı/göster
+
     if (targetArea === 'marka-tasks') {
-        $tasksMain.hide();
-        $tasksDetail.show();
-        $tasksList.hide();
-        // İlgili kartların sayılarını güncelle (Bu kısım Firebase sorgularıyla yapılmalı)
-        // updateTaskDetailCounts(linkedPersonIds, 'marka');
+        // Sadece Marka alt kartları için mantığı uyguluyoruz.
+        
+        // Marka kartının hemen altındaki bir sonraki row'da gösterim yapabiliriz. 
+        // Ancak en basit yöntem, detay kartlarını task listesinin hemen üstünde sürekli tutmaktır.
+
+        // Basitleştirilmiş çözüm: Ana kartlar ve alt kartlar aynı row'da değil,
+        // alt kartları hemen aşağı kaydırıyoruz.
+
+        // Eğer alt kartlar zaten açıksa kapat
+        if ($tasksDetail.is(':visible') && $tasksDetail.data('current-area') === targetArea) {
+             $tasksDetail.slideUp(300);
+             $tasksDetail.data('current-area', '');
+             $tasksHeader.text('İşlerim');
+             $tasksLead.text('Lütfen incelemek istediğiniz fikri mülkiyet türünü seçin.');
+        } else {
+            // Eğer kapalıysa veya farklı bir alan seçilmişse aç
+            $tasksDetail.data('current-area', targetArea);
+            $tasksDetail.slideDown(300); // Yumuşakça aç
+            
+            // Eğer diğer kartlar tıklanırsa (Patent, Tasarım), detay kartlarını gizle.
+            if (targetArea !== 'marka-tasks') {
+                $tasksDetail.hide();
+                // Yapım aşamasında mesajı
+                $tasksHeader.text(headerText + ' - Yapım Aşamasında');
+                $tasksLead.text('Bu kategoriye ait alt işlemler henüz tanımlanmadı. Lütfen Marka İşlemleri sekmesini kullanın.');
+            } else {
+                 // Marka seçiliyse, detay kartlarının başlığını uygun şekilde ayarla
+                 $tasksHeader.text('Marka İşlemleri');
+                 $tasksLead.text('İncelemek istediğiniz işlem türünü seçin.');
+            }
+            
+            // Alt kartların sayılarını güncelle (Gerçek uygulamada Firebase çağrısı burada yapılır)
+            // updateTaskDetailCounts(linkedPersonIds, 'marka');
+        }
     } else {
-        // Diğer kartlar için de aynı mantığı uygulayabilirsiniz
-        // Şimdilik sadece uyarı verelim
+        // Marka dışındaki kartlar tıklandığında alt kartları kapat
+        $tasksDetail.slideUp(300);
+        $tasksDetail.data('current-area', '');
+        // Yapım aşamasında mesajı
         $tasksHeader.text(headerText + ' - Yapım Aşamasında');
         $tasksLead.text('Bu kategoriye ait alt işlemler henüz tanımlanmadı. Lütfen Marka İşlemleri sekmesini kullanın.');
     }
@@ -2535,19 +2557,32 @@ $(document).on('click', '.task-card-link', function() {
 $(document).on('click', '.detail-card-link', function() {
     const taskType = $(this).data('task-type');
     
-    // Görünümü Detay İş Listesi'ne geçir
-    $tasksDetail.hide();
-    $tasksList.show();
+    // Eğer liste zaten açıksa ve aynı türe aitse, kapat
+    if ($tasksList.is(':visible') && $tasksList.data('current-type') === taskType) {
+        $tasksList.slideUp(300);
+        $tasksList.data('current-type', '');
+        $tasksHeader.text('Marka İşlemleri'); // Alt kart başlığına geri dön
+        $tasksLead.text('İncelemek istediğiniz işlem türünü seçin.');
+        $('#task-list-container').empty(); 
+        return;
+    }
     
-    // Başlığı, tıklanan karta göre güncelle
+    // 1. Görünümü Detay İş Listesi'ne geçir
+    $tasksList.data('current-type', taskType);
+    $tasksList.slideDown(300); // Listeyi yumuşakça aç
+    
+    // 2. Başlığı, tıklanan karta göre güncelle
     const headerText = $(this).find('.stat-label').text();
     $tasksHeader.text('Detaylı İş Listesi: ' + headerText);
     $tasksLead.text('Aşağıda seçtiğiniz iş türüne ait tüm işlemler listelenmiştir.');
     
-    // İlgili işleri yükleme fonksiyonunu çağır
-    // fetchAndDisplayTasks(linkedPersonIds, taskType);
-    // Şimdilik statik veriyi çağırıyoruz:
+    // 3. İlgili işleri yükleme fonksiyonunu çağır
     loadSampleTaskDetails(taskType);
+    
+    // Liste açıldığında listenin olduğu yere yumuşakça kay
+    $('html, body').animate({
+        scrollTop: $tasksList.offset().top - 100 // Başlık çubuğunun altından başla
+    }, 500);
 });
 
 // Test/Geliştirme amaçlı örnek listeyi yükleme fonksiyonu
