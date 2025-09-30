@@ -2061,7 +2061,10 @@ $(document).on('show.bs.modal', '#portfolioDetailModal', function (e) {
         esyaContent.html('<p class="text-muted">Mal ve hizmet bilgisi bulunamadı.</p>');
     }
     
-// Modal açıldığında tab'ları sıfırla ve ilk tab'ı aktif yap
+// İşlemler sekmesini doldur (transactions koleksiyonundan)
+    await loadTransactions(item.id);
+    
+    // Modal açıldığında tab'ları sıfırla ve ilk tab'ı aktif yap
     $('#myTab .nav-link').removeClass('active').attr('aria-selected', 'false');
     $('.tab-content .tab-pane').removeClass('show active');
     
@@ -2069,6 +2072,118 @@ $(document).on('show.bs.modal', '#portfolioDetailModal', function (e) {
     $('#myTab a[href="#modal-islemler"]').addClass('active').attr('aria-selected', 'true');
     $('#modal-islemler').addClass('show active');
 });
+
+// Transactions yükleme fonksiyonu
+async function loadTransactions(ipRecordId) {
+    const transactionsRef = collection(db, 'ipRecords', ipRecordId, 'transactions');
+    const q = query(transactionsRef);
+    const snapshot = await getDocs(q);
+    
+    const transactions = [];
+    snapshot.forEach(doc => {
+        transactions.push({ id: doc.id, ...doc.data() });
+    });
+    
+    // Parent transactions'ları filtrele
+    const parentTransactions = transactions.filter(t => t.transactionHierarchy === 'parent');
+    
+    // Tabloyu doldur
+    const tableBody = $('#modal-islemler table tbody');
+    tableBody.empty();
+    
+    let rowIndex = 1;
+    parentTransactions.forEach(parent => {
+        // Child transactions'ları bul
+        const children = transactions.filter(t => 
+            t.transactionHierarchy === 'child' && t.parentId === parent.id
+        );
+        
+        const hasChildren = children.length > 0;
+        const accordionId = `transaction-${parent.id}`;
+        
+        // Durum badge
+        const statusMap = {
+            'Tamamlandı': 'success',
+            'Devam Ediyor': 'primary',
+            'Beklemede': 'warning',
+            'Onay Bekliyor': 'warning'
+        };
+        const statusText = parent.description || 'İşlem';
+        const statusBadge = statusMap[parent.requestResult] || 'secondary';
+        
+        // Tarih formatla
+        const formatDate = (timestamp) => {
+            if (!timestamp) return '-';
+            try {
+                const date = new Date(timestamp);
+                const day = String(date.getDate()).padStart(2, '0');
+                const month = String(date.getMonth() + 1).padStart(2, '0');
+                const year = date.getFullYear();
+                return `${day}.${month}.${year}`;
+            } catch (e) {
+                return '-';
+            }
+        };
+        
+        // Parent satırı
+        const parentRow = `
+            <tr class="${hasChildren ? 'accordion-header-row' : ''}" ${hasChildren ? `data-toggle="collapse" data-target="#${accordionId}" aria-expanded="false" aria-controls="${accordionId}"` : ''}>
+                <td>${hasChildren ? '<i class="fas fa-chevron-right mr-2"></i>' : ''}${rowIndex}</td>
+                <td>${statusText}</td>
+                <td><span class="badge badge-${statusBadge}">${parent.requestResult || 'Beklemede'}</span></td>
+                <td>${formatDate(parent.timestamp)}</td>
+                <td><a href="#" class="btn btn-sm btn-info" title="Evrakı Görüntüle"><i class="fas fa-file-pdf"></i></a></td>
+            </tr>
+        `;
+        
+        tableBody.append(parentRow);
+        
+        // Child satırları (akordeon içinde)
+        if (hasChildren) {
+            let childTableHtml = `
+                <tr>
+                    <td colspan="5" class="p-0">
+                        <div class="collapse" id="${accordionId}">
+                            <table class="table mb-0 accordion-table">
+                                <thead>
+                                    <tr>
+                                        <th>#</th>
+                                        <th>İşlem Açıklaması</th>
+                                        <th>Durum</th>
+                                        <th>Tarih</th>
+                                        <th>Evrak</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+            `;
+            
+            children.forEach((child, idx) => {
+                const childStatusBadge = statusMap[child.requestResult] || 'secondary';
+                childTableHtml += `
+                    <tr>
+                        <td>${rowIndex}.${idx + 1}</td>
+                        <td>${child.description || 'Alt İşlem'}</td>
+                        <td><span class="badge badge-${childStatusBadge}">${child.requestResult || 'Beklemede'}</span></td>
+                        <td>${formatDate(child.timestamp)}</td>
+                        <td><a href="#" class="btn btn-sm btn-info" title="Evrakı Görüntüle"><i class="fas fa-file-pdf"></i></a></td>
+                    </tr>
+                `;
+            });
+            
+            childTableHtml += `
+                                </tbody>
+                            </table>
+                        </div>
+                    </td>
+                </tr>
+            `;
+            
+            tableBody.append(childTableHtml);
+        }
+        
+        rowIndex++;
+    });
+}
 
     // Modal tab'ları için event handler (sadece bir kez tanımla)
     $(document).ready(function() {
