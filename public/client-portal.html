@@ -1697,6 +1697,9 @@ async function fetchAndDisplayPortfolio() {
         window.markaPaginationData.currentPage = 1;
         window.markaPaginationData.itemsPerPage = 10;
 
+        // populatePortfolioTable'ı global olarak sakla
+        window.__originalPopulate = populatePortfolioTable;
+        
         const __markaPag = new Pagination({
         itemsPerPage: 10,
         containerId: 'markaPagination',
@@ -1708,11 +1711,8 @@ async function fetchAndDisplayPortfolio() {
             populatePortfolioTable('#marka-list', slice);
             // Filtre tekrar uygula
             setTimeout(() => {
-                if (typeof applyMenseFilterToActivePane === 'function') {
-                    var $activePane = $(".tab-content > .tab-pane.show.active");
-                    if ($activePane.attr("id") === 'marka-list') {
-                        filterPaneByMense("#marka-list", $("#menseFilter").val() || 'TÃœRKPATENT');
-                    }
+                if (typeof window.applyMenseFilterToActivePane === 'function') {
+                    window.applyMenseFilterToActivePane();
                 }
             }, 50);
         }
@@ -2591,9 +2591,19 @@ window.goToMarkaPage = function(page) {
     const end = start + data.itemsPerPage;
     const pageData = data.allData.slice(start, end);
     
-    if (window.__originalPopulate) {
+    // populatePortfolioTable direkt çağır
+    if (typeof populatePortfolioTable === 'function') {
+        populatePortfolioTable('#marka-list', pageData);
+    } else if (window.__originalPopulate) {
         window.__originalPopulate('#marka-list', pageData);
     }
+    
+    // Filtre uygula
+    setTimeout(() => {
+        if (typeof window.applyMenseFilterToActivePane === 'function') {
+            window.applyMenseFilterToActivePane();
+        }
+    }, 50);
     
     window.renderMarkaPagination();
 };
