@@ -2793,7 +2793,7 @@ async function approveTask(taskId) {
     try {
         const taskRef = doc(db, "tasks", String(taskId));
         await updateDoc(taskRef, {
-            status: "müvekkil onayı - açıldı",
+            status: "open",
             approvalDate: new Date().toISOString(),
             approvedBy: authService.getCurrentUser()?.uid || null
         });
