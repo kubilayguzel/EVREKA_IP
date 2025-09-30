@@ -1552,6 +1552,9 @@ async function fetchAndDisplayPortfolio() {
 
         const userData = userSnapshot.data();
         const linkedPersonIds = userData.linkedPersonIds;
+        
+        // Diğer fonksiyonların erişebilmesi için global sakla
+        window.__linkedPersonIds = Array.isArray(linkedPersonIds) ? linkedPersonIds : [];
 
         if (!linkedPersonIds || linkedPersonIds.length === 0) {
             console.log("Kullanıcı ile ilişkili müvekkil bulunamadı.");
@@ -1740,12 +1743,24 @@ async function fetchAndDisplayPortfolio() {
 
 async function populateDashboardNumbers(linkedPersonIds, allPortfolios){
     const portfolioCount = allPortfolios.length;
-    const taskQ = query(collection(db, "tasks"), where("personsRelatedIds", "array-contains-any", linkedPersonIds), where("status","==","müvekkil onayı bekliyor"));
+
+    // Firestore'daki gerçek değer: awaiting_client_approval
+    const taskQ = query(
+      collection(db, "tasks"),
+      where("personsRelatedIds", "array-contains-any", linkedPersonIds),
+      where("status","==","awaiting_client_approval")
+    );
     const taskSnap = await runGetDocs(taskQ);
     const pendingTasks = taskSnap.size;
-    const accrualQ = query(collection(db, "accruals"), where("personsRelatedIds", "array-contains-any", linkedPersonIds), where("isPaid","==", false));
+
+    const accrualQ = query(
+      collection(db, "accruals"),
+      where("personsRelatedIds", "array-contains-any", linkedPersonIds),
+      where("isPaid","==", false)
+    );
     const accrualSnap = await runGetDocs(accrualQ);
     const unpaidInvoices = accrualSnap.size;
+
     writeDashSafe('#dashPortfolio',        portfolioCount);
     writeDashSafe('#dashPendingApprovals', pendingTasks);
     writeDashSafe('#dashUnpaidInvoices',   unpaidInvoices);
@@ -2082,20 +2097,15 @@ $(document).ready(function() {
 });
 
 window.fetchAndDisplayTasks = async function(linkedPersonIds){
-    const q = query(collection(db, "tasks"), where("personsRelatedIds", "array-contains-any", linkedPersonIds));
-    const snap = await runGetDocs(q);
-    
-    // İşlerim sekmesini dinamik kart yapısına çevirdiğiniz için, 
-    // fetchAndDisplayTasks fonksiyonunun artık doğrudan listeyi değil, 
-    // Alt kartlardaki SAYILARI güncellemesi gerekir.
-    
-    // Şimdilik sadece alt kartların sayısını güncelleyelim:
-    const pendingTasks = snap.size; 
-    $('#taskCount-pending-approval').text(pendingTasks);
-    
-    // Bu fonksiyon artık ana listeyi değil, sadece sayaçları güncelliyor.
-    // Detaylı liste, alt karta tıklanınca yükleniyor (loadSampleTaskDetails).
-} 
+  const q = query(
+    collection(db, "tasks"),
+    where("personsRelatedIds", "array-contains-any", linkedPersonIds),
+    where("status","==","awaiting_client_approval")
+  );
+  const snap = await runGetDocs(q);
+  $('#taskCount-pending-approval').text(snap.size || 0);
+};
+
 
 
 // Modal açıldığında verileri set et
@@ -2821,12 +2831,12 @@ async function updateDashboardTaskCount() {
         if (linkedPersonIds.length === 0) return;
 
         const taskQ = query(
-            collection(db, "tasks"), 
-            where("personsRelatedIds", "array-contains-any", linkedPersonIds), 
-            where("status", "==", "müvekkil onayı bekliyor")
+        collection(db, "tasks"),
+        where("personsRelatedIds", "array-contains-any", linkedPersonIds),
+        where("status", "==", "awaiting_client_approval")
         );
-        
-        const taskSnap = await getDocs(taskQ);
+
+        const taskSnap = await runGetDocs(taskQ);
         const pendingCount = taskSnap.size;
         
         // Dashboard'daki sayıyı güncelle
