@@ -2148,9 +2148,20 @@ function _taskLabelGuess(t, meta){
 }
 const RX_BULTEN = /(bulten|izleme|watch|yayin|yayim|yayima|yayıma|gazete)/;
 
-// === SAYAÇLARI DOLDURAN YENİ SÜRÜM ===
 window.fetchAndDisplayTasks = async function(){
   try{
+    const user = authService.getCurrentUser();
+    if (!user) return;
+    
+    const userDocRef = doc(db, "users", user.uid);
+    const userSnapshot = await getDoc(userDocRef);
+    
+    if (!userSnapshot.exists()) return;
+    
+    const linkedPersonIds = userSnapshot.data().linkedPersonIds || [];
+    
+    if (linkedPersonIds.length === 0) return;
+    
     // Sadece onay bekleyenleri çek
     const q = query(
       collection(db,'tasks'),
@@ -2159,7 +2170,16 @@ window.fetchAndDisplayTasks = async function(){
     const snap = await runGetDocs(q);
 
     const awaitingTasks = [];
-    snap.forEach(d => awaitingTasks.push({ id:d.id, ...d.data() }));
+    snap.forEach(d => {
+      const taskData = d.data();
+      const relatedPartyId = taskData.details?.relatedParty?.id;
+      
+      // Müvekkil ile eşleşme kontrolü
+      if (relatedPartyId && linkedPersonIds.includes(relatedPartyId)) {
+        awaitingTasks.push({ id:d.id, ...taskData });
+      }
+    });
+    
     window.__allClientTasks = awaitingTasks; // listelemede kullanılıyor
 
     let countPending   = awaitingTasks.length; // doğrudan
@@ -2765,41 +2785,59 @@ window.loadSampleTaskDetails = async function(taskType) {
     const tasksRef = collection(db, 'tasks');
     const allTasksQuery = query(tasksRef);
     const allTasksSnapshot = await runGetDocs(allTasksQuery);
-    
+
     const matchingTasks = [];
+
+    for (const d of allTasksSnapshot.docs) {
+    const taskData = d.data();
     
-    allTasksSnapshot.forEach(d => {
-      const taskData = d.data();
-      
-      // details.relatedParty.id ile linkedPersonIds karşılaştır
-      const relatedPartyId = taskData.details?.relatedParty?.id;
-      
-      // Müvekkil ile eşleşme kontrolü
-      const isRelatedToClient = relatedPartyId && linkedPersonIds.includes(relatedPartyId);
-      
-      if (!isRelatedToClient) return;
-      
-      // Task type'a göre filtreleme
-      if (taskType === 'pending-approval') {
+    // details.relatedParty.id ile linkedPersonIds karşılaştır
+    const relatedPartyId = taskData.details?.relatedParty?.id;
+    
+    // Müvekkil ile eşleşme kontrolü
+    const isRelatedToClient = relatedPartyId && linkedPersonIds.includes(relatedPartyId);
+    
+    if (!isRelatedToClient) continue;
+    
+    // Task type'a göre filtreleme
+    if (taskType === 'pending-approval') {
         // Sadece onay bekleyenler
         if (taskData.status === 'awaiting_client_approval') {
-          matchingTasks.push({ id: d.id, ...taskData });
+        matchingTasks.push({ id: d.id, ...taskData });
         }
-      } else if (taskType === 'completed-tasks') {
+    } else if (taskType === 'renewal-approval') {
+        // Yenileme onayları
+        if (taskData.status === 'awaiting_client_approval') {
+        const meta = await _getTransactionTypeMeta(taskData.taskType);
+        const label = _taskLabelGuess(taskData, meta);
+        if (/yenileme/.test(label)) {
+            matchingTasks.push({ id: d.id, ...taskData });
+        }
+        }
+    } else if (taskType === 'bulletin-watch') {
+        // Bülten izleme onayları
+        if (taskData.status === 'awaiting_client_approval') {
+        const meta = await _getTransactionTypeMeta(taskData.taskType);
+        const label = _taskLabelGuess(taskData, meta);
+        if (RX_BULTEN.test(label)) {
+            matchingTasks.push({ id: d.id, ...taskData });
+        }
+        }
+    } else if (taskType === 'completed-tasks') {
         // Onay bekleyen dışındaki tüm işler
         if (taskData.status !== 'awaiting_client_approval') {
-          matchingTasks.push({ id: d.id, ...taskData });
+        matchingTasks.push({ id: d.id, ...taskData });
         }
-      }
-    });
-    
+    }
+    }
+
     console.log(`✅ ${matchingTasks.length} onay bekleyen iş bulundu`);
 
     if (matchingTasks.length === 0) {
-      container.innerHTML = '<p class="lead text-muted text-center mt-5">Bu kategoride onay bekleyen iş bulunmamaktadır.</p>';
-      return;
+    container.innerHTML = '<p class="lead text-muted text-center mt-5">Bu kategoride onay bekleyen iş bulunmamaktadır.</p>';
+    return;
     }
-
+    
     // Render - Her task için async işlemler gerektiğinden Promise.all kullan
     container.innerHTML = '';
     const isCompletedView = (taskType === 'completed-tasks');
