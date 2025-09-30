@@ -2743,34 +2743,32 @@ window.loadSampleTaskDetails = async function(taskType) {
 
     // Sadece personsRelatedIds ile çek, status'u client-side filtrele
     const tasksRef = collection(db, 'tasks');
-    const q = query(
-      tasksRef,
-      where('personsRelatedIds', 'array-contains-any', linkedPersonIds)
-    );
     
-    const snapshot = await runGetDocs(q);
+    // TÜM TASKLARI ÇEK (personsRelatedIds array field yoksa client-side filtreleme gerekir)
+    const allTasksQuery = query(tasksRef);
+    const allTasksSnapshot = await runGetDocs(allTasksQuery);
     
-    console.log('📊 Toplam task sayısı:', snapshot.size);
-
-    // Client-side filtreleme
-    const tasks = [];
-    snapshot.forEach(d => {
+    console.log('📊 Toplam task sayısı (database):', allTasksSnapshot.size);
+    
+    // Client-side filtreleme: relatedParty.id ile eşleşenleri bul
+    const matchingTasks = [];
+    
+    allTasksSnapshot.forEach(d => {
       const taskData = d.data();
-      const taskStatus = taskData.status;
+      const relatedPartyId = taskData.relatedParty?.id;
       
-      console.log('Task kontrolü:', {
-        id: d.id,
-        title: taskData.title,
-        status: taskStatus,
-        accepts: acceptsStatus(taskStatus)
-      });
-      
-      if (acceptsStatus(taskStatus)) {
-        tasks.push({ id: d.id, ...taskData });
+      // linkedPersonIds içinde bu task'ın relatedParty.id'si var mı kontrol et
+      if (relatedPartyId && linkedPersonIds.includes(relatedPartyId)) {
+        matchingTasks.push({ id: d.id, ...taskData });
       }
     });
-
-    console.log('✅ Filtrelenmiş task sayısı:', tasks.length);
+    
+    console.log('✅ Müvekkile ait task sayısı:', matchingTasks.length);
+    
+    // Status filtresi uygula
+    const tasks = matchingTasks.filter(task => acceptsStatus(task.status));
+    
+    console.log('✅ Status filtresinden geçen task sayısı:', tasks.length);
 
     // Boşsa mesaj
     if (tasks.length === 0) {
