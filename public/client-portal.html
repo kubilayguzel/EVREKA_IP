@@ -2822,34 +2822,15 @@ window.loadSampleTaskDetails = async function(taskType) {
       
       if (!isRelatedToClient) return;
       
-    // Task type'a göre filtreleme
-      if (taskData.status === 'awaiting_client_approval') {
-        // Transaction type'ı al ve kategorilendir
-        const meta = await _getTransactionTypeMeta(taskData.taskType);
-        const label = _taskLabelGuess(taskData, meta);
-        
-        const isRenewal = /yenileme/.test(label);
-        const isBulletin = RX_BULTEN.test(label);
-        
-        if (taskType === 'pending-approval') {
-          // Yenileme ve bülten olmayan normal onay bekleyenler
-          if (!isRenewal && !isBulletin) {
-            matchingTasks.push({ id: d.id, ...taskData });
-          }
-        } else if (taskType === 'renewal-approval') {
-          // Sadece yenileme işleri
-          if (isRenewal) {
-            matchingTasks.push({ id: d.id, ...taskData });
-          }
-        } else if (taskType === 'bulletin-watch') {
-          // Sadece bülten izleme işleri
-          if (isBulletin) {
-            matchingTasks.push({ id: d.id, ...taskData });
-          }
-        }
-      } else if (taskType === 'completed-tasks') {
-        // Onay bekleyen dışındaki tüm işler
+      // Task type'a göre filtreleme
+      if (taskType === 'completed-tasks') {
+        // Tamamlanan işler için tüm statusleri al (awaiting_client_approval hariç)
         if (taskData.status !== 'awaiting_client_approval') {
+          matchingTasks.push({ id: d.id, ...taskData });
+        }
+      } else {
+        // Diğer tüm kategoriler için sadece onay bekleyenleri al
+        if (taskData.status === 'awaiting_client_approval') {
           matchingTasks.push({ id: d.id, ...taskData });
         }
       }
@@ -2862,10 +2843,52 @@ window.loadSampleTaskDetails = async function(taskType) {
       return;
     }
 
+// Task type'a göre filtreleme (async işlemler bittikten sonra)
+    // Completed tasks için filtreleme yapmaya gerek yok, direkt matchingTasks kullan
+    let filteredTasks = [];
+    
+    if (taskType === 'completed-tasks') {
+      filteredTasks = matchingTasks;
+    } else {
+      // Onay bekleyen işler için kategori bazlı filtreleme yap
+      for (const taskData of matchingTasks) {
+        const meta = await _getTransactionTypeMeta(taskData.taskType);
+        const label = _taskLabelGuess(taskData, meta);
+        
+        const isRenewal = /yenileme/.test(label);
+        const isBulletin = RX_BULTEN.test(label);
+        
+        if (taskType === 'pending-approval') {
+          // Yenileme ve bülten olmayan normal onay bekleyenler
+          if (!isRenewal && !isBulletin) {
+            filteredTasks.push(taskData);
+          }
+        } else if (taskType === 'renewal-approval') {
+          // Sadece yenileme işleri
+          if (isRenewal) {
+            filteredTasks.push(taskData);
+          }
+        } else if (taskType === 'bulletin-watch') {
+          // Sadece bülten izleme işleri
+          if (isBulletin) {
+            filteredTasks.push(taskData);
+          }
+        }
+      }
+    }
+    
+    console.log(`✅ ${filteredTasks.length} filtrelenmiş iş bulundu (${taskType})`);
+
+    if (filteredTasks.length === 0) {
+      container.innerHTML = '<p class="lead text-muted text-center mt-5">Bu kategoride onay bekleyen iş bulunmamaktadır.</p>';
+      return;
+    }
+
     // Render - Her task için async işlemler gerektiğinden Promise.all kullan
     container.innerHTML = '';
     const isCompletedView = (taskType === 'completed-tasks');
-    const taskCards = await Promise.all(matchingTasks.map(async (task) => {
+    const tasksToRender = filteredTasks;
+    const taskCards = await Promise.all(tasksToRender.map(async (task) => {
     const taskId = task.id;
     const due = task.dueDate || task.officialDueDate || task.clientDueDate || task.deadline || null;
       
@@ -2900,7 +2923,7 @@ window.loadSampleTaskDetails = async function(taskType) {
 
       const card = document.createElement('div');
       card.className = 'col-md-12 mb-4';
-// Status badge'i belirle
+    // Status badge'i belirle
       const statusBadgeClass = {
         'open': 'primary',
         'in_progress': 'info',
