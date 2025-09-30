@@ -1023,7 +1023,7 @@
                     <div class="card p-3 h-100">
                         <div class="card-header">Marka</div>
                         <div class="card-body text-center">
-                            <img src="https://via.placeholder.com/150" alt="Marka Örneği" style="max-width: 100%; height: auto; border-radius: 8px;">
+                            <img src="https://placehold.co/150x150/png" alt="Marka Örneği" style="max-width: 100%; height: auto; border-radius: 8px;">
                         </div>
                     </div>
                 </div>
@@ -1278,8 +1278,6 @@ function initTheme() {
  * @param {string} tableId Doldurulacak tablonun ID'si (#marka-list, #patent-list vb.)
  * @param {Array<Object>} portfolioData Gösterilecek portföy verileri.
  */
-// Global fonksiyon olarak sakla (pagination için)
-window.__originalPopulate = populatePortfolioTable;
 
 function populatePortfolioTable(tableId, portfolioData) {
     const tableBody = document.querySelector(`${tableId} tbody`);
