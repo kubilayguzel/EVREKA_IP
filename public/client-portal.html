@@ -1000,15 +1000,14 @@
                 <h5 class="header-title">İşlem Geçmişi</h5>
                 <div class="table-responsive mt-3">
                     <table class="table table-hover">
-                        <thead>
-                            <tr>
-                                <th>#</th>
-                                <th>İşlem Açıklaması</th>
-                                <th>Durum</th>
-                                <th>Tarih</th>
-                                <th>Evrak</th>
-                            </tr>
-                        </thead>
+                                <thead>
+                                    <tr>
+                                        <th>#</th>
+                                        <th>İşlem Açıklaması</th>
+                                        <th>Tarih</th>
+                                        <th>Evrak</th>
+                                    </tr>
+                                </thead>
                         <tbody>
                             <tr class="accordion-header-row" data-toggle="collapse" data-target="#islem-1" aria-expanded="false" aria-controls="islem-1">
                                 <td><i class="fas fa-chevron-down mr-2"></i>1</td>
@@ -2101,15 +2100,21 @@ async function loadTransactions(ipRecordId) {
         const hasChildren = children.length > 0;
         const accordionId = `transaction-${parent.id}`;
         
-        // Durum badge
-        const statusMap = {
-            'Tamamlandı': 'success',
-            'Devam Ediyor': 'primary',
-            'Beklemede': 'warning',
-            'Onay Bekliyor': 'warning'
+        // Transaction type'ın alias değerini al
+        const getTransactionTypeAlias = async (typeId) => {
+            if (!typeId) return 'İşlem';
+            try {
+                const typeDoc = await getDoc(doc(db, 'transactionTypes', String(typeId)));
+                if (typeDoc.exists()) {
+                    return typeDoc.data().alias || typeDoc.data().name || 'İşlem';
+                }
+            } catch (e) {
+                console.warn('Type alias alınamadı:', e);
+            }
+            return 'İşlem';
         };
-        const statusText = parent.description || 'İşlem';
-        const statusBadge = statusMap[parent.requestResult] || 'secondary';
+        
+        const transactionAlias = await getTransactionTypeAlias(parent.type);
         
         // Tarih formatla
         const formatDate = (timestamp) => {
@@ -2129,8 +2134,7 @@ async function loadTransactions(ipRecordId) {
         const parentRow = `
             <tr class="${hasChildren ? 'accordion-header-row' : ''}" ${hasChildren ? `data-toggle="collapse" data-target="#${accordionId}" aria-expanded="false" aria-controls="${accordionId}"` : ''}>
                 <td>${hasChildren ? '<i class="fas fa-chevron-right mr-2"></i>' : ''}${rowIndex}</td>
-                <td>${statusText}</td>
-                <td><span class="badge badge-${statusBadge}">${parent.requestResult || 'Beklemede'}</span></td>
+                <td>${transactionAlias}</td>
                 <td>${formatDate(parent.timestamp)}</td>
                 <td><a href="#" class="btn btn-sm btn-info" title="Evrakı Görüntüle"><i class="fas fa-file-pdf"></i></a></td>
             </tr>
@@ -2145,30 +2149,28 @@ async function loadTransactions(ipRecordId) {
                     <td colspan="5" class="p-0">
                         <div class="collapse" id="${accordionId}">
                             <table class="table mb-0 accordion-table">
-                                <thead>
-                                    <tr>
-                                        <th>#</th>
-                                        <th>İşlem Açıklaması</th>
-                                        <th>Durum</th>
-                                        <th>Tarih</th>
-                                        <th>Evrak</th>
-                                    </tr>
-                                </thead>
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>İşlem Açıklaması</th>
+                                <th>Tarih</th>
+                                <th>Evrak</th>
+                            </tr>
+                        </thead>
                                 <tbody>
             `;
             
-            children.forEach((child, idx) => {
-                const childStatusBadge = statusMap[child.requestResult] || 'secondary';
+            for (const [idx, child] of children.entries()) {
+                const childAlias = await getTransactionTypeAlias(child.type);
                 childTableHtml += `
                     <tr>
                         <td>${rowIndex}.${idx + 1}</td>
-                        <td>${child.description || 'Alt İşlem'}</td>
-                        <td><span class="badge badge-${childStatusBadge}">${child.requestResult || 'Beklemede'}</span></td>
+                        <td>${childAlias}</td>
                         <td>${formatDate(child.timestamp)}</td>
                         <td><a href="#" class="btn btn-sm btn-info" title="Evrakı Görüntüle"><i class="fas fa-file-pdf"></i></a></td>
                     </tr>
                 `;
-            });
+            }
             
             childTableHtml += `
                                 </tbody>
