@@ -3025,10 +3025,9 @@ $(document).on('click', '.task-reject', function() {
 });
 
 $(document).on('click', '.task-detail', async function() {
-    const taskId = $(this).data('task-id');
+    const taskId = String($(this).data('task-id'));
     
     try {
-        // Task'tan IP Record ID'sini al
         const taskDoc = await getDoc(doc(db, 'tasks', taskId));
         if (!taskDoc.exists()) {
             alert('Task bilgisi bulunamadı.');
@@ -3041,15 +3040,17 @@ $(document).on('click', '.task-detail', async function() {
             return;
         }
         
-        // Modalı doğrudan tetikle - bootstrap modal API kullan
-        $('#portfolioDetailModal').modal('show');
+        // Fake link elementi oluştur ve modal event'ini tetikle
+        const $fakeLink = $('<a>', {
+            'data-item-id': ipRecordId,
+            'data-toggle': 'modal',
+            'data-target': '#portfolioDetailModal'
+        });
         
-        // Modal'ın show event'i tetiklenir ve ipRecordId ile açılır
-        // Bunu yapmak için fake bir event oluştur
-        const fakeEvent = {
-            relatedTarget: $('<a>').attr('data-item-id', ipRecordId)[0]
-        };
-        $('#portfolioDetailModal').trigger('show.bs.modal', fakeEvent);
+        // Modal'ı aç ve event'i tetikle
+        $('#portfolioDetailModal').one('show.bs.modal', function(e) {
+            e.relatedTarget = $fakeLink[0];
+        }).modal('show');
         
     } catch (error) {
         console.error('Portföy detayı açılırken hata:', error);
