@@ -2879,55 +2879,69 @@ window.loadSampleTaskDetails = async function(taskType) {
       }
       
     // Tamamlanan işler için farklı butonlar
-      let actionButtons;
-      if (isCompletedView) {
-        // Due date kontrolü yap
-        let canReopen = false;
-        let reopenDisabled = 'disabled';
-        
-        if (due) {
-          try {
-            let dueDate;
-            if (due && typeof due === 'object' && typeof due.toDate === 'function') {
-              dueDate = due.toDate();
-            } else {
-              dueDate = new Date(due);
-            }
-            
-            if (!isNaN(dueDate.getTime())) {
-              const today = new Date();
-              today.setHours(0, 0, 0, 0);
-              dueDate.setHours(0, 0, 0, 0);
-              
-              const diffTime = dueDate.getTime() - today.getTime();
-              const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-              
-              // Due date'e 2 gün veya daha fazla varsa VEYA status completed ise
-              if (diffDays >= 2 || task.status === 'completed') {
-                canReopen = true;
-                reopenDisabled = '';
-              }
-            }
-          } catch (e) {
-            console.warn('Due date kontrolü başarısız:', e);
-          }
-        }
-        
-        // Eğer status completed ise her zaman açılabilir
-        if (task.status === 'completed') {
-          canReopen = true;
-          reopenDisabled = '';
-        }
-        
-        actionButtons = `
-          <button class="btn btn-info btn-sm btn-action task-detail" data-task-id="${taskId}">
-            <i class="fas fa-eye"></i> İncele
-          </button>
-          <button class="btn btn-success btn-sm btn-action task-reopen" data-task-id="${taskId}" ${reopenDisabled} ${!canReopen ? 'title="İşi açmak için due date\'e en az 2 gün olmalı veya iş tamamlanmış olmalı"' : ''}>
-            <i class="fas fa-folder-open"></i> İşi Aç
-          </button>
-        `;
-      } else {
+      let actionButtons;
+      if (isCompletedView) {
+        // Due date kontrolü için başlangıç değerleri
+        let canReopen = false;
+        let reopenDisabled = 'disabled';
+        
+        // YENİ KURAL: SADECE 'müvekkil onayı - kapatıldı' STATÜSÜNDE AÇILABİLİR
+        const isReopenableStatus = (task.status === 'müvekkil onayı - kapatıldı');
+        
+        // Due date kuralını kontrol et (Sadece isReopenableStatus true ise devam et)
+        if (isReopenableStatus && due) {
+          try {
+            let dueDate;
+            // Firebase Timestamp veya ISO string/normal tarih formatlarını ele al
+            if (due && typeof due === 'object' && typeof due.toDate === 'function') {
+              dueDate = due.toDate();
+            } else {
+              dueDate = new Date(due);
+            }
+            
+            if (!isNaN(dueDate.getTime())) {
+              const today = new Date();
+              today.setHours(0, 0, 0, 0);
+              dueDate.setHours(0, 0, 0, 0);
+              
+              const diffTime = dueDate.getTime() - today.getTime();
+              const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+              
+              // Due date'e 2 gün veya daha fazla varsa butonu etkinleştir
+              if (diffDays >= 2) {
+                canReopen = true;
+                reopenDisabled = '';
+              }
+            }
+          } catch (e) {
+            console.warn('Due date kontrolü başarısız:', e);
+            // Eğer hata olursa ve statü açılabilir ise yine de disabled kalmalı (güvenlik)
+          }
+        }
+        
+        // Eğer statü açılabilir değilse (yani 'completed' ise veya başka bir statü), disabled kalır.
+        // Eğer 'müvekkil onayı - kapatıldı' ise ve due date kuralı sağlanmadıysa da disabled kalır.
+        // Bu noktada canReopen/reopenDisabled zaten doğru değeri tutuyor.
+        
+        // Özel title mesajı
+        let titleMessage = 'İşi açmak için due date\'e en az 2 gün olmalı.';
+        if (task.status === 'completed') {
+          titleMessage = 'Tamamlanmış bir iş yeniden açılamaz.';
+        } else if (task.status !== 'müvekkil onayı - kapatıldı') {
+          titleMessage = 'Bu statüdeki bir iş yeniden açılamaz.';
+        } else if (isReopenableStatus && !canReopen) {
+          titleMessage = 'İşi açmak için due date\'e en az 2 gün olmalıdır.';
+        }
+
+        actionButtons = `
+          <button class="btn btn-info btn-sm btn-action task-detail" data-task-id="${taskId}">
+            <i class="fas fa-eye"></i> İncele
+          </button>
+          <button class="btn btn-success btn-sm btn-action task-reopen" data-task-id="${taskId}" ${reopenDisabled} title="${titleMessage}">
+            <i class="fas fa-folder-open"></i> İşi Aç
+          </button>
+        `;
+      } else {
         actionButtons = `
         <button class="btn btn-success btn-sm btn-action task-approve" data-task-id="${taskId}">
           <i class="fas fa-check"></i> Onayla
