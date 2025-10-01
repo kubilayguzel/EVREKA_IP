@@ -2188,7 +2188,7 @@ window.fetchAndDisplayTasks = async function(){
     
     window.__allClientTasks = awaitingTasks; // listelemede kullanılıyor
 
-    let countPending   = awaitingTasks.length; // doğrudan
+    let countPending   = 0; // Sadece yenileme ve bülten olmayanlar
     let countRenewal   = 0;
     let countBulletin  = 0;
 
@@ -2196,8 +2196,16 @@ window.fetchAndDisplayTasks = async function(){
       const meta  = await _getTransactionTypeMeta(t.taskType);
       const label = _taskLabelGuess(t, meta);
 
-      if (/yenileme/.test(label)) countRenewal++;
-      if (RX_BULTEN.test(label))  countBulletin++;
+      const isRenewal = /yenileme/.test(label);
+      const isBulletin = RX_BULTEN.test(label);
+
+      if (isRenewal) {
+        countRenewal++;
+      } else if (isBulletin) {
+        countBulletin++;
+      } else {
+        countPending++; // Ne yenileme ne de bülten olanlar
+      }
     }
 
     $('#taskCount-pending-approval').text(countPending);
@@ -2261,17 +2269,28 @@ $(document).on('show.bs.modal', '#portfolioDetailModal', async function (e) {
     }[status] || 'secondary';
     
     // Tarihleri formatla
-    const formatDate = (dateStr) => {
-        if (!dateStr || dateStr === '-') return '-';
+    const formatDate = (dateValue) => {
+        if (!dateValue || dateValue === '-') return '-';
         try {
-            const date = new Date(dateStr);
-            if (isNaN(date.getTime())) return dateStr;
+            let date;
+            // Firebase Timestamp objesi mi kontrol et
+            if (dateValue && typeof dateValue === 'object' && typeof dateValue.toDate === 'function') {
+                date = dateValue.toDate();
+            } else if (typeof dateValue === 'string' || typeof dateValue === 'number') {
+                date = new Date(dateValue);
+            } else {
+                return '-';
+            }
+            
+            if (isNaN(date.getTime())) return '-';
+            
             const day = String(date.getDate()).padStart(2, '0');
             const month = String(date.getMonth() + 1).padStart(2, '0');
             const year = date.getFullYear();
             return `${day}.${month}.${year}`;
         } catch (error) {
-            return dateStr;
+            console.warn('Tarih formatlama hatası:', error);
+            return '-';
         }
     };
     
