@@ -2224,7 +2224,7 @@ window.fetchAndDisplayTasks = async function(){
 $(document).on('show.bs.modal', '#portfolioDetailModal', async function (e) {
     // Ana sayfanın mevcut durumunu kaydet
     window._savedPortfolioState = {
-        activeTab: $('.tab-content > .tab-pane.show.active').attr('id'),
+        activeTab: $('.content > .tab-content > .tab-pane.show.active').attr('id'),
         sidebarActive: $('#sidebar .nav-link.active').attr('href')
     };
     
