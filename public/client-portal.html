@@ -1327,12 +1327,13 @@ function initTheme() {
  * @param {Array<Object>} portfolioData Gösterilecek portföy verileri.
  */
 
-function populatePortfolioTable(tableId, portfolioData) {
+function populatePortfolioTable(tableId, portfolioData, startIndex = 0) {
     const tableBody = document.querySelector(`${tableId} tbody`);
     if (!tableBody) return;
     tableBody.innerHTML = '';
 
     portfolioData.forEach((item, index) => {
+        const actualIndex = startIndex + index; // Gerçek sıra numarası
         const mainRow = document.createElement('tr');
 
         const originRaw = (item.origin || 'TÜRKPATENT').toString().trim();
@@ -1441,7 +1442,7 @@ console.log('📍 Origin Debug:', item.title || 'İsimsiz', 'origin:', item.orig
         const regNumber = item.registrationNumber || item.registrationNo || '-';
         
         const rowHtml = `
-        <td class="col-index">${isInternational ? `<i class="fas fa-chevron-right mr-2"></i>` : ''}${index + 1}</td>
+        <td class="col-index">${isInternational ? `<i class="fas fa-chevron-right mr-2"></i>` : ''}${actualIndex + 1}</td>
         <td class="col-origin">${originDisplay}</td>
         <td class="col-sample">${imgHtml}</td>
         <td class="col-brand"><a href="#" class="portfolio-detail-link" data-item-id="${item.id}" data-toggle="modal" data-target="#portfolioDetailModal">${title}</a></td>
@@ -1526,7 +1527,7 @@ console.log('📍 Origin Debug:', item.title || 'İsimsiz', 'origin:', item.orig
                                     const subRegNo = subItem.registrationNumber || subItem.registrationNo || '-';                                  
                                     return `
                                         <tr>
-                                            <td>${index + 1}.${subIndex + 1}</td>
+                                            <td>${actualIndex + 1}.${subIndex + 1}</td>
                                             <td>${childOrigin}</td>
                                             <td>${subItem.applicationNumber || '-'}</td>
                                             <td>${subRegNo}</td>
@@ -1719,7 +1720,7 @@ async function fetchAndDisplayPortfolio() {
             const start = (page - 1) * perPage;
             const end   = start + perPage;
             const slice = window.markaPaginationData.allData.slice(start, end);
-            populatePortfolioTable('#marka-list', slice);
+            populatePortfolioTable('#marka-list', slice, start);
             
             // Menşe kolonu görünürlüğü
             const currentFilter = $("#menseFilter").val() || 'TÜRKPATENT';
@@ -1741,7 +1742,7 @@ async function fetchAndDisplayPortfolio() {
         
         window.markaPaginationData.allData = filteredData;
         __markaPag.update(filteredData.length);
-        populatePortfolioTable('#marka-list', filteredData.slice(0, 10));
+        populatePortfolioTable('#marka-list', filteredData.slice(0, 10), 0);
         
         // Menşe kolonunu gizle (varsayılan TÜRKPATENT)
         setTimeout(() => {
@@ -2023,7 +2024,7 @@ window.applyMenseFilterToActivePane = function(){
             
             // İlk sayfayı göster
             var firstPage = filteredData.slice(0, 10);
-            populatePortfolioTable('#marka-list', firstPage);
+            populatePortfolioTable('#marka-list', firstPage, 0);
             
             // Menşe kolonu görünürlüğü
             if (val === 'TÜRKPATENT') {
