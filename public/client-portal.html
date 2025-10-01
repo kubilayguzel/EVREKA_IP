@@ -3024,10 +3024,31 @@ $(document).on('click', '.task-reject', function() {
     rejectTask(taskId);
 });
 
-$(document).on('click', '.task-detail', function() {
+$(document).on('click', '.task-detail', async function() {
     const taskId = $(this).data('task-id');
-    // TODO: Task detay modalı açılabilir
-    alert('Task detay görüntüleme özelliği yakında eklenecek. Task ID: ' + taskId);
+    
+    try {
+        // Task'tan IP Record ID'sini al
+        const taskDoc = await getDoc(doc(db, 'tasks', taskId));
+        if (!taskDoc.exists()) {
+            alert('Task bilgisi bulunamadı.');
+            return;
+        }
+        
+        const ipRecordId = taskDoc.data().relatedIpRecordId;
+        if (!ipRecordId) {
+            alert('Bu task ile ilişkili portföy kaydı bulunamadı.');
+            return;
+        }
+        
+        // Portföy modalını tetikle - mevcut linklerle aynı şekilde
+        const $link = $(`<a href="#" class="portfolio-detail-link" data-item-id="${ipRecordId}" data-toggle="modal" data-target="#portfolioDetailModal"></a>`);
+        $link[0].click();
+        
+    } catch (error) {
+        console.error('Portföy detayı açılırken hata:', error);
+        alert('Portföy kaydı yüklenirken bir hata oluştu.');
+    }
 });
 </script>
 </body>
