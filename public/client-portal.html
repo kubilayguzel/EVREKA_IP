@@ -2002,14 +2002,16 @@ window.applyMenseFilterToActivePane = function(){
         var filteredData;
         
         if (val === 'HEPSI') {
-            filteredData = allData;
+            filteredData = allData.filter(item => item.transactionHierarchy !== 'child');
         } else if (val === 'TÜRKPATENT') {
             filteredData = allData.filter(item => {
+                if (item.transactionHierarchy === 'child') return false; // Child kayıtları atla
                 var orig = (item.origin || 'TÜRKPATENT').toString().toUpperCase().trim();
                 return orig === 'TÜRKPATENT' || orig === 'TURKPATENT' || orig === '';
             });
         } else if (val === 'YURTDISI') {
             filteredData = allData.filter(item => {
+                if (item.transactionHierarchy === 'child') return false; // Child kayıtları atla
                 var orig = (item.origin || 'TÜRKPATENT').toString().toUpperCase().trim();
                 return orig !== 'TÜRKPATENT' && orig !== 'TURKPATENT' && orig !== '';
             });
