@@ -183,6 +183,7 @@
             background-color: #ffffff;
             box-shadow: 0 4px 12px rgba(0,0,0,0.05);
         }
+        .light-mode #task-detail-cards .card {background-color: #f8f9fa;
         .light-mode .task-card .task-title { color: #1e3c72; }
         .light-mode .task-card .task-description { color: #555; }
         .light-mode .task-card .task-meta { color: #fb8c00; }
@@ -574,7 +575,7 @@
 }
 .dark-mode #task-main-cards .card,
 .dark-mode #task-detail-cards .card { 
-    background-color: #36393e; 
+    background-color: #40444b; 
     color: #e0e0e0;
     box-shadow: 0 4px 12px rgba(0,0,0,0.3);
 }
@@ -892,8 +893,8 @@
                     <div class="col-md-3 mb-4 task-card-link" data-target-area="marka-tasks" style="cursor: pointer;">
                     <div class="card p-4 text-center d-flex align-items-center flex-column justify-content-center h-100">
                         <i class="fas fa-registered stat-icon text-info mb-3"></i>
-                        <div class="stat-value" id="taskCount-marka-total">0</div>  <!-- ⇦ EKLENDİ -->
                         <div class="stat-label">Marka İşlemleri</div>
+                        <div class="stat-value" id="taskCount-marka-total">0</div>
                     </div>
                     </div>
                    
@@ -942,13 +943,12 @@
                             <div class="stat-value" id="taskCount-bulletin-watch">0</div>
                         </div>
                     </div>
-                    <div class="col-md-3 mb-4 detail-card-link" data-task-type="completed-tasks" style="cursor: pointer;">
-                        <div class="card p-3 text-center d-flex align-items-center flex-column justify-content-center h-100">
-                            <i class="fas fa-check-circle stat-icon text-success mb-3"></i>
-                            <div class="stat-label">Talimat Verilen/Tamamlanan İşler</div>
-                            <div class="stat-value" id="taskCount-completed-tasks">0</div>
+                        <div class="col-md-3 mb-4 detail-card-link" data-task-type="completed-tasks" style="cursor: pointer;">
+                            <div class="card p-3 text-center d-flex align-items-center flex-column justify-content-center h-100">
+                                <i class="fas fa-check-circle stat-icon text-success mb-3"></i>
+                                <div class="stat-label">Talimat Verilen/Tamamlanan İşler</div>
+                            </div>
                         </div>
-                    </div>
                 </div>
                 
                 <div class="row mt-4" id="task-list-details" style="display: none;">
@@ -2794,7 +2794,7 @@ window.loadSampleTaskDetails = async function(taskType) {
         }
       }
       
-      // IP Record bilgilerini al
+    // IP Record bilgilerini al
       let taskTitle = transactionAlias;
       if (task.relatedIpRecordId) {
         try {
@@ -2803,7 +2803,7 @@ window.loadSampleTaskDetails = async function(taskType) {
             const ipData = ipDoc.data();
             const appNo = ipData.applicationNumber || ipData.applicationNo || '-';
             const brandText = ipData.brandText || ipData.title || '-';
-            taskTitle = `${appNo} - ${brandText} - ${transactionAlias}`;
+            taskTitle = `${transactionAlias} - ${appNo} - ${brandText}`;
           }
         } catch (e) {
           console.warn('IP Record alınamadı:', e);
