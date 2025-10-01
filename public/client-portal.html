@@ -2745,9 +2745,14 @@ window.loadSampleTaskDetails = async function(taskType) {
     
     // Task type'a göre filtreleme
     if (taskType === 'pending-approval') {
-        // Sadece onay bekleyenler
+        // Sadece onay bekleyenler (yenileme hariç)
         if (taskData.status === 'awaiting_client_approval') {
-        matchingTasks.push({ id: d.id, ...taskData });
+            const meta = await window._getTransactionTypeMeta(taskData.taskType);
+            const label = window._taskLabelGuess(taskData, meta);
+            // Yenileme değilse ekle
+            if (!/yenileme/.test(label)) {
+                matchingTasks.push({ id: d.id, ...taskData });
+            }
         }
     } else if (taskType === 'renewal-approval') {
         // Yenileme onayları
