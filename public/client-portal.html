@@ -958,7 +958,36 @@
                             </div>
                         </div>
                 </div>
-                
+                <div class="row mt-4" id="task-list-filters" style="display: none;">
+                    <div class="col-12">
+                        <div class="card p-3">
+                            <h6 class="card-title mb-3">İş Listesi Filtreleri</h6>
+                            <div class="form-row align-items-end">
+                                <div class="form-group col-md-5 mb-0">
+                                    <label for="taskSearchText" class="text-muted">Başlıkta/ID'de Ara</label>
+                                    <input type="text" class="form-control form-control-sm" id="taskSearchText" placeholder="İş Tipi, Başvuru No, Marka Adı veya ID...">
+                                </div>
+                                
+                                <div class="form-group col-md-4 mb-0">
+                                    <label for="taskStatusFilter" class="text-muted">Durum</label>
+                                    <select id="taskStatusFilter" class="form-control form-control-sm">
+                                        <option value="TÜMÜ" selected>Tümü</option>
+                                        <option value="awaiting_client_approval">Onay Bekliyor</option>
+                                        <option value="open">Açık</option>
+                                        <option value="in_progress">Devam Ediyor</option>
+                                        <option value="completed">Tamamlandı</option>
+                                        <option value="müvekkil onayı - kapatıldı">Reddedildi/Kapandı</option>
+                                        <option value="closed">Kapalı</option>
+                                    </select>
+                                </div>
+                                
+                                <div class="form-group col-md-3 mb-0">
+                                    <button class="btn btn-primary btn-sm btn-block" id="applyTaskFilters">Filtrele</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
                 <div class="row mt-4" id="task-list-details" style="display: none;">
                     <div class="col-12" id="task-list-container">
                         </div>
@@ -2668,18 +2697,23 @@ $(document).on('click', '.task-card-link', function() {
 $(document).on('click', '.detail-card-link', function() {
     const taskType = $(this).data('task-type');
     
+    // Filtre alanını seç
+    const $tasksFilters = $('#task-list-filters'); // <--- YENİ TANIM
+
     // Eğer liste zaten açıksa ve aynı türe aitse, kapat
     if ($tasksList.is(':visible') && $tasksList.data('current-type') === taskType) {
         $tasksList.slideUp(300);
+        $tasksFilters.slideUp(300); // <--- FİLTRE ALANINI DA KAPAT
         $tasksList.data('current-type', '');
-        $tasksHeader.text('Marka İşlemleri'); // Alt kart başlığına geri dön
+        $tasksHeader.text('Marka İşlemleri'); 
         $tasksLead.text('İncelemek istediğiniz işlem türünü seçin.');
-        $('#task-list-container').empty(); 
+        $('#task-list-container').empty();  
         return;
     }
     
     // 1. Görünümü Detay İş Listesi'ne geçir
     $tasksList.data('current-type', taskType);
+    $tasksFilters.slideDown(300); // <--- FİLTRE ALANINI GÖSTER
     $tasksList.slideDown(300); // Listeyi yumuşakça aç
     
     // 2. Başlığı, tıklanan karta göre güncelle
@@ -2688,7 +2722,7 @@ $(document).on('click', '.detail-card-link', function() {
     $tasksLead.text('Aşağıda seçtiğiniz iş türüne ait tüm işlemler listelenmiştir.');
     
     // 3. İlgili işleri yükleme fonksiyonunu çağır
-    loadSampleTaskDetails(taskType);
+    loadSampleTaskDetails(taskType); // Bu fonksiyon listeyi doldurur.
     
     // Liste açıldığında listenin olduğu yere yumuşakça kay
     $('html, body').animate({
@@ -3004,7 +3038,64 @@ window.loadSampleTaskDetails = async function(taskType) {
     container.innerHTML = '<p class="lead text-danger text-center mt-5">Veriler yüklenirken bir hata oluştu.</p>';
   }
 };
+
+// --- İŞ LİSTESİ FİLTRELEME MANTIĞI ---
+function applyTaskListFilters() {
+    // 1. Filtre değerlerini al ve normalize et
+    const searchText = document.getElementById('taskSearchText').value.toLowerCase().trim();
+    const statusFilter = document.getElementById('taskStatusFilter').value;
+    const container = document.getElementById('task-list-container');
     
+    // Tüm görev kartlarını al
+    const taskCards = container.querySelectorAll('.col-md-12.mb-4');
+    
+    taskCards.forEach(col => {
+        const card = col.querySelector('.task-card');
+        if (!card) return;
+
+        // Karttaki tüm arama kriterlerini topla
+        const taskTitle = card.querySelector('.task-title').textContent.toLowerCase();
+        const taskId = card.getAttribute('data-task-id').toLowerCase();
+        
+        // Kartın mevcut durum metnini al (badge içindeki metin)
+        const currentStatusText = card.querySelector('.badge').textContent.toLowerCase();
+        
+        // Arama/Başlık kontrolü: Serbest metin tüm kritik alanlarda arama yapacak (İş Tipi, No, Marka Adı)
+        const isTextMatch = !searchText || taskTitle.includes(searchText) || taskId.includes(searchText);
+
+        // Durum filtresi kontrolü
+        // NOT: Durum filtresi için statusText'i kullanmak daha güvenlidir.
+        let isStatusMatch = true;
+        if (statusFilter !== 'TÜMÜ') {
+            const filterValue = statusFilter.toLowerCase();
+            
+            // Eğer statü değeri `awaiting_client_approval` gibi kısa ise doğrudan metin kontrolü yap.
+            // Aksi halde, filtre seçeneğindeki İngilizce status'u taskTitle'da aramak kafa karıştırabilir.
+            
+            // Kolaylaştırmak için: Sadece filtre değeri task kartının badge içeriğine uyuyorsa eşleşsin.
+            isStatusMatch = currentStatusText.includes(filterValue.replace(/_/g, ' '));
+            
+            // Özel durum: 'completed' filtresi hem 'Tamamlandı' hem de 'Reddedildi/Kapandı'yı göstermesin diye
+            if (filterValue === 'completed' && currentStatusText !== 'tamamlandı') {
+                isStatusMatch = false;
+            } else if (filterValue === 'open' && currentStatusText !== 'açık') {
+                isStatusMatch = false;
+            } else if (filterValue === 'müvekkil onayı - kapatıldı' && !currentStatusText.includes('reddedildi')) {
+                 isStatusMatch = false;
+            } 
+            // Tüm statü eşleşmeleri için sadece tam eşleşme kontrolü yaparsınız
+            // isStatusMatch = currentStatusText.includes(filterValue);
+        }
+        
+        // Sonuç: Hem metin aramasına hem de durum filtresine uyanları göster
+        if (isTextMatch && isStatusMatch) {
+            col.style.display = 'block';
+        } else {
+            col.style.display = 'none';
+        }
+    });
+}
+  
 // Task onaylama fonksiyonu
 async function approveTask(taskId) {
     try {
@@ -3163,6 +3254,41 @@ $(document).on('click', '.task-detail', async function() {
     } catch (error) {
         console.error('Portföy detayı açılırken hata:', error);
         alert('Portföy kaydı yüklenirken bir hata oluştu.');
+    }
+});
+
+// --- Filtre Event Listener'ları ---
+$(document).ready(function() {
+    // jQuery'nin yüklü olduğundan emin ol
+    const $ = window.jQuery;
+    if (!$) return;
+
+    const applyButton = document.getElementById('applyTaskFilters');
+    const searchInput = document.getElementById('taskSearchText');
+    const statusSelect = document.getElementById('taskStatusFilter');
+
+    // 1. Hızlı Arama (yazıldıkça anlık filtreleme)
+    if (searchInput) {
+        $(searchInput).on('keyup', function() {
+            // Sadece arama metni değişince filtrele
+            applyTaskListFilters();
+        });
+    }
+    
+    // 2. Statü Değişikliği
+    if (statusSelect) {
+        $(statusSelect).on('change', function() {
+            // Statü değişince filtrele
+            applyTaskListFilters();
+        });
+    }
+
+    // 3. Filtrele Butonu (KeyUp/Change zaten anlık çalışıyor, bu sadece görsel amaçlı kalabilir)
+    if (applyButton) {
+        $(applyButton).on('click', function(e) {
+            e.preventDefault();
+            applyTaskListFilters();
+        });
     }
 });
 </script>
