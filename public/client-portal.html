@@ -607,6 +607,18 @@
     opacity: 0.6;
     transition: opacity 0.3s;
 }
+/* İŞLERİM filtre alanı font düzeltmeleri */
+#task-list-filters label {
+    font-size: 0.9rem; /* Portföy filtreleriyle aynı veya benzer yap */
+    font-weight: 500;
+}
+#task-list-filters .form-control-sm {
+    font-size: 0.9rem; 
+    line-height: 1.5;
+}
+#task-list-filters .card-title {
+    font-size: 1.1rem; /* Başlık fontu */
+}
 </style>
 
 </head>
@@ -972,12 +984,15 @@
                                     <label for="taskStatusFilter" class="text-muted">Durum</label>
                                     <select id="taskStatusFilter" class="form-control form-control-sm">
                                         <option value="TÜMÜ" selected>Tümü</option>
-                                        <option value="awaiting_client_approval">Onay Bekliyor</option>
-                                        <option value="open">Açık</option>
-                                        <option value="in_progress">Devam Ediyor</option>
-                                        <option value="completed">Tamamlandı</option>
-                                        <option value="müvekkil onayı - kapatıldı">Reddedildi/Kapandı</option>
-                                        <option value="closed">Kapalı</option>
+                                        <option value="Açık">Açık</option>
+                                        <option value="Devam Ediyor">Devam Ediyor</option>
+                                        <option value="Tamamlandı">Tamamlandı</option>
+                                        <option value="Beklemede">Beklemede</option>
+                                        <option value="Müvekkil Onayı Bekliyor">Müvekkil Onayı Bekliyor</option>
+                                        <option value="Müvekkil Onayı - Açıldı">Müvekkil Onayı - Açıldı</option>
+                                        <option value="Müvekkil Onayı - Kapatıldı">Müvekkil Onayı - Kapatıldı</option>
+                                        <option value="Müvekkil Cevaplamadı - Kapatıldı">Müvekkil Cevaplamadı - Kapatıldı</option>
+                                        <option value="Kapalı">Kapalı</option>
                                     </select>
                                 </div>
                                 
@@ -3039,11 +3054,11 @@ window.loadSampleTaskDetails = async function(taskType) {
   }
 };
 
-// --- İŞ LİSTESİ FİLTRELEME MANTIĞI ---
+// --- İŞ LİSTESİ FİLTRELEME MANTIĞI (Büyük/Küçük Harf Duyarsız Hali) ---
 function applyTaskListFilters() {
-    // 1. Filtre değerlerini al ve normalize et
+    // 1. Filtre değerlerini al ve tamamen küçük harfe çevir
     const searchText = document.getElementById('taskSearchText').value.toLowerCase().trim();
-    const statusFilter = document.getElementById('taskStatusFilter').value;
+    const statusFilter = document.getElementById('taskStatusFilter').value.toLowerCase();
     const container = document.getElementById('task-list-container');
     
     // Tüm görev kartlarını al
@@ -3053,38 +3068,23 @@ function applyTaskListFilters() {
         const card = col.querySelector('.task-card');
         if (!card) return;
 
-        // Karttaki tüm arama kriterlerini topla
+        // Karttaki arama kriterlerini topla ve tamamen küçük harfe çevir
+        // Bu sayede arama her zaman duyarsız olacaktır.
         const taskTitle = card.querySelector('.task-title').textContent.toLowerCase();
         const taskId = card.getAttribute('data-task-id').toLowerCase();
-        
-        // Kartın mevcut durum metnini al (badge içindeki metin)
         const currentStatusText = card.querySelector('.badge').textContent.toLowerCase();
         
-        // Arama/Başlık kontrolü: Serbest metin tüm kritik alanlarda arama yapacak (İş Tipi, No, Marka Adı)
+        // Arama/Başlık kontrolü: Metin araması (İş Tipi, No, Marka Adı, ID)
         const isTextMatch = !searchText || taskTitle.includes(searchText) || taskId.includes(searchText);
 
         // Durum filtresi kontrolü
-        // NOT: Durum filtresi için statusText'i kullanmak daha güvenlidir.
         let isStatusMatch = true;
-        if (statusFilter !== 'TÜMÜ') {
-            const filterValue = statusFilter.toLowerCase();
-            
-            // Eğer statü değeri `awaiting_client_approval` gibi kısa ise doğrudan metin kontrolü yap.
-            // Aksi halde, filtre seçeneğindeki İngilizce status'u taskTitle'da aramak kafa karıştırabilir.
-            
-            // Kolaylaştırmak için: Sadece filtre değeri task kartının badge içeriğine uyuyorsa eşleşsin.
-            isStatusMatch = currentStatusText.includes(filterValue.replace(/_/g, ' '));
-            
-            // Özel durum: 'completed' filtresi hem 'Tamamlandı' hem de 'Reddedildi/Kapandı'yı göstermesin diye
-            if (filterValue === 'completed' && currentStatusText !== 'tamamlandı') {
-                isStatusMatch = false;
-            } else if (filterValue === 'open' && currentStatusText !== 'açık') {
-                isStatusMatch = false;
-            } else if (filterValue === 'müvekkil onayı - kapatıldı' && !currentStatusText.includes('reddedildi')) {
-                 isStatusMatch = false;
-            } 
-            // Tüm statü eşleşmeleri için sadece tam eşleşme kontrolü yaparsınız
-            // isStatusMatch = currentStatusText.includes(filterValue);
+        
+        if (statusFilter !== 'tümü') {
+            // Statü filtresi değerini, statü metninde arıyoruz.
+            // Örneğin, "müvekkil onayı - kapatıldı" filtresi seçildiğinde, 
+            // görev kartının metni "reddedildi/kapandı" olabilir. Tam eşleşme zorunlu değil, içeriyor olması yeterli.
+            isStatusMatch = currentStatusText.includes(statusFilter);
         }
         
         // Sonuç: Hem metin aramasına hem de durum filtresine uyanları göster
@@ -3095,7 +3095,7 @@ function applyTaskListFilters() {
         }
     });
 }
-  
+
 // Task onaylama fonksiyonu
 async function approveTask(taskId) {
     try {
