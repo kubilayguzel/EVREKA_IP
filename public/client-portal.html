@@ -3041,9 +3041,15 @@ $(document).on('click', '.task-detail', async function() {
             return;
         }
         
-        // Portföy modalını tetikle - mevcut linklerle aynı şekilde
-        const $link = $(`<a href="#" class="portfolio-detail-link" data-item-id="${ipRecordId}" data-toggle="modal" data-target="#portfolioDetailModal"></a>`);
-        $link[0].click();
+        // Modalı doğrudan tetikle - bootstrap modal API kullan
+        $('#portfolioDetailModal').modal('show');
+        
+        // Modal'ın show event'i tetiklenir ve ipRecordId ile açılır
+        // Bunu yapmak için fake bir event oluştur
+        const fakeEvent = {
+            relatedTarget: $('<a>').attr('data-item-id', ipRecordId)[0]
+        };
+        $('#portfolioDetailModal').trigger('show.bs.modal', fakeEvent);
         
     } catch (error) {
         console.error('Portföy detayı açılırken hata:', error);
