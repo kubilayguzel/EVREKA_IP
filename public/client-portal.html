@@ -2894,6 +2894,7 @@ window.loadSampleTaskDetails = async function(taskType) {
         // Kural: isReopenableStatus true İSE ve due date kontrolü sağlanıyorsa canReopen true olur
         if (isReopenableStatus && due) {
           try {
+            // ... (dueDate hesaplama kodları)
             let dueDate;
             if (due && typeof due === 'object' && typeof due.toDate === 'function') {
               dueDate = due.toDate();
@@ -2930,7 +2931,7 @@ window.loadSampleTaskDetails = async function(taskType) {
           titleMessage = 'İşi açmak için due date\'e en az 2 gün olmalıdır.';
         }
 
-        // Tamamlananlar görünümü için butonlar
+        // Tamamlananlar görünümü için butonlar (ORİJİNAL SINIFLAR KORUNDU)
         actionButtons = `
           <button class="btn btn-info btn-sm btn-action task-detail" data-task-id="${taskId}">
             <i class="fas fa-eye"></i> İncele
@@ -2960,7 +2961,7 @@ window.loadSampleTaskDetails = async function(taskType) {
             </div>`;
 
       } else {
-        // Onay Bekleyen/Diğer (isCompletedView: false) için butonlar
+        // Onay Bekleyen/Diğer (isCompletedView: false) için butonlar (ORİJİNAL SINIFLAR KORUNDU)
         actionButtons = `
         <button class="btn btn-success btn-sm btn-action task-approve" data-task-id="${taskId}">
           <i class="fas fa-check"></i> Onayla
