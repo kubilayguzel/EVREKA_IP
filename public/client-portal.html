@@ -2795,7 +2795,8 @@ window.loadSampleTaskDetails = async function(taskType) {
         try {
           const transactionDoc = await getDoc(doc(db, 'transactionTypes', String(task.taskType)));
           if (transactionDoc.exists()) {
-            transactionAlias = transactionDoc.data().alias || transactionDoc.data().name || 'İşlem';
+            const aliasRaw = transactionDoc.data().alias || transactionDoc.data().name || 'İşlem';
+            transactionAlias = aliasRaw.toLocaleUpperCase('tr-TR');
           }
         } catch (e) {
           console.warn('Transaction type alınamadı:', e);
