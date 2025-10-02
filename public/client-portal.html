@@ -3057,7 +3057,12 @@ window.loadSampleTaskDetails = async function(taskType) {
         }
 
         // Toplam öğe sayısını güncelleyerek render'ı (ilk sayfayı) tetikle
+        console.log('📈 Pagination güncelleniyor, task sayısı:', matchingTasks.length);
         window.taskPaginationData.pagination.update(matchingTasks.length);
+        
+        // Manuel olarak ilk sayfayı render et
+        console.log('🔧 Manuel render tetikleniyor...');
+        renderTaskPage(1, itemsPerPage);
         
     } catch (error) {
         console.error('Task yükleme hatası:', error);
