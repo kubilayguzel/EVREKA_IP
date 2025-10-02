@@ -1302,7 +1302,15 @@
 // --- Early globals to avoid TDZ/hoisting issues ---
 window._ttCache = window._ttCache || { items: [], counts: {}, meta: {} };
 const _ttCache = window._ttCache;
-window.taskPaginationData = window.taskPaginationData
+
+// taskPaginationData objesini doğru şekilde başlat
+window.taskPaginationData = window.taskPaginationData || {
+    allData: [],
+    currentPage: 1,
+    itemsPerPage: 10,
+    pagination: null
+};
+
 window.fetchAndDisplayTasks = window.fetchAndDisplayTasks || (async function(){ /* will be defined below */ });
 window.populateDashboardNumbers = window.populateDashboardNumbers || (function(){});
 
