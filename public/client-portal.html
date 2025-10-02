@@ -1316,7 +1316,11 @@ window.populateDashboardNumbers = window.populateDashboardNumbers || (function()
 
 import { authService, db } from './firebase-config.js';
 import { doc, getDoc, collection, getDocs, getDocsFromServer, query, where, updateDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
-import Pagination from './js/pagination.js';
+import PaginationModule from './js/pagination.js';
+
+// Pagination'ı global yap
+window.Pagination = PaginationModule;
+const Pagination = PaginationModule;
 
 // importların HEMEN ALTINA
 window.authService = authService;
