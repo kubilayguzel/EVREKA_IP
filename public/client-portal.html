@@ -619,6 +619,37 @@
 #task-list-filters .card-title {
     font-size: 1.1rem; /* Başlık fontu */
 }
+/* GÖREV KARTLARI İÇİN SIRALAMA NUMARASI VE STİLİ */
+
+/* 1. Kartı pozisyonlamaya hazırla ve numara için üstten boşluk bırak */
+.task-card {
+    position: relative;          
+    padding-top: 35px !important; /* Numara etiketi için yukarıdan boşluk */
+    padding-left: 20px !important; /* Numaranın sola dayanmaması için boşluk */
+}
+
+/* 2. Numara etiketini kartın sol üst köşesine sabitle */
+.task-number-tag {
+    position: absolute;
+    top: 8px;                    
+    left: 15px;                  
+    font-size: 1.3rem;
+    font-weight: 700;
+    line-height: 1;
+    color: #4da6ff;              /* Mavi vurgu rengi */
+    opacity: 0.9;
+}
+
+/* 3. Kart başlığını numaranın sağından başlat */
+.task-card .task-title {
+    margin-left: 30px;           
+    margin-top: 0;
+}
+
+/* Tema uyumu için (Zaten eklemiştiniz ama tekrar edelim) */
+.light-mode .task-number-tag { 
+    color: #1e88e5; 
+}
 </style>
 
 </head>
@@ -2861,9 +2892,10 @@ window.loadSampleTaskDetails = async function(taskType) {
     // Render - Her task için async işlemler gerektiğinden Promise.all kullan
     container.innerHTML = '';
     const isCompletedView = (taskType === 'completed-tasks');
-    const taskCards = await Promise.all(matchingTasks.map(async (task) => {
-    const taskId = task.id;
-    const due = task.dueDate || task.officialDueDate || task.clientDueDate || task.deadline || null;
+    const taskCards = await Promise.all(matchingTasks.map(async (task, index) => {
+    const taskId = task.id;
+    const due = task.dueDate || task.officialDueDate || task.clientDueDate || task.deadline || null;
+    const taskNumber = index + 1; // 1'den başlayan numara
       
     // Transaction type alias'ını al (taskType field'ı transaction type ID'sidir)
       let transactionAlias = 'İşlem';
@@ -2993,7 +3025,7 @@ window.loadSampleTaskDetails = async function(taskType) {
         // isCompletedView: true (Tamamlananlar sekmesi) için kartı render et
         card.innerHTML = `
             <div class="task-card task-card-success" data-task-id="${taskId}">
-                <h5 class="task-title">#${taskId} - ${taskTitle}</h5>
+                <div class="task-number-tag">${taskNumber}.</div> <h5 class="task-title">#${taskId} - ${taskTitle}</h5>
                 <div class="d-flex justify-content-between align-items-center mb-2">
                     <small class="task-meta">
                         <span class="badge badge-${statusBadgeClass}">${statusText}</span>
@@ -3025,24 +3057,24 @@ window.loadSampleTaskDetails = async function(taskType) {
         
         // isCompletedView: false için kartı render et
         card.innerHTML = `
-            <div class="task-card task-card-warning" data-task-id="${taskId}">
-                <h5 class="task-title">#${taskId} - ${taskTitle}</h5>
-                <div class="d-flex justify-content-between align-items-center mb-2">
-                    <small class="task-meta">
-                        <span class="badge badge-${statusBadgeClass}">${statusText}</span>
-                    </small>
-                </div>
-                <div class="d-flex justify-content-between align-items-center">
-                    <small class="task-meta">
-                        <i class="fas fa-clock mr-1"></i>
-                        Son Onay Tarihi: ${formatDate(due)}
-                    </small>
-                    <div>${actionButtons}</div>
-                </div>
-            </div>`;
-      } 
-      
-      return card; 
+                <div class="task-card task-card-warning" data-task-id="${taskId}">
+                    <div class="task-number-tag">${taskNumber}.</div> <h5 class="task-title">#${taskId} - ${taskTitle}</h5>
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <small class="task-meta">
+                            <span class="badge badge-${statusBadgeClass}">${statusText}</span>
+                        </small>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <small class="task-meta">
+                            <i class="fas fa-clock mr-1"></i>
+                            Son Onay Tarihi: ${formatDate(due)}
+                        </small>
+                        <div>${actionButtons}</div>
+                    </div>
+                </div>`;
+        } 
+
+        return card; 
       }));
           
         // Tüm kartları DOM'a ekle
