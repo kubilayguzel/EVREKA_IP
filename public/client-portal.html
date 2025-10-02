@@ -1637,147 +1637,6 @@ console.log('📍 Origin Debug:', item.title || 'İsimsiz', 'origin:', item.orig
     });
 }
 
-/**
- * Global taskPaginationData'daki veriye göre görev listesinin bir sayfasını render eder.
- * @param {number} page Gösterilecek sayfa numarası.
- * @param {number} perPage Sayfa başına görev sayısı.
- */
-function renderTaskPage(page, perPage) {
-    console.log('🎨 renderTaskPage çağrıldı - Sayfa:', page, 'PerPage:', perPage);
-    
-    const container = document.getElementById('task-list-container');
-    if (!container) {
-        console.error('❌ task-list-container bulunamadı!');
-        return;
-    }
-    
-    const allData = window.taskPaginationData.allData || [];
-    console.log('📊 Render edilecek veri sayısı:', allData.length);
-    
-    const startIndex = (page - 1) * perPage;
-    const tasksToRender = allData.slice(startIndex, startIndex + perPage);
-
-    container.innerHTML = ''; // Önceki kartları temizle
-
-    const taskListDetails = document.getElementById('task-list-details');
-    const taskType = taskListDetails ? taskListDetails.dataset.currentType : '';
-    const isCompletedView = (taskType === 'completed-tasks');
-    
-    // Asenkron işlemleri (Task Title ve Alias) yürütmek ve kartları oluşturmak için Promise.all kullanılır.
-    Promise.all(tasksToRender.map(async (task, index) => {
-        const taskId = task.id;
-        const due = task.dueDate || task.officialDueDate || task.clientDueDate || task.deadline || null;
-        // Global sıra numarası: Sayfa başlangıç indeksi + o sayfadaki sıra numarası + 1
-        const taskNumber = startIndex + index + 1; 
-        
-        // --- ASENKRON DEĞER HESAPLAMALARI ---
-        let transactionAlias = 'İşlem';
-        if (task.taskType) {
-            try {
-                const transactionDoc = await getDoc(doc(db, 'transactionTypes', String(task.taskType)));
-                if (transactionDoc.exists()) {
-                    transactionAlias = (transactionDoc.data().alias || transactionDoc.data().name || 'İşlem').toLocaleUpperCase('tr-TR');
-                }
-            } catch (e) { /* Hata yönetimi atlandı */ }
-        }
-
-        let taskTitle = transactionAlias;
-        if (task.relatedIpRecordId) {
-            try {
-                const ipDoc = await getDoc(doc(db, 'ipRecords', task.relatedIpRecordId));
-                if (ipDoc.exists()) {
-                    const ipData = ipDoc.data();
-                    const appNo = ipData.applicationNumber || ipData.applicationNo || '-';
-                    const brandText = ipData.brandText || ipData.title || '-';
-                    taskTitle = `${transactionAlias} - ${appNo} - ${brandText}`;
-                }
-            } catch (e) { /* Hata yönetimi atlandı */ }
-        }
-
-        const card = document.createElement('div');
-        card.className = 'col-md-12 mb-4';
-
-        // --- DİĞER DEĞER HESAPLAMALARI (STATÜ, ATANAN KİŞİ, BUTONLAR) ---
-        const statusBadgeClass = {
-            'open': 'primary', 'in_progress': 'info', 'completed': 'success', 'closed': 'secondary',
-            'awaiting_client_approval': 'warning', 'müvekkil onayı - kapatıldı': 'danger'
-        }[task.status] || 'secondary';
-        const statusText = {
-            'open': 'Açık', 'in_progress': 'Devam Ediyor', 'completed': 'Tamamlandı', 'closed': 'Kapalı',
-            'awaiting_client_approval': 'Onay Bekliyor', 'müvekkil onayı - kapatıldı': 'Reddedildi/Kapandı'
-        }[task.status] || task.status;
-        
-        // Atanan kişi hesaplaması (Kodu uzun tutmamak için basitleştirilmiştir, sizin orijinal kodunuzdan alınız)
-        let assignedTo = '-'; 
-        // if (task.assignedTo_uid) { ... }
-        
-        // Action Buttons hesaplaması (Kodu uzun tutmamak için basitleştirilmiştir, sizin orijinal kodunuzdan alınız)
-        let actionButtons;
-        if (isCompletedView) {
-            actionButtons = `
-                <button class="btn btn-info btn-sm btn-action task-detail" data-task-id="${taskId}"> <i class="fas fa-eye"></i> İncele </button>
-                <button class="btn btn-success btn-sm btn-action task-reopen" data-task-id="${taskId}"> <i class="fas fa-folder-open"></i> İşi Aç </button>
-            `;
-        } else {
-             actionButtons = `
-                <button class="btn btn-success btn-sm btn-action task-approve" data-task-id="${taskId}"> <i class="fas fa-check"></i> Onayla </button>
-                <button class="btn btn-danger btn-sm btn-action task-reject" data-task-id="${taskId}"> <i class="fas fa-times"></i> Reddet </button>
-                <button class="btn btn-info btn-sm btn-action task-detail" data-task-id="${taskId}"> <i class="fas fa-eye"></i> İncele </button>
-            `;
-        }
-        
-        // --- KART HTML'İ (Sıra Numarası Eklenmiş Hali) ---
-        if (isCompletedView) {
-            card.innerHTML = `
-                <div class="task-card task-card-success" data-task-id="${taskId}">
-                    <div class="task-number-tag">${taskNumber}.</div> <h5 class="task-title">#${taskId} - ${taskTitle}</h5>
-                    <div class="d-flex justify-content-between align-items-center mb-2">
-                        <small class="task-meta">
-                            <span class="badge badge-${statusBadgeClass}">${statusText}</span>
-                            <span class="ml-2"><i class="fas fa-user"></i> ${assignedTo}</span>
-                        </small>
-                    </div>
-                    <div class="d-flex justify-content-between align-items-center">
-                        <small class="task-meta">
-                            <i class="fas fa-clock mr-1"></i>
-                            Oluşturma Tarihi: ${formatDate(task.createdAt)}
-                        </small>
-                        <div>${actionButtons}</div>
-                    </div>
-                </div>`;
-        } else {
-            card.innerHTML = `
-                <div class="task-card task-card-warning" data-task-id="${taskId}">
-                    <div class="task-number-tag">${taskNumber}.</div> <h5 class="task-title">#${taskId} - ${taskTitle}</h5>
-                    <div class="d-flex justify-content-between align-items-center mb-2">
-                        <small class="task-meta">
-                            <span class="badge badge-${statusBadgeClass}">${statusText}</span>
-                        </small>
-                    </div>
-                    <div class="d-flex justify-content-between align-items-center">
-                        <small class="task-meta">
-                            <i class="fas fa-clock mr-1"></i>
-                            Son Onay Tarihi: ${formatDate(due)}
-                        </small>
-                        <div>${actionButtons}</div>
-                    </div>
-                </div>`;
-        } 
-
-        return card;
-    })).then(taskCards => {
-        taskCards.forEach(card => container.appendChild(card));
-        
-        // Sayfa değişiminde listenin üstüne kaydırma
-        $('html, body').animate({
-            scrollTop: $('#task-list-details').offset().top - 100 
-        }, 300);
-    }).catch(err => {
-        console.error("Task render hatası:", err);
-        container.innerHTML = '<p class="lead text-danger text-center mt-5">Görevler oluşturulurken hata oluştu.</p>';
-    });
-}
-
 
 /**
  * Kullanıcı kimliğine göre portföy verilerini çeker ve tabloyu doldurur.
@@ -2451,6 +2310,147 @@ window.fetchAndDisplayTasks = async function(){
     console.error('Tasks sayaclari doldurulurken hata:', err);
   }
 };
+
+/**
+ * Global taskPaginationData'daki veriye göre görev listesinin bir sayfasını render eder.
+ * @param {number} page Gösterilecek sayfa numarası.
+ * @param {number} perPage Sayfa başına görev sayısı.
+ */
+function renderTaskPage(page, perPage) {
+    console.log('🎨 renderTaskPage çağrıldı - Sayfa:', page, 'PerPage:', perPage);
+    
+    const container = document.getElementById('task-list-container');
+    if (!container) {
+        console.error('❌ task-list-container bulunamadı!');
+        return;
+    }
+    
+    const allData = window.taskPaginationData.allData || [];
+    console.log('📊 Render edilecek veri sayısı:', allData.length);
+    
+    const startIndex = (page - 1) * perPage;
+    const tasksToRender = allData.slice(startIndex, startIndex + perPage);
+
+    container.innerHTML = ''; // Önceki kartları temizle
+
+    const taskListDetails = document.getElementById('task-list-details');
+    const taskType = taskListDetails ? taskListDetails.dataset.currentType : '';
+    const isCompletedView = (taskType === 'completed-tasks');
+    
+    // Asenkron işlemleri (Task Title ve Alias) yürütmek ve kartları oluşturmak için Promise.all kullanılır.
+    Promise.all(tasksToRender.map(async (task, index) => {
+        const taskId = task.id;
+        const due = task.dueDate || task.officialDueDate || task.clientDueDate || task.deadline || null;
+        // Global sıra numarası: Sayfa başlangıç indeksi + o sayfadaki sıra numarası + 1
+        const taskNumber = startIndex + index + 1; 
+        
+        // --- ASENKRON DEĞER HESAPLAMALARI ---
+        let transactionAlias = 'İşlem';
+        if (task.taskType) {
+            try {
+                const transactionDoc = await getDoc(doc(db, 'transactionTypes', String(task.taskType)));
+                if (transactionDoc.exists()) {
+                    transactionAlias = (transactionDoc.data().alias || transactionDoc.data().name || 'İşlem').toLocaleUpperCase('tr-TR');
+                }
+            } catch (e) { /* Hata yönetimi atlandı */ }
+        }
+
+        let taskTitle = transactionAlias;
+        if (task.relatedIpRecordId) {
+            try {
+                const ipDoc = await getDoc(doc(db, 'ipRecords', task.relatedIpRecordId));
+                if (ipDoc.exists()) {
+                    const ipData = ipDoc.data();
+                    const appNo = ipData.applicationNumber || ipData.applicationNo || '-';
+                    const brandText = ipData.brandText || ipData.title || '-';
+                    taskTitle = `${transactionAlias} - ${appNo} - ${brandText}`;
+                }
+            } catch (e) { /* Hata yönetimi atlandı */ }
+        }
+
+        const card = document.createElement('div');
+        card.className = 'col-md-12 mb-4';
+
+        // --- DİĞER DEĞER HESAPLAMALARI (STATÜ, ATANAN KİŞİ, BUTONLAR) ---
+        const statusBadgeClass = {
+            'open': 'primary', 'in_progress': 'info', 'completed': 'success', 'closed': 'secondary',
+            'awaiting_client_approval': 'warning', 'müvekkil onayı - kapatıldı': 'danger'
+        }[task.status] || 'secondary';
+        const statusText = {
+            'open': 'Açık', 'in_progress': 'Devam Ediyor', 'completed': 'Tamamlandı', 'closed': 'Kapalı',
+            'awaiting_client_approval': 'Onay Bekliyor', 'müvekkil onayı - kapatıldı': 'Reddedildi/Kapandı'
+        }[task.status] || task.status;
+        
+        // Atanan kişi hesaplaması (Kodu uzun tutmamak için basitleştirilmiştir, sizin orijinal kodunuzdan alınız)
+        let assignedTo = '-'; 
+        // if (task.assignedTo_uid) { ... }
+        
+        // Action Buttons hesaplaması (Kodu uzun tutmamak için basitleştirilmiştir, sizin orijinal kodunuzdan alınız)
+        let actionButtons;
+        if (isCompletedView) {
+            actionButtons = `
+                <button class="btn btn-info btn-sm btn-action task-detail" data-task-id="${taskId}"> <i class="fas fa-eye"></i> İncele </button>
+                <button class="btn btn-success btn-sm btn-action task-reopen" data-task-id="${taskId}"> <i class="fas fa-folder-open"></i> İşi Aç </button>
+            `;
+        } else {
+             actionButtons = `
+                <button class="btn btn-success btn-sm btn-action task-approve" data-task-id="${taskId}"> <i class="fas fa-check"></i> Onayla </button>
+                <button class="btn btn-danger btn-sm btn-action task-reject" data-task-id="${taskId}"> <i class="fas fa-times"></i> Reddet </button>
+                <button class="btn btn-info btn-sm btn-action task-detail" data-task-id="${taskId}"> <i class="fas fa-eye"></i> İncele </button>
+            `;
+        }
+        
+        // --- KART HTML'İ (Sıra Numarası Eklenmiş Hali) ---
+        if (isCompletedView) {
+            card.innerHTML = `
+                <div class="task-card task-card-success" data-task-id="${taskId}">
+                    <div class="task-number-tag">${taskNumber}.</div> <h5 class="task-title">#${taskId} - ${taskTitle}</h5>
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <small class="task-meta">
+                            <span class="badge badge-${statusBadgeClass}">${statusText}</span>
+                            <span class="ml-2"><i class="fas fa-user"></i> ${assignedTo}</span>
+                        </small>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <small class="task-meta">
+                            <i class="fas fa-clock mr-1"></i>
+                            Oluşturma Tarihi: ${formatDate(task.createdAt)}
+                        </small>
+                        <div>${actionButtons}</div>
+                    </div>
+                </div>`;
+        } else {
+            card.innerHTML = `
+                <div class="task-card task-card-warning" data-task-id="${taskId}">
+                    <div class="task-number-tag">${taskNumber}.</div> <h5 class="task-title">#${taskId} - ${taskTitle}</h5>
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <small class="task-meta">
+                            <span class="badge badge-${statusBadgeClass}">${statusText}</span>
+                        </small>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <small class="task-meta">
+                            <i class="fas fa-clock mr-1"></i>
+                            Son Onay Tarihi: ${formatDate(due)}
+                        </small>
+                        <div>${actionButtons}</div>
+                    </div>
+                </div>`;
+        } 
+
+        return card;
+    })).then(taskCards => {
+        taskCards.forEach(card => container.appendChild(card));
+        
+        // Sayfa değişiminde listenin üstüne kaydırma
+        $('html, body').animate({
+            scrollTop: $('#task-list-details').offset().top - 100 
+        }, 300);
+    }).catch(err => {
+        console.error("Task render hatası:", err);
+        container.innerHTML = '<p class="lead text-danger text-center mt-5">Görevler oluşturulurken hata oluştu.</p>';
+    });
+}
 
 // Modal açıldığında verileri set et
 $(document).on('show.bs.modal', '#portfolioDetailModal', async function (e) {
