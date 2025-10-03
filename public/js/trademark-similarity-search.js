@@ -837,20 +837,17 @@ const loadDataFromCache = async (bulletinKey) => {
 
 // js/trademark-similarity-search.js (Mevcut renderMonitoringList fonksiyonunu bununla değiştirin)
 
-
-// js/trademark-similarity-search.js (Mevcut renderMonitoringList fonksiyonunu bununla değiştirin)
-
 const renderMonitoringList = async () => {
     const tbody = document.getElementById('monitoringListBody');
     const list = monitoringPagination ? monitoringPagination.getCurrentPageData(filteredMonitoringTrademarks) : filteredMonitoringTrademarks;
-    // Yeni başlığa göre 4 sütun (iç tablo 5 sütun: Toggle+Marka+Görsel+Başvuru No+Başvuru Tarihi)
+    // 5 SÜTUNLU YAPI
     if (!list.length) {
-        // Hata durumunda colspan'ı 4'e düşürün
-        tbody.innerHTML = '<tr><td colspan="4" class="no-records">Filtreye uygun izlenecek marka bulunamadı.</td></tr>'; 
+        // Hata durumunda colspan'ı 5'e ayarlayın
+        tbody.innerHTML = '<tr><td colspan="5" class="no-records">Filtreye uygun izlenecek marka bulunamadı.</td></tr>'; 
         return;
     }
 
-    // 1. Markaları Sahip Bazında Grupla (Nice sınıfını hesaplamaya devam ediyoruz, ama sadece görüntülenmeyecek)
+    // ... (Gruplama ve Nice Sınıfı Hesaplama Mantığı Değişmedi) ...
     const groupedByOwner = {};
     for (const tm of list) {
         const ip = await _getIp(tm.ipRecordId || tm.sourceRecordId || tm.id);
@@ -866,7 +863,6 @@ const renderMonitoringList = async () => {
             };
         }
         
-        // Grubun tüm Nice Sınıflarını topla (Bu bilgi artık görüntülenmeyecek, sadece hesaplandı)
         const nices = _uniqNice(ip || tm).split(', ').map(s => s.trim()).filter(Boolean);
         nices.forEach(n => groupedByOwner[ownerKey].allNiceClasses.add(n));
 
@@ -879,13 +875,13 @@ const renderMonitoringList = async () => {
         const group = groupedByOwner[ownerKey];
         const groupUid = `owner-group-${group.ownerId}-${ownerKey.replace(/[^a-zA-Z0-9]/g, '').slice(-10)}`;
 
-        // Grup Başlığı Satırı (NICE SINIFI KALDIRILDI - 5 kolondan 4 kolona düştü)
+        // Grup Başlığı Satırı (NICE SINIFI KOLONU KALDI, İÇERİK BOŞ BIRAKILDI)
         const headerRow = `
             <tr class="owner-row" data-toggle="collapse" data-target="#${groupUid}" aria-expanded="false" aria-controls="${groupUid}" style="cursor: pointer;">
                 <td style="text-align: center; color: #1e3c72;"><i class="fas fa-chevron-down toggle-icon"></i></td>
-                <td style="text-align: left;">${group.ownerName}</td>
-                <td style="text-align: center;">${group.trademarks.length}</td>
-                <td style="text-align: center;">
+                <td style="width: 30%; text-align: left;">${group.ownerName}</td>
+                <td style="width: 15%; text-align: center;">${group.trademarks.length}</td>
+                <td style="width: 30%; text-align: left;"></td> <td style="width: 20%; text-align: center;">
                     <button class="action-btn view-btn" data-owner-id="${group.ownerId}" title="Tüm Markaları Gör" onclick="event.stopPropagation(); window.alert('${group.ownerName} sahibinin tüm markalarını görüntüleme fonksiyonu buraya gelecek.');">
                         <i class="fas fa-eye"></i>
                     </button>
@@ -894,12 +890,13 @@ const renderMonitoringList = async () => {
         `;
         allRowsHtml.push(headerRow);
 
-        // Akordeon İçeriği (İç Tablo Satırları)
+        // Akordeon İçeriği (İç Tablo Satırları) - NICE SINIFI TEKRAR EKLENDİ
         const detailRowsHtml = group.trademarks.map(({ tm, ip }) => {
-            const [markName, imgSrc, appNo, appDate] = [ // Nice Class kaldırıldı
+            const [markName, imgSrc, appNo, nices, appDate] = [
                 _pickName(ip, tm), 
                 _pickImg(ip, tm), 
                 _pickAppNo(ip, tm), 
+                _uniqNice(ip || tm), // NICE SINIFI TEKRAR ALINDI
                 _pickAppDate(ip, tm)
             ];
             
@@ -911,22 +908,23 @@ const renderMonitoringList = async () => {
                     <td></td> <td style="text-align: left;">${markName}</td>
                     <td style="text-align: center;">${imgSrc ? `<div class="trademark-image-wrapper-large" style="${imgStyle}"><img class="trademark-image-thumbnail-large" src="${imgSrc}" alt="Marka Görseli" style="${imgStyle}"></div>` : `<div class="no-image-placeholder-large" style="${imgStyle}">-</div>`}</td>
                     <td style="text-align: center;">${appNo}</td>
-                    <td style="text-align: center;">${appDate}</td>
+                    <td style="text-align: left;">${nices || '-'}</td> <td style="text-align: center;">${appDate}</td>
                 </tr>
             `;
         }).join('');
 
-        // Gizli İçerik Satırı (colspan'ı 4'e düşürün)
+        // Gizli İçerik Satırı (colspan'ı 5'e ayarlayın)
         const contentRow = `
             <tr id="${groupUid}" class="accordion-content-row" style="display: none;">
-                <td colspan="4" style="padding: 0;">
+                <td colspan="5" style="padding: 0;">
                     <table class="table table-sm" style="margin: 0; background-color: transparent;">
                         <thead>
                             <tr>
                                 <th style="width: 5%;"></th>
-                                <th style="width: 35%; text-align: left;">Marka Adı</th>
-                                <th style="width: 25%; text-align: center;">Görsel</th>
-                                <th style="width: 25%; text-align: center;">Başvuru No</th>
+                                <th style="width: 30%; text-align: left;">Marka Adı</th>
+                                <th style="width: 15%; text-align: center;">Görsel</th>
+                                <th style="width: 15%; text-align: center;">Başvuru No</th>
+                                <th style="width: 25%; text-align: left;">Nice Sınıfı</th>
                                 <th style="width: 10%; text-align: center;">Başvuru Tarihi</th>
                             </tr>
                         </thead>
@@ -948,6 +946,7 @@ const renderMonitoringList = async () => {
     // Mevcut image hover efektlerini de yeniden ata
     setupImageHoverEffect('monitoringListBody');
 };
+
 
 const renderCurrentPageOfResults = () => {
     if (!pagination || !resultsTableBody) return;
