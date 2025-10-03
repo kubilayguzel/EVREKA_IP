@@ -837,17 +837,19 @@ const loadDataFromCache = async (bulletinKey) => {
 
 // js/trademark-similarity-search.js (Mevcut renderMonitoringList fonksiyonunu bununla değiştirin)
 
+// js/trademark-similarity-search.js (renderMonitoringList fonksiyonunu değiştirin)
+
 const renderMonitoringList = async () => {
     const tbody = document.getElementById('monitoringListBody');
     const list = monitoringPagination ? monitoringPagination.getCurrentPageData(filteredMonitoringTrademarks) : filteredMonitoringTrademarks;
-    // 5 SÜTUNLU YAPI
+    // 5 SÜTUNLU ANA YAPI
     if (!list.length) {
-        // Hata durumunda colspan'ı 5'e ayarlayın
+        // Colspan'ı 5'e ayarlayın
         tbody.innerHTML = '<tr><td colspan="5" class="no-records">Filtreye uygun izlenecek marka bulunamadı.</td></tr>'; 
         return;
     }
 
-    // ... (Gruplama ve Nice Sınıfı Hesaplama Mantığı Değişmedi) ...
+    // 1. Markaları Sahip Bazında Grupla (Mantık aynı kalıyor)
     const groupedByOwner = {};
     for (const tm of list) {
         const ip = await _getIp(tm.ipRecordId || tm.sourceRecordId || tm.id);
@@ -875,10 +877,10 @@ const renderMonitoringList = async () => {
         const group = groupedByOwner[ownerKey];
         const groupUid = `owner-group-${group.ownerId}-${ownerKey.replace(/[^a-zA-Z0-9]/g, '').slice(-10)}`;
 
-        // Grup Başlığı Satırı (NICE SINIFI KOLONU KALDI, İÇERİK BOŞ BIRAKILDI)
+        // Grup Başlığı Satırı (Nice Sınıfı kolonu kalıyor, içeriği boşaltılıyor)
         const headerRow = `
             <tr class="owner-row" data-toggle="collapse" data-target="#${groupUid}" aria-expanded="false" aria-controls="${groupUid}" style="cursor: pointer;">
-                <td style="text-align: center; color: #1e3c72;"><i class="fas fa-chevron-down toggle-icon"></i></td>
+                <td style="width: 5%; text-align: center; color: #1e3c72;"><i class="fas fa-chevron-down toggle-icon"></i></td>
                 <td style="width: 30%; text-align: left;">${group.ownerName}</td>
                 <td style="width: 15%; text-align: center;">${group.trademarks.length}</td>
                 <td style="width: 30%; text-align: left;"></td> <td style="width: 20%; text-align: center;">
@@ -890,17 +892,17 @@ const renderMonitoringList = async () => {
         `;
         allRowsHtml.push(headerRow);
 
-        // Akordeon İçeriği (İç Tablo Satırları) - NICE SINIFI TEKRAR EKLENDİ
+        // Akordeon İçeriği (İç Tablo Satırları) - Nice Sınıfı geri eklendi, Görsel 100px
         const detailRowsHtml = group.trademarks.map(({ tm, ip }) => {
             const [markName, imgSrc, appNo, nices, appDate] = [
                 _pickName(ip, tm), 
                 _pickImg(ip, tm), 
                 _pickAppNo(ip, tm), 
-                _uniqNice(ip || tm), // NICE SINIFI TEKRAR ALINDI
+                _uniqNice(ip || tm), 
                 _pickAppDate(ip, tm)
             ];
             
-            // Görsel boyutu 100px (şimdiki 50px'in iki katı)
+            // Görsel boyutu 100px
             const imgStyle = 'width: 100px; height: 100px;';
             
             return `
@@ -913,7 +915,7 @@ const renderMonitoringList = async () => {
             `;
         }).join('');
 
-        // Gizli İçerik Satırı (colspan'ı 5'e ayarlayın)
+        // Gizli İçerik Satırı (colspan'ı 5'e ayarlayın - 5 ana kolon var)
         const contentRow = `
             <tr id="${groupUid}" class="accordion-content-row" style="display: none;">
                 <td colspan="5" style="padding: 0;">
@@ -940,13 +942,9 @@ const renderMonitoringList = async () => {
     
     tbody.innerHTML = allRowsHtml.join('');
     
-    // Akordeon olay dinleyicilerini ekle
     attachMonitoringAccordionListeners(); 
-    
-    // Mevcut image hover efektlerini de yeniden ata
     setupImageHoverEffect('monitoringListBody');
 };
-
 
 const renderCurrentPageOfResults = () => {
     if (!pagination || !resultsTableBody) return;
