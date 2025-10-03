@@ -332,17 +332,19 @@
             justify-content: center;
         }
         .modal.show { display: flex; }
-        .modal-content {
-            background-color: #fefefe;
-            padding: 30px;
-            border: 1px solid #888;
-            width: 90%;
-            max-width: 500px; /* Not modalı için daha dar */
-            border-radius: 12px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
-            animation-name: animatetop;
-            animation-duration: 0.4s;
+        
+        #noteModal .modal-content {
+        background-color: #fefefe;
+        padding: 30px;
+        border: 1px solid #888;
+        width: 90%;
+        max-width: 500px;
+        border-radius: 12px;
+        box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        animation-name: animatetop;
+        animation-duration: 0.4s;
         }
+
         @keyframes animatetop {
             from {top: -300px; opacity: 0}
             to {top: 0; opacity: 1}
