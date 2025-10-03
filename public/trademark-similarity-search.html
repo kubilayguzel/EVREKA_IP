@@ -696,26 +696,26 @@
         /* 1) Arama sonuç listesinde marka örneklerini büyüt (tablo satırındaki görsel hücresi) */
 #resultsTableBody .trademark-image-wrapper-large,
 #resultsTableBody .no-image-placeholder-large {
-  width: 260px;   /* önce 200px idi; daha da büyük istersen 280-300 yapabilirsin */
+  width: 260px;
   height: 260px;
 }
 
 #resultsTableBody .trademark-image-thumbnail-large {
   width: 100%;
   height: 100%;
-  object-fit: contain;   /* taşmayı önler, logolar kırpılmaz */
+  object-fit: contain;
 }
 
 /* Geniş görseller için hücreyi rahatlat */
 #resultsTableBody .trademark-image-cell {
-  width: 280px;          /* tablo kolonuna biraz alan aç */
+  width: 280px;
   vertical-align: middle;
 }
 
 /* 2) İzlenen markalar listesinde marka örneklerini mevcut boyutun yarısına indir */
 #monitoringListBody .trademark-image-wrapper-large,
 #monitoringListBody .no-image-placeholder-large {
-  width: 100px;   /* 200px'in yarısı */
+  width: 100px;
   height: 100px;
 }
 
@@ -736,14 +736,14 @@
 /* Arama sonuç listesi: görseli biraz küçült */
 #resultsTableBody .trademark-image-wrapper-large,
 #resultsTableBody .no-image-placeholder-large {
-  width: 180px;   /* 200-260’dan 180’e çekildi */
+  width: 180px;
   height: 180px;
 }
 
 #resultsTableBody .trademark-image-thumbnail-large {
   width: 100%;
   height: 100%;
-  object-fit: contain;    /* taşma/kırpma olmasın */
+  object-fit: contain;
 }
 
 /* Hücreyi rahatlat (opsiyonel) */
@@ -755,14 +755,14 @@
 .tm-hover-popup {
   position: fixed;
   z-index: 9999;
-  pointer-events: none;       /* tıklamayı engellemez */
+  pointer-events: none;
   background: #fff;
   border: 1px solid rgba(0,0,0,.12);
   box-shadow: 0 8px 24px rgba(0,0,0,.18);
   border-radius: 8px;
   padding: 8px;
-  max-width: 50vw;            /* aşırı büyümesin */
-  max-height: 70vh;           /* aşırı büyümesin */
+  max-width: 50vw;
+  max-height: 70vh;
   overflow: hidden;
 }
 
@@ -770,7 +770,7 @@
   display: block;
   height: auto;
   max-width: 100%;
-  max-height: 68vh;           /* kutu içi sınır */
+  max-height: 68vh;
 }
 
 
@@ -817,26 +817,27 @@
     color: #333;
     background-color: #f8f9fa; /* İç tablo başlığı için hafif arkaplan */
 }
-/* trademark-similarity-search.html - <style> bloğu içinde */
 
+/* --- YENİ EKLENEN HİZALAMA VE BOYUT KURALLARI (6 KOLONLU DETAY TABLOSU) --- */
+
+/* Kolon 2 (Marka Adı) - Sola yaslı */
 .accordion-content-row .table-sm tbody .trademark-detail-row td:nth-child(2) {
     text-align: left !important;
 }
 
-/* Kolon 3 (Görsel), Kolon 4 (Başvuru No), Kolon 5 (Nice Sınıfı), Kolon 6 (Başvuru Tarihi) - Ortala/Sola Yasla */
-.accordion-content-row .table-sm tbody .trademark-detail-row td:nth-child(3), /* Görsel -> Ortala */
-.accordion-content-row .table-sm tbody .trademark-detail-row td:nth-child(4), /* Başvuru No -> Ortala */
-.accordion-content-row .table-sm tbody .trademark-detail-row td:nth-child(5), /* Nice Sınıfı -> Sola Yasla */
-.accordion-content-row .table-sm tbody .trademark-detail-row td:nth-child(6) { /* Başvuru Tarihi -> Ortala */
+/* Kolon 3 (Görsel), Kolon 4 (Başvuru No), Kolon 6 (Başvuru Tarihi) -> Ortala */
+.accordion-content-row .table-sm tbody .trademark-detail-row td:nth-child(3), 
+.accordion-content-row .table-sm tbody .trademark-detail-row td:nth-child(4), 
+.accordion-content-row .table-sm tbody .trademark-detail-row td:nth-child(6) { 
     text-align: center !important;
 }
-/* Nice Sınıfı (5. kolon) için özel olarak sola yaslama (ortalamadan farklı olabilir) */
+
+/* Kolon 5 (Nice Sınıfı) -> Sola Yaslı */
 .accordion-content-row .table-sm tbody .trademark-detail-row td:nth-child(5) { 
     text-align: left !important;
 }
 
-
-/* Görsel Boyutunu İki Katına Çıkarma (Inline stiller JS'de 100px olarak kalacak) */
+/* Görsel Boyutunu İki Katına Çıkarma (100px) */
 .accordion-content-row .table-sm tbody .trademark-detail-row .trademark-image-wrapper-large,
 .accordion-content-row .table-sm tbody .trademark-detail-row .no-image-placeholder-large,
 .accordion-content-row .table-sm tbody .trademark-detail-row .trademark-image-thumbnail-large {
@@ -845,12 +846,14 @@
     margin: 0 auto;
 }
 
-/* İç Tablo Başlıkları - Hizalama (Yeni 6 kolonlu yapıya göre güncellendi) */
+/* İç Tablo Başlıkları - Hizalama (6 kolonlu yapı) */
 .accordion-content-row .table-sm thead th:nth-child(2) { text-align: left; }  /* Marka Adı */
-.accordion-content-row .table-sm thead th:nth-child(3), /* Görsel */
-.accordion-content-row .table-sm thead th:nth-child(4), /* Başvuru No */
-.accordion-content-row .table-sm thead th:nth-child(6) { text-align: center; } /* Başvuru Tarihi */
+.accordion-content-row .table-sm thead th:nth-child(3), 
+.accordion-content-row .table-sm thead th:nth-child(4), 
+.accordion-content-row .table-sm thead th:nth-child(6) { text-align: center; } /* Görsel, Başvuru No, Başvuru Tarihi */
 .accordion-content-row .table-sm thead th:nth-child(5) { text-align: left; }  /* Nice Sınıfı */
+
+
 </style>
 </head>
 <body>
