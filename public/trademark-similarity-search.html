@@ -817,6 +817,41 @@
     color: #333;
     background-color: #f8f9fa; /* İç tablo başlığı için hafif arkaplan */
 }
+/* trademark-similarity-search.html - <style> bloğu içinde */
+
+/* Gruplu listenin iç tablosu için hizalamalar */
+.accordion-content-row .table-sm tbody .trademark-detail-row td {
+    /* Varsayılan olarak sola yasla (Marka Adı hariç diğerleri ortalanacak) */
+    text-align: left; 
+}
+
+/* Kolon 2 (Marka Adı) - Zaten varsayılan sola yaslı (LEFT) */
+.accordion-content-row .table-sm tbody .trademark-detail-row td:nth-child(2) {
+    text-align: left !important;
+}
+
+/* Kolon 3 (Görsel), Kolon 4 (Başvuru No), Kolon 6 (Başvuru Tarihi) - Ortala (CENTER) */
+.accordion-content-row .table-sm tbody .trademark-detail-row td:nth-child(3),
+.accordion-content-row .table-sm tbody .trademark-detail-row td:nth-child(4),
+.accordion-content-row .table-sm tbody .trademark-detail-row td:nth-child(6) {
+    text-align: center !important;
+}
+
+/* Görsel Boyutunu İki Katına Çıkarma (50px -> 100px) */
+/* Bu boyutlar inline olarak JS'de de güncellenecek, ama CSS'i de hazırlayalım */
+.accordion-content-row .table-sm tbody .trademark-detail-row .trademark-image-wrapper-large,
+.accordion-content-row .table-sm tbody .trademark-detail-row .no-image-placeholder-large,
+.accordion-content-row .table-sm tbody .trademark-detail-row .trademark-image-thumbnail-large {
+    width: 100px !important;
+    height: 100px !important;
+    margin: 0 auto; /* Görseli ortala */
+}
+
+/* İç Tablo Başlıkları - Hizalama (Yeni 5 kolonlu yapıya göre güncellendi) */
+.accordion-content-row .table-sm thead th:nth-child(2) { text-align: left; }  /* Marka Adı */
+.accordion-content-row .table-sm thead th:nth-child(3), /* Görsel */
+.accordion-content-row .table-sm thead th:nth-child(4), /* Başvuru No */
+.accordion-content-row .table-sm thead th:nth-child(6) { text-align: center; } /* Başvuru Tarihi */
 </style>
 </head>
 <body>
@@ -866,11 +901,9 @@
                         <table class="results-table">
                             <thead>
                                 <tr>
-                                    <th style="width: 5%;"></th> <th style="width: 30%; text-align: left;">Sahip</th>
-                                    <th style="width: 20%; text-align: center;">Marka Sayısı</th>
-                                    <th style="width: 25%;">Nice Sınıfları</th>
-                                    <th style="width: 20%; text-align: center;">Eylemler</th>
-                                </tr>
+                                    <th style="width: 5%;"></th> <th style="width: 35%; text-align: left;">Sahip</th> 
+                                    <th style="width: 25%; text-align: center;">Marka Sayısı</th>
+                                    <th style="width: 35%; text-align: center;">Eylemler</th> </tr>
                             </thead>
                             <tbody id="monitoringListBody"></tbody>
                         </table>
