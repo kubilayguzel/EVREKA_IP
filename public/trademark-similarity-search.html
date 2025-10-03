@@ -864,6 +864,48 @@
     justify-content: center; 
 }
 
+/* trademark-similarity-search.html dosyasındaki <style> bloğunun SONUNA EKLENMELİ */
+
+/* Eylemler Kolonunun İçeriğini Ortalar */
+.owner-row td:nth-child(5) { 
+    text-align: center !important;
+}
+.owner-row td:nth-child(5) .btn-group {
+    justify-content: center;
+}
+
+/* Bildirim Durumu Hücresi (4. Kolon) */
+.owner-row td:nth-child(4) { 
+    text-align: center;
+}
+
+/* Bildirim Durumu Badge Stilleri */
+.notification-status-badge {
+    display: inline-block;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 0.8em;
+    font-weight: 600;
+    white-space: nowrap;
+}
+.initial-status { /* Gönderilmedi (Varsayılan) */
+    background-color: #f8d7da; /* Açık Kırmızı/Pembe */
+    color: #721c24;
+}
+.processing-status { /* İşleniyor */
+    background-color: #fff3cd; /* Sarı */
+    color: #856404;
+}
+.sent-status { /* Gönderildi */
+    background-color: #d4edda; /* Açık Yeşil */
+    color: #155724;
+}
+.error-status { /* Hata */
+    background-color: #f5c6cb;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+
 </style>
 </head>
 <body>
@@ -914,9 +956,9 @@
                             <thead>
                                 <tr>
                                     <th style="width: 5%;"></th> 
-                                    <th style="width: 40%; text-align: left;">Sahip</th> 
-                                    <th style="width: 25%; text-align: center;">Marka Sayısı</th>
-                                    <th style="width: 30%; text-align: center;">Eylemler</th>
+                                    <th style="width: 35%; text-align: left;">Sahip</th> 
+                                    <th style="width: 15%; text-align: center;">Marka Sayısı</th>
+                                    <th style="width: 25%; text-align: center;">Bildirim Durumu</th> <th style="width: 20%; text-align: center;">Eylemler</th>
                                 </tr>
                             </thead>
                             <tbody id="monitoringListBody"></tbody>
