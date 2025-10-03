@@ -704,8 +704,8 @@ const renderMonitoringList = async () => {
                 <td style="width: 5%; text-align: center; color: #1e3c72;"><i class="fas fa-chevron-down toggle-icon"></i></td>
                 <td style="width: 40%; text-align: left;">${group.ownerName}</td>
                 <td style="width: 25%; text-align: center;">${group.trademarks.length}</td>
-                <td style="width: 30%; text-align: center;">
-                    <div class="btn-group">
+                <td style="width: 30%; text-align: center;"> 
+                    <div class="btn-group" style="justify-content: center;">
                         <button class="action-btn btn-primary generate-report-btn" 
                                 data-owner-id="${group.ownerId}" 
                                 data-owner-name="${group.ownerName}" 
