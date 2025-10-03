@@ -665,8 +665,8 @@ const renderMonitoringList = async () => {
     const list = monitoringPagination ? monitoringPagination.getCurrentPageData(filteredMonitoringTrademarks) : filteredMonitoringTrademarks;
     
     if (!list.length) {
-        // Colspan'ı 4'e ayarlayın (Toggle, Sahip, Sayı, Eylemler)
-        tbody.innerHTML = '<tr><td colspan="4" class="no-records">Filtreye uygun izlenecek marka bulunamadı.</td></tr>'; 
+        // Colspan'ı 5'e ayarlayın (Toggle, Sahip, Sayı, Bildirim Durumu, Eylemler)
+        tbody.innerHTML = '<tr><td colspan="5" class="no-records">Filtreye uygun izlenecek marka bulunamadı.</td></tr>'; 
         return;
     }
 
@@ -694,22 +694,36 @@ const renderMonitoringList = async () => {
 
     let allRowsHtml = [];
 
+    // Yeni varsayılan bildirim durumu
+    const initialNotificationStatus = 'Gönderilmedi';
+
     for (const ownerKey in groupedByOwner) {
         const group = groupedByOwner[ownerKey];
         const groupUid = `owner-group-${group.ownerId}-${ownerKey.replace(/[^a-zA-Z0-9]/g, '').slice(-10)}`;
         
-        // Grup Başlığı Satırı (4 KOLON: Nice Sınıfı ve View butonu KALDIRILDI)
+        // Grup Başlığı Satırı (5 KOLON: Toggle, Sahip, Sayı, Bildirim Durumu, Eylemler)
         const headerRow = `
             <tr class="owner-row" data-toggle="collapse" data-target="#${groupUid}" aria-expanded="false" aria-controls="${groupUid}" style="cursor: pointer;">
                 <td style="width: 5%; text-align: center; color: #1e3c72;"><i class="fas fa-chevron-down toggle-icon"></i></td>
-                <td style="width: 40%; text-align: left;">${group.ownerName}</td>
-                <td style="width: 25%; text-align: center;">${group.trademarks.length}</td>
-                <td style="width: 30%; text-align: center;"> 
-                    <div class="btn-group" style="justify-content: center;">
+                <td style="width: 35%; text-align: left;">${group.ownerName}</td>
+                <td style="width: 15%; text-align: center;">${group.trademarks.length}</td>
+                
+                <td style="width: 25%; text-align: center;">
+                    <span class="notification-status-badge initial-status" data-owner-id="${group.ownerId}">
+                        ${initialNotificationStatus}
+                    </span>
+                </td> <td style="width: 20%; text-align: center;">
+                    <div class="btn-group">
+                        <button class="action-btn btn-success generate-report-and-notify-btn" 
+                                data-owner-id="${group.ownerId}" 
+                                data-owner-name="${group.ownerName}" 
+                                title="Rapor Oluştur ve Müşteriye Bildir">
+                            <i class="fas fa-paper-plane"></i> Rapor Oluştur ve Bildir
+                        </button>
                         <button class="action-btn btn-primary generate-report-btn" 
                                 data-owner-id="${group.ownerId}" 
                                 data-owner-name="${group.ownerName}" 
-                                title="${group.ownerName} için benzerlik raporu oluştur">
+                                title="${group.ownerName} için benzerlik raporu oluştur (Sadece İndir)">
                             <i class="fas fa-file-pdf"></i> Rapor Oluştur
                         </button>
                     </div>
@@ -741,10 +755,10 @@ const renderMonitoringList = async () => {
             `;
         }).join('');
 
-        // Gizli İçerik Satırı (colspan'ı 4'e ayarlayın, ana tabloya uyması için)
+        // Gizli İçerik Satırı (colspan'ı 5'e ayarlayın, ana tabloya uyması için)
         const contentRow = `
             <tr id="${groupUid}" class="accordion-content-row" style="display: none;">
-                <td colspan="4" style="padding: 0;">
+                <td colspan="5" style="padding: 0;">
                     <table class="table table-sm" style="margin: 0; background-color: transparent;">
                         <thead>
                             <tr>
@@ -772,6 +786,7 @@ const renderMonitoringList = async () => {
     attachGenerateReportListener(); 
     setupImageHoverEffect('monitoringListBody');
 };
+
 
 // --- YENİ RAPOR OLUŞTURMA İŞLEYİCİSİ ---
 
@@ -1472,7 +1487,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 /**
  * Modalı açmak ve verileri yüklemek için yeni fonksiyon.
  */
-function openEditCriteriaModal(markData) {
+async function openEditCriteriaModal(markData) {
     const modal = document.getElementById('editCriteriaModal');
     const modalTitle = document.getElementById('editCriteriaModalLabel');
     const trademarkNameEl = document.getElementById('modalTrademarkName');
@@ -1488,13 +1503,26 @@ function openEditCriteriaModal(markData) {
     applicationNoEl.textContent = markData.applicationNumber || '-';
     ownerEl.textContent = markData.owner || '-';
     niceClassEl.textContent = Array.isArray(markData.niceClasses) ? markData.niceClasses.join(', ') : '-';
-    
-    const imageUrl = markData.brandImageUrl && markData.brandImageUrl.startsWith('http')
-        ? markData.brandImageUrl
-        : `https://firebasestorage.googleapis.com/v0/b/ip-manager-production-aab4b.appspot.com/o/${encodeURIComponent(markData.brandImageUrl)}?alt=media`;
-    modalImage.src = imageUrl;
-    modalImage.alt = markData.markName;
-
+    modalImage.alt = markData.markName || 'Marka Görseli';
+    modalImage.src = ''; // başlangıç
+    try {
+    const val = markData.brandImageUrl || '';
+    if (!val) {
+        // boşsa bir şey yapmayın ya da placeholder koyun
+    } else if (/^(https?:|data:)/i.test(val)) {
+        // Tam URL veya data: base64
+        modalImage.src = val;
+    } else {
+        // Storage yolu
+        const storage = getStorage();
+        const url = await getDownloadURL(ref(storage, val));
+        modalImage.src = url;
+    }
+    } catch (e) {
+    console.warn('Görsel yüklenemedi:', e);
+    // İsterseniz placeholder:
+    // modalImage.src = '/img/placeholder-logo.svg';
+    }
     modal.dataset.markId = markData.id;
 
     const permanentBrandText = [markData.markName].filter(Boolean);
