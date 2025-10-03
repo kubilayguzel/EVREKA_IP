@@ -819,39 +819,38 @@
 }
 /* trademark-similarity-search.html - <style> bloğu içinde */
 
-/* Gruplu listenin iç tablosu için hizalamalar */
-.accordion-content-row .table-sm tbody .trademark-detail-row td {
-    /* Varsayılan olarak sola yasla (Marka Adı hariç diğerleri ortalanacak) */
-    text-align: left; 
-}
-
-/* Kolon 2 (Marka Adı) - Zaten varsayılan sola yaslı (LEFT) */
 .accordion-content-row .table-sm tbody .trademark-detail-row td:nth-child(2) {
     text-align: left !important;
 }
 
-/* Kolon 3 (Görsel), Kolon 4 (Başvuru No), Kolon 6 (Başvuru Tarihi) - Ortala (CENTER) */
-.accordion-content-row .table-sm tbody .trademark-detail-row td:nth-child(3),
-.accordion-content-row .table-sm tbody .trademark-detail-row td:nth-child(4),
-.accordion-content-row .table-sm tbody .trademark-detail-row td:nth-child(6) {
+/* Kolon 3 (Görsel), Kolon 4 (Başvuru No), Kolon 5 (Nice Sınıfı), Kolon 6 (Başvuru Tarihi) - Ortala/Sola Yasla */
+.accordion-content-row .table-sm tbody .trademark-detail-row td:nth-child(3), /* Görsel -> Ortala */
+.accordion-content-row .table-sm tbody .trademark-detail-row td:nth-child(4), /* Başvuru No -> Ortala */
+.accordion-content-row .table-sm tbody .trademark-detail-row td:nth-child(5), /* Nice Sınıfı -> Sola Yasla */
+.accordion-content-row .table-sm tbody .trademark-detail-row td:nth-child(6) { /* Başvuru Tarihi -> Ortala */
     text-align: center !important;
 }
+/* Nice Sınıfı (5. kolon) için özel olarak sola yaslama (ortalamadan farklı olabilir) */
+.accordion-content-row .table-sm tbody .trademark-detail-row td:nth-child(5) { 
+    text-align: left !important;
+}
 
-/* Görsel Boyutunu İki Katına Çıkarma (50px -> 100px) */
-/* Bu boyutlar inline olarak JS'de de güncellenecek, ama CSS'i de hazırlayalım */
+
+/* Görsel Boyutunu İki Katına Çıkarma (Inline stiller JS'de 100px olarak kalacak) */
 .accordion-content-row .table-sm tbody .trademark-detail-row .trademark-image-wrapper-large,
 .accordion-content-row .table-sm tbody .trademark-detail-row .no-image-placeholder-large,
 .accordion-content-row .table-sm tbody .trademark-detail-row .trademark-image-thumbnail-large {
     width: 100px !important;
     height: 100px !important;
-    margin: 0 auto; /* Görseli ortala */
+    margin: 0 auto;
 }
 
-/* İç Tablo Başlıkları - Hizalama (Yeni 5 kolonlu yapıya göre güncellendi) */
+/* İç Tablo Başlıkları - Hizalama (Yeni 6 kolonlu yapıya göre güncellendi) */
 .accordion-content-row .table-sm thead th:nth-child(2) { text-align: left; }  /* Marka Adı */
 .accordion-content-row .table-sm thead th:nth-child(3), /* Görsel */
 .accordion-content-row .table-sm thead th:nth-child(4), /* Başvuru No */
 .accordion-content-row .table-sm thead th:nth-child(6) { text-align: center; } /* Başvuru Tarihi */
+.accordion-content-row .table-sm thead th:nth-child(5) { text-align: left; }  /* Nice Sınıfı */
 </style>
 </head>
 <body>
@@ -901,9 +900,10 @@
                         <table class="results-table">
                             <thead>
                                 <tr>
-                                    <th style="width: 5%;"></th> <th style="width: 35%; text-align: left;">Sahip</th> 
-                                    <th style="width: 25%; text-align: center;">Marka Sayısı</th>
-                                    <th style="width: 35%; text-align: center;">Eylemler</th> </tr>
+                                    <th style="width: 5%;"></th> <th style="width: 30%; text-align: left;">Sahip</th> 
+                                    <th style="width: 15%; text-align: center;">Marka Sayısı</th>
+                                    <th style="width: 30%; text-align: left;">Nice Sınıfları</th> <th style="width: 20%; text-align: center;">Eylemler</th>
+                                </tr>
                             </thead>
                             <tbody id="monitoringListBody"></tbody>
                         </table>
