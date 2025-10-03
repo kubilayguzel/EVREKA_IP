@@ -1042,6 +1042,7 @@ const renderCurrentPageOfResults = () => {
         // Modal için veriyi hazırlama
         const modalData = {
             id: tmMeta.id,
+            ipRecordId: tmMeta.ipRecordId || tmMeta.sourceRecordId || tmMeta.id, // ✅ eklendi
             markName: headerName,
             applicationNumber: applicationNumber,
             owner: _pickOwners(null, tmMeta, allPersons),
@@ -1050,6 +1051,7 @@ const renderCurrentPageOfResults = () => {
             brandTextSearch: tmMeta.brandTextSearch || [],
             niceClassSearch: tmMeta.niceClassSearch || []
         };
+
         groupHeaderRow.dataset.markData = JSON.stringify(modalData);
         
         const totalCount = getTotalCountForMonitoredId(trademarkKey);
@@ -1506,22 +1508,38 @@ async function openEditCriteriaModal(markData) {
     modalImage.alt = markData.markName || 'Marka Görseli';
     modalImage.src = ''; // başlangıç
     try {
-    const val = markData.brandImageUrl || '';
-    if (!val) {
-        // boşsa bir şey yapmayın ya da placeholder koyun
-    } else if (/^(https?:|data:)/i.test(val)) {
-        // Tam URL veya data: base64
-        modalImage.src = val;
-    } else {
-        // Storage yolu
-        const storage = getStorage();
-        const url = await getDownloadURL(ref(storage, val));
-        modalImage.src = url;
-    }
+        let imgUrl = '';
+
+        // (1) markData.brandImageUrl tam URL ise direkt kullan
+        if (markData.brandImageUrl && /^(https?:|data:)/i.test(markData.brandImageUrl)) {
+            imgUrl = markData.brandImageUrl;
+        }
+
+        // (2) ipRecordId üzerinden ipRecords doc çek → brandImageUrl varsa onu al
+        if (!imgUrl && markData.ipRecordId) {
+            const ip = await _getIp(markData.ipRecordId);
+            imgUrl = _pickImg(ip, markData) || '';
+        }
+
+        // (3) hâlâ yoksa applicationNumber ile monitoring/ipRecords üzerinden ara
+        if (!imgUrl && markData.applicationNumber) {
+            imgUrl = await _getBrandImageByAppNo(markData.applicationNumber);
+        }
+
+        if (imgUrl) {
+            // Eğer bir Storage path geldiyse downloadURL'e çevir
+            if (!/^(https?:|data:|blob:)/i.test(imgUrl) && !/^data:image\//i.test(imgUrl)) {
+                const storage = getStorage();
+                imgUrl = await getDownloadURL(ref(storage, imgUrl));
+            }
+            modalImage.src = imgUrl;
+        } else {
+            // İsterseniz placeholder koyabilirsiniz
+            // modalImage.src = '/img/placeholder-logo.svg';
+        }
     } catch (e) {
-    console.warn('Görsel yüklenemedi:', e);
-    // İsterseniz placeholder:
-    // modalImage.src = '/img/placeholder-logo.svg';
+        console.warn('Görsel yüklenemedi:', e);
+        // modalImage.src = '/img/placeholder-logo.svg';
     }
     modal.dataset.markId = markData.id;
 
