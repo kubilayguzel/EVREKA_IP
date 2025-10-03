@@ -665,12 +665,12 @@ const renderMonitoringList = async () => {
     const list = monitoringPagination ? monitoringPagination.getCurrentPageData(filteredMonitoringTrademarks) : filteredMonitoringTrademarks;
     
     if (!list.length) {
-        // Colspan'ı 5'e ayarlayın (Toggle, Sahip, Sayı, Nice, Eylemler)
-        tbody.innerHTML = '<tr><td colspan="5" class="no-records">Filtreye uygun izlenecek marka bulunamadı.</td></tr>'; 
+        // Colspan'ı 4'e ayarlayın (Toggle, Sahip, Sayı, Eylemler)
+        tbody.innerHTML = '<tr><td colspan="4" class="no-records">Filtreye uygun izlenecek marka bulunamadı.</td></tr>'; 
         return;
     }
 
-    // 1. Markaları Sahip Bazında Grupla (Mantık aynı kalıyor)
+    // 1. Markaları Sahip Bazında Grupla (Mantık aynı kalır)
     const groupedByOwner = {};
     for (const tm of list) {
         const ip = await _getIp(tm.ipRecordId || tm.sourceRecordId || tm.id);
@@ -698,21 +698,14 @@ const renderMonitoringList = async () => {
         const group = groupedByOwner[ownerKey];
         const groupUid = `owner-group-${group.ownerId}-${ownerKey.replace(/[^a-zA-Z0-9]/g, '').slice(-10)}`;
         
-        // Grup Nice Sınıflarını Ana Satırda GÖSTERMEK İÇİN HAZIRLA
-        const niceClassSummary = Array.from(group.allNiceClasses).sort((a, b) => Number(a) - Number(b)).join(', ');
-
-
-        // Grup Başlığı Satırı (Nice Sınıfı içeriği boşaltıldı, buton eklendi)
+        // Grup Başlığı Satırı (4 KOLON: Nice Sınıfı ve View butonu KALDIRILDI)
         const headerRow = `
             <tr class="owner-row" data-toggle="collapse" data-target="#${groupUid}" aria-expanded="false" aria-controls="${groupUid}" style="cursor: pointer;">
                 <td style="width: 5%; text-align: center; color: #1e3c72;"><i class="fas fa-chevron-down toggle-icon"></i></td>
-                <td style="width: 30%; text-align: left;">${group.ownerName}</td>
-                <td style="width: 15%; text-align: center;">${group.trademarks.length}</td>
-                <td style="width: 30%; text-align: left;">${niceClassSummary}</td> <td style="width: 20%; text-align: center;">
+                <td style="width: 40%; text-align: left;">${group.ownerName}</td>
+                <td style="width: 25%; text-align: center;">${group.trademarks.length}</td>
+                <td style="width: 30%; text-align: center;">
                     <div class="btn-group">
-                        <button class="action-btn view-btn" data-owner-id="${group.ownerId}" title="Tüm Markaları Gör" onclick="event.stopPropagation(); window.alert('${group.ownerName} sahibinin tüm markalarını görüntüleme fonksiyonu buraya gelecek.');">
-                            <i class="fas fa-eye"></i>
-                        </button>
                         <button class="action-btn btn-primary generate-report-btn" 
                                 data-owner-id="${group.ownerId}" 
                                 data-owner-name="${group.ownerName}" 
@@ -725,7 +718,7 @@ const renderMonitoringList = async () => {
         `;
         allRowsHtml.push(headerRow);
 
-        // Akordeon İçeriği (İç Tablo Satırları) - Nice Sınıfı geri eklendi, Görsel 100px
+        // Akordeon İçeriği (İç Tablo Satırları) - DETAY yapısı (6 kolonlu) KORUNDU
         const detailRowsHtml = group.trademarks.map(({ tm, ip }) => {
             const [markName, imgSrc, appNo, nices, appDate] = [
                 _pickName(ip, tm), 
@@ -748,10 +741,10 @@ const renderMonitoringList = async () => {
             `;
         }).join('');
 
-        // Gizli İçerik Satırı (colspan'ı 5'e ayarlayın - 5 ana kolon var)
+        // Gizli İçerik Satırı (colspan'ı 4'e ayarlayın, ana tabloya uyması için)
         const contentRow = `
             <tr id="${groupUid}" class="accordion-content-row" style="display: none;">
-                <td colspan="5" style="padding: 0;">
+                <td colspan="4" style="padding: 0;">
                     <table class="table table-sm" style="margin: 0; background-color: transparent;">
                         <thead>
                             <tr>
