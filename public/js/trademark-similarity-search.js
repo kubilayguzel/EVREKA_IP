@@ -658,20 +658,6 @@ function setupImageHoverEffect(tbodyId = 'monitoringListBody') {
   tbody.addEventListener('mouseleave', handleLeave, true);
 }
 
-
-// --- Gerekli Global Değişkenler ve Fonksiyonlar ---
-const ownerSearchInput = document.getElementById('ownerSearch');
-const niceClassSearchInput = document.getElementById('niceClassSearch');
-const brandNameSearchInput = document.getElementById('brandNameSearch');
-const bulletinSelect = document.getElementById('bulletinSelect');
-const resultsTableBody = document.getElementById('resultsTableBody');
-const loadingIndicator = document.getElementById('loadingIndicator');
-const noRecordsMessage = document.getElementById('noRecordsMessage');
-const infoMessageContainer = document.getElementById('infoMessageContainer');
-const startSearchBtn = document.getElementById('startSearchBtn');
-const researchBtn = document.getElementById('researchBtn');
-
-
 // js/trademark-similarity-search.js (renderMonitoringList fonksiyonunun güncellenmiş hali)
 
 const renderMonitoringList = async () => {
@@ -1429,105 +1415,6 @@ const attachEventListeners = () => {
     resultsTableBody.querySelectorAll('.bs-select').forEach(select => select.addEventListener('change', handleBsChange));
     resultsTableBody.querySelectorAll('.note-cell').forEach(cell => cell.addEventListener('click', () => handleNoteCellClick(cell)));
 };
-
-// --- YENİ RAPOR OLUŞTURMA İŞLEYİCİSİ ---
-
-const attachGenerateReportListener = () => {
-    // Liste her yeniden render edildiğinde listener'ların güncel kalmasını sağlar.
-    document.querySelectorAll('.generate-report-btn').forEach(btn => {
-        btn.removeEventListener('click', handleOwnerReportGeneration);
-        btn.addEventListener('click', handleOwnerReportGeneration);
-    });
-};
-
-const handleOwnerReportGeneration = async (event) => {
-    event.stopPropagation(); // Akordeonun açılmasını engelle
-    
-    const btn = event.currentTarget;
-    const ownerId = btn.dataset.ownerId;
-    const ownerName = btn.dataset.ownerName;
-    const bulletinKey = document.getElementById('bulletinSelect')?.value; 
-    
-    if (!bulletinKey) {
-        showNotification('Lütfen rapor oluşturmak için bir bülten seçin.', 'error');
-        return;
-    }
-    
-    // 1. İlgili Sahibe Ait Monitored Marka ID'lerini Bul
-    const ownerMonitoredIds = monitoringTrademarks
-        .filter(tm => {
-            // Monitored markadaki sahibin IDsini bulmak için _getOwnerKey kullanıyoruz.
-            const ip = _getIp(tm.ipRecordId || tm.sourceRecordId || tm.id) || null;
-            const ownerInfo = _getOwnerKey(ip || tm, tm, allPersons);
-            return ownerInfo.id === ownerId; 
-        })
-        .map(tm => tm.id);
-    
-    if (ownerMonitoredIds.length === 0) {
-        showNotification(`${ownerName} sahibine ait izlenen marka bulunamadı.`, 'warning');
-        return;
-    }
-
-    // 2. allSimilarResults'ı bu Owner'a ait sonuçlara göre filtrele
-    const filteredResults = allSimilarResults.filter(r => 
-        ownerMonitoredIds.includes(r.monitoredTrademarkId) && r.isSimilar === true
-    );
-    
-    if (filteredResults.length === 0) {
-        showNotification(`${ownerName} için seçili bültende benzer (isSimilar=true) marka sonucu bulunamadı.`, 'warning');
-        return;
-    }
-
-    // 3. Rapor Oluşturma Mantığını Çağır
-    try {
-        btn.disabled = true;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Oluşturuluyor...';
-        
-        const reportData = filteredResults.map(r => {
-            const monitoredTm = monitoringTrademarks.find(mt => mt.id === r.monitoredTrademarkId);
-            return { 
-                monitoredMark: { 
-                    name: monitoredTm?.title || r.monitoredTrademark, 
-                    ownerName: ownerName, 
-                    // Nice sınıflarını hesaplamak için _uniqNice kullanılır (iprecords verisiyle)
-                    niceClasses: _uniqNice(monitoredTm) 
-                }, 
-                similarMark: { 
-                    name: r.markName, 
-                    niceClasses: r.niceClasses, 
-                    applicationNo: r.applicationNo, 
-                    similarity: r.similarityScore 
-                } 
-            };
-        });
-
-        // Cloud Function'ı çağır (generateSimilarityReport CF'nizin adıdır)
-        const generateReportFn = httpsCallable(functions, 'generateSimilarityReport');
-        const response = await generateReportFn({ results: reportData });
-        
-        if (response.data.success) {
-            const blob = new Blob([Uint8Array.from(atob(response.data.file), c => c.charCodeAt(0))], { type: 'application/zip' });
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(blob);
-            // Dosya adını sahibin adına göre düzenle
-            const safeOwnerName = ownerName.replace(/[^a-zA-Z0-9\s]/g, '_');
-            link.download = `${safeOwnerName}_Benzer_Markalar_Raporu.zip`;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            showNotification(`${ownerName} için rapor başarıyla oluşturuldu.`, 'success');
-        } else {
-            showNotification("Rapor oluşturulamadı: " + (response.data.error || 'Bilinmeyen hata'), 'error');
-        }
-    } catch (err) {
-        console.error("Owner Report generation error:", err);
-        showNotification("Rapor oluşturulurken bir hata oluştu!", 'error');
-    } finally {
-        btn.disabled = false;
-        btn.innerHTML = '<i class="fas fa-file-pdf"></i> Rapor Oluştur';
-    }
-};
-
 
 // --- External API Integrations (Harici API Entegrasyonları) ---
 window.queryApplicationNumberWithExtension = (applicationNo) => {
