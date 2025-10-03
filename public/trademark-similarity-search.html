@@ -853,6 +853,14 @@
 .accordion-content-row .table-sm thead th:nth-child(6) { text-align: center; } /* Görsel, Başvuru No, Başvuru Tarihi */
 .accordion-content-row .table-sm thead th:nth-child(5) { text-align: left; }  /* Nice Sınıfı */
 
+/* Eylemler Kolonunun İçeriğini Ortalar */
+.owner-row td:nth-child(4) { /* Eylemler kolonu ana satırda 4. kolondur (Toggle, Sahip, Sayı, Eylemler) */
+    text-align: center !important;
+}
+/* Buton Grubunun Kendisini Ortalar (display: flex olduğu için) */
+.owner-row td:nth-child(4) .btn-group {
+    justify-content: center; 
+}
 
 </style>
 </head>
