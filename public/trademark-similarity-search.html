@@ -783,7 +783,40 @@
 .trademark-image-thumbnail-large:hover {
   transform: none !important;
 }
-
+/* Akordeon satırları için temel stiller */
+.owner-row {
+    transition: background-color 0.2s ease;
+    border-bottom: 2px solid #dee2e6 !important;
+}
+.owner-row:hover {
+    background-color: #e9ecef !important;
+}
+/* Akordeon simgesini çevirme */
+.owner-row .toggle-icon {
+    transition: transform 0.3s ease;
+}
+.owner-row[aria-expanded="true"] .toggle-icon {
+    transform: rotate(180deg);
+}
+/* İçerik satırını başlangıçta gizle */
+.accordion-content-row {
+    display: none;
+}
+/* İçerik satırındaki iç tabloyu düzenleme */
+.accordion-content-row td {
+    padding: 0 !important; /* Ana hücre dolgusunu kaldır */
+}
+.accordion-content-row .table-sm th,
+.accordion-content-row .table-sm td {
+    border-top: none;
+    border-bottom: 1px solid #eee;
+    padding: 10px 15px;
+}
+.accordion-content-row .table-sm thead th {
+    font-weight: 500;
+    color: #333;
+    background-color: #f8f9fa; /* İç tablo başlığı için hafif arkaplan */
+}
 </style>
 </head>
 <body>
@@ -833,12 +866,10 @@
                         <table class="results-table">
                             <thead>
                                 <tr>
-                                    <th>Marka Adı</th>
-                                    <th>Marka Görseli</th>
-                                    <th>Başvuru No</th>
-                                    <th>Sahip</th>
-                                    <th>Nice Sınıfı</th>
-                                    <th>Başvuru Tarihi</th>
+                                    <th style="width: 5%;"></th> <th style="width: 30%; text-align: left;">Sahip</th>
+                                    <th style="width: 20%; text-align: center;">Marka Sayısı</th>
+                                    <th style="width: 25%;">Nice Sınıfları</th>
+                                    <th style="width: 20%; text-align: center;">Eylemler</th>
                                 </tr>
                             </thead>
                             <tbody id="monitoringListBody"></tbody>
