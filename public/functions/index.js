@@ -451,6 +451,89 @@ async function buildNotificationAttachments(db, notificationData) {
     return result;
   }
 }
+
+// index.js (Yeni Callable Fonksiyon)
+
+export const createObjectionTask = onCall(
+  {
+    region: 'europe-west1',
+    timeoutSeconds: 60,
+    memory: '256MiB'
+  },
+  async (request) => {
+    // callerEmail, frontend'den gelmeli
+    const { monitoredMarkId, similarMark, similarMarkName, bulletinNo, callerEmail } = request.data;
+    
+    if (!monitoredMarkId || !similarMark || !bulletinNo) {
+      throw new HttpsError('invalid-argument', 'Eksik parametre: monitoredMarkId, similarMark veya bulletinNo gereklidir.');
+    }
+
+    logger.log(`🚀 İtiraz İşi Oluşturuluyor: Hit=${similarMarkName}, MonitoredId=${monitoredMarkId}`);
+
+    // 1. İlgili Client ve Portföy bilgilerini bul
+    const { clientId, relatedIpRecordId, clientEmail } = await findClientAndIpRecord(monitoredMarkId);
+    
+    if (!clientId || !relatedIpRecordId) {
+         throw new HttpsError('not-found', 'İtiraz sahibi müvekkil veya ilişkili portföy kaydı bulunamadı.');
+    }
+    
+    // 2. Atama yapacak kişiyi bul (Task Type '20' için)
+    // Not: resolveApprovalAssignee, index.js'de mevcut.
+    const assignee = await resolveApprovalAssignee(db, '20'); // Task Type: 20 (Yayına İtiraz)
+    const assignedTo_uid = assignee?.uid || null;
+    const assignedTo_email = assignee?.email || callerEmail || null;
+
+    // 3. Task verisini oluştur
+    const taskTitle = `Yayına İtiraz: ${similarMarkName} (Bülten No: ${bulletinNo})`;
+    const taskDescription = `Müvekkil portföyü (${relatedIpRecordId}) için, bültende benzer bulunan (${similarMarkName}) markasına itiraz işi başlatılmıştır.`;
+
+    const taskData = {
+        taskType: '20', // Yayına İtiraz
+        status: 'open',
+        priority: 'high',
+        
+        // Varlık Bilgileri
+        relatedIpRecordId,
+        clientId,
+        clientEmail,
+
+        // Atama
+        assignedTo_uid,
+        assignedTo_email,
+
+        // Başlık ve Açıklama
+        title: taskTitle,
+        description: taskDescription,
+
+        // Detaylar (Hit'e ait bilgiler)
+        details: {
+            objectionTarget: similarMarkName,
+            targetAppNo: similarMark.applicationNo,
+            targetNiceClasses: similarMark.niceClasses,
+            bulletinNo: bulletinNo,
+            monitoredMarkId: monitoredMarkId,
+            similarityScore: similarMark.similarityScore,
+        },
+        
+        // Due Date: İtiraz süresi takibi için bülten tarihini kullanmak daha doğru olur.
+        // Şimdilik FieldValue.serverTimestamp() kullanıyoruz.
+        dueDate: FieldValue.serverTimestamp(), 
+        
+        source: 'similarity_search',
+        createdBy: callerEmail,
+
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+    };
+
+    // 4. Task'ı Firestore'a kaydet (Task ID counter mekanizması olmadan)
+    const taskRef = await adminDb.collection("tasks").add(taskData);
+    logger.log(`✅ Yayına İtiraz İşi Oluşturuldu. Task ID: ${taskRef.id}`);
+
+    return { taskId: taskRef.id, success: true, message: `İtiraz işi başarıyla oluşturuldu: ${taskRef.id}` };
+  }
+);
+
 // Send Email Notification (v2 Callable Function)
 export const sendEmailNotificationV2 = onCall(
   { region: "europe-west1" },
@@ -4917,6 +5000,49 @@ export const createClientNotificationOnRenewalTaskCreated = onDocumentCreated(
     }
   }
 );
+
+// index.js (Yeni Yardımcı Fonksiyon: Client/IP Bilgisi Bulma)
+
+/**
+ * Monitored Marka ID'si üzerinden en ilişkili IP Kaydını ve Client ID'sini bulur.
+ */
+async function findClientAndIpRecord(monitoredTrademarkId) {
+    let clientId = null;
+    let relatedIpRecordId = null;
+    let clientEmail = null;
+
+    try {
+        // 1. monitoringTrademarks'tan ana kaydı çek
+        const tmSnap = await db.collection("monitoringTrademarks").doc(monitoredTrademarkId).get();
+        const tmData = tmSnap.exists ? tmSnap.data() : null;
+
+        if (tmData) {
+            relatedIpRecordId = tmData.ipRecordId || tmData.sourceRecordId || null;
+            clientId = tmData.clientId || null; // Eğer direkt monitör kaydında varsa
+            
+            if (relatedIpRecordId) {
+                // 2. IP Records'tan client bilgisini çek (Client ID/Email'i güncelle)
+                const ipSnap = await db.collection("ipRecords").doc(relatedIpRecordId).get();
+                if (ipSnap.exists) {
+                    const ipData = ipSnap.data();
+                    clientId = ipData.clientId || (ipData.applicants?.[0]?.id || clientId);
+                }
+            }
+        }
+
+        if (clientId) {
+            // 3. Client'ın email'ini persons'tan bul
+            const personSnap = await db.collection("persons").doc(clientId).get();
+            if (personSnap.exists) {
+                clientEmail = personSnap.data().email || null;
+            }
+        }
+    } catch (e) {
+        logger.error("Client/IP Record Bulma Hatası:", e);
+    }
+    
+    return { clientId, relatedIpRecordId, clientEmail };
+}
 
 export const handleBulletinDeletion = onMessagePublished(
   { topic: 'bulletin-deletion', region: 'europe-west1', memory: '1GiB', cpu: 1, timeoutSeconds: 540 },
