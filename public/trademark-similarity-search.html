@@ -905,6 +905,24 @@
     color: #721c24;
     border: 1px solid #f5c6cb;
 }
+/* Ana Tablo Başlıkları (5 Kolon) */
+/* Toggle (1), Sahip (2), Marka Sayısı (3), İş Tetiklendi (4), Bildirim Durumu (5), Eylemler (6) */
+
+.monitoring-container .results-table th:nth-child(1),
+.monitoring-container .results-table td:nth-child(1) { width: 5%; }
+.monitoring-container .results-table th:nth-child(2),
+.monitoring-container .results-table td:nth-child(2) { width: 30%; text-align: left; }
+.monitoring-container .results-table th:nth-child(3),
+.monitoring-container .results-table td:nth-child(3) { width: 10%; text-align: center; } /* Marka Sayısı */
+/* YENİ KOLON: İş Tetiklendi */
+.monitoring-container .results-table th:nth-child(4),
+.monitoring-container .results-table td:nth-child(4) { width: 15%; text-align: center; } 
+/* Bildirim Durumu (Önceden 4. Kolondu, şimdi 5. Kolon oldu) */
+.monitoring-container .results-table th:nth-child(5),
+.monitoring-container .results-table td:nth-child(5) { width: 20%; text-align: center; }
+/* Eylemler (Önceden 5. Kolondu, şimdi 6. Kolon oldu) */
+.monitoring-container .results-table th:nth-child(6),
+.monitoring-container .results-table td:nth-child(6) { width: 20%; text-align: center; }
 
 </style>
 </head>
@@ -958,10 +976,12 @@
                         <table class="results-table">
                             <thead>
                                 <tr>
-                                    <th style="width: 5%;"></th> 
-                                    <th style="width: 35%; text-align: left;">Sahip</th> 
-                                    <th style="width: 15%; text-align: center;">Marka Sayısı</th>
-                                    <th style="width: 25%; text-align: center;">Bildirim Durumu</th> <th style="width: 20%; text-align: center;">Eylemler</th>
+                                    <th style="width: 5%;"></th>
+                                    <th style="width: 30%; text-align: left;">Sahip</th>
+                                    <th style="width: 10%; text-align: center;">Marka Sayısı</th>
+                                    <th style="width: 15%; text-align: center;">İş Tetiklendi</th>
+                                    <th style="width: 20%; text-align: center;">Bildirim Durumu</th>
+                                    <th style="width: 20%; text-align: center;">Eylemler</th>
                                 </tr>
                             </thead>
                             <tbody id="monitoringListBody"></tbody>
