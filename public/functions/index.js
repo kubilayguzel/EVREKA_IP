@@ -508,13 +508,21 @@ export const createObjectionTask = onCall(
 
       // 4. Task ID üret (counter mekanizması)
       const countersRef = adminDb.collection('counters').doc('tasks');
-      const taskId = await adminDb.runTransaction(async (transaction) => {
-        const counterDoc = await transaction.get(countersRef);
-        const currentValue = counterDoc.exists ? (counterDoc.data()?.value || 0) : 0;
-        const nextValue = currentValue + 1;
-        transaction.set(countersRef, { value: nextValue }, { merge: true });
-        return String(nextValue);
+      const taskId = await adminDb.runTransaction(async (tx) => {
+        const snap = await tx.get(countersRef);
+        const last = snap.exists ? Number(snap.data()?.lastId || 0) : 0;
+        const next = last + 1;
+
+        // lastId'i ilerlet, varsa yanlış "value" alanını temizle
+        tx.set(
+          countersRef,
+          { lastId: next, value: admin.firestore.FieldValue.delete() },
+          { merge: true }
+        );
+
+        return String(next);
       });
+
 
       // 5. Task verisini hazırla
       const hitMarkName = similarMarkName || similarMark?.markName || 'Bilinmeyen Marka';
@@ -524,9 +532,8 @@ export const createObjectionTask = onCall(
       const taskData = {
         id: taskId,
         taskType: '20',
-        status: 'open',
-        priority: (similarMark?.similarityScore || 0) >= 0.7 ? 'high' : 'medium',
-        
+        status: 'awaiting_client_approval',
+        priority: 'medium',        
         relatedIpRecordId,
         relatedIpRecordTitle: monitoredData.title || hitMarkName,
         clientId,
