@@ -821,17 +821,17 @@ const handleOwnerReportAndNotifyGeneration = async (event) => {
         showNotification('Lütfen rapor oluşturmak için bir bülten seçin.', 'error');
         return;
     }
-    const bulletinNo = bulletinKey.split('_')[0]; // Bülten Numarasını al
+    const bulletinNo = bulletinKey.split('_')[0];
 
-    // 1. FİLTRELEME VE KONTROL
-    const ownerMonitoredIds = monitoringTrademarks
-        .filter(tm => {
-            const ip = _getIp(tm.ipRecordId || tm.sourceRecordId || tm.id) || null;
-            const ownerInfo = _getOwnerKey(ip || tm, tm, allPersons);
-            return ownerInfo.id === ownerId; 
-        })
-        .map(tm => tm.id);
-    
+    // 1. FİLTRELEME VE KONTROL (✅ Async düzeltmesi)
+    const ownerMonitoredIds = [];
+    for (const tm of monitoringTrademarks) {
+        const ip = await _getIp(tm.ipRecordId || tm.sourceRecordId || tm.id);
+        const ownerInfo = _getOwnerKey(ip, tm, allPersons);
+        if (ownerInfo.id === ownerId) {
+            ownerMonitoredIds.push(tm.id);
+        }
+    }    
     const filteredResults = allSimilarResults.filter(r => 
         ownerMonitoredIds.includes(r.monitoredTrademarkId) && r.isSimilar === true
     );
@@ -857,12 +857,11 @@ const handleOwnerReportAndNotifyGeneration = async (event) => {
         
         for (const r of filteredResults) {
             try {
-                // Her sonuç için CF'i çağır
                 const taskResponse = await createObjectionTaskFn({
                     monitoredMarkId: r.monitoredTrademarkId,
-                    similarMark: { // Similar Mark (Hit) Detayları
+                    similarMark: {
                         applicationNo: r.applicationNo,
-                        similarMarkName: r.markName,
+                        markName: r.markName,  // ✅ similarMarkName → markName
                         niceClasses: r.niceClasses,
                         similarityScore: r.similarityScore,
                     },
