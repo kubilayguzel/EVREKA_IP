@@ -1180,38 +1180,38 @@ const handleOwnerReportGeneration = async (event) => {
 
 const handleGlobalReportAndNotifyGeneration = async (event) => {
   const btn = event.currentTarget;
-  const bulletinKey = document.getElementById('bulletinSelect')?.value; 
-  const allFilteredSimilarResults = allSimilarResults.filter(r => r.isSimilar === true);
+  const bulletinKey = document.getElementById('bulletinSelect')?.value;
+  const bNo = String(bulletinKey || '').split('_')[0];
 
-  if (!bulletinKey) {
+  if (!bNo) {
     showNotification('Lütfen rapor oluşturmak için bir bülten seçin.', 'error');
     return;
   }
+
+  // Tüm benzerler
+  const allFilteredSimilarResults = allSimilarResults.filter(r => r.isSimilar === true);
+
   if (allFilteredSimilarResults.length === 0) {
     showNotification('Seçili bülten ve filtrelere göre benzer (isSimilar=true) marka sonucu bulunamadı.', 'warning');
     return;
   }
 
-  // (Önerilen) Giriş kontrolü – fonksiyon auth context’i istiyorsa gereklidir
-  if (!firebaseServices?.auth?.currentUser) {
-    showNotification('Lütfen giriş yapın: İtiraz işi oluşturmak için oturum gerekli.', 'error');
-    return;
-  }
-
-  const callerEmail = firebaseServices.auth.currentUser?.email || 'anonim@evreka.com';
-  const bulletinNo = String(bulletinKey).split('_')[0];
-  const createObjectionTaskFn = httpsCallable(functions, 'createObjectionTask');
-
   try {
     btn.disabled = true;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> İşleniyor...';
 
-    // 1) Tüm benzer sonuçlar için itiraz işlerini oluştur
+    const callerEmail = firebaseServices.auth.currentUser?.email || 'anonim@evreka.com';
+    const createObjectionTaskFn = httpsCallable(functions, 'createObjectionTask');
+
     let createdTaskCount = 0;
 
-    // Sırayla ilerlemek, rate-limit / kota sorunlarını azaltır
-    for (let i = 0; i < allFilteredSimilarResults.length; i++) {
-      const r = allFilteredSimilarResults[i];
+    // Güvenli: zorunlu alanları olmayan hit’leri atla
+    const candidates = allFilteredSimilarResults.filter(r =>
+      r?.monitoredTrademarkId && r?.applicationNo && r?.markName
+    );
+
+    for (let i = 0; i < candidates.length; i++) {
+      const r = candidates[i];
       try {
         const resp = await createObjectionTaskFn({
           monitoredMarkId: r.monitoredTrademarkId,
@@ -1219,37 +1219,38 @@ const handleGlobalReportAndNotifyGeneration = async (event) => {
             applicationNo: r.applicationNo,
             markName: r.markName,
             niceClasses: r.niceClasses,
-            similarityScore: r.similarityScore,
+            similarityScore: r.similarityScore
           },
           similarMarkName: r.markName,
-          bulletinNo,
+          bulletinNo: bNo,
           callerEmail
         });
         if (resp?.data?.success) createdTaskCount++;
       } catch (e) {
-        // Toplu akışta tek tek hatalar log’a düşsün, süreç devam etsin
         console.error('[Global] createObjectionTask error:', {
-          appNo: r.applicationNo, markName: r.markName, error: e
+          message: e?.message,
+          code: e?.code,
+          details: e?.details,
         });
       }
     }
 
-    // 2) Tek bir rapor zip’i oluştur ve indir
-    const reportData = allFilteredSimilarResults.map(r => {
+    // Rapor oluştur (varsa mevcut kodundaki gibi)
+    const reportData = candidates.map(r => {
       const monitoredTm = monitoringTrademarks.find(mt => mt.id === r.monitoredTrademarkId);
       const ownerName = _pickOwners(monitoredTm, monitoredTm, allPersons);
-      return { 
-        monitoredMark: { 
-          name: monitoredTm?.title || r.monitoredTrademark, 
-          ownerName: ownerName || 'Tüm Sahipler', 
-          niceClasses: _uniqNice(monitoredTm)
-        }, 
-        similarMark: { 
-          name: r.markName, 
-          niceClasses: r.niceClasses, 
-          applicationNo: r.applicationNo, 
-          similarity: r.similarityScore 
-        } 
+      return {
+        monitoredMark: {
+          name: monitoredTm?.title || r.monitoredTrademark,
+          ownerName: ownerName || 'Tüm Sahipler',
+          niceClasses: _uniqNice(monitoredTm),
+        },
+        similarMark: {
+          name: r.markName,
+          niceClasses: r.niceClasses,
+          applicationNo: r.applicationNo,
+          similarity: r.similarityScore,
+        },
       };
     });
 
@@ -1257,20 +1258,31 @@ const handleGlobalReportAndNotifyGeneration = async (event) => {
     const response = await generateReportFn({ results: reportData });
 
     if (response?.data?.success) {
-      showNotification(`Toplu rapor oluşturuldu ve ${createdTaskCount} adet "Yayına İtiraz" işi oluşturuldu.`, 'success');
+      showNotification(`Toplu rapor oluşturuldu. ${createdTaskCount} adet yayına itiraz görevi oluşturuldu.`, 'success');
+
+      // Dosya indir
       const blob = new Blob([Uint8Array.from(atob(response.data.file), c => c.charCodeAt(0))], { type: 'application/zip' });
       const link = document.createElement('a');
       link.href = URL.createObjectURL(blob);
-      link.download = `Toplu_Rapor_Bildirim_${new Date().toISOString().slice(0,10)}.zip`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      link.download = `Toplu_Rapor_Bildirim_${new Date().toISOString().slice(0, 10)}.zip`;
+      document.body.appendChild(link); link.click(); document.body.removeChild(link);
+
+      // KALICILIK: Firestore’dan durum oku ve tabloyu senkronize et
+      if (createdTaskCount > 0 && typeof refreshTriggeredStatus === 'function') {
+        await refreshTriggeredStatus(bNo);
+        if (typeof renderMonitoringList === 'function') renderMonitoringList();
+      }
     } else {
-      showNotification("Toplu Rapor/Bildirim oluşturulamadı: " + (response?.data?.error || 'Bilinmeyen hata'), 'error');
+      showNotification('Toplu rapor oluşturulamadı.', 'error');
+      console.error('Global report error:', response?.data?.error);
     }
   } catch (err) {
-    console.error("Global Report generation error:", err);
-    showNotification("İşlem sırasında kritik hata oluştu!", 'error');
+    console.error('Global handler critical error:', {
+      message: err?.message,
+      code: err?.code,
+      details: err?.details,
+    });
+    showNotification('İşlem sırasında kritik hata oluştu!', 'error');
   } finally {
     btn.disabled = false;
     btn.innerHTML = '<i class="fas fa-paper-plane"></i> Rapor Oluştur ve Bildir';
