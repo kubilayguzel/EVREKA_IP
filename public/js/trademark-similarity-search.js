@@ -19,7 +19,7 @@ let allPersons = [];
 let pagination;
 let monitoringPagination;
 
-const functions = getFunctions(undefined, "europe-west1"); // Cloud Functions referansı
+const functions = firebaseServices.functions;
 
 const TSS_RESUME_KEY = 'TSS_LAST_STATE_V1';
 
@@ -1115,73 +1115,104 @@ const handleOwnerReportGeneration = async (event) => {
 };
 
 const handleGlobalReportAndNotifyGeneration = async (event) => {
-    const btn = event.currentTarget;
-    const bulletinKey = document.getElementById('bulletinSelect')?.value; 
-    
-    // Global rapor, mevcut filtrelenmiş markalara ait tüm benzer sonuçları içerir.
-    const allFilteredSimilarResults = allSimilarResults.filter(r => r.isSimilar === true);
+  const btn = event.currentTarget;
+  const bulletinKey = document.getElementById('bulletinSelect')?.value; 
+  const allFilteredSimilarResults = allSimilarResults.filter(r => r.isSimilar === true);
 
-    if (!bulletinKey) {
-        showNotification('Lütfen rapor oluşturmak için bir bülten seçin.', 'error');
-        return;
+  if (!bulletinKey) {
+    showNotification('Lütfen rapor oluşturmak için bir bülten seçin.', 'error');
+    return;
+  }
+  if (allFilteredSimilarResults.length === 0) {
+    showNotification('Seçili bülten ve filtrelere göre benzer (isSimilar=true) marka sonucu bulunamadı.', 'warning');
+    return;
+  }
+
+  // (Önerilen) Giriş kontrolü – fonksiyon auth context’i istiyorsa gereklidir
+  if (!firebaseServices?.auth?.currentUser) {
+    showNotification('Lütfen giriş yapın: İtiraz işi oluşturmak için oturum gerekli.', 'error');
+    return;
+  }
+
+  const callerEmail = firebaseServices.auth.currentUser?.email || 'anonim@evreka.com';
+  const bulletinNo = String(bulletinKey).split('_')[0];
+  const createObjectionTaskFn = httpsCallable(functions, 'createObjectionTask');
+
+  try {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> İşleniyor...';
+
+    // 1) Tüm benzer sonuçlar için itiraz işlerini oluştur
+    let createdTaskCount = 0;
+
+    // Sırayla ilerlemek, rate-limit / kota sorunlarını azaltır
+    for (let i = 0; i < allFilteredSimilarResults.length; i++) {
+      const r = allFilteredSimilarResults[i];
+      try {
+        const resp = await createObjectionTaskFn({
+          monitoredMarkId: r.monitoredTrademarkId,
+          similarMark: {
+            applicationNo: r.applicationNo,
+            markName: r.markName,
+            niceClasses: r.niceClasses,
+            similarityScore: r.similarityScore,
+          },
+          similarMarkName: r.markName,
+          bulletinNo,
+          callerEmail
+        });
+        if (resp?.data?.success) createdTaskCount++;
+      } catch (e) {
+        // Toplu akışta tek tek hatalar log’a düşsün, süreç devam etsin
+        console.error('[Global] createObjectionTask error:', {
+          appNo: r.applicationNo, markName: r.markName, error: e
+        });
+      }
     }
 
-    if (allFilteredSimilarResults.length === 0) {
-        showNotification('Seçili bülten ve filtrelere göre benzer (isSimilar=true) marka sonucu bulunamadı.', 'warning');
-        return;
-    }
-
-    // 1. Rapor verisini hazırla
+    // 2) Tek bir rapor zip’i oluştur ve indir
     const reportData = allFilteredSimilarResults.map(r => {
-        const monitoredTm = monitoringTrademarks.find(mt => mt.id === r.monitoredTrademarkId);
-        const ownerName = _pickOwners(monitoredTm, monitoredTm, allPersons); // Sahibi al
-        
-        return { 
-            monitoredMark: { 
-                name: monitoredTm?.title || r.monitoredTrademark, 
-                ownerName: ownerName || 'Tüm Sahipler', 
-                niceClasses: _uniqNice(monitoredTm) 
-            }, 
-            similarMark: { 
-                name: r.markName, 
-                niceClasses: r.niceClasses, 
-                applicationNo: r.applicationNo, 
-                similarity: r.similarityScore 
-            } 
-        };
+      const monitoredTm = monitoringTrademarks.find(mt => mt.id === r.monitoredTrademarkId);
+      const ownerName = _pickOwners(monitoredTm, monitoredTm, allPersons);
+      return { 
+        monitoredMark: { 
+          name: monitoredTm?.title || r.monitoredTrademark, 
+          ownerName: ownerName || 'Tüm Sahipler', 
+          niceClasses: _uniqNice(monitoredTm)
+        }, 
+        similarMark: { 
+          name: r.markName, 
+          niceClasses: r.niceClasses, 
+          applicationNo: r.applicationNo, 
+          similarity: r.similarityScore 
+        } 
+      };
     });
-    
-    // 2. RAPOR OLUŞTURMA VE BİLDİRİMİ SİMÜLE ET
-    try {
-        btn.disabled = true;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> İşleniyor...';
-        
-        const generateReportFn = httpsCallable(functions, 'generateSimilarityReport');
-        const response = await generateReportFn({ results: reportData });
-        
-        if (response.data.success) {
-            showNotification(`Tüm filtreli markalar için toplu rapor oluşturuldu ve bildirim (simülasyon) başlatıldı. Dosya indiriliyor.`, 'success');
 
-            // Trigger actual download
-            const blob = new Blob([Uint8Array.from(atob(response.data.file), c => c.charCodeAt(0))], { type: 'application/zip' });
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(blob);
-            link.download = `Toplu_Rapor_Bildirim_${new Date().toISOString().slice(0, 10)}.zip`;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            
-        } else {
-            showNotification("Toplu Rapor/Bildirim oluşturulamadı: " + (response.data.error || 'Bilinmeyen hata'), 'error');
-        }
-    } catch (err) {
-        console.error("Global Report generation error:", err);
-        showNotification("İşlem sırasında kritik hata oluştu!", 'error');
-    } finally {
-        btn.disabled = false;
-        btn.innerHTML = '<i class="fas fa-paper-plane"></i> Rapor Oluştur ve Bildir';
+    const generateReportFn = httpsCallable(functions, 'generateSimilarityReport');
+    const response = await generateReportFn({ results: reportData });
+
+    if (response?.data?.success) {
+      showNotification(`Toplu rapor oluşturuldu ve ${createdTaskCount} adet "Yayına İtiraz" işi oluşturuldu.`, 'success');
+      const blob = new Blob([Uint8Array.from(atob(response.data.file), c => c.charCodeAt(0))], { type: 'application/zip' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `Toplu_Rapor_Bildirim_${new Date().toISOString().slice(0,10)}.zip`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } else {
+      showNotification("Toplu Rapor/Bildirim oluşturulamadı: " + (response?.data?.error || 'Bilinmeyen hata'), 'error');
     }
+  } catch (err) {
+    console.error("Global Report generation error:", err);
+    showNotification("İşlem sırasında kritik hata oluştu!", 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-paper-plane"></i> Rapor Oluştur ve Bildir';
+  }
 };
+
 
 // --- Geri kalan kodlar (önceden tanımlı olanlar) ---
 
