@@ -792,12 +792,21 @@ const renderMonitoringList = async () => {
 // --- YENİ RAPOR OLUŞTURMA İŞLEYİCİSİ ---
 
 const attachGenerateReportListener = () => {
-    // Liste her yeniden render edildiğinde listener'ların güncel kalmasını sağlar.
+    // Bu listener artık hem 'rapor oluştur' hem de 'rapor oluştur ve bildir' butonlarını destekler.
     document.querySelectorAll('.generate-report-btn').forEach(btn => {
-        btn.removeEventListener('click', handleOwnerReportGeneration);
-        btn.addEventListener('click', handleOwnerReportGeneration);
+        // Eski 'Sadece İndir' butonu için de aynı işleyiciyi kullanıyoruz.
+        btn.removeEventListener('click', handleOwnerReportAndNotifyGeneration);
+        btn.addEventListener('click', handleOwnerReportAndNotifyGeneration);
+    });
+
+    // Yeni 'Oluştur ve Bildir' butonu için dinleyici ekle
+    document.querySelectorAll('.generate-report-and-notify-btn').forEach(btn => {
+        btn.removeEventListener('click', handleOwnerReportAndNotifyGeneration);
+        btn.addEventListener('click', handleOwnerReportAndNotifyGeneration);
     });
 };
+
+// trademark-similarity-search.js (handleOwnerReportAndNotifyGeneration fonksiyonunun YENİ HALİ)
 
 const handleOwnerReportAndNotifyGeneration = async (event) => {
     event.stopPropagation();
@@ -844,12 +853,13 @@ const handleOwnerReportAndNotifyGeneration = async (event) => {
 
         let createdTaskCount = 0;
         const callerEmail = firebaseServices.auth.currentUser?.email || 'anonim@evreka.com';
+        const createObjectionTaskFn = httpsCallable(functions, 'createObjectionTask'); // Yeni CF referansı
 
         // >>> HER BENZER MARKA İÇİN İTİRAZ İŞİ OLUŞTUR <<<
-        const createObjectionTaskFn = httpsCallable(functions, 'createObjectionTask');
         
         for (const r of filteredResults) {
             try {
+                // Her sonuç için CF'i çağır
                 const taskResponse = await createObjectionTaskFn({
                     monitoredMarkId: r.monitoredTrademarkId,
                     similarMark: { // Similar Mark (Hit) Detayları
@@ -933,7 +943,6 @@ const handleOwnerReportAndNotifyGeneration = async (event) => {
         btn.innerHTML = '<i class="fas fa-paper-plane"></i> Rapor Oluştur ve Bildir';
     }
 };
-
 
 const handleGlobalReportAndNotifyGeneration = async (event) => {
     const btn = event.currentTarget;
