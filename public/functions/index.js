@@ -452,8 +452,6 @@ async function buildNotificationAttachments(db, notificationData) {
   }
 }
 
-// index.js (Yeni Callable Fonksiyon)
-
 export const createObjectionTask = onCall(
   {
     region: 'europe-west1',
@@ -461,76 +459,123 @@ export const createObjectionTask = onCall(
     memory: '256MiB'
   },
   async (request) => {
-    // callerEmail, frontend'den gelmeli
     const { monitoredMarkId, similarMark, similarMarkName, bulletinNo, callerEmail } = request.data;
     
     if (!monitoredMarkId || !similarMark || !bulletinNo) {
       throw new HttpsError('invalid-argument', 'Eksik parametre: monitoredMarkId, similarMark veya bulletinNo gereklidir.');
     }
 
-    logger.log(`🚀 İtiraz İşi Oluşturuluyor: Hit=${similarMarkName}, MonitoredId=${monitoredMarkId}`);
+    logger.log(`🚀 İtiraz İşi Oluşturuluyor: Hit=${similarMarkName || similarMark?.markName}, MonitoredId=${monitoredMarkId}`);
 
-    // 1. İlgili Client ve Portföy bilgilerini bul
-    const { clientId, relatedIpRecordId, clientEmail } = await findClientAndIpRecord(monitoredMarkId);
-    
-    if (!clientId || !relatedIpRecordId) {
-         throw new HttpsError('not-found', 'İtiraz sahibi müvekkil veya ilişkili portföy kaydı bulunamadı.');
-    }
-    
-    // 2. Atama yapacak kişiyi bul (Task Type '20' için)
-    // Not: resolveApprovalAssignee, index.js'de mevcut.
-    const assignee = await resolveApprovalAssignee(db, '20'); // Task Type: 20 (Yayına İtiraz)
-    const assignedTo_uid = assignee?.uid || null;
-    const assignedTo_email = assignee?.email || callerEmail || null;
+    try {
+      // 1. İzlenen markayı bul
+      const monitoredDoc = await adminDb.collection('monitoringTrademarks').doc(monitoredMarkId).get();
+      
+      if (!monitoredDoc.exists) {
+        throw new HttpsError('not-found', 'İzlenen marka bulunamadı: ' + monitoredMarkId);
+      }
+      
+      const monitoredData = monitoredDoc.data();
+      const relatedIpRecordId = monitoredData.ipRecordId || monitoredData.sourceRecordId || null;
+      
+      if (!relatedIpRecordId) {
+        throw new HttpsError('not-found', 'İzlenen marka için ilişkili IP kaydı bulunamadı.');
+      }
 
-    // 3. Task verisini oluştur
-    const taskTitle = `Yayına İtiraz: ${similarMarkName} (Bülten No: ${bulletinNo})`;
-    const taskDescription = `Müvekkil portföyü (${relatedIpRecordId}) için, bültende benzer bulunan (${similarMarkName}) markasına itiraz işi başlatılmıştır.`;
+      // 2. IP kaydından client bilgisini al
+      let clientId = monitoredData.clientId || null;
+      let clientEmail = null;
+      
+      if (relatedIpRecordId) {
+        const ipDoc = await adminDb.collection('ipRecords').doc(relatedIpRecordId).get();
+        if (ipDoc.exists) {
+          const ipData = ipDoc.data();
+          clientId = clientId || ipData.clientId || (ipData.applicants?.[0]?.id);
+        }
+      }
 
-    const taskData = {
-        taskType: '20', // Yayına İtiraz
+      if (clientId) {
+        const personDoc = await adminDb.collection('persons').doc(clientId).get();
+        if (personDoc.exists) {
+          clientEmail = personDoc.data()?.email || null;
+        }
+      }
+
+      // 3. Atama kural kontrolü
+      const assignee = await resolveApprovalAssignee(adminDb, '20');
+      const assignedTo_uid = assignee?.uid || null;
+      const assignedTo_email = assignee?.email || callerEmail || null;
+
+      // 4. Task ID üret (counter mekanizması)
+      const countersRef = adminDb.collection('counters').doc('tasks');
+      const taskId = await adminDb.runTransaction(async (transaction) => {
+        const counterDoc = await transaction.get(countersRef);
+        const currentValue = counterDoc.exists ? (counterDoc.data()?.value || 0) : 0;
+        const nextValue = currentValue + 1;
+        transaction.set(countersRef, { value: nextValue }, { merge: true });
+        return String(nextValue);
+      });
+
+      // 5. Task verisini hazırla
+      const hitMarkName = similarMarkName || similarMark?.markName || 'Bilinmeyen Marka';
+      const taskTitle = `Yayına İtiraz: ${hitMarkName} (Bülten No: ${bulletinNo})`;
+      const taskDescription = `${monitoredData.title || 'İzlenen marka'} için bültende benzer bulunan ${hitMarkName} markasına itiraz işi.`;
+
+      const taskData = {
+        id: taskId,
+        taskType: '20',
         status: 'open',
-        priority: 'high',
+        priority: (similarMark?.similarityScore || 0) >= 0.7 ? 'high' : 'medium',
         
-        // Varlık Bilgileri
         relatedIpRecordId,
+        relatedIpRecordTitle: monitoredData.title || hitMarkName,
         clientId,
         clientEmail,
 
-        // Atama
         assignedTo_uid,
         assignedTo_email,
 
-        // Başlık ve Açıklama
         title: taskTitle,
         description: taskDescription,
 
-        // Detaylar (Hit'e ait bilgiler)
         details: {
-            objectionTarget: similarMarkName,
-            targetAppNo: similarMark.applicationNo,
-            targetNiceClasses: similarMark.niceClasses,
-            bulletinNo: bulletinNo,
-            monitoredMarkId: monitoredMarkId,
-            similarityScore: similarMark.similarityScore,
+          objectionTarget: hitMarkName,
+          targetAppNo: similarMark?.applicationNo || '',
+          targetNiceClasses: similarMark?.niceClasses || [],
+          bulletinNo: bulletinNo,
+          monitoredMarkId: monitoredMarkId,
+          similarityScore: similarMark?.similarityScore || 0,
         },
         
-        // Due Date: İtiraz süresi takibi için bülten tarihini kullanmak daha doğru olur.
-        // Şimdilik FieldValue.serverTimestamp() kullanıyoruz.
-        dueDate: FieldValue.serverTimestamp(), 
-        
+        dueDate: null,
         source: 'similarity_search',
-        createdBy: callerEmail,
+        createdBy: callerEmail || 'system',
 
         createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
-    };
+        
+        history: [{
+          timestamp: FieldValue.serverTimestamp(),
+          action: 'Benzerlik aramasından otomatik iş oluşturuldu',
+          userEmail: callerEmail || 'system'
+        }]
+      };
 
-    // 4. Task'ı Firestore'a kaydet (Task ID counter mekanizması olmadan)
-    const taskRef = await adminDb.collection("tasks").add(taskData);
-    logger.log(`✅ Yayına İtiraz İşi Oluşturuldu. Task ID: ${taskRef.id}`);
+      // 6. Firestore'a kaydet
+      await adminDb.collection('tasks').doc(taskId).set(taskData);
+      
+      logger.log(`✅ Yayına İtiraz İşi Oluşturuldu. Task ID: ${taskId}`);
 
-    return { taskId: taskRef.id, success: true, message: `İtiraz işi başarıyla oluşturuldu: ${taskRef.id}` };
+      return { 
+        taskId: taskId, 
+        success: true, 
+        message: `İtiraz işi başarıyla oluşturuldu: ${taskId}` 
+      };
+
+    } catch (error) {
+      logger.error('❌ İtiraz işi oluşturma hatası:', error);
+      throw new HttpsError('internal', `İş oluşturulamadı: ${error.message}`);
+    }
   }
 );
 
