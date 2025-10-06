@@ -1319,6 +1319,7 @@ const checkCacheAndToggleButtonStates = async () => {
         startSearchBtn.disabled = true;
         researchBtn.disabled = true;
         infoMessageContainer.innerHTML = '';
+        btnGenerateReportAndNotifyGlobal.disabled = true; // Pasif kalması gereken durum
         return;
     }
     
@@ -1332,12 +1333,19 @@ const checkCacheAndToggleButtonStates = async () => {
             await loadDataFromCache(bulletinKey);
             startSearchBtn.disabled = true;
             researchBtn.disabled = !hasOriginalBulletin;
+            
+            // YENİ KONTROL: Cache'ten sonuç varsa butonu etkinleştir
+            btnGenerateReportAndNotifyGlobal.disabled = allSimilarResults.length === 0;
+
             const messageType = hasOriginalBulletin ? 'success' : 'warning';
             const messageText = hasOriginalBulletin ? 'Bu bülten sistemde kayıtlı. Önbellekten sonuçlar yüklendi.' : 'Bu bülten sistemde kayıtlı değil. Sadece eski arama sonuçları gösterilmektedir.';
             infoMessageContainer.innerHTML = `<div class="info-message ${messageType}"><strong>Bilgi:</strong> ${messageText}</div>`;
         } else {
             startSearchBtn.disabled = !hasOriginalBulletin;
             researchBtn.disabled = true;
+            
+            btnGenerateReportAndNotifyGlobal.disabled = true; // Sonuç yoksa devre dışı bırak
+
             const messageType = hasOriginalBulletin ? 'info' : 'error';
             const messageText = hasOriginalBulletin ? 'Önbellekte veri bulunamadı. "Arama Başlat" butonuna tıklayarak arama yapabilirsiniz.' : 'Bu bülten sistemde kayıtlı değil ve arama sonucu da bulunamadı.';
             infoMessageContainer.innerHTML = `<div class="info-message ${messageType}"><strong>Bilgi:</strong> ${messageText}</div>`;
@@ -1349,6 +1357,7 @@ const checkCacheAndToggleButtonStates = async () => {
         console.error('❌ Cache check error:', error);
         startSearchBtn.disabled = true;
         researchBtn.disabled = true;
+        btnGenerateReportAndNotifyGlobal.disabled = true; // Hata durumunda devre dışı bırak
         infoMessageContainer.innerHTML = `<div class="info-message error"><strong>Hata:</strong> Bülten bilgileri kontrol edilirken bir hata oluştu.</div>`;
     }
 };
@@ -1394,20 +1403,22 @@ const performSearch = async () => {
         console.error("❌ Search operation error:", error);
         infoMessageContainer.innerHTML = `<div class="info-message error"><strong>Hata:</strong> Arama işlemi sırasında bir hata oluştu.</div>`;
     } finally {
-        loadingIndicator.style.display = 'none';
-        groupAndSortResults();
-        if (allSimilarResults.length > 0) {
-            infoMessageContainer.innerHTML = `<div class="info-message success">Toplam ${allSimilarResults.length} benzer sonuç bulundu.</div>`;
-            startSearchBtn.disabled = true;
-            researchBtn.disabled = false;
-        } else {
-            noRecordsMessage.textContent = 'Arama sonucu bulunamadı.';
-            noRecordsMessage.style.display = 'block';
-            startSearchBtn.disabled = false;
-            researchBtn.disabled = true;
-        }
-        if (pagination) pagination.update(allSimilarResults.length);
-        renderCurrentPageOfResults();
+            loadingIndicator.style.display = 'none';
+            groupAndSortResults();
+            if (allSimilarResults.length > 0) {
+                infoMessageContainer.innerHTML = `<div class="info-message success">Toplam ${allSimilarResults.length} benzer sonuç bulundu.</div>`;
+                startSearchBtn.disabled = true;
+                researchBtn.disabled = false;
+                btnGenerateReportAndNotifyGlobal.disabled = false; // YENİ: Butonu etkinleştir
+            } else {
+                noRecordsMessage.textContent = 'Arama sonucu bulunamadı.';
+                noRecordsMessage.style.display = 'block';
+                startSearchBtn.disabled = false;
+                researchBtn.disabled = true;
+                btnGenerateReportAndNotifyGlobal.disabled = true; // YENİ: Butonu devre dışı bırak
+            }
+            if (pagination) pagination.update(allSimilarResults.length);
+            renderCurrentPageOfResults();
     }
 };
 
