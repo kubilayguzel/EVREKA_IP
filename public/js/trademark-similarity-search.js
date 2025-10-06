@@ -288,51 +288,47 @@ const _pickAppDate = (ip, tm) => {
 
 // Sahibi gruplamak için benzersiz bir anahtar ve adı döndürür
 const _getOwnerKey = (ip, tm, persons = []) => {
-    // 1. İlgili IP kaydı mevcutsa, ilk başvuran (applicant) ID'sini dene
-    const firstApplicant = ip?.applicants?.[0] || tm?.applicants?.[0] || null;
-    if (firstApplicant?.id) {
-        const person = persons.find(p => p.id === firstApplicant.id);
-        const name = person?.name || firstApplicant.name || firstApplicant.title || 'Bilinmeyen Sahip';
-        // En sağlam anahtar: (Kişi ID'si + İsim)
-        return { key: `${firstApplicant.id}_${name}`, id: firstApplicant.id, name: name };
-    
-// --- İş Tetiklendi durumunu Firestore'dan okuyan yardımcı ---
-const refreshTriggeredStatus = async (bulletinNo) => {
-    try {
-        taskTriggeredStatus.clear();
-        if (!bulletinNo) return;
-        const qTasks = query(
-            collection(db, 'tasks'),
-            where('taskType', '==', '20'),
-            where('bulletinNo', '==', String(bulletinNo)),
-            where('status', '==', 'awaiting_client_approval')
-        );
-        const snap = await getDocs(qTasks);
-        if (snap.empty) return;
-
-        const tmById = new Map(monitoringTrademarks.map(tm => [tm.id, tm]));
-        for (const d of snap.docs) {
-            const t = d.data();
-            const tm = tmById.get(t.monitoredMarkId);
-            if (!tm) continue;
-            const ip = await _getIp(tm.ipRecordId || tm.sourceRecordId || tm.id);
-            const ownerInfo = _getOwnerKey(ip, tm, allPersons);
-            if (ownerInfo?.id) taskTriggeredStatus.set(ownerInfo.id, 'Evet');
-        }
-    } catch (e) {
-        console.error('[TSS] refreshTriggeredStatus error:', e);
-    }
+  const firstApplicant = ip?.applicants?.[0] || tm?.applicants?.[0] || null;
+  if (firstApplicant?.id) {
+    const person = persons.find(p => p.id === firstApplicant.id);
+    const name = person?.name || firstApplicant.name || firstApplicant.title || 'Bilinmeyen Sahip';
+    return { key: `${firstApplicant.id}_${name}`, id: firstApplicant.id, name };
+  }
+  // 2) IP yoksa/ID yoksa:
+  const ownerName = _pickOwners(ip, tm, persons);
+  return {
+    key: ownerName || 'Bilinmeyen Sahip',
+    id: (ip?.clientId || tm?.clientId || 'unknown_group'),
+    name: ownerName || 'Bilinmeyen Sahip'
+  };
 };
 
-}
-    
-    // 2. IP kaydı yoksa veya applicant ID'si bulunamazsa: PickOwners metinini kullan
-    const ownerName = _pickOwners(ip, tm, persons);
-    return { 
-        key: ownerName || 'Bilinmeyen Sahip', 
-        id: (ip?.clientId || tm?.clientId || 'unknown_group'), 
-        name: ownerName || 'Bilinmeyen Sahip' 
-    };
+// --- İş Tetiklendi durumunu Firestore'dan okuyan yardımcı ---
+const refreshTriggeredStatus = async (bulletinNo) => {
+  try {
+    taskTriggeredStatus.clear();
+    if (!bulletinNo) return;
+    const qTasks = query(
+      collection(db, 'tasks'),
+      where('taskType', '==', '20'),
+      where('bulletinNo', '==', String(bulletinNo)),
+      where('status', '==', 'awaiting_client_approval')
+    );
+    const snap = await getDocs(qTasks);
+    if (snap.empty) return;
+
+    const tmById = new Map(monitoringTrademarks.map(tm => [tm.id, tm]));
+    for (const d of snap.docs) {
+      const t = d.data();
+      const tm = tmById.get(t.monitoredMarkId);
+      if (!tm) continue;
+      const ip = await _getIp(tm.ipRecordId || tm.sourceRecordId || tm.id);
+      const ownerInfo = _getOwnerKey(ip, tm, allPersons);
+      if (ownerInfo?.id) taskTriggeredStatus.set(ownerInfo.id, 'Evet');
+    }
+  } catch (e) {
+    console.error('[TSS] refreshTriggeredStatus error:', e);
+  }
 };
 
 // Akordeon açma/kapama olay dinleyicisini ekler
@@ -697,7 +693,7 @@ const renderMonitoringList = async () => {
     
     if (!list.length) {
         // Colspan'ı 5'e ayarlayın (Toggle, Sahip, Sayı, Bildirim Durumu, Eylemler)
-        tbody.innerHTML = '<tr><td colspan="5" class="no-records">Filtreye uygun izlenecek marka bulunamadı.</td></tr>'; 
+        tbody.innerHTML = '<tr><td colspan="6" class="no-records">Filtreye uygun izlenecek marka bulunamadı.</td></tr>';
         return;
     }
 
@@ -732,35 +728,47 @@ const renderMonitoringList = async () => {
         const group = groupedByOwner[ownerKey];
         const groupUid = `owner-group-${group.ownerId}-${ownerKey.replace(/[^a-zA-Z0-9]/g, '').slice(-10)}`;
         
-        // Grup Başlığı Satırı (5 KOLON: Toggle, Sahip, Sayı, Bildirim Durumu, Eylemler)
-        const headerRow = `
-            <tr class="owner-row" data-toggle="collapse" data-target="#${groupUid}" aria-expanded="false" aria-controls="${groupUid}" style="cursor: pointer;">
-                <td style="width: 5%; text-align: center; color: #1e3c72;"><i class="fas fa-chevron-down toggle-icon"></i></td>
-                <td style="width: 35%; text-align: left;">${group.ownerName}</td>
-                <td style="width: 15%; text-align: center;">${group.trademarks.length}</td>
-                
-                <td style="width: 25%; text-align: center;">
-                    <span class="notification-status-badge initial-status" data-owner-id="${group.ownerId}">
-                        ${initialNotificationStatus}
-                    </span>
-                </td> <td style="width: 20%; text-align: center;">
-                    <div class="btn-group">
-                        <button class="action-btn btn-success generate-report-and-notify-btn" 
-                                data-owner-id="${group.ownerId}" 
-                                data-owner-name="${group.ownerName}" 
-                                title="Rapor Oluştur ve Müşteriye Bildir">
-                            <i class="fas fa-paper-plane"></i> Rapor Oluştur ve Bildir
-                        </button>
-                        <button class="action-btn btn-primary generate-report-btn" 
-                                data-owner-id="${group.ownerId}" 
-                                data-owner-name="${group.ownerName}" 
-                                title="${group.ownerName} için benzerlik raporu oluştur (Sadece İndir)">
-                            <i class="fas fa-file-pdf"></i> Rapor Oluştur
-                        </button>
-                    </div>
-                </td>
-            </tr>
-        `;
+// ✅ 6 kolona çıktı: İş Tetiklendi eklendi
+    const headerRow = `
+    <tr class="owner-row" data-toggle="collapse" data-target="#${groupUid}" aria-expanded="false" aria-controls="${groupUid}" style="cursor: pointer;">
+    <td style="width:5%;text-align:center;color:#1e3c72;"><i class="fas fa-chevron-down toggle-icon"></i></td>
+    <td style="width:35%;text-align:left;">${group.ownerName}</td>
+    <td style="width:10%;text-align:center;">${group.trademarks.length}</td>
+
+    <!-- İŞ TETİKLENDİ -->
+    <td style="width:15%;text-align:center;">
+        <span class="task-triggered-status trigger-status-badge ${taskTriggeredStatus.get(group.ownerId)==='Evet' ? 'trigger-yes' : 'trigger-no'}"
+            data-owner-id="${group.ownerId}">
+        ${taskTriggeredStatus.get(group.ownerId)==='Evet' ? 'Evet' : 'Hayır'}
+        </span>
+    </td>
+
+    <!-- BİLDİRİM DURUMU -->
+    <td style="width:15%;text-align:center;">
+        <span class="notification-status-badge initial-status" data-owner-id="${group.ownerId}">
+        Gönderilmedi
+        </span>
+    </td>
+
+    <!-- EYLEMLER -->
+    <td style="width:20%;text-align:center;">
+        <div class="btn-group">
+        <button class="action-btn btn-success generate-report-and-notify-btn"
+                data-owner-id="${group.ownerId}"
+                data-owner-name="${group.ownerName}"
+                title="Rapor Oluştur ve Müşteriye Bildir">
+            <i class="fas fa-paper-plane"></i> Rapor Oluştur ve Bildir
+        </button>
+        <button class="action-btn btn-primary generate-report-btn"
+                data-owner-id="${group.ownerId}"
+                data-owner-name="${group.ownerName}"
+                title="${group.ownerName} için benzerlik raporu oluştur (Sadece İndir)">
+            <i class="fas fa-file-pdf"></i> Rapor Oluştur
+        </button>
+        </div>
+    </td>
+    </tr>
+    `;
         allRowsHtml.push(headerRow);
 
         // Akordeon İçeriği (İç Tablo Satırları) - DETAY yapısı (6 kolonlu) KORUNDU
@@ -789,7 +797,7 @@ const renderMonitoringList = async () => {
         // Gizli İçerik Satırı (colspan'ı 5'e ayarlayın, ana tabloya uyması için)
         const contentRow = `
             <tr id="${groupUid}" class="accordion-content-row" style="display: none;">
-                <td colspan="5" style="padding: 0;">
+                <td colspan="6" style="padding: 0;">
                     <table class="table table-sm" style="margin: 0; background-color: transparent;">
                         <thead>
                             <tr>
@@ -867,232 +875,227 @@ const attachGenerateReportListener = () => {
 // trademark-similarity-search.js (handleOwnerReportAndNotifyGeneration fonksiyonunun YENİ HALİ)
 
 const handleOwnerReportAndNotifyGeneration = async (event) => {
-    event.stopPropagation();
-    
-    const btn = event.currentTarget;
-    const ownerId = btn.dataset.ownerId;
-    const ownerName = btn.dataset.ownerName;
-    const bulletinKey = document.getElementById('bulletinSelect')?.value; 
-    
-    console.log('🔵 [1] Fonksiyon başladı', { ownerId, ownerName, bulletinKey });
-    
-    const statusBadge = document.querySelector(`.notification-status-badge[data-owner-id="${ownerId}"]`);
-    
-    if (!bulletinKey) {
-        console.log('❌ [1.1] Bülten seçilmemiş');
-        showNotification('Lütfen rapor oluşturmak için bir bülten seçin.', 'error');
-        return;
-    }
-    const bulletinNo = bulletinKey.split('_')[0];
+  event.stopPropagation();
 
-    // 1. FİLTRELEME VE KONTROL
-    console.log('🔵 [2] Filtreleme başlıyor...', { totalMonitoringTrademarks: monitoringTrademarks.length });
-    const ownerMonitoredIds = [];
-    for (const tm of monitoringTrademarks) {
-        const ip = await _getIp(tm.ipRecordId || tm.sourceRecordId || tm.id);
-        const ownerInfo = _getOwnerKey(ip, tm, allPersons);
-        if (ownerInfo.id === ownerId) {
-            ownerMonitoredIds.push(tm.id);
-        }
+  const btn = event.currentTarget;
+  const ownerId = btn.dataset.ownerId;
+  const ownerName = btn.dataset.ownerName;
+  const bulletinKey = document.getElementById('bulletinSelect')?.value;
+
+  console.log('🔵 [1] Fonksiyon başladı', { ownerId, ownerName, bulletinKey });
+
+  const statusBadge = document.querySelector(`.notification-status-badge[data-owner-id="${ownerId}"]`);
+
+  if (!bulletinKey) {
+    console.log('❌ [1.1] Bülten seçilmemiş');
+    showNotification('Lütfen rapor oluşturmak için bir bülten seçin.', 'error');
+    return;
+  }
+  const bulletinNo = String(bulletinKey).split('_')[0];
+
+  // 1) SAHİBE AİT İZLENEN MARKALARI TOPLA
+  console.log('🔵 [2] Filtreleme başlıyor...', { totalMonitoringTrademarks: monitoringTrademarks.length });
+  const ownerMonitoredIds = [];
+  for (const tm of monitoringTrademarks) {
+    const ip = await _getIp(tm.ipRecordId || tm.sourceRecordId || tm.id);
+    const ownerInfo = _getOwnerKey(ip, tm, allPersons);
+    if (ownerInfo.id === ownerId) ownerMonitoredIds.push(tm.id);
+  }
+
+  console.log('🔵 [3] Filtreleme tamamlandı', { ownerMonitoredIds, count: ownerMonitoredIds.length });
+
+  const filteredResults = allSimilarResults.filter(
+    (r) => ownerMonitoredIds.includes(r.monitoredTrademarkId) && r.isSimilar === true
+  );
+
+  console.log('🔵 [4] Benzer sonuçlar filtrelendi', {
+    totalResults: allSimilarResults.length,
+    filteredCount: filteredResults.length,
+    sample: filteredResults.slice(0, 2).map((r) => ({
+      markName: r.markName,
+      isSimilar: r.isSimilar,
+      monitoredTrademarkId: r.monitoredTrademarkId,
+    })),
+  });
+
+  if (filteredResults.length === 0) {
+    console.log('⚠️ [4.1] Benzer sonuç bulunamadı');
+    showNotification(`${ownerName} için seçili bültende benzer (isSimilar=true) marka sonucu bulunamadı.`, 'warning');
+    return;
+  }
+
+  // 2) İŞ OLUŞTURMA + RAPOR
+  try {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> İşleniyor...';
+
+    // Bildirim Durumu, rapor sürecini gösterir (işten bağımsız)
+    if (statusBadge) {
+      statusBadge.textContent = 'İşleniyor...';
+      statusBadge.classList.remove('initial-status', 'sent-status', 'error-status');
+      statusBadge.classList.add('processing-status');
     }
-    
-    console.log('🔵 [3] Filtreleme tamamlandı', { ownerMonitoredIds, count: ownerMonitoredIds.length });
-    
-    const filteredResults = allSimilarResults.filter(r => 
-        ownerMonitoredIds.includes(r.monitoredTrademarkId) && r.isSimilar === true
-    );
-    
-    console.log('🔵 [4] Benzer sonuçlar filtrelendi', { 
-        totalResults: allSimilarResults.length,
-        filteredCount: filteredResults.length,
-        sample: filteredResults.slice(0, 2).map(r => ({ 
-            markName: r.markName, 
-            isSimilar: r.isSimilar,
-            monitoredTrademarkId: r.monitoredTrademarkId 
-        }))
+
+    let createdTaskCount = 0;
+    const callerEmail = firebaseServices.auth.currentUser?.email || 'anonim@evreka.com';
+    const createObjectionTaskFn = httpsCallable(functions, 'createObjectionTask');
+
+    console.log('🔵 [5] İtiraz işleri oluşturuluyor...', {
+      totalResults: filteredResults.length,
+      callerEmail,
+      bulletinNo,
     });
-    
-    if (filteredResults.length === 0) {
-        console.log('⚠️ [4.1] Benzer sonuç bulunamadı');
-        showNotification(`${ownerName} için seçili bültende benzer (isSimilar=true) marka sonucu bulunamadı.`, 'warning');
-        return;
+
+    // Her benzer sonuç için bir yayına itiraz işi oluştur
+    for (let i = 0; i < filteredResults.length; i++) {
+      const r = filteredResults[i];
+      try {
+        const taskResponse = await createObjectionTaskFn({
+          monitoredMarkId: r.monitoredTrademarkId,
+          similarMark: {
+            applicationNo: r.applicationNo,
+            markName: r.markName,
+            niceClasses: r.niceClasses,
+            similarityScore: r.similarityScore,
+          },
+          similarMarkName: r.markName,
+          bulletinNo,
+          callerEmail,
+        });
+
+        console.log(`✅ [6.${i + 1}] CF yanıtı`, {
+          index: i + 1,
+          taskId: taskResponse?.data?.taskId,
+          success: taskResponse?.data?.success,
+          message: taskResponse?.data?.message,
+        });
+
+        if (taskResponse?.data?.success) createdTaskCount++;
+      } catch (e) {
+        console.error(`❌ [6.${i + 1}] İtiraz işi oluşturma hatası`, {
+          index: i + 1,
+          markName: r.markName,
+          errorMessage: e?.message,
+          errorCode: e?.code,
+          errorDetails: e?.details,
+        });
+      }
     }
 
-    // 2. İŞ OLUŞTURMA VE RAPORLAMA BAŞLANGICI
-    try {
-        btn.disabled = true;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> İşleniyor...';
-        statusBadge.textContent = 'İşleniyor...';
-        statusBadge.classList.remove('initial-status', 'sent-status', 'error-status');
-        statusBadge.classList.add('processing-status');
+    console.log('🔵 [7] İş oluşturma tamamlandı', {
+      successCount: createdTaskCount,
+      failureCount: filteredResults.length - createdTaskCount,
+    });
 
-        let createdTaskCount = 0;
-        const callerEmail = firebaseServices.auth.currentUser?.email || 'anonim@evreka.com';
-        const createObjectionTaskFn = httpsCallable(functions, 'createObjectionTask');
+    // Raporu hazırla/indir (işten bağımsız)
+    console.log('🔵 [8] Rapor oluşturuluyor...');
+    const reportData = filteredResults.map((r) => {
+      const monitoredTm = monitoringTrademarks.find((mt) => mt.id === r.monitoredTrademarkId);
+      const _ownerName = _pickOwners(monitoredTm, monitoredTm, allPersons);
+      return {
+        monitoredMark: {
+          name: monitoredTm?.title || r.monitoredTrademark,
+          ownerName: _ownerName || 'Tüm Sahipler',
+          niceClasses: _uniqNice(monitoredTm),
+        },
+        similarMark: {
+          name: r.markName,
+          niceClasses: r.niceClasses,
+          applicationNo: r.applicationNo,
+          similarity: r.similarityScore,
+        },
+      };
+    });
 
-        console.log('🔵 [5] İtiraz işleri oluşturuluyor...', { 
-            totalResults: filteredResults.length,
-            callerEmail,
-            bulletinNo 
-        });
+    const generateReportFn = httpsCallable(functions, 'generateSimilarityReport');
+    const response = await generateReportFn({ results: reportData });
 
-        // >>> HER BENZER MARKA İÇİN İTİRAZ İŞİ OLUŞTUR <
-        for (let i = 0; i < filteredResults.length; i++) {
-            const r = filteredResults[i];
-            try {
-                console.log(`🔵 [6.${i + 1}] Cloud Function çağrılıyor`, { 
-                    index: i + 1,
-                    monitoredMarkId: r.monitoredTrademarkId,
-                    markName: r.markName,
-                    applicationNo: r.applicationNo,
-                    payload: {
-                        monitoredMarkId: r.monitoredTrademarkId,
-                        similarMark: {
-                            applicationNo: r.applicationNo,
-                            markName: r.markName,
-                            niceClasses: r.niceClasses,
-                            similarityScore: r.similarityScore,
-                        },
-                        similarMarkName: r.markName,
-                        bulletinNo: bulletinNo,
-                        callerEmail: callerEmail
-                    }
-                });
+    console.log('🔵 [9] Rapor yanıtı', {
+      success: response?.data?.success,
+      hasFile: !!response?.data?.file,
+      error: response?.data?.error,
+    });
 
-                const taskResponse = await createObjectionTaskFn({
-                    monitoredMarkId: r.monitoredTrademarkId,
-                    similarMark: {
-                        applicationNo: r.applicationNo,
-                        markName: r.markName,
-                        niceClasses: r.niceClasses,
-                        similarityScore: r.similarityScore,
-                    },
-                    similarMarkName: r.markName,
-                    bulletinNo: bulletinNo,
-                    callerEmail: callerEmail
-                });
+    if (response?.data?.success) {
+      // ✅ Bildirim Durumu: rapor süreci başarılı → "Gönderildi"
+      if (statusBadge) {
+        statusBadge.textContent = 'Gönderildi';
+        statusBadge.classList.remove('processing-status', 'initial-status', 'error-status');
+        statusBadge.classList.add('sent-status');
+      }
 
-                console.log(`✅ [7.${i + 1}] Cloud Function yanıtı`, { 
-                    index: i + 1,
-                    taskId: taskResponse.data?.taskId,
-                    success: taskResponse.data?.success,
-                    message: taskResponse.data?.message,
-                    fullResponse: taskResponse.data
-                });
-
-                if (taskResponse.data.success) {
-                    createdTaskCount++;
-                }
-            } catch (e) {
-                console.error(`❌ [8.${i + 1}] İtiraz işi oluşturma hatası`, { 
-                    index: i + 1,
-                    markName: r.markName,
-                    errorMessage: e.message,
-                    errorCode: e.code,
-                    errorDetails: e.details,
-                    fullError: e 
-                });
-            }
+      // ✅ İş Tetiklendi: sadece iş oluştuysa “Evet” yap
+      if (createdTaskCount > 0) {
+        taskTriggeredStatus.set(ownerId, 'Evet');
+        const taskBadge =
+          document.querySelector(`.task-triggered-status[data-owner-id="${ownerId}"]`) ||
+          document.querySelector(`.trigger-status-badge[data-owner-id="${ownerId}"]`);
+        if (taskBadge) {
+          taskBadge.textContent = 'Evet';
+          taskBadge.classList.remove('text-danger', 'trigger-no');
+          taskBadge.classList.add('text-success', 'font-weight-bold', 'trigger-yes');
         }
-        
-        console.log('🔵 [9] Tüm itiraz işleri tamamlandı', { 
-            totalAttempts: filteredResults.length,
-            successCount: createdTaskCount,
-            failureCount: filteredResults.length - createdTaskCount 
-        });
 
-        // --- RAPOR OLUŞTURMA VE İNDİRME MANTIĞI ---
-        console.log('🔵 [10] Rapor oluşturuluyor...');
-        
-        const reportData = filteredResults.map(r => {
-            const monitoredTm = monitoringTrademarks.find(mt => mt.id === r.monitoredTrademarkId);
-            const ownerName = _pickOwners(monitoredTm, monitoredTm, allPersons); 
-            
-            return { 
-                monitoredMark: { 
-                    name: monitoredTm?.title || r.monitoredTrademark, 
-                    ownerName: ownerName || 'Tüm Sahipler', 
-                    niceClasses: _uniqNice(monitoredTm) 
-                }, 
-                similarMark: { 
-                    name: r.markName, 
-                    niceClasses: r.niceClasses, 
-                    applicationNo: r.applicationNo, 
-                    similarity: r.similarityScore 
-                } 
-            };
-        });
-
-        const generateReportFn = httpsCallable(functions, 'generateSimilarityReport');
-        const response = await generateReportFn({ results: reportData });
-        
-        console.log('🔵 [11] Rapor yanıtı alındı', { 
-            success: response.data.success,
-            hasFile: !!response.data.file,
-            error: response.data.error 
-        });
-        
-        // --- SONUÇ KONTROLÜ ---
-        if (response.data.success) {
-            statusBadge.textContent = createdTaskCount > 0 ? `İş Oluşturuldu (${createdTaskCount})` : 'Rapor Tamamlandı';
-            statusBadge.classList.remove('processing-status', 'initial-status', 'error-status');
-            statusBadge.classList.add('sent-status');
-            
-            showNotification(`Rapor oluşturuldu ve müvekkile bildirim taslağı kaydedildi. Oluşturulan itiraz görevi: ${createdTaskCount} adet.`, 'success');
-
-            const blob = new Blob([Uint8Array.from(atob(response.data.file), c => c.charCodeAt(0))], { type: 'application/zip' });
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(blob);
-            const safeOwnerName = ownerName.replace(/[^a-zA-Z0-9\s]/g, '_');
-            link.download = `${safeOwnerName}_Benzer_Markalar_Rapor_VE_Bildirim.zip`;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            
-            console.log('✅ [12] İşlem başarıyla tamamlandı', { 
-                createdTaskCount,
-                fileName: link.download 
-            });
-            
-        } else {
-            // YENİ: Globalde iş oluştuysa kalıcı durumu senkronize et ve tabloyu tazele
-            try {
-                if (typeof createdTaskCount !== 'undefined' && createdTaskCount > 0) {
-                    const bNo = String(bulletinKey).split('_')[0];
-                    if (typeof refreshTriggeredStatus === 'function') {
-                        await refreshTriggeredStatus(bNo);
-                    }
-                    if (typeof renderMonitoringList === 'function') {
-                        renderMonitoringList();
-                    }
-                }
-            } catch(e) { console.warn('[TSS] global sync error', e); }
-        
-            statusBadge.textContent = 'Rapor Hata';
-            statusBadge.classList.remove('processing-status');
-            statusBadge.classList.add('error-status');
-            showNotification("Rapor oluşturma hatası: " + (response.data.error || 'Bilinmeyen hata'), 'error');
-            
-            console.error('❌ [12] Rapor oluşturma başarısız', { error: response.data.error });
+        // Kalıcılık: Firestore’dan “awaiting_client_approval” işleri okuyup tabloyu tazele
+        try {
+          if (typeof refreshTriggeredStatus === 'function') {
+            await refreshTriggeredStatus(bulletinNo);
+          }
+          if (typeof renderMonitoringList === 'function') {
+            renderMonitoringList();
+          }
+        } catch (e) {
+          console.warn('[TSS] refreshTriggeredStatus/renderMonitoringList hata:', e);
         }
-    } catch (err) {
-        statusBadge.textContent = 'Kritik Hata';
+      }
+
+      showNotification(
+        `Rapor oluşturuldu ve müvekkile bildirim taslağı kaydedildi. Oluşturulan itiraz görevi: ${createdTaskCount} adet.`,
+        'success'
+      );
+
+      // Dosyayı indir
+      const blob = new Blob([Uint8Array.from(atob(response.data.file), (c) => c.charCodeAt(0))], {
+        type: 'application/zip',
+      });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      const safeOwnerName = ownerName.replace(/[^a-zA-Z0-9\s]/g, '_');
+      link.download = `${safeOwnerName}_Benzer_Markalar_Rapor_VE_Bildirim.zip`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      console.log('✅ [10] İşlem bitti', { createdTaskCount, fileName: link.download });
+    } else {
+      // Rapor başarısız → Bildirim Durumu hata
+      if (statusBadge) {
+        statusBadge.textContent = 'Rapor Hata';
         statusBadge.classList.remove('processing-status');
         statusBadge.classList.add('error-status');
-        showNotification("İşlem sırasında kritik hata oluştu!", 'error');
-        
-        console.error('❌ [13] Kritik hata', { 
-            message: err.message,
-            code: err.code,
-            stack: err.stack,
-            fullError: err 
-        });
-    } finally {
-        btn.disabled = false;
-        btn.innerHTML = '<i class="fas fa-paper-plane"></i> Rapor Oluştur ve Bildir';
-        console.log('🔵 [14] Fonksiyon sonlandı');
+      }
+      showNotification('Rapor oluşturma hatası: ' + (response?.data?.error || 'Bilinmeyen hata'), 'error');
+      console.error('❌ [10] Rapor başarısız', { error: response?.data?.error });
     }
+  } catch (err) {
+    if (statusBadge) {
+      statusBadge.textContent = 'Kritik Hata';
+      statusBadge.classList.remove('processing-status');
+      statusBadge.classList.add('error-status');
+    }
+    showNotification('İşlem sırasında kritik hata oluştu!', 'error');
+    console.error('❌ [X] Kritik hata', {
+      message: err?.message,
+      code: err?.code,
+      stack: err?.stack,
+    });
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-paper-plane"></i> Rapor Oluştur ve Bildir';
+    console.log('🔵 [Son] Fonksiyon sonlandı');
+  }
 };
+
 
 // Sadece rapor indirme (iş oluşturmadan)
 const handleOwnerReportGeneration = async (event) => {
