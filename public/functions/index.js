@@ -555,7 +555,7 @@ export const createObjectionTask = onCall(
         updatedAt: FieldValue.serverTimestamp(),
         
         history: [{
-          timestamp: FieldValue.serverTimestamp(),
+          timestamp: new Date().toISOString(),  // ✅ ISO string formatı
           action: 'Benzerlik aramasından otomatik iş oluşturuldu',
           userEmail: callerEmail || 'system'
         }]
