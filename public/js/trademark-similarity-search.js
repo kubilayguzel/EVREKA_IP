@@ -792,16 +792,24 @@ const renderMonitoringList = async () => {
 // --- YENİ RAPOR OLUŞTURMA İŞLEYİCİSİ ---
 
 const attachGenerateReportListener = () => {
-    // SADECE İNDİR (generate-report-btn) butonunu, ana işleyiciye bağlar.
-    document.querySelectorAll('.generate-report-btn').forEach(btn => {
-        btn.removeEventListener('click', handleOwnerReportAndNotifyGeneration);
-        btn.addEventListener('click', handleOwnerReportAndNotifyGeneration);
+    console.log('🔧 Event listener bağlanıyor...');
+    
+    // SADECE İNDİR (generate-report-btn) - Sadece rapor indirir
+    const downloadBtns = document.querySelectorAll('.generate-report-btn');
+    console.log('📥 İndirme butonları bulundu:', downloadBtns.length);
+    downloadBtns.forEach((btn, index) => {
+        btn.removeEventListener('click', handleOwnerReportGeneration);
+        btn.addEventListener('click', handleOwnerReportGeneration);
+        console.log(`✅ İndirme butonu [${index}] bağlandı:`, btn.dataset);
     });
 
-    // OLUŞTUR VE BİLDİR (generate-report-and-notify-btn) butonunu ana işleyiciye bağlar.
-    document.querySelectorAll('.generate-report-and-notify-btn').forEach(btn => {
+    // OLUŞTUR VE BİLDİR (generate-report-and-notify-btn) - İş oluşturur + rapor indirir
+    const notifyBtns = document.querySelectorAll('.generate-report-and-notify-btn');
+    console.log('📧 Bildirim butonları bulundu:', notifyBtns.length);
+    notifyBtns.forEach((btn, index) => {
         btn.removeEventListener('click', handleOwnerReportAndNotifyGeneration);
         btn.addEventListener('click', handleOwnerReportAndNotifyGeneration);
+        console.log(`✅ Bildirim butonu [${index}] bağlandı:`, btn.dataset);
     });
 };
 
@@ -1022,6 +1030,89 @@ const handleOwnerReportAndNotifyGeneration = async (event) => {
     }
 };
 
+// Sadece rapor indirme (iş oluşturmadan)
+const handleOwnerReportGeneration = async (event) => {
+    event.stopPropagation();
+    
+    const btn = event.currentTarget;
+    const ownerId = btn.dataset.ownerId;
+    const ownerName = btn.dataset.ownerName;
+    const bulletinKey = document.getElementById('bulletinSelect')?.value;
+    
+    console.log('📥 Sadece rapor indirme başladı', { ownerId, ownerName });
+    
+    if (!bulletinKey) {
+        showNotification('Lütfen rapor oluşturmak için bir bülten seçin.', 'error');
+        return;
+    }
+
+    // Filtreleme (iş oluşturma mantığıyla aynı)
+    const ownerMonitoredIds = [];
+    for (const tm of monitoringTrademarks) {
+        const ip = await _getIp(tm.ipRecordId || tm.sourceRecordId || tm.id);
+        const ownerInfo = _getOwnerKey(ip, tm, allPersons);
+        if (ownerInfo.id === ownerId) {
+            ownerMonitoredIds.push(tm.id);
+        }
+    }
+    
+    const filteredResults = allSimilarResults.filter(r => 
+        ownerMonitoredIds.includes(r.monitoredTrademarkId) && r.isSimilar === true
+    );
+    
+    if (filteredResults.length === 0) {
+        showNotification(`${ownerName} için benzer sonuç bulunamadı.`, 'warning');
+        return;
+    }
+
+    try {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Rapor hazırlanıyor...';
+
+        const reportData = filteredResults.map(r => {
+            const monitoredTm = monitoringTrademarks.find(mt => mt.id === r.monitoredTrademarkId);
+            const ownerName = _pickOwners(monitoredTm, monitoredTm, allPersons);
+            
+            return { 
+                monitoredMark: { 
+                    name: monitoredTm?.title || r.monitoredTrademark, 
+                    ownerName: ownerName || 'Tüm Sahipler', 
+                    niceClasses: _uniqNice(monitoredTm) 
+                }, 
+                similarMark: { 
+                    name: r.markName, 
+                    niceClasses: r.niceClasses, 
+                    applicationNo: r.applicationNo, 
+                    similarity: r.similarityScore 
+                } 
+            };
+        });
+
+        const generateReportFn = httpsCallable(functions, 'generateSimilarityReport');
+        const response = await generateReportFn({ results: reportData });
+        
+        if (response.data.success) {
+            showNotification('Rapor başarıyla oluşturuldu.', 'success');
+
+            const blob = new Blob([Uint8Array.from(atob(response.data.file), c => c.charCodeAt(0))], { type: 'application/zip' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            const safeOwnerName = ownerName.replace(/[^a-zA-Z0-9\s]/g, '_');
+            link.download = `${safeOwnerName}_Benzerlik_Raporu.zip`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        } else {
+            showNotification("Rapor oluşturma hatası: " + (response.data.error || 'Bilinmeyen hata'), 'error');
+        }
+    } catch (err) {
+        console.error('Rapor oluşturma hatası:', err);
+        showNotification("Rapor oluşturulurken hata oluştu!", 'error');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-file-pdf"></i> Rapor Oluştur';
+    }
+};
 
 const handleGlobalReportAndNotifyGeneration = async (event) => {
     const btn = event.currentTarget;
