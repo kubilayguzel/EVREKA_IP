@@ -5051,43 +5051,6 @@ export const createClientNotificationOnRenewalTaskCreated = onDocumentCreated(
 /**
  * Monitored Marka ID'si üzerinden en ilişkili IP Kaydını ve Client ID'sini bulur.
  */
-async function findClientAndIpRecord(monitoredTrademarkId) {
-    let clientId = null;
-    let relatedIpRecordId = null;
-    let clientEmail = null;
-
-    try {
-        // 1. monitoringTrademarks'tan ana kaydı çek
-        const tmSnap = await db.collection("monitoringTrademarks").doc(monitoredTrademarkId).get();
-        const tmData = tmSnap.exists ? tmSnap.data() : null;
-
-        if (tmData) {
-            relatedIpRecordId = tmData.ipRecordId || tmData.sourceRecordId || null;
-            clientId = tmData.clientId || null; // Eğer direkt monitör kaydında varsa
-            
-            if (relatedIpRecordId) {
-                // 2. IP Records'tan client bilgisini çek (Client ID/Email'i güncelle)
-                const ipSnap = await db.collection("ipRecords").doc(relatedIpRecordId).get();
-                if (ipSnap.exists) {
-                    const ipData = ipSnap.data();
-                    clientId = ipData.clientId || (ipData.applicants?.[0]?.id || clientId);
-                }
-            }
-        }
-
-        if (clientId) {
-            // 3. Client'ın email'ini persons'tan bul
-            const personSnap = await db.collection("persons").doc(clientId).get();
-            if (personSnap.exists) {
-                clientEmail = personSnap.data().email || null;
-            }
-        }
-    } catch (e) {
-        logger.error("Client/IP Record Bulma Hatası:", e);
-    }
-    
-    return { clientId, relatedIpRecordId, clientEmail };
-}
 
 export const handleBulletinDeletion = onMessagePublished(
   { topic: 'bulletin-deletion', region: 'europe-west1', memory: '1GiB', cpu: 1, timeoutSeconds: 540 },
