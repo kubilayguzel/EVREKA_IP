@@ -792,14 +792,13 @@ const renderMonitoringList = async () => {
 // --- YENİ RAPOR OLUŞTURMA İŞLEYİCİSİ ---
 
 const attachGenerateReportListener = () => {
-    // Bu listener artık hem 'rapor oluştur' hem de 'rapor oluştur ve bildir' butonlarını destekler.
+    // SADECE İNDİR (generate-report-btn) butonunu, ana işleyiciye bağlar.
     document.querySelectorAll('.generate-report-btn').forEach(btn => {
-        // Eski 'Sadece İndir' butonu için de aynı işleyiciyi kullanıyoruz.
         btn.removeEventListener('click', handleOwnerReportAndNotifyGeneration);
         btn.addEventListener('click', handleOwnerReportAndNotifyGeneration);
     });
 
-    // Yeni 'Oluştur ve Bildir' butonu için dinleyici ekle
+    // OLUŞTUR VE BİLDİR (generate-report-and-notify-btn) butonunu ana işleyiciye bağlar.
     document.querySelectorAll('.generate-report-and-notify-btn').forEach(btn => {
         btn.removeEventListener('click', handleOwnerReportAndNotifyGeneration);
         btn.addEventListener('click', handleOwnerReportAndNotifyGeneration);
@@ -943,6 +942,7 @@ const handleOwnerReportAndNotifyGeneration = async (event) => {
         btn.innerHTML = '<i class="fas fa-paper-plane"></i> Rapor Oluştur ve Bildir';
     }
 };
+
 
 const handleGlobalReportAndNotifyGeneration = async (event) => {
     const btn = event.currentTarget;
