@@ -815,7 +815,6 @@ const handleOwnerReportAndNotifyGeneration = async (event) => {
     const ownerName = btn.dataset.ownerName;
     const bulletinKey = document.getElementById('bulletinSelect')?.value; 
     
-    // Find the status badge to update
     const statusBadge = document.querySelector(`.notification-status-badge[data-owner-id="${ownerId}"]`);
     
     if (!bulletinKey) {
@@ -852,7 +851,7 @@ const handleOwnerReportAndNotifyGeneration = async (event) => {
 
         let createdTaskCount = 0;
         const callerEmail = firebaseServices.auth.currentUser?.email || 'anonim@evreka.com';
-        const createObjectionTaskFn = httpsCallable(functions, 'createObjectionTask'); // Yeni CF referansı
+        const createObjectionTaskFn = httpsCallable(functions, 'createObjectionTask'); // CF Çağrısı
 
         // >>> HER BENZER MARKA İÇİN İTİRAZ İŞİ OLUŞTUR <<<
         
