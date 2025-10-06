@@ -18,6 +18,7 @@ let filteredMonitoringTrademarks = [];
 let allPersons = [];
 let pagination;
 let monitoringPagination;
+const taskTriggeredStatus = new Map();
 
 const functions = firebaseServices.functions;
 
@@ -661,13 +662,14 @@ function setupImageHoverEffect(tbodyId = 'monitoringListBody') {
 
 // js/trademark-similarity-search.js (renderMonitoringList fonksiyonunun güncellenmiş hali)
 
+
 const renderMonitoringList = async () => {
     const tbody = document.getElementById('monitoringListBody');
     const list = monitoringPagination ? monitoringPagination.getCurrentPageData(filteredMonitoringTrademarks) : filteredMonitoringTrademarks;
     
     if (!list.length) {
-        // Colspan'ı 5'e ayarlayın (Toggle, Sahip, Sayı, Bildirim Durumu, Eylemler)
-        tbody.innerHTML = '<tr><td colspan="5" class="no-records">Filtreye uygun izlenecek marka bulunamadı.</td></tr>'; 
+        // Colspan'ı 6'ya ayarlayın (Toggle, Sahip, Sayı, İş Tetiklendi, Bildirim Durumu, Eylemler)
+        tbody.innerHTML = '<tr><td colspan="6" class="no-records">Filtreye uygun izlenecek marka bulunamadı.</td></tr>'; 
         return;
     }
 
@@ -702,18 +704,29 @@ const renderMonitoringList = async () => {
         const group = groupedByOwner[ownerKey];
         const groupUid = `owner-group-${group.ownerId}-${ownerKey.replace(/[^a-zA-Z0-9]/g, '').slice(-10)}`;
         
-        // Grup Başlığı Satırı (5 KOLON: Toggle, Sahip, Sayı, Bildirim Durumu, Eylemler)
+        // YENİ KOLON DURUMU: Map'ten veya varsayılan değerden al
+        const isTaskTriggered = taskTriggeredStatus.get(group.ownerId) || 'Hayır';
+        const taskStatusClass = isTaskTriggered === 'Evet' ? 'text-success font-weight-bold' : 'text-danger';
+
+        // Grup Başlığı Satırı (6 KOLON: Toggle, Sahip, Sayı, İŞ TETİKLENDİ, Bildirim Durumu, Eylemler)
         const headerRow = `
             <tr class="owner-row" data-toggle="collapse" data-target="#${groupUid}" aria-expanded="false" aria-controls="${groupUid}" style="cursor: pointer;">
                 <td style="width: 5%; text-align: center; color: #1e3c72;"><i class="fas fa-chevron-down toggle-icon"></i></td>
-                <td style="width: 35%; text-align: left;">${group.ownerName}</td>
-                <td style="width: 15%; text-align: center;">${group.trademarks.length}</td>
+                <td style="width: 30%; text-align: left;">${group.ownerName}</td>
+                <td style="width: 10%; text-align: center;">${group.trademarks.length}</td>
                 
-                <td style="width: 25%; text-align: center;">
+                <td style="width: 15%; text-align: center;">
+                    <span class="task-triggered-status ${taskStatusClass}" data-owner-id="${group.ownerId}">
+                        ${isTaskTriggered}
+                    </span>
+                </td>
+                
+                <td style="width: 20%; text-align: center;">
                     <span class="notification-status-badge initial-status" data-owner-id="${group.ownerId}">
                         ${initialNotificationStatus}
                     </span>
-                </td> <td style="width: 20%; text-align: center;">
+                </td> 
+                <td style="width: 20%; text-align: center;">
                     <div class="btn-group">
                         <button class="action-btn btn-success generate-report-and-notify-btn" 
                                 data-owner-id="${group.ownerId}" 
@@ -756,10 +769,10 @@ const renderMonitoringList = async () => {
             `;
         }).join('');
 
-        // Gizli İçerik Satırı (colspan'ı 5'e ayarlayın, ana tabloya uyması için)
+        // Gizli İçerik Satırı (colspan'ı 6'ya ayarlayın, ana tabloya uyması için)
         const contentRow = `
             <tr id="${groupUid}" class="accordion-content-row" style="display: none;">
-                <td colspan="5" style="padding: 0;">
+                <td colspan="6" style="padding: 0;">
                     <table class="table table-sm" style="margin: 0; background-color: transparent;">
                         <thead>
                             <tr>
@@ -983,6 +996,16 @@ const handleOwnerReportAndNotifyGeneration = async (event) => {
         
         // --- SONUÇ KONTROLÜ ---
         if (response.data.success) {
+            // YENİ EKLENDİ: İş Tetiklendi durumunu güncelle
+            if (createdTaskCount > 0) {
+                taskTriggeredStatus.set(ownerId, 'Evet');
+                const taskBadge = document.querySelector(`.task-triggered-status[data-owner-id="${ownerId}"]`);
+                if (taskBadge) {
+                    taskBadge.textContent = 'Evet';
+                    taskBadge.classList.remove('text-danger');
+                    taskBadge.classList.add('text-success', 'font-weight-bold');
+                }
+            }
             statusBadge.textContent = createdTaskCount > 0 ? `İş Oluşturuldu (${createdTaskCount})` : 'Rapor Tamamlandı';
             statusBadge.classList.remove('processing-status', 'initial-status', 'error-status');
             statusBadge.classList.add('sent-status');
@@ -1193,6 +1216,14 @@ const handleGlobalReportAndNotifyGeneration = async (event) => {
     const response = await generateReportFn({ results: reportData });
 
     if (response?.data?.success) {
+    // YENİ EKLENDİ: Tüm sahipler için durumu güncelle
+      if (createdTaskCount > 0) {
+          const allOwnerIds = Array.from(new Set(monitoringTrademarks.map(tm => _getOwnerKey(null, tm, allPersons).id)));
+          allOwnerIds.forEach(id => taskTriggeredStatus.set(id, 'Evet'));
+          // UI'ı yeniden render ederek bütün rozetleri güncelleyebiliriz
+          renderMonitoringList(); 
+          // Not: Global butona tıklandığında, tüm satırlar yeniden çizilirken durum "Evet" olarak görünür.
+      }
       showNotification(`Toplu rapor oluşturuldu ve ${createdTaskCount} adet "Yayına İtiraz" işi oluşturuldu.`, 'success');
       const blob = new Blob([Uint8Array.from(atob(response.data.file), c => c.charCodeAt(0))], { type: 'application/zip' });
       const link = document.createElement('a');
