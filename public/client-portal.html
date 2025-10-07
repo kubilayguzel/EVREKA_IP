@@ -3232,20 +3232,27 @@ window.loadSampleTaskDetails = async function(taskType) {
 };
 
 const getNiceClasses = (data) => {
-    // Önce niceClasses array'ini kontrol et
-    if (data?.niceClasses && Array.isArray(data.niceClasses)) {
-        return data.niceClasses.sort((a, b) => a - b).join(', ');
+    // Önce niceClasses kontrol et (array VEYA string)
+    if (data?.niceClasses) {
+        // Eğer array ise
+        if (Array.isArray(data.niceClasses)) {
+            return data.niceClasses.sort((a, b) => a - b).join(', ');
+        }
+        
+        // Eğer string ise parse et
+        if (typeof data.niceClasses === 'string') {
+            // "29 / 30 / 43 /" formatını temizle
+            const parsed = data.niceClasses
+                .split('/')
+                .map(c => parseInt(c.trim(), 10))
+                .filter(n => !isNaN(n));
+            return parsed.length > 0 ? parsed.sort((a, b) => a - b).join(', ') : '-';
+        }
     }
     
     // Sonra monitoredNiceClasses
     if (data?.monitoredNiceClasses && Array.isArray(data.monitoredNiceClasses)) {
         return data.monitoredNiceClasses.sort((a, b) => a - b).join(', ');
-    }
-    
-    // String ise parse et
-    if (typeof data?.niceClasses === 'string') {
-        const parsed = data.niceClasses.split(',').map(c => parseInt(c.trim(), 10)).filter(n => !isNaN(n));
-        return parsed.sort((a, b) => a - b).join(', ');
     }
     
     return '-';
