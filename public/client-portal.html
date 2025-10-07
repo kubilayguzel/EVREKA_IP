@@ -633,12 +633,35 @@
 .task-card-comparison-item img {
     border: 1px solid #585b63;
 }
+/* Task kartı overflow'u kaldır */
+.task-card {
+    position: relative;          
+    padding-top: 35px !important;
+    padding-left: 20px !important;
+    overflow: visible !important; /* Bu satırı ekle/değiştir */
+}
+
 /* Görev kartlarındaki marka görsellerine hover efekti */
+.task-brand-image {
+    transition: all 0.3s ease;
+    cursor: pointer;
+    position: relative;
+}
+
 .task-brand-image:hover {
     transform: scale(2.5) !important;
-    z-index: 1000;
+    z-index: 9999 !important;
+    position: absolute !important;
+    left: 50% !important;
+    transform: translateX(-50%) scale(2.5) !important;
+    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.5) !important;
+}
+
+/* Comparison area overflow */
+.comparison-area {
+    overflow: visible !important;
     position: relative;
-    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+    z-index: 1;
 }
 /* 1. Kartı pozisyonlamaya hazırla ve numara için üstten boşluk bırak */
 .task-card {
@@ -3475,12 +3498,12 @@ window._renderTaskCardsToContainer = async function(tasksToRender, containerSele
                 <button class="btn btn-info btn-sm btn-action task-detail" data-task-id="${taskId}"> <i class="fas fa-eye"></i> İncele </button>
             `;
         }
-                // Kendi (İzlenen) Marka Bilgileri
+        // Kendi (İzlenen) Marka Bilgileri
         const myMarkHtml = monitoredMarkData ? `
             <div class="col-6 task-card-comparison-item">
                 <h6 class="text-info" style="font-size: 0.9rem; font-weight: 600;">İZLENEN MARKANIZ</h6>
                 <div class="d-flex align-items-center mb-2">
-                    ${monitoredMarkData.imagePath ? `<img src="${monitoredMarkData.imagePath}" alt="Marka" class="task-brand-image" style="width: 100px; height: 100px; object-fit: contain; margin-right: 10px; border-radius: 4px; transition: transform 0.3s ease; cursor: pointer;">` : ''}
+                    ${monitoredMarkData.imagePath ? `<img src="${getImageUrl(monitoredMarkData.imagePath)}" alt="Marka" class="task-brand-image" style="width: 100px; height: 100px; object-fit: contain; margin-right: 10px; border-radius: 4px;">` : ''}
                     <div>
                         <p class="mb-0 text-truncate" style="font-size: 0.9rem;"><strong>Marka:</strong> ${monitoredMarkData.markName || monitoredMarkData.brandText || 'Adı Yok'}</p>
                         <p class="mb-0" style="font-size: 0.8rem;"><strong>B.No:</strong> ${monitoredMarkData.applicationNumber || monitoredMarkData.applicationNo || '-'}</p>
@@ -3496,11 +3519,31 @@ window._renderTaskCardsToContainer = async function(tasksToRender, containerSele
         `;
 
         // Rakip (Benzer) Marka Bilgileri
+        // Görselleri URL'e çevir fonksiyonu
+        const getImageUrl = (imagePath) => {
+            if (!imagePath) return '';
+            
+            // Eğer zaten tam URL ise
+            if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+                return imagePath;
+            }
+            
+            // Eğer Storage URL ise (gs:// ile başlıyorsa)
+            if (imagePath.startsWith('gs://')) {
+                // Firebase Storage URL'e çevir
+                const path = imagePath.replace('gs://evreka-ip.firebasestorage.app/', '');
+                return `https://firebasestorage.googleapis.com/v0/b/evreka-ip.firebasestorage.app/o/${encodeURIComponent(path)}?alt=media`;
+            }
+            
+            // Relative path ise (bulletins/... gibi)
+            return `https://firebasestorage.googleapis.com/v0/b/evreka-ip.firebasestorage.app/o/${encodeURIComponent(imagePath)}?alt=media`;
+        };
+
         const competitorMarkHtml = competitorMark ? `
             <div class="col-6 task-card-comparison-item">
                 <h6 class="text-danger" style="font-size: 0.9rem; font-weight: 600;">BENZER MARKA</h6>
                 <div class="d-flex align-items-center mb-2">
-                    ${competitorMark.imagePath ? `<img src="${competitorMark.imagePath}" alt="Marka" class="task-brand-image" style="width: 100px; height: 100px; object-fit: contain; margin-right: 10px; border-radius: 4px; transition: transform 0.3s ease; cursor: pointer;">` : ''}
+                    ${competitorMark.imagePath ? `<img src="${getImageUrl(competitorMark.imagePath)}" alt="Marka" class="task-brand-image" style="width: 100px; height: 100px; object-fit: contain; margin-right: 10px; border-radius: 4px;">` : ''}
                     <div>
                         <p class="mb-0 text-truncate" style="font-size: 0.9rem;"><strong>Marka:</strong> ${competitorMark.markName || 'Bilinmiyor'}</p>
                         <p class="mb-0" style="font-size: 0.8rem;"><strong>B.No:</strong> ${competitorMark.applicationNo || '-'}</p>
