@@ -1036,33 +1036,30 @@ const handleOwnerReportAndNotifyGeneration = async (event) => {
         
         const existingTaskSnap = await getDocs(existingTaskQuery);
         
-        // İlk önce müvekkilin clientId'sini bul
-        let clientId = null;
-        const monitoredTm = monitoringTrademarks.find(tm => tm.id === r.monitoredTrademarkId);
-        if (monitoredTm) {
-          const ip = await _getIp(monitoredTm.ipRecordId || monitoredTm.sourceRecordId || monitoredTm.id);
-          clientId = ip?.clientId || monitoredTm?.clientId || null;
-        }
+        console.log(`🔍 [6.${i + 1}] İş kontrolü yapılıyor...`, {
+          applicationNo: r.applicationNo,
+          ownerId: ownerId
+        });
         
-        console.log(`🔍 [6.${i + 1}] ClientId bulundu:`, { clientId, ownerId });
-        
-        // Client-side filtreleme: details.targetAppNo ve clientId kontrolü
+        // Client-side filtreleme: applicationNo + ownerId kontrolü
+        // Firestore'daki işlerde clientId saklanıyor, biz de ownerId ile karşılaştırıyoruz
         const duplicateTask = existingTaskSnap.docs.find(doc => {
           const data = doc.data();
           const targetAppNo = data?.details?.targetAppNo || '';
           const taskClientId = data?.clientId || '';
           
+          // Aynı benzer marka + aynı sahip = duplikasyon
           const matches = (
             String(targetAppNo) === String(r.applicationNo) &&
-            clientId && String(taskClientId) === String(clientId)
+            String(taskClientId) === String(ownerId)
           );
           
           if (matches) {
             console.log(`🔍 [6.${i + 1}] Eşleşme bulundu:`, {
               taskId: doc.id,
-              taskClientId,
-              targetClientId: clientId,
               targetAppNo,
+              taskClientId,
+              searchOwnerId: ownerId,
               taskStatus: data?.status
             });
           }
@@ -1376,22 +1373,29 @@ const handleGlobalReportAndNotifyGeneration = async (event) => {
         
         const existingTaskSnap = await getDocs(existingTaskQuery);
         
-        // Müvekkilin clientId'sini bul
-        let clientId = null;
+        // Sahip ID'sini bul (ownerId)
+        let ownerId = null;
         const monitoredTm = monitoringTrademarks.find(tm => tm.id === r.monitoredTrademarkId);
         if (monitoredTm) {
           const ip = await _getIp(monitoredTm.ipRecordId || monitoredTm.sourceRecordId || monitoredTm.id);
-          clientId = ip?.clientId || monitoredTm?.clientId || null;
+          const ownerInfo = _getOwnerKey(ip, monitoredTm, allPersons);
+          ownerId = ownerInfo?.id || null;
         }
+        
+        console.log(`🔍 [Global ${i + 1}] İş kontrolü:`, {
+          applicationNo: r.applicationNo,
+          ownerId
+        });
         
         const duplicateTask = existingTaskSnap.docs.find(doc => {
           const data = doc.data();
           const targetAppNo = data?.details?.targetAppNo || '';
           const taskClientId = data?.clientId || '';
           
+          // Aynı benzer marka + aynı sahip = duplikasyon
           return (
             String(targetAppNo) === String(r.applicationNo) &&
-            clientId && String(taskClientId) === String(clientId)
+            ownerId && String(taskClientId) === String(ownerId)
           );
         });
         
