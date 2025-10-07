@@ -3529,21 +3529,21 @@ window._renderTaskCardsToContainer = async function(tasksToRender, containerSele
                 <button class="btn btn-info btn-sm btn-action task-detail" data-task-id="${taskId}"> <i class="fas fa-eye"></i> İncele </button>
             `;
         }
-        // Kendi (İzlenen) Marka Bilgileri
         const myMarkHtml = monitoredMarkData ? `
             <div class="col-6 task-card-comparison-item">
-                <h6 class="text-info" style="font-size: 0.9rem; font-weight: 600;">İZLENEN MARKANIZ</h6>
-                <div class="d-flex align-items-center mb-2">
+                <h6 class="text-info" style="font-size: 0.9rem; font-weight: 600; margin-bottom: 10px;">İZLENEN MARKANIZ</h6>
+                <div class="d-flex align-items-start mb-2">
                     ${monitoredMarkData.imagePath ? `<img src="${getImageUrl(monitoredMarkData.imagePath)}" 
                         onerror="this.onerror=null; this.src='https://via.placeholder.com/100x100.png?text=Yok';" 
                         alt="Marka" 
-                        class="task-brand-image">` : '<div style="width:100px; height:100px; border:2px dashed #ccc; display:flex; align-items:center; justify-content:center; font-size:0.7rem; color:#999;">Görsel Yok</div>'}
-                    <div>
-                        <p class="mb-0 text-truncate" style="font-size: 0.9rem;"><strong>Marka:</strong> ${monitoredMarkData.markName || monitoredMarkData.brandText || 'Adı Yok'}</p>
-                        <p class="mb-0" style="font-size: 0.8rem;"><strong>B.No:</strong> ${monitoredMarkData.applicationNumber || monitoredMarkData.applicationNo || '-'}</p>
+                        class="task-brand-image" 
+                        style="margin-right: 20px;">` : '<div style="width:100px; height:100px; border:2px dashed #ccc; display:flex; align-items:center; justify-content:center; font-size:0.7rem; color:#999; margin-right: 20px;">Görsel Yok</div>'}
+                    <div style="display: flex; flex-direction: column; justify-content: flex-start;">
+                        <p class="mb-1" style="font-size: 0.9rem; margin-top: 0;"><strong>Marka:</strong> ${monitoredMarkData.markName || monitoredMarkData.brandText || monitoredMarkData.title || 'Adı Yok'}</p>
+                        <p class="mb-1" style="font-size: 0.8rem;"><strong>B.No:</strong> ${monitoredMarkData.applicationNumber || monitoredMarkData.applicationNo || '-'}</p>
+                        <p class="mb-0" style="font-size: 0.8rem;"><strong>Sınıflar:</strong> ${getNiceClasses(monitoredMarkData)}</p>
                     </div>
                 </div>
-                <p class="mb-0" style="font-size: 0.8rem;"><strong>Sınıflar:</strong> ${getNiceClasses(monitoredMarkData)}</p>
             </div>
         ` : `
             <div class="col-6 task-card-comparison-item">
@@ -3555,18 +3555,19 @@ window._renderTaskCardsToContainer = async function(tasksToRender, containerSele
         // Rakip (Benzer) Marka Bilgileri
         const competitorMarkHtml = competitorMark ? `
             <div class="col-6 task-card-comparison-item">
-                <h6 class="text-danger" style="font-size: 0.9rem; font-weight: 600;">BENZER MARKA</h6>
-                <div class="d-flex align-items-center mb-2">
+                <h6 class="text-danger" style="font-size: 0.9rem; font-weight: 600; margin-bottom: 10px;">BENZER MARKA</h6>
+                <div class="d-flex align-items-start mb-2">
                     ${competitorMark.imagePath ? `<img src="${getImageUrl(competitorMark.imagePath)}" 
                         onerror="this.onerror=null; this.src='https://via.placeholder.com/100x100.png?text=Yok';" 
                         alt="Marka" 
-                        class="task-brand-image">` : '<div style="width:100px; height:100px; border:2px dashed #ccc; display:flex; align-items:center; justify-content:center; font-size:0.7rem; color:#999;">Görsel Yok</div>'}
-                    <div>
-                        <p class="mb-0 text-truncate" style="font-size: 0.9rem;"><strong>Marka:</strong> ${competitorMark.markName || 'Bilinmiyor'}</p>
-                        <p class="mb-0" style="font-size: 0.8rem;"><strong>B.No:</strong> ${competitorMark.applicationNo || '-'}</p>
+                        class="task-brand-image" 
+                        style="margin-right: 20px;">` : '<div style="width:100px; height:100px; border:2px dashed #ccc; display:flex; align-items:center; justify-content:center; font-size:0.7rem; color:#999; margin-right: 20px;">Görsel Yok</div>'}
+                    <div style="display: flex; flex-direction: column; justify-content: flex-start;">
+                        <p class="mb-1" style="font-size: 0.9rem; margin-top: 0;"><strong>Marka:</strong> ${competitorMark.markName || competitorMark.brandText || 'Bilinmiyor'}</p>
+                        <p class="mb-1" style="font-size: 0.8rem;"><strong>B.No:</strong> ${competitorMark.applicationNumber || competitorMark.applicationNo || '-'}</p>
+                        <p class="mb-0" style="font-size: 0.8rem;"><strong>Sınıflar:</strong> ${getNiceClasses(competitorMark)}</p>
                     </div>
                 </div>
-                <p class="mb-0" style="font-size: 0.8rem;"><strong>Sınıflar:</strong> ${getNiceClasses(competitorMark)}</p>
             </div>
         ` : `
             <div class="col-6 task-card-comparison-item">
