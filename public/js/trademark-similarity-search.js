@@ -1019,7 +1019,51 @@ const handleOwnerReportAndNotifyGeneration = async (event) => {
     // Her benzer sonuç için bir yayına itiraz işi oluştur
     for (let i = 0; i < filteredResults.length; i++) {
       const r = filteredResults[i];
+      
+      // ✅ KONTROL: Bu benzer marka için daha önce iş oluşturulmuş mu?
       try {
+        console.log(`🔍 [6.${i + 1}] İş kontrolü yapılıyor...`, {
+          applicationNo: r.applicationNo,
+          monitoredMarkId: r.monitoredTrademarkId
+        });
+        
+        // Firestore'da aynı benzer marka (applicationNo) ve aynı izlenen marka için iş var mı?
+        const existingTaskQuery = query(
+          collection(db, 'tasks'),
+          where('taskType', '==', '20'),
+          where('status', 'in', ['awaiting_client_approval', 'client_approval_opened', 'open', 'in-progress'])
+        );
+        
+        const existingTaskSnap = await getDocs(existingTaskQuery);
+        
+        // Client-side filtreleme: details.targetAppNo ve details.monitoredMarkId kontrolü
+        const duplicateTask = existingTaskSnap.docs.find(doc => {
+          const data = doc.data();
+          const targetAppNo = data?.details?.targetAppNo || '';
+          const taskMonitoredMarkId = data?.details?.monitoredMarkId || '';
+          
+          return (
+            String(targetAppNo) === String(r.applicationNo) &&
+            String(taskMonitoredMarkId) === String(r.monitoredTrademarkId)
+          );
+        });
+        
+        if (duplicateTask) {
+          console.warn(`⚠️ [6.${i + 1}] Bu marka için zaten iş mevcut, atlanıyor`, {
+            existingTaskId: duplicateTask.id,
+            applicationNo: r.applicationNo,
+            markName: r.markName,
+            status: duplicateTask.data()?.status
+          });
+          continue; // Bu markayı atla, bir sonrakine geç
+        }
+        
+        console.log(`✅ [6.${i + 1}] Yeni iş oluşturulacak`, {
+          applicationNo: r.applicationNo,
+          markName: r.markName
+        });
+        
+        // İş oluştur
         const taskResponse = await createObjectionTaskFn({
           monitoredMarkId: r.monitoredTrademarkId,
           similarMark: {
@@ -1041,6 +1085,7 @@ const handleOwnerReportAndNotifyGeneration = async (event) => {
         });
 
         if (taskResponse?.data?.success) createdTaskCount++;
+        
       } catch (e) {
         console.error(`❌ [6.${i + 1}] İtiraz işi oluşturma hatası`, {
           index: i + 1,
@@ -1294,7 +1339,42 @@ const handleGlobalReportAndNotifyGeneration = async (event) => {
 
     for (let i = 0; i < candidates.length; i++) {
       const r = candidates[i];
+      
+      // ✅ KONTROL: Bu benzer marka için daha önce iş oluşturulmuş mu?
       try {
+        console.log(`🔍 [Global ${i + 1}] İş kontrolü yapılıyor...`, {
+          applicationNo: r.applicationNo,
+          monitoredMarkId: r.monitoredTrademarkId
+        });
+        
+        const existingTaskQuery = query(
+          collection(db, 'tasks'),
+          where('taskType', '==', '20'),
+          where('status', 'in', ['awaiting_client_approval', 'client_approval_opened', 'open', 'in-progress'])
+        );
+        
+        const existingTaskSnap = await getDocs(existingTaskQuery);
+        
+        const duplicateTask = existingTaskSnap.docs.find(doc => {
+          const data = doc.data();
+          const targetAppNo = data?.details?.targetAppNo || '';
+          const taskMonitoredMarkId = data?.details?.monitoredMarkId || '';
+          
+          return (
+            String(targetAppNo) === String(r.applicationNo) &&
+            String(taskMonitoredMarkId) === String(r.monitoredTrademarkId)
+          );
+        });
+        
+        if (duplicateTask) {
+          console.warn(`⚠️ [Global ${i + 1}] Bu marka için zaten iş mevcut, atlanıyor`, {
+            existingTaskId: duplicateTask.id,
+            applicationNo: r.applicationNo,
+            markName: r.markName
+          });
+          continue;
+        }
+        
         const resp = await createObjectionTaskFn({
           monitoredMarkId: r.monitoredTrademarkId,
           similarMark: {
@@ -1307,7 +1387,9 @@ const handleGlobalReportAndNotifyGeneration = async (event) => {
           bulletinNo: bNo,
           callerEmail
         });
+        
         if (resp?.data?.success) createdTaskCount++;
+        
       } catch (e) {
         console.error('[Global] createObjectionTask error:', {
           message: e?.message,
