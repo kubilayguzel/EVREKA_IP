@@ -633,6 +633,13 @@
 .task-card-comparison-item img {
     border: 1px solid #585b63;
 }
+/* Görev kartlarındaki marka görsellerine hover efekti */
+.task-brand-image:hover {
+    transform: scale(2.5) !important;
+    z-index: 1000;
+    position: relative;
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+}
 /* 1. Kartı pozisyonlamaya hazırla ve numara için üstten boşluk bırak */
 .task-card {
     position: relative;          
@@ -3189,12 +3196,26 @@ window.loadSampleTaskDetails = async function(taskType) {
     }
 };
 
-// Yardımcı fonksiyon: Nice Sınıflarını al
 const getNiceClasses = (data) => {
-    // MonitoredMark'tan 'monitoredNiceClasses' veya 'niceClasses' bekler.
-    const classes = data?.monitoredNiceClasses || data?.niceClasses || [];
-    return Array.isArray(classes) ? classes.join(', ') : (classes || '-');
+    // Önce niceClasses array'ini kontrol et
+    if (data?.niceClasses && Array.isArray(data.niceClasses)) {
+        return data.niceClasses.sort((a, b) => a - b).join(', ');
+    }
+    
+    // Sonra monitoredNiceClasses
+    if (data?.monitoredNiceClasses && Array.isArray(data.monitoredNiceClasses)) {
+        return data.monitoredNiceClasses.sort((a, b) => a - b).join(', ');
+    }
+    
+    // String ise parse et
+    if (typeof data?.niceClasses === 'string') {
+        const parsed = data.niceClasses.split(',').map(c => parseInt(c.trim(), 10)).filter(n => !isNaN(n));
+        return parsed.sort((a, b) => a - b).join(', ');
+    }
+    
+    return '-';
 }
+
 // Yeni Yardımcı Fonksiyon: Task Kartlarını Belirtilen Konteynere Render Etmek
 window._renderTaskCardsToContainer = async function(tasksToRender, containerSelector, formatDate, taskType) {
     const container = document.querySelector(containerSelector);
@@ -3410,10 +3431,18 @@ window._renderTaskCardsToContainer = async function(tasksToRender, containerSele
                 hasBulletinNo: !!bulletinNo
             });
         }
-        // Başlık oluşturma
-        let taskTitle = `${transactionAlias}`; 
-        if (ipRecordTitle) {
-            taskTitle += ` - ${appNo} - ${ipRecordTitle}`; 
+        
+        // Başlık oluşturma - BENZER MARKANIN bilgilerini kullan
+        let taskTitle = `${transactionAlias}`;
+        
+        if (competitorMark) {
+            // Benzer marka varsa, onun bilgilerini kullan
+            const competitorAppNo = competitorMark.applicationNo || competitorMark.applicationNumber || '-';
+            const competitorName = competitorMark.markName || competitorMark.brandText || 'Benzer Marka';
+            taskTitle += ` - ${competitorAppNo} - ${competitorName}`;
+        } else if (ipRecordTitle) {
+            // Yoksa izlenen markanın bilgilerini kullan (fallback)
+            taskTitle += ` - ${appNo} - ${ipRecordTitle}`;
         } else {
             taskTitle += ` - #${taskId}`;
         }
@@ -3451,7 +3480,7 @@ window._renderTaskCardsToContainer = async function(tasksToRender, containerSele
             <div class="col-6 task-card-comparison-item">
                 <h6 class="text-info" style="font-size: 0.9rem; font-weight: 600;">İZLENEN MARKANIZ</h6>
                 <div class="d-flex align-items-center mb-2">
-                    ${monitoredMarkData.imagePath ? `<img src="${monitoredMarkData.imagePath}" alt="Marka" style="width: 50px; height: 50px; object-fit: contain; margin-right: 10px; border-radius: 4px;">` : ''}
+                    ${monitoredMarkData.imagePath ? `<img src="${monitoredMarkData.imagePath}" alt="Marka" class="task-brand-image" style="width: 100px; height: 100px; object-fit: contain; margin-right: 10px; border-radius: 4px; transition: transform 0.3s ease; cursor: pointer;">` : ''}
                     <div>
                         <p class="mb-0 text-truncate" style="font-size: 0.9rem;"><strong>Marka:</strong> ${monitoredMarkData.markName || monitoredMarkData.brandText || 'Adı Yok'}</p>
                         <p class="mb-0" style="font-size: 0.8rem;"><strong>B.No:</strong> ${monitoredMarkData.applicationNumber || monitoredMarkData.applicationNo || '-'}</p>
@@ -3471,7 +3500,7 @@ window._renderTaskCardsToContainer = async function(tasksToRender, containerSele
             <div class="col-6 task-card-comparison-item">
                 <h6 class="text-danger" style="font-size: 0.9rem; font-weight: 600;">BENZER MARKA</h6>
                 <div class="d-flex align-items-center mb-2">
-                    ${competitorMark.imagePath ? `<img src="${competitorMark.imagePath}" alt="Marka" style="width: 50px; height: 50px; object-fit: contain; margin-right: 10px; border-radius: 4px;">` : ''}
+                    ${competitorMark.imagePath ? `<img src="${competitorMark.imagePath}" alt="Marka" class="task-brand-image" style="width: 100px; height: 100px; object-fit: contain; margin-right: 10px; border-radius: 4px; transition: transform 0.3s ease; cursor: pointer;">` : ''}
                     <div>
                         <p class="mb-0 text-truncate" style="font-size: 0.9rem;"><strong>Marka:</strong> ${competitorMark.markName || 'Bilinmiyor'}</p>
                         <p class="mb-0" style="font-size: 0.8rem;"><strong>B.No:</strong> ${competitorMark.applicationNo || '-'}</p>
