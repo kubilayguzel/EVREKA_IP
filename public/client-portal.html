@@ -3226,33 +3226,89 @@ window._renderTaskCardsToContainer = async function(tasksToRender, containerSele
             } catch (e) { }
         }
 
-        // 2. Monitored Marka Bilgisini Çekme (monitoredTrademarkRecords koleksiyonu)
-        const monitoredMarkId = task.details?.monitoredMarkId || task.relatedIpRecordId; // Hem izlenen markadan hem de IP kaydından ID al
-
+    // 2. Monitored Marka Bilgisini Çekme
+        const monitoredMarkId = task.details?.monitoredMarkId || task.relatedIpRecordId;
+        
         if (monitoredMarkId) {
             try {
+                // Önce monitoringTrademarkRecords'dan izlenen markayı çek
                 const monitoredMarkDoc = await getDoc(doc(db, 'monitoringTrademarkRecords', monitoredMarkId));
                 
                 if (monitoredMarkDoc.exists()) {
                     monitoredMarkData = monitoredMarkDoc.data();
+                    console.log('✅ Monitored Mark Data:', monitoredMarkData);
                     
                     // İzlenen Markanın Bilgilerini Al
-                    const monitoredMarkAlias = monitoredMarkData.brandText || monitoredMarkData.title || 'İzlenen Marka';
-                    ipRecordTitle = monitoredMarkAlias; // Kart başlığında kullanmak için
+                    const monitoredMarkAlias = monitoredMarkData.brandText || monitoredMarkData.markName || monitoredMarkData.title || 'İzlenen Marka';
+                    ipRecordTitle = monitoredMarkAlias;
                     appNo = monitoredMarkData.applicationNumber || monitoredMarkData.applicationNo || '-';
                     
-                    // 💥 KRİTİK ADIM: Benzer (Rakip) Markayı Filtrele (isSimilar: true)
-                    if (monitoredMarkData.results && Array.isArray(monitoredMarkData.results)) {
-                        // isSimilar: true olan ilk kaydı al
+                    // Eğer ipRecordId varsa, portföy kaydından ek bilgi çek
+                    if (monitoredMarkData.ipRecordId || monitoredMarkData.sourceRecordId) {
+                        const ipRecordId = monitoredMarkData.ipRecordId || monitoredMarkData.sourceRecordId;
+                        try {
+                            const ipDoc = await getDoc(doc(db, 'ipRecords', ipRecordId));
+                            if (ipDoc.exists()) {
+                                const ipData = ipDoc.data();
+                                // Başvuru numarası portföy kaydından gelsin
+                                appNo = ipData.applicationNumber || ipData.applicationNo || appNo;
+                                ipRecordTitle = ipData.brandText || ipData.title || ipRecordTitle;
+                                
+                                // İzlenen marka için nice sınıfları portföy kaydından al
+                                if (!monitoredMarkData.niceClasses && ipData.goodsAndServicesByClass) {
+                                    monitoredMarkData.niceClasses = ipData.goodsAndServicesByClass
+                                        .map(item => item.classNo)
+                                        .filter(Boolean);
+                                }
+                            }
+                        } catch (ipErr) {
+                            console.warn('IP kaydı çekilemedi:', ipErr);
+                        }
+                    }
+                    
+                    // 💥 KRİTİK: Benzer (Rakip) Markayı Filtrele
+                    // task.details içindeki targetAppNo (başvuru numarası) ile eşleşen benzer markayı bul
+                    const targetAppNo = task.details?.targetAppNo;
+                    
+                    if (targetAppNo && monitoredMarkData.results && Array.isArray(monitoredMarkData.results)) {
+                        // Önce başvuru numarasına göre eşleştir
+                        competitorMark = monitoredMarkData.results.find(res => 
+                            String(res.applicationNo).trim() === String(targetAppNo).trim()
+                        );
+                        
+                        console.log('🔍 Rakip Marka Arama:', {
+                            targetAppNo,
+                            totalResults: monitoredMarkData.results.length,
+                            foundMatch: !!competitorMark,
+                            competitorData: competitorMark
+                        });
+                    }
+                    
+                    // Eğer targetAppNo ile bulunamazsa, isSimilar:true olan ilk kaydı al (fallback)
+                    if (!competitorMark && monitoredMarkData.results && Array.isArray(monitoredMarkData.results)) {
                         competitorMark = monitoredMarkData.results.find(res => res.isSimilar === true);
+                        console.warn('⚠️ targetAppNo ile eşleşme bulunamadı, isSimilar:true olan ilk kayıt alındı');
+                    }
+                    
+                    // Rakip marka bulunduysa, ek bilgileri ekle
+                    if (competitorMark) {
+                        console.log('✅ Rakip Marka Bulundu:', {
+                            markName: competitorMark.markName,
+                            applicationNo: competitorMark.applicationNo,
+                            niceClasses: competitorMark.niceClasses
+                        });
+                    } else {
+                        console.warn('⚠️ Rakip marka bulunamadı:', {
+                            monitoredMarkId,
+                            targetAppNo,
+                            resultsCount: monitoredMarkData.results?.length || 0
+                        });
                     }
                 }
             } catch (e) {
-                // Eğer ID monitoringTrademarkRecords'da yoksa, sadece ipRecords'da arama yapmaya gerek kalmaz (çünkü IP kaydının verisi yeterli değil)
-                // Hata mesajı konsolda kalsın.
-                console.error(`Monitored Marka kaydı (${monitoredMarkId}) çekilirken hata:`, e);
+                console.error(`❌ Monitored Marka kaydı (${monitoredMarkId}) çekilirken hata:`, e);
             }
-        } 
+        }
 
         // Başlık oluşturma
         let taskTitle = `${transactionAlias}`; 
