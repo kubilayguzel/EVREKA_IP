@@ -1027,25 +1027,47 @@ const handleOwnerReportAndNotifyGeneration = async (event) => {
           monitoredMarkId: r.monitoredTrademarkId
         });
         
-        // Firestore'da aynı benzer marka (applicationNo) ve aynı izlenen marka için iş var mı?
+        // Firestore'da aynı benzer marka (applicationNo) ve aynı müvekkil (clientId) için iş var mı?
+        // Status önemli değil - herhangi bir durumda olsa bile tekrar oluşturma
         const existingTaskQuery = query(
           collection(db, 'tasks'),
-          where('taskType', '==', '20'),
-          where('status', 'in', ['awaiting_client_approval', 'client_approval_opened', 'open', 'in-progress'])
+          where('taskType', '==', '20')
         );
         
         const existingTaskSnap = await getDocs(existingTaskQuery);
         
-        // Client-side filtreleme: details.targetAppNo ve details.monitoredMarkId kontrolü
+        // İlk önce müvekkilin clientId'sini bul
+        let clientId = null;
+        const monitoredTm = monitoringTrademarks.find(tm => tm.id === r.monitoredTrademarkId);
+        if (monitoredTm) {
+          const ip = await _getIp(monitoredTm.ipRecordId || monitoredTm.sourceRecordId || monitoredTm.id);
+          clientId = ip?.clientId || monitoredTm?.clientId || null;
+        }
+        
+        console.log(`🔍 [6.${i + 1}] ClientId bulundu:`, { clientId, ownerId });
+        
+        // Client-side filtreleme: details.targetAppNo ve clientId kontrolü
         const duplicateTask = existingTaskSnap.docs.find(doc => {
           const data = doc.data();
           const targetAppNo = data?.details?.targetAppNo || '';
-          const taskMonitoredMarkId = data?.details?.monitoredMarkId || '';
+          const taskClientId = data?.clientId || '';
           
-          return (
+          const matches = (
             String(targetAppNo) === String(r.applicationNo) &&
-            String(taskMonitoredMarkId) === String(r.monitoredTrademarkId)
+            clientId && String(taskClientId) === String(clientId)
           );
+          
+          if (matches) {
+            console.log(`🔍 [6.${i + 1}] Eşleşme bulundu:`, {
+              taskId: doc.id,
+              taskClientId,
+              targetClientId: clientId,
+              targetAppNo,
+              taskStatus: data?.status
+            });
+          }
+          
+          return matches;
         });
         
         if (duplicateTask) {
@@ -1349,20 +1371,27 @@ const handleGlobalReportAndNotifyGeneration = async (event) => {
         
         const existingTaskQuery = query(
           collection(db, 'tasks'),
-          where('taskType', '==', '20'),
-          where('status', 'in', ['awaiting_client_approval', 'client_approval_opened', 'open', 'in-progress'])
+          where('taskType', '==', '20')
         );
         
         const existingTaskSnap = await getDocs(existingTaskQuery);
         
+        // Müvekkilin clientId'sini bul
+        let clientId = null;
+        const monitoredTm = monitoringTrademarks.find(tm => tm.id === r.monitoredTrademarkId);
+        if (monitoredTm) {
+          const ip = await _getIp(monitoredTm.ipRecordId || monitoredTm.sourceRecordId || monitoredTm.id);
+          clientId = ip?.clientId || monitoredTm?.clientId || null;
+        }
+        
         const duplicateTask = existingTaskSnap.docs.find(doc => {
           const data = doc.data();
           const targetAppNo = data?.details?.targetAppNo || '';
-          const taskMonitoredMarkId = data?.details?.monitoredMarkId || '';
+          const taskClientId = data?.clientId || '';
           
           return (
             String(targetAppNo) === String(r.applicationNo) &&
-            String(taskMonitoredMarkId) === String(r.monitoredTrademarkId)
+            clientId && String(taskClientId) === String(clientId)
           );
         });
         
