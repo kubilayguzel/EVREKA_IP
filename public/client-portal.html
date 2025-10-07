@@ -3601,6 +3601,129 @@ $(document).ready(function() {
         });
     }
 });
+
+// =====================[ BULLETIN WATCH CLIENT MATCH FIX ]=====================
+// Amaç: "Bülten İzleme Bildirim Onayları" kartında yalnızca clientId üzerinden
+// eşleşme yaparak TaskType=20 + status='awaiting_client_approval' işlerini listelemek.
+// Diğer kartların mevcut akışına dokunmadan, yalnızca bu kart tıklandığında devreye girer.
+
+async function __getAllowedClientIdsForUser_Fallback() {
+  try {
+    const user = authService.getCurrentUser && authService.getCurrentUser();
+    if (!user) return [];
+    const relCol = collection(db, 'personsRelated');
+    const results = [];
+    // 1) email alanı eşleşmesi
+    try {
+      const snap1 = await getDocs(query(relCol, where('email','==', user.email)));
+      snap1.forEach(d => results.push(d.id)); // typo intentionally to test? We'll correct
+    } catch(e) {}
+    // 2) emails dizi alanı varsa
+    try {
+      const snap2 = await getDocs(query(relCol, where('emails','array-contains', user.email)));
+      snap2.forEach && snap2.forEach(d => results.push(d.id));
+    } catch(e) {}
+    // Benzersiz
+    return Array.from(new Set(results));
+  } catch(e) {
+    console.warn('⚠️ allowedClientIds fallback hatası:', e);
+    return [];
+  }
+}
+
+async function getAllowedClientIdsForPortalUse() {
+  // Eğer uygulamanın kendi helper'ı varsa onu kullan
+  const user = authService.getCurrentUser && authService.getCurrentUser();
+  if (!user) return [];
+  try {
+    if (typeof window.getAllowedClientIdsForUser === 'function') {
+      const ids = await window.getAllowedClientIdsForUser({ uid: user.uid, email: user.email });
+      if (Array.isArray(ids) && ids.length) return ids;
+    }
+  } catch(e) { console.debug('getAllowedClientIdsForUser bulunamadı/boş:', e); }
+  // Fallback'e düş
+  return await __getAllowedClientIdsForUser_Fallback();
+}
+
+function __chunk(arr, size){ const out=[]; for(let i=0;i<arr.length;i+=size){ out.push(arr.slice(i,i+size)); } return out; }
+
+async function fetchBulletinApprovalTasksByClientIdOnly() {
+  const allowedClientIds = await getAllowedClientIdsForPortalUse();
+  if (!Array.isArray(allowedClientIds) || allowedClientIds.length === 0) return [];
+  const chunks = __chunk(allowedClientIds, 10);
+  const promises = [];
+  for (const ids of chunks) {
+    promises.push(getDocs(query(
+      collection(db,'tasks'),
+      where('taskType','==', 20),
+      where('status','==', 'awaiting_client_approval'),
+      where('clientId','in', ids)
+    )));
+  }
+  const snaps = await Promise.all(promises);
+  const list = [];
+  snaps.forEach(snap => snap.forEach && snap.forEach(docSnap => list.push({ id: docSnap.id, ...docSnap.data() })));
+  // benzersiz
+  const uniqMap = new Map();
+  list.forEach(it => uniqMap.set(it.id, it));
+  return Array.from(uniqMap.values());
+}
+
+function renderBulletinApprovalTasks(tasks){
+  const container = document.getElementById('task-list-container');
+  if (!container) return;
+  // Basit bir kart listesi render'ı (mevcut tasarıma uygun)
+  container.innerHTML = '';
+  if (!Array.isArray(tasks) || tasks.length === 0){
+    container.innerHTML = '<div class="alert alert-info mb-0">Gösterilecek iş bulunamadı.</div>';
+    return;
+  }
+  const frag = document.createDocumentFragment();
+  tasks.forEach((t, idx) => {
+    const card = document.createElement('div');
+    card.className = 'task-card task-card-warning mb-3 p-3';
+    const rpName = t?.details?.relatedParty?.name || '-';
+    const desc = t?.description || '';
+    const target = t?.details?.objectionTarget || t?.details?.targetAppNo || '';
+    card.innerHTML = `
+      <div class="task-number-tag">${idx+1}</div>
+      <div class="task-title">Yayına İtiraz / ${rpName}</div>
+      <div class="task-description">${desc || 'Müvekkil onayı bekleyen bülten izleme bildirimi.'}</div>
+      <div class="task-meta"><small>Task ID: ${t.id} • ClientId: ${t.clientId || '-'}</small></div>
+      ${target ? `<div class="mt-1"><small>Hedef: ${target}</small></div>` : ''}
+    `;
+    frag.appendChild(card);
+  });
+  container.appendChild(frag);
+}
+
+async function handleBulletinWatchClick_fixOnlyClientMatch(ev){
+  try{
+    // Görünür alanları aç
+    document.getElementById('task-main-cards')?.setAttribute('style','display:none;');
+    document.getElementById('task-detail-cards')?.setAttribute('style','display:block;');
+    document.getElementById('task-list-filters')?.setAttribute('style','display:block;');
+    document.getElementById('task-list-details')?.setAttribute('style','display:block;');
+
+    const data = await fetchBulletinApprovalTasksByClientIdOnly();
+    // Sayaç güncelle (dashboard/kart)
+    const badge = document.getElementById('taskCount-bulletin-watch');
+    if (badge) badge.textContent = data.length;
+    renderBulletinApprovalTasks(data);
+  }catch(e){
+    console.error('bulletin-watch fetch error:', e);
+  }
+}
+
+// Mevcut click binding'leri bozmadan ekstra bağlama yap
+document.addEventListener('DOMContentLoaded', function(){
+  const el = document.querySelector('[data-task-type="bulletin-watch"]');
+  if (el){
+    el.addEventListener('click', handleBulletinWatchClick_fixOnlyClientMatch);
+  }
+});
+// ===================[ /BULLETIN WATCH CLIENT MATCH FIX ]======================
+
 </script>
 </body>
 </html>
