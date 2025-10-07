@@ -17,7 +17,6 @@ let monitoringTrademarks = [];
 let filteredMonitoringTrademarks = [];
 let allPersons = [];
 const taskTriggeredStatus = new Map(); // İş Tetiklendi durum haritası
-const notificationStatus = new Map(); // Bildirim Durumu haritası (ownerId -> status)
 let pagination;
 let monitoringPagination;
 
@@ -963,8 +962,6 @@ const handleOwnerReportAndNotifyGeneration = async (event) => {
 
   console.log('🔵 [1] Fonksiyon başladı', { ownerId, ownerName, bulletinKey });
 
-  const statusBadge = document.querySelector(`.notification-status-badge[data-owner-id="${ownerId}"]`);
-
   if (!bulletinKey) {
     console.log('❌ [1.1] Bülten seçilmemiş');
     showNotification('Lütfen rapor oluşturmak için bir bülten seçin.', 'error');
@@ -1007,13 +1004,6 @@ const handleOwnerReportAndNotifyGeneration = async (event) => {
   try {
     btn.disabled = true;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> İşleniyor...';
-
-    // Bildirim Durumu, rapor sürecini gösterir (işten bağımsız)
-    if (statusBadge) {
-      statusBadge.textContent = 'İşleniyor...';
-      statusBadge.classList.remove('initial-status', 'sent-status', 'error-status');
-      statusBadge.classList.add('processing-status');
-    }
 
     let createdTaskCount = 0;
     const callerEmail = firebaseServices.auth.currentUser?.email || 'anonim@evreka.com';
@@ -1096,14 +1086,6 @@ const handleOwnerReportAndNotifyGeneration = async (event) => {
     });
 
     if (response?.data?.success) {
-      // ✅ Bildirim Durumu: rapor süreci başarılı → "Gönderildi"
-      notificationStatus.set(ownerId, 'Gönderildi'); // Map'e kaydet
-      
-      if (statusBadge) {
-        statusBadge.textContent = 'Gönderildi';
-        statusBadge.classList.remove('processing-status', 'initial-status', 'error-status');
-        statusBadge.classList.add('sent-status');
-      }
 
     // ✅ İş Tetiklendi: sadece iş oluştuysa "Evet" yap
       if (createdTaskCount > 0) {
@@ -1173,25 +1155,12 @@ const handleOwnerReportAndNotifyGeneration = async (event) => {
 
       console.log('✅ [10] İşlem bitti', { createdTaskCount, fileName: link.download });
     } else {
-      // Rapor başarısız → Bildirim Durumu hata
-      notificationStatus.set(ownerId, 'Rapor Hata'); // Map'e kaydet
-      
-      if (statusBadge) {
-        statusBadge.textContent = 'Rapor Hata';
-        statusBadge.classList.remove('processing-status');
-        statusBadge.classList.add('error-status');
-      }
+      // Rapor başarısız - Bildirim Durumu değişmez
       showNotification('Rapor oluşturma hatası: ' + (response?.data?.error || 'Bilinmeyen hata'), 'error');
       console.error('❌ [10] Rapor başarısız', { error: response?.data?.error });
     }
     } catch (err) {
-    notificationStatus.set(ownerId, 'Kritik Hata'); // Map'e kaydet
-    
-    if (statusBadge) {
-      statusBadge.textContent = 'Kritik Hata';
-      statusBadge.classList.remove('processing-status');
-      statusBadge.classList.add('error-status');
-    }
+    // Kritik hata - Bildirim Durumu değişmez
     showNotification('İşlem sırasında kritik hata oluştu!', 'error');
     console.error('❌ [X] Kritik hata', {
       message: err?.message,
