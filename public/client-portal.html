@@ -3577,11 +3577,16 @@ window._renderTaskCardsToContainer = async function(tasksToRender, containerSele
                     <div style="display: flex; flex-direction: column; justify-content: flex-start;">
                         <p class="mb-1" style="font-size: 0.9rem; margin-top: 0;"><strong>Marka:</strong> ${competitorMark.markName || competitorMark.brandText || 'Bilinmiyor'}</p>
                         <p class="mb-1" style="font-size: 0.8rem;"><strong>B.No:</strong> ${competitorMark.applicationNumber || competitorMark.applicationNo || '-'}</p>
-                        <p class="mb-1" style="font-size: 0.8rem;"><strong>Sınıflar:</strong> ${getNiceClasses(competitorMark)}</p>
+                        <p class="mb-0" style="font-size: 0.8rem;"><strong>Sınıflar:</strong> ${getNiceClasses(competitorMark)}</p>
+                    </div>
+                </div>
+                ${competitorMark.bs || competitorMark.note ? `
+                    <hr style="border: 0; border-top: 1px solid #585b63; margin: 15px 0;">
+                    <div style="padding-left: 0;">
                         ${competitorMark.bs ? `<p class="mb-1" style="font-size: 0.8rem;"><strong>İtiraz Başarı Şansı:</strong> <span class="badge badge-warning" style="font-size:0.75rem;">${competitorMark.bs}</span></p>` : ''}
                         ${competitorMark.note ? `<p class="mb-0" style="font-size: 0.8rem;"><strong>Değerlendirme:</strong> <span style="color: #f0ad4e; font-style: italic;">${competitorMark.note}</span></p>` : ''}
                     </div>
-                </div>
+                ` : ''}
             </div>
         ` : `
             <div class="col-6 task-card-comparison-item">
@@ -3603,6 +3608,7 @@ window._renderTaskCardsToContainer = async function(tasksToRender, containerSele
                         ${myMarkHtml}
                         ${competitorMarkHtml}
                     </div>
+                    <hr style="border: 0; border-top: 2px solid #585b63; margin: 20px 0;">
                 ` : ''}
                 
                 <div class="d-flex justify-content-between align-items-center mb-2">
