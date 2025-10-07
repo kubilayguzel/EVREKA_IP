@@ -2943,7 +2943,7 @@ window.loadSampleTaskDetails = async function(taskType) {
     const container = document.getElementById('task-list-container');
     container.innerHTML = '<div class="text-center mt-5"><i class="fas fa-spinner fa-spin fa-3x"></i><p class="mt-3">Yükleniyor...</p></div>';
 
-    // *** FORMAT DATE KISMI BAŞLANGIÇ (BU KISIM KORUNMALI) ***
+    // ... (formatDate fonksiyonu burada kalabilir)
     const formatDate = (v) => {
         if (!v) return '-';
         try {
@@ -2958,7 +2958,7 @@ window.loadSampleTaskDetails = async function(taskType) {
             return '-';
         }
     };
-    // *** FORMAT DATE KISMI SON ***
+    // ...
 
     try {
         const user = authService.getCurrentUser();
@@ -2982,17 +2982,25 @@ window.loadSampleTaskDetails = async function(taskType) {
             return;
         }
 
-        // TÜM TASKLARI ÇEK
+        // TÜM TASKLARI ÇEK (Awaiting Client Approval olanlar)
+        // Eğer completed-tasks değilse, sadece awaiting_client_approval olanları çekeceğiz.
         const tasksRef = collection(db, 'tasks');
-        const allTasksQuery = query(tasksRef);
-        const allTasksSnapshot = await runGetDocs(allTasksQuery);
+        let tasksQuery;
+        
+        if (taskType === 'completed-tasks') {
+            tasksQuery = query(tasksRef, where('status', '!=', 'awaiting_client_approval'));
+        } else {
+            tasksQuery = query(tasksRef, where('status', '==', 'awaiting_client_approval'));
+        }
+        
+        const allTasksSnapshot = await runGetDocs(tasksQuery);
 
         const matchingTasks = [];
 
         for (const d of allTasksSnapshot.docs) {
             const taskData = d.data();
             
-            // Müvekkil ile eşleşme kontrolü (Sizin orijinal kodunuzdan alınmıştır)
+            // Müvekkil ile eşleşme kontrolü
             const relatedPartyId = taskData.details?.relatedParty?.id;
             const personsRelated = taskData.personsRelatedIds || [];
             
@@ -3002,72 +3010,138 @@ window.loadSampleTaskDetails = async function(taskType) {
             
             if (!isRelatedToClient) continue;
             
-            // Task type'a göre filtreleme (Sizin orijinal kodunuzdan alınmıştır)
+            const meta = await window._getTransactionTypeMeta(taskData.taskType);
+            const label = window._taskLabelGuess(taskData, meta);
+            const isRenewal = /yenileme/.test(label);
+            const isBulletin = window.RX_BULTEN.test(label) || (taskData.taskType === 'objection_to_trademark_publication'); // taskType eklendi
+
+            // Task type'a göre filtreleme
             if (taskType === 'pending-approval') {
-                if (taskData.status === 'awaiting_client_approval') {
-                    const meta = await window._getTransactionTypeMeta(taskData.taskType);
-                    const label = window._taskLabelGuess(taskData, meta);
-                    if (!/yenileme/.test(label)) {
-                        matchingTasks.push({ id: d.id, ...taskData });
-                    }
-                }
-            } else if (taskType === 'renewal-approval') {
-                if (taskData.status === 'awaiting_client_approval') {
-                    const meta = await window._getTransactionTypeMeta(taskData.taskType);
-                    const label = window._taskLabelGuess(taskData, meta);
-                    if (/yenileme/.test(label)) {
-                        matchingTasks.push({ id: d.id, ...taskData });
-                    }
-                }
-            } else if (taskType === 'bulletin-watch') {
-                if (taskData.status === 'awaiting_client_approval') {
-                    const meta = await window._getTransactionTypeMeta(taskData.taskType);
-                    const label = window._taskLabelGuess(taskData, meta);
-                    if (window.RX_BULTEN.test(label)) {
-                        matchingTasks.push({ id: d.id, ...taskData });
-                    }
-                }
-            } else if (taskType === 'completed-tasks') {
-                if (taskData.status !== 'awaiting_client_approval') {
+                if (!isRenewal && !isBulletin) {
                     matchingTasks.push({ id: d.id, ...taskData });
                 }
+            } else if (taskType === 'renewal-approval') {
+                if (isRenewal) {
+                    matchingTasks.push({ id: d.id, ...taskData });
+                }
+            } else if (taskType === 'bulletin-watch') {
+                if (isBulletin) {
+                    matchingTasks.push({ id: d.id, ...taskData });
+                }
+            } else if (taskType === 'completed-tasks') {
+                // Completed tasks için zaten where koşulu yukarıda ayarlandı.
+                matchingTasks.push({ id: d.id, ...taskData });
             }
         }
+        
+        // ----------------------------------------------------
+        // BÜLTEN İZLEME İÇİN ÖZEL LİSTELEME BAŞLANGIÇ
+        // ----------------------------------------------------
+
+        if (taskType === 'bulletin-watch') {
+            const bulletinGroups = {};
+            matchingTasks.forEach(task => {
+                const bulletinNo = task.details?.bulletinNo || 'Bilinmeyen Bülten';
+                if (!bulletinGroups[bulletinNo]) {
+                    bulletinGroups[bulletinNo] = [];
+                }
+                bulletinGroups[bulletinNo].push(task);
+            });
+
+            const sortedBulletinNos = Object.keys(bulletinGroups).sort((a, b) => b - a); // En yeni bülten başta
+
+            if (sortedBulletinNos.length === 0) {
+                container.innerHTML = '<p class="lead text-muted text-center mt-5">Bu kategoride onay bekleyen bülten izleme işi bulunmamaktadır.</p>';
+                if (window.taskPaginationData.pagination) window.taskPaginationData.pagination.update(0);
+                return;
+            }
+
+            // Tab HTML yapısını oluştur
+            let tabNavHtml = '<ul class="nav nav-tabs mb-3" id="bulletinTabs" role="tablist">';
+            let tabContentHtml = '<div class="tab-content" id="bulletinTabContent">';
+
+            sortedBulletinNos.forEach((bulletinNo, index) => {
+                const isActive = index === 0;
+                const tabId = `bulletin-${bulletinNo}`;
+                const tabLinkClass = isActive ? 'active' : '';
+                const tabPaneClass = isActive ? 'show active' : '';
+
+                tabNavHtml += `
+                    <li class="nav-item">
+                        <a class="nav-link ${tabLinkClass}" id="${tabId}-tab" data-toggle="tab" href="#${tabId}-pane" role="tab" aria-controls="${tabId}-pane" aria-selected="${isActive}">
+                            Bülten ${bulletinNo} (${bulletinGroups[bulletinNo].length})
+                        </a>
+                    </li>
+                `;
+
+                tabContentHtml += `
+                    <div class="tab-pane fade ${tabPaneClass}" id="${tabId}-pane" role="tabpanel" aria-labelledby="${tabId}-tab">
+                        <div class="row mt-4" id="bulletin-tasks-row-${bulletinNo}">
+                            </div>
+                    </div>
+                `;
+            });
+
+            tabNavHtml += '</ul>';
+            tabContentHtml += '</div>';
+
+            // Ana konteynırı tab yapısıyla doldur
+            container.innerHTML = tabNavHtml + tabContentHtml;
+            
+            // İlk tab'ın içeriğini tasklarla doldur (Sadece ilk tab'ı başlangıçta yükleyelim)
+            const firstBulletinNo = sortedBulletinNos[0];
+            const tasksToRender = bulletinGroups[firstBulletinNo];
+            
+            // Pagination'ı geçici olarak gizle/sıfırla
+            $('#taskPagination').hide();
+            
+            // İlk bültenin tasklarını render et
+            await window._renderTaskCardsToContainer(tasksToRender, `#bulletin-tasks-row-${firstBulletinNo}`, formatDate, taskType);
+            
+            // Tab click event'i ekle
+            $(document).on('shown.bs.tab', '#bulletinTabs a[data-toggle="tab"]', async function (e) {
+                const targetPaneId = $(e.target).attr('href'); // #bulletin-474-pane
+                const targetBulletinNo = targetPaneId.split('-')[1]; // 474
+                const targetRowId = `#bulletin-tasks-row-${targetBulletinNo}`;
+                
+                // Zaten yüklü olup olmadığını kontrol et
+                if ($(targetRowId).html().trim() === '') {
+                    const tasks = bulletinGroups[targetBulletinNo];
+                    await window._renderTaskCardsToContainer(tasks, targetRowId, formatDate, taskType);
+                }
+            });
+
+            return; // Bülten izleme için özel akışı tamamla
+        }
+        
+        // ----------------------------------------------------
+        // BÜLTEN İZLEME İÇİN ÖZEL LİSTELEME SONU
+        // ----------------------------------------------------
 
         if (matchingTasks.length === 0) {
             container.innerHTML = '<p class="lead text-muted text-center mt-5">Bu kategoride iş bulunmamaktadır.</p>';
-            // Pagination'ı sıfırla
             if (window.taskPaginationData.pagination) {
                 window.taskPaginationData.pagination.update(0);
             }
             return;
         }
         
-        // ----------------------------------------------------
-        // PAGINATION BAŞLANGICI VE RENDER
-        // ----------------------------------------------------
-        
-        window.taskPaginationData.allData = matchingTasks; // Filtrelenmiş tüm veriyi sakla
+        // Klasik pagination akışı (Bülten İzleme dışındaki tipler için)
+        $('#taskPagination').show(); 
+        window.taskPaginationData.allData = matchingTasks;
         const itemsPerPage = window.taskPaginationData.itemsPerPage || 10;
         
-        // Pagination nesnesini oluştur veya güncelle
         if (!window.taskPaginationData.pagination) {
             window.taskPaginationData.pagination = new Pagination({
                 itemsPerPage: itemsPerPage,
                 containerId: 'taskPagination',
                 onPageChange: (page, perPage) => {
-                    // Sayfa değiştiğinde veriyi dilimle ve göster
                     renderTaskPage(page, perPage);
                 }
             });
         }
 
-        // Toplam öğe sayısını güncelleyerek render'ı (ilk sayfayı) tetikle
-        console.log('📈 Pagination güncelleniyor, task sayısı:', matchingTasks.length);
         window.taskPaginationData.pagination.update(matchingTasks.length);
-        
-        // Manuel olarak ilk sayfayı render et
-        console.log('🔧 Manuel render tetikleniyor...');
         renderTaskPage(1, itemsPerPage);
         
     } catch (error) {
@@ -3076,6 +3150,103 @@ window.loadSampleTaskDetails = async function(taskType) {
     }
 };
 
+// Yeni Yardımcı Fonksiyon: Task Kartlarını Belirtilen Konteynere Render Etmek
+window._renderTaskCardsToContainer = async function(tasksToRender, containerSelector, formatDate, taskType) {
+    const container = document.querySelector(containerSelector);
+    if (!container) return;
+    container.innerHTML = '<div class="col-12 text-center py-5"><i class="fas fa-spinner fa-spin fa-2x"></i></div>';
+    
+    const isCompletedView = (taskType === 'completed-tasks');
+    const startIndex = 0; // Bülten tabları için sayfa numarası olmadığı için index 0'dan başlar
+
+    const taskCards = await Promise.all(tasksToRender.map(async (task, index) => {
+        const taskId = task.id;
+        const taskNumber = startIndex + index + 1; 
+        
+        let transactionAlias = 'İşlem';
+        // transactionAlias'ı task.taskType'dan çekme kısmı (mevcut kodunuzda da olan kısım)
+        if (task.taskType) {
+            try {
+                const transactionDoc = await getDoc(doc(db, 'transactionTypes', String(task.taskType)));
+                if (transactionDoc.exists()) {
+                    transactionAlias = (transactionDoc.data().alias || transactionDoc.data().name || 'İşlem').toLocaleUpperCase('tr-TR');
+                }
+            } catch (e) { }
+        }
+
+        let taskTitle = transactionAlias;
+        if (task.relatedIpRecordId) {
+            try {
+                const ipDoc = await getDoc(doc(db, 'ipRecords', task.relatedIpRecordId));
+                if (ipDoc.exists()) {
+                    const ipData = ipDoc.data();
+                    const appNo = ipData.applicationNumber || ipData.applicationNo || '-';
+                    const brandText = ipData.brandText || ipData.title || '-';
+                    taskTitle = `${transactionAlias} - ${appNo} - ${brandText}`;
+                }
+            } catch (e) { }
+        }
+
+        const card = document.createElement('div');
+        card.className = 'col-md-12 mb-4';
+
+        const statusBadgeClass = {
+            'open': 'primary', 'in_progress': 'info', 'completed': 'success', 'closed': 'secondary',
+            'awaiting_client_approval': 'warning', 'müvekkil onayı - kapatıldı': 'danger'
+        }[task.status] || 'secondary';
+        
+        const statusText = {
+            'open': 'Açık', 'in_progress': 'Devam Ediyor', 'completed': 'Tamamlandı', 'closed': 'Kapalı',
+            'awaiting_client_approval': 'Onay Bekliyor', 'müvekkil onayı - kapatıldı': 'Reddedildi/Kapandı'
+        }[task.status] || task.status;
+        
+        let assignedTo = '-'; 
+        let actionButtons;
+        
+        if (isCompletedView) {
+            actionButtons = `
+                <button class="btn btn-info btn-sm btn-action task-detail" data-task-id="${taskId}"> <i class="fas fa-eye"></i> İncele </button>
+                <button class="btn btn-success btn-sm btn-action task-reopen" data-task-id="${taskId}"> <i class="fas fa-folder-open"></i> İşi Aç </button>
+            `;
+        } else {
+             actionButtons = `
+                <button class="btn btn-success btn-sm btn-action task-approve" data-task-id="${taskId}"> <i class="fas fa-check"></i> Onayla </button>
+                <button class="btn btn-danger btn-sm btn-action task-reject" data-task-id="${taskId}"> <i class="fas fa-times"></i> Reddet </button>
+                <button class="btn btn-info btn-sm btn-action task-detail" data-task-id="${taskId}"> <i class="fas fa-eye"></i> İncele </button>
+            `;
+        }
+        
+        const due = task.dueDate || task.officialDueDate || task.clientDueDate || task.deadline || null;
+        
+        // Bülten no varsa başlığa ekle
+        const bulletinInfo = task.details?.bulletinNo ? `<span class="badge badge-info mr-2">Bülten ${task.details.bulletinNo}</span>` : '';
+        
+        card.innerHTML = `
+            <div class="task-card task-card-warning" data-task-id="${taskId}">
+                <div class="task-number-tag">${taskNumber}.</div> 
+                <h5 class="task-title">#${taskId} - ${taskTitle}</h5>
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <small class="task-meta">
+                        ${bulletinInfo}
+                        <span class="badge badge-${statusBadgeClass}">${statusText}</span>
+                    </small>
+                </div>
+                <div class="d-flex justify-content-between align-items-center">
+                    <small class="task-meta">
+                        <i class="fas fa-clock mr-1"></i>
+                        ${isCompletedView ? 'Oluşturma Tarihi' : 'Son Onay Tarihi'}: ${formatDate(isCompletedView ? task.createdAt : due)}
+                    </small>
+                    <div>${actionButtons}</div>
+                </div>
+            </div>`;
+
+        return card;
+    }));
+    
+    // Konteyner içeriğini temizle ve yeni kartları ekle
+    container.innerHTML = ''; // Önceki 'Yükleniyor' mesajını kaldır
+    taskCards.forEach(card => container.appendChild(card));
+};
 
 // --- İŞ LİSTESİ FİLTRELEME MANTIĞI (Büyük/Küçük Harf Duyarsız Hali) ---
 function applyTaskListFilters() {
