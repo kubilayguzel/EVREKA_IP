@@ -3012,18 +3012,24 @@ window.loadSampleTaskDetails = async function(taskType) {
         for (const d of allTasksSnapshot.docs) {
             const taskData = d.data();
             
-        // Müvekkil ile eşleşme kontrolü (GÜNCELLENDİ: Task tipine özel clientID kontrolü)
+        // Müvekkil ile eşleşme kontrolü
             const relatedPartyId = taskData.details?.relatedParty?.id;
             const personsRelated = taskData.personsRelatedIds || [];
-            const taskId_clientID = taskData.clientID; // Görev belgesindeki clientID
+            const clientIdInTask = taskData.clientId || taskData.clientID; // İki varyasyonu da kontrol et
 
             let isRelatedToClient = false;
             
-            // Task Type "20" ise (Yayına İtiraz), SADECE clientID'yi kontrol et
-            if (taskData.taskType === "20") {
-                isRelatedToClient = (taskId_clientID && linkedPersonIds.includes(taskId_clientID));
+            // Yayına İtiraz işleri (taskType=20 veya objection_to_trademark_publication) için SADECE clientId kontrolü
+            const isObjectionTask = (taskData.taskType === "20" || 
+                                     taskData.taskType === 20 || 
+                                     taskData.taskType === "objection_to_trademark_publication");
+            
+            if (isObjectionTask) {
+                // Yayına İtiraz: Sadece clientId ile eşleştir
+                isRelatedToClient = (clientIdInTask && linkedPersonIds.includes(clientIdInTask));
+                console.log(`DEBUG - Yayına İtiraz Eşleştirme: Task ID: ${d.id}, clientId: ${clientIdInTask}, Eşleşti mi: ${isRelatedToClient}`);
             } else {
-                // Diğer tüm görevler için (Yenileme, Genel Onay vb.) eski kural geçerlidir.
+                // Diğer tüm görevler: Eski kural (relatedParty veya personsRelated)
                 isRelatedToClient = 
                     (relatedPartyId && linkedPersonIds.includes(relatedPartyId)) ||
                     (Array.isArray(personsRelated) && personsRelated.some(id => linkedPersonIds.includes(id)));
@@ -3038,8 +3044,7 @@ window.loadSampleTaskDetails = async function(taskType) {
             const meta = await window._getTransactionTypeMeta(taskData.taskType);
             const label = window._taskLabelGuess(taskData, meta);
             const isRenewal = /yenileme/.test(label);
-            const isBulletin = window.RX_BULTEN.test(label) || (taskData.taskType === 'objection_to_trademark_publication'); // taskType eklendi
-
+            const isBulletin = window.RX_BULTEN.test(label) || taskData.taskType === '20';
             // Task type'a göre filtreleme
             if (taskType === 'pending-approval') {
                 if (!isRenewal && !isBulletin) {
