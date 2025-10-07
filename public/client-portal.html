@@ -3249,7 +3249,27 @@ window._renderTaskCardsToContainer = async function(tasksToRender, containerSele
     
     const isCompletedView = (taskType === 'completed-tasks');
     const startIndex = 0;
-
+    
+    // Görselleri URL'e çevir fonksiyonu
+    const getImageUrl = (imagePath) => {
+        if (!imagePath) return '';
+        
+        // Eğer zaten tam URL ise
+        if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+            return imagePath;
+        }
+        
+        // Eğer Storage URL ise (gs:// ile başlıyorsa)
+        if (imagePath.startsWith('gs://')) {
+            // Firebase Storage URL'e çevir
+            const path = imagePath.replace('gs://evreka-ip.firebasestorage.app/', '');
+            return `https://firebasestorage.googleapis.com/v0/b/evreka-ip.firebasestorage.app/o/${encodeURIComponent(path)}?alt=media`;
+        }
+        
+        // Relative path ise (bulletins/... gibi)
+        return `https://firebasestorage.googleapis.com/v0/b/evreka-ip.firebasestorage.app/o/${encodeURIComponent(imagePath)}?alt=media`;
+    };
+    
     const taskCards = await Promise.all(tasksToRender.map(async (task, index) => {
         const taskId = task.id;
         const taskNumber = startIndex + index + 1; 
@@ -3517,27 +3537,6 @@ window._renderTaskCardsToContainer = async function(tasksToRender, containerSele
                 <p class="text-muted mt-2" style="font-size: 0.8rem;">Portföy bilgisi bulunamadı.</p>
             </div>
         `;
-
-        // Rakip (Benzer) Marka Bilgileri
-        // Görselleri URL'e çevir fonksiyonu
-        const getImageUrl = (imagePath) => {
-            if (!imagePath) return '';
-            
-            // Eğer zaten tam URL ise
-            if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
-                return imagePath;
-            }
-            
-            // Eğer Storage URL ise (gs:// ile başlıyorsa)
-            if (imagePath.startsWith('gs://')) {
-                // Firebase Storage URL'e çevir
-                const path = imagePath.replace('gs://evreka-ip.firebasestorage.app/', '');
-                return `https://firebasestorage.googleapis.com/v0/b/evreka-ip.firebasestorage.app/o/${encodeURIComponent(path)}?alt=media`;
-            }
-            
-            // Relative path ise (bulletins/... gibi)
-            return `https://firebasestorage.googleapis.com/v0/b/evreka-ip.firebasestorage.app/o/${encodeURIComponent(imagePath)}?alt=media`;
-        };
 
         const competitorMarkHtml = competitorMark ? `
             <div class="col-6 task-card-comparison-item">
