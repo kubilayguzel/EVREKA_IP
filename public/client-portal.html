@@ -3005,9 +3005,8 @@ window.loadSampleTaskDetails = async function(taskType) {
             tasksQuery = query(tasksRef, where('status', '==', 'awaiting_client_approval'));
         }
         
-        console.log("DEBUG 1: Firestore'dan çekilen tüm görev sayısı (Status Filtresinden sonra):", allTasksSnapshot.size);
         const allTasksSnapshot = await runGetDocs(tasksQuery);
-
+        console.log("DEBUG 1: Firestore'dan çekilen tüm görev sayısı (Status Filtresinden sonra):", allTasksSnapshot.size);
         const matchingTasks = [];
 
         for (const d of allTasksSnapshot.docs) {
