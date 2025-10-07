@@ -3263,13 +3263,13 @@ window._renderTaskCardsToContainer = async function(tasksToRender, containerSele
         
         // Eğer Storage URL ise (gs:// ile başlıyorsa)
         if (imagePath.startsWith('gs://')) {
-            // Firebase Storage URL'e çevir
-            const path = imagePath.replace('gs://evreka-ip.firebasestorage.app/', '');
-            return `https://firebasestorage.googleapis.com/v0/b/evreka-ip.firebasestorage.app/o/${encodeURIComponent(path)}?alt=media`;
+            const path = imagePath.replace('gs://ip-manager-production.appspot.com/', '');
+            return `https://firebasestorage.googleapis.com/v0/b/ip-manager-production.appspot.com/o/${encodeURIComponent(path)}?alt=media`;
         }
         
-        // Relative path ise (bulletins/... gibi)
-        return `https://firebasestorage.googleapis.com/v0/b/evreka-ip.firebasestorage.app/o/${encodeURIComponent(imagePath)}?alt=media`;
+        // ✅ DOĞRU BUCKET: ip-manager-production
+        // Relative path ise (bulletins/trademark_474_images/... gibi)
+        return `https://firebasestorage.googleapis.com/v0/b/ip-manager-production.appspot.com/o/${encodeURIComponent(imagePath)}?alt=media`;
     };
 
     const taskCards = await Promise.all(tasksToRender.map(async (task, index) => {
