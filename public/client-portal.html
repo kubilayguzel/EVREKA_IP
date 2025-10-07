@@ -3012,17 +3012,28 @@ window.loadSampleTaskDetails = async function(taskType) {
         for (const d of allTasksSnapshot.docs) {
             const taskData = d.data();
             
-            // Müvekkil ile eşleşme kontrolü
+        // Müvekkil ile eşleşme kontrolü (GÜNCELLENDİ: Task tipine özel clientID kontrolü)
             const relatedPartyId = taskData.details?.relatedParty?.id;
             const personsRelated = taskData.personsRelatedIds || [];
-            
-            const isRelatedToClient = 
-                (relatedPartyId && linkedPersonIds.includes(relatedPartyId)) ||
-                (Array.isArray(personsRelated) && personsRelated.some(id => linkedPersonIds.includes(id)));
-            
-            if (!isRelatedToClient) continue;
-            console.log("DEBUG 2: Müvekkil ile eşleşen Task ID:", d.id, "Task Type:", taskData.taskType, "Task Status:", taskData.status);
+            const taskId_clientID = taskData.clientID; // Görev belgesindeki clientID
 
+            let isRelatedToClient = false;
+            
+            // Task Type "20" ise (Yayına İtiraz), SADECE clientID'yi kontrol et
+            if (taskData.taskType === "20") {
+                isRelatedToClient = (taskId_clientID && linkedPersonIds.includes(taskId_clientID));
+            } else {
+                // Diğer tüm görevler için (Yenileme, Genel Onay vb.) eski kural geçerlidir.
+                isRelatedToClient = 
+                    (relatedPartyId && linkedPersonIds.includes(relatedPartyId)) ||
+                    (Array.isArray(personsRelated) && personsRelated.some(id => linkedPersonIds.includes(id)));
+            }
+            
+            if (!isRelatedToClient) {
+                // console.log(`Task ${d.id} elendi. Task Type: ${taskData.taskType}`); // İsteğe bağlı hata ayıklama
+                continue;
+            }
+            console.log("DEBUG 2: Müvekkil ile eşleşen Task ID:", d.id, "Task Type:", taskData.taskType, "Task Status:", taskData.status);
             const meta = await window._getTransactionTypeMeta(taskData.taskType);
             const label = window._taskLabelGuess(taskData, meta);
             const isRenewal = /yenileme/.test(label);
