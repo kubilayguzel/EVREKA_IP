@@ -3030,7 +3030,8 @@ window.loadSampleTaskDetails = async function(taskType) {
             }
             
             if (!isRelatedToClient) {
-                // console.log(`Task ${d.id} elendi. Task Type: ${taskData.taskType}`); // İsteğe bağlı hata ayıklama
+                // Eşleşmeyen görevleri log'layın
+                console.log(`DEBUG X: ELENEN GÖREV Task ID: ${d.id}, Task Type: ${taskData.taskType}, Eşleşme Başarısız.`);
                 continue;
             }
             console.log("DEBUG 2: Müvekkil ile eşleşen Task ID:", d.id, "Task Type:", taskData.taskType, "Task Status:", taskData.status);
