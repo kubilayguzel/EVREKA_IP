@@ -1024,28 +1024,39 @@ const handleOwnerReportAndNotifyGeneration = async (event) => {
         statusBadge.classList.add('sent-status');
       }
 
-      // ✅ İş Tetiklendi: sadece iş oluştuysa “Evet” yap
+      // ✅ İş Tetiklendi: sadece iş oluştuysa "Evet" yap
       if (createdTaskCount > 0) {
+        console.log('🔵 [10.1] İş tetiklendi, durum güncelleniyor...', { ownerId, bulletinNo });
+        
+        // Map'e kaydet
         taskTriggeredStatus.set(ownerId, 'Evet');
-        const taskBadge =
-          document.querySelector(`.task-triggered-status[data-owner-id="${ownerId}"]`) ||
-          document.querySelector(`.trigger-status-badge[data-owner-id="${ownerId}"]`);
-        if (taskBadge) {
-          taskBadge.textContent = 'Evet';
-          taskBadge.classList.remove('text-danger', 'trigger-no');
-          taskBadge.classList.add('text-success', 'font-weight-bold', 'trigger-yes');
-        }
-
-        // Kalıcılık: Firestore’dan “awaiting_client_approval” işleri okuyup tabloyu tazele
+        
+        // Firestore'dan tüm işleri yeniden yükle
         try {
-          if (typeof refreshTriggeredStatus === 'function') {
-            await refreshTriggeredStatus(bulletinNo);
-          }
-          if (typeof renderMonitoringList === 'function') {
-            renderMonitoringList();
+          await refreshTriggeredStatus(bulletinNo);
+          console.log('🔵 [10.2] refreshTriggeredStatus tamamlandı', { 
+            mapSize: taskTriggeredStatus.size,
+            hasOwner: taskTriggeredStatus.has(ownerId)
+          });
+          
+          // Tabloyu yeniden render et
+          renderMonitoringList();
+          console.log('🔵 [10.3] renderMonitoringList tamamlandı');
+          
+          // Badge'i manuel güncelle (renderMonitoringList çalışmazsa)
+          const taskBadge =
+            document.querySelector(`.task-triggered-status[data-owner-id="${ownerId}"]`) ||
+            document.querySelector(`.trigger-status-badge[data-owner-id="${ownerId}"]`);
+          if (taskBadge) {
+            taskBadge.textContent = 'Evet';
+            taskBadge.classList.remove('text-danger', 'trigger-no');
+            taskBadge.classList.add('text-success', 'font-weight-bold', 'trigger-yes');
+            console.log('🔵 [10.4] Badge manuel güncellendi');
+          } else {
+            console.warn('⚠️ [10.4] Badge bulunamadı:', { ownerId });
           }
         } catch (e) {
-          console.warn('[TSS] refreshTriggeredStatus/renderMonitoringList hata:', e);
+          console.error('❌ [10.2] refreshTriggeredStatus/renderMonitoringList hatası:', e);
         }
       }
 
