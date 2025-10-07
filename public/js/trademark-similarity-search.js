@@ -17,6 +17,7 @@ let monitoringTrademarks = [];
 let filteredMonitoringTrademarks = [];
 let allPersons = [];
 const taskTriggeredStatus = new Map(); // İş Tetiklendi durum haritası
+const notificationStatus = new Map(); // Bildirim Durumu haritası (ownerId -> status)
 let pagination;
 let monitoringPagination;
 
@@ -809,8 +810,9 @@ const renderMonitoringList = async () => {
 
     <!-- BİLDİRİM DURUMU -->
     <td style="width:15%;text-align:center;">
-        <span class="notification-status-badge initial-status" data-owner-id="${group.ownerId}">
-        Gönderilmedi
+        <span class="notification-status-badge ${notificationStatus.get(group.ownerId) === 'Gönderildi' ? 'sent-status' : 'initial-status'}" 
+              data-owner-id="${group.ownerId}">
+        ${notificationStatus.get(group.ownerId) || 'Gönderilmedi'}
         </span>
     </td>
 
@@ -1095,6 +1097,8 @@ const handleOwnerReportAndNotifyGeneration = async (event) => {
 
     if (response?.data?.success) {
       // ✅ Bildirim Durumu: rapor süreci başarılı → "Gönderildi"
+      notificationStatus.set(ownerId, 'Gönderildi'); // Map'e kaydet
+      
       if (statusBadge) {
         statusBadge.textContent = 'Gönderildi';
         statusBadge.classList.remove('processing-status', 'initial-status', 'error-status');
@@ -1170,6 +1174,8 @@ const handleOwnerReportAndNotifyGeneration = async (event) => {
       console.log('✅ [10] İşlem bitti', { createdTaskCount, fileName: link.download });
     } else {
       // Rapor başarısız → Bildirim Durumu hata
+      notificationStatus.set(ownerId, 'Rapor Hata'); // Map'e kaydet
+      
       if (statusBadge) {
         statusBadge.textContent = 'Rapor Hata';
         statusBadge.classList.remove('processing-status');
@@ -1178,7 +1184,9 @@ const handleOwnerReportAndNotifyGeneration = async (event) => {
       showNotification('Rapor oluşturma hatası: ' + (response?.data?.error || 'Bilinmeyen hata'), 'error');
       console.error('❌ [10] Rapor başarısız', { error: response?.data?.error });
     }
-  } catch (err) {
+    } catch (err) {
+    notificationStatus.set(ownerId, 'Kritik Hata'); // Map'e kaydet
+    
     if (statusBadge) {
       statusBadge.textContent = 'Kritik Hata';
       statusBadge.classList.remove('processing-status');
