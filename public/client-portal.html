@@ -620,7 +620,19 @@
     font-size: 1.1rem; /* Başlık fontu */
 }
 /* GÖREV KARTLARI İÇİN SIRALAMA NUMARASI VE STİLİ */
-
+/* Bülten İzleme Kartı Kıyaslama Stilleri */
+.comparison-area {
+    border-top: 1px solid #4a4f57; /* Koyu temada ayırıcı */
+}
+.dark-mode .comparison-area {
+    border-top: 1px solid #585b63;
+}
+.light-mode .comparison-area {
+    border-top: 1px solid #e9ecef;
+}
+.task-card-comparison-item img {
+    border: 1px solid #585b63;
+}
 /* 1. Kartı pozisyonlamaya hazırla ve numara için üstten boşluk bırak */
 .task-card {
     position: relative;          
@@ -3150,21 +3162,35 @@ window.loadSampleTaskDetails = async function(taskType) {
     }
 };
 
+// Yardımcı fonksiyon: Nice Sınıflarını al
+const getNiceClasses = (data) => {
+    // MonitoredMark'tan 'monitoredNiceClasses' veya 'niceClasses' bekler.
+    const classes = data?.monitoredNiceClasses || data?.niceClasses || [];
+    return Array.isArray(classes) ? classes.join(', ') : (classes || '-');
+}
 // Yeni Yardımcı Fonksiyon: Task Kartlarını Belirtilen Konteynere Render Etmek
 window._renderTaskCardsToContainer = async function(tasksToRender, containerSelector, formatDate, taskType) {
     const container = document.querySelector(containerSelector);
     if (!container) return;
+    
+    // Yükleniyor mesajını daha rafine bir şekilde kullan
     container.innerHTML = '<div class="col-12 text-center py-5"><i class="fas fa-spinner fa-spin fa-2x"></i></div>';
     
     const isCompletedView = (taskType === 'completed-tasks');
-    const startIndex = 0; // Bülten tabları için sayfa numarası olmadığı için index 0'dan başlar
+    const startIndex = 0;
 
     const taskCards = await Promise.all(tasksToRender.map(async (task, index) => {
         const taskId = task.id;
         const taskNumber = startIndex + index + 1; 
         
+        // Varsayılanlar
         let transactionAlias = 'İşlem';
-        // transactionAlias'ı task.taskType'dan çekme kısmı (mevcut kodunuzda da olan kısım)
+        let ipRecordTitle = '';
+        let appNo = '';
+        let monitoredMarkData = null;
+        let competitorMark = null; // isSimilar: true olan rakip marka verisi
+
+        // 1. Transaction Type Alias'ı Çekme
         if (task.taskType) {
             try {
                 const transactionDoc = await getDoc(doc(db, 'transactionTypes', String(task.taskType)));
@@ -3174,22 +3200,45 @@ window._renderTaskCardsToContainer = async function(tasksToRender, containerSele
             } catch (e) { }
         }
 
-        let taskTitle = transactionAlias;
-        if (task.relatedIpRecordId) {
+        // 2. Monitored Marka Bilgisini Çekme (monitoredTrademarkRecords koleksiyonu)
+        const monitoredMarkId = task.details?.monitoredMarkId || task.relatedIpRecordId; // Hem izlenen markadan hem de IP kaydından ID al
+
+        if (monitoredMarkId) {
             try {
-                const ipDoc = await getDoc(doc(db, 'ipRecords', task.relatedIpRecordId));
-                if (ipDoc.exists()) {
-                    const ipData = ipDoc.data();
-                    const appNo = ipData.applicationNumber || ipData.applicationNo || '-';
-                    const brandText = ipData.brandText || ipData.title || '-';
-                    taskTitle = `${transactionAlias} - ${appNo} - ${brandText}`;
+                const monitoredMarkDoc = await getDoc(doc(db, 'monitoringTrademarkRecords', monitoredMarkId));
+                
+                if (monitoredMarkDoc.exists()) {
+                    monitoredMarkData = monitoredMarkDoc.data();
+                    
+                    // İzlenen Markanın Bilgilerini Al
+                    const monitoredMarkAlias = monitoredMarkData.brandText || monitoredMarkData.title || 'İzlenen Marka';
+                    ipRecordTitle = monitoredMarkAlias; // Kart başlığında kullanmak için
+                    appNo = monitoredMarkData.applicationNumber || monitoredMarkData.applicationNo || '-';
+                    
+                    // 💥 KRİTİK ADIM: Benzer (Rakip) Markayı Filtrele (isSimilar: true)
+                    if (monitoredMarkData.results && Array.isArray(monitoredMarkData.results)) {
+                        // isSimilar: true olan ilk kaydı al
+                        competitorMark = monitoredMarkData.results.find(res => res.isSimilar === true);
+                    }
                 }
-            } catch (e) { }
+            } catch (e) {
+                // Eğer ID monitoringTrademarkRecords'da yoksa, sadece ipRecords'da arama yapmaya gerek kalmaz (çünkü IP kaydının verisi yeterli değil)
+                // Hata mesajı konsolda kalsın.
+                console.error(`Monitored Marka kaydı (${monitoredMarkId}) çekilirken hata:`, e);
+            }
+        } 
+
+        // Başlık oluşturma
+        let taskTitle = `${transactionAlias}`; 
+        if (ipRecordTitle) {
+            taskTitle += ` - ${appNo} - ${ipRecordTitle}`; 
+        } else {
+            taskTitle += ` - #${taskId}`;
         }
-
+        
         const card = document.createElement('div');
-        card.className = 'col-md-12 mb-4';
-
+        // ... (Status, Badge, Due Date gibi atamalar)
+        
         const statusBadgeClass = {
             'open': 'primary', 'in_progress': 'info', 'completed': 'success', 'closed': 'secondary',
             'awaiting_client_approval': 'warning', 'müvekkil onayı - kapatıldı': 'danger'
@@ -3215,16 +3264,61 @@ window._renderTaskCardsToContainer = async function(tasksToRender, containerSele
                 <button class="btn btn-info btn-sm btn-action task-detail" data-task-id="${taskId}"> <i class="fas fa-eye"></i> İncele </button>
             `;
         }
+                // Kendi (İzlenen) Marka Bilgileri
+        const myMarkHtml = monitoredMarkData ? `
+            <div class="col-6 task-card-comparison-item">
+                <h6 class="text-info" style="font-size: 0.9rem; font-weight: 600;">İZLENEN MARKANIZ</h6>
+                <div class="d-flex align-items-center mb-2">
+                    ${monitoredMarkData.imagePath ? `<img src="${monitoredMarkData.imagePath}" alt="Marka" style="width: 50px; height: 50px; object-fit: contain; margin-right: 10px; border-radius: 4px;">` : ''}
+                    <div>
+                        <p class="mb-0 text-truncate" style="font-size: 0.9rem;"><strong>Marka:</strong> ${monitoredMarkData.markName || monitoredMarkData.brandText || 'Adı Yok'}</p>
+                        <p class="mb-0" style="font-size: 0.8rem;"><strong>B.No:</strong> ${monitoredMarkData.applicationNumber || monitoredMarkData.applicationNo || '-'}</p>
+                    </div>
+                </div>
+                <p class="mb-0" style="font-size: 0.8rem;"><strong>Sınıflar:</strong> ${getNiceClasses(monitoredMarkData)}</p>
+            </div>
+        ` : `
+            <div class="col-6 task-card-comparison-item">
+                <h6 class="text-info" style="font-size: 0.9rem; font-weight: 600;">İZLENEN MARKANIZ</h6>
+                <p class="text-muted mt-2" style="font-size: 0.8rem;">Portföy bilgisi bulunamadı.</p>
+            </div>
+        `;
+
+        // Rakip (Benzer) Marka Bilgileri
+        const competitorMarkHtml = competitorMark ? `
+            <div class="col-6 task-card-comparison-item">
+                <h6 class="text-danger" style="font-size: 0.9rem; font-weight: 600;">BENZER MARKA</h6>
+                <div class="d-flex align-items-center mb-2">
+                    ${competitorMark.imagePath ? `<img src="${competitorMark.imagePath}" alt="Marka" style="width: 50px; height: 50px; object-fit: contain; margin-right: 10px; border-radius: 4px;">` : ''}
+                    <div>
+                        <p class="mb-0 text-truncate" style="font-size: 0.9rem;"><strong>Marka:</strong> ${competitorMark.markName || 'Bilinmiyor'}</p>
+                        <p class="mb-0" style="font-size: 0.8rem;"><strong>B.No:</strong> ${competitorMark.applicationNo || '-'}</p>
+                    </div>
+                </div>
+                <p class="mb-0" style="font-size: 0.8rem;"><strong>Sınıflar:</strong> ${getNiceClasses(competitorMark)}</p>
+            </div>
+        ` : `
+            <div class="col-6 task-card-comparison-item">
+                <h6 class="text-danger" style="font-size: 0.9rem; font-weight: 600;">BENZER MARKA</h6>
+                <p class="text-muted mt-2" style="font-size: 0.8rem;">İsim benzerliği (isSimilar: true) olan rakip marka bulunamadı.</p>
+            </div>
+        `;
         
         const due = task.dueDate || task.officialDueDate || task.clientDueDate || task.deadline || null;
-        
-        // Bülten no varsa başlığa ekle
-        const bulletinInfo = task.details?.bulletinNo ? `<span class="badge badge-info mr-2">Bülten ${task.details.bulletinNo}</span>` : '';
-        
+        const bulletinInfo = task.details?.bulletinNo ? `<span class="badge badge-info mr-2">Bülten ${task.details.bulletenNo || task.details.bulletinNo}</span>` : '';       
+        card.className = 'col-md-12 mb-4';      
         card.innerHTML = `
             <div class="task-card task-card-warning" data-task-id="${taskId}">
                 <div class="task-number-tag">${taskNumber}.</div> 
                 <h5 class="task-title">#${taskId} - ${taskTitle}</h5>
+                
+                ${taskType === 'bulletin-watch' ? `
+                    <div class="row comparison-area mt-4 mb-3 pt-3">
+                        ${myMarkHtml}
+                        ${competitorMarkHtml}
+                    </div>
+                ` : ''}
+                
                 <div class="d-flex justify-content-between align-items-center mb-2">
                     <small class="task-meta">
                         ${bulletinInfo}
@@ -3244,9 +3338,10 @@ window._renderTaskCardsToContainer = async function(tasksToRender, containerSele
     }));
     
     // Konteyner içeriğini temizle ve yeni kartları ekle
-    container.innerHTML = ''; // Önceki 'Yükleniyor' mesajını kaldır
+    container.innerHTML = ''; 
     taskCards.forEach(card => container.appendChild(card));
 };
+
 
 // --- İŞ LİSTESİ FİLTRELEME MANTIĞI (Büyük/Küçük Harf Duyarsız Hali) ---
 function applyTaskListFilters() {
