@@ -3539,7 +3539,13 @@ window._renderTaskCardsToContainer = async function(tasksToRender, containerSele
                 <p class="text-muted mt-2" style="font-size: 0.8rem;">Portföy bilgisi bulunamadı.</p>
             </div>
         `;
-
+        // DEBUG: Görselleri kontrol et
+        console.log(`🖼️ Task ${taskId} - Görsel kontrol:`, {
+            monitoredImage: monitoredMarkData?.imagePath,
+            monitoredImageUrl: getImageUrl(monitoredMarkData?.imagePath),
+            competitorImage: competitorMark?.imagePath,
+            competitorImageUrl: getImageUrl(competitorMark?.imagePath)
+        });
         const competitorMarkHtml = competitorMark ? `
             <div class="col-6 task-card-comparison-item">
                 <h6 class="text-danger" style="font-size: 0.9rem; font-weight: 600;">BENZER MARKA</h6>
