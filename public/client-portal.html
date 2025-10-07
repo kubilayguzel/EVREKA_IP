@@ -3226,24 +3226,75 @@ window._renderTaskCardsToContainer = async function(tasksToRender, containerSele
             } catch (e) { }
         }
 
-        // 2. Monitored Marka Bilgisini Çekme
+    // 2. Monitored Marka Bilgisini Çekme
         const monitoredMarkId = task.details?.monitoredMarkId || task.relatedIpRecordId;
+        const bulletinNo = task.details?.bulletinNo;
         
-        console.log(`🔍 Task ${taskId} - monitoredMarkId:`, monitoredMarkId);
+        console.log(`🔍 Task ${taskId} - Veri çekme için gerekli bilgiler:`, {
+            monitoredMarkId,
+            bulletinNo
+        });
         
-        if (monitoredMarkId) {
+        if (monitoredMarkId && bulletinNo) {
             try {
-                // ✅ DOĞRU KOLEKSIYON: monitoringTrademarkRecords
-                const monitoredMarkDoc = await getDoc(doc(db, 'monitoringTrademarkRecords', monitoredMarkId));
+                // ✅ ADIM 1: trademarkBulletins'den bulletinDate'i al ve bulletinKey oluştur
+                let bulletinKey = null;
+                
+                try {
+                    const bulletinsQuery = query(
+                        collection(db, 'trademarkBulletins'),
+                        where('bulletinNo', '==', bulletinNo),
+                        limit(1)
+                    );
+                    const bulletinSnapshot = await getDocs(bulletinsQuery);
+                    
+                    if (!bulletinSnapshot.empty) {
+                        const bulletinData = bulletinSnapshot.docs[0].data();
+                        const bulletinDate = bulletinData.bulletinDate; // "12/08/2025" formatında
+                        
+                        // bulletinDate'i "12/08/2025" → "12082025" formatına çevir
+                        let formattedDate = bulletinDate;
+                        if (bulletinDate && bulletinDate.includes('/')) {
+                            formattedDate = bulletinDate.split('/').join(''); // "12082025"
+                        }
+                        
+                        // bulletinKey formatı: "474_12082025"
+                        bulletinKey = `${bulletinNo}_${formattedDate}`;
+                        
+                        console.log(`✅ Task ${taskId} - BulletinKey oluşturuldu:`, {
+                            bulletinNo,
+                            bulletinDate,
+                            formattedDate,
+                            bulletinKey
+                        });
+                    } else {
+                        console.error(`❌ Task ${taskId} - trademarkBulletins'de bulletinNo bulunamadı:`, bulletinNo);
+                    }
+                } catch (bulletinQueryErr) {
+                    console.error(`❌ Task ${taskId} - BulletinKey sorgu hatası:`, bulletinQueryErr);
+                }
+                
+                if (!bulletinKey) {
+                    console.error(`❌ Task ${taskId} - BulletinKey oluşturulamadı, işlem durduruluyor`);
+                    throw new Error('BulletinKey bulunamadı');
+                }
+                
+                // ✅ ADIM 2: Doğru path ile monitoringTrademarkRecords'dan belgeyi çek
+                const monitoredMarkDoc = await getDoc(
+                    doc(db, 'monitoringTrademarkRecords', bulletinKey, 'trademarks', monitoredMarkId)
+                );
+                
+                console.log(`🔍 Task ${taskId} - Belge sorgusu:`, {
+                    path: `monitoringTrademarkRecords/${bulletinKey}/trademarks/${monitoredMarkId}`,
+                    exists: monitoredMarkDoc.exists()
+                });
                 
                 if (monitoredMarkDoc.exists()) {
                     monitoredMarkData = monitoredMarkDoc.data();
                     console.log(`✅ Task ${taskId} - Monitored Mark Data:`, {
                         id: monitoredMarkId,
-                        brandText: monitoredMarkData.brandText,
-                        markName: monitoredMarkData.markName,
-                        ipRecordId: monitoredMarkData.ipRecordId,
-                        hasResults: !!monitoredMarkData.results
+                        hasResults: !!monitoredMarkData.results,
+                        resultsCount: monitoredMarkData.results?.length || 0
                     });
                     
                     // İzlenen Markanın Bilgilerini Al
@@ -3252,7 +3303,7 @@ window._renderTaskCardsToContainer = async function(tasksToRender, containerSele
                     appNo = monitoredMarkData.applicationNumber || monitoredMarkData.applicationNo || '-';
                     
                     // ✅ İpRecords'dan ek bilgi çek
-                    const ipRecordId = monitoredMarkData.ipRecordId || monitoredMarkData.sourceRecordId;
+                    const ipRecordId = monitoredMarkData.monitoredTrademarkId || monitoredMarkData.ipRecordId || monitoredMarkData.sourceRecordId;
                     if (ipRecordId) {
                         try {
                             const ipDoc = await getDoc(doc(db, 'ipRecords', ipRecordId));
@@ -3284,76 +3335,80 @@ window._renderTaskCardsToContainer = async function(tasksToRender, containerSele
                         }
                     }
                     
-                // 💥 KRİTİK: Benzer (Rakip) Markayı Bul
-                const targetAppNo = task.details?.targetAppNo;
+                    // 💥 KRİTİK: Benzer (Rakip) Markayı Bul
+                    const targetAppNo = task.details?.targetAppNo;
 
-                console.log(`🎯 Task ${taskId} - Rakip marka arama:`, {
-                    targetAppNo,
-                    hasResults: !!monitoredMarkData.results,
-                    resultsCount: monitoredMarkData.results?.length || 0
-                });
-
-                // ✅ ÖNCE: monitoringTrademarkRecords/results array'inden targetAppNo ile eşleştir
-                if (targetAppNo && monitoredMarkData.results && Array.isArray(monitoredMarkData.results)) {
-                    competitorMark = monitoredMarkData.results.find(res => 
-                        String(res.applicationNo || '').trim() === String(targetAppNo).trim()
-                    );
-                    
-                    if (competitorMark) {
-                        console.log(`✅ Task ${taskId} - Rakip marka BULUNDU (results array):`, {
-                            markName: competitorMark.markName,
-                            applicationNo: competitorMark.applicationNo,
-                            niceClasses: competitorMark.niceClasses,
-                            imagePath: competitorMark.imagePath,
-                            isSimilar: competitorMark.isSimilar
-                        });
-                    } else {
-                        console.warn(`⚠️ Task ${taskId} - results array'de eşleşme bulunamadı:`, {
-                            targetAppNo,
-                            availableAppNos: monitoredMarkData.results.slice(0, 5).map(r => r.applicationNo)
-                        });
-                    }
-                }
-
-                // ✅ FALLBACK 1: isSimilar:true olan ilk kaydı al
-                if (!competitorMark && monitoredMarkData.results && Array.isArray(monitoredMarkData.results)) {
-                    competitorMark = monitoredMarkData.results.find(res => res.isSimilar === true);
-                    if (competitorMark) {
-                        console.log(`✅ Task ${taskId} - Rakip marka BULUNDU (isSimilar fallback):`, {
-                            markName: competitorMark.markName,
-                            applicationNo: competitorMark.applicationNo
-                        });
-                    }
-                }
-
-                // ✅ FALLBACK 2: task.details'dan manuel oluştur (son çare)
-                if (!competitorMark && task.details?.objectionTarget) {
-                    competitorMark = {
-                        markName: task.details.objectionTarget,
-                        applicationNo: task.details.targetAppNo || '-',
-                        niceClasses: task.details.targetNiceClasses || [],
-                        similarityScore: task.details.similarityScore || 0
-                    };
-                    console.log(`⚠️ Task ${taskId} - Rakip marka OLUŞTURULDU (task.details fallback):`, competitorMark);
-                }
-
-                if (!competitorMark) {
-                    console.error(`❌ Task ${taskId} - Rakip marka BULUNAMADI!`, {
+                    console.log(`🎯 Task ${taskId} - Rakip marka arama:`, {
                         targetAppNo,
                         hasResults: !!monitoredMarkData.results,
-                        hasDetails: !!task.details
+                        resultsCount: monitoredMarkData.results?.length || 0
                     });
-                }
+
+                    // ✅ ÖNCE: monitoringTrademarkRecords/results array'inden targetAppNo ile eşleştir
+                    if (targetAppNo && monitoredMarkData.results && Array.isArray(monitoredMarkData.results)) {
+                        competitorMark = monitoredMarkData.results.find(res => 
+                            String(res.applicationNo || '').trim() === String(targetAppNo).trim()
+                        );
+                        
+                        if (competitorMark) {
+                            console.log(`✅ Task ${taskId} - Rakip marka BULUNDU (results array):`, {
+                                markName: competitorMark.markName,
+                                applicationNo: competitorMark.applicationNo,
+                                niceClasses: competitorMark.niceClasses,
+                                imagePath: competitorMark.imagePath,
+                                isSimilar: competitorMark.isSimilar
+                            });
+                        } else {
+                            console.warn(`⚠️ Task ${taskId} - results array'de eşleşme bulunamadı:`, {
+                                targetAppNo,
+                                availableAppNos: monitoredMarkData.results.slice(0, 5).map(r => r.applicationNo)
+                            });
+                        }
+                    }
+
+                    // ✅ FALLBACK 1: isSimilar:true olan ilk kaydı al
+                    if (!competitorMark && monitoredMarkData.results && Array.isArray(monitoredMarkData.results)) {
+                        competitorMark = monitoredMarkData.results.find(res => res.isSimilar === true);
+                        if (competitorMark) {
+                            console.log(`✅ Task ${taskId} - Rakip marka BULUNDU (isSimilar fallback):`, {
+                                markName: competitorMark.markName,
+                                applicationNo: competitorMark.applicationNo
+                            });
+                        }
+                    }
+
+                    // ✅ FALLBACK 2: task.details'dan manuel oluştur (son çare)
+                    if (!competitorMark && task.details?.objectionTarget) {
+                        competitorMark = {
+                            markName: task.details.objectionTarget,
+                            applicationNo: task.details.targetAppNo || '-',
+                            niceClasses: task.details.targetNiceClasses || [],
+                            similarityScore: task.details.similarityScore || 0
+                        };
+                        console.log(`⚠️ Task ${taskId} - Rakip marka OLUŞTURULDU (task.details fallback):`, competitorMark);
+                    }
+
+                    if (!competitorMark) {
+                        console.error(`❌ Task ${taskId} - Rakip marka BULUNAMADI!`, {
+                            targetAppNo,
+                            hasResults: !!monitoredMarkData.results,
+                            hasDetails: !!task.details
+                        });
+                    }
                 } else {
-                    console.error(`❌ Task ${taskId} - monitoringTrademarkRecords/${monitoredMarkId} bulunamadı!`);
+                    console.error(`❌ Task ${taskId} - Belge bulunamadı!`, {
+                        path: `monitoringTrademarkRecords/${bulletinKey}/trademarks/${monitoredMarkId}`
+                    });
                 }
             } catch (e) {
                 console.error(`❌ Task ${taskId} - Monitored Marka çekme hatası:`, e);
             }
         } else {
-            console.warn(`⚠️ Task ${taskId} - monitoredMarkId eksik!`);
+            console.warn(`⚠️ Task ${taskId} - Eksik veri!`, {
+                hasMonitoredMarkId: !!monitoredMarkId,
+                hasBulletinNo: !!bulletinNo
+            });
         }
-
         // Başlık oluşturma
         let taskTitle = `${transactionAlias}`; 
         if (ipRecordTitle) {
