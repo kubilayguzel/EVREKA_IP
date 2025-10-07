@@ -1338,8 +1338,17 @@ const loadInitialData = async () => {
     startSearchBtn.disabled = true;
     researchBtn.disabled = true;
 
-    console.log("✅ Initial data loaded.");
-};
+    // Sayfa ilk yüklendiğinde mevcut bülteni kontrol et ve işleri yükle
+    const bulletinSelect = document.getElementById('bulletinSelect');
+    if (bulletinSelect?.value) {
+        const bNo = String(bulletinSelect.value).split('_')[0];
+        if (bNo && typeof refreshTriggeredStatus === 'function') {
+            await refreshTriggeredStatus(bNo);
+            renderMonitoringList(); // Tabloyu güncelle
+        }
+    }
+  }
+console.log("✅ Initial data loaded.");
 
 const loadBulletinOptions = async () => {
     try {
@@ -1904,18 +1913,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         }
     });
-
-    if (bulletinSelect.value) {
-        checkCacheAndToggleButtonStates();
-    
-        try {
-            const bNo = String(bulletinSelect.value || '').split('_')[0];
-            if (bNo && typeof refreshTriggeredStatus === 'function') {
-                await refreshTriggeredStatus(bNo);
-                if (typeof renderMonitoringList === 'function') renderMonitoringList();
-            }
-        } catch(e) { console.warn(e); }
-    }
 
     setupEditCriteriaModal(); // Modal'ı başlat
 });
