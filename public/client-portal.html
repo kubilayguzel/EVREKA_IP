@@ -3005,6 +3005,7 @@ window.loadSampleTaskDetails = async function(taskType) {
             tasksQuery = query(tasksRef, where('status', '==', 'awaiting_client_approval'));
         }
         
+        console.log("DEBUG 1: Firestore'dan çekilen tüm görev sayısı (Status Filtresinden sonra):", allTasksSnapshot.size);
         const allTasksSnapshot = await runGetDocs(tasksQuery);
 
         const matchingTasks = [];
@@ -3021,7 +3022,8 @@ window.loadSampleTaskDetails = async function(taskType) {
                 (Array.isArray(personsRelated) && personsRelated.some(id => linkedPersonIds.includes(id)));
             
             if (!isRelatedToClient) continue;
-            
+            console.log("DEBUG 2: Müvekkil ile eşleşen Task ID:", d.id, "Task Type:", taskData.taskType, "Task Status:", taskData.status);
+
             const meta = await window._getTransactionTypeMeta(taskData.taskType);
             const label = window._taskLabelGuess(taskData, meta);
             const isRenewal = /yenileme/.test(label);
@@ -3038,6 +3040,8 @@ window.loadSampleTaskDetails = async function(taskType) {
                 }
             } else if (taskType === 'bulletin-watch') {
                 if (isBulletin) {
+                    // Bülten olarak filtrelenen task'ları log'layın
+                    console.log("DEBUG 3: Bülten olarak filtrelenen Task ID:", d.id);
                     matchingTasks.push({ id: d.id, ...taskData });
                 }
             } else if (taskType === 'completed-tasks') {
@@ -3052,6 +3056,12 @@ window.loadSampleTaskDetails = async function(taskType) {
 
         if (taskType === 'bulletin-watch') {
             const bulletinGroups = {};
+            
+            // Hata ayıklama satırını doğru parantezlerle kapatarak ekliyoruz:
+            console.log("DEBUG 4: Bülten taskları gruplanıyor. İlk 5 görev detayı:", 
+                matchingTasks.slice(0, 5).map(t => ({ id: t.id, bulletinNo: t.details?.bulletinNo }))
+            );
+
             matchingTasks.forEach(task => {
                 const bulletinNo = task.details?.bulletinNo || 'Bilinmeyen Bülten';
                 if (!bulletinGroups[bulletinNo]) {
