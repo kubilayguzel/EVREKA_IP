@@ -307,27 +307,91 @@ const _getOwnerKey = (ip, tm, persons = []) => {
 const refreshTriggeredStatus = async (bulletinNo) => {
   try {
     taskTriggeredStatus.clear();
-    if (!bulletinNo) return;
+    if (!bulletinNo) {
+      console.warn('[TSS] refreshTriggeredStatus: bulletinNo boş');
+      return;
+    }
+    
+    console.log('[TSS] refreshTriggeredStatus başladı:', { bulletinNo });
+    
+    // ✅ bulletinNo details.bulletinNo içinde, üst seviyede yok - tüm işleri çek ve filtrele
     const qTasks = query(
       collection(db, 'tasks'),
       where('taskType', '==', '20'),
-      where('bulletinNo', '==', String(bulletinNo)),
       where('status', '==', 'awaiting_client_approval')
     );
+    
     const snap = await getDocs(qTasks);
-    if (snap.empty) return;
+    console.log('[TSS] Query sonucu:', { totalTasks: snap.size });
+    
+    if (snap.empty) {
+      console.warn('[TSS] Hiç iş bulunamadı');
+      return;
+    }
+
+    // Client-side filtreleme: details.bulletinNo kontrolü
+    const relevantTasks = snap.docs.filter(d => {
+      const data = d.data();
+      const taskBulletinNo = data?.details?.bulletinNo || data?.bulletinNo || '';
+      const matches = String(taskBulletinNo) === String(bulletinNo);
+      if (matches) {
+        console.log('[TSS] Bülten eşleşti:', { 
+          taskId: d.id, 
+          bulletinNo: taskBulletinNo,
+          monitoredMarkId: data?.details?.monitoredMarkId || data?.monitoredMarkId
+        });
+      }
+      return matches;
+    });
+    
+    console.log('[TSS] Bülten eşleşen işler:', { 
+      relevantCount: relevantTasks.length,
+      totalCount: snap.size 
+    });
+
+    if (relevantTasks.length === 0) {
+      console.warn('[TSS] Bu bülten için hiç iş bulunamadı');
+      return;
+    }
 
     const tmById = new Map(monitoringTrademarks.map(tm => [tm.id, tm]));
-    for (const d of snap.docs) {
-      const t = d.data();
-      const tm = tmById.get(t.monitoredMarkId);
-      if (!tm) continue;
+    
+    for (const docSnap of relevantTasks) {
+      const t = docSnap.data();
+      // monitoredMarkId de details içinde olabilir
+      const monitoredMarkId = t?.details?.monitoredMarkId || t?.monitoredMarkId;
+      
+      if (!monitoredMarkId) {
+        console.warn('[TSS] İş için monitoredMarkId bulunamadı:', { taskId: docSnap.id });
+        continue;
+      }
+      
+      const tm = tmById.get(monitoredMarkId);
+      if (!tm) {
+        console.warn('[TSS] Monitoring trademark bulunamadı:', { monitoredMarkId });
+        continue;
+      }
+      
       const ip = await _getIp(tm.ipRecordId || tm.sourceRecordId || tm.id);
       const ownerInfo = _getOwnerKey(ip, tm, allPersons);
-      if (ownerInfo?.id) taskTriggeredStatus.set(ownerInfo.id, 'Evet');
+      
+      if (ownerInfo?.id) {
+        taskTriggeredStatus.set(ownerInfo.id, 'Evet');
+        console.log('[TSS] ✅ Sahip için iş tetiklendi:', { 
+          ownerId: ownerInfo.id, 
+          ownerName: ownerInfo.name,
+          taskId: docSnap.id 
+        });
+      }
     }
+    
+    console.log('[TSS] ✅ refreshTriggeredStatus tamamlandı:', { 
+      mapSize: taskTriggeredStatus.size,
+      owners: Array.from(taskTriggeredStatus.entries())
+    });
+    
   } catch (e) {
-    console.error('[TSS] refreshTriggeredStatus error:', e);
+    console.error('[TSS] ❌ refreshTriggeredStatus error:', e);
   }
 };
 
