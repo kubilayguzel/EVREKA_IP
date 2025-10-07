@@ -3374,19 +3374,24 @@ window._renderTaskCardsToContainer = async function(tasksToRender, containerSele
                     });
                     
                     // İzlenen Markanın Bilgilerini Al
-                    let monitoredMarkAlias = monitoredMarkData.brandText || monitoredMarkData.markName || monitoredMarkData.title || 'İzlenen Marka';
-                    ipRecordTitle = monitoredMarkAlias;
-                    appNo = monitoredMarkData.applicationNumber || monitoredMarkData.applicationNo || '-';
-                    
-                    // ✅ İpRecords'dan ek bilgi çek
                     const ipRecordId = monitoredMarkData.monitoredTrademarkId || monitoredMarkData.ipRecordId || monitoredMarkData.sourceRecordId;
+                    
+                    let ipRecordTitle = '';
+                    let appNo = '';
+                    
                     if (ipRecordId) {
                         try {
                             const ipDoc = await getDoc(doc(db, 'ipRecords', ipRecordId));
                             if (ipDoc.exists()) {
                                 const ipData = ipDoc.data();
-                                appNo = ipData.applicationNumber || ipData.applicationNo || appNo;
-                                ipRecordTitle = ipData.brandText || ipData.title || ipRecordTitle;
+                                
+                                // İzlenen Markanın Bilgilerini ipRecords'dan Al
+                                appNo = ipData.applicationNumber || ipData.applicationNo || '-';
+                                ipRecordTitle = ipData.brandText || ipData.markName || ipData.title || 'İzlenen Marka';
+                                
+                                // MonitoredMarkData'ya ekle (HTML'de kullanmak için)
+                                monitoredMarkData.markName = ipRecordTitle;
+                                monitoredMarkData.applicationNumber = appNo;
                                 
                                 // Nice sınıfları ekle
                                 if (!monitoredMarkData.niceClasses && ipData.goodsAndServicesByClass) {
