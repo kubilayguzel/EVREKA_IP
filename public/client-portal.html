@@ -641,22 +641,32 @@
     overflow: visible !important; /* Bu satırı ekle/değiştir */
 }
 
-/* Görev kartlarındaki marka görsellerine hover efekti */
+/* Görev kartlarındaki marka görsellerine hover efekti - Portföy stilini kullan */
 .task-brand-image {
+    height: 100px !important;
+    width: auto;
+    border-radius: 6px;
+    object-fit: contain;
+    transition: transform 0.3s ease;
     cursor: pointer;
     position: relative;
-    transition: none; /* Transition'ı kaldır */
 }
 
 .task-brand-image:hover {
-    transform: scale(2.5) translateX(-50%) !important;
-    transform-origin: left center !important;
+    transform: scale(2.5) !important;
     z-index: 9999 !important;
-    position: fixed !important;
-    left: 50% !important;
-    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.5) !important;
-    background-color: white !important;
-    padding: 5px !important;
+    position: relative !important;
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3) !important;
+}
+
+/* Comparison area overflow kontrolü */
+.comparison-area {
+    overflow: visible !important;
+    position: relative;
+}
+
+.task-card-comparison-item {
+    overflow: visible !important;
 }
 
 /* Comparison area overflow */
@@ -3524,7 +3534,10 @@ window._renderTaskCardsToContainer = async function(tasksToRender, containerSele
             <div class="col-6 task-card-comparison-item">
                 <h6 class="text-info" style="font-size: 0.9rem; font-weight: 600;">İZLENEN MARKANIZ</h6>
                 <div class="d-flex align-items-center mb-2">
-                    ${monitoredMarkData.imagePath ? `<img src="${getImageUrl(monitoredMarkData.imagePath)}" alt="Marka" class="task-brand-image" style="width: 100px; height: 100px; object-fit: contain; margin-right: 10px; border-radius: 4px;">` : ''}
+                    ${monitoredMarkData.imagePath ? `<img src="${getImageUrl(monitoredMarkData.imagePath)}" 
+                        onerror="this.onerror=null; this.src='https://via.placeholder.com/100x100.png?text=Yok';" 
+                        alt="Marka" 
+                        class="task-brand-image">` : '<div style="width:100px; height:100px; border:2px dashed #ccc; display:flex; align-items:center; justify-content:center; font-size:0.7rem; color:#999;">Görsel Yok</div>'}
                     <div>
                         <p class="mb-0 text-truncate" style="font-size: 0.9rem;"><strong>Marka:</strong> ${monitoredMarkData.markName || monitoredMarkData.brandText || 'Adı Yok'}</p>
                         <p class="mb-0" style="font-size: 0.8rem;"><strong>B.No:</strong> ${monitoredMarkData.applicationNumber || monitoredMarkData.applicationNo || '-'}</p>
@@ -3538,18 +3551,16 @@ window._renderTaskCardsToContainer = async function(tasksToRender, containerSele
                 <p class="text-muted mt-2" style="font-size: 0.8rem;">Portföy bilgisi bulunamadı.</p>
             </div>
         `;
-        // DEBUG: Görselleri kontrol et
-        console.log(`🖼️ Task ${taskId} - Görsel kontrol:`, {
-            monitoredImage: monitoredMarkData?.imagePath,
-            monitoredImageUrl: getImageUrl(monitoredMarkData?.imagePath),
-            competitorImage: competitorMark?.imagePath,
-            competitorImageUrl: getImageUrl(competitorMark?.imagePath)
-        });
+
+        // Rakip (Benzer) Marka Bilgileri
         const competitorMarkHtml = competitorMark ? `
             <div class="col-6 task-card-comparison-item">
                 <h6 class="text-danger" style="font-size: 0.9rem; font-weight: 600;">BENZER MARKA</h6>
                 <div class="d-flex align-items-center mb-2">
-                    ${competitorMark.imagePath ? `<img src="${getImageUrl(competitorMark.imagePath)}" alt="Marka" class="task-brand-image" style="width: 100px; height: 100px; object-fit: contain; margin-right: 10px; border-radius: 4px;">` : ''}
+                    ${competitorMark.imagePath ? `<img src="${getImageUrl(competitorMark.imagePath)}" 
+                        onerror="this.onerror=null; this.src='https://via.placeholder.com/100x100.png?text=Yok';" 
+                        alt="Marka" 
+                        class="task-brand-image">` : '<div style="width:100px; height:100px; border:2px dashed #ccc; display:flex; align-items:center; justify-content:center; font-size:0.7rem; color:#999;">Görsel Yok</div>'}
                     <div>
                         <p class="mb-0 text-truncate" style="font-size: 0.9rem;"><strong>Marka:</strong> ${competitorMark.markName || 'Bilinmiyor'}</p>
                         <p class="mb-0" style="font-size: 0.8rem;"><strong>B.No:</strong> ${competitorMark.applicationNo || '-'}</p>
