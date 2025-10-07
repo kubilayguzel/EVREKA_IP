@@ -825,26 +825,39 @@ const renderMonitoringList = async () => {
     attachGenerateReportListener();
     setupImageHoverEffect('monitoringListBody');
 
-    // YENİ: İş Tetiklendi rozetlerini kalıcı durumdan set et
-    try {
-        document.querySelectorAll('#monitoringListBody .owner-row').forEach(row => {
-            const ownerId = row.querySelector('.generate-report-and-notify-btn')?.dataset?.ownerId;
-            if (!ownerId) return;
-            const badge = row.querySelector('.task-triggered-status, .trigger-status-badge');
-            if (!badge) return;
-            const val = taskTriggeredStatus.get(ownerId) === 'Evet' ? 'Evet' : 'Hayır';
-            badge.textContent = val;
-            if (badge.classList.contains('trigger-status-badge')) {
-                badge.classList.toggle('trigger-yes', val==='Evet');
-                badge.classList.toggle('trigger-no', val!=='Evet');
-            } else {
-                // fallback class style
-                badge.classList.toggle('text-success', val==='Evet');
-                badge.classList.toggle('font-weight-bold', val==='Evet');
-                badge.classList.toggle('text-danger', val!=='Evet');
-            }
+    // YENİ: Badge'leri kalıcı durumdan güncelle (render sonrası double-check)
+    setTimeout(() => {
+        console.log('🔄 Badge güncelleme başladı...', { 
+            mapSize: taskTriggeredStatus.size,
+            mapContent: Array.from(taskTriggeredStatus.entries())
         });
-    } catch(e) { console.warn(e); }
+        
+        document.querySelectorAll('#monitoringListBody .owner-row').forEach(row => {
+            const btn = row.querySelector('.generate-report-and-notify-btn');
+            if (!btn || !btn.dataset.ownerId) return;
+            
+            const ownerId = btn.dataset.ownerId;
+            const badge = row.querySelector('.task-triggered-status, .trigger-status-badge');
+            if (!badge) {
+                console.warn('⚠️ Badge bulunamadı:', { ownerId });
+                return;
+            }
+            
+            const hasTriggered = taskTriggeredStatus.get(ownerId) === 'Evet';
+            badge.textContent = hasTriggered ? 'Evet' : 'Hayır';
+            badge.classList.toggle('trigger-yes', hasTriggered);
+            badge.classList.toggle('trigger-no', !hasTriggered);
+            badge.classList.toggle('text-success', hasTriggered);
+            badge.classList.toggle('font-weight-bold', hasTriggered);
+            badge.classList.toggle('text-danger', !hasTriggered);
+            
+            console.log('✅ Badge güncellendi:', { 
+                ownerId, 
+                hasTriggered,
+                badgeText: badge.textContent 
+            });
+        });
+    }, 100); // Render tamamlandıktan sonra
 };
 
 
@@ -1024,37 +1037,50 @@ const handleOwnerReportAndNotifyGeneration = async (event) => {
         statusBadge.classList.add('sent-status');
       }
 
-      // ✅ İş Tetiklendi: sadece iş oluştuysa "Evet" yap
+    // ✅ İş Tetiklendi: sadece iş oluştuysa "Evet" yap
       if (createdTaskCount > 0) {
         console.log('🔵 [10.1] İş tetiklendi, durum güncelleniyor...', { ownerId, bulletinNo });
         
-        // Map'e kaydet
-        taskTriggeredStatus.set(ownerId, 'Evet');
-        
-        // Firestore'dan tüm işleri yeniden yükle
+        // ÖNCE Firestore'dan yükle
         try {
           await refreshTriggeredStatus(bulletinNo);
           console.log('🔵 [10.2] refreshTriggeredStatus tamamlandı', { 
             mapSize: taskTriggeredStatus.size,
-            hasOwner: taskTriggeredStatus.has(ownerId)
+            hasOwner: taskTriggeredStatus.has(ownerId),
+            ownerValue: taskTriggeredStatus.get(ownerId)
           });
           
-          // Tabloyu yeniden render et
-          renderMonitoringList();
+          // Kısa gecikme - Map güncellensin
+          await new Promise(resolve => setTimeout(resolve, 150));
+          
+          // SONRA render et (async olduğu için await)
+          await renderMonitoringList();
           console.log('🔵 [10.3] renderMonitoringList tamamlandı');
           
-          // Badge'i manuel güncelle (renderMonitoringList çalışmazsa)
-          const taskBadge =
-            document.querySelector(`.task-triggered-status[data-owner-id="${ownerId}"]`) ||
-            document.querySelector(`.trigger-status-badge[data-owner-id="${ownerId}"]`);
-          if (taskBadge) {
-            taskBadge.textContent = 'Evet';
-            taskBadge.classList.remove('text-danger', 'trigger-no');
-            taskBadge.classList.add('text-success', 'font-weight-bold', 'trigger-yes');
-            console.log('🔵 [10.4] Badge manuel güncellendi');
-          } else {
-            console.warn('⚠️ [10.4] Badge bulunamadı:', { ownerId });
-          }
+          // Ekstra kontrol - 200ms sonra badge'i tekrar kontrol et
+          setTimeout(() => {
+            const taskBadge =
+              document.querySelector(`.task-triggered-status[data-owner-id="${ownerId}"]`) ||
+              document.querySelector(`.trigger-status-badge[data-owner-id="${ownerId}"]`);
+            if (taskBadge) {
+              const shouldBeYes = taskTriggeredStatus.get(ownerId) === 'Evet';
+              if (taskBadge.textContent !== (shouldBeYes ? 'Evet' : 'Hayır')) {
+                console.warn('⚠️ [10.4] Badge yanlış, düzeltiliyor...', { 
+                  current: taskBadge.textContent, 
+                  shouldBe: shouldBeYes ? 'Evet' : 'Hayır' 
+                });
+                taskBadge.textContent = shouldBeYes ? 'Evet' : 'Hayır';
+                taskBadge.classList.toggle('trigger-yes', shouldBeYes);
+                taskBadge.classList.toggle('trigger-no', !shouldBeYes);
+                taskBadge.classList.toggle('text-success', shouldBeYes);
+                taskBadge.classList.toggle('font-weight-bold', shouldBeYes);
+                taskBadge.classList.toggle('text-danger', !shouldBeYes);
+              }
+              console.log('✅ [10.4] Badge doğru:', { text: taskBadge.textContent });
+            } else {
+              console.error('❌ [10.4] Badge bulunamadı:', { ownerId });
+            }
+          }, 200);
         } catch (e) {
           console.error('❌ [10.2] refreshTriggeredStatus/renderMonitoringList hatası:', e);
         }
@@ -1281,10 +1307,18 @@ const handleGlobalReportAndNotifyGeneration = async (event) => {
       link.download = `Toplu_Rapor_Bildirim_${new Date().toISOString().slice(0, 10)}.zip`;
       document.body.appendChild(link); link.click(); document.body.removeChild(link);
 
-      // KALICILIK: Firestore’dan durum oku ve tabloyu senkronize et
+    // KALICILIK: Firestore'dan durum oku ve tabloyu senkronize et
       if (createdTaskCount > 0 && typeof refreshTriggeredStatus === 'function') {
+        console.log('🔵 [Global] refreshTriggeredStatus başladı...', { bNo });
         await refreshTriggeredStatus(bNo);
-        if (typeof renderMonitoringList === 'function') renderMonitoringList();
+        console.log('🔵 [Global] refreshTriggeredStatus tamamlandı', { mapSize: taskTriggeredStatus.size });
+        
+        await new Promise(resolve => setTimeout(resolve, 150));
+        
+        if (typeof renderMonitoringList === 'function') {
+          await renderMonitoringList();
+          console.log('🔵 [Global] renderMonitoringList tamamlandı');
+        }
       }
     } else {
       showNotification('Toplu rapor oluşturulamadı.', 'error');
