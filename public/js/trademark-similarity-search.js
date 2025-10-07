@@ -17,6 +17,7 @@ let monitoringTrademarks = [];
 let filteredMonitoringTrademarks = [];
 let allPersons = [];
 const taskTriggeredStatus = new Map(); // İş Tetiklendi durum haritası
+const notificationStatus = new Map();
 let pagination;
 let monitoringPagination;
 
