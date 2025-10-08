@@ -3577,12 +3577,14 @@ window._renderTaskCardsToContainer = async function(tasksToRender, containerSele
                 <button class="btn btn-success btn-sm btn-action task-reopen" data-task-id="${taskId}"> <i class="fas fa-folder-open"></i> İşi Aç </button>
             `;
         } else {
-            // Bülten izleme görevi için emtia kıyaslama butonu ekle
+            // İpRecordId'yi çek
+            const ipRecordIdForButton = monitoredMarkData?.monitoredTrademarkId || monitoredMarkData?.ipRecordId || monitoredMarkData?.sourceRecordId || '';
+            
             const compareButton = (taskType === 'bulletin-watch') ? 
                 `<button class="btn btn-warning btn-sm btn-action task-compare-goods" 
                     data-task-id="${taskId}" 
-                    data-monitored-id="${monitoredMarkData?.id || ''}" 
-                    data-competitor-id="${competitorMark?.objectID || ''}">
+                    data-ip-record-id="${ipRecordIdForButton}" 
+                    data-bulletin-object-id="${competitorMark?.objectID || ''}">
                     <i class="fas fa-balance-scale"></i> Emtia Kıyasla
                 </button>` : '';
             
@@ -3893,10 +3895,10 @@ $(document).on('click', '.task-detail', async function() {
 // Emtia Kıyaslama Butonu Click Handler
 $(document).on('click', '.task-compare-goods', async function() {
     const taskId = $(this).data('task-id');
-    const monitoredId = $(this).data('monitored-id');
-    const competitorId = $(this).data('competitor-id');
+    const ipRecordId = $(this).data('ip-record-id');
+    const bulletinObjectId = $(this).data('bulletin-object-id');
     
-    console.log('🔍 Emtia kıyaslama:', { taskId, monitoredId, competitorId });
+    console.log('🔍 Emtia kıyaslama:', { taskId, ipRecordId, bulletinObjectId });
     
     // Modal'ı aç
     $('#goodsComparisonModal').modal('show');
@@ -3907,11 +3909,11 @@ $(document).on('click', '.task-compare-goods', async function() {
     
     try {
         // İzlenen markanın emtia listesini çek
-        const monitoredGoodsHtml = await loadGoodsFromIpRecord(monitoredId);
+        const monitoredGoodsHtml = await loadGoodsFromIpRecord(ipRecordId);
         $('#monitoredGoodsContent').html(monitoredGoodsHtml);
         
         // Benzer markanın emtia listesini çek
-        const competitorGoodsHtml = await loadGoodsFromBulletinRecord(competitorId);
+        const competitorGoodsHtml = await loadGoodsFromBulletinRecord(bulletinObjectId);
         $('#competitorGoodsContent').html(competitorGoodsHtml);
         
     } catch (error) {
@@ -3961,23 +3963,42 @@ async function loadGoodsFromIpRecord(ipRecordId) {
 async function loadGoodsFromBulletinRecord(objectId) {
     if (!objectId) return '<p class="text-muted">Kayıt ID bulunamadı.</p>';
     
-    // Önce hangi bülten ve trademark ID'si olduğunu bul
-    const taskListDetails = document.getElementById('task-list-details');
-    const taskType = taskListDetails ? taskListDetails.dataset.currentType : '';
-    
-    // Bulletin kayıtlarından `extractedGoods` field'ını çek
     try {
-        // Firestore'da objectID ile arama yap (tüm bulletin records)
-        // Örnek path: trademarkBulletinRecords/474/records/{objectID}
+        // trademarkBulletinRecords koleksiyonundan ara
+        const bulletinRecordsRef = collection(db, 'trademarkBulletinRecords');
+        const q = query(bulletinRecordsRef);
+        const snapshot = await getDocs(q);
         
-        // Geçici çözüm: extractedGoods'u competitorMark objesinden al
-        // Daha doğrusu: Firestore'da query ile objectID'ye göre ara
+        let foundGoods = null;
         
-        return '<p class="text-warning">Benzer marka emtia verisi henüz entegre edilmedi. <br><small>objectID: ' + objectId + '</small></p>';
+        // Tüm bulletin record'larında objectID'yi ara
+        for (const docSnap of snapshot.docs) {
+            const docId = docSnap.id;
+            const docData = docSnap.data();
+            
+            // Eğer bu document objectID'yi içeriyorsa
+            if (docId === objectId) {
+                foundGoods = docData.goods;
+                break;
+            }
+        }
+        
+        if (!foundGoods || !Array.isArray(foundGoods) || foundGoods.length === 0) {
+            return '<p class="text-muted">Mal ve hizmet bilgisi bulunamadı.</p>';
+        }
+        
+        // goods array'ini HTML'e çevir
+        let html = '';
+        foundGoods.forEach(item => {
+            const goodsText = item || 'Açıklama yok';
+            html += `<p style="font-size: 0.85rem; margin-bottom: 10px;">${goodsText}</p>`;
+        });
+        
+        return html;
         
     } catch (error) {
         console.error('Bulletin record emtia çekme hatası:', error);
-        return '<p class="text-danger">Veriler yüklenirken hata oluştu.</p>';
+        return '<p class="text-danger">Veriler yüklenirken hata oluştu. <br><small>' + error.message + '</small></p>';
     }
 }
 
