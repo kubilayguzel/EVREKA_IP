@@ -453,8 +453,8 @@ async function buildNotificationAttachments(db, notificationData) {
   }
 }
 
-export const createObjectionTask = functions.https.onCall(async (data, context) => {
-  const { monitoredMarkId, similarMark, bulletinNo, callerEmail } = data;
+export const createObjectionTask = onCall({ region: 'europe-west1' }, async (request) => {
+const { monitoredMarkId, similarMark, bulletinNo, callerEmail } = request.data || {};
 
   // ✅ 1. Bülten tarihini al
   let bulletinDate = null;        // Date | null
