@@ -3970,6 +3970,27 @@ $(document).on('click', '.task-compare-goods', async function() {
     }
 });
 
+// TÜRKPATENT Sorgulama Butonu Click Handler (Benzer Marka)
+$(document).on('click', '.query-turkpatent-competitor', function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const appNo = $(this).data('app-no');
+    if (!appNo || appNo === '-') {
+        alert('Başvuru numarası bulunamadı.');
+        return;
+    }
+    
+    console.log('🔍 TÜRKPATENT sorgulama:', { appNo });
+    
+    // triggerTpQuery fonksiyonunu kullan (eklenti desteği ile)
+    if (window.triggerTpQuery) {
+        window.triggerTpQuery(appNo);
+    } else {
+        alert('Sorgu fonksiyonu yüklenemedi.');
+    }
+});
+
 // İzlenen markanın emtia listesini ipRecords'dan çek
 async function loadGoodsFromIpRecord(ipRecordId) {
     if (!ipRecordId) return '<p class="text-muted">Kayıt ID bulunamadı.</p>';
@@ -4045,6 +4066,40 @@ async function loadGoodsFromBulletinRecord(objectId) {
         return '<p class="text-danger">Veriler yüklenirken hata oluştu. <br><small>' + error.message + '</small></p>';
     }
 }
+
+// === TÜRKPATENT Sorgulama Fonksiyonu (portfolio-detail.js'den alındı) ===
+window.triggerTpQuery = function(applicationNo){
+    const appNo = (applicationNo || '').toString().trim();
+    if (!appNo){
+        alert('Başvuru numarası bulunamadı.');
+        return;
+    }
+    const base = 'https://www.turkpatent.gov.tr/arastirma-yap';
+    const url = `${base}?form=trademark&auto_query=${encodeURIComponent(appNo)}&query_type=basvuru&source=${encodeURIComponent(window.location.origin)}`;
+
+    // 1) Yeni sekme aç
+    const newTab = window.open(url, '_blank');
+    if (!newTab) {
+        alert('Pop-up engellendi. Lütfen bu site için pop-up izni verin.');
+        return;
+    }
+
+    // 2) (Opsiyonel) Eklentiye mesaj gönder
+    try {
+        const eklentiID = 'bbcpnpgglakoagjakgigmgjpdpiigpah';
+        if (typeof chrome !== 'undefined' && chrome.runtime && eklentiID) {
+            chrome.runtime.sendMessage(eklentiID, { type: 'SORGULA', data: appNo }, (response) => {
+                if (chrome.runtime.lastError) {
+                    console.warn('Eklenti mesaj hatası:', chrome.runtime.lastError.message);
+                } else {
+                    console.log('Eklenti yanıtı:', response?.status);
+                }
+            });
+        }
+    } catch (e) {
+        console.warn('Eklenti mesajı gönderilemedi:', e);
+    }
+};
 
 // --- Filtre Event Listener'ları ---
 $(document).ready(function() {
