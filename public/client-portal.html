@@ -3054,7 +3054,9 @@ $(document).on('click', '.detail-card-link', function() {
     $tasksLead.text('Aşağıda seçtiğiniz iş türüne ait tüm işlemler listelenmiştir.');
     
     // 3. İlgili işleri yükleme fonksiyonunu çağır
-    loadSampleTaskDetails(taskType); // Bu fonksiyon listeyi doldurur.
+    // data-current-type'ı da HTML attribute olarak set et
+    document.getElementById('task-list-details').setAttribute('data-current-type', taskType);
+    loadSampleTaskDetails(taskType);
     
     // Liste açıldığında listenin olduğu yere yumuşakça kay
     $('html, body').animate({
