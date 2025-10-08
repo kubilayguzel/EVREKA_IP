@@ -3656,15 +3656,17 @@ window._renderTaskCardsToContainer = async function(tasksToRender, containerSele
                     <div style="display: flex; flex-direction: column; justify-content: flex-start;">
                         <p class="mb-1" style="font-size: 0.9rem; margin-top: 0;"><strong>Marka:</strong> ${competitorMark.markName || competitorMark.brandText || 'Bilinmiyor'}</p>
                         <p class="mb-1" style="font-size: 0.8rem;">
-                            <strong>B.No:</strong> 
+                            <strong>B.No:</strong> ${competitorMark.applicationNumber || competitorMark.applicationNo || '-'}
                             ${(() => {
                                 const appNo = competitorMark.applicationNumber || competitorMark.applicationNo || '-';
                                 if (appNo !== '-') {
-                                    // TÜRKPATENT link oluştur
-                                    const cleanAppNo = appNo.replace(/\//g, ''); // 2025/063425 → 2025063425
-                                    return `<a href="https://online.turkpatent.gov.tr/trademark-search/pub/trademark-detail/${cleanAppNo}" target="_blank" style="color: #4da6ff; text-decoration: none;">${appNo} <i class="fas fa-external-link-alt" style="font-size: 0.7rem;"></i></a>`;
+                                    return `<button class="btn btn-sm btn-info ml-2 query-turkpatent-competitor" 
+                                                data-app-no="${appNo}" 
+                                                style="padding: 2px 8px; font-size: 0.7rem;">
+                                                <i class="fas fa-search"></i> TPE'de Sorgula
+                                            </button>`;
                                 }
-                                return appNo;
+                                return '';
                             })()}
                         </p>
                         ${(() => {
