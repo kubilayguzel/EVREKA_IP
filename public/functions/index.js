@@ -542,9 +542,16 @@ const { monitoredMarkId, similarMark, bulletinNo, callerEmail } = request.data |
   const clientId = /* örn. similarMark.clientId veya monitoredMark dokümanından */ null;
 
   const taskData = {
+    id: taskId,
     taskType: "20",
+    priority: 'medium',
     status: "awaiting_client_approval",
-    clientId: clientId,
+    clientId,
+    clientEmail,
+    assignedTo_uid,
+    assignedTo_email,
+    title: taskTitle,
+    description: taskDescription,
     dueDate: operationalDueDate ? admin.firestore.Timestamp.fromDate(operationalDueDate) : null,
     officialDueDate: officialDueDate ? admin.firestore.Timestamp.fromDate(officialDueDate) : null,
     officialDueDateDetails: dueDateDetails,
@@ -558,6 +565,7 @@ const { monitoredMarkId, similarMark, bulletinNo, callerEmail } = request.data |
       similarityScore: similarMark.similarityScore,
     },
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
   };
 
   // Task'ı Firestore'a ekle
@@ -569,7 +577,6 @@ const { monitoredMarkId, similarMark, bulletinNo, callerEmail } = request.data |
     dueDate: operationalDueDate ? operationalDueDate.toISOString() : null,
   };
 });
-
 
 // Send Email Notification (v2 Callable Function)
 export const sendEmailNotificationV2 = onCall(
