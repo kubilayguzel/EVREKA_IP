@@ -2559,7 +2559,10 @@ window.renderTaskPage = function(page, perPage) {
                     <div class="d-flex justify-content-between align-items-center">
                         <small class="task-meta">
                             <i class="fas fa-clock mr-1"></i>
-                            Son Onay Tarihi: ${formatDate(due)} (Bu tarih resmi son onay tarihi olup talimatlarını hak kaybı yaşanmaması adına en az 2 gün öncesinden iletmeniz beklenmektedir.)
+                            Son Onay Tarihi: ${formatDate(due)}
+                            ${due ? `<span class="text-muted" style="font-size:0.8rem; margin-left:6px;">
+                            ( Bu tarih resmi son onay tarihi olup talimatlarını hak kaybı yaşanmaması adına en az 2 gün öncesinden iletmeniz beklenmektedir. )
+                            </span>` : ''}
                         </small>
                         <div>${actionButtons}</div>
                     </div>
