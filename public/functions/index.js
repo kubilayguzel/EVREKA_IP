@@ -475,8 +475,12 @@ export const createObjectionTask = functions.https.onCall(async (data, context) 
             
             // "DD/MM/YYYY" → Date objesi
             if (bulletinDateStr && typeof bulletinDateStr === 'string') {
-                const [day, month, year] = bulletinDateStr.split('/');
-                bulletinDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+                const parts = bulletinDateStr.split('/');
+                bulletinDate = new Date(
+                    parseInt(parts[2]), 
+                    parseInt(parts[1]) - 1, 
+                    parseInt(parts[0])
+                );
                 bulletinDate.setHours(0, 0, 0, 0);
                 
                 console.log('✅ Bülten tarihi bulundu:', {
@@ -527,13 +531,7 @@ export const createObjectionTask = functions.https.onCall(async (data, context) 
                 adjustments: []
             };
             
-            console.log('✅ dueDate hesaplandı:', {
-                bulletinNo,
-                bulletinDate: bulletinDate.toISOString().split('T')[0],
-                rawDueDate: rawDueDate.toISOString().split('T')[0],
-                officialDueDate: officialDueDate.toISOString().split('T')[0],
-                operationalDueDate: operationalDueDate.toISOString().split('T')[0]
-            });
+            console.log('✅ dueDate hesaplandı:', dueDateDetails);
         } catch (err) {
             console.error('❌ dueDate hesaplama hatası:', err);
         }
@@ -543,7 +541,7 @@ export const createObjectionTask = functions.https.onCall(async (data, context) 
     
     // ✅ 3. Task verilerini oluştur
     const taskData: any = {
-        taskType: "20", // Yayına İtiraz
+        taskType: "20",
         status: "awaiting_client_approval",
         clientId: clientId,
         dueDate: operationalDueDate ? admin.firestore.Timestamp.fromDate(operationalDueDate) : null,
@@ -556,7 +554,7 @@ export const createObjectionTask = functions.https.onCall(async (data, context) 
             targetAppNo: similarMark.applicationNo,
             objectionTarget: similarMark.markName,
             targetNiceClasses: similarMark.niceClasses,
-            similarityScore: similarMark.similarityScore,
+            similarityScore: similarMark.similarityScore
         },
         createdAt: admin.firestore.FieldValue.serverTimestamp()
     };
