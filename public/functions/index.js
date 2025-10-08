@@ -25,7 +25,7 @@ import { google } from "googleapis";
 import { auth } from 'firebase-functions/v1';
 import { getAuth } from 'firebase-admin/auth';                          // Admin SDK (modüler)
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';    // Admin SDK (modüler)
-import { addMonthsToDate, findNextWorkingDay, isHoliday, isWeekend, TURKEY_HOLIDAYS } from './utils';
+import { addMonthsToDate, findNextWorkingDay, isHoliday, isWeekend, TURKEY_HOLIDAYS } from '../utils.js';
 
 // Initialize Firebase Admin
 if (!admin.apps.length) {
