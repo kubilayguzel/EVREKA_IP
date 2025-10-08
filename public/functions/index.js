@@ -25,6 +25,7 @@ import { google } from "googleapis";
 import { auth } from 'firebase-functions/v1';
 import { getAuth } from 'firebase-admin/auth';                          // Admin SDK (modüler)
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';    // Admin SDK (modüler)
+import { addMonthsToDate, findNextWorkingDay, isHoliday, isWeekend, TURKEY_HOLIDAYS } from './utils.js';
 
 // Initialize Firebase Admin
 if (!admin.apps.length) {
@@ -468,20 +469,18 @@ export const createObjectionTask = onCall(
     logger.log(`🚀 İtiraz İşi Oluşturuluyor: Hit=${similarMarkName || similarMark?.markName}, MonitoredId=${monitoredMarkId}`);
 
     try {
-      // 1) İzlenen markayı bul
+      // 1) İzlenen marka
       const monitoredDoc = await adminDb.collection('monitoringTrademarks').doc(monitoredMarkId).get();
-      if (!monitoredDoc.exists) {
-        throw new HttpsError('not-found', 'İzlenen marka bulunamadı: ' + monitoredMarkId);
-      }
+      if (!monitoredDoc.exists) throw new HttpsError('not-found', 'İzlenen marka bulunamadı: ' + monitoredMarkId);
+
       const monitoredData = monitoredDoc.data();
       const relatedIpRecordId = monitoredData.ipRecordId || monitoredData.sourceRecordId || null;
-      if (!relatedIpRecordId) {
-        throw new HttpsError('not-found', 'İzlenen marka için ilişkili IP kaydı bulunamadı.');
-      }
+      if (!relatedIpRecordId) throw new HttpsError('not-found', 'İzlenen marka için ilişkili IP kaydı bulunamadı.');
 
-      // 2) IP kaydından client bilgisini al
+      // 2) Client bilgisi
       let clientId = monitoredData.clientId || null;
       let clientEmail = null;
+
       if (relatedIpRecordId) {
         const ipDoc = await adminDb.collection('ipRecords').doc(relatedIpRecordId).get();
         if (ipDoc.exists) {
@@ -489,6 +488,7 @@ export const createObjectionTask = onCall(
           clientId = clientId || ipData.clientId || (ipData.applicants?.[0]?.id);
         }
       }
+
       if (clientId) {
         const personDoc = await adminDb.collection('persons').doc(clientId).get();
         if (personDoc.exists) clientEmail = personDoc.data()?.email || null;
@@ -499,7 +499,7 @@ export const createObjectionTask = onCall(
       const assignedTo_uid = assignee?.uid || null;
       const assignedTo_email = assignee?.email || callerEmail || null;
 
-      // 4) Bülten tarihini al (DD/MM/YYYY)
+      // 4) Bülten tarihini al (DD/MM/YYYY) → Date
       let bulletinDate = null;
       let bulletinDateStr = null;
       try {
@@ -511,35 +511,32 @@ export const createObjectionTask = onCall(
           const b = q.docs[0].data();
           bulletinDateStr = b.bulletinDate || null; // "12/08/2025"
           if (bulletinDateStr && typeof bulletinDateStr === 'string') {
-            const parts = bulletinDateStr.split('/');
-            bulletinDate = new Date(
-              parseInt(parts[2], 10),
-              parseInt(parts[1], 10) - 1,
-              parseInt(parts[0], 10)
-            );
-            bulletinDate.setHours(0, 0, 0, 0);
+            const [dd, mm, yyyy] = bulletinDateStr.split('/');
+            bulletinDate = new Date(parseInt(yyyy,10), parseInt(mm,10)-1, parseInt(dd,10));
+            bulletinDate.setHours(0,0,0,0);
           }
         }
       } catch (e) {
         logger.warn('⚠️ Bülten tarihi alınamadı:', e);
       }
 
-      // 5) Due date hesapları
+      // 5) Due Date hesapları (resmî tatil/hafta sonu kaydırmalı)
       let officialDueDate = null;
       let dueDateDetails = null;
-
       if (bulletinDate) {
-        const rawDue = addMonthsToDate(bulletinDate, 2);             // +2 ay
-        const adjustedOfficial = findNextWorkingDay(rawDue, TURKEY_HOLIDAYS); // ilk iş günü
+        // +2 ay
+        const rawDue = addMonthsToDate(bulletinDate, 2);
+        // İlk iş günü (hafta sonu + TR tatilleri)
+        const adjustedOfficial = findNextWorkingDay(rawDue, TURKEY_HOLIDAYS, { isWeekend, isHoliday });
+
         officialDueDate = adjustedOfficial;
 
-        // detay yapısı (triggered task’lerle uyumlu alan isimleri)
         dueDateDetails = {
+          bulletinDate: bulletinDate.toISOString().split('T')[0],
           periodMonths: 2,
-          initialDeliveryDate: bulletinDate.toISOString().split('T')[0],
           originalCalculatedDate: rawDue.toISOString().split('T')[0],
           finalOfficialDueDate: adjustedOfficial.toISOString().split('T')[0],
-          finalOperationalDueDate: adjustedOfficial.toISOString().split('T')[0],
+          finalOperationalDueDate: adjustedOfficial.toISOString().split('T')[0], // şimdilik aynı
           adjustments: []
         };
 
@@ -548,7 +545,7 @@ export const createObjectionTask = onCall(
         logger.warn('⚠️ Bülten tarihi bulunamadı; dueDate boş kalacak.');
       }
 
-      // 6) Task ID üret (counter)
+      // 6) Task ID (counter)
       const countersRef = adminDb.collection('counters').doc('tasks');
       const taskId = await adminDb.runTransaction(async (tx) => {
         const snap = await tx.get(countersRef);
@@ -558,7 +555,7 @@ export const createObjectionTask = onCall(
         return String(next);
       });
 
-      // 7) Task verisini hazırla
+      // 7) Task verisi
       const hitMarkName = similarMarkName || similarMark?.markName || 'Bilinmeyen Marka';
       const taskTitle = `Yayına İtiraz: ${hitMarkName} (Bülten No: ${bulletinNo})`;
       const taskDescription = `${monitoredData.title || 'İzlenen marka'} için bültende benzer bulunan ${hitMarkName} markasına itiraz işi.`;
@@ -584,12 +581,12 @@ export const createObjectionTask = onCall(
           targetAppNo: similarMark?.applicationNo || '',
           targetNiceClasses: similarMark?.niceClasses || [],
           bulletinNo,
-          bulletinDate: bulletinDateStr || null,       // 👈 bülten tarihi metin olarak
+          bulletinDate: bulletinDateStr || null,
           monitoredMarkId: monitoredMarkId,
           similarityScore: similarMark?.similarityScore || 0
         },
 
-        // 👇 dueDate şimdilik resmi son tarih ile aynı
+        // 👇 dueDate şimdilik officialDueDate ile aynı
         dueDate:         officialDueDate ? admin.firestore.Timestamp.fromDate(officialDueDate) : null,
         officialDueDate: officialDueDate ? admin.firestore.Timestamp.fromDate(officialDueDate) : null,
         officialDueDateDetails: dueDateDetails || null,
@@ -606,7 +603,7 @@ export const createObjectionTask = onCall(
         }]
       };
 
-      // 8) Firestore’a kaydet
+      // 8) Kaydet
       await adminDb.collection('tasks').doc(taskId).set(taskData);
       logger.log(`✅ Yayına İtiraz İşi Oluşturuldu. Task ID: ${taskId}`);
 
@@ -617,6 +614,7 @@ export const createObjectionTask = onCall(
     }
   }
 );
+
 
 
 // Send Email Notification (v2 Callable Function)
