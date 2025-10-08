@@ -3964,40 +3964,37 @@ async function loadGoodsFromBulletinRecord(objectId) {
     if (!objectId) return '<p class="text-muted">Kayıt ID bulunamadı.</p>';
     
     try {
-        // trademarkBulletinRecords koleksiyonundan ara
-        const bulletinRecordsRef = collection(db, 'trademarkBulletinRecords');
-        const q = query(bulletinRecordsRef);
-        const snapshot = await getDocs(q);
+        console.log('🔍 Bulletin objectID ile arama:', objectId);
         
-        let foundGoods = null;
+        // Doğrudan objectID ile belgeye eriş
+        const bulletinDocRef = doc(db, 'trademarkBulletinRecords', objectId);
+        const bulletinSnap = await getDoc(bulletinDocRef);
         
-        // Tüm bulletin record'larında objectID'yi ara
-        for (const docSnap of snapshot.docs) {
-            const docId = docSnap.id;
-            const docData = docSnap.data();
-            
-            // Eğer bu document objectID'yi içeriyorsa
-            if (docId === objectId) {
-                foundGoods = docData.goods;
-                break;
-            }
+        if (!bulletinSnap.exists()) {
+            console.warn('⚠️ Bulletin kaydı bulunamadı:', objectId);
+            return '<p class="text-muted">Mal ve hizmet bilgisi bulunamadı.</p>';
         }
         
-        if (!foundGoods || !Array.isArray(foundGoods) || foundGoods.length === 0) {
+        const bulletinData = bulletinSnap.data();
+        console.log('✅ Bulletin verisi:', bulletinData);
+        
+        const goods = bulletinData.goods;
+        
+        if (!goods || !Array.isArray(goods) || goods.length === 0) {
             return '<p class="text-muted">Mal ve hizmet bilgisi bulunamadı.</p>';
         }
         
         // goods array'ini HTML'e çevir
         let html = '';
-        foundGoods.forEach(item => {
+        goods.forEach(item => {
             const goodsText = item || 'Açıklama yok';
-            html += `<p style="font-size: 0.85rem; margin-bottom: 10px;">${goodsText}</p>`;
+            html += `<p style="font-size: 0.85rem; margin-bottom: 10px; line-height: 1.4;">${goodsText}</p>`;
         });
         
         return html;
         
     } catch (error) {
-        console.error('Bulletin record emtia çekme hatası:', error);
+        console.error('❌ Bulletin record emtia çekme hatası:', error);
         return '<p class="text-danger">Veriler yüklenirken hata oluştu. <br><small>' + error.message + '</small></p>';
     }
 }
