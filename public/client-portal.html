@@ -2369,34 +2369,54 @@ window.fetchAndDisplayTasks = async function(){
     snap.forEach(d => {
       const taskData = d.data();
       const relatedPartyId = taskData.details?.relatedParty?.id;
+      const personsRelated = taskData.personsRelatedIds || [];
+      const clientIdInTask = taskData.clientId || taskData.clientID;
+
+      let isRelatedToClient = false;
       
-      // Müvekkil ile eşleşme kontrolü
-      if (relatedPartyId && linkedPersonIds.includes(relatedPartyId)) {
-        awaitingTasks.push({ id:d.id, ...taskData });
+      // Yayına İtiraz işleri (taskType=20) için SADECE clientId kontrolü
+      const isObjectionTask = (taskData.taskType === "20" || 
+                               taskData.taskType === 20 || 
+                               taskData.taskType === "objection_to_trademark_publication");
+      
+      if (isObjectionTask) {
+        isRelatedToClient = (clientIdInTask && linkedPersonIds.includes(clientIdInTask));
+      } else {
+        // Diğer tüm görevler: Eski kural
+        isRelatedToClient = 
+            (relatedPartyId && linkedPersonIds.includes(relatedPartyId)) ||
+            (Array.isArray(personsRelated) && personsRelated.some(id => linkedPersonIds.includes(id)));
       }
+      
+      if (!isRelatedToClient) return;
+      
+      awaitingTasks.push({ id:d.id, ...taskData });
     });
     
-    window.__allClientTasks = awaitingTasks; // listelemede kullanılıyor
+    window.__allClientTasks = awaitingTasks;
 
-    let countPending   = 0; // Sadece yenileme ve bülten olmayanlar
+    let countPending   = 0;
     let countRenewal   = 0;
     let countBulletin  = 0;
 
+    // ✅ loadSampleTaskDetails ile aynı filtreleme mantığını kullan
     for(const t of awaitingTasks){
       const meta  = await _getTransactionTypeMeta(t.taskType);
       const label = _taskLabelGuess(t, meta);
 
       const isRenewal = /yenileme/.test(label);
-      const isBulletin = RX_BULTEN.test(label);
+      const isBulletin = RX_BULTEN.test(label) || t.taskType === '20' || t.taskType === 20;
 
       if (isRenewal) {
         countRenewal++;
       } else if (isBulletin) {
         countBulletin++;
       } else {
-        countPending++; // Ne yenileme ne de bülten olanlar
+        countPending++;
       }
     }
+
+    console.log('📊 Task sayaçları:', { countPending, countRenewal, countBulletin, total: awaitingTasks.length });
 
     $('#taskCount-pending-approval').text(countPending);
     $('#taskCount-renewal-approval').text(countRenewal);
