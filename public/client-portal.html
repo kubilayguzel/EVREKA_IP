@@ -3725,7 +3725,7 @@ window._renderTaskCardsToContainer = async function(tasksToRender, containerSele
                         <i class="fas fa-clock mr-1"></i>
                         ${isCompletedView ? 'Oluşturma Tarihi' : 'Son Onay Tarihi'}:
                         ${formatDate(isCompletedView ? task.createdAt : due)}
-                        ${!isCompletedView ? '<span class="text-muted" style="font-size:1.1rem;"> (Bu tarih resmi son tarih olup hak kaybı yaşanmaması adına talimatların bu tarihten en az 2 gün önce iletilmesi beklenmektedir)</span>' : ''}
+                        ${!isCompletedView ? '<span class="text-muted" style="font-size:1rem;"> (Bu tarih resmi son tarih olup hak kaybı yaşanmaması adına talimatların bu tarihten en az 2 gün önce iletilmesi beklenmektedir)</span>' : ''}
                     </small>
                     <div>${actionButtons}</div>
                 </div>
