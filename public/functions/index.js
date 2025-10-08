@@ -468,24 +468,20 @@ export const createObjectionTask = onCall(
     logger.log(`🚀 İtiraz İşi Oluşturuluyor: Hit=${similarMarkName || similarMark?.markName}, MonitoredId=${monitoredMarkId}`);
 
     try {
-      // 1. İzlenen markayı bul
+      // 1) İzlenen markayı bul
       const monitoredDoc = await adminDb.collection('monitoringTrademarks').doc(monitoredMarkId).get();
-      
       if (!monitoredDoc.exists) {
         throw new HttpsError('not-found', 'İzlenen marka bulunamadı: ' + monitoredMarkId);
       }
-      
       const monitoredData = monitoredDoc.data();
       const relatedIpRecordId = monitoredData.ipRecordId || monitoredData.sourceRecordId || null;
-      
       if (!relatedIpRecordId) {
         throw new HttpsError('not-found', 'İzlenen marka için ilişkili IP kaydı bulunamadı.');
       }
 
-      // 2. IP kaydından client bilgisini al
+      // 2) IP kaydından client bilgisini al
       let clientId = monitoredData.clientId || null;
       let clientEmail = null;
-      
       if (relatedIpRecordId) {
         const ipDoc = await adminDb.collection('ipRecords').doc(relatedIpRecordId).get();
         if (ipDoc.exists) {
@@ -493,38 +489,76 @@ export const createObjectionTask = onCall(
           clientId = clientId || ipData.clientId || (ipData.applicants?.[0]?.id);
         }
       }
-
       if (clientId) {
         const personDoc = await adminDb.collection('persons').doc(clientId).get();
-        if (personDoc.exists) {
-          clientEmail = personDoc.data()?.email || null;
-        }
+        if (personDoc.exists) clientEmail = personDoc.data()?.email || null;
       }
 
-      // 3. Atama kural kontrolü
+      // 3) Atama
       const assignee = await resolveApprovalAssignee(adminDb, '20');
       const assignedTo_uid = assignee?.uid || null;
       const assignedTo_email = assignee?.email || callerEmail || null;
 
-      // 4. Task ID üret (counter mekanizması)
+      // 4) Bülten tarihini al (DD/MM/YYYY)
+      let bulletinDate = null;
+      let bulletinDateStr = null;
+      try {
+        const q = await adminDb.collection('trademarkBulletins')
+          .where('bulletinNo', '==', bulletinNo)
+          .limit(1)
+          .get();
+        if (!q.empty) {
+          const b = q.docs[0].data();
+          bulletinDateStr = b.bulletinDate || null; // "12/08/2025"
+          if (bulletinDateStr && typeof bulletinDateStr === 'string') {
+            const parts = bulletinDateStr.split('/');
+            bulletinDate = new Date(
+              parseInt(parts[2], 10),
+              parseInt(parts[1], 10) - 1,
+              parseInt(parts[0], 10)
+            );
+            bulletinDate.setHours(0, 0, 0, 0);
+          }
+        }
+      } catch (e) {
+        logger.warn('⚠️ Bülten tarihi alınamadı:', e);
+      }
+
+      // 5) Due date hesapları
+      let officialDueDate = null;
+      let dueDateDetails = null;
+
+      if (bulletinDate) {
+        const rawDue = addMonthsToDate(bulletinDate, 2);             // +2 ay
+        const adjustedOfficial = findNextWorkingDay(rawDue, TURKEY_HOLIDAYS); // ilk iş günü
+        officialDueDate = adjustedOfficial;
+
+        // detay yapısı (triggered task’lerle uyumlu alan isimleri)
+        dueDateDetails = {
+          periodMonths: 2,
+          initialDeliveryDate: bulletinDate.toISOString().split('T')[0],
+          originalCalculatedDate: rawDue.toISOString().split('T')[0],
+          finalOfficialDueDate: adjustedOfficial.toISOString().split('T')[0],
+          finalOperationalDueDate: adjustedOfficial.toISOString().split('T')[0],
+          adjustments: []
+        };
+
+        logger.log('✅ dueDate hesaplandı:', dueDateDetails);
+      } else {
+        logger.warn('⚠️ Bülten tarihi bulunamadı; dueDate boş kalacak.');
+      }
+
+      // 6) Task ID üret (counter)
       const countersRef = adminDb.collection('counters').doc('tasks');
       const taskId = await adminDb.runTransaction(async (tx) => {
         const snap = await tx.get(countersRef);
         const last = snap.exists ? Number(snap.data()?.lastId || 0) : 0;
         const next = last + 1;
-
-        // lastId'i ilerlet, varsa yanlış "value" alanını temizle
-        tx.set(
-          countersRef,
-          { lastId: next, value: admin.firestore.FieldValue.delete() },
-          { merge: true }
-        );
-
+        tx.set(countersRef, { lastId: next, value: admin.firestore.FieldValue.delete() }, { merge: true });
         return String(next);
       });
 
-
-      // 5. Task verisini hazırla
+      // 7) Task verisini hazırla
       const hitMarkName = similarMarkName || similarMark?.markName || 'Bilinmeyen Marka';
       const taskTitle = `Yayına İtiraz: ${hitMarkName} (Bülten No: ${bulletinNo})`;
       const taskDescription = `${monitoredData.title || 'İzlenen marka'} için bültende benzer bulunan ${hitMarkName} markasına itiraz işi.`;
@@ -533,7 +567,7 @@ export const createObjectionTask = onCall(
         id: taskId,
         taskType: '20',
         status: 'awaiting_client_approval',
-        priority: 'medium',        
+        priority: 'medium',
         relatedIpRecordId,
         relatedIpRecordTitle: monitoredData.title || hitMarkName,
         clientId,
@@ -549,42 +583,41 @@ export const createObjectionTask = onCall(
           objectionTarget: hitMarkName,
           targetAppNo: similarMark?.applicationNo || '',
           targetNiceClasses: similarMark?.niceClasses || [],
-          bulletinNo: bulletinNo,
+          bulletinNo,
+          bulletinDate: bulletinDateStr || null,       // 👈 bülten tarihi metin olarak
           monitoredMarkId: monitoredMarkId,
-          similarityScore: similarMark?.similarityScore || 0,
+          similarityScore: similarMark?.similarityScore || 0
         },
-        
-        dueDate: null,
+
+        // 👇 dueDate şimdilik resmi son tarih ile aynı
+        dueDate:         officialDueDate ? admin.firestore.Timestamp.fromDate(officialDueDate) : null,
+        officialDueDate: officialDueDate ? admin.firestore.Timestamp.fromDate(officialDueDate) : null,
+        officialDueDateDetails: dueDateDetails || null,
+
         source: 'similarity_search',
         createdBy: callerEmail || 'system',
-
         createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
-        
+
         history: [{
-          timestamp: new Date().toISOString(),  // ✅ ISO string formatı
+          timestamp: new Date().toISOString(),
           action: 'Benzerlik aramasından otomatik iş oluşturuldu',
           userEmail: callerEmail || 'system'
         }]
       };
 
-      // 6. Firestore'a kaydet
+      // 8) Firestore’a kaydet
       await adminDb.collection('tasks').doc(taskId).set(taskData);
-      
       logger.log(`✅ Yayına İtiraz İşi Oluşturuldu. Task ID: ${taskId}`);
 
-      return { 
-        taskId: taskId, 
-        success: true, 
-        message: `İtiraz işi başarıyla oluşturuldu: ${taskId}` 
-      };
-
+      return { taskId, success: true, message: `İtiraz işi başarıyla oluşturuldu: ${taskId}` };
     } catch (error) {
       logger.error('❌ İtiraz işi oluşturma hatası:', error);
       throw new HttpsError('internal', `İş oluşturulamadı: ${error.message}`);
     }
   }
 );
+
 
 // Send Email Notification (v2 Callable Function)
 export const sendEmailNotificationV2 = onCall(
