@@ -2516,12 +2516,33 @@ window.renderTaskPage = function(page, perPage) {
         const formatDate = (timestamp) => {
             if (!timestamp) return '-';
             try {
-                const date = new Date(timestamp);
+                let date;
+                
+                // Firebase Timestamp objesi mi kontrol et (toDate metodu var mı?)
+                if (timestamp && typeof timestamp === 'object' && typeof timestamp.toDate === 'function') {
+                    date = timestamp.toDate();
+                }
+                // Firestore Timestamp objesi (seconds ve nanoseconds alanları)
+                else if (timestamp && typeof timestamp === 'object' && timestamp.seconds) {
+                    date = new Date(timestamp.seconds * 1000);
+                }
+                // ISO string veya normal tarih
+                else {
+                    date = new Date(timestamp);
+                }
+                
+                // Geçerlilik kontrolü
+                if (isNaN(date.getTime())) {
+                    console.warn('⚠️ Geçersiz tarih formatı:', timestamp);
+                    return '-';
+                }
+                
                 const day = String(date.getDate()).padStart(2, '0');
                 const month = String(date.getMonth() + 1).padStart(2, '0');
                 const year = date.getFullYear();
                 return `${day}.${month}.${year}`;
             } catch (e) {
+                console.error('❌ Tarih formatlama hatası:', e, timestamp);
                 return '-';
             }
         };
@@ -2796,19 +2817,34 @@ async function loadTransactions(ipRecordId) {
         return 'İşlem';
     };
     
-    // Tarih formatla (fonksiyonu döngü dışında tanımla)
     const formatDate = (timestamp) => {
-        if (!timestamp) return '-';
-        try {
-            const date = new Date(timestamp);
-            const day = String(date.getDate()).padStart(2, '0');
-            const month = String(date.getMonth() + 1).padStart(2, '0');
-            const year = date.getFullYear();
-            return `${day}.${month}.${year}`;
-        } catch (e) {
-            return '-';
+    if (!timestamp) return '-';
+    try {
+        let date;
+        
+        // Firebase Timestamp objesi
+        if (timestamp && typeof timestamp === 'object' && typeof timestamp.toDate === 'function') {
+            date = timestamp.toDate();
         }
-    };
+        // Firestore Timestamp (seconds)
+        else if (timestamp && typeof timestamp === 'object' && timestamp.seconds) {
+            date = new Date(timestamp.seconds * 1000);
+        }
+        // String/number
+        else {
+            date = new Date(timestamp);
+        }
+        
+        if (isNaN(date.getTime())) return '-';
+        
+        const day = String(date.getDate()).padStart(2, '0');
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const year = date.getFullYear();
+        return `${day}.${month}.${year}`;
+    } catch (e) {
+        return '-';
+    }
+};  
     
     // Parent transactions'ları filtrele
     const parentTransactions = transactions.filter(t => t.transactionHierarchy === 'parent');
