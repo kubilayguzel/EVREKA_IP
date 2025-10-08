@@ -3581,25 +3581,28 @@ window._renderTaskCardsToContainer = async function(tasksToRender, containerSele
         
         const card = document.createElement('div');
         // ... (Status, Badge, Due Date gibi atamalar)
-        
+
         const statusBadgeClass = {
             'open': 'primary', 'in_progress': 'info', 'completed': 'success', 'closed': 'secondary',
             'awaiting_client_approval': 'warning', 'müvekkil onayı - kapatıldı': 'danger'
         }[task.status] || 'secondary';
-        
+
         const statusText = {
             'open': 'Açık', 'in_progress': 'Devam Ediyor', 'completed': 'Tamamlandı', 'closed': 'Kapalı',
             'awaiting_client_approval': 'Onay Bekliyor', 'müvekkil onayı - kapatıldı': 'Reddedildi/Kapandı'
         }[task.status] || task.status;
-        
+
         let assignedTo = '-'; 
         let actionButtons;
-        
+
+        console.log('🔍 Task render - isCompletedView:', isCompletedView, 'taskId:', taskId); // DEBUG
+
         if (isCompletedView) {
             actionButtons = `
                 <button class="btn btn-info btn-sm btn-action task-detail" data-task-id="${taskId}"> <i class="fas fa-eye"></i> İncele </button>
                 <button class="btn btn-success btn-sm btn-action task-reopen" data-task-id="${taskId}"> <i class="fas fa-folder-open"></i> İşi Aç </button>
             `;
+            console.log('✅ Completed view actionButtons:', actionButtons); // DEBUG
         } else {
             // İpRecordId'yi çek
             const ipRecordIdForButton = monitoredMarkData?.monitoredTrademarkId || monitoredMarkData?.ipRecordId || monitoredMarkData?.sourceRecordId || '';
