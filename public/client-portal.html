@@ -2455,7 +2455,8 @@ window.renderTaskPage = function(page, perPage) {
     const taskListDetails = document.getElementById('task-list-details');
     const taskType = taskListDetails ? taskListDetails.dataset.currentType : '';
     const isCompletedView = (taskType === 'completed-tasks');
-    
+    console.log('🔍 renderTaskPage - taskType:', taskType, 'isCompletedView:', isCompletedView);
+
     Promise.all(tasksToRender.map(async (task, index) => {
         const taskId = task.id;
         const taskNumber = startIndex + index + 1; 
@@ -3043,6 +3044,7 @@ $(document).on('click', '.detail-card-link', function() {
     
     // 1. Görünümü Detay İş Listesi'ne geçir
     $tasksList.data('current-type', taskType);
+    console.log('✅ data-current-type set edildi:', taskType);
     $tasksFilters.slideDown(300); // <--- FİLTRE ALANINI GÖSTER
     $tasksList.slideDown(300); // Listeyi yumuşakça aç
     
