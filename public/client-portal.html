@@ -2499,14 +2499,19 @@ window.renderTaskPage = function(page, perPage) {
         
         let assignedTo = '-'; 
         let actionButtons;
-        
+
         if (isCompletedView) {
+            // Sadece "müvekkil onayı - kapatıldı" statusunda "İşi Aç" butonu göster
+            const reopenButton = (task.status === 'müvekkil onayı - kapatıldı') 
+                ? `<button class="btn btn-success btn-sm btn-action task-reopen" data-task-id="${taskId}"> <i class="fas fa-folder-open"></i> İşi Aç </button>`
+                : '';
+            
             actionButtons = `
                 <button class="btn btn-info btn-sm btn-action task-detail" data-task-id="${taskId}"> <i class="fas fa-eye"></i> İncele </button>
-                <button class="btn btn-success btn-sm btn-action task-reopen" data-task-id="${taskId}"> <i class="fas fa-folder-open"></i> İşi Aç </button>
+                ${reopenButton}
             `;
         } else {
-             actionButtons = `
+            actionButtons = `
                 <button class="btn btn-success btn-sm btn-action task-approve" data-task-id="${taskId}"> <i class="fas fa-check"></i> Onayla </button>
                 <button class="btn btn-danger btn-sm btn-action task-reject" data-task-id="${taskId}"> <i class="fas fa-times"></i> Reddet </button>
                 <button class="btn btn-info btn-sm btn-action task-detail" data-task-id="${taskId}"> <i class="fas fa-eye"></i> İncele </button>
@@ -3635,14 +3640,19 @@ window._renderTaskCardsToContainer = async function(tasksToRender, containerSele
         let assignedTo = '-'; 
         let actionButtons;
 
-        console.log('🔍 Task render - isCompletedView:', isCompletedView, 'taskId:', taskId); // DEBUG
+        console.log('🔍 Task render - isCompletedView:', isCompletedView, 'taskId:', taskId, 'status:', task.status); // DEBUG
 
         if (isCompletedView) {
+            // Sadece "müvekkil onayı - kapatıldı" statusunda "İşi Aç" butonu göster
+            const reopenButton = (task.status === 'müvekkil onayı - kapatıldı') 
+                ? `<button class="btn btn-success btn-sm btn-action task-reopen" data-task-id="${taskId}"> <i class="fas fa-folder-open"></i> İşi Aç </button>`
+                : '';
+            
             actionButtons = `
                 <button class="btn btn-info btn-sm btn-action task-detail" data-task-id="${taskId}"> <i class="fas fa-eye"></i> İncele </button>
-                <button class="btn btn-success btn-sm btn-action task-reopen" data-task-id="${taskId}"> <i class="fas fa-folder-open"></i> İşi Aç </button>
+                ${reopenButton}
             `;
-            console.log('✅ Completed view actionButtons:', actionButtons); // DEBUG
+            console.log('✅ Completed view actionButtons:', actionButtons, 'status:', task.status); // DEBUG
         } else {
             // İpRecordId'yi çek
             const ipRecordIdForButton = monitoredMarkData?.monitoredTrademarkId || monitoredMarkData?.ipRecordId || monitoredMarkData?.sourceRecordId || '';
