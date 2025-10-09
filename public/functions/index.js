@@ -2795,11 +2795,38 @@ function calculateSimilarityScoreInternal(hitMarkName, searchMarkName, hitApplic
 export const performTrademarkSimilaritySearch = onCall(
   {
     region: 'europe-west1',
-    timeoutSeconds: 540, // 9 dakikaya çıkarıldı
-    memory: '2GiB' // Bellek 2GB'a yükseltildi
+    timeoutSeconds: 540,
+    memory: '2GiB'
   },
   async (request) => {
-    const { monitoredMarks, selectedBulletinId } = request.data;
+    const { monitoredMarks, selectedBulletinId, async = false, jobId } = request.data;
+
+    // ASYNC MODE: İş ID'si oluştur ve hemen dön
+    if (async && !jobId) {
+      const newJobId = `search_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      
+      // Progress kaydı oluştur
+      await adminDb.collection('searchProgress').doc(newJobId).set({
+        status: 'queued',
+        progress: 0,
+        total: monitoredMarks.length,
+        processed: 0,
+        results: [],
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        bulletinId: selectedBulletinId
+      });
+
+      // Arka planda çalıştır (await yok!)
+      processSearchInBackground(newJobId, monitoredMarks, selectedBulletinId).catch(err => {
+        logger.error('Background search failed:', err);
+        adminDb.collection('searchProgress').doc(newJobId).update({
+          status: 'error',
+          error: err.message
+        });
+      });
+
+      return { success: true, jobId: newJobId, async: true };
+    }
 
     if (!Array.isArray(monitoredMarks) || monitoredMarks.length === 0 || !selectedBulletinId) {
       throw new HttpsError(
@@ -3020,6 +3047,166 @@ export const performTrademarkSimilaritySearch = onCall(
     }
   }
 );
+
+// Arka planda arama yapan fonksiyon
+async function processSearchInBackground(jobId, monitoredMarks, selectedBulletinId) {
+  const progressRef = adminDb.collection('searchProgress').doc(jobId);
+  
+  try {
+    await progressRef.update({ status: 'processing', progress: 5 });
+
+    const BATCH_SIZE = 3;
+    const PROCESS_DELAY = 500;
+
+    // Bulletin kayıtlarını al
+    let bulletinRecordsSnapshot = await adminDb.collection('trademarkBulletinRecords')
+      .where('bulletinId', '==', selectedBulletinId)
+      .get();
+
+    if (!bulletinRecordsSnapshot || bulletinRecordsSnapshot.empty) {
+      let selectedBulletinNo = selectedBulletinId;
+      if (selectedBulletinId.includes('_')) {
+        selectedBulletinNo = selectedBulletinId.split('_')[0];
+      }
+
+      const bulletinDoc = await adminDb.collection('trademarkBulletins')
+        .where('bulletinNo', '==', selectedBulletinNo)
+        .limit(1)
+        .get();
+
+      if (!bulletinDoc.empty) {
+        const bulletinIdFromNo = bulletinDoc.docs[0].id;
+        bulletinRecordsSnapshot = await adminDb.collection('trademarkBulletinRecords')
+          .where('bulletinId', '==', bulletinIdFromNo)
+          .get();
+      }
+    }
+
+    const bulletinRecords = bulletinRecordsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    
+    await progressRef.update({ progress: 10 });
+
+    const allResults = [];
+    const markBatches = [];
+    for (let i = 0; i < monitoredMarks.length; i += BATCH_SIZE) {
+      markBatches.push(monitoredMarks.slice(i, i + BATCH_SIZE));
+    }
+
+    let processedCount = 0;
+
+    for (let batchIndex = 0; batchIndex < markBatches.length; batchIndex++) {
+      const batch = markBatches[batchIndex];
+      
+      for (const monitoredMark of batch) {
+        const markNameRaw = monitoredMark.markName || monitoredMark.title || '';
+        const markName = (typeof markNameRaw === 'string') ? markNameRaw.trim() : '';
+        const applicationDate = monitoredMark.applicationDate || null;
+        const niceClasses = monitoredMark.niceClasses || [];
+
+        if (!markName) continue;
+
+        const cleanedSearchName = cleanMarkName(markName, markName.trim().split(/\s+/).length > 1);
+
+        for (const hit of bulletinRecords) {
+          if (!isValidBasedOnDate(hit.applicationDate, applicationDate)) continue;
+
+          const hasNiceClassOverlap = hasOverlappingNiceClasses(monitoredMark, hit.niceClasses);
+          const { finalScore: similarityScore, positionalExactMatchScore } = calculateSimilarityScoreInternal(
+            hit.markName, markName, hit.applicationDate, applicationDate, hit.niceClasses, niceClasses
+          );
+
+          const SIMILARITY_THRESHOLD = 0.5;
+          const cleanedHitName = cleanMarkName(hit.markName, (hit.markName || '').trim().split(/\s+/).length > 1);
+          let isPrefixSuffixExactMatch = false;
+          const MIN_SEARCH_LENGTH = 3;
+
+          if (cleanedSearchName.length >= MIN_SEARCH_LENGTH) {
+            const searchWords = cleanedSearchName.split(' ').filter(word => word.length >= MIN_SEARCH_LENGTH);
+            for (const searchWord of searchWords) {
+              if (cleanedHitName.includes(searchWord)) {
+                isPrefixSuffixExactMatch = true;
+                break;
+              }
+            }
+            if (!isPrefixSuffixExactMatch && cleanedHitName.includes(cleanedSearchName)) {
+              isPrefixSuffixExactMatch = true;
+            }
+          }
+
+          if (similarityScore < SIMILARITY_THRESHOLD && 
+              positionalExactMatchScore < SIMILARITY_THRESHOLD && 
+              !isPrefixSuffixExactMatch) {
+            continue;
+          }
+
+          let isEarlier = false;
+          try {
+            const searchDate = applicationDate ? new Date(applicationDate) : null;
+            const hitDate = hit.applicationDate ? new Date(hit.applicationDate) : null;
+            if (searchDate && hitDate) {
+              isEarlier = hitDate.getTime() < searchDate.getTime();
+            }
+          } catch (e) {
+            isEarlier = false;
+          }
+
+          allResults.push({
+            objectID: hit.id,
+            markName: hit.markName,
+            applicationNo: hit.applicationNo,
+            applicationDate: hit.applicationDate,
+            niceClasses: hit.niceClasses,
+            holders: hit.holders,
+            imagePath: hit.imagePath,
+            bulletinId: hit.bulletinId,
+            similarityScore,
+            positionalExactMatchScore,
+            sameClass: hasNiceClassOverlap,
+            monitoredTrademark: markName,
+            monitoredNiceClasses: monitoredMark.niceClassSearch || [],
+            monitoredTrademarkId: monitoredMark.id,
+            isEarlier: isEarlier
+          });
+        }
+
+        processedCount++;
+        
+        // Her marka sonrası progress güncelle
+        const progress = 10 + Math.floor((processedCount / monitoredMarks.length) * 85);
+        await progressRef.update({ 
+          progress, 
+          processed: processedCount,
+          currentResults: allResults.length 
+        });
+      }
+
+      if (batchIndex < markBatches.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, PROCESS_DELAY));
+      }
+    }
+
+    allResults.sort((a, b) => b.similarityScore - a.similarityScore);
+
+    // Sonuçları kaydet
+    await progressRef.update({
+      status: 'completed',
+      progress: 100,
+      processed: monitoredMarks.length,
+      results: allResults,
+      completedAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    logger.log(`✅ Background search completed: ${allResults.length} results`);
+
+  } catch (error) {
+    logger.error('❌ Background search error:', error);
+    await progressRef.update({
+      status: 'error',
+      error: error.message,
+      progress: 0
+    });
+  }
+}
 
 const bucket = admin.storage().bucket();
 export const generateSimilarityReport = onCall(
