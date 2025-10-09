@@ -1,45 +1,89 @@
 // js/trademark-similarity/run-search.js
 
-// Firebase Firestore servislerini ve Cloud Function'ları çağırmak için gerekli modülleri import et
 import { firebaseServices } from '../../firebase-config.js';
 import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-functions.js';
+import { getFirestore, doc, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
 console.log(">>> run-search.js modülü yüklendi ve Firebase servisleri kullanılıyor <<<");
 
-// Firebase Functions instance'ı oluştur
-const functions = getFunctions(firebaseServices.app, "europe-west1"); // firebaseServices.app, Firebase app objenizi temsil etmeli
-
-// performTrademarkSimilaritySearch Cloud Function'ını çağırılabilir yap
+const functions = getFunctions(firebaseServices.app, "europe-west1");
+const db = getFirestore(firebaseServices.app);
 const performSearchCallable = httpsCallable(functions, 'performTrademarkSimilaritySearch');
 
-/**
- * Marka benzerliği aramasını çalıştıran ana fonksiyon.
- * Artık tüm hesaplama bir Firebase Cloud Function üzerinde gerçekleşir.
- *
- * @param {Array} monitoredMarks - İzlenen markalar array'i (her biri markName, applicationDate, niceClasses içerir).
- * @param {string} selectedBulletinId - Seçilen bültenin Firestore doküman ID'si.
- * @returns {Array} Benzerlik skorlarına göre sıralanmış eşleşen markalar listesi.
- */
-export async function runTrademarkSearch(monitoredMarks, selectedBulletinId) {
+export async function runTrademarkSearch(monitoredMarks, selectedBulletinId, onProgress) {
   try {
-    console.log('🚀 Cloud Function çağrılıyor:', {
+    console.log('🚀 Cloud Function çağrılıyor (ASYNC mode):', {
       monitoredMarksCount: monitoredMarks.length,
-      selectedBulletinId,
-      firstMark: monitoredMarks[0] // İlk markayı debug için logla
-    });
-
-    const response = await performSearchCallable({
-      monitoredMarks: monitoredMarks, // Array olarak gönder
       selectedBulletinId
     });
 
-    const data = response.data;
-    console.log('✅ Cloud Function yanıtı alındı:', {
-      success: data.success,
-      resultsCount: data.results?.length || 0
+    // Async mode ile başlat
+    const response = await performSearchCallable({
+      monitoredMarks,
+      selectedBulletinId,
+      async: true
     });
+
+    const data = response.data;
     
-    return data.results || [];
+    if (!data.success || !data.jobId) {
+      throw new Error('Job başlatılamadı');
+    }
+
+    const jobId = data.jobId;
+    console.log('✅ Job başlatıldı:', jobId);
+
+    // Progress tracking
+    return new Promise((resolve, reject) => {
+      const progressRef = doc(db, 'searchProgress', jobId);
+      
+      const unsubscribe = onSnapshot(progressRef, (snapshot) => {
+        if (!snapshot.exists()) {
+          unsubscribe();
+          reject(new Error('Job bulunamadı'));
+          return;
+        }
+
+        const progressData = snapshot.data();
+        console.log('📊 Progress:', progressData.progress + '%', 
+                    `(${progressData.processed}/${progressData.total})`);
+
+        // Progress callback
+        if (onProgress) {
+          onProgress({
+            progress: progressData.progress,
+            processed: progressData.processed,
+            total: progressData.total,
+            currentResults: progressData.currentResults || 0,
+            status: progressData.status
+          });
+        }
+
+        // Tamamlandı
+        if (progressData.status === 'completed') {
+          unsubscribe();
+          console.log('✅ Arama tamamlandı:', progressData.results.length, 'sonuç');
+          resolve(progressData.results || []);
+        }
+
+        // Hata
+        if (progressData.status === 'error') {
+          unsubscribe();
+          console.error('❌ Arama hatası:', progressData.error);
+          reject(new Error(progressData.error || 'Arama sırasında hata oluştu'));
+        }
+      }, (error) => {
+        console.error('❌ Snapshot hatası:', error);
+        reject(error);
+      });
+
+      // 15 dakika timeout (güvenlik için)
+      setTimeout(() => {
+        unsubscribe();
+        reject(new Error('İşlem zaman aşımına uğradı (15 dk)'));
+      }, 15 * 60 * 1000);
+    });
+
   } catch (error) {
     console.error('❌ Cloud Function çağrılırken hata:', error);
     console.error('Hata detayları:', {
@@ -47,9 +91,6 @@ export async function runTrademarkSearch(monitoredMarks, selectedBulletinId) {
       message: error.message,
       details: error.details
     });
-    return [];
+    throw error;
   }
 }
-
-// Artık client tarafında tüm kayıtları önbelleğe almaya gerek kalmadı.
-// loadAllTrademarkBulletinRecords() kaldırıldı.
