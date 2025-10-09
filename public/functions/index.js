@@ -3169,9 +3169,12 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
             similarityScore,
             positionalExactMatchScore,
             sameClass: hasNiceClassOverlap,
+            
+            // *** FRONTEND İÇİN GEREKLİ ALANLAR ***
             monitoredTrademark: markName,
             monitoredNiceClasses: monitoredMark.niceClassSearch || [],
             monitoredTrademarkId: monitoredMark.id,
+            monitoredMarkId: monitoredMark.id, // ✅ EKLENEN ALAN
             isEarlier: isEarlier
           });
         }
