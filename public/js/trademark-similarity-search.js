@@ -1913,7 +1913,7 @@ const performSearch = async () => {
     const bulletinKey = bulletinSelect.value;
     if (!bulletinKey || filteredMonitoringTrademarks.length === 0) return;
     
-    loadingIndicator.textContent = 'Arama yapılıyor...';
+    loadingIndicator.textContent = 'Arama başlatılıyor...';
     loadingIndicator.style.display = 'block';
     infoMessageContainer.innerHTML = '';
     resultsTableBody.innerHTML = '';
@@ -1927,7 +1927,24 @@ const performSearch = async () => {
     }));
     
     try {
-        const resultsFromCF = await runTrademarkSearch(monitoredMarksPayload, bulletinKey);
+        // ✅ Progress callback - Loading indicator'ı güncelle
+        const onProgress = (progressData) => {
+            const percentage = progressData.progress || 0;
+            const processed = progressData.processed || 0;
+            const total = progressData.total || monitoredMarksPayload.length;
+            const currentResults = progressData.currentResults || 0;
+            
+            loadingIndicator.textContent = 
+                `Arama devam ediyor... ${percentage}% ` +
+                `(${processed}/${total} marka işlendi, ` +
+                `${currentResults} sonuç bulundu)`;
+        };
+        
+        const resultsFromCF = await runTrademarkSearch(
+            monitoredMarksPayload, 
+            bulletinKey,
+            onProgress  // ✅ Progress callback eklendi
+        );
         
         if (resultsFromCF?.length > 0) {
             allSimilarResults = resultsFromCF.map(hit => ({
