@@ -3085,6 +3085,7 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
     const bulletinRecords = bulletinRecordsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     
     await progressRef.update({ progress: 10 });
+    logger.log(`✅ ${bulletinRecords.length} bülten kaydı bulundu`);
 
     const allResults = [];
     const markBatches = [];
@@ -3096,6 +3097,7 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
 
     for (let batchIndex = 0; batchIndex < markBatches.length; batchIndex++) {
       const batch = markBatches[batchIndex];
+      logger.log(`⚙️ Batch ${batchIndex + 1}/${markBatches.length} işleniyor...`);
       
       for (const monitoredMark of batch) {
         const markNameRaw = monitoredMark.markName || monitoredMark.title || '';
@@ -3103,9 +3105,14 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
         const applicationDate = monitoredMark.applicationDate || null;
         const niceClasses = monitoredMark.niceClasses || [];
 
-        if (!markName) continue;
+        if (!markName) {
+          logger.warn(`⚠️ Marka adı eksik, atlanıyor:`, monitoredMark.id);
+          processedCount++;
+          continue;
+        }
 
         const cleanedSearchName = cleanMarkName(markName, markName.trim().split(/\s+/).length > 1);
+        logger.log(`🔎 İşleniyor: '${markName}' (${processedCount + 1}/${monitoredMarks.length})`);
 
         for (const hit of bulletinRecords) {
           if (!isValidBasedOnDate(hit.applicationDate, applicationDate)) continue;
@@ -3170,15 +3177,17 @@ async function processSearchInBackground(jobId, monitoredMarks, selectedBulletin
         }
 
         processedCount++;
-        
-        // Her marka sonrası progress güncelle
-        const progress = 10 + Math.floor((processedCount / monitoredMarks.length) * 85);
-        await progressRef.update({ 
-          progress, 
-          processed: processedCount,
-          currentResults: allResults.length 
-        });
       }
+
+      // ✅ Her batch sonunda progress güncelle
+      const progress = 10 + Math.floor((processedCount / monitoredMarks.length) * 85);
+      await progressRef.update({ 
+        progress, 
+        processed: processedCount,
+        currentResults: allResults.length 
+      });
+      
+      logger.log(`📊 Progress güncellendi: ${progress}%, ${processedCount}/${monitoredMarks.length} marka, ${allResults.length} sonuç`);
 
       if (batchIndex < markBatches.length - 1) {
         await new Promise(resolve => setTimeout(resolve, PROCESS_DELAY));
