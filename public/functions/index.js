@@ -2789,9 +2789,8 @@ function calculateSimilarityScoreInternal(hitMarkName, searchMarkName, hitApplic
     return { finalScore: finalScore, positionalExactMatchScore: positionalExactMatchScore }; // Her iki skoru da döndür
 }
 
-// ======== Yeni Cloud Function: Sunucu Tarafında Marka Benzerliği Araması ========
-// functions/index.js - performTrademarkSimilaritySearch fonksiyonunun düzeltilmiş kısmı
 
+// ======== Sunucu Tarafında Marka Benzerliği Araması (GÜNCEL) ========
 export const performTrademarkSimilaritySearch = onCall(
   {
     region: 'europe-west1',
@@ -2801,33 +2800,37 @@ export const performTrademarkSimilaritySearch = onCall(
   async (request) => {
     const { monitoredMarks, selectedBulletinId, async = false, jobId } = request.data;
 
-    // ASYNC MODE: İş ID'si oluştur ve hemen dön
+    // =========================
+    // ASYNC MODE: Kuyruğa at ve dön
+    // =========================
     if (async && !jobId) {
       const newJobId = `search_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      
-      // Progress kaydı oluştur
+
+      // Başlangıç progress kaydı
       await adminDb.collection('searchProgress').doc(newJobId).set({
         status: 'queued',
         progress: 0,
-        total: monitoredMarks.length,
+        total: Array.isArray(monitoredMarks) ? monitoredMarks.length : 0,
         processed: 0,
         results: [],
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         bulletinId: selectedBulletinId
       });
 
-      // Arka planda çalıştır (await yok!)
-      processSearchInBackground(newJobId, monitoredMarks, selectedBulletinId).catch(err => {
-        logger.error('Background search failed:', err);
-        adminDb.collection('searchProgress').doc(newJobId).update({
-          status: 'error',
-          error: err.message
-        });
+      // 🔁 Artık aynı proseste "fire-and-forget" çağrı YAPMIYORUZ.
+      // ✅ Pub/Sub üzerinden bağımsız worker'a delege ediyoruz.
+      const TOPIC_NAME = 'similarity-search-jobs';
+      await ensureTopic(TOPIC_NAME); // projende zaten varsa kullan; yoksa aşağıdaki helper'ı ekle
+      await pubsubClient.topic(TOPIC_NAME).publishMessage({
+        json: { jobId: newJobId, monitoredMarks, selectedBulletinId }
       });
 
       return { success: true, jobId: newJobId, async: true };
     }
 
+    // =========================
+    // SYNC MODE: (mevcut mantığın korunuyor)
+    // =========================
     if (!Array.isArray(monitoredMarks) || monitoredMarks.length === 0 || !selectedBulletinId) {
       throw new HttpsError(
         'invalid-argument',
@@ -2836,7 +2839,7 @@ export const performTrademarkSimilaritySearch = onCall(
     }
 
     // BATCH PROCESSING PARAMETRELERİ
-    const BATCH_SIZE = 3; // Her batch'te 3 marka
+    const BATCH_SIZE = 3;   // Her batch'te 3 marka
     const PROCESS_DELAY = 500; // Batch'ler arası 500ms bekleme
 
     logger.log('🚀 Cloud Function: performTrademarkSimilaritySearch BAŞLATILDI', {
@@ -2856,7 +2859,6 @@ export const performTrademarkSimilaritySearch = onCall(
 
       // Eğer sonuç yoksa veya gönderilen değer "469_27052025" gibi ise → bulletinNo ile ara
       if (!bulletinRecordsSnapshot || bulletinRecordsSnapshot.empty) {
-        // "_" içeriyorsa sadece ilk kısmı al
         let selectedBulletinNo = selectedBulletinId;
         if (selectedBulletinId.includes('_')) {
           selectedBulletinNo = selectedBulletinId.split('_')[0];
@@ -2885,14 +2887,12 @@ export const performTrademarkSimilaritySearch = onCall(
       for (let i = 0; i < monitoredMarks.length; i += BATCH_SIZE) {
         markBatches.push(monitoredMarks.slice(i, i + BATCH_SIZE));
       }
-      
       logger.log(`📦 ${markBatches.length} batch oluşturuldu (her biri max ${BATCH_SIZE} marka)`);
 
       // Her batch'i sırayla işle
       for (let batchIndex = 0; batchIndex < markBatches.length; batchIndex++) {
         const batch = markBatches[batchIndex];
         const progress = Math.round(((batchIndex + 1) / markBatches.length) * 100);
-        
         logger.log(`⚙️ Batch ${batchIndex + 1}/${markBatches.length} işleniyor... (${progress}%)`);
 
         // Batch içindeki her markayı işle
@@ -2914,9 +2914,7 @@ export const performTrademarkSimilaritySearch = onCall(
             continue;
           }
 
-          // Aranan markanın temizlenmiş hali
           const cleanedSearchName = cleanMarkName(markName, markName.trim().split(/\s+/).length > 1);
-
           logger.log(`🔎 Arama: '${markName}' (ID: ${monitoredMark.id})`);
 
           let matchCount = 0;
@@ -2927,73 +2925,56 @@ export const performTrademarkSimilaritySearch = onCall(
               continue;
             }
 
-            // Nice sınıf filtresi - AKTIF
+            // Nice sınıf filtresi
             const hasNiceClassOverlap = hasOverlappingNiceClasses(monitoredMark, hit.niceClasses);
 
             // Benzerlik skoru
-            const { finalScore: similarityScore, positionalExactMatchScore } = calculateSimilarityScoreInternal(
-              hit.markName,
-              markName,
-              hit.applicationDate,
-              applicationDate,
-              hit.niceClasses,
-              niceClasses
-            );
+            const { finalScore: similarityScore, positionalExactMatchScore } =
+              calculateSimilarityScoreInternal(
+                hit.markName,
+                markName,
+                hit.applicationDate,
+                applicationDate,
+                hit.niceClasses,
+                niceClasses
+              );
 
             const SIMILARITY_THRESHOLD = 0.5;
 
-            // Yeni Kriter Kontrolü: Aranan marka, bulunan markanın başında veya sonunda tam geçiyor mu?
+            // Baş-sona tam geçiş / içinde geçme kontrolü
             const cleanedHitName = cleanMarkName(hit.markName, (hit.markName || '').trim().split(/\s+/).length > 1);
             let isPrefixSuffixExactMatch = false;
-
-            // Minimum uzunluk kontrolü eklendi, çok kısa kelimelerin eşleşmesi anlamsız olabilir.
-            const MIN_SEARCH_LENGTH = 3; // En az 3 karakterlik bir eşleşme arıyoruz
+            const MIN_SEARCH_LENGTH = 3;
 
             if (cleanedSearchName.length >= MIN_SEARCH_LENGTH) {
-              // Aranan markanın tüm kelimelerini kontrol et
               const searchWords = cleanedSearchName.split(' ').filter(word => word.length >= MIN_SEARCH_LENGTH);
-              
-              for (const searchWord of searchWords) {
-                // Bulunan markanın temizlenmiş halinde aranan kelime geçiyor mu?
-                if (cleanedHitName.includes(searchWord)) {
-                  isPrefixSuffixExactMatch = true;
-                  logger.log(`🎯 Tam eşleşme bulundu: '${searchWord}' kelimesi '${cleanedHitName}' içinde geçiyor`);
-                  break; // Bir eşleşme bulmak yeterli
-                }
+              for (const w of searchWords) {
+                if (cleanedHitName.includes(w)) { isPrefixSuffixExactMatch = true; break; }
               }
-              
-              // Alternatif olarak: Aranan markanın tamamı bulunan markada geçiyor mu?
               if (!isPrefixSuffixExactMatch && cleanedHitName.includes(cleanedSearchName)) {
                 isPrefixSuffixExactMatch = true;
-                logger.log(`🎯 Tam eşleşme bulundu: '${cleanedSearchName}' tamamı '${cleanedHitName}' içinde geçiyor`);
               }
             }
 
-            // GÜNCELLENMİŞ FİLTRELEME KOŞULU
             if (
-              similarityScore < SIMILARITY_THRESHOLD && 
-              positionalExactMatchScore < SIMILARITY_THRESHOLD && 
+              similarityScore < SIMILARITY_THRESHOLD &&
+              positionalExactMatchScore < SIMILARITY_THRESHOLD &&
               !isPrefixSuffixExactMatch
             ) {
-              // Hiçbir geçerli kriteri sağlamadı, bu yüzden atla
-              logger.log(`⏩ Atlandı: Final Skor: ${similarityScore.toFixed(2)}, Positional: ${positionalExactMatchScore.toFixed(2)}, Prefix/Suffix Eşleşme Yok - ${hit.markName}`);
+              logger.log(`⏩ Atlandı: Final ${similarityScore.toFixed(2)}, Positional ${positionalExactMatchScore.toFixed(2)} - ${hit.markName}`);
               continue;
             }
 
-            // Bu noktaya ulaşan tüm kayıtlar eklenir
+            // Eşleşme
             matchCount++;
 
-            // isEarlier hesaplama
+            // Öncelik (daha eski mi?)
             let isEarlier = false;
             try {
               const searchDate = applicationDate ? new Date(applicationDate) : null;
               const hitDate = hit.applicationDate ? new Date(hit.applicationDate) : null;
-              if (searchDate && hitDate) {
-                isEarlier = hitDate.getTime() < searchDate.getTime();
-              }
-            } catch (e) {
-              isEarlier = false;
-            }
+              if (searchDate && hitDate) isEarlier = hitDate.getTime() < searchDate.getTime();
+            } catch (_) { isEarlier = false; }
 
             allResults.push({
               objectID: hit.id,
@@ -3007,30 +2988,29 @@ export const performTrademarkSimilaritySearch = onCall(
               similarityScore,
               positionalExactMatchScore,
               sameClass: hasNiceClassOverlap,
-              
-              // *** FRONTEND İÇİN GEREKLİ ALANLAR ***
+
+              // Frontend alanları
               monitoredTrademark: markName,
               monitoredNiceClasses: monitoredMark.niceClassSearch || [],
               monitoredTrademarkId: monitoredMark.id,
-              isEarlier: isEarlier
+              isEarlier
             });
           }
 
           logger.log(`📊 '${markName}' (ID: ${monitoredMark.id}) için ${matchCount} eşleşme bulundu`);
         }
 
-        // Batch arası bekleme (rate limiting için)
+        // Batch arası bekleme (rate limiting)
         if (batchIndex < markBatches.length - 1) {
           logger.log(`⏳ Sonraki batch için ${PROCESS_DELAY}ms bekleniyor...`);
-          await new Promise(resolve => setTimeout(resolve, PROCESS_DELAY));
+          await new Promise(r => setTimeout(r, PROCESS_DELAY));
         }
-        
-        logger.log(`✅ Batch ${batchIndex + 1}/${markBatches.length} tamamlandı. Şu ana kadar toplam: ${allResults.length} sonuç`);
+
+        logger.log(`✅ Batch ${batchIndex + 1}/${markBatches.length} tamamlandı. Toplam şu ana kadar: ${allResults.length} sonuç`);
       }
 
       allResults.sort((a, b) => b.similarityScore - a.similarityScore);
-      
-      // *** SON KONTROL LOGU ***
+
       logger.log(`✅ Toplam ${allResults.length} sonuç döndürülüyor`, {
         sampleResult: allResults[0] ? {
           markName: allResults[0].markName,
@@ -3047,6 +3027,7 @@ export const performTrademarkSimilaritySearch = onCall(
     }
   }
 );
+
 
 // Arka planda arama yapan fonksiyon
 async function processSearchInBackground(jobId, monitoredMarks, selectedBulletinId) {
@@ -5300,6 +5281,46 @@ export const createClientNotificationOnRenewalTaskCreated = onDocumentCreated(
       return null;
     } catch (err) {
       console.error("❌ renewal notification create failed:", err);
+      return null;
+    }
+  }
+);
+
+// ===== similaritySearchWorker (Pub/Sub subscriber) =====
+export const similaritySearchWorker = onMessagePublished(
+  {
+    topic: 'similarity-search-jobs',
+    region: 'europe-west1',
+    memory: '2GiB',
+    timeoutSeconds: 540,
+  },
+  async (event) => {
+    const payload = event?.data?.message?.json || {};
+    const { jobId, monitoredMarks, selectedBulletinId } = payload;
+
+    if (!jobId || !Array.isArray(monitoredMarks) || !selectedBulletinId) {
+      logger.warn('⚠️ similaritySearchWorker: eksik payload', payload);
+      return null;
+    }
+
+    const progressRef = adminDb.collection('searchProgress').doc(jobId);
+
+    // Başlat/progress
+    await progressRef.set({ status: 'processing', progress: 5 }, { merge: true });
+
+    try {
+      // Mevcut arka plan fonksiyonunuzu kullanıyoruz:
+      //  - Dosyanızda zaten tanımlı: async function processSearchInBackground(jobId, monitoredMarks, selectedBulletinId)
+      await processSearchInBackground(jobId, monitoredMarks, selectedBulletinId);
+
+      // processSearchInBackground tamamlandığında, orada status/progress 'completed' yapılmalı.
+      // (Sizde zaten progress güncellemeleri ve completed set ediliyor.)
+      logger.info(`✅ similaritySearchWorker tamamlandı: ${jobId}`);
+      return null;
+
+    } catch (err) {
+      logger.error('❌ similaritySearchWorker hata:', err);
+      await progressRef.set({ status: 'error', error: err?.message || String(err) }, { merge: true });
       return null;
     }
   }
