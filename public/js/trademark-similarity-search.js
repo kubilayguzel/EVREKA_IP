@@ -1670,6 +1670,14 @@ const renderCurrentPageOfResults = () => {
 
         groupHeaderRow.dataset.markData = JSON.stringify(modalData);
         
+        // ✅ Konsol debug - veri yapısını göster
+        if (groupedByTrademark[Object.keys(groupedByTrademark)[0]]) {
+        console.log('📊 İlk grup örneği:', {
+            key: Object.keys(groupedByTrademark)[0],
+            firstHit: groupedByTrademark[Object.keys(groupedByTrademark)[0]][0],
+            totalGroups: Object.keys(groupedByTrademark).length
+        });
+        }
         const totalCount = getTotalCountForMonitoredId(trademarkKey);
 
         groupHeaderRow.innerHTML = `
@@ -1694,9 +1702,12 @@ const renderCurrentPageOfResults = () => {
 
 };
 
-const createResultRow = (hit, rowIndex) => {
+    const createResultRow = (hit, rowIndex) => {
     const holders = Array.isArray(hit.holders) ? hit.holders.map(h => h.name || h.id).filter(Boolean).join(', ') : (hit.holders || '');
-    const monitoredTrademark = monitoringTrademarks.find(tm => tm.id === hit.monitoredTrademarkId) || {};
+    // ✅ Her iki alanı da kontrol et (backward compatibility)
+    const monitoredTrademark = monitoringTrademarks.find(tm => 
+    tm.id === (hit.monitoredTrademarkId || hit.monitoredMarkId)
+    ) || {};
     
     const niceClassesArray = (Array.isArray(hit.niceClasses) ? hit.niceClasses : (hit.niceClasses?.split('/')?.map(c => c.trim()) || [])).filter(Boolean);
     const monitoredNiceClassNumbers = (monitoredTrademark?.niceClassSearch || []).map(String);
