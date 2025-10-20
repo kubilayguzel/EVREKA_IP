@@ -339,7 +339,29 @@ async handleTransactionCreated(transactionData) {
             const result = await ipRecordsService.createRecordFromOpposition(portfolioData);
             
             if (result.success) {
-                console.log('✅ Portföy kaydı işlem sonucu:', {
+                
+// ✅ Otomatik parent transaction: Başvuru (type: 2)
+try {
+  const u = (authService && typeof authService.getCurrentUser === 'function') ? authService.getCurrentUser() : null;
+  const newRecordId = result.recordId || result.id;
+  if (newRecordId) {
+    await ipRecordsService.addTransactionToRecord(newRecordId, {
+      type: '20',
+      description: 'Yayına İtiraz',
+      transactionHierarchy: 'parent',
+      timestamp: new Date().toISOString(),
+      userId: (u && u.uid) || 'anonymous',
+      userEmail: (u && u.email) || 'anonymous@example.com',
+      userName: (u && (u.displayName || u.email)) || 'anonymous'
+    });
+    console.log('🧾 Parent transaction (type=2, Başvuru) eklendi →', newRecordId);
+  } else {
+    console.warn('Yeni portföy ID bulunamadı; Başvuru transaction eklenemedi.');
+  }
+} catch (e) {
+  console.error('Başvuru transaction eklerken hata:', e);
+}
+console.log('✅ Portföy kaydı işlem sonucu:', {
                     id: result.id,
                     isExistingRecord: result.isExistingRecord || false,
                     message: result.message
