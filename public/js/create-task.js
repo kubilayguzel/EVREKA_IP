@@ -299,7 +299,7 @@ async initIpRecordSearchSelector() {
 
   const norm = v => (v == null ? '' : String(v)).toLowerCase();
 
-  const renderResults = (items) => {
+    const renderResults = (items) => {
     if (!items?.length) {
       results.innerHTML = `<div class="p-2 text-muted">Sonuç bulunamadı</div>`;
       results.style.display = 'block';
@@ -317,7 +317,7 @@ async initIpRecordSearchSelector() {
         ? (r.markName || 'Başlık yok')
         : (r.title || r.name || r.markName || r.applicationTitle || 'Başlık yok');
       const owner = this.searchSource === 'bulletin'
-        ? (Array.isArray(r.holders) && r.holders[0]?.name ? rec.holders[0].name : '')
+        ? (Array.isArray(r.holders) && r.holders[0]?.name ? r.holders[0].name : '')  // ✅ DÜZELTİLDİ: rec -> r
         : (r.ownerName || r.owner || r.applicantName || '');
       const img   = this.searchSource === 'bulletin'
         ? (r.imagePath || '')
