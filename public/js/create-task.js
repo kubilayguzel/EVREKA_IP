@@ -444,7 +444,7 @@ async initIpRecordSearchSelector() {
       ? (rec.markName || 'Başlık yok')
       : (rec.title || rec.name || rec.markName || rec.applicationTitle || 'Başlık yok');
     const owner = (this.searchSource === 'bulletin')
-      ? (Array.isArray(rec.holders) && r.holders[0]?.name ? rec.holders[0].name : '')
+      ? (Array.isArray(rec.holders) && rec.holders[0]?.name ? rec.holders[0].name : '') // 'r' yerine 'rec' kullanıldı
       : (rec.ownerName || rec.owner || rec.applicantName || '');
     const appNo = (this.searchSource === 'bulletin')
       ? (rec.applicationNo || rec.applicationNumber || '')
@@ -2760,29 +2760,30 @@ async loadBulletinRecordsOnce() {
   try {
     const db = getFirestore();
     
-    // KULLANICININ TALEBİ: 'trademarkBulletinRecords' koleksiyonundan oku
+    // DÜZELTME: Kullanıcı geri bildirimi üzerine 'trademarkBulletinRecords' koleksiyonu kullanılıyor
     const snap = await getDocs(collection(db, 'trademarkBulletinRecords')); 
     
     this.allBulletinRecords = snap.docs.map(d => {
       const x = d.data() || {};
       return {
         id: d.id,
-        // Marka bilgileri için geniş eşleme yapıldı (Search Selector'ın beklediği alanlar)
+        // Eşleme: Search Selector'ın beklediği alanlar
         markName: x.markName || x.title || '',
         applicationNo: x.applicationNo || x.applicationNumber || '',
-        imagePath: x.imagePath || x.brandImageUrl || '', // Görsel yolu
-        // Sahipler (holders) alanı, arama gösteriminde kullanıldığı için güçlendirildi
+        imagePath: x.imagePath || x.brandImageUrl || '', 
+        // Sahipler (holders) alanı için güvenli eşleme
         holders: Array.isArray(x.holders) ? x.holders : (x.ownerName ? [{ name: x.ownerName }] : []),
         bulletinId: x.bulletinId || '',
         attorneys: x.attorneys || [],
         niceClasses: x.niceClasses || [],
         // ...
       };
-    }).filter(r => !!r.bulletinId); // Yalnızca bülten ID'si olan kayıtları arama havuzunda tut
+    }).filter(r => !!r.applicationNo); // En azından bir başvuru numarası olanları tutuyoruz
 
     console.log('[BULLETIN] yüklendi:', this.allBulletinRecords.length);
   } catch (err) {
     console.error('[BULLETIN] yüklenemedi:', err);
+    // 404/izin hatalarında düşerse, en azından portföy aramasına devam edebilmek için temizle
     this.allBulletinRecords = [];
   }
 }
