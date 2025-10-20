@@ -360,7 +360,7 @@ async initIpRecordSearchSelector() {
     });
   };
 
-  const doSearch = this.debounce((raw) => {
+const doSearch = this.debounce((raw) => {
     const term = norm(raw).trim();
     if (!term) { results.style.display = 'none'; results.innerHTML = ''; return; }
 
@@ -387,10 +387,11 @@ async initIpRecordSearchSelector() {
     }
     
     // Kaynağa göre aranan alanlar
+    // DÜZELTME: applicationNo ve markName/title alanları arama kapsamına alındı.
     const hay = (this.searchSource === 'bulletin'
         ? [
             r.markName,
-            r.applicationNo || r.applicationNumber,
+            r.applicationNo, // Başvuru Numarası
             // Sahipleri de aramaya dahil et
             ...(Array.isArray(r.holders) ? r.holders.map(h => h.name || h.holderName || h) : [])
         ]
