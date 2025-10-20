@@ -1107,7 +1107,6 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
                     console.error("Transaction sorgusu sırasında hata:", error);
                 }
             }
-
             // 1) Önce taskOwner üzerinden alıcıları dene
             let toRecipients = [];
             let ccRecipients = new Set();
@@ -1118,18 +1117,16 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
               if (!Array.isArray(personIds) || personIds.length === 0) return { to, cc };
 
               // Firestore IN limiti: 10 -> parçalara böl
-              const chunks = [];
-              for (let i = 0; i < personIds.length; i += 10) chunks.push(personIds.slice(i, i + 10));
-
-              for (const batch of chunks) {
+              for (let i = 0; i < personIds.length; i += 10) {
+                const batch = personIds.slice(i, i + 10);
                 const prs = await adminDb.collection("personsRelated")
                   .where("personId", "in", batch)
-                  .where("type", "==", (after.mainProcessType || "marka"))
+                  .where("type", "==", categoryKey) // ← parametreyi kullan
                   .get();
 
                 prs.forEach(doc => {
                   const r = doc.data() || {};
-                  const email = (r.email || "").trim();
+                  const email = String(r.email || "").trim();
                   if (!email) return;
                   if (r.cc === true) cc.push(email);
                   else to.push(email);
@@ -1144,33 +1141,41 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
               try {
                 const t = await adminDb.collection("tasks").doc(after.associatedTaskId).get();
                 const tData = t.exists ? t.data() : null;
-                // Uygulamadaki iki olası alan adı:
-                taskOwnerIds = (Array.isArray(tData?.taskOwner) && tData.taskOwner)
-                            || (Array.isArray(tData?.taskOwnerIds) && tData.taskOwnerIds)
-                            || [];
+                taskOwnerIds =
+                  (Array.isArray(tData?.taskOwner)    && tData.taskOwner) ||
+                  (Array.isArray(tData?.taskOwnerIds) && tData.taskOwnerIds) ||
+                  [];
               } catch (e) {
                 console.warn("taskOwner okunamadı:", e);
               }
             }
 
-            // Önce taskOwner’dan alıcıları bul
+            const notificationType = after.mainProcessType || "marka";
+
+            // 1) Task owner → personsRelated
             if (taskOwnerIds.length > 0) {
-              const fromOwners = await findRecipientsFromPersonsRelated(taskOwnerIds, (after.mainProcessType || "marka"));
-              toRecipients = fromOwners.to;
+              const fromOwners = await findRecipientsFromPersonsRelated(taskOwnerIds, notificationType);
+              toRecipients.push(...fromOwners.to);
               fromOwners.cc.forEach(e => ccRecipients.add(e));
             }
 
             // 2) Eğer taskOwner’dan alıcı çıkmadıysa → applicants fallback
             if ((toRecipients.length + ccRecipients.size) === 0) {
-              const rec = await getRecipientsByApplicantIds(applicants, (after.mainProcessType || 'marka'));
+              const rec = await getRecipientsByApplicantIds(applicants, notificationType);
               (rec.to || []).forEach(e => toRecipients.push(e));
               (rec.cc || []).forEach(e => ccRecipients.add(e));
             }
 
-            const notificationType = after.mainProcessType || 'marka';
-            const recipients = await getRecipientsByApplicantIds(applicants, notificationType);
-            const toRecipients = recipients.to || [];
-            const ccRecipients = new Set(recipients.cc || []);
+            // (opsiyonel) Kurumsal ek CC: foundTransactionType varsa
+            if (foundTransactionType) {
+              const extraCc = await getCcFromEvrekaListByTransactionType(foundTransactionType);
+              for (const e of extraCc) ccRecipients.add(e);
+            }
+
+            // (opsiyonel) tekilleştir & CC’den TO’ları düş
+            toRecipients = Array.from(new Set(toRecipients.map(s => s.trim()).filter(Boolean)));
+            const finalCc = Array.from(ccRecipients).filter(e => !toRecipients.includes(e));
+
 
             if (foundTransactionType) {
               const extraCc = await getCcFromEvrekaListByTransactionType(foundTransactionType);
@@ -1252,6 +1257,7 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
             };
 
             await adminDb.collection("mail_notifications").add(notificationData);
+
             return null;
 
         } else {
