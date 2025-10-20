@@ -1108,6 +1108,65 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
                 }
             }
 
+            // 1) Önce taskOwner üzerinden alıcıları dene
+            let toRecipients = [];
+            let ccRecipients = new Set();
+
+            async function findRecipientsFromPersonsRelated(personIds, categoryKey) {
+              const to = [];
+              const cc = [];
+              if (!Array.isArray(personIds) || personIds.length === 0) return { to, cc };
+
+              // Firestore IN limiti: 10 -> parçalara böl
+              const chunks = [];
+              for (let i = 0; i < personIds.length; i += 10) chunks.push(personIds.slice(i, i + 10));
+
+              for (const batch of chunks) {
+                const prs = await adminDb.collection("personsRelated")
+                  .where("personId", "in", batch)
+                  .where("type", "==", (after.mainProcessType || "marka"))
+                  .get();
+
+                prs.forEach(doc => {
+                  const r = doc.data() || {};
+                  const email = (r.email || "").trim();
+                  if (!email) return;
+                  if (r.cc === true) cc.push(email);
+                  else to.push(email);
+                });
+              }
+              return { to, cc };
+            }
+
+            // taskOwnerIds'i oku (tasks/{associatedTaskId} içinden)
+            let taskOwnerIds = [];
+            if (after.associatedTaskId) {
+              try {
+                const t = await adminDb.collection("tasks").doc(after.associatedTaskId).get();
+                const tData = t.exists ? t.data() : null;
+                // Uygulamadaki iki olası alan adı:
+                taskOwnerIds = (Array.isArray(tData?.taskOwner) && tData.taskOwner)
+                            || (Array.isArray(tData?.taskOwnerIds) && tData.taskOwnerIds)
+                            || [];
+              } catch (e) {
+                console.warn("taskOwner okunamadı:", e);
+              }
+            }
+
+            // Önce taskOwner’dan alıcıları bul
+            if (taskOwnerIds.length > 0) {
+              const fromOwners = await findRecipientsFromPersonsRelated(taskOwnerIds, (after.mainProcessType || "marka"));
+              toRecipients = fromOwners.to;
+              fromOwners.cc.forEach(e => ccRecipients.add(e));
+            }
+
+            // 2) Eğer taskOwner’dan alıcı çıkmadıysa → applicants fallback
+            if ((toRecipients.length + ccRecipients.size) === 0) {
+              const rec = await getRecipientsByApplicantIds(applicants, (after.mainProcessType || 'marka'));
+              (rec.to || []).forEach(e => toRecipients.push(e));
+              (rec.cc || []).forEach(e => ccRecipients.add(e));
+            }
+
             const notificationType = after.mainProcessType || 'marka';
             const recipients = await getRecipientsByApplicantIds(applicants, notificationType);
             const toRecipients = recipients.to || [];
