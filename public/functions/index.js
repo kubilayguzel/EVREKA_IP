@@ -36,6 +36,8 @@ const adminAuth = admin.auth();
 const adminDb = admin.firestore();
 const db        = adminDb;
 const secretClient = new SecretManagerServiceClient();
+const selcanUserId = "Mkmq2sc0T6XTIg1weZyp5AGZ0YG3"; // <<< BURAYA SELCAN'IN GERÇEK ID'SİNİ YAPIŞTIRIN
+const selcanUserEmail = "selcanakoglu@evrekapatent.com"; // <<< BURAYA SELCAN'IN E-POSTA ADRESİNİ YAZIN
 
 // 🔐 SA_MAILER_KEY'i Secret Manager'dan çek
 async function loadMailerSA() {
@@ -994,8 +996,7 @@ export const createMailNotificationOnDocumentIndexV2 = onDocumentCreated(
       if (!hasRecipients) missingFields.push("recipients");
 
       // 5) Firestore’a yaz — UI filtreleriyle uyumlu alanlar
-      const selcanUserId = "Mkmq2sc0T6XTIg1weZyp5AGZ0YG3"; // <<< BURAYA SELCAN'IN GERÇEK ID'SİNİ YAPIŞTIRIN
-      const selcanUserEmail = "selcanakoglu@evrekapatent.com"; // <<< BURAYA SELCAN'IN E-POSTA ADRESİNİ YAZIN
+
 
       const finalStatus = (hasRecipients && hasContent) ? "awaiting_client_approval" : "missing_info";
       if (!hasRecipients) missingFields.push("recipients");
