@@ -1280,12 +1280,18 @@ if (typeof this.renderDocuments === 'function') {
                 const hasPdf = !!this.uploadedEpatsFile;
 
                 console.log('🔧 DEBUG: EPATS kontrol değerleri:', { hasPdf, evrakNo, docDate });
+               
+                // 1. Varsayılan olarak kullanıcının seçtiği durumu ata.
+                updatedTaskData.status = updatedStatus; 
 
                 if (hasPdf && evrakNo && docDate) {
+                    // 2. EPATS üçlüsü tam ise, completed olarak zorla değiştir.
                     console.log('✅ DEBUG: EPATS üçlüsü tam - Status otomatik completed yapılıyor');
                     updatedTaskData.status = 'completed';
-                } else {
-                    console.log('⚠️ DEBUG: EPATS üçlüsü eksik - Status önceki duruma döndürülüyor');
+                } else if (!hasPdf && this.currentTask.details?.epatsDocument) {
+                    // 3. Eğer EPATS belgesi kaldırıldıysa (yani önceden vardı ama şimdi yok), 
+                    //    status'ü eski haline getir.
+                    console.log('⚠️ DEBUG: EPATS belgesi kaldırıldı - Status önceki duruma döndürülüyor');
                     updatedTaskData.status = this.statusBeforeEpatsUpload || 'open';
                 }
                 
