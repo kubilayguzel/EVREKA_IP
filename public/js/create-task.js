@@ -432,7 +432,7 @@ const doSearch = this.debounce(async (raw) => {
     const isOpposition = this.isPublicationOpposition(typeId);
     
     const basePool = this.allIpRecords || [];
-    const pool = isOpposition
+    const pool = (isOpposition || String(typeId) === String(TASK_IDS.YAYIMA_ITIRAZIN_YENIDEN_INCELENMESI) || String(typeId) === 'trademark_reconsideration_of_publication_objection')
         ? basePool
         : basePool.filter(r => String(r.recordOwnerType || '').toLowerCase() === 'self');
 
