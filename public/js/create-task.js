@@ -1498,11 +1498,15 @@ async handleSpecificTypeChange(e) {
         searchSource: this.searchSource
     });
 
-    // ✅ YENİ: Yayına itiraz seçildiğinde bulletin kayıtlarını hemen yükle
+    // ✅ YENİ: Yayına itiraz seçildiğinde bulletin kayıtlarını arka planda yükle
     if (this.searchSource === 'bulletin') {
         console.log('📚 Yayına itiraz seçildi, bulletin kayıtları yükleniyor...');
-        await this.loadBulletinRecordsOnce();
-        console.log('✅ Bulletin kayıtları yüklendi:', this.allBulletinRecords?.length || 0);
+        // Arka planda yükle, bekleme
+        this.loadBulletinRecordsOnce().then(() => {
+            console.log('✅ Bulletin kayıtları yüklendi:', this.allBulletinRecords?.length || 0);
+        }).catch(err => {
+            console.error('❌ Bulletin yükleme hatası:', err);
+        });
     }
     // ✅ YENİ SONU
 
