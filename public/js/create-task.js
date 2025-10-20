@@ -2756,35 +2756,52 @@ async resolveImageUrl(img) {
 }
 
 async loadBulletinRecordsOnce() {
-  if (Array.isArray(this.allBulletinRecords) && this.allBulletinRecords.length) return;
-
+  // ✅ Her zaman yükle - cache kontrolü kaldırıldı
   try {
     const db = getFirestore();
     
-    // DÜZELTME: Kullanıcı geri bildirimi üzerine 'trademarkBulletinRecords' koleksiyonu kullanılıyor
-    const snap = await getDocs(collection(db, 'trademarkBulletinRecords')); 
+    console.log('🔄 Bulletin kayıtları yükleniyor...');
+    
+    // ✅ DOĞRU: trademarkBulletinRecords koleksiyonunu oku
+    const snap = await getDocs(collection(db, 'trademarkBulletinRecords'));
+    
+    if (snap.empty) {
+      console.warn('⚠️ Hiç bulletin kaydı bulunamadı!');
+      this.allBulletinRecords = [];
+      return;
+    }
     
     this.allBulletinRecords = snap.docs.map(d => {
       const x = d.data() || {};
       return {
         id: d.id,
-        // Eşleme: Search Selector'ın beklediği alanlar
-        markName: x.markName || x.title || '',
+        markName: x.markName || '',
         applicationNo: x.applicationNo || x.applicationNumber || '',
-        imagePath: x.imagePath || x.brandImageUrl || '', 
-        // Sahipler (holders) alanı için güvenli eşleme
-        holders: Array.isArray(x.holders) ? x.holders : (x.ownerName ? [{ name: x.ownerName }] : []),
+        imagePath: x.imagePath || '',
+        holders: Array.isArray(x.holders) ? x.holders : [],
         bulletinId: x.bulletinId || '',
-        attorneys: x.attorneys || [],
-        niceClasses: x.niceClasses || [],
-        // ...
+        bulletinNo: x.bulletinNo || '',
+        attorneys: Array.isArray(x.attorneys) ? x.attorneys : [],
+        niceClasses: x.niceClasses || x.classNumbers || [],
+        goods: x.goods || []
       };
-    }).filter(r => !!r.applicationNo); // En azından bir başvuru numarası olanları tutuyoruz
-
-    console.log('[BULLETIN] yüklendi:', this.allBulletinRecords.length);
+    });
+    
+    console.log('✅ [BULLETIN] yüklendi:', this.allBulletinRecords.length, 'kayıt');
+    
+    // Debug: İlk 3 kaydı göster
+    if (this.allBulletinRecords.length > 0) {
+      console.log('📋 İlk 3 bulletin kaydı:', 
+        this.allBulletinRecords.slice(0, 3).map(r => ({
+          markName: r.markName,
+          applicationNo: r.applicationNo,
+          holders: r.holders.map(h => h.name || h)
+        }))
+      );
+    }
+    
   } catch (err) {
-    console.error('[BULLETIN] yüklenemedi:', err);
-    // 404/izin hatalarında düşerse, en azından portföy aramasına devam edebilmek için temizle
+    console.error('❌ [BULLETIN] yüklenemedi:', err);
     this.allBulletinRecords = [];
   }
 }
