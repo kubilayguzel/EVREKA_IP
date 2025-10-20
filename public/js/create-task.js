@@ -2,8 +2,7 @@ import { authService, taskService, ipRecordsService, personService, accrualServi
 import { loadSharedLayout, openPersonModal, ensurePersonModal } from './layout-loader.js';
 import { initializeNiceClassification, getSelectedNiceClasses } from './nice-classification.js';
 import { ref, uploadBytes, getStorage, deleteObject, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
-import { getFirestore, collection, getDocs, getDoc, doc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { getFirestore, collection, getDocs, getDoc, doc, query, where, limit } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { ORIGIN_TYPES } from '../utils.js';
 
 
@@ -213,7 +212,6 @@ class CreateTaskModule {
         this._lastRenderSig = '';
         this._eventsBound = false;
         this.searchSource = 'portfolio';       // 'portfolio' | 'bulletin'
-        this.allBulletinRecords = [];          // itiraz aramaları için
         this.allCountries = [];
         this.selectedCountries = [];
         // Yeni eklenen WIPO/ARIPO için alt kayıt listesi
