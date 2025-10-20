@@ -1193,7 +1193,7 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
             };
 
             await adminDb.collection("mail_notifications").add(notificationData);
-            console.log(`Mail bildirimi '${finalStatus}' olarak oluşturuldu ve ${DEFAULT_ASSIGNEE_EMAIL} kullanıcısına atandı.`);
+            console.log(`Mail bildirimi '${finalStatus}' olarak oluşturuldu ve ${assignedTo_email} kullanıcısına atandı.`);
             return null;
 
         } else {
