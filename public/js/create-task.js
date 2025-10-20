@@ -3284,7 +3284,28 @@ async handleFormSubmit(e) {
             return;
         }
 
-        const officialFee = parseFloat(document.getElementById('officialFee')?.value) || 0;
+        
+// ✅ Üçüncü taraf dosyasında 'Yayıma İtirazın Yeniden İncelenmesi' (type:19) için parent transaction ekle
+try {
+  const isReconsideration = String(selectedTransactionType?.id) === '19';
+  const isThirdParty = String(this.selectedIpRecord?.recordOwnerType || '').toLowerCase() === 'third_party';
+  if (isReconsideration && isThirdParty && this.selectedIpRecord?.id) {
+    const u = (authService && typeof authService.getCurrentUser === 'function') ? authService.getCurrentUser() : null;
+    await ipRecordsService.addTransactionToRecord(this.selectedIpRecord.id, {
+      type: '19',
+      description: 'Yayıma İtirazin Yeniden Incelenmesi',
+      transactionHierarchy: 'parent',
+      timestamp: new Date().toISOString(),
+      userId: (u && u.uid) || 'anonymous',
+      userEmail: (u && u.email) || 'anonymous@example.com',
+      userName: (u && (u.displayName || u.email)) || 'anonymous'
+    });
+    console.log('🧾 Parent transaction (type=19) eklendi →', this.selectedIpRecord.id);
+  }
+} catch (e) {
+  console.error('Reconsideration parent transaction eklenemedi:', e);
+}
+const officialFee = parseFloat(document.getElementById('officialFee')?.value) || 0;
         const serviceFee = parseFloat(document.getElementById('serviceFee')?.value) || 0;
 
         if (officialFee > 0 || serviceFee > 0) {
