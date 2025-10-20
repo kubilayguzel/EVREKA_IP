@@ -297,8 +297,6 @@ async initIpRecordSearchSelector() {
         this.allIpRecords = arr;
       } catch {}
     }
-  } else {
-    await this.loadBulletinRecordsOnce();
   }
 
   const norm = v => (v == null ? '' : String(v)).toLowerCase();
@@ -1559,11 +1557,6 @@ async handleSpecificTypeChange(e) {
     // Form render edildikten sonra atama dropdown'ını kurala göre doldur.
     await this.updateAssignedToDropdown(taskTypeId);
     // ===================================
-
-    if (this.searchSource === 'bulletin') {
-        await this.loadBulletinRecordsOnce();
-        console.log('📚 Bulletin records loaded:', this.allBulletinRecords?.length || 0);
-    }
 
     await this.initIpRecordSearchSelector();
     
