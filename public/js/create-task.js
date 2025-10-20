@@ -1498,18 +1498,6 @@ async handleSpecificTypeChange(e) {
         searchSource: this.searchSource
     });
 
-    // ✅ YENİ: Yayına itiraz seçildiğinde bulletin kayıtlarını arka planda yükle
-    if (this.searchSource === 'bulletin') {
-        console.log('📚 Yayına itiraz seçildi, bulletin kayıtları yükleniyor...');
-        // Arka planda yükle, bekleme
-        this.loadBulletinRecordsOnce().then(() => {
-            console.log('✅ Bulletin kayıtları yüklendi:', this.allBulletinRecords?.length || 0);
-        }).catch(err => {
-            console.error('❌ Bulletin yükleme hatası:', err);
-        });
-    }
-    // ✅ YENİ SONU
-
     const sig = selectedTaskType ? `${selectedTaskType.id}::${selectedTaskType.alias || selectedTaskType.name || ''}` : '';
     if (this._lastRenderSig === sig && container.childElementCount > 0) return;
 
@@ -2768,52 +2756,35 @@ async resolveImageUrl(img) {
 }
 
 async loadBulletinRecordsOnce() {
-  // ✅ Her zaman yükle - cache kontrolü kaldırıldı
+  if (Array.isArray(this.allBulletinRecords) && this.allBulletinRecords.length) return;
+
   try {
     const db = getFirestore();
     
-    console.log('🔄 Bulletin kayıtları yükleniyor...');
-    
-    // ✅ DOĞRU: trademarkBulletinRecords koleksiyonunu oku
-    const snap = await getDocs(collection(db, 'trademarkBulletinRecords'));
-    
-    if (snap.empty) {
-      console.warn('⚠️ Hiç bulletin kaydı bulunamadı!');
-      this.allBulletinRecords = [];
-      return;
-    }
+    // DÜZELTME: Kullanıcı geri bildirimi üzerine 'trademarkBulletinRecords' koleksiyonu kullanılıyor
+    const snap = await getDocs(collection(db, 'trademarkBulletinRecords')); 
     
     this.allBulletinRecords = snap.docs.map(d => {
       const x = d.data() || {};
       return {
         id: d.id,
-        markName: x.markName || '',
+        // Eşleme: Search Selector'ın beklediği alanlar
+        markName: x.markName || x.title || '',
         applicationNo: x.applicationNo || x.applicationNumber || '',
-        imagePath: x.imagePath || '',
-        holders: Array.isArray(x.holders) ? x.holders : [],
+        imagePath: x.imagePath || x.brandImageUrl || '', 
+        // Sahipler (holders) alanı için güvenli eşleme
+        holders: Array.isArray(x.holders) ? x.holders : (x.ownerName ? [{ name: x.ownerName }] : []),
         bulletinId: x.bulletinId || '',
-        bulletinNo: x.bulletinNo || '',
-        attorneys: Array.isArray(x.attorneys) ? x.attorneys : [],
-        niceClasses: x.niceClasses || x.classNumbers || [],
-        goods: x.goods || []
+        attorneys: x.attorneys || [],
+        niceClasses: x.niceClasses || [],
+        // ...
       };
-    });
-    
-    console.log('✅ [BULLETIN] yüklendi:', this.allBulletinRecords.length, 'kayıt');
-    
-    // Debug: İlk 3 kaydı göster
-    if (this.allBulletinRecords.length > 0) {
-      console.log('📋 İlk 3 bulletin kaydı:', 
-        this.allBulletinRecords.slice(0, 3).map(r => ({
-          markName: r.markName,
-          applicationNo: r.applicationNo,
-          holders: r.holders.map(h => h.name || h)
-        }))
-      );
-    }
-    
+    }).filter(r => !!r.applicationNo); // En azından bir başvuru numarası olanları tutuyoruz
+
+    console.log('[BULLETIN] yüklendi:', this.allBulletinRecords.length);
   } catch (err) {
-    console.error('❌ [BULLETIN] yüklenemedi:', err);
+    console.error('[BULLETIN] yüklenemedi:', err);
+    // 404/izin hatalarında düşerse, en azından portföy aramasına devam edebilmek için temizle
     this.allBulletinRecords = [];
   }
 }
