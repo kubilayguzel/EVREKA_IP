@@ -2,7 +2,7 @@
 // Yayına İtiraz işi oluşturulduğunda otomatik 3.taraf portföy kaydı oluşturma
 
 import { getFirestore, doc, getDoc, addDoc, collection, query, where, getDocs, updateDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
-import { ipRecordsService } from '../firebase-config.js';
+import { ipRecordsService, authService} from '../firebase-config.js';
 
 class PortfolioByOppositionCreator {
     constructor() {
@@ -341,31 +341,27 @@ async handleTransactionCreated(transactionData) {
             if (result.success) {
                 
 // ✅ Otomatik parent transaction: Yayına İtiraz (type: 20)
+// create-portfolio-by-opposition.js içinde, result.success === true sonrasında
 try {
-  const u = (authService && typeof authService.getCurrentUser === 'function') ? authService.getCurrentUser() : null;
-  const newRecordId = result.id;  // ✅ DÜZELTME: Sadece result.id kullan
-  
+  const u = (typeof authService !== 'undefined' && typeof authService.getCurrentUser === 'function')
+    ? authService.getCurrentUser()
+    : null;
+
+  const newRecordId = result.id; // ipRecordsService.createRecordFromOpposition dönüşü
   if (newRecordId) {
-    const transactionResult = await ipRecordsService.addTransactionToRecord(newRecordId, {
+    await ipRecordsService.addTransactionToRecord(newRecordId, {
       type: '20',
+      designation: 'Yayına İtiraz',
       description: 'Yayına İtiraz',
       transactionHierarchy: 'parent',
       timestamp: new Date().toISOString(),
-      userId: (u && u.uid) || 'anonymous',
-      userEmail: (u && u.email) || 'anonymous@example.com',
-      userName: (u && (u.displayName || u.email)) || 'anonymous'
+      userId:  u?.uid   || 'anonymous',
+      userEmail: u?.email || 'anonymous@example.com',
+      userName: u?.displayName || u?.email || 'anonymous'
     });
-    
-    if (transactionResult && transactionResult.success) {
-      console.log('✅ Yayına İtiraz transaction başarıyla eklendi → Portföy ID:', newRecordId);
-    } else {
-      console.error('❌ Transaction eklenemedi:', transactionResult?.error);
-    }
-  } else {
-    console.warn('⚠️ Yeni portföy ID bulunamadı; Yayına İtiraz transaction eklenemedi.');
   }
 } catch (e) {
-  console.error('❌ Yayına İtiraz transaction eklerken hata:', e);
+  console.error('Yayına İtiraz transaction eklenemedi:', e);
 }
 
 console.log('✅ Portföy kaydı işlem sonucu:', {
