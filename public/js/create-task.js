@@ -360,62 +360,83 @@ async initIpRecordSearchSelector() {
     });
   };
 
-const doSearch = this.debounce((raw) => {
+const doSearch = this.debounce(async (raw) => {
     const term = norm(raw).trim();
-    if (!term) { results.style.display = 'none'; results.innerHTML = ''; return; }
+    if (!term || term.length < 2) { 
+        results.style.display = 'none'; 
+        results.innerHTML = ''; 
+        return; 
+    }
 
-    // YENİ (yayına itiraz değilse self sahipli kayıtlarda ara)
-    let pool;
+    // ✅ Bulletin kayıtları için anlık Firestore sorgusu
+    if (this.searchSource === 'bulletin') {
+        try {
+            results.innerHTML = '<div class="p-2 text-muted">Aranıyor...</div>';
+            results.style.display = 'block';
+            
+            const db = getFirestore();
+            const bulletinRef = collection(db, 'trademarkBulletinRecords');
+            
+            // Firestore'da arama yap
+            const q = query(bulletinRef, 
+                where('markName', '>=', term.toUpperCase()),
+                where('markName', '<=', term.toUpperCase() + '\uf8ff'),
+                limit(50)
+            );
+            
+            const snapshot = await getDocs(q);
+            const filtered = snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            }));
+            
+            console.log('🔍 Bulletin arama sonuçları:', filtered.length);
+            renderResults(filtered);
+            
+        } catch (err) {
+            console.error('❌ Bulletin arama hatası:', err);
+            results.innerHTML = '<div class="p-2 text-danger">Arama hatası!</div>';
+        }
+        return;
+    }
+
+    // Portfolio kayıtları için mevcut mantık
     const typeId = document.getElementById('specificTaskType')?.value;
     const isOpposition = this.isPublicationOpposition(typeId);
-
-    if (this.searchSource === 'bulletin') {
-    pool = this.allBulletinRecords || [];
-    } else {
+    
     const basePool = this.allIpRecords || [];
-    pool = isOpposition
+    const pool = isOpposition
         ? basePool
         : basePool.filter(r => String(r.recordOwnerType || '').toLowerCase() === 'self');
-    }
 
     const filtered = pool.filter(r => {
-    // WIPO/ARIPO kayıtları için sadece 'parent' hiyerarşisine sahip olanları göster
-    const isWipoAripo = !!r.wipoIR || !!r.aripoIR;
-    const isParent = r.transactionHierarchy === 'parent';
-    if (isWipoAripo && !isParent) {
-        return false;
-    }
-    
-    // Kaynağa göre aranan alanlar
-    // DÜZELTME: applicationNo ve markName/title alanları arama kapsamına alındı.
-    const hay = (this.searchSource === 'bulletin'
-        ? [
-            r.markName,
-            r.applicationNo, // Başvuru Numarası
-            // Sahipleri de aramaya dahil et
-            ...(Array.isArray(r.holders) ? r.holders.map(h => h.name || h.holderName || h) : [])
-        ]
-        : [
+        // WIPO/ARIPO kayıtları için sadece 'parent' hiyerarşisine sahip olanları göster
+        const isWipoAripo = !!r.wipoIR || !!r.aripoIR;
+        const isParent = r.transactionHierarchy === 'parent';
+        if (isWipoAripo && !isParent) {
+            return false;
+        }
+        
+        const hay = [
             r.title, r.name, r.markName, r.applicationTitle,
             r.ownerName, r.owner, r.applicantName,
             r.applicationNo, r.applicationNumber, r.appNo,
             r.fileNo, r.registrationNo,
             r.wipoIR, r.aripoIR
-        ])
+        ]
         .map(norm).join(' ');
 
-    if (hay.includes(term)) return true;
-    
-    // Şemalar değişkense son güvenlik
-    try { 
-        return Object.values(r).map(norm).join(' ').includes(term); 
-    } catch { 
-        return false; 
-    }
+        if (hay.includes(term)) return true;
+        
+        try { 
+            return Object.values(r).map(norm).join(' ').includes(term); 
+        } catch { 
+            return false; 
+        }
     });
 
     renderResults(filtered);
-  }, 250);
+}, 250);
 
   input.addEventListener('input', (e) => doSearch(e.target.value));
 
@@ -2752,40 +2773,6 @@ async resolveImageUrl(img) {
     return url;
   } catch {
     return '';
-  }
-}
-
-async loadBulletinRecordsOnce() {
-  if (Array.isArray(this.allBulletinRecords) && this.allBulletinRecords.length) return;
-
-  try {
-    const db = getFirestore();
-    
-    // DÜZELTME: Kullanıcı geri bildirimi üzerine 'trademarkBulletinRecords' koleksiyonu kullanılıyor
-    const snap = await getDocs(collection(db, 'trademarkBulletinRecords')); 
-    
-    this.allBulletinRecords = snap.docs.map(d => {
-      const x = d.data() || {};
-      return {
-        id: d.id,
-        // Eşleme: Search Selector'ın beklediği alanlar
-        markName: x.markName || x.title || '',
-        applicationNo: x.applicationNo || x.applicationNumber || '',
-        imagePath: x.imagePath || x.brandImageUrl || '', 
-        // Sahipler (holders) alanı için güvenli eşleme
-        holders: Array.isArray(x.holders) ? x.holders : (x.ownerName ? [{ name: x.ownerName }] : []),
-        bulletinId: x.bulletinId || '',
-        attorneys: x.attorneys || [],
-        niceClasses: x.niceClasses || [],
-        // ...
-      };
-    }).filter(r => !!r.applicationNo); // En azından bir başvuru numarası olanları tutuyoruz
-
-    console.log('[BULLETIN] yüklendi:', this.allBulletinRecords.length);
-  } catch (err) {
-    console.error('[BULLETIN] yüklenemedi:', err);
-    // 404/izin hatalarında düşerse, en azından portföy aramasına devam edebilmek için temizle
-    this.allBulletinRecords = [];
   }
 }
 
