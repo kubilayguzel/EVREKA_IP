@@ -2760,29 +2760,33 @@ async loadBulletinRecordsOnce() {
   try {
     const db = getFirestore();
     
-    // ✅ DOĞRU: trademarkBulletinRecords koleksiyonunu oku
-    const snap = await getDocs(collection(db, 'trademarkBulletinRecords'));
+    // KULLANICININ TALEBİ: 'trademarkBulletinRecords' koleksiyonundan oku
+    const snap = await getDocs(collection(db, 'trademarkBulletinRecords')); 
     
     this.allBulletinRecords = snap.docs.map(d => {
       const x = d.data() || {};
       return {
         id: d.id,
-        markName: x.markName || '',
+        // Marka bilgileri için geniş eşleme yapıldı (Search Selector'ın beklediği alanlar)
+        markName: x.markName || x.title || '',
         applicationNo: x.applicationNo || x.applicationNumber || '',
-        imagePath: x.imagePath || '',
-        holders: x.holders || [],
+        imagePath: x.imagePath || x.brandImageUrl || '', // Görsel yolu
+        // Sahipler (holders) alanı, arama gösteriminde kullanıldığı için güçlendirildi
+        holders: Array.isArray(x.holders) ? x.holders : (x.ownerName ? [{ name: x.ownerName }] : []),
         bulletinId: x.bulletinId || '',
         attorneys: x.attorneys || [],
-        // ihtiyacın olan başka alanlar da buraya eklenebilir
+        niceClasses: x.niceClasses || [],
+        // ...
       };
-    });
-    
+    }).filter(r => !!r.bulletinId); // Yalnızca bülten ID'si olan kayıtları arama havuzunda tut
+
     console.log('[BULLETIN] yüklendi:', this.allBulletinRecords.length);
   } catch (err) {
     console.error('[BULLETIN] yüklenemedi:', err);
     this.allBulletinRecords = [];
   }
 }
+
 isApplicationProcess(transactionTypeId) {
     const applicationTypes = [
         'patent_application',
