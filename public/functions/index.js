@@ -1046,226 +1046,211 @@ export const createMailNotificationOnDocumentIndexV2 = onDocumentCreated(
 );
 
 export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
-    {
-        document: "unindexed_pdfs/{docId}",
-        region: 'europe-west1'
-    },
-    async (event) => {
-        const change = event.data;
-        if (!change || !change.before || !change.after) {
-          console.error("Unexpected Firestore event shape for onDocumentUpdated.", {
-            hasChange: !!change,
-            hasBefore: !!change?.before,
-            hasAfter: !!change?.after,
-          });
-          return null;
-        }
-        const before = change.before.data() || {};
-        const after  = change.after.data()  || {};
-        const docId = event.params.docId;
+  {
+    document: "unindexed_pdfs/{docId}",
+    region: "europe-west1",
+  },
+  async (event) => {
+    const change = event.data;
+    if (!change || !change.before || !change.after) return null;
 
-        if (before.status !== 'indexed' && after.status === 'indexed') {
-            console.log(`Belge indexlendi: ${docId}`, after);
+    const before = change.before.data() || {};
+    const after  = change.after.data()  || {};
+    const docId  = event.params.docId;
 
-            let rule = null;
-            let template = null;
-            let client = null;
-            let status = "pending"; // Varsayılan durum
-            let subject = "";
-            let body = "";
-            let ipRecordData = null;
-            let applicants = [];
-            var foundTransactionType = null;
-            
-            const associatedTransactionId = after.associatedTransactionId;
-            if (associatedTransactionId) {
-                try {
-                    const ipRecordsSnapshot = await adminDb.collection("ipRecords").get();            
-                    for (const ipDoc of ipRecordsSnapshot.docs) {
-                        const transactionRef = db.collection("ipRecords").doc(ipDoc.id).collection("transactions").doc(associatedTransactionId);
-                        const transactionDoc = await transactionRef.get();
-                        if (transactionDoc.exists) {
-                            ipRecordData = ipDoc.data();
-                            applicants = ipRecordData.applicants || [];
-                            foundTransactionType = transactionDoc.data()?.type;
-                            console.log(`✅ Transaction found in ipRecord: ${ipDoc.id}`);
-                            break;
-                        }
-                    }
-                    
-                    if (ipRecordData) {
-                        applicants = ipRecordData.applicants || [];
-                        if (applicants.length > 0) {
-                            const primaryApplicantId = applicants[0].id;
-                            const clientSnapshot = await adminDb.collection("persons").doc(primaryApplicantId).get();
-                            if (clientSnapshot.exists) {
-                                client = clientSnapshot.data();
-                            }
-                        }
-                    }
-                } catch (error) {
-                    console.error("Transaction sorgusu sırasında hata:", error);
-                }
-            }
-            // 1) Önce taskOwner üzerinden alıcıları dene
-            let toRecipients = [];
-            let ccRecipients = new Set();
-
-            async function findRecipientsFromPersonsRelated(personIds, categoryKey) {
-              const to = [];
-              const cc = [];
-              if (!Array.isArray(personIds) || personIds.length === 0) return { to, cc };
-
-              // Firestore IN limiti: 10 -> parçalara böl
-              for (let i = 0; i < personIds.length; i += 10) {
-                const batch = personIds.slice(i, i + 10);
-                const prs = await adminDb.collection("personsRelated")
-                  .where("personId", "in", batch)
-                  .where("type", "==", categoryKey) // ← parametreyi kullan
-                  .get();
-
-                prs.forEach(doc => {
-                  const r = doc.data() || {};
-                  const email = String(r.email || "").trim();
-                  if (!email) return;
-                  if (r.cc === true) cc.push(email);
-                  else to.push(email);
-                });
-              }
-              return { to, cc };
-            }
-
-            // taskOwnerIds'i oku (tasks/{associatedTaskId} içinden)
-            let taskOwnerIds = [];
-            if (after.associatedTaskId) {
-              try {
-                const t = await adminDb.collection("tasks").doc(after.associatedTaskId).get();
-                const tData = t.exists ? t.data() : null;
-                taskOwnerIds =
-                  (Array.isArray(tData?.taskOwner)    && tData.taskOwner) ||
-                  (Array.isArray(tData?.taskOwnerIds) && tData.taskOwnerIds) ||
-                  [];
-              } catch (e) {
-                console.warn("taskOwner okunamadı:", e);
-              }
-            }
-
-            const notificationType = after.mainProcessType || "marka";
-
-            // 1) Task owner → personsRelated
-            if (taskOwnerIds.length > 0) {
-              const fromOwners = await findRecipientsFromPersonsRelated(taskOwnerIds, notificationType);
-              toRecipients.push(...fromOwners.to);
-              fromOwners.cc.forEach(e => ccRecipients.add(e));
-            }
-
-            // 2) Eğer taskOwner’dan alıcı çıkmadıysa → applicants fallback
-            if ((toRecipients.length + ccRecipients.size) === 0) {
-              const rec = await getRecipientsByApplicantIds(applicants, notificationType);
-              (rec.to || []).forEach(e => toRecipients.push(e));
-              (rec.cc || []).forEach(e => ccRecipients.add(e));
-            }
-
-            // (opsiyonel) Kurumsal ek CC: foundTransactionType varsa
-            if (foundTransactionType) {
-              const extraCc = await getCcFromEvrekaListByTransactionType(foundTransactionType);
-              for (const e of extraCc) ccRecipients.add(e);
-            }
-
-            // (opsiyonel) tekilleştir & CC’den TO’ları düş
-            toRecipients = Array.from(new Set(toRecipients.map(s => s.trim()).filter(Boolean)));
-            const finalCc = Array.from(ccRecipients).filter(e => !toRecipients.includes(e));
-
-
-            if (foundTransactionType) {
-              const extraCc = await getCcFromEvrekaListByTransactionType(foundTransactionType);
-              for (const e of extraCc) { ccRecipients.add(e); }
-            }
-
-            if (toRecipients.length === 0 && Array.from(ccRecipients).length === 0) {
-                status = "missing_info";
-            }
-
-            if (!client && after.clientId) {
-                const clientSnapshot = await adminDb.collection("persons").doc(after.clientId).get();
-                if (clientSnapshot.exists) {
-                    client = clientSnapshot.data();
-                }
-            }
-
-            const rulesSnapshot = await adminDb.collection("template_rules")
-                .where("sourceType", "==", "document")
-                .where("mainProcessType", "==", after.mainProcessType)
-                .where("subProcessType", "==", after.subProcessType)
-                .limit(1)
-                .get();
-
-            if (!rulesSnapshot.empty) {
-                rule = rulesSnapshot.docs[0].data();
-                const templateSnapshot = await adminDb.collection("mail_templates").doc(rule.templateId).get();
-                if (templateSnapshot.exists) {
-                    template = templateSnapshot.data();
-                }
-            }
-
-            if (template && client) {
-                subject = template.subject;
-                body = template.body;
-                const parameters = { ...client, ...after };
-                for (const key in parameters) {
-                    const placeholder = new RegExp(`{{${key}}}`, "g");
-                    subject = subject.replace(placeholder, parameters[key]);
-                    body = body.replace(placeholder, parameters[key]);
-                }
-            } else {
-                subject = "Eksik Bilgi: Bildirim Tamamlanamadı";
-                body = "Bu bildirim oluşturuldu ancak gönderim için eksik bilgiler mevcut.";
-                status = "missing_info";
-            }
-
-            const missingFields = [];
-            if (!client) missingFields.push('client');
-            if (!template) missingFields.push('template');
-            if (toRecipients.length === 0 && Array.from(ccRecipients).length === 0) missingFields.push('recipients');
-
-            // === YENİ DURUM VE ATAMA MANTIĞI ===
-            let finalStatus;
-            if (missingFields.length > 0) {
-                finalStatus = "missing_info";
-            } else {
-                finalStatus = "awaiting_client_approval"; // "pending" yerine bu durum kullanılır
-            }
-
-            const notificationData = {
-                recipientTo: toRecipients,
-                recipientCc: Array.from(ccRecipients),
-                clientId: after.clientId || (applicants.length > 0 ? applicants[0].id : null),
-                subject: subject,
-                body: body,
-                status: finalStatus, // GÜNCELLENDİ
-                missingFields: missingFields,
-                sourceDocumentId: docId,
-                notificationType: notificationType,
-                
-                // --- OTOMATİK ATAMA EKLENDİ ---
-                assignedTo_uid: selcanUserId,
-                assignedTo_email: selcanUserEmail,
-                // ----------------------------------
-
-                createdAt: admin.firestore.FieldValue.serverTimestamp(),
-                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-            };
-
-            await adminDb.collection("mail_notifications").add(notificationData);
-
-            return null;
-
-        } else {
-            console.log("Status değişimi indekslenme değil, işlem atlandı.");
-            return null;
-        }
+    // Sadece indexed geçişinde çalış
+    if (!(before.status !== "indexed" && after.status === "indexed")) {
+      console.log("Status değişimi indekslenme değil, işlem atlandı.");
+      return null;
     }
+
+    console.log(`Belge indexlendi: ${docId}`, after);
+
+    let rule = null;
+    let template = null;
+    let client = null;
+    let status = "pending";
+    let subject = "";
+    let body = "";
+    let ipRecordData = null;
+    let applicants = [];
+    let foundTransactionType = null;
+
+    // İlgili transaction'dan başvuru/müvekkil bağlamını çöz
+    const associatedTransactionId = after.associatedTransactionId;
+    if (associatedTransactionId) {
+      try {
+        const ipRecordsSnapshot = await adminDb.collection("ipRecords").get();
+        for (const ipDoc of ipRecordsSnapshot.docs) {
+          const transactionRef = db
+            .collection("ipRecords")
+            .doc(ipDoc.id)
+            .collection("transactions")
+            .doc(associatedTransactionId);
+
+          const transactionDoc = await transactionRef.get();
+          if (transactionDoc.exists) {
+            ipRecordData = ipDoc.data();
+            applicants = ipRecordData.applicants || [];
+            foundTransactionType = transactionDoc.data()?.type ?? null;
+            console.log(`✅ Transaction found in ipRecord: ${ipDoc.id}`);
+            break;
+          }
+        }
+
+        if (ipRecordData) {
+          applicants = ipRecordData.applicants || [];
+          if (applicants.length > 0) {
+            const primaryApplicantId = applicants[0].id;
+            const clientSnapshot = await adminDb.collection("persons").doc(primaryApplicantId).get();
+            if (clientSnapshot.exists) client = clientSnapshot.data();
+          }
+        }
+      } catch (error) {
+        console.error("Transaction sorgusu sırasında hata:", error);
+      }
+    }
+
+    // ===== Alıcı belirleme: önce taskOwner, yoksa applicants =====
+    const notificationType = after.mainProcessType || "marka";
+
+    let toRecipients = [];
+    let ccRecipientsSet = new Set();
+
+    async function findRecipientsFromPersonsRelated(personIds, categoryKey) {
+      const to = [];
+      const cc = [];
+      if (!Array.isArray(personIds) || personIds.length === 0) return { to, cc };
+
+      // Firestore 'in' limiti (10) → parçalara böl
+      for (let i = 0; i < personIds.length; i += 10) {
+        const batch = personIds.slice(i, i + 10);
+        const prs = await adminDb
+          .collection("personsRelated")
+          .where("personId", "in", batch)
+          .where("type", "==", categoryKey)
+          .get();
+
+        prs.forEach((doc) => {
+          const r = doc.data() || {};
+          const email = String(r.email || "").trim();
+          if (!email) return;
+          if (r.cc === true) cc.push(email);
+          else to.push(email);
+        });
+      }
+      return { to, cc };
+    }
+
+    // taskOwnerIds'i oku
+    let taskOwnerIds = [];
+    if (after.associatedTaskId) {
+      try {
+        const t = await adminDb.collection("tasks").doc(after.associatedTaskId).get();
+        const tData = t.exists ? (t.data() || {}) : {};
+        taskOwnerIds =
+          (Array.isArray(tData?.taskOwner)    && tData.taskOwner) ||
+          (Array.isArray(tData?.taskOwnerIds) && tData.taskOwnerIds) ||
+          (tData?.taskOwnerId ? [tData.taskOwnerId] : []) ||
+          [];
+      } catch (e) {
+        console.warn("taskOwner okunamadı:", e);
+      }
+    }
+
+    // 1) taskOwner → personsRelated
+    if (taskOwnerIds.length > 0) {
+      const fromOwners = await findRecipientsFromPersonsRelated(taskOwnerIds, notificationType);
+      toRecipients.push(...fromOwners.to);
+      fromOwners.cc.forEach((e) => ccRecipientsSet.add(e));
+    }
+
+    // 2) fallback: applicants
+    if ((toRecipients.length + ccRecipientsSet.size) === 0) {
+      const rec = await getRecipientsByApplicantIds(applicants, notificationType);
+      (rec.to || []).forEach((e) => toRecipients.push(e));
+      (rec.cc || []).forEach((e) => ccRecipientsSet.add(e));
+    }
+
+    // 3) Kurumsal ek CC (transaction tipine göre) — sadece bir kez
+    if (foundTransactionType) {
+      const extraCc = await getCcFromEvrekaListByTransactionType(foundTransactionType);
+      for (const e of (extraCc || [])) ccRecipientsSet.add(e);
+    }
+
+    // 4) Tekilleştir & CC = CC − TO
+    toRecipients = Array.from(new Set(toRecipients.map((s) => s.trim()).filter(Boolean)));
+    const ccRecipients = Array.from(ccRecipientsSet).filter((e) => !toRecipients.includes(e));
+
+    // Eksik alan/kural kontrolü
+    if (toRecipients.length === 0 && ccRecipients.length === 0) status = "missing_info";
+
+    if (!client && after.clientId) {
+      const clientSnapshot = await adminDb.collection("persons").doc(after.clientId).get();
+      if (clientSnapshot.exists) client = clientSnapshot.data();
+    }
+
+    // Şablon kuralı
+    const rulesSnapshot = await adminDb
+      .collection("template_rules")
+      .where("sourceType", "==", "document")
+      .where("mainProcessType", "==", after.mainProcessType)
+      .where("subProcessType", "==", after.subProcessType)
+      .limit(1)
+      .get();
+
+    if (!rulesSnapshot.empty) {
+      rule = rulesSnapshot.docs[0].data();
+      const templateSnapshot = await adminDb.collection("mail_templates").doc(rule.templateId).get();
+      if (templateSnapshot.exists) template = templateSnapshot.data();
+    }
+
+    if (template && client) {
+      subject = String(template.subject || "");
+      body    = String(template.body || "");
+      const parameters = { ...client, ...after };
+      for (const key in parameters) {
+        const re = new RegExp(`{{${key}}}`, "g");
+        subject = subject.replace(re, parameters[key]);
+        body    = body.replace(re, parameters[key]);
+      }
+    } else {
+      subject = "Eksik Bilgi: Bildirim Tamamlanamadı";
+      body    = "Bu bildirim oluşturuldu ancak gönderim için eksik bilgiler mevcut.";
+      status  = "missing_info";
+    }
+
+    const missingFields = [];
+    if (!client) missingFields.push("client");
+    if (!template) missingFields.push("template");
+    if (toRecipients.length === 0 && ccRecipients.length === 0) missingFields.push("recipients");
+
+    const finalStatus = missingFields.length > 0 ? "missing_info" : "awaiting_client_approval";
+
+    const notificationData = {
+      recipientTo: toRecipients,
+      recipientCc: ccRecipients,
+      clientId: after.clientId || (applicants[0]?.id ?? null),
+      subject,
+      body,
+      status: finalStatus,
+      missingFields,
+      sourceDocumentId: docId,
+      notificationType,
+
+      // — Atama (V1 mantığı) —
+      assignedTo_uid: selcanUserId,
+      assignedTo_email: selcanUserEmail,
+
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
+
+    await adminDb.collection("mail_notifications").add(notificationData);
+    return null;
+  }
 );
+
 
 export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
   {
