@@ -1183,8 +1183,8 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
                 notificationType: notificationType,
                 
                 // --- OTOMATİK ATAMA EKLENDİ ---
-                assignedTo_uid: DEFAULT_ASSIGNEE_UID,
-                assignedTo_email: DEFAULT_ASSIGNEE_EMAIL,
+                assignedTo_uid: selcanUserId,
+                assignedTo_email: selcanUserEmail,
                 // ----------------------------------
 
                 createdAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -1348,8 +1348,8 @@ export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
       isDraft: true,
 
       // --- OTOMATİK ATAMA EKLENDİ ---
-      assignedTo_uid: DEFAULT_ASSIGNEE_UID,
-      assignedTo_email: DEFAULT_ASSIGNEE_EMAIL,
+      assignedTo_uid: selcanUserId,
+      assignedTo_email: selcanUserEmail,
       // ----------------------------------
 
       relatedIpRecordId: after.relatedIpRecordId || null,
@@ -1364,7 +1364,7 @@ export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
     };
 
     await adminDb.collection("mail_notifications").add(notificationDoc);
-    console.log(`Bildirim '${finalStatus}' olarak oluşturuldu ve ${DEFAULT_ASSIGNEE_EMAIL} kullanıcısına atandı.`);
+    console.log(`Bildirim '${finalStatus}' olarak oluşturuldu ve ${selcanUserEmail} kullanıcısına atandı.`);
 
     return null;
   }
