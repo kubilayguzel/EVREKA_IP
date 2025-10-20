@@ -340,12 +340,13 @@ async handleTransactionCreated(transactionData) {
             
             if (result.success) {
                 
-// ✅ Otomatik parent transaction: Başvuru (type: 2)
+// ✅ Otomatik parent transaction: Yayına İtiraz (type: 20)
 try {
   const u = (authService && typeof authService.getCurrentUser === 'function') ? authService.getCurrentUser() : null;
-  const newRecordId = result.recordId || result.id;
+  const newRecordId = result.id;  // ✅ DÜZELTME: Sadece result.id kullan
+  
   if (newRecordId) {
-    await ipRecordsService.addTransactionToRecord(newRecordId, {
+    const transactionResult = await ipRecordsService.addTransactionToRecord(newRecordId, {
       type: '20',
       description: 'Yayına İtiraz',
       transactionHierarchy: 'parent',
@@ -354,13 +355,19 @@ try {
       userEmail: (u && u.email) || 'anonymous@example.com',
       userName: (u && (u.displayName || u.email)) || 'anonymous'
     });
-    console.log('🧾 Parent transaction (type=2, Başvuru) eklendi →', newRecordId);
+    
+    if (transactionResult && transactionResult.success) {
+      console.log('✅ Yayına İtiraz transaction başarıyla eklendi → Portföy ID:', newRecordId);
+    } else {
+      console.error('❌ Transaction eklenemedi:', transactionResult?.error);
+    }
   } else {
-    console.warn('Yeni portföy ID bulunamadı; Başvuru transaction eklenemedi.');
+    console.warn('⚠️ Yeni portföy ID bulunamadı; Yayına İtiraz transaction eklenemedi.');
   }
 } catch (e) {
-  console.error('Başvuru transaction eklerken hata:', e);
+  console.error('❌ Yayına İtiraz transaction eklerken hata:', e);
 }
+
 console.log('✅ Portföy kaydı işlem sonucu:', {
                     id: result.id,
                     isExistingRecord: result.isExistingRecord || false,
@@ -370,6 +377,7 @@ console.log('✅ Portföy kaydı işlem sonucu:', {
                 return {
                     success: true,
                     recordId: result.id,
+                    id: result.id,  // ✅ Hem recordId hem id döndür
                     isExistingRecord: result.isExistingRecord || false,
                     message: result.message || 'Kayıt oluşturuldu',
                     data: portfolioData
