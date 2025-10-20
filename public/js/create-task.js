@@ -364,7 +364,7 @@ const doSearch = this.debounce(async (raw) => {
         return; 
     }
 
-    // ✅ Bulletin kayıtları için anlık Firestore sorgusu
+// ✅ Bulletin kayıtları için anlık Firestore sorgusu
     if (this.searchSource === 'bulletin') {
         try {
             results.innerHTML = '<div class="p-2 text-muted">Aranıyor...</div>';
@@ -373,18 +373,49 @@ const doSearch = this.debounce(async (raw) => {
             const db = getFirestore();
             const bulletinRef = collection(db, 'trademarkBulletinRecords');
             
-            // Firestore'da arama yap
-            const q = query(bulletinRef, 
-                where('markName', '>=', term.toUpperCase()),
-                where('markName', '<=', term.toUpperCase() + '\uf8ff'),
-                limit(50)
-            );
+            // 4 farklı sorgu: markName (küçük/büyük) + applicationNo (küçük/büyük)
+            const searchLower = term.toLowerCase();
+            const searchUpper = term.toUpperCase();
             
-            const snapshot = await getDocs(q);
-            const filtered = snapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            }));
+            const queries = [
+                // markName - küçük harf
+                query(bulletinRef, 
+                    where('markName', '>=', searchLower),
+                    where('markName', '<=', searchLower + '\uf8ff'),
+                    limit(50)
+                ),
+                // markName - büyük harf
+                query(bulletinRef, 
+                    where('markName', '>=', searchUpper),
+                    where('markName', '<=', searchUpper + '\uf8ff'),
+                    limit(50)
+                ),
+                // applicationNo - küçük harf
+                query(bulletinRef, 
+                    where('applicationNo', '>=', searchLower),
+                    where('applicationNo', '<=', searchLower + '\uf8ff'),
+                    limit(50)
+                ),
+                // applicationNo - büyük harf
+                query(bulletinRef, 
+                    where('applicationNo', '>=', searchUpper),
+                    where('applicationNo', '<=', searchUpper + '\uf8ff'),
+                    limit(50)
+                )
+            ];
+            
+            // Tüm sorguları paralel çalıştır
+            const snapshots = await Promise.all(queries.map(q => getDocs(q)));
+            
+            // Sonuçları birleştir (ID'ye göre tekil)
+            const resultsMap = new Map();
+            snapshots.forEach(snapshot => {
+                snapshot.docs.forEach(doc => {
+                    resultsMap.set(doc.id, { id: doc.id, ...doc.data() });
+                });
+            });
+            
+            const filtered = Array.from(resultsMap.values());
             
             console.log('🔍 Bulletin arama sonuçları:', filtered.length);
             renderResults(filtered);
