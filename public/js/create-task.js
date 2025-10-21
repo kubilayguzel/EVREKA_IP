@@ -3489,7 +3489,8 @@ const officialFee = parseFloat(document.getElementById('officialFee')?.value) ||
                 const transactionData = {
                     type: selectedTransactionType.id,
                     description: `${selectedTransactionType.name} işlemi.`,
-                    transactionHierarchy: "parent"
+                    transactionHierarchy: "parent",
+                    triggeringTaskId: String(taskResult.id)
                 };
 
                 const addResult = await ipRecordsService.addTransactionToRecord(__currentRecord?.id, transactionData);
@@ -3623,7 +3624,8 @@ const officialFee = parseFloat(document.getElementById('officialFee')?.value) ||
             const transactionData = {
                 type: selectedTransactionType.id,
                 description: `${selectedTransactionType.name} işlemi.`,
-                transactionHierarchy: "parent"
+                transactionHierarchy: "parent",
+                triggeringTaskId: String(taskResult.id)
             };
 
         const addResult = await ipRecordsService.addTransactionToRecord(this.selectedIpRecord?.id, transactionData);
