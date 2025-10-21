@@ -355,6 +355,7 @@ try {
       description: 'Yayına İtiraz',
       transactionHierarchy: 'parent',
       timestamp: new Date().toISOString(),
+      triggeringTaskId: String(transactionId),
       userId:  u?.uid   || 'anonymous',
       userEmail: u?.email || 'anonymous@example.com',
       userName: u?.displayName || u?.email || 'anonymous'
