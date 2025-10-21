@@ -977,17 +977,45 @@ async function renderCurrentPage() {
       ? notification.subject
       : '<span class="missing-field">Konu Eksik</span>';
 
-    const [
-  applicantName,
+const [
+  recipientDisplay,
   applicationNoText,
   typeText,
   docInfo,
   deliveryDateText
 ] = await Promise.all([
   (async () => {
+    // ✅ ÖNCE recipientTo'dan alıcıları göster (taskOwner veya applicant olabilir)
+    const { toList } = getToCcFromNotification(notification);
+    if (toList && toList.length > 0) {
+      // Email adreslerinden isimleri çöz
+      const names = [];
+      for (const email of toList.slice(0, 2)) { // İlk 2 alıcı
+        try {
+          const personsSnap = await getDocs(query(
+            collection(db, 'persons'),
+            where('email', '==', email),
+            limit(1)
+          ));
+          if (!personsSnap.empty) {
+            const personData = personsSnap.docs[0].data();
+            names.push(personData.name || personData.companyName || email);
+          } else {
+            names.push(email);
+          }
+        } catch {
+          names.push(email);
+        }
+      }
+      const displayText = names.join(', ');
+      return toList.length > 2 ? `${displayText} (+${toList.length - 2})` : displayText;
+    }
+    
+    // Fallback: applicantName (eski davranış)
     if (notification.applicantName) return notification.applicantName;
     try { return await resolveApplicantName(notification); } catch { return '-'; }
   })(),
+  
   (async () => {
     if (notification.applicationNo) return notification.applicationNo;
     try { return await resolveApplicationNo(notification); } catch { return '-'; }
