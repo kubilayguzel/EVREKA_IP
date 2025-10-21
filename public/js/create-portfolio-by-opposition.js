@@ -58,7 +58,7 @@ async createThirdPartyPortfolioFromBulletin(bulletinRecordId, transactionId) {
 
     // 3) Portföy kaydını oluştur / duplikasyonda mevcut kaydı döndür
     //    (ipRecordsService tarafı { success, recordId, isExistingRecord } döndürmeli)
-    const result = await this.createPortfolioRecord(portfolioData);
+    const result = await this.createPortfolioRecord(portfolioData, transactionId);
     if (!result.success) {
       return { success: false, error: result.error };
     }
@@ -348,19 +348,19 @@ try {
     : null;
 
   const newRecordId = result.id; // ipRecordsService.createRecordFromOpposition dönüşü
-  if (newRecordId) {
-    await ipRecordsService.addTransactionToRecord(newRecordId, {
-      type: '20',
-      designation: 'Yayına İtiraz',
-      description: 'Yayına İtiraz',
-      transactionHierarchy: 'parent',
-      timestamp: new Date().toISOString(),
-      triggeringTaskId: String(transactionId),
-      userId:  u?.uid   || 'anonymous',
-      userEmail: u?.email || 'anonymous@example.com',
-      userName: u?.displayName || u?.email || 'anonymous'
-    });
-  }
+    if (newRecordId) {
+      await ipRecordsService.addTransactionToRecord(newRecordId, {
+        type: '20',
+        designation: 'Yayına İtiraz',
+        description: 'Yayına İtiraz',
+        transactionHierarchy: 'parent',
+        ...(transactionId ? { triggeringTaskId: String(transactionId) } : {}), // <<< EKLENDİ
+        timestamp: new Date().toISOString(),
+        userId:  u?.uid   || 'anonymous',
+        userEmail: u?.email || 'anonymous@example.com',
+        userName: u?.displayName || u?.email || 'anonymous'
+      });
+    }
 } catch (e) {
   console.error('Yayına İtiraz transaction eklenemedi:', e);
 }
