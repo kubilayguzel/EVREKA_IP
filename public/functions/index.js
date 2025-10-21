@@ -1076,40 +1076,83 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
     let applicants = [];
     let foundTransactionType = null;
 
-    // <<< YENİ: transaction'dan gelebilecek tetikleyen task id
+    // <<< eklendi
     let triggeringTaskIdFromTxn = null;
 
-    // İlgili transaction'dan başvuru/müvekkil bağlamını çöz
+    // İlgili transaction'ı çöz
     const associatedTransactionId = after.associatedTransactionId;
     if (associatedTransactionId) {
       try {
+        // Tüm ipRecords içinde bu transaction'ı ara (elde recordId yoksa en güvenlisi bu)
         const ipRecordsSnapshot = await adminDb.collection("ipRecords").get();
         for (const ipDoc of ipRecordsSnapshot.docs) {
-          const transactionRef = adminDb
+          const txnRef = adminDb
             .collection("ipRecords")
             .doc(ipDoc.id)
             .collection("transactions")
             .doc(associatedTransactionId);
 
-          const transactionDoc = await transactionRef.get();
-          if (transactionDoc.exists) {
-            const txnData = transactionDoc.data() || {};
-            ipRecordData = ipDoc.data();
-            applicants = ipRecordData.applicants || [];
-            foundTransactionType = txnData.type ?? null;
+          const txnSnap = await txnRef.get();
+          if (!txnSnap.exists) continue;
 
-            // <<< YENİ: triggeringTaskId'i al
-            triggeringTaskIdFromTxn = txnData.triggeringTaskId
-              ? String(txnData.triggeringTaskId)
-              : null;
+          const txnData = txnSnap.data() || {};
+          ipRecordData = ipDoc.data();
+          applicants = ipRecordData.applicants || [];
+          foundTransactionType = txnData.type ?? null;
 
-            console.log(
-              `✅ Transaction found in ipRecord: ${ipDoc.id}; triggeringTaskIdFromTxn=${triggeringTaskIdFromTxn}`
-            );
-            break;
+          // 1) önce bu belgeden dene
+          let tTaskId = txnData.triggeringTaskId || null;
+
+          // 2) yoksa ve belge child ise parent'a git
+          if (!tTaskId && (txnData.transactionHierarchy === "child" || txnData.parentId)) {
+            try {
+              const parentId = txnData.parentId;
+              if (parentId) {
+                const parentRef = adminDb
+                  .collection("ipRecords").doc(ipDoc.id)
+                  .collection("transactions").doc(parentId);
+                const parentSnap = await parentRef.get();
+                if (parentSnap.exists) {
+                  const parentData = parentSnap.data() || {};
+                  tTaskId = parentData.triggeringTaskId || null;
+                  if (!foundTransactionType && parentData.type) {
+                    foundTransactionType = parentData.type;
+                  }
+                }
+              }
+            } catch (e) {
+              console.warn("Parent transaction okunamadı:", e);
+            }
           }
+
+          // 3) yine yoksa son çare: aynı ipRecord'daki ilk 'parent'larda ara
+          if (!tTaskId) {
+            try {
+              const parents = await adminDb
+                .collection("ipRecords").doc(ipDoc.id)
+                .collection("transactions")
+                .where("transactionHierarchy", "==", "parent")
+                .limit(3)
+                .get();
+              for (const p of parents.docs) {
+                const pd = p.data() || {};
+                if (pd.triggeringTaskId) {
+                  tTaskId = pd.triggeringTaskId;
+                  if (!foundTransactionType && pd.type) foundTransactionType = pd.type;
+                  break;
+                }
+              }
+            } catch (e) {
+              console.warn("Parent fallback sorgusu hatası:", e);
+            }
+          }
+
+          triggeringTaskIdFromTxn = tTaskId ? String(tTaskId) : null;
+          console.log(`✅ Transaction found in ipRecord: ${ipDoc.id}; triggeringTaskIdFromTxn=${triggeringTaskIdFromTxn}`);
+          break;
         }
 
+        // Müşteriyi (applicant) hazırla
         if (ipRecordData) {
           applicants = ipRecordData.applicants || [];
           if (applicants.length > 0) {
@@ -1130,11 +1173,9 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
     let ccRecipientsSet = new Set();
 
     async function findRecipientsFromPersonsRelated(personIds, categoryKey) {
-      const to = [];
-      const cc = [];
+      const to = [], cc = [];
       if (!Array.isArray(personIds) || personIds.length === 0) return { to, cc };
 
-      // Firestore 'in' limiti (10) → parçalara böl
       for (let i = 0; i < personIds.length; i += 10) {
         const batch = personIds.slice(i, i + 10);
         const prs = await adminDb
@@ -1154,10 +1195,9 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
       return { to, cc };
     }
 
-    // <<< GÜNCEL: taskOwnerIds'i oku (önce associatedTaskId, yoksa transaction.triggeringTaskId)
+    // taskOwnerIds: associatedTaskId varsa onu, yoksa parent'tan bulduğumuz ID'yi kullan
     let taskOwnerIds = [];
     const taskIdToResolve = after.associatedTaskId || triggeringTaskIdFromTxn || null;
-
     if (taskIdToResolve) {
       try {
         const t = await adminDb.collection("tasks").doc(String(taskIdToResolve)).get();
@@ -1187,7 +1227,7 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
       (rec.cc || []).forEach((e) => ccRecipientsSet.add(e));
     }
 
-    // 3) Kurumsal ek CC (transaction tipine göre) — sadece bir kez
+    // 3) Kurumsal ek CC (transaction tipine göre)
     if (foundTransactionType) {
       const extraCc = await getCcFromEvrekaListByTransactionType(foundTransactionType);
       for (const e of (extraCc || [])) ccRecipientsSet.add(e);
@@ -1197,7 +1237,6 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
     toRecipients = Array.from(new Set(toRecipients.map((s) => s.trim()).filter(Boolean)));
     const ccRecipients = Array.from(ccRecipientsSet).filter((e) => !toRecipients.includes(e));
 
-    // Eksik alan/kural kontrolü
     if (toRecipients.length === 0 && ccRecipients.length === 0) status = "missing_info";
 
     if (!client && after.clientId) {
@@ -1252,11 +1291,8 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
       missingFields,
       sourceDocumentId: docId,
       notificationType,
-
-      // — Atama (V1 mantığı) —
       assignedTo_uid: selcanUserId,
       assignedTo_email: selcanUserEmail,
-
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     };
@@ -1265,6 +1301,7 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
     return null;
   }
 );
+
 
 export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
   {
