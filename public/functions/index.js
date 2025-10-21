@@ -1076,13 +1076,16 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
     let applicants = [];
     let foundTransactionType = null;
 
+    // <<< YENİ: transaction'dan gelebilecek tetikleyen task id
+    let triggeringTaskIdFromTxn = null;
+
     // İlgili transaction'dan başvuru/müvekkil bağlamını çöz
     const associatedTransactionId = after.associatedTransactionId;
     if (associatedTransactionId) {
       try {
         const ipRecordsSnapshot = await adminDb.collection("ipRecords").get();
         for (const ipDoc of ipRecordsSnapshot.docs) {
-          const transactionRef = db
+          const transactionRef = adminDb
             .collection("ipRecords")
             .doc(ipDoc.id)
             .collection("transactions")
@@ -1090,10 +1093,19 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
 
           const transactionDoc = await transactionRef.get();
           if (transactionDoc.exists) {
+            const txnData = transactionDoc.data() || {};
             ipRecordData = ipDoc.data();
             applicants = ipRecordData.applicants || [];
-            foundTransactionType = transactionDoc.data()?.type ?? null;
-            console.log(`✅ Transaction found in ipRecord: ${ipDoc.id}`);
+            foundTransactionType = txnData.type ?? null;
+
+            // <<< YENİ: triggeringTaskId'i al
+            triggeringTaskIdFromTxn = txnData.triggeringTaskId
+              ? String(txnData.triggeringTaskId)
+              : null;
+
+            console.log(
+              `✅ Transaction found in ipRecord: ${ipDoc.id}; triggeringTaskIdFromTxn=${triggeringTaskIdFromTxn}`
+            );
             break;
           }
         }
@@ -1142,17 +1154,20 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
       return { to, cc };
     }
 
-    // taskOwnerIds'i oku
+    // <<< GÜNCEL: taskOwnerIds'i oku (önce associatedTaskId, yoksa transaction.triggeringTaskId)
     let taskOwnerIds = [];
-    if (after.associatedTaskId) {
+    const taskIdToResolve = after.associatedTaskId || triggeringTaskIdFromTxn || null;
+
+    if (taskIdToResolve) {
       try {
-        const t = await adminDb.collection("tasks").doc(after.associatedTaskId).get();
+        const t = await adminDb.collection("tasks").doc(String(taskIdToResolve)).get();
         const tData = t.exists ? (t.data() || {}) : {};
         taskOwnerIds =
           (Array.isArray(tData?.taskOwner)    && tData.taskOwner) ||
           (Array.isArray(tData?.taskOwnerIds) && tData.taskOwnerIds) ||
           (tData?.taskOwnerId ? [tData.taskOwnerId] : []) ||
           [];
+        console.log("taskOwnerIds (resolved from task):", taskOwnerIds);
       } catch (e) {
         console.warn("taskOwner okunamadı:", e);
       }
@@ -1250,7 +1265,6 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
     return null;
   }
 );
-
 
 export const createUniversalNotificationOnTaskCompleteV2 = onDocumentUpdated(
   {
