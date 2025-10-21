@@ -1172,32 +1172,61 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
     let toRecipients = [];
     let ccRecipientsSet = new Set();
 
-    async function findRecipientsFromPersonsRelated(personIds, categoryKey) {
+ async function findRecipientsFromPersonsRelated(personIds, categoryKey) {
       const to = [], cc = [];
       if (!Array.isArray(personIds) || personIds.length === 0) return { to, cc };
+
+      console.log("🔍 findRecipientsFromPersonsRelated - personIds:", personIds, "categoryKey:", categoryKey);
 
       for (let i = 0; i < personIds.length; i += 10) {
         const batch = personIds.slice(i, i + 10);
         const prs = await adminDb
           .collection("personsRelated")
           .where("personId", "in", batch)
-          .where("type", "==", categoryKey)
           .get();
+
+        console.log(`📋 Bulunan personsRelated kayıt sayısı: ${prs.docs.length}`);
 
         prs.forEach((doc) => {
           const r = doc.data() || {};
           const email = String(r.email || "").trim();
-          if (!email) return;
-          if (r.cc === true) cc.push(email);
-          else to.push(email);
+          
+          // responsible kontrolü yap
+          const isResponsible = r?.responsible?.[categoryKey] === true;
+          
+          console.log(`🔍 PersonID: ${r.personId} - Email: ${email} - responsible[${categoryKey}]: ${isResponsible}`);
+          
+          if (!email || !isResponsible) return;
+          
+          // notify ayarlarını kontrol et
+          const notify = r?.notify?.[categoryKey] || {};
+          
+          if (notify.to === true) {
+            to.push(email);
+            console.log(`✅ TO'ya eklendi: ${email}`);
+          } else if (notify.cc === true) {
+            cc.push(email);
+            console.log(`✅ CC'ye eklendi: ${email}`);
+          } else {
+            // Varsayılan olarak TO'ya ekle
+            to.push(email);
+            console.log(`✅ TO'ya eklendi (varsayılan): ${email}`);
+          }
         });
       }
+      
+      console.log("📧 Final Recipients - TO:", to, "CC:", cc);
       return { to, cc };
     }
 
-    // taskOwnerIds: associatedTaskId varsa onu, yoksa parent'tan bulduğumuz ID'yi kullan
+   // taskOwnerIds: associatedTaskId varsa onu, yoksa parent'tan bulduğumuz ID'yi kullan
     let taskOwnerIds = [];
     const taskIdToResolve = after.associatedTaskId || triggeringTaskIdFromTxn || null;
+    
+    console.log("🔍 taskIdToResolve:", taskIdToResolve);
+    console.log("🔍 after.associatedTaskId:", after.associatedTaskId);
+    console.log("🔍 triggeringTaskIdFromTxn:", triggeringTaskIdFromTxn);
+    
     if (taskIdToResolve) {
       try {
         const t = await adminDb.collection("tasks").doc(String(taskIdToResolve)).get();
@@ -1207,24 +1236,34 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
           (Array.isArray(tData?.taskOwnerIds) && tData.taskOwnerIds) ||
           (tData?.taskOwnerId ? [tData.taskOwnerId] : []) ||
           [];
-        console.log("taskOwnerIds (resolved from task):", taskOwnerIds);
+        console.log("✅ taskOwnerIds (resolved from task):", taskOwnerIds);
       } catch (e) {
-        console.warn("taskOwner okunamadı:", e);
+        console.warn("❌ taskOwner okunamadı:", e);
       }
+    } else {
+      console.log("⚠️ taskIdToResolve boş, taskOwner bulunamayacak");
     }
 
-    // 1) taskOwner → personsRelated
+    // 1) ÖNCE taskOwner → personsRelated
     if (taskOwnerIds.length > 0) {
+      console.log("🎯 TaskOwner bulundu, personsRelated üzerinden alıcılar belirleniyor...");
       const fromOwners = await findRecipientsFromPersonsRelated(taskOwnerIds, notificationType);
       toRecipients.push(...fromOwners.to);
       fromOwners.cc.forEach((e) => ccRecipientsSet.add(e));
+      console.log("📧 TaskOwner'dan alınan TO:", fromOwners.to.length, "adet");
+      console.log("📧 TaskOwner'dan alınan CC:", fromOwners.cc.length, "adet");
     }
 
-    // 2) fallback: applicants
+    // 2) SADECE taskOwner'dan alıcı bulunamadıysa → applicants fallback
     if ((toRecipients.length + ccRecipientsSet.size) === 0) {
+      console.log("⚠️ TaskOwner'dan alıcı bulunamadı, applicants fallback uygulanıyor...");
       const rec = await getRecipientsByApplicantIds(applicants, notificationType);
       (rec.to || []).forEach((e) => toRecipients.push(e));
       (rec.cc || []).forEach((e) => ccRecipientsSet.add(e));
+      console.log("📧 Applicants'tan alınan TO:", (rec.to || []).length, "adet");
+      console.log("📧 Applicants'tan alınan CC:", (rec.cc || []).length, "adet");
+    } else {
+      console.log("✅ TaskOwner'dan alıcı bulundu, applicants fallback ATLANDI");
     }
 
     // 3) Kurumsal ek CC (transaction tipine göre)
