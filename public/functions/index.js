@@ -1167,7 +1167,25 @@ export const createMailNotificationOnDocumentStatusChangeV2 = onDocumentUpdated(
     }
 
     // ===== Alıcı belirleme: önce taskOwner, yoksa applicants =====
-    const notificationType = after.mainProcessType || "marka";
+        let rawMainProcessType = after.mainProcessType || "marka";
+        
+        // ✅ İngilizce → Türkçe field name mapping (ipRecords İngilizce, personsRelated Türkçe)
+        const typeMapping = {
+          'trademark': 'marka',
+          'patent': 'patent',      // Patent her iki dilde aynı
+          'design': 'tasarim',
+          'litigation': 'dava',
+          'accounting': 'muhasebe',
+          // Türkçe değerler zaten Türkçe
+          'marka': 'marka',
+          'tasarim': 'tasarim',
+          'tasarım': 'tasarim',
+          'dava': 'dava',
+          'muhasebe': 'muhasebe'
+        };
+        
+        const notificationType = typeMapping[rawMainProcessType?.toLowerCase()] || rawMainProcessType?.toLowerCase() || 'marka';
+        console.log("🔄 Type mapping:", rawMainProcessType, "→", notificationType);
 
     let toRecipients = [];
     let ccRecipientsSet = new Set();
