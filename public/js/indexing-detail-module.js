@@ -1156,7 +1156,8 @@ async handleIndexing(opts = {}) {
                 type: childTransactionType.id,
                 description: `${childTransactionType.name} alt işlemi.`,
                 parentId: parent.id,
-                transactionHierarchy: "child"
+                transactionHierarchy: "child",
+                triggeringTaskId: String(createdTaskId)
             };
 
             console.log("📤 Firestore'a child transaction ekleniyor:", childTransactionData);
