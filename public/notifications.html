@@ -984,7 +984,7 @@ const [
   docInfo,
   deliveryDateText
 ] = await Promise.all([
-  (async () => {
+(async () => {
     // ✅ ÖNCE recipientTo'dan alıcıları göster (taskOwner veya applicant olabilir)
     const { toList } = getToCcFromNotification(notification);
     if (toList && toList.length > 0) {
@@ -992,18 +992,46 @@ const [
       const names = [];
       for (const email of toList.slice(0, 2)) { // İlk 2 alıcı
         try {
-          const personsSnap = await getDocs(query(
-            collection(db, 'persons'),
+          // 1. personsRelated'da email ile ara
+          const personsRelatedSnap = await getDocs(query(
+            collection(db, 'personsRelated'),
             where('email', '==', email),
             limit(1)
           ));
-          if (!personsSnap.empty) {
-            const personData = personsSnap.docs[0].data();
-            names.push(personData.name || personData.companyName || email);
+          
+          if (!personsRelatedSnap.empty) {
+            // personsRelated kaydından personId al
+            const personsRelatedData = personsRelatedSnap.docs[0].data();
+            const personId = personsRelatedData.personId;
+            
+            if (personId) {
+              // 2. persons koleksiyonundan personId ile kişiyi bul
+              const personSnap = await getDoc(doc(db, 'persons', personId));
+              if (personSnap.exists()) {
+                const personData = personSnap.data();
+                names.push(personData.name || personData.companyName || email);
+              } else {
+                names.push(email);
+              }
+            } else {
+              names.push(email);
+            }
           } else {
-            names.push(email);
+            // personsRelated'da bulunamadıysa direkt persons'da ara (fallback)
+            const personsSnap = await getDocs(query(
+              collection(db, 'persons'),
+              where('email', '==', email),
+              limit(1)
+            ));
+            if (!personsSnap.empty) {
+              const personData = personsSnap.docs[0].data();
+              names.push(personData.name || personData.companyName || email);
+            } else {
+              names.push(email);
+            }
           }
-        } catch {
+        } catch (err) {
+          console.warn('Email çözme hatası:', email, err);
           names.push(email);
         }
       }
