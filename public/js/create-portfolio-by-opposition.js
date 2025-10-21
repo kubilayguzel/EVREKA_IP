@@ -327,7 +327,7 @@ async handleTransactionCreated(transactionData) {
      * @param {Object} portfolioData - Portföy kayıt verisi
      * @returns {Object} Kayıt sonucu
      */
-    async createPortfolioRecord(portfolioData) {
+    async createPortfolioRecord(portfolioData, transactionId = null) {
         try {
             console.log('🔄 Portföy kaydı oluşturuluyor (duplikasyon kontrolü ile)...', {
                 applicationNumber: portfolioData.applicationNumber,
@@ -340,69 +340,69 @@ async handleTransactionCreated(transactionData) {
             
             if (result.success) {
                 
-// ✅ Otomatik parent transaction: Yayına İtiraz (type: 20)
-// create-portfolio-by-opposition.js içinde, result.success === true sonrasında
-try {
-  const u = (typeof authService !== 'undefined' && typeof authService.getCurrentUser === 'function')
-    ? authService.getCurrentUser()
-    : null;
+  // ✅ Otomatik parent transaction: Yayına İtiraz (type: 20)
+  // create-portfolio-by-opposition.js içinde, result.success === true sonrasında
+  try {
+    const u = (typeof authService !== 'undefined' && typeof authService.getCurrentUser === 'function')
+      ? authService.getCurrentUser()
+      : null;
 
-  const newRecordId = result.id; // ipRecordsService.createRecordFromOpposition dönüşü
-    if (newRecordId) {
-      await ipRecordsService.addTransactionToRecord(newRecordId, {
-        type: '20',
-        designation: 'Yayına İtiraz',
-        description: 'Yayına İtiraz',
-        transactionHierarchy: 'parent',
-        ...(transactionId ? { triggeringTaskId: String(transactionId) } : {}), // <<< EKLENDİ
-        timestamp: new Date().toISOString(),
-        userId:  u?.uid   || 'anonymous',
-        userEmail: u?.email || 'anonymous@example.com',
-        userName: u?.displayName || u?.email || 'anonymous'
-      });
-    }
-} catch (e) {
-  console.error('Yayına İtiraz transaction eklenemedi:', e);
-}
+    const newRecordId = result.id; // ipRecordsService.createRecordFromOpposition dönüşü
+      if (newRecordId) {
+        await ipRecordsService.addTransactionToRecord(newRecordId, {
+          type: '20',
+          designation: 'Yayına İtiraz',
+          description: 'Yayına İtiraz',
+          transactionHierarchy: 'parent',
+          ...(transactionId ? { triggeringTaskId: String(transactionId) } : {}), // <<< EKLENDİ
+          timestamp: new Date().toISOString(),
+          userId:  u?.uid   || 'anonymous',
+          userEmail: u?.email || 'anonymous@example.com',
+          userName: u?.displayName || u?.email || 'anonymous'
+        });
+      }
+  } catch (e) {
+    console.error('Yayına İtiraz transaction eklenemedi:', e);
+  }
 
-console.log('✅ Portföy kaydı işlem sonucu:', {
-                    id: result.id,
-                    isExistingRecord: result.isExistingRecord || false,
-                    message: result.message
-                });
-                
-                return {
-                    success: true,
-                    recordId: result.id,
-                    id: result.id,  // ✅ Hem recordId hem id döndür
-                    isExistingRecord: result.isExistingRecord || false,
-                    message: result.message || 'Kayıt oluşturuldu',
-                    data: portfolioData
-                };
-            } else {
-                console.error('❌ Portföy kaydı oluşturulamadı:', {
-                    error: result.error,
-                    isDuplicate: result.isDuplicate,
-                    existingRecordId: result.existingRecordId
-                });
-                
-                return {
-                    success: false,
-                    error: result.error,
-                    isDuplicate: result.isDuplicate || false,
-                    existingRecordId: result.existingRecordId || null,
-                    existingRecordType: result.existingRecordType || null
-                };
-            }
+  console.log('✅ Portföy kaydı işlem sonucu:', {
+                      id: result.id,
+                      isExistingRecord: result.isExistingRecord || false,
+                      message: result.message
+                  });
+                  
+                  return {
+                      success: true,
+                      recordId: result.id,
+                      id: result.id,  // ✅ Hem recordId hem id döndür
+                      isExistingRecord: result.isExistingRecord || false,
+                      message: result.message || 'Kayıt oluşturuldu',
+                      data: portfolioData
+                  };
+              } else {
+                  console.error('❌ Portföy kaydı oluşturulamadı:', {
+                      error: result.error,
+                      isDuplicate: result.isDuplicate,
+                      existingRecordId: result.existingRecordId
+                  });
+                  
+                  return {
+                      success: false,
+                      error: result.error,
+                      isDuplicate: result.isDuplicate || false,
+                      existingRecordId: result.existingRecordId || null,
+                      existingRecordType: result.existingRecordType || null
+                  };
+              }
 
-        } catch (error) {
-            console.error('❌ Portföy kaydı kaydetme hatası:', error);
-            return { 
-                success: false, 
-                error: `Kayıt oluşturulamadı: ${error.message}` 
-            };
-        }
-    }
+          } catch (error) {
+              console.error('❌ Portföy kaydı kaydetme hatası:', error);
+              return { 
+                  success: false, 
+                  error: `Kayıt oluşturulamadı: ${error.message}` 
+              };
+          }
+      }
     /**
      * Yayına itiraz işi türü kontrolü - Hem ID hem de alias'a göre kontrol
      * @param {string} transactionTypeId - İşlem türü ID'si
