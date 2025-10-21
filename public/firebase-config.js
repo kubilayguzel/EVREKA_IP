@@ -422,34 +422,33 @@ export const ipRecordsService = {
         }
     },
     
+    // public/firebase-config.js  (ipRecordsService içinde)
     async addTransactionToRecord(recordId, transactionData) {
-        if (!isFirebaseAvailable) return { success: false, error: "Firebase kullanılamıyor." };
-        try {
-            const recordRef = doc(db, 'ipRecords', recordId);
-            const transactionsCollectionRef = collection(recordRef, 'transactions');
+    if (!isFirebaseAvailable) return { success: false, error: "Firebase kullanılamıyor." };
+    try {
+        const recordRef = doc(db, 'ipRecords', recordId);
+        const transactionsCollectionRef = collection(recordRef, 'transactions');
 
-            const currentUser = auth.currentUser;
-            let userName = 'Bilinmeyen Kullanıcı';
+        const currentUser = auth.currentUser;
+        const userName = currentUser?.displayName || currentUser?.email || 'anonymous';
 
-            if (currentUser) {
-                userName = currentUser.displayName || currentUser.email;
-            }
+        const transactionToAdd = {
+        ...transactionData,
+        ...(transactionData.triggeringTaskId ? { triggeringTaskId: String(transactionData.triggeringTaskId) } : {}),
+        timestamp: new Date().toISOString(),
+        userId: currentUser ? currentUser.uid : 'anonymous',
+        userEmail: currentUser ? currentUser.email : 'anonymous@example.com',
+        userName
+        };
 
-            const transactionToAdd = {
-                ...transactionData,
-                timestamp: new Date().toISOString(),
-                userId: currentUser ? currentUser.uid : 'anonymous',
-                userEmail: currentUser ? currentUser.email : 'anonymous@example.com',
-                userName: userName
-            };
-
-            const docRef = await addDoc(transactionsCollectionRef, transactionToAdd);
-            return { success: true, id: docRef.id, data: transactionToAdd };
-        } catch (error) {
-            console.error("Transaction alt koleksiyona eklenirken hata:", error);
-            return { success: false, error: error.message };
-        }
-    },
+        const docRef = await addDoc(transactionsCollectionRef, transactionToAdd);
+        return { success: true, id: docRef.id, data: transactionToAdd };
+    } catch (error) {
+        console.error("Transaction alt koleksiyona eklenirken hata:", error);
+        return { success: false, error: error.message };
+    }
+    }
+    ,
     async addFileToRecord(recordId, fileData) {
         if (!isFirebaseAvailable) return { success: false, error: "Firebase kullanılamıyor." };
         try {
