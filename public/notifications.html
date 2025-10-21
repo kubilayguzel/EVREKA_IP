@@ -1015,7 +1015,7 @@ const [
     if (notification.applicantName) return notification.applicantName;
     try { return await resolveApplicantName(notification); } catch { return '-'; }
   })(),
-  
+
   (async () => {
     if (notification.applicationNo) return notification.applicationNo;
     try { return await resolveApplicationNo(notification); } catch { return '-'; }
@@ -1075,7 +1075,7 @@ const [
 
     tr.innerHTML = `
       <td><span class="status-badge ${statusClass}">${notification.status || '-'}</span></td>
-      <td>${applicantName || '-'}</td>
+      <td>${recipientDisplay || '-'}</td>
       <td>${subjectCell}</td>
       <td>${applicationNoText || '-'}</td>
       <td>${typeText || '-'}</td>
