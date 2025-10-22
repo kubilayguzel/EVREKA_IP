@@ -544,17 +544,23 @@ const doSearch = this.debounce(async (raw) => {
     selectedMeta.textContent = owner || '';
 
     const host  = selectedBox.querySelector('.p-2') || selectedBox;
-    const thumb = selectedBox.querySelector('.ip-thumb') || (() => {
-      const ph = document.createElement('img');
-      ph.className = 'ip-thumb';
-      ph.style.cssText = 'width:96px;height:96px;object-fit:contain;border:1px solid #eee;border-radius:4px;margin-right:8px;background:#fff;';
-      host.prepend(ph);
-      return ph;
-    })();
 
+    // ✅ ÖNCE: Varsa eski görseli kaldır
+    const oldThumb = selectedBox.querySelector('.ip-thumb');
+    if (oldThumb) oldThumb.remove();
+
+    // ✅ Görsel varsa oluştur
     if (img) {
-      const url = await this.resolveImageUrl(img);
-      if (url) thumb.src = url;
+    const thumb = document.createElement('img');
+    thumb.className = 'ip-thumb';
+    thumb.style.cssText = 'width:96px;height:96px;object-fit:contain;border:1px solid #eee;border-radius:4px;margin-right:8px;background:#fff;';
+    
+    // ✅ Görseli hemen yükle
+    const url = await this.resolveImageUrl(img);
+    if (url) {
+        thumb.src = url;
+        host.prepend(thumb);
+    }
     }
 
     results.style.display = 'none';
