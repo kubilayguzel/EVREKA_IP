@@ -543,25 +543,10 @@ const doSearch = this.debounce(async (raw) => {
     selectedLabel.innerHTML = `${prefixParts.length ? prefixParts.join(' - ') + ' - ' : ''}${title}`;
     selectedMeta.textContent = owner || '';
 
-    const host  = selectedBox.querySelector('.p-2') || selectedBox;
-
-    // ✅ ÖNCE: Varsa TÜM ESKİ GÖRSELLERİ kaldır
+    // ✅ ÖNCE: Varsa TÜM ESKİ GÖRSELLERİ kaldır (seçili kayıtta görsel göstermiyoruz)
     const oldThumbs = selectedBox.querySelectorAll('.ip-thumb');
     oldThumbs.forEach(thumb => thumb.remove());
 
-    // ✅ Görsel varsa oluştur
-    if (img) {
-    const thumb = document.createElement('img');
-    thumb.className = 'ip-thumb';
-    thumb.style.cssText = 'width:96px;height:96px;object-fit:contain;border:1px solid #eee;border-radius:4px;margin-right:8px;background:#fff;';
-    
-    // ✅ Görseli hemen yükle
-    const url = await this.resolveImageUrl(img);
-    if (url) {
-        thumb.src = url;
-        host.prepend(thumb);
-    }
-    }
     results.style.display = 'none';
     results.innerHTML = '';
     input.value = '';
