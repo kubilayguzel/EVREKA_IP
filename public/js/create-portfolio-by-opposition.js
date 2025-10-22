@@ -279,8 +279,7 @@ async handleTransactionCreated(transactionData) {
             // Marka bilgileri
             brandText: bulletinData.markName || null,
             markName: bulletinData.markName || null, // ✅ EKLENDI: Alternatif alan adı
-            brandImageUrl: bulletinData.imagePath || null,
-            imagePath: bulletinData.imagePath || null, // ✅ EKLENDI: Liste görünümü için
+            imagePath: bulletinData.imagePath || null,
             description: `Yayına itiraz (İş ID: ${transactionId}) için oluşturulan 3.taraf portföy kaydı`,
             
             // İlişkili veriler
