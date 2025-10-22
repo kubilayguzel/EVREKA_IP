@@ -665,7 +665,6 @@ renderWipoAripoChildRecords() {
     });
 }
 // ✨ YENİ SONU
-
 async updateAssignedToDropdown(taskTypeId) {
     const assignedToSelect = document.getElementById('assignedTo');
     if (!assignedToSelect) {
@@ -711,30 +710,11 @@ async updateAssignedToDropdown(taskTypeId) {
             // Eğer sadece 1 kişi varsa, onu otomatik seç
             if (usersInRule.length === 1) {
                 assignedToSelect.value = usersInRule[0].id;
-                
-                // ✅ DEĞİŞTİRİLDİ: Biraz bekle, diğer alanlar da doldurulsun
-                setTimeout(() => {
-                    assignedToSelect.dispatchEvent(new Event('change', { bubbles: true }));
-                    if (typeof this.checkFormCompleteness === 'function') {
-                        console.log('🔄 Otomatik seçim sonrası form kontrolü yapılıyor...');
-                        this.checkFormCompleteness();
-                    }
-                }, 300);
             }
 
+            // Manuel override kontrolü
             if (ruleData.allowManualOverride === false) {
                 assignedToSelect.disabled = true;
-                
-                // ✅ DEĞİŞTİRİLDİ: Biraz bekle, diğer alanlar da doldurulsun
-                if (assignedToSelect.value) {
-                    setTimeout(() => {
-                        assignedToSelect.dispatchEvent(new Event('change', { bubbles: true }));
-                        if (typeof this.checkFormCompleteness === 'function') {
-                            console.log('🔄 Kilitli atama sonrası form kontrolü yapılıyor...');
-                            this.checkFormCompleteness();
-                        }
-                    }, 300);
-                }
             } else {
                 assignedToSelect.disabled = false;
             }
@@ -751,13 +731,16 @@ async updateAssignedToDropdown(taskTypeId) {
             assignedToSelect.disabled = false;
         }
 
-        // ✅ DEĞİŞTİRİLDİ: Son kontrol - biraz bekle
+        // ✅ TEK BİR YER: Dropdown dolduktan sonra form kontrolü yap
         setTimeout(() => {
+            assignedToSelect.dispatchEvent(new Event('change', { bubbles: true }));
             if (typeof this.checkFormCompleteness === 'function') {
-                console.log('🔄 Dropdown dolduruldu, form kontrolü yapılıyor...');
+                console.log('🔄 Dropdown dolduruldu, form kontrolü yapılıyor...', {
+                    value: assignedToSelect.value,
+                    disabled: assignedToSelect.disabled
+                });
                 this.checkFormCompleteness();
             }
-            assignedToSelect.dispatchEvent(new Event('change', { bubbles: true }));
         }, 300);
 
     } catch (error) {
@@ -773,7 +756,6 @@ async updateAssignedToDropdown(taskTypeId) {
         assignedToSelect.disabled = false;
     }
 }
-
   _onPersonCreated(newPerson, target) {
     this.allPersons = this.allPersons || [];
     this.allPersons.push(newPerson);
