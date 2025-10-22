@@ -502,11 +502,12 @@ const doSearch = this.debounce(async (raw) => {
       ? (rec.imagePath || '')
       : (rec.brandImageUrl || rec.markImageUrl || rec.brandSampleUrl || rec.markSampleUrl || rec.imageUrl || rec.brandSamplePath || '');
 
-     this.selectedIpRecord = {
+    this.selectedIpRecord = {
         id: rec.id || id,
         title,
         ownerName: owner,
         applicationNo: appNo,
+        imagePath: img,  // ✅ EKLE: Görsel bilgisi
         source: this.searchSource,
         origin: rec.origin || 'TÜRKPATENT',
         // ✨ YENİ: WIPO/ARIPO verilerini de sakla
@@ -514,7 +515,7 @@ const doSearch = this.debounce(async (raw) => {
         aripoIR: rec.aripoIR || null,
         transactionHierarchy: rec.transactionHierarchy || null
         // ✨ YENİ SONU
-        };
+    };
 
     // ✨ YENİ: Varlık seçimiyle menşe dropdown'ını güncelle
     if (originSelect && this.selectedIpRecord.origin !== originSelect.value) {
@@ -2450,37 +2451,7 @@ async handleSpecificTypeChange(e) {
         this.selectedIpRecord = this.allIpRecords.find(r => r.id === recordId);
         const display = document.getElementById('selectedIpRecordDisplay');
         if (display) {
-            // ✅ Bülten veya portföy kaydına göre başlık ve görsel belirle
-            const title = (this.searchSource === 'bulletin')
-                ? (this.selectedIpRecord.markName || this.selectedIpRecord.title || 'Başlık yok')
-                : (this.selectedIpRecord.title || this.selectedIpRecord.name || this.selectedIpRecord.markName || 'Başlık yok');
-            
-            const imagePath = (this.searchSource === 'bulletin')
-                ? (this.selectedIpRecord.imagePath || '')
-                : (this.selectedIpRecord.brandImageUrl || this.selectedIpRecord.imageUrl || '');
-            
-            const applicationNo = (this.searchSource === 'bulletin')
-                ? (this.selectedIpRecord.applicationNo || '')
-                : (this.selectedIpRecord.applicationNumber || '');
-            
-            // HTML içeriği oluştur
-            let html = '<div class="d-flex align-items-center">';
-            
-            // Görsel varsa ekle
-            if (imagePath) {
-                html += `<img src="${imagePath}" alt="Marka Görseli" style="width: 60px; height: 60px; object-fit: contain; margin-right: 15px; border: 1px solid #ddd; border-radius: 4px;">`;
-            }
-            
-            // Başlık ve başvuru numarası
-            html += '<div>';
-            html += `<p style="margin: 0;"><b>Seçilen Varlık:</b> ${title}</p>`;
-            if (applicationNo) {
-                html += `<small class="text-muted">Başvuru No: ${applicationNo}</small>`;
-            }
-            html += '</div>';
-            html += '</div>';
-            
-            display.innerHTML = html;
+            display.innerHTML = `<p><b>Seçilen Varlık:</b> ${this.selectedIpRecord.title}</p>`;
             display.style.display = 'flex';
         }
         const searchResults = document.getElementById('portfolioSearchResults');
