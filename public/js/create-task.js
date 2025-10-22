@@ -545,9 +545,9 @@ const doSearch = this.debounce(async (raw) => {
 
     const host  = selectedBox.querySelector('.p-2') || selectedBox;
 
-    // ✅ ÖNCE: Varsa eski görseli kaldır
-    const oldThumb = selectedBox.querySelector('.ip-thumb');
-    if (oldThumb) oldThumb.remove();
+    // ✅ ÖNCE: Varsa TÜM ESKİ GÖRSELLERİ kaldır
+    const oldThumbs = selectedBox.querySelectorAll('.ip-thumb');
+    oldThumbs.forEach(thumb => thumb.remove());
 
     // ✅ Görsel varsa oluştur
     if (img) {
@@ -562,7 +562,6 @@ const doSearch = this.debounce(async (raw) => {
         host.prepend(thumb);
     }
     }
-
     results.style.display = 'none';
     results.innerHTML = '';
     input.value = '';
