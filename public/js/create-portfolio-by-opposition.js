@@ -260,7 +260,7 @@ async handleTransactionCreated(transactionData) {
             status: 'active'
         })) || [];
 
-        const portfolioData = {
+      const portfolioData = {
             // Temel bilgiler
             title: bulletinData.markName || `Başvuru No: ${bulletinData.applicationNo}`,
             type: 'trademark',
@@ -270,6 +270,7 @@ async handleTransactionCreated(transactionData) {
             
             // Başvuru/Tescil bilgileri
             applicationNumber: bulletinData.applicationNo || null,
+            applicationNo: bulletinData.applicationNo || null, // ✅ EKLENDI: Liste görünümü için
             applicationDate: bulletinData.applicationDate || null,
             registrationNumber: null,
             registrationDate: null,
@@ -277,7 +278,9 @@ async handleTransactionCreated(transactionData) {
             
             // Marka bilgileri
             brandText: bulletinData.markName || null,
+            markName: bulletinData.markName || null, // ✅ EKLENDI: Alternatif alan adı
             brandImageUrl: bulletinData.imagePath || null,
+            imagePath: bulletinData.imagePath || null, // ✅ EKLENDI: Liste görünümü için
             description: `Yayına itiraz (İş ID: ${transactionId}) için oluşturulan 3.taraf portföy kaydı`,
             
             // İlişkili veriler
