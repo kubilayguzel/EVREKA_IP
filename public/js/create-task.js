@@ -712,16 +712,25 @@ async updateAssignedToDropdown(taskTypeId) {
                 if (usersInRule.length === 1) {
                 assignedToSelect.value = usersInRule[0].id;
 
-                // 🔽 EKLE
-                this.checkFormCompleteness?.();
+                // 👇 EKLE: change event + form kontrolü
                 assignedToSelect.dispatchEvent(new Event('change', { bubbles: true }));
+                if (typeof this.checkFormCompleteness === 'function') {
+                    this.checkFormCompleteness();
+                }
                 }
 
-                // Kural override'a izin vermiyorsa dropdown'ı kilitle
                 if (ruleData.allowManualOverride === false) {
-                    assignedToSelect.disabled = true;
+                assignedToSelect.disabled = true;
+
+                // 👇 EKLE: değer varsa formu kontrol et
+                if (assignedToSelect.value) {
+                    assignedToSelect.dispatchEvent(new Event('change', { bubbles: true }));
+                    if (typeof this.checkFormCompleteness === 'function') {
+                    this.checkFormCompleteness();
+                    }
+                }
                 } else {
-                    assignedToSelect.disabled = false;
+                assignedToSelect.disabled = false;
                 }
 
                 } else {
