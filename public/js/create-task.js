@@ -543,9 +543,19 @@ const doSearch = this.debounce(async (raw) => {
     selectedLabel.innerHTML = `${prefixParts.length ? prefixParts.join(' - ') + ' - ' : ''}${title}`;
     selectedMeta.textContent = owner || '';
 
-    // ✅ ÖNCE: Varsa TÜM ESKİ GÖRSELLERİ kaldır (seçili kayıtta görsel göstermiyoruz)
-    const oldThumbs = selectedBox.querySelectorAll('.ip-thumb');
-    oldThumbs.forEach(thumb => thumb.remove());
+    const host  = selectedBox.querySelector('.p-2') || selectedBox;
+    const thumb = selectedBox.querySelector('.ip-thumb') || (() => {
+      const ph = document.createElement('img');
+      ph.className = 'ip-thumb';
+      ph.style.cssText = 'width:96px;height:96px;object-fit:contain;border:1px solid #eee;border-radius:4px;margin-right:8px;background:#fff;';
+      host.prepend(ph);
+      return ph;
+    })();
+
+    if (img) {
+      const url = await this.resolveImageUrl(img);
+      if (url) thumb.src = url;
+    }
 
     results.style.display = 'none';
     results.innerHTML = '';
@@ -572,7 +582,7 @@ const doSearch = this.debounce(async (raw) => {
     this.renderWipoAripoChildRecords();
     // ✨ YENİ SONU
   });
-  }
+}
 
   document.addEventListener('click', (e) => {
     if (!results.contains(e.target) && e.target !== input) results.style.display = 'none';
