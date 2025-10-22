@@ -665,6 +665,7 @@ renderWipoAripoChildRecords() {
     });
 }
 // ✨ YENİ SONU
+
 async updateAssignedToDropdown(taskTypeId) {
     const assignedToSelect = document.getElementById('assignedTo');
     if (!assignedToSelect) {
@@ -756,6 +757,7 @@ async updateAssignedToDropdown(taskTypeId) {
         assignedToSelect.disabled = false;
     }
 }
+
   _onPersonCreated(newPerson, target) {
     this.allPersons = this.allPersons || [];
     this.allPersons.push(newPerson);
@@ -2864,10 +2866,20 @@ checkFormCompleteness() {
 
         const assignedTo = document.getElementById('assignedTo')?.value;
         isComplete = !!(assignedTo && brandText && hasNiceClasses && hasApplicants && hasCountrySelection);
+        
+        // ✅ DEBUG LOG - Başvuru formu
+        console.log('🔍 Form Kontrol (Başvuru):', {
+            assignedTo: assignedTo || 'BOŞ!',
+            brandText: brandText || 'BOŞ!',
+            hasNiceClasses,
+            hasApplicants,
+            hasCountrySelection,
+            isComplete
+        });
     } else {
         const taskTitle = document.getElementById('taskTitle')?.value?.trim() || selectedTaskType?.alias || selectedTaskType?.name;
         const hasIpRecord = !!this.selectedIpRecord;
-        const assignedTo = document.getElementById('assignedTo')?.value; // ✅ EKLENDİ
+        const assignedTo = document.getElementById('assignedTo')?.value;
 
         // assignedTo, başlık, portföy kaydı ve ilgili taraf seçildiğinde tamamlandı olarak işaretle
         const tIdStr = asId(selectedTaskType.id);
@@ -2875,10 +2887,32 @@ checkFormCompleteness() {
         const needsObjectionOwner = (tIdStr === TASK_IDS.ITIRAZ_YAYIN) || (tIdStr === '19') || (tIdStr === '7');
         const hasRelated = Array.isArray(this.selectedRelatedParties) && this.selectedRelatedParties.length > 0;
         
-        // ✅ assignedTo kontrolü eklendi
         isComplete = !!assignedTo && !!taskTitle && !!hasIpRecord && (!needsRelatedParty || hasRelated) && (!needsObjectionOwner || hasRelated);
+        
+        // ✅ DEBUG LOG - Diğer işlemler
+        console.log('🔍 Form Kontrol Detayları:', {
+            işTipi: selectedTaskType.alias || selectedTaskType.name,
+            işTipiId: tIdStr,
+            assignedTo: assignedTo || '❌ BOŞ!',
+            assignedToElementMevcut: !!document.getElementById('assignedTo'),
+            assignedToValue: document.getElementById('assignedTo')?.value || '❌ BOŞ!',
+            taskTitle: taskTitle || 'BOŞ!',
+            hasIpRecord,
+            needsRelatedParty,
+            needsObjectionOwner,
+            hasRelated,
+            selectedRelatedPartiesCount: this.selectedRelatedParties?.length || 0,
+            'SONUÇ - isComplete': isComplete,
+            'Eksik Alanlar': {
+                assignedTo: !assignedTo ? '❌ EKSİK' : '✅ OK',
+                taskTitle: !taskTitle ? '❌ EKSİK' : '✅ OK',
+                hasIpRecord: !hasIpRecord ? '❌ EKSİK' : '✅ OK',
+                ilgiliTaraf: (needsRelatedParty && !hasRelated) ? '❌ EKSİK' : '✅ OK veya GEREKLİ DEĞİL'
+            }
+        });
     }
 
+    console.log(`🎯 BUTON DURUMU: ${isComplete ? '✅ AKTİF' : '❌ DISABLED'}`);
     saveTaskBtn.disabled = !isComplete;
 }
 
