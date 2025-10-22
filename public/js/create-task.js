@@ -710,7 +710,11 @@ async updateAssignedToDropdown(taskTypeId) {
 
                 // Eğer sadece 1 kişi varsa, onu otomatik seç
                 if (usersInRule.length === 1) {
-                    assignedToSelect.value = usersInRule[0].id;
+                assignedToSelect.value = usersInRule[0].id;
+
+                // 🔽 EKLE
+                this.checkFormCompleteness?.();
+                assignedToSelect.dispatchEvent(new Event('change', { bubbles: true }));
                 }
 
                 // Kural override'a izin vermiyorsa dropdown'ı kilitle
@@ -720,7 +724,7 @@ async updateAssignedToDropdown(taskTypeId) {
                     assignedToSelect.disabled = false;
                 }
 
-            } else {
+                } else {
                 // Kural bulunamadı, tüm kullanıcıları listele (eski davranış)
                 assignedToSelect.innerHTML = '<option value="">Seçiniz...</option>';
                 this.allUsers.forEach(user => {
@@ -730,7 +734,10 @@ async updateAssignedToDropdown(taskTypeId) {
                     assignedToSelect.appendChild(option);
                 });
                 assignedToSelect.disabled = false;
-            }
+                }
+
+                this.checkFormCompleteness?.();
+                assignedToSelect.dispatchEvent(new Event('change', { bubbles: true }));
 
         } catch (error) {
             console.error("Atama kuralı getirilirken hata oluştu:", error);
@@ -2760,7 +2767,8 @@ async handleParentSelection(selectedParentId) {
     const childTransactionData = {
         type: String(childTypeId),
         description: 'İtiraz geri çekme işlemi',
-        transactionHierarchy: 'child'
+        transactionHierarchy: 'child',
+        triggeringTaskId: String(taskResult.id)
     };
     if (!this.selectedIpRecord || !this.selectedIpRecord?.id) {
         alert('Portföy kaydı bulunamadı. Lütfen bir portföy seçin.');
@@ -3232,7 +3240,8 @@ async handleFormSubmit(e) {
                             const childTransactionData = {
                                 type: selectedTransactionType.id,
                                 description: `${selectedTransactionType.name} işlemi.`,
-                                transactionHierarchy: 'child'
+                                transactionHierarchy: 'child',
+                                triggeringTaskId: String(taskResult.id)
                             };
                             await ipRecordsService.addTransactionToRecord(childCreate.id, childTransactionData);
                             
@@ -3468,7 +3477,8 @@ const officialFee = parseFloat(document.getElementById('officialFee')?.value) ||
                 const childTransactionData = {
                     type: selectedTransactionType.id, // AYNI işlem tipi
                     description: `${selectedTransactionType.name} işlemi.`,
-                    transactionHierarchy: 'child'
+                    transactionHierarchy: 'child',
+                    triggeringTaskId: String(taskResult.id)
                 };
 
                 const childResult = await ipRecordsService.addTransactionToRecord(child.id, childTransactionData);
@@ -3569,7 +3579,8 @@ const officialFee = parseFloat(document.getElementById('officialFee')?.value) ||
                 const childTransactionData = {
                     type: selectedTransactionType.id,
                     description: `${selectedTransactionType.name} işlemi.`,
-                    transactionHierarchy: 'child'
+                    transactionHierarchy: 'child',
+                    triggeringTaskId: String(taskResult.id)
                 };
 
                 const childResult = await ipRecordsService.addTransactionToRecord(child.id, childTransactionData);
