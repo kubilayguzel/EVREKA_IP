@@ -416,7 +416,7 @@ const doSearch = this.debounce(async (raw) => {
             });
             
             const filtered = Array.from(resultsMap.values());
-            
+            this.allBulletinRecords = filtered;
             console.log('🔍 Bulletin arama sonuçları:', filtered.length);
             renderResults(filtered);
             
