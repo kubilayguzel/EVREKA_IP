@@ -2873,13 +2873,16 @@ checkFormCompleteness() {
     } else {
         const taskTitle = document.getElementById('taskTitle')?.value?.trim() || selectedTaskType?.alias || selectedTaskType?.name;
         const hasIpRecord = !!this.selectedIpRecord;
+        const assignedTo = document.getElementById('assignedTo')?.value; // ✅ EKLENDİ
 
-        // assignedTo, başlık ve portföy kaydı seçildiğinde tamamlandı olarak işaretle
+        // assignedTo, başlık, portföy kaydı ve ilgili taraf seçildiğinde tamamlandı olarak işaretle
         const tIdStr = asId(selectedTaskType.id);
         const needsRelatedParty = RELATED_PARTY_REQUIRED.has(tIdStr);
         const needsObjectionOwner = (tIdStr === TASK_IDS.ITIRAZ_YAYIN) || (tIdStr === '19') || (tIdStr === '7');
         const hasRelated = Array.isArray(this.selectedRelatedParties) && this.selectedRelatedParties.length > 0;
-        isComplete = !!taskTitle && !!this.selectedIpRecord && (!needsRelatedParty || hasRelated) && (!needsObjectionOwner || hasRelated);
+        
+        // ✅ assignedTo kontrolü eklendi
+        isComplete = !!assignedTo && !!taskTitle && !!hasIpRecord && (!needsRelatedParty || hasRelated) && (!needsObjectionOwner || hasRelated);
     }
 
     saveTaskBtn.disabled = !isComplete;
