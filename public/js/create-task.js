@@ -2448,22 +2448,23 @@ async handleSpecificTypeChange(e) {
             const item = document.createElement('div');
             item.className = 'search-result-item';
             item.dataset.id = r.id;
-            item.innerHTML = `<div><b>${r.title}</b> (${r.applicationNumber || 'Numara Yok'})<br><small>Durum: ${r.status}</small></div>`;
-            item.addEventListener('click', () => this.selectIpRecord(r.id));
+            item.innerHTML = `<div><b>${r.title || r.markName || 'Başlık yok'}</b> (${r.applicationNumber || r.applicationNo || 'Numara Yok'})<br><small>Durum: ${r.status || 'Bilinmiyor'}</small></div>`;
+            item.addEventListener('click', () => {
+                // ✅ Doğrudan selectedIpRecord objesini oluştur
+                this.selectedIpRecord = r;
+                this.checkFormCompleteness();
+                console.log('✅ Kayıt seçildi (eski arama):', r);
+            });
             container.appendChild(item);
         });
     }
     selectIpRecord(recordId) {
-        this.selectedIpRecord = this.allIpRecords.find(r => r.id === recordId);
-        const display = document.getElementById('selectedIpRecordDisplay');
-        if (display) {
-            display.innerHTML = `<p><b>Seçilen Varlık:</b> ${this.selectedIpRecord.title}</p>`;
-            display.style.display = 'flex';
-        }
-        const searchResults = document.getElementById('portfolioSearchResults');
-        if (searchResults) searchResults.innerHTML = '';
+        // ⚠️ Bu fonksiyon sadece eski kodlarla uyumluluk için bırakıldı
+        // Asıl seçim işlemi initIpRecordSearchSelector içindeki click handler tarafından yapılıyor
+        console.warn('⚠️ selectIpRecord çağrıldı (deprecated):', recordId);
+        
+        // Sadece form kontrolü yap
         this.checkFormCompleteness();
-        this.handleIpRecordChange(recordId);
     }
     searchPersons(query, target) {
     const resultsContainerId = {
