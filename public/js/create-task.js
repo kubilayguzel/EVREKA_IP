@@ -667,91 +667,81 @@ renderWipoAripoChildRecords() {
 // ✨ YENİ SONU
 
 async updateAssignedToDropdown(taskTypeId) {
-        const assignedToSelect = document.getElementById('assignedTo');
-        if (!assignedToSelect) {
-            console.error('"assignedTo" dropdown elementi bulunamadı.');
-            return;
+    const assignedToSelect = document.getElementById('assignedTo');
+    if (!assignedToSelect) {
+        console.error('"assignedTo" dropdown elementi bulunamadı.');
+        return;
+    }
+
+    // Dropdown'ı başlangıç durumuna getir
+    assignedToSelect.innerHTML = '<option value="">Yükleniyor...</option>';
+    assignedToSelect.disabled = true;
+
+    if (!taskTypeId) {
+        assignedToSelect.innerHTML = '<option value="">Önce İş Tipi Seçin</option>';
+        return;
+    }
+
+    try {
+        // 1. Firestore'dan atama kuralını çek
+        const ruleDocRef = doc(db, 'taskAssignments', taskTypeId);
+        const ruleDocSnap = await getDoc(ruleDocRef);
+
+        let ruleData = null;
+        if (ruleDocSnap.exists()) {
+            ruleData = ruleDocSnap.data();
         }
 
-        // Dropdown'ı başlangıç durumuna getir
-        assignedToSelect.innerHTML = '<option value="">Yükleniyor...</option>';
-        assignedToSelect.disabled = true;
+        // 2. Kurala göre dropdown'ı doldur
+        if (ruleData && ruleData.assigneeIds && ruleData.assigneeIds.length > 0) {
+            // Kural bulundu ve atanacak kişiler var
+            const assignedUserIds = ruleData.assigneeIds;
+            
+            // Atanacak kullanıcıların tam bilgilerini allUsers listesinden bul
+            const usersInRule = this.allUsers.filter(user => assignedUserIds.includes(user.id));
 
-        if (!taskTypeId) {
-            assignedToSelect.innerHTML = '<option value="">Önce İş Tipi Seçin</option>';
-            return;
-        }
+            assignedToSelect.innerHTML = '<option value="">Seçiniz...</option>';
+            usersInRule.forEach(user => {
+                const option = document.createElement('option');
+                option.value = user.id;
+                option.textContent = user.displayName || user.email;
+                assignedToSelect.appendChild(option);
+            });
 
-        try {
-            // 1. Firestore'dan atama kuralını çek
-            const ruleDocRef = doc(db, 'taskAssignments', taskTypeId);
-            const ruleDocSnap = await getDoc(ruleDocRef);
-
-            let ruleData = null;
-            if (ruleDocSnap.exists()) {
-                ruleData = ruleDocSnap.data();
-            }
-
-            // 2. Kurala göre dropdown'ı doldur
-            if (ruleData && ruleData.assigneeIds && ruleData.assigneeIds.length > 0) {
-                // Kural bulundu ve atanacak kişiler var
-                const assignedUserIds = ruleData.assigneeIds;
-                
-                // Atanacak kullanıcıların tam bilgilerini allUsers listesinden bul
-                const usersInRule = this.allUsers.filter(user => assignedUserIds.includes(user.id));
-
-                assignedToSelect.innerHTML = '<option value="">Seçiniz...</option>';
-                usersInRule.forEach(user => {
-                    const option = document.createElement('option');
-                    option.value = user.id;
-                    option.textContent = user.displayName || user.email;
-                    assignedToSelect.appendChild(option);
-                });
-
-                // Eğer sadece 1 kişi varsa, onu otomatik seç
-                if (usersInRule.length === 1) {
+            // Eğer sadece 1 kişi varsa, onu otomatik seç
+            if (usersInRule.length === 1) {
                 assignedToSelect.value = usersInRule[0].id;
-
-                // 👇 EKLE: change event + form kontrolü
-                assignedToSelect.dispatchEvent(new Event('change', { bubbles: true }));
-                if (typeof this.checkFormCompleteness === 'function') {
-                    this.checkFormCompleteness();
-                }
-                }
-
-                if (ruleData.allowManualOverride === false) {
-                assignedToSelect.disabled = true;
-
-                // 👇 EKLE: değer varsa formu kontrol et
-                if (assignedToSelect.value) {
+                
+                // ✅ DEĞİŞTİRİLDİ: Biraz bekle, diğer alanlar da doldurulsun
+                setTimeout(() => {
                     assignedToSelect.dispatchEvent(new Event('change', { bubbles: true }));
                     if (typeof this.checkFormCompleteness === 'function') {
-                    this.checkFormCompleteness();
+                        console.log('🔄 Otomatik seçim sonrası form kontrolü yapılıyor...');
+                        this.checkFormCompleteness();
                     }
+                }, 300);
+            }
+
+            if (ruleData.allowManualOverride === false) {
+                assignedToSelect.disabled = true;
+                
+                // ✅ DEĞİŞTİRİLDİ: Biraz bekle, diğer alanlar da doldurulsun
+                if (assignedToSelect.value) {
+                    setTimeout(() => {
+                        assignedToSelect.dispatchEvent(new Event('change', { bubbles: true }));
+                        if (typeof this.checkFormCompleteness === 'function') {
+                            console.log('🔄 Kilitli atama sonrası form kontrolü yapılıyor...');
+                            this.checkFormCompleteness();
+                        }
+                    }, 300);
                 }
-                } else {
+            } else {
                 assignedToSelect.disabled = false;
-                }
+            }
 
-                } else {
-                // Kural bulunamadı, tüm kullanıcıları listele (eski davranış)
-                assignedToSelect.innerHTML = '<option value="">Seçiniz...</option>';
-                this.allUsers.forEach(user => {
-                    const option = document.createElement('option');
-                    option.value = user.id;
-                    option.textContent = user.displayName || user.email;
-                    assignedToSelect.appendChild(option);
-                });
-                assignedToSelect.disabled = false;
-                }
-
-                this.checkFormCompleteness?.();
-                assignedToSelect.dispatchEvent(new Event('change', { bubbles: true }));
-
-        } catch (error) {
-            console.error("Atama kuralı getirilirken hata oluştu:", error);
-            // Hata durumunda yine de tüm kullanıcıları listele
-            assignedToSelect.innerHTML = '<option value="">Hata oluştu, tümü listeleniyor...</option>';
+        } else {
+            // Kural bulunamadı, tüm kullanıcıları listele (eski davranış)
+            assignedToSelect.innerHTML = '<option value="">Seçiniz...</option>';
             this.allUsers.forEach(user => {
                 const option = document.createElement('option');
                 option.value = user.id;
@@ -760,7 +750,29 @@ async updateAssignedToDropdown(taskTypeId) {
             });
             assignedToSelect.disabled = false;
         }
+
+        // ✅ DEĞİŞTİRİLDİ: Son kontrol - biraz bekle
+        setTimeout(() => {
+            if (typeof this.checkFormCompleteness === 'function') {
+                console.log('🔄 Dropdown dolduruldu, form kontrolü yapılıyor...');
+                this.checkFormCompleteness();
+            }
+            assignedToSelect.dispatchEvent(new Event('change', { bubbles: true }));
+        }, 300);
+
+    } catch (error) {
+        console.error("Atama kuralı getirilirken hata oluştu:", error);
+        // Hata durumunda yine de tüm kullanıcıları listele
+        assignedToSelect.innerHTML = '<option value="">Hata oluştu, tümü listeleniyor...</option>';
+        this.allUsers.forEach(user => {
+            const option = document.createElement('option');
+            option.value = user.id;
+            option.textContent = user.displayName || user.email;
+            assignedToSelect.appendChild(option);
+        });
+        assignedToSelect.disabled = false;
     }
+}
 
   _onPersonCreated(newPerson, target) {
     this.allPersons = this.allPersons || [];
@@ -2458,7 +2470,7 @@ async handleSpecificTypeChange(e) {
         this.checkFormCompleteness();
         this.handleIpRecordChange(recordId);
     }
-searchPersons(query, target) {
+    searchPersons(query, target) {
     const resultsContainerId = {
         'relatedParty': 'personSearchResults',
         'tpInvoiceParty': 'tpInvoicePartyResults',
