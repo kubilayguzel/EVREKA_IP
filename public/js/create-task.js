@@ -2200,9 +2200,9 @@ async handleSpecificTypeChange(e) {
                 const person = this.allPersons.find(p => p.id === id);
                 if (!person) return;
 
-                // Burada sahibin ekleme işlemi yapılır
-                if (!Array.isArray(this.selectedRelatedParties)) this.selectedRelatedParties = [];
-                if (!this.selectedRelatedParties.some(p => String(p.id) === String(person.id))) {
+            // Burada sahibin ekleme işlemi yapılır
+            if (!Array.isArray(this.selectedRelatedParties)) this.selectedRelatedParties = [];
+            if (!this.selectedRelatedParties.some(p => String(p.id) === String(person.id))) {
                 this.selectedRelatedParties.push({
                     id: person.id,
                     name: person.name,
@@ -2210,12 +2210,16 @@ async handleSpecificTypeChange(e) {
                     phone: person.phone || ''
                 });
                 this.renderSelectedRelatedParties();
-                }
+                
+                // ✅ EKLE: İlgili taraf eklendiğinde form kontrolü yap
+                console.log('✅ İlgili taraf eklendi, form kontrol ediliyor...');
+                this.checkFormCompleteness();
+            }
 
-                // Arama sonuçlarını kapat
-                relatedPartyResults.innerHTML = '';
-                relatedPartyResults.style.display = 'none';
-                relatedPartySearch.value = '';
+            // Arama sonuçlarını kapat
+            relatedPartyResults.innerHTML = '';
+            relatedPartyResults.style.display = 'none';
+            relatedPartySearch.value = '';
             });
         }
         const applicantSearchInput = document.getElementById('applicantSearchInput');
