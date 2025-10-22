@@ -461,7 +461,7 @@ const doSearch = this.debounce(async (raw) => {
             return false; 
         }
     });
-
+    this.allBulletinRecords = filtered;
     renderResults(filtered);
 }, 250);
 
