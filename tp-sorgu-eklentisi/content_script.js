@@ -15,6 +15,35 @@ function findInputByPlaceholder(ph) {
   return document.evaluate(xp, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue || null;
 }
 
+// React kontrollü inputlara güvenli değer yaz
+function setReactInputValue(input, value) {
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+  if (setter) setter.call(input, value);
+  else input.value = value;
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  input.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
+// Metne göre buton bul (case-insensitive)
+function findButtonByTextCI(text) {
+  const xp = `//button[descendant-or-self::*[contains(translate(normalize-space(.),
+              'abcdefghijklmnopqrstuvwxyzçğıöşü',
+              'ABCDEFGHIJKLMNOPQRSTUVWXYZÇĞİÖŞÜ'), "${text.toUpperCase()}")]]`;
+  return document.evaluate(xp, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue || null;
+}
+
+// MUI buton gerçekten enable oldu mu?
+async function waitForEnabled(btn, timeout = 4000) {
+  const t0 = Date.now();
+  while (Date.now() - t0 < timeout) {
+    const disabledAttr = btn.hasAttribute('disabled');
+    const hasMuiDisabled = (btn.className || '').includes('Mui-disabled');
+    if (!disabledAttr && !hasMuiDisabled) return true;
+    await sleep(100);
+  }
+  return false;
+}
+
 function getBNFromHash() {
   try {
     const raw = (location.hash || "").replace(/^#/, "");
@@ -49,32 +78,73 @@ async function waitFor(getter, timeout = 12000, step = 200) {
 async function fillAndSearch(bn) {
   if (!bn) return false;
 
+  // 0) Önce "Başvuru Numarası" sekmesini aktif et (butonlardan biri)
+  try {
+    const basvuruTab = findButtonByTextCI("Başvuru Numarası") || findClickableByText("Başvuru Numarası");
+    if (basvuruTab) { basvuruTab.click(); await sleep(150); }
+  } catch {}
+
+  // 1) Input'u bul — placeholder küçük harfli olduğundan case-insensitive seçici kullan
   let input =
-    findInputByPlaceholder("Başvuru Numarası") ||
-    qs('input[placeholder*="Başvuru"]') ||
+    document.querySelector('input[placeholder*="başvuru" i]') ||
+    findInputByPlaceholder("Başvuru") ||
     qs('input[type="text"]');
 
-  if (!input) input = await waitFor(() => findInputByPlaceholder("Başvuru Numarası"));
+  if (!input) {
+    input = await waitFor(() =>
+      document.querySelector('input[placeholder*="başvuru" i]') ||
+      findInputByPlaceholder("Başvuru")
+    );
+  }
   if (!input) return false;
 
-  if (input.value !== bn) {
+  // 2) Değeri React/MUI uyumlu yaz + blur/validation tetikle
+  const current = (input.value || '').trim();
+  if (current !== bn) {
     input.focus();
-    input.value = "";
-    input.dispatchEvent(new Event("input", { bubbles: true }));
-    await sleep(50);
-    input.value = bn;
-    input.dispatchEvent(new Event("input", { bubbles: true }));
+    setReactInputValue(input, '');
+    await sleep(60);
+    setReactInputValue(input, bn);
+    await sleep(120);
+    input.blur();               // MUI doğrulama
+    await sleep(150);
   }
 
+  // 3) "Sorgula" butonunu bul
   let btn =
-    findClickableByText("SORGULA") ||
+    findButtonByTextCI("Sorgula") ||
     findClickableByText("Sorgula") ||
-    qs('button[type="submit"]');
+    qs('button[aria-label*="sorgula" i]') ||
+    qs('button[type="submit"]') ||
+    qs('button[type="button"]');
 
-  if (!btn) btn = await waitFor(() => findClickableByText("Sorgula"));
-  if (btn) { await sleep(150); btn.click(); return true; }
-  return false;
+  if (!btn) {
+    btn = await waitFor(() =>
+      findButtonByTextCI("Sorgula") ||
+      qs('button[type="submit"]') ||
+      qs('button[type="button"]')
+    );
+  }
+  if (!btn) {
+    // Son çare: Enter ile submit et
+    input.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter', code:'Enter', keyCode:13, bubbles:true}));
+    input.dispatchEvent(new KeyboardEvent('keyup',   {key:'Enter', code:'Enter', keyCode:13, bubbles:true}));
+    return true;
+  }
+
+  // 4) Enable olmasını bekle ve tıkla; enable olmazsa Enter dene
+  const ready = await waitForEnabled(btn, 4000);
+  if (!ready) {
+    input.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter', code:'Enter', keyCode:13, bubbles:true}));
+    input.dispatchEvent(new KeyboardEvent('keyup',   {key:'Enter', code:'Enter', keyCode:13, bubbles:true}));
+    return true;
+  }
+
+  await sleep(120);
+  btn.click();
+  return true;
 }
+
 
 async function runAutomation() {
   const url = new URL(location.href);
