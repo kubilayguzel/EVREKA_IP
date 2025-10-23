@@ -84,16 +84,17 @@ async function fillAndSearch(bn) {
     if (basvuruTab) { basvuruTab.click(); await sleep(150); }
   } catch {}
 
-  // 1) Input'u bul — placeholder küçük harfli olduğundan case-insensitive seçici kullan
-  let input =
-    document.querySelector('input[placeholder*="başvuru" i]') ||
-    findInputByPlaceholder("Başvuru") ||
-    qs('input[type="text"]');
+  // 1) Input’u BUL — önce ID ile (id: «r8»), sonra eski fallback’ler
+  let input = document.getElementById('«r8»')
+    || document.querySelector('input[placeholder*="başvuru" i]')
+    || findInputByPlaceholder("Başvuru")
+    || qs('input[type="text"]');
 
   if (!input) {
     input = await waitFor(() =>
-      document.querySelector('input[placeholder*="başvuru" i]') ||
-      findInputByPlaceholder("Başvuru")
+      document.getElementById('«r8»')
+      || document.querySelector('input[placeholder*="başvuru" i]')
+      || findInputByPlaceholder("Başvuru")
     );
   }
   if (!input) return false;
@@ -115,16 +116,20 @@ async function fillAndSearch(bn) {
     findButtonByTextCI("Sorgula") ||
     findClickableByText("Sorgula") ||
     qs('button[aria-label*="sorgula" i]') ||
+    // Sayfadaki buton kümesi için extra fallback:
+    document.querySelector('.css-1tzelke button.MuiButton-contained') ||
     qs('button[type="submit"]') ||
     qs('button[type="button"]');
 
   if (!btn) {
     btn = await waitFor(() =>
-      findButtonByTextCI("Sorgula") ||
-      qs('button[type="submit"]') ||
-      qs('button[type="button"]')
+      findButtonByTextCI("Sorgula")
+      || document.querySelector('.css-1tzelke button.MuiButton-contained')
+      || qs('button[type="submit"]')
+      || qs('button[type="button"]')
     );
   }
+
   if (!btn) {
     // Son çare: Enter ile submit et
     input.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter', code:'Enter', keyCode:13, bubbles:true}));
