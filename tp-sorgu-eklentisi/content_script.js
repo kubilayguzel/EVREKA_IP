@@ -15,6 +15,14 @@ function findInputByPlaceholder(ph) {
   return document.evaluate(xp, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue || null;
 }
 
+// YENİ YARDIMCI FONKSİYON: Label metninden input'un for ID'sini bulur.
+function findInputIdByLabel(labelText) {
+  // Label'ı metnine göre bul ve 'for' attribute değerini döndür
+  const xp = `//label[contains(normalize-space(.), "${labelText}")]`;
+  const label = document.evaluate(xp, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+  return label ? label.getAttribute('for') : null;
+}
+
 // React kontrollü inputlara güvenli değer yaz
 function setReactInputValue(input, value) {
   const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
@@ -84,22 +92,40 @@ async function fillAndSearch(bn) {
     if (basvuruTab) { basvuruTab.click(); await sleep(150); }
   } catch {}
 
-  // 1) Input’u BUL — önce ID ile (id: «r8»), sonra eski fallback’ler
-  let input = document.getElementById('«r8»')
-    || document.querySelector('input[placeholder*="başvuru" i]')
-    || findInputByPlaceholder("Başvuru")
-    || qs('input[type="text"]');
+  // 1) Input’u BUL — EN GÜVENİLİR YÖNTEM: Label'dan ID al ve Input'u bul
+  let input = null;
+  const targetLabelText = "Başvuru Numarası";
+  
+  // Önce label ID'sini bulmayı dene
+  let reliableInputId = findInputIdByLabel(targetLabelText); 
 
-  if (!input) {
-    input = await waitFor(() =>
-      document.getElementById('«r8»')
-      || document.querySelector('input[placeholder*="başvuru" i]')
-      || findInputByPlaceholder("Başvuru")
-    );
+  if (reliableInputId) {
+      // Bulunan ID ile input'u DOM'da bekle ve bul
+      input = await waitFor(() => document.getElementById(reliableInputId));
   }
+
+  // Eğer label üzerinden bulunamazsa, eski fallback yöntemleri dene
+  if (!input) {
+    input = document.querySelector('input[placeholder*="başvuru" i]') 
+      || findInputByPlaceholder("Başvuru") 
+      || qs('input[type="text"]');
+  }
+
+  // Hala bulunamazsa, daha uzun bekleme süresiyle tekrar dene
+  if (!input) {
+    input = await waitFor(() => {
+      // Bu tekrar denemede de ID'yi almayı dene
+      reliableInputId = findInputIdByLabel(targetLabelText); 
+      return reliableInputId 
+          ? document.getElementById(reliableInputId) 
+          : document.querySelector('input[placeholder*="başvuru" i]') || findInputByPlaceholder("Başvuru");
+    });
+  }
+
   if (!input) return false;
 
   // 2) Değeri React/MUI uyumlu yaz + blur/validation tetikle
+  // Bu işlem, sorgula butonunun "disabled" durumdan çıkmasını sağlar.
   const current = (input.value || '').trim();
   if (current !== bn) {
     input.focus();
@@ -117,14 +143,14 @@ async function fillAndSearch(bn) {
     findClickableByText("Sorgula") ||
     qs('button[aria-label*="sorgula" i]') ||
     // Sayfadaki buton kümesi için extra fallback:
-    document.querySelector('.css-1tzelke button.MuiButton-contained') ||
+    document.querySelector('button.MuiButton-contained') || 
     qs('button[type="submit"]') ||
     qs('button[type="button"]');
 
   if (!btn) {
     btn = await waitFor(() =>
       findButtonByTextCI("Sorgula")
-      || document.querySelector('.css-1tzelke button.MuiButton-contained')
+      || document.querySelector('button.MuiButton-contained')
       || qs('button[type="submit"]')
       || qs('button[type="button"]')
     );
@@ -137,7 +163,7 @@ async function fillAndSearch(bn) {
     return true;
   }
 
-  // 4) Enable olmasını bekle ve tıkla; enable olmazsa Enter dene
+  // 4) Butonun enable olmasını bekle (Mui-disabled kalkmalı) ve tıkla; enable olmazsa Enter dene
   const ready = await waitForEnabled(btn, 4000);
   if (!ready) {
     input.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter', code:'Enter', keyCode:13, bubbles:true}));
