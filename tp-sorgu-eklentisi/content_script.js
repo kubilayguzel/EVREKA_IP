@@ -43,12 +43,27 @@ function findButtonByTextCI(text) {
 // MUI buton gerçekten enable oldu mu?
 async function waitForEnabled(btn, timeout = 4000) {
   const t0 = Date.now();
+  let attempts = 0;
+  
   while (Date.now() - t0 < timeout) {
     const disabledAttr = btn.hasAttribute('disabled');
     const hasMuiDisabled = (btn.className || '').includes('Mui-disabled');
-    if (!disabledAttr && !hasMuiDisabled) return true;
-    await sleep(100);
+    
+    if (!disabledAttr && !hasMuiDisabled) {
+      console.log('[TP Eklenti] Buton enable oldu ✓');
+      return true;
+    }
+    
+    if (attempts % 10 === 0) {
+      const elapsed = Math.floor((Date.now() - t0) / 1000);
+      console.log(`[TP Eklenti] Buton henüz disabled, bekleniyor... (${elapsed}s/${Math.floor(timeout/1000)}s)`);
+    }
+    
+    attempts++;
+    await sleep(200);
   }
+  
+  console.log('[TP Eklenti] Buton timeout ✗ (enable olmadı)');
   return false;
 }
 
@@ -85,97 +100,141 @@ async function waitFor(getter, timeout = 12000, step = 200) {
 
 async function fillAndSearch(bn) {
   if (!bn) return false;
-
-  // 0) Önce "Başvuru Numarası" sekmesini aktif et (butonlardan biri)
-  try {
-    const basvuruTab = findButtonByTextCI("Başvuru Numarası") || findClickableByText("Başvuru Numarası");
-    if (basvuruTab) { basvuruTab.click(); await sleep(150); }
-  } catch {}
-
-  // 1) Input’u BUL — EN GÜVENİLİR YÖNTEM: Label'dan ID al ve Input'u bul
-  let input = null;
-  const targetLabelText = "Başvuru Numarası";
   
-  // Önce label ID'sini bulmayı dene
-  let reliableInputId = findInputIdByLabel(targetLabelText); 
+  console.log('[TP Eklenti] Başvuru numarası dolduruluyor:', bn);
 
-  if (reliableInputId) {
-      // Bulunan ID ile input'u DOM'da bekle ve bul
-      input = await waitFor(() => document.getElementById(reliableInputId));
-  }
-
-  // Eğer label üzerinden bulunamazsa, eski fallback yöntemleri dene
+  // 1) Başvuru Numarası input alanını bul
+  let input = null;
+  
+  // Önce placeholder ile dene (en güvenilir)
+  input = document.querySelector('input[placeholder="Başvuru numarası"]');
+  
+  // Bulunamazsa label'a göre ara
   if (!input) {
-    input = document.querySelector('input[placeholder*="başvuru" i]') 
-      || findInputByPlaceholder("Başvuru") 
-      || qs('input[type="text"]');
-  }
-
-  // Hala bulunamazsa, daha uzun bekleme süresiyle tekrar dene
-  if (!input) {
-    input = await waitFor(() => {
-      // Bu tekrar denemede de ID'yi almayı dene
-      reliableInputId = findInputIdByLabel(targetLabelText); 
-      return reliableInputId 
-          ? document.getElementById(reliableInputId) 
-          : document.querySelector('input[placeholder*="başvuru" i]') || findInputByPlaceholder("Başvuru");
-    });
-  }
-
-  if (!input) return false;
-
-  // 2) Değeri React/MUI uyumlu yaz + blur/validation tetikle
-  // Bu işlem, sorgula butonunun "disabled" durumdan çıkmasını sağlar.
-  const current = (input.value || '').trim();
-  if (current !== bn) {
-    input.focus();
-    setReactInputValue(input, '');
-    await sleep(60);
-    setReactInputValue(input, bn);
-    await sleep(120);
-    input.blur();               // MUI doğrulama
-    await sleep(150);
-  }
-
-  // 3) "Sorgula" butonunu bul
-  let btn =
-    findButtonByTextCI("Sorgula") ||
-    findClickableByText("Sorgula") ||
-    qs('button[aria-label*="sorgula" i]') ||
-    // Sayfadaki buton kümesi için extra fallback:
-    document.querySelector('button.MuiButton-contained') || 
-    qs('button[type="submit"]') ||
-    qs('button[type="button"]');
-
-  if (!btn) {
-    btn = await waitFor(() =>
-      findButtonByTextCI("Sorgula")
-      || document.querySelector('button.MuiButton-contained')
-      || qs('button[type="submit"]')
-      || qs('button[type="button"]')
+    const label = Array.from(document.querySelectorAll('label')).find(
+      l => l.textContent.trim() === 'Başvuru Numarası'
     );
+    if (label) {
+      const inputId = label.getAttribute('for');
+      if (inputId) {
+        input = document.getElementById(inputId);
+      }
+    }
+  }
+  
+  // Hala bulunamadıysa class kombinasyonu ile ara
+  if (!input) {
+    const inputs = document.querySelectorAll('input.MuiInputBase-input.MuiOutlinedInput-input');
+    for (const inp of inputs) {
+      const placeholder = (inp.getAttribute('placeholder') || '').toLowerCase();
+      if (placeholder.includes('başvuru')) {
+        input = inp;
+        break;
+      }
+    }
+  }
+
+  // Hala bulunamadıysa bekle
+  if (!input) {
+    console.log('[TP Eklenti] Input bulunamadı, bekleniyor...');
+    try {
+      input = await waitFor(() => {
+        return document.querySelector('input[placeholder="Başvuru numarası"]')
+          || document.querySelector('input[placeholder*="başvuru" i]');
+      }, 8000);
+    } catch (e) {
+      console.error('[TP Eklenti] Input bulma timeout:', e);
+    }
+  }
+
+  if (!input) {
+    console.error('[TP Eklenti] Başvuru numarası input alanı bulunamadı!');
+    return false;
+  }
+
+  console.log('[TP Eklenti] Input bulundu');
+
+  // 2) Input değerini React uyumlu şekilde yaz
+  input.focus();
+  await sleep(150);
+  
+  // Önce temizle
+  setReactInputValue(input, '');
+  await sleep(100);
+  
+  // Değeri yaz
+  setReactInputValue(input, bn);
+  console.log('[TP Eklenti] Değer yazıldı:', bn);
+  await sleep(250);
+  
+  // MUI validation için blur
+  input.blur();
+  await sleep(300);
+
+  // 3) Sorgula butonunu bul
+  let btn = null;
+  
+  // MUI contained primary button + "Sorgula" metni ile bul
+  const buttons = document.querySelectorAll('button.MuiButton-contained.MuiButton-containedPrimary');
+  for (const b of buttons) {
+    const text = (b.textContent || '').trim();
+    if (text === 'Sorgula' || text.includes('Sorgula')) {
+      btn = b;
+      break;
+    }
+  }
+  
+  // Bulunamadıysa genel aramaya geç
+  if (!btn) {
+    btn = findButtonByTextCI("Sorgula") || findClickableByText("Sorgula");
+  }
+  
+  // Hala bulunamadıysa bekle
+  if (!btn) {
+    console.log('[TP Eklenti] Buton bulunamadı, bekleniyor...');
+    try {
+      btn = await waitFor(() => {
+        const btns = document.querySelectorAll('button.MuiButton-contained');
+        for (const b of btns) {
+          const text = (b.textContent || '').trim();
+          if (text === 'Sorgula' || text.includes('Sorgula')) {
+            return b;
+          }
+        }
+        return null;
+      }, 5000);
+    } catch (e) {
+      console.error('[TP Eklenti] Buton bulma timeout:', e);
+    }
   }
 
   if (!btn) {
-    // Son çare: Enter ile submit et
+    console.log('[TP Eklenti] Buton bulunamadı, Enter gönderiliyor...');
+    input.focus();
     input.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter', code:'Enter', keyCode:13, bubbles:true}));
-    input.dispatchEvent(new KeyboardEvent('keyup',   {key:'Enter', code:'Enter', keyCode:13, bubbles:true}));
+    input.dispatchEvent(new KeyboardEvent('keyup', {key:'Enter', code:'Enter', keyCode:13, bubbles:true}));
     return true;
   }
 
-  // 4) Butonun enable olmasını bekle (Mui-disabled kalkmalı) ve tıkla; enable olmazsa Enter dene
-  const ready = await waitForEnabled(btn, 4000);
+  console.log('[TP Eklenti] Buton bulundu');
+
+  // 4) Butonun Mui-disabled class'ının kalkmasını bekle
+  const ready = await waitForEnabled(btn, 8000);
+  
   if (!ready) {
+    console.log('[TP Eklenti] Buton enable olmadı, Enter gönderiliyor...');
+    input.focus();
     input.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter', code:'Enter', keyCode:13, bubbles:true}));
-    input.dispatchEvent(new KeyboardEvent('keyup',   {key:'Enter', code:'Enter', keyCode:13, bubbles:true}));
+    input.dispatchEvent(new KeyboardEvent('keyup', {key:'Enter', code:'Enter', keyCode:13, bubbles:true}));
     return true;
   }
 
-  await sleep(120);
+  await sleep(250);
+  console.log('[TP Eklenti] Sorgula butonuna tıklanıyor...');
   btn.click();
+  
   return true;
 }
-
 
 async function runAutomation() {
   const url = new URL(location.href);
@@ -226,6 +285,8 @@ async function runAutomation() {
 
 // İlk yüklemede çalıştır (her eşleşen sayfada otomatik enjekte edilir)
 (async () => {
-  await sleep(150);
+  console.log('[TP Eklenti] Content script yüklendi');
+  await sleep(1000); // Sayfa ve React bileşenlerinin tam yüklenmesi için bekle
+  console.log('[TP Eklenti] Otomasyon başlatılıyor...');
   runAutomation();
 })();
