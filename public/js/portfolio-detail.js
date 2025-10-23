@@ -608,10 +608,8 @@ window.triggerTpQuery = function(applicationNo){
   }
 
   // Eklenti çalışmazsa kullanılacak yedek URL (tek sekme)
-  const fallbackBase = 'https://www.turkpatent.gov.tr/arastirma-yap';
   const fallbackUrl =
-    `${fallbackBase}?form=trademark&auto_query=${encodeURIComponent(appNo)}&type=basvuru&source=${encodeURIComponent(window.location.origin)}`;
-
+   `https://opts.turkpatent.gov.tr/trademark#bn=${encodeURIComponent(appNo)}`;
   // SADECE v1 eklenti ID'si (tp-sorgu-eklentisi)
   const EXT_ID_TP_V1 = 'bbcpnpgglakoagjakgigmgjpdpiigpah';
 
