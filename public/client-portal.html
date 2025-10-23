@@ -4123,7 +4123,7 @@ async function loadGoodsFromBulletinRecord(objectId) {
     }
 }
 
-// YALNIZCA tp-sorgu-eklentisi'ni hedefleyen, güvenli tek-sekme akışı
+// YALNIZCA tp-sorgu-eklentisi'ni hedefleyen fonksiyon
 window.triggerTpQuery = function(applicationNo){
   const appNo = (applicationNo || '').toString().trim();
   if (!appNo){
@@ -4131,40 +4131,38 @@ window.triggerTpQuery = function(applicationNo){
     return;
   }
 
-  // Eklenti çalışmazsa kullanılacak yedek URL (tek sekme)
-  const fallbackBase = 'https://www.turkpatent.gov.tr/arastirma-yap';
-  const fallbackUrl =
-    `${fallbackBase}?form=trademark&auto_query=${encodeURIComponent(appNo)}&type=basvuru&source=${encodeURIComponent(window.location.origin)}`;
+  console.log('[TP Query] Başvuru numarası:', appNo);
 
-  // SADECE v1 eklenti ID'si (tp-sorgu-eklentisi)
-  const EXT_ID_TP_V1 = 'bbcpnpgglakoagjakgigmgjpdpiigpah';
+  // SADECE tp-sorgu-eklentisi ID'si
+  const EXT_ID_TP = 'bbcpnpgglakoagjakgigmgjpdpiigpah';
 
-  try {
-    if (typeof chrome !== 'undefined' && chrome.runtime && EXT_ID_TP_V1) {
-      chrome.runtime.sendMessage(
-        EXT_ID_TP_V1,
-        { type: 'SORGULA', data: appNo },
-        (response) => {
-          const hasErr = !!(chrome.runtime && chrome.runtime.lastError);
-          const ok = response && (response.status === 'OK' || response.status === 'OK_WAIT');
-
-          // Eklenti yok/cevap vermedi -> tek sekmelik yedek
-          if (hasErr || !ok) {
-            const win = window.open(fallbackUrl, '_blank');
-            if (!win) alert('Pop-up engellendi. Lütfen bu site için pop-up izni verin.');
-          }
-          // Eklenti başarıyla sekmeyi kendi açacak; burada ekstra pencere açmıyoruz.
-        }
-      );
-      return; // Mesaj denendi; burada bitiriyoruz.
-    }
-  } catch (e) {
-    // Mesaj atılamadıysa yedeğe düş
+  // Eklenti kontrolü
+  if (typeof chrome === 'undefined' || !chrome.runtime) {
+    alert('Chrome eklentisi ortamı bulunamadı. Lütfen Chrome tarayıcısı kullanın.');
+    return;
   }
 
-  // Eklenti ortamı yoksa (Safari/Firefox vs.) ya da bir şey ters gittiyse tek sekme aç
-  const win = window.open(fallbackUrl, '_blank');
-  if (!win) alert('Pop-up engellendi. Lütfen bu site için pop-up izni verin.');
+  // Eklentiye mesaj gönder
+  chrome.runtime.sendMessage(
+    EXT_ID_TP,
+    { type: 'SORGULA', data: appNo },
+    (response) => {
+      const hasErr = !!(chrome.runtime && chrome.runtime.lastError);
+      
+      if (hasErr) {
+        const errMsg = chrome.runtime.lastError?.message || 'Bilinmeyen hata';
+        console.error('[TP Query] Eklenti hatası:', errMsg);
+        alert(`Eklenti çalışmıyor. Lütfen "TP - Marka Dosya Sorgu" eklentisinin yüklü ve aktif olduğundan emin olun.\n\nHata: ${errMsg}`);
+        return;
+      }
+      
+      if (response && response.status === 'OK') {
+        console.log('[TP Query] Eklenti başarıyla yanıt verdi');
+      } else {
+        console.warn('[TP Query] Beklenmeyen eklenti yanıtı:', response);
+      }
+    }
+  );
 };
 
 // --- Filtre Event Listener'ları ---
