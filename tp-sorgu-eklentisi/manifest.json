@@ -7,8 +7,9 @@
   
   "host_permissions": [
     "*://arastirma.turkpatent.gov.tr/*",
-    "*://www.turkpatent.gov.tr/*"
-       
+    "*://www.turkpatent.gov.tr/*",
+    "*://giris.turkiye.gov.tr/*",
+    "*://opts.turkpatent.gov.tr/*"
   ],
   "background": {
     "service_worker": "background.js"
