@@ -1,30 +1,22 @@
-// Web sitenizden gelen mesajları dinle
-chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => {
-  if (request.type === 'SORGULA' && request.data) {
-    const basvuruNo = request.data;
-    const targetUrl = "https://www.turkpatent.gov.tr/arastirma-yap?form=trademark";
+// TP - Marka Dosya Sorgu (background / service worker)
+// İZİN YOK: sadece sekme açıyoruz. bn bilgisini URL hash ile geçiyoruz.
 
-    // Yeni bir sekme oluştur
-    chrome.tabs.create({ url: targetUrl }, (newTab) => {
-      // Bu yeni sekmenin yüklenmesini dinlemek için bir olay dinleyici ekle
-      const listener = (tabId, changeInfo, tab) => {
-        // Eğer güncellenen sekme bizim oluşturduğumuz sekme ise VE yüklenmesi tamamlandıysa
-        if (tabId === newTab.id && changeInfo.status === 'complete') {
-          // Mesajı şimdi, yani sayfa tamamen hazır olduğunda gönder
-          chrome.tabs.sendMessage(tabId, {
-            type: 'AUTO_FILL',
-            data: basvuruNo
-          });
-          // İşi bittiği için bu dinleyiciyi bellekten kaldır
-          chrome.tabs.onUpdated.removeListener(listener);
-        }
-      };
-      
-      // Sekme güncelleme olaylarını dinlemeye başla
-      chrome.tabs.onUpdated.addListener(listener);
-    });
+// Dış kaynaktan çağrı örneği:
+// chrome.runtime.sendMessage(EXT_ID, { type: "SORGULA", data: "2024/123456" })
+chrome.runtime.onMessageExternal.addListener((req, sender, sendResponse) => {
+  if (!req || req.type !== "SORGULA" || !req.data) return;
+  const bn = String(req.data).trim();
+  if (!bn) return;
 
-    sendResponse({ status: 'OK', message: 'Sorgulama sekmesi oluşturuldu ve yüklenmesi bekleniyor.' });
-  }
-  return true; 
+  const url = "https://opts.turkpatent.gov.tr/trademark#bn=" + encodeURIComponent(bn);
+
+  chrome.tabs.create({ url }, (tab) => {
+    if (!tab) {
+      sendResponse?.({ status: "ERR", reason: "Sekme açılamadı" });
+      return;
+    }
+    sendResponse?.({ status: "OK" });
+  });
+
+  return true; // async response
 });
