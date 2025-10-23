@@ -4123,38 +4123,48 @@ async function loadGoodsFromBulletinRecord(objectId) {
     }
 }
 
-// === TÜRKPATENT Sorgulama Fonksiyonu (portfolio-detail.js'den alındı) ===
+// YALNIZCA tp-sorgu-eklentisi'ni hedefleyen, güvenli tek-sekme akışı
 window.triggerTpQuery = function(applicationNo){
-    const appNo = (applicationNo || '').toString().trim();
-    if (!appNo){
-        alert('Başvuru numarası bulunamadı.');
-        return;
-    }
-    const base = 'https://www.turkpatent.gov.tr/arastirma-yap';
-    const url = `${base}?form=trademark&auto_query=${encodeURIComponent(appNo)}&query_type=basvuru&source=${encodeURIComponent(window.location.origin)}`;
+  const appNo = (applicationNo || '').toString().trim();
+  if (!appNo){
+    alert('Başvuru numarası bulunamadı.');
+    return;
+  }
 
-    // 1) Yeni sekme aç
-    const newTab = window.open(url, '_blank');
-    if (!newTab) {
-        alert('Pop-up engellendi. Lütfen bu site için pop-up izni verin.');
-        return;
-    }
+  // Eklenti çalışmazsa kullanılacak yedek URL (tek sekme)
+  const fallbackBase = 'https://www.turkpatent.gov.tr/arastirma-yap';
+  const fallbackUrl =
+    `${fallbackBase}?form=trademark&auto_query=${encodeURIComponent(appNo)}&type=basvuru&source=${encodeURIComponent(window.location.origin)}`;
 
-    // 2) (Opsiyonel) Eklentiye mesaj gönder
-    try {
-        const eklentiID = 'bbcpnpgglakoagjakgigmgjpdpiigpah';
-        if (typeof chrome !== 'undefined' && chrome.runtime && eklentiID) {
-            chrome.runtime.sendMessage(eklentiID, { type: 'SORGULA', data: appNo }, (response) => {
-                if (chrome.runtime.lastError) {
-                    console.warn('Eklenti mesaj hatası:', chrome.runtime.lastError.message);
-                } else {
-                    console.log('Eklenti yanıtı:', response?.status);
-                }
-            });
+  // SADECE v1 eklenti ID'si (tp-sorgu-eklentisi)
+  const EXT_ID_TP_V1 = 'bbcpnpgglakoagjakgigmgjpdpiigpah';
+
+  try {
+    if (typeof chrome !== 'undefined' && chrome.runtime && EXT_ID_TP_V1) {
+      chrome.runtime.sendMessage(
+        EXT_ID_TP_V1,
+        { type: 'SORGULA', data: appNo },
+        (response) => {
+          const hasErr = !!(chrome.runtime && chrome.runtime.lastError);
+          const ok = response && (response.status === 'OK' || response.status === 'OK_WAIT');
+
+          // Eklenti yok/cevap vermedi -> tek sekmelik yedek
+          if (hasErr || !ok) {
+            const win = window.open(fallbackUrl, '_blank');
+            if (!win) alert('Pop-up engellendi. Lütfen bu site için pop-up izni verin.');
+          }
+          // Eklenti başarıyla sekmeyi kendi açacak; burada ekstra pencere açmıyoruz.
         }
-    } catch (e) {
-        console.warn('Eklenti mesajı gönderilemedi:', e);
+      );
+      return; // Mesaj denendi; burada bitiriyoruz.
     }
+  } catch (e) {
+    // Mesaj atılamadıysa yedeğe düş
+  }
+
+  // Eklenti ortamı yoksa (Safari/Firefox vs.) ya da bir şey ters gittiyse tek sekme aç
+  const win = window.open(fallbackUrl, '_blank');
+  if (!win) alert('Pop-up engellendi. Lütfen bu site için pop-up izni verin.');
 };
 
 // --- Filtre Event Listener'ları ---
