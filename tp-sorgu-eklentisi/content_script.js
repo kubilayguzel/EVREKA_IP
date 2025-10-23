@@ -1,210 +1,130 @@
-// =============================
-// Evreka IP - Turkpatent Otomasyon (İZİNSİZ GÜNCELLENMİŞ SÜRÜM)
-// =============================
+// TP - Marka Dosya Sorgu (content script) — minimum izin
 
-let targetBasvuruNo = null; // Sayfa yenilendiğinde sıfırlanacaktır.
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const qs = (sel, root = document) => root.querySelector(sel);
 
-// Gerekli CSS Selector'ler (Bu selector'leri, ilgili sayfalardan F12 ile kontrol edip 
-// DOM yapısına göre güncellemeniz gerekebilir. Text aramayı baz alıyorum.)
-const SELECTORS = {
-    // TÜRKPATENT ilk Dosya Takibi ekranında çıkan e-Devlet butonu metni
-    E_DEVLET_GIRIS_TEXT: 'e-Devlet ile Giriş Yap',
-    // Giriş sonrası çıkan sayfadaki Marka Dosya Takibi butonu/linki metni (2. görsel)
-    MARKA_DOSYA_TAKIBI_TEXT: 'Marka Dosya Takibi',
-    // Son sorgulama sayfasındaki Başvuru Numarası inputu (3. görsel)
-    BASVURU_NO_INPUT: 'input[placeholder="Başvuru Numarası"]', 
-    // Son sorgulama sayfasındaki Sorgula butonu metni
-    SORGULA_TEXT: 'Sorgula'
-};
-
-
-// -------------- Yardımcılar (Mevcut kodunuzdan alındı) --------------
-function waitFor(selector, { root = document, timeout = 7000, test = null } = {}) {
-  return new Promise((resolve, reject) => {
-    // Hemen var mı?
-    let el = root.querySelector(selector);
-    if (el && (!test || test(el))) return resolve(el);
-
-    // Observer ile hızlı yakala
-    const obs = new MutationObserver(() => {
-      el = root.querySelector(selector);
-      if (el && (!test || test(el))) {
-        obs.disconnect();
-        resolve(el);
-      }
-    });
-    obs.observe(root, { childList: true, subtree: true, attributes: true });
-
-    // Emniyet timeout
-    const to = setTimeout(() => {
-      obs.disconnect();
-      reject(new Error(`waitFor timeout: ${selector}`));
-    }, timeout);
-
-    // Resolve olunca timeout temizlensin
-    const _resolve = (v) => { clearTimeout(to); resolve(v); };
-  });
+function findClickableByText(text) {
+  const xp = `//button[contains(normalize-space(.), "${text}")]
+              | //a[contains(normalize-space(.), "${text}")]
+              | //div[@role="button" and contains(normalize-space(.), "${text}")]`;
+  return document.evaluate(xp, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue || null;
 }
 
-function click(el) {
-  if (!el) return false;
-  const rect = el.getBoundingClientRect();
-  if (rect.width > 0 && rect.height > 0) {
-    el.click();
-    return true;
-  }
-  return false;
+function findInputByPlaceholder(ph) {
+  const xp = `//input[@placeholder and contains(normalize-space(@placeholder), "${ph}")]`;
+  return document.evaluate(xp, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue || null;
 }
 
-function findButtonByTextFast(text) {
-  // Çok hızlı text yakalama (span->button da dahil)
-  const allElements = document.querySelectorAll('button, a, span[role="button"]'); 
-  for (const el of allElements) {
-    if ((el.textContent || '').trim().includes(text)) {
-        if (el.tagName === 'BUTTON' || el.tagName === 'A' || el.getAttribute('role') === 'button') {
-            return el;
-        }
-    }
-  }
-  return null;
+function getBNFromHash() {
+  try {
+    const raw = (location.hash || "").replace(/^#/, "");
+    const m = raw.match(/(?:^|[&#;])bn=([^&#;]+)/i);
+    return m ? decodeURIComponent(m[1]) : "";
+  } catch { return ""; }
 }
 
-// -------------------- Ana Akış Fonksiyonları --------------------
-
-// ADIM 1: TÜRKPATENT Başlangıç Sayfası -> e-Devlet'e yönlendirme
-async function step1_InitialPage(basvuruNo) {
-    // 1) "Dosya Takibi" sekmesine geç
-    let tabBtn = findButtonByTextFast('Dosya Takibi');
-    if (!tabBtn) {
-        tabBtn = await waitFor('button[role="tab"]', {
-            timeout: 4000,
-            test: (el) => (el.textContent || '').includes('Dosya Takibi')
-        });
-    }
-    
-    if (tabBtn.getAttribute('aria-selected') !== 'true') {
-        click(tabBtn);
-        console.log('[Evreka Eklenti] "Dosya Takibi" sekmesine tıklandı.');
-    }
-
-    // 2) "e-Devlet ile Giriş Yap" butonunu bekle ve tıkla
-    const edevletGirisBtn = await waitFor('button, a', {
-        timeout: 4000,
-        test: (el) => (el.textContent || '').includes(SELECTORS.E_DEVLET_GIRIS_TEXT)
-    });
-
-    if (edevletGirisBtn) {
-        click(edevletGirisBtn);
-        console.log('[Evreka Eklenti] "e-Devlet ile Giriş Yap" butonuna tıklandı. Kullanıcı girişi bekleniyor...');
-    } else {
-        throw new Error(`[ADIM 1 HATA] "${SELECTORS.E_DEVLET_GIRIS_TEXT}" butonu bulunamadı.`);
-    }
-    // NOT: Bu noktada sayfa e-Devlet'e yönlenir.
+function setWindowNameBN(bn) {
+  try { window.name = JSON.stringify({ bn }); }
+  catch { try { window.name = bn; } catch(_){} }
 }
 
-// ADIM 2: TÜRKPATENT İç Portalı -> Marka Dosya Takibi formuna yönlendirme
-async function step2_InternalPortal(basvuruNo) {
-    console.log('[Evreka Eklenti] E-Devlet girişi sonrası iç portaldeyiz.');
-    
-    // Marka Dosya Takibi butonuna tıkla
-    const markaDosyaTakibiBtn = await waitFor('a, button, span[role="button"]', {
-        timeout: 5000,
-        test: (el) => (el.textContent || '').includes(SELECTORS.MARKA_DOSYA_TAKIBI_TEXT)
-    });
-
-    if (markaDosyaTakibiBtn) {
-        click(markaDosyaTakibiBtn);
-        console.log('[Evreka Eklenti] "Marka Dosya Takibi" butonuna tıklandı. Sorgulama sayfasına gidiliyor.');
-    } else {
-        throw new Error(`[ADIM 2 HATA] "${SELECTORS.MARKA_DOSYA_TAKIBI_TEXT}" butonu bulunamadı.`);
-    }
-    // NOT: Bu noktada sorgulama formu olan 3. sayfaya yönlenir.
+function getWindowNameBN() {
+  try {
+    if (!window.name) return "";
+    try { const o = JSON.parse(window.name); return o && o.bn ? String(o.bn) : String(window.name); }
+    catch { return String(window.name); }
+  } catch { return ""; }
 }
 
-// ADIM 3: Sorgulama Aşaması (Son sayfa) -> Numarayı gir ve tıkla
-async function step3_PerformQuery(basvuruNo) {
-    console.log('[Evreka Eklenti] Sorgulama sayfasındayız. Numarayı giriyoruz.');
+async function waitFor(getter, timeout = 12000, step = 200) {
+  const st = Date.now();
+  while (Date.now() - st < timeout) {
+    const el = await getter();
+    if (el) return el;
+    await sleep(step);
+  }
+  return null;
+}
 
-    // 1. Formu doldur
-    const input = await waitFor(SELECTORS.BASVURU_NO_INPUT, { timeout: 7000 });
-    
-    // 2. Sorgula butonu
-    const sorgulaBtn = await waitFor('button', {
-        timeout: 3000,
-        test: (el) => (el.textContent || '').includes(SELECTORS.SORGULA_TEXT)
-    });
+async function fillAndSearch(bn) {
+  if (!bn) return false;
 
-    // Değer yaz (React controlled için event’ler)
+  let input =
+    findInputByPlaceholder("Başvuru Numarası") ||
+    qs('input[placeholder*="Başvuru"]') ||
+    qs('input[type="text"]');
+
+  if (!input) input = await waitFor(() => findInputByPlaceholder("Başvuru Numarası"));
+  if (!input) return false;
+
+  if (input.value !== bn) {
     input.focus();
-    input.value = basvuruNo;
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-    input.dispatchEvent(new Event('change', { bubbles: true }));
-    console.log('[Evreka Eklenti] Başvuru No yazıldı:', basvuruNo);
+    input.value = "";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    await sleep(50);
+    input.value = bn;
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  }
 
-    // Tıkla
-    click(sorgulaBtn);
-    console.log('[Evreka Eklenti] Sorgula butonuna tıklandı. ✔');
-    
-    // NOT: Akış tamamlandı. targetBasvuruNo otomatik sıfırlanacaktır.
+  let btn =
+    findClickableByText("SORGULA") ||
+    findClickableByText("Sorgula") ||
+    qs('button[type="submit"]');
+
+  if (!btn) btn = await waitFor(() => findClickableByText("Sorgula"));
+  if (btn) { await sleep(150); btn.click(); return true; }
+  return false;
 }
 
+async function runAutomation() {
+  const url = new URL(location.href);
 
-// -------------- Ana akış --------------
-async function runAutomation(basvuruNo) {
-  console.log('[Evreka Eklenti] Otomasyon başladı. Başvuru No:', basvuruNo);
+  // Eski domain görülürse yeni uygulamaya geç
+  if (url.hostname === "www.turkpatent.gov.tr") {
+    location.href = "https://opts.turkpatent.gov.tr/trademark";
+    return;
+  }
 
-  // TÜM ADIMLARDAN ÖNCE POP-UP KAPATMA
-  try {
-    // a) Pop-up kapat (Mevcut kodunuzdaki gibi)
-    const fraudClose = await waitFor('.jss84 .jss92, [data-testid="CloseIcon"], button[aria-label="Kapat"]', { timeout: 1500 });
-    click(fraudClose);
-    console.log('[Evreka Eklenti] Popup kapatıldı.');
-  } catch { /* yoksa geç */ }
+  // Hash'teki bn'i window.name'e koy (redirectlerde korunur)
+  const bnFromHash = getBNFromHash();
+  if (bnFromHash) setWindowNameBN(bnFromHash);
 
-    const currentUrl = window.location.href;
+  const bn = bnFromHash || getWindowNameBN();
+  if (!bn) return; // dış tetik yoksa dur
 
-    // URL'ye ve sayfa içeriğine göre hangi adımda olduğumuzu tespit etme
-    try {
-        if (currentUrl.includes("giris.turkiye.gov.tr")) {
-            // ADIM 1.5: E-Devlet Giriş Sayfası (KULLANICI BEKLEME)
-            console.warn('[Evreka Eklenti] E-Devlet giriş sayfası. Lütfen girişi manuel tamamlayın. Giriş sonrası dış uygulamadan tekrar tetikleme gereklidir.');
-            return; // Dur ve kullanıcıyı bekle
+  // /login: "e-Devlet ile Giriş Yap" tıkla (kullanıcı şifresini girer)
+  if (url.hostname === "opts.turkpatent.gov.tr" && url.pathname.startsWith("/login")) {
+    const btn = await waitFor(() => findClickableByText("e-Devlet ile Giriş Yap"));
+    if (btn) btn.click();
+    return;
+  }
 
-        } else if (document.querySelector(SELECTORS.BASVURU_NO_INPUT)) {
-            // ADIM 3: Sorgulama Aşaması (Sorgulama input alanı varsa)
-            await step3_PerformQuery(basvuruNo);
+  // /home: bn hash'iyle /trademark'a geç
+  if (url.hostname === "opts.turkpatent.gov.tr" && url.pathname === "/home") {
+    location.href = "https://opts.turkpatent.gov.tr/trademark#bn=" + encodeURIComponent(bn);
+    return;
+  }
 
-        } else if (findButtonByTextFast(SELECTORS.MARKA_DOSYA_TAKIBI_TEXT)) {
-            // ADIM 2: İç Portal Aşaması (Marka Dosya Takibi butonu varsa)
-            await step2_InternalPortal(basvuruNo);
+  // /trademark (veya marka-dosya-takibi): doldur & sorgula
+  const isTrademark =
+    url.hostname === "opts.turkpatent.gov.tr" &&
+    (url.pathname === "/trademark" || url.pathname.includes("marka-dosya-takibi"));
 
-        } else if (findButtonByTextFast(SELECTORS.E_DEVLET_GIRIS_TEXT) || findButtonByTextFast('Dosya Takibi')) { 
-            // ADIM 1: TÜRKPATENT Başlangıç Sayfası (e-Devlet butonu veya Dosya Takibi sekmesi varsa)
-            await step1_InitialPage(basvuruNo);
-
-        } else {
-            console.log('[Evreka Eklenti] Tanımsız TÜRKPATENT sayfası. Dış uygulamadan gelen mesaj bekleniyor.');
-        }
-
-    } catch (err) {
-        console.error('[Evreka Eklenti] Otomasyon Akışında Hata:', err.message);
+  if (isTrademark) {
+    const ok = await fillAndSearch(bn);
+    if (!ok) {
+      // DOM geç yüklenirse tekrar dene
+      const mo = new MutationObserver(async () => {
+        const done = await fillAndSearch(bn);
+        if (done) mo.disconnect();
+      });
+      mo.observe(document.documentElement, { subtree: true, childList: true });
     }
+  }
 }
 
-
-// -------------- Mesaj Dinleyici (Başlatıcı) --------------
-
-// background.js'den komutu al
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.type === 'AUTO_FILL' && request.data) {
-    // Basvuru numarasını local değişkene ata
-    targetBasvuruNo = request.data; 
-    
-    // Yeni akışı başlat (targetBasvuruNo'nun bu mesajla geldiği varsayılır)
-    runAutomation(targetBasvuruNo).catch(err => console.error('[Evreka Eklenti] Hata:', err));
-    sendResponse({ status: 'OK' });
-  }
-  return true;
-});
-
-// NOT: Dış uygulamanızın (kullanıcı arayüzü) her sayfa yüklendiğinde bu kodu tetiklemesi gereklidir.
+// İlk yüklemede çalıştır (her eşleşen sayfada otomatik enjekte edilir)
+(async () => {
+  await sleep(150);
+  runAutomation();
+})();
