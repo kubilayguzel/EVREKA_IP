@@ -1,45 +1,49 @@
 // TP - Marka Dosya Sorgu (content script) — opts.turkpatent.gov.tr için
+// v2.0 - Daha güvenilir ve debug friendly
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const qs = (sel, root = document) => root.querySelector(sel);
 
-console.log('[TP Eklenti] Content script yüklendi. URL:', window.location.href);
+console.log('[TP Eklenti] Content script yüklendi');
+console.log('[TP Eklenti] URL:', window.location.href);
+console.log('[TP Eklenti] Zaman:', new Date().toLocaleTimeString());
 
 // React kontrollü inputlara güvenli değer yaz
 function setReactInputValue(input, value) {
-  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
-  if (setter) setter.call(input, value);
-  else input.value = value;
+  const nativeInputValueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+  if (nativeInputValueSetter) {
+    nativeInputValueSetter.call(input, value);
+  } else {
+    input.value = value;
+  }
+  
+  // React event'lerini tetikle
   input.dispatchEvent(new Event('input', { bubbles: true }));
   input.dispatchEvent(new Event('change', { bubbles: true }));
 }
 
-// Metne göre buton bul
-function findButtonByText(text) {
-  const buttons = document.querySelectorAll('button');
-  for (const btn of buttons) {
-    if ((btn.textContent || '').trim().includes(text)) {
-      return btn;
-    }
-  }
-  return null;
-}
-
 // Elementin DOM'da görünmesini bekle
-async function waitFor(selector, timeout = 10000) {
+async function waitFor(selectorOrFn, timeout = 12000) {
   const startTime = Date.now();
   
   while (Date.now() - startTime < timeout) {
-    const el = typeof selector === 'function' ? selector() : document.querySelector(selector);
-    if (el) return el;
-    await sleep(200);
+    try {
+      const el = typeof selectorOrFn === 'function' 
+        ? selectorOrFn() 
+        : document.querySelector(selectorOrFn);
+      
+      if (el) return el;
+    } catch (e) {
+      console.warn('[TP Eklenti] waitFor hata:', e);
+    }
+    
+    await sleep(250);
   }
   
-  throw new Error(`Timeout: ${selector}`);
+  throw new Error(`Timeout: ${selectorOrFn}`);
 }
 
 // MUI buton enable olmasını bekle
-async function waitForEnabled(btn, timeout = 10000) {
+async function waitForEnabled(btn, timeout = 12000) {
   const t0 = Date.now();
   let attempts = 0;
   
@@ -48,20 +52,20 @@ async function waitForEnabled(btn, timeout = 10000) {
     const hasMuiDisabled = (btn.className || '').includes('Mui-disabled');
     
     if (!disabledAttr && !hasMuiDisabled) {
-      console.log('[TP Eklenti] Buton enable oldu ✓');
+      console.log('[TP Eklenti] ✓ Buton enable oldu');
       return true;
     }
     
-    if (attempts % 10 === 0) {
+    if (attempts % 5 === 0) {
       const elapsed = Math.floor((Date.now() - t0) / 1000);
-      console.log(`[TP Eklenti] Buton disabled, bekleniyor... (${elapsed}s)`);
+      console.log(`[TP Eklenti] ⏳ Buton disabled... (${elapsed}s)`);
     }
     
     attempts++;
-    await sleep(200);
+    await sleep(300);
   }
   
-  console.log('[TP Eklenti] Buton timeout (enable olmadı)');
+  console.log('[TP Eklenti] ✗ Buton timeout');
   return false;
 }
 
@@ -71,47 +75,69 @@ function getBNFromHash() {
     const raw = (location.hash || "").replace(/^#/, "");
     const m = raw.match(/(?:^|[&#;])bn=([^&#;]+)/i);
     return m ? decodeURIComponent(m[1]) : "";
-  } catch { return ""; }
+  } catch { 
+    return ""; 
+  }
 }
 
-// Başvuru numarasını doldur ve sorgula
+// Başvuru numarasını doldur ve sorgula - ANA FONKSİYON
 async function fillAndSearch(bn) {
   if (!bn) {
-    console.error('[TP Eklenti] Başvuru numarası boş!');
+    console.error('[TP Eklenti] ✗ Başvuru numarası boş!');
     return false;
   }
   
-  console.log('[TP Eklenti] Başvuru numarası dolduruluyor:', bn);
+  console.log('[TP Eklenti] ========================================');
+  console.log('[TP Eklenti] İŞLEM BAŞLIYOR');
+  console.log('[TP Eklenti] Başvuru No:', bn);
+  console.log('[TP Eklenti] ========================================');
 
-  // 1) Input alanını bul
-  let input = null;
-  
   try {
-    // Önce bekle ki sayfa tam yüklensin
-    await sleep(1500);
+    // 1) Sayfa yüklensin diye bekle
+    console.log('[TP Eklenti] 1️⃣ Sayfa yükleme bekleniyor...');
+    await sleep(2000);
     
-    console.log('[TP Eklenti] Input aranıyor...');
+    // 2) Input alanını bul
+    console.log('[TP Eklenti] 2️⃣ Input alanı aranıyor...');
     
-    // Placeholder ile bul
-    input = await waitFor(() => {
-      return document.querySelector('input[placeholder="Başvuru numarası"]')
-        || document.querySelector('input[placeholder*="başvuru" i]');
-    }, 8000);
+    let input = null;
     
-  } catch (e) {
-    console.error('[TP Eklenti] Input bulma hatası:', e);
-    return false;
-  }
+    try {
+      input = await waitFor(() => {
+        // Yöntem 1: Placeholder
+        let inp = document.querySelector('input[placeholder="Başvuru numarası"]');
+        if (inp) return inp;
+        
+        // Yöntem 2: Placeholder (case insensitive)
+        inp = document.querySelector('input[placeholder*="başvuru" i]');
+        if (inp) return inp;
+        
+        // Yöntem 3: MUI input class + placeholder kontrolü
+        const muiInputs = document.querySelectorAll('input.MuiInputBase-input');
+        for (const i of muiInputs) {
+          const ph = (i.getAttribute('placeholder') || '').toLowerCase();
+          if (ph.includes('başvuru')) {
+            return i;
+          }
+        }
+        
+        return null;
+      }, 10000);
+    } catch (e) {
+      console.error('[TP Eklenti] ✗ Input bulma timeout:', e);
+      return false;
+    }
 
-  if (!input) {
-    console.error('[TP Eklenti] Input bulunamadı!');
-    return false;
-  }
+    if (!input) {
+      console.error('[TP Eklenti] ✗ Input bulunamadı!');
+      return false;
+    }
 
-  console.log('[TP Eklenti] Input bulundu ✓');
+    console.log('[TP Eklenti] ✓ Input bulundu');
 
-  // 2) Değeri yaz
-  try {
+    // 3) Değeri yaz
+    console.log('[TP Eklenti] 3️⃣ Değer yazılıyor...');
+    
     input.focus();
     await sleep(200);
     
@@ -119,119 +145,110 @@ async function fillAndSearch(bn) {
     await sleep(150);
     
     setReactInputValue(input, bn);
-    console.log('[TP Eklenti] Değer yazıldı:', bn);
+    console.log('[TP Eklenti] ✓ Değer yazıldı:', input.value);
     await sleep(300);
     
+    // Validation için blur
     input.blur();
-    await sleep(400);
+    await sleep(500);
     
-  } catch (e) {
-    console.error('[TP Eklenti] Değer yazma hatası:', e);
-    return false;
-  }
+    console.log('[TP Eklenti] ✓ Input değeri:', input.value);
 
-  // 3) Sorgula butonunu bul
-  let btn = null;
-  
-  try {
-    console.log('[TP Eklenti] Buton aranıyor...');
+    // 4) Sorgula butonunu bul
+    console.log('[TP Eklenti] 4️⃣ Sorgula butonu aranıyor...');
     
-    btn = await waitFor(() => {
-      // MUI contained primary button + "Sorgula" içeriği
-      const buttons = document.querySelectorAll('button.MuiButton-contained.MuiButton-containedPrimary');
-      for (const b of buttons) {
-        const text = (b.textContent || '').trim();
-        if (text === 'Sorgula' || text.includes('Sorgula')) {
-          return b;
+    let btn = null;
+    
+    try {
+      btn = await waitFor(() => {
+        // MUI contained primary button + "Sorgula" içeriği
+        const buttons = document.querySelectorAll('button.MuiButton-contained');
+        for (const b of buttons) {
+          const text = (b.textContent || '').trim();
+          if (text.includes('Sorgula')) {
+            return b;
+          }
         }
-      }
+        return null;
+      }, 8000);
+    } catch (e) {
+      console.error('[TP Eklenti] ✗ Buton bulma timeout:', e);
       
-      // Alternatif: herhangi bir button içinde "Sorgula" ara
-      return findButtonByText('Sorgula');
-    }, 5000);
-    
-  } catch (e) {
-    console.error('[TP Eklenti] Buton bulma hatası:', e);
-    
-    // Enter ile dene
-    console.log('[TP Eklenti] Enter gönderiliyor...');
-    input.focus();
-    input.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter', code:'Enter', keyCode:13, bubbles:true}));
-    input.dispatchEvent(new KeyboardEvent('keyup', {key:'Enter', code:'Enter', keyCode:13, bubbles:true}));
-    return true;
-  }
+      // Enter ile dene
+      console.log('[TP Eklenti] 💡 Enter tuşu gönderiliyor...');
+      input.focus();
+      input.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter', code:'Enter', keyCode:13, bubbles:true}));
+      input.dispatchEvent(new KeyboardEvent('keyup', {key:'Enter', code:'Enter', keyCode:13, bubbles:true}));
+      return true;
+    }
 
-  if (!btn) {
-    console.error('[TP Eklenti] Buton bulunamadı!');
+    if (!btn) {
+      console.error('[TP Eklenti] ✗ Buton bulunamadı!');
+      return false;
+    }
+
+    console.log('[TP Eklenti] ✓ Buton bulundu');
+
+    // 5) Butonun enable olmasını bekle
+    console.log('[TP Eklenti] 5️⃣ Butonun enable olması bekleniyor...');
+    
+    const ready = await waitForEnabled(btn, 12000);
+    
+    if (!ready) {
+      console.log('[TP Eklenti] 💡 Buton enable olmadı, Enter deneniyor...');
+      input.focus();
+      input.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter', code:'Enter', keyCode:13, bubbles:true}));
+      input.dispatchEvent(new KeyboardEvent('keyup', {key:'Enter', code:'Enter', keyCode:13, bubbles:true}));
+      return true;
+    }
+
+    // 6) Butona tıkla
+    console.log('[TP Eklenti] 6️⃣ Butona tıklanıyor...');
+    await sleep(300);
+    
+    btn.click();
+    
+    console.log('[TP Eklenti] ========================================');
+    console.log('[TP Eklenti] ✓✓✓ İŞLEM TAMAMLANDI ✓✓✓');
+    console.log('[TP Eklenti] ========================================');
+    
+    return true;
+    
+  } catch (error) {
+    console.error('[TP Eklenti] ✗✗✗ HATA:', error);
     return false;
   }
-
-  console.log('[TP Eklenti] Buton bulundu ✓');
-
-  // 4) Butonun enable olmasını bekle
-  const ready = await waitForEnabled(btn, 10000);
-  
-  if (!ready) {
-    console.log('[TP Eklenti] Buton enable olmadı, Enter deneniyor...');
-    input.focus();
-    input.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter', code:'Enter', keyCode:13, bubbles:true}));
-    input.dispatchEvent(new KeyboardEvent('keyup', {key:'Enter', code:'Enter', keyCode:13, bubbles:true}));
-    return true;
-  }
-
-  await sleep(300);
-  console.log('[TP Eklenti] Sorgula butonuna tıklanıyor...');
-  btn.click();
-  
-  console.log('[TP Eklenti] İşlem tamamlandı ✓');
-  return true;
 }
 
 // Ana otomasyon fonksiyonu
 async function runAutomation() {
+  console.log('[TP Eklenti] 🚀 Otomasyon başladı');
+  
   const url = new URL(location.href);
-  console.log('[TP Eklenti] Otomasyon başladı. URL:', url.href);
+  console.log('[TP Eklenti] Domain:', url.hostname);
+  console.log('[TP Eklenti] Path:', url.pathname);
 
   // Hash'ten bn al
   const bn = getBNFromHash();
   
   if (!bn) {
-    console.log('[TP Eklenti] Hash\'te bn yok, bekleniyor...');
+    console.log('[TP Eklenti] ⚠️ Hash\'te başvuru numarası yok');
     return;
   }
 
-  console.log('[TP Eklenti] Hash\'ten bn alındı:', bn);
+  console.log('[TP Eklenti] ✓ Hash\'ten alındı:', bn);
 
-  // opts.turkpatent.gov.tr/trademark sayfasındayız, direkt doldur
+  // opts.turkpatent.gov.tr/trademark sayfasındayız
   if (url.hostname === "opts.turkpatent.gov.tr" && url.pathname === "/trademark") {
     await fillAndSearch(bn);
   } else {
-    console.log('[TP Eklenti] Beklenmeyen sayfa:', url.href);
+    console.log('[TP Eklenti] ⚠️ Beklenmeyen sayfa');
   }
 }
 
-// Background'dan gelen mesajı dinle
-chrome.runtime?.onMessage?.addListener((request, sender, sendResponse) => {
-  console.log('[TP Eklenti] Mesaj alındı:', request);
-  
-  if (request?.type === 'AUTO_FILL_FROM_BACKGROUND' && request?.data) {
-    const bn = request.data;
-    console.log('[TP Eklenti] Background\'dan bn alındı:', bn);
-    
-    fillAndSearch(bn).then(success => {
-      sendResponse({ status: success ? 'OK' : 'FAILED' });
-    }).catch(err => {
-      console.error('[TP Eklenti] Hata:', err);
-      sendResponse({ status: 'ERROR', error: err.message });
-    });
-    
-    return true; // async response
-  }
-});
-
 // Sayfa yüklendiğinde otomatik çalıştır
 (async () => {
-  console.log('[TP Eklenti] Başlangıç bekleme...');
-  await sleep(1500);
+  console.log('[TP Eklenti] ⏳ Başlangıç bekleme... (2 saniye)');
+  await sleep(2000);
   runAutomation();
 })();
