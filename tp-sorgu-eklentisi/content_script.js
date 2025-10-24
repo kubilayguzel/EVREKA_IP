@@ -284,50 +284,6 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   return true;
 });
 
-// Manual helper - Global scope'a ekle
-const manualFill = (no) => {
-  console.log(TAG, '🔧 Manual __evrekaFill called with:', no);
-  doQuery(no).catch(err => {
-    console.error(TAG, 'Manual fill error:', err);
-  });
-};
-
-// Birden fazla yöntemi dene
-try {
-  window.__evrekaFill = manualFill;
-  globalThis.__evrekaFill = manualFill;
-  
-  // exportFunction varsa kullan (Firefox için)
-  if (typeof exportFunction !== 'undefined') {
-    exportFunction(manualFill, window, { defineAs: '__evrekaFill' });
-  }
-  
-  // Script injection yöntemi (en güvenilir)
-  const script = document.createElement('script');
-  script.textContent = `
-    window.__evrekaFill = function(no) {
-      console.log('[Evreka CS] Manual call via injected script:', no);
-      window.postMessage({ type: 'EVREKA_MANUAL_FILL', data: no }, '*');
-    };
-    console.log('[Evreka CS] __evrekaFill injected to page context');
-  `;
-  (document.head || document.documentElement).appendChild(script);
-  script.remove();
-  
-} catch (e) {
-  console.error(TAG, 'Error setting up manual fill:', e);
-}
-
-// PostMessage listener for manual calls
-window.addEventListener('message', (event) => {
-  if (event.source !== window) return;
-  if (event.data.type === 'EVREKA_MANUAL_FILL') {
-    console.log(TAG, '📨 Received manual fill via postMessage:', event.data.data);
-    doQuery(event.data.data);
-  }
-});
-
-console.log(TAG, '✅ Ready! Manual test: __evrekaFill("2023/12345")');
 
 // ========================================
 // HASH CHANGE HANDLER (Login sonrası korumalı)
