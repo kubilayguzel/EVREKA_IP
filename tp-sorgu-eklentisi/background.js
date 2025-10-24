@@ -29,7 +29,7 @@ chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => 
             
             if (messageAttempts < maxAttempts) {
               messageAttempts++;
-              setTimeout(() => tryToSendMessage(tabId), 500);
+              setTimeout(() => tryToSendMessage(tabId), 200);
             } else {
               console.error(TAG, 'Failed to send message after', maxAttempts, 'attempts');
             }
@@ -60,7 +60,7 @@ chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => 
           // Biraz bekle, sonra mesaj göndermeye başla
           setTimeout(() => {
             tryToSendMessage(tabId);
-          }, 1000);
+          }, 500);
           
           // Listener'ı kaldır
           chrome.tabs.onUpdated.removeListener(listener);
