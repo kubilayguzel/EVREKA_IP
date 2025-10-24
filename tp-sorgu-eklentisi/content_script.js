@@ -1,124 +1,107 @@
-// =============================
-// Evreka IP - Turkpatent Otomasyon (hızlı sürüm)
-// =============================
+// Content script: robust fill & submit on /trademark
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-let targetBasvuruNo = null;
-
-// background.js'den komutu al
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.type === 'AUTO_FILL' && request.data) {
-    targetBasvuruNo = request.data;
-    runAutomation().catch(err => console.error('[Evreka Eklenti] Hata:', err));
-    sendResponse({ status: 'OK' });
-  }
-  return true;
-});
-
-// -------------- Yardımcılar --------------
-function waitFor(selector, { root = document, timeout = 7000, test = null } = {}) {
-  return new Promise((resolve, reject) => {
-    // Hemen var mı?
-    let el = root.querySelector(selector);
-    if (el && (!test || test(el))) return resolve(el);
-
-    // Observer ile hızlı yakala
-    const obs = new MutationObserver(() => {
-      el = root.querySelector(selector);
-      if (el && (!test || test(el))) {
-        obs.disconnect();
-        resolve(el);
-      }
-    });
-    obs.observe(root, { childList: true, subtree: true, attributes: true });
-
-    // Emniyet timeout
-    const to = setTimeout(() => {
-      obs.disconnect();
-      reject(new Error(`waitFor timeout: ${selector}`));
-    }, timeout);
-
-    // Resolve olunca timeout temizlensin
-    const _resolve = (v) => { clearTimeout(to); resolve(v); };
+function waitFor(checkFn, {timeout=15000, interval=100} = {}) {
+  const t0 = Date.now();
+  return new Promise(async (resolve) => {
+    while (Date.now() - t0 < timeout) {
+      try {
+        const el = typeof checkFn === 'string' ? document.querySelector(checkFn) : checkFn();
+        if (el) return resolve(el);
+      } catch {}
+      await sleep(interval);
+    }
+    resolve(null);
   });
 }
 
-function click(el) {
-  if (!el) return false;
-  const rect = el.getBoundingClientRect();
-  if (rect.width > 0 && rect.height > 0) {
-    el.click();
-    return true;
-  }
-  return false;
-}
-
-function findButtonByTextFast(text) {
-  // Çok hızlı text yakalama (span->button da dahil)
-  const btns = document.querySelectorAll('button');
-  for (const b of btns) {
-    if ((b.textContent || '').trim().includes(text)) return b;
-    const spanBtn = b.querySelector('span');
-    if (spanBtn && (spanBtn.textContent || '').trim().includes(text)) return b;
-  }
-  return null;
-}
-
-// -------------- Ana akış --------------
-async function runAutomation() {
-  console.log('[Evreka Eklenti] Otomasyon başladı. Başvuru No:', targetBasvuruNo);
-
-  // 1) Modal/popup kapat (anında yakala)
-  try {
-    // a) “Dolandırıcılık Hakkında” popup
-    const fraudClose = await waitFor('.jss84 .jss92', { timeout: 1500 });
-    click(fraudClose);
-    console.log('[Evreka Eklenti] Dolandırıcılık popup kapatıldı.');
-  } catch { /* görünmediyse sorun değil */ }
-
-  try {
-    // b) Klasik MUI dialog/overlay (varsa)
-    const anyDialog = await waitFor('[role="dialog"], .MuiDialog-root, .MuiModal-root, .modal', { timeout: 800 });
-    const closeCandidate = anyDialog.querySelector('button[aria-label="Close"], button[aria-label="Kapat"], .close') || anyDialog.querySelector('button');
-    if (closeCandidate) {
-      click(closeCandidate);
-      console.log('[Evreka Eklenti] MUI modal kapatıldı.');
-    }
-  } catch { /* yoksa geç */ }
-
-  // 2) “Dosya Takibi” sekmesine geç
-  let tabBtn = findButtonByTextFast('Dosya Takibi');
-  if (!tabBtn) {
-    tabBtn = await waitFor('button[role="tab"]', {
-      timeout: 4000,
-      test: (el) => (el.textContent || '').includes('Dosya Takibi')
-    });
-  }
-  if (tabBtn.getAttribute('aria-selected') !== 'true') {
-    click(tabBtn);
-    console.log('[Evreka Eklenti] "Dosya Takibi" sekmesine tıklandı.');
+// Set value using native setter so React/MUI controlled inputs pick it up
+function setNativeValue(el, value) {
+  const proto = Object.getPrototypeOf(el);
+  const desc = Object.getOwnPropertyDescriptor(proto, 'value');
+  if (desc && desc.set) {
+    desc.set.call(el, value);
   } else {
-    console.log('[Evreka Eklenti] "Dosya Takibi" zaten aktif.');
+    el.value = value;
   }
+}
 
-  // 3) Formu doldur + Sorgula
-  const input = await waitFor('input[placeholder="Başvuru Numarası"]', { timeout: 4000 });
-  // Sorgula butonu çok hızlı değişebildiği için önce hızlı tara, yoksa bekle
-  let sorgulaBtn = findButtonByTextFast('Sorgula');
-  if (!sorgulaBtn) {
-    sorgulaBtn = await waitFor('button', {
-      timeout: 3000,
-      test: (el) => (el.textContent || '').includes('Sorgula')
-    });
-  }
-
-  // Değer yaz (React controlled için event’ler)
+function fillReactInput(input, value) {
   input.focus();
-  input.value = targetBasvuruNo;
+  setNativeValue(input, value);
   input.dispatchEvent(new Event('input', { bubbles: true }));
   input.dispatchEvent(new Event('change', { bubbles: true }));
-  console.log('[Evreka Eklenti] Başvuru No yazıldı:', targetBasvuruNo);
-
-  // Tıkla
-  click(sorgulaBtn);
-  console.log('[Evreka Eklenti] Sorgula butonuna tıklandı. ✔');
+  input.blur(); // some forms enable button on blur
 }
+
+function findButtonByText(...texts) {
+  const norm = s => (s||'').trim().toLowerCase().replace(/\s+/g,' ');
+  const want = new Set(texts.map(t => norm(t)));
+  const nodes = Array.from(document.querySelectorAll('button,[role="button"],input[type="button"],input[type="submit"]'));
+  return nodes.find(n => want.has(norm(n.innerText) || norm(n.value)));
+}
+
+async function findAppNoInput() {
+  // 1) Label -> for
+  const labels = Array.from(document.querySelectorAll('label'));
+  for (const lb of labels) {
+    const t = (lb.textContent||'').toLowerCase();
+    if (t.includes('başvuru')) {
+      const id = lb.getAttribute('for');
+      if (id) {
+        const el = document.getElementById(id);
+        if (el && el.tagName === 'INPUT') return el;
+      }
+      const direct = lb.querySelector('input');
+      if (direct) return direct;
+    }
+  }
+  // 2) placeholder/name
+  const cand = Array.from(document.querySelectorAll('input'));
+  const byPh = cand.find(i => (i.getAttribute('placeholder')||'').toLowerCase().includes('başvuru'));
+  if (byPh) return byPh;
+  const byName = cand.find(i => (i.getAttribute('name')||'').toLowerCase().includes('basvuru'));
+  if (byName) return byName;
+
+  // 3) visible first input fallback
+  return cand.find(i => i.offsetParent !== null) || null;
+}
+
+async function doQuery(appNo) {
+  const url = location.href;
+  if (!/^https:\/\/opts\.turkpatent\.gov\.tr\/trademark\b/i.test(url)) return;
+
+  // Wait app shell mount
+  await sleep(300);
+
+  const input = await waitFor(findAppNoInput, { timeout: 20000, interval: 150 });
+  if (!input) {
+    console.warn('[Evreka] Başvuru Numarası alanı bulunamadı.');
+    return;
+  }
+
+  // Write and make sure button becomes enabled
+  fillReactInput(input, String(appNo||'').trim());
+
+  // Find the SORGULA button (uppercase or title-case)
+  let btn = await waitFor(() => findButtonByText('SORGULA','Sorgula','Ara','Sorgu'), { timeout: 8000 });
+  if (!btn) btn = document.querySelector('button[type="submit"],input[type="submit"]');
+  if (!btn) {
+    console.warn('[Evreka] SORGULA butonu bulunamadı.');
+    return;
+  }
+
+  if (btn.disabled) {
+    await sleep(250);
+  }
+  try { btn.scrollIntoView({ block: 'center' }); } catch {}
+  btn.click();
+  console.log('[Evreka] Sorgu gönderildi.');
+}
+
+// Message from background
+chrome.runtime.onMessage.addListener((msg) => {
+  if (msg?.type === 'AUTO_FILL') {
+    doQuery(msg.data);
+  }
+});
