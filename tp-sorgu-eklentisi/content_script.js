@@ -445,3 +445,82 @@ setTimeout(() => {
 }, 30000);
 
 console.log(TAG, '🔄 Hash monitoring active');
+
+// ========================================
+// URL MONITORING: Trademark sayfasına dönünce otomatik tetikle
+// ========================================
+
+let lastProcessedUrl = '';
+let urlCheckInterval = null;
+
+function checkUrlAndTrigger() {
+  const currentUrl = window.location.href;
+  
+  // Aynı URL'i tekrar işleme
+  if (currentUrl === lastProcessedUrl) {
+    return;
+  }
+  
+  console.log(TAG, '🔍 URL changed to:', currentUrl);
+  
+  // Trademark sayfasına döndük mü?
+  if (/^https:\/\/opts\.turkpatent\.gov\.tr\/trademark\b/i.test(currentUrl)) {
+    console.log(TAG, '✅ Trademark page detected');
+    lastProcessedUrl = currentUrl;
+    
+    // Hash var mı kontrol et
+    const currentHash = window.location.hash;
+    const hashMatch = currentHash.match(/#bn=([^&]+)/);
+    
+    if (hashMatch && hashMatch[1]) {
+      const appNo = decodeURIComponent(hashMatch[1]);
+      console.log(TAG, '📍 Hash found in URL:', appNo);
+      
+      // Direkt sorguyu tetikle
+      setTimeout(() => {
+        console.log(TAG, '🚀 Auto-triggering query from URL monitoring');
+        doQuery(appNo);
+      }, 1500);
+      
+      return;
+    }
+    
+    // Hash yok ama sessionStorage'da var mı?
+    const pendingQuery = sessionStorage.getItem('evreka_pending_query');
+    if (pendingQuery) {
+      console.log(TAG, '📦 No hash but found in sessionStorage:', pendingQuery);
+      
+      // Hash'i ekle
+      window.location.hash = `#bn=${encodeURIComponent(pendingQuery)}`;
+      
+      setTimeout(() => {
+        console.log(TAG, '🚀 Auto-triggering query after hash restore');
+        doQuery(pendingQuery);
+        sessionStorage.removeItem('evreka_pending_query');
+        sessionStorage.removeItem('evreka_hash_timestamp');
+      }, 1500);
+      
+      return;
+    }
+    
+    console.log(TAG, '⚠️ Trademark page but no hash or sessionStorage data');
+  }
+}
+
+// URL değişikliklerini izle (her 500ms)
+urlCheckInterval = setInterval(() => {
+  checkUrlAndTrigger();
+}, 500);
+
+// İlk kontrolü hemen yap
+setTimeout(checkUrlAndTrigger, 300);
+
+// 2 dakika sonra interval'i durdur (gereksiz CPU kullanımı için)
+setTimeout(() => {
+  if (urlCheckInterval) {
+    clearInterval(urlCheckInterval);
+    console.log(TAG, '⏹️ URL monitoring stopped after 2 minutes');
+  }
+}, 120000);
+
+console.log(TAG, '👀 URL monitoring active');
