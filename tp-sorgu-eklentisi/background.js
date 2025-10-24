@@ -1,5 +1,8 @@
-// Background: open /trademark and wait through e-Devlet if needed.
+// Background: open /trademark and wait through e-Devlet if needed (verbose logs)
+const TAG='[Evreka BG]';
+
 chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => {
+  console.log(TAG, 'onMessageExternal', request);
   if (request?.type === 'SORGULA' && request.data) {
     const basvuruNo = String(request.data);
     const targetUrl = "https://opts.turkpatent.gov.tr/trademark";
@@ -8,24 +11,24 @@ chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => 
     const isLogin     = (url="") => /^https:\/\/opts\.turkpatent\.gov\.tr\/login\b/i.test(url);
 
     chrome.tabs.create({ url: targetUrl }, (newTab) => {
+      console.log(TAG, 'Tab created', newTab);
       const listener = async (tabId, changeInfo, tab) => {
         if (tabId !== newTab.id) return;
 
-        // React to either full load or URL change
         const statusComplete = changeInfo.status === 'complete';
         const url = (changeInfo.url || tab?.url || "");
+        if (changeInfo.url) console.log(TAG, 'URL changed:', changeInfo.url);
+        if (statusComplete) console.log(TAG, 'Status complete for tab', tabId);
 
         if (!statusComplete && !url) return;
+        if (isLogin(url)) { console.log(TAG,'At login, waiting user to auth...'); return; }
 
-        // If user is on login, do nothing; they'll come back here in the same tab
-        if (isLogin(url)) return;
-
-        // When we finally land on /trademark, inject message
         if (isTrademark(url) || (statusComplete && isTrademark((tab && tab.url) || ""))) {
+          console.log(TAG, 'At /trademark, sending AUTO_FILL with', basvuruNo);
           try {
             chrome.tabs.sendMessage(tabId, { type: 'AUTO_FILL', data: basvuruNo });
           } catch (e) {
-            console.warn('[Evreka Eklenti] sendMessage hatası:', e);
+            console.warn(TAG, 'sendMessage error:', e);
           }
           chrome.tabs.onUpdated.removeListener(listener);
         }
