@@ -342,10 +342,27 @@ function checkHashAndFill() {
 
 // Sayfa yüklenince sessionStorage'dan kurtarma dene
 const pendingQuery = sessionStorage.getItem('evreka_pending_query');
-if (pendingQuery && !window.location.hash && !/login|auth|giris|e-devlet/i.test(window.location.href)) {
-  console.log(TAG, '🔄 Restoring query from sessionStorage:', pendingQuery);
-  window.location.hash = `#bn=${encodeURIComponent(pendingQuery)}`;
-  sessionStorage.removeItem('evreka_pending_query');
+const currentUrl = window.location.href;
+const currentHash = window.location.hash;
+
+// Trademark sayfasındayız VE hash yoksa VE login sayfasında değilsek
+if (pendingQuery && /^https:\/\/opts\.turkpatent\.gov\.tr\/trademark\b/i.test(currentUrl)) {
+  if (!currentHash || !currentHash.includes('bn=')) {
+    console.log(TAG, '🔄 Restoring query from sessionStorage:', pendingQuery);
+    
+    // Hash'i ekle
+    window.location.hash = `#bn=${encodeURIComponent(pendingQuery)}`;
+    
+    // Hash eklendikten sonra kısa bekleyip sorguyu çalıştır
+    setTimeout(() => {
+      console.log(TAG, 'Hash restored, triggering query...');
+      doQuery(pendingQuery);
+      sessionStorage.removeItem('evreka_pending_query');
+    }, 500);
+  } else {
+    console.log(TAG, 'Hash already present, cleaning sessionStorage');
+    sessionStorage.removeItem('evreka_pending_query');
+  }
 }
 
 // Sayfa yüklendiğinde kontrol et
