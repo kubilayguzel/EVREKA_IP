@@ -74,7 +74,7 @@ function findButton() {
 }
 
 async function findInput() {
-  await sleep(500);
+  await sleep(100);
   
   // 1) Placeholder ile
   let el = document.querySelector('input[placeholder*="Başvuru" i][placeholder*="numarası" i]');
@@ -134,8 +134,12 @@ async function doQuery(appNo) {
   }
 
   // MUI container bekle
-  await waitFor('.MuiBox-root, .MuiFormControl-root', { timeout: 10000, label: 'MUI Container' });
-  await sleep(300);
+  const container = await waitFor('.MuiBox-root, .MuiFormControl-root', { timeout: 10000, label: 'MUI Container' });
+  if (container) {
+    await sleep(100); // 300 → 100 (container bulunduysa az bekle)
+  } else {
+    await sleep(500); // Container bulunamadıysa biraz daha bekle
+  }
 
   // Input bul
   const input = await waitFor(findInput, { timeout: 5000, label: 'Input field' });
@@ -163,8 +167,6 @@ async function doQuery(appNo) {
   
   console.log(TAG, '🖱️ Clicking button');
   btn.click();
-  
-  await sleep(500);
   console.log(TAG, '✅ Query completed!');
 }
 
@@ -261,8 +263,8 @@ function checkUrl() {
 }
 
 // URL monitoring başlat
-setInterval(checkUrl, 500);
-setTimeout(checkUrl, 300);
+setInterval(checkUrl, 200);
+setTimeout(checkUrl, 100);
 
 // 2 dakika sonra durdur
 setTimeout(() => {
