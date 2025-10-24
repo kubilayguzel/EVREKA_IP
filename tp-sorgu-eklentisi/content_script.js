@@ -45,25 +45,14 @@ function fillReactInput(input, value) {
   // MUI input'u focus et
   input.focus();
   
-  // Önce mevcut değeri temizle
-  setNativeValue(input, '');
-  input.dispatchEvent(new Event('input', { bubbles: true }));
+  // Direkt değeri yaz (temizleme adımı gereksiz)
+  setNativeValue(input, value);
   
-  // Kısa bir gecikme ile yeni değeri yaz
-  setTimeout(() => {
-    // Yeni değeri yaz
-    setNativeValue(input, value);
-    
-    // MUI için gerekli tüm event'leri tetikle
-    input.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
-    input.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
-    input.dispatchEvent(new Event('blur', { bubbles: true }));
-    
-    // Focus'u koru (MUI validation için)
-    input.focus();
-    
-    console.log(TAG, 'Input filled, final value:', input.value);
-  }, 100);
+  // MUI için gerekli event'leri tetikle
+  input.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+  input.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+  
+  console.log(TAG, 'Input filled, final value:', input.value);
 }
 
 function findButtonByText(...texts) {
@@ -200,10 +189,10 @@ async function doQuery(appNo) {
   }
 
   console.log(TAG, 'Waiting for page to stabilize...');
-  await sleep(1000); // Sayfanın tamamen yüklenmesi için biraz daha uzun bekle
+  await sleep(300); // Sayfanın tamamen yüklenmesi için biraz daha uzun bekle
 
   console.log(TAG, 'Looking for input field...');
-  const input = await waitFor(findAppNoInput, { timeout: 25000, interval: 200, label: 'Başvuru Numarası Input' });
+  const input = await waitFor(findAppNoInput, { timeout: 10000, interval: 150, label: 'Başvuru Numarası Input' });
   
   if (!input) { 
     console.error(TAG, '❌ Başvuru Numarası input alanı bulunamadı!');
@@ -225,11 +214,11 @@ async function doQuery(appNo) {
   fillReactInput(input, String(appNo || '').trim());
   
   // MUI input'un doldurulması için biraz daha bekle
-  await sleep(800);
+  await sleep(200);
   console.log(TAG, 'Input value after fill:', input.value);
 
   console.log(TAG, 'Looking for SORGULA button...');
-  let btn = await waitFor(() => findButtonByText('SORGULA','Sorgula','sorgula','Ara','Search'), { timeout: 10000, label: 'SORGULA Button' });
+  let btn = await waitFor(() => findButtonByText('SORGULA','Sorgula','sorgula','Ara','Search'), { timeout: 5000, label: 'SORGULA Button' });
   
   if (!btn) {
     console.log(TAG, 'Button not found by text, trying submit buttons...');
@@ -258,7 +247,7 @@ async function doQuery(appNo) {
   
   try { 
     btn.scrollIntoView({ block: 'center', behavior: 'smooth' }); 
-    await sleep(300);
+    await sleep(100);
   } catch(e) {
     console.warn(TAG, 'scrollIntoView failed:', e);
   }
@@ -317,3 +306,20 @@ console.log(TAG, 'Functions available:', {
   __evrekaFill: typeof window.__evrekaFill,
   doQuery: typeof doQuery
 });
+
+// Hızlı hash kontrolü - DOM tamamen yüklenmeden önce
+if (window.location.hash.includes('#bn=')) {
+  console.log(TAG, '⚡ Early hash detection, preparing...');
+  const match = window.location.hash.match(/#bn=([^&]+)/);
+  if (match && match[1]) {
+    const appNo = decodeURIComponent(match[1]);
+    // DOM hazır olunca hemen çalıştır
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', () => {
+        setTimeout(() => doQuery(appNo), 100);
+      });
+    } else {
+      setTimeout(() => doQuery(appNo), 100);
+    }
+  }
+}
