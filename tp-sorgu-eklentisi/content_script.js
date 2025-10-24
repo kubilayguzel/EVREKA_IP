@@ -1,6 +1,27 @@
 // [Evreka CS] Wide-match debug content script
 const TAG='[Evreka CS]';
 console.log(TAG, 'content_script loaded at', location.href);
+// ============================================
+// HASH'İ HEMEN YAKALA (Modal açılmadan önce!)
+// ============================================
+(function() {
+  const currentHash = window.location.hash;
+  if (currentHash && currentHash.includes('#bn=')) {
+    const match = currentHash.match(/#bn=([^&]+)/);
+    if (match && match[1]) {
+      const appNo = decodeURIComponent(match[1]);
+      console.log(TAG, '⚡ IMMEDIATE hash capture on load:', appNo);
+      
+      try {
+        sessionStorage.setItem('evreka_pending_query', appNo);
+        sessionStorage.setItem('evreka_hash_timestamp', Date.now().toString());
+        console.log(TAG, '✅ Saved to sessionStorage immediately');
+      } catch(e) {
+        console.error(TAG, 'Failed to save to sessionStorage:', e);
+      }
+    }
+  }
+})();
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
@@ -311,7 +332,8 @@ function checkHashAndFill() {
     // sessionStorage'a yedekle (login sonrası kurtarmak için)
     try {
       sessionStorage.setItem('evreka_pending_query', appNo);
-      console.log(TAG, 'Saved to sessionStorage for backup');
+      sessionStorage.setItem('evreka_hash_timestamp', Date.now().toString());
+      console.log(TAG, '💾 Saved to sessionStorage with timestamp');
     } catch(e) {
       console.warn(TAG, 'sessionStorage save failed:', e);
     }
@@ -341,29 +363,56 @@ function checkHashAndFill() {
 }
 
 // Sayfa yüklenince sessionStorage'dan kurtarma dene
-const pendingQuery = sessionStorage.getItem('evreka_pending_query');
-const currentUrl = window.location.href;
-const currentHash = window.location.hash;
-
-// Trademark sayfasındayız VE hash yoksa VE login sayfasında değilsek
-if (pendingQuery && /^https:\/\/opts\.turkpatent\.gov\.tr\/trademark\b/i.test(currentUrl)) {
-  if (!currentHash || !currentHash.includes('bn=')) {
-    console.log(TAG, '🔄 Restoring query from sessionStorage:', pendingQuery);
-    
-    // Hash'i ekle
-    window.location.hash = `#bn=${encodeURIComponent(pendingQuery)}`;
-    
-    // Hash eklendikten sonra kısa bekleyip sorguyu çalıştır
-    setTimeout(() => {
-      console.log(TAG, 'Hash restored, triggering query...');
-      doQuery(pendingQuery);
-      sessionStorage.removeItem('evreka_pending_query');
-    }, 500);
-  } else {
-    console.log(TAG, 'Hash already present, cleaning sessionStorage');
+function tryRestoreFromSessionStorage() {
+  const pendingQuery = sessionStorage.getItem('evreka_pending_query');
+  const timestamp = sessionStorage.getItem('evreka_hash_timestamp');
+  const currentUrl = window.location.href;
+  const currentHash = window.location.hash;
+  
+  if (!pendingQuery) {
+    console.log(TAG, 'No pending query in sessionStorage');
+    return;
+  }
+  
+  // Zaman aşımı kontrolü (5 dakika)
+  const age = Date.now() - parseInt(timestamp || '0');
+  if (age > 5 * 60 * 1000) {
+    console.log(TAG, 'SessionStorage data too old, cleaning up');
     sessionStorage.removeItem('evreka_pending_query');
+    sessionStorage.removeItem('evreka_hash_timestamp');
+    return;
+  }
+  
+  console.log(TAG, '📦 Found pending query in sessionStorage:', pendingQuery, 'age:', Math.round(age/1000), 'seconds');
+  
+  // Trademark sayfasındayız VE hash yoksa
+  if (/^https:\/\/opts\.turkpatent\.gov\.tr\/trademark\b/i.test(currentUrl)) {
+    if (!currentHash || !currentHash.includes('bn=')) {
+      console.log(TAG, '🔄 Restoring hash from sessionStorage');
+      
+      // Hash'i ekle
+      window.location.hash = `#bn=${encodeURIComponent(pendingQuery)}`;
+      
+      // Hash eklendikten sonra sorguyu çalıştır
+      setTimeout(() => {
+        console.log(TAG, '✅ Hash restored, triggering query...');
+        doQuery(pendingQuery);
+        // Başarılı olduktan sonra temizle
+        setTimeout(() => {
+          sessionStorage.removeItem('evreka_pending_query');
+          sessionStorage.removeItem('evreka_hash_timestamp');
+        }, 2000);
+      }, 800);
+    } else {
+      console.log(TAG, 'Hash already present, cleaning sessionStorage');
+      sessionStorage.removeItem('evreka_pending_query');
+      sessionStorage.removeItem('evreka_hash_timestamp');
+    }
   }
 }
+
+// Hemen dene
+tryRestoreFromSessionStorage();
 
 // Sayfa yüklendiğinde kontrol et
 if (document.readyState === 'loading') {
