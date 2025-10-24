@@ -1,29 +1,29 @@
 {
   "manifest_version": 3,
-  "name": "TP - Marka Dosya Sorgu",
-  "version": "1.3.1",
-  "description": "TürkPatent /trademark sayfasında başvuru numarasını otomatik sorgular.",
+  "name": "Evreka IP Sorgu Yardımcısı",
+  "version": "1.0",
+  "description": "Evreka IP uygulamasından TÜRKPATENT üzerinde otomatik sorgulama yapar.",
+  "permissions": [],
+  
   "host_permissions": [
-    "https://opts.turkpatent.gov.tr/*",
-    "https://www.turkpatent.gov.tr/*",
-    "https://giris.turkiye.gov.tr/*"
+    "*://arastirma.turkpatent.gov.tr/*",
+    "*://www.turkpatent.gov.tr/*"
+       
   ],
-  "background": { "service_worker": "background.js" },
+  "background": {
+    "service_worker": "background.js"
+  },
   "content_scripts": [
     {
-      "matches": [
-        "https://opts.turkpatent.gov.tr/*",
-        "https://www.turkpatent.gov.tr/*"
-      ],
-      "js": ["content_script.js"],
-      "run_at": "document_idle"
+      "matches": ["*://www.turkpatent.gov.tr/arastirma-yap*"],
+      "js": ["content_script.js"]
     }
   ],
   "externally_connectable": {
     "matches": [
       "http://localhost:*/*",
       "https://ip-manager-production-aab4b.web.app/*",
-      "https://kubilayguzel.github.io/*"
+    "https://kubilayguzel.github.io/*"
     ]
   }
-}
+} 
