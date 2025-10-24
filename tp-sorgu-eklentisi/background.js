@@ -1,30 +1,39 @@
-// Web sitenizden gelen mesajları dinle
+// Background: open /trademark and wait through e-Devlet if needed.
 chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => {
-  if (request.type === 'SORGULA' && request.data) {
-    const basvuruNo = request.data;
-    const targetUrl = "https://www.turkpatent.gov.tr/arastirma-yap?form=trademark";
+  if (request?.type === 'SORGULA' && request.data) {
+    const basvuruNo = String(request.data);
+    const targetUrl = "https://opts.turkpatent.gov.tr/trademark";
 
-    // Yeni bir sekme oluştur
+    const isTrademark = (url="") => /^https:\/\/opts\.turkpatent\.gov\.tr\/trademark\b/i.test(url);
+    const isLogin     = (url="") => /^https:\/\/opts\.turkpatent\.gov\.tr\/login\b/i.test(url);
+
     chrome.tabs.create({ url: targetUrl }, (newTab) => {
-      // Bu yeni sekmenin yüklenmesini dinlemek için bir olay dinleyici ekle
-      const listener = (tabId, changeInfo, tab) => {
-        // Eğer güncellenen sekme bizim oluşturduğumuz sekme ise VE yüklenmesi tamamlandıysa
-        if (tabId === newTab.id && changeInfo.status === 'complete') {
-          // Mesajı şimdi, yani sayfa tamamen hazır olduğunda gönder
-          chrome.tabs.sendMessage(tabId, {
-            type: 'AUTO_FILL',
-            data: basvuruNo
-          });
-          // İşi bittiği için bu dinleyiciyi bellekten kaldır
+      const listener = async (tabId, changeInfo, tab) => {
+        if (tabId !== newTab.id) return;
+
+        // React to either full load or URL change
+        const statusComplete = changeInfo.status === 'complete';
+        const url = (changeInfo.url || tab?.url || "");
+
+        if (!statusComplete && !url) return;
+
+        // If user is on login, do nothing; they'll come back here in the same tab
+        if (isLogin(url)) return;
+
+        // When we finally land on /trademark, inject message
+        if (isTrademark(url) || (statusComplete && isTrademark((tab && tab.url) || ""))) {
+          try {
+            chrome.tabs.sendMessage(tabId, { type: 'AUTO_FILL', data: basvuruNo });
+          } catch (e) {
+            console.warn('[Evreka Eklenti] sendMessage hatası:', e);
+          }
           chrome.tabs.onUpdated.removeListener(listener);
         }
       };
-      
-      // Sekme güncelleme olaylarını dinlemeye başla
       chrome.tabs.onUpdated.addListener(listener);
     });
 
-    sendResponse({ status: 'OK', message: 'Sorgulama sekmesi oluşturuldu ve yüklenmesi bekleniyor.' });
+    sendResponse({ status: 'OK', message: 'Sorgu sekmesi açıldı.' });
   }
-  return true; 
+  return true;
 });
