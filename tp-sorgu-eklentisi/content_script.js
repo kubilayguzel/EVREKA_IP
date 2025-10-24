@@ -138,7 +138,7 @@ async function doQuery(appNo) {
   await sleep(300);
 
   // Input bul
-  const input = await waitFor(findInput, { timeout: 15000, label: 'Input field' });
+  const input = await waitFor(findInput, { timeout: 5000, label: 'Input field' });
   if (!input) {
     console.error(TAG, '❌ Input not found');
     return;
