@@ -183,20 +183,25 @@ async function doQuery(appNo) {
   const url = location.href;
   console.log(TAG, 'doQuery started - url:', url, 'appNo:', appNo);
   
+  // Login sayfası kontrolü
+  if (/login|auth|giris|e-devlet/i.test(url)) {
+    console.log(TAG, '🔐 On login page, waiting for authentication to complete...');
+    return; // Login bitene kadar bekle, hash korunacak
+  }
+  
   if (!/^https:\/\/opts\.turkpatent\.gov\.tr\/trademark\b/i.test(url)) {
     console.log(TAG, 'Not on /trademark page; skipping automation.');
     return;
   }
 
   console.log(TAG, 'Waiting for page to stabilize...');
-  await sleep(300); // Sayfanın tamamen yüklenmesi için biraz daha uzun bekle
+  await sleep(300);
 
   console.log(TAG, 'Looking for input field...');
   const input = await waitFor(findAppNoInput, { timeout: 10000, interval: 150, label: 'Başvuru Numarası Input' });
   
   if (!input) { 
     console.error(TAG, '❌ Başvuru Numarası input alanı bulunamadı!');
-    // Sayfadaki tüm input'ları logla (debug için)
     console.log(TAG, 'Available inputs:', Array.from(document.querySelectorAll('input')).map(i => ({
       id: i.id,
       name: i.name,
@@ -213,7 +218,6 @@ async function doQuery(appNo) {
   console.log(TAG, 'Filling input with value:', appNo);
   fillReactInput(input, String(appNo || '').trim());
   
-  // MUI input'un doldurulması için biraz daha bekle
   await sleep(200);
   console.log(TAG, 'Input value after fill:', input.value);
 
@@ -227,7 +231,6 @@ async function doQuery(appNo) {
   
   if (!btn) { 
     console.error(TAG, '❌ SORGULA butonu bulunamadı!');
-    // Sayfadaki tüm butonları logla (debug için)
     console.log(TAG, 'Available buttons:', Array.from(document.querySelectorAll('button')).map(b => ({
       text: b.textContent?.trim(),
       type: b.type,
@@ -246,7 +249,7 @@ async function doQuery(appNo) {
   }
   
   try { 
-    btn.scrollIntoView({ block: 'center', behavior: 'smooth' }); 
+    btn.scrollIntoView({ block: 'center', behavior: 'instant' }); 
     await sleep(100);
   } catch(e) {
     console.warn(TAG, 'scrollIntoView failed:', e);
@@ -258,11 +261,6 @@ async function doQuery(appNo) {
   await sleep(500);
   console.log(TAG, '✅ Query submitted successfully!');
 }
-
-// Hash-change logger
-window.addEventListener('hashchange', () => { 
-  console.log(TAG, 'hashchange', location.hash); 
-}, false);
 
 // Message from background
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
@@ -279,14 +277,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     }, 100);
     
     sendResponse({ status: 'received' });
-    return true; // Async response için gerekli
+    return true;
   }
   
   sendResponse({ status: 'unknown_message_type' });
   return true;
 });
 
-// Manual helper - window ve unsafeWindow'a da ekle
+// Manual helper - Global scope'a ekle
 const manualFill = (no) => {
   console.log(TAG, '🔧 Manual __evrekaFill called with:', no);
   doQuery(no).catch(err => {
@@ -294,32 +292,134 @@ const manualFill = (no) => {
   });
 };
 
-window.__evrekaFill = manualFill;
-
-// Bazı durumlarda window.wrappedJSObject gerekebilir
-if (typeof unsafeWindow !== 'undefined') {
-  unsafeWindow.__evrekaFill = manualFill;
+// Birden fazla yöntemi dene
+try {
+  window.__evrekaFill = manualFill;
+  globalThis.__evrekaFill = manualFill;
+  
+  // exportFunction varsa kullan (Firefox için)
+  if (typeof exportFunction !== 'undefined') {
+    exportFunction(manualFill, window, { defineAs: '__evrekaFill' });
+  }
+  
+  // Script injection yöntemi (en güvenilir)
+  const script = document.createElement('script');
+  script.textContent = `
+    window.__evrekaFill = function(no) {
+      console.log('[Evreka CS] Manual call via injected script:', no);
+      window.postMessage({ type: 'EVREKA_MANUAL_FILL', data: no }, '*');
+    };
+    console.log('[Evreka CS] __evrekaFill injected to page context');
+  `;
+  (document.head || document.documentElement).appendChild(script);
+  script.remove();
+  
+} catch (e) {
+  console.error(TAG, 'Error setting up manual fill:', e);
 }
 
-console.log(TAG, '✅ Ready! Manual test: __evrekaFill("2023/12345")');
-console.log(TAG, 'Functions available:', {
-  __evrekaFill: typeof window.__evrekaFill,
-  doQuery: typeof doQuery
+// PostMessage listener for manual calls
+window.addEventListener('message', (event) => {
+  if (event.source !== window) return;
+  if (event.data.type === 'EVREKA_MANUAL_FILL') {
+    console.log(TAG, '📨 Received manual fill via postMessage:', event.data.data);
+    doQuery(event.data.data);
+  }
 });
 
-// Hızlı hash kontrolü - DOM tamamen yüklenmeden önce
-if (window.location.hash.includes('#bn=')) {
-  console.log(TAG, '⚡ Early hash detection, preparing...');
-  const match = window.location.hash.match(/#bn=([^&]+)/);
+console.log(TAG, '✅ Ready! Manual test: __evrekaFill("2023/12345")');
+
+// ========================================
+// HASH CHANGE HANDLER (Login sonrası korumalı)
+// ========================================
+
+let lastProcessedHash = '';
+let hashCheckInterval = null;
+
+function checkHashAndFill() {
+  const hash = window.location.hash;
+  
+  // Aynı hash'i tekrar işleme
+  if (hash === lastProcessedHash) {
+    return;
+  }
+  
+  console.log(TAG, 'Checking hash:', hash);
+  
+  // #bn=2025/093581 formatını yakala
+  const match = hash.match(/#bn=([^&]+)/);
   if (match && match[1]) {
     const appNo = decodeURIComponent(match[1]);
-    // DOM hazır olunca hemen çalıştır
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', () => {
-        setTimeout(() => doQuery(appNo), 100);
-      });
+    console.log(TAG, '📍 Hash contains application number:', appNo);
+    
+    // sessionStorage'a yedekle (login sonrası kurtarmak için)
+    try {
+      sessionStorage.setItem('evreka_pending_query', appNo);
+      console.log(TAG, 'Saved to sessionStorage for backup');
+    } catch(e) {
+      console.warn(TAG, 'sessionStorage save failed:', e);
+    }
+    
+    // Login sayfasında değilsek işle
+    if (!/login|auth|giris|e-devlet/i.test(window.location.href)) {
+      console.log(TAG, 'Not on login page, auto-filling after 500ms...');
+      lastProcessedHash = hash;
+      
+      setTimeout(() => {
+        doQuery(appNo);
+        // İşlem tamamlandıktan sonra yedekleri temizle
+        try {
+          sessionStorage.removeItem('evreka_pending_query');
+        } catch(e) {}
+      }, 500);
+      
+      // Hash kontrolünü durdur
+      if (hashCheckInterval) {
+        clearInterval(hashCheckInterval);
+        hashCheckInterval = null;
+      }
     } else {
-      setTimeout(() => doQuery(appNo), 100);
+      console.log(TAG, '🔐 On login page, hash will be processed after login');
     }
   }
 }
+
+// Sayfa yüklenince sessionStorage'dan kurtarma dene
+const pendingQuery = sessionStorage.getItem('evreka_pending_query');
+if (pendingQuery && !window.location.hash && !/login|auth|giris|e-devlet/i.test(window.location.href)) {
+  console.log(TAG, '🔄 Restoring query from sessionStorage:', pendingQuery);
+  window.location.hash = `#bn=${encodeURIComponent(pendingQuery)}`;
+  sessionStorage.removeItem('evreka_pending_query');
+}
+
+// Sayfa yüklendiğinde kontrol et
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', checkHashAndFill);
+} else {
+  setTimeout(checkHashAndFill, 100);
+}
+
+// Hash değiştiğinde kontrol et
+window.addEventListener('hashchange', () => {
+  console.log(TAG, 'Hash changed event triggered');
+  checkHashAndFill();
+}, false);
+
+// Periyodik kontrol (login sonrası hash kaybolursa)
+hashCheckInterval = setInterval(() => {
+  const hash = window.location.hash;
+  if (hash && hash !== lastProcessedHash && hash.includes('#bn=')) {
+    console.log(TAG, 'Periodic check found hash:', hash);
+    checkHashAndFill();
+  }
+}, 1000);
+
+// 30 saniye sonra periyodik kontrolü durdur
+setTimeout(() => {
+  if (hashCheckInterval) {
+    clearInterval(hashCheckInterval);
+    console.log(TAG, 'Stopped periodic hash checking after 30s');
+  }
+}, 30000);
+
+console.log(TAG, '🔄 Hash monitoring active');
