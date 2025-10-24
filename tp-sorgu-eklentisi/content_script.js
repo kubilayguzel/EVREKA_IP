@@ -276,18 +276,44 @@ window.addEventListener('hashchange', () => {
 }, false);
 
 // Message from background
-chrome.runtime.onMessage.addListener((msg) => {
-  console.log(TAG, 'onMessage received:', msg);
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  console.log(TAG, '📨 onMessage received:', msg, 'from:', sender);
+  
   if (msg?.type === 'AUTO_FILL') {
-    console.log(TAG, 'AUTO_FILL message received, starting query...');
-    doQuery(msg.data);
+    console.log(TAG, '✅ AUTO_FILL message received, starting query for:', msg.data);
+    
+    // Async olarak çalıştır ama hemen response dön
+    setTimeout(() => {
+      doQuery(msg.data).catch(err => {
+        console.error(TAG, 'doQuery error:', err);
+      });
+    }, 100);
+    
+    sendResponse({ status: 'received' });
+    return true; // Async response için gerekli
   }
+  
+  sendResponse({ status: 'unknown_message_type' });
+  return true;
 });
 
-// Manual helper (console'dan test için)
-window.__evrekaFill = (no) => {
-  console.log(TAG, 'Manual __evrekaFill called with:', no);
-  doQuery(no);
+// Manual helper - window ve unsafeWindow'a da ekle
+const manualFill = (no) => {
+  console.log(TAG, '🔧 Manual __evrekaFill called with:', no);
+  doQuery(no).catch(err => {
+    console.error(TAG, 'Manual fill error:', err);
+  });
 };
 
-console.log(TAG, 'ready; __evrekaFill available:', typeof window.__evrekaFill);
+window.__evrekaFill = manualFill;
+
+// Bazı durumlarda window.wrappedJSObject gerekebilir
+if (typeof unsafeWindow !== 'undefined') {
+  unsafeWindow.__evrekaFill = manualFill;
+}
+
+console.log(TAG, '✅ Ready! Manual test: __evrekaFill("2023/12345")');
+console.log(TAG, 'Functions available:', {
+  __evrekaFill: typeof window.__evrekaFill,
+  doQuery: typeof doQuery
+});
