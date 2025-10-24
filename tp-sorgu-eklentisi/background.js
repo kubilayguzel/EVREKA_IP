@@ -55,14 +55,11 @@ chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => 
               console.error(TAG, 'Failed to send message after', maxAttempts, 'attempts');
               pendingQueries.delete(tabId);
             }
-          } else {
+            } else {
             console.log(TAG, '✅ Message sent successfully, response:', response);
             isWaitingForLogin = false;
-            // Başarılı olduktan sonra birkaç saniye tut (tekrar gerekirse)
-            setTimeout(() => {
-              pendingQueries.delete(tabId);
-              console.log(TAG, '🧹 Cleaned up query for tab:', tabId);
-            }, 10000);
+            // Query'i TAB KAPANANA KADAR tut (login sonrası için gerekli)
+            console.log(TAG, '📌 Keeping query for potential re-login');
           }
         });
       };
@@ -82,6 +79,7 @@ chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => 
         if (isLogin(url)) { 
           console.log(TAG, '🔐 Login page detected, waiting...');
           isWaitingForLogin = true;
+          hasProcessedTrademark = false; // Login sonrası trademark'ı tekrar işle
           messageAttempts = 0;
           return;
         }
@@ -91,6 +89,7 @@ chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => 
           console.log(TAG, '🏠 Home page after login');
           hasSeenHome = true;
           isWaitingForLogin = false;
+          hasProcessedTrademark = false; // Home sonrası trademark'ı tekrar işle
           return;
         }
 
@@ -138,11 +137,11 @@ chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => 
             tryToSendMessage(tabId);
           }, 1000);
           
-          // Listener'ı 10 saniye sonra kaldır (tekrar login olursa diye)
+          // Listener'ı 60 saniye sonra kaldır (login + home + trademark için)
           setTimeout(() => {
             chrome.tabs.onUpdated.removeListener(listener);
-            console.log(TAG, 'Listener removed after delay');
-          }, 10000);
+            console.log(TAG, '⏹️ Listener removed after 60 seconds');
+          }, 60000);
         }
       };
       
