@@ -506,28 +506,32 @@ function checkUrlAndTrigger() {
     console.log(TAG, '⚠️ Trademark page but no hash or sessionStorage data');
     console.log(TAG, '🔍 Asking background for stored query...');
     
-    // Background'a sor
-    chrome.runtime.sendMessage({ type: 'GET_PENDING_QUERY' }, (response) => {
-      if (chrome.runtime.lastError) {
-        console.warn(TAG, 'Failed to get query from background:', chrome.runtime.lastError.message);
-        return;
-      }
-      
-      if (response && response.query) {
-        console.log(TAG, '💾 Background provided query:', response.query);
+    // Background'a sor (tab bazlı storage)
+    try {
+      chrome.runtime.sendMessage({ type: 'GET_PENDING_QUERY' }, (response) => {
+        if (chrome.runtime.lastError) {
+          console.warn(TAG, 'Failed to get query from background:', chrome.runtime.lastError.message);
+          return;
+        }
         
-        // Hash'i ekle
-        window.location.hash = `#bn=${encodeURIComponent(response.query)}`;
-        
-        // Sorguyu çalıştır
-        setTimeout(() => {
-          console.log(TAG, '🚀 Auto-triggering query from background storage');
-          doQuery(response.query);
-        }, 1500);
-      } else {
-        console.log(TAG, '❌ Background has no query for this tab');
-      }
-    });
+        if (response && response.query) {
+          console.log(TAG, '💾 Background provided query:', response.query);
+          
+          // Hash'i ekle
+          window.location.hash = `#bn=${encodeURIComponent(response.query)}`;
+          
+          // Sorguyu çalıştır
+          setTimeout(() => {
+            console.log(TAG, '🚀 Auto-triggering query from background storage');
+            doQuery(response.query);
+          }, 1500);
+        } else {
+          console.log(TAG, '❌ Background has no query for this tab');
+        }
+      });
+    } catch (e) {
+      console.error(TAG, 'Error asking background:', e);
+    }
   }
 }
 
