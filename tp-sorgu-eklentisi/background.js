@@ -29,6 +29,7 @@ chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => 
       const maxAttempts = 25;
       let isWaitingForLogin = false;
       let hasSeenHome = false;
+      let hasProcessedTrademark = false;
       
       const tryToSendMessage = (tabId) => {
         messageAttempts++;
@@ -96,6 +97,14 @@ chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => 
         // Trademark sayfası
         if (isTrademark(url) || (statusComplete && isTrademark((tab && tab.url) || ""))) {
           console.log(TAG, '✅ At /trademark page');
+          
+          // Zaten işlendiyse tekrar işleme
+          if (hasProcessedTrademark && !isWaitingForLogin && !hasSeenHome) {
+            console.log(TAG, '⏭️ Already processed trademark, skipping');
+            return;
+          }
+          
+          hasProcessedTrademark = true;
           
           if (isWaitingForLogin || hasSeenHome) {
             console.log(TAG, '🎉 Login successful! User returned to trademark');
