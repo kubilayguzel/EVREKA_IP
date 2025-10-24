@@ -1,8 +1,9 @@
-// Background: open /trademark and wait through e-Devlet if needed (verbose logs)
+// [Evreka BG] Wide-match debug SW
 const TAG='[Evreka BG]';
+console.log(TAG, 'Service worker loaded.');
 
 chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => {
-  console.log(TAG, 'onMessageExternal', request);
+  console.log(TAG, 'onMessageExternal', request, 'from', sender?.origin);
   if (request?.type === 'SORGULA' && request.data) {
     const basvuruNo = String(request.data);
     const targetUrl = "https://opts.turkpatent.gov.tr/trademark";
