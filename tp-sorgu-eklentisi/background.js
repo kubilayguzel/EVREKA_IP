@@ -1,50 +1,30 @@
-// TP - Marka Dosya Sorgu (background / service worker)
-// Başvuru numarasını sekme açtıktan sonra content script'e gönderiyoruz
+// Web sitenizden gelen mesajları dinle
+chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => {
+  if (request.type === 'SORGULA' && request.data) {
+    const basvuruNo = request.data;
+    const targetUrl = "https://www.turkpatent.gov.tr/arastirma-yap?form=trademark";
 
-chrome.runtime.onMessageExternal.addListener((req, sender, sendResponse) => {
-  if (!req || req.type !== "SORGULA" || !req.data) return;
-  const bn = String(req.data).trim();
-  if (!bn) return;
-
-  console.log('[TP Background] Başvuru numarası alındı:', bn);
-
-  // Direkt opts.turkpatent.gov.tr/trademark sayfasını hash ile aç
-  const url = "https://opts.turkpatent.gov.tr/trademark#bn=" + encodeURIComponent(bn);
-
-  chrome.tabs.create({ url }, (tab) => {
-    if (!tab) {
-      sendResponse?.({ status: "ERR", reason: "Sekme açılamadı" });
-      return;
-    }
-    
-    console.log('[TP Background] Sekme açıldı, content script mesajı bekleniyor...');
-    
-    // Sekmenin yüklenmesini izle
-    const listener = (tabId, changeInfo) => {
-      if (tabId === tab.id && changeInfo.status === 'complete') {
-        console.log('[TP Background] Sayfa yüklendi, content script\'e mesaj gönderiliyor...');
-        
-        // Birkaç saniye bekle, sonra mesaj gönder
-        setTimeout(() => {
+    // Yeni bir sekme oluştur
+    chrome.tabs.create({ url: targetUrl }, (newTab) => {
+      // Bu yeni sekmenin yüklenmesini dinlemek için bir olay dinleyici ekle
+      const listener = (tabId, changeInfo, tab) => {
+        // Eğer güncellenen sekme bizim oluşturduğumuz sekme ise VE yüklenmesi tamamlandıysa
+        if (tabId === newTab.id && changeInfo.status === 'complete') {
+          // Mesajı şimdi, yani sayfa tamamen hazır olduğunda gönder
           chrome.tabs.sendMessage(tabId, {
-            type: 'AUTO_FILL_FROM_BACKGROUND',
-            data: bn
-          }, (response) => {
-            if (chrome.runtime.lastError) {
-              console.log('[TP Background] Content script henüz hazır değil:', chrome.runtime.lastError.message);
-            } else {
-              console.log('[TP Background] Content script yanıtı:', response);
-            }
+            type: 'AUTO_FILL',
+            data: basvuruNo
           });
-        }, 1500);
-        
-        chrome.tabs.onUpdated.removeListener(listener);
-      }
-    };
-    
-    chrome.tabs.onUpdated.addListener(listener);
-    sendResponse?.({ status: "OK" });
-  });
+          // İşi bittiği için bu dinleyiciyi bellekten kaldır
+          chrome.tabs.onUpdated.removeListener(listener);
+        }
+      };
+      
+      // Sekme güncelleme olaylarını dinlemeye başla
+      chrome.tabs.onUpdated.addListener(listener);
+    });
 
-  return true; // async response
+    sendResponse({ status: 'OK', message: 'Sorgulama sekmesi oluşturuldu ve yüklenmesi bekleniyor.' });
+  }
+  return true; 
 });
