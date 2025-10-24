@@ -7,7 +7,7 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 // CRITICAL: Debounce mekanizması - aynı query'i tekrar çalıştırma
 let lastQuery = '';
 let lastQueryTime = 0;
-const DEBOUNCE_MS = 3000; // 3 saniye içinde aynı query'i tekrar çalıştırma
+const DEBOUNCE_MS = 1800;
 
 function shouldProcess(appNo) {
   const now = Date.now();
@@ -135,7 +135,7 @@ async function doQuery(appNo) {
 
   // MUI container bekle
   await waitFor('.MuiBox-root, .MuiFormControl-root', { timeout: 10000, label: 'MUI Container' });
-  await sleep(800);
+  await sleep(300);
 
   // Input bul
   const input = await waitFor(findInput, { timeout: 15000, label: 'Input field' });
@@ -229,7 +229,7 @@ function checkUrl() {
   if (match) {
     const appNo = decodeURIComponent(match[1]);
     console.log(TAG, '🔖 Hash found:', appNo);
-    setTimeout(() => doQuery(appNo), 1500);
+    setTimeout(() => doQuery(appNo), 700);
     return;
   }
   
@@ -242,7 +242,7 @@ function checkUrl() {
     if (age < 300000) { // 5 dakika
       console.log(TAG, '💾 Restored from sessionStorage:', stored);
       window.location.hash = `#bn=${encodeURIComponent(stored)}`;
-      setTimeout(() => doQuery(stored), 1500);
+      setTimeout(() => doQuery(stored), 700);
       return;
     }
   }
@@ -253,7 +253,7 @@ function checkUrl() {
     if (response && response.query) {
       console.log(TAG, '📦 Background query:', response.query);
       window.location.hash = `#bn=${encodeURIComponent(response.query)}`;
-      setTimeout(() => doQuery(response.query), 1500);
+      setTimeout(() => doQuery(response.query), 700);
     } else {
       console.log(TAG, '❌ No query available');
     }
