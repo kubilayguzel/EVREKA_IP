@@ -7,6 +7,8 @@
     box-sizing: border-box;
 }
 
+
+:root { --sidebar-w: 280px; }
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     color: #333;
@@ -20,7 +22,7 @@ body {
     display: flex;
     flex-direction: column;
     /* height: 100vh; /* BU SATIRI KALDIRIN VEYA YORUM SATIRI YAPIN */
-    overflow-y: auto; /* Kendi içeriği için kaydırma çubuğu */
+    overflow-y: visible; /* Kendi içeriği için kaydırma çubuğu */
     background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
 }
 
@@ -33,18 +35,20 @@ body {
 
 /* Sol Menü (Sidebar) */
 .sidebar {
-    width: 280px; /* GENİŞLİK BURADA ARTIRILDI */
+    width: var(--sidebar-w); /* GENİŞLİK BURADA ARTIRILDI */
     background: #1e3c72; /* Koyu mavi */
     color: white;
     display: flex;
     flex-direction: column;
     transition: width 0.3s ease;
-    height: 100vh;
+    height: auto;
     position: sticky;
     top: 0;
     z-index: 1001; /* Diğer elementlerin önünde olması için */
     flex-shrink: 0; /* Küçülmesini engeller */
     box-shadow: 2px 0 10px rgba(0,0,0,0.1); /* Hafif gölge */
+
+    overflow: visible;
 }
 
 .sidebar-header {
@@ -169,8 +173,8 @@ body {
     justify-content: space-between;
     align-items: center;
     position: fixed; /* Sayfayla kaymamasını sağlar */
-    width: calc(100% - 280px); /* Sidebar genişliğini düş */
-    left: 280px; /* Sidebar kadar boşluk bırak */
+    width: calc(100% - var(--sidebar-w)); /* Sidebar genişliğini düş */
+    left: var(--sidebar-w); /* Sidebar kadar boşluk bırak */
     top: 0;
     z-index: 999; /* En üstte kalması için yüksek z-index */
     backdrop-filter: blur(10px);
@@ -821,10 +825,7 @@ button.action-btn[data-action="edit"]:hover {
         margin-right: 0 !important; /* Esnekliği koru */
         margin-bottom: 10px;
     }
-
-    .sidebar {
-        width: 200px; /* Daha küçük ekranlarda sidebar'ı küçült */
-    }
+    :root { --sidebar-w: 200px; }
 
     .top-header {
         padding: 10px 15px;
