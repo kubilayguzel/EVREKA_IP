@@ -510,12 +510,11 @@ const doSearch = this.debounce(async (raw) => {
         imagePath: img,
         source: this.searchSource,
         origin: rec.origin || 'TÜRKPATENT',
-        // ✨ WIPO/ARIPO verilerini de sakla
         wipoIR: rec.wipoIR || null,
         aripoIR: rec.aripoIR || null,
         transactionHierarchy: rec.transactionHierarchy || null,
-        // ✨ YENİ: Bulletin kaydı için bulletinId ekle
-        bulletinId: rec.bulletinId || null
+        // ✅ YENİ: Bulletin kaydı seçildiğinde bulletinId'yi de sakla
+        bulletinId: (this.searchSource === 'bulletin') ? (rec.id || rec.bulletinId || rec.recordId) : null
     };
 
     // ✨ YENİ: Varlık seçimiyle menşe dropdown'ını güncelle
