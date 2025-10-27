@@ -1783,17 +1783,14 @@ const renderCurrentPageOfResults = () => {
     
     // 2. Benzerlik durumuna göre filtrele
     if (similarityFilter === 'similar') {
+        // Sadece isSimilar === true olanlar
         filteredResults = filteredResults.filter(r => r.isSimilar === true);
+        console.log('🔍 [BENZERLİK FİLTRESİ] "Benzer" seçildi, filtrelendi');
     } else if (similarityFilter === 'not-similar') {
-        filteredResults = filteredResults.filter(r => r.isSimilar === false);
+        // isSimilar !== true olanlar (yani false, null, undefined veya hiç yoksa)
+        filteredResults = filteredResults.filter(r => r.isSimilar !== true);
+        console.log('🔍 [BENZERLİK FİLTRESİ] "Benzemez" seçildi, filtrelendi');
     }
-    
-    console.log('🔍 [SONUÇ FİLTRESİ] Uygulanan filtreler:', {
-        toplamSonuç: allSimilarResults.length,
-        seçiliMarka: selectedMonitoredTrademarkId ? 'Evet' : 'Hayır',
-        benzerlikFiltresi: similarityFilter,
-        filtrelenmişSonuç: filteredResults.length
-    });
     
     // Filtre bilgilerini güncelle
     updateFilterInfo(filteredResults.length);
