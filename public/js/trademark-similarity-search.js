@@ -399,63 +399,39 @@ const refreshTriggeredStatus = async (bulletinNo) => {
 };
 
 const attachMonitoringAccordionListeners = () => {
-    const ownerRows = document.querySelectorAll('#monitoringListBody .owner-row');
-    console.log('🔧 [AKORDEON] Listener bağlanıyor, bulunan satır sayısı:', ownerRows.length);
-    
-    ownerRows.forEach((row, index) => {
-        row.addEventListener('click', function(e) {
-            // Eylem butonuna tıklanırsa akordeonu engelle
-            if (e.target.closest('.action-btn') || e.target.closest('button')) {
-                console.log('🚫 [AKORDEON] Butona tıklandı, akordeon engellendi');
-                return;
-            }
-            
-            // data-target veya aria-controls'tan target ID'yi al
-            const targetId = this.dataset.target || '#' + this.getAttribute('aria-controls');
-            
-            console.log('🖱️ [AKORDEON] Satıra tıklandı:', {
-                index,
-                targetId,
-                ariaExpanded: this.getAttribute('aria-expanded')
-            });
-            
-            if (!targetId) {
-                console.error('❌ [AKORDEON] Target ID bulunamadı!', this);
-                return;
-            }
-            
-            const targetRow = document.querySelector(targetId);
-            const icon = this.querySelector('.toggle-icon');
-            
-            if (!targetRow) {
-                console.error('❌ [AKORDEON] Target satır bulunamadı:', targetId);
-                return;
-            }
-            
-            const isExpanded = this.getAttribute('aria-expanded') === 'true';
-            
-            if (isExpanded) {
-                targetRow.style.display = 'none';
-                this.setAttribute('aria-expanded', 'false');
-                if (icon) {
-                    icon.classList.remove('fa-chevron-up');
-                    icon.classList.add('fa-chevron-down');
-                }
-                console.log('📕 [AKORDEON] Kapatıldı');
-            } else {
-                targetRow.style.display = 'table-row';
-                this.setAttribute('aria-expanded', 'true');
-                if (icon) {
-                    icon.classList.remove('fa-chevron-down');
-                    icon.classList.add('fa-chevron-up');
-                }
-                console.log('📖 [AKORDEON] Açıldı');
-            }
-        });
-        
-        console.log(`✅ [AKORDEON] Satır [${index}] bağlandı`);
-    });
+  const tbody = document.getElementById('monitoringListBody');
+  if (!tbody || tbody._accordionSetup) return;   // idempotent
+  tbody._accordionSetup = true;
+
+  tbody.addEventListener('click', (e) => {
+    // Eylem butonlarına tıklamada akordeon tetiklenmesin
+    if (e.target.closest('.action-btn, button, a')) return;
+
+    const row = e.target.closest('.owner-row');
+    if (!row) return;
+
+    const targetId = row.dataset.target || '#' + row.getAttribute('aria-controls');
+    if (!targetId) return;
+
+    const contentRow = document.querySelector(targetId);
+    if (!contentRow) return;
+
+    const isExpanded = row.getAttribute('aria-expanded') === 'true';
+
+    // Aç/Kapa
+    contentRow.style.display = isExpanded ? 'none' : 'table-row';
+    row.setAttribute('aria-expanded', isExpanded ? 'false' : 'true');
+
+    const icon = row.querySelector('.toggle-icon');
+    if (icon) {
+      icon.classList.toggle('fa-chevron-up', !isExpanded);
+      icon.classList.toggle('fa-chevron-down', isExpanded);
+    }
+
+    console.log(isExpanded ? '📕 [AKORDEON] Kapatıldı' : '📖 [AKORDEON] Açıldı');
+  });
 };
+
 
 const _pickOwners = (ip, tm, persons = []) => {
     if (Array.isArray(ip?.applicants) && ip.applicants.length) {
@@ -1018,64 +994,47 @@ const attachGenerateReportListener = () => {
     });
 };
 
-// Markaya tıklama olayını dinle
+// Markaya tıklama olayını dinle (KLON YOK, DELEGE VAR)
 const attachTrademarkClickListener = () => {
-    const tbody = document.getElementById('monitoringListBody');
-    if (!tbody) return;
-    
-    // Önceki listener'ı kaldır
-    const newTbody = tbody.cloneNode(true);
-    tbody.parentNode.replaceChild(newTbody, tbody);
-    
-    // Event delegation kullan
-    newTbody.addEventListener('click', async (e) => {
-        const row = e.target.closest('.clickable-trademark-row');
-        if (!row) return;
-        
-        const trademarkId = row.dataset.trademarkId;
-        const trademarkName = row.dataset.trademarkName;
-        
-        console.log('🖱️ [MARKA TIKLAME] Marka seçildi:', {
-            id: trademarkId,
-            name: trademarkName
-        });
-        
-        // Önceki seçimi temizle
-        newTbody.querySelectorAll('.clickable-trademark-row').forEach(r => {
-            r.style.backgroundColor = '#ffffff';
-            r.style.borderLeft = 'none';
-            r.removeAttribute('data-selected');
-        });
-        
-        // Aynı markaya tekrar tıklanırsa filtreyi kaldır
-        if (selectedMonitoredTrademarkId === trademarkId) {
-            selectedMonitoredTrademarkId = null;
-            console.log('🔄 [MARKA TIKLAME] Filtre kaldırıldı');
-            showNotification('Marka filtresi kaldırıldı. Tüm sonuçlar gösteriliyor.', 'info');
-        } else {
-            // Yeni markayı seç
-            selectedMonitoredTrademarkId = trademarkId;
-            row.style.backgroundColor = '#e3f2fd';
-            row.style.borderLeft = '4px solid #1e3c72';
-            row.setAttribute('data-selected', 'true');
-            
-            console.log('✅ [MARKA TIKLAME] Filtre uygulandı:', {
-                selectedId: selectedMonitoredTrademarkId
-            });
-            
-            showNotification(`"${trademarkName}" için sonuçlar filtreleniyor...`, 'info');
-        }
-        
-        // Sonuçları yeniden render et
-        renderCurrentPageOfResults();
-        
-        // Sonuç bölümüne kaydır
-        const resultsSection = document.getElementById('resultsTableBody');
-        if (resultsSection) {
-            resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }
+  const tbody = document.getElementById('monitoringListBody');
+  if (!tbody || tbody._trademarkClickSetup) return;   // idempotent
+  tbody._trademarkClickSetup = true;
+
+  tbody.addEventListener('click', async (e) => {
+    const row = e.target.closest('.clickable-trademark-row');
+    if (!row) return;
+
+    const trademarkId = row.dataset.trademarkId || null;
+    const trademarkName = row.dataset.trademarkName || '-';
+    console.log('🖱️ [MARKA TIKLAMA] Marka seçildi:', { id: trademarkId, name: trademarkName });
+
+    // Önceki seçim vurgusunu temizle
+    tbody.querySelectorAll('.clickable-trademark-row').forEach(r => {
+      r.style.backgroundColor = '#ffffff';
+      r.style.borderLeft = 'none';
+      r.removeAttribute('data-selected');
     });
+
+    // Aynı markaya tekrar tıklandıysa filtreyi kaldır
+    if (selectedMonitoredTrademarkId === trademarkId) {
+      selectedMonitoredTrademarkId = null;
+      showNotification('Marka filtresi kaldırıldı. Tüm sonuçlar gösteriliyor.', 'info');
+    } else {
+      selectedMonitoredTrademarkId = trademarkId;
+      row.style.backgroundColor = '#e3f2fd';
+      row.style.borderLeft = '4px solid #1e3c72';
+      row.setAttribute('data-selected', 'true');
+      showNotification(`"${trademarkName}" için sonuçlar filtreleniyor...`, 'info');
+    }
+
+    try {
+      renderCurrentPageOfResults();
+    } catch (err) {
+      console.warn('[MARKA TIKLAMA] renderCurrentPageOfResults hata:', err);
+    }
+  });
 };
+
 
 // trademark-similarity-search.js (handleOwnerReportAndNotifyGeneration fonksiyonunun YENİ HALİ)
 
