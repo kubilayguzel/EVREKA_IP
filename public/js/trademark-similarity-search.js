@@ -754,17 +754,20 @@ function setupImageHoverEffect(tbodyId = 'monitoringListBody') {
 
 const renderMonitoringList = async () => {
     const tbody = document.getElementById('monitoringListBody');
-    const list = monitoringPagination ? monitoringPagination.getCurrentPageData(filteredMonitoringTrademarks) : filteredMonitoringTrademarks;
     
-    if (!list.length) {
-        // Colspan'ı 5'e ayarlayın (Toggle, Sahip, Sayı, Bildirim Durumu, Eylemler)
+    if (!filteredMonitoringTrademarks.length) {
         tbody.innerHTML = '<tr><td colspan="6" class="no-records">Filtreye uygun izlenecek marka bulunamadı.</td></tr>';
         return;
     }
 
-    // 1. Markaları Sahip Bazında Grupla (Mantık aynı kalır)
+    // 🔍 LOG: Render başlıyor
+    console.log('📋 [RENDER] Başlatılıyor...', {
+        filtrelenmişMarkaSayısı: filteredMonitoringTrademarks.length
+    });
+
+    // 1. TÜM FİLTRELENMİŞ markaları sahip bazında grupla (pagination ÖNCESİ)
     const groupedByOwner = {};
-    for (const tm of list) {
+    for (const tm of filteredMonitoringTrademarks) {
         const ip = await _getIp(tm.ipRecordId || tm.sourceRecordId || tm.id);
         const ownerInfo = _getOwnerKey(ip, tm, allPersons);
         const ownerKey = ownerInfo.key;
@@ -783,13 +786,47 @@ const renderMonitoringList = async () => {
 
         groupedByOwner[ownerKey].trademarks.push({ tm, ip, ownerInfo });
     }
+// 2. Sahipleri alfabetik sırala
+    const sortedOwnerKeys = Object.keys(groupedByOwner).sort((a, b) => 
+        groupedByOwner[a].ownerName.localeCompare(groupedByOwner[b].ownerName)
+    );
+    
+    const totalOwners = sortedOwnerKeys.length;
+    
+    console.log('📊 [RENDER] Sahip grupları oluşturuldu:', {
+        toplamSahip: totalOwners,
+        toplamMarka: filteredMonitoringTrademarks.length,
+        ilk3Sahip: sortedOwnerKeys.slice(0, 3).map(key => ({
+            sahip: groupedByOwner[key].ownerName,
+            markaSayısı: groupedByOwner[key].trademarks.length
+        }))
+    });
+    
+    // 3. Pagination uygula - SAHİPLERE GÖRE
+    const itemsPerPage = monitoringPagination ? monitoringPagination.getItemsPerPage() : 5;
+    const currentPage = monitoringPagination ? monitoringPagination.getCurrentPage() : 1;
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    
+    // Bu sayfada gösterilecek sahipleri seç
+    const paginatedOwnerKeys = sortedOwnerKeys.slice(startIndex, endIndex);
+    
+    console.log('📄 [RENDER] Sayfalama uygulandı:', {
+        mevcutSayfa: currentPage,
+        sayfadakiSahipSayısı: paginatedOwnerKeys.length,
+        toplamSahip: totalOwners,
+        başlangıçIndex: startIndex,
+        bitişIndex: endIndex,
+        sayfadakiSahipler: paginatedOwnerKeys.map(key => groupedByOwner[key].ownerName)
+    });
 
     let allRowsHtml = [];
 
     // Yeni varsayılan bildirim durumu
     const initialNotificationStatus = 'Gönderilmedi';
 
-    for (const ownerKey in groupedByOwner) {
+    // 4. Sadece bu sayfadaki sahipleri render et
+    for (const ownerKey of paginatedOwnerKeys) {
         const group = groupedByOwner[ownerKey];
         const groupUid = `owner-group-${group.ownerId}-${ownerKey.replace(/[^a-zA-Z0-9]/g, '').slice(-10)}`;
         
@@ -1852,20 +1889,105 @@ const renderCurrentPageOfResults = () => {
     return row;
 };
 
-// --- Core Logic (Temel Uygulama Mantığı) ---
-const updateMonitoringCount = () => {
-    document.getElementById('monitoringCount').textContent = filteredMonitoringTrademarks.length;
+const updateMonitoringCount = async () => {
+    // Sahip sayısını göster
+    const ownerGroups = {};
+    
+    for (const tm of filteredMonitoringTrademarks) {
+        const ip = await _getIp(tm.ipRecordId || tm.sourceRecordId || tm.id);
+        const ownerInfo = _getOwnerKey(ip, tm, allPersons);
+        const ownerKey = ownerInfo.key;
+        
+        if (!ownerGroups[ownerKey]) {
+            ownerGroups[ownerKey] = true;
+        }
+    }
+    
+    const ownerCount = Object.keys(ownerGroups).length;
+    document.getElementById('monitoringCount').textContent = `${ownerCount} Sahip (${filteredMonitoringTrademarks.length} Marka)`;
 };
 
-const applyMonitoringListFilters = () => {
-    const [ownerFilter, niceFilter, brandFilter] = [ownerSearchInput.value, niceClassSearchInput.value, brandNameSearchInput.value].map(s => s.toLowerCase());
-    filteredMonitoringTrademarks = monitoringTrademarks.filter(data =>
-        _pickOwners(data).toLowerCase().includes(ownerFilter) &&
-        _uniqNice(data).includes(niceFilter) &&
-        (data.title || data.markName || data.brandText || '').toLowerCase().includes(brandFilter)
-    );
-    monitoringPagination.update(filteredMonitoringTrademarks.length);
+// Sahip bazında pagination için yardımcı fonksiyon
+const updateOwnerBasedPagination = async () => {
+    // Markaları sahip bazında grupla
+    const ownerGroups = {};
+    
+    for (const tm of filteredMonitoringTrademarks) {
+        const ip = await _getIp(tm.ipRecordId || tm.sourceRecordId || tm.id);
+        const ownerInfo = _getOwnerKey(ip, tm, allPersons);
+        const ownerKey = ownerInfo.key;
+        
+        if (!ownerGroups[ownerKey]) {
+            ownerGroups[ownerKey] = {
+                ownerName: ownerInfo.name,
+                ownerId: ownerInfo.id,
+                trademarks: []
+            };
+        }
+        
+        ownerGroups[ownerKey].trademarks.push(tm);
+    }
+    
+    // Sahip sayısını pagination'a ver
+    const ownerCount = Object.keys(ownerGroups).length;
+    
+    console.log('📊 [PAGİNATİON] Sahip grupları:', {
+        toplamSahip: ownerCount,
+        toplamMarka: filteredMonitoringTrademarks.length,
+        örnek: Object.values(ownerGroups).slice(0, 2).map(g => ({
+            sahip: g.ownerName,
+            markaSayısı: g.trademarks.length
+        }))
+    });
+    
+    monitoringPagination.update(ownerCount); // Marka sayısı değil, sahip sayısı
     monitoringPagination.reset();
+};
+
+const applyMonitoringListFilters = async () => {
+    const [ownerFilter, niceFilter, brandFilter] = [ownerSearchInput.value, niceClassSearchInput.value, brandNameSearchInput.value].map(s => s.toLowerCase());
+    
+    // 🔍 LOG: Filtreleme başlıyor
+    console.log('🔍 [FİLTRELEME] Başlatıldı:', {
+        ownerFilter,
+        niceFilter,
+        brandFilter,
+        toplamMarka: monitoringTrademarks.length
+    });
+    
+    // Async filtreleme yapılmalı çünkü _getIp ve _pickOwners async
+    const filteredResults = [];
+    
+    for (const data of monitoringTrademarks) {
+        // Sahip kontrolü
+        const ip = await _getIp(data.ipRecordId || data.sourceRecordId || data.id);
+        const ownerInfo = _getOwnerKey(ip, data, allPersons);
+        const ownerName = ownerInfo.name.toLowerCase();
+        
+        // Nice sınıfı kontrolü
+        const niceClasses = _uniqNice(ip || data);
+        
+        // Marka adı kontrolü
+        const markName = (data.title || data.markName || data.brandText || '').toLowerCase();
+        
+        // Filtreleri uygula
+        const ownerMatch = !ownerFilter || ownerName.includes(ownerFilter);
+        const niceMatch = !niceFilter || niceClasses.toLowerCase().includes(niceFilter);
+        const brandMatch = !brandFilter || markName.includes(brandFilter);
+        
+        if (ownerMatch && niceMatch && brandMatch) {
+            filteredResults.push(data);
+        }
+    }
+    
+    filteredMonitoringTrademarks = filteredResults;
+    
+    console.log('✅ [FİLTRELEME] Tamamlandı:', {
+        sonuç: filteredMonitoringTrademarks.length
+    });
+    
+    // Sahip bazında pagination güncelle
+    await updateOwnerBasedPagination();
     renderMonitoringList();
     updateMonitoringCount();
     checkCacheAndToggleButtonStates();
