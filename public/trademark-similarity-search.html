@@ -1008,6 +1008,34 @@
                     </div>
                 </div>
                 <div id="infoMessageContainer"></div>
+                <!-- Sonuç Filtreleri -->
+                <div style="display: flex; gap: 15px; align-items: center; margin-bottom: 15px; padding: 15px; background: #f8f9fa; border-radius: 8px; border: 1px solid #dee2e6;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <label for="similarityFilterSelect" style="font-weight: 500; color: #1e3c72; margin: 0;">
+                            <i class="fas fa-filter"></i> Benzerlik Durumu:
+                        </label>
+                        <select id="similarityFilterSelect" style="padding: 8px 12px; border: 1px solid #ddd; border-radius: 4px; min-width: 150px;">
+                            <option value="all">Tümü</option>
+                            <option value="similar">✓ Benzer</option>
+                            <option value="not-similar">✗ Benzemez</option>
+                        </select>
+                    </div>
+                    
+                    <div id="selectedTrademarkInfo" style="display: none; flex: 1; padding: 8px 12px; background: #e3f2fd; border-radius: 4px; border-left: 4px solid #1e3c72;">
+                        <span style="font-weight: 500; color: #1e3c72;">
+                            <i class="fas fa-bookmark"></i> Filtre: 
+                        </span>
+                        <span id="selectedTrademarkName" style="color: #333;"></span>
+                        <button id="clearTrademarkFilterBtn" style="margin-left: 10px; padding: 4px 8px; background: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">
+                            <i class="fas fa-times"></i> Kaldır
+                        </button>
+                    </div>
+                    
+                    <div style="margin-left: auto; color: #666; font-size: 14px;">
+                        <i class="fas fa-info-circle"></i> 
+                        <span id="filteredResultCount">0</span> sonuç gösteriliyor
+                    </div>
+                </div>
                 <div style="overflow-x: auto;">
                     <table class="results-table">
                         <thead>
