@@ -3570,7 +3570,89 @@ const officialFee = parseFloat(document.getElementById('officialFee')?.value) ||
             return;
         }
 
-        const taskResult = await taskService.createTask(taskData);
+// ===== YENİ: Yayına İtiraz işi için otomatik tarih hesaplama =====
+        const isPublicationOppositionTask = this.isPublicationOpposition(selectedTransactionType.id);
+        
+        if (isPublicationOppositionTask && this.selectedIpRecord && this.searchSource === 'bulletin') {
+            try {
+                console.log('📅 Yayına itiraz işi tespit edildi, tarihler hesaplanıyor...');
+                
+                // Bulletin ID'yi al
+                const bulletinId = this.selectedIpRecord.bulletinId;
+                
+                if (bulletinId) {
+                    // Firestore'dan bulletin kaydını al
+                    const bulletinRef = doc(getFirestore(), 'trademarkBulletins', bulletinId);
+                    const bulletinSnap = await getDoc(bulletinRef);
+                    
+                    if (bulletinSnap.exists()) {
+                        const bulletinData = bulletinSnap.data();
+                        const bulletinDateStr = bulletinData.bulletinDate; // "DD/MM/YYYY" formatında
+                        const bulletinNo = bulletinData.bulletinNo;
+                        
+                        if (bulletinDateStr) {
+                            // Bülten tarihini Date objesine çevir
+                            const [dd, mm, yyyy] = bulletinDateStr.split('/');
+                            const bulletinDate = new Date(parseInt(yyyy,10), parseInt(mm,10)-1, parseInt(dd,10));
+                            bulletinDate.setHours(0,0,0,0);
+                            
+                            console.log('📅 Bülten tarihi bulundu:', bulletinDateStr);
+                            
+                            // Resmi son tarih: Bülten tarihi + 2 ay
+                            const rawOfficialDate = new Date(bulletinDate);
+                            rawOfficialDate.setMonth(bulletinDate.getMonth() + 2);
+                            
+                            // Hafta sonu ve tatillere göre kaydır
+                            const adjustedOfficialDate = findNextWorkingDay(rawOfficialDate, TURKEY_HOLIDAYS);
+                            
+                            // Operasyonel son tarih: Resmi son tarihten 3 gün önce
+                            const rawOperationalDate = new Date(adjustedOfficialDate);
+                            rawOperationalDate.setDate(adjustedOfficialDate.getDate() - 3);
+                            
+                            // Operasyonel tarihi de hafta sonu ve tatillerden kaydır (geriye)
+                            let tempOperationalDate = new Date(rawOperationalDate);
+                            tempOperationalDate.setHours(0,0,0,0);
+                            while (isWeekend(tempOperationalDate) || isHoliday(tempOperationalDate, TURKEY_HOLIDAYS)) {
+                                tempOperationalDate.setDate(tempOperationalDate.getDate() - 1);
+                            }
+                            
+                            // TaskData'ya tarihleri ekle
+                            taskData.dueDate = tempOperationalDate.toISOString();
+                            taskData.officialDueDate = adjustedOfficialDate.toISOString();
+                            taskData.officialDueDateDetails = {
+                                bulletinDate: bulletinDateStr,
+                                periodMonths: 2,
+                                originalCalculatedDate: rawOfficialDate.toISOString().split('T')[0],
+                                finalOfficialDueDate: adjustedOfficialDate.toISOString().split('T')[0],
+                                finalOperationalDueDate: tempOperationalDate.toISOString().split('T')[0],
+                                adjustments: []
+                            };
+                            
+                            // Details'e bulletin bilgilerini ekle
+                            taskData.details = taskData.details || {};
+                            taskData.details.bulletinNo = bulletinNo;
+                            taskData.details.bulletinDate = bulletinDateStr;
+                            
+                            console.log('✅ Tarihler hesaplandı:', {
+                                operasyonelSonTarih: tempOperationalDate.toISOString().split('T')[0],
+                                resmiSonTarih: adjustedOfficialDate.toISOString().split('T')[0]
+                            });
+                        } else {
+                            console.warn('⚠️ Bülten tarihi bulunamadı');
+                        }
+                    } else {
+                        console.warn('⚠️ Bulletin kaydı bulunamadı:', bulletinId);
+                    }
+                } else {
+                    console.warn('⚠️ selectedIpRecord\'da bulletinId yok');
+                }
+            } catch (error) {
+                console.error('❌ Tarih hesaplama hatası:', error);
+            }
+        }
+        // ===== TARIH HESAPLAMA SONU =====
+
+        const taskResult = await taskService.createTask(taskData);  // ← BU SATIRDAN ÖNCE EKLE
         if (!taskResult.success) {
             alert('İş oluşturulurken hata oluştu: ' + taskResult.error);
             return;
