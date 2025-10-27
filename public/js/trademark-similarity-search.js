@@ -398,38 +398,65 @@ const refreshTriggeredStatus = async (bulletinNo) => {
   }
 };
 
-// Akordeon açma/kapama olay dinleyicisini ekler
 const attachMonitoringAccordionListeners = () => {
     const ownerRows = document.querySelectorAll('#monitoringListBody .owner-row');
-    ownerRows.forEach(row => {
+    console.log('🔧 [AKORDEON] Listener bağlanıyor, bulunan satır sayısı:', ownerRows.length);
+    
+    ownerRows.forEach((row, index) => {
         row.addEventListener('click', function(e) {
             // Eylem butonuna tıklanırsa akordeonu engelle
-            if (e.target.closest('.action-btn')) {
+            if (e.target.closest('.action-btn') || e.target.closest('button')) {
+                console.log('🚫 [AKORDEON] Butona tıklandı, akordeon engellendi');
                 return;
             }
             
-            const targetId = this.dataset.target;
+            // data-target veya aria-controls'tan target ID'yi al
+            const targetId = this.dataset.target || '#' + this.getAttribute('aria-controls');
+            
+            console.log('🖱️ [AKORDEON] Satıra tıklandı:', {
+                index,
+                targetId,
+                ariaExpanded: this.getAttribute('aria-expanded')
+            });
+            
+            if (!targetId) {
+                console.error('❌ [AKORDEON] Target ID bulunamadı!', this);
+                return;
+            }
+            
             const targetRow = document.querySelector(targetId);
             const icon = this.querySelector('.toggle-icon');
             
-            if (targetRow) {
-                const isExpanded = this.getAttribute('aria-expanded') === 'true';
-                
-                if (isExpanded) {
-                    targetRow.style.display = 'none';
-                    this.setAttribute('aria-expanded', 'false');
+            if (!targetRow) {
+                console.error('❌ [AKORDEON] Target satır bulunamadı:', targetId);
+                return;
+            }
+            
+            const isExpanded = this.getAttribute('aria-expanded') === 'true';
+            
+            if (isExpanded) {
+                targetRow.style.display = 'none';
+                this.setAttribute('aria-expanded', 'false');
+                if (icon) {
                     icon.classList.remove('fa-chevron-up');
                     icon.classList.add('fa-chevron-down');
-                } else {
-                    targetRow.style.display = 'table-row'; // İçerik satırını göster
-                    this.setAttribute('aria-expanded', 'true');
+                }
+                console.log('📕 [AKORDEON] Kapatıldı');
+            } else {
+                targetRow.style.display = 'table-row';
+                this.setAttribute('aria-expanded', 'true');
+                if (icon) {
                     icon.classList.remove('fa-chevron-down');
                     icon.classList.add('fa-chevron-up');
                 }
+                console.log('📖 [AKORDEON] Açıldı');
             }
         });
+        
+        console.log(`✅ [AKORDEON] Satır [${index}] bağlandı`);
     });
 };
+
 const _pickOwners = (ip, tm, persons = []) => {
     if (Array.isArray(ip?.applicants) && ip.applicants.length) {
         return ip.applicants.map(a => a?.name).filter(Boolean).join(', ');
