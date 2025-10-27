@@ -2453,16 +2453,51 @@ const attachEventListeners = () => {
 
 // --- External API Integrations (Harici API Entegrasyonları) ---
 window.queryApplicationNumberWithExtension = (applicationNo) => {
-    const eklentiID = 'bbcpnpgglakoagjakgigmgjpdpiigpah';
-    if (!applicationNo) return;
-    const url = `https://www.turkpatent.gov.tr/arastirma-yap?form=trademark&auto_query=${encodeURIComponent(applicationNo)}&query_type=basvuru&source=${encodeURIComponent(window.location.origin)}`;
-    const newTab = window.open(url, '_blank');
-    if (!newTab) { alert('Pop-up engellendi. Lütfen bu site için izin verin.'); }
+    const appNo = (applicationNo || '').toString().trim();
+    if (!appNo) {
+        alert('Başvuru numarası bulunamadı.');
+        return;
+    }
+    
+    // Yeni eklenti ID'si (tp-sorgu-eklentisi)
+    const EXT_ID = 'kmdlgghljcoanmckgnpibhklfpnkalci';
+    
+    // Yedek URL (eklenti çalışmazsa tek sekme açılacak)
+    const fallbackUrl = `https://opts.turkpatent.gov.tr/trademark#bn=${encodeURIComponent(appNo)}`;
+    
     try {
-        if (typeof chrome !== 'undefined' && chrome.runtime && eklentiID) {
-            chrome.runtime.sendMessage(eklentiID, { type: 'SORGULA', data: applicationNo });
+        if (typeof chrome !== 'undefined' && chrome.runtime && EXT_ID) {
+            chrome.runtime.sendMessage(
+                EXT_ID,
+                { type: 'SORGULA', data: appNo },
+                (response) => {
+                    const hasErr = !!(chrome.runtime && chrome.runtime.lastError);
+                    const ok = response && (response.status === 'OK' || response.status === 'OK_WAIT');
+                    
+                    // Eklenti yok veya cevap vermediyse fallback URL'i aç
+                    if (hasErr || !ok) {
+                        const win = window.open(fallbackUrl, '_blank');
+                        if (!win) {
+                            alert('Pop-up engellendi. Lütfen bu site için izin verin.');
+                        }
+                    }
+                }
+            );
+        } else {
+            // Chrome extension API yok, direkt fallback URL'i aç
+            const win = window.open(fallbackUrl, '_blank');
+            if (!win) {
+                alert('Pop-up engellendi. Lütfen bu site için izin verin.');
+            }
         }
-    } catch (e) { console.warn('Extension message failed:', e); }
+    } catch (e) {
+        console.warn('Extension message failed:', e);
+        // Hata durumunda fallback URL'i aç
+        const win = window.open(fallbackUrl, '_blank');
+        if (!win) {
+            alert('Pop-up engellendi. Lütfen bu site için izin verin.');
+        }
+    }
 };
 
 
