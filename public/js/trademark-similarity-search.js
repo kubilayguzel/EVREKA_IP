@@ -1864,29 +1864,35 @@ const renderCurrentPageOfResults = () => {
     
     const resultClasses = normalizeNiceList(hit.niceClasses);
 
-    // Tescilli sınıflar: önce goodsAndServicesByClass, boşsa niceClasses / niceClass / _uniqNice fallback
-    let registered = normalizeNiceList(getNiceClassNumbers(monitoredTrademark));
-    if (registered.length === 0) {
-    registered = normalizeNiceList(
-        Array.isArray(monitoredTrademark?.niceClasses) && monitoredTrademark.niceClasses.length
-        ? monitoredTrademark.niceClasses
-        : _uniqNice(monitoredTrademark) // "1, 3, 30" gibi birleşik stringi de parse eder
-    );
-    }
-    const registeredSet = new Set(registered);
+// ✅ YEŞİL: goodsAndServicesByClassNumbers (Tescilli sınıflar)
+    const goodsAndServicesClasses = normalizeNiceList(getNiceClassNumbers(monitoredTrademark));
+    const goodsAndServicesSet = new Set(goodsAndServicesClasses);
 
-    // Kriter sınıfları (sarı)
-    const criteriaSet = new Set(normalizeNiceList(monitoredTrademark?.niceClassSearch));
+    // 🟡 SARI: monitoredNiceClassNumbers (İzlenen tüm sınıflar - tescilli olmayan ama izlenen)
+    // niceClassSearch veya monitoredNiceClassNumbers alanını kullan
+    let monitoredClasses = normalizeNiceList(
+        monitoredTrademark?.monitoredNiceClassNumbers || 
+        monitoredTrademark?.niceClassSearch || 
+        []
+    );
+    
+    // Fallback: Eğer hiçbiri yoksa niceClasses'ı kullan
+    if (monitoredClasses.length === 0 && Array.isArray(monitoredTrademark?.niceClasses)) {
+        monitoredClasses = normalizeNiceList(monitoredTrademark.niceClasses);
+    }
+    
+    const monitoredSet = new Set(monitoredClasses);
 
     // Tekrarsız sırayla rozet üret
     const niceClassHtml = [...new Set(resultClasses)].map(cls => {
-    let cssClass = '';
-    if (registeredSet.has(cls)) {
-        cssClass = 'match';          // ✅ yeşil: tescilli ile eşleşti
-    } else if (criteriaSet.has(cls)) {
-        cssClass = 'partial-match';  // 🟡 sarı: tescilde yok ama kriterde var
-    }
-    return `<span class="nice-class-badge ${cssClass}">${cls}</span>`;
+        let cssClass = '';
+        if (goodsAndServicesSet.has(cls)) {
+            cssClass = 'match';          // ✅ yeşil: goodsAndServicesByClassNumbers ile eşleşti
+        } else if (monitoredSet.has(cls)) {
+            cssClass = 'partial-match';  // 🟡 sarı: tescilde yok ama monitoredNiceClassNumbers'da var
+        }
+        // cssClass boşsa gri kalır (varsayılan)
+        return `<span class="nice-class-badge ${cssClass}">${cls}</span>`;
     }).join('');
 
     const similarityScore = hit.similarityScore ? `${(hit.similarityScore * 100).toFixed(0)}%` : '-';
