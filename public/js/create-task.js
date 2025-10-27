@@ -503,7 +503,7 @@ const doSearch = this.debounce(async (raw) => {
       : (rec.brandImageUrl || rec.markImageUrl || rec.brandSampleUrl || rec.markSampleUrl || rec.imageUrl || rec.brandSamplePath || '');
 
     this.selectedIpRecord = {
-        id: rec.id || id,
+        id: rec.id || id,  // Bu trademarkBulletinRecords kaydının ID'si
         title,
         ownerName: owner,
         applicationNo: appNo,
@@ -513,9 +513,26 @@ const doSearch = this.debounce(async (raw) => {
         wipoIR: rec.wipoIR || null,
         aripoIR: rec.aripoIR || null,
         transactionHierarchy: rec.transactionHierarchy || null,
-        // ✅ YENİ: Bulletin kaydı seçildiğinde bulletinId'yi de sakla
-        bulletinId: (this.searchSource === 'bulletin') ? (rec.id || rec.bulletinId || rec.recordId) : null
+        // ✅ DÜZELT: rec.bulletinId field'ını kullan (bu trademarkBulletins ID'si)
+        bulletinId: (this.searchSource === 'bulletin') ? rec.bulletinId : null,
+        bulletinNo: (this.searchSource === 'bulletin') ? rec.bulletinNo : null,
+        bulletinRecordId: (this.searchSource === 'bulletin') ? (rec.id || id) : null  // trademarkBulletinRecords ID'si
     };
+
+    console.log('✅ Kayıt seçildi:', {
+        bulletinRecordId: this.selectedIpRecord.bulletinRecordId,
+        bulletinId: this.selectedIpRecord.bulletinId,
+        bulletinNo: this.selectedIpRecord.bulletinNo
+    });
+
+    // ✅ EKLE: Bulletin kaydı seçildiyse bulletin verisini çek ve cache'le
+    if (this.searchSource === 'bulletin' && this.selectedIpRecord.bulletinId) {
+        console.log('🔍 Bulletin verisi çekiliyor...', {
+            bulletinId: this.selectedIpRecord.bulletinId,
+            bulletinNo: this.selectedIpRecord.bulletinNo
+        });
+        await this.fetchAndStoreBulletinData(this.selectedIpRecord.bulletinId);
+    }
 
     // ✨ YENİ: Varlık seçimiyle menşe dropdown'ını güncelle
     if (originSelect && this.selectedIpRecord.origin !== originSelect.value) {
@@ -589,7 +606,52 @@ const doSearch = this.debounce(async (raw) => {
   });
 }
 
-    populateOriginDropdown(dropdownId, selectedValue = 'TÜRKPATENT') {
+async fetchAndStoreBulletinData(bulletinId) {
+    try {
+        if (!bulletinId) {
+            console.warn('⚠️ bulletinId boş, bulletin verisi çekilemedi');
+            return null;
+        }
+
+        // Cache kontrolü
+        this.bulletinDataCache = this.bulletinDataCache || {};
+        if (this.bulletinDataCache[bulletinId]) {
+            console.log('✅ Bulletin verisi cache\'den alındı:', this.bulletinDataCache[bulletinId]);
+            return this.bulletinDataCache[bulletinId];
+        }
+
+        console.log('🔍 Bulletin verisi Firebase\'den çekiliyor:', bulletinId);
+
+        // Firebase'den bulletin kaydını çek
+        const db = getFirestore();
+        const bulletinRef = doc(db, 'trademarkBulletins', bulletinId);
+        const bulletinSnap = await getDoc(bulletinRef);
+
+        if (!bulletinSnap.exists()) {
+            console.warn('⚠️ Bulletin kaydı bulunamadı:', bulletinId);
+            return null;
+        }
+
+        const bulletinData = bulletinSnap.data();
+        
+        // ✅ Bulletin verisini cache'le (tarih hesaplamaları için)
+        this.bulletinDataCache[bulletinId] = {
+            id: bulletinId,
+            bulletinNo: bulletinData.bulletinNo,
+            bulletinDate: bulletinData.bulletinDate,
+            type: bulletinData.type
+        };
+
+        console.log('✅ Bulletin verisi cache\'lendi:', this.bulletinDataCache[bulletinId]);
+        return this.bulletinDataCache[bulletinId];
+
+    } catch (error) {
+        console.error('❌ Bulletin verisi çekme hatası:', error);
+        return null;
+    }
+}
+
+populateOriginDropdown(dropdownId, selectedValue = 'TÜRKPATENT') {
         const dropdown = document.getElementById(dropdownId);
         if (!dropdown) return;
         dropdown.innerHTML = '';
