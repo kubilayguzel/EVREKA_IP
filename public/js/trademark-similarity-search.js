@@ -20,6 +20,8 @@ const taskTriggeredStatus = new Map(); // İş Tetiklendi durum haritası
 const notificationStatus = new Map();
 let pagination;
 let monitoringPagination;
+let selectedMonitoredTrademarkId = null; // Seçili marka ID'si
+let similarityFilter = 'all'; // 'all', 'similar', 'not-similar'
 
 const functions = firebaseServices.functions;
 
@@ -927,6 +929,7 @@ const renderMonitoringList = async () => {
     attachMonitoringAccordionListeners();
     attachGenerateReportListener();
     setupImageHoverEffect('monitoringListBody');
+    attachTrademarkClickListener();
 
     // YENİ: Badge'leri kalıcı durumdan güncelle (render sonrası double-check)
     setTimeout(() => {
@@ -985,6 +988,65 @@ const attachGenerateReportListener = () => {
         btn.removeEventListener('click', handleOwnerReportAndNotifyGeneration);
         btn.addEventListener('click', handleOwnerReportAndNotifyGeneration);
         console.log(`✅ Bildirim butonu [${index}] bağlandı:`, btn.dataset);
+    });
+};
+
+// Markaya tıklama olayını dinle
+const attachTrademarkClickListener = () => {
+    const tbody = document.getElementById('monitoringListBody');
+    if (!tbody) return;
+    
+    // Önceki listener'ı kaldır
+    const newTbody = tbody.cloneNode(true);
+    tbody.parentNode.replaceChild(newTbody, tbody);
+    
+    // Event delegation kullan
+    newTbody.addEventListener('click', async (e) => {
+        const row = e.target.closest('.clickable-trademark-row');
+        if (!row) return;
+        
+        const trademarkId = row.dataset.trademarkId;
+        const trademarkName = row.dataset.trademarkName;
+        
+        console.log('🖱️ [MARKA TIKLAME] Marka seçildi:', {
+            id: trademarkId,
+            name: trademarkName
+        });
+        
+        // Önceki seçimi temizle
+        newTbody.querySelectorAll('.clickable-trademark-row').forEach(r => {
+            r.style.backgroundColor = '#ffffff';
+            r.style.borderLeft = 'none';
+            r.removeAttribute('data-selected');
+        });
+        
+        // Aynı markaya tekrar tıklanırsa filtreyi kaldır
+        if (selectedMonitoredTrademarkId === trademarkId) {
+            selectedMonitoredTrademarkId = null;
+            console.log('🔄 [MARKA TIKLAME] Filtre kaldırıldı');
+            showNotification('Marka filtresi kaldırıldı. Tüm sonuçlar gösteriliyor.', 'info');
+        } else {
+            // Yeni markayı seç
+            selectedMonitoredTrademarkId = trademarkId;
+            row.style.backgroundColor = '#e3f2fd';
+            row.style.borderLeft = '4px solid #1e3c72';
+            row.setAttribute('data-selected', 'true');
+            
+            console.log('✅ [MARKA TIKLAME] Filtre uygulandı:', {
+                selectedId: selectedMonitoredTrademarkId
+            });
+            
+            showNotification(`"${trademarkName}" için sonuçlar filtreleniyor...`, 'info');
+        }
+        
+        // Sonuçları yeniden render et
+        renderCurrentPageOfResults();
+        
+        // Sonuç bölümüne kaydır
+        const resultsSection = document.getElementById('resultsTableBody');
+        if (resultsSection) {
+            resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
     });
 };
 
@@ -1653,11 +1715,67 @@ const loadDataFromCache = async (bulletinKey) => {
     }
 };
 
+// Filtre bilgilerini güncelle
+const updateFilterInfo = (resultCount) => {
+    const selectedTrademarkInfo = document.getElementById('selectedTrademarkInfo');
+    const selectedTrademarkName = document.getElementById('selectedTrademarkName');
+    const filteredResultCount = document.getElementById('filteredResultCount');
+    
+    // Sonuç sayısını güncelle
+    if (filteredResultCount) {
+        filteredResultCount.textContent = resultCount;
+    }
+    
+    // Seçili marka bilgisini göster/gizle
+    if (selectedMonitoredTrademarkId && selectedTrademarkInfo && selectedTrademarkName) {
+        const selectedTrademark = monitoringTrademarks.find(tm => tm.id === selectedMonitoredTrademarkId);
+        const selectedName = selectedTrademark?.title || selectedTrademark?.markName || 'Bilinmeyen Marka';
+        
+        selectedTrademarkName.textContent = `"${selectedName}"`;
+        selectedTrademarkInfo.style.display = 'flex';
+    } else if (selectedTrademarkInfo) {
+        selectedTrademarkInfo.style.display = 'none';
+    }
+};
 
 const renderCurrentPageOfResults = () => {
     if (!pagination || !resultsTableBody) return;
     resultsTableBody.innerHTML = '';
-    const currentPageData = pagination.getCurrentPageData(allSimilarResults);
+    
+    // ✅ FİLTRELEME UYGULA
+    let filteredResults = allSimilarResults;
+    
+    // 1. Seçili markaya göre filtrele
+    if (selectedMonitoredTrademarkId) {
+        filteredResults = filteredResults.filter(r => r.monitoredTrademarkId === selectedMonitoredTrademarkId);
+        console.log('🔍 [SONUÇ FİLTRESİ] Seçili marka:', {
+            monitoredTrademarkId: selectedMonitoredTrademarkId,
+            sonuçSayısı: filteredResults.length
+        });
+    }
+    
+    // 2. Benzerlik durumuna göre filtrele
+    if (similarityFilter === 'similar') {
+        filteredResults = filteredResults.filter(r => r.isSimilar === true);
+    } else if (similarityFilter === 'not-similar') {
+        filteredResults = filteredResults.filter(r => r.isSimilar === false);
+    }
+    
+    console.log('🔍 [SONUÇ FİLTRESİ] Uygulanan filtreler:', {
+        toplamSonuç: allSimilarResults.length,
+        seçiliMarka: selectedMonitoredTrademarkId ? 'Evet' : 'Hayır',
+        benzerlikFiltresi: similarityFilter,
+        filtrelenmişSonuç: filteredResults.length
+    });
+    
+    // Filtre bilgilerini güncelle
+    updateFilterInfo(filteredResults.length);
+    
+    // Pagination'ı güncelle (FİLTRELENMİŞ sonuçlarla)
+    pagination.update(filteredResults.length);
+    
+    const currentPageData = pagination.getCurrentPageData(filteredResults);
+    
     if (currentPageData.length === 0) {
         noRecordsMessage.textContent = 'Arama sonucu bulunamadı.';
         noRecordsMessage.style.display = 'block';
@@ -2316,6 +2434,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         brandNameSearchInput.value = '';
         bulletinSelect.selectedIndex = 0;
         applyMonitoringListFilters();
+        showNotification('İzleme listesi filtreleri temizlendi.', 'info');
     });
 
     // Attach filters and bulletin change listener
@@ -2348,7 +2467,33 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         }
     });
-
+    // ✅ Benzerlik filtresi değişikliğini dinle
+    const similarityFilterSelect = document.getElementById('similarityFilterSelect');
+    if (similarityFilterSelect) {
+        similarityFilterSelect.addEventListener('change', () => {
+            similarityFilter = similarityFilterSelect.value;
+            console.log('🔍 [BENZERLİK FİLTRESİ] Değişti:', similarityFilter);
+            renderCurrentPageOfResults();
+        });
+    }
+    
+    // ✅ Marka filtresi kaldırma butonu
+    const clearTrademarkFilterBtn = document.getElementById('clearTrademarkFilterBtn');
+    if (clearTrademarkFilterBtn) {
+        clearTrademarkFilterBtn.addEventListener('click', () => {
+            selectedMonitoredTrademarkId = null;
+            
+            // Marka seçim vurgusunu temizle
+            document.querySelectorAll('.clickable-trademark-row').forEach(r => {
+                r.style.backgroundColor = '#ffffff';
+                r.style.borderLeft = 'none';
+                r.removeAttribute('data-selected');
+            });
+            
+            renderCurrentPageOfResults();
+            showNotification('Marka filtresi kaldırıldı.', 'info');
+        });
+    }
     setupEditCriteriaModal(); // Modal'ı başlat
 });
 
