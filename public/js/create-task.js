@@ -507,14 +507,15 @@ const doSearch = this.debounce(async (raw) => {
         title,
         ownerName: owner,
         applicationNo: appNo,
-        imagePath: img,  // ✅ EKLE: Görsel bilgisi
+        imagePath: img,
         source: this.searchSource,
         origin: rec.origin || 'TÜRKPATENT',
-        // ✨ YENİ: WIPO/ARIPO verilerini de sakla
+        // ✨ WIPO/ARIPO verilerini de sakla
         wipoIR: rec.wipoIR || null,
         aripoIR: rec.aripoIR || null,
-        transactionHierarchy: rec.transactionHierarchy || null
-        // ✨ YENİ SONU
+        transactionHierarchy: rec.transactionHierarchy || null,
+        // ✨ YENİ: Bulletin kaydı için bulletinId ekle
+        bulletinId: rec.bulletinId || null
     };
 
     // ✨ YENİ: Varlık seçimiyle menşe dropdown'ını güncelle
