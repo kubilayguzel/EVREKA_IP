@@ -1924,6 +1924,21 @@ const performSearch = async () => {
     const bulletinKey = bulletinSelect.value;
     if (!bulletinKey || filteredMonitoringTrademarks.length === 0) return;
     
+    // 🔍 LOG: Arama başlangıç bilgileri
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('🔍 [ARAMA BAŞLAT] İŞLEM BAŞLADI');
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('📊 [ARAMA BAŞLAT] Genel Durum:', {
+        seçiliBülten: bulletinKey,
+        toplamİzlenenMarka: monitoringTrademarks.length,
+        filtrelenmişMarkaSayısı: filteredMonitoringTrademarks.length
+    });
+    
+    console.log('📋 [ARAMA BAŞLAT] Arama yapılacak markalar:');
+    filteredMonitoringTrademarks.forEach((tm, index) => {
+        console.log(`  ${index + 1}. ${tm.title || tm.markName} (ID: ${tm.id}, Başvuru No: ${tm.applicationNumber})`);
+    });
+    
     loadingIndicator.textContent = 'Arama başlatılıyor...';
     loadingIndicator.style.display = 'block';
     infoMessageContainer.innerHTML = '';
@@ -1936,6 +1951,11 @@ const performSearch = async () => {
         niceClassSearch: tm.niceClassSearch || [],
         goodsAndServicesByClass: tm.goodsAndServicesByClass || [],
     }));
+    
+    console.log('🎯 [ARAMA BAŞLAT] Arama payload hazırlandı:', {
+        markaSayısı: monitoredMarksPayload.length,
+        örnek: monitoredMarksPayload.slice(0, 2)
+    });
     
     try {
         // ✅ Progress callback - Loading indicator'ı güncelle
@@ -1979,6 +1999,13 @@ const performSearch = async () => {
         infoMessageContainer.innerHTML = `<div class="info-message error"><strong>Hata:</strong> Arama işlemi sırasında bir hata oluştu.</div>`;
     } finally {
             loadingIndicator.style.display = 'none';
+            console.log('✅ [ARAMA BAŞLAT] Sonuçlar alındı:', {
+                toplamSonuç: allSimilarResults.length,
+                benzerSayısı: allSimilarResults.filter(r => r.isSimilar === true).length,
+                benzemezSayısı: allSimilarResults.filter(r => r.isSimilar === false).length
+            });
+            
+            console.log('💾 [ARAMA BAŞLAT] Sonuçlar cache\'e kaydediliyor...');
             groupAndSortResults();
             if (allSimilarResults.length > 0) {
                 infoMessageContainer.innerHTML = `<div class="info-message success">Toplam ${allSimilarResults.length} benzer sonuç bulundu.</div>`;
@@ -2001,17 +2028,73 @@ const performResearch = async () => {
     const bulletinKey = bulletinSelect.value;
     if (!bulletinKey) return;
     
+    // 🔍 LOG: Yeniden arama başlangıç bilgileri
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('🔄 [YENİDEN ARA] İŞLEM BAŞLADI');
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('📊 [YENİDEN ARA] Genel Durum:', {
+        seçiliBülten: bulletinKey,
+        toplamİzlenenMarka: monitoringTrademarks.length,
+        filtrelenişMarkaSayısı: filteredMonitoringTrademarks.length
+    });
+    
+    console.log('📋 [YENİDEN ARA] Yeniden arama yapılacak markalar:');
+    filteredMonitoringTrademarks.forEach((tm, index) => {
+        console.log(`  ${index + 1}. ${tm.title || tm.markName} (ID: ${tm.id}, Başvuru No: ${tm.applicationNumber})`);
+    });
+    
     loadingIndicator.textContent = 'Cache temizleniyor ve yeniden arama başlatılıyor...';
     loadingIndicator.style.display = 'block';
     
     try {
-        await Promise.all(filteredMonitoringTrademarks.map(tm => searchRecordService.deleteRecord(bulletinKey, tm.id)));
+        // Cache silme işlemi
+        console.log('🗑️ [YENİDEN ARA] ADIM 1: Cache kayıtları siliniyor...');
+        
+        const deletePromises = filteredMonitoringTrademarks.map(tm => 
+            searchRecordService.deleteRecord(bulletinKey, tm.id)
+        );
+        
+        const deleteResults = await Promise.allSettled(deletePromises);
+        
+        // Silme sonuçlarını analiz et
+        const successCount = deleteResults.filter(r => r.status === 'fulfilled').length;
+        const failCount = deleteResults.filter(r => r.status === 'rejected').length;
+        
+        console.log('✅ [YENİDEN ARA] Cache silme tamamlandı:', {
+            toplamİşlem: deleteResults.length,
+            başarılı: successCount,
+            başarısız: failCount
+        });
+        
+        if (failCount > 0) {
+            console.warn('⚠️ [YENİDEN ARA] Bazı cache kayıtları silinemedi:');
+            deleteResults.forEach((result, index) => {
+                if (result.status === 'rejected') {
+                    console.warn(`  ❌ ${filteredMonitoringTrademarks[index]?.title}: ${result.reason}`);
+                }
+            });
+        }
+        
+        // Yeniden arama başlat
+        console.log('🔍 [YENİDEN ARA] ADIM 2: Yeniden arama başlatılıyor...');
         await performSearch();
+        
+        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        console.log('✅ [YENİDEN ARA] İŞLEM TAMAMLANDI');
+        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        
     } catch (error) {
-        console.error("❌ Research error:", error);
+        console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        console.error("❌ [YENİDEN ARA] HATA OLUŞTU:", error);
+        console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
         infoMessageContainer.innerHTML = `<div class="info-message error"><strong>Hata:</strong> Yeniden arama sırasında bir hata oluştu.</div>`;
-    } finally {
+    } 
+    
+    finally {
         loadingIndicator.style.display = 'none';
+        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        console.log('✅ [ARAMA BAŞLAT] İŞLEM TAMAMLANDI');
+        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     }
 };
 
