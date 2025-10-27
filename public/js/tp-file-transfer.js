@@ -371,7 +371,7 @@ async function handleQuery() {
 // ===============================
 
 async function queryByApplicationNumber(basvuruNo) {
-  console.log('[DEBUG] Başvuru numarası eklentiye yönlendiriliyor (scrapeTrademark DEVREDİŞI):', basvuruNo);
+  console.log('[DEBUG] Başvuru numarası yeni eklentiye yönlendiriliyor:', basvuruNo);
 
   try {
     _showBlock(loadingEl);
@@ -380,46 +380,88 @@ async function queryByApplicationNumber(basvuruNo) {
     // ÖNEMLİ: scrapeTrademark fonksiyonunu devre dışı bırak
     window.skipScrapeTrademark = true;
 
-    // TÜRKPATENT sayfasını aç (eklentinin otomatik akışı için)
-    const turkPatentUrl = `https://www.turkpatent.gov.tr/arastirma-yap?form=trademark&auto_query=${encodeURIComponent(basvuruNo)}&query_type=basvuru&source=${encodeURIComponent(window.location.origin)}`;
-    console.log('[DEBUG] TÜRKPATENT URL açılıyor (başvuru):', turkPatentUrl);
+    // Yeni eklenti ID'si
+    const EXT_ID = 'kmdlgghljcoanmckgnpibhklfpnkalci';
+    
+    // Fallback URL (eklenti çalışmazsa)
+    const fallbackUrl = `https://opts.turkpatent.gov.tr/trademark#bn=${encodeURIComponent(basvuruNo)}`;
 
     // Simple Loading ile kontrol
     let loading = window.showLoadingWithCancel?.(
       'TÜRKPATENT sorgulanıyor',
-      'Başvuru numarası ile kayıt araştırılıyor (sadece eklenti)...',
+      'Başvuru numarası ile kayıt araştırılıyor...',
       () => {
-        console.log('[DEBUG] Sorgu iptal edildi (basvuru)');
+        console.log('[DEBUG] Sorgu iptal edildi');
         if (window.currentLoading) window.currentLoading = null;
-        // İptal edilince flag'i temizle
         window.skipScrapeTrademark = false;
       }
     );
 
-    const newWindow = window.open(turkPatentUrl, '_blank');
-    if (!newWindow) {
-      if (loading && loading.showError) loading.showError('Pop-up engellendi. Tarayıcı ayarlarından pop-up\'ları açın.');
-      _hideBlock(loadingEl);
-      // Hata durumunda flag'i temizle
-      window.skipScrapeTrademark = false;
-      return;
+    // Eklentiye mesaj gönder
+    try {
+      if (typeof chrome !== 'undefined' && chrome.runtime && EXT_ID) {
+        chrome.runtime.sendMessage(
+          EXT_ID,
+          { type: 'SORGULA', data: basvuruNo },
+          (response) => {
+            const hasErr = !!(chrome.runtime && chrome.runtime.lastError);
+            const ok = response && (response.status === 'OK' || response.status === 'OK_WAIT');
+            
+            // Eklenti yoksa veya hata varsa fallback aç
+            if (hasErr || !ok) {
+              console.log('[DEBUG] Eklenti yanıt vermedi, fallback URL açılıyor');
+              const newWindow = window.open(fallbackUrl, '_blank');
+              if (!newWindow) {
+                if (loading && loading.showError) loading.showError('Pop-up engellendi.');
+                _hideBlock(loadingEl);
+                window.skipScrapeTrademark = false;
+              } else {
+                window.currentLoading = loading || null;
+                showToast('TÜRKPATENT sayfası açıldı. Eklenti çalışacak.', 'info');
+              }
+            } else {
+              // Eklenti başarılı
+              window.currentLoading = loading || null;
+              showToast('TÜRKPATENT sayfası açıldı. Eklenti çalışacak.', 'info');
+            }
+          }
+        );
+      } else {
+        // Chrome extension API yok, direkt fallback aç
+        console.log('[DEBUG] Chrome extension API yok, fallback URL açılıyor');
+        const newWindow = window.open(fallbackUrl, '_blank');
+        if (!newWindow) {
+          if (loading && loading.showError) loading.showError('Pop-up engellendi.');
+          _hideBlock(loadingEl);
+          window.skipScrapeTrademark = false;
+          return;
+        }
+        window.currentLoading = loading || null;
+        showToast('TÜRKPATENT sayfası açıldı.', 'info');
+      }
+    } catch (e) {
+      console.warn('[DEBUG] Extension error:', e);
+      const newWindow = window.open(fallbackUrl, '_blank');
+      if (!newWindow) {
+        if (loading && loading.showError) loading.showError('Pop-up engellendi.');
+        _hideBlock(loadingEl);
+        window.skipScrapeTrademark = false;
+        return;
+      }
+      window.currentLoading = loading || null;
+      showToast('TÜRKPATENT sayfası açıldı.', 'info');
     }
 
-    // Loading referansını global'e kaydet
-    window.currentLoading = loading || null;
-
-    // Zaman aşımı emniyeti (flag'i de temizle)
+    // Zaman aşımı emniyeti
     setTimeout(() => { 
       try { _hideBlock(loadingEl); } catch {} 
       window.skipScrapeTrademark = false;
     }, 45000);
 
-    showToast('TÜRKPATENT sayfası açıldı. Eklenti çalışacak ve sonuçları gönderecek.', 'info');
   } catch (err) {
     _hideBlock(loadingEl);
-    // Hata durumunda flag'i temizle
     window.skipScrapeTrademark = false;
-    console.error('[DEBUG] Başvuru numarası sorgulama hatası (eklentili):', err);
+    console.error('[DEBUG] Başvuru numarası sorgulama hatası:', err);
     showToast('İşlem hatası: ' + (err?.message || err), 'danger');
   }
 }
