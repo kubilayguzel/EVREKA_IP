@@ -1862,10 +1862,21 @@ const renderCurrentPageOfResults = () => {
     tm.id === (hit.monitoredTrademarkId || hit.monitoredMarkId)
     ) || {};
     
-    // --- SINIF ROZETLERİ (normalize + set tabanlı kontrol) ---
-    const resultClasses = normalizeNiceList(hit.niceClasses);                // arama sonucu sınıfları
-    const registeredSet = new Set(normalizeNiceList(getNiceClassNumbers(monitoredTrademark))); // tescilli sınıflar (goodsAndServicesByClassNumbers)
-    const criteriaSet   = new Set(normalizeNiceList(monitoredTrademark?.niceClassSearch));     // kriter sınıfları (monitoredNiceClassNumbers)
+    const resultClasses = normalizeNiceList(hit.niceClasses);
+
+    // Tescilli sınıflar: önce goodsAndServicesByClass, boşsa niceClasses / niceClass / _uniqNice fallback
+    let registered = normalizeNiceList(getNiceClassNumbers(monitoredTrademark));
+    if (registered.length === 0) {
+    registered = normalizeNiceList(
+        Array.isArray(monitoredTrademark?.niceClasses) && monitoredTrademark.niceClasses.length
+        ? monitoredTrademark.niceClasses
+        : _uniqNice(monitoredTrademark) // "1, 3, 30" gibi birleşik stringi de parse eder
+    );
+    }
+    const registeredSet = new Set(registered);
+
+    // Kriter sınıfları (sarı)
+    const criteriaSet = new Set(normalizeNiceList(monitoredTrademark?.niceClassSearch));
 
     // Tekrarsız sırayla rozet üret
     const niceClassHtml = [...new Set(resultClasses)].map(cls => {
