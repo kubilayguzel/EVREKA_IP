@@ -464,6 +464,21 @@ const getNiceClassNumbers = (item) => {
     }
     return [];
 };
+
+// Nice sınıfı değerlerini güvenli biçimde "['1','2',...]" standardına çeker
+function normalizeNiceList(input) {
+  // input dizi ise birleştirip string yap, değilse stringe çevir
+  const raw = Array.isArray(input) ? input.join(',') : String(input || '');
+
+  // rakam dışı her şeyi ayraç kabul et (virgül, slash, noktalı virgül, boşluk vb.)
+  const parts = raw.split(/[^\d]+/).filter(Boolean);
+
+  // "03" -> "3", 1..45 ve 99 dışındakileri at
+  return parts
+    .map(p => String(parseInt(p, 10)))
+    .filter(p => !isNaN(p) && ( (Number(p) >= 1 && Number(p) <= 45) || Number(p) === 99 ));
+}
+
 const getApplicationDateFormatted = (item) => {
     try {
         const date = (item.applicationDate?.toDate && typeof item.applicationDate.toDate === 'function') ? item.applicationDate.toDate() : new Date(item.applicationDate);
@@ -1847,19 +1862,20 @@ const renderCurrentPageOfResults = () => {
     tm.id === (hit.monitoredTrademarkId || hit.monitoredMarkId)
     ) || {};
     
-    const niceClassesArray = (Array.isArray(hit.niceClasses) ? hit.niceClasses : (hit.niceClasses?.split('/')?.map(c => c.trim()) || [])).filter(Boolean);
-    const monitoredNiceClassNumbers = (monitoredTrademark?.niceClassSearch || []).map(String);
-    const goodsAndServicesByClassNumbers = getNiceClassNumbers(monitoredTrademark).map(String);
-    
-    const niceClassHtml = niceClassesArray.map(cls => {
-        const clsString = String(cls).trim();
-        let cssClass = '';
-        if (goodsAndServicesByClassNumbers.includes(clsString)) {
-            cssClass = 'match';
-        } else if (monitoredNiceClassNumbers.includes(clsString)) {
-            cssClass = 'partial-match';
-        }
-        return `<span class="nice-class-badge ${cssClass}">${cls}</span>`;
+    // --- SINIF ROZETLERİ (normalize + set tabanlı kontrol) ---
+    const resultClasses = normalizeNiceList(hit.niceClasses);                // arama sonucu sınıfları
+    const registeredSet = new Set(normalizeNiceList(getNiceClassNumbers(monitoredTrademark))); // tescilli sınıflar (goodsAndServicesByClassNumbers)
+    const criteriaSet   = new Set(normalizeNiceList(monitoredTrademark?.niceClassSearch));     // kriter sınıfları (monitoredNiceClassNumbers)
+
+    // Tekrarsız sırayla rozet üret
+    const niceClassHtml = [...new Set(resultClasses)].map(cls => {
+    let cssClass = '';
+    if (registeredSet.has(cls)) {
+        cssClass = 'match';          // ✅ yeşil: tescilli ile eşleşti
+    } else if (criteriaSet.has(cls)) {
+        cssClass = 'partial-match';  // 🟡 sarı: tescilde yok ama kriterde var
+    }
+    return `<span class="nice-class-badge ${cssClass}">${cls}</span>`;
     }).join('');
 
     const similarityScore = hit.similarityScore ? `${(hit.similarityScore * 100).toFixed(0)}%` : '-';
