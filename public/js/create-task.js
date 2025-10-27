@@ -3661,8 +3661,7 @@ const officialFee = parseFloat(document.getElementById('officialFee')?.value) ||
                             console.log('📅 Bülten tarihi bulundu:', bulletinDateStr);
                             
                             // Resmi son tarih: Bülten tarihi + 2 ay
-                            const rawOfficialDate = new Date(bulletinDate);
-                            rawOfficialDate.setMonth(bulletinDate.getMonth() + 2);
+                            const rawOfficialDate = addMonthsToDate(bulletinDate, 2);
                             
                             // Hafta sonu ve tatillere göre kaydır
                             const adjustedOfficialDate = findNextWorkingDay(rawOfficialDate, TURKEY_HOLIDAYS);
