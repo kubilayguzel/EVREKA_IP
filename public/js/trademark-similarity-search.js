@@ -1855,7 +1855,7 @@ const renderCurrentPageOfResults = () => {
 
 };
 
-    const createResultRow = (hit, rowIndex) => {
+const createResultRow = (hit, rowIndex) => {
     const holders = Array.isArray(hit.holders) ? hit.holders.map(h => h.name || h.id).filter(Boolean).join(', ') : (hit.holders || '');
     // ✅ Her iki alanı da kontrol et (backward compatibility)
     const monitoredTrademark = monitoringTrademarks.find(tm => 
@@ -1864,35 +1864,40 @@ const renderCurrentPageOfResults = () => {
     
     const resultClasses = normalizeNiceList(hit.niceClasses);
 
-// ✅ YEŞİL: goodsAndServicesByClassNumbers (Tescilli sınıflar)
-    const goodsAndServicesClasses = normalizeNiceList(getNiceClassNumbers(monitoredTrademark));
-    const goodsAndServicesSet = new Set(goodsAndServicesClasses);
-
-    // 🟡 SARI: monitoredNiceClassNumbers (İzlenen tüm sınıflar - tescilli olmayan ama izlenen)
-    // niceClassSearch veya monitoredNiceClassNumbers alanını kullan
-    let monitoredClasses = normalizeNiceList(
-        monitoredTrademark?.monitoredNiceClassNumbers || 
-        monitoredTrademark?.niceClassSearch || 
-        []
-    );
+    // ✅ YEŞİL: goodsAndServicesByClass (tescilli sınıflar)
+    // hit.ipRecord veya monitoredTrademark.ipRecord varsa ondan al
+    const ipRecordData = hit.ipRecord || monitoredTrademark.ipRecord || {};
+    let goodsAndServicesClasses = normalizeNiceList(getNiceClassNumbers(ipRecordData));
     
-    // Fallback: Eğer hiçbiri yoksa niceClasses'ı kullan
-    if (monitoredClasses.length === 0 && Array.isArray(monitoredTrademark?.niceClasses)) {
-        monitoredClasses = normalizeNiceList(monitoredTrademark.niceClasses);
+    // Fallback: ipRecord yoksa monitoredTrademark'tan dene
+    if (goodsAndServicesClasses.length === 0) {
+        goodsAndServicesClasses = normalizeNiceList(getNiceClassNumbers(monitoredTrademark));
     }
     
+    // Hala boşsa niceClasses / _uniqNice fallback
+    if (goodsAndServicesClasses.length === 0) {
+        goodsAndServicesClasses = normalizeNiceList(
+            Array.isArray(monitoredTrademark?.niceClasses) && monitoredTrademark.niceClasses.length
+            ? monitoredTrademark.niceClasses
+            : _uniqNice(monitoredTrademark)
+        );
+    }
+    const goodsAndServicesSet = new Set(goodsAndServicesClasses);
+
+    // 🟡 SARI: niceClassSearch (izlenen ama tescilli olmayan sınıflar)
+    const monitoredClasses = normalizeNiceList(monitoredTrademark?.niceClassSearch || []);
     const monitoredSet = new Set(monitoredClasses);
 
     // Tekrarsız sırayla rozet üret
     const niceClassHtml = [...new Set(resultClasses)].map(cls => {
-        let cssClass = '';
-        if (goodsAndServicesSet.has(cls)) {
-            cssClass = 'match';          // ✅ yeşil: goodsAndServicesByClassNumbers ile eşleşti
-        } else if (monitoredSet.has(cls)) {
-            cssClass = 'partial-match';  // 🟡 sarı: tescilde yok ama monitoredNiceClassNumbers'da var
-        }
-        // cssClass boşsa gri kalır (varsayılan)
-        return `<span class="nice-class-badge ${cssClass}">${cls}</span>`;
+    let cssClass = '';
+    if (goodsAndServicesSet.has(cls)) {
+        cssClass = 'match';          // ✅ yeşil: goodsAndServicesByClass ile eşleşti
+    } else if (monitoredSet.has(cls)) {
+        cssClass = 'partial-match';  // 🟡 sarı: tescilde yok ama niceClassSearch'te var
+    }
+    // cssClass boşsa gri kalır
+    return `<span class="nice-class-badge ${cssClass}">${cls}</span>`;
     }).join('');
 
     const similarityScore = hit.similarityScore ? `${(hit.similarityScore * 100).toFixed(0)}%` : '-';
