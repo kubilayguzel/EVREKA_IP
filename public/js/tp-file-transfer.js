@@ -562,61 +562,6 @@ function handleOptsError(error) {
   window.skipScrapeTrademark = false;
 }
 
-// Eklentiden sonuç bekle (polling)
-function startPollingForOptsResult(basvuruNo, loading) {
-  const EXT_ID = 'gkhmldkbjmnipikgjabmlilibllikapk'; // Güncel ID
-  let pollCount = 0;
-  const maxPolls = 60; // 30 saniye
-  
-  console.log('[Poll] Polling başlatıldı:', basvuruNo);
-  
-  const pollInterval = setInterval(() => {
-    pollCount++;
-    
-    // Eklentiye sonuç var mı diye sor
-    if (typeof chrome !== 'undefined' && chrome.runtime) {
-      chrome.runtime.sendMessage(
-        EXT_ID,
-        { type: 'GET_RESULT', applicationNumber: basvuruNo },
-        (response) => {
-          if (chrome.runtime.lastError) {
-            console.log('[Poll] Eklenti cevap vermedi');
-            return;
-          }
-          
-          if (response && response.status === 'READY' && response.data) {
-            console.log('[Poll] ✅ Sonuç alındı!', response);
-            clearInterval(pollInterval);
-            
-            // Veriyi işle
-            if (response.messageType === 'VERI_GELDI_OPTS') {
-              handleOptsSuccess(response.data);
-            } else if (response.messageType === 'HATA_OPTS') {
-              handleOptsError(response.data);
-            }
-          }
-        }
-      );
-    }
-    
-    // Timeout
-    if (pollCount >= maxPolls) {
-      clearInterval(pollInterval);
-      console.log('[Poll] ❌ Timeout');
-      if (loading && loading.showError) {
-        loading.showError('Zaman aşımı');
-      }
-      _hideBlock(loadingEl);
-      window.skipScrapeTrademark = false;
-    }
-  }, 500);
-  
-  // İptal için polling referansını kaydet
-  if (loading) {
-    loading._pollInterval = pollInterval;
-  }
-}
-
 // OPTS başarı durumu
 function handleOptsSuccess(data) {
   console.log('[OPTS] Veri işleniyor:', data);
