@@ -1254,6 +1254,269 @@ async function waitAndSendApplicationResults() {
   }
 }
 
+// ============================================
+// OPTS.TURKPATENT.GOV.TR İÇİN YENİ AKIM
+// ============================================
+
+// Sayfa yüklendiğinde URL kontrolü
+(function initOptsFlow() {
+  const currentUrl = window.location.href;
+  
+  // opts.turkpatent.gov.tr kontrolü
+  if (/^https:\/\/opts\.turkpatent\.gov\.tr\/trademark/i.test(currentUrl)) {
+    log('🎯 OPTS sayfası algılandı, hash kontrolü yapılıyor...');
+    
+    // Hash'den başvuru numarasını al
+    const hash = window.location.hash;
+    const match = hash.match(/#bn=([^&]+)/);
+    
+    if (match) {
+      const appNo = decodeURIComponent(match[1]);
+      log('✅ Hash\'den başvuru no bulundu:', appNo);
+      
+      // Kısa gecikme sonrası otomatik doldur ve veri topla
+      setTimeout(() => {
+        runOptsFlow(appNo);
+      }, 1000);
+    }
+  }
+})();
+
+// OPTS akışını çalıştır
+async function runOptsFlow(appNo) {
+  log('🚀 OPTS akışı başlatılıyor:', appNo);
+  
+  try {
+    // Sayfada input alanını bul
+    const input = document.querySelector('input[id*="input-"][type="text"]') || 
+                  document.querySelector('input[type="text"]');
+    
+    if (!input) {
+      err('❌ Input alanı bulunamadı');
+      sendToOpener('HATA_OPTS', { message: 'Input alanı bulunamadı' });
+      return;
+    }
+    
+    log('✅ Input bulundu, başvuru no yazılıyor...');
+    
+    // Input'u doldur
+    input.value = '';
+    input.focus();
+    
+    setTimeout(() => {
+      input.value = appNo;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+      
+      log('📝 Başvuru no yazıldı');
+      
+      // Arama butonuna tıkla
+      setTimeout(() => {
+        const searchBtn = document.querySelector('button[type="submit"]') ||
+                         document.querySelector('button.MuiButton-containedPrimary') ||
+                         Array.from(document.querySelectorAll('button')).find(b => 
+                           /ara|search|sorgula/i.test(b.textContent || '')
+                         );
+        
+        if (searchBtn) {
+          log('🔍 Arama butonu bulundu, tıklanıyor...');
+          searchBtn.click();
+          
+          // Sonuçları bekle ve topla
+          setTimeout(() => {
+            waitForOptsResultsAndScrape(appNo);
+          }, 1500);
+        } else {
+          log('⚠️ Arama butonu bulunamadı, Enter denenecek');
+          input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true }));
+          
+          setTimeout(() => {
+            waitForOptsResultsAndScrape(appNo);
+          }, 1500);
+        }
+      }, 500);
+    }, 300);
+    
+  } catch (error) {
+    err('❌ OPTS akış hatası:', error);
+    sendToOpener('HATA_OPTS', { message: error.message });
+  }
+}
+
+// OPTS sonuçlarını bekle ve scrape et
+async function waitForOptsResultsAndScrape(appNo) {
+  log('⏳ OPTS sonuçları bekleniyor...');
+  
+  let attempts = 0;
+  const maxAttempts = 40; // 20 saniye (500ms * 40)
+  
+  const checkInterval = setInterval(() => {
+    attempts++;
+    
+    // Sonuç tablosunu kontrol et
+    const resultTable = document.querySelector('table.MuiTable-root, div[class*="MuiTable"] table, tbody');
+    const resultRows = resultTable ? resultTable.querySelectorAll('tbody tr, tr') : [];
+    
+    // En az 1 satır var mı?
+    const hasResults = resultRows.length > 0 && 
+                      Array.from(resultRows).some(row => {
+                        const cells = row.querySelectorAll('td');
+                        return cells.length > 2; // En az 3 hücre olmalı
+                      });
+    
+    if (hasResults) {
+      log('✅ OPTS sonuçları bulundu, scraping başlatılıyor...');
+      clearInterval(checkInterval);
+      scrapeOptsData(appNo, resultTable);
+      return;
+    }
+    
+    // Maksimum deneme sayısına ulaşıldı
+    if (attempts >= maxAttempts) {
+      log('❌ OPTS Timeout: Sonuç bulunamadı');
+      clearInterval(checkInterval);
+      sendToOpener('HATA_OPTS', { message: 'Sonuç bulunamadı veya zaman aşımı' });
+    }
+  }, 500);
+}
+
+// OPTS verilerini scrape et
+function scrapeOptsData(appNo, table) {
+  log('🔍 OPTS veri scraping başladı...');
+  
+  try {
+    const rows = table.querySelectorAll('tbody tr, tr');
+    if (rows.length === 0) {
+      sendToOpener('HATA_OPTS', { message: 'Tablo satırları bulunamadı' });
+      return;
+    }
+    
+    log(`📊 ${rows.length} satır bulundu, parse ediliyor...`);
+    
+    // İlk satırı al (opts genelde tek sonuç döner)
+    const row = rows[0];
+    const cells = Array.from(row.querySelectorAll('td'));
+    
+    if (cells.length === 0) {
+      sendToOpener('HATA_OPTS', { message: 'Hücre bulunamadı' });
+      return;
+    }
+    
+    const data = {
+      applicationNumber: appNo,
+      brandName: '',
+      ownerName: '',
+      applicationDate: '',
+      registrationNumber: '',
+      status: '',
+      niceClasses: '',
+      imageSrc: null,
+      brandImageUrl: null,
+      brandImageDataUrl: null
+    };
+    
+    // Görsel varsa çek
+    const img = row.querySelector('img');
+    if (img && img.src) {
+      data.imageSrc = img.src;
+      data.brandImageUrl = img.src;
+      data.brandImageDataUrl = img.src;
+      log('🖼️ Görsel bulundu');
+    }
+    
+    // Hücreleri tara
+    cells.forEach((cell, index) => {
+      const text = cell.textContent.trim();
+      
+      log(`  Hücre ${index}: "${text}"`);
+      
+      // Başvuru numarası (2025/123 formatı)
+      if (/^\d{4}\/\d+$/.test(text)) {
+        data.applicationNumber = normalizeAppNo(text);
+        log('  → Başvuru no');
+      }
+      
+      // Tarih formatı (DD.MM.YYYY)
+      else if (/^\d{2}\.\d{2}\.\d{4}$/.test(text)) {
+        if (!data.applicationDate) {
+          data.applicationDate = text;
+          log('  → Başvuru tarihi');
+        }
+      }
+      
+      // Tescil numarası (2025 123456 formatı)
+      else if (/^\d{4}\s+\d+$/.test(text)) {
+        data.registrationNumber = text;
+        log('  → Tescil no');
+      }
+      
+      // Statü
+      else if (/TESCİL|GEÇERSİZ|BAŞVURU|REDDEDİLDİ|YAYINLANDI/i.test(text)) {
+        data.status = text;
+        log('  → Statü');
+      }
+      
+      // Nice sınıfları (eğik çizgi içeren sayılar)
+      else if (text.includes('/') && /\d+/.test(text) && text.length < 50) {
+        data.niceClasses = text;
+        log('  → Nice sınıfları');
+      }
+      
+      // Marka adı (ilk boş alan)
+      else if (text.length > 0 && !data.brandName && text.length < 200) {
+        // Şirket ismi değilse
+        if (!/LİMİTED|A\.Ş\.|ŞİRKETİ|LTD|INCORPORATED/i.test(text)) {
+          data.brandName = text;
+          log('  → Marka adı');
+        }
+      }
+      
+      // Sahip adı (ikinci boş alan veya şirket içeriyorsa)
+      else if (text.length > 0 && !data.ownerName) {
+        data.ownerName = text;
+        log('  → Sahip adı');
+      }
+    });
+    
+    log('✅ OPTS scraping tamamlandı:', data);
+    
+    // Veriyi ana uygulamaya gönder
+    sendToOpener('VERI_GELDI_OPTS', [data]);
+    
+    // Sekmeyi kapat (isteğe bağlı)
+    setTimeout(() => {
+      window.close();
+    }, 2000);
+    
+  } catch (error) {
+    err('❌ OPTS scraping hatası:', error);
+    sendToOpener('HATA_OPTS', { message: 'Scraping hatası: ' + error.message });
+  }
+}
+
+// ============================================
+// OPTS İÇİN MESSAGE LISTENER
+// ============================================
+
+// Mevcut listener'a ekle (veya yeni listener oluştur)
+chrome.runtime?.onMessage?.addListener?.((request, sender, sendResponse) => {
+  // OPTS için özel mesaj
+  if (request?.type === 'AUTO_FILL_OPTS' && request?.data) {
+    const appNo = request.data;
+    log('📨 AUTO_FILL_OPTS mesajı alındı:', appNo);
+    
+    // Eğer zaten opts sayfasındaysa direkt çalıştır
+    if (/^https:\/\/opts\.turkpatent\.gov\.tr/i.test(window.location.href)) {
+      runOptsFlow(appNo);
+    }
+    
+    sendResponse?.({ status: 'OK' });
+    return true;
+  }
+  
+  return true;
+});
+
 // Dış mesajlar: AUTO_FILL (geri uyum) ve AUTO_FILL_BASVURU
 chrome.runtime?.onMessage?.addListener?.((request, sender, sendResponse) => {
   if (request?.type === 'AUTO_FILL' && request?.data) {
