@@ -1,6 +1,8 @@
 // ================================================
 // Evreka IP — SADE (Sadece Sahip No) İçerik Scripti + Sonuç Toplama (STRICT)
 // ================================================
+console.log('[Evreka OPTS] ========== CONTENT SCRIPT LOADED ==========');
+console.log('[Evreka OPTS] URL:', window.location.href);
 
 const TAG = '[Evreka SahipNo]';
 let targetKisiNo = null;
