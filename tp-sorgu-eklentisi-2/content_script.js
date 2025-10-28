@@ -391,155 +391,209 @@ async function parseDetailsFromOpenDialog(dialogRoot) {
   } catch (e) { /* ignore */ }
 
 
-  try {
-    // Hızlı tablo parsing - tek geçişte her şeyi topla
-    const allTables = dialogRoot.querySelectorAll('table, .MuiTable-root');
+try {
+    // YENİ: Tüm tabloları topla - hem eski hem yeni selector'lar
+    const allTables = dialogRoot.querySelectorAll(
+      'table, .MuiTable-root, table.MuiTable-root.css-175qdh6'
+    );
     
-  for (const table of allTables) {
-    const headers = table.querySelectorAll('th, .MuiTableCell-head');
-    const headerTexts = Array.from(headers).map(h => h.textContent.trim());
+    console.log('🔍 Toplam tablo sayısı:', allTables.length);
     
-    const tbody = table.querySelector('tbody, .MuiTableBody-root');
-    if (!tbody) continue;
-    
-    const rows = tbody.querySelectorAll('tr, .MuiTableRow-root');
-    
-    // ÖNCELİK: Key-Value tablo parsing (Durumu vs. bilgiler için)
-    console.log('🔍 Toplam tablo satırı:', rows.length);
-    for (const row of rows) {
-      const cells = row.querySelectorAll('td, .MuiTableCell-body');
-      if (cells.length === 4) {
-        // 4 hücreli: Key1, Value1, Key2, Value2
-        const key1 = cells[0].textContent.trim();
-        const value1 = cells[1].textContent.trim();
-        const key2 = cells[2].textContent.trim();
-        const value2 = cells[3].textContent.trim();
-        
-        console.log('🔍 4 hücreli satır:', key1, '=', value1, '|', key2, '=', value2);
-        
-        if (key1 && value1) data.fields[key1] = value1;
-        if (key2 && value2) data.fields[key2] = value2;
+    for (const table of allTables) {
+      // Header detection - YENİ CSS class'ları ekle
+      const headers = table.querySelectorAll(
+        'th, .MuiTableCell-head, thead .MuiTableCell-root, th.MuiTableCell-head.MuiTableCell-sizeSmall'
+      );
+      const headerTexts = Array.from(headers).map(h => h.textContent.trim());
+      
+      console.log('📋 Tablo header\'ları:', headerTexts);
+      
+      // tbody detection - YENİ CSS class'lı tbody
+      const tbody = table.querySelector(
+        'tbody, .MuiTableBody-root, tbody.MuiTableBody-root.css-y6j1my'
+      );
+      if (!tbody) {
+        console.warn('⚠️ tbody bulunamadı, sonraki tabloya geç');
+        continue;
       }
-    }      
-      // EŞYA TABLOSU kontrolü
+      
+      // tr detection - YENİ CSS class'lı tr
+      const rows = tbody.querySelectorAll(
+        'tr, .MuiTableRow-root, tr.MuiTableRow-root.css-11biftp'
+      );
+      
+      console.log('📊 Tablo satır sayısı:', rows.length);
+      
+      // ==========================================
+      // 1) MAL VE HİZMETLER TABLOSU (2 kolonlu)
+      // ==========================================
       if (headerTexts.some(h => h.includes('Sınıf')) && 
           headerTexts.some(h => h.includes('Mal') || h.includes('Hizmet'))) {
         
+        console.log('✅ Mal ve Hizmetler tablosu tespit edildi');
+        
         for (const row of rows) {
-          const cells = row.querySelectorAll('td, .MuiTableCell-body');
+          const cells = row.querySelectorAll(
+            'td, .MuiTableCell-body, td.MuiTableCell-root.MuiTableCell-body.MuiTableCell-sizeSmall'
+          );
+          
           if (cells.length === 2) {
-            const classNo = parseInt(cells[0].textContent.trim(), 10);
+            const classNoText = cells[0].textContent.trim();
             const goodsText = cells[1].textContent.trim();
             
+            // Sınıf numarası parse et
+            const classNo = parseInt(classNoText, 10);
+            
             if (!isNaN(classNo) && classNo >= 1 && classNo <= 45 && goodsText.length > 0) {
+              // Mal/hizmet metnini satırlara ayır
               const items = goodsText
                 .split(/\n+/)
                 .map(item => item.trim())
                 .filter(Boolean)
                 .map(item => item.replace(/\s+/g, ' '));
               
+              console.log(`📦 Sınıf ${classNo}: ${items.length} adet mal/hizmet bulundu`);
               data.goodsAndServices.push({ classNo, items });
             }
           }
         }
       }
       
-      // İŞLEM TABLOSU kontrolü
+      // ==========================================
+      // 2) İŞLEM GEÇMİŞİ TABLOSU (4 kolonlu + başlık satırları)
+      // ==========================================
       else if (headerTexts.some(h => h.includes('Tarih')) && 
                headerTexts.some(h => h.includes('İşlem'))) {
+        
+        console.log('✅ İşlem geçmişi tablosu tespit edildi');
         
         const dateRegex = /^\d{2}\.\d{2}\.\d{4}$/;
         
         for (const row of rows) {
-          const cells = row.querySelectorAll('td, .MuiTableCell-body');
+          const cells = row.querySelectorAll(
+            'td, .MuiTableCell-body, td.MuiTableCell-root.MuiTableCell-body.MuiTableCell-sizeSmall'
+          );
+          
+          // BAŞLIK SATIRLARI: 1 hücreli + colspan (Marka başvurusu, Marka Tescil Ücreti Ödeme gibi)
+          if (cells.length === 1) {
+            const titleText = cells[0].textContent.trim();
+            if (titleText && titleText.length > 0) {
+              console.log('📌 İşlem geçmişi başlık:', titleText);
+              // Başlık satırlarını ignore et veya özel işle
+            }
+            continue;
+          }
+          
+          // VERİ SATIRLARI: 4 hücreli (Tarih, Tebliğ Tarihi, İşlem, Açıklama)
           if (cells.length === 4) {
             const dateText = cells[0].textContent.trim();
+            const notificationDate = cells[1].textContent.trim();
             const operationText = cells[2].textContent.trim();
             const noteText = cells[3].textContent.trim();
             
-            if (dateRegex.test(dateText) && operationText && operationText !== '-') {
-              data.transactions.push({
+            // Sadece geçerli tarih formatına sahip satırları al
+            if (dateRegex.test(dateText) && operationText && operationText !== '--') {
+              const transaction = {
                 date: dateText,
                 description: operationText,
-                note: (noteText && noteText !== '-') ? noteText : null
-              });
+                note: (noteText && noteText !== '--' && noteText !== '-') ? noteText : null
+              };
+              
+              // İsteğe bağlı: Tebliğ tarihini de ekle
+              if (notificationDate && notificationDate !== '--') {
+                transaction.notificationDate = notificationDate;
+              }
+              
+              console.log('📝 Transaction eklendi:', transaction);
+              data.transactions.push(transaction);
             }
           }
         }
       }
-      // GENEL BİLGİ TABLOSU kontrolü (Key-Value tarzı: "Durumu", "Koruma Tarihi" vb.)
+      
+      // ==========================================
+      // 3) ANA BİLGİLER TABLOSU (4 kolonlu Key-Value)
+      // ==========================================
       else {
-        // 2 kolonlu Key-Value tablolarını kontrol et
+        console.log('✅ Ana bilgiler tablosu tespit edildi');
+        
         for (const row of rows) {
-          const cells = row.querySelectorAll('td, .MuiTableCell-body');
-          if (cells.length === 4 || cells.length === 2) {
-            // 4 kolonlu: Key1, Value1, Key2, Value2 formatı
-            if (cells.length === 4) {
-              const key1 = cells[0].textContent.trim();
-              const value1 = cells[1].textContent.trim();
-              const key2 = cells[2].textContent.trim();
-              const value2 = cells[3].textContent.trim();
-              
-              if (key1 && value1) data.fields[key1] = value1;
-              if (key2 && value2) data.fields[key2] = value2;
-            }
-            // 2 kolonlu: Key, Value formatı
-            else if (cells.length === 2) {
-              const key = cells[0].textContent.trim();
-              const value = cells[1].textContent.trim();
-              
-              if (key && value) data.fields[key] = value;
-            }
+          const cells = row.querySelectorAll(
+            'td, .MuiTableCell-body, td.MuiTableCell-root.MuiTableCell-body.MuiTableCell-sizeSmall'
+          );
+          
+          // 4 KOLONLU: Key1, Value1, Key2, Value2
+          if (cells.length === 4) {
+            const key1 = cells[0].textContent.trim();
+            const value1 = cells[1].textContent.trim();
+            const key2 = cells[2].textContent.trim();
+            const value2 = cells[3].textContent.trim();
+            
+            console.log('🔍 4 hücreli satır:', key1, '=', value1, '|', key2, '=', value2);
+            
+            // Value normalize - "--" ve "-" boş kabul edilir
+            const normalizedValue1 = (value1 === '--' || value1 === '-') ? '' : value1;
+            const normalizedValue2 = (value2 === '--' || value2 === '-') ? '' : value2;
+            
+            if (key1 && normalizedValue1) data.fields[key1] = normalizedValue1;
+            if (key2 && normalizedValue2) data.fields[key2] = normalizedValue2;
+          }
+          
+          // 2 KOLONLU: Key, Value (Sahip Bilgileri, Vekil Bilgileri gibi)
+          else if (cells.length === 2) {
+            const key = cells[0].textContent.trim();
+            const value = cells[1].textContent.trim();
+            
+            console.log('🔍 2 hücreli satır:', key, '=', value);
+            
+            const normalizedValue = (value === '--' || value === '-') ? '' : value;
+            if (key && normalizedValue) data.fields[key] = normalizedValue;
           }
         }
       }
     }
     
-    // Tüm tablo satırlarında Key-Value arama (4 hücreli format)
-    const allTableRows = dialogRoot.querySelectorAll('table tr, .MuiTable-root tr');
+    // EKSTRA GÜVENLIK: Tüm tablolardaki 4 hücreli satırları da tara
+    // (Bazı bilgiler farklı tablolarda olabilir)
+    const allTableRows = dialogRoot.querySelectorAll(
+      'table tr, .MuiTable-root tr, tr.MuiTableRow-root'
+    );
+    
     for (const row of allTableRows) {
-      const cells = row.querySelectorAll('td, .MuiTableCell-body');
+      const cells = row.querySelectorAll(
+        'td, .MuiTableCell-body, td.MuiTableCell-root.MuiTableCell-body'
+      );
+      
       if (cells.length === 4) {
-        // 4 hücreli: Key1, Value1, Key2, Value2
         const key1 = cells[0].textContent.trim();
         const value1 = cells[1].textContent.trim();
         const key2 = cells[2].textContent.trim();
         const value2 = cells[3].textContent.trim();
         
-        if (key1 && value1) data.fields[key1] = value1;
-        if (key2 && value2) data.fields[key2] = value2;
-      }
-    }
-     // Hızlı genel bilgi toplama
-    const fieldsets = dialogRoot.querySelectorAll('fieldset');
-    for (const fieldset of fieldsets) {
-      const legend = fieldset.querySelector('legend');
-      if (!legend) continue;
-      
-      const legendText = legend.textContent.trim();
-      if (legendText.includes('Marka Bilgileri')) {
-        const allText = fieldset.textContent;
+        // Sadece daha önce eklenmemiş bilgileri ekle
+        const normalizedValue1 = (value1 === '--' || value1 === '-') ? '' : value1;
+        const normalizedValue2 = (value2 === '--' || value2 === '-') ? '' : value2;
         
-        // Regex ile hızlı çıkarım
-        const bulletinNoMatch = allText.match(/Marka İlan Bülten No[:\s]*([^\n\r]+)/i);
-        const bulletinDateMatch = allText.match(/Marka İlan Bülten Tarihi[:\s]*([^\n\r]+)/i);
-        const registrationDateMatch = allText.match(/Tescil Tarihi[:\s]*([^\n\r]+)/i);
-        
-        if (bulletinNoMatch) data.fields['Marka İlan Bülten No'] = bulletinNoMatch[1].trim();
-        if (bulletinDateMatch) data.fields['Marka İlan Bülten Tarihi'] = bulletinDateMatch[1].trim();
-        if (registrationDateMatch) data.fields['Tescil Tarihi'] = registrationDateMatch[1].trim();
-        
-        break; // İlk marka bilgisini bulduktan sonra çık
+        if (key1 && normalizedValue1 && !data.fields[key1]) {
+          data.fields[key1] = normalizedValue1;
+        }
+        if (key2 && normalizedValue2 && !data.fields[key2]) {
+          data.fields[key2] = normalizedValue2;
+        }
       }
     }
     
   } catch (e) {
-    console.warn('Modal parse hatası:', e);
+    console.error('❌ Modal parse hatası:', e);
+    console.error('❌ Hata detayı:', e.stack);
   }
- console.log('🔍 Final data.fields:', data.fields);
+  
+  console.log('🔍 Final data.fields:', data.fields);
+  console.log('📦 Final data.goodsAndServices:', data.goodsAndServices.length, 'sınıf');
+  console.log('📝 Final data.transactions:', data.transactions.length, 'işlem');
+  
   return data;
 }
-
 
 async function openRowModalAndParse(tr, { timeout = 10000 } = {}) {
   try {
