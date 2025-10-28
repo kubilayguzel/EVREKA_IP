@@ -422,7 +422,7 @@ async function queryByApplicationNumber(basvuruNo) {
                 // Fallback için de polling başlat
                 startPollingForOptsResult(basvuruNo, loading);
               }
-            } else {
+              } else {
               // Eklenti başarılı - Polling başlat
               window.currentLoading = loading || null;
               showToast('TÜRKPATENT sayfası açıldı. Eklenti çalışacak.', 'info');
@@ -546,45 +546,6 @@ function handleOptsSuccess(data) {
     showToast('Veri işlenirken hata oluştu', 'danger');
     _hideBlock(loadingEl);
     window.skipScrapeTrademark = false;
-  }
-}
-
-// OPTS hata durumu
-function handleOptsError(error) {
-  console.error('[OPTS] Hata:', error);
-  
-  if (window.currentLoading) {
-    window.currentLoading.showError?.(error.message || 'Sorgu başarısız');
-  }
-  _hideBlock(loadingEl);
-  
-  showToast(`Hata: ${error.message || 'Bilinmeyen hata'}`, 'danger');
-  window.skipScrapeTrademark = false;
-}
-
-// OPTS başarı durumu
-function handleOptsSuccess(data) {
-  console.log('[OPTS] Veri işleniyor:', data);
-  
-  try {
-    // Loading'i kapat
-    if (window.currentLoading) {
-      window.currentLoading.hide?.();
-      window.currentLoading = null;
-    }
-    _hideBlock(loadingEl);
-    
-    // Veriyi göster (ilk kayıt)
-    const record = Array.isArray(data) ? data[0] : data;
-    displaySingleResult(record);
-    _showBlock(singleResultContainer);
-    
-    showToast('✅ TÜRKPATENT verisi alındı!', 'success');
-    window.skipScrapeTrademark = false;
-    
-  } catch (error) {
-    console.error('[OPTS] İşleme hatası:', error);
-    showToast('Veri işlenirken hata oluştu', 'danger');
   }
 }
 
