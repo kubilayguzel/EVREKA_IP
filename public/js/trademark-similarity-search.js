@@ -2460,7 +2460,7 @@ window.queryApplicationNumberWithExtension = (applicationNo) => {
     }
     
     // Yeni eklenti ID'si (tp-sorgu-eklentisi)
-    const EXT_ID = 'kmdlgghljcoanmckgnpibhklfpnkalci';
+    const EXT_ID = 'gkhmldkbjmnipikgjabmlilibllikapk';
     
     // Yedek URL (eklenti çalışmazsa tek sekme açılacak)
     const fallbackUrl = `https://opts.turkpatent.gov.tr/trademark#bn=${encodeURIComponent(appNo)}`;
