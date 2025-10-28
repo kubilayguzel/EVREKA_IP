@@ -1621,3 +1621,200 @@ window.addEventListener('load', () => {
   log('window.load. frame:', window.self !== window.top ? 'iframe' : 'top');
   captureUrlParams();
 });
+
+// ============================================
+// OPTS.TURKPATENT.GOV.TR İÇİN ÖZEL AKIM
+// ============================================
+
+// Sayfa yüklendiğinde kontrol
+(function initOptsDetection() {
+  const url = window.location.href;
+  
+  if (/^https:\/\/opts\.turkpatent\.gov\.tr/i.test(url)) {
+    log('🎯 [OPTS] Sayfa algılandı:', url);
+    
+    // Hash'ten başvuru no al
+    const hash = window.location.hash;
+    const match = hash.match(/#bn=([^&]+)/);
+    
+    if (match) {
+      const appNo = decodeURIComponent(match[1]);
+      log('✅ [OPTS] Başvuru no bulundu:', appNo);
+      
+      // Sayfa yüklenene kadar bekle
+      setTimeout(() => runOptsApplicationFlow(appNo), 2000);
+    } else {
+      log('⚠️ [OPTS] Hash\'te başvuru no yok');
+    }
+  }
+})();
+
+// OPTS için başvuru no akışı
+async function runOptsApplicationFlow(appNo) {
+  log('🚀 [OPTS] Akış başladı:', appNo);
+  
+  try {
+    // Input alanını bekle
+    let input = await waitFor('input[type="text"]', { timeout: 10000 }).catch(() => null);
+    
+    if (!input) {
+      err('[OPTS] Input bulunamadı');
+      sendToOpener('HATA_OPTS', { message: 'Input alanı bulunamadı' });
+      return;
+    }
+    
+    log('[OPTS] ✅ Input bulundu');
+    
+    // Input'u doldur
+    input.focus();
+    setReactInputValue(input, appNo);
+    await sleep(300);
+    
+    // Arama butonu
+    let searchBtn = document.querySelector('button[type="submit"]');
+    if (!searchBtn) {
+      searchBtn = Array.from(document.querySelectorAll('button')).find(b => 
+        /sorgula|ara|search/i.test(b.textContent || '')
+      );
+    }
+    
+    if (searchBtn && click(searchBtn)) {
+      log('[OPTS] ✅ Arama butonu tıklandı');
+    } else {
+      log('[OPTS] ⚠️ Buton yok, Enter gönderiliyor');
+      pressEnter(input);
+    }
+    
+    // Sonuçları bekle
+    await sleep(2000);
+    await waitForOptsResultsAndScrape(appNo);
+    
+  } catch (error) {
+    err('[OPTS] Hata:', error);
+    sendToOpener('HATA_OPTS', { message: error.message });
+  }
+}
+
+// Sonuçları bekle ve scrape et
+async function waitForOptsResultsAndScrape(appNo) {
+  log('[OPTS] ⏳ Sonuçlar bekleniyor...');
+  
+  let attempts = 0;
+  const maxAttempts = 40;
+  
+  return new Promise((resolve) => {
+    const interval = setInterval(() => {
+      attempts++;
+      
+      // Tablo satırlarını kontrol et
+      const rows = document.querySelectorAll('tbody tr, table tr');
+      const validRows = Array.from(rows).filter(row => {
+        const cells = row.querySelectorAll('td');
+        return cells.length > 3;
+      });
+      
+      if (validRows.length > 0) {
+        log('[OPTS] ✅ Sonuç bulundu:', validRows.length, 'satır');
+        clearInterval(interval);
+        scrapeOptsTableResults(validRows, appNo);
+        resolve(true);
+        return;
+      }
+      
+      if (attempts >= maxAttempts) {
+        log('[OPTS] ❌ Timeout');
+        clearInterval(interval);
+        sendToOpener('HATA_OPTS', { message: 'Sonuç bulunamadı' });
+        resolve(false);
+      }
+    }, 500);
+  });
+}
+
+// Tablo sonuçlarını scrape et
+function scrapeOptsTableResults(rows, appNo) {
+  log('[OPTS] 📊 Scraping:', rows.length, 'satır');
+  
+  const results = [];
+  
+  rows.forEach((row, idx) => {
+    const cells = Array.from(row.querySelectorAll('td'));
+    if (cells.length < 3) return;
+    
+    const item = {
+      applicationNumber: appNo,
+      brandName: '',
+      ownerName: '',
+      applicationDate: '',
+      registrationNumber: '',
+      status: '',
+      niceClasses: '',
+      imageSrc: null,
+      brandImageUrl: null,
+      brandImageDataUrl: null
+    };
+    
+    // Görsel
+    const img = row.querySelector('img');
+    if (img?.src) {
+      item.imageSrc = img.src;
+      item.brandImageUrl = img.src;
+      item.brandImageDataUrl = img.src;
+    }
+    
+    // Hücreleri parse et
+    cells.forEach(cell => {
+      const txt = cell.textContent.trim();
+      
+      if (/^\d{4}\/\d+$/.test(txt)) {
+        item.applicationNumber = normalizeAppNo(txt);
+      }
+      else if (/^\d{2}\.\d{2}\.\d{4}$/.test(txt) && !item.applicationDate) {
+        item.applicationDate = txt;
+      }
+      else if (/^\d{4}\s+\d+$/.test(txt)) {
+        item.registrationNumber = txt;
+      }
+      else if (/TESCİL|GEÇERSİZ|BAŞVURU|RET|YAYINLANDI/i.test(txt)) {
+        item.status = txt;
+      }
+      else if (txt.includes('/') && /\d+/.test(txt) && txt.length < 50) {
+        item.niceClasses = txt;
+      }
+      else if (txt && !item.brandName && txt.length < 200) {
+        if (!/LİMİTED|A\.Ş\.|ŞİRKETİ/i.test(txt)) {
+          item.brandName = txt;
+        }
+      }
+      else if (txt && !item.ownerName) {
+        item.ownerName = txt;
+      }
+    });
+    
+    if (item.applicationNumber) {
+      log(`[OPTS]   ✅ Satır ${idx + 1}:`, item.applicationNumber);
+      results.push(item);
+    }
+  });
+  
+  log('[OPTS] ✅ Toplam:', results.length, 'kayıt');
+  
+  if (results.length > 0) {
+    sendToOpener('VERI_GELDI_OPTS', results);
+    setTimeout(() => window.close(), 2000);
+  } else {
+    sendToOpener('HATA_OPTS', { message: 'Veri bulunamadı' });
+  }
+}
+
+// Message listener (OPTS için)
+chrome.runtime?.onMessage?.addListener?.((request, sender, sendResponse) => {
+  if (request?.type === 'AUTO_FILL_OPTS' && request?.data) {
+    log('[OPTS] 📨 Mesaj alındı:', request.data);
+    if (/opts\.turkpatent\.gov\.tr/i.test(window.location.href)) {
+      runOptsApplicationFlow(request.data);
+    }
+    sendResponse?.({ status: 'OK' });
+    return true;
+  }
+});
