@@ -611,7 +611,7 @@ window.triggerTpQuery = function(applicationNo){
   const fallbackUrl =
    `https://opts.turkpatent.gov.tr/trademark#bn=${encodeURIComponent(appNo)}`;
   // SADECE v1 eklenti ID'si (tp-sorgu-eklentisi)
-  const EXT_ID_TP_V1 = 'kmdlgghljcoanmckgnpibhklfpnkalci';
+  const EXT_ID_TP_V1 = 'gkhmldkbjmnipikgjabmlilibllikapk';
 
   try {
     if (typeof chrome !== 'undefined' && chrome.runtime && EXT_ID_TP_V1) {
