@@ -63,3 +63,39 @@ chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => 
   }
   return true; 
 });
+// Content script'ten gelen verileri ana uygulamaya ilet
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.type === 'FORWARD_TO_APP') {
+    const { messageType, data } = request;
+    
+    console.log('[Background] Content script\'ten veri alındı:', messageType);
+    
+    // Tüm sekmelere broadcast et (ana uygulama dinleyecek)
+    chrome.tabs.query({}, (tabs) => {
+      tabs.forEach(tab => {
+        // Sadece allowed domain'lere gönder
+        const allowedOrigins = [
+          'http://localhost',
+          'https://ip-manager-production-aab4b.web.app',
+          'https://kubilayguzel.github.io'
+        ];
+        
+        const tabUrl = tab.url || '';
+        const isAllowed = allowedOrigins.some(origin => tabUrl.startsWith(origin));
+        
+        if (isAllowed) {
+          chrome.tabs.sendMessage(tab.id, {
+            type: messageType,
+            source: 'tp-sorgu-eklentisi-2',
+            data: data
+          }).catch(() => {
+            // Tab mesaj dinlemiyorsa sessizce geç
+          });
+        }
+      });
+    });
+    
+    sendResponse({ status: 'OK' });
+  }
+  return true;
+});
