@@ -381,7 +381,7 @@ async function queryByApplicationNumber(basvuruNo) {
     window.skipScrapeTrademark = true;
 
     // Yeni eklenti ID'si
-    const EXT_ID = 'kmdlgghljcoanmckgnpibhklfpnkalci';
+    const EXT_ID = 'gkhmldkbjmnipikgjabmlilibllikapk';
     
     // Fallback URL (eklenti çalışmazsa)
     const fallbackUrl = `https://opts.turkpatent.gov.tr/trademark#bn=${encodeURIComponent(basvuruNo)}`;
