@@ -15,7 +15,8 @@
   "content_scripts": [
     {
       "matches": [
-        "*://www.turkpatent.gov.tr/arastirma-yap*"
+        "*://www.turkpatent.gov.tr/arastirma-yap*",
+        "*://opts.turkpatent.gov.tr/*"
       ],
       "js": [
         "content_script.js"
