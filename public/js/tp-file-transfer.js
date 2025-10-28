@@ -393,6 +393,7 @@ async function queryByApplicationNumber(basvuruNo) {
       () => {
         console.log('[DEBUG] Sorgu iptal edildi');
         if (window.currentLoading) window.currentLoading = null;
+        if (window.currentPolling) clearInterval(window.currentPolling);
         window.skipScrapeTrademark = false;
       }
     );
@@ -418,11 +419,14 @@ async function queryByApplicationNumber(basvuruNo) {
               } else {
                 window.currentLoading = loading || null;
                 showToast('TÜRKPATENT sayfası açıldı. Eklenti çalışacak.', 'info');
+                // Fallback için de polling başlat
+                startPollingForOptsResult(basvuruNo, loading);
               }
             } else {
-              // Eklenti başarılı
+              // Eklenti başarılı - Polling başlat
               window.currentLoading = loading || null;
               showToast('TÜRKPATENT sayfası açıldı. Eklenti çalışacak.', 'info');
+              startPollingForOptsResult(basvuruNo, loading);
             }
           }
         );
@@ -438,6 +442,7 @@ async function queryByApplicationNumber(basvuruNo) {
         }
         window.currentLoading = loading || null;
         showToast('TÜRKPATENT sayfası açıldı.', 'info');
+        startPollingForOptsResult(basvuruNo, loading);
       }
     } catch (e) {
       console.warn('[DEBUG] Extension error:', e);
@@ -450,13 +455,8 @@ async function queryByApplicationNumber(basvuruNo) {
       }
       window.currentLoading = loading || null;
       showToast('TÜRKPATENT sayfası açıldı.', 'info');
+      startPollingForOptsResult(basvuruNo, loading);
     }
-
-    // Zaman aşımı emniyeti
-    setTimeout(() => { 
-      try { _hideBlock(loadingEl); } catch {} 
-      window.skipScrapeTrademark = false;
-    }, 45000);
 
   } catch (err) {
     _hideBlock(loadingEl);
@@ -464,6 +464,196 @@ async function queryByApplicationNumber(basvuruNo) {
     console.error('[DEBUG] Başvuru numarası sorgulama hatası:', err);
     showToast('İşlem hatası: ' + (err?.message || err), 'danger');
   }
+}
+
+// Eklentiden sonuç bekle (polling)
+function startPollingForOptsResult(basvuruNo, loading) {
+  const EXT_ID = 'gkhmldkbjmnipikgjabmlilibllikapk';
+  let pollCount = 0;
+  const maxPolls = 60; // 30 saniye
+  
+  console.log('[Poll] Polling başlatıldı:', basvuruNo);
+  
+  const pollInterval = setInterval(() => {
+    pollCount++;
+    
+    // Eklentiye sonuç var mı diye sor
+    if (typeof chrome !== 'undefined' && chrome.runtime) {
+      chrome.runtime.sendMessage(
+        EXT_ID,
+        { type: 'GET_RESULT', applicationNumber: basvuruNo },
+        (response) => {
+          if (chrome.runtime.lastError) {
+            console.log('[Poll] Eklenti cevap vermedi');
+            return;
+          }
+          
+          if (response && response.status === 'READY' && response.data) {
+            console.log('[Poll] ✅ Sonuç alındı!', response);
+            clearInterval(pollInterval);
+            window.currentPolling = null;
+            
+            // Veriyi işle
+            if (response.messageType === 'VERI_GELDI_OPTS') {
+              handleOptsSuccess(response.data);
+            } else if (response.messageType === 'HATA_OPTS') {
+              handleOptsError(response.data);
+            }
+          }
+        }
+      );
+    }
+    
+    // Timeout
+    if (pollCount >= maxPolls) {
+      clearInterval(pollInterval);
+      window.currentPolling = null;
+      console.log('[Poll] ❌ Timeout');
+      if (loading && loading.showError) {
+        loading.showError('Zaman aşımı');
+      }
+      _hideBlock(loadingEl);
+      window.skipScrapeTrademark = false;
+    }
+  }, 500);
+  
+  // Polling referansını global'e kaydet (iptal için)
+  window.currentPolling = pollInterval;
+}
+
+// OPTS başarı durumu
+function handleOptsSuccess(data) {
+  console.log('[OPTS] Veri işleniyor:', data);
+  
+  try {
+    // Loading'i kapat
+    if (window.currentLoading) {
+      window.currentLoading.hide?.();
+      window.currentLoading = null;
+    }
+    _hideBlock(loadingEl);
+    
+    // Veriyi göster (ilk kayıt)
+    const record = Array.isArray(data) ? data[0] : data;
+    displaySingleResult(record);
+    _showBlock(singleResultContainer);
+    
+    showToast('✅ TÜRKPATENT verisi alındı!', 'success');
+    window.skipScrapeTrademark = false;
+    
+  } catch (error) {
+    console.error('[OPTS] İşleme hatası:', error);
+    showToast('Veri işlenirken hata oluştu', 'danger');
+    _hideBlock(loadingEl);
+    window.skipScrapeTrademark = false;
+  }
+}
+
+// OPTS hata durumu
+function handleOptsError(error) {
+  console.error('[OPTS] Hata:', error);
+  
+  if (window.currentLoading) {
+    window.currentLoading.showError?.(error.message || 'Sorgu başarısız');
+  }
+  _hideBlock(loadingEl);
+  
+  showToast(`Hata: ${error.message || 'Bilinmeyen hata'}`, 'danger');
+  window.skipScrapeTrademark = false;
+}
+
+// Eklentiden sonuç bekle (polling)
+function startPollingForOptsResult(basvuruNo, loading) {
+  const EXT_ID = 'gkhmldkbjmnipikgjabmlilibllikapk'; // Güncel ID
+  let pollCount = 0;
+  const maxPolls = 60; // 30 saniye
+  
+  console.log('[Poll] Polling başlatıldı:', basvuruNo);
+  
+  const pollInterval = setInterval(() => {
+    pollCount++;
+    
+    // Eklentiye sonuç var mı diye sor
+    if (typeof chrome !== 'undefined' && chrome.runtime) {
+      chrome.runtime.sendMessage(
+        EXT_ID,
+        { type: 'GET_RESULT', applicationNumber: basvuruNo },
+        (response) => {
+          if (chrome.runtime.lastError) {
+            console.log('[Poll] Eklenti cevap vermedi');
+            return;
+          }
+          
+          if (response && response.status === 'READY' && response.data) {
+            console.log('[Poll] ✅ Sonuç alındı!', response);
+            clearInterval(pollInterval);
+            
+            // Veriyi işle
+            if (response.messageType === 'VERI_GELDI_OPTS') {
+              handleOptsSuccess(response.data);
+            } else if (response.messageType === 'HATA_OPTS') {
+              handleOptsError(response.data);
+            }
+          }
+        }
+      );
+    }
+    
+    // Timeout
+    if (pollCount >= maxPolls) {
+      clearInterval(pollInterval);
+      console.log('[Poll] ❌ Timeout');
+      if (loading && loading.showError) {
+        loading.showError('Zaman aşımı');
+      }
+      _hideBlock(loadingEl);
+      window.skipScrapeTrademark = false;
+    }
+  }, 500);
+  
+  // İptal için polling referansını kaydet
+  if (loading) {
+    loading._pollInterval = pollInterval;
+  }
+}
+
+// OPTS başarı durumu
+function handleOptsSuccess(data) {
+  console.log('[OPTS] Veri işleniyor:', data);
+  
+  try {
+    // Loading'i kapat
+    if (window.currentLoading) {
+      window.currentLoading.hide?.();
+      window.currentLoading = null;
+    }
+    _hideBlock(loadingEl);
+    
+    // Veriyi göster (ilk kayıt)
+    const record = Array.isArray(data) ? data[0] : data;
+    displaySingleResult(record);
+    _showBlock(singleResultContainer);
+    
+    showToast('✅ TÜRKPATENT verisi alındı!', 'success');
+    window.skipScrapeTrademark = false;
+    
+  } catch (error) {
+    console.error('[OPTS] İşleme hatası:', error);
+    showToast('Veri işlenirken hata oluştu', 'danger');
+  }
+}
+
+// OPTS hata durumu
+function handleOptsError(error) {
+  console.error('[OPTS] Hata:', error);
+  
+  if (window.currentLoading) {
+    window.currentLoading.showError?.(error.message || 'Sorgu başarısız');
+  }
+  _hideBlock(loadingEl);
+  
+  showToast(`Hata: ${error.message || 'Bilinmeyen hata'}`, 'danger');
+  window.skipScrapeTrademark = false;
 }
 
 // ===============================
