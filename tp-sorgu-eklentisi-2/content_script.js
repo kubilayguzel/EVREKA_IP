@@ -80,18 +80,34 @@ function extractByLabel(root, label) {
   } catch {}
   return '';
 }
-// --------- Messaging ---------
+
+// Opener'a mesaj gönder (window.opener veya chrome.runtime ile)
 function sendToOpener(type, data) {
-  const payload = { source: 'tp-extension-sahip', type, data };
   try {
+    // Önce window.opener'ı dene
     if (window.opener && !window.opener.closed) {
-      window.opener.postMessage(payload, sourceOrigin || '*');
-      log('Mesaj gönderildi:', type, payload);
-    } else {
-      warn('Opener yok veya kapalı; mesaj gönderilemedi:', type);
+      log('📤 window.opener\'a postMessage gönderiliyor:', type);
+      window.opener.postMessage({
+        type: type,
+        source: 'tp-sorgu-eklentisi-2',
+        data: data
+      }, '*');
+      return;
     }
-  } catch (e) {
-    err('postMessage hatası:', e?.message || e);
+    
+    // window.opener yoksa background'a gönder
+    log('📤 Background\'a mesaj gönderiliyor:', type);
+    if (chrome?.runtime?.sendMessage) {
+      chrome.runtime.sendMessage({
+        type: 'FORWARD_TO_APP',
+        messageType: type,
+        data: data
+      });
+    } else {
+      warn('⚠️ Chrome runtime API yok');
+    }
+  } catch (error) {
+    err('❌ sendToOpener hatası:', error);
   }
 }
 
@@ -1602,4 +1618,41 @@ document.addEventListener('DOMContentLoaded', () => {
 window.addEventListener('load', () => {
   log('window.load. frame:', window.self !== window.top ? 'iframe' : 'top');
   captureUrlParams();
+});
+
+// Content script'ten gelen verileri ana uygulamaya ilet
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.type === 'FORWARD_TO_APP') {
+    const { messageType, data } = request;
+    
+    console.log('[Background] Content script\'ten veri alındı:', messageType);
+    
+    // Tüm sekmelere broadcast et (ana uygulama dinleyecek)
+    chrome.tabs.query({}, (tabs) => {
+      tabs.forEach(tab => {
+        // Sadece allowed domain'lere gönder
+        const allowedOrigins = [
+          'http://localhost',
+          'https://ip-manager-production-aab4b.web.app',
+          'https://kubilayguzel.github.io'
+        ];
+        
+        const tabUrl = tab.url || '';
+        const isAllowed = allowedOrigins.some(origin => tabUrl.startsWith(origin));
+        
+        if (isAllowed) {
+          chrome.tabs.sendMessage(tab.id, {
+            type: messageType,
+            source: 'tp-sorgu-eklentisi-2',
+            data: data
+          }).catch(() => {
+            // Tab mesaj dinlemiyorsa sessizce geç
+          });
+        }
+      });
+    });
+    
+    sendResponse({ status: 'OK' });
+  }
+  return true;
 });
