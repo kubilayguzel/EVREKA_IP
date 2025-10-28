@@ -99,3 +99,66 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
   return true;
 });
+
+// ============================================
+// RESULT CACHE SYSTEM
+// ============================================
+const resultCache = new Map();
+
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  // Content script'ten veri geldiğinde cache'e kaydet
+  if (request.type === 'FORWARD_TO_APP') {
+    const { messageType, data } = request;
+    
+    console.log('[Background] Veri cache\'e kaydediliyor:', messageType);
+    
+    // Başvuru numarasını bul
+    let appNo = null;
+    if (Array.isArray(data) && data[0]?.applicationNumber) {
+      appNo = data[0].applicationNumber;
+    } else if (data?.applicationNumber) {
+      appNo = data.applicationNumber;
+    }
+    
+    if (appNo) {
+      resultCache.set(appNo, {
+        type: messageType,
+        data: data,
+        timestamp: Date.now()
+      });
+      
+      console.log('[Background] ✅ Cache\'e kaydedildi:', appNo);
+      
+      // 5 dakika sonra otomatik sil
+      setTimeout(() => {
+        resultCache.delete(appNo);
+        console.log('[Background] Cache temizlendi:', appNo);
+      }, 300000);
+    }
+    
+    sendResponse({ status: 'OK' });
+    return true;
+  }
+  
+  // Ana uygulamadan polling sorgusu
+  if (request.type === 'GET_RESULT' && request.applicationNumber) {
+    const appNo = request.applicationNumber;
+    const cached = resultCache.get(appNo);
+    
+    if (cached) {
+      console.log('[Background] ✅ Cache\'ten döndürülüyor:', appNo);
+      resultCache.delete(appNo); // Bir kez kullan
+      
+      sendResponse({
+        status: 'READY',
+        data: cached.data,
+        messageType: cached.type
+      });
+    } else {
+      sendResponse({ status: 'WAITING' });
+    }
+    return true;
+  }
+  
+  return true;
+});
