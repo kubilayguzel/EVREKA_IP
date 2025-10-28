@@ -1,13 +1,14 @@
 // Web sitenizden gelen mesajları dinle
 chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => {
-  // Başvuru No (geriye uyum): SORGULA veya SORGULA_BASVURU
+// Başvuru No (geriye uyum): SORGULA veya SORGULA_BASVURU
   if ((request.type === 'SORGULA' || request.type === 'SORGULA_BASVURU') && request.data) {
     const appNo = request.data;
-    const targetUrl = "https://www.turkpatent.gov.tr/arastirma-yap?form=trademark";
+    // YENİ: opts.turkpatent.gov.tr'ye yönlendir
+    const targetUrl = `https://opts.turkpatent.gov.tr/trademark#bn=${encodeURIComponent(appNo)}`;
     chrome.tabs.create({ url: targetUrl }, (newTab) => {
       const listener = (tabId, changeInfo) => {
         if (tabId === newTab.id && changeInfo.status === 'complete') {
-          chrome.tabs.sendMessage(tabId, { type: 'AUTO_FILL', data: appNo });
+          chrome.tabs.sendMessage(tabId, { type: 'AUTO_FILL_OPTS', data: appNo });
           chrome.tabs.onUpdated.removeListener(listener);
         }
       };
