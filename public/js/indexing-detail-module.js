@@ -1255,6 +1255,7 @@ async handleIndexing(opts = {}) {
     try { showNotification('İndeksleme sırasında hata: ' + (error?.message || error), 'error'); } catch(e) {}
     }
 }
+
 async createParentTransactionForTriggeredTask(triggeredTaskTypeId, createdTaskId, deliveryDateStr) {
     if (!triggeredTaskTypeId) {
         console.log('ℹ️ Tetiklenen iş yok, parent transaction kontrolü yapılmayacak');
@@ -1264,34 +1265,11 @@ async createParentTransactionForTriggeredTask(triggeredTaskTypeId, createdTaskId
     console.log('🔍 Tetiklenen iş için parent transaction kontrolü başlatıldı. TaskTypeId:', triggeredTaskTypeId);
     
     try {
-        // 1. TaskAssignment kaydından transactionType al
-        const taskAssignmentRef = doc(firebaseServices.db, 'taskAssignments', String(triggeredTaskTypeId));
-        const taskAssignmentSnap = await getDoc(taskAssignmentRef);
-        
-        if (!taskAssignmentSnap.exists()) {
-            console.warn('⚠️ TaskAssignment kaydı bulunamadı:', triggeredTaskTypeId);
-            return;
-        }
-        
-        const taskAssignmentData = taskAssignmentSnap.data();
-        const transactionTypeIdForTask = taskAssignmentData?.transactionType;
-        
-        console.log('🔍 TaskAssignment verisi:', {
-            taskId: triggeredTaskTypeId,
-            taskName: taskAssignmentData?.name,
-            transactionType: transactionTypeIdForTask
-        });
-        
-        if (!transactionTypeIdForTask) {
-            console.log('ℹ️ TaskAssignment\'da transactionType bulunamadı, parent transaction oluşturulmayacak');
-            return;
-        }
-        
-        // 2. TransactionType'ı bul ve hierarchy kontrolü yap
-        const triggeredTransactionType = this.allTransactionTypes.find(t => t.id === transactionTypeIdForTask);
+        // 1. TransactionType'ı direkt triggered task ID'si ile bul (transactionTypes/7 gibi)
+        const triggeredTransactionType = this.allTransactionTypes.find(t => t.id === String(triggeredTaskTypeId));
         
         if (!triggeredTransactionType) {
-            console.warn('⚠️ TransactionType bulunamadı:', transactionTypeIdForTask);
+            console.warn('⚠️ TransactionType bulunamadı. TaskTypeId:', triggeredTaskTypeId);
             return;
         }
         
@@ -1302,7 +1280,7 @@ async createParentTransactionForTriggeredTask(triggeredTaskTypeId, createdTaskId
             hierarchy: triggeredTransactionType.hierarchy
         });
         
-        // 3. Hierarchy parent değilse çık
+        // 2. Hierarchy parent değilse çık
         if (triggeredTransactionType.hierarchy !== 'parent') {
             console.log('ℹ️ Tetiklenen işin hierarchy değeri parent değil (' + triggeredTransactionType.hierarchy + '), parent transaction oluşturulmayacak');
             return;
@@ -1310,7 +1288,7 @@ async createParentTransactionForTriggeredTask(triggeredTaskTypeId, createdTaskId
         
         console.log('✅ Tetiklenen işin hierarchy değeri PARENT, portföy kontrolü yapılacak');
         
-        // 4. Portföyde bu parent transaction zaten var mı kontrol et
+        // 3. Portföyde bu parent transaction zaten var mı kontrol et
         const recordTransactionsResult = await ipRecordsService.getRecordTransactions(this.matchedRecord.id);
         
         if (!recordTransactionsResult.success) {
@@ -1322,23 +1300,23 @@ async createParentTransactionForTriggeredTask(triggeredTaskTypeId, createdTaskId
         console.log('🔍 Portföydeki mevcut transactions:', existingTransactions.length, 'adet');
         
         const parentExists = existingTransactions.some(tx => 
-            tx.type === transactionTypeIdForTask && 
+            tx.type === String(triggeredTaskTypeId) && 
             tx.transactionHierarchy === 'parent'
         );
         
         if (parentExists) {
-            console.log('ℹ️ Parent transaction zaten mevcut, yeni oluşturulmadı:', transactionTypeIdForTask);
+            console.log('ℹ️ Parent transaction zaten mevcut, yeni oluşturulmadı:', triggeredTaskTypeId);
             return;
         }
         
-        // 5. Parent transaction oluştur
+        // 4. Parent transaction oluştur
         console.log('✅ Parent transaction oluşturuluyor:', {
-            type: transactionTypeIdForTask,
+            type: triggeredTaskTypeId,
             name: triggeredTransactionType.alias || triggeredTransactionType.name
         });
         
         const parentTransactionData = {
-            type: transactionTypeIdForTask,
+            type: String(triggeredTaskTypeId),
             description: `${triggeredTransactionType.alias || triggeredTransactionType.name} işlemi (Otomatik oluşturuldu)`,
             transactionHierarchy: 'parent',
             triggeringTaskId: String(createdTaskId),
@@ -1366,4 +1344,6 @@ async createParentTransactionForTriggeredTask(triggeredTaskTypeId, createdTaskId
         showNotification('Parent transaction oluşturma hatası: ' + error.message, 'error');
     }
 }
+
+
 }
