@@ -2,9 +2,9 @@
 import { loadSharedLayout } from './layout-loader.js';
 import { ipRecordsService, transactionTypeService, auth, db, storage } from '../firebase-config.js';
 import { formatFileSize, STATUSES } from '../utils.js';
-import { doc, getDoc, collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { doc, getDoc, collection, query, where, getDocs, getFirestore } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-import { ref, uploadBytes, getDownloadURL, deleteObject, getStorage, getFirestore } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
+import { ref, uploadBytes, getDownloadURL, deleteObject, getStorage } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
 
 
 // URL
@@ -40,8 +40,6 @@ const docSaveBtn = document.getElementById('docSaveBtn');
 const docCancelBtn = document.getElementById('docCancelBtn');
 const docsTbody = document.getElementById('documentsTbody');
 const docCount  = document.getElementById('docCount');
-
-const db = getFirestore();
 
 // Reflect chosen file name into disabled input next to 'Dosya Seç' button
 document.getElementById('docFile')?.addEventListener('change', (e)=>{
@@ -152,7 +150,6 @@ function composeAddressTriple(address, province, countryName){
   const s = parts.join(' - ').replace(/\s*-\s*/g, ' - ').replace(/\s+/g, ' ').trim();
   return s;
 }
-
 
 
 // Applicant adresini persons koleksiyonundan çek
