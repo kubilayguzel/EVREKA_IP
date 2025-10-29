@@ -4095,9 +4095,19 @@ $(document).on('click', '.task-compare-goods', async function() {
 });
 
 // TÜRKPATENT Sorgulama Butonu Click Handler (Benzer Marka)
+// ✅ Çift tıklama ve tekrarlı tetiklemeyi önle
+let queryInProgress = false;
+
 $(document).on('click', '.query-turkpatent-competitor', function(e) {
     e.preventDefault();
     e.stopPropagation();
+    e.stopImmediatePropagation(); // ✅ Aynı element üzerindeki diğer handler'ları da durdur
+    
+    // ✅ Eğer işlem devam ediyorsa tekrar tetiklemeyi engelle
+    if (queryInProgress) {
+        console.log('⏳ Sorgu zaten devam ediyor, lütfen bekleyin...');
+        return;
+    }
     
     const appNo = $(this).data('app-no');
     if (!appNo || appNo === '-') {
@@ -4107,12 +4117,24 @@ $(document).on('click', '.query-turkpatent-competitor', function(e) {
     
     console.log('🔍 TÜRKPATENT sorgulama:', { appNo });
     
+    // ✅ İşlemi başlat ve butonu devre dışı bırak
+    queryInProgress = true;
+    const $btn = $(this);
+    $btn.prop('disabled', true).addClass('disabled').html('<i class="fas fa-spinner fa-spin"></i> Sorgulanıyor...');
+    
     // triggerTpQuery fonksiyonunu kullan (eklenti desteği ile)
     if (window.triggerTpQuery) {
         window.triggerTpQuery(appNo);
     } else {
         alert('Sorgu fonksiyonu yüklenemedi.');
     }
+    
+    // ✅ 2 saniye sonra kilidi aç ve butonları normale döndür
+    setTimeout(() => {
+        queryInProgress = false;
+        $('.query-turkpatent-competitor').prop('disabled', false).removeClass('disabled')
+            .html('<i class="fas fa-search"></i> TPE\'de Sorgula');
+    }, 2000);
 });
 
 // İzlenen markanın emtia listesini ipRecords'dan çek
