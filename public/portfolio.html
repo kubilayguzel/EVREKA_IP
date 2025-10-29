@@ -423,6 +423,39 @@ td.caret-host { position: relative; padding-left: 28px; }
     background-color: #ffe0b2 !important; /* Açık pastel turuncu */
 }
 
+/* PDF ikonları için stil */
+.transaction-pdfs, .child-transaction-pdfs {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 4px;
+}
+
+.pdf-link {
+  color: #dc3545;
+  font-size: 1.1em;
+  transition: all 0.2s ease;
+  text-decoration: none;
+}
+
+.pdf-link:hover {
+  color: #c82333;
+  transform: scale(1.2);
+}
+
+.child-transaction-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 20px 8px 48px;
+  border-bottom: 1px solid #e8e8e8;
+  border-left: 44px solid #f39c12;
+  background: white;
+  margin: 0 8px;
+  margin-bottom: 2px;
+  border-radius: 4px;
+}
+
 </style>
 
 <style id="accordion-fix-style">
