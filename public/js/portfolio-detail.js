@@ -4,7 +4,7 @@ import { ipRecordsService, transactionTypeService, auth, db, storage } from '../
 import { formatFileSize, STATUSES } from '../utils.js';
 import { doc, getDoc, collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-import { ref, uploadBytes, getDownloadURL, deleteObject, getStorage } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
+import { ref, uploadBytes, getDownloadURL, deleteObject, getStorage, getFirestore } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
 
 
 // URL
@@ -41,6 +41,7 @@ const docCancelBtn = document.getElementById('docCancelBtn');
 const docsTbody = document.getElementById('documentsTbody');
 const docCount  = document.getElementById('docCount');
 
+const db = getFirestore();
 
 // Reflect chosen file name into disabled input next to 'Dosya Seç' button
 document.getElementById('docFile')?.addEventListener('change', (e)=>{
@@ -245,9 +246,6 @@ function renderDocuments(docs){
   docsTbody.innerHTML = rows;
 }
 
-
-
-
 // Transactions accordion
 function organizeTransactions(txList){
   const parents = [];
@@ -271,6 +269,7 @@ function organizeTransactions(txList){
   return {parents, childrenMap};
 }
 // ✅ Transaction'lara ait PDF'leri getir
+// ✅ Transaction'lara ait PDF'leri getir
 async function fetchPdfsForTransactions(transactionIds) {
   if (!transactionIds || transactionIds.length === 0) return {};
   
@@ -279,7 +278,7 @@ async function fetchPdfsForTransactions(transactionIds) {
     
     // unindexed_pdfs koleksiyonundan PDF'leri çek
     const pdfsQuery = query(
-      collection(firebaseServices.db, 'unindexed_pdfs'),
+      collection(db, 'unindexed_pdfs'),
       where('associatedTransactionId', 'in', transactionIds),
       where('status', '==', 'indexed')
     );
