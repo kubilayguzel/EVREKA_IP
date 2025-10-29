@@ -1068,42 +1068,71 @@ if (typeof this.renderDocuments === 'function') {
                     document.getElementById('removeEpatsFileBtn').addEventListener('click', () => this.removeEpatsDocument());
                 }
             }
+async removeEpatsDocument() {
+    if (!confirm('EPATS belgesini kaldırmak istediğinizden emin misiniz? Bu işlem dosyayı storage\'dan da kalıcı olarak silecektir.')) {
+        return;
+    }
 
-            async removeEpatsDocument() {
-                if (!confirm('EPATS belgesini kaldırmak istediğinizden emin misiniz? Bu işlem dosyayı storage\'dan da kalıcı olarak silecektir.')) {
-                    return;
-                }
-
-                try {
-                    // Storage'dan dosyayı sil
-                    if (this.uploadedEpatsFile?.storagePath) {
-                        try {
-                            const storageRef = firebaseServices.storageRef(firebaseServices.storage, this.uploadedEpatsFile.storagePath);
-                            await deleteObject(storageRef);
-                            console.log('EPATS dosyası storage\'dan silindi:', this.uploadedEpatsFile.storagePath);
-                        } catch (storageError) {
-                            console.warn('EPATS dosyası storage\'dan silinirken hata:', storageError);
-                            // Storage hatası olsa bile devam et
-                        }
-                    }
-
-                    // Yerel state'i temizle
-                    this.uploadedEpatsFile = null;
-                    this.renderEpatsDocument();
-
-                    // Task durumunu eski haline getir
-                    const taskStatusSelect = document.getElementById('taskStatus');
-                    if (taskStatusSelect) {
-                        taskStatusSelect.value = this.statusBeforeEpatsUpload || this.currentTask.details?.statusBeforeEpatsUpload || 'open';
-                    }
-                    this.statusBeforeEpatsUpload = null;
-
-                    showNotification('EPATS belgesi başarıyla kaldırıldı.', 'success');
-                } catch (error) {
-                    console.error('EPATS belgesi kaldırılırken hata:', error);
-                    showNotification('EPATS belgesi kaldırılırken hata oluştu.', 'error');
-                }
+    try {
+        // Storage'dan dosyayı sil
+        if (this.uploadedEpatsFile?.storagePath) {
+            try {
+                const storageRef = firebaseServices.storageRef(firebaseServices.storage, this.uploadedEpatsFile.storagePath);
+                await deleteObject(storageRef);
+                console.log('EPATS dosyası storage\'dan silindi:', this.uploadedEpatsFile.storagePath);
+            } catch (storageError) {
+                console.warn('EPATS dosyası storage\'dan silinirken hata:', storageError);
+                // Storage hatası olsa bile devam et
             }
+        }
+
+        // Eski durumu al
+        const oldStatus = this.statusBeforeEpatsUpload || this.currentTask.details?.statusBeforeEpatsUpload || 'open';
+
+        // Yerel state'i temizle
+        this.uploadedEpatsFile = null;
+        this.renderEpatsDocument();
+
+        // Task durumunu eski haline getir
+        const taskStatusSelect = document.getElementById('taskStatus');
+        if (taskStatusSelect) {
+            taskStatusSelect.value = oldStatus;
+        }
+        this.statusBeforeEpatsUpload = null;
+
+        // VERİTABANINA KAYDET - Bu kısım eksikti!
+        const updateData = {
+            status: oldStatus,
+            'details.epatsDocument': null,
+            'details.statusBeforeEpatsUpload': null,
+            updatedAt: new Date()
+        };
+
+        // TURKPATENT evrak no ve tarih alanlarını da temizle
+        document.getElementById('turkpatentEvrakNo').value = '';
+        document.getElementById('epatsDocumentDate').value = '';
+
+        const result = await taskService.updateTask(this.taskId, updateData);
+        
+        if (result.success) {
+            // currentTask'ı güncelle
+            this.currentTask.status = oldStatus;
+            if (this.currentTask.details) {
+                this.currentTask.details.epatsDocument = null;
+                this.currentTask.details.statusBeforeEpatsUpload = null;
+            }
+            
+            showNotification('EPATS belgesi başarıyla kaldırıldı.', 'success');
+            console.log('✅ EPATS belgesi veritabanından kaldırıldı');
+        } else {
+            throw new Error(result.error || 'Veritabanı güncellenemedi');
+        }
+        
+    } catch (error) {
+        console.error('EPATS belgesi kaldırılırken hata:', error);
+        showNotification('EPATS belgesi kaldırılırken hata oluştu: ' + (error.message || error), 'error');
+    }
+}
 
             setupDocumentUploadListeners() {
                 const fileUploadArea = document.getElementById('fileUploadArea');
