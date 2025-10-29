@@ -1098,13 +1098,26 @@ async handleIndexing(opts = {}) {
                     createdBy: this.currentUser.uid,
                     taskType: childTransactionType.taskTriggered // ✅ Bu doğru - taskAssignments ID'si olacak
                 };
-
-                const taskResult = await taskService.createTask(taskData);
-                if (taskResult.success) {
+                
+    const taskResult = await taskService.createTask(taskData);
+            if (taskResult.success) {
                     createdTaskId = taskResult.id || taskResult.data?.id;
                     console.log('İş başarıyla tetiklendi, ID:', createdTaskId);
                     showNotification('Alt işlem oluşturuldu ve iş tetiklendi!', 'success');
+                    
+                    // ✅ YENİ: Tetiklenen işin hierarchy değerine göre parent transaction oluştur
+                    if (childTransactionType.taskTriggered) {
+                        console.log('🔍 Tetiklenen iş var, parent transaction kontrolü yapılacak. TaskTriggered:', childTransactionType.taskTriggered);
+                        await this.createParentTransactionForTriggeredTask(
+                            childTransactionType.taskTriggered,
+                            createdTaskId,
+                            deliveryDateStr
+                        );
+                    }
+                    
+                    // MEVCUT: isTopLevelSelectable mantığı devam ediyor (değişmedi)
                     if (childTransactionType && childTransactionType.hierarchy === "child" && childTransactionType.isTopLevelSelectable) {
+
     console.log("📤 Tetiklenen işlem sonrası transaction yaratma başladı.");
     console.log("📌 Tetiklenen işlem bir child ve top-level selectable.");
 
@@ -1240,6 +1253,117 @@ async handleIndexing(opts = {}) {
     } catch (error) {
     console.error('indexing-detail.handleIndexing failed:', error);
     try { showNotification('İndeksleme sırasında hata: ' + (error?.message || error), 'error'); } catch(e) {}
+    }
+}
+async createParentTransactionForTriggeredTask(triggeredTaskTypeId, createdTaskId, deliveryDateStr) {
+    if (!triggeredTaskTypeId) {
+        console.log('ℹ️ Tetiklenen iş yok, parent transaction kontrolü yapılmayacak');
+        return;
+    }
+    
+    console.log('🔍 Tetiklenen iş için parent transaction kontrolü başlatıldı. TaskTypeId:', triggeredTaskTypeId);
+    
+    try {
+        // 1. TaskAssignment kaydından transactionType al
+        const taskAssignmentRef = doc(firebaseServices.db, 'taskAssignments', String(triggeredTaskTypeId));
+        const taskAssignmentSnap = await getDoc(taskAssignmentRef);
+        
+        if (!taskAssignmentSnap.exists()) {
+            console.warn('⚠️ TaskAssignment kaydı bulunamadı:', triggeredTaskTypeId);
+            return;
+        }
+        
+        const taskAssignmentData = taskAssignmentSnap.data();
+        const transactionTypeIdForTask = taskAssignmentData?.transactionType;
+        
+        console.log('🔍 TaskAssignment verisi:', {
+            taskId: triggeredTaskTypeId,
+            taskName: taskAssignmentData?.name,
+            transactionType: transactionTypeIdForTask
+        });
+        
+        if (!transactionTypeIdForTask) {
+            console.log('ℹ️ TaskAssignment\'da transactionType bulunamadı, parent transaction oluşturulmayacak');
+            return;
+        }
+        
+        // 2. TransactionType'ı bul ve hierarchy kontrolü yap
+        const triggeredTransactionType = this.allTransactionTypes.find(t => t.id === transactionTypeIdForTask);
+        
+        if (!triggeredTransactionType) {
+            console.warn('⚠️ TransactionType bulunamadı:', transactionTypeIdForTask);
+            return;
+        }
+        
+        console.log('🔍 Tetiklenen işin transaction type bilgisi:', {
+            id: triggeredTransactionType.id,
+            name: triggeredTransactionType.name,
+            alias: triggeredTransactionType.alias,
+            hierarchy: triggeredTransactionType.hierarchy
+        });
+        
+        // 3. Hierarchy parent değilse çık
+        if (triggeredTransactionType.hierarchy !== 'parent') {
+            console.log('ℹ️ Tetiklenen işin hierarchy değeri parent değil (' + triggeredTransactionType.hierarchy + '), parent transaction oluşturulmayacak');
+            return;
+        }
+        
+        console.log('✅ Tetiklenen işin hierarchy değeri PARENT, portföy kontrolü yapılacak');
+        
+        // 4. Portföyde bu parent transaction zaten var mı kontrol et
+        const recordTransactionsResult = await ipRecordsService.getRecordTransactions(this.matchedRecord.id);
+        
+        if (!recordTransactionsResult.success) {
+            console.error('❌ Portföy işlemleri alınamadı:', recordTransactionsResult.error);
+            return;
+        }
+        
+        const existingTransactions = recordTransactionsResult.data || [];
+        console.log('🔍 Portföydeki mevcut transactions:', existingTransactions.length, 'adet');
+        
+        const parentExists = existingTransactions.some(tx => 
+            tx.type === transactionTypeIdForTask && 
+            tx.transactionHierarchy === 'parent'
+        );
+        
+        if (parentExists) {
+            console.log('ℹ️ Parent transaction zaten mevcut, yeni oluşturulmadı:', transactionTypeIdForTask);
+            return;
+        }
+        
+        // 5. Parent transaction oluştur
+        console.log('✅ Parent transaction oluşturuluyor:', {
+            type: transactionTypeIdForTask,
+            name: triggeredTransactionType.alias || triggeredTransactionType.name
+        });
+        
+        const parentTransactionData = {
+            type: transactionTypeIdForTask,
+            description: `${triggeredTransactionType.alias || triggeredTransactionType.name} işlemi (Otomatik oluşturuldu)`,
+            transactionHierarchy: 'parent',
+            triggeringTaskId: String(createdTaskId),
+            deliveryDate: deliveryDateStr || null,
+            timestamp: deliveryDateStr ? new Date(deliveryDateStr).toISOString() : new Date().toISOString()
+        };
+        
+        console.log('📤 Parent transaction verisi:', parentTransactionData);
+        
+        const addParentResult = await ipRecordsService.addTransactionToRecord(
+            this.matchedRecord.id, 
+            parentTransactionData
+        );
+        
+        if (addParentResult.success) {
+            console.log('✅ Parent transaction başarıyla oluşturuldu! ID:', addParentResult.data?.id || addParentResult.id);
+            showNotification('Ana işlem (' + (triggeredTransactionType.alias || triggeredTransactionType.name) + ') otomatik olarak portföye eklendi!', 'success');
+        } else {
+            console.error('❌ Parent transaction oluşturulamadı:', addParentResult.error);
+            showNotification('Ana işlem oluşturulamadı: ' + addParentResult.error, 'error');
+        }
+        
+    } catch (error) {
+        console.error('❌ Parent transaction oluşturma hatası:', error);
+        showNotification('Parent transaction oluşturma hatası: ' + error.message, 'error');
     }
 }
 }
