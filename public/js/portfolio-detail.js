@@ -270,6 +270,53 @@ function organizeTransactions(txList){
   });
   return {parents, childrenMap};
 }
+// ✅ Transaction'lara ait PDF'leri getir
+async function fetchPdfsForTransactions(transactionIds) {
+  if (!transactionIds || transactionIds.length === 0) return {};
+  
+  try {
+    const pdfMap = {};
+    
+    // unindexed_pdfs koleksiyonundan PDF'leri çek
+    const pdfsQuery = query(
+      collection(firebaseServices.db, 'unindexed_pdfs'),
+      where('associatedTransactionId', 'in', transactionIds),
+      where('status', '==', 'indexed')
+    );
+    
+    const pdfsSnapshot = await getDocs(pdfsQuery);
+    
+    pdfsSnapshot.forEach(doc => {
+      const pdfData = doc.data();
+      const txId = pdfData.associatedTransactionId;
+      
+      if (!pdfMap[txId]) {
+        pdfMap[txId] = [];
+      }
+      
+      pdfMap[txId].push({
+        id: doc.id,
+        fileName: pdfData.fileName || 'Belge',
+        fileUrl: pdfData.fileUrl || pdfData.url,
+        indexedAt: pdfData.indexedAt
+      });
+    });
+    
+    // Her transaction için PDF'leri tarihe göre sırala
+    Object.keys(pdfMap).forEach(txId => {
+      pdfMap[txId].sort((a, b) => {
+        const dateA = a.indexedAt?.toDate?.() || new Date(a.indexedAt);
+        const dateB = b.indexedAt?.toDate?.() || new Date(b.indexedAt);
+        return dateB - dateA; // En yeni önce
+      });
+    });
+    
+    return pdfMap;
+  } catch (error) {
+    console.error('PDF\'ler getirilirken hata:', error);
+    return {};
+  }
+}
 
 async function renderTransactionsAccordion(recordId){
   try{
@@ -287,6 +334,9 @@ async function renderTransactionsAccordion(recordId){
       });
     }
 
+    // ✅ PDF'leri transaction ID'sine göre grupla
+    const pdfsByTransaction = await fetchPdfsForTransactions(list.map(tx => tx.id));
+
     const {parents, childrenMap} = organizeTransactions(list);
     if (!parents.length){
       if (txAccordion) txAccordion.innerHTML = '<div class="p-3 text-muted">Henüz işlem geçmişi yok.</div>';
@@ -300,19 +350,39 @@ async function renderTransactionsAccordion(recordId){
       const children = childrenMap[p.id] || [];
       const hasChildren = children.length > 0;
 
+      // ✅ Parent transaction'a ait PDF'leri getir
+      const parentPdfs = pdfsByTransaction[p.id] || [];
+
       const childrenHtml = hasChildren ? `
         <div class="accordion-transaction-children" id="children-${p.id}">
           ${children.map(c => {
             const cm = typeMap.get(String(c.type));
             const cn = cm ? (cm.alias || cm.name) : `İşlem ${c.type}`;
             const ct = fmtDateTime(c.timestamp);
+            
+            // ✅ Child transaction'a ait PDF'leri getir
+            const childPdfs = pdfsByTransaction[c.id] || [];
+            const pdfIcons = childPdfs.map(pdf => 
+              `<a href="${pdf.fileUrl}" target="_blank" title="${pdf.fileName}" class="pdf-link">
+                <i class="fas fa-file-pdf"></i>
+              </a>`
+            ).join(' ');
+
             return `<div class="child-transaction-item">
               <div class="child-transaction-content">
                 <div class="child-transaction-name-date">${cn} - ${ct.d} ${ct.t}</div>
               </div>
+              ${pdfIcons ? `<div class="child-transaction-pdfs">${pdfIcons}</div>` : ''}
             </div>`;
           }).join('')}
         </div>` : '';
+
+      // ✅ Parent'a ait PDF ikonları
+      const parentPdfIcons = parentPdfs.map(pdf => 
+        `<a href="${pdf.fileUrl}" target="_blank" title="${pdf.fileName}" class="pdf-link">
+          <i class="fas fa-file-pdf"></i>
+        </a>`
+      ).join(' ');
 
       return `<div class="accordion-transaction-item">
         <div class="accordion-transaction-header ${hasChildren ? 'has-children' : ''}" data-parent-id="${p.id}">
@@ -323,6 +393,7 @@ async function renderTransactionsAccordion(recordId){
             </div>
           </div>
           <div class="transaction-meta">
+            ${parentPdfIcons ? `<div class="transaction-pdfs">${parentPdfIcons}</div>` : ''}
             ${hasChildren ? `<span class="child-count">${children.length} alt işlem</span>` : ''}
           </div>
         </div>
