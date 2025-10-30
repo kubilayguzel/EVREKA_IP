@@ -2,7 +2,7 @@ import { authService, taskService, ipRecordsService, personService, accrualServi
 import { loadSharedLayout, openPersonModal, ensurePersonModal } from './layout-loader.js';
 import { initializeNiceClassification, getSelectedNiceClasses } from './nice-classification.js';
 import { ref, uploadBytes, getStorage, deleteObject, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
-import { getFirestore, collection, getDocs, getDoc, doc, query, where, limit } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { getFirestore, collection, getDocs, getDoc, doc, query, where, limit, Timestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { ORIGIN_TYPES, addMonthsToDate, findNextWorkingDay, isWeekend, isHoliday, TURKEY_HOLIDAYS } from '../utils.js';
 
 
@@ -3759,9 +3759,9 @@ const officialFee = parseFloat(document.getElementById('officialFee')?.value) ||
             const operationalISO = operational.toISOString().slice(0, 10);
 
             // 4) İş verisine yaz: DUE = OPERASYONEL TARİH (resmî - 3 gün)
-            taskData.officialDueDate    = firebase.firestore.Timestamp.fromDate(official);
-            taskData.operationalDueDate = firebase.firestore.Timestamp.fromDate(operational);
-            taskData.dueDate            = firebase.firestore.Timestamp.fromDate(operational);
+            taskData.officialDueDate    = Timestamp.fromDate(official);
+            taskData.operationalDueDate = Timestamp.fromDate(operational);
+            taskData.dueDate            = Timestamp.fromDate(operational);
 
             // Detay objesi (alan adları sabit)
             taskData.officialDueDateDetails = {
