@@ -1286,29 +1286,7 @@ async createParentTransactionForTriggeredTask(triggeredTaskTypeId, createdTaskId
             return;
         }
         
-        console.log('✅ Tetiklenen işin hierarchy değeri PARENT, portföy kontrolü yapılacak');
-        
-        // 3. Portföyde bu parent transaction zaten var mı kontrol et
-        const recordTransactionsResult = await ipRecordsService.getRecordTransactions(this.matchedRecord.id);
-        
-        if (!recordTransactionsResult.success) {
-            console.error('❌ Portföy işlemleri alınamadı:', recordTransactionsResult.error);
-            return;
-        }
-        
-        const existingTransactions = recordTransactionsResult.data || [];
-        console.log('🔍 Portföydeki mevcut transactions:', existingTransactions.length, 'adet');
-        
-        const parentExists = existingTransactions.some(tx => 
-            tx.type === String(triggeredTaskTypeId) && 
-            tx.transactionHierarchy === 'parent'
-        );
-        
-        if (parentExists) {
-            console.log('ℹ️ Parent transaction zaten mevcut, yeni oluşturulmadı:', triggeredTaskTypeId);
-            return;
-        }
-        
+     
         // 4. Parent transaction oluştur
         console.log('✅ Parent transaction oluşturuluyor:', {
             type: triggeredTaskTypeId,
