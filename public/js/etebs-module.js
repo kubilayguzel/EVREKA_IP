@@ -158,47 +158,31 @@ async uploadDocumentsToFirebase(documents, userId, evrakNo) {
     return uploadResults;
 }
 
-// ===== Güncellenmiş indexNotification fonksiyonu =====
+// ===== indexNotification fonksiyonu (Sadece Firebase'e bakar) =====
 async indexNotification(token, notification) {
     try {
-        showNotification('Evrak indiriliyor ve indeksleme sayfasına yönlendiriliyor...', 'info');
+        showNotification('Evrak indeksleme sayfasına yönlendiriliyor...', 'info');
         
-        // Önce yerel kopya var mı kontrol et
+        // 1. Kayıtlı (unindexed_pdfs) var mı?
         let unindexedDoc = await this.findUnindexedDocument(notification.evrakNo);
-        if (unindexedDoc) {
-            showNotification('Yerel kopya bulundu. İndeksleme sayfasına yönlendiriliyor...', 'success');
-            setTimeout(() => window.open(`indexing-detail.html?pdfId=${unindexedDoc.id}`, '_blank'), 500);
-            return;
-        }
-
-        let etebsDoc = await this.findETEBSDocument(notification.evrakNo);
-        if (etebsDoc) {
-            const newUnindexed = await this.copyToUnindexedPdfs(etebsDoc.data);
-            if (newUnindexed) {
-                showNotification('Yerel kopya indeksleme listesine eklendi. Yönlendiriliyor...', 'success');
-                setTimeout(() => window.open(`indexing-detail.html?pdfId=${newUnindexed.id}`, '_blank'), 500);
-                return;
-            }
+        
+        if (!unindexedDoc) {
+             // 2. etebs_documents (yedek) var mı?
+             let etebsDoc = await this.findETEBSDocument(notification.evrakNo);
+             if (etebsDoc) {
+                // Kopyala ve yönlendir
+                unindexedDoc = await this.copyToUnindexedPdfs(etebsDoc.data);
+             }
         }
         
-        // Sunucuya evrağı indirme isteği gönder
-        const downloadResult = await etebsService.downloadDocument(token, notification.evrakNo);
-
-        // Yeni indirilen dosya varsa unindexed_pdfs kaydından yönlendir
-        if (downloadResult.success && downloadResult.data && downloadResult.data.unindexedPdfId) {
-            const pdfId = downloadResult.data.unindexedPdfId;
-            showNotification('Evrak indirildi. İndeksleme sayfasına yönlendiriliyor...', 'success');
-            setTimeout(() => {
-                window.open(`indexing-detail.html?pdfId=${pdfId}`, '_blank');
-            }, 1000);
+        if (unindexedDoc) {
+            showNotification('Evrak bulundu. İndeksleme sayfasına yönlendiriliyor...', 'success');
+            const pdfId = unindexedDoc.id;
+            setTimeout(() => window.open(`indexing-detail.html?pdfId=${pdfId}`, '_blank'), 500);
             return;
         } else {
-            // ETEBS'ten gelen hata kodlarını kontrol et
-            if (downloadResult.success === false && downloadResult.errorCode === '005') {
-                showNotification('Bu evrak daha önce indirildi ama kaydı bulunamadı.', 'error');
-            } else {
-                showNotification(`İndirme hatası: ${downloadResult.error || 'Bilinmeyen hata'}`, 'error');
-            }
+             // 3. Hiçbir yerde yoksa, BATCH işleminde indirilemediğini varsay.
+            showNotification('Bu evrak sistemde kayıtlı değil. Batch işleminde indirme başarısız olmuş olabilir.', 'error');
             return;
         }
 
@@ -208,51 +192,33 @@ async indexNotification(token, notification) {
     }
 }
 
-// ===== Güncellenmiş showNotificationPDF fonksiyonu =====
+// ===== showNotificationPDF fonksiyonu (Sadece Firebase'e bakar) =====
 async showNotificationPDF(token, notification) {
     try {
         showNotification("📄 PDF aranıyor...", "info");
 
-        const currentUser = authService.getCurrentUser();
-        if (!currentUser) {
-            showNotification("Kullanıcı girişi yapılmamış.", "error");
-            return;
-        }
-
-        // Önce Firebase'de daha önce kaydedilmiş kopyasını ara
+        // 1. Unindexed_pdfs koleksiyonunda kaydı ara
         let docData = await this.findUnindexedDocument(notification.evrakNo);
-        
         if (!docData) {
+            // 2. etebs_documents koleksiyonunda kaydı ara
             docData = await this.findETEBSDocument(notification.evrakNo);
         }
 
         if (docData && docData.data.fileUrl) {
-             // Yerel kopya bulunduysa doğrudan URL'den aç
+             // 3. Yerel kopya bulunduysa doğrudan URL'den aç
             await this.openPDFFromFirestore(docData);
             return;
         }
-
-        // Eğer yerel kopya yoksa ETEBS'ten indirme isteği gönder (bu işlem aynı zamanda kaydedecektir)
-        const downloadResult = await etebsService.downloadDocument(token, notification.evrakNo);
-        console.log("Download result:", downloadResult);
-
-        // İndirme başarılıysa ve URL geldiyse aç
-        if (downloadResult.success && downloadResult.data && downloadResult.data.fileUrl) {
-            const fileUrl = downloadResult.data.fileUrl;
-            window.open(fileUrl, "_blank");
-            showNotification("PDF başarıyla açıldı", "success");
-            return;
-        }
         
-        // İndirme başarısız olduysa hata mesajı göster
-        showNotification("PDF açılamadı. Veri bulunamadı veya bir hata oluştu.", "error");
-        console.error("Beklenmeyen download result:", downloadResult);
+        // 4. Kayıt bulunamadıysa, BATCH işleminin başarısız olduğunu varsay.
+        showNotification("PDF bulunamadı. Belge indirme hakkı tek seferlik olduğu için tekrar indirme yapılamaz.", "error");
 
     } catch (error) {
         console.error("Show PDF error:", error);
         showNotification("PDF açılırken hata oluştu.", "error");
     }
 }
+
 async handleNotificationAction(action, notification) {
     const tokenInput = document.getElementById('etebsTokenInput');
     if (!tokenInput) return;
@@ -629,8 +595,10 @@ updateTabBadge() {
 
             // 7. Başarı notifikasyonu
             try {
-                showNotification(`${result.totalCount} ETEBS tebligatı başarıyla alındı`, 'success');
-                console.log("✅ Başarı notifikasyonu gösterildi");
+                showNotification(
+                    `${result.totalCount} tebligat bulundu. ${result.savedCount} tanesi başarıyla kaydedildi!`, 
+                    'success'
+                );
             } catch (notifError) {
                 console.error("❌ Notification hatası:", notifError);
             }
