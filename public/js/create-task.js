@@ -3758,16 +3758,18 @@ const officialFee = parseFloat(document.getElementById('officialFee')?.value) ||
             const officialISO = official.toISOString().slice(0, 10);
             const operationalISO = operational.toISOString().slice(0, 10);
 
-            // 4) İş verisine yaz: dueDate = resmi son tarih
-            taskData.dueDate = officialISO;
-            taskData.officialDueDate = officialISO;
-            taskData.operationalDueDate = operationalISO;
+            // 4) İş verisine yaz: DUE = OPERASYONEL TARİH (resmî - 3 gün)
+            taskData.officialDueDate    = firebase.firestore.Timestamp.fromDate(official);
+            taskData.operationalDueDate = firebase.firestore.Timestamp.fromDate(operational);
+            taskData.dueDate            = firebase.firestore.Timestamp.fromDate(operational);
 
-            // (Opsiyonel, debug için) açıklama eklemek istersen:
+            // Detay objesi (alan adları sabit)
             taskData.officialDueDateDetails = {
-                base: renewalDate.toISOString().slice(0, 10),
-                adjustedOfficial: officialISO,
-                adjustedOperational: operationalISO
+            finalOfficialDueDate: officialISO,          // YYYY-MM-DD
+            finalOperationalDueDate: operationalISO,    // YYYY-MM-DD
+            originalCalculatedDate: renewalDate.toISOString().slice(0,10),
+            renewalDate: renewalDate.toISOString().slice(0,10),
+            adjustments: []
             };
             }
         }
