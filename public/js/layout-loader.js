@@ -8,6 +8,7 @@ let authCache = null;
 let lastAuthCheck = 0;
 const AUTH_CACHE_DURATION = 5000; // 5 saniye
 
+
 // Menü yapısını daha yönetilebilir bir veri formatında tanımlıyoruz
 const menuItems = [
     { id: 'dashboard', text: 'Dashboard', link: 'dashboard.html', icon: 'fas fa-tachometer-alt', category: 'Ana Menü' },
