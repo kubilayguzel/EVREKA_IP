@@ -5319,6 +5319,34 @@ export const checkAndCreateRenewalTasks = onCall({ region: "europe-west1" }, asy
       const dueISO = renewalDate.toISOString().slice(0, 10);
       const title = `${ipRecord.title} Marka Yenileme`;
       const description = `${ipRecord.title} adlı markanın yenileme süreci için müvekkil onayı bekleniyor. Yenileme tarihi: ${renewalDate.toLocaleDateString('tr-TR')}.`;
+      
+      // === RESMİ/OPERASYONEL SON TARİHLER (YENİ) ===
+      // Resmi son tarih: portföy kaydının renewalDate'i; hafta sonu/tatil ise ilk iş günü
+      const rawOfficialDate = new Date(renewalDate);
+      rawOfficialDate.setHours(0,0,0,0);
+
+      const officialDate = findNextWorkingDay(
+        rawOfficialDate,
+        TURKEY_HOLIDAYS,
+        { isWeekend, isHoliday }
+      );
+
+      // Operasyonel son tarih: resmi tarihten 3 gün önce; hafta sonu/tatil ise bir önceki iş günü
+      let operationalDate = new Date(officialDate);
+      operationalDate.setDate(operationalDate.getDate() - 3);
+      operationalDate.setHours(0,0,0,0);
+      while (isWeekend(operationalDate) || isHoliday(operationalDate, TURKEY_HOLIDAYS)) {
+        operationalDate.setDate(operationalDate.getDate() - 1);
+      }
+
+      // (Opsiyonel) izleme için detay obje
+      const dueDateDetails = {
+        renewalDate: renewalDate.toISOString().split('T')[0],
+        originalCalculatedDate: rawOfficialDate.toISOString().split('T')[0],
+        finalOfficialDueDate: officialDate.toISOString().split('T')[0],
+        finalOperationalDueDate: operationalDate.toISOString().split('T')[0],
+        adjustments: []
+      };
 
       // Henüz ID vermiyoruz; sadece veri şablonu hazırlıyoruz
       const data = {
@@ -5329,7 +5357,10 @@ export const checkAndCreateRenewalTasks = onCall({ region: "europe-west1" }, asy
         relatedIpRecordTitle: ipRecord.title,
         status: 'awaiting_client_approval',
         priority: 'medium',
-        dueDate: dueISO,
+        dueDate: admin.firestore.Timestamp.fromDate(operationalDate),
+        officialDueDate: admin.firestore.Timestamp.fromDate(officialDate),
+        operationalDueDate: admin.firestore.Timestamp.fromDate(operationalDate),
+        officialDueDateDetails: dueDateDetails,
         assignedTo_uid,
         assignedTo_email,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
