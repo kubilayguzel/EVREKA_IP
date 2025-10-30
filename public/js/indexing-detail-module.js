@@ -681,6 +681,7 @@ searchRecords(query) {
                         <div class="transaction-details">
                             ${transaction.description || 'Açıklama yok'}
                             ${transaction.deliveryDate ? ` • Tebliğ: ${transaction.deliveryDate}` : ''}
+                            ${transaction.details?.epatsDocumentNumber ? ` • ePats: ${transaction.details.epatsDocumentNumber}` : ''}
                         </div>
                         <div class="transaction-date">${new Date(transaction.timestamp).toLocaleDateString('tr-TR')}</div>
                     </div>
@@ -1286,7 +1287,8 @@ async createParentTransactionForTriggeredTask(triggeredTaskTypeId, createdTaskId
             return;
         }
         
-     
+
+        
         // 4. Parent transaction oluştur
         console.log('✅ Parent transaction oluşturuluyor:', {
             type: triggeredTaskTypeId,
