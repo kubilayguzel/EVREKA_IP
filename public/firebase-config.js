@@ -1282,7 +1282,7 @@ const ETEBS_CONFIG = {
   retryDelay: 1000
 };
 
-// ETEBS Error Codes
+// ETEBS Error Codes (Gerekli)
 const ETEBS_ERROR_CODES = {
     '001': 'Eksik Parametre',
     '002': 'Hatalı Token',
@@ -1294,196 +1294,95 @@ const ETEBS_ERROR_CODES = {
 
 // ETEBS Service
 export const etebsService = {
-    // Token validation
+    // Token validation (Aynı kalır)
     validateToken(token) {
         if (!token || typeof token !== 'string') {
             return { valid: false, error: 'Token gerekli' };
         }
-        
-        // GUID format validation
         const guidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-        
         if (!guidRegex.test(token)) {
             return { valid: false, error: 'Geçersiz token formatı' };
         }
-        
         return { valid: true };
     },
 
-    // Get daily notifications from ETEBS
-    // Updated getDailyNotifications using Firebase Functions proxy
+    // GÜNCELLENMİŞ: Tüm Batch İşlemini Başlatan Metot
     getDailyNotifications: async function(token) {
-    try {
-        const response = await fetch(ETEBS_CONFIG.proxyUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                action: 'daily-notifications',
-                token: token
-            })
-        });
-
-        if (!response.ok) {
-            console.error("❌ ETEBS API HTTP hatası:", response.status);
-            return { success: false, error: `ETEBS API bağlantısı başarısız: ${response.status}` };
-        }
-
-        let result;
         try {
-            result = await response.json();
-        } catch (jsonErr) {
-            console.error("🛑 Yanıt JSON'a çevrilemedi:", jsonErr);
-            const rawText = await response.text();
-            console.error("📄 Ham yanıt:", rawText);
-            return { success: false, error: 'ETEBS yanıtı bozuk ya da JSON değil.' };
-        }
-
-        console.log("📥 [ETEBŞ] API yanıtı:", result);
-
-        const etebsData = result.data;
-
-        if (!Array.isArray(etebsData)) {
-            console.warn("⚠️ Beklenen veri dizisi değil:", etebsData);
-            return { success: true, data: [], totalCount: 0, matchedCount: 0, unmatchedCount: 0 };
-        }
-
-        const currentUser = authService.getCurrentUser();
-        if (!currentUser) {
-            return { success: false, error: 'Kullanıcı kimliği doğrulanamadı.' };
-        }
-
-        const processedNotifications = await this.processNotifications(etebsData, currentUser.uid);
-
-        const matchedCount = processedNotifications.filter(n => n.matched).length;
-        const unmatchedCount = processedNotifications.length - matchedCount;
-
-        return {
-            success: true,
-            data: processedNotifications,
-            totalCount: processedNotifications.length,
-            matchedCount,
-            unmatchedCount
-        };
-
-    } catch (error) {
-        console.error("🔥 getDailyNotifications hata:", error);
-        return { success: false, error: 'ETEBS servisine bağlanırken beklenmeyen bir hata oluştu.' };
-    }
-},
-async downloadDocument(token, documentNo) {
-    if (!isFirebaseAvailable) {
-        return { success: false, error: "Firebase kullanılamıyor." };
-    }
-
-    const currentUser = authService.getCurrentUser();
-    if (!currentUser) {
-        return { success: false, error: "Kullanıcı girişi yapılmamış." };
-    }
-
-    // Validate inputs
-    const tokenValidation = this.validateToken(token);
-    if (!tokenValidation.valid) {
-        return { success: false, error: tokenValidation.error };
-    }
-
-    if (!documentNo) {
-        return { success: false, error: 'Evrak numarası gerekli' };
-    }
-
-    try {
-        console.log('🔥 ETEBS Download Document via Firebase Functions');
-
-        const response = await fetch(ETEBS_CONFIG.proxyUrl, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                action: 'download-document',
-                token: token,
-                documentNo: documentNo
-            })
-        });
-
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
-        }
-
-        const result = await response.json();
-
-        if (!result.success) {
-            throw new Error(result.error || 'Proxy error');
-        }
-
-        const etebsData = result.data;
-
-        // Handle ETEBS API errors
-        if (etebsData.IslemSonucKod && etebsData.IslemSonucKod !== '000') {
-            const errorMessage = ETEBS_ERROR_CODES[etebsData.IslemSonucKod] || 'Bilinmeyen hata';
-            return { 
-                success: false, 
-                error: errorMessage,
-                errorCode: etebsData.IslemSonucKod
-            };
-        }
-
-        // Process downloaded documents
-        const processedDocuments = await this.processDownloadedDocuments(etebsData.DownloadDocumentResult, documentNo);
-        
-        // YENİ: PDF Blob'unu oluştur
-        let pdfBlob = null;
-        if (processedDocuments.length > 0 && processedDocuments[0].base64) {
-            try {
-                const binaryString = atob(processedDocuments[0].base64);
-                const bytes = new Uint8Array(binaryString.length);
-                for (let i = 0; i < binaryString.length; i++) {
-                    bytes[i] = binaryString.charCodeAt(i);
-                }
-                pdfBlob = new Blob([bytes], { type: 'application/pdf' });
-                console.log('✅ PDF Blob oluşturuldu:', pdfBlob.size, 'bytes');
-            } catch (error) {
-                console.error('Error converting base64 to blob:', error);
+            const currentUser = authService.getCurrentUser();
+            if (!currentUser) {
+                return { success: false, error: 'Kullanıcı kimliği doğrulanamadı.' };
             }
+            
+            console.log("🔥 [ETEBŞ] Batch indirme işlemi Cloud Function üzerinden başlatılıyor...");
+
+            const response = await fetch(ETEBS_CONFIG.proxyUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'process-daily-batch', // YENİ ACTION: Tüm listeyi çek ve kalıcı kaydet
+                    token: token,
+                    userId: currentUser.uid // Sunucunun dosya yolunu belirlemesi için
+                }),
+                timeout: ETEBS_CONFIG.timeout
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                console.error("❌ ETEBS API HTTP hatası:", response.status, errorData.message);
+                return { success: false, error: `ETEBS API bağlantısı başarısız: ${response.status} - ${errorData.message || 'Sunucu hatası'}` };
+            }
+
+            const result = await response.json();
+            
+            if (!result.success || !result.data) {
+                return { success: false, error: result.error || 'Batch işlemi başarısız oldu.' };
+            }
+
+            const batchData = result.data;
+            const notifications = batchData.notifications || [];
+            const savedDocuments = batchData.savedDocuments || [];
+            
+            // 1. Yeni Listeyi Oluştur ve Eşleştirme yap
+            const processedNotifications = await this.processNotifications(notifications, currentUser.uid);
+
+            // 2. Kaydedilen evrak ID'lerini eşleştir
+            const savedMap = new Map(savedDocuments.map(d => [d.evrakNo, d]));
+            
+            const finalNotifications = processedNotifications.map(n => {
+                const savedDoc = savedMap.get(n.evrakNo);
+                return {
+                    ...n,
+                    isSaved: !!savedDoc, // Kalıcı olarak kaydedildi mi?
+                    savedDocument: savedDoc || null,
+                    // Eğer kaydedilmişse, unindexedPdfId'yi ekle (UI'da yönlendirme için kullanılır)
+                    unindexedPdfId: savedDoc?.unindexedPdfId || savedDoc?.id || null 
+                };
+            });
+
+            const matchedCount = finalNotifications.filter(n => n.matched).length;
+            const unmatchedCount = finalNotifications.length - matchedCount;
+            const savedCount = finalNotifications.filter(n => n.isSaved).length;
+
+            // Sonuçları döndür
+            return {
+                success: true,
+                data: finalNotifications,
+                totalCount: finalNotifications.length,
+                matchedCount,
+                unmatchedCount,
+                savedCount,
+                failureCount: batchData.failures.length,
+                failures: batchData.failures
+            };
+
+        } catch (error) {
+            console.error("🔥 getDailyNotifications (Batch) hata:", error);
+            return { success: false, error: 'Batch servisine bağlanırken beklenmeyen bir hata oluştu.' };
         }
+    },
 
-        // Upload to Firebase Storage and save metadata
-        const uploadResults = await this.uploadDocumentsToFirebase(processedDocuments, currentUser.uid, documentNo);
-
-        return { 
-            success: true, 
-            data: uploadResults,
-            documentCount: processedDocuments.length,
-            pdfBlob: pdfBlob, // YENİ: PDF'i blob olarak döndür
-            pdfData: processedDocuments.length > 0 ? processedDocuments[0].base64 : null // Eski uyumluluk için base64 data
-        };
-
-    } catch (error) {
-        console.error('ETEBS Download Document Error:', error);
-        
-        // Log error to Firebase
-        await this.logETEBSError(currentUser.uid, 'downloadDocument', error.message, { documentNo });
-        
-        // User-friendly error messages
-        let userError = 'Evrak indirme hatası';
-        
-        if (error.name === 'AbortError') {
-            userError = 'İndirme zaman aşımına uğradı';
-        } else if (error.message.includes('Failed to fetch')) {
-            userError = 'Ağ bağlantısı hatası';
-        }
-        
-        return { 
-            success: false, 
-            error: userError
-        };
-    }
-},
-
-
-
-    // Process notifications and match with portfolio
-    async processNotifications(notifications, userId) {
+async processNotifications(notifications, userId) {
         const processedNotifications = [];
 
         for (const notification of notifications) {
@@ -1579,188 +1478,6 @@ async downloadDocument(token, documentNo) {
         }
     },
 
-    // Convert base64 to file object
-    base64ToFile(base64String, fileName) {
-    try {
-        if (typeof base64String !== 'string') {
-        throw new Error('Geçersiz BASE64 veri türü');
-        }
-
-        // Varsa data URL önekini temizle
-        const base64Data = base64String.replace(/^data:[^;]+;base64,/, '');
-        if (!base64Data) {
-        throw new Error('BASE64 boş');
-        }
-
-        // Base64 -> binary
-        const binaryString = atob(base64Data);
-        const bytes = new Uint8Array(binaryString.length);
-        for (let i = 0; i < binaryString.length; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
-        }
-
-        // Blob + File oluştur
-        const blob = new Blob([bytes], { type: 'application/pdf' });
-        const safeName = fileName && String(fileName).trim() ? fileName : 'document.pdf';
-        const file = new File([blob], safeName, { type: 'application/pdf' });
-
-        return { success: true, file };
-    } catch (error) {
-        console.error('Base64 to file conversion error:', error);
-        return { success: false, error: error.message };
-    }
-    },
-
-    // Process downloaded documents
-    async processDownloadedDocuments(downloadResult, evrakNo) {
-  const processedDocs = [];
-
-  if (!Array.isArray(downloadResult)) {
-    console.warn('processDownloadedDocuments: downloadResult is not an array:', downloadResult);
-    return processedDocs;
-  }
-
-  for (const doc of downloadResult) {
-    try {
-      // EVRAK_NO veya parametre ile gelen evrakNo
-      const evrak = (doc && (doc.EVRAK_NO ?? evrakNo)) ? String(doc.EVRAK_NO ?? evrakNo) : 'EVRAK';
-
-      // Açıklama alanı undefined gelebilir → güvenli varsayılan
-      const rawDesc = (doc && doc.BELGE_ACIKLAMASI != null) ? String(doc.BELGE_ACIKLAMASI) : 'Belge';
-
-      // Dosya adı için normalize + güvenli karakter seti
-      const normalized = rawDesc
-        .normalize('NFKD')                  // aksanları ayır
-        .replace(/[\u0300-\u036f]/g, '');   // aksan işaretlerini temizle
-
-      const safeDesc = normalized
-        .replace(/[^a-zA-Z0-9_-]+/g, '_')   // güvenli olmayanları alt çizgiye çevir
-        .replace(/^_+|_+$/g, '')            // baş/sondaki alt çizgileri kaldır
-        .slice(0, 80) || 'Belge';           // çok uzunsa kısalt
-
-      const fileName = `${evrak}_${safeDesc}.pdf`;
-
-      // BASE64 boş/yanlış olabilir → kontrol et
-      const base64 = doc && doc.BASE64;
-      if (!base64 || typeof base64 !== 'string' || !base64.trim()) {
-        console.warn(`processDownloadedDocuments: Missing/invalid BASE64 for evrak ${evrak}`);
-        continue;
-      }
-
-      // DÖNÜŞ: base64ToFile senkron, await kullanmıyoruz
-      const fileResult = this.base64ToFile(base64, fileName);
-      if (fileResult && fileResult.success) {
-        processedDocs.push({
-          evrakNo: doc.EVRAK_NO ?? evrakNo ?? null,
-          belgeAciklamasi: rawDesc,
-          fileName,
-          file: fileResult.file,
-          base64
-        });
-      } else {
-        console.error(`File conversion failed for ${evrak}:`, fileResult && fileResult.error);
-      }
-    } catch (err) {
-      console.error('processDownloadedDocuments: error while preparing document:', err, doc);
-    }
-  }
-
-  return processedDocs;
-},
-
-    // Upload documents to Firebase Storage
-async uploadDocumentsToFirebase(documents, userId, evrakNo) {
-    console.log('📤 uploadDocumentsToFirebase başladı:', documents.length, 'dosya');
-    const uploadResults = [];
-
-    for (const doc of documents) {
-        try {
-            console.log('📁 Upload ediliyor:', doc.fileName, 'Evrak:', doc.evrakNo);
-
-            // 1. Firebase Storage'a yükle
-            const storagePath = `etebs_documents/${userId}/${doc.evrakNo || evrakNo}/${doc.fileName}`;
-            console.log('📂 Storage path:', storagePath);
-            
-            const storageRef = ref(storage, storagePath);
-            
-            // doc.file zaten Blob olmalı (base64ToFile'dan geliyor)
-            if (!doc.file) {
-                throw new Error('File objesi bulunamadı');
-            }
-
-            console.log('⬆️ Storage\'a yükleniyor...');
-            await uploadBytes(storageRef, doc.file);
-            
-            console.log('🔗 Download URL alınıyor...');
-            const downloadURL = await getDownloadURL(storageRef);
-            console.log('✅ Download URL:', downloadURL);
-
-            // 2. Firestore metadata hazırla
-            const docData = {
-                evrakNo: doc.evrakNo || evrakNo,
-                belgeAciklamasi: doc.belgeAciklamasi || 'ETEBS Belgesi',
-                fileName: doc.fileName,
-                fileUrl: downloadURL,
-                filePath: storagePath,
-                fileSize: doc.file.size,
-                uploadedAt: serverTimestamp(),
-                userId: userId,
-                source: 'etebs',
-                status: 'pending', // İndeksleme için
-                extractedAppNumber: doc.evrakNo || evrakNo,
-                matchedRecordId: null,
-                matchedRecordDisplay: null
-            };
-
-            console.log('🔍 Portfolio eşleştirmesi yapılıyor...');
-            // 3. Portfolio eşleştirmesi yap
-            try {
-                const matchResult = await this.matchWithPortfolio(doc.evrakNo || evrakNo);
-                if (matchResult.matched) {
-                    docData.matchedRecordId = matchResult.record.id;
-                    docData.matchedRecordDisplay = `${matchResult.record.title} - ${matchResult.record.applicationNumber}`;
-                    console.log('✅ ETEBS Eşleştirme başarılı:', doc.fileName, '→', docData.matchedRecordDisplay);
-                } else {
-                    console.log('❌ ETEBS Eşleştirme başarısız:', doc.fileName, 'Evrak No:', doc.evrakNo);
-                }
-            } catch (matchError) {
-                console.error('Eşleştirme hatası:', matchError);
-            }
-
-            // 4. Firestore'a kaydet - HEM etebs_documents HEM DE unindexed_pdfs'e
-            console.log('💾 Firestore\'a kaydediliyor...');
-            
-            // etebs_documents koleksiyonuna kaydet
-            const etebsDocRef = await addDoc(collection(db, 'etebs_documents'), docData);
-            console.log('✅ etebs_documents\'a kaydedildi:', etebsDocRef.id);
-
-            // unindexed_pdfs koleksiyonuna da kaydet (indeksleme için)
-            const unindexedDocRef = await addDoc(collection(db, 'unindexed_pdfs'), docData);
-            console.log('✅ unindexed_pdfs\'e kaydedildi:', unindexedDocRef.id);
-
-            uploadResults.push({
-                ...docData,
-                id: etebsDocRef.id,
-                unindexedPdfId: unindexedDocRef.id, // İndeksleme sayfası için
-                success: true
-            });
-
-            console.log('✅ Upload tamamlandı:', doc.fileName);
-
-        } catch (error) {
-            console.error(`❌ Upload failed for ${doc.fileName}:`, error);
-            uploadResults.push({
-                fileName: doc.fileName,
-                evrakNo: doc.evrakNo || evrakNo,
-                success: false,
-                error: error.message
-            });
-        }
-    }
-
-    console.log('📤 uploadDocumentsToFirebase tamamlandı. Sonuçlar:', uploadResults);
-    return uploadResults;
-},
     // Save notifications to Firebase for tracking
     async saveNotificationsToFirebase(notifications, userId, token) {
         try {
