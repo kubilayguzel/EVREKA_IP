@@ -3711,6 +3711,70 @@ const officialFee = parseFloat(document.getElementById('officialFee')?.value) ||
                 console.error('❌ Tarih hesaplama hatası:', error);
             }
         }
+
+        // === Yenileme işinde resmi/operasyonel son tarih hesapla ===
+        try {
+        const isRenewal =
+            String(selectedTransactionType?.id) === '22' ||
+            /yenileme/i.test(String(selectedTransactionType?.alias || selectedTransactionType?.name || ''));
+
+        if (isRenewal && this.selectedIpRecord) {
+            // 1) Portföy kaydından renewalDate'i al (Timestamp/string/Date olabilir)
+            let renewalDate = null;
+            const raw = this.selectedIpRecord.renewalDate;
+
+            if (raw && typeof raw.toDate === 'function') {
+            renewalDate = raw.toDate();
+            } else if (raw) {
+            const d = new Date(raw);
+            if (!isNaN(d)) renewalDate = d;
+            }
+
+            // (İsteğe bağlı) renewalDate yoksa 10 yıl kuralıyla türetme
+            if (!renewalDate) {
+            const fb = this.selectedIpRecord.registrationDate || this.selectedIpRecord.applicationDate;
+            if (fb) {
+                const d = typeof fb?.toDate === 'function' ? fb.toDate() : new Date(fb);
+                if (d && !isNaN(d)) {
+                d.setFullYear(d.getFullYear() + 10);
+                renewalDate = d;
+                }
+            }
+            }
+
+            if (!renewalDate) {
+            console.warn('Yenileme tarihi bulunamadı; resmi/operasyonel son tarih hesaplanamadı.');
+            } else {
+            // 2) Resmi son tarih: tatil/hafta sonuna gelirse İLK iş günü
+            const official = findNextWorkingDay(renewalDate, TURKEY_HOLIDAYS);
+
+            // 3) Operasyonel tarih: resmi tarihten 3 gün önce; tatil/hafta sonu ise geriye doğru ilk iş günü
+            const operational = new Date(official);
+            operational.setDate(operational.getDate() - 3);
+            while (isWeekend(operational) || isHoliday(operational, TURKEY_HOLIDAYS)) {
+                operational.setDate(operational.getDate() - 1);
+            }
+
+            const officialISO = official.toISOString().slice(0, 10);
+            const operationalISO = operational.toISOString().slice(0, 10);
+
+            // 4) İş verisine yaz: dueDate = resmi son tarih
+            taskData.dueDate = officialISO;
+            taskData.officialDueDate = officialISO;
+            taskData.operationalDueDate = operationalISO;
+
+            // (Opsiyonel, debug için) açıklama eklemek istersen:
+            taskData.officialDueDateDetails = {
+                base: renewalDate.toISOString().slice(0, 10),
+                adjustedOfficial: officialISO,
+                adjustedOperational: operationalISO
+            };
+            }
+        }
+        } catch (e) {
+        console.warn('Yenileme tarihi hesaplama hatası:', e);
+        }
+
         // ===== TARIH HESAPLAMA SONU =====
 
         const taskResult = await taskService.createTask(taskData);  // ← BU SATIRDAN ÖNCE EKLE
