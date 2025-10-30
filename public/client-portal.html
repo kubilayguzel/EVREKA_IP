@@ -2923,11 +2923,36 @@ async function loadTransactions(ipRecordId) {
         
         const transactionAlias = await getTransactionTypeAlias(parent.type);
         
-    // ✅ Parent transaction'a ait PDF'leri getir
+        // ✅ Parent transaction'a ait PDF'leri getir
         const parentPdfs = pdfsByTransaction[parent.id] || [];
-        const parentPdfLinks = parentPdfs.map(pdf => 
-            `<a href="${pdf.fileUrl}" target="_blank" title="${pdf.fileName}" class="btn btn-sm btn-danger mr-1">
+        
+        // ✅ Parent transaction'ın triggeringTaskId'si varsa, task'tan ePats evraklarını al
+        let epatsDocuments = [];
+        if (parent.triggeringTaskId) {
+            try {
+                const taskDocRef = doc(db, 'tasks', parent.triggeringTaskId);
+                const taskDocSnap = await getDoc(taskDocRef);
+                if (taskDocSnap.exists()) {
+                    const taskData = taskDocSnap.data();
+                    if (taskData.details?.epatsDocument) {
+                        epatsDocuments.push({
+                            fileName: taskData.details.epatsDocument.name || 'ePats Belgesi',
+                            fileUrl: taskData.details.epatsDocument.downloadURL,
+                            evrakNo: taskData.details.epatsDocument.turkpatentEvrakNo
+                        });
+                    }
+                }
+            } catch (err) {
+                console.warn('⚠️ Task ePats bilgisi alınamadı:', parent.triggeringTaskId, err);
+            }
+        }
+        
+        // ✅ Tüm belgeleri birleştir (normal PDF'ler + ePats)
+        const allParentDocs = [...parentPdfs, ...epatsDocuments];
+        const parentPdfLinks = allParentDocs.map(pdf => 
+            `<a href="${pdf.fileUrl}" target="_blank" title="${pdf.evrakNo ? `ePats: ${pdf.evrakNo}` : pdf.fileName}" class="btn btn-sm ${pdf.evrakNo ? 'btn-info' : 'btn-danger'} mr-1">
                 <i class="fas fa-file-pdf"></i>
+                ${pdf.evrakNo ? `<small class="ml-1">${pdf.evrakNo}</small>` : ''}
             </a>`
         ).join('');
         
