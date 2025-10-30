@@ -678,7 +678,7 @@ searchRecords(query) {
                 // Eğer transaction'da triggeringTaskId varsa, task'ı sorgula
                 if (transaction.triggeringTaskId) {
                     try {
-                        const taskResult = await taskService.getTask(transaction.triggeringTaskId);
+                        const taskResult = await taskService.getTaskById(transaction.triggeringTaskId);
                         if (taskResult.success && taskResult.data?.details?.epatsDocument?.turkpatentEvrakNo) {
                             epatsNumber = taskResult.data.details.epatsDocument.turkpatentEvrakNo;
                         }
