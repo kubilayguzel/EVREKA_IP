@@ -82,8 +82,57 @@ const menuItems = [
     { id: 'settings', text: 'Ayarlar', link: '#', icon: 'fas fa-cog', category: 'Araçlar', disabled: true }
     ];
 
+    // === Datepicker bağımlılıklarını 1 kez yükle ===
+async function ensureDatepickerDeps() {
+  const head = document.head;
+
+  // CSS (Flatpickr)
+  if (!document.querySelector('link[data-evreka="flatpickr-css"]')) {
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = 'https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css';
+    link.setAttribute('data-evreka', 'flatpickr-css');
+    head.appendChild(link);
+  }
+
+  // z-index stile
+  if (!document.querySelector('style[data-evreka="flatpickr-z"]')) {
+    const st = document.createElement('style');
+    st.setAttribute('data-evreka', 'flatpickr-z');
+    st.textContent = '.flatpickr-calendar{z-index:100000!important}';
+    head.appendChild(st);
+  }
+
+  const loadScript = (src, attr) => new Promise(res => {
+    if (document.querySelector(`script[${attr}]`)) return res();
+    const s = document.createElement('script');
+    s.src = src;
+    s.setAttribute(attr.split('=')[0], attr.split('=')[1]?.replace(/"/g,'') || attr);
+    s.onload = () => res();
+    head.appendChild(s);
+  });
+
+  // JS (Flatpickr + TR l10n) — zaten yüklüyse atla
+  if (!window.flatpickr) {
+    await loadScript('https://cdn.jsdelivr.net/npm/flatpickr', 'data-evreka="flatpickr-js"');
+  }
+  if (!(window.flatpickr && window.flatpickr.l10ns && window.flatpickr.l10ns.tr)) {
+    await loadScript('https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/tr.js', 'data-evreka="flatpickr-tr"');
+  }
+
+  // Ortak tarih bileşeni
+  if (!window.EvrekaDatePicker) {
+    await loadScript('./js/date-pickers.js', 'data-evreka="evreka-datepickers"');
+  }
+
+  // Otomatik başlat
+  window.EvrekaDatePicker?.init();
+}
+
+
 export async function loadSharedLayout(options = {}) {
     const { activeMenuLink } = options;
+    await ensureDatepickerDeps();
     const placeholder = document.getElementById('layout-placeholder');
 
     if (!placeholder) {
