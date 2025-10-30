@@ -339,15 +339,42 @@ async function renderTransactionsAccordion(recordId){
       return;
     }
 
-    if (txAccordion) txAccordion.innerHTML = parents.map(p => {
-      const tmeta = typeMap.get(String(p.type));
-      const tname = tmeta ? (tmeta.alias || tmeta.name) : `İşlem ${p.type}`;
-      const {d,t} = fmtDateTime(p.timestamp);
-      const children = childrenMap[p.id] || [];
-      const hasChildren = children.length > 0;
+    // ✅ Parent transaction'lar için ePats bilgilerini topla
+    const parentsWithEpats = await Promise.all(parents.map(async (p) => {
+      // ✅ Parent transaction'ın triggeringTaskId'si varsa, task'tan ePats evraklarını al
+      let epatsDocuments = [];
+      if (p.triggeringTaskId) {
+        try {
+          const taskDoc = await getDoc(doc(db, 'tasks', p.triggeringTaskId));
+          if (taskDoc.exists()) {
+            const taskData = taskDoc.data();
+            if (taskData.details?.epatsDocument) {
+              epatsDocuments.push({
+                fileName: taskData.details.epatsDocument.name || 'ePats Belgesi',
+                fileUrl: taskData.details.epatsDocument.downloadURL,
+                evrakNo: taskData.details.epatsDocument.turkpatentEvrakNo
+              });
+            }
+          }
+        } catch (err) {
+          console.warn('⚠️ Task ePats bilgisi alınamadı:', p.triggeringTaskId, err);
+        }
+      }
+      
+      return { ...p, epatsDocuments };
+    }));
+
+    if (txAccordion) txAccordion.innerHTML = parentsWithEpats.map(p => {
+          const tmeta = typeMap.get(String(p.type));
+          const tname = tmeta ? (tmeta.alias || tmeta.name) : `İşlem ${p.type}`;
+          const {d,t} = fmtDateTime(p.timestamp);
+          const children = childrenMap[p.id] || [];
+          const hasChildren = children.length > 0;
 
       // ✅ Parent transaction'a ait PDF'leri getir
       const parentPdfs = pdfsByTransaction[p.id] || [];
+      // ePats evrakları zaten p.epatsDocuments içinde
+      const epatsDocuments = p.epatsDocuments || [];
 
       const childrenHtml = hasChildren ? `
         <div class="accordion-transaction-children" id="children-${p.id}">
@@ -373,12 +400,14 @@ async function renderTransactionsAccordion(recordId){
           }).join('')}
         </div>` : '';
 
-      // ✅ Parent'a ait PDF ikonları
-      const parentPdfIcons = parentPdfs.map(pdf => 
-        `<a href="${pdf.fileUrl}" target="_blank" title="${pdf.fileName}" class="pdf-link">
-          <i class="fas fa-file-pdf"></i>
-        </a>`
-      ).join(' ');
+        // ✅ Parent'a ait PDF ikonları (normal PDF'ler + ePats evrakları)
+        const allParentDocs = [...parentPdfs, ...epatsDocuments];
+        const parentPdfIcons = allParentDocs.map(pdf => 
+          `<a href="${pdf.fileUrl}" target="_blank" title="${pdf.evrakNo ? `ePats: ${pdf.evrakNo}` : pdf.fileName}" class="pdf-link ${pdf.evrakNo ? 'epats-doc' : ''}">
+            <i class="fas fa-file-pdf"></i>
+            ${pdf.evrakNo ? `<span class="epats-badge">${pdf.evrakNo}</span>` : ''}
+          </a>`
+        ).join(' ');
 
       return `<div class="accordion-transaction-item">
         <div class="accordion-transaction-header ${hasChildren ? 'has-children' : ''}" data-parent-id="${p.id}">
