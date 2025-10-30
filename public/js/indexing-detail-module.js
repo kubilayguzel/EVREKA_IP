@@ -671,7 +671,26 @@ searchRecords(query) {
                 return;
             }
 
-            const transactionsHtml = parentTransactions.map(transaction => {
+            // ePats bilgilerini task'lardan al
+            const transactionsWithEpats = await Promise.all(parentTransactions.map(async (transaction) => {
+                let epatsNumber = null;
+                
+                // Eğer transaction'da triggeringTaskId varsa, task'ı sorgula
+                if (transaction.triggeringTaskId) {
+                    try {
+                        const taskResult = await taskService.getTask(transaction.triggeringTaskId);
+                        if (taskResult.success && taskResult.data?.details?.epatsDocument?.turkpatentEvrakNo) {
+                            epatsNumber = taskResult.data.details.epatsDocument.turkpatentEvrakNo;
+                        }
+                    } catch (err) {
+                        console.warn('⚠️ Task sorgulanamadı (ePats için):', transaction.triggeringTaskId, err);
+                    }
+                }
+                
+                return { ...transaction, epatsNumber };
+            }));
+
+            const transactionsHtml = transactionsWithEpats.map(transaction => {
                 const transactionType = this.allTransactionTypes.find(t => t.id === transaction.type);
                 const typeName = transactionType ? (transactionType.alias || transactionType.name) : 'Bilinmeyen Tür';
                 
@@ -681,7 +700,7 @@ searchRecords(query) {
                         <div class="transaction-details">
                             ${transaction.description || 'Açıklama yok'}
                             ${transaction.deliveryDate ? ` • Tebliğ: ${transaction.deliveryDate}` : ''}
-                            ${transaction.details?.epatsDocumentNumber ? ` • ePats: ${transaction.details.epatsDocumentNumber}` : ''}
+                            ${transaction.epatsNumber ? ` • ePats: ${transaction.epatsNumber}` : ''}
                         </div>
                         <div class="transaction-date">${new Date(transaction.timestamp).toLocaleDateString('tr-TR')}</div>
                     </div>
