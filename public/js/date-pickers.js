@@ -5,6 +5,7 @@
  * - Cleans up stray altInput if any
  * - Uses flatpickr with altInput and hides the original input to avoid double fields
  * - Adds a simple gg.aa.yyyy mask on the visible input
+ * - Syncs alt input changes back to the original hidden input (#deliveryDate etc.)
  */
 (function (w) {
   const DP = {
@@ -66,6 +67,14 @@
           defaultDate,
           minDate,
           maxDate,
+          onChange: (selectedDates, dateStr, inst) => {
+            // Sync ISO (Y-m-d) to hidden/original input and dispatch events for validators
+            el.value = dateStr || '';
+            try {
+              el.dispatchEvent(new Event('input',  { bubbles: true }));
+              el.dispatchEvent(new Event('change', { bubbles: true }));
+            } catch(e){}
+          },
           onClose: (selectedDates, dateStr, inst) => {
             // If visible value is not in dd.mm.yyyy sanitize by clearing
             const vis = inst && inst.altInput ? inst.altInput.value : '';
@@ -82,13 +91,40 @@
         if (fp && fp.altInput) {
           el.style.display = 'none'; // keep only the nice visible input
           try { fp.altInput.setAttribute('data-for', el.id || ''); } catch (e) {}
+
+          // 🔁 Keep original input in sync when user types manually into alt input
+          const alt = fp.altInput;
+          if (alt && !alt.__evrekaSyncBound) {
+            alt.addEventListener('input', (ev) => {
+              let v = (alt.value || '').replace(/[^\d.]/g, '');
+              if (v.length >= 2 && v[2] !== '.') v = v.slice(0, 2) + '.' + v.slice(2);
+              if (v.length >= 5 && v[5] !== '.') v = v.slice(0, 5) + '.' + v.slice(5);
+              if (v.length > 10) v = v.slice(0, 10);
+              alt.value = v;
+
+              // dd.mm.yyyy → yyyy-mm-dd
+              if (ddmmyyyy.test(v)) {
+                const [dd, mm, yyyy] = v.split('.');
+                el.value = `${yyyy}-${mm}-${dd}`;
+              } else {
+                el.value = '';
+              }
+              try {
+                el.dispatchEvent(new Event('input',  { bubbles: true }));
+                el.dispatchEvent(new Event('change', { bubbles: true }));
+              } catch(e){}
+            }, { passive: true });
+            alt.__evrekaSyncBound = true;
+          }
         }
 
-        // 🔤 Simple mask for the visible input (or fallback to original)
+        // 🔤 Simple mask for the visible input (or fallback to original) — keep for non-altInput case
         const maskTarget = (fp && fp.altInput) ? fp.altInput : el;
         if (maskTarget && !maskTarget.__evrekaMaskBound) {
           if (!maskTarget.placeholder) maskTarget.placeholder = 'gg.aa.yyyy';
           maskTarget.addEventListener('input', ev => {
+            // If there's an altInput, the sync above already formats it; keep this for fallback cases
+            if (fp && fp.altInput && ev.target === fp.altInput) return;
             let v = (ev.target.value || '').replace(/[^\d.]/g, '');
             if (v.length >= 2 && v[2] !== '.') v = v.slice(0, 2) + '.' + v.slice(2);
             if (v.length >= 5 && v[5] !== '.') v = v.slice(0, 5) + '.' + v.slice(5);
