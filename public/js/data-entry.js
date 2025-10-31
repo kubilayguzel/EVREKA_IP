@@ -1540,12 +1540,28 @@ populateFormFields(recordData) {
                 if (previewContainer) previewContainer.style.display = 'block';
             }
 
-            // ✅ Nice sınıfları - goodsAndServices ana seviyede
+            // ✅ Nice sınıfları - goodsAndServicesByClass'tan yükle
             if (recordData.goodsAndServicesByClass && recordData.goodsAndServicesByClass.length > 0) {
                 if (typeof setSelectedNiceClasses === 'function') {
-                    const flattenedGoodsAndServices = recordData.goodsAndServicesByClass.flatMap(group =>
-                        group.items.map(item => `${group.classNo}. ${item}`)
-                    );
+                    // Her classNo için bir sayaç tutalım
+                    const classCounters = {};
+                    
+                    const flattenedGoodsAndServices = recordData.goodsAndServicesByClass.flatMap(group => {
+                        const classNo = group.classNo;
+                        
+                        // Bu sınıf için sayaç yoksa 1'den başlat
+                        if (!classCounters[classNo]) {
+                            classCounters[classNo] = 1;
+                        }
+                        
+                        // Her item için format: "(classNo-index) item"
+                        return (group.items || []).map(item => {
+                            const formattedItem = `(${classNo}-${classCounters[classNo]}) ${item}`;
+                            classCounters[classNo]++;
+                            return formattedItem;
+                        });
+                    });
+                    
                     console.log('🎯 Nice sınıfları ayarlanıyor:', flattenedGoodsAndServices);
                     setSelectedNiceClasses(flattenedGoodsAndServices);
                 }
