@@ -406,18 +406,29 @@ setupEventListeners() {
         });
     }
 
-    // ⭐ TESLİMAT TARİHİ ALAN DEĞİŞİKLİĞİNİ İZLE
     const deliveryDateInput = document.getElementById('deliveryDate');
     if (deliveryDateInput) {
-        const newDeliveryDateInput = deliveryDateInput.cloneNode(true);
-        deliveryDateInput.parentNode.replaceChild(newDeliveryDateInput, deliveryDateInput);
-        
-        ['change', 'input'].forEach(eventType => {
-            newDeliveryDateInput.addEventListener(eventType, () => {
-                console.log('📅 Tebliğ tarihi değişti:', newDeliveryDateInput.value);
-                this.checkFormCompleteness();
-            });
-        });
+    const onDateChange = () => {
+        const alt = deliveryDateInput.nextElementSibling;
+        console.log('📅 Tebliğ tarihi değişti:',
+        deliveryDateInput.value,
+        alt && alt.classList && alt.classList.contains('flatpickr-alt-input') ? alt.value : ''
+        );
+        this.checkFormCompleteness();
+    };
+
+    // Asıl (gizli) input’u dinle
+    ['change','input'].forEach(evt =>
+        deliveryDateInput.addEventListener(evt, onDateChange)
+    );
+
+    // Varsa alt input’u da dinle (flatpickr’ın görünür kutusu)
+    const alt = deliveryDateInput.nextElementSibling;
+    if (alt && alt.classList && alt.classList.contains('flatpickr-alt-input')) {
+        ['change','input'].forEach(evt =>
+        alt.addEventListener(evt, onDateChange)
+        );
+    }
     }
 
     // ⭐ TRANSACTION SEÇİMİ EVENT LISTENER'I
