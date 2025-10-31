@@ -1912,7 +1912,7 @@ async saveTrademarkPortfolio(portfolioData) {
             return;
         }
 
-        if (!Array.isArray(goodsAndServices) || goodsAndServices.length === 0) {
+        if (!Array.isArray(rawNiceClasses) || rawNiceClasses.length === 0) {
             alert('Lütfen en az bir mal veya hizmet seçin.');
             return;
         }
