@@ -812,7 +812,15 @@ checkFormCompleteness() {
     }
 
     const deliveryInput = document.getElementById('deliveryDate');
-    const hasDeliveryDate = !!(deliveryInput && deliveryInput.value && deliveryInput.value.trim() !== '');
+    let hasDeliveryDate = false;
+    if (deliveryInput) {
+    const raw = (deliveryInput.value || '').trim();
+    const alt = deliveryInput.nextElementSibling;
+    const altVal = (alt && alt.classList && alt.classList.contains('flatpickr-alt-input'))
+        ? (alt.value || '').trim()
+        : '';
+    hasDeliveryDate = !!(raw || altVal);
+    }
 
     const canSubmit = hasMatchedRecord 
     && hasSelectedTransaction 
@@ -859,7 +867,17 @@ async handleIndexing(opts = {}) {
         }
 
         const childTypeId = document.getElementById('childTransactionType')?.value;
-        const deliveryDateStr = document.getElementById('deliveryDate')?.value;
+        const deliveryEl = document.getElementById('deliveryDate');
+        let deliveryDateStr = deliveryEl?.value?.trim() || '';
+
+        if (!deliveryDateStr && deliveryEl?.nextElementSibling?.classList?.contains('flatpickr-alt-input')) {
+        const v = (deliveryEl.nextElementSibling.value || '').trim(); // dd.mm.yyyy
+        if (/^\d{2}\.\d{2}\.\d{4}$/.test(v)) {
+            const [dd, mm, yyyy] = v.split('.');
+            deliveryDateStr = `${yyyy}-${mm}-${dd}`;
+        }
+        }
+
 
         if (!childTypeId || !deliveryDateStr) {
             showNotification('Alt işlem türü ve tebliğ tarihi seçilmeli.', 'error');
