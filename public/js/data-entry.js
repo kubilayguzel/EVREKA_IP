@@ -1882,7 +1882,9 @@ async saveTrademarkPortfolio(portfolioData) {
         const registrationDate = document.getElementById('registrationDate').value;
         const renewalDate = document.getElementById('renewalDate').value;
         const description = document.getElementById('brandDescription').value.trim();
-        const goodsAndServices = getSelectedNiceClasses();
+        // Nice Classification'dan sınıflara göre grupla
+        const rawNiceClasses = getSelectedNiceClasses();
+        console.log('🔍 Raw Nice Classes:', rawNiceClasses);
 
         // WIPO/ARIPO'ya özgü alanları al
         const registrationNumberInput = document.getElementById('registrationNumber');
@@ -1931,78 +1933,30 @@ async saveTrademarkPortfolio(portfolioData) {
             brandImageUrl = null;
         }
 
-        // 2) Yardımcılar (blok içi; fonksiyon dışına alma zorunluluğu yok)
-        const parseClassNo = (val) => {
-            if (val == null) return null;
-            if (typeof val === 'number') return Number(val);
-            if (typeof val === 'object') {
-                const cand = val.classNo ?? val.class ?? val.classNumber ?? val.niceClass ?? val.k ?? null;
-                if (cand != null) return Number(cand);
-                val = val.text ?? val.name ?? val.label ?? '';
+        // 3) goodsAndServices'i doğru formata dönüştür
+        const goodsAndServicesByClass = rawNiceClasses.reduce((acc, item) => {
+            // Formatı parse et: "(1-2) Gübreler ve topraklar" veya "1. (1-2) Gübreler"
+            const match = item.match(/^(?:\d+\.\s*)?\((\d+)-\d+\)\s*(.*)$/);
+            if (match) {
+                const classNo = parseInt(match[1]);
+                const text = match[2].trim();
+                
+                // Sınıf zaten varsa items'a ekle, yoksa yeni obje oluştur
+                let classObj = acc.find(obj => obj.classNo === classNo);
+                if (!classObj) {
+                    classObj = { classNo, items: [] };
+                    acc.push(classObj);
+                }
+                if (text && !classObj.items.includes(text)) {
+                    classObj.items.push(text);
+                }
             }
-            const s = String(val);
-            const m = s.match(/(?:^|\b)([1-9]|[12]\d|3\d|4[0-5])(?:\b|[^\d])/);
-            return m ? Number(m[1]) : null;
-        };
+            return acc;
+        }, []).sort((a, b) => a.classNo - b.classNo);
 
-        const deriveNiceClasses = (gas) => {
-            const set = new Set();
-            const visit = (v) => {
-                if (v == null) return;
-                if (Array.isArray(v)) { v.forEach(visit); return; }
-                if (typeof v === 'object') {
-                    const cls = parseClassNo(v); if (cls != null) set.add(cls);
-                    if (Array.isArray(v.items)) v.items.forEach(visit);
-                    return;
-                }
-                const cls = parseClassNo(v); if (cls != null) set.add(cls);
-            };
-            visit(gas);
-            return Array.from(set).sort((a,b)=>a-b);
-        };
+        const niceClass = goodsAndServicesByClass.map(item => item.classNo);
 
-        const groupGoodsByClass = (gas) => {
-            const groups = new Map();
-            const add = (cls, text) => {
-                if (cls == null) return;
-                const key = Number(cls);
-                if (!groups.has(key)) groups.set(key, []);
-                const t = String(text ?? '').trim();
-                if (t) groups.get(key).push(t);
-            };
-            const visit = (v, currentClass=null) => {
-                if (v == null) return;
-                if (Array.isArray(v)) { v.forEach(e => visit(e, currentClass)); return; }
-                if (typeof v === 'object') {
-                    const cls = parseClassNo(v) ?? currentClass;
-                    const maybeText = v.text ?? v.name ?? v.label ?? null;
-                    if (maybeText) add(cls, maybeText);
-                    if (Array.isArray(v.items)) {
-                        v.items.forEach(it => {
-                            if (typeof it === 'object') {
-                                const t = it.text ?? it.name ?? it.label ?? JSON.stringify(it);
-                                const itCls = parseClassNo(it) ?? cls;
-                                add(itCls, t);
-                            } else {
-                                const itCls = parseClassNo(it) ?? cls;
-                                add(itCls, it);
-                            }
-                        });
-                    }
-                    return;
-                }
-                const cls = parseClassNo(v) ?? currentClass;
-                add(cls, v);
-            };
-            visit(gas);
-            return Array.from(groups.entries())
-                .sort((a,b)=>a[0]-b[0])
-                .map(([classNo, items]) => ({ classNo, items }));
-        };
-
-        // 3) Bağı kuran alanlar
-        const niceClass = deriveNiceClasses(goodsAndServices);
-        const goodsAndServicesByClass = groupGoodsByClass(goodsAndServices);
+        console.log('✅ Grouped goodsAndServicesByClass:', goodsAndServicesByClass);
 
         // 4) Kayıt payload’u
         let recordsToSave = [];
