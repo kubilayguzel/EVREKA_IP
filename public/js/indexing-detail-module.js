@@ -25,6 +25,10 @@ import {
     TURKEY_HOLIDAYS
 } from '../utils.js';
 
+import { 
+    ref, uploadBytes, getDownloadURL 
+} from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js';
+
 // Constants
 const UNINDEXED_PDFS_COLLECTION = 'unindexed_pdfs';
 
@@ -833,10 +837,20 @@ checkFormCompleteness() {
     hasDeliveryDate = !!(raw || altVal);
     }
 
+    // 🔥 YENİ: İtiraz bildirimi seçildiyse PDF kontrolü yap
+    let hasOppositionPdf = true;
+    const childTypeSelect = document.getElementById('childTransactionType');
+    if (childTypeSelect && childTypeSelect.value === '27') {
+        const pdfInput = document.getElementById('oppositionPetitionFile');
+        hasOppositionPdf = !!(pdfInput && pdfInput.files && pdfInput.files.length > 0);
+        console.log('Opposition petition PDF check:', hasOppositionPdf);
+    }
+
     const canSubmit = hasMatchedRecord 
     && hasSelectedTransaction 
     && hasSelectedChildType 
-    && hasDeliveryDate;
+    && hasDeliveryDate
+    && hasOppositionPdf; // 🔥 YENİ ŞART
     
     const indexBtn      = document.getElementById('indexPdfBtn') || document.getElementById('indexBtn');
     const saveUpdateBtn = document.getElementById('saveUpdatePdfBtn');
@@ -926,22 +940,100 @@ async handleIndexing(opts = {}) {
         let transactionIdToAssociateFiles = this.selectedTransactionId;
         let createdTaskId = null;
 
-        // 1. Alt işlem varsa oluştur
-        if (childTypeId) {
-            console.log('Alt işlem oluşturuluyor...');
+    // 1. Alt işlem varsa oluştur
+    if (childTypeId) {
+        console.log('Alt işlem oluşturuluyor...');
 
-            const childTransactionType = this.allTransactionTypes.find(type => type.id === childTypeId);
-            if (!childTransactionType) {
-                throw new Error('Alt işlem türü bulunamadı: ' + childTypeId);
+        const childTransactionType = this.allTransactionTypes.find(type => type.id === childTypeId);
+        if (!childTransactionType) {
+            throw new Error('Alt işlem türü bulunamadı: ' + childTypeId);
+        }
+
+        // 🔥 YENİ: İtiraz bildirimi özel mantığı
+        let newParentTransactionId = null;
+        let oppositionPetitionFileUrl = null;
+        
+        if (childTypeId === '27') { // İtiraz Bildirimi
+            console.log('🔍 İtiraz Bildirimi tespit edildi, özel işlem başlatılıyor...');
+            
+            // PDF yükleme alanından dosyayı al
+            const oppositionPdfFile = document.getElementById('oppositionPetitionFile')?.files[0];
+            
+            if (!oppositionPdfFile) {
+                throw new Error('İtiraz bildirimi için "Karşı Taraf İtiraz Dilekçesi" PDF dosyası yüklenmelidir.');
+            }
+            
+            // PDF'i storage'a yükle
+            console.log('📤 Karşı taraf itiraz dilekçesi yükleniyor...');
+            const timestamp = Date.now();
+            const storagePath = `opposition-petitions/${this.matchedRecord.id}/${timestamp}_${oppositionPdfFile.name}`;
+            const storageRef = ref(firebaseServices.storage, storagePath);
+            
+            await uploadBytes(storageRef, oppositionPdfFile);
+            oppositionPetitionFileUrl = await getDownloadURL(storageRef);
+            console.log('✅ Karşı taraf itiraz dilekçesi yüklendi:', oppositionPetitionFileUrl);
+            
+            // Seçili parent transaction'ın tipini kontrol et
+            const selectedParentType = this.allTransactionTypes.find(t => t.id === String(this.selectedTransactionType));
+            const parentAlias = selectedParentType?.alias || selectedParentType?.name || '';
+            
+            let newParentType = null;
+            let newParentDescription = '';
+            
+            // Parent transaction türüne göre yeni parent oluştur
+            if (parentAlias === 'Başvuru') {
+                newParentType = '20'; // Yayına İtiraz
+                newParentDescription = 'Yayına İtiraz (Otomatik oluşturuldu)';
+            } else if (parentAlias === 'Yayına İtiraz') {
+                newParentType = 'trademark_reconsideration_of_publication_objection'; // Yayına İtirazın Yeniden İncelenmesi
+                newParentDescription = 'Yayına İtirazın Yeniden İncelenmesi (Otomatik oluşturuldu)';
+            }
+            
+            if (newParentType) {
+                console.log(`✅ Yeni parent transaction oluşturuluyor: ${newParentDescription}`);
+                
+                const newParentData = {
+                    type: newParentType,
+                    description: newParentDescription,
+                    transactionHierarchy: 'parent',
+                    oppositionPetitionFileUrl: oppositionPetitionFileUrl, // PDF linkini ekle
+                    oppositionPetitionFileName: oppositionPdfFile.name,
+                    timestamp: new Date().toISOString()
+                };
+                
+                const addParentResult = await ipRecordsService.addTransactionToRecord(
+                    this.matchedRecord.id,
+                    newParentData
+                );
+                
+                if (addParentResult.success) {
+                    newParentTransactionId = addParentResult.data?.id || addParentResult.id;
+                    console.log('✅ Yeni parent transaction oluşturuldu, ID:', newParentTransactionId);
+                    showNotification(`${newParentDescription} otomatik olarak oluşturuldu!`, 'success');
+                } else {
+                    throw new Error('Yeni parent transaction oluşturulamadı: ' + addParentResult.error);
+                }
+            }
+        }
+
+            // 🔥 YENİ: Eğer İtiraza Karşı Görüş (ID: 38) ise ve yeni parent oluşturulduysa, onu kullan
+            let finalParentId = this.selectedTransactionId;
+            if (childTypeId === '38' && newParentTransactionId) {
+                finalParentId = newParentTransactionId;
+                console.log('✅ "İtiraza Karşı Görüş" işlemi yeni parent transaction\'a bağlandı');
+            } else if (childTypeId === '27' && newParentTransactionId) {
+                // İtiraz Bildirimi de yeni parent'a bağlansın
+                finalParentId = newParentTransactionId;
+                console.log('✅ "İtiraz Bildirimi" işlemi yeni parent transaction\'a bağlandı');
             }
 
             const childTransactionData = {
                 type: childTypeId,
                 description: childTransactionType.alias || childTransactionType.name,
                 deliveryDate: deliveryDateStr || null,
-                timestamp: deliveryDateStr ? new Date(deliveryDateStr) : new Date(),
+                timestamp: deliveryDateStr ? new Date(deliveryDateStr).toISOString() : new Date().toISOString(),
                 transactionHierarchy: 'child',
-                parentId: this.selectedTransactionId
+                parentId: finalParentId // 🔥 Güncellenmiş parent ID
             };
 
             const childResult = await ipRecordsService.addTransactionToRecord(this.matchedRecord.id, childTransactionData);
