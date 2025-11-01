@@ -3486,15 +3486,17 @@ async function createProfessionalReport(ownerName, matches) {
 function createComparisonPage(group) {
   const similarMark = group.similarMark;
   const monitoredMarks = group.monitoredMarks || [];
+  const monitoredMark = monitoredMarks.length > 0 ? monitoredMarks[0] : {};
   
   const elements = [];
   
   // Tablo satırlarını bir array'de topluyoruz
   const tableRows = [];
 
-  // Başlık satırı
+  // ============ BAŞLIK SATIRI ============
   tableRows.push(
     new TableRow({
+      height: { value: 800, rule: "atLeast" },
       children: [
         new TableCell({
           width: { size: 50, type: WidthType.PERCENTAGE },
@@ -3504,25 +3506,27 @@ function createComparisonPage(group) {
                 new TextRun({
                   text: "İzlenen Marka",
                   bold: true,
-                  size: 22,
+                  size: 28,
                   italics: true
                 })
               ],
               alignment: AlignmentType.CENTER,
-              spacing: { before: 100, after: 100 }
+              spacing: { before: 200, after: 100 }
             }),
             new Paragraph({
               children: [
                 new TextRun({
-                  text: monitoredMarks.length > 0 ? (monitoredMarks[0].markName || monitoredMarks[0].name || "-") : "-",
-                  size: 20
+                  text: monitoredMark.markName || monitoredMark.name || "-",
+                  size: 24,
+                  bold: true
                 })
               ],
               alignment: AlignmentType.CENTER,
-              spacing: { after: 100 }
+              spacing: { after: 200 }
             })
           ],
-          shading: { fill: "F0F0F0" }
+          shading: { fill: "E8F4F8" },
+          verticalAlign: "center"
         }),
         new TableCell({
           width: { size: 50, type: WidthType.PERCENTAGE },
@@ -3532,33 +3536,36 @@ function createComparisonPage(group) {
                 new TextRun({
                   text: "Benzer Marka",
                   bold: true,
-                  size: 22,
+                  size: 28,
                   italics: true
                 })
               ],
               alignment: AlignmentType.CENTER,
-              spacing: { before: 100, after: 100 }
+              spacing: { before: 200, after: 100 }
             }),
             new Paragraph({
               children: [
                 new TextRun({
                   text: similarMark.name || "-",
-                  size: 20
+                  size: 24,
+                  bold: true
                 })
               ],
               alignment: AlignmentType.CENTER,
-              spacing: { after: 100 }
+              spacing: { after: 200 }
             })
           ],
-          shading: { fill: "F0F0F0" }
+          shading: { fill: "FFF4E6" },
+          verticalAlign: "center"
         })
       ]
     })
   );
 
-  // Görsel alan (placeholder - gerçek görseller varsa eklenebilir)
+  // ============ GÖRSEL ALANI ============
   tableRows.push(
     new TableRow({
+      height: { value: 2000, rule: "atLeast" },
       children: [
         new TableCell({
           children: [
@@ -3566,15 +3573,17 @@ function createComparisonPage(group) {
               children: [
                 new TextRun({
                   text: "[İzlenen Marka Görseli]",
-                  size: 18,
-                  color: "999999",
+                  size: 20,
+                  color: "AAAAAA",
                   italics: true
                 })
               ],
               alignment: AlignmentType.CENTER,
-              spacing: { before: 200, after: 200 }
+              spacing: { before: 400, after: 400 }
             })
-          ]
+          ],
+          shading: { fill: "F5F5F5" },
+          verticalAlign: "center"
         }),
         new TableCell({
           children: [
@@ -3582,28 +3591,30 @@ function createComparisonPage(group) {
               children: [
                 new TextRun({
                   text: "[Benzer Marka Görseli]",
-                  size: 18,
-                  color: "999999",
+                  size: 20,
+                  color: "AAAAAA",
                   italics: true
                 })
               ],
               alignment: AlignmentType.CENTER,
-              spacing: { before: 200, after: 200 }
+              spacing: { before: 400, after: 400 }
             })
-          ]
+          ],
+          shading: { fill: "F5F5F5" },
+          verticalAlign: "center"
         })
       ]
     })
   );
 
-  // İzlenen Sınıflar
-  const monitoredClasses = monitoredMarks.length > 0 && monitoredMarks[0].niceClass 
-    ? (Array.isArray(monitoredMarks[0].niceClass) ? monitoredMarks[0].niceClass.join(", ") : monitoredMarks[0].niceClass)
-    : "-";
+  // ============ İZLENEN SINIFLAR ============
+  const monitoredClasses = monitoredMark.niceClass 
+    ? (Array.isArray(monitoredMark.niceClass) ? monitoredMark.niceClass.join(", ") : monitoredMark.niceClass)
+    : (monitoredMark.niceClasses ? (Array.isArray(monitoredMark.niceClasses) ? monitoredMark.niceClasses.join(", ") : monitoredMark.niceClasses) : "-");
   
   const similarClasses = similarMark.niceClass
     ? (Array.isArray(similarMark.niceClass) ? similarMark.niceClass.join(", ") : similarMark.niceClass)
-    : (similarMark.niceClasses || "-");
+    : (similarMark.niceClasses ? (Array.isArray(similarMark.niceClasses) ? similarMark.niceClasses.join(", ") : similarMark.niceClasses) : "-");
 
   tableRows.push(
     new TableRow({
@@ -3613,35 +3624,55 @@ function createComparisonPage(group) {
             new Paragraph({
               children: [
                 new TextRun({
-                  text: `İzlenen Sınıflar: ${monitoredClasses}`,
-                  size: 20
+                  text: "İzlenen Sınıflar: ",
+                  bold: true,
+                  size: 22
+                }),
+                new TextRun({
+                  text: monitoredClasses,
+                  size: 22
                 })
               ],
-              alignment: AlignmentType.LEFT,
-              spacing: { before: 100, after: 100 }
+              spacing: { before: 150, after: 150 }
             })
-          ]
+          ],
+          margins: {
+            top: 150,
+            bottom: 150,
+            left: 150,
+            right: 150
+          }
         }),
         new TableCell({
           children: [
             new Paragraph({
               children: [
                 new TextRun({
-                  text: `Başvurulan Sınıflar: ${similarClasses}`,
-                  size: 20
+                  text: "Başvurulan Sınıflar: ",
+                  bold: true,
+                  size: 22
+                }),
+                new TextRun({
+                  text: similarClasses,
+                  size: 22
                 })
               ],
-              alignment: AlignmentType.LEFT,
-              spacing: { before: 100, after: 100 }
+              spacing: { before: 150, after: 150 }
             })
-          ]
+          ],
+          margins: {
+            top: 150,
+            bottom: 150,
+            left: 150,
+            right: 150
+          }
         })
       ]
     })
   );
 
-  // Başvuru Tarihi
-  const monitoredDate = monitoredMarks.length > 0 ? (monitoredMarks[0].date || monitoredMarks[0].applicationDate || "-") : "-";
+  // ============ BAŞVURU TARİHİ ============
+  const monitoredDate = monitoredMark.date || monitoredMark.applicationDate || "-";
   const similarDate = similarMark.date || similarMark.applicationDate || "-";
 
   tableRows.push(
@@ -3652,35 +3683,55 @@ function createComparisonPage(group) {
             new Paragraph({
               children: [
                 new TextRun({
-                  text: `Başvuru Tarihi: ${monitoredDate}`,
-                  size: 20
+                  text: "Başvuru Tarihi: ",
+                  bold: true,
+                  size: 22
+                }),
+                new TextRun({
+                  text: monitoredDate,
+                  size: 22
                 })
               ],
-              alignment: AlignmentType.LEFT,
-              spacing: { before: 100, after: 100 }
+              spacing: { before: 150, after: 150 }
             })
-          ]
+          ],
+          margins: {
+            top: 150,
+            bottom: 150,
+            left: 150,
+            right: 150
+          }
         }),
         new TableCell({
           children: [
             new Paragraph({
               children: [
                 new TextRun({
-                  text: `Başvuru Tarihi: ${similarDate}`,
-                  size: 20
+                  text: "Başvuru Tarihi: ",
+                  bold: true,
+                  size: 22
+                }),
+                new TextRun({
+                  text: similarDate,
+                  size: 22
                 })
               ],
-              alignment: AlignmentType.LEFT,
-              spacing: { before: 100, after: 100 }
+              spacing: { before: 150, after: 150 }
             })
-          ]
+          ],
+          margins: {
+            top: 150,
+            bottom: 150,
+            left: 150,
+            right: 150
+          }
         })
       ]
     })
   );
 
-  // Başvuru No
-  const monitoredAppNo = monitoredMarks.length > 0 ? (monitoredMarks[0].applicationNo || "-") : "-";
+  // ============ BAŞVURU NO ============
+  const monitoredAppNo = monitoredMark.applicationNo || "-";
   const similarAppNo = similarMark.applicationNo || "-";
 
   tableRows.push(
@@ -3691,34 +3742,57 @@ function createComparisonPage(group) {
             new Paragraph({
               children: [
                 new TextRun({
-                  text: `Başvuru No: ${monitoredAppNo}`,
-                  size: 20
+                  text: "Başvuru No: ",
+                  bold: true,
+                  size: 22
+                }),
+                new TextRun({
+                  text: monitoredAppNo,
+                  size: 22
                 })
               ],
-              alignment: AlignmentType.LEFT,
-              spacing: { before: 100, after: 100 }
+              spacing: { before: 150, after: 150 }
             })
-          ]
+          ],
+          margins: {
+            top: 150,
+            bottom: 150,
+            left: 150,
+            right: 150
+          }
         }),
         new TableCell({
           children: [
             new Paragraph({
               children: [
                 new TextRun({
-                  text: `Başvuru Numarası: ${similarAppNo}`,
-                  size: 20
+                  text: "Başvuru Numarası: ",
+                  bold: true,
+                  size: 22
+                }),
+                new TextRun({
+                  text: similarAppNo,
+                  size: 22
                 })
               ],
-              alignment: AlignmentType.LEFT,
-              spacing: { before: 100, after: 100 }
+              spacing: { before: 150, after: 150 }
             })
-          ]
+          ],
+          margins: {
+            top: 150,
+            bottom: 150,
+            left: 150,
+            right: 150
+          }
         })
       ]
     })
   );
 
-  // Tescil Tarihi (opsiyonel - veri varsa)
+  // ============ TESCİL TARİHİ & SON İTİRAZ TARİHİ ============
+  const monitoredRegDate = monitoredMark.registrationDate || "-";
+  const similarObjDeadline = similarMark.objectionDeadline || "-";
+
   tableRows.push(
     new TableRow({
       children: [
@@ -3727,34 +3801,57 @@ function createComparisonPage(group) {
             new Paragraph({
               children: [
                 new TextRun({
-                  text: "Tescil Tarihi:",
-                  size: 20
+                  text: "Tescil Tarihi: ",
+                  bold: true,
+                  size: 22
+                }),
+                new TextRun({
+                  text: monitoredRegDate,
+                  size: 22
                 })
               ],
-              alignment: AlignmentType.LEFT,
-              spacing: { before: 100, after: 100 }
+              spacing: { before: 150, after: 150 }
             })
-          ]
+          ],
+          margins: {
+            top: 150,
+            bottom: 150,
+            left: 150,
+            right: 150
+          }
         }),
         new TableCell({
           children: [
             new Paragraph({
               children: [
                 new TextRun({
-                  text: "Son İtiraz Tarihi:",
-                  size: 20
+                  text: "Son İtiraz Tarihi: ",
+                  bold: true,
+                  size: 22
+                }),
+                new TextRun({
+                  text: similarObjDeadline,
+                  size: 22
                 })
               ],
-              alignment: AlignmentType.LEFT,
-              spacing: { before: 100, after: 100 }
+              spacing: { before: 150, after: 150 }
             })
-          ]
+          ],
+          margins: {
+            top: 150,
+            bottom: 150,
+            left: 150,
+            right: 150
+          }
         })
       ]
     })
   );
 
-  // Tescil No ve Hak Sahibi
+  // ============ TESCİL NO & HAK SAHİBİ ============
+  const monitoredRegNo = monitoredMark.registrationNo || "-";
+  const similarOwner = similarMark.owner || similarMark.ownerName || "-";
+
   tableRows.push(
     new TableRow({
       children: [
@@ -3763,28 +3860,48 @@ function createComparisonPage(group) {
             new Paragraph({
               children: [
                 new TextRun({
-                  text: "Tescil No:",
-                  size: 20
+                  text: "Tescil No: ",
+                  bold: true,
+                  size: 22
+                }),
+                new TextRun({
+                  text: monitoredRegNo,
+                  size: 22
                 })
               ],
-              alignment: AlignmentType.LEFT,
-              spacing: { before: 100, after: 100 }
+              spacing: { before: 150, after: 150 }
             })
-          ]
+          ],
+          margins: {
+            top: 150,
+            bottom: 150,
+            left: 150,
+            right: 150
+          }
         }),
         new TableCell({
           children: [
             new Paragraph({
               children: [
                 new TextRun({
-                  text: "Hak Sahibi:",
-                  size: 20
+                  text: "Hak Sahibi: ",
+                  bold: true,
+                  size: 22
+                }),
+                new TextRun({
+                  text: similarOwner,
+                  size: 22
                 })
               ],
-              alignment: AlignmentType.LEFT,
-              spacing: { before: 100, after: 100 }
+              spacing: { before: 150, after: 150 }
             })
-          ]
+          ],
+          margins: {
+            top: 150,
+            bottom: 150,
+            left: 150,
+            right: 150
+          }
         })
       ]
     })
@@ -3794,38 +3911,21 @@ function createComparisonPage(group) {
   const comparisonTable = new Table({
     width: { size: 100, type: WidthType.PERCENTAGE },
     borders: {
-      top: { style: "single", size: 6, color: "000000" },
-      bottom: { style: "single", size: 6, color: "000000" },
-      left: { style: "single", size: 6, color: "000000" },
-      right: { style: "single", size: 6, color: "000000" },
-      insideHorizontal: { style: "single", size: 6, color: "000000" },
-      insideVertical: { style: "single", size: 6, color: "000000" }
+      top: { style: "single", size: 15, color: "2C3E50" },
+      bottom: { style: "single", size: 15, color: "2C3E50" },
+      left: { style: "single", size: 15, color: "2C3E50" },
+      right: { style: "single", size: 15, color: "2C3E50" },
+      insideHorizontal: { style: "single", size: 8, color: "BDC3C7" },
+      insideVertical: { style: "single", size: 15, color: "2C3E50" }
     },
     rows: tableRows
   });
 
   elements.push(comparisonTable);
 
-  // Benzerlik bilgileri
-  const similarity = parseFloat(similarMark.similarity) || 0;
-  elements.push(
-    new Paragraph({ text: "", spacing: { before: 300, after: 100 } }),
-    new Paragraph({
-      children: [
-        new TextRun({
-          text: `Benzerlik Oranı: %${similarity.toFixed(1)}`,
-          bold: true,
-          size: 24,
-          color: similarity >= 70 ? "DC3545" : (similarity >= 50 ? "FFC107" : "28A745")
-        })
-      ],
-      alignment: AlignmentType.CENTER,
-      spacing: { after: 200 }
-    })
-  );
-
   return elements;
 }
+
 
 // === YARDIMCI FONKSİYONLAR ===
 
