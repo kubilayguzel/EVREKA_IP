@@ -2953,7 +2953,7 @@ async function loadTransactions(ipRecordId) {
         const displayAlias = (isOppositionParent && parent.oppositionOwner)
         ? `${transactionAlias} - ${parent.oppositionOwner}`
         : transactionAlias;
-        
+
         // Transaction'ın kendi documents array'i
         const transactionDocs = parent.documents || [];
 
@@ -3004,7 +3004,6 @@ async function loadTransactions(ipRecordId) {
         const parentRow = `
             <tr class="${hasChildren ? 'accordion-header-row' : ''}" ${hasChildren ? `data-toggle="collapse" data-target="#${accordionId}" aria-expanded="false" aria-controls="${accordionId}"` : ''}>
                 <td>${hasChildren ? '<i class="fas fa-chevron-right mr-2"></i>' : ''}${rowIndex}</td>
-                <td>${transactionAlias}</td>
                 <td>${displayAlias}</td>
                 <td>${formatDate(parent.timestamp)}</td>
                 <td>${parentPdfLinks || '<span class="text-muted">-</span>'}</td>
