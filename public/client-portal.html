@@ -2947,14 +2947,54 @@ async function loadTransactions(ipRecordId) {
             }
         }
         
-        // ✅ Tüm belgeleri birleştir (normal PDF'ler + ePats)
-        const allParentDocs = [...parentPdfs, ...epatsDocuments];
-        const parentPdfLinks = allParentDocs.map(pdf => 
-            `<a href="${pdf.fileUrl}" target="_blank" title="${pdf.evrakNo ? `ePats: ${pdf.evrakNo}` : pdf.fileName}" class="btn btn-sm ${pdf.evrakNo ? 'btn-info' : 'btn-danger'} mr-1">
-                <i class="fas fa-file-pdf"></i>
-                ${pdf.evrakNo ? `<small class="ml-1">${pdf.evrakNo}</small>` : ''}
-            </a>`
-        ).join('');
+        // 🔥 YENİ: Yayına İtiraz (ID: 20) veya Yayına İtirazın Yeniden İncelenmesi (ID: 19) ise PDF'leri gizle
+        const isOppositionParent = String(parent.type) === '20' || String(parent.type) === '19';
+
+        // Transaction'ın kendi documents array'i
+        const transactionDocs = parent.documents || [];
+
+        let allParentDocs = [];
+        if (!isOppositionParent) {
+            // Normal parent'lar için tüm belgeleri göster
+            allParentDocs = [
+                ...parentPdfs, 
+                ...epatsDocuments,
+                ...transactionDocs.map(doc => ({
+                    fileName: doc.name || 'Belge',
+                    fileUrl: doc.path,
+                    type: doc.type,
+                    isTransactionDoc: true
+                }))
+            ];
+        } else {
+            // İtiraz parent'ları için sadece ePats belgelerini göster
+            allParentDocs = [...epatsDocuments];
+            console.log('✅ İtiraz parent - PDF ikonları gizlendi, child\'da gösterilecek');
+        }
+
+        const parentPdfLinks = allParentDocs.map(pdf => {
+            let iconClass = 'fas fa-file-pdf';
+            let btnClass = 'btn-danger';
+            let titleText = pdf.fileName;
+            let badgeHtml = '';
+            
+            if (pdf.evrakNo) {
+                btnClass = 'btn-info';
+                titleText = `ePats: ${pdf.evrakNo}`;
+                badgeHtml = `<small class="ml-1">${pdf.evrakNo}</small>`;
+            } else if (pdf.type === 'opposition_petition') {
+                iconClass = 'fas fa-gavel';
+                titleText = 'Karşı Taraf İtiraz Dilekçesi';
+            } else if (pdf.type === 'official_document') {
+                iconClass = 'fas fa-file-signature';
+                titleText = 'Resmi Yazı';
+            }
+            
+            return `<a href="${pdf.fileUrl || pdf.path}" target="_blank" title="${titleText}" class="btn btn-sm ${btnClass} mr-1">
+                <i class="${iconClass}"></i>
+                ${badgeHtml}
+            </a>`;
+        }).join('');
         
         // Parent satırı
         const parentRow = `
@@ -2991,11 +3031,49 @@ async function loadTransactions(ipRecordId) {
                 
                 // ✅ Child transaction'a ait PDF'leri getir
                 const childPdfs = pdfsByTransaction[child.id] || [];
-                const childPdfLinks = childPdfs.map(pdf => 
-                    `<a href="${pdf.fileUrl}" target="_blank" title="${pdf.fileName}" class="btn btn-sm btn-danger mr-1">
-                        <i class="fas fa-file-pdf"></i>
-                    </a>`
-                ).join('');
+                
+                // 🔥 YENİ: Eğer İtiraz Bildirimi (ID: 27) ise parent'ın belgelerini de göster
+                let allChildDocs = [...childPdfs];
+                
+                if (String(child.type) === '27') {
+                    console.log('🔍 İtiraz Bildirimi tespit edildi, parent belgeleri ekleniyor...');
+                    
+                    // Parent'ın transaction.documents array'ini ekle
+                    const parentTransactionDocs = parent.documents || [];
+                    
+                    // Parent'ın PDF'lerini ekle
+                    const parentPdfsForChild = pdfsByTransaction[parent.id] || [];
+                    
+                    allChildDocs = [
+                        ...childPdfs,
+                        ...parentPdfsForChild,
+                        ...parentTransactionDocs.map(doc => ({
+                            fileName: doc.name || 'Belge',
+                            fileUrl: doc.path,
+                            type: doc.type,
+                            isParentDoc: true
+                        }))
+                    ];
+                    
+                    console.log('✅ İtiraz Bildirimi için toplam belge sayısı:', allChildDocs.length);
+                }
+                
+                const childPdfLinks = allChildDocs.map(pdf => {
+                    let iconClass = 'fas fa-file-pdf';
+                    let titleText = pdf.fileName || 'Belge';
+                    
+                    if (pdf.type === 'opposition_petition') {
+                        iconClass = 'fas fa-gavel';
+                        titleText = 'Karşı Taraf İtiraz Dilekçesi';
+                    } else if (pdf.type === 'official_document') {
+                        iconClass = 'fas fa-file-signature';
+                        titleText = 'Resmi Yazı';
+                    }
+                    
+                    return `<a href="${pdf.fileUrl || pdf.path}" target="_blank" title="${titleText}" class="btn btn-sm btn-danger mr-1">
+                        <i class="${iconClass}"></i>
+                    </a>`;
+                }).join('');
                 
                 childTableHtml += `
                     <tr>
