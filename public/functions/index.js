@@ -3484,24 +3484,37 @@ async function createProfessionalReport(ownerName, matches) {
   });
 }
 
-// Firebase Storage'dan görsel indir ve buffer'a çevir
+// Firebase Storage'dan veya HTTP URL'den görsel indir
 async function downloadImageAsBuffer(imagePath) {
   if (!imagePath) return null;
   
   try {
+    // HTTP URL ise direkt indir
+    if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+      console.log(`📥 HTTP'den görsel indiriliyor: ${imagePath}`);
+      const response = await fetch(imagePath);
+      if (!response.ok) {
+        console.warn(`⚠️ HTTP indirme hatası: ${response.status} ${response.statusText}`);
+        return null;
+      }
+      const arrayBuffer = await response.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+      console.log(`✅ HTTP'den görsel indirildi: ${imagePath} (${buffer.length} bytes)`);
+      return buffer;
+    }
+    
+    // Storage path ise Firebase Storage'dan indir
     const bucket = admin.storage().bucket();
     const file = bucket.file(imagePath);
     
-    // Dosya var mı kontrol et
     const [exists] = await file.exists();
     if (!exists) {
-      console.warn(`⚠️ Görsel bulunamadı: ${imagePath}`);
+      console.warn(`⚠️ Storage'da görsel bulunamadı: ${imagePath}`);
       return null;
     }
     
-    // Dosyayı indir
     const [buffer] = await file.download();
-    console.log(`✅ Görsel indirildi: ${imagePath} (${buffer.length} bytes)`);
+    console.log(`✅ Storage'dan görsel indirildi: ${imagePath} (${buffer.length} bytes)`);
     return buffer;
   } catch (error) {
     console.error(`❌ Görsel indirme hatası (${imagePath}):`, error.message);
