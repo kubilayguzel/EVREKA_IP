@@ -1070,8 +1070,15 @@ async handleIndexing(opts = {}) {
                 throw new Error('Alt işlem ID\'si alınamadı');
             }
 
-            transactionIdToAssociateFiles = childTransactionId;
+            // 🔥 İTİRAZ BİLDİRİMİ: PDF'ler child değil parent transaction'a bağlanmalı
+            if (childTypeId === '27' && newParentTransactionId) {
+                transactionIdToAssociateFiles = newParentTransactionId;
+                console.log('✅ İtiraz bildirimi: PDF\'ler yeni parent transaction\'a bağlanacak:', newParentTransactionId);
+            } else {
+                transactionIdToAssociateFiles = childTransactionId;
+            }
             console.log('Alt işlem başarıyla oluşturuldu, ID:', childTransactionId);
+            console.log('🔍 PDF\'ler şu transaction\'a bağlanacak:', transactionIdToAssociateFiles);
 
             // 2. İş tetikleme koşulunu belirle
             let shouldTriggerTask = false;
@@ -1374,6 +1381,40 @@ async handleIndexing(opts = {}) {
                 // clientId satırını tamamen kaldırın
             }
         );
+
+        // 🔥 YENİ: İtiraz bildirimi için karşı taraf dilekçesini de transaction'a belge olarak ekle
+        if (childTypeId === '27' && oppositionPetitionFileUrl && newParentTransactionId) {
+            console.log('📎 Karşı taraf itiraz dilekçesi parent transaction\'a belge olarak ekleniyor...');
+            
+            try {
+                const oppositionDocument = {
+                    name: 'Karşı Taraf İtiraz Dilekçesi',
+                    type: 'opposition_petition',
+                    path: oppositionPetitionFileUrl,
+                    uploadedAt: new Date().toISOString(),
+                    uploadedBy: this.currentUser?.uid || 'unknown'
+                };
+                
+                // Transaction'a belge ekle
+                const transactionRef = doc(
+                    collection(firebaseServices.db, 'ipRecords', this.matchedRecord.id, 'transactions'),
+                    newParentTransactionId
+                );
+                
+                // Mevcut belgeleri al ve yenisini ekle
+                const transactionSnap = await getDoc(transactionRef);
+                const existingDocs = transactionSnap.data()?.documents || [];
+                
+                await updateDoc(transactionRef, {
+                    documents: [...existingDocs, oppositionDocument]
+                });
+                
+                console.log('✅ Karşı taraf itiraz dilekçesi başarıyla eklendi');
+            } catch (error) {
+                console.error('❌ Karşı taraf dilekçesi eklenirken hata:', error);
+                showNotification('Karşı taraf dilekçesi kaydedilemedi: ' + error.message, 'warning');
+            }
+        }
 
         // 5. Parent transaction'a requestResult = childTypeId yaz (son indekse göre güncellenir)
         if (this.selectedTransactionId && childTypeId) {
