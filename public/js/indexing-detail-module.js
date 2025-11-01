@@ -794,6 +794,24 @@ searchRecords(query) {
     newSelectElement.addEventListener('change', (event) => {
         const selectedValue = event.target.value;
         console.log('Alt işlem seçildi:', selectedValue);
+        
+        // 🔥 YENİ: İtiraz bildirimi seçildiyse PDF yükleme alanını göster
+        const oppositionSection = document.getElementById('oppositionPetitionSection');
+        if (oppositionSection) {
+            if (selectedValue === '27') { // İtiraz Bildirimi
+                oppositionSection.style.display = 'block';
+                const fileInput = document.getElementById('oppositionPetitionFile');
+                if (fileInput) fileInput.required = true;
+            } else {
+                oppositionSection.style.display = 'none';
+                const fileInput = document.getElementById('oppositionPetitionFile');
+                if (fileInput) {
+                    fileInput.required = false;
+                    fileInput.value = ''; // Temizle
+                }
+            }
+        }
+        
         // Biraz gecikme ekleyerek DOM güncellemesini bekle
         setTimeout(() => {
             this.checkFormCompleteness();
@@ -1016,15 +1034,11 @@ async handleIndexing(opts = {}) {
             }
         }
 
-            // 🔥 YENİ: Eğer İtiraza Karşı Görüş (ID: 38) ise ve yeni parent oluşturulduysa, onu kullan
+            // 🔥 YENİ: Eğer İtiraza Karşı Görüş (ID: 38) veya İtiraz Bildirimi (ID: 27) ise ve yeni parent oluşturulduysa, onu kullan
             let finalParentId = this.selectedTransactionId;
-            if (childTypeId === '38' && newParentTransactionId) {
+            if ((childTypeId === '38' || childTypeId === '27') && newParentTransactionId) {
                 finalParentId = newParentTransactionId;
-                console.log('✅ "İtiraza Karşı Görüş" işlemi yeni parent transaction\'a bağlandı');
-            } else if (childTypeId === '27' && newParentTransactionId) {
-                // İtiraz Bildirimi de yeni parent'a bağlansın
-                finalParentId = newParentTransactionId;
-                console.log('✅ "İtiraz Bildirimi" işlemi yeni parent transaction\'a bağlandı');
+                console.log(`✅ "${childTransactionType.alias || childTransactionType.name}" işlemi yeni parent transaction'a bağlandı`);
             }
 
             const childTransactionData = {
