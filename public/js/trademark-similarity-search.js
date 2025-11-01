@@ -1350,8 +1350,6 @@ const handleOwnerReportAndNotifyGeneration = async (event) => {
   }
 };
 
-
-// Sadece rapor indirme (iş oluşturmadan)
 const handleOwnerReportGeneration = async (event) => {
     event.stopPropagation();
     
@@ -1367,7 +1365,7 @@ const handleOwnerReportGeneration = async (event) => {
         return;
     }
 
-    // Filtreleme (iş oluşturma mantığıyla aynı)
+    // Filtreleme
     const ownerMonitoredIds = [];
     for (const tm of monitoringTrademarks) {
         const ip = await _getIp(tm.ipRecordId || tm.sourceRecordId || tm.id);
@@ -1390,24 +1388,81 @@ const handleOwnerReportGeneration = async (event) => {
         btn.disabled = true;
         btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Rapor hazırlanıyor...';
 
-        const reportData = filteredResults.map(r => {
+        // Her result için detaylı veri hazırla
+        const reportData = [];
+        
+        for (const r of filteredResults) {
             const monitoredTm = monitoringTrademarks.find(mt => mt.id === r.monitoredTrademarkId);
+            
+            // IP record'dan veri al
+            let ipData = null;
+            if (monitoredTm?.ipRecordId) {
+                try {
+                    const ipDoc = await db.collection('ipRecords').doc(monitoredTm.ipRecordId).get();
+                    if (ipDoc.exists) {
+                        ipData = ipDoc.data();
+                    }
+                } catch (e) {
+                    console.warn('⚠️ IP Record okunamadı:', monitoredTm.ipRecordId, e);
+                }
+            }
+            
             const ownerName = _pickOwners(monitoredTm, monitoredTm, allPersons);
             
-            return { 
+            // Veri loglama
+            console.log('📊 Marka Verileri:', {
+                monitoredTm: {
+                    id: monitoredTm?.id,
+                    title: monitoredTm?.title,
+                    markName: monitoredTm?.markName,
+                    niceClassSearch: monitoredTm?.niceClassSearch,
+                    applicationNumber: monitoredTm?.applicationNumber,
+                    applicationDate: monitoredTm?.applicationDate
+                },
+                ipData: ipData ? {
+                    applicationNo: ipData.applicationNo,
+                    niceClasses: ipData.niceClasses,
+                    applicationDate: ipData.applicationDate
+                } : null,
+                similarResult: {
+                    markName: r.markName,
+                    applicationNo: r.applicationNo,
+                    niceClasses: r.niceClasses,
+                    holders: r.holders
+                }
+            });
+            
+            reportData.push({ 
                 monitoredMark: { 
-                    name: monitoredTm?.title || r.monitoredTrademark, 
-                    ownerName: ownerName || 'Tüm Sahipler', 
-                    niceClasses: _uniqNice(monitoredTm) 
+                    name: monitoredTm?.title || monitoredTm?.markName || r.monitoredTrademark,
+                    markName: monitoredTm?.markName || monitoredTm?.title,
+                    ownerName: ownerName || 'Tüm Sahipler',
+                    niceClassSearch: monitoredTm?.niceClassSearch || ipData?.niceClasses || [],
+                    niceClass: monitoredTm?.niceClassSearch || ipData?.niceClasses || _uniqNice(monitoredTm) || [],
+                    niceClasses: monitoredTm?.niceClassSearch || ipData?.niceClasses || _uniqNice(monitoredTm) || [],
+                    applicationNumber: monitoredTm?.applicationNumber || monitoredTm?.applicationNo || ipData?.applicationNo || "-",
+                    applicationNo: monitoredTm?.applicationNumber || monitoredTm?.applicationNo || ipData?.applicationNo || "-",
+                    applicationDate: monitoredTm?.applicationDate || ipData?.applicationDate,
+                    registrationDate: monitoredTm?.registrationDate || ipData?.registrationDate,
+                    registrationNo: monitoredTm?.registrationNo || ipData?.registrationNo || "-"
                 }, 
                 similarMark: { 
-                    name: r.markName, 
-                    niceClasses: r.niceClasses, 
-                    applicationNo: r.applicationNo, 
-                    similarity: r.similarityScore 
+                    name: r.markName,
+                    markName: r.markName,
+                    niceClasses: r.niceClasses || [],
+                    niceClass: r.niceClasses || [],
+                    applicationNo: r.applicationNo || "-",
+                    applicationDate: r.applicationDate || "-",
+                    similarity: r.similarityScore,
+                    holders: r.holders || [],
+                    owner: r.holders?.[0]?.name || "-",
+                    ownerName: r.holders?.[0]?.name || "-",
+                    objectionDeadline: r.objectionDeadline || "-"
                 } 
-            };
-        });
+            });
+        }
+
+        console.log('📤 Rapor data gönderiliyor:', reportData.length, 'adet');
 
         const generateReportFn = httpsCallable(functions, 'generateSimilarityReport');
         const response = await generateReportFn({ results: reportData });
@@ -1427,7 +1482,7 @@ const handleOwnerReportGeneration = async (event) => {
             showNotification("Rapor oluşturma hatası: " + (response.data.error || 'Bilinmeyen hata'), 'error');
         }
     } catch (err) {
-        console.error('Rapor oluşturma hatası:', err);
+        console.error('❌ Rapor oluşturma hatası:', err);
         showNotification("Rapor oluşturulurken hata oluştu!", 'error');
     } finally {
         btn.disabled = false;
