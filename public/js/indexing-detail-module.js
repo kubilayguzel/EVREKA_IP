@@ -1037,7 +1037,13 @@ async handleIndexing(opts = {}) {
                     
                     // 🔥 KRİTİK: selectedTransactionId'yi güncelle ki iş tetikleme doğru parent'a baksın
                     this.selectedTransactionId = newParentTransactionId;
-                } else {
+                } 
+                // 🔥 KRİTİK: Yeni parent oluşturuldu, transaction listesini güncelle
+                const updatedTxResult = await ipRecordsService.getRecordTransactions(this.matchedRecord.id);
+                if (updatedTxResult.success) {
+                    this.currentTransactions = updatedTxResult.data || [];
+                    console.log('✅ Transaction listesi güncellendi, yeni parent dahil edildi');
+                }else {
                     throw new Error('Yeni parent transaction oluşturulamadı: ' + addParentResult.error);
                 }
             }
@@ -1334,11 +1340,26 @@ async handleIndexing(opts = {}) {
         if (suitableParents.length === 0) {
             showNotification(`Bu alt işlem (${childTransactionType.name}) için portföyde uygun bir ana işlem bulunamadı. Lütfen önce ilgili ana işlemi oluşturun.`, "warning");
         } else {
-            const parent = suitableParents[0];
+            // 🔥 İTİRAZ BİLDİRİMİ ÖZEL DURUMU: Yeni parent varsa onu kullan
+            let targetParentId = suitableParents[0].id;
+            
+            // Eğer itiraz bildirimi sonucu yeni parent oluşturulduysa, onu kullan
+            if (newParentTransactionId && childTypeId === '27') {
+                // Yeni parent transaction'ın bu child'ı kabul edip etmediğini kontrol et
+                const newParentTx = existingTransactions.find(tx => tx.id === newParentTransactionId);
+                if (newParentTx) {
+                    const newParentType = this.allTransactionTypes.find(t => t.id === newParentTx.type);
+                    if (newParentType?.allowedChildTypes?.includes(childTransactionType.id)) {
+                        targetParentId = newParentTransactionId;
+                        console.log('✅ İtiraza Karşı Görüş işi yeni parent transaction\'a bağlanacak:', newParentTransactionId);
+                    }
+                }
+            }
+            
             const childTransactionData = {
                 type: childTransactionType.id,
                 description: `${childTransactionType.name} alt işlemi.`,
-                parentId: parent.id,
+                parentId: targetParentId, // 🔥 Doğru parent ID kullan
                 transactionHierarchy: "child",
                 triggeringTaskId: String(createdTaskId)
             };
