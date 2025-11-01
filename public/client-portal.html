@@ -709,33 +709,26 @@
 .light-mode .task-number-tag { 
     color: #1e88e5; 
 }
-
-/* Opposition owner chip — light & dark theme friendly */
-.opposition-owner{
-  display:inline-flex; align-items:center; gap:.35rem;
-  padding:.1rem .5rem; border-radius:9999px; line-height:1;
-  font-weight:600; white-space:nowrap;
-  background:var(--opp-bg, #fee2e2);
-  color:var(--opp-fg, #b91c1c);
-  border:1px solid var(--opp-br, #fecaca);
-}
-:root{
-  --opp-bg:#fee2e2;   /* light bg */
-  --opp-fg:#b91c1c;   /* light fg (kırmızı koyu) */
-  --opp-br:#fecaca;   /* light border */
-}
-/* dark tema varyantları (hangi sınıfı kullanıyorsan biri iş görecek) */
-.dark .opposition-owner,
-[data-theme="dark"] .opposition-owner,
-.theme-dark .opposition-owner{
-  --opp-bg:rgba(239,68,68,.15);
-  --opp-fg:#fecaca;
-  --opp-br:rgba(239,68,68,.35);
-}
-
 </style>
+
 </head>
-<body>
+<bod
+<style>
+/* Opposition owner badge (light & dark theme friendly) */
+.opposition-owner-badge{
+  display:inline-block;
+  margin-left:.5rem;
+  padding:.15rem .45rem;
+  font-size:.85rem;
+  font-weight:600;
+  border-radius:.35rem;
+  background:#dc3545;
+  color:#fff;
+  vertical-align:middle;
+  white-space:nowrap;
+}
+</style>
+y>
     <header class="top-header">
         <div class="theme-toggle custom-control custom-switch">
             <input type="checkbox" class="custom-control-input" id="themeSwitch">
@@ -2870,6 +2863,15 @@ async function fetchPdfsForTransactions(transactionIds) {
 
 // Transactions yükleme fonksiyonu
 async function loadTransactions(ipRecordId) {
+
+  // Simple HTML escape helper for safe badge text
+  function esc(s){
+    return String(s ?? '')
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;').replace(/"/g,'&quot;')
+      .replace(/'/g,'&#39;');
+  }
+
     const transactionsRef = collection(db, 'ipRecords', ipRecordId, 'transactions');
     const q = query(transactionsRef);
     const snapshot = await getDocs(q);
@@ -2946,6 +2948,14 @@ async function loadTransactions(ipRecordId) {
         
         const transactionAlias = await getTransactionTypeAlias(parent.type);
         
+        // Badge for opposition owner in specific parent types
+        const isOppositionParent = ['20','19'].includes(String(parent.type));
+        const ownerBadge = (isOppositionParent && parent.oppositionOwner)
+          ? ` <span class="opposition-owner-badge">${esc(parent.oppositionOwner)}</span>`
+          : '';
+        const displayAliasHtml = `${transactionAlias}${ownerBadge}`;
+    
+        
         // ✅ Parent transaction'a ait PDF'leri getir
         const parentPdfs = pdfsByTransaction[parent.id] || [];
         
@@ -2972,10 +2982,6 @@ async function loadTransactions(ipRecordId) {
         
         // 🔥 YENİ: Yayına İtiraz (ID: 20) veya Yayına İtirazın Yeniden İncelenmesi (ID: 19) ise PDF'leri gizle
         const isOppositionParent = String(parent.type) === '20' || String(parent.type) === '19';
-
-        const displayAliasHtml = (isOppositionParent && parent.oppositionOwner)
-        ? `${transactionAlias} <span class="opposition-owner">${esc(parent.oppositionOwner)}</span>`
-        : transactionAlias;
 
         // Transaction'ın kendi documents array'i
         const transactionDocs = parent.documents || [];
