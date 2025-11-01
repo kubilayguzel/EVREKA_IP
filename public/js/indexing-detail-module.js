@@ -795,22 +795,39 @@ searchRecords(query) {
         const selectedValue = event.target.value;
         console.log('Alt işlem seçildi:', selectedValue);
         
-        // 🔥 YENİ: İtiraz bildirimi seçildiyse PDF yükleme alanını göster
-        const oppositionSection = document.getElementById('oppositionPetitionSection');
-        if (oppositionSection) {
-            if (selectedValue === '27') { // İtiraz Bildirimi
-                oppositionSection.style.display = 'block';
-                const fileInput = document.getElementById('oppositionPetitionFile');
-                if (fileInput) fileInput.required = true;
-            } else {
-                oppositionSection.style.display = 'none';
-                const fileInput = document.getElementById('oppositionPetitionFile');
-                if (fileInput) {
-                    fileInput.required = false;
-                    fileInput.value = ''; // Temizle
-                }
+    // 🔥 YENİ: İtiraz bildirimi seçildiyse PDF yükleme ve itiraz sahibi alanlarını göster
+    const oppositionSection = document.getElementById('oppositionPetitionSection');
+    const oppositionOwnerSection = document.getElementById('oppositionOwnerSection');
+
+    if (oppositionSection) {
+        if (selectedValue === '27') { // İtiraz Bildirimi
+            oppositionSection.style.display = 'block';
+            const fileInput = document.getElementById('oppositionPetitionFile');
+            if (fileInput) fileInput.required = true;
+        } else {
+            oppositionSection.style.display = 'none';
+            const fileInput = document.getElementById('oppositionPetitionFile');
+            if (fileInput) {
+                fileInput.required = false;
+                fileInput.value = ''; // Temizle
             }
         }
+    }
+
+    if (oppositionOwnerSection) {
+        if (selectedValue === '27') { // İtiraz Bildirimi
+            oppositionOwnerSection.style.display = 'block';
+            const ownerInput = document.getElementById('oppositionOwnerInput');
+            if (ownerInput) ownerInput.required = true;
+        } else {
+            oppositionOwnerSection.style.display = 'none';
+            const ownerInput = document.getElementById('oppositionOwnerInput');
+            if (ownerInput) {
+                ownerInput.required = false;
+                ownerInput.value = ''; // Temizle
+            }
+        }
+    }
         
         // Biraz gecikme ekleyerek DOM güncellemesini bekle
         setTimeout(() => {
@@ -855,20 +872,28 @@ checkFormCompleteness() {
     hasDeliveryDate = !!(raw || altVal);
     }
 
-    // 🔥 YENİ: İtiraz bildirimi seçildiyse PDF kontrolü yap
+    // 🔥 YENİ: İtiraz bildirimi seçildiyse PDF ve itiraz sahibi kontrolü yap
     let hasOppositionPdf = true;
+    let hasOppositionOwner = true;
     const childTypeSelect = document.getElementById('childTransactionType');
+
     if (childTypeSelect && childTypeSelect.value === '27') {
         const pdfInput = document.getElementById('oppositionPetitionFile');
         hasOppositionPdf = !!(pdfInput && pdfInput.files && pdfInput.files.length > 0);
         console.log('Opposition petition PDF check:', hasOppositionPdf);
+        
+        const ownerInput = document.getElementById('oppositionOwnerInput');
+        const ownerValue = (ownerInput?.value || '').trim();
+        hasOppositionOwner = ownerValue.length > 0;
+        console.log('Opposition owner check:', hasOppositionOwner, 'Value:', ownerValue);
     }
 
     const canSubmit = hasMatchedRecord 
     && hasSelectedTransaction 
     && hasSelectedChildType 
     && hasDeliveryDate
-    && hasOppositionPdf; // 🔥 YENİ ŞART
+    && hasOppositionPdf
+    && hasOppositionOwner; // 🔥 YENİ ŞART
     
     const indexBtn      = document.getElementById('indexPdfBtn') || document.getElementById('indexBtn');
     const saveUpdateBtn = document.getElementById('saveUpdatePdfBtn');
@@ -981,6 +1006,13 @@ async handleIndexing(opts = {}) {
                 throw new Error('İtiraz bildirimi için "Karşı Taraf İtiraz Dilekçesi" PDF dosyası yüklenmelidir.');
             }
             
+            // 🔥 YENİ: İtiraz sahibini al
+            const oppositionOwner = (document.getElementById('oppositionOwnerInput')?.value || '').trim();
+            
+            if (!oppositionOwner) {
+                throw new Error('İtiraz bildirimi için "İtiraz Sahibi" bilgisi girilmelidir.');
+            }
+            
             // PDF'i storage'a yükle
             console.log('📤 Karşı taraf itiraz dilekçesi yükleniyor...');
             const timestamp = Date.now();
@@ -1015,14 +1047,15 @@ async handleIndexing(opts = {}) {
             if (newParentType) {
                 console.log(`✅ Yeni parent transaction oluşturuluyor: ${newParentDescription}`);
                 
-                const newParentData = {
-                    type: newParentType,
-                    description: newParentDescription,
-                    transactionHierarchy: 'parent',
-                    oppositionPetitionFileUrl: oppositionPetitionFileUrl, // PDF linkini ekle
-                    oppositionPetitionFileName: oppositionPdfFile.name,
-                    timestamp: new Date().toISOString()
-                };
+            const newParentData = {
+                type: newParentType,
+                description: newParentDescription,
+                transactionHierarchy: 'parent',
+                oppositionPetitionFileUrl: oppositionPetitionFileUrl, // PDF linkini ekle
+                oppositionPetitionFileName: oppositionPdfFile.name,
+                oppositionOwner: oppositionOwner, // 🔥 YENİ: İtiraz sahibi
+                timestamp: new Date().toISOString()
+            };
                 
                 const addParentResult = await ipRecordsService.addTransactionToRecord(
                     this.matchedRecord.id,
