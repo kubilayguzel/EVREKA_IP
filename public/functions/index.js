@@ -3510,7 +3510,7 @@ async function downloadImageAsBuffer(imagePath) {
 }
 
 // Basit ve profesyonel karşılaştırma raporu
-function createComparisonPage(group) {
+async function createComparisonPage(group) {
   const similarMark = group.similarMark;
   const monitoredMarks = group.monitoredMarks || [];
   const monitoredMark = monitoredMarks.length > 0 ? monitoredMarks[0] : {};
