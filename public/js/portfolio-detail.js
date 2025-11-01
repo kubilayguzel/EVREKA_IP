@@ -448,6 +448,15 @@ const transactionDocs = p.transactionDocs || [];
 const parentTypeName = tmeta ? (tmeta.alias || tmeta.name) : '';
 const isOppositionParent = parentTypeName === 'Yayına İtiraz' || parentTypeName === 'Yayına İtirazın Yeniden İncelenmesi';
 
+console.log('🔍 Parent transaction kontrol:', {
+  parentId: p.id,
+  parentType: parentTypeName,
+  isOppositionParent,
+  transactionDocsCount: transactionDocs.length,
+  parentPdfsCount: parentPdfs.length,
+  epatsCount: epatsDocuments.length
+});
+
 let allParentDocs = [];
 if (!isOppositionParent) {
   // Normal parent'lar için tüm belgeleri göster
@@ -462,9 +471,14 @@ if (!isOppositionParent) {
     }))
   ];
 } else {
-  // İtiraz parent'ları için sadece ePats belgelerini göster
+  // 🔥 İtiraz parent'ları için HİÇBİR PDF gösterme (sadece ePats varsa onları göster)
   allParentDocs = [...epatsDocuments];
-  console.log('🔍 İtiraz parent transaction - PDF ikonları gizlendi, sadece ePats:', parentTypeName);
+  console.log('✅ İtiraz parent - PDF ikonları gizlendi, child\'da gösterilecek:', {
+    parentType: parentTypeName,
+    gizlenenPdfSayisi: parentPdfs.length,
+    gizlenenTransactionDocsSayisi: transactionDocs.length,
+    gorunecekEpatsSayisi: epatsDocuments.length
+  });
 }
 
 const parentPdfIcons = allParentDocs.map(pdf => {
