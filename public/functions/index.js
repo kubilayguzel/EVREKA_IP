@@ -3608,13 +3608,21 @@ function createComparisonPage(group) {
   );
 
   // ============ İZLENEN SINIFLAR ============
-  const monitoredClasses = monitoredMark.niceClass 
-    ? (Array.isArray(monitoredMark.niceClass) ? monitoredMark.niceClass.join(", ") : monitoredMark.niceClass)
-    : (monitoredMark.niceClasses ? (Array.isArray(monitoredMark.niceClasses) ? monitoredMark.niceClasses.join(", ") : monitoredMark.niceClasses) : "-");
+  // monitoredMark için niceClassSearch array'inden değerleri al
+  let monitoredClasses = "-";
+  if (monitoredMark.niceClassSearch && Array.isArray(monitoredMark.niceClassSearch) && monitoredMark.niceClassSearch.length > 0) {
+    monitoredClasses = monitoredMark.niceClassSearch.join(", ");
+  } else if (monitoredMark.niceClass) {
+    monitoredClasses = Array.isArray(monitoredMark.niceClass) ? monitoredMark.niceClass.join(", ") : String(monitoredMark.niceClass);
+  }
   
-  const similarClasses = similarMark.niceClass
-    ? (Array.isArray(similarMark.niceClass) ? similarMark.niceClass.join(", ") : similarMark.niceClass)
-    : (similarMark.niceClasses ? (Array.isArray(similarMark.niceClasses) ? similarMark.niceClasses.join(", ") : similarMark.niceClasses) : "-");
+  // similarMark için niceClasses array'inden değerleri al
+  let similarClasses = "-";
+  if (similarMark.niceClasses && Array.isArray(similarMark.niceClasses) && similarMark.niceClasses.length > 0) {
+    similarClasses = similarMark.niceClasses.join(", ");
+  } else if (similarMark.niceClass) {
+    similarClasses = Array.isArray(similarMark.niceClass) ? similarMark.niceClass.join(", ") : String(similarMark.niceClass);
+  }
 
   tableRows.push(
     new TableRow({
@@ -3672,8 +3680,24 @@ function createComparisonPage(group) {
   );
 
   // ============ BAŞVURU TARİHİ ============
-  const monitoredDate = monitoredMark.date || monitoredMark.applicationDate || "-";
-  const similarDate = similarMark.date || similarMark.applicationDate || "-";
+  // monitoredMark için applicationDate kullan
+  let monitoredDate = "-";
+  if (monitoredMark.applicationDate) {
+    // Firestore Timestamp ise dönüştür
+    if (monitoredMark.applicationDate.toDate) {
+      monitoredDate = monitoredMark.applicationDate.toDate().toLocaleDateString('tr-TR');
+    } else {
+      monitoredDate = monitoredMark.applicationDate;
+    }
+  }
+  
+  // similarMark için applicationDate kullan
+  let similarDate = "-";
+  if (similarMark.applicationDate) {
+    similarDate = similarMark.applicationDate;
+  } else if (similarMark.date) {
+    similarDate = similarMark.date;
+  }
 
   tableRows.push(
     new TableRow({
@@ -3731,7 +3755,7 @@ function createComparisonPage(group) {
   );
 
   // ============ BAŞVURU NO ============
-  const monitoredAppNo = monitoredMark.applicationNo || "-";
+  const monitoredAppNo = monitoredMark.applicationNumber || monitoredMark.applicationNo || "-";
   const similarAppNo = similarMark.applicationNo || "-";
 
   tableRows.push(
@@ -3790,7 +3814,16 @@ function createComparisonPage(group) {
   );
 
   // ============ TESCİL TARİHİ & SON İTİRAZ TARİHİ ============
-  const monitoredRegDate = monitoredMark.registrationDate || "-";
+  let monitoredRegDate = "-";
+  if (monitoredMark.registrationDate) {
+    // Firestore Timestamp ise dönüştür
+    if (monitoredMark.registrationDate.toDate) {
+      monitoredRegDate = monitoredMark.registrationDate.toDate().toLocaleDateString('tr-TR');
+    } else {
+      monitoredRegDate = monitoredMark.registrationDate;
+    }
+  }
+  
   const similarObjDeadline = similarMark.objectionDeadline || "-";
 
   tableRows.push(
@@ -3850,7 +3883,19 @@ function createComparisonPage(group) {
 
   // ============ TESCİL NO & HAK SAHİBİ ============
   const monitoredRegNo = monitoredMark.registrationNo || "-";
-  const similarOwner = similarMark.owner || similarMark.ownerName || "-";
+  
+  // similarMark için holders array'inden ilk holder'ı al
+  let similarOwner = "-";
+  if (similarMark.holders && Array.isArray(similarMark.holders) && similarMark.holders.length > 0) {
+    const firstHolder = similarMark.holders[0];
+    if (firstHolder.name) {
+      similarOwner = firstHolder.name;
+    }
+  } else if (similarMark.owner) {
+    similarOwner = similarMark.owner;
+  } else if (similarMark.ownerName) {
+    similarOwner = similarMark.ownerName;
+  }
 
   tableRows.push(
     new TableRow({
@@ -3925,6 +3970,7 @@ function createComparisonPage(group) {
 
   return elements;
 }
+
 
 
 // === YARDIMCI FONKSİYONLAR ===
