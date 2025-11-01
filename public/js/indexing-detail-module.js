@@ -967,10 +967,10 @@ async handleIndexing(opts = {}) {
             throw new Error('Alt işlem türü bulunamadı: ' + childTypeId);
         }
 
-        // 🔥 YENİ: İtiraz bildirimi özel mantığı
+        // 🔥 İTİRAZ BİLDİRİMİ ÖZEL MANTIĞI - YENİ PARENT TRANSACTION OLUŞTUR
         let newParentTransactionId = null;
         let oppositionPetitionFileUrl = null;
-        
+
         if (childTypeId === '27') { // İtiraz Bildirimi
             console.log('🔍 İtiraz Bildirimi tespit edildi, özel işlem başlatılıyor...');
             
@@ -1011,7 +1011,6 @@ async handleIndexing(opts = {}) {
             newParentType = '19';
             newParentDescription = 'Yayına İtirazın Yeniden İncelenmesi (Otomatik oluşturuldu)';
             }
-
             
             if (newParentType) {
                 console.log(`✅ Yeni parent transaction oluşturuluyor: ${newParentDescription}`);
@@ -1033,19 +1032,24 @@ async handleIndexing(opts = {}) {
                 if (addParentResult.success) {
                     newParentTransactionId = addParentResult.data?.id || addParentResult.id;
                     console.log('✅ Yeni parent transaction oluşturuldu, ID:', newParentTransactionId);
+                    console.log('🔍 DEBUG - newParentTransactionId set edildi:', newParentTransactionId);
                     showNotification(`${newParentDescription} otomatik olarak oluşturuldu!`, 'success');
+                    
+                    // 🔥 KRİTİK: selectedTransactionId'yi güncelle ki iş tetikleme doğru parent'a baksın
+                    this.selectedTransactionId = newParentTransactionId;
                 } else {
                     throw new Error('Yeni parent transaction oluşturulamadı: ' + addParentResult.error);
                 }
             }
         }
 
-            // 🔥 YENİ: Eğer İtiraza Karşı Görüş (ID: 38) veya İtiraz Bildirimi (ID: 27) ise ve yeni parent oluşturulduysa, onu kullan
-            let finalParentId = this.selectedTransactionId;
-            if ((childTypeId === '38' || childTypeId === '27') && newParentTransactionId) {
-                finalParentId = newParentTransactionId;
-                console.log(`✅ "${childTransactionType.alias || childTransactionType.name}" işlemi yeni parent transaction'a bağlandı`);
-            }
+            // 🔥 KRİTİK: İtiraz Bildirimi için yeni parent kullan
+            const finalParentId = newParentTransactionId || this.selectedTransactionId;
+            console.log('🔍 DEBUG - Child transaction için parent ID:', {
+                newParentTransactionId,
+                oldSelectedTransactionId: this.selectedTransactionId,
+                finalParentId
+            });
 
             const childTransactionData = {
                 type: childTypeId,
@@ -1053,7 +1057,7 @@ async handleIndexing(opts = {}) {
                 deliveryDate: deliveryDateStr || null,
                 timestamp: deliveryDateStr ? new Date(deliveryDateStr).toISOString() : new Date().toISOString(),
                 transactionHierarchy: 'child',
-                parentId: finalParentId // 🔥 Güncellenmiş parent ID
+                parentId: finalParentId // 🔥 Yeni parent ID kullanılacak
             };
 
             const childResult = await ipRecordsService.addTransactionToRecord(this.matchedRecord.id, childTransactionData);
