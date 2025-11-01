@@ -372,6 +372,11 @@ async function renderTransactionsAccordion(recordId){
           const {d,t} = fmtDateTime(p.timestamp);
           const children = childrenMap[p.id] || [];
           const hasChildren = children.length > 0;
+          
+          // 🔥 YENİ: İtiraz sahibi bilgisini ekle (varsa)
+          const oppositionOwnerBadge = p.oppositionOwner 
+            ? `<span class="badge badge-warning ml-2" style="font-size: 0.85em;">📋 ${p.oppositionOwner}</span>` 
+            : '';
 
       // ✅ Parent transaction'a ait PDF'leri getir
       const parentPdfs = pdfsByTransaction[p.id] || [];
@@ -496,17 +501,18 @@ const parentPdfIcons = allParentDocs.map(pdf => {
     titleText = 'Resmi Yazı';
   }
   
-  return `<a href="${pdf.fileUrl || pdf.path}" target="_blank" title="${titleText}" class="pdf-link ${pdf.evrakNo ? 'epats-doc' : ''} ${pdf.isTransactionDoc ? 'tx-doc' : ''}">
-    <i class="${iconClass}"></i>
-    ${badgeHtml}
-  </a>`;
-}).join(' ');
-      return `<div class="accordion-transaction-item">
+    return `<a href="${pdf.fileUrl || pdf.path}" target="_blank" title="${titleText}" class="pdf-link ${pdf.evrakNo ? 'epats-doc' : ''} ${pdf.isTransactionDoc ? 'tx-doc' : ''}">
+      <i class="${iconClass}"></i>
+      ${badgeHtml}
+    </a>`;
+    }).join(' ');
+
+    return `<div class="accordion-transaction-item">
         <div class="accordion-transaction-header ${hasChildren ? 'has-children' : ''}" data-parent-id="${p.id}">
           <div class="transaction-main-info">
             <div class="${hasChildren ? 'accordion-icon' : 'accordion-icon-empty'}">${hasChildren ? '▶' : ''}</div>
             <div class="transaction-details">
-              <div class="transaction-name-date">${tname} - ${d} ${t}</div>
+              <div class="transaction-name-date">${tname} ${oppositionOwnerBadge} - ${d} ${t}</div>
             </div>
           </div>
           <div class="transaction-meta">
