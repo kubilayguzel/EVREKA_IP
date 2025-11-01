@@ -3463,34 +3463,13 @@ async function createProfessionalReport(ownerName, matches) {
 
   const reportContent = [];
 
-  // === RAPOR BAŞLIĞI ===
-  reportContent.push(...createReportHeader(ownerName, matches.length));
-  
-  // === ÖZ BİLGİLER ===
-  reportContent.push(...createExecutiveSummary(grouped));
-  
-  // === SAYFA KESME ===
-  reportContent.push(new Paragraph({ 
-    children: [new PageBreak()]
-  }));
-
-  // === DETAY ANALİZ ===
-  for (const [index, group] of Object.entries(grouped).entries()) {
+  // Her benzer marka için ayrı sayfa
+  Object.entries(grouped).forEach(([_, group], index) => {
     if (index > 0) {
-      reportContent.push(new Paragraph({ 
-        children: [new PageBreak()]
-      }));
+      reportContent.push(new Paragraph({ children: [new PageBreak()] }));
     }
-    
-    const [_, g] = group;
-    reportContent.push(...createDetailedAnalysisSection(g, index + 1));
-  }
-
-  // === SONUÇ VE ÖNERİLER ===
-  reportContent.push(new Paragraph({ 
-    children: [new PageBreak()]
-  }));
-  reportContent.push(...createConclusionSection(grouped));
+    reportContent.push(...createComparisonPage(group));
+  });
 
   return new Document({
     creator: "IP Manager",
@@ -3503,468 +3482,347 @@ async function createProfessionalReport(ownerName, matches) {
   });
 }
 
-// === RAPOR BAŞLIĞI ===
-function createReportHeader(ownerName, totalMatches) {
-  const currentDate = new Date().toLocaleDateString('tr-TR', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric'
-  });
-
-  return [
-    // Ana başlık
-    new Paragraph({
-      children: [
-        new TextRun({
-          text: "MARKA BENZERLİK ANALİZİ RAPORU",
-          bold: true,
-          size: 32,
-          color: "2E4BC7"
-        })
-      ],
-      alignment: AlignmentType.CENTER,
-      spacing: { after: 400 }
-    }),
-
-    // Alt başlık
-    new Paragraph({
-      children: [
-        new TextRun({
-          text: `${ownerName} İçin Detaylı İnceleme`,
-          bold: true,
-          size: 24,
-          color: "666666"
-        })
-      ],
-      alignment: AlignmentType.CENTER,
-      spacing: { after: 600 }
-    }),
-
-    // Rapor bilgileri tablosu
-    new Table({
-      width: { size: 100, type: WidthType.PERCENTAGE },
-      rows: [
-        new TableRow({
-          children: [
-            createInfoCell("Rapor Tarihi:", currentDate),
-            createInfoCell("Toplam Tespit:", `${totalMatches} adet benzer marka`)
-          ]
-        }),
-        new TableRow({
-          children: [
-            createInfoCell("Analiz Kapsamı:", "Marka benzerlik tespiti"),
-            createInfoCell("Rapor Durumu:", "Tamamlandı")
-          ]
-        })
-      ]
-    }),
-
-    new Paragraph({ text: "", spacing: { after: 600 } })
-  ];
-}
-
-// === ÖZ BİLGİLER BÖLÜMÜ ===
-function createExecutiveSummary(grouped) {
-  const totalSimilarMarks = Object.keys(grouped).length;
-  const totalMonitoredMarks = Object.values(grouped).reduce((sum, g) => sum + g.monitoredMarks.length, 0);
-  
-  // Risk seviyesi analizi
-  let highRisk = 0, mediumRisk = 0, lowRisk = 0;
-  Object.values(grouped).forEach(g => {
-    const similarity = parseFloat(g.similarMark.similarity) || 0;
-    if (similarity >= 70) highRisk++;
-    else if (similarity >= 50) mediumRisk++;
-    else lowRisk++;
-  });
-
-  return [
-    new Paragraph({
-      children: [
-        new TextRun({
-          text: "YÖNETİCİ ÖZETİ",
-          bold: true,
-          size: 20,
-          color: "2E4BC7"
-        })
-      ],
-      heading: HeadingLevel.HEADING_1,
-      spacing: { before: 400, after: 300 }
-    }),
-
-    new Paragraph({
-      children: [
-        new TextRun({
-          text: "Bu rapor, izlenen markalarınıza yönelik benzerlik analizi sonuçlarını içermektedir. ",
-          size: 22
-        }),
-        new TextRun({
-          text: "Aşağıdaki önemli bulgular tespit edilmiştir:",
-          size: 22,
-          bold: true
-        })
-      ],
-      spacing: { after: 300 }
-    }),
-
-    // Özet istatistikler tablosu
-    new Table({
-      width: { size: 100, type: WidthType.PERCENTAGE },
-      rows: [
-        new TableRow({
-          children: [
-            createSummaryHeaderCell("Analiz Konusu"),
-            createSummaryHeaderCell("Sonuç"),
-            createSummaryHeaderCell("Değerlendirme")
-          ]
-        }),
-        new TableRow({
-          children: [
-            createSummaryCell("Benzer Marka Sayısı"),
-            createSummaryCell(`${totalSimilarMarks} adet`),
-            createSummaryCell(totalSimilarMarks > 5 ? "Yüksek" : totalSimilarMarks > 2 ? "Orta" : "Düşük")
-          ]
-        }),
-        new TableRow({
-          children: [
-            createSummaryCell("İzlenen Marka Sayısı"),
-            createSummaryCell(`${totalMonitoredMarks} adet`),
-            createSummaryCell("Aktif İzleme")
-          ]
-        }),
-        new TableRow({
-          children: [
-            createSummaryCell("Yüksek Risk (≥%70)"),
-            createSummaryCell(`${highRisk} adet`),
-            createSummaryCell(highRisk > 0 ? "Acil İnceleme Gerekli" : "Risk Yok")
-          ]
-        }),
-        new TableRow({
-          children: [
-            createSummaryCell("Orta Risk (%50-69)"),
-            createSummaryCell(`${mediumRisk} adet`),
-            createSummaryCell(mediumRisk > 0 ? "İzleme Gerekli" : "Risk Yok")
-          ]
-        }),
-        new TableRow({
-          children: [
-            createSummaryCell("Düşük Risk (<50%)"),
-            createSummaryCell(`${lowRisk} adet`),
-            createSummaryCell("Düşük Öncelik")
-          ]
-        })
-      ]
-    })
-  ];
-}
-
-// === DETAYLI ANALİZ BÖLÜMÜ ===
-function createDetailedAnalysisSection(group, sectionIndex) {
-  const elements = [];
+// Yeni karşılaştırma sayfası oluşturma fonksiyonu
+function createComparisonPage(group) {
   const similarMark = group.similarMark;
-  const similarity = parseFloat(similarMark.similarity) || 0;
+  const monitoredMarks = group.monitoredMarks || [];
   
-  // Risk seviyesi belirleme
-  let riskLevel = "DÜŞÜK";
-  let riskColor = "28A745";
-  if (similarity >= 70) {
-    riskLevel = "YÜKSEK";
-    riskColor = "DC3545";
-  } else if (similarity >= 50) {
-    riskLevel = "ORTA";
-    riskColor = "FFC107";
-  }
+  const elements = [];
+  
+  // Ana tablo: 2 sütunlu yan yana karşılaştırma
+  const comparisonTable = new Table({
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    borders: {
+      top: { style: "single", size: 6, color: "000000" },
+      bottom: { style: "single", size: 6, color: "000000" },
+      left: { style: "single", size: 6, color: "000000" },
+      right: { style: "single", size: 6, color: "000000" },
+      insideHorizontal: { style: "single", size: 6, color: "000000" },
+      insideVertical: { style: "single", size: 6, color: "000000" }
+    },
+    rows: []
+  });
 
-  // Bölüm başlığı
-  elements.push(
-    new Paragraph({
-      children: [
-        new TextRun({
-          text: `${sectionIndex}. BENZER MARKA ANALİZİ`,
-          bold: true,
-          size: 18,
-          color: "2E4BC7"
-        })
-      ],
-      heading: HeadingLevel.HEADING_1,
-      spacing: { before: 400, after: 300 }
-    })
-  );
-
-  // Benzer marka bilgi kartı
-  elements.push(
-    new Table({
-      width: { size: 100, type: WidthType.PERCENTAGE },
-      rows: [
-        new TableRow({
-          children: [
-            new TableCell({
-              children: [
-                new Paragraph({
-                  children: [
-                    new TextRun({
-                      text: "🎯 BENZER MARKA BİLGİLERİ",
-                      bold: true,
-                      size: 32,
-                      color: "FFFFFF"
-                    })
-                  ],
-                  alignment: AlignmentType.CENTER
-                })
-              ],
-              columnSpan: 2,
-              shading: { fill: "2E4BC7", type: "clear", color: "auto" }
-            })
-          ]
-        }),
-        new TableRow({
-          children: [
-            createDetailCell("Marka Adı:", similarMark.name || "-"),
-            createDetailCell("Başvuru No:", similarMark.applicationNo || "-")
-          ]
-        }),
-        new TableRow({
-          children: [
-            createDetailCell("Başvuru Tarihi:", similarMark.date || "-"),
-            createDetailCell("Nice Sınıfları:", Array.isArray(similarMark.niceClass) ? 
-              similarMark.niceClass.join(", ") : (similarMark.niceClass || "-"))
-          ]
-        }),
-        new TableRow({
-          children: [
-            new TableCell({
-              children: [
-                new Paragraph({
-                  children: [
-                    new TextRun({
-                      text: "Benzerlik Oranı: ",
-                      bold: true
-                    }),
-                    new TextRun({
-                      text: `%${similarity.toFixed(1)}`,
-                      bold: true,
-                      color: riskColor,
-                      size: 24
-                    })
-                  ]
-                })
-              ]
-            }),
-            new TableCell({
-              children: [
-                new Paragraph({
-                  children: [
-                    new TextRun({
-                      text: "Risk Seviyesi: ",
-                      bold: true
-                    }),
-                    new TextRun({
-                      text: riskLevel,
-                      bold: true,
-                      color: riskColor,
-                      size: 24
-                    })
-                  ]
-                })
-              ]
-            })
-          ]
-        })
-      ]
-    })
-  );
-
-  elements.push(new Paragraph({ text: "", spacing: { after: 300 } }));
-
-  // İzlenen markalar tablosu
-  elements.push(
-    new Paragraph({
-      children: [
-        new TextRun({
-          text: "🔍 İZLENEN MARKALAR",
-          bold: true,
-          size: 16,
-          color: "2E4BC7"
-        })
-      ],
-      spacing: { before: 300, after: 200 }
-    })
-  );
-
-  const monitoredTableRows = [
+  // Başlık satırı
+  comparisonTable.root.push(
     new TableRow({
       children: [
-        createTableHeaderCell("Marka Adı"),
-        createTableHeaderCell("Başvuru No"),
-        createTableHeaderCell("Başvuru Tarihi"),
-        createTableHeaderCell("Nice Sınıfları"),
-        createTableHeaderCell("Durum")
+        new TableCell({
+          width: { size: 50, type: WidthType.PERCENTAGE },
+          children: [
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: "İzlenen Marka",
+                  bold: true,
+                  size: 22,
+                  italics: true
+                })
+              ],
+              alignment: AlignmentType.CENTER,
+              spacing: { before: 100, after: 100 }
+            }),
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: monitoredMarks.length > 0 ? (monitoredMarks[0].markName || monitoredMarks[0].name || "-") : "-",
+                  size: 20
+                })
+              ],
+              alignment: AlignmentType.CENTER,
+              spacing: { after: 100 }
+            })
+          ],
+          shading: { fill: "F0F0F0" }
+        }),
+        new TableCell({
+          width: { size: 50, type: WidthType.PERCENTAGE },
+          children: [
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: "Benzer Marka",
+                  bold: true,
+                  size: 22,
+                  italics: true
+                })
+              ],
+              alignment: AlignmentType.CENTER,
+              spacing: { before: 100, after: 100 }
+            }),
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: similarMark.name || "-",
+                  size: 20
+                })
+              ],
+              alignment: AlignmentType.CENTER,
+              spacing: { after: 100 }
+            })
+          ],
+          shading: { fill: "F0F0F0" }
+        })
       ]
-    })
-  ];
-
-  group.monitoredMarks.forEach(mark => {
-    monitoredTableRows.push(
-      new TableRow({
-        children: [
-          createTableDataCell(mark.markName || mark.name || "-"),
-          createTableDataCell(mark.applicationNo || "-"),
-          createTableDataCell(mark.date || mark.applicationDate || "-"),
-          createTableDataCell(Array.isArray(mark.niceClass) ? 
-            mark.niceClass.join(", ") : (mark.niceClass || mark.niceClasses || "-")),
-          createTableDataCell("Aktif İzleme")
-        ]
-      })
-    );
-  });
-
-  elements.push(
-    new Table({
-      width: { size: 100, type: WidthType.PERCENTAGE },
-      rows: monitoredTableRows
     })
   );
 
-  // Not alanı varsa ekle
-  if (similarMark.note && similarMark.note.trim()) {
-    elements.push(
-      new Paragraph({ text: "", spacing: { after: 300 } }),
-      new Paragraph({
-        children: [
-          new TextRun({
-            text: "📝 NOTLAR",
-            bold: true,
-            size: 14,
-            color: "2E4BC7"
-          })
-        ],
-        spacing: { after: 200 }
-      }),
-      new Paragraph({
-        children: [
-          new TextRun({
-            text: similarMark.note,
-            italics: true,
-            size: 22
-          })
-        ],
-        spacing: { before: 100, after: 300 }
-      })
-    );
-  }
-
-  return elements;
-}
-
-// === SONUÇ VE ÖNERİLER ===
-function createConclusionSection(grouped) {
-  const totalMarks = Object.keys(grouped).length;
-  const highRiskMarks = Object.values(grouped).filter(g => 
-    parseFloat(g.similarMark.similarity) >= 70).length;
-
-  return [
-    new Paragraph({
+  // Görsel alan (placeholder - gerçek görseller varsa eklenebilir)
+  comparisonTable.root.push(
+    new TableRow({
       children: [
-        new TextRun({
-          text: "SONUÇ VE ÖNERİLER",
-          bold: true,
-          size: 20,
-          color: "2E4BC7"
-        })
-      ],
-      heading: HeadingLevel.HEADING_1,
-      spacing: { before: 400, after: 300 }
-    }),
-
-    new Paragraph({
-      children: [
-        new TextRun({
-          text: `Bu analiz kapsamında toplam ${totalMarks} adet benzer marka tespit edilmiştir. `,
-          size: 22
+        new TableCell({
+          children: [
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: "[İzlenen Marka Görseli]",
+                  size: 18,
+                  color: "999999",
+                  italics: true
+                })
+              ],
+              alignment: AlignmentType.CENTER,
+              spacing: { before: 200, after: 200 }
+            })
+          ]
         }),
+        new TableCell({
+          children: [
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: "[Benzer Marka Görseli]",
+                  size: 18,
+                  color: "999999",
+                  italics: true
+                })
+              ],
+              alignment: AlignmentType.CENTER,
+              spacing: { before: 200, after: 200 }
+            })
+          ]
+        })
+      ]
+    })
+  );
+
+  // İzlenen Sınıflar
+  const monitoredClasses = monitoredMarks.length > 0 && monitoredMarks[0].niceClass 
+    ? (Array.isArray(monitoredMarks[0].niceClass) ? monitoredMarks[0].niceClass.join(", ") : monitoredMarks[0].niceClass)
+    : "-";
+  
+  const similarClasses = similarMark.niceClass
+    ? (Array.isArray(similarMark.niceClass) ? similarMark.niceClass.join(", ") : similarMark.niceClass)
+    : (similarMark.niceClasses || "-");
+
+  comparisonTable.root.push(
+    new TableRow({
+      children: [
+        new TableCell({
+          children: [
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: `İzlenen Sınıflar: ${monitoredClasses}`,
+                  size: 20
+                })
+              ],
+              alignment: AlignmentType.LEFT,
+              spacing: { before: 100, after: 100 }
+            })
+          ]
+        }),
+        new TableCell({
+          children: [
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: `Başvurulan Sınıflar: ${similarClasses}`,
+                  size: 20
+                })
+              ],
+              alignment: AlignmentType.LEFT,
+              spacing: { before: 100, after: 100 }
+            })
+          ]
+        })
+      ]
+    })
+  );
+
+  // Başvuru Tarihi
+  const monitoredDate = monitoredMarks.length > 0 ? (monitoredMarks[0].date || monitoredMarks[0].applicationDate || "-") : "-";
+  const similarDate = similarMark.date || similarMark.applicationDate || "-";
+
+  comparisonTable.root.push(
+    new TableRow({
+      children: [
+        new TableCell({
+          children: [
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: `Başvuru Tarihi: ${monitoredDate}`,
+                  size: 20
+                })
+              ],
+              alignment: AlignmentType.LEFT,
+              spacing: { before: 100, after: 100 }
+            })
+          ]
+        }),
+        new TableCell({
+          children: [
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: `Başvuru Tarihi: ${similarDate}`,
+                  size: 20
+                })
+              ],
+              alignment: AlignmentType.LEFT,
+              spacing: { before: 100, after: 100 }
+            })
+          ]
+        })
+      ]
+    })
+  );
+
+  // Başvuru No
+  const monitoredAppNo = monitoredMarks.length > 0 ? (monitoredMarks[0].applicationNo || "-") : "-";
+  const similarAppNo = similarMark.applicationNo || "-";
+
+  comparisonTable.root.push(
+    new TableRow({
+      children: [
+        new TableCell({
+          children: [
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: `Başvuru No: ${monitoredAppNo}`,
+                  size: 20
+                })
+              ],
+              alignment: AlignmentType.LEFT,
+              spacing: { before: 100, after: 100 }
+            })
+          ]
+        }),
+        new TableCell({
+          children: [
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: `Başvuru Numarası: ${similarAppNo}`,
+                  size: 20
+                })
+              ],
+              alignment: AlignmentType.LEFT,
+              spacing: { before: 100, after: 100 }
+            })
+          ]
+        })
+      ]
+    })
+  );
+
+  // Tescil Tarihi (opsiyonel - veri varsa)
+  comparisonTable.root.push(
+    new TableRow({
+      children: [
+        new TableCell({
+          children: [
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: "Tescil Tarihi:",
+                  size: 20
+                })
+              ],
+              alignment: AlignmentType.LEFT,
+              spacing: { before: 100, after: 100 }
+            })
+          ]
+        }),
+        new TableCell({
+          children: [
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: "Son İtiraz Tarihi:",
+                  size: 20
+                })
+              ],
+              alignment: AlignmentType.LEFT,
+              spacing: { before: 100, after: 100 }
+            })
+          ]
+        })
+      ]
+    })
+  );
+
+  // Tescil No
+  comparisonTable.root.push(
+    new TableRow({
+      children: [
+        new TableCell({
+          children: [
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: "Tescil No:",
+                  size: 20
+                })
+              ],
+              alignment: AlignmentType.LEFT,
+              spacing: { before: 100, after: 100 }
+            })
+          ]
+        }),
+        new TableCell({
+          children: [
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: "Hak Sahibi: ",
+                  size: 20
+                })
+              ],
+              alignment: AlignmentType.LEFT,
+              spacing: { before: 100, after: 100 }
+            })
+          ]
+        })
+      ]
+    })
+  );
+
+  elements.push(comparisonTable);
+
+  // Benzerlik bilgileri
+  const similarity = parseFloat(similarMark.similarity) || 0;
+  elements.push(
+    new Paragraph({ text: "", spacing: { before: 300, after: 100 } }),
+    new Paragraph({
+      children: [
         new TextRun({
-          text: `Bunlardan ${highRiskMarks} adedi yüksek risk kategorisindedir.`,
-          size: 22,
+          text: `Benzerlik Oranı: %${similarity.toFixed(1)}`,
           bold: true,
-          color: highRiskMarks > 0 ? "DC3545" : "28A745"
-        })
-      ],
-      spacing: { after: 300 }
-    }),
-
-    new Paragraph({
-      children: [
-        new TextRun({
-          text: "📋 ÖNERİLER:",
-          bold: true,
-          size: 16,
-          color: "2E4BC7"
-        })
-      ],
-      spacing: { before: 300, after: 200 }
-    }),
-
-    ...(highRiskMarks > 0 ? [
-      new Paragraph({
-        children: [
-          new TextRun({ text: "🔴 ", size: 20 }),
-          new TextRun({
-            text: "Yüksek riskli markalar için acil hukuki inceleme yapılması önerilir.",
-            size: 22,
-            bold: true
-          })
-        ],
-        spacing: { after: 150 }
-      })
-    ] : []),
-
-    new Paragraph({
-      children: [
-        new TextRun({ text: "📊 ", size: 20 }),
-        new TextRun({
-          text: "Nice sınıf çakışmalarının detaylı analiz edilmesi",
-          size: 22
-        })
-      ],
-      spacing: { after: 150 }
-    }),
-
-    new Paragraph({
-      children: [
-        new TextRun({ text: "⚖️ ", size: 20 }),
-        new TextRun({
-          text: "Gerekli durumlarda itiraz prosedürlerinin başlatılması",
-          size: 22
-        })
-      ],
-      spacing: { after: 150 }
-    }),
-
-    new Paragraph({
-      children: [
-        new TextRun({ text: "🔍 ", size: 20 }),
-        new TextRun({
-          text: "Düzenli izleme sürecinin devam ettirilmesi",
-          size: 22
-        })
-      ],
-      spacing: { after: 400 }
-    }),
-
-    // Rapor footer
-    new Paragraph({
-      children: [
-        new TextRun({
-          text: "Bu rapor IP Manager - Marka Analiz Sistemi tarafından otomatik olarak oluşturulmuştur.",
-          size: 18,
-          italics: true,
-          color: "666666"
+          size: 24,
+          color: similarity >= 70 ? "DC3545" : (similarity >= 50 ? "FFC107" : "28A745")
         })
       ],
       alignment: AlignmentType.CENTER,
-      spacing: { before: 600 }
+      spacing: { after: 200 }
     })
-  ];
-}
+  );
+
+  return elements;
+} 
 
 // === YARDIMCI FONKSİYONLAR ===
 
