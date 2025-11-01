@@ -1394,11 +1394,11 @@ const handleOwnerReportGeneration = async (event) => {
         for (const r of filteredResults) {
             const monitoredTm = monitoringTrademarks.find(mt => mt.id === r.monitoredTrademarkId);
             
-            // IP record'dan veri al
-            let ipData = null;
-            if (monitoredTm?.ipRecordId) {
-                try {
-                    const ipDoc = await db.collection('ipRecords').doc(monitoredTm.ipRecordId).get();
+        // IP record'dan veri al
+        let ipData = null;
+        if (monitoredTm?.ipRecordId) {
+            try {
+                const ipDoc = await getFirestore().collection('ipRecords').doc(monitoredTm.ipRecordId).get();
                     if (ipDoc.exists) {
                         ipData = ipDoc.data();
                     }
