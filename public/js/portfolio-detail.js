@@ -473,13 +473,7 @@ if (!isOppositionParent) {
 } else {
   // 🔥 İtiraz parent'ları için HİÇBİR PDF gösterme (sadece ePats varsa onları göster)
   allParentDocs = [...epatsDocuments];
-console.log('✅ İtiraz parent - PDF ikonları gizlendi, child\'da gösterilecek:', {
-  parentTypeId: p.type,
-  parentTypeName: tname,
-  gizlenenPdfSayisi: parentPdfs.length,
-  gizlenenTransactionDocsSayisi: transactionDocs.length,
-  gorunecekEpatsSayisi: epatsDocuments.length
-});
+  console.log('✅ İtiraz parent - PDF ikonları gizlendi, child\'da gösterilecek');
 }
 
 const parentPdfIcons = allParentDocs.map(pdf => {
