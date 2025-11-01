@@ -991,21 +991,27 @@ async handleIndexing(opts = {}) {
             oppositionPetitionFileUrl = await getDownloadURL(storageRef);
             console.log('✅ Karşı taraf itiraz dilekçesi yüklendi:', oppositionPetitionFileUrl);
             
-            // Seçili parent transaction'ın tipini kontrol et
-            const selectedParentType = this.allTransactionTypes.find(t => t.id === String(this.selectedTransactionType));
-            const parentAlias = selectedParentType?.alias || selectedParentType?.name || '';
-            
+            // ✅ Seçili parent'ı ve tipini DOĞRU al
+            const selectedParent = this.currentTransactions.find(t => t.id === this.selectedTransactionId);
+            const selectedParentType = this.allTransactionTypes.find(t => String(t.id) === String(selectedParent?.type));
+            const parentIdStr = String(selectedParentType?.id || '');
+            const parentAlias = (selectedParentType?.alias || selectedParentType?.name || '').trim();
+
             let newParentType = null;
             let newParentDescription = '';
-            
-            // Parent transaction türüne göre yeni parent oluştur
+
+            // ✅ Başvuru altına indekslendiyse -> Yayına İtiraz (ID: 20)
             if (parentAlias === 'Başvuru') {
-                newParentType = '20'; // Yayına İtiraz
-                newParentDescription = 'Yayına İtiraz (Otomatik oluşturuldu)';
-            } else if (parentAlias === 'Yayına İtiraz') {
-                newParentType = 'trademark_reconsideration_of_publication_objection'; // Yayına İtirazın Yeniden İncelenmesi
-                newParentDescription = 'Yayına İtirazın Yeniden İncelenmesi (Otomatik oluşturuldu)';
+            newParentType = '20';
+            newParentDescription = 'Yayına İtiraz (Otomatik oluşturuldu)';
             }
+            // ✅ Zaten Yayına İtiraz altına indekslendiyse -> Yeniden İnceleme (ID: 19)
+            // (alias'a ek olarak ID kontrolü de yap)
+            else if (parentAlias === 'Yayına İtiraz' || parentIdStr === '20') {
+            newParentType = '19';
+            newParentDescription = 'Yayına İtirazın Yeniden İncelenmesi (Otomatik oluşturuldu)';
+            }
+
             
             if (newParentType) {
                 console.log(`✅ Yeni parent transaction oluşturuluyor: ${newParentDescription}`);
