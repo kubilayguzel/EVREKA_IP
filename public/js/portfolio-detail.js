@@ -444,13 +444,13 @@ async function renderTransactionsAccordion(recordId){
 // 🔥 GÜNCEL: Parent'a ait tüm belgeler (PDF'ler + ePats + transaction.documents)
 const transactionDocs = p.transactionDocs || [];
 
-// 🔥 YENİ: Yayına İtiraz veya Yayına İtirazın Yeniden İncelenmesi ise PDF ikonlarını gizle
-const parentTypeName = tmeta ? (tmeta.alias || tmeta.name) : '';
-const isOppositionParent = parentTypeName === 'Yayına İtiraz' || parentTypeName === 'Yayına İtirazın Yeniden İncelenmesi';
+// 🔥 YENİ: Yayına İtiraz (ID: 20) veya Yayına İtirazın Yeniden İncelenmesi (ID: 19) ise PDF ikonlarını gizle
+const isOppositionParent = String(p.type) === '20' || String(p.type) === '19';
 
 console.log('🔍 Parent transaction kontrol:', {
   parentId: p.id,
-  parentType: parentTypeName,
+  parentTypeId: p.type,
+  parentTypeName: tname,
   isOppositionParent,
   transactionDocsCount: transactionDocs.length,
   parentPdfsCount: parentPdfs.length,
