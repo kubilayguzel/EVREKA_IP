@@ -1221,24 +1221,35 @@ const handleOwnerReportAndNotifyGeneration = async (event) => {
       failureCount: filteredResults.length - createdTaskCount,
     });
 
-    // Raporu hazırla/indir (işten bağımsız)
-    console.log('🔵 [8] Rapor oluşturuluyor...');
-    const reportData = filteredResults.map((r) => {
-      const monitoredTm = monitoringTrademarks.find((mt) => mt.id === r.monitoredTrademarkId);
-      const _ownerName = _pickOwners(monitoredTm, monitoredTm, allPersons);
-      return {
-        monitoredMark: {
-          name: monitoredTm?.title || r.monitoredTrademark,
-          ownerName: _ownerName || 'Tüm Sahipler',
-          niceClasses: _uniqNice(monitoredTm),
-        },
-        similarMark: {
-          name: r.markName,
-          niceClasses: r.niceClasses,
-          applicationNo: r.applicationNo,
-          similarity: r.similarityScore,
-        },
-      };
+    const reportData = filteredResults.map(r => {
+        const monitoredTm = monitoringTrademarks.find(mt => mt.id === r.monitoredTrademarkId);
+        const ownerName = _pickOwners(monitoredTm, monitoredTm, allPersons);
+        
+        return { 
+            monitoredMark: { 
+                name: monitoredTm?.title || monitoredTm?.markName || r.monitoredTrademark,
+                markName: monitoredTm?.markName || monitoredTm?.title,
+                ownerName: ownerName || 'Tüm Sahipler', 
+                niceClass: monitoredTm?.niceClassSearch || _uniqNice(monitoredTm),
+                niceClasses: monitoredTm?.niceClassSearch || _uniqNice(monitoredTm),
+                applicationNumber: monitoredTm?.applicationNumber || monitoredTm?.applicationNo,
+                applicationDate: monitoredTm?.applicationDate,
+                registrationDate: monitoredTm?.registrationDate,
+                registrationNo: monitoredTm?.registrationNo
+            }, 
+            similarMark: { 
+                name: r.markName,
+                markName: r.markName,
+                niceClasses: r.niceClasses,
+                niceClass: r.niceClasses,
+                applicationNo: r.applicationNo,
+                applicationDate: r.applicationDate,
+                similarity: r.similarityScore,
+                holders: r.holders,
+                owner: r.holders?.[0]?.name,
+                objectionDeadline: r.objectionDeadline
+            } 
+        };
     });
 
     const generateReportFn = httpsCallable(functions, 'generateSimilarityReport');
