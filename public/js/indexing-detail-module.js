@@ -1291,7 +1291,7 @@ async handleIndexing(opts = {}) {
                         );
                         
                     }
-                    
+
     // 🔥 KRİTİK: Yeni parent oluşturulduysa, transaction listesini güncelle
         if (newParentTransactionId) {
             console.log('🔄 Yeni parent oluşturuldu, transaction listesi güncelleniyor...');
@@ -1310,10 +1310,9 @@ async handleIndexing(opts = {}) {
         console.log("📤 Tetiklenen işlem sonrası transaction yaratma başladı.");
         console.log("📌 Tetiklenen işlem bir child ve top-level selectable.");
 
-    const recordTransactionsResult = await ipRecordsService.getRecordTransactions(this.matchedRecord.id);
-        if (recordTransactionsResult.success) {
-        const existingTransactions = recordTransactionsResult.data || [];
-        console.log("🟢 Portföydeki mevcut işlemler:", existingTransactions);
+        // 🔥 Güncellenmiş listeyi kullan
+        const existingTransactions = this.currentTransactions || [];
+        if (existingTransactions.length > 0) {
 
         // Tüm transactionları yazdır
         existingTransactions.forEach(tx => {
