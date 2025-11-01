@@ -3488,30 +3488,25 @@ function createComparisonPage(group) {
   const monitoredMarks = group.monitoredMarks || [];
   const monitoredMark = monitoredMarks.length > 0 ? monitoredMarks[0] : {};
   
-    // DEBUG: Gelen verileri logla
+  // ⚠️ DEBUG LOG
   console.log("📊 RAPOR VERİLERİ:", {
-    monitoredMark: {
-      markName: monitoredMark.markName,
-      name: monitoredMark.name,
-      niceClassSearch: monitoredMark.niceClassSearch,
-      niceClass: monitoredMark.niceClass,
-      niceClasses: monitoredMark.niceClasses,
-      applicationNumber: monitoredMark.applicationNumber,
-      applicationDate: monitoredMark.applicationDate,
-      registrationDate: monitoredMark.registrationDate,
-      registrationNo: monitoredMark.registrationNo
-    },
+    similarMarkKeys: Object.keys(similarMark),
+    monitoredMarkKeys: Object.keys(monitoredMark),
     similarMark: {
       name: similarMark.name,
       markName: similarMark.markName,
       niceClasses: similarMark.niceClasses,
-      applicationNo: similarMark.applicationNo,
-      applicationDate: similarMark.applicationDate,
-      holders: similarMark.holders,
-      objectionDeadline: similarMark.objectionDeadline
+      applicationNo: similarMark.applicationNo
+    },
+    monitoredMark: {
+      name: monitoredMark.name,
+      markName: monitoredMark.markName,
+      niceClassSearch: monitoredMark.niceClassSearch,
+      niceClasses: monitoredMark.niceClasses,
+      applicationNumber: monitoredMark.applicationNumber
     }
   });
-  
+
   const elements = [];
   const tableRows = [];
 
