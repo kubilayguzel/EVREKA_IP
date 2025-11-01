@@ -710,27 +710,25 @@
     color: #1e88e5; 
 }
 
-/* Opposition owner chip — light & dark theme friendly */
-.opposition-owner{
-  display:inline-flex; align-items:center; gap:.35rem;
-  padding:.1rem .5rem; border-radius:9999px; line-height:1;
-  font-weight:600; white-space:nowrap;
-  background:var(--opp-bg, #fee2e2);
-  color:var(--opp-fg, #b91c1c);
-  border:1px solid var(--opp-br, #fecaca);
+/* Opposition owner badge (hem light hem dark temada görünür) */
+.opposition-owner-badge{
+  display:inline-block;
+  margin-left:.5rem;
+  padding:.15rem .45rem;
+  border-radius:.35rem;
+  font-size:.85em;
+  font-weight:600;
+  line-height:1;
+  background:#dc3545;   /* kırmızı */
+  color:#fff;           /* beyaz yazı */
+  border:1px solid rgba(0,0,0,.15);
+  vertical-align:middle;
 }
-:root{
-  --opp-bg:#fee2e2;   /* light bg */
-  --opp-fg:#b91c1c;   /* light fg (kırmızı koyu) */
-  --opp-br:#fecaca;   /* light border */
-}
-/* dark tema varyantları (hangi sınıfı kullanıyorsan biri iş görecek) */
-.dark .opposition-owner,
-[data-theme="dark"] .opposition-owner,
-.theme-dark .opposition-owner{
-  --opp-bg:rgba(239,68,68,.15);
-  --opp-fg:#fecaca;
-  --opp-br:rgba(239,68,68,.35);
+
+/* Koyu temalarda kenarı biraz belirginleştir */
+.dark-mode .opposition-owner-badge,
+body.dark .opposition-owner-badge{
+  box-shadow:0 0 0 1px rgba(255,255,255,.15) inset;
 }
 
 </style>
@@ -2945,6 +2943,10 @@ async function loadTransactions(ipRecordId) {
         const accordionId = `transaction-${parent.id}`;
         
         const transactionAlias = await getTransactionTypeAlias(parent.type);
+        const showOppBadge = ['19','20'].includes(String(parent.type)) && parent.oppositionOwner;
+        const oppositionBadgeHtml = showOppBadge
+        ? ` <span class="opposition-owner-badge">${parent.oppositionOwner}</span>`
+        : '';
         
         // ✅ Parent transaction'a ait PDF'leri getir
         const parentPdfs = pdfsByTransaction[parent.id] || [];
@@ -2972,10 +2974,6 @@ async function loadTransactions(ipRecordId) {
         
         // 🔥 YENİ: Yayına İtiraz (ID: 20) veya Yayına İtirazın Yeniden İncelenmesi (ID: 19) ise PDF'leri gizle
         const isOppositionParent = String(parent.type) === '20' || String(parent.type) === '19';
-
-        const displayAliasHtml = (isOppositionParent && parent.oppositionOwner)
-        ? `${transactionAlias} <span class="opposition-owner">${esc(parent.oppositionOwner)}</span>`
-        : transactionAlias;
 
         // Transaction'ın kendi documents array'i
         const transactionDocs = parent.documents || [];
@@ -3027,7 +3025,7 @@ async function loadTransactions(ipRecordId) {
         const parentRow = `
             <tr class="${hasChildren ? 'accordion-header-row' : ''}" ${hasChildren ? `data-toggle="collapse" data-target="#${accordionId}" aria-expanded="false" aria-controls="${accordionId}"` : ''}>
                 <td>${hasChildren ? '<i class="fas fa-chevron-right mr-2"></i>' : ''}${rowIndex}</td>
-                <td>${displayAliasHtml}</td>
+                <td>${transactionAlias}${oppositionBadgeHtml}</td>
                 <td>${formatDate(parent.timestamp)}</td>
                 <td>${parentPdfLinks || '<span class="text-muted">-</span>'}</td>
             </tr>
