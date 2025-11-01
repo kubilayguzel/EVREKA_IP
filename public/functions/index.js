@@ -3489,22 +3489,11 @@ function createComparisonPage(group) {
   
   const elements = [];
   
-  // Ana tablo: 2 sütunlu yan yana karşılaştırma
-  const comparisonTable = new Table({
-    width: { size: 100, type: WidthType.PERCENTAGE },
-    borders: {
-      top: { style: "single", size: 6, color: "000000" },
-      bottom: { style: "single", size: 6, color: "000000" },
-      left: { style: "single", size: 6, color: "000000" },
-      right: { style: "single", size: 6, color: "000000" },
-      insideHorizontal: { style: "single", size: 6, color: "000000" },
-      insideVertical: { style: "single", size: 6, color: "000000" }
-    },
-    rows: []
-  });
+  // Tablo satırlarını bir array'de topluyoruz
+  const tableRows = [];
 
   // Başlık satırı
-  comparisonTable.root.push(
+  tableRows.push(
     new TableRow({
       children: [
         new TableCell({
@@ -3568,7 +3557,7 @@ function createComparisonPage(group) {
   );
 
   // Görsel alan (placeholder - gerçek görseller varsa eklenebilir)
-  comparisonTable.root.push(
+  tableRows.push(
     new TableRow({
       children: [
         new TableCell({
@@ -3616,7 +3605,7 @@ function createComparisonPage(group) {
     ? (Array.isArray(similarMark.niceClass) ? similarMark.niceClass.join(", ") : similarMark.niceClass)
     : (similarMark.niceClasses || "-");
 
-  comparisonTable.root.push(
+  tableRows.push(
     new TableRow({
       children: [
         new TableCell({
@@ -3655,7 +3644,7 @@ function createComparisonPage(group) {
   const monitoredDate = monitoredMarks.length > 0 ? (monitoredMarks[0].date || monitoredMarks[0].applicationDate || "-") : "-";
   const similarDate = similarMark.date || similarMark.applicationDate || "-";
 
-  comparisonTable.root.push(
+  tableRows.push(
     new TableRow({
       children: [
         new TableCell({
@@ -3694,7 +3683,7 @@ function createComparisonPage(group) {
   const monitoredAppNo = monitoredMarks.length > 0 ? (monitoredMarks[0].applicationNo || "-") : "-";
   const similarAppNo = similarMark.applicationNo || "-";
 
-  comparisonTable.root.push(
+  tableRows.push(
     new TableRow({
       children: [
         new TableCell({
@@ -3730,7 +3719,7 @@ function createComparisonPage(group) {
   );
 
   // Tescil Tarihi (opsiyonel - veri varsa)
-  comparisonTable.root.push(
+  tableRows.push(
     new TableRow({
       children: [
         new TableCell({
@@ -3765,8 +3754,8 @@ function createComparisonPage(group) {
     })
   );
 
-  // Tescil No
-  comparisonTable.root.push(
+  // Tescil No ve Hak Sahibi
+  tableRows.push(
     new TableRow({
       children: [
         new TableCell({
@@ -3788,7 +3777,7 @@ function createComparisonPage(group) {
             new Paragraph({
               children: [
                 new TextRun({
-                  text: "Hak Sahibi: ",
+                  text: "Hak Sahibi:",
                   size: 20
                 })
               ],
@@ -3800,6 +3789,20 @@ function createComparisonPage(group) {
       ]
     })
   );
+
+  // Tabloyu oluştur
+  const comparisonTable = new Table({
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    borders: {
+      top: { style: "single", size: 6, color: "000000" },
+      bottom: { style: "single", size: 6, color: "000000" },
+      left: { style: "single", size: 6, color: "000000" },
+      right: { style: "single", size: 6, color: "000000" },
+      insideHorizontal: { style: "single", size: 6, color: "000000" },
+      insideVertical: { style: "single", size: 6, color: "000000" }
+    },
+    rows: tableRows
+  });
 
   elements.push(comparisonTable);
 
@@ -3822,7 +3825,7 @@ function createComparisonPage(group) {
   );
 
   return elements;
-} 
+}
 
 // === YARDIMCI FONKSİYONLAR ===
 
