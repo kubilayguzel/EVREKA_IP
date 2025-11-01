@@ -1436,6 +1436,7 @@ const handleOwnerReportGeneration = async (event) => {
                 monitoredMark: { 
                     name: monitoredTm?.title || monitoredTm?.markName || r.monitoredTrademark,
                     markName: monitoredTm?.markName || monitoredTm?.title,
+                    imagePath: ipData?.imagePath || null,
                     ownerName: ownerName || 'Tüm Sahipler',
                     niceClassSearch: monitoredTm?.niceClassSearch || ipData?.niceClasses || [],
                     niceClass: monitoredTm?.niceClassSearch || ipData?.niceClasses || _uniqNice(monitoredTm) || [],
@@ -1449,8 +1450,8 @@ const handleOwnerReportGeneration = async (event) => {
                 similarMark: { 
                     name: r.markName,
                     markName: r.markName,
+                    imagePath: r.imagePath || null,
                     niceClasses: r.niceClasses || [],
-                    niceClass: r.niceClasses || [],
                     applicationNo: r.applicationNo || "-",
                     applicationDate: r.applicationDate || "-",
                     similarity: r.similarityScore,
