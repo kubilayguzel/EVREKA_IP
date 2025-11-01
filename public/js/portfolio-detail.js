@@ -387,11 +387,50 @@ async function renderTransactionsAccordion(recordId){
             
             // ✅ Child transaction'a ait PDF'leri getir
             const childPdfs = pdfsByTransaction[c.id] || [];
-            const pdfIcons = childPdfs.map(pdf => 
-              `<a href="${pdf.fileUrl}" target="_blank" title="${pdf.fileName}" class="pdf-link">
-                <i class="fas fa-file-pdf"></i>
-              </a>`
-            ).join(' ');
+            
+            // 🔥 YENİ: Eğer İtiraz Bildirimi ise parent'ın belgelerini de göster
+            let allChildDocs = [...childPdfs];
+            
+            if (cm?.alias === 'İtiraz Bildirimi' || cm?.name === 'İtiraz Bildirimi' || String(cm?.id) === '27') {
+              console.log('🔍 İtiraz Bildirimi tespit edildi, parent belgeleri ekleniyor...');
+              
+              // Parent'ın transaction.documents array'ini ekle
+              const parentTransactionDocs = p.transactionDocs || [];
+              
+              // Parent'ın PDF'lerini ekle (unindexed_pdfs'ten gelenler)
+              const parentPdfsForChild = pdfsByTransaction[p.id] || [];
+              
+              allChildDocs = [
+                ...childPdfs,
+                ...parentPdfsForChild,
+                ...parentTransactionDocs.map(doc => ({
+                  fileName: doc.name || 'Belge',
+                  fileUrl: doc.path,
+                  type: doc.type,
+                  isParentDoc: true
+                }))
+              ];
+              
+              console.log('✅ İtiraz Bildirimi için toplam belge sayısı:', allChildDocs.length);
+            }
+            
+            const pdfIcons = allChildDocs.map(pdf => {
+              // İkon tipini belirle
+              let iconClass = 'fas fa-file-pdf';
+              let titleText = pdf.fileName || 'Belge';
+              
+              if (pdf.type === 'opposition_petition') {
+                iconClass = 'fas fa-gavel';
+                titleText = 'Karşı Taraf İtiraz Dilekçesi';
+              } else if (pdf.type === 'official_document') {
+                iconClass = 'fas fa-file-signature';
+                titleText = 'Resmi Yazı';
+              }
+              
+              return `<a href="${pdf.fileUrl || pdf.path}" target="_blank" title="${titleText}" class="pdf-link ${pdf.isParentDoc ? 'parent-doc' : ''}">
+                <i class="${iconClass}"></i>
+              </a>`;
+            }).join(' ');
 
             return `<div class="child-transaction-item">
               <div class="child-transaction-content">
