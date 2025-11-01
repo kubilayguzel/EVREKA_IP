@@ -26,6 +26,7 @@ import { auth } from 'firebase-functions/v1';
 import { getAuth } from 'firebase-admin/auth';                          // Admin SDK (modüler)
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';    // Admin SDK (modüler)
 import { addMonthsToDate, findNextWorkingDay, isHoliday, isWeekend, TURKEY_HOLIDAYS } from './utils.js';
+import { ImageRun } from 'docx';
 
 // Initialize Firebase Admin
 if (!admin.apps.length) {
@@ -3463,13 +3464,14 @@ async function createProfessionalReport(ownerName, matches) {
 
   const reportContent = [];
 
-  // Her benzer marka için ayrı sayfa
-  Object.entries(grouped).forEach(([_, group], index) => {
+  // Her benzer marka için ayrı sayfa (async)
+  for (const [index, [_, group]] of Object.entries(grouped).entries()) {
     if (index > 0) {
       reportContent.push(new Paragraph({ children: [new PageBreak()] }));
     }
-    reportContent.push(...createComparisonPage(group));
-  });
+    const pageElements = await createComparisonPage(group);
+    reportContent.push(...pageElements);
+  }
 
   return new Document({
     creator: "IP Manager",
@@ -3482,34 +3484,59 @@ async function createProfessionalReport(ownerName, matches) {
   });
 }
 
+// Firebase Storage'dan görsel indir ve buffer'a çevir
+async function downloadImageAsBuffer(imagePath) {
+  if (!imagePath) return null;
+  
+  try {
+    const bucket = admin.storage().bucket();
+    const file = bucket.file(imagePath);
+    
+    // Dosya var mı kontrol et
+    const [exists] = await file.exists();
+    if (!exists) {
+      console.warn(`⚠️ Görsel bulunamadı: ${imagePath}`);
+      return null;
+    }
+    
+    // Dosyayı indir
+    const [buffer] = await file.download();
+    console.log(`✅ Görsel indirildi: ${imagePath} (${buffer.length} bytes)`);
+    return buffer;
+  } catch (error) {
+    console.error(`❌ Görsel indirme hatası (${imagePath}):`, error.message);
+    return null;
+  }
+}
+
 // Basit ve profesyonel karşılaştırma raporu
 function createComparisonPage(group) {
   const similarMark = group.similarMark;
   const monitoredMarks = group.monitoredMarks || [];
   const monitoredMark = monitoredMarks.length > 0 ? monitoredMarks[0] : {};
   
-  // ⚠️ DEBUG LOG
-  console.log("📊 RAPOR VERİLERİ:", {
-    similarMarkKeys: Object.keys(similarMark),
-    monitoredMarkKeys: Object.keys(monitoredMark),
-    similarMark: {
-      name: similarMark.name,
-      markName: similarMark.markName,
-      niceClasses: similarMark.niceClasses,
-      applicationNo: similarMark.applicationNo
-    },
-    monitoredMark: {
-      name: monitoredMark.name,
-      markName: monitoredMark.markName,
-      niceClassSearch: monitoredMark.niceClassSearch,
-      niceClasses: monitoredMark.niceClasses,
-      applicationNumber: monitoredMark.applicationNumber
-    }
-  });
-
   const elements = [];
   const tableRows = [];
-
+  // ============ GÖRSELLERİ İNDİR ============
+    let monitoredImageBuffer = null;
+    let similarImageBuffer = null;
+    
+    // İzlenen marka görseli
+    if (monitoredMark.imagePath) {
+      monitoredImageBuffer = await downloadImageAsBuffer(monitoredMark.imagePath);
+    }
+    
+    // Benzer marka görseli
+    if (similarMark.imagePath) {
+      similarImageBuffer = await downloadImageAsBuffer(similarMark.imagePath);
+    }
+    
+    console.log('🖼️ Görseller:', {
+      monitored: monitoredMark.imagePath,
+      monitoredLoaded: !!monitoredImageBuffer,
+      similar: similarMark.imagePath,
+      similarLoaded: !!similarImageBuffer
+    });
   // ============ BAŞLIK SATIRI ============
   tableRows.push(
     new TableRow({
@@ -3582,46 +3609,73 @@ function createComparisonPage(group) {
   );
 
   // ============ GÖRSEL ALANI ============
+  const createImageCell = (imageBuffer, placeholderText) => {
+    const children = [];
+    
+    if (imageBuffer) {
+      try {
+        children.push(
+          new Paragraph({
+            children: [
+              new ImageRun({
+                data: imageBuffer,
+                transformation: {
+                  width: 200,
+                  height: 200
+                }
+              })
+            ],
+            alignment: AlignmentType.CENTER,
+            spacing: { before: 200, after: 200 }
+          })
+        );
+      } catch (error) {
+        console.error('Görsel ekleme hatası:', error);
+        children.push(
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: "[Görsel yüklenemedi]",
+                size: 20,
+                color: "FF0000",
+                italics: true
+              })
+            ],
+            alignment: AlignmentType.CENTER,
+            spacing: { before: 400, after: 400 }
+          })
+        );
+      }
+    } else {
+      children.push(
+        new Paragraph({
+          children: [
+            new TextRun({
+              text: placeholderText,
+              size: 22,
+              color: "999999",
+              italics: true
+            })
+          ],
+          alignment: AlignmentType.CENTER,
+          spacing: { before: 400, after: 400 }
+        })
+      );
+    }
+    
+    return new TableCell({
+      children,
+      shading: { fill: "F5F5F5" },
+      verticalAlign: "center"
+    });
+  };
+
   tableRows.push(
     new TableRow({
       height: { value: 2000, rule: "atLeast" },
       children: [
-        new TableCell({
-          children: [
-            new Paragraph({
-              children: [
-                new TextRun({
-                  text: "[İzlenen Marka Görseli]",
-                  size: 22,
-                  color: "999999",
-                  italics: true
-                })
-              ],
-              alignment: AlignmentType.CENTER,
-              spacing: { before: 400, after: 400 }
-            })
-          ],
-          shading: { fill: "F5F5F5" },
-          verticalAlign: "center"
-        }),
-        new TableCell({
-          children: [
-            new Paragraph({
-              children: [
-                new TextRun({
-                  text: "[Benzer Marka Görseli]",
-                  size: 22,
-                  color: "999999",
-                  italics: true
-                })
-              ],
-              alignment: AlignmentType.CENTER,
-              spacing: { before: 400, after: 400 }
-            })
-          ],
-          shading: { fill: "F5F5F5" },
-          verticalAlign: "center"
-        })
+        createImageCell(monitoredImageBuffer, "[İzlenen Marka Görseli]"),
+        createImageCell(similarImageBuffer, "[Benzer Marka Görseli]")
       ]
     })
   );
@@ -3778,7 +3832,7 @@ function createComparisonPage(group) {
 
 
 // Yardımcı fonksiyon - Veri satırı oluşturma
-function createDataRow(label1, value1, label2, value2, bgColor) {
+function createInfoRow(label1, value1, label2, value2, isEven = false) {
   return new TableRow({
     height: { value: 600, rule: "atLeast" },
     children: [
