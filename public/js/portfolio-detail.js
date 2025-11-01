@@ -361,7 +361,9 @@ async function renderTransactionsAccordion(recordId){
         }
       }
       
-      return { ...p, epatsDocuments };
+      // 🔥 YENİ: Transaction'ın kendi documents array'ini de ekle
+      const transactionDocs = p.documents || [];
+      return { ...p, epatsDocuments, transactionDocs };
     }));
 
     if (txAccordion) txAccordion.innerHTML = parentsWithEpats.map(p => {
@@ -400,14 +402,44 @@ async function renderTransactionsAccordion(recordId){
           }).join('')}
         </div>` : '';
 
-        // ✅ Parent'a ait PDF ikonları (normal PDF'ler + ePats evrakları)
-        const allParentDocs = [...parentPdfs, ...epatsDocuments];
-        const parentPdfIcons = allParentDocs.map(pdf => 
-          `<a href="${pdf.fileUrl}" target="_blank" title="${pdf.evrakNo ? `ePats: ${pdf.evrakNo}` : pdf.fileName}" class="pdf-link ${pdf.evrakNo ? 'epats-doc' : ''}">
-            <i class="fas fa-file-pdf"></i>
-            ${pdf.evrakNo ? `<span class="epats-badge">${pdf.evrakNo}</span>` : ''}
-          </a>`
-        ).join(' ');
+        // 🔥 GÜNCEL: Parent'a ait tüm belgeler (PDF'ler + ePats + transaction.documents)
+        const transactionDocs = p.transactionDocs || [];
+        const allParentDocs = [
+          ...parentPdfs, 
+          ...epatsDocuments,
+          ...transactionDocs.map(doc => ({
+            fileName: doc.name || 'Belge',
+            fileUrl: doc.path,
+            type: doc.type,
+            isTransactionDoc: true
+          }))
+        ];
+
+        const parentPdfIcons = allParentDocs.map(pdf => {
+          // İkon tipini belirle
+          let iconClass = 'fas fa-file-pdf';
+          let badgeHtml = '';
+          let titleText = pdf.fileName;
+          
+          if (pdf.evrakNo) {
+            // ePats belgesi
+            badgeHtml = `<span class="epats-badge">${pdf.evrakNo}</span>`;
+            titleText = `ePats: ${pdf.evrakNo}`;
+          } else if (pdf.type === 'opposition_petition') {
+            // Karşı taraf itiraz dilekçesi
+            iconClass = 'fas fa-gavel';
+            titleText = 'Karşı Taraf İtiraz Dilekçesi';
+          } else if (pdf.type === 'official_document') {
+            // Resmi yazı
+            iconClass = 'fas fa-file-signature';
+            titleText = 'Resmi Yazı';
+          }
+          
+          return `<a href="${pdf.fileUrl || pdf.path}" target="_blank" title="${titleText}" class="pdf-link ${pdf.evrakNo ? 'epats-doc' : ''} ${pdf.isTransactionDoc ? 'tx-doc' : ''}">
+            <i class="${iconClass}"></i>
+            ${badgeHtml}
+          </a>`;
+        }).join(' ');
 
       return `<div class="accordion-transaction-item">
         <div class="accordion-transaction-header ${hasChildren ? 'has-children' : ''}" data-parent-id="${p.id}">
