@@ -204,7 +204,60 @@
   transform: translateY(-2px);
 }
 
-  </style>
+/* Transaction belgeler için ikonlar */
+.pdf-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  margin: 0 2px;
+  border-radius: 4px;
+  color: #dc3545;
+  text-decoration: none;
+  transition: all 0.2s ease;
+  font-size: 1.1em;
+}
+
+.pdf-link:hover {
+  background-color: #f8f9fa;
+  color: #c82333;
+  transform: scale(1.1);
+}
+
+.pdf-link.epats-doc {
+  color: #007bff;
+}
+
+.pdf-link.epats-doc:hover {
+  color: #0056b3;
+}
+
+.pdf-link.tx-doc {
+  color: #6c757d;
+}
+
+.pdf-link.tx-doc:hover {
+  color: #5a6268;
+}
+
+.epats-badge {
+  font-size: 0.65em;
+  background: #e3f2fd;
+  color: #1976d2;
+  padding: 2px 4px;
+  border-radius: 3px;
+  font-weight: 600;
+}
+
+.fa-gavel {
+  color: #dc3545;
+}
+
+.fa-file-signature {
+  color: #28a745;
+}
+
+</style>
 </head>
 <body>
   <div id="notification-container" class="notification-container"></div>
