@@ -1289,16 +1289,29 @@ async handleIndexing(opts = {}) {
                             createdTaskId,
                             deliveryDateStr
                         );
+                        
                     }
                     
-                    // MEVCUT: isTopLevelSelectable mantığı devam ediyor (değişmedi)
-                    if (childTransactionType && childTransactionType.hierarchy === "child" && childTransactionType.isTopLevelSelectable) {
+    // 🔥 KRİTİK: Yeni parent oluşturulduysa, transaction listesini güncelle
+        if (newParentTransactionId) {
+            console.log('🔄 Yeni parent oluşturuldu, transaction listesi güncelleniyor...');
+            const updatedTxResult = await ipRecordsService.getRecordTransactions(this.matchedRecord.id);
+            if (updatedTxResult.success) {
+                this.currentTransactions = updatedTxResult.data || [];
+                console.log('✅ Transaction listesi güncellendi, yeni parent dahil:', {
+                    toplamTransaction: this.currentTransactions.length,
+                    yeniParentVar: this.currentTransactions.some(tx => tx.id === newParentTransactionId)
+                });
+            }
+        }
 
-    console.log("📤 Tetiklenen işlem sonrası transaction yaratma başladı.");
-    console.log("📌 Tetiklenen işlem bir child ve top-level selectable.");
+    // MEVCUT: isTopLevelSelectable mantığı devam ediyor (değişmedi)
+        if (childTransactionType && childTransactionType.hierarchy === "child" && childTransactionType.isTopLevelSelectable) {
+        console.log("📤 Tetiklenen işlem sonrası transaction yaratma başladı.");
+        console.log("📌 Tetiklenen işlem bir child ve top-level selectable.");
 
     const recordTransactionsResult = await ipRecordsService.getRecordTransactions(this.matchedRecord.id);
-    if (recordTransactionsResult.success) {
+        if (recordTransactionsResult.success) {
         const existingTransactions = recordTransactionsResult.data || [];
         console.log("🟢 Portföydeki mevcut işlemler:", existingTransactions);
 
