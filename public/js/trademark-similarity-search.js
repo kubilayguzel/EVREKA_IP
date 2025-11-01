@@ -24,8 +24,6 @@ let selectedMonitoredTrademarkId = null; // Seçili marka ID'si
 let similarityFilter = 'all'; // 'all', 'similar', 'not-similar'
 
 const functions = firebaseServices.functions;
-const db = getFirestore();
-
 const TSS_RESUME_KEY = 'TSS_LAST_STATE_V1';
 
 const tssLoadState = () => {
