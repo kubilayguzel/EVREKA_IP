@@ -2,7 +2,7 @@
 
 import { db, personService, searchRecordService, similarityService, ipRecordsService, firebaseServices } from '../firebase-config.js';
 import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-functions.js';
-import { collection, doc, getDoc, getDocs, limit, query, setDoc, where } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+import { collection, doc, getDoc, getDocs, limit, query, setDoc, where, getFirestore } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 import { runTrademarkSearch } from './trademark-similarity/run-search.js';
 import Pagination from './pagination.js';
 import { loadSharedLayout } from './layout-loader.js';
@@ -24,6 +24,7 @@ let selectedMonitoredTrademarkId = null; // Seçili marka ID'si
 let similarityFilter = 'all'; // 'all', 'similar', 'not-similar'
 
 const functions = firebaseServices.functions;
+const db = getFirestore();
 
 const TSS_RESUME_KEY = 'TSS_LAST_STATE_V1';
 
@@ -1398,14 +1399,23 @@ const handleOwnerReportGeneration = async (event) => {
         let ipData = null;
         if (monitoredTm?.ipRecordId) {
             try {
-                const ipDoc = await getFirestore().collection('ipRecords').doc(monitoredTm.ipRecordId).get();
-                    if (ipDoc.exists) {
-                        ipData = ipDoc.data();
-                    }
-                } catch (e) {
-                    console.warn('⚠️ IP Record okunamadı:', monitoredTm.ipRecordId, e);
+                const ipDocRef = doc(db, 'ipRecords', monitoredTm.ipRecordId);
+                const ipDoc = await getDoc(ipDocRef);
+                if (ipDoc.exists()) {
+                    ipData = ipDoc.data();
+                    console.log('✅ IP Record okundu:', {
+                        id: monitoredTm.ipRecordId,
+                        brandImageUrl: ipData.brandImageUrl,
+                        applicationNo: ipData.applicationNumber,
+                        niceClasses: ipData.niceClasses
+                    });
+                } else {
+                    console.warn('⚠️ IP Record bulunamadı:', monitoredTm.ipRecordId);
                 }
+            } catch (e) {
+                console.warn('⚠️ IP Record okuma hatası:', monitoredTm.ipRecordId, e);
             }
+        }
             
             const ownerName = _pickOwners(monitoredTm, monitoredTm, allPersons);
             
@@ -1436,7 +1446,7 @@ const handleOwnerReportGeneration = async (event) => {
                 monitoredMark: { 
                     name: monitoredTm?.title || monitoredTm?.markName || r.monitoredTrademark,
                     markName: monitoredTm?.markName || monitoredTm?.title,
-                    imagePath: ipData?.imagePath || null,
+                    imagePath: ipData?.brandImageUrl || imagePathFromRecords || monitoredTm?.imagePath || null,
                     ownerName: ownerName || 'Tüm Sahipler',
                     niceClassSearch: monitoredTm?.niceClassSearch || ipData?.niceClasses || [],
                     niceClass: monitoredTm?.niceClassSearch || ipData?.niceClasses || _uniqNice(monitoredTm) || [],
