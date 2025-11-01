@@ -1275,7 +1275,7 @@ async handleIndexing(opts = {}) {
                     taskType: childTransactionType.taskTriggered // ✅ Bu doğru - taskAssignments ID'si olacak
                 };
                 
-    const taskResult = await taskService.createTask(taskData);
+        const taskResult = await taskService.createTask(taskData);
             if (taskResult.success) {
                     createdTaskId = taskResult.id || taskResult.data?.id;
                     console.log('İş başarıyla tetiklendi, ID:', createdTaskId);
@@ -1292,7 +1292,7 @@ async handleIndexing(opts = {}) {
                         
                     }
 
-    // 🔥 KRİTİK: Yeni parent oluşturulduysa, transaction listesini güncelle
+        // 🔥 KRİTİK: Yeni parent oluşturulduysa, transaction listesini güncelle
         if (newParentTransactionId) {
             console.log('🔄 Yeni parent oluşturuldu, transaction listesi güncelleniyor...');
             const updatedTxResult = await ipRecordsService.getRecordTransactions(this.matchedRecord.id);
@@ -1305,7 +1305,42 @@ async handleIndexing(opts = {}) {
             }
         }
 
-    // MEVCUT: isTopLevelSelectable mantığı devam ediyor (değişmedi)
+        // 🔥 YENİ: İtiraz Bildirimi için özel transaction oluşturma
+        // İtiraz Bildirimi indekslendi ve iş tetiklendi, şimdi İtiraza Karşı Görüş transaction'ını oluştur
+        if (childTypeId === '27' && createdTaskId && newParentTransactionId) {
+            console.log('🔥 İtiraz Bildirimi: İtiraza Karşı Görüş transaction\'ı oluşturuluyor...');
+            
+            // İtiraza Karşı Görüş transaction type bilgisi
+            const triggeredTransactionType = this.allTransactionTypes.find(t => t.id === '38');
+            
+            if (triggeredTransactionType) {
+                const triggeredChildData = {
+                    type: '38', // İtiraza Karşı Görüş
+                    description: triggeredTransactionType.alias || triggeredTransactionType.name || 'İtiraza Karşı Görüş',
+                    parentId: newParentTransactionId, // Yeni oluşturulan parent'a bağla
+                    transactionHierarchy: 'child',
+                    triggeringTaskId: String(createdTaskId)
+                };
+                
+                console.log('📤 İtiraza Karşı Görüş transaction\'ı oluşturuluyor:', triggeredChildData);
+                
+                const triggeredResult = await ipRecordsService.addTransactionToRecord(
+                    this.matchedRecord.id,
+                    triggeredChildData
+                );
+                
+                if (triggeredResult.success) {
+                    console.log('✅ İtiraza Karşı Görüş transaction\'ı başarıyla oluşturuldu:', triggeredResult.data?.id || triggeredResult.id);
+                    showNotification('İtiraza Karşı Görüş işlemi de eklendi!', 'success');
+                } else {
+                    console.error('❌ İtiraza Karşı Görüş transaction\'ı oluşturulamadı:', triggeredResult.error);
+                }
+            } else {
+                console.warn('⚠️ İtiraza Karşı Görüş transaction type bulunamadı!');
+            }
+        }
+
+        // MEVCUT: isTopLevelSelectable mantığı devam ediyor (değişmedi)
         if (childTransactionType && childTransactionType.hierarchy === "child" && childTransactionType.isTopLevelSelectable) {
         console.log("📤 Tetiklenen işlem sonrası transaction yaratma başladı.");
         console.log("📌 Tetiklenen işlem bir child ve top-level selectable.");
