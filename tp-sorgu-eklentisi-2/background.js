@@ -92,6 +92,26 @@ chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => 
     return; // Sadece return, return true değil
   }
 
+// GET_RESULT için özel kontrol (External'dan da gelebilir)
+  if (request.type === 'GET_RESULT' && request.applicationNumber) {
+    const appNo = request.applicationNumber;
+    const cached = resultCache.get(appNo);
+    
+    if (cached) {
+      console.log(`[Background] ✅ Cache'ten döndürülüyor (external): ${appNo}`);
+      resultCache.delete(appNo);
+      
+      sendResponse({
+        status: 'READY',
+        data: cached.data,
+        messageType: cached.type
+      });
+    } else {
+      sendResponse({ status: 'WAITING' });
+    }
+    return; // Sadece return
+  }
+
   // Tanınmayan mesaj tipi
   console.warn('[Background] Bilinmeyen mesaj tipi:', request.type);
   sendResponse({ status: 'IGNORED' });
