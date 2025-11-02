@@ -1374,29 +1374,6 @@ async function parseApplicationResultFromPage() {
   }
 }
 
-// ============================================
-// OPTS İÇİN MESSAGE LISTENER
-// ============================================
-
-// Mevcut listener'a ekle (veya yeni listener oluştur)
-chrome.runtime?.onMessage?.addListener?.((request, sender, sendResponse) => {
-  // OPTS için özel mesaj
-  if (request?.type === 'AUTO_FILL_OPTS' && request?.data) {
-    const appNo = request.data;
-    log('📨 AUTO_FILL_OPTS mesajı alındı:', appNo);
-    
-    // Eğer zaten opts sayfasındaysa direkt çalıştır
-    if (/^https:\/\/opts\.turkpatent\.gov\.tr/i.test(window.location.href)) { // Düzeltildi
-      runOptsApplicationFlow(appNo);
-    }
-    
-    sendResponse?.({ status: 'OK' });
-    return true;
-  }
-  
-  return true;
-});
-
 // Dış mesajlar: AUTO_FILL (geri uyum) ve AUTO_FILL_BASVURU
 chrome.runtime?.onMessage?.addListener?.((request, sender, sendResponse) => {
   if (request?.type === 'AUTO_FILL' && request?.data) {
@@ -1592,218 +1569,49 @@ async function waitForOptsResultsAndScrape(appNo) {
   }
 }
 
-// Tablo sonuçlarını scrape et
-function scrapeOptsTableResults(rows, appNo) {
-  log('[OPTS] 📊 Scraping başlatıldı, appNo:', appNo);
-  
-  const results = [];
-  
-  // Marka Görselini doğrudan en üst seviye div'den çekelim
-  const imageContainer = document.querySelector('.MuiBox-root img[alt="Marka Görseli"]');
-  const imgUrl = imageContainer ? imageContainer.src : null;
-  
-  log('[OPTS] 🖼️ Görsel URL:', imgUrl ? 'Bulundu' : 'Bulunamadı');
+// ============================================
+// OPTS.TURKPATENT.GOV.TR İÇİN ÖZEL AKIM
+// ============================================
 
-  const item = {
-    applicationNumber: appNo,
-    brandName: '',
-    ownerName: '',
-    applicationDate: '',
-    registrationNumber: '',
-    status: '',
-    niceClasses: '',
-    imageSrc: imgUrl,
-    brandImageUrl: imgUrl,
-    brandImageDataUrl: imgUrl,
-    fields: {},
-    details: {}
-  };
+let optsAlreadyProcessed = false; // Duplicate engelleme
 
-  // ✅ İLK TABLO: Marka Bilgileri (4 kolonlu Key-Value-Key-Value yapısı)
-  const firstTableBody = document.querySelector('tbody.MuiTableBody-root');
+// Sayfa yüklendiğinde kontrol
+(function initOptsDetection() {
+  const url = window.location.href;
   
-  if (!firstTableBody) {
-    err('[OPTS] ❌ tbody.MuiTableBody-root bulunamadı!');
-    sendToOpener('HATA_OPTS', { message: 'Tablo yapısı bulunamadı' });
+  if (!/^https:\/\/opts\.turkpatent\.gov\.tr/i.test(url)) {
+    return; // OPTS değilse çık
+  }
+  
+  log('🎯 [OPTS] Sayfa algılandı:', url);
+  
+  // Hash'ten başvuru no al
+  const hash = window.location.hash;
+  const match = hash.match(/#bn=([^&]+)/);
+  
+  if (!match) {
+    log('⚠️ [OPTS] Hash\'te başvuru no yok');
     return;
   }
   
-  log('[OPTS] ✅ İlk tablo tbody bulundu');
+  const appNo = decodeURIComponent(match[1]);
+  log('✅ [OPTS] Başvuru no bulundu:', appNo);
   
-  const dataRows = firstTableBody.querySelectorAll('tr.MuiTableRow-root');
-  log('[OPTS] 📊 Toplam satır sayısı:', dataRows.length);
-  
-  dataRows.forEach((dataRow, rowIndex) => {
-    const rowCells = dataRow.querySelectorAll('td.MuiTableCell-root, td.MuiTableCell-body');
-    const cellTexts = Array.from(rowCells).map(c => (c.textContent || '').trim());
-    
-    // Debug: İlk 3 satırı logla
-    if (rowIndex < 3) {
-      log(`[OPTS] Satır ${rowIndex + 1}: ${rowCells.length} hücre -`, cellTexts);
-    }
-
-    // 4 HÜCRELİ: Key1, Value1, Key2, Value2
-    if (rowCells.length === 4) {
-      const key1 = cellTexts[0];
-      let value1 = cellTexts[1];
-      const key2 = cellTexts[2];
-      let value2 = cellTexts[3];
-
-      // '--' değerlerini boş string yap
-      if (value1 === '--' || value1 === '-') value1 = '';
-      if (value2 === '--' || value2 === '-') value2 = '';
-
-      if (key1 && value1) {
-        item.fields[key1] = value1;
-        item.details[key1] = value1;
-      }
-      if (key2 && value2) {
-        item.fields[key2] = value2;
-        item.details[key2] = value2;
-      }
-      
-      if (rowIndex < 3) {
-        log(`[OPTS]   ✅ 4 hücreli: ${key1}="${value1}", ${key2}="${value2}"`);
-      }
-    } 
-    // COLSPAN DURUMU (Sahip/Vekil Bilgileri)
-    else if (rowCells.length === 2) {
-      const key = cellTexts[0];
-      const valueCell = rowCells[1];
-      const colspanVal = valueCell.getAttribute('colspan');
-      
-      if (colspanVal === '3') {
-        // Sahip/Vekil Bilgileri özel işleme
-        if (key.includes('Sahip Bilgileri') || key.includes('Vekil Bilgileri')) {
-          const lines = Array.from(valueCell.querySelectorAll('div'))
-            .map(d => d.textContent.trim())
-            .filter(Boolean);
-          
-          const joinedValue = lines.join(' | ');
-          item.fields[key] = joinedValue;
-          item.details[key] = joinedValue;
-          
-          // Sahip adını özel olarak çıkar
-          if (key.includes('Sahip Bilgileri') && lines.length > 1) {
-            item.ownerName = lines[1];
-          }
-          
-          log(`[OPTS]   ✅ Colspan (${key}): ${lines.length} satır birleştirildi`);
-        } else {
-          let val = valueCell.textContent.trim();
-          if (val === '--' || val === '-') val = '';
-          if (key && val) {
-            item.fields[key] = val;
-            item.details[key] = val;
-          }
-        }
-      } else {
-        // Normal 2 hücreli
-        let val = cellTexts[1];
-        if (val === '--' || val === '-') val = '';
-        if (key && val) {
-          item.fields[key] = val;
-          item.details[key] = val;
-        }
-      }
-    }
-  });
-
-  // ✅ İKİNCİ TABLO: Mal ve Hizmetler (varsa)
-  const allTables = document.querySelectorAll('table.MuiTable-root');
-  log('[OPTS] 📋 Toplam tablo sayısı:', allTables.length);
-  
-  if (allTables.length > 1) {
-    const secondTable = allTables[1];
-    const headers = secondTable.querySelectorAll('th');
-    const headerTexts = Array.from(headers).map(h => h.textContent.trim());
-    
-    log('[OPTS] 📋 2. tablo header\'ları:', headerTexts);
-    
-    if (headerTexts.some(h => h.includes('Sınıf'))) {
-      const goodsRows = secondTable.querySelectorAll('tbody tr');
-      const goodsAndServices = [];
-      
-      goodsRows.forEach(row => {
-        const cells = row.querySelectorAll('td');
-        if (cells.length === 2) {
-          const classNo = parseInt(cells[0].textContent.trim());
-          const description = cells[1].textContent.trim();
-          
-          if (!isNaN(classNo) && description) {
-            goodsAndServices.push({
-              classNo: classNo,
-              items: [description]
-            });
-          }
-        }
-      });
-      
-      if (goodsAndServices.length > 0) {
-        item.goodsAndServicesByClass = goodsAndServices;
-        log('[OPTS] ✅ Mal ve Hizmetler:', goodsAndServices.length, 'sınıf bulundu');
-      }
-    }
-  }
-
-  // Ana alanlara mapping
-  item.applicationDate = item.fields['Başvuru Tarihi'] || '';
-  item.registrationNumber = item.fields['Tescil Numarası'] || '';
-  item.niceClasses = item.fields['Nice Sınıfları'] || '';
-  item.status = item.fields['Durumu'] || item.fields['Karar'] || '';
-  item.brandName = item.fields['Marka Adı'] || '';
-  
-  // Başvuru numarasını normalize et
-  const finalAppNo = normalizeAppNo(item.fields['Başvuru Numarası'] || item.applicationNumber);
-  item.applicationNumber = finalAppNo;
-
-  log('[OPTS] 📝 Final değerler:', {
-    appNo: finalAppNo,
-    brandName: item.brandName,
-    ownerName: item.ownerName,
-    status: item.status,
-    fieldsCount: Object.keys(item.fields).length
-  });
-
-  if (finalAppNo) {
-    log(`[OPTS] ✅ Başarıyla tamamlandı: ${finalAppNo}`);
-    results.push(item);
-  } else {
-    err('[OPTS] ❌ Başvuru numarası çıkarılamadı');
+  // Duplicate kontrolü
+  if (optsAlreadyProcessed) {
+    log('⚠️ [OPTS] Zaten işleniyor, atlanıyor');
+    return;
   }
   
-  // Sonuçları gönder
-  if (results.length > 0) {
-    const firstAppNo = results[0].applicationNumber;
-    if (__EVREKA_SENT_OPTS_MAP__[firstAppNo]) {
-      log('[OPTS] ⚠️ Duplicate VERI_GELDI_OPTS engellendi:', firstAppNo);
-    } else {
-      __EVREKA_SENT_OPTS_MAP__[firstAppNo] = true;
-      log('[OPTS] 📤 VERI_GELDI_OPTS gönderiliyor:', results);
-      sendToOpener('VERI_GELDI_OPTS', results);
-    }
-    // Başarılı scrape sonrası sekme kapatma
-    setTimeout(() => {
-      log('[OPTS] 🚪 Sekme kapatılıyor...');
-      window.close();
-    }, 3000); 
-  } else {
-    err('[OPTS] ❌ Sonuç listesi boş');
-    sendToOpener('HATA_OPTS', { message: 'Scrape sonrası sonuç listesi boş kaldı.' });
-  }
-}
+  optsAlreadyProcessed = true;
+  
+  // Sayfa yüklenene kadar bekle
+  setTimeout(() => {
+    log('🚀 [OPTS] runOptsApplicationFlow başlatılıyor');
+    runOptsApplicationFlow(appNo);
+  }, 2000);
+})();
 
-// Message listener (OPTS için)
-chrome.runtime?.onMessage?.addListener?.((request, sender, sendResponse) => {
-  if (request?.type === 'AUTO_FILL_OPTS' && request?.data) {
-    log('[OPTS] 📨 Mesaj alındı:', request.data);
-    if (/opts\.turkpatent\.gov\.tr/i.test(window.location.href)) {
-      runOptsApplicationFlow(request.data);
-    }
-    sendResponse?.({ status: 'OK' });
-    return true;
-  }
-});
 
 chrome.runtime?.onMessage?.addListener?.((msg)=>{
   if (msg && msg.type === 'VERI_ALINDI_OK') {
