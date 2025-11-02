@@ -35,6 +35,7 @@ chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => 
     return true;
   }
 
+  // Geriye uyumluluk için eski SORGULA mesajı
   if (request.type === 'SORGULA' && request.data) {
     const basvuruNo = request.data;
     const targetUrl = "https://www.turkpatent.gov.tr/arastirma-yap?form=trademark";
@@ -63,6 +64,7 @@ chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => 
   }
   return true; 
 });
+
 // Content script'ten gelen verileri ana uygulamaya ilet
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.type === 'FORWARD_TO_APP') {
@@ -97,15 +99,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     
     sendResponse({ status: 'OK' });
   }
-  return true;
-});
 
-// ============================================
-// RESULT CACHE SYSTEM
-// ============================================
-const resultCache = new Map();
-
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  // ============================================
+  // RESULT CACHE SYSTEM
+  // ============================================
+  const resultCache = new Map();
+  const processedAppNos = new Set();
+  
   // Content script'ten veri geldiğinde cache'e kaydet
   if (request.type === 'FORWARD_TO_APP') {
     const { messageType, data } = request;
@@ -134,6 +134,18 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         resultCache.delete(appNo);
         console.log('[Background] Cache temizlendi:', appNo);
       }, 300000);
+    }
+    
+    // ACK: içerik scriptine "veri alındı" mesajı gönder
+    try {
+      // Hata düzeltildi: 'and' yerine '&&' kullanıldı ve gerekli kontroller eklendi
+      const appNoForAck = appNo; // appNo'yu kullanıyoruz
+      if (sender && sender.tab && sender.tab.id && appNoForAck) {
+        chrome.tabs.sendMessage(sender.tab.id, { type: 'VERI_ALINDI_OK', appNo: appNoForAck });
+      }
+    } catch (e) { 
+      /* ignore */ 
+      console.error("[Background] ACK gönderilirken hata oluştu:", e);
     }
     
     sendResponse({ status: 'OK' });
