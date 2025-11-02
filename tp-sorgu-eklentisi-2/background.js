@@ -1,3 +1,5 @@
+const resultCache = new Map();
+const processedAppNos = new Set();
 // Web sitenizden gelen mesajları dinle
 chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => {
 // Başvuru No (geriye uyum): SORGULA veya SORGULA_BASVURU
@@ -103,9 +105,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   // ============================================
   // RESULT CACHE SYSTEM
   // ============================================
-  const resultCache = new Map();
-  const processedAppNos = new Set();
-  
   // Content script'ten veri geldiğinde cache'e kaydet
   if (request.type === 'FORWARD_TO_APP') {
     const { messageType, data } = request;
