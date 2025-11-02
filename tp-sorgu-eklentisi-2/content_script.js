@@ -1572,10 +1572,44 @@ async function waitForOptsResultsAndScrape(appNo) {
 // ============================================
 // OPTS.TURKPATENT.GOV.TR İÇİN ÖZEL AKIM
 // ============================================
+let optsAlreadyProcessed = false; // Global duplicate flag
+let optsCurrentAppNo = null; // İşlenen başvuru no
 
-let optsAlreadyProcessed = false; // Duplicate engelleme
+// Chrome message listener için handler
+chrome.runtime?.onMessage?.addListener?.((request, sender, sendResponse) => {
+  if (request?.type === 'AUTO_FILL_OPTS' && request?.data) {
+    const appNo = request.data;
+    log('[OPTS] 📨 AUTO_FILL_OPTS mesajı alındı:', appNo);
+    
+    // OPTS sayfasında değilsek çık
+    if (!/^https:\/\/opts\.turkpatent\.gov\.tr/i.test(window.location.href)) {
+      log('[OPTS] ⚠️ OPTS sayfasında değil, atlanıyor');
+      sendResponse?.({ status: 'IGNORED' });
+      return;
+    }
+    
+    // Duplicate kontrolü
+    if (optsAlreadyProcessed && optsCurrentAppNo === appNo) {
+      log('[OPTS] ⚠️ Bu başvuru zaten işleniyor:', appNo);
+      sendResponse?.({ status: 'ALREADY_PROCESSING' });
+      return;
+    }
+    
+    optsAlreadyProcessed = true;
+    optsCurrentAppNo = appNo;
+    
+    log('[OPTS] 🚀 runOptsApplicationFlow başlatılıyor');
+    
+    // Async işlem başlat
+    setTimeout(() => {
+      runOptsApplicationFlow(appNo);
+    }, 500);
+    
+    sendResponse?.({ status: 'OK' });
+  }
+});
 
-// Sayfa yüklendiğinde kontrol
+// Sayfa yüklendiğinde hash kontrolü (fallback)
 (function initOptsDetection() {
   const url = window.location.href;
   
@@ -1590,28 +1624,28 @@ let optsAlreadyProcessed = false; // Duplicate engelleme
   const match = hash.match(/#bn=([^&]+)/);
   
   if (!match) {
-    log('⚠️ [OPTS] Hash\'te başvuru no yok');
+    log('⚠️ [OPTS] Hash\'te başvuru no yok - Background\'dan mesaj bekleniyor');
     return;
   }
   
   const appNo = decodeURIComponent(match[1]);
-  log('✅ [OPTS] Başvuru no bulundu:', appNo);
+  log('✅ [OPTS] Hash\'ten başvuru no bulundu:', appNo);
   
   // Duplicate kontrolü
-  if (optsAlreadyProcessed) {
-    log('⚠️ [OPTS] Zaten işleniyor, atlanıyor');
+  if (optsAlreadyProcessed && optsCurrentAppNo === appNo) {
+    log('⚠️ [OPTS] Bu başvuru zaten işleniyor, atlanıyor');
     return;
   }
   
   optsAlreadyProcessed = true;
+  optsCurrentAppNo = appNo;
   
   // Sayfa yüklenene kadar bekle
   setTimeout(() => {
-    log('🚀 [OPTS] runOptsApplicationFlow başlatılıyor');
+    log('🚀 [OPTS] runOptsApplicationFlow başlatılıyor (hash fallback)');
     runOptsApplicationFlow(appNo);
   }, 2000);
 })();
-
 
 chrome.runtime?.onMessage?.addListener?.((msg)=>{
   if (msg && msg.type === 'VERI_ALINDI_OK') {
