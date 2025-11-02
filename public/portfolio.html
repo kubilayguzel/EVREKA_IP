@@ -764,6 +764,43 @@ tr.group-row[aria-hidden="true"]{ display:none !important; }
                     document.getElementById('loadingIndicator').style.display = 'none';
                 }
             }
+            
+        renderObjectionRows(list) {
+            const tableBody = document.getElementById('portfolioTableBody');
+            if (!tableBody || !pagination) return;
+
+            tableBody.innerHTML = '';
+
+            // Pagination toplamı güncelle
+            pagination.update(list.length);
+
+            // Bu sayfada gösterilecek kalemleri al
+            const pageData = pagination.getCurrentPageData(list);
+
+            const frag = document.createDocumentFragment();
+            pageData.forEach(r => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                <td></td>  <!-- toggle/caret kolonu boş -->
+                <td>${(r.recordType || r.ipType || '-')}</td>
+                <td>${(r.transactionTypeName || '-')}</td>
+                <td>${(r.applicationNumber || '-')}</td>
+                <td>${(r.applicantName || '-')}</td>
+                <td>${(r.opponent || '-')}</td>
+                <td>${fmtDate(r.bulletinDate)}</td>
+                <td>${(r.bulletinNo || '-')}</td>
+                <td>${fmtDate(r.epatsDate)}</td>
+                <td>${(r.statusText || '-')}</td>
+                `;
+                frag.appendChild(tr);
+            });
+
+            tableBody.appendChild(frag);
+
+            // Boş liste mesajı yönetimi
+            document.getElementById('portfolioTableBody').style.display = list.length > 0 ? 'table-row-group' : 'none';
+            document.getElementById('noRecordsMessage').style.display = list.length === 0 ? 'block' : 'none';
+            }
 
         renderCurrentPage() {
             const tableBody = document.getElementById('portfolioTableBody');
@@ -822,13 +859,8 @@ tr.group-row[aria-hidden="true"]{ display:none !important; }
                     });
                 }
 
-                // ✅ İtirazlar için filteredAndSortedRecords yerine pagination'a direkt veriyi ver
-                if (pagination) pagination.update(baseData.length);
-
-                document.getElementById('portfolioTableBody').style.display = baseData.length > 0 ? 'table-row-group' : 'none';
-                document.getElementById('noRecordsMessage').style.display = baseData.length === 0 ? 'block' : 'none';
-
-                this.renderCurrentPage();
+                // İtirazlar: objectionRows'u kullan ve doğrudan çiz
+                this.renderObjectionRows(baseData);
                 return;
             }
 
@@ -1086,14 +1118,7 @@ tr.group-row[aria-hidden="true"]{ display:none !important; }
                         return 0;
                     });
                 }
-
-                // ✅ İtirazlar için filteredAndSortedRecords yerine pagination'a direkt veriyi ver
-                if (pagination) pagination.update(filtered.length);
-
-                document.getElementById('portfolioTableBody').style.display = filtered.length > 0 ? 'table-row-group' : 'none';
-                document.getElementById('noRecordsMessage').style.display = filtered.length === 0 ? 'block' : 'none';
-
-                this.renderCurrentPage();
+                this.renderObjectionRows(filtered);
                 return;
             }
 
