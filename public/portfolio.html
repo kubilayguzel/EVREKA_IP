@@ -500,8 +500,8 @@ tr.group-row[aria-hidden="true"]{ display:none !important; }
                     <button class="btn-add-record" onclick="window.location.href='data-entry.html'">
                         <span>&#x2795;</span> Yeni Kayıt Ekle
                     </button>
-                    <button class="btn-secondary" id="exportExcelBtn">Excel'e Aktar</button>
-                    <button class="btn-secondary" id="exportPdfBtn">PDF'e Aktar</button>
+                        <button id="exportExcelBtn" class="btn-secondary">Excel'e Aktar</button>
+                        <button id="exportPdfBtn" class="btn-secondary">PDF'e Aktar</button>
                 </div>
             </div>
             
@@ -529,10 +529,6 @@ tr.group-row[aria-hidden="true"]{ display:none !important; }
             <div id="modalBody" class="modal-body-content"></div>
         </div>
     </div>
-    
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.2/dist/js/bootstrap.bundle.min.js"></script>
 
@@ -632,6 +628,30 @@ tr.group-row[aria-hidden="true"]{ display:none !important; }
         }
 
         document.addEventListener('DOMContentLoaded', () => {
+
+        // --- Lazy-load: Excel ve PDF kütüphaneleri sadece buton tıklandığında indirilsin ---
+        const excelBtn = document.getElementById('exportExcelBtn');
+        if (excelBtn) {
+            excelBtn.addEventListener('click', async () => {
+            // Aynı dizin/isimleri kullan: az önce sildiğimiz dosya yolları
+            const ExcelJSMod = await import('./libs/exceljs.min.js');
+            const FileSaverMod = await import('./libs/FileSaver.min.js');
+            const ExcelJS = ExcelJSMod.default || ExcelJSMod;
+            const saveAs = (FileSaverMod.saveAs || FileSaverMod.default || FileSaverMod);
+            // Uygulamadaki mevcut fonksiyonuna pasla (adı farklıysa uyarlayabilirsin)
+            await exportToExcel(ExcelJS, saveAs);
+            });
+        }
+
+        const pdfBtn = document.getElementById('exportPdfBtn');
+        if (pdfBtn) {
+            pdfBtn.addEventListener('click', async () => {
+            const html2pdfMod = await import('./libs/html2pdf.bundle.min.js');
+            const html2pdf = html2pdfMod.default || html2pdfMod;
+            await exportToPdf(html2pdf);
+            });
+        }
+
         // Kullanıcı zaten girişliyse anında başlat
         const current = auth.currentUser;
         if (current) boot();
@@ -1510,17 +1530,16 @@ tr.group-row[aria-hidden="true"]{ display:none !important; }
                     let transactionsHtml = '<div class="accordion-transaction-history">';
 
                                 try {
-                                    // 1. Transaction türlerini yükle
-                                    const transactionTypesResult = await transactionTypeService.getTransactionTypes();
-                                    const allTransactionTypes = Array.isArray(transactionTypesResult?.data)
-                                                                     ? transactionTypesResult.data
-                                                                     : [];
+                                    const [transactionTypesResult, transResult] = await Promise.all([
+                                    transactionTypeService.getTransactionTypes(),
+                                    ipRecordsService.getTransactionsForRecord(recordId)
+                                    ]);
 
-                                    // 2. Transaction geçmişini al
-                                    const transResult = await ipRecordsService.getTransactionsForRecord(recordId);
-                                    const allTransactions = transResult.success && Array.isArray(transResult.transactions)
-                                                                     ? transResult.transactions
-                                                                     : [];
+                                    const allTransactionTypes = Array.isArray(transactionTypesResult?.data)
+                                    ? transactionTypesResult.data : [];
+
+                                    const allTransactions = transResult?.success && Array.isArray(transResult.transactions)
+                                    ? transResult.transactions : [];
 
                                     if (allTransactions.length === 0) {
                                         transactionsHtml += '<p class="text-muted">Henüz işlem geçmişi yok.</p>';
@@ -1763,138 +1782,114 @@ tr.group-row[aria-hidden="true"]{ display:none !important; }
                 });
             }
 
-        async loadObjectionRows() {
-            console.log('🔄 FIXED loadObjectionRows başladı');
-            const TYPE_SET = new Set(['7','19','20', 7, 19, 20]);
-            console.log('🎯 Aranacak task tipleri:', Array.from(TYPE_SET));
-            let tasks = [];
-            try {
-                console.log('📡 Tasks çekiliyor...');
-                const res = await taskService.getTasks?.() || await taskService.getAllTasks?.();
-                const arr = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
-                tasks = arr.filter(t => TYPE_SET.has(String(t.taskType)));
-                console.log('📊 İtiraz task sayısı:', tasks.length);
-            } catch (e) {
-                console.error('❌ Tasks yüklenemedi', e);
-                tasks = [];
+async loadObjectionRows() {
+  console.log('🔄 FIXED loadObjectionRows başladı');
+  const TYPE_SET = new Set(['7','19','20', 7, 19, 20]);
+  console.log('🎯 Aranacak task tipleri:', Array.from(TYPE_SET));
+
+  // 1) Tasks: tek çağrı
+  let tasks = [];
+  try {
+    console.log('📡 Tasks çekiliyor...');
+    const res = await (taskService.getTasks?.() || taskService.getAllTasks?.());
+    const arr = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
+    tasks = arr.filter(t => TYPE_SET.has(String(t.taskType)));
+    console.log('📊 İtiraz task sayısı:', tasks.length);
+  } catch (e) {
+    console.error('❌ Tasks yüklenemedi', e);
+    tasks = [];
+  }
+
+  console.log('🔄 Task detayları işleniyor (paralel)...');
+
+  // 2) Kayıt cache’i (aynı recordId birden fazla task'te tekrar okunmasın)
+  const recordCache = new Map();
+  const getRecordCached = (id) => {
+    if (!id) return Promise.resolve(null);
+    if (!recordCache.has(id)) {
+      const p = ipRecordsService.getRecordById(id)
+        .then(r => (r?.success ? r.data : null))
+        .catch(() => null);
+      recordCache.set(id, p);
+    }
+    return recordCache.get(id);
+  };
+
+  // 3) Tüm taskleri paralel işle
+  const rows = (await Promise.all(tasks.map(async (t) => {
+    try {
+      const rec = await getRecordCached(t.relatedIpRecordId);
+
+      const typeMeta = transactionTypesMap.get(String(t.taskType)) || transactionTypesMap.get(Number(t.taskType));
+      const transactionTypeName = (typeMeta?.alias || typeMeta?.name || String(t.taskType));
+
+      const applicants = rec?.applicants?.map(a => a.name).join(', ') || (t.applicantName || '-');
+      const applicationNumber = rec?.applicationNumber || t.applicationNumber || '-';
+
+      const details   = t.details || t.extra || {};
+      const brandInfo = rec?.details?.brandInfo || {};
+      const opposedNo = brandInfo.opposedMarkBulletinNo ?? null;
+      const opposedDateRaw = brandInfo.opposedMarkBulletinDate ?? null;
+
+      const bulletinNo   = opposedNo ?? details.bulletinNo ?? details.bulletinId ?? t.bulletinNo ?? t.bulletinId ?? '-';
+      const bulletinDate = opposedDateRaw ? fmtDate(opposedDateRaw) : fmtDate(details.bulletinDate ?? t.bulletinDate ?? null);
+
+      const opponentName = (details?.opponent?.name) || (t?.opponent?.name) || '-';
+      const epatsDateRaw = details?.epatsDocument?.documentDate || null;
+      const epatsDate    = fmtDate(epatsDateRaw);
+
+      // — Status çözümü —
+      let statusText = 'Karar Bekleniyor';
+      try {
+        if (rec?.id) {
+          // Transactions'ı task'a paralel çektik → sadece bu task için bekle
+          const txRes  = await ipRecordsService.getTransactionsForRecord(rec.id);
+          const txList = (txRes?.success && Array.isArray(txRes.transactions)) ? txRes.transactions : [];
+
+          let foundRequestResult = null;
+          const parentTxId = details?.parentTransactionId || details?.selectedTransactionId;
+
+          if (parentTxId) {
+            const specificTx = txList.find(x => x.id === parentTxId);
+            if (specificTx && specificTx.requestResult !== undefined && specificTx.requestResult !== null && specificTx.requestResult !== '') {
+              foundRequestResult = specificTx.requestResult;
             }
-            console.log('🔄 Task detayları işleniyor...');
-            const rows = [];
-            for (const t of tasks) {
-                try {
-                    console.log('🔄 Task işleniyor:', t.id);
-                    let rec = null;
-                    if (t.relatedIpRecordId) {
-                        console.log('📡 IP kaydı çekiliyor:', t.relatedIpRecordId);
-                        const r = await ipRecordsService.getRecordById(t.relatedIpRecordId);
-                        rec = r?.success ? r.data : null;
-                        console.log('📊 IP kaydı:', rec ? 'bulundu' : 'bulunamadı');
-                    }
-                    const typeMeta = transactionTypesMap.get(String(t.taskType)) || transactionTypesMap.get(Number(t.taskType));
-                    const transactionTypeName = (typeMeta?.alias || typeMeta?.name || String(t.taskType));
-                    console.log('🏷️ İşlem tipi:', transactionTypeName);
-                    const applicants = rec?.applicants?.map(a => a.name).join(', ') || (t.applicantName || '-');
-                    const applicationNumber = rec?.applicationNumber || t.applicationNumber || '-';
-                    const details = t.details || t.extra || {};
-                    const brandInfo = rec?.details?.brandInfo || {};
-                    const opposedNo = brandInfo.opposedMarkBulletinNo ?? null;
-                    const opposedDateRaw = brandInfo.opposedMarkBulletinDate ?? null;
-                    const bulletinNo = opposedNo ?? details.bulletinNo ?? details.bulletinId ?? t.bulletinNo ?? t.bulletinId ?? '-';
-                    const bulletinDate = opposedDateRaw ? fmtDate(opposedDateRaw) : fmtDate(details.bulletinDate ?? t.bulletinDate ?? null);
-                    const opponentName = (details?.opponent?.name) || (t?.opponent?.name) || '-';
-                    const epatsDateRaw = details?.epatsDocument?.documentDate || null;
-                    const epatsDate = fmtDate(epatsDateRaw);
-                    let statusText = 'Karar Bekleniyor';
-                    console.log('🔍 Task analiz ediliyor:', {
-                        taskId: t.id,
-                        applicationNumber,
-                        hasRecord: !!rec,
-                        recordId: rec?.id
-                    });
-                    try {
-                        if (rec?.id) {
-                            console.log('📡 Transactions çekiliyor için record:', rec.id);
-                            const txRes = await ipRecordsService.getTransactionsForRecord(rec.id);
-                            const txList = (txRes?.success && Array.isArray(txRes.transactions)) ? txRes.transactions : [];
-                            console.log('📊 Transaction sayısı:', txList.length);
-                            let targetTransactionId = null;
-                            let foundRequestResult = null;
-                            const parentTxId = details?.parentTransactionId || details?.selectedTransactionId;
-                            if (parentTxId) {
-                                targetTransactionId = parentTxId;
-                                const specificTx = txList.find(x => x.id === parentTxId);
-                                if (specificTx) {
-                                    console.log('✅ Spesifik parent transaction bulundu:', {
-                                        id: specificTx.id,
-                                        requestResult: specificTx.requestResult,
-                                        type: typeof specificTx.requestResult
-                                    });
-                                    if (specificTx.requestResult !== null && specificTx.requestResult !== undefined && specificTx.requestResult !== '') {
-                                        foundRequestResult = specificTx.requestResult;
-                                        console.log('✅ Spesifik TX\'den requestResult bulundu:', foundRequestResult);
-                                    } else {
-                                        console.log('⚠️ Spesifik transaction\'da requestResult yok');
-                                    }
-                                } else {
-                                    console.log('❌ Parent transaction bulunamadı, parentTxId:', parentTxId);
-                                    console.log('📊 Mevcut transaction ID\'leri:', txList.map(tx => tx.id));
-                                }
-                            } else {
-                                console.log('⚠️ parentTxId yok, task type\'ına göre transaction aranıyor...');
-                                const taskTypeStr = String(t.taskType);
-                                const relatedTx = txList.find(tx => String(tx.type) === taskTypeStr);
-                                if (relatedTx) {
-                                    targetTransactionId = relatedTx.id;
-                                    console.log('✅ Task type\'ına göre transaction bulundu:', {
-                                        taskType: taskTypeStr,
-                                        transactionId: relatedTx.id,
-                                        requestResult: relatedTx.requestResult
-                                    });
-                                    if (relatedTx.requestResult !== null && relatedTx.requestResult !== undefined && relatedTx.requestResult !== '') {
-                                        foundRequestResult = relatedTx.requestResult;
-                                        console.log('✅ İlgili TX\'den requestResult bulundu:', foundRequestResult);
-                                    }
-                                } else {
-                                    console.log('❌ Task type\'ına göre transaction bulunamadı');
-                                }
-                            }
-                            if (foundRequestResult !== null && foundRequestResult !== undefined && foundRequestResult !== '') {
-                                console.log('🔍 requestResult bulundu:', foundRequestResult, '->', formatObjectionStatus(foundRequestResult));
-                                statusText = formatObjectionStatus(foundRequestResult);
-                            } else {
-                                console.log('⚠️ İlgili transaction\'da requestResult yok; varsayılan kullanılacak:', statusText);
-                            }
-                            console.log('📊 Tüm transactions debug:');
-                            txList.forEach((tx, index) => {
-                                console.log(`  ${index + 1}. TX ID: ${tx.id}, Type: ${tx.type}, requestResult: ${tx.requestResult}`);
-                            });
-                        } else {
-                            console.log('⚠️ IP record ID yok, transaction kontrol edilemiyor');
-                        }
-                    } catch (e) {
-                        console.error('❌ requestResult kontrolünde hata:', e);
-                    }
-                    const rowData = {
-                        id: t.id,
-                        recordType: rec?.type || '-',
-                        transactionTypeName,
-                        applicationNumber,
-                        applicantName: applicants || '-',
-                        opponent: opponentName,
-                        bulletinDate,
-                        bulletinNo,
-                        epatsDate,
-                        statusText
-                    };
-                    console.log('✅ Final row data:', rowData);
-                    rows.push(rowData);
-                } catch (e) {
-                    console.warn('❌ Task satırı oluşturulamadı', t?.id, e);
-                }
+          } else {
+            const relatedTx = txList.find(tx => String(tx.type) === String(t.taskType));
+            if (relatedTx && relatedTx.requestResult !== undefined && relatedTx.requestResult !== null && relatedTx.requestResult !== '') {
+              foundRequestResult = relatedTx.requestResult;
             }
-            console.log('✅ loadObjectionRows tamamlandı, toplam satır:', rows.length);
-            this.objectionRows = rows;
+          }
+
+          if (foundRequestResult !== null && foundRequestResult !== undefined && foundRequestResult !== '') {
+            statusText = formatObjectionStatus(foundRequestResult);
+          }
         }
+      } catch (e) {
+        console.error('❌ requestResult kontrolünde hata:', e);
+      }
+
+      return {
+        id: t.id,
+        recordType: rec?.type || '-',
+        transactionTypeName,
+        applicationNumber,
+        applicantName: applicants || '-',
+        opponent: opponentName,
+        bulletinDate,
+        bulletinNo,
+        epatsDate,
+        statusText
+      };
+    } catch (e) {
+      console.warn('❌ Task satırı oluşturulamadı', t?.id, e);
+      return null;
+    }
+  }))).filter(Boolean);
+
+  console.log('✅ loadObjectionRows tamamlandı, toplam satır:', rows.length);
+  this.objectionRows = rows;
+}
 
             buildObjectionGroups() {
             const groupsMap = {};
