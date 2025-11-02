@@ -720,7 +720,11 @@ function setupExtensionMessageListener() {
     
     if (!allowedOrigins.includes(event.origin)) return;
     
-    if (event.data && event.data.source === 'tp-extension-sahip') {
+    // İki source'u da kabul et (geriye uyumluluk)
+    const validSources = ['tp-extension-sahip', 'tp-sorgu-eklentisi-2'];
+    const isValidSource = event.data && validSources.includes(event.data.source);
+    
+    if (isValidSource) {
       console.log('[DEBUG] Eklenti mesajı alındı:', event.data);
       
       if (event.data.type === 'SORGU_BASLADI') {
