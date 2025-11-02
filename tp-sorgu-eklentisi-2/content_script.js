@@ -6,6 +6,7 @@ console.log('[Evreka OPTS] URL:', window.location.href);
 
 const TAG = '[Evreka SahipNo]';
 let __EVREKA_SENT_OPTS_MAP__ = {};
+let __EVREKA_SENT_ERR_MAP__ = {};
 let targetKisiNo = null;
 let targetAppNo = null; // Başvuru No (Application Number) hedefi
 let sourceOrigin = null; // opener target origin (from ?source=...)
@@ -15,6 +16,67 @@ const log = (...a) => console.log(TAG, ...a);
 const warn = (...a) => console.warn(TAG, ...a);
 const err = (...a) => console.error(TAG, ...a);
 
+// --- Single Transfer helpers (OPTS) ---
+const getHashParam = (name) => {
+  const m = location.hash && location.hash.match(new RegExp(`[?#&]${name}=([^&]+)`));
+  return m ? decodeURIComponent(m[1]) : null;
+};
+
+async function waitAndScrapeResultFromDom(appNo, timeout = 25000) {
+  const root = document.body;
+  let resolved = false;
+  function scrape() {
+    const appNoEl = root.querySelector('[data-app-no], .app-no, #appNo, td.appno, .application-number');
+    let foundAppNo = appNoEl ? (appNoEl.textContent || appNoEl.value || '').trim() : null;
+    if (!foundAppNo) {
+      const labels = Array.from(root.querySelectorAll('th,td,div,span,label'));
+      const cand = labels.find(el => /başvuru\s*no/i.test((el.textContent || '')));
+      if (cand) {
+        const val = (cand.nextElementSibling && cand.nextElementSibling.textContent || '').trim();
+        if (/\d{4}\/\d+/.test(val)) foundAppNo = val;
+      }
+    }
+    if (!foundAppNo) {
+      const text = (root.textContent || '');
+      const m = text.match(/(\d{4}\/\d{3,})/);
+      if (m) foundAppNo = m[1];
+    }
+    if (foundAppNo && (!appNo || foundAppNo === appNo)) {
+      const titleEl = root.querySelector('[data-title], .result-title, h1, h2');
+      return {
+        applicationNumber: foundAppNo,
+        title: titleEl ? (titleEl.textContent || '').trim() : null,
+        source: 'dom'
+      };
+    }
+    return null;
+  }
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      if (!resolved) {
+        try { obs.disconnect(); } catch {}
+        reject(new Error('RESULT_TIMEOUT'));
+      }
+    }, timeout);
+    const obs = new MutationObserver(() => {
+      const data = scrape();
+      if (data) {
+        resolved = true;
+        clearTimeout(timer);
+        obs.disconnect();
+        resolve(data);
+      }
+    });
+    const first = scrape();
+    if (first) {
+      resolved = true;
+      clearTimeout(timer);
+      resolve(first);
+      return;
+    }
+    obs.observe(root, { childList: true, subtree: true, characterData: true });
+  });
+}
 // --------- DOM Helpers ---------
 function waitFor(selector, { root = document, timeout = 7000, test = null } = {}) {
   return new Promise((resolve, reject) => {
