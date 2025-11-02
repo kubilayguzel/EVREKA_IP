@@ -535,7 +535,7 @@ function handleOptsSuccess(data) {
     
     // Veriyi göster (ilk kayıt)
     const record = Array.isArray(data) ? data[0] : data;
-    displaySingleResult(record);
+    renderSingleResult(record);
     _showBlock(singleResultContainer);
     
     showToast('✅ TÜRKPATENT verisi alındı!', 'success');
@@ -936,11 +936,23 @@ function updateTableRowCount() {
 
 function renderSingleResult(payload) {
   console.log('[DEBUG] renderSingleResult çağrıldı, payload:', payload);
-  const d = payload.data && typeof payload.data === 'object' ? payload.data : payload;
+  
+  // Payload normalize et
+  let d;
+  if (payload.data && typeof payload.data === 'object') {
+    d = payload.data;
+  } else {
+    d = payload;
+  }
+  
   console.log('[DEBUG] renderSingleResult - parsed d:', d);
   
   // Tek sonucu da tablo formatında göster
   renderOwnerResults([d]);
+  
+  // Sonuç container'ı göster
+  _showBlock(singleResultContainer);
+  _hideBlock(loadingEl);
 }
 
 function renderOwnerResults(items) {
