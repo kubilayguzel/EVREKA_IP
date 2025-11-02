@@ -1463,6 +1463,216 @@ window.addEventListener('load', () => {
 // ============================================
 // OPTS.TURKPATENT.GOV.TR İÇİN ÖZEL AKIM
 // ============================================
+// Tablo sonuçlarını scrape et
+function scrapeOptsTableResults(rows, appNo) {
+  log('[OPTS] 📊 Scraping başlatıldı, appNo:', appNo);
+  
+  const results = [];
+  
+  // Marka Görselini doğrudan en üst seviye div'den çekelim
+  const imageContainer = document.querySelector('.MuiBox-root img[alt="Marka Görseli"]');
+  const imgUrl = imageContainer ? imageContainer.src : null;
+  
+  log('[OPTS] 🖼️ Görsel URL:', imgUrl ? 'Bulundu' : 'Bulunamadı');
+
+  const item = {
+    applicationNumber: appNo,
+    brandName: '',
+    ownerName: '',
+    applicationDate: '',
+    registrationNumber: '',
+    status: '',
+    niceClasses: '',
+    imageSrc: imgUrl,
+    brandImageUrl: imgUrl,
+    brandImageDataUrl: imgUrl,
+    fields: {},
+    details: {}
+  };
+
+  // ✅ İLK TABLO: Marka Bilgileri (4 kolonlu Key-Value-Key-Value yapısı)
+  const firstTableBody = document.querySelector('tbody.MuiTableBody-root');
+  
+  if (!firstTableBody) {
+    err('[OPTS] ❌ tbody.MuiTableBody-root bulunamadı!');
+    sendToOpener('HATA_OPTS', { message: 'Tablo yapısı bulunamadı' });
+    return;
+  }
+  
+  log('[OPTS] ✅ İlk tablo tbody bulundu');
+  
+  const dataRows = firstTableBody.querySelectorAll('tr.MuiTableRow-root');
+  log('[OPTS] 📊 Toplam satır sayısı:', dataRows.length);
+  
+  dataRows.forEach((dataRow, rowIndex) => {
+    const rowCells = dataRow.querySelectorAll('td.MuiTableCell-root, td.MuiTableCell-body');
+    const cellTexts = Array.from(rowCells).map(c => (c.textContent || '').trim());
+    
+    // Debug: İlk 3 satırı logla
+    if (rowIndex < 3) {
+      log(`[OPTS] Satır ${rowIndex + 1}: ${rowCells.length} hücre -`, cellTexts);
+    }
+
+    // 4 HÜCRELİ: Key1, Value1, Key2, Value2
+    if (rowCells.length === 4) {
+      const key1 = cellTexts[0];
+      let value1 = cellTexts[1];
+      const key2 = cellTexts[2];
+      let value2 = cellTexts[3];
+
+      // '--' değerlerini boş string yap
+      if (value1 === '--' || value1 === '-') value1 = '';
+      if (value2 === '--' || value2 === '-') value2 = '';
+
+      if (key1 && value1) {
+        item.fields[key1] = value1;
+        item.details[key1] = value1;
+      }
+      if (key2 && value2) {
+        item.fields[key2] = value2;
+        item.details[key2] = value2;
+      }
+      
+      if (rowIndex < 3) {
+        log(`[OPTS]   ✅ 4 hücreli: ${key1}="${value1}", ${key2}="${value2}"`);
+      }
+    } 
+    // COLSPAN DURUMU (Sahip/Vekil Bilgileri)
+    else if (rowCells.length === 2) {
+      const key = cellTexts[0];
+      const valueCell = rowCells[1];
+      const colspanVal = valueCell.getAttribute('colspan');
+      
+      if (colspanVal === '3') {
+        // Sahip/Vekil Bilgileri özel işleme
+        if (key.includes('Sahip Bilgileri') || key.includes('Vekil Bilgileri')) {
+          const lines = Array.from(valueCell.querySelectorAll('div'))
+            .map(d => d.textContent.trim())
+            .filter(Boolean);
+          
+          const joinedValue = lines.join(' | ');
+          item.fields[key] = joinedValue;
+          item.details[key] = joinedValue;
+          
+          // Sahip adını özel olarak çıkar
+          if (key.includes('Sahip Bilgileri') && lines.length > 1) {
+            item.ownerName = lines[1];
+          }
+          
+          log(`[OPTS]   ✅ Colspan (${key}): ${lines.length} satır birleştirildi`);
+        } else {
+          let val = valueCell.textContent.trim();
+          if (val === '--' || val === '-') val = '';
+          if (key && val) {
+            item.fields[key] = val;
+            item.details[key] = val;
+          }
+        }
+      } else {
+        // Normal 2 hücreli
+        let val = cellTexts[1];
+        if (val === '--' || val === '-') val = '';
+        if (key && val) {
+          item.fields[key] = val;
+          item.details[key] = val;
+        }
+      }
+    }
+  });
+
+  // ✅ İKİNCİ TABLO: Mal ve Hizmetler (varsa)
+  const allTables = document.querySelectorAll('table.MuiTable-root');
+  log('[OPTS] 📋 Toplam tablo sayısı:', allTables.length);
+  
+  if (allTables.length > 1) {
+    const secondTable = allTables[1];
+    const headers = secondTable.querySelectorAll('th');
+    const headerTexts = Array.from(headers).map(h => h.textContent.trim());
+    
+    log('[OPTS] 📋 2. tablo header\'ları:', headerTexts);
+    
+    if (headerTexts.some(h => h.includes('Sınıf'))) {
+      const goodsRows = secondTable.querySelectorAll('tbody tr');
+      const goodsAndServices = [];
+      
+      goodsRows.forEach(row => {
+        const cells = row.querySelectorAll('td');
+        if (cells.length === 2) {
+          const classNo = parseInt(cells[0].textContent.trim());
+          const description = cells[1].textContent.trim();
+          
+          if (!isNaN(classNo) && description) {
+            goodsAndServices.push({
+              classNo: classNo,
+              items: [description]
+            });
+          }
+        }
+      });
+      
+      if (goodsAndServices.length > 0) {
+        item.goodsAndServicesByClass = goodsAndServices;
+        log('[OPTS] ✅ Mal ve Hizmetler:', goodsAndServices.length, 'sınıf bulundu');
+      }
+    }
+  }
+
+  // Ana alanlara mapping
+  item.applicationDate = item.fields['Başvuru Tarihi'] || '';
+  item.registrationNumber = item.fields['Tescil Numarası'] || '';
+  item.niceClasses = item.fields['Nice Sınıfları'] || '';
+  item.status = item.fields['Durumu'] || item.fields['Karar'] || '';
+  item.brandName = item.fields['Marka Adı'] || '';
+  
+  // Başvuru numarasını normalize et
+  const finalAppNo = normalizeAppNo(item.fields['Başvuru Numarası'] || item.applicationNumber);
+  item.applicationNumber = finalAppNo;
+
+  log('[OPTS] 📝 Final değerler:', {
+    appNo: finalAppNo,
+    brandName: item.brandName,
+    ownerName: item.ownerName,
+    status: item.status,
+    fieldsCount: Object.keys(item.fields).length
+  });
+
+  if (finalAppNo) {
+    log(`[OPTS] ✅ Başarıyla tamamlandı: ${finalAppNo}`);
+    results.push(item);
+  } else {
+    err('[OPTS] ❌ Başvuru numarası çıkarılamadı');
+  }
+  
+  // Sonuçları gönder
+  if (results.length > 0) {
+    const firstAppNo = results[0].applicationNumber;
+    
+    // Duplicate kontrolü - Her başvuru için sadece 1 kez gönder
+    if (__EVREKA_SENT_OPTS_MAP__[firstAppNo]) {
+      log('[OPTS] ⚠️ Duplicate VERI_GELDI_OPTS engellendi:', firstAppNo);
+      return; // Mesaj gönderme, direkt çık
+    }
+    
+    __EVREKA_SENT_OPTS_MAP__[firstAppNo] = true;
+    log('[OPTS] 📤 VERI_GELDI_OPTS gönderiliyor:', results);
+    sendToOpener('VERI_GELDI_OPTS', results);
+    
+    // Başarılı scrape sonrası sekme kapatma
+    setTimeout(() => {
+      log('[OPTS] 🚪 Sekme kapatılıyor...');
+      window.close();
+    }, 2000); // 3 saniye -> 2 saniye
+  } else {
+    err('[OPTS] ❌ Sonuç listesi boş');
+    
+    // Hata mesajını da sadece 1 kez gönder
+    const errorKey = `ERROR_${optsCurrentAppNo || 'unknown'}`;
+    if (!__EVREKA_SENT_ERR_MAP__[errorKey]) {
+      __EVREKA_SENT_ERR_MAP__[errorKey] = true;
+      sendToOpener('HATA_OPTS', { message: 'Scrape sonrası sonuç listesi boş kaldı.' });
+    }
+  }
+}
 
 // Sonuçları bekle ve scrape et
 async function waitForOptsResultsAndScrape(appNo) {
@@ -1490,12 +1700,17 @@ async function waitForOptsResultsAndScrape(appNo) {
     scrapeOptsTableResults(Array.from(allRows), appNo);
     return true;
 
-  } catch (error) {
-    err('[OPTS] ❌ Timeout/Hata:', error.message);
-    // Hata durumunda sadece HATA_OPTS mesajını gönder
-    sendToOpener('HATA_OPTS', { message: error.message || 'Sonuç tablosu bulunamadı veya zaman aşımı' });
-    return false;
-  }
+  } catch (error) {
+      err('[OPTS] ❌ Timeout/Hata:', error.message);
+      
+      // Hata mesajını sadece 1 kez gönder
+      const errorKey = `ERROR_${optsCurrentAppNo || appNo}`;
+      if (!__EVREKA_SENT_ERR_MAP__[errorKey]) {
+        __EVREKA_SENT_ERR_MAP__[errorKey] = true;
+        sendToOpener('HATA_OPTS', { message: error.message || 'Sonuç tablosu bulunamadı veya zaman aşımı' });
+      }
+      return false;
+    }
 }
 
 // ============================================
