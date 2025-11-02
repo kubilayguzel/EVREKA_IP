@@ -1464,77 +1464,6 @@ window.addEventListener('load', () => {
 // OPTS.TURKPATENT.GOV.TR İÇİN ÖZEL AKIM
 // ============================================
 
-// Sayfa yüklendiğinde kontrol
-(function initOptsDetection() {
-  const url = window.location.href;
-  
-  if (/^https:\/\/opts\.turkpatent\.gov\.tr/i.test(url)) { // Düzeltildi
-    log('🎯 [OPTS] Sayfa algılandı:', url);
-    
-    // Hash'ten başvuru no al
-    const hash = window.location.hash;
-    const match = hash.match(/#bn=([^&]+)/);
-    
-    if (match) {
-      const appNo = decodeURIComponent(match[1]);
-      log('✅ [OPTS] Başvuru no bulundu:', appNo);
-      
-      // Sayfa yüklenene kadar bekle
-      setTimeout(() => runOptsApplicationFlow(appNo), 2000);
-    } else {
-      log('⚠️ [OPTS] Hash\'te başvuru no yok'); // Düzeltildi
-    }
-  }
-})();
-
-// OPTS için başvuru no akışı
-async function runOptsApplicationFlow(appNo) {
-  log('🚀 [OPTS] Akış başladı:', appNo);
-  
-  try {
-    // Input alanını bekle
-    let input = await waitFor('input[type="text"]', { timeout: 10000 }).catch(() => null);
-    
-    if (!input) {
-      err('[OPTS] Input bulunamadı');
-      sendToOpener('HATA_OPTS', { message: 'Input alanı bulunamadı' });
-      return;
-    }
-    
-    log('[OPTS] ✅ Input bulundu');
-    
-    // Input'u doldur
-    input.focus();
-    setReactInputValue(input, appNo);
-    await sleep(300);
-    
-    // Arama butonu: Tekrar eden sorguyu engellemek için, butonu bulup tıklıyoruz.
-    let searchBtn = await waitFor('button[type="submit"], button:has(span:contains("Sorgula")), button:contains("Ara")', { 
-      timeout: 10000, 
-      root: input.closest('form') || document.body
-    }).catch(() => {
-      err('[OPTS] Sorgula butonu bulunamadı.');
-      return null;
-    });
-    
-    // Sadece bir kez tıklama/enter gönderme
-    if (searchBtn && click(searchBtn)) {
-      log('[OPTS] ✅ Arama butonu tıklandı');
-    } else {
-      pressEnter(input);
-      log('[OPTS] ⚠️ Buton yok, Enter gönderildi (Tek Tık)');
-    }
-    
-    // Sonuçları bekle ve scrape et
-    // runOptsApplicationFlow bitince sekme kapanır/veri gönderilir.
-    await waitForOptsResultsAndScrape(appNo); 
-    
-  } catch (error) {
-    err('[OPTS] Hata:', error);
-    sendToOpener('HATA_OPTS', { message: error.message });
-  }
-}
-
 // Sonuçları bekle ve scrape et
 async function waitForOptsResultsAndScrape(appNo) {
   log('[OPTS] ⏳ Sonuçlar bekleniyor...');
@@ -1646,6 +1575,36 @@ chrome.runtime?.onMessage?.addListener?.((request, sender, sendResponse) => {
     runOptsApplicationFlow(appNo);
   }, 2000);
 })();
+
+// OPTS için başvuru no akışı - Sadece scraping yapar (input doldurma YOK)
+async function runOptsApplicationFlow(appNo) {
+  log('🚀 [OPTS] Scraping akışı başladı:', appNo);
+  
+  if (!appNo) {
+    err('[OPTS] appNo parametresi boş!');
+    return;
+  }
+  
+  try {
+    // Fraud modal varsa kapat
+    await closeFraudModalIfAny().catch(() => {});
+    
+    // Direkt sonuçları bekle ve scrape et
+    // OPTS sayfası hash ile açıldığında sonuçlar zaten yüklü oluyor
+    log('[OPTS] Sonuçlar bekleniyor ve scrape edilecek...');
+    await waitForOptsResultsAndScrape(appNo); 
+    
+  } catch (error) {
+    err('[OPTS] ❌ Genel hata:', error);
+    
+    // Hata mesajını sadece 1 kez gönder
+    const errorKey = `ERROR_${optsCurrentAppNo || appNo}`;
+    if (!__EVREKA_SENT_ERR_MAP__[errorKey]) {
+      __EVREKA_SENT_ERR_MAP__[errorKey] = true;
+      sendToOpener('HATA_OPTS', { message: error.message || 'OPTS scraping hatası' });
+    }
+  }
+}
 
 chrome.runtime?.onMessage?.addListener?.((msg)=>{
   if (msg && msg.type === 'VERI_ALINDI_OK') {
