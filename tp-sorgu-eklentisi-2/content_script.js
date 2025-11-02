@@ -1531,24 +1531,26 @@ async function runOptsApplicationFlow(appNo) {
     setReactInputValue(input, appNo);
     await sleep(300);
     
-    // Arama butonu
-    let searchBtn = document.querySelector('button[type="submit"]');
-    if (!searchBtn) {
-      searchBtn = Array.from(document.querySelectorAll('button')).find(b => 
-        /sorgula|ara|search/i.test(b.textContent || '')
-      );
-    }
+    // Arama butonu: Tekrar eden sorguyu engellemek için, butonu bulup tıklıyoruz.
+    let searchBtn = await waitFor('button[type="submit"], button:has(span:contains("Sorgula")), button:contains("Ara")', { 
+      timeout: 10000, 
+      root: input.closest('form') || document.body
+    }).catch(() => {
+      err('[OPTS] Sorgula butonu bulunamadı.');
+      return null;
+    });
     
+    // Sadece bir kez tıklama/enter gönderme
     if (searchBtn && click(searchBtn)) {
       log('[OPTS] ✅ Arama butonu tıklandı');
     } else {
-      log('[OPTS] ⚠️ Buton yok, Enter gönderiliyor');
       pressEnter(input);
+      log('[OPTS] ⚠️ Buton yok, Enter gönderildi (Tek Tık)');
     }
     
-    // Sonuçları bekle
-    await sleep(2000);
-    await waitForOptsResultsAndScrape(appNo);
+    // Sonuçları bekle ve scrape et
+    // runOptsApplicationFlow bitince sekme kapanır/veri gönderilir.
+    await waitForOptsResultsAndScrape(appNo); 
     
   } catch (error) {
     err('[OPTS] Hata:', error);
@@ -1560,37 +1562,36 @@ async function runOptsApplicationFlow(appNo) {
 async function waitForOptsResultsAndScrape(appNo) {
   log('[OPTS] ⏳ Sonuçlar bekleniyor...');
   
-  let attempts = 0;
-  const maxAttempts = 40;
-  
-  return new Promise((resolve) => {
-    const interval = setInterval(() => {
-      attempts++;
-      
-      // Tablo satırlarını kontrol et
-      const rows = document.querySelectorAll('tbody tr, table tr');
-      const validRows = Array.from(rows).filter(row => {
-        const cells = row.querySelectorAll('td');
-        return cells.length > 3;
-      });
-      
-      if (validRows.length > 0) {
-        log('[OPTS] ✅ Sonuç bulundu:', validRows.length, 'satır');
-        clearInterval(interval);
-        scrapeOptsTableResults(validRows, appNo);
-        resolve(true);
-        return;
-      }
-      
-      if (attempts >= maxAttempts) {
-        log('[OPTS] ❌ Timeout');
-        clearInterval(interval);
-        sendToOpener('HATA_OPTS', { message: 'Sonuç bulunamadı' });
-        resolve(false);
-      }
-    }, 500);
-  });
+  try {
+    // ✅ YENİ SEÇİCİ: Sonuçları içeren ana tablo gövdesini bekliyoruz.
+    // Material UI yapısını (.MuiTableContainer-root) ve tbody içeriğini hedef al
+    const tableContainer = await waitFor('.MuiTableContainer-root', { 
+      timeout: 35000, // Zaman aşımı süresi artırıldı
+      test: (el) => {
+          // Tablo içinde en az bir MuiTableRow-root sınıfına sahip satır var mı?
+          return !!el.querySelector('tbody.MuiTableBody-root tr.MuiTableRow-root');
+      }
+    });
+
+    // Tablonun içindeki tüm veri satırlarını topla
+    const allRows = tableContainer.querySelectorAll('tbody.MuiTableBody-root tr.MuiTableRow-root');
+
+    if (allRows.length === 0) {
+      throw new Error("Sorgu sonucu bulunamadı (0 satır).");
+    }
+    
+    log('[OPTS] ✅ Sonuç bulundu:', allRows.length, 'satır');
+    scrapeOptsTableResults(Array.from(allRows), appNo);
+    return true;
+
+  } catch (error) {
+    err('[OPTS] ❌ Timeout/Hata:', error.message);
+    // Hata durumunda sadece HATA_OPTS mesajını gönder
+    sendToOpener('HATA_OPTS', { message: error.message || 'Sonuç tablosu bulunamadı veya zaman aşımı' });
+    return false;
+  }
 }
+
 
 // Tablo sonuçlarını scrape et
 function scrapeOptsTableResults(rows, appNo) {
@@ -1598,82 +1599,103 @@ function scrapeOptsTableResults(rows, appNo) {
   
   const results = [];
   
-  rows.forEach((row, idx) => {
-    const cells = Array.from(row.querySelectorAll('td'));
-    if (cells.length < 3) return;
-    
-    const item = {
-      applicationNumber: appNo,
-      brandName: '',
-      ownerName: '',
-      applicationDate: '',
-      registrationNumber: '',
-      status: '',
-      niceClasses: '',
-      imageSrc: null,
-      brandImageUrl: null,
-      brandImageDataUrl: null
-    };
-    
-    // Görsel
-    const img = row.querySelector('img');
-    if (img?.src) {
-      item.imageSrc = img.src;
-      item.brandImageUrl = img.src;
-      item.brandImageDataUrl = img.src;
-    }
-    
-    // Hücreleri parse et
-    cells.forEach(cell => {
-      const txt = cell.textContent.trim();
-      
-      if (/^\d{4}\/\d+$/.test(txt)) { // Düzeltildi
-        item.applicationNumber = normalizeAppNo(txt);
-      }
-      else if (/^\d{2}\.\d{2}\.\d{4}$/.test(txt) && !item.applicationDate) { // Düzeltildi
-        item.applicationDate = txt;
-      }
-      else if (/^\d{4}\s+\d+$/.test(txt)) { // Düzeltildi
-        item.registrationNumber = txt;
-      }
-      else if (/TESCİL|GEÇERSİZ|BAŞVURU|RET|YAYINLANDI/i.test(txt)) {
-        item.status = txt;
-      }
-      else if (txt.includes('/') && /\d+/.test(txt) && txt.length < 50) { // Düzeltildi
-        item.niceClasses = txt;
-      }
-      else if (txt && !item.brandName && txt.length < 200) {
-        if (!/LİMİTED|A\.Ş\.|ŞİRKETİ/i.test(txt)) { // Düzeltildi
-          item.brandName = txt;
+  // Marka Görselini doğrudan en üst seviye div'den çekelim (ekran görüntüsündeki gibi)
+  const imageContainer = document.querySelector('.MuiBox-root img[alt="Marka Görseli"]');
+  const imgUrl = imageContainer ? imageContainer.src : null;
+
+
+  // ✅ 4 Kolonlu Yapıdan Veri Çıkarımı (Key-Value Key-Value)
+  const item = {
+    applicationNumber: appNo,
+    brandName: '',
+    ownerName: '',
+    applicationDate: '',
+    registrationNumber: '',
+    status: '',
+    niceClasses: '',
+    imageSrc: imgUrl,
+    brandImageUrl: imgUrl,
+    brandImageDataUrl: imgUrl,
+    fields: {}
+  };
+
+  // Ekran görüntüsündeki gibi <tr> içinde <td>Key</td><td>Value</td> yapısını parse et.
+  const dataRows = document.querySelectorAll('.MuiTableBody-root tr.MuiTableRow-root');
+  
+  dataRows.forEach(dataRow => {
+    const rowCells = dataRow.querySelectorAll('td.MuiTableCell-root');
+    const cellTexts = Array.from(rowCells).map(c => (c.textContent || '').trim());
+
+    // 4 hücreli: Key1, Value1, Key2, Value2
+    if (rowCells.length === 4) {
+      const key1 = cellTexts[0];
+      const value1 = cellTexts[1];
+      const key2 = cellTexts[2];
+      const value2 = cellTexts[3];
+
+      if (key1) item.fields[key1] = value1;
+      if (key2) item.fields[key2] = value2;
+    } 
+    // Colspan 3 (4 hücreli gibi ama son 3'ü tek hücrede): Key, Value(Colspan 3)
+    else if (rowCells.length === 2 && rowCells[1].getAttribute('colspan') === '3') {
+      const key = cellTexts[0];
+      const valueCell = rowCells[1];
+      if (key) {
+        // Sahip/Vekil Bilgileri özel işlenmeli (içindeki div/p'lerden)
+        if (key.includes('Sahip Bilgileri') || key.includes('Vekil Bilgileri')) {
+          // İçindeki div elementlerinden satır satır metinleri al
+          const lines = Array.from(valueCell.querySelectorAll('div')).map(d => d.textContent.trim()).filter(Boolean);
+          item.fields[key] = lines.join(' | '); // Tek satıra birleştiriyoruz
+          if (key.includes('Sahip Bilgileri') && lines.length > 1) {
+            item.ownerName = lines[1]; // Genellikle ikinci satır Sahip Adıdır
+          }
+        } else {
+          item.fields[key] = valueCell.textContent.trim();
         }
       }
-      else if (txt && !item.ownerName) {
-        item.ownerName = txt;
-      }
-    });
-    
-    if (item.applicationNumber) {
-      log(`[OPTS]   ✅ Satır ${idx + 1}:`, item.applicationNumber);
-      results.push(item);
-    }
+    } 
+    // 2 hücreli (key-value)
+    else if (rowCells.length === 2) {
+        const key = cellTexts[0];
+        const value = cellTexts[1];
+        if (key) item.fields[key] = value;
+    }
   });
+
+  // Extracted fields'ı ana item'a atama
+  item.applicationDate = item.fields['Başvuru Tarihi'] || '';
+  item.registrationNumber = item.fields['Tescil Numarası'] || '';
+  item.niceClasses = item.fields['Nice Sınıfları'] || '';
+  // Durumu, Durumu alanından veya Karar alanından al
+  item.status = item.fields['Durumu'] || item.fields['Karar'] || ''; 
   
-  log('[OPTS] ✅ Toplam:', results.length, 'kayıt');
+  // Başvuru Numarası
+  const finalAppNo = normalizeAppNo(item.fields['Başvuru Numarası'] || item.applicationNumber);
+  item.applicationNumber = finalAppNo;
+  
+  // Marka Adı'nı fields'tan çek
+  item.brandName = item.fields['Marka Adı'] || '';
+
+
+  if (finalAppNo) {
+    log(`[OPTS] ✅ Tamamlandı: ${finalAppNo}`);
+    results.push(item);
+  } else {
+    log('[OPTS] ❌ Başvuru numarası çıkarılamadı, veri atlandı.');
+}
   
   if (results.length > 0) {
-    
-    // Single-send guard per appNo
-    const firstAppNo = (results && results[0] && results[0].applicationNumber) || null;
-    if (firstAppNo && __EVREKA_SENT_OPTS_MAP__[firstAppNo]) {
-      log('[OPTS] Duplicate VERI_GELDI_OPTS prevented for', firstAppNo);
+    const firstAppNo = results[0].applicationNumber;
+    if (__EVREKA_SENT_OPTS_MAP__[firstAppNo]) {
+      log('[OPTS] Duplicate VERI_GELDI_OPTS engellendi:', firstAppNo);
     } else {
-      if (firstAppNo) __EVREKA_SENT_OPTS_MAP__[firstAppNo] = true;
+      __EVREKA_SENT_OPTS_MAP__[firstAppNo] = true;
       sendToOpener('VERI_GELDI_OPTS', results);
     }
-
-    setTimeout(() => window.close(), 2000);
+    // Başarılı scrape sonrası sekme kapatma
+    setTimeout(() => window.close(), 3000); 
   } else {
-    sendToOpener('HATA_OPTS', { message: 'Veri bulunamadı' });
+    sendToOpener('HATA_OPTS', { message: 'Scrape sonrası sonuç listesi boş kaldı.' });
   }
 }
 
