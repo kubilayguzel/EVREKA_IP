@@ -795,16 +795,30 @@ tr.group-row[aria-hidden="true"]{ display:none !important; }
 
             tableBody.innerHTML = '';
 
-            // Pagination toplamı
+            // (⚠️ ÖNEMLİ) Grupları doğrudan bu liste üzerinden oluştur
+            const groupsMapLocal = {};
+            (list || []).forEach(item => {
+            const gkey = normalizeAppNo(item.applicationNumber) || '—';
+            if (!groupsMapLocal[gkey]) groupsMapLocal[gkey] = { key: gkey, items: [] };
+            groupsMapLocal[gkey].items.push(item);
+            });
+            let groupsLocal = Object.values(groupsMapLocal)
+            .map(g => {
+                g.items.sort((a, b) => {
+                const ad = new Date(a.bulletinDate || 0).getTime();
+                const bd = new Date(b.bulletinDate || 0).getTime();
+                return bd - ad; // en yeni başa
+                });
+                g.hasMultiple = g.items.length > 1;
+                return g;
+            })
+            .sort((a, b) => b.items.length - a.items.length);
+
+            // Pagination toplamı – satır adedine göre
             pagination.update(list.length);
 
-            // Grupları hazırla (önceden hesaplandıysa kullan, değilse oluştur)
-            if (!this.objectionGroups || !this.objectionGroups.length) {
-                this.buildObjectionGroups();
-            }
-
             // Bu sayfada gösterilecek grup aralığı
-            const pageGroups = pagination.getCurrentPageData(this.objectionGroups);
+            const pageGroups = pagination.getCurrentPageData(groupsLocal);
 
             const frag = document.createDocumentFragment();
 
@@ -841,6 +855,8 @@ tr.group-row[aria-hidden="true"]{ display:none !important; }
             <td>${fmtDate(head.epatsDate)}</td>
             <td>${head.statusText || '-'}</td>
             `;
+
+            frag.appendChild(th);
 
             // parent'ı child'lardan çıkar
             const children = hasChildren ? group.items.slice(1) : [];
