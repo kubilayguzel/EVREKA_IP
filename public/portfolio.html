@@ -1945,16 +1945,7 @@ async loadObjectionRows() {
     const allRecords = this.pickArray(recordsResult);
     
     console.log('📊 Toplam kayıt sayısı:', allRecords.length);
-    
-    // İlk filtreleme: Sadece 3. taraf kayıtlarını ve transactions array'i olanları al
-    const relevantRecords = allRecords.filter(record => {
-      // Sadece 3. taraf kayıtları veya transactions'ı olan kayıtlar
-      return record.recordOwnerType === 'third_party' || 
-             (Array.isArray(record.transactions) && record.transactions.length > 0);
-    });
-    
-    console.log('📊 İtirazla ilgili olabilecek kayıt sayısı:', relevantRecords.length);
-    
+      
     // Batch processing: Her seferinde 50 kayıt işle
     const BATCH_SIZE = 50;
     let processedCount = 0;
