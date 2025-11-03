@@ -876,7 +876,7 @@ tr.group-row[aria-hidden="true"]{ display:none !important; }
             <td>${head.statusText || '-'}</td>
             `;
 
-            frag.appendChild(th);
+            frag.appendChild(tr);
 
             // parent'ı child'lardan çıkar
             const children = hasChildren ? group.items.slice(1) : [];
