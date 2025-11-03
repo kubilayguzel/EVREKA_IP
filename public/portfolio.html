@@ -456,6 +456,9 @@ td.caret-host { position: relative; padding-left: 28px; }
   border-radius: 4px;
 }
 
+tr.child-row[aria-hidden="true"] { display: none; }
+tr.group-header .row-caret { cursor: pointer; }
+
 </style>
 
 <style id="accordion-fix-style">
@@ -836,8 +839,9 @@ tr.group-row[aria-hidden="true"]{ display:none !important; }
                 `;
                 frag.appendChild(th);
 
-                // Child satırlar (başlık altına gizli)
-                group.items.forEach(item => {
+                // parent header'ı ekledikten sonra: parent'ı child'lardan çıkar
+                const children = group.items.slice(1); // ilk eleman parent (başlıkta gösteriliyor)
+                children.forEach(item => {
                 const tr = document.createElement('tr');
                 tr.className = 'group-row child-row';
                 tr.dataset.parentId = gid;
@@ -2035,74 +2039,52 @@ async loadObjectionRows() {
                 localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
             }
 
-            window.wireAccordion = function(){
-                const tbody = document.getElementById('portfolioTableBody');
-                if(!tbody) return;
-                const toggleGroup = (gid, next) => {
-                    const btn = tbody.querySelector(`.row-caret[data-group-id="${gid}"]`);
-                    if(btn) btn.setAttribute('aria-expanded', String(next));
-                    tbody.querySelectorAll(`tr.group-row[data-parent-id="${gid}"]`).forEach(r => {
-                        r.setAttribute('aria-hidden', next ? 'false' : 'true');
-                    });
-                };
-                if(!tbody.__accordionBound){
-                    tbody.addEventListener('click', (e)=>{
-                        const caret = e.target.closest('.row-caret');
-                        if(caret){
-                            const gid = caret.dataset.groupId;
-                            const expanded = caret.getAttribute('aria-expanded') === 'true';
-                            toggleGroup(gid, !expanded);
-                            return;
-                        }
-                        const header = e.target.closest('tr.group-header');
-                        if(header && !e.target.closest('button,.action-btn,a,input[type="checkbox"]')){
-                            const gid = header.dataset.groupId;
-                            const hb = header.querySelector('.row-caret');
-                            const expanded = hb && hb.getAttribute('aria-expanded') === 'true';
-                            toggleGroup(gid, !expanded);
-                        }
-                    });
-                    tbody.__accordionBound = true;
+            window.wireAccordion = function () {
+            const tbody = document.getElementById('portfolioTableBody');
+            if (!tbody) return;
+
+            // Toggle işlemi: sadece ilgili grubun child'larını hedefle
+            const toggleGroup = (gid, nextOpen) => {
+                // Sadece group-header içindeki row-caret'i güncelle
+                const btn = tbody.querySelector(`tr.group-header .row-caret[data-group-id="${gid}"]`);
+                if (btn) {
+                btn.setAttribute('aria-expanded', String(nextOpen));
+                const icon = btn.querySelector('i');
+                if (icon) {
+                    icon.classList.toggle('fa-chevron-right', !nextOpen);
+                    icon.classList.toggle('fa-chevron-down', nextOpen);
                 }
+                }
+                // Sadece child satırları aç/kapat
+                tbody.querySelectorAll(`tr.child-row[data-parent-id="${gid}"]`)
+                .forEach(r => r.setAttribute('aria-hidden', nextOpen ? 'false' : 'true'));
             };
 
-            window.wireObjectionsAccordion = function(){
-                const tbody = document.getElementById('portfolioTableBody');
-                if(!tbody) return;
-                const toggleGroup = (groupId, isExpanded) => {
-                    const header = tbody.querySelector(`.accordion-toggle[aria-controls="grp-${groupId}"]`);
-                    if (header) {
-                        header.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
-                        header.querySelector('i').classList.toggle('fa-chevron-right', !isExpanded);
-                        header.querySelector('i').classList.toggle('fa-chevron-down', isExpanded);
-                    }
-                    const rows = tbody.querySelectorAll(`tr.group-row[data-parent-id="${groupId}"]`);
-                    rows.forEach(row => {
-                        row.setAttribute('aria-hidden', !isExpanded ? 'true' : 'false');
-                    });
-                    const state = loadState();
-                    state[groupId] = isExpanded;
-                    saveState(state);
-                };
+            // Event delegation – sadece parent header veya onun butonu tetiklesin
+            if (!tbody.__accordionBound) {
                 tbody.addEventListener('click', (e) => {
-                    const toggleBtn = e.target.closest('.accordion-toggle');
-                    if (toggleBtn) {
-                        const groupId = toggleBtn.getAttribute('aria-controls').replace('grp-', '');
-                        const isExpanded = toggleBtn.getAttribute('aria-expanded') === 'true';
-                        toggleGroup(groupId, !isExpanded);
-                    }
+                const caretBtn = e.target.closest('tr.group-header .row-caret');
+                if (caretBtn) {
+                    const gid = caretBtn.dataset.groupId;
+                    const expanded = caretBtn.getAttribute('aria-expanded') === 'true';
+                    toggleGroup(gid, !expanded);
+                    return;
+                }
+                const header = e.target.closest('tr.group-header');
+                if (header && !e.target.closest('button,.action-btn,a,input[type="checkbox"]')) {
+                    const gid = header.dataset.groupId;
+                    const hb = header.querySelector('.row-caret');
+                    const expanded = hb && hb.getAttribute('aria-expanded') === 'true';
+                    toggleGroup(gid, !expanded);
+                }
                 });
-                const state = loadState();
-                tbody.querySelectorAll('.group-header').forEach(header => {
-                    const groupId = header.dataset.groupId;
-                    const toggleBtn = header.querySelector('.accordion-toggle');
-                    if (state[groupId] && toggleBtn) {
-                        toggleGroup(groupId, true);
-                    } else if (toggleBtn) {
-                        toggleGroup(groupId, false);
-                    }
-                });
+                tbody.__accordionBound = true;
+            }
+
+            // Güvenlik: group-header olmayan satırlarda yanlışlıkla kalmış caret varsa temizle
+            tbody.querySelectorAll('tr:not(.group-header) .row-caret').forEach(el => el.remove());
             };
+
         })();
     </script>
 </body>
