@@ -785,46 +785,125 @@ tr.group-row[aria-hidden="true"]{ display:none !important; }
                 }
             }
             
-        renderObjectionRows(list) {
-            const tableBody = document.getElementById('portfolioTableBody');
-            if (!tableBody || !pagination) return;
+            renderObjectionRows(list) {
+                const tableBody = document.getElementById('portfolioTableBody');
+                if (!tableBody || !pagination) return;
 
-            tableBody.innerHTML = '';
+                tableBody.innerHTML = '';
 
-            // Pagination toplamı güncelle
-            pagination.update(list.length);
+                // Önce gruplama yap
+                const groupsMap = {};
+                list.forEach(item => {
+                    const key = normalizeAppNo(item.applicationNumber || '');
+                    if (!groupsMap[key]) {
+                        groupsMap[key] = {
+                            key,
+                            displayNo: item.applicationNumber || '-',
+                            items: []
+                        };
+                    }
+                    groupsMap[key].items.push(item);
+                });
 
-            // Bu sayfada gösterilecek kalemleri al
-            const pageData = pagination.getCurrentPageData(list);
+                // Grupları diziye çevir ve sırala
+                const groups = Object.values(groupsMap);
+                groups.forEach(g => {
+                    g.items.sort((a, b) => {
+                        const ad = new Date(a.bulletinDate || 0).getTime();
+                        const bd = new Date(b.bulletinDate || 0).getTime();
+                        return bd - ad; // En yeni en üstte
+                    });
+                    g.hasMultiple = g.items.length > 1;
+                });
 
-            const frag = document.createDocumentFragment();
-            pageData.forEach(r => {
-                const tr = document.createElement('tr');
-                tr.innerHTML = `
-                <td></td>  <!-- toggle/caret kolonu boş -->
-                <td>${(r.recordType || r.ipType || '-')}</td>
-                <td>${(r.transactionTypeName || '-')}</td>
-                <td>${(r.applicationNumber || '-')}</td>
-                <td>${(r.applicantName || '-')}</td>
-                <td>${(r.opponent || '-')}</td>
-                <td>${fmtDate(r.bulletinDate)}</td>
-                <td>${(r.bulletinNo || '-')}</td>
-                <td>${fmtDate(r.epatsDate)}</td>
-                <td>${(r.statusText || '-')}</td>
-                `;
-                frag.appendChild(tr);
-            });
+                // Pagination için toplam satır sayısını hesapla (parent + child)
+                const totalRows = groups.reduce((sum, g) => sum + (g.hasMultiple ? 1 + g.items.length : g.items.length), 0);
+                pagination.update(totalRows);
 
-            tableBody.appendChild(frag);
+                // Sayfadaki grupları al
+                const pageGroups = pagination.getCurrentPageData(groups);
 
-            // Boş liste mesajı yönetimi
-            const tbody = document.getElementById('portfolioTableBody');
-            const noRecMsg = document.getElementById('noRecordsMessage');
+                const frag = document.createDocumentFragment();
+                
+                pageGroups.forEach(group => {
+                    if (group.hasMultiple) {
+                        // PARENT SATIR
+                        const parentTr = document.createElement('tr');
+                        parentTr.className = 'group-header';
+                        parentTr.dataset.groupId = safeId(group.key);
+                        
+                        const firstItem = group.items[0];
+                        
+                        parentTr.innerHTML = `
+                            <td class="caret-host">
+                                <button class="row-caret" aria-expanded="false" data-group-id="${safeId(group.key)}">
+                                    <i class="fas fa-chevron-right"></i>
+                                </button>
+                            </td>
+                            <td>${firstItem.recordType || '-'}</td>
+                            <td>${firstItem.transactionTypeName || '-'}</td>
+                            <td>${group.displayNo}</td>
+                            <td>${firstItem.applicantName || '-'}</td>
+                            <td colspan="5" style="text-align:right; padding-right:20px;">
+                                <span class="count-dot">${group.items.length}</span> işlem
+                            </td>
+                        `;
+                        frag.appendChild(parentTr);
 
-            if (tbody) tbody.style.display = list.length > 0 ? 'table-row-group' : 'none';
-            if (noRecMsg) noRecMsg.style.display = list.length === 0 ? 'block' : 'none';
+                        // CHILD SATIRLAR
+                        group.items.forEach((item, idx) => {
+                            const childTr = document.createElement('tr');
+                            childTr.className = 'group-row child-row';
+                            childTr.dataset.parentId = safeId(group.key);
+                            childTr.setAttribute('aria-hidden', 'true');
+                            
+                            childTr.innerHTML = `
+                                <td></td>
+                                <td>${item.recordType || '-'}</td>
+                                <td>${item.transactionTypeName || '-'}</td>
+                                <td>${item.applicationNumber || '-'}</td>
+                                <td>${item.applicantName || '-'}</td>
+                                <td>${item.opponent || '-'}</td>
+                                <td>${fmtDate(item.bulletinDate)}</td>
+                                <td>${item.bulletinNo || '-'}</td>
+                                <td>${fmtDate(item.epatsDate)}</td>
+                                <td>${item.statusText || '-'}</td>
+                            `;
+                            frag.appendChild(childTr);
+                        });
+                    } else {
+                        // TEK SATIR (accordion'suz)
+                        const item = group.items[0];
+                        const tr = document.createElement('tr');
+                        tr.innerHTML = `
+                            <td></td>
+                            <td>${item.recordType || '-'}</td>
+                            <td>${item.transactionTypeName || '-'}</td>
+                            <td>${item.applicationNumber || '-'}</td>
+                            <td>${item.applicantName || '-'}</td>
+                            <td>${item.opponent || '-'}</td>
+                            <td>${fmtDate(item.bulletinDate)}</td>
+                            <td>${item.bulletinNo || '-'}</td>
+                            <td>${fmtDate(item.epatsDate)}</td>
+                            <td>${item.statusText || '-'}</td>
+                        `;
+                        frag.appendChild(tr);
+                    }
+                });
 
-            console.log('✅ İtirazlar render edildi, gösterilen satır:', pageData.length, '/ Toplam:', list.length);
+                tableBody.appendChild(frag);
+                
+                // Accordion'u aktif et
+                wireAccordion();
+
+                // Boş liste mesajı yönetimi
+                const tbody = document.getElementById('portfolioTableBody');
+                const noRecMsg = document.getElementById('noRecordsMessage');
+
+                if (tbody) tbody.style.display = list.length > 0 ? 'table-row-group' : 'none';
+                if (noRecMsg) noRecMsg.style.display = list.length === 0 ? 'block' : 'none';
+
+                console.log('✅ İtirazlar render edildi (accordion):', pageGroups.length, 'grup');
             }
 
         renderCurrentPage() {
@@ -1250,8 +1329,7 @@ tr.group-row[aria-hidden="true"]{ display:none !important; }
                             this.loadObjectionRows()
                                 .then(() => {
                                     console.log('✅ İtirazlar yüklendi, satır sayısı:', this.objectionRows.length);
-                                    this.buildObjectionGroups();
-                                    
+                                   
                                     if (pagination) {
                                         pagination.update(this.objectionRows.length);
                                     }
@@ -1917,26 +1995,6 @@ async loadObjectionRows() {
   console.log('✅ loadObjectionRows tamamlandı, toplam satır:', rows.length);
   this.objectionRows = rows;
 }
-
-            buildObjectionGroups() {
-            const groupsMap = {};
-            (this.objectionRows || []).forEach(item => {
-                const key = item.applicationNumber || '—';
-                if (!groupsMap[key]) groupsMap[key] = { key, items: [] };
-                groupsMap[key].items.push(item);
-            });
-            this.objectionGroups = Object.values(groupsMap)
-            .map(g => {
-                g.items.sort((a, b) => {
-                const ad = new Date(a.bulletinDate || 0).getTime();
-                const bd = new Date(b.bulletinDate || 0).getTime();
-                return bd - ad;
-                });
-                g.hasMultiple = g.items.length > 1;
-                return g;
-            })
-            .sort((a, b) => b.items.length - a.items.length);
-            }
 
             initialRenderTableStructure() {
                 const headerRow = document.getElementById('portfolioTableHeaderRow');
