@@ -818,8 +818,13 @@ tr.group-row[aria-hidden="true"]{ display:none !important; }
             tableBody.appendChild(frag);
 
             // Boş liste mesajı yönetimi
-            document.getElementById('portfolioTableBody').style.display = list.length > 0 ? 'table-row-group' : 'none';
-            document.getElementById('noRecordsMessage').style.display = list.length === 0 ? 'block' : 'none';
+            const tbody = document.getElementById('portfolioTableBody');
+            const noRecMsg = document.getElementById('noRecordsMessage');
+
+            if (tbody) tbody.style.display = list.length > 0 ? 'table-row-group' : 'none';
+            if (noRecMsg) noRecMsg.style.display = list.length === 0 ? 'block' : 'none';
+
+            console.log('✅ İtirazlar render edildi, gösterilen satır:', pageData.length, '/ Toplam:', list.length);
             }
 
         renderCurrentPage() {
@@ -1242,18 +1247,36 @@ tr.group-row[aria-hidden="true"]{ display:none !important; }
                         if (globalSelect) globalSelect.checked = false;
                         this.initialRenderTableStructure();
                         if (this.activeTypeFilter === 'objections') {
-                        this.loadObjectionRows()
-                            .then(() => {
-                            this.buildObjectionGroups();
-                            if (pagination) pagination.update(this.objectionRows.length); // <-- EKLENDİ
-                            // boş liste mesajı
-                            document.getElementById('noRecordsMessage').style.display =
-                                (this.objectionRows.length === 0) ? 'block' : 'none';
-                            this.renderCurrentPage();
-                            })
-                            .catch(err => console.error('İtiraz satırları yüklenemedi:', err));
+                            this.loadObjectionRows()
+                                .then(() => {
+                                    console.log('✅ İtirazlar yüklendi, satır sayısı:', this.objectionRows.length);
+                                    this.buildObjectionGroups();
+                                    
+                                    if (pagination) {
+                                        pagination.update(this.objectionRows.length);
+                                    }
+                                    
+                                    // Tablo yapısını göster/gizle
+                                    const tbody = document.getElementById('portfolioTableBody');
+                                    const noRecMsg = document.getElementById('noRecordsMessage');
+                                    
+                                    if (this.objectionRows.length === 0) {
+                                        if (tbody) tbody.style.display = 'none';
+                                        if (noRecMsg) noRecMsg.style.display = 'block';
+                                    } else {
+                                        if (tbody) tbody.style.display = 'table-row-group';
+                                        if (noRecMsg) noRecMsg.style.display = 'none';
+                                    }
+                                    
+                                    this.renderCurrentPage();
+                                })
+                                .catch(err => {
+                                    console.error('❌ İtiraz satırları yüklenirken hata:', err);
+                                    this.objectionRows = [];
+                                    document.getElementById('noRecordsMessage').style.display = 'block';
+                                });
                         } else {
-                        this.applyFiltersAndSort();
+                            this.applyFiltersAndSort();
                         }
                     });
                 });
@@ -1783,21 +1806,25 @@ tr.group-row[aria-hidden="true"]{ display:none !important; }
             }
 
 async loadObjectionRows() {
-  console.log('🔄 FIXED loadObjectionRows başladı');
+  console.log('🔄 İtirazlar yükleniyor...');
   const TYPE_SET = new Set(['7','19','20', 7, 19, 20]);
-  console.log('🎯 Aranacak task tipleri:', Array.from(TYPE_SET));
-
-  // 1) Tasks: tek çağrı
+  
   let tasks = [];
   try {
-    console.log('📡 Tasks çekiliyor...');
     const res = await (taskService.getTasks?.() || taskService.getAllTasks?.());
     const arr = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
     tasks = arr.filter(t => TYPE_SET.has(String(t.taskType)));
-    console.log('📊 İtiraz task sayısı:', tasks.length);
+    console.log('✅ İtiraz task sayısı:', tasks.length);
   } catch (e) {
     console.error('❌ Tasks yüklenemedi', e);
-    tasks = [];
+    this.objectionRows = [];
+    return;
+  }
+  
+  if (tasks.length === 0) {
+    console.log('ℹ️ Hiç itiraz task bulunamadı');
+    this.objectionRows = [];
+    return;
   }
 
   console.log('🔄 Task detayları işleniyor (paralel)...');
