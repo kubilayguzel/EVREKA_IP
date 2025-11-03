@@ -809,104 +809,103 @@ tr.group-row[aria-hidden="true"]{ display:none !important; }
                 }
             }
             
-            // İTİRAZLAR TABI – AKORDEONLU RENDER
-            renderObjectionRows(list) {
-                        const tableBody = document.getElementById('portfolioTableBody');
-                        if (!tableBody || !pagination) return;
+// İTİRAZLAR TABI – AKORDEONLU RENDER
+renderObjectionRows(list) {
+            const tableBody = document.getElementById('portfolioTableBody');
+            if (!tableBody || !pagination) return;
 
-                        tableBody.innerHTML = '';
+            tableBody.innerHTML = '';
 
-                        // (⚠️ ÖNEMLİ) Grupları doğrudan bu liste üzerinden oluştur
-                        const groupsMapLocal = {};
-                        (list || []).forEach(item => {
-                        const gkey = normalizeAppNo(item.applicationNumber) || '—';
-                        if (!groupsMapLocal[gkey]) groupsMapLocal[gkey] = { key: gkey, items: [] };
-                        groupsMapLocal[gkey].items.push(item);
-                        });
-                        let groupsLocal = Object.values(groupsMapLocal)
-                        .map(g => {
-                            g.items.sort((a, b) => {
-                            const ad = new Date(a.bulletinDate || 0).getTime();
-                            const bd = new Date(b.bulletinDate || 0).getTime();
-                            return bd - ad; // en yeni başa
-                            });
-                            g.hasMultiple = g.items.length > 1;
-                            return g;
-                        })
-                        .sort((a, b) => b.items.length - a.items.length);
+            // (⚠️ ÖNEMLİ) Grupları doğrudan bu liste üzerinden oluştur
+            const groupsMapLocal = {};
+            (list || []).forEach(item => {
+            const gkey = normalizeAppNo(item.applicationNumber) || '—';
+            if (!groupsMapLocal[gkey]) groupsMapLocal[gkey] = { key: gkey, items: [] };
+            groupsMapLocal[gkey].items.push(item);
+            });
+            let groupsLocal = Object.values(groupsMapLocal)
+            .map(g => {
+                g.items.sort((a, b) => {
+                const ad = new Date(a.bulletinDate || 0).getTime();
+                const bd = new Date(b.bulletinDate || 0).getTime();
+                return bd - ad; // en yeni başa
+                });
+                g.hasMultiple = g.items.length > 1;
+                return g;
+            })
+            .sort((a, b) => b.items.length - a.items.length);
 
-                        // Pagination toplamı – satır adedine göre
-                        pagination.update(list.length);
+            // Pagination toplamı – satır adedine göre
+            pagination.update(list.length);
 
-                        // Bu sayfada gösterilecek grup aralığı
-                        const pageGroups = pagination.getCurrentPageData(groupsLocal);
+            // Bu sayfada gösterilecek grup aralığı
+            const pageGroups = pagination.getCurrentPageData(groupsLocal);
 
-                        const frag = document.createDocumentFragment();
+            const frag = document.createDocumentFragment();
 
-                        pageGroups.forEach(group => {
-                            const gid = safeId(group.key);
-                            const head = group.items[0] || {}; // gruptaki en güncel satır
-                            const hasChildren = (group.items.length > 1);
-                            const colSpanCount = 10; // İtirazlar tablosundaki toplam kolon sayısı
+            pageGroups.forEach(group => {
+                const gid = safeId(group.key);
+                const hasChildren = (group.items.length > 1);
+                const colSpanCount = 10; // İtirazlar tablosundaki toplam kolon sayısı
 
-                            // Grup başlığı (parent satır)
-                            const trHeader = document.createElement('tr');
-                            trHeader.className = 'group-header';
-                            trHeader.dataset.groupId = gid;
+                // Grup başlığı (parent satır)
+                const trHeader = document.createElement('tr');
+                trHeader.className = 'group-header';
+                trHeader.dataset.groupId = gid; // Akordeon JS'in ihtiyacı var
 
-                            // ✅ AKORDEON BUTONU VE GRUP BAŞLIĞI
-                            trHeader.innerHTML = `
-                            <td class="toggle-cell">
-                                ${hasChildren
-                                ? `<button class="accordion-toggle" data-group-id="${gid}" aria-expanded="false" aria-controls="grp-${gid}">
-                                    <i class="fas fa-chevron-right"></i>
-                                    </button>`
-                                : ''
-                                }
-                            </td>
-                            <td colspan="${colSpanCount - 1}" class="group-title">
-                                <span class="badge badge-soft">${safe(group.key)}</span>
-                                <strong>başvuru numarasına ait ${group.items.length} itiraz işlemi</strong>
-                                <span class="count-dot">${group.items.length}</span>
-                            </td>
-                            `;
+                // ✅ AKORDEON BUTONU VE GRUP BAŞLIĞI
+                trHeader.innerHTML = `
+                <td class="toggle-cell">
+                    ${hasChildren
+                    ? `<button type="button" class="accordion-toggle" data-group-id="${gid}" aria-expanded="false" aria-controls="grp-${gid}">
+                        <i class="fas fa-chevron-right"></i>
+                        </button>`
+                    : ''
+                    }
+                </td>
+                <td colspan="${colSpanCount - 1}" class="group-title">
+                    <span class="badge badge-soft">${safe(group.key)}</span>
+                    <strong>başvuru numarasına ait ${group.items.length} itiraz işlemi</strong>
+                    ${hasChildren ? `<span class="count-dot">${group.items.length}</span>` : ''}
+                </td>
+                `;
 
-                            frag.appendChild(trHeader);
+                frag.appendChild(trHeader);
 
-                            // Akordeon İçeriği (Child Rows)
-                            group.items.forEach(item => {
-                                const tr = document.createElement('tr');
-                                tr.className = 'group-row child-row';
-                                tr.dataset.parentId = gid;
-                                tr.setAttribute('aria-hidden', 'true'); // Başlangıçta gizli
+                // Akordeon İçeriği (Child Rows)
+                group.items.forEach((item, idx) => {
+                    const tr = document.createElement('tr');
+                    tr.className = 'group-row child-row';
+                    tr.dataset.parentId = gid;
+                    tr.setAttribute('aria-hidden', 'true'); // Başlangıçta gizli
 
-                                tr.innerHTML = `
-                                    <td class="toggle-cell"></td>
-                                    <td>${item.recordType || '-'}</td>
-                                    <td>${item.transactionTypeName || '-'}</td>
-                                    <td>${item.applicationNumber || '-'}</td>
-                                    <td>${item.applicantName || '-'}</td>
-                                    <td>${item.opponent || '-'}</td>
-                                    <td>${fmtDate(item.bulletinDate)}</td>
-                                    <td>${item.bulletinNo || '-'}</td>
-                                    <td>${fmtDate(item.epatsDate)}</td>
-                                    <td>${item.statusText || '-'}</td>
-                                `;
-                                frag.appendChild(tr);
-                            });
-                        });
+                    tr.innerHTML = `
+                        <td class="toggle-cell"></td>
+                        <td>${item.recordType || '-'}</td>
+                        <td>${item.transactionTypeName || '-'}</td>
+                        <td>${item.applicationNumber || '-'}</td>
+                        <td>${item.applicantName || '-'}</td>
+                        <td>${item.opponent || '-'}</td>
+                        <td>${fmtDate(item.bulletinDate)}</td>
+                        <td>${item.bulletinNo || '-'}</td>
+                        <td>${fmtDate(item.epatsDate)}</td>
+                        <td>${item.statusText || '-'}</td>
+                    `;
+                    frag.appendChild(tr);
+                });
+            });
 
-                        tableBody.appendChild(frag);
+            tableBody.appendChild(frag);
 
-                        // Boş liste mesajı
-                        document.getElementById('portfolioTableBody').style.display = pageGroups.length > 0 ? 'table-row-group' : 'none';
-                        document.getElementById('noRecordsMessage').style.display = pageGroups.length === 0 ? 'block' : 'none';
+            // Boş liste mesajı
+            document.getElementById('portfolioTableBody').style.display = pageGroups.length > 0 ? 'table-row-group' : 'none';
+            document.getElementById('noRecordsMessage').style.display = pageGroups.length === 0 ? 'block' : 'none';
 
-                        // Akordeon davranışını bağla
-                        if (typeof window.wireObjectionsAccordion === 'function') { // Doğru fonksiyonu çağır
-                            window.wireObjectionsAccordion();
-                        }
-                    }
+            // Akordeon davranışını bağla (İtirazlar için özel olanı çağır)
+            if (typeof window.wireObjectionsAccordion === 'function') { 
+                window.wireObjectionsAccordion();
+            }
+        }
 
         renderCurrentPage() {
             const tableBody = document.getElementById('portfolioTableBody');
@@ -2129,60 +2128,67 @@ buildObjectionGroups() {
                             tbody.querySelectorAll('tr:not(.group-header) .row-caret').forEach(el => el.remove());
                         };
                         
-                        // 2. İTİRAZLAR AKORDEONU (Bu, itirazlar sekmesi için geçerli)
-                        window.wireObjectionsAccordion = function () {
-                            const tbody = document.getElementById('portfolioTableBody');
-                            if(!tbody) return;
+// 2. İTİRAZLAR AKORDEONU (Bu, itirazlar sekmesi için geçerli)
+            window.wireObjectionsAccordion = function () {
+                const tbody = document.getElementById('portfolioTableBody');
+                if(!tbody) return;
 
-                            const toggleGroup = (groupId, isExpanded) => {
-                                const header = tbody.querySelector(`tr.group-header[data-group-id="${groupId}"] .accordion-toggle`);
-                                if (header) {
-                                    header.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
-                                    const icon = header.querySelector('i');
-                                    icon.classList.toggle('fa-chevron-right', !isExpanded);
-                                    icon.classList.toggle('fa-chevron-down', isExpanded);
-                                }
+                const toggleGroup = (groupId, isExpanded) => {
+                    // ✅ SADECE header içindeki butonu hedefle
+                    const header = tbody.querySelector(`tr.group-header[data-group-id="${groupId}"] .accordion-toggle`);
+                    if (header) {
+                        header.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
+                        const icon = header.querySelector('i');
+                        icon.classList.toggle('fa-chevron-right', !isExpanded);
+                        icon.classList.toggle('fa-chevron-down', isExpanded);
+                    }
 
-                                const rows = tbody.querySelectorAll(`tr.child-row[data-parent-id="${groupId}"]`);
-                                rows.forEach(row => {
-                                    row.setAttribute('aria-hidden', !isExpanded ? 'true' : 'false');
-                                });
+                    // Child satırları gizle/göster
+                    const rows = tbody.querySelectorAll(`tr.child-row[data-parent-id="${groupId}"]`);
+                    rows.forEach(row => {
+                        row.setAttribute('aria-hidden', !isExpanded ? 'true' : 'false');
+                    });
 
-                                const state = loadState();
-                                state[groupId] = isExpanded;
-                                saveState(state);
-                            };
-                            
-                            // Sadece bir kez dinleyici ata
-                            if (!tbody.__objectionsAccordionBound) {
-                                tbody.addEventListener('click', (e) => {
-                                    const toggleBtn = e.target.closest('.accordion-toggle');
-                                    const headerRow = e.target.closest('tr.group-header');
+                    const state = loadState();
+                    state[groupId] = isExpanded;
+                    saveState(state);
+                };
+                
+                // Sadece bir kez dinleyici ata
+                if (!tbody.__objectionsAccordionBound) {
+                    tbody.addEventListener('click', (e) => {
+                        // Buton veya header'a tıklandıysa yakala
+                        const toggleBtn = e.target.closest('.accordion-toggle');
+                        const headerRow = e.target.closest('tr.group-header');
+                        
+                        let targetButton = toggleBtn;
+                        let groupId = null;
 
-                                    let targetGroupElement = toggleBtn || (headerRow && !e.target.closest('button,.action-btn,a,input[type="checkbox"]') ? headerRow : null);
+                        if (toggleBtn) {
+                            groupId = toggleBtn.closest('tr.group-header')?.dataset.groupId;
+                        } else if (headerRow && !e.target.closest('button,.action-btn,a,input[type="checkbox"]')) {
+                            // Header'a tıklandı ve hedef buton değil
+                            targetButton = headerRow.querySelector('.accordion-toggle');
+                            groupId = headerRow.dataset.groupId;
+                        }
 
-                                    if (targetGroupElement) {
-                                        const groupId = targetGroupElement.closest('tr.group-header')?.dataset.groupId;
-                                        const button = targetGroupElement.querySelector('.accordion-toggle') || targetGroupElement;
+                        if (groupId && targetButton) {
+                            const isExpanded = targetButton.getAttribute('aria-expanded') === 'true';
+                            toggleGroup(groupId, !isExpanded);
+                        }
+                    });
+                    tbody.__objectionsAccordionBound = true;
+            }
 
-                                        if (groupId) {
-                                            const isExpanded = button.getAttribute('aria-expanded') === 'true';
-                                            toggleGroup(groupId, !isExpanded);
-                                        }
-                                    }
-                                });
-                                tbody.__objectionsAccordionBound = true;
-                            }
-
-                            // Son olarak, kayıttan geri yükle (her render'da çalışır)
-                            const state = loadState();
-                            tbody.querySelectorAll('.group-header').forEach(header => {
-                                const groupId = header.dataset.groupId;
-                                if (state[groupId]) {
-                                    toggleGroup(groupId, true);
-                                }
-                            });
-                        };
+            // Son olarak, kayıttan geri yükle (her render'da çalışır)
+            const state = loadState();
+            tbody.querySelectorAll('.group-header').forEach(header => {
+                const groupId = header.dataset.groupId;
+                if (state[groupId]) {
+                    toggleGroup(groupId, true);
+                }
+            });
+        };
                 })();
     </script>
 </body>
