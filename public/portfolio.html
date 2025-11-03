@@ -455,7 +455,30 @@ td.caret-host { position: relative; padding-left: 28px; }
   margin-bottom: 2px;
   border-radius: 4px;
 }
-
+/* === Inline accordion caret (no extra column) === */
+td.caret-host { position: relative; padding-left: 38px !important; }
+.row-caret{
+    position:absolute !important; 
+    left:8px !important; 
+    top:50% !important; 
+    transform:translateY(-50%) !important;
+    width:24px !important; 
+    height:24px !important; 
+    display:inline-flex !important; 
+    align-items:center !important; 
+    justify-content:center !important;
+    border:1px solid #333 !important; 
+    border-radius:6px !important; 
+    background:#fff !important; 
+    cursor:pointer !important;
+    z-index: 10 !important;
+}
+.row-caret i{ 
+    transition: transform .18s ease !important; 
+    font-size: 12px !important;
+    color: #333 !important;
+}
+.row-caret[aria-expanded="true"] i{ transform: rotate(90deg) !important; }
 </style>
 
 <style id="accordion-fix-style">
