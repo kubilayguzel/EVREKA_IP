@@ -179,10 +179,32 @@ function createGoodsAndServicesByClass(inputGSC, niceClassesStr, details) {
   // Önce modal'dan gelen goodsAndServicesByClass'ı kontrol et
   if (Array.isArray(inputGSC) && inputGSC.length > 0) {
     console.log('✅ Modal\'dan gelen goodsAndServicesByClass kullanılıyor');
-    return inputGSC.map(x => ({
-      classNo: Number(x.classNo),
-      items: Array.isArray(x.items) ? x.items : []
-    }));
+    
+    // Modal'dan gelen veriyi sınıflara göre grupla
+    const groupedByClass = new Map();
+    
+    inputGSC.forEach(entry => {
+      const classNo = Number(entry.classNo);
+      const items = Array.isArray(entry.items) ? entry.items : [];
+      
+      if (!groupedByClass.has(classNo)) {
+        groupedByClass.set(classNo, []);
+      }
+      
+      // Bu sınıfa ait items'ları ekle
+      groupedByClass.get(classNo).push(...items);
+    });
+    
+    // Map'i array'e çevir ve sırala
+    const result = Array.from(groupedByClass.entries())
+      .map(([classNo, items]) => ({
+        classNo,
+        items: [...new Set(items)] // Tekrar eden items'ları temizle
+      }))
+      .sort((a, b) => a.classNo - b.classNo);
+    
+    console.log('✅ Gruplandırılmış goodsAndServicesByClass:', result);
+    return result;
   }
 
   console.log('⚠️ Modal\'dan veri yok, alternatif kaynaklardan deneniyor...');
@@ -213,20 +235,14 @@ function createGoodsAndServicesByClass(inputGSC, niceClassesStr, details) {
     return niceNums.map(classNo => ({ classNo, items: [] }));
   }
 
-  const rawItems = goodsText
-    .split(/[\n,;]+/)
-    .map(t => t.trim())
-    .filter(Boolean);
-
-  console.log('✅ Eşya listesi oluşturuldu:', rawItems);
-
-  const result = niceNums.map(classNo => ({
+  // Eğer details'tan geliyorsa, sınıf bilgisi olmadan tüm sınıflara aynı items'ı vermek yerine
+  // sadece boş items ile döndür (çünkü hangi eşyanın hangi sınıfa ait olduğunu bilemiyoruz)
+  console.log('⚠️ Details\'tan gelen genel eşya metni, sınıf bazlı ayrıştırma yapılamıyor');
+  
+  return niceNums.map(classNo => ({
     classNo,
-    items: rawItems
+    items: [] // Modal'dan gelmeyen verilerde sınıf-eşya eşleştirmesi yapamıyoruz
   }));
-
-  console.log('✅ Final goodsAndServicesByClass:', result);
-  return result;
 }
 
 /**
