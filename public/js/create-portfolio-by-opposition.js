@@ -350,14 +350,30 @@ async handleTransactionCreated(transactionData) {
       ? authService.getCurrentUser()
       : null;
 
-    const newRecordId = result.id; // ipRecordsService.createRecordFromOpposition dönüşü
+  const newRecordId = result.id; // ipRecordsService.createRecordFromOpposition dönüşü
       if (newRecordId) {
+        // ✅ Task'tan itiraz sahibi bilgisini al
+        let oppositionOwner = null;
+        if (transactionId) {
+          try {
+            const taskRef = doc(this.db, 'tasks', String(transactionId));
+            const taskSnap = await getDoc(taskRef);
+            if (taskSnap.exists()) {
+              const taskData = taskSnap.data();
+              oppositionOwner = taskData.details?.relatedParty?.name || 
+                               taskData.details?.relatedParties?.[0]?.name || null;
+            }
+          } catch (e) {
+            console.warn('İtiraz sahibi bilgisi alınamadı:', e);
+          }
+        }
+
         await ipRecordsService.addTransactionToRecord(newRecordId, {
           type: '20',
           designation: 'Yayına İtiraz',
           description: 'Yayına İtiraz',
           transactionHierarchy: 'parent',
-          ...(transactionId ? { triggeringTaskId: String(transactionId) } : {}), // <<< EKLENDİ
+          ...(oppositionOwner ? { oppositionOwner } : {}),
           timestamp: new Date().toISOString(),
           userId:  u?.uid   || 'anonymous',
           userEmail: u?.email || 'anonymous@example.com',
