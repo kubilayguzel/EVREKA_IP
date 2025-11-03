@@ -2064,25 +2064,36 @@ buildObjectionGroups() {
                 .forEach(r => r.setAttribute('aria-hidden', nextOpen ? 'false' : 'true'));
             };
 
-            // Event delegation – sadece parent header veya onun butonu tetiklesin
             if (!tbody.__accordionBound) {
-                tbody.addEventListener('click', (e) => {
+            tbody.addEventListener('click', (e) => {
+                // 1) Butona tıklama
                 const caretBtn = e.target.closest('tr.group-header .row-caret');
                 if (caretBtn) {
-                    const gid = caretBtn.dataset.groupId;
-                    const expanded = caretBtn.getAttribute('aria-expanded') === 'true';
-                    toggleGroup(gid, !expanded);
-                    return;
+                const gid = caretBtn.dataset.groupId;
+                // child var mı?
+                const hasChildren = tbody.querySelector(`tr.child-row[data-parent-id="${gid}"]`);
+                if (!hasChildren) return; // child yoksa işlem yapma
+
+                const expanded = caretBtn.getAttribute('aria-expanded') === 'true';
+                toggleGroup(gid, !expanded);
+                return;
                 }
+
+                // 2) Header satırına boş alandan tıklama (buton vs. değilken)
                 const header = e.target.closest('tr.group-header');
                 if (header && !e.target.closest('button,.action-btn,a,input[type="checkbox"]')) {
-                    const gid = header.dataset.groupId;
-                    const hb = header.querySelector('.row-caret');
-                    const expanded = hb && hb.getAttribute('aria-expanded') === 'true';
-                    toggleGroup(gid, !expanded);
+                const gid = header.dataset.groupId;
+                const hb = header.querySelector('.row-caret');
+
+                // child var mı?
+                const hasChildren = tbody.querySelector(`tr.child-row[data-parent-id="${gid}"]`);
+                if (!hasChildren) return; // child yoksa işlem yapma
+
+                const expanded = hb && hb.getAttribute('aria-expanded') === 'true';
+                toggleGroup(gid, !expanded);
                 }
-                });
-                tbody.__accordionBound = true;
+            });
+            tbody.__accordionBound = true;
             }
 
             // Güvenlik: group-header olmayan satırlarda yanlışlıkla kalmış caret varsa temizle
