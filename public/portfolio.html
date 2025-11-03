@@ -795,31 +795,16 @@ tr.group-row[aria-hidden="true"]{ display:none !important; }
 
             tableBody.innerHTML = '';
 
-            // Pagination toplamı – satır adedine göre
+            // Pagination toplamı
             pagination.update(list.length);
 
-            // (⚠️ ÖNEMLİ) Grupları doğrudan bu liste üzerinden oluştur
-            const groupsMapLocal = {};
-            (list || []).forEach(item => {
-            const gkey = normalizeAppNo(item.applicationNumber) || '—';
-            if (!groupsMapLocal[gkey]) groupsMapLocal[gkey] = { key: gkey, items: [] };
-            groupsMapLocal[gkey].items.push(item);
-            });
-            let groupsLocal = Object.values(groupsMapLocal)
-            .map(g => {
-                g.items.sort((a, b) => {
-                const ad = new Date(a.bulletinDate || 0).getTime();
-                const bd = new Date(b.bulletinDate || 0).getTime();
-                return bd - ad; // en yeni başa
-                });
-                g.hasMultiple = g.items.length > 1;
-                return g;
-            })
-            .sort((a, b) => b.items.length - a.items.length);
+            // Grupları hazırla (önceden hesaplandıysa kullan, değilse oluştur)
+            if (!this.objectionGroups || !this.objectionGroups.length) {
+                this.buildObjectionGroups();
+            }
 
             // Bu sayfada gösterilecek grup aralığı
-            const pageGroups = pagination.getCurrentPageData(groupsLocal);
-
+            const pageGroups = pagination.getCurrentPageData(this.objectionGroups);
 
             const frag = document.createDocumentFragment();
 
@@ -952,6 +937,13 @@ tr.group-row[aria-hidden="true"]{ display:none !important; }
 
                 // İtirazlar: objectionRows'u kullan ve doğrudan çiz
                 this.renderObjectionRows(baseData);
+                
+                // İtirazlar için görünürlük ayarları
+                document.getElementById('portfolioTableBody').style.display = 
+                    baseData.length > 0 ? 'table-row-group' : 'none';
+                document.getElementById('noRecordsMessage').style.display = 
+                    baseData.length === 0 ? 'block' : 'none';
+                
                 return;
             }
 
