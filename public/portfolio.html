@@ -849,11 +849,11 @@ tr.group-row[aria-hidden="true"]{ display:none !important; }
             const hasChildren = (group.items.length > 1);
 
             // Grup başlığı
-            const th = document.createElement('tr');
-            th.className = 'group-header';
-            th.dataset.groupId = gid;
+            const tr = document.createElement('tr');
+            tr.className = 'group-header';
+            tr.dataset.groupId = gid;
 
-            th.innerHTML = `
+            tr.innerHTML = `
             <td class="caret-host">
                 ${hasChildren
                 ? `<button class="row-caret" data-group-id="${gid}" aria-expanded="false" title="Aç/Kapat">
