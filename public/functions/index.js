@@ -624,7 +624,11 @@ export const createObjectionTask = onCall(
           bulletinNo,
           bulletinDate: bulletinDateStr || null,
           monitoredMarkId: monitoredMarkId,
-          similarityScore: similarMark?.similarityScore || 0
+          similarityScore: similarMark?.similarityScore || 0,
+          relatedParty: {
+            id: clientId || null,
+            name: null // Aşağıda doldurulacak
+          }
         },
 
         // 👇 dueDate şimdilik officialDueDate ile aynı
@@ -638,15 +642,71 @@ export const createObjectionTask = onCall(
         updatedAt: FieldValue.serverTimestamp(),
 
         history: [{
-          timestamp: new Date().toISOString(),
-          action: 'Benzerlik aramasından otomatik iş oluşturuldu',
-          userEmail: callerEmail || 'system'
-        }]
-      };
+                  timestamp: new Date().toISOString(),
+                  action: 'Benzerlik aramasından otomatik iş oluşturuldu',
+                  userEmail: callerEmail || 'system'
+                }]
+              };
+
+              // ✅ İtiraz sahibinin adını al ve task data'ya ekle
+              if (clientId) {
+                try {
+                  const personDoc = await adminDb.collection('persons').doc(clientId).get();
+                  if (personDoc.exists) {
+                    const personData = personDoc.data();
+                    taskData.details.relatedParty.name = personData.name || 'İzlenen Marka Sahibi';
+                    taskData.details.relatedParty.email = personData.email || null;
+                    taskData.details.relatedParty.phone = personData.phone || null;
+                  }
+                } catch (e) {
+                  logger.warn('⚠️ İtiraz sahibi bilgisi details\'e eklenemedi:', e);
+                  taskData.details.relatedParty.name = 'İzlenen Marka Sahibi';
+                }
+              }
 
       // 8) Kaydet
       await adminDb.collection('tasks').doc(taskId).set(taskData);
       logger.log(`✅ Yayına İtiraz İşi Oluşturuldu. Task ID: ${taskId}`);
+
+      // ✅ İzlenen markanın portföyüne transaction ekle
+      try {
+        // İtiraz sahibini belirle
+        let oppositionOwnerName = null;
+        if (clientId) {
+          try {
+            const personDoc = await adminDb.collection('persons').doc(clientId).get();
+            if (personDoc.exists) {
+              oppositionOwnerName = personDoc.data()?.name || null;
+            }
+          } catch (e) {
+            logger.warn('⚠️ İtiraz sahibi adı alınamadı:', e);
+          }
+        }
+
+        // İzlenen markanın ipRecords kaydına transaction ekle
+        const transactionsRef = adminDb
+          .collection('ipRecords')
+          .doc(relatedIpRecordId)
+          .collection('transactions');
+        
+        await transactionsRef.add({
+          type: '20',
+          designation: 'Yayına İtiraz',
+          description: 'Yayına İtiraz',
+          transactionHierarchy: 'parent',
+          // ❌ triggeringTaskId YOK - Manuel oluşturulan iş
+          ...(oppositionOwnerName ? { oppositionOwner: oppositionOwnerName } : {}),
+          timestamp: admin.firestore.FieldValue.serverTimestamp(),
+          userId: 'cloud_function',
+          userEmail: callerEmail || 'system@evreka.com',
+          userName: 'Cloud Function'
+        });
+        
+        logger.log(`✅ İzlenen marka portföyüne transaction eklendi. RecordId=${relatedIpRecordId}`);
+      } catch (txErr) {
+        logger.error('❌ Transaction eklenirken hata:', txErr);
+        // Hata olsa bile task oluşturuldu, devam et
+      }
 
       return { taskId, success: true, message: `İtiraz işi başarıyla oluşturuldu: ${taskId}` };
     } catch (error) {
