@@ -795,154 +795,150 @@ async renderObjectionRows(list) {
     }
 
     console.log('🔍 renderObjectionRows çağrıldı:', { totalRows: list.length });
+    tableBody.innerHTML = ''; // Önceki içeriği temizle
 
-    // 🔥 YENİ MANTIK: Task'lardan relatedIpRecordId'leri topla ve transactions'ları çek
+    // 1. Unique recordId'leri al
+    const uniqueRecordIds = [...new Set(list.map(row => row.recordId))].filter(Boolean);
+    
+    // 2. Her record için transactions'ları çek ve Parent/Child gruplamasını yap
+    const recordTransactionsMap = new Map();
     const PARENT_TYPE_IDS = ['7', '19', '20'];
     
-    // Task'lardan unique recordId'leri al
-    const taskRecordMap = new Map();
-    list.forEach(row => {
-        if (row.id) {
-            // loadObjectionRows'dan gelen task verisini sakla
-            const taskData = window.portfolioModule?.allRecords?.find(r => 
-                r.transactions?.some(t => t.id === row.id)
-            );
-            
-            if (taskData?.id) {
-                taskRecordMap.set(row.id, taskData.id);
-            }
-        }
-    });
-
-    // Her record için transactions'ları çek
-    const recordTransactionsMap = new Map();
-    const uniqueRecordIds = [...new Set([...taskRecordMap.values()])];
-    
-    for (const recordId of uniqueRecordIds) {
+    // Asenkron olarak tüm transaction'ları paralel çek
+    await Promise.all(uniqueRecordIds.map(async (recordId) => {
         try {
             const txResult = await ipRecordsService.getTransactionsForRecord(recordId);
             if (txResult?.success && Array.isArray(txResult.transactions)) {
-                // Parent transactions'ları filtrele (type 7, 19, 20)
-                const parentTransactions = txResult.transactions.filter(tx => 
-                    PARENT_TYPE_IDS.includes(String(tx.type))
-                );
+                const allTransactions = txResult.transactions;
                 
-                // Child transactions'ları grupla
+                const parentsMap = new Map();
                 const childrenMap = {};
-                parentTransactions.forEach(parent => {
-                    childrenMap[parent.id] = txResult.transactions.filter(tx => 
-                        tx.parentId === parent.id && tx.transactionHierarchy === 'child'
-                    );
-                    // Child'ları tarihe göre sırala
-                    childrenMap[parent.id].sort((a, b) => 
-                        new Date(a.timestamp) - new Date(b.timestamp)
-                    );
+                
+                allTransactions.forEach(tx => {
+                    // Parent Transaction: İtiraz tiplerinden biri VE Parent olarak işaretlenmiş VEYA parentId'si yoksa (üst seviye işlem)
+                    if (PARENT_TYPE_IDS.includes(String(tx.type)) && (tx.transactionHierarchy === 'parent' || !tx.parentId)) {
+                        parentsMap.set(tx.id, tx);
+                        childrenMap[tx.id] = []; // Her parent için boş child array'i hazırla
+                    }
                 });
                 
-                // Parent'ları tarihe göre sırala
-                parentTransactions.sort((a, b) => 
-                    new Date(a.timestamp) - new Date(b.timestamp)
-                );
+                // Child Transaction
+                allTransactions.forEach(tx => {
+                    // Parent'a bağlı VE Child olarak işaretlenmişse (transactionHierarchy === 'child')
+                    if (tx.parentId && childrenMap[tx.parentId] && tx.transactionHierarchy === 'child') {
+                        childrenMap[tx.parentId].push(tx);
+                    }
+                });
+
+                // Child'ları ve Parent'ları tarihe göre sırala
+                parentsMap.forEach(parent => {
+                     childrenMap[parent.id].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+                });
                 
                 recordTransactionsMap.set(recordId, {
-                    parents: parentTransactions,
+                    parents: [...parentsMap.values()].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp)),
                     childrenMap
                 });
             }
         } catch (e) {
             console.error('Transaction çekme hatası:', recordId, e);
         }
-    }
+    }));
 
-    // Accordion yapısını oluştur
+
+    // 3. Parent/Child yapısını kullanarak tabloyu render et
     const frag = document.createDocumentFragment();
     
-    // Her row için parent-child yapısını render et
-    for (const row of list) {
-        const recordId = taskRecordMap.get(row.id);
+    // Sadece mevcut sayfadaki satırları render et
+    const pageData = pagination.getCurrentPageData(list);
+
+    for (const row of pageData) {
+        const recordId = row.recordId;
+        const parentTxId = row.id; // Bu, loadObjectionRows'dan gelen parent transaction ID'si
+
         const txData = recordTransactionsMap.get(recordId);
         
-        if (!txData || !txData.parents.length) {
-            // Transaction yoksa basit satır göster
+        if (!txData) {
+            // Transaction detayı çekilemediyse veya bu record'a ait parent yoksa basit satır göster
             const tr = document.createElement('tr');
+            // 10 kolon (toggle hücresi dahil)
             tr.innerHTML = `
-                <td></td>
+                <td class="toggle-cell"></td>
                 <td>${row.recordType || '-'}</td>
                 <td>${row.transactionTypeName || '-'}</td>
                 <td>${row.applicationNumber || '-'}</td>
                 <td>${row.applicantName || '-'}</td>
                 <td>${row.opponent || '-'}</td>
-                <td>${fmtDate(row.bulletinDate)}</td>
+                <td>${row.bulletinDate || '-'}</td>
                 <td>${row.bulletinNo || '-'}</td>
-                <td>${fmtDate(row.epatsDate)}</td>
+                <td>${row.epatsDate || '-'}</td>
                 <td>${row.statusText || '-'}</td>
             `;
             frag.appendChild(tr);
             continue;
         }
 
-        // 🔥 Her parent transaction için parent satırı + child satırları
-        const { parents, childrenMap } = txData;
+        const parent = [...txData.parents].find(p => p.id === parentTxId);
+        const children = txData.childrenMap[parentTxId] || [];
         
-        parents.forEach((parent) => {
-            const groupId = safeId(`${recordId}_parent_${parent.id}`);
-            const children = childrenMap[parent.id] || [];
-            const hasChildren = children.length > 0;
-            
-            // Parent transaction type bilgisi
-            const parentTypeMeta = transactionTypesMap.get(String(parent.type));
-            const parentTypeName = parentTypeMeta?.alias || parentTypeMeta?.name || `İşlem ${parent.type}`;
+        // Eğer bu satır, yüklenen transaction'lar arasında bulunamıyorsa atla
+        if (!parent) continue; 
+        
+        const hasChildren = children.length > 0;
+        const groupId = safeId(`${recordId}_parent_${parentTxId}`);
+        
+        // PARENT SATIRI (10 hücre)
+        const parentTr = document.createElement('tr');
+        parentTr.className = 'group-header'; // CSS stilini kullanmak için
+        parentTr.dataset.groupId = groupId;
+        
+        // loadObjectionRows tarafından zaten hesaplanmış değerleri kullan
+        parentTr.innerHTML = `
+            <td class="toggle-cell caret-host">
+                ${hasChildren ? `<button class="row-caret" data-group-id="${groupId}" aria-expanded="false">
+                    <i class="fas fa-chevron-right"></i>
+                </button>` : ''}
+            </td>
+            <td>${row.recordType || '-'}</td>
+            <td>${row.transactionTypeName || '-'}</td>
+            <td>${row.applicationNumber || '-'}</td>
+            <td>${row.applicantName || '-'}</td>
+            <td>${row.opponent || '-'}</td>
+            <td>${row.bulletinDate || '-'}</td>
+            <td>${row.bulletinNo || '-'}</td>
+            <td>${row.epatsDate || '-'}</td>
+            <td>${row.statusText || '-'}</td>
+        `;
+        frag.appendChild(parentTr);
 
-            // PARENT SATIRI
-            const parentTr = document.createElement('tr');
-            parentTr.className = hasChildren ? 'group-header' : '';
-            parentTr.dataset.groupId = groupId;
-            
-            parentTr.innerHTML = `
-                <td class="toggle-cell">
-                    ${hasChildren ? `<button class="row-caret" data-group-id="${groupId}" aria-expanded="false">
-                        <i class="fas fa-chevron-right"></i>
-                    </button>` : ''}
-                </td>
-                <td>${row.recordType || '-'}</td>
-                <td>${parentTypeName}</td>
-                <td>${row.applicationNumber || '-'}</td>
-                <td>${row.applicantName || '-'}</td>
-                <td>${row.opponent || '-'}</td>
-                <td>${fmtDate(parent.timestamp)}</td>
-                <td>${row.bulletinNo || '-'}</td>
-                <td>${fmtDate(row.epatsDate)}</td>
-                <td>${row.statusText || '-'}</td>
-            `;
-            frag.appendChild(parentTr);
-
-            // CHILD SATIRLARI
-            if (hasChildren) {
-                children.forEach((child) => {
-                    const childTypeMeta = transactionTypesMap.get(String(child.type));
-                    const childTypeName = childTypeMeta?.alias || childTypeMeta?.name || `İşlem ${child.type}`;
-                    
-                    const childTr = document.createElement('tr');
-                    childTr.className = 'group-row child-row';
-                    childTr.dataset.parentId = groupId;
-                    childTr.setAttribute('aria-hidden', 'true');
-                    
-                    childTr.innerHTML = `
-                        <td></td>
-                        <td>${row.recordType || '-'}</td>
-                        <td style="padding-left: 32px;">↳ ${childTypeName}</td>
-                        <td>${row.applicationNumber || '-'}</td>
-                        <td>${row.applicantName || '-'}</td>
-                        <td>${row.opponent || '-'}</td>
-                        <td>${fmtDate(child.timestamp)}</td>
-                        <td>${row.bulletinNo || '-'}</td>
-                        <td>${fmtDate(row.epatsDate)}</td>
-                        <td>${row.statusText || '-'}</td>
-                    `;
-                    frag.appendChild(childTr);
-                });
-            }
-        });
+        // CHILD SATIRLARI
+        if (hasChildren) {
+            children.forEach((child) => {
+                const childTypeMeta = transactionTypesMap.get(String(child.type));
+                const childTypeName = childTypeMeta?.alias || childTypeMeta?.name || `İşlem ${child.type}`;
+                
+                // Child satırları için kolon sayısını ve hizalamayı koru
+                const childTr = document.createElement('tr');
+                childTr.className = 'group-row child-row';
+                childTr.dataset.parentId = groupId;
+                childTr.setAttribute('aria-hidden', 'true');
+                
+                // Child için güncel transaction/epats tarihlerini kullan
+                childTr.innerHTML = `
+                    <td class="toggle-cell"></td>
+                    <td>${row.recordType || '-'}</td>
+                    <td style="padding-left: 32px;">↳ ${childTypeName}</td>
+                    <td>${row.applicationNumber || '-'}</td>
+                    <td>${row.applicantName || '-'}</td>
+                    <td>${row.opponent || '-'}</td>
+                    <td>${fmtDate(child.timestamp)}</td> 
+                    <td>${row.bulletinNo || '-'}</td>
+                    <td>${fmtDate(child.epatsDocument?.documentDate) || '-'}</td>
+                    <td>${formatObjectionStatus(child.requestResult) || '-'}</td>
+                `;
+                frag.appendChild(childTr);
+            });
+        }
     }
 
     tableBody.appendChild(frag);
@@ -1273,6 +1269,10 @@ async renderObjectionRows(list) {
                         return 0;
                     });
                 }
+
+                // Sayfalama bu adımda güncellenmeli
+                if (pagination) pagination.update(filtered.length);
+
                 this.renderObjectionRows(filtered);
                 return;
             }
@@ -1946,11 +1946,9 @@ async loadObjectionRows() {
 
     console.log('📊 Toplam kayıt sayısı:', allRecords.length);
 
-    // İlk filtreleme: Sadece transactions array'i olan kayıtları al (third_party filtresi kaldırıldı)
-    const relevantRecords = allRecords.filter(record => {
-      // Sadece transactions'ı olan kayıtlar
-      return (Array.isArray(record.transactions) && record.transactions.length > 0);
-    });
+    // İstenen değişiklik: Performans sorununu çözmek için kısıtlayıcı filtre kaldırıldı.
+    // Tüm kayıtlar (Batch Processing ile) itiraz transaction'ı için kontrol edilecek.
+    const relevantRecords = allRecords;
 
     console.log('📊 İtirazla ilgili olabilecek kayıt sayısı:', relevantRecords.length);
 
@@ -1963,6 +1961,7 @@ async loadObjectionRows() {
 
       await Promise.all(batch.map(async (record) => {
         try {
+          // Transaction'ları ayrı API çağrısıyla al
           const txResult = await ipRecordsService.getTransactionsForRecord(record.id);
           if (!txResult?.success || !Array.isArray(txResult.transactions)) return;
 
