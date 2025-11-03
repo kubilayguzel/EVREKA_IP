@@ -611,7 +611,8 @@
                             <i class="fas fa-chevron-right"></i>
                         </button>` : ''}
                     </td>
-                    <td>${row.recordType === 'marka' || row.recordType === 'trademark' ? 'M-' + (row.brandName || row.title || '') : (row.recordType || '-')}</td>
+                    <td>${row.recordType || '-'}</td>
+                    <td>${row.title || '-'}</td>
                     <td>${row.transactionTypeName || '-'}</td>
                     <td>${row.applicationNumber || '-'}</td>
                     <td>${row.applicantName || '-'}</td>
@@ -630,17 +631,19 @@
                       childTr.className = 'group-row child-row';
                       childTr.dataset.parentId = groupId;
                       childTr.setAttribute('aria-hidden', 'true');
-                      childTr.innerHTML = `
-                          <td class="toggle-cell"></td>
-                          <td>${row.recordType === 'marka' || row.recordType === 'trademark' ? 'M-' + (row.brandName || row.title || '') : (row.recordType || '-')}</td>
-                          <td style="padding-left: 32px;">↳ ${childTypeName}</td>
-                          <td>${row.applicationNumber || '-'}</td>
-                          <td>${row.applicantName || '-'}</td>
-                          <td>${row.opponent || '-'}</td>
-                          <td></td>
-                          <td></td>
-                          <td>${fmtDate(child.timestamp)}</td>
-                          <td></td>`;
+                
+                    childTr.innerHTML = `
+                        <td class="toggle-cell"></td>
+                        <td>${row.recordType || '-'}</td>
+                        <td></td>
+                        <td style="padding-left: 32px;">↳ ${childTypeName}</td>
+                        <td>${row.applicationNumber || '-'}</td>
+                        <td>${row.applicantName || '-'}</td>
+                        <td>${row.opponent || '-'}</td>
+                        <td></td>
+                        <td></td>
+                        <td>${fmtDate(child.timestamp)}</td>
+                        <td></td>`;
                       frag.appendChild(childTr);
                   });
                 }
@@ -1601,19 +1604,19 @@ async loadObjectionRows() {
             }
 
             allRows.push({
-              id: parentTx.id,
-              recordId: record.id,
-              recordType: record.type || '-',
-              title: record.title || record.brandText || '',
-              transactionTypeName,
-              applicationNumber,
-              applicantName: applicants,
-              opponent: opponentName,
-              bulletinDate: fmtDate(bulletinDate),
-              bulletinNo,
-              epatsDate: fmtDate(epatsDate),
-              statusText,
-              timestamp: parentTx.timestamp
+            id: parentTx.id,
+            recordId: record.id,
+            recordType: record.type || '-',
+            title: record.title || record.brandText || '',
+            transactionTypeName,
+            applicationNumber,
+            applicantName: applicants,
+            opponent: opponentName,
+            bulletinDate: fmtDate(bulletinDate),
+            bulletinNo,
+            epatsDate: fmtDate(epatsDate),
+            statusText,
+            timestamp: parentTx.timestamp
             });
           }
         } catch (e) {
@@ -1645,6 +1648,7 @@ async loadObjectionRows() {
                     ? [
                         { key: 'toggle', label: '', sortable: false, width: '44px' },
                         { key: 'recordType',      label: 'Kayıt Tipi',  sortable: true,  width: '110px' },
+                        { key: 'title',           label: 'M/T/B Adı',   sortable: true,  width: '180px' },
                         { key: 'transactionTypeName',   label: 'İşlem Tipi',  sortable: true,  width: '180px' },
                         { key: 'applicationNumber', label: 'Başvuru No',  sortable: true,  width: '140px' },
                         { key: 'applicantName',      label: 'Başvuru Sahibi', sortable: true, width: '240px' },
