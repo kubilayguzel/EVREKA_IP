@@ -201,8 +201,8 @@
         .sidebar-nav .accordion-header.active::after { transform: rotate(90deg); }
 
         /* Parent satırlar özel renk */
-        .portfolio-table tr.group-header { background-color: #ffb347 !important; color: #fff; }
-        .portfolio-table tr.child-row { background-color: #ffe0b2 !important; }
+        .portfolio-table tr.group-header { background-color: transparent; }
+        .portfolio-table tr.child-row { background-color: transparent; }
 
         .transaction-pdfs, .child-transaction-pdfs { display: flex; gap: 8px; align-items: center; margin-top: 4px; }
         .pdf-link { color: #dc3545; font-size: 1.1em; transition: all 0.2s ease; text-decoration: none; }
@@ -613,7 +613,7 @@
                             <i class="fas fa-chevron-right"></i>
                         </button>` : ''}
                     </td>
-                    <td>${row.recordType || '-'}</td>
+                    <td>${row.recordType === 'marka' || row.recordType === 'trademark' ? 'M-' + (row.brandName || row.title || '') : (row.recordType || '-')}</td>
                     <td>${row.transactionTypeName || '-'}</td>
                     <td>${row.applicationNumber || '-'}</td>
                     <td>${row.applicantName || '-'}</td>
@@ -634,7 +634,7 @@
                       childTr.setAttribute('aria-hidden', 'true');
                       childTr.innerHTML = `
                           <td class="toggle-cell"></td>
-                          <td>${row.recordType || '-'}</td>
+                          <td>${row.recordType === 'marka' || row.recordType === 'trademark' ? 'M-' + (row.brandName || row.title || '') : (row.recordType || '-')}</td>
                           <td style="padding-left: 32px;">↳ ${childTypeName}</td>
                           <td>${row.applicationNumber || '-'}</td>
                           <td>${row.applicantName || '-'}</td>
@@ -1630,9 +1630,9 @@
                         { key: 'applicationNumber', label: 'Başvuru No',  sortable: true,  width: '140px' },
                         { key: 'applicantName',      label: 'Başvuru Sahibi', sortable: true, width: '240px' },
                         { key: 'opponent', label: 'İtiraz Sahibi', sortable: true, width: '200px' },
-                        { key: 'bulletinDate',      label: 'Bülten Tarihi', sortable: true, width: '140px' },
-                        { key: 'bulletinNo',        label: 'Bülten No',   sortable: true,  width: '120px' },
-                        { key: 'epatsDate',         label: 'İşlem Tarihi', sortable: true, width: '130px' },
+                        { key: 'bulletinDate',      label: 'Bülten Tarihi', sortable: true, width: '100px' },
+                        { key: 'bulletinNo',        label: 'Bülten No',   sortable: true,  width: '90px' },
+                        { key: 'epatsDate',         label: 'İşlem Tarihi', sortable: true, width: '100px' },
                         { key: 'statusText',        label: 'Durum',        sortable: true, width: '140px' }
                     ]
                     : [
