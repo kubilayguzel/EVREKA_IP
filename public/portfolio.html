@@ -1938,49 +1938,50 @@ async loadObjectionRows() {
   console.log('🔄 İtirazlar yükleniyor...');
   const PARENT_TYPE_IDS = ['7', '19', '20'];
   const allRows = [];
-  
+
   try {
     // 🔥 OPTİMİZASYON: Sadece itiraz transaction'ı olan kayıtları filtrele
     const recordsResult = await ipRecordsService.getRecords();
     const allRecords = this.pickArray(recordsResult);
-    
+
     console.log('📊 Toplam kayıt sayısı:', allRecords.length);
-    
-    // İlk filtreleme: Sadece transactions array'i olanları al
-    const relevantRecords = allRecords.filter(record =>
-    Array.isArray(record.transactions) && record.transactions.length > 0
-    );
-    
+
+    // İlk filtreleme: Sadece transactions array'i olan kayıtları al (third_party filtresi kaldırıldı)
+    const relevantRecords = allRecords.filter(record => {
+      // Sadece transactions'ı olan kayıtlar
+      return (Array.isArray(record.transactions) && record.transactions.length > 0);
+    });
+
     console.log('📊 İtirazla ilgili olabilecek kayıt sayısı:', relevantRecords.length);
-    
+
     // Batch processing: Her seferinde 50 kayıt işle
     const BATCH_SIZE = 50;
     let processedCount = 0;
-    
+
     for (let i = 0; i < relevantRecords.length; i += BATCH_SIZE) {
       const batch = relevantRecords.slice(i, i + BATCH_SIZE);
-      
+
       await Promise.all(batch.map(async (record) => {
         try {
           const txResult = await ipRecordsService.getTransactionsForRecord(record.id);
           if (!txResult?.success || !Array.isArray(txResult.transactions)) return;
-          
+
           // Type'ı 7, 19 veya 20 olan parent transaction'ları bul
-          const parentTransactions = txResult.transactions.filter(tx => 
-            PARENT_TYPE_IDS.includes(String(tx.type)) && 
+          const parentTransactions = txResult.transactions.filter(tx =>
+            PARENT_TYPE_IDS.includes(String(tx.type)) &&
             (tx.transactionHierarchy === 'parent' || !tx.parentId)
           );
-          
+
           if (parentTransactions.length === 0) return;
-          
+
           // Her parent transaction için bir satır oluştur
           for (const parentTx of parentTransactions) {
             const typeMeta = transactionTypesMap.get(String(parentTx.type));
             const transactionTypeName = typeMeta?.alias || typeMeta?.name || `İşlem ${parentTx.type}`;
-            
+
             const applicants = record.applicants?.map(a => a.name).join(', ') || '-';
             const applicationNumber = record.applicationNumber || '-';
-            
+
             // İtiraz sahibi
             let opponentName = parentTx.oppositionOwner || '-';
             if (opponentName === '-' && parentTx.relatedParty?.name) {
@@ -1989,24 +1990,24 @@ async loadObjectionRows() {
             if (opponentName === '-' && Array.isArray(parentTx.objectionOwners) && parentTx.objectionOwners.length > 0) {
               opponentName = parentTx.objectionOwners.map(o => o.name).join(', ');
             }
-            
+
             // Bülten bilgileri
             const brandInfo = record.details?.brandInfo || {};
             const bulletinNo = brandInfo.opposedMarkBulletinNo || parentTx.bulletinNo || '-';
             const bulletinDate = brandInfo.opposedMarkBulletinDate || parentTx.bulletinDate || null;
-            
+
             // ePats tarihi
             let epatsDate = null;
             if (parentTx.epatsDocument?.documentDate) {
               epatsDate = parentTx.epatsDocument.documentDate;
             }
-            
+
             // Durum - parent transaction'ın requestResult'unu kullan
             let statusText = 'Karar Bekleniyor';
             if (parentTx.requestResult !== undefined && parentTx.requestResult !== null && parentTx.requestResult !== '') {
               statusText = formatObjectionStatus(parentTx.requestResult);
             }
-            
+
             allRows.push({
               id: parentTx.id,
               recordId: record.id,
@@ -2026,14 +2027,14 @@ async loadObjectionRows() {
           console.warn('❌ Record transaction hatası:', record.id, e);
         }
       }));
-      
+
       processedCount += batch.length;
       console.log(`⏳ İşlenen kayıt: ${processedCount}/${relevantRecords.length}`);
     }
-    
+
     console.log('✅ loadObjectionRows tamamlandı, toplam satır:', allRows.length);
     this.objectionRows = allRows;
-    
+
   } catch (e) {
     console.error('❌ İtirazlar yüklenirken hata:', e);
     this.objectionRows = [];
