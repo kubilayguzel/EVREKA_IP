@@ -605,6 +605,12 @@
                 const parentTr = document.createElement('tr');
                 parentTr.className = hasChildren ? 'group-header' : '';
                 parentTr.dataset.groupId = groupId;
+
+                // Marka ise açık mavi renk ekle
+                if (row.recordType === 'trademark' || row.recordType === 'marka') {
+                    parentTr.style.backgroundColor = '#e3f2fd';
+                }
+
                 parentTr.innerHTML = `
                     <td class="toggle-cell caret-host">
                         ${hasChildren ? `<button class="row-caret" data-group-id="${groupId}" aria-expanded="false">
@@ -627,11 +633,16 @@
                   children.forEach((child) => {
                       const childTypeMeta = transactionTypesMap.get(String(child.type));
                       const childTypeName = childTypeMeta?.alias || childTypeMeta?.name || `İşlem ${child.type}`;
-                      const childTr = document.createElement('tr');
-                      childTr.className = 'group-row child-row';
-                      childTr.dataset.parentId = groupId;
-                      childTr.setAttribute('aria-hidden', 'true');
-                
+                    const childTr = document.createElement('tr');
+                    childTr.className = 'group-row child-row';
+                    childTr.dataset.parentId = groupId;
+                    childTr.setAttribute('aria-hidden', 'true');
+
+                    // Marka ise açık mavi renk ekle
+                    if (row.recordType === 'trademark' || row.recordType === 'marka') {
+                        childTr.style.backgroundColor = '#e3f2fd';
+                    }
+
                     childTr.innerHTML = `
                         <td class="toggle-cell"></td>
                         <td>${row.recordType || '-'}</td>
@@ -644,7 +655,7 @@
                         <td></td>
                         <td>${fmtDate(child.timestamp)}</td>
                         <td></td>`;
-                      frag.appendChild(childTr);
+                    frag.appendChild(childTr);
                   });
                 }
               }
