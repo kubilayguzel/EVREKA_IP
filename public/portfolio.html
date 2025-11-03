@@ -796,85 +796,25 @@ async renderObjectionRows(list) {
 
     console.log('🔍 renderObjectionRows çağrıldı:', { totalRows: list.length });
 
-    // 🔥 YENİ MANTIK: Task'lardan relatedIpRecordId'leri topla ve transactions'ları çek
-    const PARENT_TYPE_IDS = ['7', '19', '20'];
+    // 🔥 PERFORMANS İYİLEŞTİRMESİ: loadObjectionRows fonksiyonunda zaten çekilen 
+    // parent ve child verileri doğrudan kullanılacaktır. Ekstra asenkron işlem/API çağrısı YAPILMAYACAKTIR.
     
-    // Task'lardan unique recordId'leri al
-    const taskRecordMap = new Map();
-    list.forEach(row => {
-        if (row.recordId) {
-            // loadObjectionRows'dan gelen parent transaction ID'si ile recordId eşleştir
-            taskRecordMap.set(row.id, row.recordId);
-        }
-    });
-
-    // Her record için transactions'ları çek
-    const recordTransactionsMap = new Map();
-    const uniqueRecordIds = [...new Set([...taskRecordMap.values()])];
-    
-    for (const recordId of uniqueRecordIds) {
-        try {
-            const txResult = await ipRecordsService.getTransactionsForRecord(recordId);
-            if (txResult?.success && Array.isArray(txResult.transactions)) {
-                
-                const parentsMap = new Map();
-                const childrenMap = {};
-                
-                // Parent Transactions: Sadece 7, 19, 20 tipli olanları ayır
-                txResult.transactions.forEach(tx => {
-                    if (PARENT_TYPE_IDS.includes(String(tx.type)) && (tx.transactionHierarchy === 'parent' || !tx.parentId)) {
-                        parentsMap.set(tx.id, tx);
-                        childrenMap[tx.id] = []; 
-                    }
-                });
-                
-                // Child Transactions: Parent'a bağlı child'ları ayır
-                txResult.transactions.forEach(tx => {
-                    if (tx.parentId && childrenMap[tx.parentId] && tx.transactionHierarchy === 'child') {
-                        childrenMap[tx.parentId].push(tx);
-                    }
-                });
-
-                // Child'ları ve Parent'ları tarihe göre sırala
-                parentsMap.forEach(parent => {
-                     childrenMap[parent.id].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-                });
-                
-                recordTransactionsMap.set(recordId, {
-                    parents: [...parentsMap.values()].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp)),
-                    childrenMap
-                });
-            }
-        } catch (e) {
-            console.error('Transaction çekme hatası:', recordId, e);
-        }
-    }
-
-    // Accordion yapısını oluştur
     const frag = document.createDocumentFragment();
     
     // Sadece mevcut sayfadaki satırları render et
     const pageData = pagination.getCurrentPageData(list);
 
     for (const row of pageData) {
-        const recordId = row.recordId;
         const parentTxId = row.id;
-
-        const txData = recordTransactionsMap.get(recordId);
+        const children = row.children || []; // 🔥 loadObjectionRows'dan gelen çocuklar
         
-        if (!txData) continue;
-
-        const parent = txData.parents.find(p => p.id === parentTxId);
-        const children = txData.childrenMap[parentTxId] || [];
-        
-        if (!parent) continue; 
-        
+        // Row'un zaten bir Parent Transaction olduğu varsayılır (loadObjectionRows tarafından filtrelendiği için)
         const hasChildren = children.length > 0;
-        const groupId = safeId(`${recordId}_parent_${parentTxId}`);
-        
+        const groupId = safeId(`parent_${parentTxId}`); 
+
         // PARENT SATIRI (10 hücre)
         const parentTr = document.createElement('tr');
-        // İstenen Değişiklik 2: Child'ı yoksa group-header (renk) sınıfını uygulama
+        // İstenen Değişiklik: Child'ı yoksa group-header (renk) sınıfını uygulama
         parentTr.className = hasChildren ? 'group-header' : ''; 
         parentTr.dataset.groupId = groupId;
         
@@ -890,7 +830,11 @@ async renderObjectionRows(list) {
             <td>${row.applicationNumber || '-'}</td>
             <td>${row.applicantName || '-'}</td>
             <td>${row.opponent || '-'}</td>
-            <td>${row.bulletinDate || '-'}</td> <td>${row.bulletinNo || '-'}</td> <td>${row.epatsDate || '-'}</td>   <td>${row.statusText || '-'}</td> `;
+            <td>${row.bulletinDate || '-'}</td> 
+            <td>${row.bulletinNo || '-'}</td> 
+            <td>${row.epatsDate || '-'}</td>   
+            <td>${row.statusText || '-'}</td>
+        `;
         frag.appendChild(parentTr);
 
         // CHILD SATIRLARI
@@ -904,7 +848,7 @@ async renderObjectionRows(list) {
                 childTr.dataset.parentId = groupId;
                 childTr.setAttribute('aria-hidden', 'true');
                 
-                // İstenen Değişiklik 1: Bülten Tarihi, Bülten No ve Durum kolonları boş bırakıldı.
+                // Bülten Tarihi, Bülten No ve Durum kolonları boş bırakıldı (önceki değişiklik)
                 childTr.innerHTML = `
                     <td class="toggle-cell"></td>
                     <td>${row.recordType || '-'}</td>
@@ -927,8 +871,9 @@ async renderObjectionRows(list) {
     if (tableBody) tableBody.style.display = list.length > 0 ? 'table-row-group' : 'none';
     if (noRecMsg) noRecMsg.style.display = list.length === 0 ? 'block' : 'none';
 
-    console.log('✅ İtirazlar render edildi (yeni accordion yapısı)');
+    console.log('✅ İtirazlar render edildi (Optimizasyonlu)');
 }
+
         renderCurrentPage() {
             const tableBody = document.getElementById('portfolioTableBody');
             if (!tableBody || !pagination) return;
@@ -986,7 +931,6 @@ async renderObjectionRows(list) {
                     });
                 }
 
-                // İtirazlar: objectionRows'u kullan ve doğrudan çiz
                 this.renderObjectionRows(baseData);
                 return;
             }
@@ -1245,10 +1189,6 @@ async renderObjectionRows(list) {
                         return 0;
                     });
                 }
-
-                // Sayfalama bu adımda güncellenmeli
-                if (pagination) pagination.update(filtered.length);
-
                 this.renderObjectionRows(filtered);
                 return;
             }
@@ -1922,9 +1862,11 @@ async loadObjectionRows() {
 
     console.log('📊 Toplam kayıt sayısı:', allRecords.length);
 
-    // İstenen değişiklik: Performans sorununu çözmek için kısıtlayıcı filtre kaldırıldı.
-    // Tüm kayıtlar (Batch Processing ile) itiraz transaction'ı için kontrol edilecek.
-    const relevantRecords = allRecords;
+    // İlk filtreleme: Sadece transactions array'i olan kayıtları al (Bu filtre bazen boş sonuç verse de kalsın.)
+    const relevantRecords = allRecords.filter(record => {
+      // Sadece transactions'ı olan kayıtlar
+      return (Array.isArray(record.transactions) && record.transactions.length > 0);
+    });
 
     console.log('📊 İtirazla ilgili olabilecek kayıt sayısı:', relevantRecords.length);
 
@@ -1937,7 +1879,6 @@ async loadObjectionRows() {
 
       await Promise.all(batch.map(async (record) => {
         try {
-          // Transaction'ları ayrı API çağrısıyla al
           const txResult = await ipRecordsService.getTransactionsForRecord(record.id);
           if (!txResult?.success || !Array.isArray(txResult.transactions)) return;
 
@@ -1948,6 +1889,21 @@ async loadObjectionRows() {
           );
 
           if (parentTransactions.length === 0) return;
+          
+          // 🔥 YENİ: Child transaction'ları grupla ve sırala
+          const childrenMap = {};
+          txResult.transactions.forEach(tx => {
+            if (tx.parentId && parentTransactions.some(p => p.id === tx.parentId) && tx.transactionHierarchy === 'child') {
+              if (!childrenMap[tx.parentId]) childrenMap[tx.parentId] = [];
+              childrenMap[tx.parentId].push(tx);
+            }
+          });
+
+          // Çocukları tarihe göre sırala
+          Object.keys(childrenMap).forEach(parentId => {
+            childrenMap[parentId].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+          });
+
 
           // Her parent transaction için bir satır oluştur
           for (const parentTx of parentTransactions) {
@@ -1995,7 +1951,8 @@ async loadObjectionRows() {
               bulletinNo,
               epatsDate: fmtDate(epatsDate),
               statusText,
-              timestamp: parentTx.timestamp
+              timestamp: parentTx.timestamp,
+              children: childrenMap[parentTx.id] || [] // 🔥 Yeni: Child'ları burada sakla
             });
           }
         } catch (e) {
