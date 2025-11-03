@@ -1936,115 +1936,91 @@ async renderObjectionRows(list) {
 
 async loadObjectionRows() {
   console.log('🔄 İtirazlar yükleniyor...');
-  const TYPE_SET = new Set(['7','19','20', 7, 19, 20]);
+  const PARENT_TYPE_IDS = ['7', '19', '20'];
+  const allRows = [];
   
-  let tasks = [];
   try {
-    const res = await (taskService.getTasks?.() || taskService.getAllTasks?.());
-    const arr = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
-    tasks = arr.filter(t => TYPE_SET.has(String(t.taskType)));
-    console.log('✅ İtiraz task sayısı:', tasks.length);
-  } catch (e) {
-    console.error('❌ Tasks yüklenemedi', e);
-    this.objectionRows = [];
-    return;
-  }
-  
-  if (tasks.length === 0) {
-    console.log('ℹ️ Hiç itiraz task bulunamadı');
-    this.objectionRows = [];
-    return;
-  }
-
-  console.log('🔄 Task detayları işleniyor (paralel)...');
-
-  // 2) Kayıt cache’i (aynı recordId birden fazla task'te tekrar okunmasın)
-  const recordCache = new Map();
-  const getRecordCached = (id) => {
-    if (!id) return Promise.resolve(null);
-    if (!recordCache.has(id)) {
-      const p = ipRecordsService.getRecordById(id)
-        .then(r => (r?.success ? r.data : null))
-        .catch(() => null);
-      recordCache.set(id, p);
-    }
-    return recordCache.get(id);
-  };
-
-  // 3) Tüm taskleri paralel işle
-  const rows = (await Promise.all(tasks.map(async (t) => {
-    try {
-      const rec = await getRecordCached(t.relatedIpRecordId);
-
-      const typeMeta = transactionTypesMap.get(String(t.taskType)) || transactionTypesMap.get(Number(t.taskType));
-      const transactionTypeName = (typeMeta?.alias || typeMeta?.name || String(t.taskType));
-
-      const applicants = rec?.applicants?.map(a => a.name).join(', ') || (t.applicantName || '-');
-      const applicationNumber = rec?.applicationNumber || t.applicationNumber || '-';
-
-      const details   = t.details || t.extra || {};
-      const brandInfo = rec?.details?.brandInfo || {};
-      const opposedNo = brandInfo.opposedMarkBulletinNo ?? null;
-      const opposedDateRaw = brandInfo.opposedMarkBulletinDate ?? null;
-
-      const bulletinNo   = opposedNo ?? details.bulletinNo ?? details.bulletinId ?? t.bulletinNo ?? t.bulletinId ?? '-';
-      const bulletinDate = opposedDateRaw ? fmtDate(opposedDateRaw) : fmtDate(details.bulletinDate ?? t.bulletinDate ?? null);
-
-      const opponentName = (details?.opponent?.name) || (t?.opponent?.name) || '-';
-      const epatsDateRaw = details?.epatsDocument?.documentDate || null;
-      const epatsDate    = fmtDate(epatsDateRaw);
-
-      // — Status çözümü —
-      let statusText = 'Karar Bekleniyor';
+    // Tüm kayıtları al
+    const recordsResult = await ipRecordsService.getRecords();
+    const allRecords = this.pickArray(recordsResult);
+    
+    console.log('📊 Toplam kayıt sayısı:', allRecords.length);
+    
+    // Her kayıt için transaction'ları kontrol et
+    for (const record of allRecords) {
       try {
-        if (rec?.id) {
-          // Transactions'ı task'a paralel çektik → sadece bu task için bekle
-          const txRes  = await ipRecordsService.getTransactionsForRecord(rec.id);
-          const txList = (txRes?.success && Array.isArray(txRes.transactions)) ? txRes.transactions : [];
-
-          let foundRequestResult = null;
-          const parentTxId = details?.parentTransactionId || details?.selectedTransactionId;
-
-          if (parentTxId) {
-            const specificTx = txList.find(x => x.id === parentTxId);
-            if (specificTx && specificTx.requestResult !== undefined && specificTx.requestResult !== null && specificTx.requestResult !== '') {
-              foundRequestResult = specificTx.requestResult;
-            }
-          } else {
-            const relatedTx = txList.find(tx => String(tx.type) === String(t.taskType));
-            if (relatedTx && relatedTx.requestResult !== undefined && relatedTx.requestResult !== null && relatedTx.requestResult !== '') {
-              foundRequestResult = relatedTx.requestResult;
-            }
+        const txResult = await ipRecordsService.getTransactionsForRecord(record.id);
+        if (!txResult?.success || !Array.isArray(txResult.transactions)) continue;
+        
+        // Type'ı 7, 19 veya 20 olan parent transaction'ları bul
+        const parentTransactions = txResult.transactions.filter(tx => 
+          PARENT_TYPE_IDS.includes(String(tx.type)) && 
+          (tx.transactionHierarchy === 'parent' || !tx.parentId)
+        );
+        
+        if (parentTransactions.length === 0) continue;
+        
+        // Her parent transaction için bir satır oluştur
+        for (const parentTx of parentTransactions) {
+          const typeMeta = transactionTypesMap.get(String(parentTx.type));
+          const transactionTypeName = typeMeta?.alias || typeMeta?.name || `İşlem ${parentTx.type}`;
+          
+          const applicants = record.applicants?.map(a => a.name).join(', ') || '-';
+          const applicationNumber = record.applicationNumber || '-';
+          
+          // İtiraz sahibi
+          let opponentName = parentTx.oppositionOwner || '-';
+          if (opponentName === '-' && parentTx.relatedParty?.name) {
+            opponentName = parentTx.relatedParty.name;
           }
-
-          if (foundRequestResult !== null && foundRequestResult !== undefined && foundRequestResult !== '') {
-            statusText = formatObjectionStatus(foundRequestResult);
+          if (opponentName === '-' && Array.isArray(parentTx.objectionOwners) && parentTx.objectionOwners.length > 0) {
+            opponentName = parentTx.objectionOwners.map(o => o.name).join(', ');
           }
+          
+          // Bülten bilgileri
+          const brandInfo = record.details?.brandInfo || {};
+          const bulletinNo = brandInfo.opposedMarkBulletinNo || parentTx.bulletinNo || '-';
+          const bulletinDate = brandInfo.opposedMarkBulletinDate || parentTx.bulletinDate || null;
+          
+          // ePats tarihi
+          let epatsDate = null;
+          if (parentTx.epatsDocument?.documentDate) {
+            epatsDate = parentTx.epatsDocument.documentDate;
+          }
+          
+          // Durum - parent transaction'ın requestResult'unu kullan
+          let statusText = 'Karar Bekleniyor';
+          if (parentTx.requestResult !== undefined && parentTx.requestResult !== null && parentTx.requestResult !== '') {
+            statusText = formatObjectionStatus(parentTx.requestResult);
+          }
+          
+          allRows.push({
+            id: parentTx.id,
+            recordId: record.id,
+            recordType: record.type || '-',
+            transactionTypeName,
+            applicationNumber,
+            applicantName: applicants,
+            opponent: opponentName,
+            bulletinDate: fmtDate(bulletinDate),
+            bulletinNo,
+            epatsDate: fmtDate(epatsDate),
+            statusText,
+            timestamp: parentTx.timestamp
+          });
         }
       } catch (e) {
-        console.error('❌ requestResult kontrolünde hata:', e);
+        console.warn('❌ Record transaction hatası:', record.id, e);
       }
-
-      return {
-        id: t.id,
-        recordType: rec?.type || '-',
-        transactionTypeName,
-        applicationNumber,
-        applicantName: applicants || '-',
-        opponent: opponentName,
-        bulletinDate,
-        bulletinNo,
-        epatsDate,
-        statusText
-      };
-    } catch (e) {
-      console.warn('❌ Task satırı oluşturulamadı', t?.id, e);
-      return null;
     }
-  }))).filter(Boolean);
-
-  console.log('✅ loadObjectionRows tamamlandı, toplam satır:', rows.length);
-  this.objectionRows = rows;
+    
+    console.log('✅ loadObjectionRows tamamlandı, toplam satır:', allRows.length);
+    this.objectionRows = allRows;
+    
+  } catch (e) {
+    console.error('❌ İtirazlar yüklenirken hata:', e);
+    this.objectionRows = [];
+  }
 }
 
 async createOppositionRowFromTransaction(transaction, record) {
