@@ -7,7 +7,7 @@ import {
     onAuthStateChanged,
     updateProfile
 } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
-import { getFirestore, collection, addDoc,
+import { initializeFirestore, collection, addDoc,
     getDocs, doc, updateDoc, deleteDoc,
     query, orderBy, where, getDoc, setDoc, arrayUnion, writeBatch, documentId, serverTimestamp, Timestamp, FieldValue }
 from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
@@ -31,7 +31,11 @@ let isFirebaseAvailable = false;
 try {
     app = initializeApp(firebaseConfig);
     auth = getAuth(app);
-    db = getFirestore(app);
+    db = initializeFirestore(app, {
+    experimentalAutoDetectLongPolling: true, // ortam desteklemiyorsa otomatik long-polling
+    // experimentalForceLongPolling: true,   // hâlâ 404’ler sürerse bunu da aç
+    useFetchStreams: false                   // bazı proxy/CDN’lerde stream’i tamamen kapatmak iyi gelir
+    });
     storage = getStorage(app);
     isFirebaseAvailable = true;
     console.log('🔥 Firebase initialized successfully');
