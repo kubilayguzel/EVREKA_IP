@@ -380,17 +380,6 @@
     opacity:1; transform: translateY(0);
 }
 
-
-/* === Inline accordion caret (no extra column) === */
-td.caret-host { position: relative; padding-left: 28px; }
-.row-caret{
-    position:absolute; left:6px; top:50%; transform:translateY(-50%);
-    width:20px; height:20px; display:inline-flex; align-items:center; justify-content:center;
-    border:1px solid #d8dee9; border-radius:6px; background:#fff; cursor:pointer;
-}
-.row-caret i{ transition: transform .18s ease; }
-.row-caret[aria-expanded="true"] i{ transform: rotate(90deg); }
-
 /* Portfolio sayfası için CSS override */
 .portfolio-table th::after,
 .portfolio-table .accordion-header::after,
@@ -456,29 +445,41 @@ td.caret-host { position: relative; padding-left: 28px; }
   border-radius: 4px;
 }
 /* === Inline accordion caret (no extra column) === */
-td.caret-host { position: relative; padding-left: 38px !important; }
-.row-caret{
-    position:absolute !important; 
-    left:8px !important; 
-    top:50% !important; 
-    transform:translateY(-50%) !important;
-    width:24px !important; 
-    height:24px !important; 
-    display:inline-flex !important; 
-    align-items:center !important; 
-    justify-content:center !important;
-    border:1px solid #333 !important; 
-    border-radius:6px !important; 
-    background:#fff !important; 
-    cursor:pointer !important;
-    z-index: 10 !important;
+td.caret-host { 
+    position: relative !important; 
+    padding-left: 40px !important; 
 }
-.row-caret i{ 
+.row-caret {
+    position: absolute !important; 
+    left: 10px !important; 
+    top: 50% !important; 
+    transform: translateY(-50%) !important;
+    width: 28px !important; 
+    height: 28px !important; 
+    display: inline-flex !important; 
+    align-items: center !important; 
+    justify-content: center !important;
+    border: 2px solid #1e3c72 !important; 
+    border-radius: 6px !important; 
+    background: #ffffff !important; 
+    cursor: pointer !important;
+    z-index: 100 !important;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.15) !important;
+}
+.row-caret:hover {
+    background: #f0f4ff !important;
+    border-color: #2a5298 !important;
+    box-shadow: 0 3px 8px rgba(30,60,114,0.25) !important;
+}
+.row-caret i { 
     transition: transform .18s ease !important; 
-    font-size: 12px !important;
-    color: #333 !important;
+    font-size: 14px !important;
+    color: #1e3c72 !important;
+    display: block !important;
 }
-.row-caret[aria-expanded="true"] i{ transform: rotate(90deg) !important; }
+.row-caret[aria-expanded="true"] i { 
+    transform: rotate(90deg) !important; 
+}
 </style>
 
 <style id="accordion-fix-style">
