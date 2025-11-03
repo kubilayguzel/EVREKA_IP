@@ -785,92 +785,42 @@ tr.group-row[aria-hidden="true"]{ display:none !important; }
                 }
             }
             
-            // İTİRAZLAR TABI – AKORDEONLU RENDER
-            renderObjectionRows(list) {
+        renderObjectionRows(list) {
             const tableBody = document.getElementById('portfolioTableBody');
             if (!tableBody || !pagination) return;
 
             tableBody.innerHTML = '';
 
-            // Pagination toplamı
+            // Pagination toplamı güncelle
             pagination.update(list.length);
 
-            // Grupları hazırla (önceden hesaplandıysa kullan, değilse oluştur)
-            if (!this.objectionGroups || !this.objectionGroups.length) {
-                this.buildObjectionGroups();
-            }
-
-            // Bu sayfada gösterilecek grup aralığı
-            const pageGroups = pagination.getCurrentPageData(this.objectionGroups);
+            // Bu sayfada gösterilecek kalemleri al
+            const pageData = pagination.getCurrentPageData(list);
 
             const frag = document.createDocumentFragment();
-
-            pageGroups.forEach(group => {
-                const gid = safeId(group.key);
-                const head = group.items[0] || {}; // gruptaki en güncel satır
-
-                // Grup başlığı (toggle/caret olan satır)
-                const th = document.createElement('tr');
-                th.className = 'group-header';
-                th.dataset.groupId = gid;
-
-                // kolon sıralaması initialRenderTableStructure() ile uyumlu
-                th.innerHTML = `
-                <td class="caret-host">
-                    <button class="accordion-toggle row-caret" data-group-id="${gid}" aria-expanded="false" title="Aç/Kapat">
-                    <i class="fas fa-chevron-right"></i>
-                    </button>
-                </td>
-                <td>${head.recordType || '-'}</td>
-                <td>${head.transactionTypeName || '-'}</td>
-                <td>${head.applicationNumber || '-'}</td>
-                <td>${head.applicantName || '-'}</td>
-                <td>
-                    ${head.opponent || '-'}
-                    ${group.hasMultiple ? `<span class="child-count" title="Bu başvuruya bağlı ${group.items.length} itiraz var">${group.items.length}</span>` : ''}
-                </td>
-                <td>${fmtDate(head.bulletinDate)}</td>
-                <td>${head.bulletinNo || '-'}</td>
-                <td>${fmtDate(head.epatsDate)}</td>
-                <td>${head.statusText || '-'}</td>
-                `;
-                frag.appendChild(th);
-
-                // Child satırlar (başlık altına gizli)
-                group.items.forEach(item => {
+            pageData.forEach(r => {
                 const tr = document.createElement('tr');
-                tr.className = 'group-row child-row';
-                tr.dataset.parentId = gid;
-                tr.setAttribute('aria-hidden', 'true');
-
                 tr.innerHTML = `
-                    <td></td>
-                    <td>${item.recordType || '-'}</td>
-                    <td>${item.transactionTypeName || '-'}</td>
-                    <td>${item.applicationNumber || '-'}</td>
-                    <td>${item.applicantName || '-'}</td>
-                    <td>${item.opponent || '-'}</td>
-                    <td>${fmtDate(item.bulletinDate)}</td>
-                    <td>${item.bulletinNo || '-'}</td>
-                    <td>${fmtDate(item.epatsDate)}</td>
-                    <td>${item.statusText || '-'}</td>
+                <td></td>  <!-- toggle/caret kolonu boş -->
+                <td>${(r.recordType || r.ipType || '-')}</td>
+                <td>${(r.transactionTypeName || '-')}</td>
+                <td>${(r.applicationNumber || '-')}</td>
+                <td>${(r.applicantName || '-')}</td>
+                <td>${(r.opponent || '-')}</td>
+                <td>${fmtDate(r.bulletinDate)}</td>
+                <td>${(r.bulletinNo || '-')}</td>
+                <td>${fmtDate(r.epatsDate)}</td>
+                <td>${(r.statusText || '-')}</td>
                 `;
                 frag.appendChild(tr);
-                });
             });
 
             tableBody.appendChild(frag);
 
-            // Boş liste mesajı
-            document.getElementById('portfolioTableBody').style.display = pageGroups.length > 0 ? 'table-row-group' : 'none';
-            document.getElementById('noRecordsMessage').style.display = pageGroups.length === 0 ? 'block' : 'none';
-
-            // Akordeon davranışını bağla
-            if (typeof window.wireAccordion === 'function') {
-                window.wireAccordion();
+            // Boş liste mesajı yönetimi
+            document.getElementById('portfolioTableBody').style.display = list.length > 0 ? 'table-row-group' : 'none';
+            document.getElementById('noRecordsMessage').style.display = list.length === 0 ? 'block' : 'none';
             }
-            }
-
 
         renderCurrentPage() {
             const tableBody = document.getElementById('portfolioTableBody');
