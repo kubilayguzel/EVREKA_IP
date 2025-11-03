@@ -182,17 +182,19 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       }, 300000);
 
       // ACK: içerik scriptine "veri alındı" mesajı gönder
-      try {
-        if (sender && sender.tab && sender.tab.id) {
-          chrome.tabs.sendMessage(sender.tab.id, { 
-            type: 'VERI_ALINDI_OK', 
-            appNo: appNo 
-          }).catch(err => {
-            console.error('[Background] ACK gönderilirken hata:', err);
-          });
-        }
-      } catch (e) { 
-        console.error("[Background] ACK gönderilirken hata:", e);
+      if (sender && sender.tab && sender.tab.id) {
+        chrome.tabs.sendMessage(sender.tab.id, { 
+          type: 'VERI_ALINDI_OK', 
+          appNo: appNo 
+        }, (response) => {
+          // Callback ile hata yakalama
+          if (chrome.runtime.lastError) {
+            // Sekme kapanmışsa veya erişilemiyorsa sessizce logla
+            console.log('[Background] ACK gönderilemedi (sekme kapalı olabilir):', chrome.runtime.lastError.message);
+          } else {
+            console.log('[Background] ✅ ACK gönderildi:', appNo);
+          }
+        });
       }
     }
     
