@@ -1587,18 +1587,19 @@
                         }
 
                         allRows.push({
-                          id: parentTx.id,
-                          recordId: record.id,
-                          recordType: record.type || '-',
-                          transactionTypeName,
-                          applicationNumber,
-                          applicantName: applicants,
-                          opponent: opponentName,
-                          bulletinDate: fmtDate(bulletinDate),
-                          bulletinNo,
-                          epatsDate: fmtDate(epatsDate),
-                          statusText,
-                          timestamp: parentTx.timestamp
+                        id: parentTx.id,
+                        recordId: record.id,
+                        recordType: record.type || '-',
+                        title: record.title || record.brandText || '',
+                        transactionTypeName,
+                        applicationNumber,
+                        applicantName: applicants,
+                        opponent: opponentName,
+                        bulletinDate: fmtDate(bulletinDate),
+                        bulletinNo,
+                        epatsDate: fmtDate(epatsDate),
+                        statusText,
+                        timestamp: parentTx.timestamp
                         });
                       }
                     } catch (e) {
