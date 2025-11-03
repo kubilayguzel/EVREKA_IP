@@ -784,127 +784,178 @@ tr.group-row[aria-hidden="true"]{ display:none !important; }
                     document.getElementById('loadingIndicator').style.display = 'none';
                 }
             }
+
+async renderObjectionRows(list) {
+    const tableBody = document.getElementById('portfolioTableBody');
+    const noRecMsg = document.getElementById('noRecordsMessage');
+    if (!tableBody || list.length === 0) {
+        if (tableBody) tableBody.style.display = 'none';
+        if (noRecMsg) noRecMsg.style.display = 'block';
+        return;
+    }
+
+    console.log('🔍 renderObjectionRows çağrıldı:', { totalRows: list.length });
+
+    // 🔥 YENİ MANTIK: Task'lardan relatedIpRecordId'leri topla ve transactions'ları çek
+    const PARENT_TYPE_IDS = ['7', '19', '20'];
+    
+    // Task'lardan unique recordId'leri al
+    const taskRecordMap = new Map();
+    list.forEach(row => {
+        if (row.id) {
+            // loadObjectionRows'dan gelen task verisini sakla
+            const taskData = window.portfolioModule?.allRecords?.find(r => 
+                r.transactions?.some(t => t.id === row.id)
+            );
             
-            renderObjectionRows(list) {
-                const tableBody = document.getElementById('portfolioTableBody');
-                if (!tableBody || !pagination) return;
-
-                tableBody.innerHTML = '';
-
-                // Önce gruplama yap
-                const groupsMap = {};
-                list.forEach(item => {
-                    const key = normalizeAppNo(item.applicationNumber || '');
-                    if (!groupsMap[key]) {
-                        groupsMap[key] = {
-                            key,
-                            displayNo: item.applicationNumber || '-',
-                            items: []
-                        };
-                    }
-                    groupsMap[key].items.push(item);
-                });
-
-                // Grupları diziye çevir ve sırala
-                const groups = Object.values(groupsMap);
-                groups.forEach(g => {
-                    g.items.sort((a, b) => {
-                        const ad = new Date(a.bulletinDate || 0).getTime();
-                        const bd = new Date(b.bulletinDate || 0).getTime();
-                        return bd - ad; // En yeni en üstte
-                    });
-                    g.hasMultiple = g.items.length > 1;
-                });
-
-                // Pagination için toplam satır sayısını hesapla (parent + child)
-                const totalRows = groups.reduce((sum, g) => sum + (g.hasMultiple ? 1 + g.items.length : g.items.length), 0);
-                pagination.update(totalRows);
-
-                // Sayfadaki grupları al
-                const pageGroups = pagination.getCurrentPageData(groups);
-
-                const frag = document.createDocumentFragment();
-                
-                pageGroups.forEach(group => {
-                    if (group.hasMultiple) {
-                        // PARENT SATIR
-                        const parentTr = document.createElement('tr');
-                        parentTr.className = 'group-header';
-                        parentTr.dataset.groupId = safeId(group.key);
-                        
-                        const firstItem = group.items[0];
-                        
-                        parentTr.innerHTML = `
-                            <td class="caret-host">
-                                <button class="row-caret" aria-expanded="false" data-group-id="${safeId(group.key)}">
-                                    <i class="fas fa-chevron-right"></i>
-                                </button>
-                            </td>
-                            <td>${firstItem.recordType || '-'}</td>
-                            <td>${firstItem.transactionTypeName || '-'}</td>
-                            <td>${group.displayNo}</td>
-                            <td>${firstItem.applicantName || '-'}</td>
-                            <td colspan="5" style="text-align:right; padding-right:20px;">
-                                <span class="count-dot">${group.items.length}</span> işlem
-                            </td>
-                        `;
-                        frag.appendChild(parentTr);
-
-                        // CHILD SATIRLAR
-                        group.items.forEach((item, idx) => {
-                            const childTr = document.createElement('tr');
-                            childTr.className = 'group-row child-row';
-                            childTr.dataset.parentId = safeId(group.key);
-                            childTr.setAttribute('aria-hidden', 'true');
-                            
-                            childTr.innerHTML = `
-                                <td></td>
-                                <td>${item.recordType || '-'}</td>
-                                <td>${item.transactionTypeName || '-'}</td>
-                                <td>${item.applicationNumber || '-'}</td>
-                                <td>${item.applicantName || '-'}</td>
-                                <td>${item.opponent || '-'}</td>
-                                <td>${fmtDate(item.bulletinDate)}</td>
-                                <td>${item.bulletinNo || '-'}</td>
-                                <td>${fmtDate(item.epatsDate)}</td>
-                                <td>${item.statusText || '-'}</td>
-                            `;
-                            frag.appendChild(childTr);
-                        });
-                    } else {
-                        // TEK SATIR (accordion'suz)
-                        const item = group.items[0];
-                        const tr = document.createElement('tr');
-                        tr.innerHTML = `
-                            <td></td>
-                            <td>${item.recordType || '-'}</td>
-                            <td>${item.transactionTypeName || '-'}</td>
-                            <td>${item.applicationNumber || '-'}</td>
-                            <td>${item.applicantName || '-'}</td>
-                            <td>${item.opponent || '-'}</td>
-                            <td>${fmtDate(item.bulletinDate)}</td>
-                            <td>${item.bulletinNo || '-'}</td>
-                            <td>${fmtDate(item.epatsDate)}</td>
-                            <td>${item.statusText || '-'}</td>
-                        `;
-                        frag.appendChild(tr);
-                    }
-                });
-
-                tableBody.appendChild(frag);
-                
-                // Accordion'u aktif et
-                wireAccordion();
-
-                // Boş liste mesajı yönetimi
-                const tbody = document.getElementById('portfolioTableBody');
-                const noRecMsg = document.getElementById('noRecordsMessage');
-
-                if (tbody) tbody.style.display = list.length > 0 ? 'table-row-group' : 'none';
-                if (noRecMsg) noRecMsg.style.display = list.length === 0 ? 'block' : 'none';
-
-                console.log('✅ İtirazlar render edildi (accordion):', pageGroups.length, 'grup');
+            if (taskData?.id) {
+                taskRecordMap.set(row.id, taskData.id);
             }
+        }
+    });
+
+    // Her record için transactions'ları çek
+    const recordTransactionsMap = new Map();
+    const uniqueRecordIds = [...new Set([...taskRecordMap.values()])];
+    
+    for (const recordId of uniqueRecordIds) {
+        try {
+            const txResult = await ipRecordsService.getTransactionsForRecord(recordId);
+            if (txResult?.success && Array.isArray(txResult.transactions)) {
+                // Parent transactions'ları filtrele (type 7, 19, 20)
+                const parentTransactions = txResult.transactions.filter(tx => 
+                    PARENT_TYPE_IDS.includes(String(tx.type))
+                );
+                
+                // Child transactions'ları grupla
+                const childrenMap = {};
+                parentTransactions.forEach(parent => {
+                    childrenMap[parent.id] = txResult.transactions.filter(tx => 
+                        tx.parentId === parent.id && tx.transactionHierarchy === 'child'
+                    );
+                    // Child'ları tarihe göre sırala
+                    childrenMap[parent.id].sort((a, b) => 
+                        new Date(a.timestamp) - new Date(b.timestamp)
+                    );
+                });
+                
+                // Parent'ları tarihe göre sırala
+                parentTransactions.sort((a, b) => 
+                    new Date(a.timestamp) - new Date(b.timestamp)
+                );
+                
+                recordTransactionsMap.set(recordId, {
+                    parents: parentTransactions,
+                    childrenMap
+                });
+            }
+        } catch (e) {
+            console.error('Transaction çekme hatası:', recordId, e);
+        }
+    }
+
+    // Accordion yapısını oluştur
+    const frag = document.createDocumentFragment();
+    
+    // Her row için parent-child yapısını render et
+    for (const row of list) {
+        const recordId = taskRecordMap.get(row.id);
+        const txData = recordTransactionsMap.get(recordId);
+        
+        if (!txData || !txData.parents.length) {
+            // Transaction yoksa basit satır göster
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td></td>
+                <td>${row.recordType || '-'}</td>
+                <td>${row.transactionTypeName || '-'}</td>
+                <td>${row.applicationNumber || '-'}</td>
+                <td>${row.applicantName || '-'}</td>
+                <td>${row.opponent || '-'}</td>
+                <td>${fmtDate(row.bulletinDate)}</td>
+                <td>${row.bulletinNo || '-'}</td>
+                <td>${fmtDate(row.epatsDate)}</td>
+                <td>${row.statusText || '-'}</td>
+            `;
+            frag.appendChild(tr);
+            continue;
+        }
+
+        // 🔥 Her parent transaction için parent satırı + child satırları
+        const { parents, childrenMap } = txData;
+        
+        parents.forEach((parent) => {
+            const groupId = safeId(`${recordId}_parent_${parent.id}`);
+            const children = childrenMap[parent.id] || [];
+            const hasChildren = children.length > 0;
+            
+            // Parent transaction type bilgisi
+            const parentTypeMeta = transactionTypesMap.get(String(parent.type));
+            const parentTypeName = parentTypeMeta?.alias || parentTypeMeta?.name || `İşlem ${parent.type}`;
+
+            // PARENT SATIRI
+            const parentTr = document.createElement('tr');
+            parentTr.className = hasChildren ? 'group-header' : '';
+            parentTr.dataset.groupId = groupId;
+            
+            parentTr.innerHTML = `
+                <td class="toggle-cell">
+                    ${hasChildren ? `<button class="row-caret" data-group-id="${groupId}" aria-expanded="false">
+                        <i class="fas fa-chevron-right"></i>
+                    </button>` : ''}
+                </td>
+                <td>${row.recordType || '-'}</td>
+                <td>${parentTypeName}</td>
+                <td>${row.applicationNumber || '-'}</td>
+                <td>${row.applicantName || '-'}</td>
+                <td>${row.opponent || '-'}</td>
+                <td>${fmtDate(parent.timestamp)}</td>
+                <td>${row.bulletinNo || '-'}</td>
+                <td>${fmtDate(row.epatsDate)}</td>
+                <td>${row.statusText || '-'}</td>
+            `;
+            frag.appendChild(parentTr);
+
+            // CHILD SATIRLARI
+            if (hasChildren) {
+                children.forEach((child) => {
+                    const childTypeMeta = transactionTypesMap.get(String(child.type));
+                    const childTypeName = childTypeMeta?.alias || childTypeMeta?.name || `İşlem ${child.type}`;
+                    
+                    const childTr = document.createElement('tr');
+                    childTr.className = 'group-row child-row';
+                    childTr.dataset.parentId = groupId;
+                    childTr.setAttribute('aria-hidden', 'true');
+                    
+                    childTr.innerHTML = `
+                        <td></td>
+                        <td>${row.recordType || '-'}</td>
+                        <td style="padding-left: 32px;">↳ ${childTypeName}</td>
+                        <td>${row.applicationNumber || '-'}</td>
+                        <td>${row.applicantName || '-'}</td>
+                        <td>${row.opponent || '-'}</td>
+                        <td>${fmtDate(child.timestamp)}</td>
+                        <td>${row.bulletinNo || '-'}</td>
+                        <td>${fmtDate(row.epatsDate)}</td>
+                        <td>${row.statusText || '-'}</td>
+                    `;
+                    frag.appendChild(childTr);
+                });
+            }
+        });
+    }
+
+    tableBody.appendChild(frag);
+    
+    // Accordion'u aktif et
+    wireAccordion();
+
+    // Boş liste mesajı yönetimi
+    if (tableBody) tableBody.style.display = list.length > 0 ? 'table-row-group' : 'none';
+    if (noRecMsg) noRecMsg.style.display = list.length === 0 ? 'block' : 'none';
+
+    console.log('✅ İtirazlar render edildi (yeni accordion yapısı)');
+}
 
         renderCurrentPage() {
             const tableBody = document.getElementById('portfolioTableBody');
@@ -1995,6 +2046,70 @@ async loadObjectionRows() {
   console.log('✅ loadObjectionRows tamamlandı, toplam satır:', rows.length);
   this.objectionRows = rows;
 }
+
+async createOppositionRowFromTransaction(transaction, record) {
+  try {
+    const typeMeta = transactionTypesMap.get(String(transaction.type));
+    const transactionTypeName = typeMeta?.alias || typeMeta?.name || `İşlem ${transaction.type}`;
+    
+    const applicants = record?.applicants?.map(a => a.name).join(', ') || '-';
+    const applicationNumber = record?.applicationNumber || '-';
+    
+    // İtiraz sahibi
+    let opponentName = transaction.oppositionOwner || '-';
+    if (opponentName === '-' && transaction.relatedParty?.name) {
+      opponentName = transaction.relatedParty.name;
+    }
+    
+    // Bülten bilgileri
+    const brandInfo = record?.details?.brandInfo || {};
+    let bulletinNo = brandInfo.opposedMarkBulletinNo || transaction.bulletinNo || '-';
+    let bulletinDate = brandInfo.opposedMarkBulletinDate || transaction.bulletinDate || null;
+    
+    const formatDate = (dateValue) => {
+      if (!dateValue) return '-';
+      try {
+        return new Date(dateValue).toLocaleDateString('tr-TR');
+      } catch {
+        return '-';
+      }
+    };
+    
+    // ePats tarihi
+    let epatsDate = '-';
+    if (transaction.epatsDocument?.documentDate) {
+      epatsDate = formatDate(transaction.epatsDocument.documentDate);
+    }
+    
+    // Durum
+    let statusText = 'Karar Bekleniyor';
+    if (transaction.requestResult) {
+      statusText = this.formatObjectionStatus(transaction.requestResult);
+    }
+    
+    return {
+      id: `tx_${transaction.id}`,
+      transactionId: transaction.id,
+      recordId: record.id,
+      recordType: record.type || '-',
+      transactionTypeName,
+      applicationNumber,
+      applicantName: applicants,
+      opponent: opponentName,
+      bulletinDate: formatDate(bulletinDate),
+      bulletinNo,
+      epatsDate,
+      statusText,
+      timestamp: transaction.timestamp,
+      isParent: transaction.transactionHierarchy === 'parent',
+      children: []
+    };
+  } catch (e) {
+    console.warn('❌ Transaction satırı oluşturulamadı:', transaction.id, e);
+    return null;
+  }
+}
+
 
             initialRenderTableStructure() {
                 const headerRow = document.getElementById('portfolioTableHeaderRow');
