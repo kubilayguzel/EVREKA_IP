@@ -7,10 +7,11 @@ import {
     onAuthStateChanged,
     updateProfile
 } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
-import { initializeFirestore, collection, addDoc,
-    getDocs, doc, updateDoc, deleteDoc,
-    query, orderBy, where, getDoc, setDoc, arrayUnion, writeBatch, documentId, serverTimestamp, Timestamp, FieldValue }
+
+import { initializeFirestore, collection, addDoc, getDocs, doc, updateDoc, deleteDoc, query, orderBy, where, getDoc, setDoc, arrayUnion, writeBatch, documentId, serverTimestamp, Timestamp, FieldValue,
+collectionGroup, limit, getDocsFromCache, getDocsFromServer, persistentLocalCache, persistentMultipleTabManager }
 from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+
 import { getStorage, ref, uploadBytes, uploadBytesResumable, getDownloadURL, deleteObject } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js';
 import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-functions.js';
 
@@ -32,9 +33,13 @@ try {
     app = initializeApp(firebaseConfig);
     auth = getAuth(app);
     db = initializeFirestore(app, {
-    experimentalAutoDetectLongPolling: true, // ortam desteklemiyorsa otomatik long-polling
-    // experimentalForceLongPolling: true,   // hâlâ 404’ler sürerse bunu da aç
-    useFetchStreams: false                   // bazı proxy/CDN’lerde stream’i tamamen kapatmak iyi gelir
+    experimentalAutoDetectLongPolling: true,
+    // experimentalForceLongPolling: true,   // gerekiyorsa aç
+    useFetchStreams: false,
+    // 🔒 IndexedDB kalıcı cache (ilk boyama için anında veri)
+    localCache: persistentLocalCache({
+        tabManager: persistentMultipleTabManager()
+    }),
     });
     storage = getStorage(app);
     isFirebaseAvailable = true;
@@ -335,13 +340,23 @@ export const ipRecordsService = {
             return { success: false, error: error.message };
         }
     },
-    async getRecords() {
+    async getRecords(opts = {}) {
         if (!isFirebaseAvailable) return { success: true, data: [] };
+        const { limitCount } = opts;
         try {
-            const snapshot = await getDocs(query(collection(db, 'ipRecords'), orderBy('createdAt', 'desc')));
-            return { success: true, data: snapshot.docs.map(d => ({ id: d.id, ...d.data() })) };
+        let q = query(collection(db, 'ipRecords'), orderBy('createdAt', 'desc'));
+        if (limitCount) q = query(q, limit(limitCount));
+
+        // 1) Cache'ten dene (IndexedDB)
+        const snapCache = await getDocsFromCache(q).catch(() => null);
+        if (snapCache && !snapCache.empty) {
+            return { success: true, data: snapCache.docs.map(d => ({ id: d.id, ...d.data() })), from: 'cache' };
+        }
+        // 2) Sunucudan getir
+        const snapServer = await getDocsFromServer(q).catch(() => getDocs(q));
+        return { success: true, data: snapServer.docs.map(d => ({ id: d.id, ...d.data() })), from: 'server' };
         } catch (error) {
-            return { success: false, error: error.message };
+        return { success: false, error: error.message };
         }
     },
 
@@ -374,6 +389,7 @@ export const ipRecordsService = {
             return { success: false, error: error.message };
         }
     },
+
     async getRecordById(recordId) {
         if (!isFirebaseAvailable) return { success: false, error: "Firebase kullanılamıyor." };
         try {
@@ -384,6 +400,7 @@ export const ipRecordsService = {
             return { success: false, error: error.message };
         }
     },
+
     async updateRecord(recordId, updates) {
         if (!isFirebaseAvailable) return { success: false, error: "Firebase kullanılamıyor." };
         try {
@@ -425,7 +442,34 @@ export const ipRecordsService = {
             return { success: false, error: error.message };
         }
     },
-    
+
+    // ipRecordsService içine ekle
+    async getObjectionParents(limitCount = 50) {
+    if (!isFirebaseAvailable) return { success: true, data: [] };
+    try {
+        const TYPES = [7, 19, 20]; // ebeveyn itiraz/yanıt/karar tipleri
+        let q = query(
+        collectionGroup(db, 'transactions'),
+        where('type', 'in', TYPES),
+        orderBy('timestamp', 'desc'),
+        limit(limitCount)
+        );
+        // Cache -> Server stratejisi
+        const snapCache = await getDocsFromCache(q).catch(() => null);
+        const snap = (snapCache && !snapCache.empty) ? snapCache : await getDocs(q);
+        const items = snap.docs.map(d => {
+        const data = d.data();
+        const recordRef = d.ref.parent.parent;   // ilgili ipRecords/{recordId}
+        return { id: d.id, recordId: recordRef.id, ...data };
+        });
+        return { success: true, data: items };
+    } catch (error) {
+        // İlk seferde index isteyebilir; konsol linkinden oluştur.
+        console.error('getObjectionParents error:', error);
+        return { success: false, error: error.message, data: [] };
+    }
+    },
+
     // public/firebase-config.js  (ipRecordsService içinde)
     async addTransactionToRecord(recordId, transactionData) {
     if (!isFirebaseAvailable) return { success: false, error: "Firebase kullanılamıyor." };
