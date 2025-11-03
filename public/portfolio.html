@@ -290,10 +290,10 @@
 
 <script type="module">
         import Pagination from './js/pagination.js';
-        import { ipRecordsService, personService, transactionTypeService, auth, monitoringService, taskService } from './firebase-config.js';
+        import { ipRecordsService, db, personService, transactionTypeService, auth, monitoringService, taskService } from './firebase-config.js';
         import { showNotification, formatFileSize, STATUSES } from './utils.js';
         import { loadSharedLayout } from './js/layout-loader.js';
-        import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { doc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
         import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
         // === Yardımcı Fonksiyonlar ===
@@ -460,12 +460,10 @@
             if (result.success) allPersons = result.data;
         }
 
-        async function getCountries() {
-            try {
-                const db = getFirestore();
-                const docRef = doc(db, 'common', 'countries');
-                const docSnap = await getDoc(docRef);
-
+            async function getCountries() {
+                try {
+                    const docRef = doc(db, 'common', 'countries');
+                    const docSnap = await getDoc(docRef);
                 if (docSnap.exists()) {
                     const data = docSnap.data();
                     allCountries = data.list || [];
@@ -1523,97 +1521,117 @@
                 });
             }
 
-            async loadObjectionRows() {
-              const PARENT_TYPE_IDS = ['7', '19', '20'];
-              const allRows = [];
+ // YERİNE GEÇSİN
+async loadObjectionRows() {
+  const PARENT_TYPE_IDS = ['7', '19', '20'];
+  const allRows = [];
 
-              try {
-                const recordsResult = await ipRecordsService.getRecords();
-                const allRecords = this.pickArray(recordsResult);
-                const relevantRecords = allRecords;
+  try {
+    // 1) Görünen sayfadaki kayıtları belirle (varsayılan 20)
+    //    - Eğer modülde pagination bilgileri varsa kullan; yoksa 20 kabul et
+    const pageSize = this.pageSize || this.pagination?.pageSize || 20;
+    const currentPage = this.currentPage || this.pagination?.page || 1;
+    const start = (currentPage - 1) * pageSize;
+    const end = start + pageSize;
 
-                // Batch processing: 50'lik paketler
-                const BATCH_SIZE = 50;
+    // Kayıt listesi: varsa önceden yüklenmiş diziyi kullan; yoksa servis çağır
+    let allRecords;
+    if (Array.isArray(this.allRecords) && this.allRecords.length) {
+      allRecords = this.allRecords;
+    } else {
+      const recordsResult = await ipRecordsService.getRecords();
+      allRecords = this.pickArray(recordsResult); // senin util’in
+      this.allRecords = allRecords;
+    }
+    const pageRecords = allRecords.slice(start, end);
 
-                for (let i = 0; i < relevantRecords.length; i += BATCH_SIZE) {
-                  const batch = relevantRecords.slice(i, i + BATCH_SIZE);
+    // 2) İstekleri aşırı paralelleştirmeden yapalım (basit concurrency pool)
+    const CONCURRENCY = 6;
+    const queue = [...pageRecords];
 
-                  await Promise.all(batch.map(async (record) => {
-                    try {
-                      const txResult = await ipRecordsService.getTransactionsForRecord(record.id);
-                      if (!txResult?.success || !Array.isArray(txResult.transactions)) return;
+    const worker = async () => {
+      while (queue.length) {
+        const record = queue.shift();
+        try {
+          // a) Cache varsa kullan, yoksa getir
+          let txs, cached = this.txCache.get(record.id);
+          if (cached?.transactions) {
+            txs = cached.transactions;
+          } else {
+            const txResult = await ipRecordsService.getTransactionsForRecord(record.id);
+            if (!txResult?.success || !Array.isArray(txResult.transactions)) continue;
+            txs = txResult.transactions;
+            // Cache’e koy (parent/child haritası varsa koru)
+            const pc = buildParentChild(txs);
+            this.txCache.set(record.id, { transactions: txs, ...pc });
+          }
 
-                      // Cache'e koy (bir kere çekildiğinde reusable olsun)
-                      const cached = this.txCache.get(record.id);
-                      if (!cached) {
-                        const pc = buildParentChild(txResult.transactions);
-                        this.txCache.set(record.id, {transactions: txResult.transactions, ...pc});
-                      }
+          // b) Sadece parent itiraz işlemlerini topla
+          const parentTransactions = txs.filter(tx =>
+            PARENT_TYPE_IDS.includes(String(tx.type)) &&
+            (tx.transactionHierarchy === 'parent' || !tx.parentId)
+          );
+          if (parentTransactions.length === 0) continue;
 
-                      const parentTransactions = txResult.transactions.filter(tx =>
-                        PARENT_TYPE_IDS.includes(String(tx.type)) &&
-                        (tx.transactionHierarchy === 'parent' || !tx.parentId)
-                      );
+          // c) Satırları oluştur
+          const applicants = record.applicants?.map(a => a.name).join(', ') || '-';
+          const applicationNumber = record.applicationNumber || '-';
+          const brandInfo = record.details?.brandInfo || {};
 
-                      if (parentTransactions.length === 0) return;
+          for (const parentTx of parentTransactions) {
+            const typeMeta = transactionTypesMap.get(String(parentTx.type));
+            const transactionTypeName = typeMeta?.alias || typeMeta?.name || `İşlem ${parentTx.type}`;
 
-                      for (const parentTx of parentTransactions) {
-                        const typeMeta = transactionTypesMap.get(String(parentTx.type));
-                        const transactionTypeName = typeMeta?.alias || typeMeta?.name || `İşlem ${parentTx.type}`;
+            let opponentName =
+              parentTx.oppositionOwner ||
+              parentTx.relatedParty?.name ||
+              (Array.isArray(parentTx.objectionOwners) && parentTx.objectionOwners.length
+                ? parentTx.objectionOwners.map(o => o.name).join(', ')
+                : '-') ;
 
-                        const applicants = record.applicants?.map(a => a.name).join(', ') || '-';
-                        const applicationNumber = record.applicationNumber || '-';
+            const bulletinNo = brandInfo.opposedMarkBulletinNo || parentTx.bulletinNo || '-';
+            const bulletinDate = brandInfo.opposedMarkBulletinDate || parentTx.bulletinDate || null;
 
-                        let opponentName = parentTx.oppositionOwner || '-';
-                        if (opponentName === '-' && parentTx.relatedParty?.name) {
-                          opponentName = parentTx.relatedParty.name;
-                        }
-                        if (opponentName === '-' && Array.isArray(parentTx.objectionOwners) && parentTx.objectionOwners.length > 0) {
-                          opponentName = parentTx.objectionOwners.map(o => o.name).join(', ');
-                        }
+            let epatsDate = null;
+            if (parentTx.epatsDocument?.documentDate) epatsDate = parentTx.epatsDocument.documentDate;
 
-                        const brandInfo = record.details?.brandInfo || {};
-                        const bulletinNo = brandInfo.opposedMarkBulletinNo || parentTx.bulletinNo || '-';
-                        const bulletinDate = brandInfo.opposedMarkBulletinDate || parentTx.bulletinDate || null;
-
-                        let epatsDate = null;
-                        if (parentTx.epatsDocument?.documentDate) {
-                          epatsDate = parentTx.epatsDocument.documentDate;
-                        }
-
-                        let statusText = 'Karar Bekleniyor';
-                        if (parentTx.requestResult !== undefined && parentTx.requestResult !== null && parentTx.requestResult !== '') {
-                          statusText = formatObjectionStatus(parentTx.requestResult);
-                        }
-
-                        allRows.push({
-                        id: parentTx.id,
-                        recordId: record.id,
-                        recordType: record.type || '-',
-                        title: record.title || record.brandText || '',
-                        transactionTypeName,
-                        applicationNumber,
-                        applicantName: applicants,
-                        opponent: opponentName,
-                        bulletinDate: fmtDate(bulletinDate),
-                        bulletinNo,
-                        epatsDate: fmtDate(epatsDate),
-                        statusText,
-                        timestamp: parentTx.timestamp
-                        });
-                      }
-                    } catch (e) {
-                      console.warn('❌ Record transaction hatası:', record.id, e);
-                    }
-                  }));
-                }
-
-                this.objectionRows = allRows;
-              } catch (e) {
-                console.error('❌ İtirazlar yüklenirken hata:', e);
-                this.objectionRows = [];
-              }
+            let statusText = 'Karar Bekleniyor';
+            if (parentTx.requestResult !== undefined && parentTx.requestResult !== null && parentTx.requestResult !== '') {
+              statusText = formatObjectionStatus(parentTx.requestResult);
             }
+
+            allRows.push({
+              id: parentTx.id,
+              recordId: record.id,
+              recordType: record.type || '-',
+              title: record.title || record.brandText || '',
+              transactionTypeName,
+              applicationNumber,
+              applicantName: applicants,
+              opponent: opponentName,
+              bulletinDate: fmtDate(bulletinDate),
+              bulletinNo,
+              epatsDate: fmtDate(epatsDate),
+              statusText,
+              timestamp: parentTx.timestamp
+            });
+          }
+        } catch (e) {
+          console.warn('❌ Record transaction hatası:', record.id, e);
+        }
+      }
+    };
+
+    // CONCURRENCY kadar worker çalıştır
+    await Promise.all([...Array(CONCURRENCY)].map(worker));
+
+    this.objectionRows = allRows;
+  } catch (e) {
+    console.error('❌ İtirazlar yüklenirken hata:', e);
+    this.objectionRows = [];
+  }
+}
+
 
             initialRenderTableStructure() {
                 const headerRow = document.getElementById('portfolioTableHeaderRow');
