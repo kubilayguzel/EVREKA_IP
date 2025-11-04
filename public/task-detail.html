@@ -1835,100 +1835,123 @@ async removeEpatsDocument() {
                 }
             }
          
+            // task-detail.html içinde
             async handleTaskDocumentsUpload(files) {
             const toAppend = [];
             for (const file of files) {
-                // Boyut / tür kontrolleri
-                if (file.size > 10 * 1024 * 1024) {
-                showNotification(`"${file.name}" dosyası çok büyük (Max 10MB).`, 'error');
-                continue;
-                }
-                const allowedTypes = ['application/pdf','application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document','image/jpeg','image/png'];
-                if (!allowedTypes.includes(file.type)) {
-                showNotification(`"${file.name}" desteklenmeyen bir formattadır.`, 'error');
-                continue;
-                }
-                if (this.currentTaskDocuments.some(d => d.name === file.name && d.size === file.size)) {
-                showNotification(`"${file.name}" zaten eklenmiş.`, 'info');
-                continue;
-                }
+                // boyut/tip kontrolleri aynı kalsın…
 
-                // İçeriği bekleyerek oku
-                const dataUrl = await new Promise((resolve, reject) => {
-                const r = new FileReader();
-                r.onload = () => resolve(r.result);
-                r.onerror = reject;
-                r.readAsDataURL(file);
-                });
+                // Benzersiz id ve storage yolu
+                const id = (crypto?.randomUUID?.() || `${Date.now()}_${Math.random().toString(36).slice(2)}`);
+                const storagePath = `task_documents/${this.taskId}/${id}_${file.name}`;
+                const storageRef = firebaseServices.storageRef(firebaseServices.storage, storagePath);
+
+                // Upload + URL
+                await uploadBytes(storageRef, file);               // EPATS’teki gibi
+                const downloadURL = await getDownloadURL(storageRef);
 
                 toAppend.push({
-                id: (crypto?.randomUUID?.() || `${Date.now()}_${Math.random().toString(36).slice(2)}`),
+                id,
                 name: file.name,
                 size: file.size,
                 type: file.type,
-                content: dataUrl,
+                storagePath,           // <— yeni
+                downloadURL,           // <— yeni
                 uploadedAt: new Date().toISOString(),
-                documentDesignation: 'Diğer',
+                documentDesignation: 'Diğer'
                 });
             }
-
-            if (toAppend.length === 0) return;
-            this.currentTaskDocuments = [...(this.currentTaskDocuments || []), ...toAppend];
+            if (!toAppend.length) return;
+            this.currentTaskDocuments = [ ...(this.currentTaskDocuments || []), ...toAppend ];
             this.renderDocuments();
-            await this.saveDocumentsToTask();   // <-- yalnızca okuma bittikten sonra
-            }
-            renderDocuments() {
-                const fileListContainer = document.getElementById('fileListContainer');
-                fileListContainer.innerHTML = '';
-                if (this.currentTaskDocuments.length === 0) {
-                    fileListContainer.innerHTML = '<p style="text-align: center; color: #666; padding: 20px;">Bu işe ait belge bulunmamaktadır.</p>';
-                    return;
-                }
-                this.currentTaskDocuments.forEach(doc => {
-                    const fileItem = document.createElement('div');
-                    fileItem.classList.add('file-item');
-                    let optionsHtml = '';
-                    for (const key in documentDesignationTranslations) {
-                        if (documentDesignationTranslations.hasOwnProperty(key)) {
-                            const value = documentDesignationTranslations[key];
-                            const selected = doc.documentDesignation === value ? 'selected' : '';
-                            optionsHtml += `<option value="${value}" ${selected}>${value}</option>`;
-                        }
-                    }
-                    fileItem.innerHTML = `
-                        <div class="file-info">
-                            <span class="file-icon">📄</span>
-                            <div>
-                                <div class="file-name"><a href="${doc.content}" download="${doc.name}">${doc.name}</a></div>
-                                <div class="file-size">${formatFileSize(doc.size)}</div>
-                            </div>
-                        </div>
-                        <div class="file-actions">
-                            <select class="file-designation-select" data-doc-id="${doc.id}">
-                                ${optionsHtml}
-                            </select>
-                            <button class="btn-remove-file" data-doc-id="${doc.id}">&times;</button>
-                        </div>
-                    `;
-                    fileItem.querySelector('.file-designation-select').addEventListener('change', (e) => {
-                        const changedDoc = this.currentTaskDocuments.find(d => d.id === e.target.dataset.docId);
-                        if (changedDoc) {
-                            changedDoc.documentDesignation = e.target.value;
-                            this.saveDocumentsToTask();
-                        }
-                    });
-                    fileItem.querySelector('.btn-remove-file').addEventListener('click', (e) => this.removeDocument(e.target.dataset.docId));
-                    fileListContainer.appendChild(fileItem);
-                });
+            await this.saveDocumentsToTask();
             }
 
-            removeDocument(docId) {
-                if (confirm('Bu belgeyi kaldırmak istediğinizden emin misiniz?')) {
-                    this.currentTaskDocuments = this.currentTaskDocuments.filter(doc => doc.id !== docId);
-                    this.renderDocuments();
+            // Belgeleri listele (storage öncelikli, eski content'e fallback)
+            renderDocuments() {
+            const fileListContainer = document.getElementById('fileListContainer');
+            fileListContainer.innerHTML = '';
+
+            if (!this.currentTaskDocuments || this.currentTaskDocuments.length === 0) {
+                fileListContainer.innerHTML = '<p style="text-align: center; color: #666; padding: 20px;">Bu işe ait belge bulunmamaktadır.</p>';
+                return;
+            }
+
+            this.currentTaskDocuments.forEach(doc => {
+                const fileItem = document.createElement('div');
+                fileItem.classList.add('file-item');
+
+                // Belge türü seçimi için seçenekler
+                let optionsHtml = '';
+                for (const key in documentDesignationTranslations) {
+                if (Object.prototype.hasOwnProperty.call(documentDesignationTranslations, key)) {
+                    const value = documentDesignationTranslations[key];
+                    const selected = doc.documentDesignation === value ? 'selected' : '';
+                    optionsHtml += `<option value="${value}" ${selected}>${value}</option>`;
+                }
+                }
+
+                // Storage URL varsa onu kullan; yoksa eski base64 'content' alanına düş
+                const href = doc.downloadURL || doc.content || '#';
+
+                fileItem.innerHTML = `
+                <div class="file-info">
+                    <span class="file-icon">📄</span>
+                    <div>
+                    <div class="file-name">
+                        <a href="${href}" ${doc.downloadURL ? 'target="_blank" rel="noopener"' : ''} download="${doc.name}">${doc.name}</a>
+                    </div>
+                    <div class="file-size">${formatFileSize(doc.size)}</div>
+                    </div>
+                </div>
+                <div class="file-actions">
+                    <select class="file-designation-select" data-doc-id="${doc.id}">
+                    ${optionsHtml}
+                    </select>
+                    <button class="btn-remove-file" data-doc-id="${doc.id}">&times;</button>
+                </div>
+                `;
+
+                // Tür güncellemesi
+                fileItem.querySelector('.file-designation-select').addEventListener('change', (e) => {
+                const changedDoc = this.currentTaskDocuments.find(d => d.id === e.target.dataset.docId);
+                if (changedDoc) {
+                    changedDoc.documentDesignation = e.target.value;
                     this.saveDocumentsToTask();
                 }
+                });
+
+                // Silme
+                fileItem.querySelector('.btn-remove-file').addEventListener('click', (e) => this.removeDocument(e.target.dataset.docId));
+
+                fileListContainer.appendChild(fileItem);
+            });
             }
+
+            // Belgeyi sil (varsa Storage'dan da kaldır)
+            async removeDocument(docId) {
+            const doc = this.currentTaskDocuments?.find(d => d.id === docId);
+            if (!doc) return;
+
+            if (!confirm('Bu belgeyi kaldırmak istediğinizden emin misiniz?')) return;
+
+            // Storage'ta tutuluyorsa önce oradan sil
+            if (doc.storagePath) {
+                try {
+                const ref = firebaseServices.storageRef(firebaseServices.storage, doc.storagePath);
+                await deleteObject(ref);
+                } catch (err) {
+                // Storage silme hatası uygulamayı durdurmasın; logla ve devam et
+                console.warn('Storage silme hatası:', err);
+                }
+            }
+
+            // Bellekten/liste ve Firestore'dan kaldır
+            this.currentTaskDocuments = this.currentTaskDocuments.filter(d => d.id !== docId);
+            this.renderDocuments();
+            await this.saveDocumentsToTask();
+            }
+
 
             async saveDocumentsToTask() {
             try {
