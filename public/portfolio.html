@@ -617,7 +617,6 @@
                             <i class="fas fa-chevron-right"></i>
                         </button>` : ''}
                     </td>
-                    <td>${row.recordType || '-'}</td>
                     <td>${row.title || '-'}</td>
                     <td>${row.transactionTypeName || '-'}</td>
                     <td>${row.applicationNumber || '-'}</td>
@@ -641,7 +640,6 @@
                     
                     childTr.innerHTML = `
                         <td class="toggle-cell"></td>
-                        <td>${row.recordType || '-'}</td>
                         <td></td>
                         <td style="padding-left: 32px;">↳ ${childTypeName}</td>
                         <td>${row.applicationNumber || '-'}</td>
@@ -1654,12 +1652,12 @@ async loadObjectionRows() {
                 let columns = isObjections
                     ? [
                         { key: 'toggle', label: '', sortable: false, width: '44px' },
-                        { key: 'recordType',      label: 'Kayıt Tipi',  sortable: true,  width: '110px' },
+                        // { key: 'recordType',      label: 'Kayıt Tipi',  sortable: true,  width: '110px' }, // KALDIRILDI
                         { key: 'title',           label: 'M/T/B Adı',   sortable: true,  width: '180px' },
                         { key: 'transactionTypeName',   label: 'İşlem Tipi',  sortable: true,  width: '180px' },
                         { key: 'applicationNumber', label: 'Başvuru No',  sortable: true,  width: '140px' },
-                        { key: 'applicantName',      label: 'Başvuru Sahibi', sortable: true, width: '240px' },
-                        { key: 'opponent', label: 'İtiraz Sahibi', sortable: true, width: '200px' },
+                        { key: 'applicantName',      label: 'Başvuru Sahibi', sortable: true, width: '300px' },
+                        { key: 'opponent', label: 'İtiraz Sahibi', sortable: true, width: '250px' },
                         { key: 'bulletinDate',      label: 'Bülten Tarihi', sortable: true, width: '100px' },
                         { key: 'bulletinNo',        label: 'Bülten No',   sortable: true,  width: '90px' },
                         { key: 'epatsDate',         label: 'İşlem Tarihi', sortable: true, width: '100px' },
