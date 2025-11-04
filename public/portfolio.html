@@ -552,7 +552,7 @@
                 }
             }
 
-            async renderObjectionRows(list) {
+async renderObjectionRows(list) {
               const tableBody = document.getElementById('portfolioTableBody');
               const noRecMsg = document.getElementById('noRecordsMessage');
               if (!tableBody || list.length === 0) {
@@ -586,6 +586,22 @@
                 });
               }
 
+              // 🔥 YENİ: Transaction ID'lerini topla ve PDF'leri çek
+              const allTransactionIds = [];
+              for (const row of pageData) {
+                const recordId = row.recordId;
+                const txData = this.txCache.get(recordId);
+                if (txData && txData.transactions) {
+                  txData.transactions.forEach(tx => {
+                    if (tx.id) allTransactionIds.push(tx.id);
+                  });
+                }
+              }
+
+              // 🔥 YENİ: unindexed_pdfs'ten PDF'leri çek
+              const pdfsByTransaction = await this.fetchPdfsForTransactions(allTransactionIds);
+              console.log('📄 İtirazlar için PDF\'ler çekildi:', Object.keys(pdfsByTransaction).length, 'transaction');
+
               const frag = document.createDocumentFragment();
 
               for (const row of pageData) {
@@ -601,6 +617,44 @@
 
                 const hasChildren = children.length > 0;
                 const groupId = safeId(`${recordId}_parent_${parentTxId}`);
+
+                // 🔥 YENİ: Parent transaction'a ait PDF'leri al
+                const parentPdfs = pdfsByTransaction[parent.id] || [];
+                const parentDocuments = parent.documents || [];
+                
+                // 🔥 YENİ: İtiraz parent'ları için PDF'leri gizle (child'da gösterilecek)
+                const isOppositionParent = String(parent.type) === '20' || String(parent.type) === '19';
+                
+                let allParentDocs = [];
+                if (!isOppositionParent) {
+                  allParentDocs = [
+                    ...parentPdfs,
+                    ...parentDocuments.map(doc => ({
+                      fileName: doc.name || 'Belge',
+                      fileUrl: doc.path,
+                      type: doc.type,
+                      isTransactionDoc: true
+                    }))
+                  ];
+                }
+
+                // 🔥 YENİ: Parent PDF linklerini oluştur
+                const parentPdfIcons = allParentDocs.map(pdf => {
+                  let iconClass = 'fas fa-file-pdf';
+                  let titleText = pdf.fileName || 'Belge';
+                  
+                  if (pdf.type === 'opposition_petition') {
+                    iconClass = 'fas fa-gavel';
+                    titleText = 'Karşı Taraf İtiraz Dilekçesi';
+                  } else if (pdf.type === 'official_document') {
+                    iconClass = 'fas fa-file-signature';
+                    titleText = 'Resmi Yazı';
+                  }
+                  
+                  return `<a href="${pdf.fileUrl || pdf.path}" target="_blank" title="${titleText}" class="pdf-link" style="margin-right: 8px;">
+                    <i class="${iconClass}" style="font-size: 1.2em;"></i>
+                  </a>`;
+                }).join('');
 
                 const parentTr = document.createElement('tr');
                 parentTr.className = hasChildren ? 'group-header' : '';
@@ -626,13 +680,58 @@
                     <td>${row.bulletinDate || '-'}</td>
                     <td>${row.bulletinNo || '-'}</td>
                     <td>${row.epatsDate || '-'}</td>
-                    <td>${row.statusText || '-'}</td>`;
+                    <td>${row.statusText || '-'}</td>
+                    <td>${parentPdfIcons || '<span class="text-muted">-</span>'}</td>`;
                 frag.appendChild(parentTr);
 
                 if (hasChildren) {
                   children.forEach((child) => {
                       const childTypeMeta = transactionTypesMap.get(String(child.type));
                       const childTypeName = childTypeMeta?.alias || childTypeMeta?.name || `İşlem ${child.type}`;
+                    
+                    // 🔥 YENİ: Child transaction'a ait PDF'leri al
+                    const childPdfs = pdfsByTransaction[child.id] || [];
+                    
+                    // 🔥 YENİ: İtiraz Bildirimi (ID: 27) ise parent'ın belgelerini de göster
+                    let allChildDocs = [...childPdfs];
+                    
+                    if (String(child.type) === '27') {
+                      console.log('🔍 İtiraz Bildirimi tespit edildi, parent belgeleri ekleniyor...');
+                      
+                      const parentPdfsForChild = pdfsByTransaction[parent.id] || [];
+                      const parentTransactionDocs = parent.documents || [];
+                      
+                      allChildDocs = [
+                        ...childPdfs,
+                        ...parentPdfsForChild,
+                        ...parentTransactionDocs.map(doc => ({
+                          fileName: doc.name || 'Belge',
+                          fileUrl: doc.path,
+                          type: doc.type,
+                          isParentDoc: true
+                        }))
+                      ];
+                      
+                      console.log('✅ İtiraz Bildirimi için toplam belge sayısı:', allChildDocs.length);
+                    }
+                    
+                    // 🔥 YENİ: Child PDF linklerini oluştur
+                    const childPdfIcons = allChildDocs.map(pdf => {
+                      let iconClass = 'fas fa-file-pdf';
+                      let titleText = pdf.fileName || 'Belge';
+                      
+                      if (pdf.type === 'opposition_petition') {
+                        iconClass = 'fas fa-gavel';
+                        titleText = 'Karşı Taraf İtiraz Dilekçesi';
+                      } else if (pdf.type === 'official_document') {
+                        iconClass = 'fas fa-file-signature';
+                        titleText = 'Resmi Yazı';
+                      }
+                      
+                      return `<a href="${pdf.fileUrl || pdf.path}" target="_blank" title="${titleText}" class="pdf-link ${pdf.isParentDoc ? 'parent-doc' : ''}" style="margin-right: 8px;">
+                        <i class="${iconClass}" style="font-size: 1.2em;"></i>
+                      </a>`;
+                    }).join('');
                     
                     const childTr = document.createElement('tr');
                     childTr.className = 'group-row child-row';
@@ -650,7 +749,8 @@
                         <td></td>
                         <td></td>
                         <td>${fmtDate(child.timestamp)}</td>
-                        <td></td>`;
+                        <td></td>
+                        <td>${childPdfIcons || '<span class="text-muted">-</span>'}</td>`;
                     frag.appendChild(childTr);
                   });
                 }
@@ -662,6 +762,62 @@
 
               if (tableBody) tableBody.style.display = list.length > 0 ? 'table-row-group' : 'none';
               if (noRecMsg) noRecMsg.style.display = list.length === 0 ? 'block' : 'none';
+            }
+
+            // 🔥 YENİ FONKSIYON: Transaction'lara ait PDF'leri getir
+            async fetchPdfsForTransactions(transactionIds) {
+              if (!transactionIds || transactionIds.length === 0) return {};
+              
+              try {
+                const pdfMap = {};
+                
+                // Firestore'dan 10'lu gruplar halinde çek (in operatörü max 10 eleman destekler)
+                const chunks = [];
+                for (let i = 0; i < transactionIds.length; i += 10) {
+                  chunks.push(transactionIds.slice(i, i + 10));
+                }
+                
+                for (const chunk of chunks) {
+                  const pdfsQuery = query(
+                    collection(db, 'unindexed_pdfs'),
+                    where('associatedTransactionId', 'in', chunk),
+                    where('status', '==', 'indexed')
+                  );
+                  
+                  const pdfsSnapshot = await getDocs(pdfsQuery);
+                  
+                  pdfsSnapshot.forEach(doc => {
+                    const pdfData = doc.data();
+                    const txId = pdfData.associatedTransactionId;
+                    
+                    if (!pdfMap[txId]) {
+                      pdfMap[txId] = [];
+                    }
+                    
+                    pdfMap[txId].push({
+                      id: doc.id,
+                      fileName: pdfData.fileName || 'Belge',
+                      fileUrl: pdfData.fileUrl || pdfData.url,
+                      type: pdfData.type || 'pdf',
+                      indexedAt: pdfData.indexedAt
+                    });
+                  });
+                }
+                
+                // Her transaction için PDF'leri tarihe göre sırala
+                Object.keys(pdfMap).forEach(txId => {
+                  pdfMap[txId].sort((a, b) => {
+                    const dateA = a.indexedAt?.toDate?.() || new Date(a.indexedAt || 0);
+                    const dateB = b.indexedAt?.toDate?.() || new Date(b.indexedAt || 0);
+                    return dateB - dateA; // En yeni önce
+                  });
+                });
+                
+                return pdfMap;
+              } catch (error) {
+                console.error('❌ PDF\'ler getirilirken hata:', error);
+                return {};
+              }
             }
 
             renderCurrentPage() {
@@ -1653,17 +1809,17 @@ async loadObjectionRows() {
                 const isAllTab = (this.activeTypeFilter === 'all');
                 let columns = isObjections
                     ? [
-                        { key: 'toggle', label: '', sortable: false, width: '44px' },
-                        { key: 'recordType',      label: 'Kayıt Tipi',  sortable: true,  width: '110px' },
-                        { key: 'title',           label: 'M/T/B Adı',   sortable: true,  width: '180px' },
-                        { key: 'transactionTypeName',   label: 'İşlem Tipi',  sortable: true,  width: '180px' },
-                        { key: 'applicationNumber', label: 'Başvuru No',  sortable: true,  width: '140px' },
-                        { key: 'applicantName',      label: 'Başvuru Sahibi', sortable: true, width: '240px' },
-                        { key: 'opponent', label: 'İtiraz Sahibi', sortable: true, width: '200px' },
-                        { key: 'bulletinDate',      label: 'Bülten Tarihi', sortable: true, width: '100px' },
-                        { key: 'bulletinNo',        label: 'Bülten No',   sortable: true,  width: '90px' },
-                        { key: 'epatsDate',         label: 'İşlem Tarihi', sortable: true, width: '100px' },
-                        { key: 'statusText',        label: 'Durum',        sortable: true, width: '140px' }
+                        { key: 'recordType', label: 'Tür', sortable: true, searchable: true },
+                        { key: 'title', label: 'Marka Adı', sortable: true, searchable: true },
+                        { key: 'transactionTypeName', label: 'İşlem Türü', sortable: true, searchable: true },
+                        { key: 'applicationNumber', label: 'Başvuru No', sortable: true, searchable: true },
+                        { key: 'applicantName', label: 'Başvuru Sahibi', sortable: true, searchable: true },
+                        { key: 'opponent', label: 'İtiraz Eden', sortable: true, searchable: true },
+                        { key: 'bulletinDate', label: 'Bülten Tarihi', sortable: true, searchable: false },
+                        { key: 'bulletinNo', label: 'Bülten No', sortable: true, searchable: true },
+                        { key: 'epatsDate', label: 'ePats Tarihi', sortable: true, searchable: false },
+                        { key: 'statusText', label: 'Durum', sortable: true, searchable: true },
+                        { key: 'documents', label: 'Evraklar', sortable: false, searchable: false }
                     ]
                     : [
                         { key: 'selection', label: '', sortable: false, isCheckbox: true, width: '40px' },
