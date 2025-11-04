@@ -290,7 +290,7 @@
 
 <script type="module">
         import Pagination from './js/pagination.js';
-        import { ipRecordsService, db, personService, transactionTypeService, auth, monitoringService, taskService } from './firebase-config.js';
+        import { ipRecordsService, db, personService, transactionTypeService, auth, monitoringService, taskService,query } from './firebase-config.js';
         import { showNotification, formatFileSize, STATUSES } from './utils.js';
         import { loadSharedLayout } from './js/layout-loader.js';
         import { doc, getDoc,  } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
@@ -2318,6 +2318,204 @@ import { collection, query, where, getDocs } from "https://www.gstatic.com/fireb
 })();
 </script>
 <!-- ==== END: network & documents patch ==== -->
+
+
+<!-- ===== BEGIN: objections fetch/render refactor patch ===== -->
+<script type="module">
+import { collection, getDocs, query, where } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { ipRecordsService, db } from './firebase-config.js';
+
+(function(){
+  const chunk10 = (arr)=>{ const out=[]; for(let i=0;i<arr.length;i+=10) out.push(arr.slice(i,i+10)); return out; };
+  function ensureCaches(ctx){ if(!ctx.txCache) ctx.txCache=new Map(); if(!ctx.pdfCache) ctx.pdfCache=new Map(); if(!ctx.taskDocCache) ctx.taskDocCache=new Map(); }
+
+  async function prepareObjectionPageData(ctx, pageRows){
+    ensureCaches(ctx);
+    const pageRecordIds=[...new Set(pageRows.map(r=>r.recordId))];
+    const missing=pageRecordIds.filter(id=>!ctx.txCache.has(id));
+    for(const recordId of missing){
+      try{
+        const txRes=await ipRecordsService.getTransactionsForRecord(recordId);
+        const txs=(txRes?.success && Array.isArray(txRes.transactions))?txRes.transactions:[];
+        const helper=window.buildParentChild || (t=>({parents:[],childrenMap:{}}));
+        const {parents,childrenMap}=helper(txs);
+        ctx.txCache.set(recordId,{transactions:txs,parents,childrenMap});
+      }catch(e){
+        ctx.txCache.set(recordId,{transactions:[],parents:[],childrenMap:{}});
+      }
+    }
+    const txIds=new Set(); const pairs=[];
+    for(const row of pageRows){
+      const txData=ctx.txCache.get(row.recordId);
+      if(!txData) continue;
+      const parentId=row.id;
+      const children=(txData.childrenMap||{})[parentId]||[];
+      if(parentId){ txIds.add(parentId); pairs.push({transactionId:parentId,recordId:row.recordId}); }
+      for(const ch of children){ if(ch?.id){ txIds.add(ch.id); pairs.push({transactionId:ch.id,recordId:row.recordId}); } }
+    }
+    const pdfsByTransaction=await fetchPdfsForTransactions(ctx,[...txIds]);
+    const taskDocsByTransaction=await fetchTaskDocumentsForTransactions(ctx,pairs);
+    return { pdfsByTransaction, taskDocsByTransaction };
+  }
+
+  async function fetchPdfsForTransactions(ctx, transactionIds){
+    ensureCaches(ctx);
+    if(!Array.isArray(transactionIds) || transactionIds.length===0) return {};
+    const out={}; const need=[];
+    for(const id of transactionIds){ if(ctx.pdfCache.has(id)) out[id]=ctx.pdfCache.get(id); else need.push(id); }
+    for(const ids of chunk10(need)){
+      if(ids.length===0) continue;
+      const qs=query(
+        collection(db,'unindexed_pdfs'),
+        where('associatedTransactionId','in',ids),
+        where('status','==','indexed')
+      );
+      const snap=await getDocs(qs);
+      snap.forEach(d=>{
+        const data=d.data(); const txId=data.associatedTransactionId;
+        (out[txId] ||= []).push({ id:d.id, fileName:data.fileName||'Belge', fileUrl:data.fileUrl||data.url, type:data.type||'pdf', indexedAt:data.indexedAt });
+      });
+    }
+    Object.keys(out).forEach(txId=>{
+      out[txId].sort((a,b)=>{
+        const da=a.indexedAt?.toDate?.() || new Date(a.indexedAt||0);
+        const db=b.indexedAt?.toDate?.() || new Date(b.indexedAt||0);
+        return db-da;
+      });
+      ctx.pdfCache.set(txId,out[txId]);
+    });
+    return out;
+  }
+
+  async function fetchTaskDocumentsForTransactions(ctx, transactionRecordPairs){
+    ensureCaches(ctx);
+    if(!Array.isArray(transactionRecordPairs) || transactionRecordPairs.length===0) return {};
+    const result={}; const missingByRecord=new Map();
+    for(const p of transactionRecordPairs){
+      if(ctx.taskDocCache.has(p.transactionId)) result[p.transactionId]=ctx.taskDocCache.get(p.transactionId);
+      else { if(!missingByRecord.has(p.recordId)) missingByRecord.set(p.recordId,new Set()); missingByRecord.get(p.recordId).add(p.transactionId); }
+    }
+    for(const [recId,txSet] of missingByRecord.entries()){
+      const ids=[...txSet];
+      for(const chunkIds of chunk10(ids)){
+        if(chunkIds.length===0) continue;
+        const qs=query(
+          collection(db,'tasks'),
+          where('relatedIpRecordId','==',recId),
+          where('transactionId','in',chunkIds)
+        );
+        const snap=await getDocs(qs);
+        snap.forEach(docSnap=>{
+          const t=docSnap.data(); const txId=t.transactionId; const list=[];
+          const docs=[...(Array.isArray(t.documents)?t.documents:[]), ...(Array.isArray(t.details?.documents)?t.details.documents:[])];
+          docs.forEach(d=> list.push({ fileName:d.name||d.fileName||'Task Belgesi', fileUrl:d.storagePath||d.downloadURL||d.url||d.content, type:d.documentDesignation||d.type||'task_document', isTaskDoc:true, taskId:docSnap.id }));
+          const epats=t.details?.epatsDocument || t.epatsDocument;
+          if(epats && (epats.downloadURL||epats.url||epats.storagePath)){
+            list.push({ fileName:epats.name||'ePats Belgesi', fileUrl:epats.downloadURL||epats.url||epats.storagePath, type:'official_document', isTaskDoc:true, taskId:docSnap.id });
+          }
+          result[txId]=list; ctx.taskDocCache.set(txId,list);
+        });
+      }
+    }
+    return result;
+  }
+
+  const iconify=(pdf)=>{
+    let icon='fas fa-file-pdf'; let title=pdf.fileName||'Belge';
+    if(pdf.type==='opposition_petition'){ icon='fas fa-gavel'; title='Karşı Taraf İtiraz Dilekçesi'; }
+    else if(pdf.type==='official_document'){ icon='fas fa-file-signature'; title='Resmi Yazı'; }
+    const url=pdf.fileUrl || pdf.path;
+    return url ? `<a href="${url}" target="_blank" title="${title}" class="pdf-link" style="margin-right:8px;"><i class="${icon}" style="font-size:1.2em;"></i></a>` : '';
+  };
+  const fmtDate=(d)=>{ try{ if(!d) return '-'; let dt=d; if(typeof d?.toDate==='function') dt=d.toDate(); else if(d.seconds) dt=new Date(d.seconds*1000); else dt=new Date(d); return isNaN(dt.getTime())?'-':dt.toLocaleDateString('tr-TR'); }catch{return '-';} };
+
+  function applyPatch(){
+    if(!window.PortfolioModule) return;
+    PortfolioModule.prototype.prepareObjectionPageData = async function(rows){ return prepareObjectionPageData(this, rows); };
+    PortfolioModule.prototype.fetchPdfsForTransactions = async function(ids){ return fetchPdfsForTransactions(this, ids); };
+    PortfolioModule.prototype.fetchTaskDocumentsForTransactions = async function(pairs){ return fetchTaskDocumentsForTransactions(this, pairs); };
+
+    PortfolioModule.prototype.renderObjectionRows = async function(list){
+      const tableBody=document.getElementById('portfolioTableBody');
+      const noRecMsg=document.getElementById('noRecordsMessage');
+      if(!tableBody || list.length===0){ if(tableBody) tableBody.style.display='none'; if(noRecMsg) noRecMsg.style.display='block'; return; }
+      const pageData=pagination.getCurrentPageData(list);
+      const { pdfsByTransaction, taskDocsByTransaction } = await this.prepareObjectionPageData(pageData);
+
+      const frag=document.createDocumentFragment();
+      for(const row of pageData){
+        const txData=this.txCache.get(row.recordId);
+        if(!txData) continue;
+        const parent=(txData.parents||[]).find(p=>p.id===row.id);
+        const children=(txData.childrenMap||{})[row.id]||[];
+        if(!parent) continue;
+        const hasChildren=children.length>0;
+        const groupId=(row.title||'')+'_'+parent.id;
+
+        const parentDocs=[
+          ...(pdfsByTransaction[parent.id]||[]),
+          ...(Array.isArray(parent.documents)?parent.documents.map(d=>({fileName:d.name||'Belge', fileUrl:d.path, type:d.type})):[]),
+          ...(taskDocsByTransaction[parent.id]||[]),
+        ];
+
+        const parentTr=document.createElement('tr');
+        parentTr.className=hasChildren?'group-header':'';
+        parentTr.dataset.groupId=groupId;
+        parentTr.innerHTML=`
+          <td class="toggle-cell caret-host" style="width:35px;padding:4px;">${hasChildren?`<button class="row-caret" data-group-id="${groupId}" aria-expanded="false"><i class="fas fa-chevron-right"></i></button>`:''}</td>
+          <td style="width:120px;max-width:120px;" title="${row.title||'-'}">${row.title||'-'}</td>
+          <td style="width:180px;max-width:180px;" title="${row.transactionTypeName||'-'}">${row.transactionTypeName||'-'}</td>
+          <td style="width:110px;max-width:110px;" title="${row.applicationNumber||'-'}">${row.applicationNumber||'-'}</td>
+          <td style="width:300px;max-width:300px;" title="${row.applicantName||'-'}">${row.applicantName||'-'}</td>
+          <td style="width:300px;max-width:300px;" title="${row.opponent||'-'}">${row.opponent||'-'}</td>
+          <td style="width:95px;max-width:95px;text-align:center;" title="${row.bulletinDate||'-'}">${row.bulletinDate||'-'}</td>
+          <td style="width:85px;max-width:85px;text-align:center;" title="${row.bulletinNo||'-'}">${row.bulletinNo||'-'}</td>
+          <td style="width:95px;max-width:95px;text-align:center;" title="${row.epatsDate||'-'}">${row.epatsDate||'-'}</td>
+          <td style="width:140px;max-width:140px;" title="${row.statusText||'-'}">${row.statusText||'-'}</td>
+          <td style="width:70px;max-width:70px;text-align:center;padding:4px;">${(parentDocs.map(iconify).join('')) || '<span class="text-muted">-</span>'}</td>`;
+        frag.appendChild(parentTr);
+
+        if(hasChildren){
+          children.forEach(child=>{
+            const typeMeta=(window.transactionTypesMap&&window.transactionTypesMap.get)?window.transactionTypesMap.get(String(child.type)):null;
+            const childName=(typeMeta?.alias || typeMeta?.name || `İşlem ${child.type}`);
+            const childNameL=childName.toLowerCase();
+            const baseChildDocs=[...(pdfsByTransaction[child.id]||[]), ...(taskDocsByTransaction[child.id]||[])];
+            const showParentToo=(String(child.type)==='27') || (childNameL.includes('karşı') && childNameL.includes('görüş'));
+            const finalDocs=showParentToo?[...baseChildDocs, ...parentDocs]:baseChildDocs;
+
+            const childTr=document.createElement('tr');
+            childTr.className='group-row child-row';
+            childTr.dataset.parentId=groupId;
+            childTr.setAttribute('aria-hidden','true');
+            childTr.innerHTML=`
+              <td class="toggle-cell" style="width:35px;padding:4px;"></td>
+              <td style="width:120px;max-width:120px;"></td>
+              <td style="width:180px;max-width:180px;padding-left:32px;" title="↳ ${childName}">↳ ${childName}</td>
+              <td style="width:110px;max-width:110px;" title="${row.applicationNumber||'-'}">${row.applicationNumber||'-'}</td>
+              <td style="width:300px;max-width:300px;" title="${row.applicantName||'-'}">${row.applicantName||'-'}</td>
+              <td style="width:300px;max-width:300px;" title="${row.opponent||'-'}">${row.opponent||'-'}</td>
+              <td style="width:95px;max-width:95px;text-align:center;"></td>
+              <td style="width:85px;max-width:85px;text-align:center;"></td>
+              <td style="width:95px;max-width:95px;text-align:center;" title="${(child.timestamp && (new Date(child.timestamp))).toLocaleDateString?.('tr-TR')||'-'}">${(child.timestamp && (new Date(child.timestamp))).toLocaleDateString?.('tr-TR')||'-'}</td>
+              <td style="width:140px;max-width:140px;"></td>
+              <td style="width:70px;max-width:70px;text-align:center;padding:4px;">${(finalDocs.map(iconify).join('')) || '<span class="text-muted">-</span>'}</td>`;
+            frag.appendChild(childTr);
+          });
+        }
+      }
+      tableBody.innerHTML='';
+      tableBody.appendChild(frag);
+      window.wireAccordion && window.wireAccordion();
+      tableBody.style.display='table-row-group';
+      if(noRecMsg) noRecMsg.style.display='none';
+    };
+  }
+
+  if(window.PortfolioModule) applyPatch(); else setTimeout(applyPatch,0);
+})();
+</script>
+<!-- ===== END: objections fetch/render refactor patch ===== -->
 
 </body>
 </html>
