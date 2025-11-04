@@ -681,7 +681,7 @@ async renderObjectionRows(list) {
                     <td>${row.bulletinNo || '-'}</td>
                     <td>${row.epatsDate || '-'}</td>
                     <td>${row.statusText || '-'}</td>
-                    <td>${parentPdfIcons || '<span class="text-muted">-</span>'}</td>`;
+                    <td style="text-align: center;">${parentPdfIcons || '<span class="text-muted">-</span>'}</td>`;
                 frag.appendChild(parentTr);
 
                 if (hasChildren) {
@@ -750,7 +750,7 @@ async renderObjectionRows(list) {
                         <td></td>
                         <td>${fmtDate(child.timestamp)}</td>
                         <td></td>
-                        <td>${childPdfIcons || '<span class="text-muted">-</span>'}</td>`;
+                        <td style="text-align: center;">${childPdfIcons || '<span class="text-muted">-</span>'}</td>`;
                     frag.appendChild(childTr);
                   });
                 }
