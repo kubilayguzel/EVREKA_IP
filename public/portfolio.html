@@ -666,21 +666,21 @@ async renderObjectionRows(list) {
                 }
 
                 parentTr.innerHTML = `
-                    <td class="toggle-cell caret-host" style="width: 40px;">
+                    <td class="toggle-cell caret-host" style="width: 35px; padding: 4px;">
                         ${hasChildren ? `<button class="row-caret" data-group-id="${groupId}" aria-expanded="false">
                             <i class="fas fa-chevron-right"></i>
                         </button>` : ''}
                     </td>
-                    <td>${row.title || '-'}</td>
-                    <td>${row.transactionTypeName || '-'}</td>
-                    <td>${row.applicationNumber || '-'}</td>
-                    <td style="min-width: 250px; max-width: 250px;">${row.applicantName || '-'}</td>
-                    <td style="min-width: 250px; max-width: 250px;">${row.opponent || '-'}</td>
-                    <td style="width: 100px;">${row.bulletinDate || '-'}</td>
-                    <td style="width: 90px;">${row.bulletinNo || '-'}</td>
-                    <td style="width: 100px;">${row.epatsDate || '-'}</td>
-                    <td>${row.statusText || '-'}</td>
-                    <td style="text-align: center; width: 80px;">${parentPdfIcons || '<span class="text-muted">-</span>'}</td>`;
+                    <td style="width: 120px; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${row.title || '-'}</td>
+                    <td style="width: 180px; max-width: 180px; overflow: hidden; text-overflow: ellipsis;">${row.transactionTypeName || '-'}</td>
+                    <td style="width: 110px; max-width: 110px;">${row.applicationNumber || '-'}</td>
+                    <td style="width: 300px; max-width: 300px; overflow: hidden; text-overflow: ellipsis;">${row.applicantName || '-'}</td>
+                    <td style="width: 300px; max-width: 300px; overflow: hidden; text-overflow: ellipsis;">${row.opponent || '-'}</td>
+                    <td style="width: 95px; max-width: 95px; text-align: center;">${row.bulletinDate || '-'}</td>
+                    <td style="width: 85px; max-width: 85px; text-align: center;">${row.bulletinNo || '-'}</td>
+                    <td style="width: 95px; max-width: 95px; text-align: center;">${row.epatsDate || '-'}</td>
+                    <td style="width: 140px; max-width: 140px; overflow: hidden; text-overflow: ellipsis;">${row.statusText || '-'}</td>
+                    <td style="width: 70px; max-width: 70px; text-align: center; padding: 4px;">${parentPdfIcons || '<span class="text-muted">-</span>'}</td>`;
                 frag.appendChild(parentTr);
 
                 if (hasChildren) {
@@ -738,17 +738,17 @@ async renderObjectionRows(list) {
                     childTr.setAttribute('aria-hidden', 'true');
                     
                     childTr.innerHTML = `
-                        <td class="toggle-cell" style="width: 40px;"></td>
-                        <td></td>
-                        <td style="padding-left: 32px;">↳ ${childTypeName}</td>
-                        <td>${row.applicationNumber || '-'}</td>
-                        <td style="min-width: 250px; max-width: 250px;">${row.applicantName || '-'}</td>
-                        <td style="min-width: 250px; max-width: 250px;">${row.opponent || '-'}</td>
-                        <td style="width: 100px;"></td>
-                        <td style="width: 90px;"></td>
-                        <td style="width: 100px;">${fmtDate(child.timestamp)}</td>
-                        <td></td>
-                        <td style="text-align: center; width: 80px;">${childPdfIcons || '<span class="text-muted">-</span>'}</td>`;
+                        <td class="toggle-cell" style="width: 35px; padding: 4px;"></td>
+                        <td style="width: 120px; max-width: 120px;"></td>
+                        <td style="width: 180px; max-width: 180px; padding-left: 32px; overflow: hidden; text-overflow: ellipsis;">↳ ${childTypeName}</td>
+                        <td style="width: 110px; max-width: 110px;">${row.applicationNumber || '-'}</td>
+                        <td style="width: 300px; max-width: 300px; overflow: hidden; text-overflow: ellipsis;">${row.applicantName || '-'}</td>
+                        <td style="width: 300px; max-width: 300px; overflow: hidden; text-overflow: ellipsis;">${row.opponent || '-'}</td>
+                        <td style="width: 95px; max-width: 95px; text-align: center;"></td>
+                        <td style="width: 85px; max-width: 85px; text-align: center;"></td>
+                        <td style="width: 95px; max-width: 95px; text-align: center;">${fmtDate(child.timestamp)}</td>
+                        <td style="width: 140px; max-width: 140px;"></td>
+                        <td style="width: 70px; max-width: 70px; text-align: center; padding: 4px;">${childPdfIcons || '<span class="text-muted">-</span>'}</td>`;
                     frag.appendChild(childTr);
                   });
                 }
@@ -1807,17 +1807,17 @@ async loadObjectionRows() {
                 const isAllTab = (this.activeTypeFilter === 'all');
                 let columns = isObjections
                     ? [
-                        { key: 'toggle', label: '', sortable: false, searchable: false, width: '40px' },
-                        { key: 'title', label: 'Marka Adı', sortable: true, searchable: true },
-                        { key: 'transactionTypeName', label: 'İşlem Türü', sortable: true, searchable: true },
-                        { key: 'applicationNumber', label: 'Başvuru No', sortable: true, searchable: true },
-                        { key: 'applicantName', label: 'Başvuru Sahibi', sortable: true, searchable: true, width: '250px' },
-                        { key: 'opponent', label: 'İtiraz Eden', sortable: true, searchable: true, width: '250px' },
-                        { key: 'bulletinDate', label: 'Bülten Tarihi', sortable: true, searchable: false, width: '100px' },
-                        { key: 'bulletinNo', label: 'Bülten No', sortable: true, searchable: true, width: '90px' },
-                        { key: 'epatsDate', label: 'ePats Tarihi', sortable: true, searchable: false, width: '100px' },
-                        { key: 'statusText', label: 'Durum', sortable: true, searchable: true },
-                        { key: 'documents', label: 'Evraklar', sortable: false, searchable: false, width: '80px' }
+                        { key: 'toggle', label: '', sortable: false, searchable: false, width: '35px' },
+                        { key: 'title', label: 'M/T/B Adı', sortable: true, searchable: true, width: '120px' },
+                        { key: 'transactionTypeName', label: 'İşlem Türü', sortable: true, searchable: true, width: '180px' },
+                        { key: 'applicationNumber', label: 'Başvuru No', sortable: true, searchable: true, width: '110px' },
+                        { key: 'applicantName', label: 'Başvuru Sahibi', sortable: true, searchable: true, width: '300px' },
+                        { key: 'opponent', label: 'İtiraz Eden', sortable: true, searchable: true, width: '300px' },
+                        { key: 'bulletinDate', label: 'Bülten Tarihi', sortable: true, searchable: false, width: '95px' },
+                        { key: 'bulletinNo', label: 'Bülten No', sortable: true, searchable: true, width: '85px' },
+                        { key: 'epatsDate', label: 'ePats Tarihi', sortable: true, searchable: false, width: '95px' },
+                        { key: 'statusText', label: 'Durum', sortable: true, searchable: true, width: '140px' },
+                        { key: 'documents', label: 'Evraklar', sortable: false, searchable: false, width: '70px' }
                     ]
                     : [
                         { key: 'selection', label: '', sortable: false, isCheckbox: true, width: '40px' },
