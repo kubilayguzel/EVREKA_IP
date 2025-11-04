@@ -1809,6 +1809,7 @@ async loadObjectionRows() {
                 const isAllTab = (this.activeTypeFilter === 'all');
                 let columns = isObjections
                     ? [
+                        { key: 'toggle', label: '', sortable: false, searchable: false },
                         { key: 'recordType', label: 'Tür', sortable: true, searchable: true },
                         { key: 'title', label: 'Marka Adı', sortable: true, searchable: true },
                         { key: 'transactionTypeName', label: 'İşlem Türü', sortable: true, searchable: true },
