@@ -671,15 +671,15 @@ async renderObjectionRows(list) {
                             <i class="fas fa-chevron-right"></i>
                         </button>` : ''}
                     </td>
-                    <td style="width: 120px; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${row.title || '-'}</td>
-                    <td style="width: 180px; max-width: 180px; overflow: hidden; text-overflow: ellipsis;">${row.transactionTypeName || '-'}</td>
-                    <td style="width: 110px; max-width: 110px;">${row.applicationNumber || '-'}</td>
-                    <td style="width: 300px; max-width: 300px; overflow: hidden; text-overflow: ellipsis;">${row.applicantName || '-'}</td>
-                    <td style="width: 300px; max-width: 300px; overflow: hidden; text-overflow: ellipsis;">${row.opponent || '-'}</td>
-                    <td style="width: 95px; max-width: 95px; text-align: center;">${row.bulletinDate || '-'}</td>
-                    <td style="width: 85px; max-width: 85px; text-align: center;">${row.bulletinNo || '-'}</td>
-                    <td style="width: 95px; max-width: 95px; text-align: center;">${row.epatsDate || '-'}</td>
-                    <td style="width: 140px; max-width: 140px; overflow: hidden; text-overflow: ellipsis;">${row.statusText || '-'}</td>
+                    <td style="width: 120px; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${row.title || '-'}">${row.title || '-'}</td>
+                    <td style="width: 180px; max-width: 180px; overflow: hidden; text-overflow: ellipsis;" title="${row.transactionTypeName || '-'}">${row.transactionTypeName || '-'}</td>
+                    <td style="width: 110px; max-width: 110px;" title="${row.applicationNumber || '-'}">${row.applicationNumber || '-'}</td>
+                    <td style="width: 300px; max-width: 300px; overflow: hidden; text-overflow: ellipsis;" title="${row.applicantName || '-'}">${row.applicantName || '-'}</td>
+                    <td style="width: 300px; max-width: 300px; overflow: hidden; text-overflow: ellipsis;" title="${row.opponent || '-'}">${row.opponent || '-'}</td>
+                    <td style="width: 95px; max-width: 95px; text-align: center;" title="${row.bulletinDate || '-'}">${row.bulletinDate || '-'}</td>
+                    <td style="width: 85px; max-width: 85px; text-align: center;" title="${row.bulletinNo || '-'}">${row.bulletinNo || '-'}</td>
+                    <td style="width: 95px; max-width: 95px; text-align: center;" title="${row.epatsDate || '-'}">${row.epatsDate || '-'}</td>
+                    <td style="width: 140px; max-width: 140px; overflow: hidden; text-overflow: ellipsis;" title="${row.statusText || '-'}">${row.statusText || '-'}</td>
                     <td style="width: 70px; max-width: 70px; text-align: center; padding: 4px;">${parentPdfIcons || '<span class="text-muted">-</span>'}</td>`;
                 frag.appendChild(parentTr);
 
@@ -740,13 +740,13 @@ async renderObjectionRows(list) {
                     childTr.innerHTML = `
                         <td class="toggle-cell" style="width: 35px; padding: 4px;"></td>
                         <td style="width: 120px; max-width: 120px;"></td>
-                        <td style="width: 180px; max-width: 180px; padding-left: 32px; overflow: hidden; text-overflow: ellipsis;">↳ ${childTypeName}</td>
-                        <td style="width: 110px; max-width: 110px;">${row.applicationNumber || '-'}</td>
-                        <td style="width: 300px; max-width: 300px; overflow: hidden; text-overflow: ellipsis;">${row.applicantName || '-'}</td>
-                        <td style="width: 300px; max-width: 300px; overflow: hidden; text-overflow: ellipsis;">${row.opponent || '-'}</td>
+                        <td style="width: 180px; max-width: 180px; padding-left: 32px; overflow: hidden; text-overflow: ellipsis;" title="↳ ${childTypeName}">↳ ${childTypeName}</td>
+                        <td style="width: 110px; max-width: 110px;" title="${row.applicationNumber || '-'}">${row.applicationNumber || '-'}</td>
+                        <td style="width: 300px; max-width: 300px; overflow: hidden; text-overflow: ellipsis;" title="${row.applicantName || '-'}">${row.applicantName || '-'}</td>
+                        <td style="width: 300px; max-width: 300px; overflow: hidden; text-overflow: ellipsis;" title="${row.opponent || '-'}">${row.opponent || '-'}</td>
                         <td style="width: 95px; max-width: 95px; text-align: center;"></td>
                         <td style="width: 85px; max-width: 85px; text-align: center;"></td>
-                        <td style="width: 95px; max-width: 95px; text-align: center;">${fmtDate(child.timestamp)}</td>
+                        <td style="width: 95px; max-width: 95px; text-align: center;" title="${fmtDate(child.timestamp)}">${fmtDate(child.timestamp)}</td>
                         <td style="width: 140px; max-width: 140px;"></td>
                         <td style="width: 70px; max-width: 70px; text-align: center; padding: 4px;">${childPdfIcons || '<span class="text-muted">-</span>'}</td>`;
                     frag.appendChild(childTr);
