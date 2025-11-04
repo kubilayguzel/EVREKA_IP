@@ -594,28 +594,37 @@ async renderObjectionRows(list) {
               }
 
             // 🔥 YENİ: Transaction ID'lerini topla ve PDF'leri çek
-              const allTransactionIds = [];
-              const allRecordIds = [];
-              for (const row of pageData) {
+                const allTransactionIds = [];
+                const allRecordIds = [];
+                for (const row of pageData) {
                 const recordId = row.recordId;
                 const txData = this.txCache.get(recordId);
-                if (txData && txData.transactions) {
-                  txData.transactions.forEach(tx => {
-                    if (tx.id) {
-                      allTransactionIds.push(tx.id);
-                      allRecordIds.push({ transactionId: tx.id, recordId: recordId });
-                    }
-                  });
+                if (!txData) continue;
+
+                const parentId = row.id;
+                const children = (txData.childrenMap || {})[parentId] || [];
+
+                // parent
+                if (parentId) {
+                    allTransactionIds.push(parentId);
+                    allRecordIds.push({ transactionId: parentId, recordId });
                 }
-              }
+                // çocuklar
+                for (const ch of children) {
+                    if (ch?.id) {
+                    allTransactionIds.push(ch.id);
+                    allRecordIds.push({ transactionId: ch.id, recordId });
+                    }
+                }
+                }
+                // güvenlik: tekilleştir
+                const _uniq = arr => [...new Set(arr)];
+                const uniqTxIds = _uniq(allTransactionIds);
+                const uniqPairs = _uniq(allRecordIds.map(p => JSON.stringify(p))).map(s => JSON.parse(s));
 
-              // 🔥 YENİ: unindexed_pdfs'ten PDF'leri çek
-              const pdfsByTransaction = await this.fetchPdfsForTransactions(allTransactionIds);
-              console.log('📄 İtirazlar için PDF\'ler çekildi:', Object.keys(pdfsByTransaction).length, 'transaction');
+                const pdfsByTransaction  = await this.fetchPdfsForTransactions(uniqTxIds);
+                const taskDocsByTransaction = await this.fetchTaskDocumentsForTransactions(uniqPairs);
 
-              // 🔥 YENİ: Task'lardan belgeleri çek
-              const taskDocsByTransaction = await this.fetchTaskDocumentsForTransactions(allRecordIds);
-              console.log('📋 İtirazlar için task belgeleri çekildi:', Object.keys(taskDocsByTransaction).length, 'transaction');
 
               const frag = document.createDocumentFragment();
 
