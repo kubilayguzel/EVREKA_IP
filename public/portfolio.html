@@ -674,13 +674,13 @@ async renderObjectionRows(list) {
                     <td>${row.title || '-'}</td>
                     <td>${row.transactionTypeName || '-'}</td>
                     <td>${row.applicationNumber || '-'}</td>
-                    <td style="min-width: 200px;">${row.applicantName || '-'}</td>
-                    <td style="min-width: 200px;">${row.opponent || '-'}</td>
-                    <td>${row.bulletinDate || '-'}</td>
-                    <td>${row.bulletinNo || '-'}</td>
-                    <td>${row.epatsDate || '-'}</td>
+                    <td style="min-width: 250px; max-width: 250px;">${row.applicantName || '-'}</td>
+                    <td style="min-width: 250px; max-width: 250px;">${row.opponent || '-'}</td>
+                    <td style="width: 100px;">${row.bulletinDate || '-'}</td>
+                    <td style="width: 90px;">${row.bulletinNo || '-'}</td>
+                    <td style="width: 100px;">${row.epatsDate || '-'}</td>
                     <td>${row.statusText || '-'}</td>
-                    <td style="text-align: center;">${parentPdfIcons || '<span class="text-muted">-</span>'}</td>`;
+                    <td style="text-align: center; width: 80px;">${parentPdfIcons || '<span class="text-muted">-</span>'}</td>`;
                 frag.appendChild(parentTr);
 
                 if (hasChildren) {
@@ -742,13 +742,13 @@ async renderObjectionRows(list) {
                         <td></td>
                         <td style="padding-left: 32px;">↳ ${childTypeName}</td>
                         <td>${row.applicationNumber || '-'}</td>
-                        <td style="min-width: 200px;">${row.applicantName || '-'}</td>
-                        <td style="min-width: 200px;">${row.opponent || '-'}</td>
+                        <td style="min-width: 250px; max-width: 250px;">${row.applicantName || '-'}</td>
+                        <td style="min-width: 250px; max-width: 250px;">${row.opponent || '-'}</td>
+                        <td style="width: 100px;"></td>
+                        <td style="width: 90px;"></td>
+                        <td style="width: 100px;">${fmtDate(child.timestamp)}</td>
                         <td></td>
-                        <td></td>
-                        <td>${fmtDate(child.timestamp)}</td>
-                        <td></td>
-                        <td style="text-align: center;">${childPdfIcons || '<span class="text-muted">-</span>'}</td>`;
+                        <td style="text-align: center; width: 80px;">${childPdfIcons || '<span class="text-muted">-</span>'}</td>`;
                     frag.appendChild(childTr);
                   });
                 }
@@ -1811,13 +1811,13 @@ async loadObjectionRows() {
                         { key: 'title', label: 'Marka Adı', sortable: true, searchable: true },
                         { key: 'transactionTypeName', label: 'İşlem Türü', sortable: true, searchable: true },
                         { key: 'applicationNumber', label: 'Başvuru No', sortable: true, searchable: true },
-                        { key: 'applicantName', label: 'Başvuru Sahibi', sortable: true, searchable: true, width: '200px' },
-                        { key: 'opponent', label: 'İtiraz Eden', sortable: true, searchable: true, width: '200px' },
-                        { key: 'bulletinDate', label: 'Bülten Tarihi', sortable: true, searchable: false },
-                        { key: 'bulletinNo', label: 'Bülten No', sortable: true, searchable: true },
-                        { key: 'epatsDate', label: 'ePats Tarihi', sortable: true, searchable: false },
+                        { key: 'applicantName', label: 'Başvuru Sahibi', sortable: true, searchable: true, width: '250px' },
+                        { key: 'opponent', label: 'İtiraz Eden', sortable: true, searchable: true, width: '250px' },
+                        { key: 'bulletinDate', label: 'Bülten Tarihi', sortable: true, searchable: false, width: '100px' },
+                        { key: 'bulletinNo', label: 'Bülten No', sortable: true, searchable: true, width: '90px' },
+                        { key: 'epatsDate', label: 'ePats Tarihi', sortable: true, searchable: false, width: '100px' },
                         { key: 'statusText', label: 'Durum', sortable: true, searchable: true },
-                        { key: 'documents', label: 'Evraklar', sortable: false, searchable: false }
+                        { key: 'documents', label: 'Evraklar', sortable: false, searchable: false, width: '80px' }
                     ]
                     : [
                         { key: 'selection', label: '', sortable: false, isCheckbox: true, width: '40px' },
