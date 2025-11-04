@@ -586,14 +586,18 @@ async renderObjectionRows(list) {
                 });
               }
 
-              // 🔥 YENİ: Transaction ID'lerini topla ve PDF'leri çek
+            // 🔥 YENİ: Transaction ID'lerini topla ve PDF'leri çek
               const allTransactionIds = [];
+              const allRecordIds = [];
               for (const row of pageData) {
                 const recordId = row.recordId;
                 const txData = this.txCache.get(recordId);
                 if (txData && txData.transactions) {
                   txData.transactions.forEach(tx => {
-                    if (tx.id) allTransactionIds.push(tx.id);
+                    if (tx.id) {
+                      allTransactionIds.push(tx.id);
+                      allRecordIds.push({ transactionId: tx.id, recordId: recordId });
+                    }
                   });
                 }
               }
@@ -601,6 +605,10 @@ async renderObjectionRows(list) {
               // 🔥 YENİ: unindexed_pdfs'ten PDF'leri çek
               const pdfsByTransaction = await this.fetchPdfsForTransactions(allTransactionIds);
               console.log('📄 İtirazlar için PDF\'ler çekildi:', Object.keys(pdfsByTransaction).length, 'transaction');
+
+              // 🔥 YENİ: Task'lardan belgeleri çek
+              const taskDocsByTransaction = await this.fetchTaskDocumentsForTransactions(allRecordIds);
+              console.log('📋 İtirazlar için task belgeleri çekildi:', Object.keys(taskDocsByTransaction).length, 'transaction');
 
               const frag = document.createDocumentFragment();
 
@@ -621,6 +629,7 @@ async renderObjectionRows(list) {
                 // 🔥 YENİ: Parent transaction'a ait PDF'leri al
                 const parentPdfs = pdfsByTransaction[parent.id] || [];
                 const parentDocuments = parent.documents || [];
+                const parentTaskDocs = taskDocsByTransaction[parent.id] || [];
                 
                 // 🔥 YENİ: İtiraz parent'ları için PDF'leri gizle (child'da gösterilecek)
                 const isOppositionParent = String(parent.type) === '20' || String(parent.type) === '19';
@@ -634,7 +643,8 @@ async renderObjectionRows(list) {
                       fileUrl: doc.path,
                       type: doc.type,
                       isTransactionDoc: true
-                    }))
+                    })),
+                    ...parentTaskDocs
                   ];
                 }
 
@@ -690,6 +700,7 @@ async renderObjectionRows(list) {
                     
                     // 🔥 YENİ: Child transaction'a ait PDF'leri al
                     const childPdfs = pdfsByTransaction[child.id] || [];
+                    const childTaskDocs = taskDocsByTransaction[child.id] || [];
                     
                     // 🔥 YENİ: İtiraz Bildirimi (ID: 27) ise parent'ın belgelerini de göster
                     let allChildDocs = [...childPdfs];
@@ -700,15 +711,17 @@ async renderObjectionRows(list) {
                       const parentPdfsForChild = pdfsByTransaction[parent.id] || [];
                       const parentTransactionDocs = parent.documents || [];
                       
-                      allChildDocs = [
+                    allChildDocs = [
                         ...childPdfs,
+                        ...childTaskDocs,  // 🔥 YENİ: Child task belgelerini ekle
                         ...parentPdfsForChild,
                         ...parentTransactionDocs.map(doc => ({
                           fileName: doc.name || 'Belge',
                           fileUrl: doc.path,
                           type: doc.type,
                           isParentDoc: true
-                        }))
+                        })),
+                        ...parentTaskDocs  // 🔥 YENİ: Parent task belgelerini de ekle
                       ];
                       
                       console.log('✅ İtiraz Bildirimi için toplam belge sayısı:', allChildDocs.length);
@@ -814,6 +827,53 @@ async renderObjectionRows(list) {
                 return pdfMap;
               } catch (error) {
                 console.error('❌ PDF\'ler getirilirken hata:', error);
+                return {};
+              }
+            }
+
+            // 🔥 YENİ FONKSIYON: Transaction'lara ait task belgelerini getir
+            async fetchTaskDocumentsForTransactions(transactionRecordPairs) {
+              if (!transactionRecordPairs || transactionRecordPairs.length === 0) return {};
+              
+              try {
+                const taskDocsMap = {};
+                
+                // Her transaction için task belgelerini çek
+                for (const pair of transactionRecordPairs) {
+                  try {
+                    // Task'ı transactionId ve relatedIpRecordId ile bul
+                    const tasksQuery = query(
+                      collection(db, 'tasks'),
+                      where('transactionId', '==', pair.transactionId),
+                      where('relatedIpRecordId', '==', pair.recordId)
+                    );
+                    
+                    const tasksSnapshot = await getDocs(tasksQuery);
+                    
+                    if (!tasksSnapshot.empty) {
+                      const taskDoc = tasksSnapshot.docs[0]; // İlk eşleşen task'ı al
+                      const taskData = taskDoc.data();
+                      
+                      if (taskData.documents && Array.isArray(taskData.documents) && taskData.documents.length > 0) {
+                        taskDocsMap[pair.transactionId] = taskData.documents.map(doc => ({
+                          fileName: doc.name || doc.fileName || 'Task Belgesi',
+                          fileUrl: doc.storagePath || doc.downloadURL || doc.url || doc.content,
+                          type: doc.documentDesignation || doc.type || 'task_document',
+                          isTaskDoc: true,
+                          taskId: taskDoc.id
+                        }));
+                        
+                        console.log(`✅ Task belgesi bulundu - Transaction: ${pair.transactionId}, Belge sayısı: ${taskDocsMap[pair.transactionId].length}`);
+                      }
+                    }
+                  } catch (err) {
+                    console.warn(`⚠️ Task belgesi alınamadı - Transaction: ${pair.transactionId}`, err);
+                  }
+                }
+                
+                return taskDocsMap;
+              } catch (error) {
+                console.error('❌ Task belgeleri getirilirken hata:', error);
                 return {};
               }
             }
