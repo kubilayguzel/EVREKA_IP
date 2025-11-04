@@ -175,12 +175,16 @@
 
 <script type="module">
     // Tüm JS modül importları tek bir yerden
-    import Pagination from './js/pagination.js';
-    import { ipRecordsService, db, personService, transactionTypeService, auth, monitoringService, taskService, query } from './firebase-config.js';
-    import { showNotification, formatFileSize, STATUSES } from './utils.js';
-    import { loadSharedLayout } from './js/layout-loader.js';
-    import { doc, getDoc, collection, getDocs, where } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-    import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+// Düzeltilmiş import satırları
+
+import Pagination from './js/pagination.js';
+// ARTIK 'query' YOK. Sadece servisler ve db, auth gibi dışa aktarılan değişkenler kaldı.
+import { ipRecordsService, db, personService, transactionTypeService, auth, monitoringService, taskService } from './firebase-config.js';
+import { showNotification, formatFileSize, STATUSES } from './utils.js';
+import { loadSharedLayout } from './js/layout-loader.js';
+// 'query' fonksiyonu, diğer Firestore fonksiyonlarıyla birlikte buraya EKLENDİ.
+import { doc, getDoc, collection, getDocs, where, query } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
     // --- Yardımcı Fonksiyonlar ---
     const safe = (v) => (v ?? '').toString();
