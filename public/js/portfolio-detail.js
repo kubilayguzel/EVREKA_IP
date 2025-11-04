@@ -313,7 +313,7 @@ async function fetchPdfsForTransactions(transactionIds) {
   }
 }
 
-// YENİ EKLENEN FONKSİYON: Task'a bağlı belgeleri getiren yardımcı fonksiyon
+// 🔥 YENİ EKLENEN FONKSİYON: Task'a bağlı belgeleri getiren yardımcı fonksiyon
 async function fetchTaskDocuments(taskId) {
   if (!taskId) return [];
   try {
@@ -323,11 +323,11 @@ async function fetchTaskDocuments(taskId) {
     const taskData = taskDoc.data();
     let docs = [];
 
-    // 1. epatsDocument'i ekle
+    // 1. epatsDocument'i ekle (Zaten Storage URL'sini tutuyor)
     if (taskData.details?.epatsDocument) {
       docs.push({
         fileName: taskData.details.epatsDocument.name || 'ePats Belgesi',
-        fileUrl: taskData.details.epatsDocument.downloadURL,
+        fileUrl: taskData.details.epatsDocument.downloadURL, // downloadURL
         evrakNo: taskData.details.epatsDocument.turkpatentEvrakNo,
         type: 'epats_document'
       });
@@ -336,14 +336,22 @@ async function fetchTaskDocuments(taskId) {
     // 2. documents (Task'ın kendi documents array'ini ekle)
     if (Array.isArray(taskData.documents)) {
         taskData.documents.forEach(doc => {
-            // Check if fileUrl or path is available
-            if (doc.url || doc.path) {
+            // 🔥 KESİNLEŞTİRİLMİŞ GÜNCELLEME: Yalnızca storage/indirilebilir bir URL'yi kontrol et.
+            // doc.content (Base64) Yoksayılıyor. Task belgesi Storage'a yüklenmiş olmalıdır.
+            const fileUrl = doc.url || doc.path; 
+            
+            if (fileUrl) { 
                 docs.push({
                     fileName: doc.name || 'Task Belgesi',
-                    fileUrl: doc.url || doc.path,
+                    fileUrl: fileUrl, 
                     type: doc.type || 'task_document',
                     isTaskDoc: true // Özel tip etiketi
                 });
+            } else {
+                // Base64 içeriği geliyorsa, konsola uyarı basılarak task oluşturma/güncelleme mantığının düzeltilmesi gerektiği belirtiliyor.
+                if (doc.content) {
+                    console.warn(`⚠️ Task dokümanı Base64/Content içeriyor ancak URL/Path yok: ${doc.name}. Task oluşturma/güncelleme mantığı (dosya yükleme) düzeltilmelidir.`);
+                }
             }
         });
     }
