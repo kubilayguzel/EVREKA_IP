@@ -293,14 +293,7 @@
         import { ipRecordsService, db, personService, transactionTypeService, auth, monitoringService, taskService } from './firebase-config.js';
         import { showNotification, formatFileSize, STATUSES } from './utils.js';
         import { loadSharedLayout } from './js/layout-loader.js';
-          import {
-    doc,
-    getDoc,
-    collection,
-    getDocs,
-    query,
-    where
-  } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { doc, getDoc,  } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
         import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
         // === Yardımcı Fonksiyonlar ===
@@ -594,37 +587,28 @@ async renderObjectionRows(list) {
               }
 
             // 🔥 YENİ: Transaction ID'lerini topla ve PDF'leri çek
-                const allTransactionIds = [];
-                const allRecordIds = [];
-                for (const row of pageData) {
+              const allTransactionIds = [];
+              const allRecordIds = [];
+              for (const row of pageData) {
                 const recordId = row.recordId;
                 const txData = this.txCache.get(recordId);
-                if (!txData) continue;
-
-                const parentId = row.id;
-                const children = (txData.childrenMap || {})[parentId] || [];
-
-                // parent
-                if (parentId) {
-                    allTransactionIds.push(parentId);
-                    allRecordIds.push({ transactionId: parentId, recordId });
-                }
-                // çocuklar
-                for (const ch of children) {
-                    if (ch?.id) {
-                    allTransactionIds.push(ch.id);
-                    allRecordIds.push({ transactionId: ch.id, recordId });
+                if (txData && txData.transactions) {
+                  txData.transactions.forEach(tx => {
+                    if (tx.id) {
+                      allTransactionIds.push(tx.id);
+                      allRecordIds.push({ transactionId: tx.id, recordId: recordId });
                     }
+                  });
                 }
-                }
-                // güvenlik: tekilleştir
-                const _uniq = arr => [...new Set(arr)];
-                const uniqTxIds = _uniq(allTransactionIds);
-                const uniqPairs = _uniq(allRecordIds.map(p => JSON.stringify(p))).map(s => JSON.parse(s));
+              }
 
-                const pdfsByTransaction  = await this.fetchPdfsForTransactions(uniqTxIds);
-                const taskDocsByTransaction = await this.fetchTaskDocumentsForTransactions(uniqPairs);
+              // 🔥 YENİ: unindexed_pdfs'ten PDF'leri çek
+              const pdfsByTransaction = await this.fetchPdfsForTransactions(allTransactionIds);
+              console.log('📄 İtirazlar için PDF\'ler çekildi:', Object.keys(pdfsByTransaction).length, 'transaction');
 
+              // 🔥 YENİ: Task'lardan belgeleri çek
+              const taskDocsByTransaction = await this.fetchTaskDocumentsForTransactions(allRecordIds);
+              console.log('📋 İtirazlar için task belgeleri çekildi:', Object.keys(taskDocsByTransaction).length, 'transaction');
 
               const frag = document.createDocumentFragment();
 
@@ -2012,5 +1996,328 @@ async loadObjectionRows() {
             };
         })();
     </script>
+
+<!-- ==== BEGIN: network & documents patch (added by ChatGPT) ==== -->
+<script type="module">
+// This patch overrides three methods to (1) batch Firestore reads with 'in' queries,
+// (2) add in-memory caches, and (3) always show task documents (including epatsDocument)
+// for 'İtiraza Karşı Görüş' as well as 'İtiraz Bildirimi'.
+
+import { db } from './firebase-config.js';
+import { collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+(function(){
+  const CONCURRENCY = 6;
+
+  function chunk(arr, n){ const out=[]; for(let i=0;i<arr.length;i+=n) out.push(arr.slice(i,i+n)); return out; }
+  async function runJobs(jobs, limit=CONCURRENCY){
+    let i=0, running=0;
+    const next = () => {
+      if (i>=jobs.length) return Promise.resolve();
+      const fn = jobs[i++]; running++;
+      return Promise.resolve(fn()).finally(() => { running--; }).then(next);
+    };
+    const starters = Array.from({length: Math.min(limit, jobs.length)}, next);
+    await Promise.all(starters);
+  }
+
+  // ---- fetchPdfsForTransactions (batched + cache) ----
+  const fetchPdfsForTransactionsPatched = async function(transactionIds){
+    if (!transactionIds || transactionIds.length===0) return {};
+
+    this.pdfCache = this.pdfCache || new Map();
+    const map = {};
+    const missing = [];
+    for (const id of transactionIds){
+      if (this.pdfCache.has(id)) {
+        map[id] = this.pdfCache.get(id);
+      } else {
+        missing.push(id);
+      }
+    }
+    if (missing.length === 0) return map;
+
+    const jobs = chunk(missing, 10).map(ids => async () => {
+      const qs = query(
+        collection(db, 'unindexed_pdfs'),
+        where('associatedTransactionId', 'in', ids),
+        where('status', '==', 'indexed')
+      );
+      const snap = await getDocs(qs);
+      snap.forEach(d => {
+        const data = d.data();
+        const txId = data.associatedTransactionId;
+        if (!map[txId]) map[txId] = [];
+        map[txId].push({
+          id: d.id,
+          fileName: data.fileName || 'Belge',
+          fileUrl: data.fileUrl || data.url,
+          type: data.type || 'pdf',
+          indexedAt: data.indexedAt
+        });
+      });
+    });
+
+    await runJobs(jobs);
+
+    Object.keys(map).forEach(txId => {
+      map[txId].sort((a,b) => {
+        const da = (a.indexedAt && a.indexedAt.toDate ? a.indexedAt.toDate() : new Date(a.indexedAt||0));
+        const db_ = (b.indexedAt && b.indexedAt.toDate ? b.indexedAt.toDate() : new Date(b.indexedAt||0));
+        return db_ - da;
+      });
+      this.pdfCache.set(txId, map[txId]);
+    });
+    return map;
+  };
+
+  // ---- fetchTaskDocumentsForTransactions (grouped by record, includes epatsDocument) ----
+  const fetchTaskDocumentsForTransactionsPatched = async function(transactionRecordPairs){
+    if (!transactionRecordPairs || transactionRecordPairs.length===0) return {};
+
+    this.taskDocCache = this.taskDocCache || new Map();
+    const result = {};
+    const missingByRecord = new Map();
+
+    for (const p of transactionRecordPairs){
+      const txId = p.transactionId, recId = p.recordId;
+      if (this.taskDocCache.has(txId)){
+        result[txId] = this.taskDocCache.get(txId);
+      } else {
+        if (!missingByRecord.has(recId)) missingByRecord.set(recId, new Set());
+        missingByRecord.get(recId).add(txId);
+      }
+    }
+    if (missingByRecord.size===0) return result;
+
+    const jobs = [];
+    missingByRecord.forEach((txSet, recId) => {
+      const parts = chunk(Array.from(txSet), 10);
+      parts.forEach(ids => {
+        jobs.push(async () => {
+          const qs = query(
+            collection(db, 'tasks'),
+            where('relatedIpRecordId', '==', recId),
+            where('transactionId', 'in', ids)
+          );
+          const snap = await getDocs(qs);
+          snap.forEach(docSnap => {
+            const t = docSnap.data();
+            const txId = t.transactionId;
+            const list = [];
+
+            if (Array.isArray(t.documents)){
+              t.documents.forEach(d => {
+                list.push({
+                  fileName: d.name || d.fileName || 'Task Belgesi',
+                  fileUrl: d.storagePath || d.downloadURL || d.url || d.content,
+                  type: d.documentDesignation || d.type || 'task_document',
+                  isTaskDoc: true,
+                  taskId: docSnap.id
+                });
+              });
+            }
+            if (t.epatsDocument && (t.epatsDocument.downloadURL || t.epatsDocument.url || t.epatsDocument.storagePath)){
+              list.push({
+                fileName: t.epatsDocument.name || 'ePats Belgesi',
+                fileUrl: t.epatsDocument.downloadURL || t.epatsDocument.url || t.epatsDocument.storagePath,
+                type: 'official_document',
+                isTaskDoc: true,
+                taskId: docSnap.id
+              });
+            }
+
+            result[txId] = list;
+            (this.taskDocCache).set(txId, list);
+          });
+        });
+      });
+    });
+
+    await runJobs(jobs);
+    return result;
+  };
+
+  // ---- renderObjectionRows override (always include child task docs; show parent docs also for "İtiraza Karşı Görüş") ----
+  const renderObjectionRowsPatched = async function(list){
+    const tableBody = document.getElementById('portfolioTableBody');
+    const noRecMsg = document.getElementById('noRecordsMessage');
+    if (!tableBody || list.length === 0) {
+        if (tableBody) tableBody.style.display = 'none';
+        if (noRecMsg) noRecMsg.style.display = 'block';
+        return;
+    }
+
+    const pageData = pagination.getCurrentPageData(list);
+    const pageRecordIds = [...new Set(pageData.map(r => r.recordId))];
+    const missing = pageRecordIds.filter(id => !this.txCache.has(id));
+    if (missing.length) {
+      const jobs = missing.map(recordId => async () => {
+        try{
+          const txResult = await ipRecordsService.getTransactionsForRecord(recordId);
+          if (txResult?.success && Array.isArray(txResult.transactions)) {
+            const {parents, childrenMap} = (window.buildParentChild || function(){return {parents:[],childrenMap:{}};})(txResult.transactions);
+            this.txCache.set(recordId, {transactions: txResult.transactions, parents, childrenMap});
+          } else {
+            this.txCache.set(recordId, {transactions: [], parents: [], childrenMap: {}});
+          }
+        }catch(e){
+          console.error('Transaction çekme hatası:', recordId, e);
+          this.txCache.set(recordId, {transactions: [], parents: [], childrenMap: {}});
+        }
+      });
+      await runJobs(jobs, 6);
+    }
+
+    // collect tx ids (parents + children of visible)
+    const txIds = new Set();
+    const pairs = [];
+    for (const row of pageData){
+      const recordId = row.recordId;
+      const txData = this.txCache.get(recordId);
+      if (!txData) continue;
+      const parentId = row.id;
+      const children = (txData.childrenMap || {})[parentId] || [];
+      if (parentId){ txIds.add(parentId); pairs.push({transactionId: parentId, recordId}); }
+      for (const ch of children){
+        if (ch?.id){ txIds.add(ch.id); pairs.push({transactionId: ch.id, recordId}); }
+      }
+    }
+    const pdfsByTransaction = await this.fetchPdfsForTransactions(Array.from(txIds));
+    const taskDocsByTransaction = await this.fetchTaskDocumentsForTransactions(pairs);
+
+    const fmtDate = (d) => {
+      try {
+        if (!d) return '-';
+        let dt = d;
+        if (typeof d?.toDate === 'function') dt = d.toDate();
+        else if (d.seconds) dt = new Date(d.seconds*1000);
+        else dt = new Date(d);
+        return isNaN(dt.getTime()) ? '-' : dt.toLocaleDateString('tr-TR');
+      } catch { return '-'; }
+    };
+
+    const frag = document.createDocumentFragment();
+    for (const row of pageData){
+      const recordId = row.recordId;
+      const parentTxId = row.id;
+      const txData = this.txCache.get(recordId);
+      if (!txData) continue;
+
+      const parent = (txData.parents || []).find(p => p.id === parentTxId);
+      const children = (txData.childrenMap || {})[parentTxId] || [];
+      if (!parent) continue;
+
+      const hasChildren = children.length > 0;
+      const groupId = (row.title || '') + '_' + parentTxId;
+
+      const parentPdfs = pdfsByTransaction[parent.id] || [];
+      const parentDocuments = parent.documents || [];
+      const parentTaskDocs = taskDocsByTransaction[parent.id] || [];
+      const isOppositionParent = String(parent.type) === '20' || String(parent.type) === '19';
+
+      let allParentDocs = [];
+      if (!isOppositionParent){
+        allParentDocs = [
+          ...parentPdfs,
+          ...parentDocuments.map(doc => ({ fileName: doc.name || 'Belge', fileUrl: doc.path, type: doc.type, isTransactionDoc: true })),
+          ...parentTaskDocs
+        ];
+      }
+      const iconify = (pdf) => {
+        let iconClass = 'fas fa-file-pdf';
+        let titleText = pdf.fileName || 'Belge';
+        if (pdf.type === 'opposition_petition') { iconClass='fas fa-gavel'; titleText='Karşı Taraf İtiraz Dilekçesi'; }
+        else if (pdf.type === 'official_document') { iconClass='fas fa-file-signature'; titleText='Resmi Yazı'; }
+        return `<a href="${pdf.fileUrl || pdf.path}" target="_blank" title="${titleText}" class="pdf-link ${pdf.isParentDoc ? 'parent-doc' : ''}" style="margin-right:8px;"><i class="${iconClass}" style="font-size:1.2em;"></i></a>`;
+      };
+
+      const parentPdfIcons = allParentDocs.map(iconify).join('');
+
+      const parentTr = document.createElement('tr');
+      parentTr.className = hasChildren ? 'group-header' : '';
+      parentTr.dataset.groupId = groupId;
+      parentTr.innerHTML = `
+        <td class="toggle-cell caret-host" style="width:35px;padding:4px;">${hasChildren ? `<button class="row-caret" data-group-id="${groupId}" aria-expanded="false"><i class="fas fa-chevron-right"></i></button>`:''}</td>
+        <td style="width:120px;max-width:120px;" title="${row.title||'-'}">${row.title||'-'}</td>
+        <td style="width:180px;max-width:180px;" title="${row.transactionTypeName||'-'}">${row.transactionTypeName||'-'}</td>
+        <td style="width:110px;max-width:110px;" title="${row.applicationNumber||'-'}">${row.applicationNumber||'-'}</td>
+        <td style="width:300px;max-width:300px;" title="${row.applicantName||'-'}">${row.applicantName||'-'}</td>
+        <td style="width:300px;max-width:300px;" title="${row.opponent||'-'}">${row.opponent||'-'}</td>
+        <td style="width:95px;max-width:95px;text-align:center;" title="${row.bulletinDate||'-'}">${row.bulletinDate||'-'}</td>
+        <td style="width:85px;max-width:85px;text-align:center;" title="${row.bulletinNo||'-'}">${row.bulletinNo||'-'}</td>
+        <td style="width:95px;max-width:95px;text-align:center;" title="${row.epatsDate||'-'}">${row.epatsDate||'-'}</td>
+        <td style="width:140px;max-width:140px;" title="${row.statusText||'-'}">${row.statusText||'-'}</td>
+        <td style="width:70px;max-width:70px;text-align:center;padding:4px;">${parentPdfIcons || '<span class="text-muted">-</span>'}</td>`;
+      frag.appendChild(parentTr);
+
+      if (hasChildren){
+        children.forEach(child => {
+          const childTypeMeta = window.transactionTypesMap && window.transactionTypesMap.get ? window.transactionTypesMap.get(String(child.type)) : null;
+          const childTypeName = (childTypeMeta?.alias || childTypeMeta?.name || `İşlem ${child.type}`);
+
+          const childPdfs = pdfsByTransaction[child.id] || [];
+          const childTaskDocs = taskDocsByTransaction[child.id] || [];
+
+          // Always include child task docs; also include parent docs for İtiraz Bildirimi (27) and İtiraza Karşı Görüş
+          const n = (childTypeName || '').toLowerCase();
+          const showParentToo = (String(child.type)==='27') || n.includes('itiraza karşı görüş') || n.includes('karşı görüş');
+
+          let allChildDocs = [
+            ...childPdfs,
+            ...childTaskDocs
+          ];
+          if (showParentToo){
+            allChildDocs = [
+              ...allChildDocs,
+              ...(pdfsByTransaction[parent.id] || []),
+              ...(parent.documents || []).map(doc => ({ fileName: doc.name || 'Belge', fileUrl: doc.path, type: doc.type, isParentDoc: true })),
+              ...(parentTaskDocs || [])
+            ];
+          }
+
+          const childPdfIcons = allChildDocs.map(iconify).join('');
+          const childTr = document.createElement('tr');
+          childTr.className = 'group-row child-row';
+          childTr.dataset.parentId = groupId;
+          childTr.setAttribute('aria-hidden','true');
+          childTr.innerHTML = `
+            <td class="toggle-cell" style="width:35px;padding:4px;"></td>
+            <td style="width:120px;max-width:120px;"></td>
+            <td style="width:180px;max-width:180px;padding-left:32px;" title="↳ ${childTypeName}">↳ ${childTypeName}</td>
+            <td style="width:110px;max-width:110px;" title="${row.applicationNumber||'-'}">${row.applicationNumber||'-'}</td>
+            <td style="width:300px;max-width:300px;" title="${row.applicantName||'-'}">${row.applicantName||'-'}</td>
+            <td style="width:300px;max-width:300px;" title="${row.opponent||'-'}">${row.opponent||'-'}</td>
+            <td style="width:95px;max-width:95px;text-align:center;"></td>
+            <td style="width:85px;max-width:85px;text-align:center;"></td>
+            <td style="width:95px;max-width:95px;text-align:center;" title="${fmtDate(child.timestamp)}">${fmtDate(child.timestamp)}</td>
+            <td style="width:140px;max-width:140px;"></td>
+            <td style="width:70px;max-width:70px;text-align:center;padding:4px;">${childPdfIcons || '<span class="text-muted">-</span>'}</td>`;
+          frag.appendChild(childTr);
+        });
+      }
+    }
+
+    tableBody.innerHTML = '';
+    tableBody.appendChild(frag);
+    if (window.wireAccordion) window.wireAccordion();
+
+    if (tableBody) tableBody.style.display = list.length > 0 ? 'table-row-group' : 'none';
+    if (noRecMsg) noRecMsg.style.display = list.length === 0 ? 'block' : 'none';
+  };
+
+  // apply overrides
+  if (window.PortfolioModule){
+    PortfolioModule.prototype.fetchPdfsForTransactions = fetchPdfsForTransactionsPatched;
+    PortfolioModule.prototype.fetchTaskDocumentsForTransactions = fetchTaskDocumentsForTransactionsPatched;
+    PortfolioModule.prototype.renderObjectionRows = renderObjectionRowsPatched;
+    console.log('[patch] objection rendering & firestore batching enabled');
+  } else {
+    console.warn('[patch] PortfolioModule not found; ensure this script is after original module.');
+  }
+})();
+</script>
+<!-- ==== END: network & documents patch ==== -->
+
 </body>
 </html>
