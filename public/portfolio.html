@@ -666,17 +666,16 @@ async renderObjectionRows(list) {
                 }
 
                 parentTr.innerHTML = `
-                    <td class="toggle-cell caret-host">
+                    <td class="toggle-cell caret-host" style="width: 40px;">
                         ${hasChildren ? `<button class="row-caret" data-group-id="${groupId}" aria-expanded="false">
                             <i class="fas fa-chevron-right"></i>
                         </button>` : ''}
                     </td>
-                    <td>${row.recordType || '-'}</td>
                     <td>${row.title || '-'}</td>
                     <td>${row.transactionTypeName || '-'}</td>
                     <td>${row.applicationNumber || '-'}</td>
-                    <td>${row.applicantName || '-'}</td>
-                    <td>${row.opponent || '-'}</td>
+                    <td style="min-width: 200px;">${row.applicantName || '-'}</td>
+                    <td style="min-width: 200px;">${row.opponent || '-'}</td>
                     <td>${row.bulletinDate || '-'}</td>
                     <td>${row.bulletinNo || '-'}</td>
                     <td>${row.epatsDate || '-'}</td>
@@ -739,13 +738,12 @@ async renderObjectionRows(list) {
                     childTr.setAttribute('aria-hidden', 'true');
                     
                     childTr.innerHTML = `
-                        <td class="toggle-cell"></td>
-                        <td>${row.recordType || '-'}</td>
+                        <td class="toggle-cell" style="width: 40px;"></td>
                         <td></td>
                         <td style="padding-left: 32px;">↳ ${childTypeName}</td>
                         <td>${row.applicationNumber || '-'}</td>
-                        <td>${row.applicantName || '-'}</td>
-                        <td>${row.opponent || '-'}</td>
+                        <td style="min-width: 200px;">${row.applicantName || '-'}</td>
+                        <td style="min-width: 200px;">${row.opponent || '-'}</td>
                         <td></td>
                         <td></td>
                         <td>${fmtDate(child.timestamp)}</td>
@@ -1809,13 +1807,12 @@ async loadObjectionRows() {
                 const isAllTab = (this.activeTypeFilter === 'all');
                 let columns = isObjections
                     ? [
-                        { key: 'toggle', label: '', sortable: false, searchable: false },
-                        { key: 'recordType', label: 'Tür', sortable: true, searchable: true },
+                        { key: 'toggle', label: '', sortable: false, searchable: false, width: '40px' },
                         { key: 'title', label: 'Marka Adı', sortable: true, searchable: true },
                         { key: 'transactionTypeName', label: 'İşlem Türü', sortable: true, searchable: true },
                         { key: 'applicationNumber', label: 'Başvuru No', sortable: true, searchable: true },
-                        { key: 'applicantName', label: 'Başvuru Sahibi', sortable: true, searchable: true },
-                        { key: 'opponent', label: 'İtiraz Eden', sortable: true, searchable: true },
+                        { key: 'applicantName', label: 'Başvuru Sahibi', sortable: true, searchable: true, width: '200px' },
+                        { key: 'opponent', label: 'İtiraz Eden', sortable: true, searchable: true, width: '200px' },
                         { key: 'bulletinDate', label: 'Bülten Tarihi', sortable: true, searchable: false },
                         { key: 'bulletinNo', label: 'Bülten No', sortable: true, searchable: true },
                         { key: 'epatsDate', label: 'ePats Tarihi', sortable: true, searchable: false },
