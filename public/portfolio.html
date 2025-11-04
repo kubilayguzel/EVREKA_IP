@@ -289,11 +289,15 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.2/dist/js/bootstrap.bundle.min.js"></script>
 
 <script type="module">
+
+        // Düzeltilmiş import satırları
         import Pagination from './js/pagination.js';
+        // ARTIK 'query' YOK. Sadece servisler ve db, auth gibi dışa aktarılan değişkenler kaldı.
         import { ipRecordsService, db, personService, transactionTypeService, auth, monitoringService, taskService } from './firebase-config.js';
         import { showNotification, formatFileSize, STATUSES } from './utils.js';
         import { loadSharedLayout } from './js/layout-loader.js';
-        import { doc, getDoc,  } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        // 'query' fonksiyonu, diğer Firestore fonksiyonlarıyla birlikte buraya EKLENDİ.
+        import { doc, getDoc, collection, getDocs, where, query } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
         import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
         // === Yardımcı Fonksiyonlar ===
