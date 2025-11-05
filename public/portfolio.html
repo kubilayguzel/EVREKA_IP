@@ -596,171 +596,162 @@
             }
 
 async renderObjectionRows(list) {
-  const tableBody = document.getElementById('portfolioTableBody');
-  const noRecMsg = document.getElementById('noRecordsMessage');
-  if (!tableBody || list.length === 0) {
-      if (tableBody) tableBody.style.display = 'none';
-      if (noRecMsg) noRecMsg.style.display = 'block';
-      return;
-  }
+  const tableBody = document.getElementById('portfolioTableBody');
+  const noRecMsg = document.getElementById('noRecordsMessage');
+  if (!tableBody || list.length === 0) {
+      if (tableBody) tableBody.style.display = 'none';
+      if (noRecMsg) noRecMsg.style.display = 'block';
+      return;
+  }
 
-  // SADECE GÖRÜNÜR SAYFA VERİLERİYLE ÇALIŞ
-  const pageData = pagination.getCurrentPageData(list);
+  // SADECE GÖRÜNÜR SAYFA VERİLERİYLE ÇALIŞ
+  const pageData = pagination.getCurrentPageData(list);
+  const frag = document.createDocumentFragment();
 
-  const frag = document.createDocumentFragment();
+  // Promise.all kullanarak tüm satırları asenkron olarak oluştur
+  const renderPromises = pageData.map(async (row) => {
+    const recordId = row.recordId;
+    const parentTxId = row.id;
 
-  // Task belgeleri çekimi için Asenkron işlemler
-  const renderPromises = pageData.map(async (row) => {
-    const recordId = row.recordId;
-    const parentTxId = row.id;
+    const txData = this.txCache.get(recordId);
+    if (!txData) return null;
 
-    const txData = this.txCache.get(recordId);
-    if (!txData) return '';
+    const parent = (txData.parents || []).find(p => p.id === parentTxId);
+    const children = (txData.childrenMap || {})[parentTxId] || [];
+    if (!parent) return null;
 
-    const parent = (txData.parents || []).find(p => p.id === parentTxId);
-    const children = (txData.childrenMap || {})[parentTxId] || [];
-    if (!parent) return '';
+    const hasChildren = children.length > 0;
+    const groupId = safeId(`${recordId}_parent_${parentTxId}`);
 
-    const hasChildren = children.length > 0;
-    const groupId = safeId(`${recordId}_parent_${parentTxId}`);
+    // --- PARENT BELGE ÇEKİMİ ---
+    let allParentDocs = (parent.documents || []).map(doc => ({
+        fileName: doc.name || 'Belge',
+        fileUrl: doc.path,
+        type: doc.type,
+        isObjectionDoc: true
+    }));
+    
+    const existingParentFileNames = new Set(allParentDocs.map(d => d.fileName).filter(Boolean));
+    const IS_OPPOSITION_RESPONSE = String(parent.type) === '38';
 
-    // 1. Belge Çekimi ve Birleştirme
-    let allDocs = (parent.documents || []).map(doc => ({
-      fileName: doc.name || 'Belge',
-      fileUrl: doc.path,
-      type: doc.type,
-      isObjectionDoc: true
-    }));
+    if (IS_OPPOSITION_RESPONSE && parent.triggeringTaskId) {
+      try {
+        const taskDocs = await fetchTaskDocuments(parent.triggeringTaskId);
+        taskDocs.forEach(doc => {
+          if (doc.fileName && !existingParentFileNames.has(doc.fileName)) {
+            allParentDocs.push(doc);
+            existingParentFileNames.add(doc.fileName);
+          }
+        });
+      } catch (e) {
+        console.error(`Task belgeleri çekilirken hata (ID: ${parent.triggeringTaskId}):`, e);
+      }
+    }
+    
+    // Parent Belge Linklerini Oluşturma
+    const parentDocLinks = allParentDocs.map(pdf => {
+      let iconClass = 'fas fa-file-pdf';
+      let titleText = pdf.fileName || 'Belge';
+      let btnClass = 'btn-danger';
+      
+      if (pdf.type === 'opposition_petition') { btnClass = 'btn-warning'; iconClass = 'fas fa-gavel'; titleText = 'Karşı Taraf İtiraz Dilekçesi'; }
+      else if (pdf.type === 'official_document') { btnClass = 'btn-success'; iconClass = 'fas fa-file-signature'; titleText = 'Resmi Yazı'; }
+      else if (pdf.type === 'epats_document') { btnClass = 'btn-info'; iconClass = 'fas fa-file-invoice'; titleText = `ePats: ${pdf.evrakNo || pdf.fileName}`; }
+      else if (pdf.type === 'task_document' || pdf.isTaskDoc) { btnClass = 'btn-primary'; iconClass = 'fas fa-file-alt'; titleText = 'Görev Belgesi: ' + pdf.fileName; }
+        
+      return `<a href="${pdf.fileUrl || pdf.path}" target="_blank" title="${titleText}" class="action-btn ${btnClass} mr-1">
+        <i class="${iconClass}"></i>
+      </a>`;
+    }).join('');
 
-    const existingFileNames = new Set(allDocs.map(d => d.fileName).filter(Boolean));
+    // Parent Satırını Oluştur
+    const parentTr = document.createElement('tr');
+    parentTr.className = hasChildren ? 'group-header' : '';
+    parentTr.dataset.groupId = groupId;
 
-    // Eğer işlem, Task ile tetiklenmiş bir "İtiraza Karşı Görüş" ise (ID: 38)
-    const IS_OPPOSITION_RESPONSE = String(parent.type) === '38';
+    if (row.recordType === 'trademark' || row.recordType === 'marka') {
+        parentTr.style.backgroundColor = '#e3f2fd';
+    }
 
-    if (IS_OPPOSITION_RESPONSE && parent.triggeringTaskId) {
-      try {
-        const taskDocs = await fetchTaskDocuments(parent.triggeringTaskId);
-        
-        // Task belgelerini mevcut belgelere ekle (benzersizleştirerek)
-        taskDocs.forEach(doc => {
-          if (doc.fileName && !existingFileNames.has(doc.fileName)) {
-            allDocs.push(doc);
-            existingFileNames.add(doc.fileName);
-          }
-        });
-      } catch (e) {
-        console.error(`Task belgeleri çekilirken hata (ID: ${parent.triggeringTaskId}):`, e);
-      }
-    }
-    
-    // 2. Belge Linklerini Oluşturma
-    const docLinks = allDocs.map(pdf => {
-      let iconClass = 'fas fa-file-pdf';
-      let titleText = pdf.fileName || 'Belge';
-      let btnClass = 'btn-danger';
-      
-      if (pdf.type === 'opposition_petition') {
-        iconClass = 'fas fa-gavel';
-        titleText = 'Karşı Taraf İtiraz Dilekçesi';
-        btnClass = 'btn-warning';
-      } else if (pdf.type === 'official_document') {
-        iconClass = 'fas fa-file-signature';
-        titleText = 'Resmi Yazı';
-        btnClass = 'btn-success';
-      } else if (pdf.type === 'epats_document') {
-        iconClass = 'fas fa-file-invoice'; 
-        titleText = `ePats: ${pdf.evrakNo || pdf.fileName}`;
-        btnClass = 'btn-info';
-      } else if (pdf.type === 'task_document' || pdf.isTaskDoc) {
-        iconClass = 'fas fa-file-alt'; 
-        titleText = 'Görev Belgesi: ' + pdf.fileName;
-        btnClass = 'btn-primary';
-      }
-        
-      return `<a href="${pdf.fileUrl || pdf.path}" target="_blank" title="${titleText}" class="action-btn ${btnClass} mr-1">
-        <i class="${iconClass}"></i>
-      </a>`;
-    }).join('');
+    parentTr.innerHTML = `
+        <td class="toggle-cell caret-host">
+            ${hasChildren ? `<button class="row-caret" data-group-id="${groupId}" aria-expanded="false">
+                <i class="fas fa-chevron-right"></i>
+            </button>` : ''}
+        </td>
+        <td>${row.title || '-'}</td>
+        <td>${row.transactionTypeName || '-'}</td>
+        <td>${row.applicationNumber || '-'}</td>
+        <td>${row.applicantName || '-'}</td>
+        <td>${row.opponent || '-'}</td>
+        <td>${row.bulletinDate || '-'}</td>
+        <td>${row.bulletinNo || '-'}</td>
+        <td>${row.epatsDate || '-'}</td>
+        <td>${row.statusText || '-'}</td>
+        <td class="transaction-pdfs">${parentDocLinks || '-'}</td> `;
 
-    const parentTr = document.createElement('tr');
-    parentTr.className = hasChildren ? 'group-header' : '';
-    parentTr.dataset.groupId = groupId;
+    // Child Satırlarını Oluştur
+    const childRows = [];
+    if (hasChildren) {
+        for (const child of children) {
+            const childTypeMeta = transactionTypesMap.get(String(child.type));
+            const childTypeName = childTypeMeta?.alias || childTypeMeta?.name || `İşlem ${child.type}`;
 
-    // Marka ise açık mavi renk ekle (mevcut kodunuzu koruyarak)
-    if (row.recordType === 'trademark' || row.recordType === 'marka') {
-        parentTr.style.backgroundColor = '#e3f2fd';
-    }
+            // --- CHILD BELGE ÇEKİMİ ---
+            let allChildDocs = [];
+            const IS_CHILD_OPPOSITION_RESPONSE = String(child.type) === '38'; 
+            const IS_CHILD_OPPOSITION_NOTICE = String(child.type) === '27';
+            
+            // Eğer Child, Task ile tetiklenmişse belgeleri çek
+            if ((IS_CHILD_OPPOSITION_RESPONSE || IS_CHILD_OPPOSITION_NOTICE) && child.triggeringTaskId) {
+                allChildDocs = await fetchTaskDocuments(child.triggeringTaskId); 
+            }
+            
+            const childDocLinks = allChildDocs.map(pdf => {
+                let iconClass = 'fas fa-file-pdf';
+                let titleText = pdf.fileName || 'Belge';
+                let btnClass = 'btn-danger';
+                
+                // İkon mantığı Parent ile aynı
+                if (pdf.type === 'opposition_petition') { btnClass = 'btn-warning'; iconClass = 'fas fa-gavel'; titleText = 'Karşı Taraf İtiraz Dilekçesi'; }
+                else if (pdf.type === 'official_document') { btnClass = 'btn-success'; iconClass = 'fas fa-file-signature'; titleText = 'Resmi Yazı'; }
+                else if (pdf.type === 'epats_document') { btnClass = 'btn-info'; iconClass = 'fas fa-file-invoice'; titleText = `ePats: ${pdf.evrakNo || pdf.fileName}`; }
+                else if (pdf.type === 'task_document' || pdf.isTaskDoc) { btnClass = 'btn-primary'; iconClass = 'fas fa-file-alt'; titleText = 'Görev Belgesi: ' + pdf.fileName; }
+                
+                return `<a href="${pdf.fileUrl || pdf.path}" target="_blank" title="${titleText}" class="action-btn ${btnClass} mr-1">
+                    <i class="${iconClass}"></i>
+                </a>`;
+            }).join('');
 
-    // 3. Parent Satırı HTML'ini Oluştur
-    parentTr.innerHTML = `
-        <td class="toggle-cell caret-host">
-            ${hasChildren ? `<button class="row-caret" data-group-id="${groupId}" aria-expanded="false">
-                <i class="fas fa-chevron-right"></i>
-            </button>` : ''}
-        </td>
-        <td>${row.title || '-'}</td>
-        <td>${row.transactionTypeName || '-'}</td>
-        <td>${row.applicationNumber || '-'}</td>
-        <td>${row.applicantName || '-'}</td>
-        <td>${row.opponent || '-'}</td>
-        <td>${row.bulletinDate || '-'}</td>
-        <td>${row.bulletinNo || '-'}</td>
-        <td class="transaction-pdfs">${docLinks || '-'}</td>         <td>${row.statusText || '-'}</td>
-    `;
-    frag.appendChild(parentTr);
 
-    // 4. Child Satırlarını Oluştur
-    if (hasChildren) {
-      for (const child of children) {
-        const childTypeMeta = transactionTypesMap.get(String(child.type));
-        const childTypeName = childTypeMeta?.alias || childTypeMeta?.name || `İşlem ${child.type}`;
+            const childTr = document.createElement('tr');
+            childTr.className = 'group-row child-row';
+            childTr.dataset.parentId = groupId;
+            childTr.setAttribute('aria-hidden', 'true');
 
-        // 🔥 Child belge çekimi (Burada sadece İtiraz Bildirimi (27) için Task evraklarını çekmeniz gerekebilir,
-        // ancak basitlik için Task evraklarının sadece Parent'a bağlı 38 gibi işlemlerden geldiğini varsayalım.
-        // Mevcut Parent/Child yapınızda belgeleri Child'a özel çekmiyorsunuz, bu yüzden sadece
-        // Parent'ta zaten çekilen docLinks mantığını koruyalım.)
+            // Child satırı için 11 sütun olmalı:
+            childTr.innerHTML = `
+                <td class="toggle-cell"></td> <td></td> <td style="padding-left: 32px;">↳ ${childTypeName}</td> <td>${row.applicationNumber || '-'}</td> <td>${row.applicantName || '-'}</td> <td>${row.opponent || '-'}</td> <td></td> <td></td> <td>${fmtDate(child.timestamp)}</td> <td></td> <td class="transaction-pdfs">${childDocLinks || '-'}</td> `;
+            childRows.push(childTr);
+        }
+    }
 
-        const childTr = document.createElement('tr');
-        childTr.className = 'group-row child-row';
-        childTr.dataset.parentId = groupId;
-        childTr.setAttribute('aria-hidden', 'true');
+    const result = [parentTr, ...childRows];
+    return result;
+  });
 
-        // Child'a belge göstermek isterseniz: Child'ın da bir transaction olduğunu varsayarak
-        // Child'ın da kendi documents'ını veya TaskId'sinden gelenleri göstermesi gerekir.
-        // Ancak Objections sekmesinde bu genelde Parent (Yayına İtiraz/Karşı Görüş) seviyesinde kalır.
-        // Basitleştirilmiş çözümde, sadece Parent'ta gösterilen belgeler, Child'da görünmeyecektir.
-        
-        // Child satırı için belge sütununu boş bırakalım veya işlem tarihini gösterelim
-        childTr.innerHTML = `
-            <td class="toggle-cell"></td>
-            <td></td>
-            <td style="padding-left: 32px;">↳ ${childTypeName}</td>
-            <td>${row.applicationNumber || '-'}</td>
-            <td>${row.applicantName || '-'}</td>
-            <td>${row.opponent || '-'}</td>
-            <td></td>
-            <td></td>
-            <td>${fmtDate(child.timestamp)}</td>
-            <td></td>
-        `;
-        frag.appendChild(childTr);
-      }
-    }
-    return parentTr; // Sadece parent satırını döndür (frag'e zaten eklenmiş)
+  // Tüm Promise'lerin tamamlanmasını bekle
+  const allElements = await Promise.all(renderPromises);
+  
+  tableBody.innerHTML = '';
+  // Filtreleyip DOM'a ekle
+  allElements.flat().filter(e => e instanceof Element).forEach(e => frag.appendChild(e));
+  
+  tableBody.appendChild(frag);
+  wireAccordion();
 
-  });
-  
-  // Tüm Promise'lerin tamamlanmasını bekle
-  const parentRows = await Promise.all(renderPromises);
-  
-  // DOM'a ekle
-  tableBody.innerHTML = '';
-  parentRows.filter(r => r instanceof Element).forEach(r => frag.appendChild(r)); // Sadece Element olanları ekle
-  tableBody.appendChild(frag);
-  wireAccordion();
-
-  if (tableBody) tableBody.style.display = list.length > 0 ? 'table-row-group' : 'none';
-  if (noRecMsg) noRecMsg.style.display = list.length === 0 ? 'block' : 'none';
+  if (tableBody) tableBody.style.display = list.length > 0 ? 'table-row-group' : 'none';
+  if (noRecMsg) noRecMsg.style.display = list.length === 0 ? 'block' : 'none';
 }
 
             renderCurrentPage() {
@@ -1753,16 +1744,16 @@ async loadObjectionRows() {
                 let columns = isObjections
                     ? [
                         { key: 'toggle', label: '', sortable: false, width: '44px' },
-                        // { key: 'recordType',      label: 'Kayıt Tipi',  sortable: true,  width: '110px' }, // KALDIRILDI
                         { key: 'title',           label: 'M/T/B Adı',   sortable: true,  width: '180px' },
                         { key: 'transactionTypeName',   label: 'İşlem Tipi',  sortable: true,  width: '180px' },
                         { key: 'applicationNumber', label: 'Başvuru No',  sortable: true,  width: '140px' },
-                        { key: 'applicantName',      label: 'Başvuru Sahibi', sortable: true, width: '300px' },
+                        { key: 'applicantName',      label: 'Başvuru Sahibi', sortable: true, width: '250px' },
                         { key: 'opponent', label: 'İtiraz Sahibi', sortable: true, width: '250px' },
                         { key: 'bulletinDate',      label: 'Bülten Tarihi', sortable: true, width: '100px' },
                         { key: 'bulletinNo',        label: 'Bülten No',   sortable: true,  width: '90px' },
                         { key: 'epatsDate',         label: 'İşlem Tarihi', sortable: true, width: '100px' },
-                        { key: 'statusText',        label: 'Durum',        sortable: true, width: '140px' }
+                        { key: 'statusText',        label: 'Durum',        sortable: true, width: '120px' },
+                        { key: 'documents',         label: 'Evraklar',     sortable: false, width: '150px' } // 🔥 EN SONA EKLENDİ
                     ]
                     : [
                         { key: 'selection', label: '', sortable: false, isCheckbox: true, width: '40px' },
