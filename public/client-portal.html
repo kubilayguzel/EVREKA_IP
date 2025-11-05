@@ -4513,14 +4513,11 @@ $(document).on('shown.bs.tab', '#tab-dava', function() {
   if (__davaItirazLoaded) return;
   console.log('📋 Dava/İtiraz tab\'ı açıldı, veriler kontrol ediliyor...');
   
-  // Eğer tablo boşsa veya çok az satır varsa, veriyi yeniden yükle
+  // Eğer tablo boşsa, veriyi yeniden yükle
   const tableBody = document.querySelector('#dava-itiraz-list tbody');
   if (!tableBody || tableBody.children.length === 0) {
-    console.log('⚠️ Dava/İtiraz tablosu boş, loadPortfolioData tekrar çağrılıyor...');
-    const linkedIds = window.__linkedPersonIds || window.linkedPersonIds || [];
-    if (linkedIds.length > 0) {
-      loadPortfolioData(linkedIds);
-    }
+    console.log('⚠️ Dava/İtiraz tablosu boş, fetchAndDisplayPortfolio tekrar çağrılıyor...');
+    fetchAndDisplayPortfolio(); // Doğru fonksiyon adını kullan
   } else {
     console.log('✅ Dava/İtiraz verileri zaten yüklü:', tableBody.children.length, 'satır');
   }
