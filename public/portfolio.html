@@ -659,9 +659,9 @@ async renderObjectionRows(list) {
       else if (pdf.type === 'epats_document') { btnClass = 'btn-info'; iconClass = 'fas fa-file-invoice'; titleText = `ePats: ${pdf.evrakNo || pdf.fileName}`; }
       else if (pdf.type === 'task_document' || pdf.isTaskDoc) { btnClass = 'btn-primary'; iconClass = 'fas fa-file-alt'; titleText = 'Görev Belgesi: ' + pdf.fileName; }
         
-      return `<a href="${pdf.fileUrl || pdf.path}" target="_blank" title="${titleText}" class="action-btn ${btnClass} mr-1">
-        <i class="${iconClass}"></i>
-      </a>`;
+    return `<a href="${pdf.fileUrl || pdf.path}" title="${titleText}" class="action-btn ${btnClass} mr-1" download="${pdf.fileName || 'belge'}">
+    <i class="${iconClass}"></i>
+    </a>`;
     }).join('');
 
     // Parent Satırını Oluştur
@@ -718,8 +718,8 @@ async renderObjectionRows(list) {
                 else if (pdf.type === 'epats_document') { btnClass = 'btn-info'; iconClass = 'fas fa-file-invoice'; titleText = `ePats: ${pdf.evrakNo || pdf.fileName}`; }
                 else if (pdf.type === 'task_document' || pdf.isTaskDoc) { btnClass = 'btn-primary'; iconClass = 'fas fa-file-alt'; titleText = 'Görev Belgesi: ' + pdf.fileName; }
                 
-                return `<a href="${pdf.fileUrl || pdf.path}" target="_blank" title="${titleText}" class="action-btn ${btnClass} mr-1">
-                    <i class="${iconClass}"></i>
+                return `<a href="${pdf.fileUrl || pdf.path}" title="${titleText}" class="action-btn ${btnClass} mr-1" download="${pdf.fileName || 'belge'}">
+                <i class="${iconClass}"></i>
                 </a>`;
             }).join('');
 
