@@ -1436,8 +1436,7 @@ window.taskPaginationData = window.taskPaginationData || {
 window.fetchAndDisplayTasks = window.fetchAndDisplayTasks || (async function(){ /* will be defined below */ });
 window.populateDashboardNumbers = window.populateDashboardNumbers || (function(){});
 
-import { authService, db, ipRecordsService, transactionTypeService } from './firebase-config.js';
-import './js/simple-loading.js';
+import { authService, db } from './firebase-config.js';
 import { doc, getDoc, collection, getDocs, getDocsFromServer, query, where, updateDoc, limit } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 import PaginationModule from './js/pagination.js';
 
@@ -3239,212 +3238,6 @@ async function loadTransactions(ipRecordId) {
 });
 })();
 
-
-// === Client Portal: Objections view (authorized person filter) ===
-
-// Helper: create document link button
-function _createDocLinkHtml(pdf) {
-  let iconClass = 'fas fa-file-pdf';
-  let titleText = pdf.fileName || 'Belge';
-  let btnClass = 'btn-danger';
-  let badgeHtml = '';
-
-  if (pdf.type === 'opposition_petition') { iconClass = 'fas fa-gavel'; titleText = 'Karşı Taraf İtiraz Dilekçesi'; btnClass = 'btn-warning'; }
-  else if (pdf.type === 'official_document') { iconClass = 'fas fa-file-signature'; titleText = 'Resmi Yazı'; btnClass = 'btn-success'; }
-  else if (pdf.type === 'epats_document') { iconClass = 'fas fa-file-invoice'; titleText = `ePats: ${pdf.evrakNo || pdf.fileName}`; btnClass = 'btn-info'; if (pdf.evrakNo) badgeHtml = `<small class="ml-1">${pdf.evrakNo}</small>`; }
-  else if (pdf.type === 'task_document' || pdf.isTaskDoc) { iconClass = 'fas fa-file-alt'; titleText = 'Görev Belgesi: ' + (pdf.fileName || 'Belge'); btnClass = 'btn-primary'; }
-  else if (pdf.type === 'child_manual_document' || pdf.isManualDoc) { iconClass = 'fas fa-file-export'; titleText = 'Manuel Belge: ' + (pdf.fileName || 'Belge'); btnClass = 'btn-secondary'; }
-
-  return `<a onclick="window.open('${pdf.fileUrl || pdf.path}', '_blank', 'noopener');"
-            title="${titleText}" class="btn btn-sm ${btnClass} mr-1" style="cursor:pointer;">
-            <i class="${iconClass}"></i>${badgeHtml}
-          </a>`;
-}
-
-function fmtDate(d){ try{ if(!d) return '-'; const dt = (typeof d==='string')?new Date(d):(d?.toDate?.()||('seconds' in (d||{})?new Date(d.seconds*1000):d)); if (isNaN(dt)) return String(d); return dt.toLocaleDateString('tr-TR'); } catch { return String(d); } }
-
-const REQUEST_RESULT_STATUS = {'24':'Eksiklik Bildirimi','28':'Kabul','29':'Kısmi Kabul','30':'Ret','31':'B.S - Kabul','32':'B.S - Kısmi Kabul','33':'B.S - Ret','34':'İ.S - Kabul','35':'İ.S - Kısmi Kabul','36':'İ.S - Ret','50':'Kabul','51':'Kısmi Kabul','52':'Ret'};
-function formatObjectionStatus(id){
-  if (id === undefined || id === null || id === '') return 'Karar Bekleniyor';
-  const k = String(id); return REQUEST_RESULT_STATUS[k] || `Bilinmiyor (ID: ${k})`;
-}
-
-async function fetchTaskDocuments(taskId){
-  if (!taskId) return [];
-  try {
-    const snap = await getDoc(doc(db,'tasks',taskId));
-    if (!snap.exists()) return [];
-    const t = snap.data();
-    const out = [];
-    if (t.details?.epatsDocument) out.push({
-      fileName: t.details.epatsDocument.name || 'ePats Belgesi',
-      fileUrl: t.details.epatsDocument.downloadURL,
-      evrakNo: t.details.epatsDocument.turkpatentEvrakNo,
-      type: 'epats_document'
-    });
-    if (Array.isArray(t.documents)) {
-      t.documents.forEach(d=>{
-        const url = d.downloadURL || d.url || d.path;
-        if (url) out.push({ fileName: d.name || 'Task Belgesi', fileUrl: url, type: d.type || 'task_document', isTaskDoc: true });
-      });
-    }
-    return out;
-  } catch(e){ console.error('Task belgeleri:', e); return []; }
-}
-
-function isOwnedByAuthorizedPerson(parentTx, linkedPersonIds, linkedNames = []){
-  const inIds = (id) => id && linkedPersonIds.includes(id);
-  if (Array.isArray(parentTx.objectionOwners) && parentTx.objectionOwners.some(o => inIds(o?.id))) return true;
-  if (inIds(parentTx?.relatedParty?.id)) return true;
-  if (inIds(parentTx?.oppositionOwnerId)) return true;
-  const norm = s => (s||'').toString().toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g,'').trim();
-  const oppName = norm(parentTx.oppositionOwner || parentTx.relatedParty?.name);
-  if (oppName && linkedNames.some(n => norm(n) === oppName)) return true;
-  return false;
-}
-
-let __txTypeMap = new Map();
-async function ensureTxTypes(){
-  if (__txTypeMap.size) return;
-  const res = await transactionTypeService.getTransactionTypes();
-  if (res?.success && Array.isArray(res.data)){
-    res.data.forEach(t => { __txTypeMap.set(String(t.id), t); if (t.code) __txTypeMap.set(String(t.code), t); });
-  }
-}
-
-function buildParentChild(txs){
-  const PARENT_TYPE_IDS = ['7','19','20'];
-  const P = new Map(), C = {};
-  for (const tx of txs){
-    if (PARENT_TYPE_IDS.includes(String(tx.type)) && (tx.transactionHierarchy === 'parent' || !tx.parentId)){
-      P.set(tx.id, tx); C[tx.id] = [];
-    }
-  }
-  for (const tx of txs){ if (tx.parentId && C[tx.parentId]) C[tx.parentId].push(tx); }
-  Object.values(C).forEach(a=>a.sort((a,b)=> new Date(a.timestamp) - new Date(b.timestamp)));
-  return { parents: [...P.values()], childrenMap: C };
-}
-
-async function loadClientObjections(linkedPersonIds, linkedPersonNames = []){
-  await ensureTxTypes();
-  const loading = (window.SimpleLoading) ? new window.SimpleLoading() : null;
-  loading?.show({ text: 'İtirazlar Yükleniyor', subtext: 'Yetkili olduğunuz işlemler filtreleniyor...' });
-  try{
-    const recRes = await ipRecordsService.getRecords();
-    const allRecords = Array.isArray(recRes?.data) ? recRes.data : (Array.isArray(recRes) ? recRes : []);
-    const rows = [];
-    const queue = [...allRecords];
-    const CONC = 12;
-
-    async function worker(){
-      while(queue.length){
-        const rec = queue.shift();
-        const txRes = await ipRecordsService.getTransactionsForRecord(rec.id).catch(()=>null);
-        const txs = (txRes?.success && Array.isArray(txRes.transactions)) ? txRes.transactions : [];
-        if (!txs.length) continue;
-        const {parents, childrenMap} = buildParentChild(txs);
-        for (const parentTx of parents){
-          if (!isOwnedByAuthorizedPerson(parentTx, linkedPersonIds, linkedPersonNames)) continue;
-          const typeMeta = __txTypeMap.get(String(parentTx.type));
-          const transactionTypeName = typeMeta?.alias || typeMeta?.name || `İşlem ${parentTx.type}`;
-          const opponentName = parentTx.oppositionOwner || parentTx.relatedParty?.name ||
-              (Array.isArray(parentTx.objectionOwners) && parentTx.objectionOwners.length ? parentTx.objectionOwners.map(o=>o.name).join(', ') : '-');
-          const bulletinNo   = rec.details?.brandInfo?.opposedMarkBulletinNo || parentTx.bulletinNo || '-';
-          const bulletinDate = rec.details?.brandInfo?.opposedMarkBulletinDate || parentTx.bulletinDate || null;
-          const epatsDate    = parentTx.epatsDocument?.documentDate || null;
-          let statusText = 'Karar Bekleniyor';
-          if (parentTx.requestResult !== undefined && parentTx.requestResult !== null && parentTx.requestResult !== '') {
-            statusText = formatObjectionStatus(parentTx.requestResult);
-          }
-          rows.push({
-            id: parentTx.id, recordId: rec.id, recordType: rec.type || '-',
-            title: rec.title || rec.brandText || '', transactionTypeName,
-            applicationNumber: rec.applicationNumber || '-', applicantName: (rec.applicants?.map?.(a=>a.name).join(', ')) || '-',
-            opponent: opponentName, bulletinDate: fmtDate(bulletinDate), bulletinNo, epatsDate: fmtDate(epatsDate),
-            statusText, timestamp: parentTx.timestamp, _children: childrenMap[parentTx.id] || [],
-            _parentTriggerTaskId: parentTx.triggeringTaskId || null
-          });
-        }
-      }
-    }
-    await Promise.all([...Array(CONC)].map(()=>worker()));
-    renderClientObjectionsTable(rows);
-  } catch(e){
-    console.error(e);
-    loading?.showError?.('İtiraz verileri yüklenirken hata oluştu.');
-  } finally {
-    loading?.hide?.();
-  }
-}
-
-async function renderClientObjectionsTable(rows){
-  const container = document.querySelector('#dava-itiraz-list tbody') || document.querySelector('#portfolioTableBody');
-  if (!container) return;
-  const frag = document.createDocumentFragment();
-  for (const row of rows){
-    // Parent docs
-    let parentDocs = [];
-    if (row._parentTriggerTaskId){
-      const tdocs = await fetchTaskDocuments(row._parentTriggerTaskId);
-      parentDocs.push(...tdocs);
-    }
-    const parentDocLinks = parentDocs.length ? parentDocs.map(_createDocLinkHtml).join('') : '-';
-    const tr = document.createElement('tr');
-    tr.className = row._children?.length ? 'group-header' : '';
-    tr.dataset.groupId = row.id;
-    tr.innerHTML = `
-      <td class="toggle-cell">${row._children?.length ? `<button class="row-caret" data-group-id="${row.id}" aria-expanded="false"><i class="fas fa-chevron-right"></i></button>`:''}</td>
-      <td>${row.title || '-'}</td>
-      <td>${row.transactionTypeName || '-'}</td>
-      <td>${row.applicationNumber || '-'}</td>
-      <td>${row.applicantName || '-'}</td>
-      <td>${row.opponent || '-'}</td>
-      <td>${row.bulletinDate || '-'}</td>
-      <td>${row.bulletinNo || '-'}</td>
-      <td>${row.epatsDate || '-'}</td>
-      <td>${row.statusText || '-'}</td>
-      <td class="transaction-pdfs">${parentDocLinks}</td>
-    `;
-    frag.appendChild(tr);
-    if (Array.isArray(row._children) && row._children.length){
-      for (const child of row._children){
-        let childDocs = (child.documents || []).map(d=>({ fileName:d.name||'Belge', fileUrl:d.url||d.path, type:d.type, isManualDoc:true }));
-        if (child.triggeringTaskId){
-          const tdocs = await fetchTaskDocuments(child.triggeringTaskId);
-          childDocs.push(...tdocs);
-        }
-        const childDocLinks = childDocs.length ? childDocs.map(_createDocLinkHtml).join('') : '-';
-        const childTr = document.createElement('tr');
-        childTr.className = 'group-row child-row';
-        childTr.dataset.parentId = row.id;
-        childTr.setAttribute('aria-hidden','true');
-        childTr.innerHTML = `
-          <td></td><td></td>
-          <td style="padding-left:32px;">↳ ${child.type || ''}</td>
-          <td>${row.applicationNumber||'-'}</td>
-          <td>${row.applicantName||'-'}</td>
-          <td>${row.opponent||'-'}</td>
-          <td></td><td></td>
-          <td>${fmtDate(child.timestamp)}</td>
-          <td></td>
-          <td class="transaction-pdfs">${childDocLinks}</td>
-        `;
-        frag.appendChild(childTr);
-      }
-    }
-  }
-  container.innerHTML = '';
-  container.appendChild(frag);
-  // if page uses same wireAccordion as portfolio:
-  if (window.wireAccordion) window.wireAccordion();
-}
-
-// Wire-up: when Dava/İtiraz tab is shown, load with authorized person filter
-$(document).on('shown.bs.tab', 'a#tab-dava[data-toggle="tab"]', async function () {
-  const ids = Array.isArray(window.__linkedPersonIds) ? window.__linkedPersonIds : [];
-  await loadClientObjections(ids, []);
-});
-
 </script>
 <script>
 // --- Sidebar / Top-level tab behavior ---
@@ -4715,3 +4508,28 @@ $(document).ready(function() {
 </script>
 </body>
 </html>
+// === Trigger loading when the "Dava/İtiraz" tab becomes visible ===
+let __clientObjectionsLoaded = false;
+async function __triggerClientObjectionsOnce(){
+  if (__clientObjectionsLoaded) return;
+  const ids = Array.isArray(window.__linkedPersonIds) ? window.__linkedPersonIds
+             : (Array.isArray(window.linkedPersonIds) ? window.linkedPersonIds : []);
+  try {
+    await loadClientObjections(ids, []);
+  } catch(e){ console.error('loadClientObjections error', e); }
+  __clientObjectionsLoaded = true;
+}
+
+// Bootstrap v4 target by id
+$(document).on('shown.bs.tab', '#tab-dava', __triggerClientObjectionsOnce);
+// Bootstrap v5 target by data-bs-toggle/href
+$(document).on('shown.bs.tab', 'a[data-bs-toggle="tab"][href="#dava-itiraz-list"]', __triggerClientObjectionsOnce);
+// Fallback: plain click
+document.getElementById('tab-dava')?.addEventListener('click', ()=> setTimeout(__triggerClientObjectionsOnce, 0));
+// Load if the tab is initially active or hash targets it
+document.addEventListener('DOMContentLoaded', ()=>{
+  const pane = document.getElementById('dava-itiraz-list');
+  if (location.hash === '#dava-itiraz-list' || (pane && pane.classList.contains('show') && pane.classList.contains('active'))) {
+    __triggerClientObjectionsOnce();
+  }
+});
