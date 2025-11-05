@@ -1,6 +1,65 @@
 /**
  * Simple Loading Animation - Tech Company Style
+ * (CSS runtime inject'li sürüm)
  */
+
+function ensureStyles() {
+  if (document.getElementById('simple-loading-style')) return;
+
+  const style = document.createElement('style');
+  style.id = 'simple-loading-style';
+  style.textContent = `
+    .simple-loading-overlay {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(17, 24, 39, 0.45);
+      backdrop-filter: blur(3px);
+      -webkit-backdrop-filter: blur(3px);
+      z-index: 2147483647;
+      opacity: 0;
+      transition: opacity .2s ease;
+    }
+    .simple-loading-overlay.show { opacity: 1; }
+
+    .simple-loading-content {
+      background: #ffffff;
+      border-radius: 16px;
+      padding: 20px 24px;
+      box-shadow: 0 10px 40px rgba(0,0,0,.18);
+      min-width: 280px;
+      max-width: 90vw;
+      text-align: center;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    .loading-spinner {
+      width: 40px; height: 40px;
+      border-radius: 999px;
+      border: 4px solid #e5e7eb;
+      border-top-color: #3b82f6;
+      animation: simpleloading-spin 1s linear infinite;
+      margin: 0 auto 12px auto;
+    }
+    @keyframes simpleloading-spin { to { transform: rotate(360deg); } }
+
+    .loading-text   { font-weight: 600; font-size: 16px; margin-bottom: 6px; }
+    .loading-subtext{ font-size: 13px; color: #4b5563; margin-bottom: 8px; }
+
+    .loading-cancel {
+      margin-top: 6px;
+      border: 0;
+      padding: 8px 12px;
+      border-radius: 10px;
+      background: #ef4444;
+      color: #fff;
+      cursor: pointer;
+    }
+  `;
+  document.head.appendChild(style);
+}
 
 class SimpleLoading {
   constructor() {
@@ -9,6 +68,8 @@ class SimpleLoading {
   }
 
   show(options = {}) {
+    ensureStyles(); // ✅ CSS'i bir kez enjekte et
+
     const {
       text = 'İşlem yapılıyor',
       subtext = 'Lütfen bekleyiniz',
@@ -22,9 +83,13 @@ class SimpleLoading {
 
     this.overlay = document.createElement('div');
     this.overlay.className = 'simple-loading-overlay';
+    this.overlay.setAttribute('role', 'dialog');
+    this.overlay.setAttribute('aria-live', 'polite');
+    this.overlay.setAttribute('aria-label', 'Yükleniyor');
+
     this.overlay.innerHTML = `
       <div class="simple-loading-content">
-        <div class="loading-spinner"></div>
+        <div class="loading-spinner" aria-hidden="true"></div>
         <div class="loading-text">${displayText}</div>
         <div class="loading-subtext">${subtext}</div>
         ${onCancel ? '<button class="loading-cancel" id="loadingCancel">İptal</button>' : ''}
@@ -101,16 +166,15 @@ class SimpleLoading {
   }
 }
 
-// Global functions
-window.SimpleLoading = SimpleLoading;
-
-window.showSimpleLoading = (text, subtext, onCancel) => {
-  const loading = new SimpleLoading();
-  loading.show({ text, subtext, onCancel });
-  return loading;
-};
-
-window.showLoadingWithCancel = window.showSimpleLoading;
+// Global exportlar
 if (typeof window !== 'undefined') {
   window.SimpleLoading = SimpleLoading;
+
+  window.showSimpleLoading = (text, subtext, onCancel) => {
+    const loading = new SimpleLoading();
+    loading.show({ text, subtext, onCancel });
+    return loading;
+  };
+
+  window.showLoadingWithCancel = window.showSimpleLoading;
 }
