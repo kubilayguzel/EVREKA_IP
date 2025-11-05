@@ -1725,122 +1725,163 @@
                 });
             }
 
-    async loadObjectionRows() {
-        const PARENT_TYPE_IDS = ['7', '19', '20'];
-        const allRows = [];
+            async loadObjectionRows(options = {}) {
+            // === Ayarlar (dilersen dışarıdan geçebilirsin) ===
+            const {
+                eagerPages = 1, // ilk boyada kaç sayfa hazır olsun?
+                pageSize = (this.pagination?.itemsPerPage || 20), // sayfa başına öğe
+                batchSize = 25, // her şu kadar satırda bir UI'ı güncelle
+                CONCURRENCY = 20, // paralel işçi sayısı (15→20 önerdim)
+                parentTypeIds = ['7', '19', '20'] // parent itiraz türleri
+            } = options;
 
-        const loading = new window.SimpleLoading(); // Sınıfı doğrudan global'den oluştur
+            const EAGER_TARGET = (eagerPages * pageSize) + 5; // ilk boyama eşiği (küçük tampon)
+            const allRows = [];
+            const buffer = []; // UI'ya toplu basacağımız ara biriktirme
+            let didFirstPaint = false;
+            let isFlushing = false;
+
+            // Basit, sağlam bir flush: buffer'ı allRows'a taşır, UI'ı günceller
+            const flushBufferToUI = async (force = false) => {
+                if (isFlushing) return;
+                if (!force && buffer.length < batchSize) return;
+                isFlushing = true;
+
+                // buffer'daki tüm satırları tek hamlede al
+                const chunk = buffer.splice(0, buffer.length);
+                if (chunk.length) allRows.push(...chunk);
+
+                // Listeyi güncelle
+                this.objectionRows = allRows.slice(); // referans kopya
+                if (this.pagination?.update) {
+                try { this.pagination.update(this.objectionRows.length); } catch {}
+                }
+
+                // Tabloyu yeniden çiz
+                if (typeof this.renderObjectionRows === 'function') {
+                try { this.renderObjectionRows(this.objectionRows); } catch (e) { console.warn('renderObjectionRows hata:', e); }
+                }
+
+                isFlushing = false;
+            };
+
+            const loading = new window.SimpleLoading();
             loading.show({
                 text: 'İtiraz İşlemleri Yükleniyor',
                 subtext: 'Bu işlem, geçmiş verilerin taranmasını gerektirir...'
             });
 
-        try {
-            let allRecords = this.allRecords;
-            if (!Array.isArray(allRecords) || allRecords.length === 0) {
+            try {
+                // 1) Kayıtları hazırla / cache'le
+                let allRecords = this.allRecords;
+                if (!Array.isArray(allRecords) || allRecords.length === 0) {
                 const recordsResult = await ipRecordsService.getRecords();
-                allRecords = this.pickArray(recordsResult); 
-                this.allRecords = allRecords; 
+                allRecords = this.pickArray(recordsResult);
+                this.allRecords = allRecords;
+                }
+
+                // 2) Kuyruk + işçiler
+                const queue = [...allRecords];
+
+                const worker = async () => {
+                while (queue.length) {
+                    const record = queue.shift();
+
+                    // 2.1) Transactions: cache varsa kullan
+                    let txs;
+                    const cached = this.txCache.get(record.id);
+                    if (!cached?.transactions) {
+                    try {
+                        const txResult = await ipRecordsService.getTransactionsForRecord(record.id);
+                        if (!txResult?.success || !Array.isArray(txResult.transactions)) continue;
+                        txs = txResult.transactions;
+                        const pc = buildParentChild(txs); // parent/child ilişkileri gerekiyorsa
+                        this.txCache.set(record.id, { transactions: txs, ...pc });
+                    } catch (e) {
+                        console.warn('❌ Record transaction çekme hatası:', record.id, e);
+                        continue;
+                    }
+                    } else {
+                    txs = cached.transactions;
+                    }
+
+                    // 2.2) Parent itirazları filtrele
+                    const parentTransactions = txs.filter(tx =>
+                    parentTypeIds.includes(String(tx.type)) &&
+                    (tx.transactionHierarchy === 'parent' || !tx.parentId)
+                    );
+                    if (parentTransactions.length === 0) continue;
+
+                    // 2.3) Her parent için satır oluştur
+                    for (const parentTx of parentTransactions) {
+                    // ——— Row hesaplama (senkron, ek veri çekmiyoruz) ———
+                    const typeMeta = transactionTypesMap?.get?.(String(parentTx.type));
+                    const transactionTypeName = typeMeta?.alias || typeMeta?.name || `İşlem ${parentTx.type}`;
+
+                    const opponentName =
+                        parentTx.oppositionOwner ||
+                        parentTx.relatedParty?.name ||
+                        (Array.isArray(parentTx.objectionOwners) && parentTx.objectionOwners.length
+                        ? parentTx.objectionOwners.map(o => o.name).join(', ')
+                        : '-');
+
+                    const bulletinNo = record.details?.brandInfo?.opposedMarkBulletinNo || parentTx.bulletinNo || '-';
+                    const bulletinDate = record.details?.brandInfo?.opposedMarkBulletinDate || parentTx.bulletinDate || null;
+                    const epatsDate = parentTx.epatsDocument?.documentDate || null;
+
+                    let statusText = 'Karar Bekleniyor';
+                    if (parentTx.requestResult !== undefined && parentTx.requestResult !== null && parentTx.requestResult !== '') {
+                        statusText = formatObjectionStatus(parentTx.requestResult);
+                    }
+
+                    const row = {
+                        id: parentTx.id,
+                        recordId: record.id,
+                        recordType: record.type || '-',
+                        title: record.title || record.brandText || '',
+                        transactionTypeName,
+                        applicationNumber: record.applicationNumber || '-',
+                        applicantName: (record.applicants?.map?.(a => a.name).join(', ')) || '-',
+                        opponent: opponentName,
+                        bulletinDate: fmtDate(bulletinDate),
+                        bulletinNo,
+                        epatsDate: fmtDate(epatsDate),
+                        statusText,
+                        timestamp: parentTx.timestamp
+                    };
+
+                    // 2.4) Buffer’a ekle, eşiklere göre UI’ı güncelle
+                    buffer.push(row);
+
+                    // İlk boyama eşiği aşıldıysa: hemen göster, overlay’i kapat
+                    if (!didFirstPaint && (allRows.length + buffer.length) >= EAGER_TARGET) {
+                        await flushBufferToUI(true); // force flush
+                        didFirstPaint = true;
+                        try { loading.hide(); } catch {}
+                    } else {
+                        // Ara ara UI’ya küçük partiler halinde bas (algısal akıcılık)
+                        await flushBufferToUI(false);
+                    }
+                    }
+                }
+                };
+
+                // 3) İşçileri çalıştır
+                await Promise.all([...Array(CONCURRENCY)].map(() => worker()));
+
+                // 4) Kalan tamponu bas ve temizle
+                await flushBufferToUI(true);
+
+            } catch (e) {
+                console.error('❌ İtirazlar yüklenirken hata:', e);
+                this.objectionRows = [];
+            } finally {
+                // İlk boyama hiç gerçekleşmediyse yine de overlay’i kapat
+                try { loading.hide(); } catch {}
+            }
             }
 
-            // Task belgelerini, transaction types'ı vb. çekmek için tüm asenkron işlemleri Promise'ler halinde topla
-            const allObjectionPromises = [];
-            const CONCURRENCY = 15; // 🔥 Paralellik seviyesini artırıyoruz
 
-            const queue = [...allRecords];
-
-            const worker = async () => {
-            while (queue.length) {
-                const record = queue.shift();
-                
-                // 1. Transaction verisini cache'den al veya çek
-                let txs, cached = this.txCache.get(record.id);
-                if (!cached?.transactions) {
-                try {
-                    const txResult = await ipRecordsService.getTransactionsForRecord(record.id);
-                    if (!txResult?.success || !Array.isArray(txResult.transactions)) continue;
-                    txs = txResult.transactions;
-                    const pc = buildParentChild(txs);
-                    this.txCache.set(record.id, { transactions: txs, ...pc });
-                } catch (e) {
-                    console.warn('❌ Record transaction çekme hatası:', record.id, e);
-                    continue;
-                }
-                } else {
-                txs = cached.transactions;
-                }
-
-                // 2. Parent itiraz işlemlerini bul
-                const parentTransactions = txs.filter(tx =>
-                PARENT_TYPE_IDS.includes(String(tx.type)) &&
-                (tx.transactionHierarchy === 'parent' || !tx.parentId)
-                );
-                if (parentTransactions.length === 0) continue;
-
-                // 3. Her bir parent işlemi için satır oluşturma görevini Promise'e ekle
-                for (const parentTx of parentTransactions) {
-                    allObjectionPromises.push((async () => {
-                        // 🔥 DÜZELTME: transactionTypesMap bir Map olduğu için Promise.all dışında çözülmeli, AWAIT KALDIRILDI
-                        const typeMeta = transactionTypesMap.get(String(parentTx.type));
-                        const transactionTypeName = typeMeta?.alias || typeMeta?.name || `İşlem ${parentTx.type}`;
-                        // ... (Diğer tüm veri çekme ve hesaplama mantığı aynı kalacak) ...
-                        
-                        let opponentName = 
-                            parentTx.oppositionOwner || 
-                            parentTx.relatedParty?.name ||
-                            (Array.isArray(parentTx.objectionOwners) && parentTx.objectionOwners.length
-                                ? parentTx.objectionOwners.map(o => o.name).join(', ')
-                                : '-');
-                        
-                        const bulletinNo = record.details?.brandInfo?.opposedMarkBulletinNo || parentTx.bulletinNo || '-';
-                        const bulletinDate = record.details?.brandInfo?.opposedMarkBulletinDate || parentTx.bulletinDate || null;
-                        
-                        let epatsDate = parentTx.epatsDocument?.documentDate || null;
-                        
-                        let statusText = 'Karar Bekleniyor';
-                        if (parentTx.requestResult !== undefined && parentTx.requestResult !== null && parentTx.requestResult !== '') {
-                            statusText = formatObjectionStatus(parentTx.requestResult);
-                        }
-
-                        // 🔥 YENİ: Tek bir obje döndürerek satır listesine eklenmesini sağla
-                        return {
-                            id: parentTx.id,
-                            recordId: record.id,
-                            recordType: record.type || '-',
-                            title: record.title || record.brandText || '',
-                            transactionTypeName,
-                            applicationNumber: record.applicationNumber || '-',
-                            applicantName: record.applicants?.map(a => a.name).join(', ') || '-',
-                            opponent: opponentName,
-                            bulletinDate: fmtDate(bulletinDate),
-                            bulletinNo,
-                            epatsDate: fmtDate(epatsDate),
-                            statusText,
-                            timestamp: parentTx.timestamp
-                        };
-                    })());
-                }
-            }
-            };
-
-            // Tüm worker'ları başlat
-            await Promise.all([...Array(CONCURRENCY)].map(worker));
-            
-            // Tüm satır oluşturma Promise'lerinin sonucunu bekle
-            const results = await Promise.all(allObjectionPromises);
-            
-            // Geçersiz sonuçları filtrele
-            this.objectionRows = results.filter(Boolean);
-
-        } catch (e) {
-            console.error('❌ İtirazlar yüklenirken hata:', e);
-            this.objectionRows = [];
-        } finally {
-            loading.hide(); // 🔥 Loading ekranını gizle
-        }
-        }
-            
-        
         initialRenderTableStructure() {
                 const headerRow = document.getElementById('portfolioTableHeaderRow');
                 const filterRow = document.getElementById('portfolioTableFilterRow');
