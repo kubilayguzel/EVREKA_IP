@@ -295,6 +295,7 @@
         import { loadSharedLayout } from './js/layout-loader.js';
         import { doc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
         import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+        import SimpleLoading from './js/simple-loading.js';
 
         // === Yardımcı Fonksiyonlar ===
         const safe = (v) => (v ?? '').toString();
@@ -1143,42 +1144,49 @@
 
             setupEventListeners() {
                 document.querySelectorAll('.tab-menu .tab-button').forEach(button => {
-                    button.addEventListener('click', (e) => {
-                        document.querySelectorAll('.tab-menu .tab-button').forEach(btn => btn.classList.remove('active'));
-                        e.target.classList.add('active');
-                        this.activeTypeFilter = e.target.dataset.type;
-                        this.selectedRecords.clear();
-                        this.updateAddToMonitoringButtonState();
-                        this.setupImageHoverEffect();
-                        this.updateRecordStatusToggleButtonState();
-                        const globalSelect = document.getElementById('selectAllCheckbox');
-                        if (globalSelect) globalSelect.checked = false;
-                        this.initialRenderTableStructure();
-                        if (this.activeTypeFilter === 'objections') {
-                            this.loadObjectionRows()
-                                .then(() => {
-                                    if (pagination) pagination.update(this.objectionRows.length);
-                                    const tbody = document.getElementById('portfolioTableBody');
-                                    const noRecMsg = document.getElementById('noRecordsMessage');
-                                    if (this.objectionRows.length === 0) {
-                                        if (tbody) tbody.style.display = 'none';
-                                        if (noRecMsg) noRecMsg.style.display = 'block';
-                                    } else {
-                                        if (tbody) tbody.style.display = 'table-row-group';
-                                        if (noRecMsg) noRecMsg.style.display = 'none';
-                                    }
-                                    this.renderCurrentPage();
-                                })
-                                .catch(err => {
-                                    console.error('❌ İtiraz satırları yüklenirken hata:', err);
-                                    this.objectionRows = [];
-                                    document.getElementById('noRecordsMessage').style.display = 'block';
-                                });
-                        } else {
-                            this.applyFiltersAndSort();
-                        }
-                    });
+                button.addEventListener('click', async (e) => { // 🔥 async eklendi
+                    document.querySelectorAll('.tab-menu .tab-button').forEach(btn => btn.classList.remove('active'));
+                    e.target.classList.add('active');
+                    this.activeTypeFilter = e.target.dataset.type;
+                    this.selectedRecords.clear();
+                    this.updateAddToMonitoringButtonState();
+                    this.setupImageHoverEffect();
+                    this.updateRecordStatusToggleButtonState();
+                    const globalSelect = document.getElementById('selectAllCheckbox');
+                    if (globalSelect) globalSelect.checked = false;
+                    this.initialRenderTableStructure();
+                    
+                    if (this.activeTypeFilter === 'objections') {
+                        // 🔥 Loading ekranı, loadObjectionRows içine taşındığı için sadece çağırıyoruz.
+                        
+                        this.loadObjectionRows()
+                            .then(() => {
+                                if (pagination) pagination.update(this.objectionRows.length);
+                                const tbody = document.getElementById('portfolioTableBody');
+                                const noRecMsg = document.getElementById('noRecordsMessage');
+                                
+                                // Tablo görünürlük kontrolü
+                                if (this.objectionRows.length === 0) {
+                                    if (tbody) tbody.style.display = 'none';
+                                    if (noRecMsg) noRecMsg.style.display = 'block';
+                                } else {
+                                    if (tbody) tbody.style.display = 'table-row-group';
+                                    if (noRecMsg) noRecMsg.style.display = 'none';
+                                }
+                                
+                                this.renderCurrentPage();
+                            })
+                            .catch(err => {
+                                console.error('❌ İtiraz satırları yüklenirken hata:', err);
+                                // Hata durumunda loading ekranı zaten kapanmalı veya hata göstermelidir.
+                                this.objectionRows = [];
+                                document.getElementById('noRecordsMessage').style.display = 'block';
+                            });
+                    } else {
+                        this.applyFiltersAndSort();
+                    }
                 });
+            });
 
                 let searchTimeout;
                 document.getElementById('searchBar').addEventListener('input', () => {
@@ -1681,110 +1689,113 @@
         const PARENT_TYPE_IDS = ['7', '19', '20'];
         const allRows = [];
 
+        // 🔥 Loading ekranını göster
+        const loading = window.showSimpleLoading('İtiraz İşlemleri Yükleniyor', 'Bu işlem, geçmiş verilerin taranmasını gerektirir...');
+        
         try {
-            // 🔥 DÜZELTME: Tüm kayıtlar üzerinde çalış, sadece sayfa değil.
             let allRecords = this.allRecords;
             if (!Array.isArray(allRecords) || allRecords.length === 0) {
                 const recordsResult = await ipRecordsService.getRecords();
-                allRecords = this.pickArray(recordsResult);
-                this.allRecords = allRecords; // Cache'i güncelle
+                allRecords = this.pickArray(recordsResult); 
+                this.allRecords = allRecords; 
             }
 
-            // 2) İstekleri aşırı paralelleştirmeden yapalım (TÜM KAYITLAR ÜZERİNDE)
-            const CONCURRENCY = 6;
-            const queue = [...allRecords]; // 🔥 TÜM KAYITLAR KUYRUĞA EKLENDİ
+            // Task belgelerini, transaction types'ı vb. çekmek için tüm asenkron işlemleri Promise'ler halinde topla
+            const allObjectionPromises = [];
+            const CONCURRENCY = 15; // 🔥 Paralellik seviyesini artırıyoruz
+
+            const queue = [...allRecords];
 
             const worker = async () => {
             while (queue.length) {
                 const record = queue.shift();
                 
-                // Önceki adımda eklediğimiz recordOwnerType kontrolü buraya eklenebilir, 
-                // ancak tüm itirazları listelemek istediğiniz için bu kontrolü atlıyoruz.
-                // Third Party kayıtlarındaki itirazları da dahil etmek için devam ediyoruz.
-
-                try {
-                // a) Cache varsa kullan, yoksa getir
+                // 1. Transaction verisini cache'den al veya çek
                 let txs, cached = this.txCache.get(record.id);
-                if (cached?.transactions) {
-                    txs = cached.transactions;
-                } else {
+                if (!cached?.transactions) {
+                try {
                     const txResult = await ipRecordsService.getTransactionsForRecord(record.id);
                     if (!txResult?.success || !Array.isArray(txResult.transactions)) continue;
                     txs = txResult.transactions;
-                    
-                    // Cache’e koy (parent/child haritası varsa koru)
                     const pc = buildParentChild(txs);
                     this.txCache.set(record.id, { transactions: txs, ...pc });
+                } catch (e) {
+                    console.warn('❌ Record transaction çekme hatası:', record.id, e);
+                    continue;
+                }
+                } else {
+                txs = cached.transactions;
                 }
 
-                // b) Sadece parent itiraz işlemlerini topla
+                // 2. Parent itiraz işlemlerini bul
                 const parentTransactions = txs.filter(tx =>
-                    PARENT_TYPE_IDS.includes(String(tx.type)) &&
-                    (tx.transactionHierarchy === 'parent' || !tx.parentId)
+                PARENT_TYPE_IDS.includes(String(tx.type)) &&
+                (tx.transactionHierarchy === 'parent' || !tx.parentId)
                 );
                 if (parentTransactions.length === 0) continue;
 
-                // c) Satırları oluştur (bu kısım aynı kalacak)
-                const applicants = record.applicants?.map(a => a.name).join(', ') || '-';
-                const applicationNumber = record.applicationNumber || '-';
-                const brandInfo = record.details?.brandInfo || {};
-
+                // 3. Her bir parent işlemi için satır oluşturma görevini Promise'e ekle
                 for (const parentTx of parentTransactions) {
-                    // ... (İşlem detaylarını çıkarma mantığı) ...
-                    
-                    const typeMeta = transactionTypesMap.get(String(parentTx.type));
-                    const transactionTypeName = typeMeta?.alias || typeMeta?.name || `İşlem ${parentTx.type}`;
+                    allObjectionPromises.push((async () => {
+                        const typeMeta = await transactionTypesMap.get(String(parentTx.type));
+                        const transactionTypeName = typeMeta?.alias || typeMeta?.name || `İşlem ${parentTx.type}`;
+                        
+                        // ... (Diğer tüm veri çekme ve hesaplama mantığı aynı kalacak) ...
+                        
+                        let opponentName = 
+                            parentTx.oppositionOwner || 
+                            parentTx.relatedParty?.name ||
+                            (Array.isArray(parentTx.objectionOwners) && parentTx.objectionOwners.length
+                                ? parentTx.objectionOwners.map(o => o.name).join(', ')
+                                : '-');
+                        
+                        const bulletinNo = record.details?.brandInfo?.opposedMarkBulletinNo || parentTx.bulletinNo || '-';
+                        const bulletinDate = record.details?.brandInfo?.opposedMarkBulletinDate || parentTx.bulletinDate || null;
+                        
+                        let epatsDate = parentTx.epatsDocument?.documentDate || null;
+                        
+                        let statusText = 'Karar Bekleniyor';
+                        if (parentTx.requestResult !== undefined && parentTx.requestResult !== null && parentTx.requestResult !== '') {
+                            statusText = formatObjectionStatus(parentTx.requestResult);
+                        }
 
-                    let opponentName =
-                    parentTx.oppositionOwner ||
-                    parentTx.relatedParty?.name ||
-                    (Array.isArray(parentTx.objectionOwners) && parentTx.objectionOwners.length
-                        ? parentTx.objectionOwners.map(o => o.name).join(', ')
-                        : '-') ;
-
-                    const bulletinNo = brandInfo.opposedMarkBulletinNo || parentTx.bulletinNo || '-';
-                    const bulletinDate = brandInfo.opposedMarkBulletinDate || parentTx.bulletinDate || null;
-
-                    let epatsDate = null;
-                    if (parentTx.epatsDocument?.documentDate) epatsDate = parentTx.epatsDocument.documentDate;
-
-                    let statusText = 'Karar Bekleniyor';
-                    if (parentTx.requestResult !== undefined && parentTx.requestResult !== null && parentTx.requestResult !== '') {
-                    statusText = formatObjectionStatus(parentTx.requestResult);
-                    }
-
-                    allRows.push({
-                    id: parentTx.id,
-                    recordId: record.id,
-                    recordType: record.type || '-',
-                    title: record.title || record.brandText || '',
-                    transactionTypeName,
-                    applicationNumber,
-                    applicantName: applicants,
-                    opponent: opponentName,
-                    bulletinDate: fmtDate(bulletinDate),
-                    bulletinNo,
-                    epatsDate: fmtDate(epatsDate),
-                    statusText,
-                    timestamp: parentTx.timestamp
-                    });
-                }
-                } catch (e) {
-                console.warn('❌ Record transaction hatası:', record.id, e);
+                        // 🔥 YENİ: Tek bir obje döndürerek satır listesine eklenmesini sağla
+                        return {
+                            id: parentTx.id,
+                            recordId: record.id,
+                            recordType: record.type || '-',
+                            title: record.title || record.brandText || '',
+                            transactionTypeName,
+                            applicationNumber: record.applicationNumber || '-',
+                            applicantName: record.applicants?.map(a => a.name).join(', ') || '-',
+                            opponent: opponentName,
+                            bulletinDate: fmtDate(bulletinDate),
+                            bulletinNo,
+                            epatsDate: fmtDate(epatsDate),
+                            statusText,
+                            timestamp: parentTx.timestamp
+                        };
+                    })());
                 }
             }
             };
 
-            // CONCURRENCY kadar worker çalıştır
+            // Tüm worker'ları başlat
             await Promise.all([...Array(CONCURRENCY)].map(worker));
+            
+            // Tüm satır oluşturma Promise'lerinin sonucunu bekle
+            const results = await Promise.all(allObjectionPromises);
+            
+            // Geçersiz sonuçları filtrele
+            this.objectionRows = results.filter(Boolean);
 
-            this.objectionRows = allRows;
         } catch (e) {
             console.error('❌ İtirazlar yüklenirken hata:', e);
             this.objectionRows = [];
+        } finally {
+            loading.hide(); // 🔥 Loading ekranını gizle
         }
         }
-
             initialRenderTableStructure() {
                 const headerRow = document.getElementById('portfolioTableHeaderRow');
                 const filterRow = document.getElementById('portfolioTableFilterRow');
