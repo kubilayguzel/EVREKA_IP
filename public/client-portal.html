@@ -4497,7 +4497,7 @@ $(document).ready(function() {
         });
     }
 
-    // 3. Filtrele Butonu (KeyUp/Change zaten anlık çalışıyor, bu sadece görsel amaçlı kalabilir)
+// 3. Filtrele Butonu (KeyUp/Change zaten anlık çalışıyor, bu sadece görsel amaçlı kalabilir)
     if (applyButton) {
         $(applyButton).on('click', function(e) {
             e.preventDefault();
@@ -4506,7 +4506,7 @@ $(document).ready(function() {
     }
 });
 
-// === Trigger loading when the "Dava/İtiraz" tab becomes visible ===
+// === Dava/İtiraz tab'ına tıklandığında veri yükleme ===
 let __davaItirazLoaded = false;
 
 $(document).on('shown.bs.tab', '#tab-dava', function() {
@@ -4527,7 +4527,6 @@ $(document).on('shown.bs.tab', '#tab-dava', function() {
   
   __davaItirazLoaded = true;
 });
-
 </script>
 </body>
 </html>
