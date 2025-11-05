@@ -1197,8 +1197,16 @@
                     this.initialRenderTableStructure();
                     
                     if (this.activeTypeFilter === 'objections') {
-                    await this.loadObjectionRows();  // tüm loading + ilk render içeride
-                    return;                          // ekstra render/görünürlük ayarı yok
+                    // toplam ve sayfayı resetle (eski “423” gibi değerler kalmasın)
+                    if (pagination) {
+                        try {
+                        pagination.update(0);
+                        (pagination.goToPage?.(1)) || (pagination.currentPage = 1); // goToPage yoksa fallback
+                        } catch {}
+                    }
+
+                    await this.loadObjectionRows();   // ilk render içeride yapılacak
+                    return;
                     } else {
                     this.applyFiltersAndSort();
                     }
@@ -1849,19 +1857,21 @@
 
                 // 4) Kalan tamponu bas ve temizle
                 if (!didFirstPaint) {
-                // Hiç erken boyama olmadıysa normal finalize
+                // hiç erken boyama olmadıysa normal finalize
                 await flushBufferToUI(true);
                 } else {
-                // Erken boyama yapıldıysa: tabloyu tekrar söküp takmadan sadece sayıyı güncelle
+                // erken boyama yapıldıysa: tabloyu baştan kurmadan sadece toplamı düzelt
                 const chunk = buffer.splice(0, buffer.length);
                 if (chunk.length) allRows.push(...chunk);
                 this.objectionRows = allRows.slice();
                 if (this.pagination?.update) {
-                    try { this.pagination.update(this.objectionRows.length); } catch {}
+                    try {
+                    this.pagination.currentPage = 1; // güvenli başlangıç
+                    this.pagination.update(this.objectionRows.length); // sadece itiraz sayısı
+                    } catch {}
                 }
-                // Bilerek render çağrısı YOK → ikinci “yenilenme” görünmez
+                // bilinçli olarak render çağrısı YOK → 3–4 sn sonra “yenilenme” görünmez
                 }
-
 
             } catch (e) {
                 console.error('❌ İtirazlar yüklenirken hata:', e);
@@ -1933,6 +1943,15 @@
                     }
                     headerRow.appendChild(th);
                     filterRow.appendChild(thFilter);
+
+                    // Objections sekmesine girildiğinde toplamı doğru göstermek için şimdiden sıfırla/güncelle
+                    if (this.activeTypeFilter === 'objections' && pagination) {
+                    try {
+                        pagination.update(this.objectionRows?.length || 0);
+                        (pagination.goToPage?.(1)) || (pagination.currentPage = 1);
+                    } catch {}
+                    }
+
                 });
             }
         }
