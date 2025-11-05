@@ -4509,35 +4509,72 @@ $(document).ready(function() {
 // === Dava/İtiraz tab'ına tıklandığında veri yükleme ===
 let __davaItirazLoaded = false;
 
-// Bootstrap tab event'i için doğru selector kullan
-$(document).on('shown.bs.tab', 'a[data-toggle="tab"][href="#dava-itiraz-list"]', function(e) {
-  console.log('📋 Dava/İtiraz tab\'ı AÇILDI - Event tetiklendi!', e.target);
+function loadDavaItirazData() {
+  console.log('📋 loadDavaItirazData çağrıldı');
   
   if (__davaItirazLoaded) {
     console.log('✅ Dava/İtiraz verileri daha önce yüklendi, atlanıyor');
     return;
   }
   
-  // Eğer tablo boşsa, veriyi yeniden yükle
+  // Tablo durumunu kontrol et
   const tableBody = document.querySelector('#dava-itiraz-list tbody');
   console.log('🔍 Tablo durumu:', {
     tableBodyExists: !!tableBody,
     rowCount: tableBody ? tableBody.children.length : 0
   });
   
-  if (!tableBody || tableBody.children.length === 0) {
-    console.log('⚠️ Dava/İtiraz tablosu boş, fetchAndDisplayPortfolio çağrılıyor...');
-    fetchAndDisplayPortfolio();
-  } else {
-    console.log('✅ Dava/İtiraz verileri zaten yüklü:', tableBody.children.length, 'satır');
+  // Eğer zaten veriler yüklüyse atlama yap
+  if (tableBody && tableBody.children.length > 1) {
+    console.log('✅ Dava/İtiraz verileri zaten tabloda:', tableBody.children.length, 'satır');
+    __davaItirazLoaded = true;
+    return;
   }
   
-  __davaItirazLoaded = true;
+  console.log('⚠️ Dava/İtiraz tablosu boş, tüm portföy verilerinden filtreleniyor...');
+  
+  // Zaten yüklü olan tüm portföy verisinden Dava/İtiraz kayıtlarını filtrele
+  if (window.markaPaginationData && window.markaPaginationData.allDataUnfiltered) {
+    const allData = window.markaPaginationData.allDataUnfiltered;
+    
+    // Type'a göre filtrele
+    const davaList = allData.filter(p => 
+      p.type === 'litigation' || 
+      p.type === 'objection' || 
+      p.type === 'Dava/İtiraz' || 
+      p.type === 'dava' || 
+      p.type === 'itiraz'
+    );
+    
+    console.log('✅ Dava/İtiraz kayıtları bulundu:', davaList.length);
+    
+    if (davaList.length > 0) {
+      // Tabloyu doldur
+      populatePortfolioTable('#dava-itiraz-list', davaList);
+      __davaItirazLoaded = true;
+    } else {
+      console.log('⚠️ Hiç Dava/İtiraz kaydı bulunamadı');
+    }
+  } else {
+    console.log('⚠️ Portföy verileri henüz yüklenmemiş, fetchAndDisplayPortfolio çağrılıyor...');
+    fetchAndDisplayPortfolio();
+  }
+}
+
+// Bootstrap tab gösterildiğinde
+$(document).on('shown.bs.tab', 'a[data-toggle="tab"][href="#dava-itiraz-list"]', function(e) {
+  console.log('📋 shown.bs.tab event tetiklendi');
+  loadDavaItirazData();
 });
 
-// Alternatif: Tab'a tıklama ile de tetikle (double safety)
-$(document).on('click', '#tab-dava', function() {
+// Tab'a tıklandığında (fallback)
+$(document).on('click', '#tab-dava', function(e) {
   console.log('🖱️ Dava/İtiraz tab\'ına TIKLANDI');
+  
+  // Küçük bir gecikme ile veri yükle (tab'ın açılmasını bekle)
+  setTimeout(function() {
+    loadDavaItirazData();
+  }, 100);
 });
 </script>
 </body>
