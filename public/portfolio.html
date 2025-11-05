@@ -1086,10 +1086,12 @@
                           return 0;
                       });
                   }
-
-                  if (pagination) pagination.update(filtered.length);
-                  this.renderObjectionRows(filtered);
-                  return;
+                if (pagination) {
+                    // Sayfalama toplam kayıt sayısını günceller
+                    try { pagination.update(filtered.length); } catch (e) { console.warn('Pagination update error in filter:', e); }
+                }
+                this.renderObjectionRows(filtered);
+                return;
               }
 
             let filtered = this.allRecords.filter(record => {
@@ -1863,9 +1865,14 @@
                     this.pagination.update(this.objectionRows.length); // ✅ toplam yalnızca itiraz sayısı
                     } catch {}
                 }
-                // burada bilerek render çağrısı yok
                 }
-
+                // 🔥 YENİ EKLENECEK KOD: İlk boyama eşiği (EAGER_TARGET) altında kalsa bile, yükleme bitince toplam sayıyı güncelle.
+                if (this.pagination?.update) {
+                    try {
+                        if (this.pagination.currentPage !== 1) this.pagination.currentPage = 1; // Başlangıçta 1. sayfaya git
+                        this.pagination.update(this.objectionRows.length); // Toplam öğe sayısını ayarla
+                    } catch (e) { console.warn('Pagination update error:', e); }
+                }
             } catch (e) {
                 console.error('❌ İtirazlar yüklenirken hata:', e);
                 this.objectionRows = [];
