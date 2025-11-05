@@ -716,23 +716,37 @@ async renderObjectionRows(list) {
         const childTypeMeta = transactionTypesMap.get(String(child.type));
         const childTypeName = childTypeMeta?.alias || childTypeMeta?.name || `İşlem ${child.type}`;
 
-        // 🔥 Child belge çekimi (Burada sadece İtiraz Bildirimi (27) için Task evraklarını çekmeniz gerekebilir,
-        // ancak basitlik için Task evraklarının sadece Parent'a bağlı 38 gibi işlemlerden geldiğini varsayalım.
-        // Mevcut Parent/Child yapınızda belgeleri Child'a özel çekmiyorsunuz, bu yüzden sadece
-        // Parent'ta zaten çekilen docLinks mantığını koruyalım.)
+        // 🔥 Child'ın kendi belgelerini çekme (Parent'taki Task belgeleri mantığına benzer,
+        // bu Child'a özgü Task evrakları da olabilir.)
+        let childDocs = [];
+        const IS_OPPOSITION_RESPONSE = String(child.type) === '38'; 
+        const IS_OPPOSITION_NOTICE = String(child.type) === '27';
+        
+        // Sadece Task ile tetiklenmiş Karşı Görüş veya İtiraz Bildirimi ise Task belgelerini çek
+        if ((IS_OPPOSITION_RESPONSE || IS_OPPOSITION_NOTICE) && child.triggeringTaskId) {
+          childDocs = await fetchTaskDocuments(child.triggeringTaskId); 
+        }
+        
+        // Child Belgeleri için HTML oluşturma (Aynı ikon mantığı kullanılabilir)
+        const childDocLinks = childDocs.map(pdf => {
+          let iconClass = 'fas fa-file-pdf';
+          let titleText = pdf.fileName || 'Belge';
+          let btnClass = 'btn-danger';
+          // ... (İkon tipine göre sınıf atamaları)
+          if (pdf.type === 'epats_document') { btnClass = 'btn-info'; iconClass = 'fas fa-file-invoice'; titleText = `ePats: ${pdf.evrakNo || pdf.fileName}`; }
+          else if (pdf.type === 'task_document' || pdf.isTaskDoc) { btnClass = 'btn-primary'; iconClass = 'fas fa-file-alt'; titleText = 'Görev Belgesi: ' + pdf.fileName; }
+          
+          return `<a href="${pdf.fileUrl || pdf.path}" target="_blank" title="${titleText}" class="action-btn ${btnClass} mr-1">
+            <i class="${iconClass}"></i>
+          </a>`;
+        }).join('');
 
         const childTr = document.createElement('tr');
         childTr.className = 'group-row child-row';
         childTr.dataset.parentId = groupId;
         childTr.setAttribute('aria-hidden', 'true');
 
-        // Child'a belge göstermek isterseniz: Child'ın da bir transaction olduğunu varsayarak
-        // Child'ın da kendi documents'ını veya TaskId'sinden gelenleri göstermesi gerekir.
-        // Ancak Objections sekmesinde bu genelde Parent (Yayına İtiraz/Karşı Görüş) seviyesinde kalır.
-        // Basitleştirilmiş çözümde, sadece Parent'ta gösterilen belgeler, Child'da görünmeyecektir.
-        
-        // Child satırı için belge sütununu boş bırakalım veya işlem tarihini gösterelim
-        childTr.innerHTML = `
+        childTr.innerHTML = `
             <td class="toggle-cell"></td>
             <td></td>
             <td style="padding-left: 32px;">↳ ${childTypeName}</td>
@@ -741,7 +755,7 @@ async renderObjectionRows(list) {
             <td>${row.opponent || '-'}</td>
             <td></td>
             <td></td>
-            <td></td>             <td>${fmtDate(child.timestamp)}</td>
+            <td class="transaction-pdfs">${childDocLinks || '-'}</td>             <td>${fmtDate(child.timestamp)}</td>
             <td></td>
         `;
         frag.appendChild(childTr);
