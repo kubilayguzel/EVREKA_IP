@@ -692,7 +692,7 @@ async renderObjectionRows(list) {
     }
 
     // 3. Parent Satırı HTML'ini Oluştur
-    parentTr.innerHTML = `
+    parentTr.innerHTML = `
         <td class="toggle-cell caret-host">
             ${hasChildren ? `<button class="row-caret" data-group-id="${groupId}" aria-expanded="false">
                 <i class="fas fa-chevron-right"></i>
@@ -705,7 +705,8 @@ async renderObjectionRows(list) {
         <td>${row.opponent || '-'}</td>
         <td>${row.bulletinDate || '-'}</td>
         <td>${row.bulletinNo || '-'}</td>
-        <td class="transaction-pdfs">${docLinks || '-'}</td>         <td>${row.statusText || '-'}</td>
+        <td class="transaction-pdfs">${docLinks || '-'}</td>         <td>${row.epatsDate || '-'}</td>
+        <td>${row.statusText || '-'}</td>
     `;
     frag.appendChild(parentTr);
 
@@ -731,7 +732,7 @@ async renderObjectionRows(list) {
         // Basitleştirilmiş çözümde, sadece Parent'ta gösterilen belgeler, Child'da görünmeyecektir.
         
         // Child satırı için belge sütununu boş bırakalım veya işlem tarihini gösterelim
-        childTr.innerHTML = `
+        childTr.innerHTML = `
             <td class="toggle-cell"></td>
             <td></td>
             <td style="padding-left: 32px;">↳ ${childTypeName}</td>
@@ -740,7 +741,7 @@ async renderObjectionRows(list) {
             <td>${row.opponent || '-'}</td>
             <td></td>
             <td></td>
-            <td>${fmtDate(child.timestamp)}</td>
+            <td></td>             <td>${fmtDate(child.timestamp)}</td>
             <td></td>
         `;
         frag.appendChild(childTr);
@@ -1753,16 +1754,17 @@ async loadObjectionRows() {
                 let columns = isObjections
                     ? [
                         { key: 'toggle', label: '', sortable: false, width: '44px' },
-                        // { key: 'recordType',      label: 'Kayıt Tipi',  sortable: true,  width: '110px' }, // KALDIRILDI
                         { key: 'title',           label: 'M/T/B Adı',   sortable: true,  width: '180px' },
                         { key: 'transactionTypeName',   label: 'İşlem Tipi',  sortable: true,  width: '180px' },
                         { key: 'applicationNumber', label: 'Başvuru No',  sortable: true,  width: '140px' },
-                        { key: 'applicantName',      label: 'Başvuru Sahibi', sortable: true, width: '300px' },
+                        { key: 'applicantName',      label: 'Başvuru Sahibi', sortable: true, width: '250px' },
                         { key: 'opponent', label: 'İtiraz Sahibi', sortable: true, width: '250px' },
                         { key: 'bulletinDate',      label: 'Bülten Tarihi', sortable: true, width: '100px' },
                         { key: 'bulletinNo',        label: 'Bülten No',   sortable: true,  width: '90px' },
+                        // 🔥 YENİ SÜTUN: Evraklar (İkonlar için alan açar)
+                        { key: 'documents',         label: 'Evraklar',     sortable: false, width: '150px' },
                         { key: 'epatsDate',         label: 'İşlem Tarihi', sortable: true, width: '100px' },
-                        { key: 'statusText',        label: 'Durum',        sortable: true, width: '140px' }
+                        { key: 'statusText',        label: 'Durum',        sortable: true, width: '120px' }
                     ]
                     : [
                         { key: 'selection', label: '', sortable: false, isCheckbox: true, width: '40px' },
