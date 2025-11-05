@@ -333,12 +333,11 @@ async function fetchTaskDocuments(taskId) {
       });
     }
 
-    // 2. documents (Task'ın kendi documents array'ini ekle)
+// 2. documents (Task'ın kendi documents array'ini ekle)
     if (Array.isArray(taskData.documents)) {
         taskData.documents.forEach(doc => {
-            // 🔥 KESİNLEŞTİRİLMİŞ GÜNCELLEME: Yalnızca storage/indirilebilir bir URL'yi kontrol et.
-            // doc.content (Base64) Yoksayılıyor. Task belgesi Storage'a yüklenmiş olmalıdır.
-            const fileUrl = doc.url || doc.path; 
+            // 🔥 GÜNCELLEME: Veritabanındaki `downloadURL` alanını öncelikli olarak kullan.
+            const fileUrl = doc.downloadURL || doc.url || doc.path; // <<< BU SATIR GÜNCELLENDİ
             
             if (fileUrl) { 
                 docs.push({
