@@ -2866,6 +2866,55 @@ async function fetchPdfsForTransactions(transactionIds) {
   }
 }
 
+// 🔥 YENİ EKLENEN FONKSİYON: Task'a bağlı belgeleri getiren yardımcı fonksiyon
+async function fetchTaskDocuments(taskId) {
+  if (!taskId) return [];
+  try {
+    // Sadece gerekli alanlar için getDoc çağrısı (varsayımsal)
+    const taskDoc = await getDoc(doc(db, 'tasks', taskId)); 
+    if (!taskDoc.exists()) return [];
+    
+    const taskData = taskDoc.data();
+    let docs = [];
+
+    // 1. epatsDocument'i ekle (Zaten Storage URL'sini tutuyor)
+    if (taskData.details?.epatsDocument) {
+      docs.push({
+        fileName: taskData.details.epatsDocument.name || 'ePats Belgesi',
+        fileUrl: taskData.details.epatsDocument.downloadURL, // downloadURL
+        evrakNo: taskData.details.epatsDocument.turkpatentEvrakNo,
+        type: 'epats_document'
+      });
+    }
+
+    // 2. documents (Task'ın kendi documents array'ini ekle)
+    if (Array.isArray(taskData.documents)) {
+        taskData.documents.forEach(doc => {
+            // 🔥 GÜNCELLEME: doc.downloadURL, doc.url ve doc.path'i kontrol et.
+            const fileUrl = doc.downloadURL || doc.url || doc.path; 
+            
+            if (fileUrl) { 
+                docs.push({
+                    fileName: doc.name || 'Task Belgesi',
+                    fileUrl: fileUrl, 
+                    type: doc.type || 'task_document',
+                    isTaskDoc: true // Özel tip etiketi
+                });
+            } else {
+                if (doc.content) {
+                    console.warn(`⚠️ Task dokümanı Base64/Content içeriyor ancak URL/Path yok: ${doc.name}`);
+                }
+            }
+        });
+    }
+    
+    return docs;
+  } catch (error) {
+    console.error('Task belgeleri getirilirken hata:', taskId, error);
+    return [];
+  }
+}
+
 // Transactions yükleme fonksiyonu
 async function loadTransactions(ipRecordId) {
     const transactionsRef = collection(db, 'ipRecords', ipRecordId, 'transactions');
@@ -3057,10 +3106,32 @@ async function loadTransactions(ipRecordId) {
                 // ✅ Child transaction'a ait PDF'leri getir
                 const childPdfs = pdfsByTransaction[child.id] || [];
                 
-                // 🔥 YENİ: Eğer İtiraz Bildirimi (ID: 27) ise parent'ın belgelerini de göster
                 let allChildDocs = [...childPdfs];
+                const existingFileNames = new Set(allChildDocs.map(d => d.fileName).filter(Boolean));
                 
-                if (String(child.type) === '27') {
+                // İtiraza Karşı Görüş (ID: 38) veya İtiraz Bildirimi (ID: 27)
+                const IS_OPPOSITION_RESPONSE = String(child.type) === '38'; 
+                const IS_OPPOSITION_NOTICE = String(child.type) === '27';
+
+                // 🔥 YENİ: ID 38 (İtiraza Karşı Görüş) ve ID 27 (İtiraz Bildirimi) için Task belgelerini çek.
+                if ((IS_OPPOSITION_RESPONSE || IS_OPPOSITION_NOTICE) && child.triggeringTaskId) {
+                     console.log(`🔍 Child işlem (${childAlias}, ID:${child.type}) için task belgeleri çekiliyor:`, child.triggeringTaskId);
+                     
+                     // 💡 Task belgelerini (ePats + documents array) çek
+                     const taskDocs = await fetchTaskDocuments(child.triggeringTaskId); 
+                     
+                     // Task belgelerini benzersizleştirerek/kontrol ederek ekle
+                     taskDocs.forEach(doc => {
+                        if (doc.fileName && !existingFileNames.has(doc.fileName)) {
+                            allChildDocs.push(doc);
+                            existingFileNames.add(doc.fileName);
+                        }
+                     });
+                     console.log(`✅ Task sonrası toplam belge sayısı: ${allChildDocs.length}`);
+                }
+                
+                // 🔥 MEVCUT MANTIK: Eğer İtiraz Bildirimi (ID: 27) ise parent'ın belgelerini de ekle
+                if (IS_OPPOSITION_NOTICE) {
                     console.log('🔍 İtiraz Bildirimi tespit edildi, parent belgeleri ekleniyor...');
                     
                     // Parent'ın transaction.documents array'ini ekle
@@ -3069,33 +3140,51 @@ async function loadTransactions(ipRecordId) {
                     // Parent'ın PDF'lerini ekle
                     const parentPdfsForChild = pdfsByTransaction[parent.id] || [];
                     
-                    allChildDocs = [
-                        ...childPdfs,
+                    const parentDocsToAttach = [
                         ...parentPdfsForChild,
                         ...parentTransactionDocs.map(doc => ({
-                            fileName: doc.name || 'Belge',
-                            fileUrl: doc.path,
-                            type: doc.type,
-                            isParentDoc: true
+                          fileName: doc.name || 'Belge',
+                          fileUrl: doc.path,
+                          type: doc.type,
+                          isParentDoc: true
                         }))
                     ];
+
+                    parentDocsToAttach.forEach(doc => {
+                        if (doc.fileName && !existingFileNames.has(doc.fileName)) {
+                            allChildDocs.push(doc);
+                            existingFileNames.add(doc.fileName);
+                        }
+                    });
                     
-                    console.log('✅ İtiraz Bildirimi için toplam belge sayısı:', allChildDocs.length);
+                    console.log('✅ İtiraz Bildirimi için son toplam belge sayısı:', allChildDocs.length);
                 }
                 
+                // ✅ Child PDF Linklerini Oluştur
                 const childPdfLinks = allChildDocs.map(pdf => {
                     let iconClass = 'fas fa-file-pdf';
                     let titleText = pdf.fileName || 'Belge';
+                    let btnClass = 'btn-danger';
                     
                     if (pdf.type === 'opposition_petition') {
                         iconClass = 'fas fa-gavel';
                         titleText = 'Karşı Taraf İtiraz Dilekçesi';
+                        btnClass = 'btn-warning';
                     } else if (pdf.type === 'official_document') {
                         iconClass = 'fas fa-file-signature';
                         titleText = 'Resmi Yazı';
+                        btnClass = 'btn-success';
+                    } else if (pdf.type === 'epats_document') { // Task'tan gelen ePats dokümanı
+                        iconClass = 'fas fa-file-invoice'; 
+                        titleText = `ePats: ${pdf.evrakNo || pdf.fileName}`;
+                        btnClass = 'btn-info';
+                    } else if (pdf.type === 'task_document' || pdf.isTaskDoc) { // Task'ın documents array'inden gelen belge
+                        iconClass = 'fas fa-file-alt'; 
+                        titleText = 'Görev Belgesi: ' + pdf.fileName;
+                        btnClass = 'btn-primary';
                     }
                     
-                    return `<a href="${pdf.fileUrl || pdf.path}" target="_blank" title="${titleText}" class="btn btn-sm btn-danger mr-1">
+                    return `<a href="${pdf.fileUrl || pdf.path}" target="_blank" title="${titleText}" class="btn btn-sm ${btnClass} mr-1">
                         <i class="${iconClass}"></i>
                     </a>`;
                 }).join('');
