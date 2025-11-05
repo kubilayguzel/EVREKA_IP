@@ -1677,117 +1677,113 @@
                 });
             }
 
- // YERİNE GEÇSİN
-async loadObjectionRows() {
-  const PARENT_TYPE_IDS = ['7', '19', '20'];
-  const allRows = [];
+        async loadObjectionRows() {
+        const PARENT_TYPE_IDS = ['7', '19', '20'];
+        const allRows = [];
 
-  try {
-    // 1) Görünen sayfadaki kayıtları belirle (varsayılan 20)
-    //    - Eğer modülde pagination bilgileri varsa kullan; yoksa 20 kabul et
-    const pageSize = this.pageSize || this.pagination?.pageSize || 20;
-    const currentPage = this.currentPage || this.pagination?.page || 1;
-    const start = (currentPage - 1) * pageSize;
-    const end = start + pageSize;
-
-    // Kayıt listesi: varsa önceden yüklenmiş diziyi kullan; yoksa servis çağır
-    let allRecords;
-    if (Array.isArray(this.allRecords) && this.allRecords.length) {
-      allRecords = this.allRecords;
-    } else {
-      const recordsResult = await ipRecordsService.getRecords();
-      allRecords = this.pickArray(recordsResult); // senin util’in
-      this.allRecords = allRecords;
-    }
-    const pageRecords = allRecords.slice(start, end);
-
-    // 2) İstekleri aşırı paralelleştirmeden yapalım (basit concurrency pool)
-    const CONCURRENCY = 6;
-    const queue = [...pageRecords];
-
-    const worker = async () => {
-      while (queue.length) {
-        const record = queue.shift();
         try {
-          // a) Cache varsa kullan, yoksa getir
-          let txs, cached = this.txCache.get(record.id);
-          if (cached?.transactions) {
-            txs = cached.transactions;
-          } else {
-            const txResult = await ipRecordsService.getTransactionsForRecord(record.id);
-            if (!txResult?.success || !Array.isArray(txResult.transactions)) continue;
-            txs = txResult.transactions;
-            // Cache’e koy (parent/child haritası varsa koru)
-            const pc = buildParentChild(txs);
-            this.txCache.set(record.id, { transactions: txs, ...pc });
-          }
-
-          // b) Sadece parent itiraz işlemlerini topla
-          const parentTransactions = txs.filter(tx =>
-            PARENT_TYPE_IDS.includes(String(tx.type)) &&
-            (tx.transactionHierarchy === 'parent' || !tx.parentId)
-          );
-          if (parentTransactions.length === 0) continue;
-
-          // c) Satırları oluştur
-          const applicants = record.applicants?.map(a => a.name).join(', ') || '-';
-          const applicationNumber = record.applicationNumber || '-';
-          const brandInfo = record.details?.brandInfo || {};
-
-          for (const parentTx of parentTransactions) {
-            const typeMeta = transactionTypesMap.get(String(parentTx.type));
-            const transactionTypeName = typeMeta?.alias || typeMeta?.name || `İşlem ${parentTx.type}`;
-
-            let opponentName =
-              parentTx.oppositionOwner ||
-              parentTx.relatedParty?.name ||
-              (Array.isArray(parentTx.objectionOwners) && parentTx.objectionOwners.length
-                ? parentTx.objectionOwners.map(o => o.name).join(', ')
-                : '-') ;
-
-            const bulletinNo = brandInfo.opposedMarkBulletinNo || parentTx.bulletinNo || '-';
-            const bulletinDate = brandInfo.opposedMarkBulletinDate || parentTx.bulletinDate || null;
-
-            let epatsDate = null;
-            if (parentTx.epatsDocument?.documentDate) epatsDate = parentTx.epatsDocument.documentDate;
-
-            let statusText = 'Karar Bekleniyor';
-            if (parentTx.requestResult !== undefined && parentTx.requestResult !== null && parentTx.requestResult !== '') {
-              statusText = formatObjectionStatus(parentTx.requestResult);
+            // 🔥 DÜZELTME: Tüm kayıtlar üzerinde çalış, sadece sayfa değil.
+            let allRecords = this.allRecords;
+            if (!Array.isArray(allRecords) || allRecords.length === 0) {
+                const recordsResult = await ipRecordsService.getRecords();
+                allRecords = this.pickArray(recordsResult);
+                this.allRecords = allRecords; // Cache'i güncelle
             }
 
-            allRows.push({
-            id: parentTx.id,
-            recordId: record.id,
-            recordType: record.type || '-',
-            title: record.title || record.brandText || '',
-            transactionTypeName,
-            applicationNumber,
-            applicantName: applicants,
-            opponent: opponentName,
-            bulletinDate: fmtDate(bulletinDate),
-            bulletinNo,
-            epatsDate: fmtDate(epatsDate),
-            statusText,
-            timestamp: parentTx.timestamp
-            });
-          }
+            // 2) İstekleri aşırı paralelleştirmeden yapalım (TÜM KAYITLAR ÜZERİNDE)
+            const CONCURRENCY = 6;
+            const queue = [...allRecords]; // 🔥 TÜM KAYITLAR KUYRUĞA EKLENDİ
+
+            const worker = async () => {
+            while (queue.length) {
+                const record = queue.shift();
+                
+                // Önceki adımda eklediğimiz recordOwnerType kontrolü buraya eklenebilir, 
+                // ancak tüm itirazları listelemek istediğiniz için bu kontrolü atlıyoruz.
+                // Third Party kayıtlarındaki itirazları da dahil etmek için devam ediyoruz.
+
+                try {
+                // a) Cache varsa kullan, yoksa getir
+                let txs, cached = this.txCache.get(record.id);
+                if (cached?.transactions) {
+                    txs = cached.transactions;
+                } else {
+                    const txResult = await ipRecordsService.getTransactionsForRecord(record.id);
+                    if (!txResult?.success || !Array.isArray(txResult.transactions)) continue;
+                    txs = txResult.transactions;
+                    
+                    // Cache’e koy (parent/child haritası varsa koru)
+                    const pc = buildParentChild(txs);
+                    this.txCache.set(record.id, { transactions: txs, ...pc });
+                }
+
+                // b) Sadece parent itiraz işlemlerini topla
+                const parentTransactions = txs.filter(tx =>
+                    PARENT_TYPE_IDS.includes(String(tx.type)) &&
+                    (tx.transactionHierarchy === 'parent' || !tx.parentId)
+                );
+                if (parentTransactions.length === 0) continue;
+
+                // c) Satırları oluştur (bu kısım aynı kalacak)
+                const applicants = record.applicants?.map(a => a.name).join(', ') || '-';
+                const applicationNumber = record.applicationNumber || '-';
+                const brandInfo = record.details?.brandInfo || {};
+
+                for (const parentTx of parentTransactions) {
+                    // ... (İşlem detaylarını çıkarma mantığı) ...
+                    
+                    const typeMeta = transactionTypesMap.get(String(parentTx.type));
+                    const transactionTypeName = typeMeta?.alias || typeMeta?.name || `İşlem ${parentTx.type}`;
+
+                    let opponentName =
+                    parentTx.oppositionOwner ||
+                    parentTx.relatedParty?.name ||
+                    (Array.isArray(parentTx.objectionOwners) && parentTx.objectionOwners.length
+                        ? parentTx.objectionOwners.map(o => o.name).join(', ')
+                        : '-') ;
+
+                    const bulletinNo = brandInfo.opposedMarkBulletinNo || parentTx.bulletinNo || '-';
+                    const bulletinDate = brandInfo.opposedMarkBulletinDate || parentTx.bulletinDate || null;
+
+                    let epatsDate = null;
+                    if (parentTx.epatsDocument?.documentDate) epatsDate = parentTx.epatsDocument.documentDate;
+
+                    let statusText = 'Karar Bekleniyor';
+                    if (parentTx.requestResult !== undefined && parentTx.requestResult !== null && parentTx.requestResult !== '') {
+                    statusText = formatObjectionStatus(parentTx.requestResult);
+                    }
+
+                    allRows.push({
+                    id: parentTx.id,
+                    recordId: record.id,
+                    recordType: record.type || '-',
+                    title: record.title || record.brandText || '',
+                    transactionTypeName,
+                    applicationNumber,
+                    applicantName: applicants,
+                    opponent: opponentName,
+                    bulletinDate: fmtDate(bulletinDate),
+                    bulletinNo,
+                    epatsDate: fmtDate(epatsDate),
+                    statusText,
+                    timestamp: parentTx.timestamp
+                    });
+                }
+                } catch (e) {
+                console.warn('❌ Record transaction hatası:', record.id, e);
+                }
+            }
+            };
+
+            // CONCURRENCY kadar worker çalıştır
+            await Promise.all([...Array(CONCURRENCY)].map(worker));
+
+            this.objectionRows = allRows;
         } catch (e) {
-          console.warn('❌ Record transaction hatası:', record.id, e);
+            console.error('❌ İtirazlar yüklenirken hata:', e);
+            this.objectionRows = [];
         }
-      }
-    };
-
-    // CONCURRENCY kadar worker çalıştır
-    await Promise.all([...Array(CONCURRENCY)].map(worker));
-
-    this.objectionRows = allRows;
-  } catch (e) {
-    console.error('❌ İtirazlar yüklenirken hata:', e);
-    this.objectionRows = [];
-  }
-}
-
+        }
 
             initialRenderTableStructure() {
                 const headerRow = document.getElementById('portfolioTableHeaderRow');
