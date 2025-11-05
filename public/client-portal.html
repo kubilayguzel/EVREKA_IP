@@ -4638,6 +4638,58 @@ async function loadOppositionsForClient(linkedPersonIds) {
     if (window.allPortfolioData) {
       window.allPortfolioData.davaItiraz = allOppositions;
     }
+    
+    // ✅ Transaction cache oluştur (Portfolio.html'deki txCache mantığı)
+    window.oppositionTxCache = new Map();
+    
+    for (const opp of allOppositions) {
+        const recordId = opp._source === 'tasks' ? opp.relatedIpRecordId : opp.id;
+        if (!recordId) continue;
+        
+        // Zaten cache'de varsa atla
+        if (window.oppositionTxCache.has(recordId)) continue;
+        
+        try {
+            // İpRecord'dan transaction'ları çek
+            const txResult = await window.ipRecordsService.getTransactionsForRecord(recordId);
+            if (txResult?.success && Array.isArray(txResult.transactions)) {
+                const txs = txResult.transactions;
+                
+                // Parent-child ilişkilerini oluştur
+                const parents = [];
+                const childrenMap = {};
+                
+                txs.forEach(tx => {
+                    if (['7', '19', '20'].includes(String(tx.type)) && 
+                        (tx.transactionHierarchy === 'parent' || !tx.parentId)) {
+                        parents.push(tx);
+                        childrenMap[tx.id] = [];
+                    }
+                });
+                
+                txs.forEach(tx => {
+                    if (tx.transactionHierarchy === 'child' && tx.parentId && childrenMap[tx.parentId]) {
+                        childrenMap[tx.parentId].push(tx);
+                    }
+                });
+                
+                // Çocukları tarihe göre sırala
+                Object.values(childrenMap).forEach(arr => 
+                    arr.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp))
+                );
+                
+                window.oppositionTxCache.set(recordId, {
+                    transactions: txs,
+                    parents,
+                    childrenMap
+                });
+            }
+        } catch (error) {
+            console.warn(`⚠️ Transaction çekilemedi (recordId: ${recordId}):`, error);
+        }
+    }
+    
+    console.log('✅ Opposition transaction cache oluşturuldu:', window.oppositionTxCache.size, 'kayıt');
 
     return allOppositions;
 
@@ -4648,95 +4700,167 @@ async function loadOppositionsForClient(linkedPersonIds) {
 }
 
 /**
- * Opposition tablosunu render et
- * @param {Array<Object>} oppositions - Opposition verileri
+ * Opposition tablosunu portfolio.html'deki renderObjectionRows ile AYNI FORMATTA render et
  */
-function renderOppositionsForClient(oppositions) {
-  const tableBody = document.querySelector('#dava-itiraz-list tbody');
-  if (!tableBody) {
-    console.error('❌ #dava-itiraz-list tbody bulunamadı!');
-    return;
-  }
-
-  tableBody.innerHTML = '';
-
-  if (!oppositions || oppositions.length === 0) {
-    tableBody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4">Henüz Dava/İtiraz kaydı bulunmamaktadır.</td></tr>';
-    return;
-  }
-
-  console.log('🎨 Opposition tablosu render ediliyor...', oppositions.length);
-
-  oppositions.forEach((opp, index) => {
-    const row = document.createElement('tr');
+function renderOppositionsForClient(list) {
+    const tableBody = document.querySelector('#dava-itiraz-list tbody');
+    const noRecMsg = document.getElementById('noRecordsMessage');
     
-    // Başvuru No
-    const appNo = opp.monitoredApplicationNo || opp.applicationNo || '-';
+    if (!tableBody || list.length === 0) {
+        if (tableBody) tableBody.style.display = 'none';
+        if (noRecMsg) noRecMsg.style.display = 'block';
+        return;
+    }
+
+    console.log('🎨 Opposition tablosu render ediliyor...', list.length);
+
+    // Pagination'dan sadece görünür sayfa verilerini al
+    const pageData = window.taskPaginationData?.pagination 
+        ? window.taskPaginationData.pagination.getCurrentPageData(list)
+        : list.slice(0, 20); // Fallback: İlk 20 kayıt
+
+    const frag = document.createDocumentFragment();
+
+    pageData.forEach((row, index) => {
+        const recordId = row.recordId;
+        const parentTxId = row.id;
+
+        // Transaction cache'den parent ve child'ları al
+        const txData = window.oppositionTxCache?.get(recordId);
+        if (!txData) return;
+
+        const parent = (txData.parents || []).find(p => p.id === parentTxId);
+        const children = (txData.childrenMap || {})[parentTxId] || [];
+        if (!parent) return;
+
+        const hasChildren = children.length > 0;
+        const groupId = safeId(`${recordId}_parent_${parentTxId}`);
+
+        // PARENT SATIRINI OLUŞTUR
+        const parentTr = document.createElement('tr');
+        parentTr.className = hasChildren ? 'group-header' : '';
+        parentTr.dataset.groupId = groupId;
+
+        if (row.recordType === 'trademark' || row.recordType === 'marka') {
+            parentTr.style.backgroundColor = '#e3f2fd';
+        }
+
+        parentTr.innerHTML = `
+            <td class="toggle-cell caret-host">
+                ${hasChildren ? `<button class="row-caret" data-group-id="${groupId}" aria-expanded="false">
+                    <i class="fas fa-chevron-right"></i>
+                </button>` : ''}
+            </td>
+            <td>${row.title || '-'}</td>
+            <td>${row.transactionTypeName || '-'}</td>
+            <td>${row.applicationNumber || '-'}</td>
+            <td>${row.applicantName || '-'}</td>
+            <td>${row.opponent || '-'}</td>
+            <td>${row.bulletinDate || '-'}</td>
+            <td>${row.bulletinNo || '-'}</td>
+            <td>${row.epatsDate || '-'}</td>
+            <td>${row.statusText || '-'}</td>
+            <td class="transaction-pdfs">-</td>
+        `;
+
+        frag.appendChild(parentTr);
+
+        // CHILD SATIRLARINI OLUŞTUR
+        if (hasChildren) {
+            children.forEach(child => {
+                const childTypeMeta = window.transactionTypesMap?.get(String(child.type));
+                const childTypeName = childTypeMeta?.alias || childTypeMeta?.name || `İşlem ${child.type}`;
+
+                const childTr = document.createElement('tr');
+                childTr.className = 'group-row child-row';
+                childTr.dataset.parentId = groupId;
+                childTr.setAttribute('aria-hidden', 'true');
+
+                childTr.innerHTML = `
+                    <td class="toggle-cell"></td>
+                    <td></td>
+                    <td style="padding-left: 32px;">↳ ${childTypeName}</td>
+                    <td>${row.applicationNumber || '-'}</td>
+                    <td>${row.applicantName || '-'}</td>
+                    <td>${row.opponent || '-'}</td>
+                    <td></td>
+                    <td></td>
+                    <td>${formatDate(child.timestamp)}</td>
+                    <td></td>
+                    <td class="transaction-pdfs">-</td>
+                `;
+                
+                frag.appendChild(childTr);
+            });
+        }
+    });
+
+    tableBody.innerHTML = '';
+    tableBody.appendChild(frag);
     
-    // Marka Adı
-    const brandName = opp.monitoredBrandText || opp.brandText || opp.title || '-';
-    
-    // Durum
-    const status = opp.status || 'Bilinmiyor';
-    const statusBadgeClass = {
-      'filed': 'primary',
-      'pending': 'warning',
-      'approved': 'success',
-      'rejected': 'danger',
-      'withdrawn': 'secondary'
-    }[status] || 'secondary';
-    
-    // Tarih
-    const formatDate = (timestamp) => {
-      if (!timestamp) return '-';
-      try {
+    // Akordeon işlevselliğini bağla
+    wireAccordion();
+
+    if (tableBody) tableBody.style.display = list.length > 0 ? 'table-row-group' : 'none';
+    if (noRecMsg) noRecMsg.style.display = list.length === 0 ? 'block' : 'none';
+}
+
+// Yardımcı fonksiyonlar
+function safeId(str) {
+    return String(str || '').replace(/[^a-zA-Z0-9]/g, '_');
+}
+
+function formatDate(timestamp) {
+    if (!timestamp) return '-';
+    try {
         let date;
         if (timestamp && typeof timestamp === 'object' && typeof timestamp.toDate === 'function') {
-          date = timestamp.toDate();
+            date = timestamp.toDate();
         } else {
-          date = new Date(timestamp);
+            date = new Date(timestamp);
         }
         if (isNaN(date.getTime())) return '-';
         const day = String(date.getDate()).padStart(2, '0');
         const month = String(date.getMonth() + 1).padStart(2, '0');
         const year = date.getFullYear();
         return `${day}.${month}.${year}`;
-      } catch (e) {
+    } catch (e) {
         return '-';
-      }
+    }
+}
+
+// Accordion bağlama fonksiyonu (Portfolio.html'den)
+function wireAccordion() {
+    const tbody = document.querySelector('#dava-itiraz-list tbody');
+    if (!tbody) return;
+    
+    const toggleGroup = (gid, next) => {
+        const btn = tbody.querySelector(`.row-caret[data-group-id="${gid}"]`);
+        if (btn) btn.setAttribute('aria-expanded', String(next));
+        tbody.querySelectorAll(`tr.group-row[data-parent-id="${gid}"]`).forEach(r => {
+            r.setAttribute('aria-hidden', next ? 'false' : 'true');
+        });
     };
     
-    const filingDate = formatDate(opp.filingDate || opp.createdAt);
-    
-    // Sınıflar
-    const classes = (() => {
-      if (Array.isArray(opp.niceClasses)) {
-        return opp.niceClasses.sort((a, b) => a - b).join(', ');
-      }
-      return '-';
-    })();
-
-// Rol badge'i (sahip mi, karşı taraf mı?)
-    const roleBadge = opp._role === 'opponent' 
-      ? '<span class="badge badge-danger ml-2" style="font-size:0.75rem;">Karşı Taraf</span>'
-      : '<span class="badge badge-info ml-2" style="font-size:0.75rem;">Sahibi</span>';
-
-    row.innerHTML = `
-      <td>${index + 1}</td>
-      <td>
-        <a href="#" class="opposition-detail-link" data-item-id="${opp.id}">${brandName}</a>
-        ${roleBadge}
-      </td>
-      <td>${appNo}</td>
-      <td><span class="badge badge-${statusBadgeClass}">${status}</span></td>
-      <td>${classes}</td>
-      <td>${filingDate}</td>
-    `;
-
-    tableBody.appendChild(row);
-  });
-
-  console.log('✅ Opposition tablosu render edildi');
+    if (!tbody.__accordionBound) {
+        tbody.addEventListener('click', (e) => {
+            const caret = e.target.closest('.row-caret');
+            if (caret) {
+                const gid = caret.dataset.groupId;
+                const expanded = caret.getAttribute('aria-expanded') === 'true';
+                toggleGroup(gid, !expanded);
+                return;
+            }
+            const header = e.target.closest('tr.group-header');
+            if (header && !e.target.closest('button,.action-btn,a,input[type="checkbox"]')) {
+                const gid = header.dataset.groupId;
+                const hb = header.querySelector('.row-caret');
+                const expanded = hb && hb.getAttribute('aria-expanded') === 'true';
+                toggleGroup(gid, !expanded);
+            }
+        });
+        tbody.__accordionBound = true;
+    }
 }
 
 // === Dava/İtiraz tab'ına tıklandığında veri yükleme ===
