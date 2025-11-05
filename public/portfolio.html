@@ -1197,34 +1197,12 @@
                     this.initialRenderTableStructure();
                     
                     if (this.activeTypeFilter === 'objections') {
-                        // 🔥 Loading ekranı, loadObjectionRows içine taşındığı için sadece çağırıyoruz.
-                        
-                        this.loadObjectionRows()
-                            .then(() => {
-                                if (pagination) pagination.update(this.objectionRows.length);
-                                const tbody = document.getElementById('portfolioTableBody');
-                                const noRecMsg = document.getElementById('noRecordsMessage');
-                                
-                                // Tablo görünürlük kontrolü
-                                if (this.objectionRows.length === 0) {
-                                    if (tbody) tbody.style.display = 'none';
-                                    if (noRecMsg) noRecMsg.style.display = 'block';
-                                } else {
-                                    if (tbody) tbody.style.display = 'table-row-group';
-                                    if (noRecMsg) noRecMsg.style.display = 'none';
-                                }
-                                
-                                this.renderCurrentPage();
-                            })
-                            .catch(err => {
-                                console.error('❌ İtiraz satırları yüklenirken hata:', err);
-                                // Hata durumunda loading ekranı zaten kapanmalı veya hata göstermelidir.
-                                this.objectionRows = [];
-                                document.getElementById('noRecordsMessage').style.display = 'block';
-                            });
+                    await this.loadObjectionRows();  // tüm loading + ilk render içeride
+                    return;                          // ekstra render/görünürlük ayarı yok
                     } else {
-                        this.applyFiltersAndSort();
+                    this.applyFiltersAndSort();
                     }
+
                 });
             });
 
@@ -1870,7 +1848,20 @@
                 await Promise.all([...Array(CONCURRENCY)].map(() => worker()));
 
                 // 4) Kalan tamponu bas ve temizle
+                if (!didFirstPaint) {
+                // Hiç erken boyama olmadıysa normal finalize
                 await flushBufferToUI(true);
+                } else {
+                // Erken boyama yapıldıysa: tabloyu tekrar söküp takmadan sadece sayıyı güncelle
+                const chunk = buffer.splice(0, buffer.length);
+                if (chunk.length) allRows.push(...chunk);
+                this.objectionRows = allRows.slice();
+                if (this.pagination?.update) {
+                    try { this.pagination.update(this.objectionRows.length); } catch {}
+                }
+                // Bilerek render çağrısı YOK → ikinci “yenilenme” görünmez
+                }
+
 
             } catch (e) {
                 console.error('❌ İtirazlar yüklenirken hata:', e);
