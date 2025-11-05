@@ -1966,6 +1966,10 @@ async function fetchAndDisplayPortfolio() {
         populatePortfolioTable('#tasarim-list', tasarimList);
         populatePortfolioTable('#dava-itiraz-list', davaIItirazList);
         setDashboardLoading(false);
+        
+        // ✅ DAVA/İTİRAZ (OPPOSITIONS) VERİLERİNİ ÇEK VE KAYDET
+                console.log("📋 Opposition verileri yükleniyor...");
+                await loadOppositionsForClient(linkedPersonIds);
 
         // Dashboard sayaçlarını doldur
         await populateDashboardNumbers(linkedPersonIds, allPortfolios);
@@ -4506,6 +4510,156 @@ $(document).ready(function() {
     }
 });
 
+// ============================================
+// OPPOSITION (DAVA/İTİRAZ) VERİ YÖNETİMİ
+// ============================================
+
+/**
+ * Client için opposition verilerini Firestore'dan çeker
+ * @param {Array<string>} linkedPersonIds - İlişkili kişi ID'leri
+ */
+async function loadOppositionsForClient(linkedPersonIds) {
+  try {
+    if (!linkedPersonIds || linkedPersonIds.length === 0) {
+      console.warn('❌ linkedPersonIds boş, opposition sorgusu atlanıyor');
+      return;
+    }
+
+    console.log('🔍 Opposition verileri çekiliyor...', {
+      linkedPersonIds,
+      count: linkedPersonIds.length
+    });
+
+    // Firestore'dan oppositions koleksiyonunu çek
+    const oppositionsRef = collection(db, 'oppositions');
+    const oppositionsSnap = await getDocs(oppositionsRef);
+
+    const allOppositions = [];
+    oppositionsSnap.forEach(doc => {
+      allOppositions.push({ id: doc.id, ...doc.data() });
+    });
+
+    console.log('📥 Toplam opposition kaydı:', allOppositions.length);
+
+    // linkedPersonIds'ye göre filtrele
+    const filteredOppositions = allOppositions.filter(opp => {
+      // applicants array'ini kontrol et
+      if (opp.applicants && Array.isArray(opp.applicants)) {
+        return opp.applicants.some(applicant => 
+          applicant && applicant.id && linkedPersonIds.includes(applicant.id)
+        );
+      }
+      
+      // Fallback: personsRelatedIds
+      if (opp.personsRelatedIds && Array.isArray(opp.personsRelatedIds)) {
+        return opp.personsRelatedIds.some(id => linkedPersonIds.includes(id));
+      }
+      
+      return false;
+    });
+
+    console.log('✅ Müvekkile ait opposition:', filteredOppositions.length);
+
+    // Global'e kaydet
+    window.oppositionData = filteredOppositions;
+
+    // Portföy verilerine de ekle
+    if (window.allPortfolioData) {
+      window.allPortfolioData.davaItiraz = filteredOppositions;
+    }
+
+    return filteredOppositions;
+
+  } catch (error) {
+    console.error('❌ Opposition verileri çekilirken hata:', error);
+    return [];
+  }
+}
+
+/**
+ * Opposition tablosunu render et
+ * @param {Array<Object>} oppositions - Opposition verileri
+ */
+function renderOppositionsForClient(oppositions) {
+  const tableBody = document.querySelector('#dava-itiraz-list tbody');
+  if (!tableBody) {
+    console.error('❌ #dava-itiraz-list tbody bulunamadı!');
+    return;
+  }
+
+  tableBody.innerHTML = '';
+
+  if (!oppositions || oppositions.length === 0) {
+    tableBody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4">Henüz Dava/İtiraz kaydı bulunmamaktadır.</td></tr>';
+    return;
+  }
+
+  console.log('🎨 Opposition tablosu render ediliyor...', oppositions.length);
+
+  oppositions.forEach((opp, index) => {
+    const row = document.createElement('tr');
+    
+    // Başvuru No
+    const appNo = opp.monitoredApplicationNo || opp.applicationNo || '-';
+    
+    // Marka Adı
+    const brandName = opp.monitoredBrandText || opp.brandText || opp.title || '-';
+    
+    // Durum
+    const status = opp.status || 'Bilinmiyor';
+    const statusBadgeClass = {
+      'filed': 'primary',
+      'pending': 'warning',
+      'approved': 'success',
+      'rejected': 'danger',
+      'withdrawn': 'secondary'
+    }[status] || 'secondary';
+    
+    // Tarih
+    const formatDate = (timestamp) => {
+      if (!timestamp) return '-';
+      try {
+        let date;
+        if (timestamp && typeof timestamp === 'object' && typeof timestamp.toDate === 'function') {
+          date = timestamp.toDate();
+        } else {
+          date = new Date(timestamp);
+        }
+        if (isNaN(date.getTime())) return '-';
+        const day = String(date.getDate()).padStart(2, '0');
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const year = date.getFullYear();
+        return `${day}.${month}.${year}`;
+      } catch (e) {
+        return '-';
+      }
+    };
+    
+    const filingDate = formatDate(opp.filingDate || opp.createdAt);
+    
+    // Sınıflar
+    const classes = (() => {
+      if (Array.isArray(opp.niceClasses)) {
+        return opp.niceClasses.sort((a, b) => a - b).join(', ');
+      }
+      return '-';
+    })();
+
+    row.innerHTML = `
+      <td>${index + 1}</td>
+      <td><a href="#" class="opposition-detail-link" data-item-id="${opp.id}">${brandName}</a></td>
+      <td>${appNo}</td>
+      <td><span class="badge badge-${statusBadgeClass}">${status}</span></td>
+      <td>${classes}</td>
+      <td>${filingDate}</td>
+    `;
+
+    tableBody.appendChild(row);
+  });
+
+  console.log('✅ Opposition tablosu render edildi');
+}
+
 // === Dava/İtiraz tab'ına tıklandığında veri yükleme ===
 let __davaItirazLoaded = false;
 
@@ -4531,33 +4685,26 @@ function loadDavaItirazData() {
     return;
   }
   
-  console.log('⚠️ Dava/İtiraz tablosu boş, tüm portföy verilerinden filtreleniyor...');
+  console.log('⚠️ Dava/İtiraz tablosu boş, opposition verisi kontrol ediliyor...');
   
-  // Zaten yüklü olan tüm portföy verisinden Dava/İtiraz kayıtlarını filtrele
-  if (window.markaPaginationData && window.markaPaginationData.allDataUnfiltered) {
-    const allData = window.markaPaginationData.allDataUnfiltered;
+  // ✅ GLOBAL OPPOSITION VERİSİNDEN RENDER ET
+  if (window.oppositionData && Array.isArray(window.oppositionData)) {
+    const oppositions = window.oppositionData;
     
-    // Type'a göre filtrele
-    const davaList = allData.filter(p => 
-      p.type === 'litigation' || 
-      p.type === 'objection' || 
-      p.type === 'Dava/İtiraz' || 
-      p.type === 'dava' || 
-      p.type === 'itiraz'
-    );
+    console.log('✅ Opposition kayıtları bulundu:', oppositions.length);
     
-    console.log('✅ Dava/İtiraz kayıtları bulundu:', davaList.length);
+    // Tabloyu doldur
+    renderOppositionsForClient(oppositions);
+    __davaItirazLoaded = true;
     
-    if (davaList.length > 0) {
-      // Tabloyu doldur
-      populatePortfolioTable('#dava-itiraz-list', davaList);
-      __davaItirazLoaded = true;
-    } else {
-      console.log('⚠️ Hiç Dava/İtiraz kaydı bulunamadı');
-    }
   } else {
-    console.log('⚠️ Portföy verileri henüz yüklenmemiş, fetchAndDisplayPortfolio çağrılıyor...');
-    fetchAndDisplayPortfolio();
+    console.log('❌ Opposition verisi bulunamadı!');
+    console.log('🔍 window.oppositionData:', window.oppositionData);
+    
+    // Fallback: Boş tablo mesajı
+    if (tableBody) {
+      tableBody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4">Veriler yükleniyor...</td></tr>';
+    }
   }
 }
 
