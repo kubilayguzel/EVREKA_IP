@@ -4515,14 +4515,16 @@ $(document).ready(function() {
 // ============================================
 
 /**
- * Client için opposition verilerini Firestore'dan çeker
- * @param {Array<string>} linkedPersonIds - İlişkili kişi ID'leri
+ * Client için opposition verilerini çeker
+ * İki kaynaktan veri toplar:
+ * 1. Oppositions koleksiyonu (linkedPersonIds'nin sahip olduğu itirazlar)
+ * 2. Tasks koleksiyonu (ID:19,20 - linkedPersonIds'nin opponent olduğu itirazlar)
  */
 async function loadOppositionsForClient(linkedPersonIds) {
   try {
     if (!linkedPersonIds || linkedPersonIds.length === 0) {
       console.warn('❌ linkedPersonIds boş, opposition sorgusu atlanıyor');
-      return;
+      return [];
     }
 
     console.log('🔍 Opposition verileri çekiliyor...', {
@@ -4530,45 +4532,114 @@ async function loadOppositionsForClient(linkedPersonIds) {
       count: linkedPersonIds.length
     });
 
-    // Firestore'dan oppositions koleksiyonunu çek
-    const oppositionsRef = collection(db, 'oppositions');
-    const oppositionsSnap = await getDocs(oppositionsRef);
-
     const allOppositions = [];
+
+    // ========================================
+    // 1. OPPOSİTİONS KOLEKSİYONUNDAN ÇEK
+    // ========================================
+    console.log('📥 1/2: Oppositions koleksiyonundan çekiliyor...');
+    const oppositionsRef = collection(db, 'oppositions');
+    const oppositionsSnap = await runGetDocs(oppositionsRef);
+
+    let ownOppositionsCount = 0;
     oppositionsSnap.forEach(doc => {
-      allOppositions.push({ id: doc.id, ...doc.data() });
-    });
-
-    console.log('📥 Toplam opposition kaydı:', allOppositions.length);
-
-    // linkedPersonIds'ye göre filtrele
-    const filteredOppositions = allOppositions.filter(opp => {
-      // applicants array'ini kontrol et
-      if (opp.applicants && Array.isArray(opp.applicants)) {
-        return opp.applicants.some(applicant => 
+      const oppData = doc.data();
+      
+      // LinkedPersonIds'nin SAHİP olduğu itirazlar
+      let isOwned = false;
+      
+      if (oppData.applicants && Array.isArray(oppData.applicants)) {
+        isOwned = oppData.applicants.some(applicant => 
           applicant && applicant.id && linkedPersonIds.includes(applicant.id)
         );
       }
       
-      // Fallback: personsRelatedIds
-      if (opp.personsRelatedIds && Array.isArray(opp.personsRelatedIds)) {
-        return opp.personsRelatedIds.some(id => linkedPersonIds.includes(id));
+      if (!isOwned && oppData.personsRelatedIds && Array.isArray(oppData.personsRelatedIds)) {
+        isOwned = oppData.personsRelatedIds.some(id => linkedPersonIds.includes(id));
       }
-      
-      return false;
+
+      if (isOwned) {
+        allOppositions.push({
+          id: doc.id,
+          ...oppData,
+          _source: 'oppositions', // Kaynak işareti
+          _role: 'owner' // Rol: Sahip
+        });
+        ownOppositionsCount++;
+      }
     });
 
-    console.log('✅ Müvekkile ait opposition:', filteredOppositions.length);
+    console.log('✅ Sahip olunan itirazlar:', ownOppositionsCount);
+
+    // ========================================
+    // 2. TASKS KOLEKSİYONUNDAN ÇEK (ID: 19, 20)
+    // ========================================
+    console.log('📥 2/2: Tasks koleksiyonundan çekiliyor (ID:19,20)...');
+    const tasksRef = collection(db, 'tasks');
+    const tasksSnap = await runGetDocs(tasksRef);
+
+    let opponentOppositionsCount = 0;
+    tasksSnap.forEach(doc => {
+      const taskData = doc.data();
+      
+      // Sadece itiraz task'ları (ID: 19 veya 20)
+      const taskTypeStr = String(taskData.taskType);
+      if (taskTypeStr !== '19' && taskTypeStr !== '20') {
+        return;
+      }
+
+      // Opponent kontrolü
+      const opponentId = taskData.opponent?.id || taskData.details?.opponent?.id;
+      
+      if (opponentId && linkedPersonIds.includes(opponentId)) {
+        // Bu task'ı opposition formatına dönüştür
+        allOppositions.push({
+          id: doc.id,
+          
+          // Temel bilgiler
+          monitoredApplicationNo: taskData.details?.targetAppNo || taskData.details?.applicationNo || '-',
+          monitoredBrandText: taskData.details?.targetBrandText || taskData.details?.brandText || '-',
+          
+          // Status
+          status: taskData.status || 'open',
+          
+          // Tarih
+          filingDate: taskData.createdAt || taskData.details?.filingDate,
+          
+          // Sınıflar
+          niceClasses: taskData.details?.targetNiceClasses || taskData.details?.niceClasses || [],
+          
+          // Kaynak bilgileri
+          _source: 'tasks',
+          _role: 'opponent', // Rol: Karşı Taraf
+          _taskType: taskData.taskType,
+          _taskId: doc.id,
+          
+          // Ek bilgiler
+          relatedIpRecordId: taskData.relatedIpRecordId,
+          bulletinNo: taskData.details?.bulletinNo
+        });
+        opponentOppositionsCount++;
+      }
+    });
+
+    console.log('✅ Karşı taraf olunan itirazlar:', opponentOppositionsCount);
+
+    console.log('🎯 TOPLAM:', {
+      sahipOlunan: ownOppositionsCount,
+      karsiTaraf: opponentOppositionsCount,
+      toplam: allOppositions.length
+    });
 
     // Global'e kaydet
-    window.oppositionData = filteredOppositions;
+    window.oppositionData = allOppositions;
 
     // Portföy verilerine de ekle
     if (window.allPortfolioData) {
-      window.allPortfolioData.davaItiraz = filteredOppositions;
+      window.allPortfolioData.davaItiraz = allOppositions;
     }
 
-    return filteredOppositions;
+    return allOppositions;
 
   } catch (error) {
     console.error('❌ Opposition verileri çekilirken hata:', error);
@@ -4645,9 +4716,17 @@ function renderOppositionsForClient(oppositions) {
       return '-';
     })();
 
+// Rol badge'i (sahip mi, karşı taraf mı?)
+    const roleBadge = opp._role === 'opponent' 
+      ? '<span class="badge badge-danger ml-2" style="font-size:0.75rem;">Karşı Taraf</span>'
+      : '<span class="badge badge-info ml-2" style="font-size:0.75rem;">Sahibi</span>';
+
     row.innerHTML = `
       <td>${index + 1}</td>
-      <td><a href="#" class="opposition-detail-link" data-item-id="${opp.id}">${brandName}</a></td>
+      <td>
+        <a href="#" class="opposition-detail-link" data-item-id="${opp.id}">${brandName}</a>
+        ${roleBadge}
+      </td>
       <td>${appNo}</td>
       <td><span class="badge badge-${statusBadgeClass}">${status}</span></td>
       <td>${classes}</td>
