@@ -295,11 +295,11 @@
         import { loadSharedLayout } from './js/layout-loader.js';
         import { doc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
         import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-        import SimpleLoading from './js/simple-loading.js';
 
         // === Yardımcı Fonksiyonlar ===
         const safe = (v) => (v ?? '').toString();
-
+        const SimpleLoading = window.SimpleLoading;
+        
         function safeId(str) {
             return String(str || '').replace(/[^a-zA-Z0-9]/g, '_');
         }
