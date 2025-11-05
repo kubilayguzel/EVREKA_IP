@@ -1690,9 +1690,12 @@
         const PARENT_TYPE_IDS = ['7', '19', '20'];
         const allRows = [];
 
-        // 🔥 Loading ekranını göster
-        const loading = window.showSimpleLoading('İtiraz İşlemleri Yükleniyor', 'Bu işlem, geçmiş verilerin taranmasını gerektirir...');
-        
+        const loading = new window.SimpleLoading(); // Sınıfı doğrudan global'den oluştur
+            loading.show({
+                text: 'İtiraz İşlemleri Yükleniyor',
+                subtext: 'Bu işlem, geçmiş verilerin taranmasını gerektirir...'
+            });
+
         try {
             let allRecords = this.allRecords;
             if (!Array.isArray(allRecords) || allRecords.length === 0) {
@@ -1737,10 +1740,10 @@
 
                 // 3. Her bir parent işlemi için satır oluşturma görevini Promise'e ekle
                 for (const parentTx of parentTransactions) {
-                    allObjectionPromises.push((async () => {
-                        const typeMeta = await transactionTypesMap.get(String(parentTx.type));
-                        const transactionTypeName = typeMeta?.alias || typeMeta?.name || `İşlem ${parentTx.type}`;
-                        
+                    allObjectionPromises.push((async () => {
+                        // 🔥 DÜZELTME: transactionTypesMap bir Map olduğu için Promise.all dışında çözülmeli, AWAIT KALDIRILDI
+                        const typeMeta = transactionTypesMap.get(String(parentTx.type));
+                        const transactionTypeName = typeMeta?.alias || typeMeta?.name || `İşlem ${parentTx.type}`;
                         // ... (Diğer tüm veri çekme ve hesaplama mantığı aynı kalacak) ...
                         
                         let opponentName = 
