@@ -4507,29 +4507,25 @@ $(document).ready(function() {
 });
 
 // === Trigger loading when the "Dava/İtiraz" tab becomes visible ===
-let __clientObjectionsLoaded = false;
-async function __triggerClientObjectionsOnce(){
-  if (__clientObjectionsLoaded) return;
-  const ids = Array.isArray(window.__linkedPersonIds) ? window.__linkedPersonIds
-             : (Array.isArray(window.linkedPersonIds) ? window.linkedPersonIds : []);
-  try {
-    await loadClientObjections(ids, []);
-  } catch(e){ console.error('loadClientObjections error', e); }
-  __clientObjectionsLoaded = true;
-}
+let __davaItirazLoaded = false;
 
-// Bootstrap v4 target by id
-$(document).on('shown.bs.tab', '#tab-dava', __triggerClientObjectionsOnce);
-// Bootstrap v5 target by data-bs-toggle/href
-$(document).on('shown.bs.tab', 'a[data-bs-toggle="tab"][href="#dava-itiraz-list"]', __triggerClientObjectionsOnce);
-// Fallback: plain click
-document.getElementById('tab-dava')?.addEventListener('click', ()=> setTimeout(__triggerClientObjectionsOnce, 0));
-// Load if the tab is initially active or hash targets it
-document.addEventListener('DOMContentLoaded', ()=>{
-  const pane = document.getElementById('dava-itiraz-list');
-  if (location.hash === '#dava-itiraz-list' || (pane && pane.classList.contains('show') && pane.classList.contains('active'))) {
-    __triggerClientObjectionsOnce();
+$(document).on('shown.bs.tab', '#tab-dava', function() {
+  if (__davaItirazLoaded) return;
+  console.log('📋 Dava/İtiraz tab\'ı açıldı, veriler kontrol ediliyor...');
+  
+  // Eğer tablo boşsa veya çok az satır varsa, veriyi yeniden yükle
+  const tableBody = document.querySelector('#dava-itiraz-list tbody');
+  if (!tableBody || tableBody.children.length === 0) {
+    console.log('⚠️ Dava/İtiraz tablosu boş, loadPortfolioData tekrar çağrılıyor...');
+    const linkedIds = window.__linkedPersonIds || window.linkedPersonIds || [];
+    if (linkedIds.length > 0) {
+      loadPortfolioData(linkedIds);
+    }
+  } else {
+    console.log('✅ Dava/İtiraz verileri zaten yüklü:', tableBody.children.length, 'satır');
   }
+  
+  __davaItirazLoaded = true;
 });
 
 </script>
