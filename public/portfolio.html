@@ -1197,14 +1197,9 @@
                     this.initialRenderTableStructure();
                     
                     if (this.activeTypeFilter === 'objections') {
-                    // toplam ve sayfayı resetle (eski “423” gibi değerler kalmasın)
                     if (pagination) {
-                        try {
-                        pagination.update(0);
-                        (pagination.goToPage?.(1)) || (pagination.currentPage = 1); // goToPage yoksa fallback
-                        } catch {}
+                    try { (pagination.goToPage?.(1)) || (pagination.currentPage = 1); } catch {}
                     }
-
                     await this.loadObjectionRows();   // ilk render içeride yapılacak
                     return;
                     } else {
@@ -1857,20 +1852,18 @@
 
                 // 4) Kalan tamponu bas ve temizle
                 if (!didFirstPaint) {
-                // hiç erken boyama olmadıysa normal finalize
                 await flushBufferToUI(true);
                 } else {
-                // erken boyama yapıldıysa: tabloyu baştan kurmadan sadece toplamı düzelt
                 const chunk = buffer.splice(0, buffer.length);
                 if (chunk.length) allRows.push(...chunk);
                 this.objectionRows = allRows.slice();
                 if (this.pagination?.update) {
                     try {
-                    this.pagination.currentPage = 1; // güvenli başlangıç
-                    this.pagination.update(this.objectionRows.length); // sadece itiraz sayısı
+                    this.pagination.currentPage = 1;
+                    this.pagination.update(this.objectionRows.length); // ✅ toplam yalnızca itiraz sayısı
                     } catch {}
                 }
-                // bilinçli olarak render çağrısı YOK → 3–4 sn sonra “yenilenme” görünmez
+                // burada bilerek render çağrısı yok
                 }
 
             } catch (e) {
@@ -1943,14 +1936,6 @@
                     }
                     headerRow.appendChild(th);
                     filterRow.appendChild(thFilter);
-
-                    // Objections sekmesine girildiğinde toplamı doğru göstermek için şimdiden sıfırla/güncelle
-                    if (this.activeTypeFilter === 'objections' && pagination) {
-                    try {
-                        pagination.update(this.objectionRows?.length || 0);
-                        (pagination.goToPage?.(1)) || (pagination.currentPage = 1);
-                    } catch {}
-                    }
 
                 });
             }
