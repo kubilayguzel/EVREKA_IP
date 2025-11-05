@@ -1051,49 +1051,59 @@
                   return;
               }
 
-              let filtered = this.allRecords.filter(record => {
-                  let tabMatch = false;
-                  if (this.activeTypeFilter === 'all') {
-                      tabMatch = (record.recordOwnerType !== 'third_party');
-                  } else if (this.activeTypeFilter === 'trademark') {
-                      tabMatch = record.type === 'trademark' && record.recordOwnerType !== 'third_party';
-                  } else if (this.activeTypeFilter === 'litigation') {
-                      tabMatch = Array.isArray(record.transactions) && record.transactions.some(t => (t.type || '').includes('Dava'));
-                  } else {
-                      tabMatch = record.type === this.activeTypeFilter;
-                  }
+            let filtered = this.allRecords.filter(record => {
+                let tabMatch = false;
+                
+                // 1. Sekme Eşleşmesi ve Kayıt Sahipliği Kontrolü
+                if (this.activeTypeFilter === 'all') {
+                    // 'Tümü' sekmesinde sadece SELF kayıtlarını göster
+                    tabMatch = (record.recordOwnerType !== 'third_party');
+                } else if (this.activeTypeFilter === 'trademark') {
+                    // 'Marka' sekmesinde sadece SELF marka kayıtlarını göster
+                    tabMatch = record.type === 'trademark' && record.recordOwnerType !== 'third_party';
+                } else if (this.activeTypeFilter === 'litigation') {
+                    // 'Davalar' sekmesinde sadece SELF kayıtlarını göster
+                    tabMatch = (record.recordOwnerType !== 'third_party') && Array.isArray(record.transactions) && record.transactions.some(t => (t.type || '').includes('Dava'));
+                } else if (this.activeTypeFilter === 'objections') {
+                    // 🔥 İTİRAZLAR SEKME DÜZELTMESİ: Tüm kayıtları kullan (self VE third_party)
+                    tabMatch = true; 
+                } else {
+                    // Patent/Tasarım gibi diğer sekmelerde sadece tür eşleşmesini kontrol et (varsayılan olarak SELF kabul ediliyor)
+                    tabMatch = record.type === this.activeTypeFilter;
+                }
 
-                  if (!tabMatch) return false;
+                if (!tabMatch) return false;
 
-                  if (globalSearchTerm) {
-                      const searchableText = `
-                          ${record.title || ''}
-                          ${record.brandText || ''}
-                          ${record.applicationNumber || ''}
-                          ${record.status || ''}
-                          ${record.type || ''}
-                          ${record.applicants?.map(a => a.name).join(' ') || ''}
-                      `.toLowerCase();
-                      if (!searchableText.includes(globalSearchTerm)) return false;
-                  }
+                // 2. Global Arama ve Sütun Filtreleri (Bu kısım aynı kalacak)
+                if (globalSearchTerm) {
+                    const searchableText = `
+                        ${record.title || ''}
+                        ${record.brandText || ''}
+                        ${record.applicationNumber || ''}
+                        ${record.status || ''}
+                        ${record.type || ''}
+                        ${record.applicants?.map(a => a.name).join(' ') || ''}
+                    `.toLowerCase();
+                    if (!searchableText.includes(globalSearchTerm)) return false;
+                }
 
-                  return Object.keys(this.columnFilters).every(key => {
-                      const filterValue = this.columnFilters[key];
-                      if (!filterValue) return true;
+                return Object.keys(this.columnFilters).every(key => {
+                    const filterValue = this.columnFilters[key];
+                    if (!filterValue) return true;
 
-                      let recordValue = '';
-                      if (key === 'owners' || key === 'applicants') {
-                          recordValue = record.applicants?.map(a => a.name).join(' ') || '';
-                      } else if (key === 'title') {
-                          recordValue = record.title || record.brandText || '';
-                      } else if (key === 'type' || key === 'recordType' || key === 'ipType') {
-                          recordValue = record.type || '';
-                      } else {
-                          recordValue = String(record[key] || '');
-                      }
-                      return recordValue.toLowerCase().includes(filterValue);
-                  });
-              });
+                    let recordValue = '';
+                    if (key === 'owners' || key === 'applicants') {
+                        recordValue = record.applicants?.map(a => a.name).join(' ') || '';
+                    } else if (key === 'title') {
+                        recordValue = record.title || record.brandText || '';
+                    } else if (key === 'type' || key === 'recordType' || key === 'ipType') {
+                        recordValue = record.type || '';
+                    } else {
+                        recordValue = String(record[key] || '');
+                    }
+                    return recordValue.toLowerCase().includes(filterValue);
+                });
+            });
 
               if (this.sortBy.column) {
                   const { column, direction } = this.sortBy;
