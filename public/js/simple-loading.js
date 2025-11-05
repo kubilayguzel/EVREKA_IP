@@ -111,3 +111,6 @@ window.showSimpleLoading = (text, subtext, onCancel) => {
 };
 
 window.showLoadingWithCancel = window.showSimpleLoading;
+if (typeof window !== 'undefined') {
+  window.SimpleLoading = SimpleLoading;
+}
