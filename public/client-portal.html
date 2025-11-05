@@ -4509,20 +4509,35 @@ $(document).ready(function() {
 // === Dava/İtiraz tab'ına tıklandığında veri yükleme ===
 let __davaItirazLoaded = false;
 
-$(document).on('shown.bs.tab', '#tab-dava', function() {
-  if (__davaItirazLoaded) return;
-  console.log('📋 Dava/İtiraz tab\'ı açıldı, veriler kontrol ediliyor...');
+// Bootstrap tab event'i için doğru selector kullan
+$(document).on('shown.bs.tab', 'a[data-toggle="tab"][href="#dava-itiraz-list"]', function(e) {
+  console.log('📋 Dava/İtiraz tab\'ı AÇILDI - Event tetiklendi!', e.target);
+  
+  if (__davaItirazLoaded) {
+    console.log('✅ Dava/İtiraz verileri daha önce yüklendi, atlanıyor');
+    return;
+  }
   
   // Eğer tablo boşsa, veriyi yeniden yükle
   const tableBody = document.querySelector('#dava-itiraz-list tbody');
+  console.log('🔍 Tablo durumu:', {
+    tableBodyExists: !!tableBody,
+    rowCount: tableBody ? tableBody.children.length : 0
+  });
+  
   if (!tableBody || tableBody.children.length === 0) {
-    console.log('⚠️ Dava/İtiraz tablosu boş, fetchAndDisplayPortfolio tekrar çağrılıyor...');
-    fetchAndDisplayPortfolio(); // Doğru fonksiyon adını kullan
+    console.log('⚠️ Dava/İtiraz tablosu boş, fetchAndDisplayPortfolio çağrılıyor...');
+    fetchAndDisplayPortfolio();
   } else {
     console.log('✅ Dava/İtiraz verileri zaten yüklü:', tableBody.children.length, 'satır');
   }
   
   __davaItirazLoaded = true;
+});
+
+// Alternatif: Tab'a tıklama ile de tetikle (double safety)
+$(document).on('click', '#tab-dava', function() {
+  console.log('🖱️ Dava/İtiraz tab\'ına TIKLANDI');
 });
 </script>
 </body>
