@@ -4799,68 +4799,7 @@ jQuery(document).ready(function($) {
         });
     }
 });
+
 </script>
-
-<script>
-// --- Dava/İtiraz tab fallback loader (auto-injected by helper) ---
-(function () {
-  try {
-    // Guard: avoid double-binding
-    if (window.__davaItirazFallbackBound) return;
-    window.__davaItirazFallbackBound = true;
-
-    function ensureObjectionsLoaded() {
-      try {
-        if (typeof window.fetchAndDisplayObjections === "function") {
-          // Only fetch if we don't already have data or table is empty
-          var hasRows = Array.isArray(window.davaItirazRows) && window.davaItirazRows.length > 0;
-          var tbody = document.getElementById("dava-itiraz-tbody");
-          var tbodyEmpty = !tbody || !tbody.children || tbody.children.length === 0;
-          if (!hasRows || tbodyEmpty) {
-            console.log("🛠 Fallback: fetchAndDisplayObjections() tetikleniyor");
-            window.fetchAndDisplayObjections();
-          }
-        } else {
-          console.warn("⚠️ Fallback: fetchAndDisplayObjections fonksiyonu bulunamadı.");
-        }
-      } catch (e) {
-        console.error("Fallback ensureObjectionsLoaded hata:", e);
-      }
-    }
-
-    // 1) Direct click listener (if Bootstrap/jQuery tab event fails)
-    var tabBtn = document.getElementById("tab-dava") || document.querySelector('[data-bs-target="#dava-itiraz-list"], [href="#dava-itiraz-list"]');
-    if (tabBtn) {
-      tabBtn.addEventListener("click", ensureObjectionsLoaded, { passive: true });
-    }
-
-    // 2) Also listen to Bootstrap shown.bs.tab if available (covers keyboard nav etc.)
-    if (window.jQuery && typeof jQuery === "function") {
-      jQuery(document).on("shown.bs.tab", 'a[data-bs-toggle="tab"]', function (e) {
-        var target = e.target && (e.target.getAttribute("data-bs-target") || e.target.getAttribute("href") || "");
-        if (target && target.indexOf("#dava-itiraz-list") !== -1) {
-          ensureObjectionsLoaded();
-        }
-      });
-    } else {
-      // Vanilla: observe hashchange for anchor-based tabs as a backup
-      window.addEventListener("hashchange", function () {
-        if (location.hash === "#dava-itiraz-list") ensureObjectionsLoaded();
-      });
-    }
-
-    // 3) Optional: prefetch once after load so first tab visit is instant
-    window.addEventListener("DOMContentLoaded", function () {
-      setTimeout(function () {
-        // Only prefetch if on portfolio page and user hasn't loaded objections yet
-        ensureObjectionsLoaded();
-      }, 0);
-    });
-  } catch (err) {
-    console.error("Dava/İtiraz fallback injector error:", err);
-  }
-})();
-</script>
-
 </body>
 </html>
