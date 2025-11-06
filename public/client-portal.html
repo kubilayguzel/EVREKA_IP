@@ -3805,6 +3805,17 @@ window.loadSampleTaskDetails = async function(taskType) {
             }
             
             if (!isRelatedToClient) {
+                // ======================================================
+                // YENİ EKLENECEK DEBUG LOGLARI BAŞLANGIÇ
+                // ======================================================
+                console.log(`
+                    [DEBUG EŞLEŞTİRME HATASI - Task ID: ${d.id}]
+                    Kullanıcının Yetkili Olduğu ID'ler (linkedPersonIds):`, JSON.stringify(linkedPersonIds), `
+                    Görevin ID'leri:
+                    - relatedPartyId: ${relatedPartyId || 'yok'}
+                    - personsRelatedIds: ${JSON.stringify(personsRelated)}
+                    - clientIdInTask: ${clientIdInTask || 'yok'}
+                `);
                 // Eşleşmeyen görevleri log'layın
                 console.log(`DEBUG X: ELENEN GÖREV Task ID: ${d.id}, Task Type: ${taskData.taskType}, Eşleşme Başarısız.`);
                 continue;
