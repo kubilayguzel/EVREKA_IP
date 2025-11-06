@@ -2007,7 +2007,14 @@ async function fetchAndDisplayPortfolio() {
     } catch (error) {
         console.error("Portföy verileri çekilirken bir hata oluştu:", error);
     }
-}
+    
+    // === DEBUG: Transaction Types Map Kontrolü ===
+        console.log('🔍 Transaction Types Map boyutu:', window.transactionTypesMap?.size || 0);
+        if (window.transactionTypesMap?.size > 0) {
+            console.log('✅ Transaction types yüklendi:', 
+                Array.from(window.transactionTypesMap.keys()).slice(0, 5));
+        }
+    }
 
 window.populateDashboardNumbers = async function (linkedPersonIds, allPortfolios){
     const portfolioCount = allPortfolios.length;
@@ -2088,11 +2095,49 @@ window.fetchAndDisplayInvoices = async function (linkedPersonIds) {
   }
 };
 
+// === GLOBAL DEĞİŞKENLER (DOMContentLoaded'dan ÖNCE) ===
+window.davaItirazRows = [];
+window.transactionTypesMap = new Map();
+
+// Transaction Type servisi
+window.transactionTypeService = {
+    getTransactionTypes: async () => {
+        const typesRef = collection(db, 'transactionTypes');
+        const snapshot = await getDocs(typesRef);
+        const types = [];
+        snapshot.forEach(doc => {
+            types.push({ id: doc.id, ...doc.data() });
+        });
+        return { success: true, data: types };
+    }
+};
+
 // Sayfa yüklendiğinde tüm fonksiyonları başlat
 document.addEventListener('DOMContentLoaded', function () {
     initTheme();
     populateUserInfo();
     fetchAndDisplayPortfolio();
+
+// === DAVA/İTİRAZ SEKMESİ EVENT HANDLER (DOMContentLoaded içinde) ===
+    console.log('🔧 Dava/İtiraz event listener ekleniyor...');
+    
+    // Bootstrap tab event'ini dinle
+    $('#portfolioTopTabs a[data-toggle="tab"]').on('shown.bs.tab', function (e) {
+        const targetHref = $(e.target).attr('href');
+        console.log('📋 Sekme değişti:', targetHref);
+        
+        if (targetHref === '#dava-itiraz-list') {
+            console.log('🔍 Dava/İtiraz sekmesi açıldı, veriler yükleniyor...');
+            
+            // Eğer daha önce yüklenmediyse
+            if (!window.davaItirazRows || window.davaItirazRows.length === 0) {
+                window.fetchAndDisplayObjections();
+            } else {
+                console.log('✅ Veriler zaten yüklü, tekrar render ediliyor...');
+                window.renderDavaItirazTable(window.davaItirazRows);
+            }
+        }
+    });
 
 // --- Sidebar tab click kontrolü ---
     const $ = window.jQuery; // bootstrap.bundle yüklü; jQuery globalde mevcut
@@ -2492,6 +2537,8 @@ window.fetchAndDisplayTasks = async function(){
 
 // === DAVA/İTİRAZ YÜKLEME FONKSİYONU (Portfolio'dan uyarlandı) ===
 window.fetchAndDisplayObjections = async function() {
+    console.log('🚀 fetchAndDisplayObjections çağrıldı');
+    
     try {
         const user = authService.getCurrentUser();
         if (!user) return;
@@ -2655,8 +2702,9 @@ window.fetchAndDisplayObjections = async function() {
     }
 };
 
-// Tabloyu render eden fonksiyon
-function renderDavaItirazTable(rows) {
+// Tabloyu render eden fonksiyon (GLOBAL)
+window.renderDavaItirazTable = function(rows) {
+    console.log('📊 Tablo render ediliyor, satır sayısı:', rows.length);
     const tbody = document.getElementById('dava-itiraz-tbody');
     if (!tbody) return;
     
