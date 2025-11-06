@@ -2123,8 +2123,8 @@ document.addEventListener('DOMContentLoaded', function () {
     console.log('🔧 Dava/İtiraz event listener ekleniyor...');
     
     // Bootstrap tab event'ini dinle
-    $('#portfolioTopTabs a[data-toggle="tab"]').on('shown.bs.tab', function (e) {
-        const targetHref = $(e.target).attr('href');
+        window.jQuery('#portfolioTopTabs a[data-toggle="tab"]').on('shown.bs.tab', function (e) {
+        const targetHref = window.jQuery(e.target).attr('href');
         console.log('📋 Sekme değişti:', targetHref);
         
         if (targetHref === '#dava-itiraz-list') {
