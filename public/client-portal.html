@@ -2362,7 +2362,7 @@ $(function(){
 // Client Portal menü aktif durumu yönetimi
 $(document).ready(function() {
     // Ana menü linklerine click event ekle (İşlerim, Faturalarım, Raporlar)
-    $('.nav-link[data-toggle="tab"]:not(#portfoy-accordion .nav-link)').on('click', function() {
+    $('#sidebar .nav-link[data-toggle="tab"]').on('click', function() {
         // Tüm ana menü nav-link'lerden active sınıfını kaldır
         $('.sidebar .nav-link').removeClass('active');
         // Tıklanan linke active sınıfını ekle
