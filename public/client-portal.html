@@ -3779,89 +3779,90 @@ window.loadSampleTaskDetails = async function(taskType) {
         console.log("DEBUG 1: Firestore'dan çekilen tüm görev sayısı (Status Filtresinden sonra):", allTasksSnapshot.size);
         const matchingTasks = [];
 
-        for (const d of allTasksSnapshot.docs) {
+ for (const d of allTasksSnapshot.docs) {
             
-        // Müvekkil ile eşleşme kontrolü
-            const relatedPartyId = taskData.details?.relatedParty?.id;
-            const personsRelated = taskData.personsRelatedIds || [];
-            const clientIdInTask = taskData.clientId || taskData.clientID; // İki varyasyonu da kontrol et
+            // HATA 1 DÜZELTİLDİ: taskData en başta tanımlanmalı
+            const taskData = d.data();
+            const taskTypeStr = String(taskData.taskType); // Eşleştirme için string'e çevir
 
-        const taskData = d.data();
-        const taskTypeStr = String(taskData.taskType); // Eşleştirme için string'e çevir
+            let isRelatedToClient = false; // Varsayılan olarak false
 
-        let isRelatedToClient = false; // Varsayılan olarak false
-
-        try {
-            // KURAL 1: İstisna (Task Type 19 ve 20)
-            // Bu tiplerde 'taskOwner' alanını 'linkedPersonIds' ile karşılaştır.
-            if (taskTypeStr === '19' || taskTypeStr === '20') {
-                
-                const taskOwnerId = taskData.taskOwner;
-                if (taskOwnerId && clientPersonIdSet.has(taskOwnerId)) {
-                    isRelatedToClient = true;
-                    console.log(`DEBUG (Kural 1) - BAŞARILI: Task ${d.id} (Tip 19/20), 'taskOwner' ile eşleşti: ${taskOwnerId}`);
-                }
-
-                // Fallback Kural (Eski kod + Güvenlik): 'clientId' alanını da kontrol et
-                if (!isRelatedToClient) {
-                    const clientIdInTask = taskData.clientId || taskData.clientID;
-                    if (clientIdInTask && clientPersonIdSet.has(clientIdInTask)) {
+            try {
+                // KURAL 1: İstisna (Task Type 19 ve 20)
+                // Bu tiplerde 'taskOwner' alanını 'linkedPersonIds' ile karşılaştır.
+                if (taskTypeStr === '19' || taskTypeStr === '20') {
+                    
+                    const taskOwnerId = taskData.taskOwner;
+                    if (taskOwnerId && clientPersonIdSet.has(taskOwnerId)) {
                         isRelatedToClient = true;
-                        console.log(`DEBUG (Kural 1 - Fallback) - BAŞARILI: Task ${d.id} (Tip 19/20), 'clientIdInTask' ile eşleşti: ${clientIdInTask}`);
+                        console.log(`DEBUG (Kural 1) - BAŞARILI: Task ${d.id} (Tip 19/20), 'taskOwner' ile eşleşti: ${taskOwnerId}`);
                     }
-                }
-            } 
-            // KURAL 2: Standart Kural (Diğer tüm task tipleri - örn: Yenileme)
-            // 'relatedIpRecordId' üzerinden 'ipRecords' tablosunu sorgula.
-            else {
-                const ipRecordId = taskData.relatedIpRecordId;
-                
-                if (ipRecordId) {
-                    // İlgili portföy kaydını veritabanından çek (DERİNLEMESİNE SORGU)
-                    const ipDocRef = doc(db, 'ipRecords', ipRecordId);
-                    const ipDocSnap = await getDoc(ipDocRef); // ASYNC ÇAĞRI
 
-                    if (ipDocSnap.exists()) {
-                        const ipData = ipDocSnap.data();
-                        
-                        // Portföy kaydının 'applicants' dizisini kontrol et
-                        if (ipData.applicants && Array.isArray(ipData.applicants)) {
-                            
-                            // 'applicants' dizisindeki ID'lerden BİRİ BİLE
-                            // kullanıcının yetkili ID'leriyle (Set) eşleşiyorsa...
-                            isRelatedToClient = ipData.applicants.some(applicant => 
-                                applicant && applicant.id && clientPersonIdSet.has(applicant.id)
-                            );
-
-                            if (isRelatedToClient) {
-                                console.log(`DEBUG (Kural 2) - BAŞARILI: Task ${d.id} (Tip ${taskTypeStr}) -> ipRecord ${ipRecordId} -> applicant ID eşleşti.`);
-                            }
+                    // Fallback Kural (Eski kod + Güvenlik): 'clientId' alanını da kontrol et
+                    if (!isRelatedToClient) {
+                        const clientIdInTask = taskData.clientId || taskData.clientID;
+                        if (clientIdInTask && clientPersonIdSet.has(clientIdInTask)) {
+                            isRelatedToClient = true;
+                            console.log(`DEBUG (Kural 1 - Fallback) - BAŞARILI: Task ${d.id} (Tip 19/20), 'clientIdInTask' ile eşleşti: ${clientIdInTask}`);
                         }
-                    } else {
-                         console.warn(`DEBUG (Kural 2) - HATA: Task ${d.id}, ipRecordId'yi (${ipRecordId}) işaret ediyor ama bu 'ipRecords' kaydı bulunamadı.`);
+                    }
+                } 
+                // KURAL 2: Standart Kural (Diğer tüm task tipleri - örn: Yenileme)
+                // 'relatedIpRecordId' üzerinden 'ipRecords' tablosunu sorgula.
+                else {
+                    const ipRecordId = taskData.relatedIpRecordId;
+                    
+                    if (ipRecordId) {
+                        // İlgili portföy kaydını veritabanından çek (DERİNLEMESİNE SORGU)
+                        const ipDocRef = doc(db, 'ipRecords', ipRecordId);
+                        const ipDocSnap = await getDoc(ipDocRef); // ASYNC ÇAĞRI
+
+                        if (ipDocSnap.exists()) {
+                            const ipData = ipDocSnap.data();
+                            
+                            // Portföy kaydının 'applicants' dizisini kontrol et
+                            if (ipData.applicants && Array.isArray(ipData.applicants)) {
+                                
+                                // 'applicants' dizisindeki ID'lerden BİRİ BİLE
+                                // kullanıcının yetkili ID'leriyle (Set) eşleşiyorsa...
+                                isRelatedToClient = ipData.applicants.some(applicant => 
+                                    applicant && applicant.id && clientPersonIdSet.has(applicant.id)
+                                );
+
+                                if (isRelatedToClient) {
+                                    console.log(`DEBUG (Kural 2) - BAŞARILI: Task ${d.id} (Tip ${taskTypeStr}) -> ipRecord ${ipRecordId} -> applicant ID eşleşti.`);
+                                }
+                            }
+                        } else {
+                             console.warn(`DEBUG (Kural 2) - HATA: Task ${d.id}, ipRecordId'yi (${ipRecordId}) işaret ediyor ama bu 'ipRecords' kaydı bulunamadı.`);
+                        }
                     }
                 }
+            } catch (matchError) {
+                 console.error(`DEBUG - EŞLEŞTİRME SIRASINDA HATA (Task ID: ${d.id}):`, matchError);
+                 isRelatedToClient = false; // Hata durumunda güvenli olarak false ata
             }
-        } catch (matchError) {
-             console.error(`DEBUG - EŞLEŞTİRME SIRASINDA HATA (Task ID: ${d.id}):`, matchError);
-             isRelatedToClient = false; // Hata durumunda güvenli olarak false ata
-        }
-            
+                
+            // Filtreleme ve HATA 2'NİN DÜZELTİLDİĞİ YENİ LOG BLOĞU
             if (!isRelatedToClient) {
+                
                 console.log(`
                     [DEBUG EŞLEŞTİRME HATASI - Task ID: ${d.id}]
                     Kullanıcının Yetkili Olduğu ID'ler (linkedPersonIds):`, JSON.stringify(linkedPersonIds), `
-                    Görevin ID'leri:
-                    - relatedPartyId: ${relatedPartyId || 'yok'}
-                    - personsRelatedIds: ${JSON.stringify(personsRelated)}
-                    - clientIdInTask: ${clientIdInTask || 'yok'}
+                    Görevin ID'leri (YENİ LOGIC KONTROLÜ):
+                    - Task Type: ${taskTypeStr}
+                    - taskOwner (19/20 için): ${taskData.taskOwner || 'yok'}
+                    - clientIdInTask (19/20 fallback): ${taskData.clientId || taskData.clientID || 'yok'}
+                    - relatedIpRecordId (Diğerleri için): ${taskData.relatedIpRecordId || 'yok'}
                 `);
-                // Eşleşmeyen görevleri log'layın
+                
                 console.log(`DEBUG X: ELENEN GÖREV Task ID: ${d.id}, Task Type: ${taskData.taskType}, Eşleşme Başarısız.`);
                 continue;
             }
-            console.log("DEBUG 2: Müvekkil ile eşleşen Task ID:", d.id, "Task Type:", taskData.taskType, "Task Status:", taskData.status);
-            const meta = await window._getTransactionTypeMeta(taskData.taskType);
+
+            console.log("DEBUG 2: BAŞARILI EŞLEŞME. Görev listeye ekleniyor. Task ID:", d.id, "Task Type:", taskData.taskType, "Task Status:", taskData.status);
+            
+            const meta  = await window._getTransactionTypeMeta(taskData.taskType);
             const label = window._taskLabelGuess(taskData, meta);
             const isRenewal = /yenileme/.test(label);
             const isBulletin = window.RX_BULTEN.test(label) || taskData.taskType === '20';
