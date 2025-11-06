@@ -4868,5 +4868,59 @@ jQuery(document).ready(function($) {
 })();
 </script>
 
+
+<script>
+// --- Bootstrap tab normalization to prevent dual-active tabs ---
+(function () {
+  function normalizeActiveTab(e) {
+    try {
+      var trigger = e && e.target ? e.target : document.querySelector('[data-bs-toggle="tab"].active');
+      var selector = trigger && (trigger.getAttribute('data-bs-target') || trigger.getAttribute('href'));
+      // 1) Deactivate all nav links
+      document.querySelectorAll('[data-bs-toggle="tab"]').forEach(function (el) {
+        el.classList.remove('active');
+        el.setAttribute('aria-selected', 'false');
+      });
+      // 2) Activate the clicked nav
+      if (trigger) {
+        trigger.classList.add('active');
+        trigger.setAttribute('aria-selected', 'true');
+      }
+      // 3) Hide all panes
+      document.querySelectorAll('.tab-pane').forEach(function (pane) {
+        pane.classList.remove('show','active');
+      });
+      // 4) Show only the target pane
+      if (selector) {
+        var pane = document.querySelector(selector);
+        if (pane) {
+          pane.classList.add('show','active');
+        }
+      }
+    } catch (err) {
+      console.error('Tab normalize error:', err);
+    }
+  }
+
+  // On Bootstrap tab show event
+  if (window.jQuery) {
+    jQuery(document).on('shown.bs.tab', 'a[data-bs-toggle="tab"]', normalizeActiveTab);
+  } else {
+    document.addEventListener('shown.bs.tab', normalizeActiveTab);
+  }
+
+  // Also run on click as a fallback (in case event doesn't bubble)
+  document.querySelectorAll('[data-bs-toggle="tab"]').forEach(function (el) {
+    el.addEventListener('click', function (e) {
+      // let Bootstrap handle first; we normalize right after with microtask
+      setTimeout(function(){ normalizeActiveTab({target: el}); }, 0);
+    }, {passive:true});
+  });
+
+  // Normalize once on load (handles pre-marked "active" classes)
+  window.addEventListener('DOMContentLoaded', function(){ setTimeout(normalizeActiveTab, 0); });
+})();
+</script>
+
 </body>
 </html>
