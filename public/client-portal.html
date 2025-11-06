@@ -3080,45 +3080,46 @@ $(document).on('hidden.bs.modal', '#portfolioDetailModal', function (e) {
     $('#myTab a[href="#modal-islemler"]').addClass('active').attr('aria-selected', 'true');
     $('#modal-islemler').addClass('show active');
     
-    // Ana sayfayı kayıtlı duruma geri yükle
-    setTimeout(() => {
-        if (window._savedPortfolioState) {
-            const savedTab = window._savedPortfolioState.activeTab;
-            const savedSidebar = window._savedPortfolioState.sidebarActive;
-            
-            // Ana content tab'larını sıfırla
-            $('.content > .tab-content > .tab-pane').removeClass('show active');
-            
-            // Kaydedilmiş tab'ı aktif yap
-            if (savedTab) {
-                $('#' + savedTab).addClass('show active');
-            }
-            
-            // Sidebar'ı güncelle
-            $('#sidebar .nav-link').removeClass('active');
-            if (savedSidebar) {
-                $(`#sidebar a[href="${savedSidebar}"]`).addClass('active');
-            }
-            
-            // Portföy içindeyse, marka listesini ve filtreleri yenile
-            if (savedTab === 'portfolio-content') {
-                setTimeout(() => {
-                    $('#portfolioTopTabs a[href="#marka-list"]').tab('show');
-                    
-                    if (typeof window.applyMenseFilterToActivePane === 'function') {
-                        window.applyMenseFilterToActivePane();
-                    }
-                    
-                    if (window.renderMarkaPagination) {
-                        window.renderMarkaPagination();
-                    }
-                }, 50);
-            }
-            
-            // State'i temizle
-            delete window._savedPortfolioState;
-        }
-    }, 50);
+  // Ana sayfayı kayıtlı duruma geri yükle
+  setTimeout(() => {
+    if (window._savedPortfolioState) {
+      const savedTab      = window._savedPortfolioState.activeTab;
+      const savedSidebar  = window._savedPortfolioState.sidebarActive;
+      const savedInnerTab = window._savedPortfolioState.portfolioInnerTab; // ⇦ YENİ
+
+      // Ana content tab'larını sıfırla
+      $('.content > .tab-content > .tab-pane').removeClass('show active');
+
+      // Kaydedilmiş content tab'ını geri getir
+      if (savedTab) {
+        $('#' + savedTab).addClass('show active');
+      }
+
+      // Sidebar aktifliği
+      $('#sidebar .nav-link').removeClass('active');
+      if (savedSidebar) {
+        $(`#sidebar a[href="${savedSidebar}"]`).addClass('active');
+      }
+
+      // Portföy içindeysek: KAYDEDİLEN İÇ SEKMEYE DÖN
+      if (savedTab === 'portfolio-content') {
+        setTimeout(() => {
+          const target = savedInnerTab || '#marka-list'; // emniyet amaçlı fallback
+          $('#portfolioTopTabs a[href="'+ target +'"]').tab('show');
+
+          if (typeof window.applyMenseFilterToActivePane === 'function') {
+            window.applyMenseFilterToActivePane();
+          }
+          if (window.renderMarkaPagination) {
+            window.renderMarkaPagination();
+          }
+        }, 50);
+      }
+
+      // Temizle
+      delete window._savedPortfolioState;
+    }
+  }, 50);
 });
 
 // ✅ Transaction'lara ait PDF'leri getir
