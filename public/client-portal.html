@@ -2329,23 +2329,29 @@ $(document).on('change', '#menseFilter', function(){
 
 // === BİRLEŞTİRİLMİŞ ve DÜZELTİLMİŞ PORTFÖY TAB HANDLER ===
 $(document).on('shown.bs.tab', '#portfolioTopTabs a[data-toggle="tab"]', function (e) {    
-  // 1) Her sekme değişiminde menşe filtresi
-  applyMenseFilterToActivePane();
-
-  // 2) Hedef sekme
-  const targetHref = $(e.target).attr('href');
-
-  // 3) Dava/İtiraz sekmesi açıldıysa
-  if (targetHref === '#dava-itiraz-list') {
+    
+    // 1. Her sekme değişiminde menşe filtresini uygula
+    applyMenseFilterToActivePane();
+    
+    // 2. Hedef sekmenin href'ini al
+    const targetHref = $(e.target).attr('href');
+    
+    // 3. Eğer Dava/İtiraz sekmesi açıldıysa...
+    if (targetHref === '#dava-itiraz-list') {
+        console.log('✅ Birleştirilmiş handler: Dava/İtiraz sekmesi açıldı, veriler yükleniyor...');
+        
     if (!window.davaItirazRows || window.davaItirazRows.length === 0) {
-      window.fetchAndDisplayObjections();
-    } else {
-      const tbody = document.getElementById('dava-itiraz-tbody');
-      if (tbody && (tbody.innerHTML.trim() === '' || tbody.children.length === 0 || (tbody.children[0]?.children[0]?.textContent === 'Yükleniyor.'))) {
-        window.renderDavaItirazTable(window.davaItirazRows);
-      }
+            window.fetchAndDisplayObjections();
+        }
+        // Veri yüklü AMA tablo boşsa (önceki bir hatadan dolayı), tekrar render etmeyi dene
+        else {
+            const tbody = document.getElementById('dava-itiraz-tbody');
+            if (tbody && (tbody.innerHTML.trim() === '' || tbody.children.length === 0 || (tbody.children[0]?.children[0]?.textContent === 'Yükleniyor...'))) {
+                console.log('✅ Veri yüklüydü ama tablo boştu, tekrar render ediliyor...');
+                window.renderDavaItirazTable(window.davaItirazRows);
+            }
+        }
     }
-  }
 });
 
 $(function(){
@@ -2356,7 +2362,7 @@ $(function(){
 // Client Portal menü aktif durumu yönetimi
 $(document).ready(function() {
     // Ana menü linklerine click event ekle (İşlerim, Faturalarım, Raporlar)
-    $('#sidebar .nav-link[data-toggle="tab"]').on('click', function() {
+    $('.nav-link[data-toggle="tab"]:not(#portfoy-accordion .nav-link)').on('click', function() {
         // Tüm ana menü nav-link'lerden active sınıfını kaldır
         $('.sidebar .nav-link').removeClass('active');
         // Tıklanan linke active sınıfını ekle
@@ -2478,50 +2484,59 @@ window.fetchAndDisplayTasks = async function(){
       collection(db,'tasks'),
       where('status','==','awaiting_client_approval')
     );
-    const snap = await runGetDocs(q);
+const snap = await runGetDocs(q);
 
-    const awaitingTasks = [];
-    snap.forEach(d => {
-      const taskData = d.data();
-      const relatedPartyId = taskData.details?.relatedParty?.id;
-      const personsRelated = taskData.personsRelatedIds || [];
-      const clientIdInTask = taskData.clientId || taskData.clientID;
+const awaitingTasks = [];
+snap.forEach(d => {
+  try {
+    const taskData = d.data() || {};
+    const relatedPartyId = taskData.details?.relatedParty?.id;
+    const personsRelated = Array.isArray(taskData.personsRelatedIds) ? taskData.personsRelatedIds : [];
+    const clientIdInTask = (taskData.clientId ?? taskData.clientID) || null;
 
-      // === DEBUG: personsRelatedIds ve ilgili alanlar ===
-        const debugRow = {
-            taskId: d.id,
-            taskType: taskData.taskType,
-            status: taskData.status,
-            personsRelatedIds: Array.isArray(taskData.personsRelatedIds) ? taskData.personsRelatedIds : null,
-            rawPersonsRelatedIds: taskData.personsRelatedIds, // tip/format görmek için
-            relatedPartyId,
-            clientIdInTask,
-            typeofPersonsRelatedIds: typeof taskData.personsRelatedIds
-        };
-        console.log("TASK DEBUG:", debugRow);
-        window.__taskDebug.push(debugRow);
-            let isRelatedToClient = false;
-      
-      // Yayına İtiraz işleri (taskType=20) için SADECE clientId kontrolü
-      const isObjectionTask = (taskData.taskType === "20" || 
-                               taskData.taskType === 20 || 
-                               taskData.taskType === "objection_to_trademark_publication");
-      
-      if (isObjectionTask) {
-        isRelatedToClient = (clientIdInTask && linkedPersonIds.includes(clientIdInTask));
-      } else {
-        // Diğer tüm görevler: Eski kural
-        isRelatedToClient = 
-            (relatedPartyId && linkedPersonIds.includes(relatedPartyId)) ||
-            (Array.isArray(personsRelated) && personsRelated.some(id => linkedPersonIds.includes(id)));
-      }
-      
-      if (!isRelatedToClient) return;
-      
-      awaitingTasks.push({ id:d.id, ...taskData });
+    // DEBUG: personsRelatedIds ve ilişki sinyalleri
+    console.log('🔎 personsRelatedIds debug', {
+      taskId: d?.id,
+      personsRelated,
+      relatedPartyId,
+      clientIdInTask,
     });
-    
-    window.__allClientTasks = awaitingTasks;
+
+    let isRelatedToClient = false;
+
+    // 1) task.clientId / clientID doğrudan eşleşiyor mu?
+    if (clientIdInTask && clientId && clientIdInTask === clientId) {
+      isRelatedToClient = true;
+    }
+
+    // 2) details.relatedParty.id ile eşleşme
+    if (!isRelatedToClient && relatedPartyId && clientId && relatedPartyId === clientId) {
+      isRelatedToClient = true;
+    }
+
+    // 3) personsRelatedIds ∩ linkedPersonIds (müşteriyle ilişkili kişi id'leri) kesişimi var mı?
+    if (
+      !isRelatedToClient &&
+      Array.isArray(linkedPersonIds) && linkedPersonIds.length > 0 &&
+      personsRelated.some(id => linkedPersonIds.includes(id))
+    ) {
+      isRelatedToClient = true;
+    }
+
+    console.log('🔗 relation check', {
+      taskId: d?.id,
+      decided: isRelatedToClient,
+    });
+
+    if (!isRelatedToClient) return;
+
+    awaitingTasks.push({ id: d.id, ...taskData });
+  } catch (err) {
+    console.error('💥 Task row failed', d?.id, err);
+  }
+});
+
+window.__allClientTasks = awaitingTasks;
 
     let countPending   = 0;
     let countRenewal   = 0;
@@ -2708,12 +2723,6 @@ window.fetchAndDisplayObjections = async function() {
                     statusText = REQUEST_RESULT_STATUS[String(parentTx.requestResult)] || `Bilinmiyor (ID: ${parentTx.requestResult})`;
                 }
 
-                // push öncesine (veya hemen içinde) ekle
-                const originRaw = (record.origin || parentTx.origin || '').toString().toUpperCase().trim();
-                const originBucket = (originRaw === 'TÜRKPATENT' || originRaw === 'TURKPATENT' || originRaw === '')
-                ? 'TÜRKPATENT'
-                : 'YURTDISI';
-
                 objectionRows.push({
                     id: parentTx.id,
                     recordId: record.id,
@@ -2725,7 +2734,6 @@ window.fetchAndDisplayObjections = async function() {
                     bulletinDate: formatDate(bulletinDate),
                     bulletinNo,
                     epatsDate: formatDate(epatsDate),
-                    origin: originBucket,
                     statusText
                 });
             }
@@ -2759,7 +2767,6 @@ window.renderDavaItirazTable = function(rows) {
 
     rows.forEach((row, index) => {
         const tr = document.createElement('tr');
-        tr.setAttribute('data-origin', (row.origin || 'TÜRKPATENT'));
         tr.innerHTML = `
             <td>${index + 1}</td>
             <td><a href="#" class="portfolio-detail-link" data-item-id="${row.recordId}" data-toggle="modal" data-target="#portfolioDetailModal">${row.title}</a></td>
@@ -2773,10 +2780,6 @@ window.renderDavaItirazTable = function(rows) {
             <td><span class="badge badge-warning">${row.statusText}</span></td>
         `;
         tbody.appendChild(tr);
-        
-        if (typeof window.applyMenseFilterToActivePane === 'function') {
-        try { window.applyMenseFilterToActivePane(); } catch (_) {}
-        }
     });
 }
 
@@ -2953,15 +2956,14 @@ window.renderTaskPage = function(page, perPage) {
     });
 };
 
+
 // Modal açıldığında verileri set et
 $(document).on('show.bs.modal', '#portfolioDetailModal', async function (e) {
-  // Ana sayfanın mevcut durumunu kaydet
-  window._savedPortfolioState = {
-    activeTab: $('.content > .tab-content > .tab-pane.show.active').attr('id'),
-    sidebarActive: $('#sidebar .nav-link.active').attr('href'),
-    // ⇩ YENİ: aktif iç portföy sekmesi (Marka/Patent/Tasarım/Dava-İtiraz)
-    portfolioInnerTab: $('#portfolioTopTabs .nav-link.active').attr('href') || null
-  };
+    // Ana sayfanın mevcut durumunu kaydet
+    window._savedPortfolioState = {
+        activeTab: $('.content > .tab-content > .tab-pane.show.active').attr('id'),
+        sidebarActive: $('#sidebar .nav-link.active').attr('href')
+    };
     
     const triggerLink = $(e.relatedTarget);
     const itemId = triggerLink.data('item-id');
@@ -3105,46 +3107,45 @@ $(document).on('hidden.bs.modal', '#portfolioDetailModal', function (e) {
     $('#myTab a[href="#modal-islemler"]').addClass('active').attr('aria-selected', 'true');
     $('#modal-islemler').addClass('show active');
     
-  // Ana sayfayı kayıtlı duruma geri yükle
-  setTimeout(() => {
-    if (window._savedPortfolioState) {
-      const savedTab      = window._savedPortfolioState.activeTab;
-      const savedSidebar  = window._savedPortfolioState.sidebarActive;
-      const savedInnerTab = window._savedPortfolioState.portfolioInnerTab; // ⇦ YENİ
-
-      // Ana content tab'larını sıfırla
-      $('.content > .tab-content > .tab-pane').removeClass('show active');
-
-      // Kaydedilmiş content tab'ını geri getir
-      if (savedTab) {
-        $('#' + savedTab).addClass('show active');
-      }
-
-      // Sidebar aktifliği
-      $('#sidebar .nav-link').removeClass('active');
-      if (savedSidebar) {
-        $(`#sidebar a[href="${savedSidebar}"]`).addClass('active');
-      }
-
-      // Portföy içindeysek: KAYDEDİLEN İÇ SEKMEYE DÖN
-      if (savedTab === 'portfolio-content') {
-        setTimeout(() => {
-          const target = savedInnerTab || '#marka-list'; // emniyet amaçlı fallback
-          $('#portfolioTopTabs a[href="'+ target +'"]').tab('show');
-
-          if (typeof window.applyMenseFilterToActivePane === 'function') {
-            window.applyMenseFilterToActivePane();
-          }
-          if (window.renderMarkaPagination) {
-            window.renderMarkaPagination();
-          }
-        }, 50);
-      }
-
-      // Temizle
-      delete window._savedPortfolioState;
-    }
-  }, 50);
+    // Ana sayfayı kayıtlı duruma geri yükle
+    setTimeout(() => {
+        if (window._savedPortfolioState) {
+            const savedTab = window._savedPortfolioState.activeTab;
+            const savedSidebar = window._savedPortfolioState.sidebarActive;
+            
+            // Ana content tab'larını sıfırla
+            $('.content > .tab-content > .tab-pane').removeClass('show active');
+            
+            // Kaydedilmiş tab'ı aktif yap
+            if (savedTab) {
+                $('#' + savedTab).addClass('show active');
+            }
+            
+            // Sidebar'ı güncelle
+            $('#sidebar .nav-link').removeClass('active');
+            if (savedSidebar) {
+                $(`#sidebar a[href="${savedSidebar}"]`).addClass('active');
+            }
+            
+            // Portföy içindeyse, marka listesini ve filtreleri yenile
+            if (savedTab === 'portfolio-content') {
+                setTimeout(() => {
+                    $('#portfolioTopTabs a[href="#marka-list"]').tab('show');
+                    
+                    if (typeof window.applyMenseFilterToActivePane === 'function') {
+                        window.applyMenseFilterToActivePane();
+                    }
+                    
+                    if (window.renderMarkaPagination) {
+                        window.renderMarkaPagination();
+                    }
+                }, 50);
+            }
+            
+            // State'i temizle
+            delete window._savedPortfolioState;
+        }
+    }, 50);
 });
 
 // ✅ Transaction'lara ait PDF'leri getir
@@ -3569,6 +3570,10 @@ async function loadTransactions(ipRecordId) {
 
 </script>
 <script>
+// ---- debug helpers ----
+window.__taskDebug = window.__taskDebug || [];
+// ------------------------
+
 // --- Sidebar / Top-level tab behavior ---
 (function(){
   var $ = window.jQuery;
