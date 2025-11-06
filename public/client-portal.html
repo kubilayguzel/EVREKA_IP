@@ -2481,6 +2481,7 @@ window.fetchAndDisplayTasks = async function(){
     const snap = await runGetDocs(q);
 
     const awaitingTasks = [];
+    window.__taskDebug = [];
     snap.forEach(d => {
       const taskData = d.data();
       const relatedPartyId = taskData.details?.relatedParty?.id;
