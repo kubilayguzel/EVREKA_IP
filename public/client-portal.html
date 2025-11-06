@@ -2340,11 +2340,9 @@ $(document).on('shown.bs.tab', '#portfolioTopTabs a[data-toggle="tab"]', functio
     if (targetHref === '#dava-itiraz-list') {
         console.log('✅ Birleştirilmiş handler: Dava/İtiraz sekmesi açıldı, veriler yükleniyor...');
         
-        // Veri daha önce (optimize fonksiyonla) yüklenmemişse yükle
-        if (!window.davaItirazRows || window.davaItirazRows.length === 0) {
-            // YENİ OPTİMİZE FONKSİYONU ÇAĞIR
-            await window.fetchAndDisplayObjections(); 
-        } 
+    if (!window.davaItirazRows || window.davaItirazRows.length === 0) {
+            window.fetchAndDisplayObjections();
+        }
         // Veri yüklü AMA tablo boşsa (önceki bir hatadan dolayı), tekrar render etmeyi dene
         else {
             const tbody = document.getElementById('dava-itiraz-tbody');
