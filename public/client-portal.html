@@ -2487,7 +2487,20 @@ window.fetchAndDisplayTasks = async function(){
       const personsRelated = taskData.personsRelatedIds || [];
       const clientIdInTask = taskData.clientId || taskData.clientID;
 
-      let isRelatedToClient = false;
+      // === DEBUG: personsRelatedIds ve ilgili alanlar ===
+        const debugRow = {
+            taskId: d.id,
+            taskType: taskData.taskType,
+            status: taskData.status,
+            personsRelatedIds: Array.isArray(taskData.personsRelatedIds) ? taskData.personsRelatedIds : null,
+            rawPersonsRelatedIds: taskData.personsRelatedIds, // tip/format görmek için
+            relatedPartyId,
+            clientIdInTask,
+            typeofPersonsRelatedIds: typeof taskData.personsRelatedIds
+        };
+        console.log("TASK DEBUG:", debugRow);
+        window.__taskDebug.push(debugRow);
+            let isRelatedToClient = false;
       
       // Yayına İtiraz işleri (taskType=20) için SADECE clientId kontrolü
       const isObjectionTask = (taskData.taskType === "20" || 
