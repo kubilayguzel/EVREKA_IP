@@ -2120,29 +2120,49 @@ document.addEventListener('DOMContentLoaded', function () {
     populateUserInfo();
     fetchAndDisplayPortfolio();
 
-// === DAVA/İTİRAZ SEKMESİ EVENT HANDLER (DOMContentLoaded içinde) ===
     console.log('🔧 Dava/İtiraz event listener ekleniyor...');
-    
-    // Bootstrap tab event'ini dinle
-    $('#portfolioTopTabs a[data-toggle="tab"]').on('shown.bs.tab', function (e) {
-        const targetHref = $(e.target).attr('href');
-        console.log('📋 Sekme değişti:', targetHref);
-        
-        if (targetHref === '#dava-itiraz-list') {
-            console.log('🔍 Dava/İtiraz sekmesi açıldı, veriler yükleniyor...');
-            
-            // Eğer daha önce yüklenmediyse
-            if (!window.davaItirazRows || window.davaItirazRows.length === 0) {
-                window.fetchAndDisplayObjections();
-            } else {
-                console.log('✅ Veriler zaten yüklü, tekrar render ediliyor...');
-                window.renderDavaItirazTable(window.davaItirazRows);
-            }
-        }
-    });
 
-// --- Sidebar tab click kontrolü ---
-    const $ = window.jQuery; // bootstrap.bundle yüklü; jQuery globalde mevcut
+    // Güvenli jQuery referansı al (global property assignment yaptıysanız window.$ hazır olur)
+    const jq = window.jQuery || window.$ || null;
+
+    if (jq) {
+        jq('#portfolioTopTabs a[data-toggle="tab"]').on('shown.bs.tab', function (e) {
+            const targetHref = jq(e.target).attr('href');
+            console.log('📋 Sekme değişti:', targetHref);
+
+            if (targetHref === '#dava-itiraz-list') {
+                console.log('🔍 Dava/İtiraz sekmesi açıldı, veriler yükleniyor...');
+
+                if (!window.davaItirazRows || window.davaItirazRows.length === 0) {
+                    window.fetchAndDisplayObjections();
+                } else {
+                    console.log('✅ Veriler zaten yüklü, tekrar render ediliyor...');
+                    window.renderDavaItirazTable(window.davaItirazRows);
+                }
+            }
+        });
+    } else {
+        // jQuery yoksa basit vanilla fallback (Bootstrap tab event'leri olmayabilir; en azından hata vermez)
+        console.warn('jQuery bulunamadı — portfolioTopTabs için vanilla fallback uygulanıyor.');
+        const tabsContainer = document.querySelector('#portfolioTopTabs');
+        if (tabsContainer) {
+            tabsContainer.addEventListener('click', function (ev) {
+                const a = ev.target.closest && ev.target.closest('a[data-toggle="tab"]');
+                if (!a) return;
+                const href = a.getAttribute('href');
+                if (href === '#dava-itiraz-list') {
+                    if (!window.davaItirazRows || window.davaItirazRows.length === 0) {
+                        window.fetchAndDisplayObjections();
+                    } else {
+                        window.renderDavaItirazTable(window.davaItirazRows);
+                    }
+                }
+            });
+        }
+    }
+
+    // --- Sidebar tab click kontrolü ---
+
     if ($) {
         // Sidebar içindeki tab linklerine tıklandığında sadece biri aktif kalsın
         $('#sidebar a[data-toggle="tab"]').on('show.bs.tab', function (e) {
