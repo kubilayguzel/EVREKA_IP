@@ -2311,26 +2311,30 @@ $(document).on('change', '#menseFilter', function(){
     applyMenseFilterToActivePane();
 });
 
-// === BİRLEŞTİRİLMİŞ PORTFÖY TAB HANDLER ===
+// === BİRLEŞTİRİLMİŞ ve DÜZELTİLMİŞ PORTFÖY TAB HANDLER ===
 $(document).on('shown.bs.tab', '#portfolioTopTabs a[data-toggle="tab"]', async function (e) {
+    // e.target -> yeni aktif olan sekme
+    // e.relatedTarget -> az önce kapanan sekme
     
-    // 1. Her sekme değişiminde filtreyi uygula (Bu zaten vardı)
+    // 1. Her sekme değişiminde menşe filtresini uygula
     applyMenseFilterToActivePane();
     
-    // 2. Sadece Dava/İtiraz sekmesi ise veriyi yükle (YENİ EKLENDİ)
+    // 2. Hedef sekmenin href'ini al
     const targetHref = $(e.target).attr('href');
     
+    // 3. Eğer Dava/İtiraz sekmesi açıldıysa...
     if (targetHref === '#dava-itiraz-list') {
         console.log('✅ Birleştirilmiş handler: Dava/İtiraz sekmesi açıldı, veriler yükleniyor...');
         
-        // Veri daha önce yüklenmemişse yükle
+        // Veri daha önce (optimize fonksiyonla) yüklenmemişse yükle
         if (!window.davaItirazRows || window.davaItirazRows.length === 0) {
-            await window.fetchAndDisplayObjections();
+            // YENİ OPTİMİZE FONKSİYONU ÇAĞIR
+            await window.fetchAndDisplayObjections(); 
         } 
         // Veri yüklü AMA tablo boşsa (önceki bir hatadan dolayı), tekrar render etmeyi dene
         else {
             const tbody = document.getElementById('dava-itiraz-tbody');
-            if (tbody && (tbody.innerHTML.trim() === '' || tbody.children.length === 0)) {
+            if (tbody && (tbody.innerHTML.trim() === '' || tbody.children.length === 0 || (tbody.children[0]?.children[0]?.textContent === 'Yükleniyor...'))) {
                 console.log('✅ Veri yüklüydü ama tablo boştu, tekrar render ediliyor...');
                 window.renderDavaItirazTable(window.davaItirazRows);
             }
@@ -2532,35 +2536,48 @@ window.fetchAndDisplayTasks = async function(){
   }
 };
 
-// === DAVA/İTİRAZ YÜKLEME FONKSİYONU (Portfolio'dan uyarlandı) ===
 window.fetchAndDisplayObjections = async function() {
-    console.log('🚀 fetchAndDisplayObjections çağrıldı');
+    console.log('🚀 fetchAndDisplayObjections (YENİ OPTİMİZE) çağrıldı');
     
+    const tbody = document.getElementById('dava-itiraz-tbody');
+    if (!tbody) {
+        console.error('❌ #dava-itiraz-tbody bulunamadı!');
+        return;
+    }
+    // Yükleniyor... mesajı
+    tbody.innerHTML = '<tr><td colspan="10" class="text-center"><i class="fas fa-spinner fa-spin"></i> Yükleniyor...</td></tr>';
+
     try {
+        // 1. Kullanıcı ve Müvekkil ID'lerini al
         const user = authService.getCurrentUser();
-        if (!user) return;
+        if (!user) {
+            tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted">Kullanıcı girişi yapılmamış.</td></tr>';
+            return;
+        }
         
         const userDocRef = doc(db, "users", user.uid);
         const userSnapshot = await getDoc(userDocRef);
         
-        if (!userSnapshot.exists()) return;
+        if (!userSnapshot.exists()) {
+             tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted">Kullanıcı verisi bulunamadı.</td></tr>';
+             return;
+        }
         
         const linkedPersonIds = userSnapshot.data().linkedPersonIds || [];
         
         if (linkedPersonIds.length === 0) {
             console.log("Bağlı müvekkil bulunamadı.");
+            tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted">Bağlı müvekkil bulunamadı.</td></tr>';
             return;
         }
-
-        console.log('🔍 Dava/İtiraz verileri yükleniyor...', {
+        
+        const clientPersonIdSet = new Set(linkedPersonIds);
+        console.log('🔍 Dava/İtiraz (Optimize) yükleniyor...', {
             linkedPersonIds,
             count: linkedPersonIds.length
         });
 
-        // İtiraz type ID'leri (Portfolio'daki gibi)
-        const PARENT_TYPE_IDS = ['7', '19', '20'];
-        
-        // Transaction Type'ları yükle (henüz yüklenmediyse)
+        // 2. Transaction Type'ları yükle (cache'de yoksa)
         if (transactionTypesMap.size === 0) {
             const txTypesResult = await window.transactionTypeService?.getTransactionTypes();
             if (txTypesResult?.success) {
@@ -2570,134 +2587,136 @@ window.fetchAndDisplayObjections = async function() {
             }
         }
 
-        // TÜM ipRecords'ı çek (applicants array kontrolü için)
+        // 3. Müvekkile ait TÜM portföy kayıtlarını bul (Bu kısım hızlı)
         const allIpQuery = query(collection(db, "ipRecords"));
         const allIpSnap = await runGetDocs(allIpQuery);
         
-        const relevantRecords = [];
+        const relevantRecords = []; // Client's portfolio items
         
         allIpSnap.forEach(doc => {
             const data = doc.data();
-            
-            // applicants array'inde linked person var mı?
             if (data.applicants && Array.isArray(data.applicants)) {
-                const hasMatch = data.applicants.some(applicant => {
-                    return applicant && applicant.id && linkedPersonIds.includes(applicant.id);
-                });
-                
+                const hasMatch = data.applicants.some(applicant => 
+                    applicant && applicant.id && clientPersonIdSet.has(applicant.id)
+                );
                 if (hasMatch) {
                     relevantRecords.push({ id: doc.id, ...data });
                 }
             }
         });
 
-        console.log(`📊 Toplam ${relevantRecords.length} portföy kaydı bulundu`);
+        console.log(`📊 Toplam ${relevantRecords.length} portföy kaydı bulundu (Optimize sorgu)`);
+        
+        if (relevantRecords.length === 0) {
+            renderDavaItirazTable([]); // Boş tabloyu render et
+            return;
+        }
+
+        const PARENT_TYPE_IDS = ['7', '19', '20']; // İlgilendiğimiz transaction tipleri
+
+        // 4. OPTİMİZASYON: Tüm sorgu promise'lerini bir diziye topla
+        // 147 kaydın 147'si için de transaction sorgusu oluştur
+        const transactionPromises = relevantRecords.map(record => {
+            const transactionsRef = collection(db, 'ipRecords', record.id, 'transactions');
+            // Sorguyu optimize et: Sadece ilgili tipleri iste
+            const q = query(transactionsRef, where('type', 'in', PARENT_TYPE_IDS));
+            
+            // getDocs() promise'ini döndür
+            return getDocs(q).then(snapshot => ({ record, snapshot })); // record'u da result'a ekle
+        });
+
+        // 5. PARALEL ÇALIŞTIRMA: Tüm sorguları AYNI ANDA çalıştır
+        console.log(`⏳ ${transactionPromises.length} adet portföy kaydının işlem (transaction) dökümü paralel olarak çekiliyor...`);
+        const results = await Promise.all(transactionPromises);
+        console.log(`✅ ${results.length} adet portföy işlemi çekildi, veriler işleniyor.`);
 
         const objectionRows = [];
-        
-        // Her kayıt için transaction'ları çek
-        for (const record of relevantRecords) {
+        const formatDate = (v) => {
+            if (!v) return '-';
             try {
-                // Transactions koleksiyonunu çek
-                const transactionsRef = collection(db, 'ipRecords', record.id, 'transactions');
-                const transSnapshot = await getDocs(transactionsRef);
-                
-                const transactions = [];
-                transSnapshot.forEach(txDoc => {
-                    transactions.push({ id: txDoc.id, ...txDoc.data() });
-                });
+                let dt;
+                if (typeof v === 'string') dt = new Date(v);
+                else if (typeof v?.toDate === 'function') dt = v.toDate();
+                else if ('seconds' in (v||{})) dt = new Date(v.seconds*1000);
+                else if (v instanceof Date) dt = v;
+                else return String(v);
+                if (isNaN(dt.getTime())) return String(v);
+                const day = String(dt.getDate()).padStart(2, '0');
+                const month = String(dt.getMonth() + 1).padStart(2, '0');
+                const year = dt.getFullYear();
+                return `${day}/${month}/${year}`;
+            } catch { return String(v); }
+        };
 
-                // Parent itirazları filtrele
-                const parentTransactions = transactions.filter(tx =>
-                    PARENT_TYPE_IDS.includes(String(tx.type)) &&
-                    (tx.transactionHierarchy === 'parent' || !tx.parentId)
-                );
+        // 6. Sonuçları işle (Bu döngüde 'await' YOK, bu yüzden çok hızlı)
+        for (const { record, snapshot } of results) {
+            if (snapshot.empty) continue; // Bu portföyde ilgili işlem yoksa atla
 
-                // Her parent için satır oluştur
-                for (const parentTx of parentTransactions) {
-                    const typeMeta = transactionTypesMap.get(String(parentTx.type));
-                    const transactionTypeName = typeMeta?.alias || typeMeta?.name || `İşlem ${parentTx.type}`;
+            const transactions = [];
+            snapshot.forEach(txDoc => {
+                transactions.push({ id: txDoc.id, ...txDoc.data() });
+            });
 
-                    const opponentName =
-                        parentTx.oppositionOwner ||
-                        parentTx.relatedParty?.name ||
-                        (Array.isArray(parentTx.objectionOwners) && parentTx.objectionOwners.length
-                            ? parentTx.objectionOwners.map(o => o.name).join(', ')
-                            : '-');
+            // Parent işlemleri filtrele
+            const parentTransactions = transactions.filter(tx =>
+                (tx.transactionHierarchy === 'parent' || !tx.parentId)
+            );
 
-                    const bulletinNo = record.details?.brandInfo?.opposedMarkBulletinNo || parentTx.bulletinNo || '-';
-                    const bulletinDate = record.details?.brandInfo?.opposedMarkBulletinDate || parentTx.bulletinDate || null;
-                    const epatsDate = parentTx.epatsDocument?.documentDate || null;
+            // Satırları oluştur (Mevcut kodunuzdaki mantıkla aynı)
+            for (const parentTx of parentTransactions) {
+                const typeMeta = transactionTypesMap.get(String(parentTx.type));
+                const transactionTypeName = typeMeta?.alias || typeMeta?.name || `İşlem ${parentTx.type}`;
 
-                    let statusText = 'Karar Bekleniyor';
-                    if (parentTx.requestResult !== undefined && parentTx.requestResult !== null && parentTx.requestResult !== '') {
-                        const REQUEST_RESULT_STATUS = {
-                            '24': 'Eksiklik Bildirimi',
-                            '28': 'Kabul',
-                            '29': 'Kısmi Kabul',
-                            '30': 'Ret',
-                            '31': 'B.S - Kabul',
-                            '32': 'B.S - Kısmi Kabul',
-                            '33': 'B.S - Ret',
-                            '34': 'İ.S - Kabul',
-                            '35': 'İ.S - Kısmi Kabul',
-                            '36': 'İ.S - Ret',
-                            '50': 'Kabul',
-                            '51': 'Kısmi Kabul',
-                            '52': 'Ret'
-                        };
-                        statusText = REQUEST_RESULT_STATUS[String(parentTx.requestResult)] || `Bilinmiyor (ID: ${parentTx.requestResult})`;
-                    }
+                const opponentName =
+                    parentTx.oppositionOwner ||
+                    parentTx.relatedParty?.name ||
+                    (Array.isArray(parentTx.objectionOwners) && parentTx.objectionOwners.length
+                        ? parentTx.objectionOwners.map(o => o.name).join(', ')
+                        : '-');
 
-                    const formatDate = (v) => {
-                        if (!v) return '-';
-                        try {
-                            let dt;
-                            if (typeof v === 'string') dt = new Date(v);
-                            else if (typeof v?.toDate === 'function') dt = v.toDate();
-                            else if ('seconds' in (v||{})) dt = new Date(v.seconds*1000);
-                            else if (v instanceof Date) dt = v;
-                            else return String(v);
-                            if (isNaN(dt.getTime())) return String(v);
-                            const day = String(dt.getDate()).padStart(2, '0');
-                            const month = String(dt.getMonth() + 1).padStart(2, '0');
-                            const year = dt.getFullYear();
-                            return `${day}/${month}/${year}`;
-                        } catch { return String(v); }
+                const bulletinNo = record.details?.brandInfo?.opposedMarkBulletinNo || parentTx.bulletinNo || '-';
+                const bulletinDate = record.details?.brandInfo?.opposedMarkBulletinDate || parentTx.bulletinDate || null;
+                const epatsDate = parentTx.epatsDocument?.documentDate || null;
+
+                let statusText = 'Karar Bekleniyor';
+                if (parentTx.requestResult !== undefined && parentTx.requestResult !== null && parentTx.requestResult !== '') {
+                    const REQUEST_RESULT_STATUS = {
+                        '24': 'Eksiklik Bildirimi', '28': 'Kabul', '29': 'Kısmi Kabul', '30': 'Ret',
+                        '31': 'B.S - Kabul', '32': 'B.S - Kısmi Kabul', '33': 'B.S - Ret',
+                        '34': 'İ.S - Kabul', '35': 'İ.S - Kısmi Kabul', '36': 'İ.S - Ret',
+                        '50': 'Kabul', '51': 'Kısmi Kabul', '52': 'Ret'
                     };
-
-                    objectionRows.push({
-                        id: parentTx.id,
-                        recordId: record.id,
-                        title: record.title || record.brandText || '',
-                        transactionTypeName,
-                        applicationNumber: record.applicationNumber || '-',
-                        applicantName: (record.applicants?.map?.(a => a.name).join(', ')) || '-',
-                        opponent: opponentName,
-                        bulletinDate: formatDate(bulletinDate),
-                        bulletinNo,
-                        epatsDate: formatDate(epatsDate),
-                        statusText
-                    });
+                    statusText = REQUEST_RESULT_STATUS[String(parentTx.requestResult)] || `Bilinmiyor (ID: ${parentTx.requestResult})`;
                 }
 
-            } catch (txErr) {
-                console.warn(`⚠️ Transaction çekme hatası (${record.id}):`, txErr);
+                objectionRows.push({
+                    id: parentTx.id,
+                    recordId: record.id,
+                    title: record.title || record.brandText || '',
+                    transactionTypeName,
+                    applicationNumber: record.applicationNumber || '-',
+                    applicantName: (record.applicants?.map?.(a => a.name).join(', ')) || '-',
+                    opponent: opponentName,
+                    bulletinDate: formatDate(bulletinDate),
+                    bulletinNo,
+                    epatsDate: formatDate(epatsDate),
+                    statusText
+                });
             }
         }
 
-        console.log(`✅ Toplam ${objectionRows.length} itiraz/dava satırı oluşturuldu`);
+        console.log(`✅ Toplam ${objectionRows.length} itiraz/dava satırı oluşturuldu (Optimize)`);
 
-        // Global değişkene sakla
+        // 7. Global veriyi sakla ve tabloyu ÇİZ
         window.davaItirazRows = objectionRows;
-
-        // İlk render
         renderDavaItirazTable(objectionRows);
 
     } catch (error) {
-        console.error('❌ Dava/İtiraz yükleme hatası:', error);
+        console.error('❌ Dava/İtiraz (Optimize) yükleme hatası:', error);
+        tbody.innerHTML = '<tr><td colspan="10" class="text-center text-danger">Veriler yüklenirken bir hata oluştu. Lütfen sayfayı yenileyin.</td></tr>';
     }
 };
+
 
 // Tabloyu render eden fonksiyon (GLOBAL)
 window.renderDavaItirazTable = function(rows) {
