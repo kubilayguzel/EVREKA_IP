@@ -3757,6 +3757,7 @@ window.loadSampleTaskDetails = async function(taskType) {
         }
 
         const linkedPersonIds = userSnapshot.data().linkedPersonIds || [];
+        const clientPersonIdSet = new Set(linkedPersonIds);
         
         if (linkedPersonIds.length === 0) {
             container.innerHTML = '<p class="lead text-muted text-center mt-5">Bağlı müvekkil bulunamadı.</p>';
@@ -3779,35 +3780,74 @@ window.loadSampleTaskDetails = async function(taskType) {
         const matchingTasks = [];
 
         for (const d of allTasksSnapshot.docs) {
-            const taskData = d.data();
             
         // Müvekkil ile eşleşme kontrolü
             const relatedPartyId = taskData.details?.relatedParty?.id;
             const personsRelated = taskData.personsRelatedIds || [];
             const clientIdInTask = taskData.clientId || taskData.clientID; // İki varyasyonu da kontrol et
 
-            let isRelatedToClient = false;
-            
-            // Yayına İtiraz işleri (taskType=20 veya objection_to_trademark_publication) için SADECE clientId kontrolü
-            const isObjectionTask = (taskData.taskType === "20" || 
-                                     taskData.taskType === 20 || 
-                                     taskData.taskType === "objection_to_trademark_publication");
-            
-            if (isObjectionTask) {
-                // Yayına İtiraz: Sadece clientId ile eşleştir
-                isRelatedToClient = (clientIdInTask && linkedPersonIds.includes(clientIdInTask));
-                console.log(`DEBUG - Yayına İtiraz Eşleştirme: Task ID: ${d.id}, clientId: ${clientIdInTask}, Eşleşti mi: ${isRelatedToClient}`);
-            } else {
-                // Diğer tüm görevler: Eski kural (relatedParty veya personsRelated)
-                isRelatedToClient = 
-                    (relatedPartyId && linkedPersonIds.includes(relatedPartyId)) ||
-                    (Array.isArray(personsRelated) && personsRelated.some(id => linkedPersonIds.includes(id)));
+        const taskData = d.data();
+        const taskTypeStr = String(taskData.taskType); // Eşleştirme için string'e çevir
+
+        let isRelatedToClient = false; // Varsayılan olarak false
+
+        try {
+            // KURAL 1: İstisna (Task Type 19 ve 20)
+            // Bu tiplerde 'taskOwner' alanını 'linkedPersonIds' ile karşılaştır.
+            if (taskTypeStr === '19' || taskTypeStr === '20') {
+                
+                const taskOwnerId = taskData.taskOwner;
+                if (taskOwnerId && clientPersonIdSet.has(taskOwnerId)) {
+                    isRelatedToClient = true;
+                    console.log(`DEBUG (Kural 1) - BAŞARILI: Task ${d.id} (Tip 19/20), 'taskOwner' ile eşleşti: ${taskOwnerId}`);
+                }
+
+                // Fallback Kural (Eski kod + Güvenlik): 'clientId' alanını da kontrol et
+                if (!isRelatedToClient) {
+                    const clientIdInTask = taskData.clientId || taskData.clientID;
+                    if (clientIdInTask && clientPersonIdSet.has(clientIdInTask)) {
+                        isRelatedToClient = true;
+                        console.log(`DEBUG (Kural 1 - Fallback) - BAŞARILI: Task ${d.id} (Tip 19/20), 'clientIdInTask' ile eşleşti: ${clientIdInTask}`);
+                    }
+                }
+            } 
+            // KURAL 2: Standart Kural (Diğer tüm task tipleri - örn: Yenileme)
+            // 'relatedIpRecordId' üzerinden 'ipRecords' tablosunu sorgula.
+            else {
+                const ipRecordId = taskData.relatedIpRecordId;
+                
+                if (ipRecordId) {
+                    // İlgili portföy kaydını veritabanından çek (DERİNLEMESİNE SORGU)
+                    const ipDocRef = doc(db, 'ipRecords', ipRecordId);
+                    const ipDocSnap = await getDoc(ipDocRef); // ASYNC ÇAĞRI
+
+                    if (ipDocSnap.exists()) {
+                        const ipData = ipDocSnap.data();
+                        
+                        // Portföy kaydının 'applicants' dizisini kontrol et
+                        if (ipData.applicants && Array.isArray(ipData.applicants)) {
+                            
+                            // 'applicants' dizisindeki ID'lerden BİRİ BİLE
+                            // kullanıcının yetkili ID'leriyle (Set) eşleşiyorsa...
+                            isRelatedToClient = ipData.applicants.some(applicant => 
+                                applicant && applicant.id && clientPersonIdSet.has(applicant.id)
+                            );
+
+                            if (isRelatedToClient) {
+                                console.log(`DEBUG (Kural 2) - BAŞARILI: Task ${d.id} (Tip ${taskTypeStr}) -> ipRecord ${ipRecordId} -> applicant ID eşleşti.`);
+                            }
+                        }
+                    } else {
+                         console.warn(`DEBUG (Kural 2) - HATA: Task ${d.id}, ipRecordId'yi (${ipRecordId}) işaret ediyor ama bu 'ipRecords' kaydı bulunamadı.`);
+                    }
+                }
             }
+        } catch (matchError) {
+             console.error(`DEBUG - EŞLEŞTİRME SIRASINDA HATA (Task ID: ${d.id}):`, matchError);
+             isRelatedToClient = false; // Hata durumunda güvenli olarak false ata
+        }
             
             if (!isRelatedToClient) {
-                // ======================================================
-                // YENİ EKLENECEK DEBUG LOGLARI BAŞLANGIÇ
-                // ======================================================
                 console.log(`
                     [DEBUG EŞLEŞTİRME HATASI - Task ID: ${d.id}]
                     Kullanıcının Yetkili Olduğu ID'ler (linkedPersonIds):`, JSON.stringify(linkedPersonIds), `
