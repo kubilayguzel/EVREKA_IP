@@ -1824,6 +1824,22 @@ async function fetchAndDisplayPortfolio() {
                 return { success: true, data: types };
             }
         };
+
+        try {
+            console.log('🔄 Transaction Types Map yükleniyor...');
+            const txTypesResult = await window.transactionTypeService.getTransactionTypes();
+            if (txTypesResult?.success) {
+                txTypesResult.data.forEach(type => {
+                    window.transactionTypesMap.set(String(type.id), type);
+                });
+                console.log(`✅ Transaction Types Map yüklendi, boyut: ${window.transactionTypesMap.size}`);
+            } else {
+                console.warn('⚠️ Transaction Types yüklenemedi (başarısız).');
+            }
+        } catch (txErr) {
+            console.error('❌ Transaction Types yüklenirken HATA oluştu:', txErr);
+        }
+
         if (!linkedPersonIds || linkedPersonIds.length === 0) {
             console.log("Kullanıcı ile ilişkili müvekkil bulunamadı.");
             return;
@@ -2312,9 +2328,7 @@ $(document).on('change', '#menseFilter', function(){
 });
 
 // === BİRLEŞTİRİLMİŞ ve DÜZELTİLMİŞ PORTFÖY TAB HANDLER ===
-$(document).on('shown.bs.tab', '#portfolioTopTabs a[data-toggle="tab"]', async function (e) {
-    // e.target -> yeni aktif olan sekme
-    // e.relatedTarget -> az önce kapanan sekme
+$(document).on('shown.bs.tab', '#portfolioTopTabs a[data-toggle="tab"]', function (e) {    
     
     // 1. Her sekme değişiminde menşe filtresini uygula
     applyMenseFilterToActivePane();
