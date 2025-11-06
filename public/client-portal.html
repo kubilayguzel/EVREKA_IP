@@ -731,6 +731,19 @@ body.dark .opposition-owner-badge{
   box-shadow:0 0 0 1px rgba(255,255,255,.15) inset;
 }
 
+/* Dava/İtiraz Tablosu Kolon Genişlikleri */
+#dava-itiraz-list table { table-layout: auto; }
+#dava-itiraz-list th.col-index, #dava-itiraz-list td.col-index { width: 56px; }
+#dava-itiraz-list th.col-brand, #dava-itiraz-list td.col-brand { width: 180px; }
+#dava-itiraz-list th.col-transaction, #dava-itiraz-list td.col-transaction { width: 180px; }
+#dava-itiraz-list th.col-appno, #dava-itiraz-list td.col-appno { width: 140px; }
+#dava-itiraz-list th.col-applicant, #dava-itiraz-list td.col-applicant { width: 250px; }
+#dava-itiraz-list th.col-opponent, #dava-itiraz-list td.col-opponent { width: 250px; }
+#dava-itiraz-list th.col-bulletin-date, #dava-itiraz-list td.col-bulletin-date { width: 100px; }
+#dava-itiraz-list th.col-bulletin-no, #dava-itiraz-list td.col-bulletin-no { width: 90px; }
+#dava-itiraz-list th.col-process-date, #dava-itiraz-list td.col-process-date { width: 100px; }
+#dava-itiraz-list th.col-status, #dava-itiraz-list td.col-status { width: 120px; }
+
 </style>
 </head>
 <body>
@@ -988,30 +1001,28 @@ body.dark .opposition-owner-badge{
                             </tbody>
                         </table>
                     </div>
-                    <div class="tab-pane fade" id="dava-itiraz-list">
-                         <table class="table table-hover">
-                            <thead>
-                                <tr>
-                                    <th>#</th>
-                                    <th>Marka Adı</th>
-                                    <th>Başvuru No</th>
-                                    <th>Durum</th>
-                                    <th>Sınıflar</th>
-                                    <th>Son İşlem</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr>
-                                    <td>1</td>
-                                    <td><a href="#" data-toggle="modal" data-target="#portfolioDetailModal">Dava Adı 1 (TR)</a></td>
-                                    <td>2023/98765</td>
-                                    <td><span class="badge badge-warning">İtiraz</span></td>
-                                    <td>25</td>
-                                    <td>15.08.2023</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
+                        <div class="tab-pane fade" id="dava-itiraz-list">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th class="col-index">#</th>
+                                        <th class="col-brand">M/T/B Adı</th>
+                                        <th class="col-transaction">İşlem Tipi</th>
+                                        <th class="col-appno">Başvuru No</th>
+                                        <th class="col-applicant">Başvuru Sahibi</th>
+                                        <th class="col-opponent">İtiraz/Dava Sahibi</th>
+                                        <th class="col-bulletin-date">Bülten Tarihi</th>
+                                        <th class="col-bulletin-no">Bülten No</th>
+                                        <th class="col-process-date">İşlem Tarihi</th>
+                                        <th class="col-status">Durum</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="dava-itiraz-tbody">
+                                    <!-- Dinamik olarak doldurulacak -->
+                                </tbody>
+                            </table>
+                            <div id="davaItirazPagination" class="mt-3"></div>
+                        </div>
                 </div>
             </div>
 
@@ -1794,6 +1805,23 @@ async function fetchAndDisplayPortfolio() {
         // Diğer fonksiyonların erişebilmesi için global sakla
         window.__linkedPersonIds = Array.isArray(linkedPersonIds) ? linkedPersonIds : [];
 
+        // Transaction Types Map'i başlat (henüz başlatılmadıysa)
+        if (!window.transactionTypesMap) {
+            window.transactionTypesMap = new Map();
+        }
+
+        // Transaction Type servisini global yap
+        window.transactionTypeService = {
+            getTransactionTypes: async () => {
+                const typesRef = collection(db, 'transactionTypes');
+                const snapshot = await getDocs(typesRef);
+                const types = [];
+                snapshot.forEach(doc => {
+                    types.push({ id: doc.id, ...doc.data() });
+                });
+                return { success: true, data: types };
+            }
+        };
         if (!linkedPersonIds || linkedPersonIds.length === 0) {
             console.log("Kullanıcı ile ilişkili müvekkil bulunamadı.");
             return;
@@ -2452,6 +2480,201 @@ window.fetchAndDisplayTasks = async function(){
     console.error('Tasks sayaclari doldurulurken hata:', err);
   }
 };
+
+// === DAVA/İTİRAZ YÜKLEME FONKSİYONU (Portfolio'dan uyarlandı) ===
+window.fetchAndDisplayObjections = async function() {
+    try {
+        const user = authService.getCurrentUser();
+        if (!user) return;
+        
+        const userDocRef = doc(db, "users", user.uid);
+        const userSnapshot = await getDoc(userDocRef);
+        
+        if (!userSnapshot.exists()) return;
+        
+        const linkedPersonIds = userSnapshot.data().linkedPersonIds || [];
+        
+        if (linkedPersonIds.length === 0) {
+            console.log("Bağlı müvekkil bulunamadı.");
+            return;
+        }
+
+        console.log('🔍 Dava/İtiraz verileri yükleniyor...', {
+            linkedPersonIds,
+            count: linkedPersonIds.length
+        });
+
+        // İtiraz type ID'leri (Portfolio'daki gibi)
+        const PARENT_TYPE_IDS = ['7', '19', '20'];
+        
+        // Transaction Type'ları yükle (henüz yüklenmediyse)
+        if (transactionTypesMap.size === 0) {
+            const txTypesResult = await window.transactionTypeService?.getTransactionTypes();
+            if (txTypesResult?.success) {
+                txTypesResult.data.forEach(type => {
+                    transactionTypesMap.set(String(type.id), type);
+                });
+            }
+        }
+
+        // TÜM ipRecords'ı çek (applicants array kontrolü için)
+        const allIpQuery = query(collection(db, "ipRecords"));
+        const allIpSnap = await runGetDocs(allIpQuery);
+        
+        const relevantRecords = [];
+        
+        allIpSnap.forEach(doc => {
+            const data = doc.data();
+            
+            // applicants array'inde linked person var mı?
+            if (data.applicants && Array.isArray(data.applicants)) {
+                const hasMatch = data.applicants.some(applicant => {
+                    return applicant && applicant.id && linkedPersonIds.includes(applicant.id);
+                });
+                
+                if (hasMatch) {
+                    relevantRecords.push({ id: doc.id, ...data });
+                }
+            }
+        });
+
+        console.log(`📊 Toplam ${relevantRecords.length} portföy kaydı bulundu`);
+
+        const objectionRows = [];
+        
+        // Her kayıt için transaction'ları çek
+        for (const record of relevantRecords) {
+            try {
+                // Transactions koleksiyonunu çek
+                const transactionsRef = collection(db, 'ipRecords', record.id, 'transactions');
+                const transSnapshot = await getDocs(transactionsRef);
+                
+                const transactions = [];
+                transSnapshot.forEach(txDoc => {
+                    transactions.push({ id: txDoc.id, ...txDoc.data() });
+                });
+
+                // Parent itirazları filtrele
+                const parentTransactions = transactions.filter(tx =>
+                    PARENT_TYPE_IDS.includes(String(tx.type)) &&
+                    (tx.transactionHierarchy === 'parent' || !tx.parentId)
+                );
+
+                // Her parent için satır oluştur
+                for (const parentTx of parentTransactions) {
+                    const typeMeta = transactionTypesMap.get(String(parentTx.type));
+                    const transactionTypeName = typeMeta?.alias || typeMeta?.name || `İşlem ${parentTx.type}`;
+
+                    const opponentName =
+                        parentTx.oppositionOwner ||
+                        parentTx.relatedParty?.name ||
+                        (Array.isArray(parentTx.objectionOwners) && parentTx.objectionOwners.length
+                            ? parentTx.objectionOwners.map(o => o.name).join(', ')
+                            : '-');
+
+                    const bulletinNo = record.details?.brandInfo?.opposedMarkBulletinNo || parentTx.bulletinNo || '-';
+                    const bulletinDate = record.details?.brandInfo?.opposedMarkBulletinDate || parentTx.bulletinDate || null;
+                    const epatsDate = parentTx.epatsDocument?.documentDate || null;
+
+                    let statusText = 'Karar Bekleniyor';
+                    if (parentTx.requestResult !== undefined && parentTx.requestResult !== null && parentTx.requestResult !== '') {
+                        const REQUEST_RESULT_STATUS = {
+                            '24': 'Eksiklik Bildirimi',
+                            '28': 'Kabul',
+                            '29': 'Kısmi Kabul',
+                            '30': 'Ret',
+                            '31': 'B.S - Kabul',
+                            '32': 'B.S - Kısmi Kabul',
+                            '33': 'B.S - Ret',
+                            '34': 'İ.S - Kabul',
+                            '35': 'İ.S - Kısmi Kabul',
+                            '36': 'İ.S - Ret',
+                            '50': 'Kabul',
+                            '51': 'Kısmi Kabul',
+                            '52': 'Ret'
+                        };
+                        statusText = REQUEST_RESULT_STATUS[String(parentTx.requestResult)] || `Bilinmiyor (ID: ${parentTx.requestResult})`;
+                    }
+
+                    const formatDate = (v) => {
+                        if (!v) return '-';
+                        try {
+                            let dt;
+                            if (typeof v === 'string') dt = new Date(v);
+                            else if (typeof v?.toDate === 'function') dt = v.toDate();
+                            else if ('seconds' in (v||{})) dt = new Date(v.seconds*1000);
+                            else if (v instanceof Date) dt = v;
+                            else return String(v);
+                            if (isNaN(dt.getTime())) return String(v);
+                            const day = String(dt.getDate()).padStart(2, '0');
+                            const month = String(dt.getMonth() + 1).padStart(2, '0');
+                            const year = dt.getFullYear();
+                            return `${day}/${month}/${year}`;
+                        } catch { return String(v); }
+                    };
+
+                    objectionRows.push({
+                        id: parentTx.id,
+                        recordId: record.id,
+                        title: record.title || record.brandText || '',
+                        transactionTypeName,
+                        applicationNumber: record.applicationNumber || '-',
+                        applicantName: (record.applicants?.map?.(a => a.name).join(', ')) || '-',
+                        opponent: opponentName,
+                        bulletinDate: formatDate(bulletinDate),
+                        bulletinNo,
+                        epatsDate: formatDate(epatsDate),
+                        statusText
+                    });
+                }
+
+            } catch (txErr) {
+                console.warn(`⚠️ Transaction çekme hatası (${record.id}):`, txErr);
+            }
+        }
+
+        console.log(`✅ Toplam ${objectionRows.length} itiraz/dava satırı oluşturuldu`);
+
+        // Global değişkene sakla
+        window.davaItirazRows = objectionRows;
+
+        // İlk render
+        renderDavaItirazTable(objectionRows);
+
+    } catch (error) {
+        console.error('❌ Dava/İtiraz yükleme hatası:', error);
+    }
+};
+
+// Tabloyu render eden fonksiyon
+function renderDavaItirazTable(rows) {
+    const tbody = document.getElementById('dava-itiraz-tbody');
+    if (!tbody) return;
+    
+    tbody.innerHTML = '';
+    
+    if (rows.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted">Henüz dava/itiraz kaydı bulunmamaktadır.</td></tr>';
+        return;
+    }
+
+    rows.forEach((row, index) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${index + 1}</td>
+            <td><a href="#" class="portfolio-detail-link" data-item-id="${row.recordId}" data-toggle="modal" data-target="#portfolioDetailModal">${row.title}</a></td>
+            <td>${row.transactionTypeName}</td>
+            <td>${row.applicationNumber}</td>
+            <td>${row.applicantName}</td>
+            <td>${row.opponent}</td>
+            <td>${row.bulletinDate}</td>
+            <td>${row.bulletinNo}</td>
+            <td>${row.epatsDate}</td>
+            <td><span class="badge badge-warning">${row.statusText}</span></td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
 
 // ============================================
 // YENİ EKLEME: renderTaskPage fonksiyonu
