@@ -1454,6 +1454,7 @@ import PaginationModule from './js/pagination.js';
 // Pagination'ı global yap
 window.Pagination = PaginationModule;
 const Pagination = PaginationModule;
+const $ = window.jQuery;
 
 // importların HEMEN ALTINA
 window.authService = authService;
@@ -4752,10 +4753,8 @@ window.triggerTpQuery = function(applicationNo){
 };
 
 // --- Filtre Event Listener'ları ---
-$(document).ready(function() {
-    // jQuery'nin yüklü olduğundan emin ol
-    const $ = window.jQuery;
-    if (!$) return;
+// jQuery yüklendikten sonra çalıştır
+jQuery(document).ready(function($) {
 
     const applyButton = document.getElementById('applyTaskFilters');
     const searchInput = document.getElementById('taskSearchText');
