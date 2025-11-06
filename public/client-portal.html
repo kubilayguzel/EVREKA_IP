@@ -2695,6 +2695,12 @@ window.fetchAndDisplayObjections = async function() {
                     statusText = REQUEST_RESULT_STATUS[String(parentTx.requestResult)] || `Bilinmiyor (ID: ${parentTx.requestResult})`;
                 }
 
+                // push öncesine (veya hemen içinde) ekle
+                const originRaw = (record.origin || parentTx.origin || '').toString().toUpperCase().trim();
+                const originBucket = (originRaw === 'TÜRKPATENT' || originRaw === 'TURKPATENT' || originRaw === '')
+                ? 'TÜRKPATENT'
+                : 'YURTDISI';
+
                 objectionRows.push({
                     id: parentTx.id,
                     recordId: record.id,
@@ -2706,6 +2712,7 @@ window.fetchAndDisplayObjections = async function() {
                     bulletinDate: formatDate(bulletinDate),
                     bulletinNo,
                     epatsDate: formatDate(epatsDate),
+                    origin: originBucket,
                     statusText
                 });
             }
@@ -2739,6 +2746,7 @@ window.renderDavaItirazTable = function(rows) {
 
     rows.forEach((row, index) => {
         const tr = document.createElement('tr');
+        tr.setAttribute('data-origin', (row.origin || 'TÜRKPATENT'));
         tr.innerHTML = `
             <td>${index + 1}</td>
             <td><a href="#" class="portfolio-detail-link" data-item-id="${row.recordId}" data-toggle="modal" data-target="#portfolioDetailModal">${row.title}</a></td>
@@ -2752,6 +2760,10 @@ window.renderDavaItirazTable = function(rows) {
             <td><span class="badge badge-warning">${row.statusText}</span></td>
         `;
         tbody.appendChild(tr);
+        
+        if (typeof window.applyMenseFilterToActivePane === 'function') {
+        try { window.applyMenseFilterToActivePane(); } catch (_) {}
+        }
     });
 }
 
