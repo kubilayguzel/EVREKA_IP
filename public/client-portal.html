@@ -2362,6 +2362,15 @@ $(document).ready(function() {
     });
 });
 
+// === DAVA/İTİRAZ SEKMESİ EVENT HANDLER ===
+$(document).on('shown.bs.tab', '#portfolioTopTabs a[href="#dava-itiraz-list"]', async function (e) {
+    console.log('🔍 Dava/İtiraz sekmesi açıldı, veriler yükleniyor...');
+    
+    if (!window.davaItirazRows || window.davaItirazRows.length === 0) {
+        await window.fetchAndDisplayObjections();
+    }
+});
+
 // Türkçe karakter normalize
 function _normalizeTr(s){
   if(!s) return '';
