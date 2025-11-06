@@ -2329,29 +2329,23 @@ $(document).on('change', '#menseFilter', function(){
 
 // === BİRLEŞTİRİLMİŞ ve DÜZELTİLMİŞ PORTFÖY TAB HANDLER ===
 $(document).on('shown.bs.tab', '#portfolioTopTabs a[data-toggle="tab"]', function (e) {    
-    
-    // 1. Her sekme değişiminde menşe filtresini uygula
-    applyMenseFilterToActivePane();
-    
-    // 2. Hedef sekmenin href'ini al
-    const targetHref = $(e.target).attr('href');
-    
-    // 3. Eğer Dava/İtiraz sekmesi açıldıysa...
-    if (targetHref === '#dava-itiraz-list') {
-        console.log('✅ Birleştirilmiş handler: Dava/İtiraz sekmesi açıldı, veriler yükleniyor...');
-        
+  // 1) Her sekme değişiminde menşe filtresi
+  applyMenseFilterToActivePane();
+
+  // 2) Hedef sekme
+  const targetHref = $(e.target).attr('href');
+
+  // 3) Dava/İtiraz sekmesi açıldıysa
+  if (targetHref === '#dava-itiraz-list') {
     if (!window.davaItirazRows || window.davaItirazRows.length === 0) {
-            window.fetchAndDisplayObjections();
-        }
-        // Veri yüklü AMA tablo boşsa (önceki bir hatadan dolayı), tekrar render etmeyi dene
-        else {
-            const tbody = document.getElementById('dava-itiraz-tbody');
-            if (tbody && (tbody.innerHTML.trim() === '' || tbody.children.length === 0 || (tbody.children[0]?.children[0]?.textContent === 'Yükleniyor...'))) {
-                console.log('✅ Veri yüklüydü ama tablo boştu, tekrar render ediliyor...');
-                window.renderDavaItirazTable(window.davaItirazRows);
-            }
-        }
+      window.fetchAndDisplayObjections();
+    } else {
+      const tbody = document.getElementById('dava-itiraz-tbody');
+      if (tbody && (tbody.innerHTML.trim() === '' || tbody.children.length === 0 || (tbody.children[0]?.children[0]?.textContent === 'Yükleniyor.'))) {
+        window.renderDavaItirazTable(window.davaItirazRows);
+      }
     }
+  }
 });
 
 $(function(){
@@ -2934,14 +2928,15 @@ window.renderTaskPage = function(page, perPage) {
     });
 };
 
-
 // Modal açıldığında verileri set et
 $(document).on('show.bs.modal', '#portfolioDetailModal', async function (e) {
-    // Ana sayfanın mevcut durumunu kaydet
-    window._savedPortfolioState = {
-        activeTab: $('.content > .tab-content > .tab-pane.show.active').attr('id'),
-        sidebarActive: $('#sidebar .nav-link.active').attr('href')
-    };
+  // Ana sayfanın mevcut durumunu kaydet
+  window._savedPortfolioState = {
+    activeTab: $('.content > .tab-content > .tab-pane.show.active').attr('id'),
+    sidebarActive: $('#sidebar .nav-link.active').attr('href'),
+    // ⇩ YENİ: aktif iç portföy sekmesi (Marka/Patent/Tasarım/Dava-İtiraz)
+    portfolioInnerTab: $('#portfolioTopTabs .nav-link.active').attr('href') || null
+  };
     
     const triggerLink = $(e.relatedTarget);
     const itemId = triggerLink.data('item-id');
