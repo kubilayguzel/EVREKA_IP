@@ -748,6 +748,29 @@ body.dark .opposition-owner-badge{
 #dava-itiraz-list th.col-process-date, #dava-itiraz-list td.col-process-date { width: 100px; }
 #dava-itiraz-list th.col-status, #dava-itiraz-list td.col-status { width: 120px; }
 
+/* İtiraz tablosu görsel hizalaması */
+#dava-itiraz-list td.col-sample {
+    vertical-align: middle; /* Görseli dikey ortala */
+}
+
+/* İtiraz tablosu görsel boyutu (Marka listesiyle aynı) */
+#dava-itiraz-list img.brand-thumb {
+    height: 128px !important;  /* Yüksekliği sabitle */
+    width: auto;               /* Genişlik otomatik */
+    max-width: 100%;           /* Kolondan taşmasın */
+    object-fit: contain;       /* Görüntü bozulmasın */
+    display: block;            /* Hizalama için */
+    margin: 0 auto;            /* Yatay ortala */
+    border-radius: 6px;
+    transition: transform 0.3s ease;
+}
+
+/* İtiraz tablosu görsel hover efekti (Marka listesiyle aynı) */
+#dava-itiraz-list img.brand-thumb:hover {
+    transform: scale(2.2);
+    z-index: 999;
+    position: relative;
+}
 </style>
 </head>
 <body>
