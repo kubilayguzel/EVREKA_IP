@@ -2672,8 +2672,8 @@ window.fetchAndDisplayObjections = async function() {
         const objectorQuery = query(
             collectionGroup(db, 'transactions'),
             where('type', 'in', PARENT_TYPE_IDS),
-            where('relatedParty.id', 'in', linkedPersonIds),
-            where('transactionHierarchy', '==', 'parent') // Sadece parent'ları bul
+            where('taskOwner', 'in', linkedPersonIds), // <-- DOĞRU ALAN (Ekran görüntüsüne göre)
+            where('transactionHierarchy', '==', 'parent') 
         );
         
         const objectorSnap = await getDocs(objectorQuery);
