@@ -1476,7 +1476,7 @@ window.fetchAndDisplayTasks = window.fetchAndDisplayTasks || (async function(){ 
 window.populateDashboardNumbers = window.populateDashboardNumbers || (function(){});
 
 import { authService, db } from './firebase-config.js';
-import { doc, getDoc, collection, getDocs, getDocsFromServer, query, where, updateDoc, limit } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+import { doc, getDoc, collection, getDocs, getDocsFromServer, query, where, updateDoc, limit, collectionGroup } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 import PaginationModule from './js/pagination.js';
 
 const $ = window.jQuery || (typeof jQuery !== 'undefined' ? jQuery : null);
@@ -1496,6 +1496,7 @@ window.where = where;
 window.getDocs = getDocs;
 window.updateDoc = updateDoc;
 window.limit = limit;
+window.collectionGroup = collectionGroup;
 
 // --- Dashboard sayaç kontrolü ---
 // Destek varsa cache yerine sunucudan oku:
