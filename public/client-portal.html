@@ -860,7 +860,7 @@ body.dark .opposition-owner-badge{
       <a class="nav-link" id="tab-tasarim" data-toggle="tab" href="#tasarim-list" role="tab" aria-controls="tasarim-list" aria-selected="false">Tasarım</a>
     </li>
     <li class="nav-item">
-      <a class="nav-link" id="tab-dava" data-toggle="tab" href="#dava-itiraz-list" role="tab" aria-controls="dava-itiraz-list" aria-selected="false">Dava/İtiraz</a>
+      <a class="nav-link" id="tab-dava" data-toggle="tab" href="#dava-itiraz-list" role="tab" aria-controls="dava-itiraz-list" aria-selected="false">İtiraz</a>
     </li>
     <li class="nav-item d-flex align-items-center pl-2" id="portfolioFiltersNavItem" style="margin-left: .75rem;">
       <label for="menseFilter" class="mb-0 mr-2">Menşe:</label>
@@ -1010,7 +1010,7 @@ body.dark .opposition-owner-badge{
                                         <th class="col-transaction">İşlem Tipi</th>
                                         <th class="col-appno">Başvuru No</th>
                                         <th class="col-applicant">Başvuru Sahibi</th>
-                                        <th class="col-opponent">İtiraz/Dava Sahibi</th>
+                                        <th class="col-opponent">İtiraz Sahibi</th>
                                         <th class="col-bulletin-date">Bülten Tarihi</th>
                                         <th class="col-bulletin-no">Bülten No</th>
                                         <th class="col-process-date">İşlem Tarihi</th>
@@ -2710,12 +2710,21 @@ window.fetchAndDisplayObjections = async function() {
                     statusText = REQUEST_RESULT_STATUS[String(parentTx.requestResult)] || `Bilinmiyor (ID: ${parentTx.requestResult})`;
                 }
 
-                // push öncesine (veya hemen içinde) ekle
                 const originRaw = (record.origin || parentTx.origin || '').toString().toUpperCase().trim();
                 const originBucket = (originRaw === 'TÜRKPATENT' || originRaw === 'TURKPATENT' || originRaw === '')
                 ? 'TÜRKPATENT'
                 : 'YURTDISI';
 
+                // === BAŞLANGIÇ: YENİ AKORDEON MANTIĞI ===
+                
+                // 1. Bu parent'a ait child'ları bul (tüm transactions listesinden)
+                const childTransactions = transactions.filter(tx => 
+                    tx.parentId === parentTx.id && 
+                    tx.transactionHierarchy === 'child'
+                );
+                const hasChildren = childTransactions.length > 0;
+
+                // 2. Parent satırı (akordeon bayrakları ile) diziye ekle
                 objectionRows.push({
                     id: parentTx.id,
                     recordId: record.id,
@@ -2728,9 +2737,57 @@ window.fetchAndDisplayObjections = async function() {
                     bulletinNo,
                     epatsDate: formatDate(epatsDate),
                     origin: originBucket,
-                    statusText
+                    statusText,
+                    // Akordeon bayrakları
+                    isParent: true,
+                    hasChildren: hasChildren 
                 });
+
+                // 3. Child satırları (eğer varsa) diziye ekle
+                if (hasChildren) {
+                    for (const [subIndex, childTx] of childTransactions.entries()) {
+                        
+                        const childTypeMeta = transactionTypesMap.get(String(childTx.type));
+                        const childTxTypeName = childTypeMeta?.alias || childTypeMeta?.name || `İşlem ${childTx.type}`;
+                        const childOpponent = childTx.oppositionOwner || childTx.relatedParty?.name || '-';
+                        const childEpatsDate = childTx.epatsDocument?.documentDate || null;
+
+                        // Child status (Gerekirse bu mantığı genişletebilirsiniz)
+                        let childStatusText = 'İşlemde';
+                        if (childTx.requestResult) {
+                            const REQUEST_RESULT_STATUS = {
+                                '24': 'Eksiklik Bildirimi', '28': 'Kabul', '29': 'Kısmi Kabul', '30': 'Ret',
+                                '31': 'B.S - Kabul', '32': 'B.S - Kısmi Kabul', '33': 'B.S - Ret',
+                                '34': 'İ.S - Kabul', '35': 'İ.S - Kısmi Kabul', '36': 'İ.S - Ret',
+                                '50': 'Kabul', '51': 'Kısmi Kabul', '52': 'Ret'
+                            };
+                            childStatusText = REQUEST_RESULT_STATUS[String(childTx.requestResult)] || `Bilinmiyor (ID: ${childTx.requestResult})`;
+                        }
+
+                        objectionRows.push({
+                            id: childTx.id,
+                            parentId: parentTx.id, // Parent'a bağla
+                            recordId: record.id,
+                            title: record.title || record.brandText || '',
+                            transactionTypeName: childTxTypeName,
+                            applicationNumber: record.applicationNumber || '-', 
+                            applicantName: (record.applicants?.map?.(a => a.name).join(', ')) || '-',
+                            opponent: childOpponent,
+                            bulletinDate: '-',
+                            bulletinNo: '-',
+                            epatsDate: formatDate(childEpatsDate),
+                            origin: originBucket,
+                            statusText: childStatusText,
+                            // Akordeon bayrakları
+                            isParent: false,
+                            hasChildren: false,
+                            subIndex: subIndex + 1 // (Numaralandırma için 1.1, 1.2 vb.)
+                        });
+                    }
+                }
+                // === SON: YENİ AKORDEON MANTIĞI ===
             }
+
         }
 
         console.log(`✅ Toplam ${objectionRows.length} itiraz/dava satırı oluşturuldu (Optimize)`);
@@ -2745,41 +2802,117 @@ window.fetchAndDisplayObjections = async function() {
     }
 };
 
-
 // Tabloyu render eden fonksiyon (GLOBAL)
 window.renderDavaItirazTable = function(rows) {
-    console.log('📊 Tablo render ediliyor, satır sayısı:', rows.length);
+    console.log('📊 İtiraz Tablosu render ediliyor, satır sayısı (parent+child):', rows.length);
     const tbody = document.getElementById('dava-itiraz-tbody');
     if (!tbody) return;
     
     tbody.innerHTML = '';
     
     if (rows.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted">Henüz dava/itiraz kaydı bulunmamaktadır.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted">Henüz itiraz kaydı bulunmamaktadır.</td></tr>';
         return;
     }
 
-    rows.forEach((row, index) => {
-        const tr = document.createElement('tr');
-        tr.setAttribute('data-origin', (row.origin || 'TÜRKPATENT'));
-        tr.innerHTML = `
-            <td>${index + 1}</td>
-            <td><a href="#" class="portfolio-detail-link" data-item-id="${row.recordId}" data-toggle="modal" data-target="#portfolioDetailModal">${row.title}</a></td>
-            <td>${row.transactionTypeName}</td>
-            <td>${row.applicationNumber}</td>
-            <td>${row.applicantName}</td>
-            <td>${row.opponent}</td>
-            <td>${row.bulletinDate}</td>
-            <td>${row.bulletinNo}</td>
-            <td>${row.epatsDate}</td>
-            <td><span class="badge badge-warning">${row.statusText}</span></td>
-        `;
-        tbody.appendChild(tr);
+    let parentIndex = 0; // Parent satırlar için ayrı sayaç
+
+    rows.forEach((row) => {
         
-        if (typeof window.applyMenseFilterToActivePane === 'function') {
-        try { window.applyMenseFilterToActivePane(); } catch (_) {}
+        // === PARENT SATIRLARI ÇİZ ===
+        if (row.isParent) {
+            parentIndex++;
+            const tr = document.createElement('tr');
+            tr.setAttribute('data-origin', (row.origin || 'TÜRKPATENT'));
+            
+            const iconHtml = row.hasChildren ? '<i class="fas fa-chevron-right mr-2"></i>' : '';
+            
+            // Eğer child'ı varsa akordeon özelliklerini ekle
+            if (row.hasChildren) {
+                tr.classList.add('accordion-header-row');
+                tr.setAttribute('data-toggle', 'collapse');
+                tr.setAttribute('data-target', `#itiraz-accordion-${row.id}`);
+                tr.setAttribute('aria-expanded', 'false');
+                tr.setAttribute('aria-controls', `itiraz-accordion-${row.id}`);
+            }
+
+            // (İstek 2'ye göre 'İtiraz Sahibi' olarak güncellendi)
+            tr.innerHTML = `
+                <td>${iconHtml}${parentIndex}</td>
+                <td><a href="#" class="portfolio-detail-link" data-item-id="${row.recordId}" data-toggle="modal" data-target="#portfolioDetailModal">${row.title}</a></td>
+                <td>${row.transactionTypeName}</td>
+                <td>${row.applicationNumber}</td>
+                <td>${row.applicantName}</td>
+                <td>${row.opponent}</td> 
+                <td>${row.bulletinDate}</td>
+                <td>${row.bulletinNo}</td>
+                <td>${row.epatsDate}</td>
+                <td><span class="badge badge-warning">${row.statusText}</span></td>
+            `;
+            tbody.appendChild(tr);
+
+            // === CHILD SATIRLAR İÇİN AKORDEON TABLOSUNU HAZIRLA ===
+            if (row.hasChildren) {
+                const detailRow = document.createElement('tr');
+                detailRow.setAttribute('data-origin', (row.origin || 'TÜRKPATENT'));
+                // Bu satırın colspan'i 10 olmalı (parent tablodaki kolon sayısı)
+                detailRow.innerHTML = `
+                    <td colspan="10" class="p-0">
+                        <div class="collapse" id="itiraz-accordion-${row.id}">
+                            <table class="table mb-0 accordion-table">
+                                <thead>
+                                    <tr>
+                                        <th>#</th>
+                                        <th>İşlem Tipi</th>
+                                        <th>Başvuru Sahibi</th>
+                                        <th>İtiraz Sahibi</th>
+                                        <th>İşlem Tarihi</th>
+                                        <th>Durum</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    </tbody>
+                            </table>
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(detailRow);
+            }
+        } 
+        
+        // === CHILD SATIRLARI ÇİZ (ve doğru yere ekle) ===
+        else if (!row.isParent && row.parentId) {
+            // İlgili parent'ın akordeon <tbody>'sini bul
+            const childTbody = tbody.querySelector(`#itiraz-accordion-${row.parentId} tbody`);
+            
+            if (childTbody) {
+                const childTr = document.createElement('tr');
+                childTr.setAttribute('data-origin', (row.origin || 'TÜRKPATENT'));
+                
+                // Parent'ın görünen index numarasını bul (örn: "5")
+                const parentRow = tbody.querySelector(`[data-target="#itiraz-accordion-${row.parentId}"]`);
+                let parentDisplayIndex = "?";
+                if (parentRow) {
+                    // İkonu temizleyip sadece sayıyı al
+                    parentDisplayIndex = parentRow.querySelector('td:first-child').textContent.trim();
+                }
+
+                childTr.innerHTML = `
+                    <td>${parentDisplayIndex}.${row.subIndex}</td>
+                    <td>${row.transactionTypeName}</td>
+                    <td>${row.applicantName}</td>
+                    <td>${row.opponent}</td>
+                    <td>${row.epatsDate}</td>
+                    <td><span class="badge badge-info">${row.statusText}</span></td>
+                `;
+                childTbody.appendChild(childTr);
+            }
         }
-    });
+    }); 
+
+    if (typeof window.applyMenseFilterToActivePane === 'function') {
+        try { window.applyMenseFilterToActivePane(); } catch (_) {}
+    }
 }
 
 // ============================================
