@@ -2690,17 +2690,13 @@ window.fetchAndDisplayObjections = async function() {
         
         console.log(`🔍 ${objectorSnap.size} adet eşleşen 'task' kaydı (3. taraf) bulundu.`);
 
-        // Eşleşen 'task'lar üzerinden 'transaction' ve 'ipRecord' bilgilerini al
+// Eşleşen 'task'lar üzerinden 'transaction' ve 'ipRecord' bilgilerini al
         const processPromises = objectorSnap.docs.map(async (taskDoc) => {
             const taskData = taskDoc.data();
             const recordId = taskData.relatedIpRecordId;
             
-            // ======================================================
-            // === KRİTİK DÜZELTME (portfolio.html'den alındı) ===
-            // ======================================================
-            // Eğer triggeringTransactionId boşsa (undefined), task'ın kendi ID'sini kullan
+            // KRİTİK DÜZELTME: Eğer triggeringTransactionId boşsa (undefined), task'ın kendi ID'sini kullan
             const parentTxId = taskData.triggeringTransactionId || taskDoc.id; 
-            // ======================================================
 
             if (!recordId || !parentTxId) {
                 console.warn(`⚠️ Task ${taskDoc.id} eşleşti ama 'relatedIpRecordId' (${recordId}) veya 'parentTxId' (${parentTxId}) eksik.`);
@@ -2713,19 +2709,27 @@ window.fetchAndDisplayObjections = async function() {
                 getDoc(doc(db, 'ipRecords', recordId, 'transactions', parentTxId))
             ]);
 
-            if (!recordSnap.exists() || !parentTxSnap.exists()) {
-                console.warn(`⚠️ Task ${taskDoc.id} için ipRecord (${recordId}) veya parentTransaction (${parentTxId}) bulunamadı.`);
-                return null;
+            // =================================================================
+            // === 'portfolio.html' DEN ALINAN KRİTİK 'exists' KONTROLÜ ===
+            // =================================================================
+            // Logların "bulunamadı" dediği yer burası.
+            // parentTxSnap (işlem detayı) bulunamazsa 'null' ata.
+            
+            if (!recordSnap.exists()) {
+                 console.warn(`⚠️ Task ${taskDoc.id} için ipRecord (${recordId}) bulunamadı.`);
+                 return null;
             }
             
             const record = recordSnap.data();
-            const parentTx = { id: parentTxSnap.id, ...parentTxSnap.data() };
+            // parentTx (işlem) belgesi 'null' olabilir, bu normaldir.
+            const parentTx = parentTxSnap.exists() ? { id: parentTxSnap.id, ...parentTxSnap.data() } : null; 
+            // =================================================================
 
-            // 2. Bu parent işleme ait child'ları çek
+            // 2. Bu parent işleme ait child'ları çek (Transaction 'null' olsa bile)
             const childTransactions = [];
             const childQuery = query(
                 collection(db, 'ipRecords', recordId, 'transactions'), 
-                where('parentId', '==', parentTx.id),
+                where('parentId', '==', parentTxId), // parentTxId (Task ID'si) ile ara
                 where('transactionHierarchy', '==', 'child')
             );
             const childSnap = await getDocs(childQuery);
@@ -2733,20 +2737,36 @@ window.fetchAndDisplayObjections = async function() {
                 childTransactions.push({ id: childDoc.id, ...childDoc.data() });
             });
             
-            // 3. Parent objesini oluştur (Veriyi 'transaction'dan alıyoruz)
-            const typeMeta = transactionTypesMap.get(String(parentTx.type));
-            const transactionTypeName = typeMeta?.alias || typeMeta?.name || `İşlem ${parentTx.type}`;
-            const opponentName = parentTx.oppositionOwner || parentTx.relatedParty?.name || '(Müvekkil)';
-            const bulletinNo = record.details?.brandInfo?.opposedMarkBulletinNo || parentTx.bulletinNo || '-';
-            const bulletinDate = record.details?.brandInfo?.opposedMarkBulletinDate || parentTx.bulletinDate || null;
-            const epatsDate = parentTx.epatsDocument?.documentDate || null;
+            // 3. Parent objesini oluştur (Veriyi 'transaction'dan VEYA 'task'dan al)
+            const typeMeta = transactionTypesMap.get(String(taskData.taskType)); // Ana tip 'task'dan gelir
+            const transactionTypeName = typeMeta?.alias || typeMeta?.name || `İşlem ${taskData.taskType}`;
+            
+            // İtiraz sahibi (opponent) müvekkildir.
+            // Önce parentTx'i (işlem) dene, yoksa taskData'yı (görev) dene
+            const opponentName = 
+                parentTx?.oppositionOwner || 
+                parentTx?.relatedParty?.name || 
+                taskData.relatedParty?.name || // <-- YEDEK KULLANIM
+                '(Müvekkil)';
+            
+            const bulletinNo = record.details?.brandInfo?.opposedMarkBulletinNo || parentTx?.bulletinNo || taskData.details?.bulletinNo || '-';
+            const bulletinDate = record.details?.brandInfo?.opposedMarkBulletinDate || parentTx?.bulletinDate || taskData.details?.bulletinDate || null;
+            const epatsDate = parentTx?.epatsDocument?.documentDate || null;
 
             let statusText = 'Karar Bekleniyor';
-            if (parentTx.requestResult !== undefined && parentTx.requestResult !== null && parentTx.requestResult !== '') {
-                const REQUEST_RESULT_STATUS = {'24': 'Eksiklik Bildirimi', '28': 'Kabul', '29': 'Kısmi Kabul', '30': 'Ret', '31': 'B.S - Kabul', '32': 'B.S - Kısmi Kabul', '33': 'B.S - Ret', '34': 'İ.S - Kabul', '35': 'İ.S - Kısmi Kabul', '36': 'İ.S - Ret', '50': 'Kabul', '51': 'Kısmi Kabul', '52': 'Ret'};
-                statusText = REQUEST_RESULT_STATUS[String(parentTx.requestResult)] || `Bilinmiyor (ID: ${parentTx.requestResult})`;
+            // Durumu ÖNCE parentTx'den (işlem) dene
+            let reqResult = parentTx?.requestResult;
+            // EĞER parentTx'de (işlem) durum yoksa, ana task'dan (görev) al
+            if (reqResult === undefined && taskData.requestResult !== undefined) {
+                reqResult = taskData.requestResult; // <-- YEDEK KULLANIM
             }
-            const originRaw = (record.origin || parentTx.origin || '').toString().toUpperCase().trim();
+
+            if (reqResult !== undefined && reqResult !== null && reqResult !== '') {
+                const REQUEST_RESULT_STATUS = {'24': 'Eksiklik Bildirimi', '28': 'Kabul', '29': 'Kısmi Kabul', '30': 'Ret', '31': 'B.S - Kabul', '32': 'B.S - Kısmi Kabul', '33': 'B.S - Ret', '34': 'İ.S - Kabul', '35': 'İ.S - Kısmi Kabul', '36': 'İ.S - Ret', '50': 'Kabul', '51': 'Kısmi Kabul', '52': 'Ret'};
+                statusText = REQUEST_RESULT_STATUS[String(reqResult)] || `Bilinmiyor (ID: ${reqResult})`;
+            }
+            
+            const originRaw = (record.origin || parentTx?.origin || '').toString().toUpperCase().trim();
             const originBucket = (originRaw === 'TÜRKPATENT' || originRaw === 'TURKPATENT' || originRaw === '') ? 'TÜRKPATENT' : 'YURTDISI';
 
             const hasChildren = childTransactions.length > 0;
@@ -2754,7 +2774,7 @@ window.fetchAndDisplayObjections = async function() {
 
             // 4. Parent satırı ekle
             rowsToAdd.push({
-                id: parentTx.id,
+                id: parentTxId, // Ana ID olarak Task ID'sini kullan
                 recordId: recordId,
                 brandImageUrl: record.brandImageUrl || record.brandImage || '',
                 title: record.title || record.brandText || '',
@@ -2774,6 +2794,7 @@ window.fetchAndDisplayObjections = async function() {
             // 5. Child satırları ekle
             if (hasChildren) {
                 for (const [subIndex, childTx] of childTransactions.entries()) {
+                    // (Child satırları ekleme kodunuz burada... öncekiyle aynı, DOKUNMAYIN)
                     const childTypeMeta = transactionTypesMap.get(String(childTx.type));
                     const childTxTypeName = childTypeMeta?.alias || childTypeMeta?.name || `İşlem ${childTx.type}`;
                     const childOpponent = childTx.oppositionOwner || childTx.relatedParty?.name || '-';
@@ -2785,7 +2806,7 @@ window.fetchAndDisplayObjections = async function() {
                     }
                     rowsToAdd.push({
                         id: childTx.id,
-                        parentId: parentTx.id,
+                        parentId: parentTxId, // Parent'a bağla (Task ID'si)
                         recordId: recordId,
                         brandImageUrl: record.brandImageUrl || record.brandImage || '',
                         title: record.title || record.brandText || '',
@@ -2806,7 +2827,7 @@ window.fetchAndDisplayObjections = async function() {
             }
             return rowsToAdd;
         });
-
+        
         // Gelen sonuçları bekle ve ana listeye ekle
         const results = await Promise.all(processPromises);
         results.forEach(rows => {
