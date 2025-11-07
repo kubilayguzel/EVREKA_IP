@@ -2690,7 +2690,7 @@ window.fetchAndDisplayObjections = async function() {
         
         console.log(`🔍 ${objectorSnap.size} adet eşleşen 'task' kaydı (3. taraf) bulundu.`);
 
-// Eşleşen 'task'lar üzerinden 'transaction' ve 'ipRecord' bilgilerini al
+    // Eşleşen 'task'lar üzerinden 'transaction' ve 'ipRecord' bilgilerini al
         const processPromises = objectorSnap.docs.map(async (taskDoc) => {
             const taskData = taskDoc.data();
             const recordId = taskData.relatedIpRecordId;
@@ -2915,13 +2915,23 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
                 tr.setAttribute('aria-controls', `itiraz-accordion-${row.id}`);
             }
 
-            // Marka Örneği için imgHtml hazırla (Marka tabı ile aynı stili kullanır)
-            const imgHtml = row.brandImageUrl ? `<img src="${row.brandImageUrl}" alt="marka" class="brand-thumb">` : '-';
+            // Marka Örneği için imgHtml hazırla - URL varsa thumbnail göster
+            let imgHtml = '-';
+            if (row.brandImageUrl && row.brandImageUrl.trim() !== '') {
+                imgHtml = `<div class="trademark-image-wrapper">
+                    <img src="${row.brandImageUrl}" 
+                         alt="${row.title || 'Marka'}" 
+                         class="trademark-image-thumbnail"
+                         style="width: 40px; height: 40px; object-fit: contain; cursor: pointer;"
+                         onerror="this.style.display='none'; this.parentElement.innerHTML='-';">
+                </div>`;
+            }
 
-            // HTML'i 11 kolon olarak güncelle
+            // HTML'i 11 kolon olarak güncelle - icon HTML'ini düzelt
             tr.innerHTML = `
                 <td>${iconHtml}${parentIndex}</td>
-                <td class="col-sample text-center">${imgHtml}</td> <td><a href="#" class="portfolio-detail-link" data-item-id="${row.recordId}" data-toggle="modal" data-target="#portfolioDetailModal">${row.title}</a></td>
+                <td class="col-sample text-center">${imgHtml}</td>
+                <td><a href="#" class="portfolio-detail-link" data-item-id="${row.recordId}" data-toggle="modal" data-target="#portfolioDetailModal">${row.title}</a></td>
                 <td>${row.transactionTypeName}</td>
                 <td>${row.applicationNumber}</td>
                 <td>${row.applicantName}</td>
