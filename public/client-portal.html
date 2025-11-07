@@ -119,46 +119,6 @@
         .dark-mode .task-card .task-meta { color: #f0ad4e; }
         .dark-mode .form-control { background-color: #40444b; border-color: #585b63; color: #e0e0e0; }
 
-        /* === Accordion Stilleri (İtiraz Tabı için) === */
-        .dark-mode .accordion-toggle {
-            background: none;
-            border: none;
-            color: #4da6ff;
-            cursor: pointer;
-            padding: 0;
-            transition: transform 0.3s ease;
-        }
-        .dark-mode .accordion-toggle:hover {
-            color: #6bb8ff;
-        }
-        .dark-mode .accordion-toggle[aria-expanded="true"] i {
-            transform: rotate(90deg);
-        }
-        .dark-mode .group-header {
-            cursor: pointer;
-        }
-        .dark-mode .group-header:hover {
-            background-color: #3a3f45;
-        }
-        .dark-mode .group-row[aria-hidden="true"] {
-            display: none;
-        }
-        .dark-mode .accordion-table {
-            background-color: #2b2d31;
-            margin: 0;
-        }
-        .dark-mode .accordion-table thead th {
-            background-color: #3a3f45;
-            border-bottom: 1px solid #585b63;
-            font-size: 0.9em;
-            padding: 10px;
-        }
-        .dark-mode .accordion-table tbody td {
-            padding: 10px;
-            border-bottom: 1px solid #40444b;
-            font-size: 0.85em;
-        }
-
         /* === Beyaz Tema Stilleri === */
         body.light-mode {
             background-color: #f0f2f5; 
@@ -2730,7 +2690,7 @@ window.fetchAndDisplayObjections = async function() {
         
         console.log(`🔍 ${objectorSnap.size} adet eşleşen 'task' kaydı (3. taraf) bulundu.`);
 
-    // Eşleşen 'task'lar üzerinden 'transaction' ve 'ipRecord' bilgilerini al
+// Eşleşen 'task'lar üzerinden 'transaction' ve 'ipRecord' bilgilerini al
         const processPromises = objectorSnap.docs.map(async (taskDoc) => {
             const taskData = taskDoc.data();
             const recordId = taskData.relatedIpRecordId;
@@ -2792,62 +2752,24 @@ window.fetchAndDisplayObjections = async function() {
             const bulletinDate = record.details?.brandInfo?.opposedMarkBulletinDate || parentTx?.bulletinDate || taskData.details?.bulletinDate || null;
             const epatsDate = parentTx?.epatsDocument?.documentDate || null;
 
-            // === DURUM BELİRLEME (portfolio.html ile aynı mantık) ===
             let statusText = 'Karar Bekleniyor';
             
-            // 1. Önce child transaction'lara bak (en güncel durum)
-            if (childTransactions && childTransactions.length > 0) {
-                // Child'lar arasında requestResult olanları bul
-                const childWithResult = childTransactions.find(ch => 
-                    ch.requestResult !== undefined && 
-                    ch.requestResult !== null && 
-                    ch.requestResult !== ''
-                );
-                
-                if (childWithResult) {
-                    const REQUEST_RESULT_STATUS = {
-                        '24': 'Eksiklik Bildirimi', 
-                        '28': 'Kabul', 
-                        '29': 'Kısmi Kabul', 
-                        '30': 'Ret', 
-                        '31': 'B.S - Kabul', 
-                        '32': 'B.S - Kısmi Kabul', 
-                        '33': 'B.S - Ret', 
-                        '34': 'İ.S - Kabul', 
-                        '35': 'İ.S - Kısmi Kabul', 
-                        '36': 'İ.S - Ret', 
-                        '50': 'Kabul', 
-                        '51': 'Kısmi Kabul', 
-                        '52': 'Ret'
-                    };
-                    statusText = REQUEST_RESULT_STATUS[String(childWithResult.requestResult)] || 
-                                `Bilinmiyor (ID: ${childWithResult.requestResult})`;
-                    console.log(`✅ Durum child transaction'dan alındı: ${statusText}`);
+            // Durumu ÖNCE parentTx'den (işlem) dene
+            let reqResult = parentTx?.requestResult; 
+            
+            // EĞER parentTx'de (işlem) durum yoksa, ana task'dan (görev) al
+            if (reqResult === undefined || reqResult === null) { // <-- Daha güçlü kontrol
+                if (taskData.requestResult !== undefined && taskData.requestResult !== null) {
+                    console.log(`(Durum: Task ${taskDoc.id} için 'taskData.requestResult' kullanılıyor)`);
+                    reqResult = taskData.requestResult; // <-- YEDEK KULLANIM
                 }
             }
-            
-            // 2. Child'larda durum yoksa parentTx'e bak
-            if (statusText === 'Karar Bekleniyor' && parentTx?.requestResult) {
-                const REQUEST_RESULT_STATUS = {
-                    '24': 'Eksiklik Bildirimi', 
-                    '28': 'Kabul', 
-                    '29': 'Kısmi Kabul', 
-                    '30': 'Ret', 
-                    '31': 'B.S - Kabul', 
-                    '32': 'B.S - Kısmi Kabul', 
-                    '33': 'B.S - Ret', 
-                    '34': 'İ.S - Kabul', 
-                    '35': 'İ.S - Kısmi Kabul', 
-                    '36': 'İ.S - Ret', 
-                    '50': 'Kabul', 
-                    '51': 'Kısmi Kabul', 
-                    '52': 'Ret'
-                };
-                statusText = REQUEST_RESULT_STATUS[String(parentTx.requestResult)] || 
-                            `Bilinmiyor (ID: ${parentTx.requestResult})`;
-                console.log(`✅ Durum parent transaction'dan alındı: ${statusText}`);
+
+            if (reqResult !== undefined && reqResult !== null && reqResult !== '') {
+                const REQUEST_RESULT_STATUS = {'24': 'Eksiklik Bildirimi', '28': 'Kabul', '29': 'Kısmi Kabul', '30': 'Ret', '31': 'B.S - Kabul', '32': 'B.S - Kısmi Kabul', '33': 'B.S - Ret', '34': 'İ.S - Kabul', '35': 'İ.S - Kısmi Kabul', '36': 'İ.S - Ret', '50': 'Kabul', '51': 'Kısmi Kabul', '52': 'Ret'};
+                statusText = REQUEST_RESULT_STATUS[String(reqResult)] || `Bilinmiyor (ID: ${reqResult})`;
             }
-                       
+            
             const originRaw = (record.origin || parentTx?.origin || '').toString().toUpperCase().trim();
             const originBucket = (originRaw === 'TÜRKPATENT' || originRaw === 'TURKPATENT' || originRaw === '') ? 'TÜRKPATENT' : 'YURTDISI';
 
@@ -2947,14 +2869,7 @@ window.fetchAndDisplayObjections = async function() {
         // 9. Pagination'ı güncelle ve ilk sayfayı çiz
         window.davaItirazPaginationData.pagination.update(allParentRows.length);
         const firstPageSlice = allParentRows.slice(0, itemsPerPage);
-        renderDavaItirazTable(firstPageSlice, 0);
-        
-        // 10. Accordion event listener'larını ekle
-        setTimeout(() => {
-            if (typeof window.wireObjectionsAccordion === 'function') {
-                window.wireObjectionsAccordion();
-            }
-        }, 300);
+        renderDavaItirazTable(firstPageSlice, 0); 
 
     } catch (error) {
         console.error('❌ İtiraz (3. taraf - basit sorgu) yükleme hatası:', error);
@@ -2990,35 +2905,23 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
             const tr = document.createElement('tr');
             tr.setAttribute('data-origin', (row.origin || 'TÜRKPATENT'));
             
-            // Accordion yapısı için toggle butonu
-            const iconHtml = row.hasChildren 
-                ? `<button class="accordion-toggle btn btn-sm btn-link p-0" aria-expanded="false" aria-controls="grp-${row.id}">
-                    <i class="fas fa-chevron-right"></i>
-                   </button>` 
-                : '';
+            const iconHtml = row.hasChildren ? '<i class="fas fa-chevron-right mr-2"></i>' : '';
             
             if (row.hasChildren) {
-                tr.classList.add('group-header');
-                tr.setAttribute('data-group-id', row.id);
+                tr.classList.add('accordion-header-row');
+                tr.setAttribute('data-toggle', 'collapse');
+                tr.setAttribute('data-target', `#itiraz-accordion-${row.id}`);
+                tr.setAttribute('aria-expanded', 'false');
+                tr.setAttribute('aria-controls', `itiraz-accordion-${row.id}`);
             }
 
-            // Marka Örneği için imgHtml hazırla - URL varsa thumbnail göster
-            let imgHtml = '-';
-            if (row.brandImageUrl && row.brandImageUrl.trim() !== '') {
-                imgHtml = `<div class="trademark-image-wrapper">
-                    <img src="${row.brandImageUrl}" 
-                         alt="${row.title || 'Marka'}" 
-                         class="trademark-image-thumbnail"
-                         style="width: 40px; height: 40px; object-fit: contain; cursor: pointer;"
-                         onerror="this.style.display='none'; this.parentElement.innerHTML='-';">
-                </div>`;
-            }
+            // Marka Örneği için imgHtml hazırla (Marka tabı ile aynı stili kullanır)
+            const imgHtml = row.brandImageUrl ? `<img src="${row.brandImageUrl}" alt="marka" class="brand-thumb">` : '-';
 
-            // HTML'i 11 kolon olarak güncelle - icon HTML'ini düzelt
+            // HTML'i 11 kolon olarak güncelle
             tr.innerHTML = `
                 <td>${iconHtml}${parentIndex}</td>
-                <td class="col-sample text-center">${imgHtml}</td>
-                <td><a href="#" class="portfolio-detail-link" data-item-id="${row.recordId}" data-toggle="modal" data-target="#portfolioDetailModal">${row.title}</a></td>
+                <td class="col-sample text-center">${imgHtml}</td> <td><a href="#" class="portfolio-detail-link" data-item-id="${row.recordId}" data-toggle="modal" data-target="#portfolioDetailModal">${row.title}</a></td>
                 <td>${row.transactionTypeName}</td>
                 <td>${row.applicationNumber}</td>
                 <td>${row.applicantName}</td>
@@ -3078,47 +2981,6 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
         try { window.applyMenseFilterToActivePane(); } catch (_) {}
     }
 }
-
-// ============================================
-// Accordion Toggle Fonksiyonu (İtiraz Tabı)
-// ============================================
-window.wireObjectionsAccordion = function() {
-    const tbody = document.getElementById('dava-itiraz-tbody');
-    if (!tbody || tbody.__accordionBound) return;
-    
-    tbody.addEventListener('click', (e) => {
-        const toggleBtn = e.target.closest('.accordion-toggle');
-        if (!toggleBtn) return;
-        
-        e.preventDefault();
-        e.stopPropagation();
-        
-        const groupId = toggleBtn.getAttribute('aria-controls').replace('grp-', '');
-        const isExpanded = toggleBtn.getAttribute('aria-expanded') === 'true';
-        const newExpanded = !isExpanded;
-        
-        // Toggle butonu güncelle
-        toggleBtn.setAttribute('aria-expanded', String(newExpanded));
-        toggleBtn.querySelector('i').className = newExpanded 
-            ? 'fas fa-chevron-down' 
-            : 'fas fa-chevron-right';
-        
-        // Collapse div'i bul ve aç/kapat
-        const collapseDiv = tbody.querySelector(`#itiraz-accordion-${groupId}`);
-        if (collapseDiv) {
-            if (newExpanded) {
-                $(collapseDiv).collapse('show');
-            } else {
-                $(collapseDiv).collapse('hide');
-            }
-        }
-        
-        console.log(`🔄 Accordion ${groupId} - ${newExpanded ? 'açıldı' : 'kapatıldı'}`);
-    });
-    
-    tbody.__accordionBound = true;
-    console.log('✅ Accordion event listeners bağlandı');
-};
 
 // ============================================
 // YENİ EKLEME: renderTaskPage fonksiyonu
