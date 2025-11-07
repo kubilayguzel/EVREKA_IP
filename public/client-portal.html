@@ -734,6 +734,7 @@ body.dark .opposition-owner-badge{
 /* Dava/İtiraz Tablosu Kolon Genişlikleri */
 #dava-itiraz-list table { table-layout: auto; }
 #dava-itiraz-list th.col-index, #dava-itiraz-list td.col-index { width: 56px; }
+#dava-itiraz-list th.col-sample, #dava-itiraz-list td.col-sample { width: 120px; text-align: center; } /* YENİ EKLENDİ */
 #dava-itiraz-list th.col-brand, #dava-itiraz-list td.col-brand { width: 180px; }
 #dava-itiraz-list th.col-transaction, #dava-itiraz-list td.col-transaction { width: 180px; }
 #dava-itiraz-list th.col-appno, #dava-itiraz-list td.col-appno { width: 140px; }
@@ -1006,6 +1007,7 @@ body.dark .opposition-owner-badge{
                                 <thead>
                                     <tr>
                                         <th class="col-index">#</th>
+                                        <th class="col-sample text-center">Marka Örneği</th>
                                         <th class="col-brand">M/T/B Adı</th>
                                         <th class="col-transaction">İşlem Tipi</th>
                                         <th class="col-appno">Başvuru No</th>
@@ -2114,7 +2116,13 @@ window.fetchAndDisplayInvoices = async function (linkedPersonIds) {
 };
 
 // === GLOBAL DEĞİŞKENLER (DOMContentLoaded'dan ÖNCE) ===
-window.davaItirazRows = [];
+window.davaItirazRows = []; // Bu satır artık kullanılmayacak, yenisiyle değişecek
+window.davaItirazPaginationData = {
+    allData: [], // Tüm parent ve child satırları burada saklanacak
+    pagination: null,
+    itemsPerPage: 10, // Sayfa başına 10 kayıt
+    currentPage: 1
+};
 window.transactionTypesMap = new Map();
 
 // Transaction Type servisi
@@ -2729,6 +2737,7 @@ window.fetchAndDisplayObjections = async function() {
                 objectionRows.push({
                     id: parentTx.id,
                     recordId: record.id,
+                    brandImageUrl: record.brandImageUrl || record.brandImage || '', // <-- YENİ EKLENDİ
                     title: record.title || record.brandText || '',
                     transactionTypeName,
                     applicationNumber: record.applicationNumber || '-',
@@ -2769,6 +2778,7 @@ window.fetchAndDisplayObjections = async function() {
                             id: childTx.id,
                             parentId: parentTx.id, // Parent'a bağla
                             recordId: record.id,
+                            brandImageUrl: record.brandImageUrl || record.brandImage || '', // <-- YENİ EKLENDİ
                             title: record.title || record.brandText || '',
                             transactionTypeName: childTxTypeName,
                             applicationNumber: record.applicationNumber || '-', 
@@ -2793,9 +2803,34 @@ window.fetchAndDisplayObjections = async function() {
 
         console.log(`✅ Toplam ${objectionRows.length} itiraz/dava satırı oluşturuldu (Optimize)`);
 
-        // 7. Global veriyi sakla ve tabloyu ÇİZ
-        window.davaItirazRows = objectionRows;
-        renderDavaItirazTable(objectionRows);
+        // 7. Global veriyi sakla
+        window.davaItirazPaginationData.allData = objectionRows;
+        const allParentRows = objectionRows.filter(r => r.isParent);
+        const paginationContainerId = 'davaItirazPagination';
+        const itemsPerPage = window.davaItirazPaginationData.itemsPerPage || 10;
+
+        // 8. Pagination'ı başlat (eğer yoksa)
+        if (!window.davaItirazPaginationData.pagination) {
+            // (Pagination modülünün (window.Pagination) yüklendiğinden emin olun)
+            window.davaItirazPaginationData.pagination = new Pagination({
+                itemsPerPage: itemsPerPage,
+                containerId: paginationContainerId,
+                onPageChange: (page, perPage) => {
+                    const start = (page - 1) * perPage;
+                    const end = start + perPage;
+                    const parentSlice = allParentRows.slice(start, end);
+                    // RenderDavaItirazTable'ı slice ve başlangıç index'i ile çağır
+                    renderDavaItirazTable(parentSlice, start);
+                }
+            });
+        }
+        
+        // 9. Pagination'ı güncelle ve ilk sayfayı çiz
+        window.davaItirazPaginationData.pagination.update(allParentRows.length);
+        
+        // İlk sayfayı manuel olarak çiz
+        const firstPageSlice = allParentRows.slice(0, itemsPerPage);
+        renderDavaItirazTable(firstPageSlice, 0); 
 
     } catch (error) {
         console.error('❌ Dava/İtiraz (Optimize) yükleme hatası:', error);
@@ -2804,31 +2839,30 @@ window.fetchAndDisplayObjections = async function() {
 };
 
 // Tabloyu render eden fonksiyon (GLOBAL)
-window.renderDavaItirazTable = function(rows) {
-    console.log('📊 İtiraz Tablosu render ediliyor, satır sayısı (parent+child):', rows.length);
+
+window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
+    console.log(`📊 İtiraz Tablosu render ediliyor, sayfa ${Math.floor(startIndex / (window.davaItirazPaginationData.itemsPerPage || 10)) + 1}, ${parentRowsSlice.length} parent satır`);
     const tbody = document.getElementById('dava-itiraz-tbody');
     if (!tbody) return;
     
     tbody.innerHTML = '';
+    const allData = window.davaItirazPaginationData.allData || []; // Tüm veriyi (parent+child) al
     
-    if (rows.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted">Henüz itiraz kaydı bulunmamaktadır.</td></tr>';
+    // Kolon sayısı 11 oldu (Marka Örneği eklendi)
+    if (parentRowsSlice.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="11" class="text-center text-muted">Henüz itiraz kaydı bulunmamaktadır.</td></tr>';
         return;
     }
 
-    let parentIndex = 0; // Parent satırlar için ayrı sayaç
-
-    rows.forEach((row) => {
+    parentRowsSlice.forEach((row, index) => {
+        const parentIndex = startIndex + index + 1; // Gerçek sıra no
         
-        // === PARENT SATIRLARI ÇİZ ===
         if (row.isParent) {
-            parentIndex++;
             const tr = document.createElement('tr');
             tr.setAttribute('data-origin', (row.origin || 'TÜRKPATENT'));
             
             const iconHtml = row.hasChildren ? '<i class="fas fa-chevron-right mr-2"></i>' : '';
             
-            // Eğer child'ı varsa akordeon özelliklerini ekle
             if (row.hasChildren) {
                 tr.classList.add('accordion-header-row');
                 tr.setAttribute('data-toggle', 'collapse');
@@ -2837,10 +2871,13 @@ window.renderDavaItirazTable = function(rows) {
                 tr.setAttribute('aria-controls', `itiraz-accordion-${row.id}`);
             }
 
-            // (İstek 2'ye göre 'İtiraz Sahibi' olarak güncellendi)
+            // Marka Örneği için imgHtml hazırla (Marka tabı ile aynı stili kullanır)
+            const imgHtml = row.brandImageUrl ? `<img src="${row.brandImageUrl}" alt="marka" class="brand-thumb">` : '-';
+
+            // HTML'i 11 kolon olarak güncelle
             tr.innerHTML = `
                 <td>${iconHtml}${parentIndex}</td>
-                <td><a href="#" class="portfolio-detail-link" data-item-id="${row.recordId}" data-toggle="modal" data-target="#portfolioDetailModal">${row.title}</a></td>
+                <td class="col-sample text-center">${imgHtml}</td> <td><a href="#" class="portfolio-detail-link" data-item-id="${row.recordId}" data-toggle="modal" data-target="#portfolioDetailModal">${row.title}</a></td>
                 <td>${row.transactionTypeName}</td>
                 <td>${row.applicationNumber}</td>
                 <td>${row.applicantName}</td>
@@ -2852,13 +2889,16 @@ window.renderDavaItirazTable = function(rows) {
             `;
             tbody.appendChild(tr);
 
-            // === CHILD SATIRLAR İÇİN AKORDEON TABLOSUNU HAZIRLA ===
             if (row.hasChildren) {
+                // Çocukları global diziden bul
+                const childRows = allData.filter(r => !r.isParent && r.parentId === row.id);
+                
                 const detailRow = document.createElement('tr');
                 detailRow.setAttribute('data-origin', (row.origin || 'TÜRKPATENT'));
-                // Bu satırın colspan'i 10 olmalı (parent tablodaki kolon sayısı)
+                
+                // Colspan 11 olarak güncellendi
                 detailRow.innerHTML = `
-                    <td colspan="10" class="p-0">
+                    <td colspan="11" class="p-0"> 
                         <div class="collapse" id="itiraz-accordion-${row.id}">
                             <table class="table mb-0 accordion-table">
                                 <thead>
@@ -2872,45 +2912,27 @@ window.renderDavaItirazTable = function(rows) {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    </tbody>
+                                    ${childRows.map(childRow => `
+                                        <tr data-origin="${childRow.origin || 'TÜRKPATENT'}">
+                                            <td>${parentIndex}.${childRow.subIndex}</td>
+                                            <td>${childRow.transactionTypeName}</td>
+                                            <td>${childRow.applicantName}</td>
+                                            <td>${childRow.opponent}</td>
+                                            <td>${childRow.epatsDate}</td>
+                                            <td><span class="badge badge-info">${childRow.statusText}</span></td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
                             </table>
                         </div>
                     </td>
                 `;
                 tbody.appendChild(detailRow);
             }
-        } 
-        
-        // === CHILD SATIRLARI ÇİZ (ve doğru yere ekle) ===
-        else if (!row.isParent && row.parentId) {
-            // İlgili parent'ın akordeon <tbody>'sini bul
-            const childTbody = tbody.querySelector(`#itiraz-accordion-${row.parentId} tbody`);
-            
-            if (childTbody) {
-                const childTr = document.createElement('tr');
-                childTr.setAttribute('data-origin', (row.origin || 'TÜRKPATENT'));
-                
-                // Parent'ın görünen index numarasını bul (örn: "5")
-                const parentRow = tbody.querySelector(`[data-target="#itiraz-accordion-${row.parentId}"]`);
-                let parentDisplayIndex = "?";
-                if (parentRow) {
-                    // İkonu temizleyip sadece sayıyı al
-                    parentDisplayIndex = parentRow.querySelector('td:first-child').textContent.trim();
-                }
-
-                childTr.innerHTML = `
-                    <td>${parentDisplayIndex}.${row.subIndex}</td>
-                    <td>${row.transactionTypeName}</td>
-                    <td>${row.applicantName}</td>
-                    <td>${row.opponent}</td>
-                    <td>${row.epatsDate}</td>
-                    <td><span class="badge badge-info">${row.statusText}</span></td>
-                `;
-                childTbody.appendChild(childTr);
-            }
         }
-    }); 
+    }); // end forEach(row)
 
+    // Menşe filtresini uygula
     if (typeof window.applyMenseFilterToActivePane === 'function') {
         try { window.applyMenseFilterToActivePane(); } catch (_) {}
     }
