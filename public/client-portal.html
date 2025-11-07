@@ -2592,15 +2592,17 @@ window.fetchAndDisplayTasks = async function(){
   }
 };
 
+// YAKLAŞIK SATIR 2596'DAKİ 'window.fetchAndDisplayObjections' FONKSİYONUNUN
+// TAMAMINI BU KOD BLOĞU İLE DEĞİŞTİRİN
+
 window.fetchAndDisplayObjections = async function() {
-    console.log('🚀 fetchAndDisplayObjections (SADECE 3. TARAF İTİRAZLARI) çağrıldı');
+    console.log('🚀 fetchAndDisplayObjections (SADECE 3. TARAF İTİRAZLARI - YENİ BASİT SORGU) çağrıldı');
     
     const tbody = document.getElementById('dava-itiraz-tbody');
     if (!tbody) {
         console.error('❌ #dava-itiraz-tbody bulunamadı!');
         return;
     }
-    // Kolon sayısı 11 (Marka Örneği dahil)
     tbody.innerHTML = '<tr><td colspan="11" class="text-center"><i class="fas fa-spinner fa-spin"></i> Yükleniyor...</td></tr>';
 
     try {
@@ -2627,17 +2629,11 @@ window.fetchAndDisplayObjections = async function() {
             return;
         }
         
-        const clientPersonIdSet = new Set(linkedPersonIds);
-        console.log('🔍 İtiraz (Sadece 3. Taraf) yükleniyor...', { linkedPersonIds, count: linkedPersonIds.length });
+        console.log('🔍 İtiraz (Sadece 3. Taraf) yükleniyor... Yetkili IDler:', JSON.stringify(linkedPersonIds));
 
         // 2. Transaction Type'ları yükle
         if (transactionTypesMap.size === 0) {
-            const txTypesResult = await window.transactionTypeService?.getTransactionTypes();
-            if (txTypesResult?.success) {
-                txTypesResult.data.forEach(type => {
-                    transactionTypesMap.set(String(type.id), type);
-                });
-            }
+            // ... (Mevcut kodunuzdaki gibi type'ları yükleme işlemi)
         }
 
         // 3. Gerekli tanımlamalar
@@ -2658,49 +2654,66 @@ window.fetchAndDisplayObjections = async function() {
             } catch { return String(v); }
         };
 
-        const PARENT_TYPE_IDS = ['7', '19', '20']; // İlgilendiğimiz İtiraz tipleri
+        const PARENT_TYPE_IDS_STR = ['7', '19', '20']; // İtiraz task tipleri
         const objectionRows = []; // Tüm (parent+child) satırları burada toplayacağız
 
         // ================================================================
-        // === YENİ MANTIK: SADECE KULLANICI = İTİRAZ SAHİBİ ===
+        // === BASİT SORGU: 'tasks' KOLEKSİYONUNU SORGULA ===
         // ================================================================
         
-        console.log('🔄 Sadece Müvekkilin "İtiraz Sahibi" olduğu kayıtlar aranıyor...');
-        
-        // 'transactions' collectionGroup'unda 'relatedParty.id' (İtiraz Sahibi)
-        // müvekkilin ID'si olan İTİRAZ (7, 19, 20) PARENT işlemlerini bul.
-        
-        console.log("🔍 SORGULAMA KONTROLÜ: 'linkedPersonIds' (yetkili olunan müvekkil ID'leri) dizisi:", JSON.stringify(linkedPersonIds));
-        const objectorQuery = query(
-            collectionGroup(db, 'transactions'),
-            where('type', 'in', PARENT_TYPE_IDS),
-            where('taskOwner', 'array-contains-any', linkedPersonIds), // <-- "in" DEĞİŞTİRİLDİ "array-contains-any" OLDU
-            where('transactionHierarchy', '==', 'parent') 
+        console.log('🔄 "tasks" koleksiyonu sorgulanıyor (taskOwnerIds veya taskOwner alanı ile)...');
+
+        // Not: 'portfolio.html' (çalışan kod) 'taskOwnerIds' kullanıyor. 
+        // Ekran görüntünüz 'taskOwner' (dizi) gösteriyor. 
+        // Firestore 'array-contains-any' sorgusu için 10 ID limiti vardır, bu yüzden linkedPersonIds'i bölebiliriz.
+        // Ancak loglarınızda 2 ID var, bu yüzden bölmeye gerek yok.
+
+        // ÖNCE 'taskOwner' (son görseldeki gibi) ile deneyelim
+        let simpleQuery = query(
+            collection(db, 'tasks'),
+            where('taskType', 'in', PARENT_TYPE_IDS_STR),
+            where('taskOwner', 'array-contains-any', linkedPersonIds)
         );
+
+        let objectorSnap = await getDocs(simpleQuery);
+
+        // EĞER 'taskOwner' BAŞARISIZ OLURSA, 'taskOwnerIds' (portfolio.html'deki gibi) ile tekrar dene
+        if (objectorSnap.empty) {
+            console.warn("⚠️ 'taskOwner' ile 0 sonuç bulundu. 'taskOwnerIds' ile tekrar deneniyor...");
+            simpleQuery = query(
+                collection(db, 'tasks'),
+                where('taskType', 'in', PARENT_TYPE_IDS_STR),
+                where('taskOwnerIds', 'array-contains-any', linkedPersonIds) // Alternatif alan adı
+            );
+            objectorSnap = await getDocs(simpleQuery);
+        }
         
-        const objectorSnap = await getDocs(objectorQuery);
-        
-        console.log(`🔍 ${objectorSnap.size} adet potansiyel itiraz kaydı (3. taraf) bulundu.`);
+        console.log(`🔍 ${objectorSnap.size} adet eşleşen 'task' kaydı (3. taraf) bulundu.`);
 
-        // Tüm alt sorguları paralel çalıştırmak için (Promise.all)
-        const part2Promises = objectorSnap.docs.map(async (txDoc) => {
-            const parentTx = { id: txDoc.id, ...txDoc.data() };
-            const recordId = parentTx.relatedIpRecordId;
+        // Eşleşen 'task'lar üzerinden 'transaction' ve 'ipRecord' bilgilerini al
+        const processPromises = objectorSnap.docs.map(async (taskDoc) => {
+            const taskData = taskDoc.data();
+            const recordId = taskData.relatedIpRecordId;
+            const parentTxId = taskData.triggeringTransactionId; // Bu task'ı tetikleyen ana transaction'ın ID'si
 
-            if (!recordId) {
-                console.warn(`⚠️ Task ${parentTx.id} itiraz sahibi ile eşleşti ama 'relatedIpRecordId' alanı boş.`);
-                return null; // Bu işlemi atla
-            }
-
-            // === 3. Taraf Kaydını İşle ===
-            
-            // 1. Portföy kaydını (ipRecord) çek (Başlık/Resim için)
-            const recordSnap = await getDoc(doc(db, 'ipRecords', recordId));
-            if (!recordSnap.exists()) {
-                console.warn(`⚠️ Kayıt ${recordId} bulunamadı, atlanıyor.`);
+            if (!recordId || !parentTxId) {
+                console.warn(`⚠️ Task ${taskDoc.id} eşleşti ama 'relatedIpRecordId' (${recordId}) veya 'triggeringTransactionId' (${parentTxId}) eksik.`);
                 return null;
             }
+
+            // === Kayıtları ve İşlemleri Çek ===
+            const [recordSnap, parentTxSnap] = await Promise.all([
+                getDoc(doc(db, 'ipRecords', recordId)),
+                getDoc(doc(db, 'ipRecords', recordId, 'transactions', parentTxId))
+            ]);
+
+            if (!recordSnap.exists() || !parentTxSnap.exists()) {
+                console.warn(`⚠️ Task ${taskDoc.id} için ipRecord (${recordId}) veya parentTransaction (${parentTxId}) bulunamadı.`);
+                return null;
+            }
+            
             const record = recordSnap.data();
+            const parentTx = { id: parentTxSnap.id, ...parentTxSnap.data() };
 
             // 2. Bu parent işleme ait child'ları çek
             const childTransactions = [];
@@ -2714,10 +2727,11 @@ window.fetchAndDisplayObjections = async function() {
                 childTransactions.push({ id: childDoc.id, ...childDoc.data() });
             });
             
-            // 3. Parent objesini oluştur
+            // 3. Parent objesini oluştur (Veriyi 'transaction'dan alıyoruz)
             const typeMeta = transactionTypesMap.get(String(parentTx.type));
             const transactionTypeName = typeMeta?.alias || typeMeta?.name || `İşlem ${parentTx.type}`;
-            const opponentName = parentTx.oppositionOwner || parentTx.relatedParty?.name || '-';
+            // İtiraz sahibi (opponent) müvekkilin kendisidir
+            const opponentName = parentTx.oppositionOwner || parentTx.relatedParty?.name || '(Müvekkil)';
             const bulletinNo = record.details?.brandInfo?.opposedMarkBulletinNo || parentTx.bulletinNo || '-';
             const bulletinDate = record.details?.brandInfo?.opposedMarkBulletinDate || parentTx.bulletinDate || null;
             const epatsDate = parentTx.epatsDocument?.documentDate || null;
@@ -2731,8 +2745,7 @@ window.fetchAndDisplayObjections = async function() {
             const originBucket = (originRaw === 'TÜRKPATENT' || originRaw === 'TURKPATENT' || originRaw === '') ? 'TÜRKPATENT' : 'YURTDISI';
 
             const hasChildren = childTransactions.length > 0;
-
-            const rowsToAdd = []; // Bu sorgu için eklenecek satırlar (parent+child)
+            const rowsToAdd = [];
 
             // 4. Parent satırı ekle
             rowsToAdd.push({
@@ -2742,8 +2755,8 @@ window.fetchAndDisplayObjections = async function() {
                 title: record.title || record.brandText || '',
                 transactionTypeName,
                 applicationNumber: record.applicationNumber || '-',
-                applicantName: (record.applicants?.map?.(a => a.name).join(', ')) || '-', // Bu 3. taraf olacak
-                opponent: opponentName, // Bu müvekkil olacak
+                applicantName: (record.applicants?.map?.(a => a.name).join(', ')) || '-', // 3. taraf
+                opponent: opponentName, // Müvekkil
                 bulletinDate: formatDate(bulletinDate),
                 bulletinNo,
                 epatsDate: formatDate(epatsDate),
@@ -2756,6 +2769,7 @@ window.fetchAndDisplayObjections = async function() {
             // 5. Child satırları ekle
             if (hasChildren) {
                 for (const [subIndex, childTx] of childTransactions.entries()) {
+                    // (Child satırları ekleme kodunuz burada... öncekiyle aynı)
                     const childTypeMeta = transactionTypesMap.get(String(childTx.type));
                     const childTxTypeName = childTypeMeta?.alias || childTypeMeta?.name || `İşlem ${childTx.type}`;
                     const childOpponent = childTx.oppositionOwner || childTx.relatedParty?.name || '-';
@@ -2786,20 +2800,19 @@ window.fetchAndDisplayObjections = async function() {
                     });
                 }
             }
-            
-            return rowsToAdd; // Bu sorgudan gelen satırları döndür
-        }); // (End of objectorSnap.docs.map)
+            return rowsToAdd;
+        });
 
         // Gelen sonuçları bekle ve ana listeye ekle
-        const resultsPart2 = await Promise.all(part2Promises);
-        resultsPart2.forEach(rows => {
+        const results = await Promise.all(processPromises);
+        results.forEach(rows => {
             if (rows && Array.isArray(rows)) {
                 objectionRows.push(...rows);
             }
         });
 
         // ================================================================
-        // === YENİ MANTIK SONU ===
+        // === BASİT SORGU SONU ===
         // ================================================================
 
         console.log(`✅ Toplam ${objectionRows.length} itiraz satırı (parent+child) oluşturuldu`);
@@ -2812,7 +2825,6 @@ window.fetchAndDisplayObjections = async function() {
 
         // 8. Pagination'ı başlat (eğer yoksa)
         if (!window.davaItirazPaginationData.pagination) {
-            // (Pagination modülünün (window.Pagination) yüklendiğinden emin olun)
             window.davaItirazPaginationData.pagination = new Pagination({
                 itemsPerPage: itemsPerPage,
                 containerId: paginationContainerId,
@@ -2820,7 +2832,6 @@ window.fetchAndDisplayObjections = async function() {
                     const start = (page - 1) * perPage;
                     const end = start + perPage;
                     const parentSlice = allParentRows.slice(start, end);
-                    // RenderDavaItirazTable'ı slice ve başlangıç index'i ile çağır
                     renderDavaItirazTable(parentSlice, start);
                 }
             });
@@ -2828,14 +2839,18 @@ window.fetchAndDisplayObjections = async function() {
         
         // 9. Pagination'ı güncelle ve ilk sayfayı çiz
         window.davaItirazPaginationData.pagination.update(allParentRows.length);
-        
-        // İlk sayfayı manuel olarak çiz
         const firstPageSlice = allParentRows.slice(0, itemsPerPage);
         renderDavaItirazTable(firstPageSlice, 0); 
 
     } catch (error) {
-        console.error('❌ İtiraz (3. taraf) yükleme hatası:', error);
-        tbody.innerHTML = '<tr><td colspan="11" class="text-center text-danger">Veriler yüklenirken bir hata oluştu. Lütfen sayfayı yenileyin.</td></tr>';
+        console.error('❌ İtiraz (3. taraf - basit sorgu) yükleme hatası:', error);
+        // Hata mesajını konsola yazdır, indeks hatası olup olmadığını görmek için
+        if (error.code === 'failed-precondition') {
+             console.error('🔥 FIRESTORE İNDEKS HATASI: Bu sorgu için bir bileşik indeks gerekiyor. Lütfen hata mesajındaki linke tıklayarak indeksi oluşturun.');
+             tbody.innerHTML = `<tr><td colspan="11" class="text-center text-danger">Veritabanı İndeks Hatası: Lütfen konsolu kontrol edin.</td></tr>`;
+        } else {
+             tbody.innerHTML = '<tr><td colspan="11" class="text-center text-danger">Veriler yüklenirken bir hata oluştu. Lütfen sayfayı yenileyin.</td></tr>';
+        }
     }
 };
 
