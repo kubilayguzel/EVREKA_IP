@@ -2669,10 +2669,12 @@ window.fetchAndDisplayObjections = async function() {
         
         // 'transactions' collectionGroup'unda 'relatedParty.id' (İtiraz Sahibi)
         // müvekkilin ID'si olan İTİRAZ (7, 19, 20) PARENT işlemlerini bul.
+        
+        console.log("🔍 SORGULAMA KONTROLÜ: 'linkedPersonIds' (yetkili olunan müvekkil ID'leri) dizisi:", JSON.stringify(linkedPersonIds));
         const objectorQuery = query(
             collectionGroup(db, 'transactions'),
             where('type', 'in', PARENT_TYPE_IDS),
-            where('taskOwner', 'in', linkedPersonIds), // <-- DOĞRU ALAN (Ekran görüntüsüne göre)
+            where('taskOwner', 'array-contains-any', linkedPersonIds), // <-- "in" DEĞİŞTİRİLDİ "array-contains-any" OLDU
             where('transactionHierarchy', '==', 'parent') 
         );
         
