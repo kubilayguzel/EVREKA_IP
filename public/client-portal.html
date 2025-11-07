@@ -2680,8 +2680,9 @@ window.fetchAndDisplayObjections = async function() {
 
             // Parent işlemleri filtrele
             const parentTransactions = transactions.filter(tx =>
-                (tx.transactionHierarchy === 'parent' || !tx.parentId)
-            );
+            (tx.transactionHierarchy === 'parent' || !tx.parentId) &&
+            PARENT_TYPE_IDS.includes(String(tx.type)) // <-- FİLTRE BURAYA EKLENDİ
+        );
 
             // Satırları oluştur (Mevcut kodunuzdaki mantıkla aynı)
             for (const parentTx of parentTransactions) {
