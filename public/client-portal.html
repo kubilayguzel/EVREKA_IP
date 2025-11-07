@@ -2596,7 +2596,7 @@ window.fetchAndDisplayTasks = async function(){
 // TAMAMINI BU KOD BLOĞU İLE DEĞİŞTİRİN
 
 window.fetchAndDisplayObjections = async function() {
-    console.log('🚀 fetchAndDisplayObjections (SADECE 3. TARAF İTİRAZLARI - YENİ BASİT SORGU) çağrıldı');
+    console.log('🚀 fetchAndDisplayObjections (SADECE 3. TARAF - portfolio.html LOGIC) çağrıldı');
     
     const tbody = document.getElementById('dava-itiraz-tbody');
     if (!tbody) {
@@ -2633,7 +2633,12 @@ window.fetchAndDisplayObjections = async function() {
 
         // 2. Transaction Type'ları yükle
         if (transactionTypesMap.size === 0) {
-            // ... (Mevcut kodunuzdaki gibi type'ları yükleme işlemi)
+            const txTypesResult = await window.transactionTypeService?.getTransactionTypes();
+            if (txTypesResult?.success) {
+                txTypesResult.data.forEach(type => {
+                    transactionTypesMap.set(String(type.id), type);
+                });
+            }
         }
 
         // 3. Gerekli tanımlamalar
@@ -2658,17 +2663,12 @@ window.fetchAndDisplayObjections = async function() {
         const objectionRows = []; // Tüm (parent+child) satırları burada toplayacağız
 
         // ================================================================
-        // === BASİT SORGU: 'tasks' KOLEKSİYONUNU SORGULA ===
+        // === 'portfolio.html' DOSYASINDAN KOPYALANAN BASİT SORGU ===
         // ================================================================
         
-        console.log('🔄 "tasks" koleksiyonu sorgulanıyor (taskOwnerIds veya taskOwner alanı ile)...');
+        console.log('🔄 "tasks" koleksiyonu sorgulanıyor (taskOwner veya taskOwnerIds alanı ile)...');
 
-        // Not: 'portfolio.html' (çalışan kod) 'taskOwnerIds' kullanıyor. 
-        // Ekran görüntünüz 'taskOwner' (dizi) gösteriyor. 
-        // Firestore 'array-contains-any' sorgusu için 10 ID limiti vardır, bu yüzden linkedPersonIds'i bölebiliriz.
-        // Ancak loglarınızda 2 ID var, bu yüzden bölmeye gerek yok.
-
-        // ÖNCE 'taskOwner' (son görseldeki gibi) ile deneyelim
+        // 'taskOwner' (dizi) ile sorgula
         let simpleQuery = query(
             collection(db, 'tasks'),
             where('taskType', 'in', PARENT_TYPE_IDS_STR),
@@ -2677,7 +2677,7 @@ window.fetchAndDisplayObjections = async function() {
 
         let objectorSnap = await getDocs(simpleQuery);
 
-        // EĞER 'taskOwner' BAŞARISIZ OLURSA, 'taskOwnerIds' (portfolio.html'deki gibi) ile tekrar dene
+        // EĞER 'taskOwner' BAŞARISIZ OLURSA, 'taskOwnerIds' ile tekrar dene
         if (objectorSnap.empty) {
             console.warn("⚠️ 'taskOwner' ile 0 sonuç bulundu. 'taskOwnerIds' ile tekrar deneniyor...");
             simpleQuery = query(
@@ -2694,10 +2694,16 @@ window.fetchAndDisplayObjections = async function() {
         const processPromises = objectorSnap.docs.map(async (taskDoc) => {
             const taskData = taskDoc.data();
             const recordId = taskData.relatedIpRecordId;
-            const parentTxId = taskData.triggeringTransactionId; // Bu task'ı tetikleyen ana transaction'ın ID'si
+            
+            // ======================================================
+            // === KRİTİK DÜZELTME (portfolio.html'den alındı) ===
+            // ======================================================
+            // Eğer triggeringTransactionId boşsa (undefined), task'ın kendi ID'sini kullan
+            const parentTxId = taskData.triggeringTransactionId || taskDoc.id; 
+            // ======================================================
 
             if (!recordId || !parentTxId) {
-                console.warn(`⚠️ Task ${taskDoc.id} eşleşti ama 'relatedIpRecordId' (${recordId}) veya 'triggeringTransactionId' (${parentTxId}) eksik.`);
+                console.warn(`⚠️ Task ${taskDoc.id} eşleşti ama 'relatedIpRecordId' (${recordId}) veya 'parentTxId' (${parentTxId}) eksik.`);
                 return null;
             }
 
@@ -2730,7 +2736,6 @@ window.fetchAndDisplayObjections = async function() {
             // 3. Parent objesini oluştur (Veriyi 'transaction'dan alıyoruz)
             const typeMeta = transactionTypesMap.get(String(parentTx.type));
             const transactionTypeName = typeMeta?.alias || typeMeta?.name || `İşlem ${parentTx.type}`;
-            // İtiraz sahibi (opponent) müvekkilin kendisidir
             const opponentName = parentTx.oppositionOwner || parentTx.relatedParty?.name || '(Müvekkil)';
             const bulletinNo = record.details?.brandInfo?.opposedMarkBulletinNo || parentTx.bulletinNo || '-';
             const bulletinDate = record.details?.brandInfo?.opposedMarkBulletinDate || parentTx.bulletinDate || null;
@@ -2769,7 +2774,6 @@ window.fetchAndDisplayObjections = async function() {
             // 5. Child satırları ekle
             if (hasChildren) {
                 for (const [subIndex, childTx] of childTransactions.entries()) {
-                    // (Child satırları ekleme kodunuz burada... öncekiyle aynı)
                     const childTypeMeta = transactionTypesMap.get(String(childTx.type));
                     const childTxTypeName = childTypeMeta?.alias || childTypeMeta?.name || `İşlem ${childTx.type}`;
                     const childOpponent = childTx.oppositionOwner || childTx.relatedParty?.name || '-';
@@ -2844,7 +2848,6 @@ window.fetchAndDisplayObjections = async function() {
 
     } catch (error) {
         console.error('❌ İtiraz (3. taraf - basit sorgu) yükleme hatası:', error);
-        // Hata mesajını konsola yazdır, indeks hatası olup olmadığını görmek için
         if (error.code === 'failed-precondition') {
              console.error('🔥 FIRESTORE İNDEKS HATASI: Bu sorgu için bir bileşik indeks gerekiyor. Lütfen hata mesajındaki linke tıklayarak indeksi oluşturun.');
              tbody.innerHTML = `<tr><td colspan="11" class="text-center text-danger">Veritabanı İndeks Hatası: Lütfen konsolu kontrol edin.</td></tr>`;
