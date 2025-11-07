@@ -2640,7 +2640,7 @@ window.fetchAndDisplayObjections = async function() {
         const transactionPromises = relevantRecords.map(record => {
             const transactionsRef = collection(db, 'ipRecords', record.id, 'transactions');
             // Sorguyu optimize et: Sadece ilgili tipleri iste
-            const q = query(transactionsRef, where('type', 'in', PARENT_TYPE_IDS));
+            const q = query(transactionsRef);
             
             // getDocs() promise'ini döndür
             return getDocs(q).then(snapshot => ({ record, snapshot })); // record'u da result'a ekle
