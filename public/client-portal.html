@@ -2729,7 +2729,7 @@ window.fetchAndDisplayObjections = async function() {
             const childTransactions = [];
             const childQuery = query(
                 collection(db, 'ipRecords', recordId, 'transactions'), 
-                where('parentId', '==', parentTxId), // parentTxId (Task ID'si) ile ara
+                where('parentId', '==', parentTxId), // <-- DÜZELTME: 'parentTx.id' yerine 'parentTxId' kullan
                 where('transactionHierarchy', '==', 'child')
             );
             const childSnap = await getDocs(childQuery);
@@ -2754,11 +2754,16 @@ window.fetchAndDisplayObjections = async function() {
             const epatsDate = parentTx?.epatsDocument?.documentDate || null;
 
             let statusText = 'Karar Bekleniyor';
+            
             // Durumu ÖNCE parentTx'den (işlem) dene
-            let reqResult = parentTx?.requestResult;
+            let reqResult = parentTx?.requestResult; 
+            
             // EĞER parentTx'de (işlem) durum yoksa, ana task'dan (görev) al
-            if (reqResult === undefined && taskData.requestResult !== undefined) {
-                reqResult = taskData.requestResult; // <-- YEDEK KULLANIM
+            if (reqResult === undefined || reqResult === null) { // <-- Daha güçlü kontrol
+                if (taskData.requestResult !== undefined && taskData.requestResult !== null) {
+                    console.log(`(Durum: Task ${taskDoc.id} için 'taskData.requestResult' kullanılıyor)`);
+                    reqResult = taskData.requestResult; // <-- YEDEK KULLANIM
+                }
             }
 
             if (reqResult !== undefined && reqResult !== null && reqResult !== '') {
