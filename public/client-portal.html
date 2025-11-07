@@ -2712,16 +2712,15 @@ window.fetchAndDisplayObjections = async function() {
             // =================================================================
             // === 'portfolio.html' DEN ALINAN KRİTİK 'exists' KONTROLÜ ===
             // =================================================================
-            // Logların "bulunamadı" dediği yer burası.
-            // parentTxSnap (işlem detayı) bulunamazsa 'null' ata.
             
+            // SADECE 'ipRecord' belgesi var mı diye kontrol et
             if (!recordSnap.exists()) {
                  console.warn(`⚠️ Task ${taskDoc.id} için ipRecord (${recordId}) bulunamadı.`);
-                 return null;
+                 return null; // Sadece bu durumda durdur
             }
             
             const record = recordSnap.data();
-            // parentTx (işlem) belgesi 'null' olabilir, bu normaldir.
+            // 'parentTx' (işlem) belgesi 'null' olabilir, bu bir hata değil.
             const parentTx = parentTxSnap.exists() ? { id: parentTxSnap.id, ...parentTxSnap.data() } : null; 
             // =================================================================
 
