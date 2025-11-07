@@ -2592,21 +2592,21 @@ window.fetchAndDisplayTasks = async function(){
 };
 
 window.fetchAndDisplayObjections = async function() {
-    console.log('🚀 fetchAndDisplayObjections (YENİ OPTİMİZE) çağrıldı');
+    console.log('🚀 fetchAndDisplayObjections (SADECE 3. TARAF İTİRAZLARI) çağrıldı');
     
     const tbody = document.getElementById('dava-itiraz-tbody');
     if (!tbody) {
         console.error('❌ #dava-itiraz-tbody bulunamadı!');
         return;
     }
-    // Yükleniyor... mesajı
-    tbody.innerHTML = '<tr><td colspan="10" class="text-center"><i class="fas fa-spinner fa-spin"></i> Yükleniyor...</td></tr>';
+    // Kolon sayısı 11 (Marka Örneği dahil)
+    tbody.innerHTML = '<tr><td colspan="11" class="text-center"><i class="fas fa-spinner fa-spin"></i> Yükleniyor...</td></tr>';
 
     try {
         // 1. Kullanıcı ve Müvekkil ID'lerini al
         const user = authService.getCurrentUser();
         if (!user) {
-            tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted">Kullanıcı girişi yapılmamış.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="11" class="text-center text-muted">Kullanıcı girişi yapılmamış.</td></tr>';
             return;
         }
         
@@ -2614,7 +2614,7 @@ window.fetchAndDisplayObjections = async function() {
         const userSnapshot = await getDoc(userDocRef);
         
         if (!userSnapshot.exists()) {
-             tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted">Kullanıcı verisi bulunamadı.</td></tr>';
+             tbody.innerHTML = '<tr><td colspan="11" class="text-center text-muted">Kullanıcı verisi bulunamadı.</td></tr>';
              return;
         }
         
@@ -2622,17 +2622,14 @@ window.fetchAndDisplayObjections = async function() {
         
         if (linkedPersonIds.length === 0) {
             console.log("Bağlı müvekkil bulunamadı.");
-            tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted">Bağlı müvekkil bulunamadı.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="11" class="text-center text-muted">Bağlı müvekkil bulunamadı.</td></tr>';
             return;
         }
         
         const clientPersonIdSet = new Set(linkedPersonIds);
-        console.log('🔍 Dava/İtiraz (Optimize) yükleniyor...', {
-            linkedPersonIds,
-            count: linkedPersonIds.length
-        });
+        console.log('🔍 İtiraz (Sadece 3. Taraf) yükleniyor...', { linkedPersonIds, count: linkedPersonIds.length });
 
-        // 2. Transaction Type'ları yükle (cache'de yoksa)
+        // 2. Transaction Type'ları yükle
         if (transactionTypesMap.size === 0) {
             const txTypesResult = await window.transactionTypeService?.getTransactionTypes();
             if (txTypesResult?.success) {
@@ -2642,50 +2639,7 @@ window.fetchAndDisplayObjections = async function() {
             }
         }
 
-        // 3. Müvekkile ait TÜM portföy kayıtlarını bul (Bu kısım hızlı)
-        const allIpQuery = query(collection(db, "ipRecords"));
-        const allIpSnap = await runGetDocs(allIpQuery);
-        
-        const relevantRecords = []; // Client's portfolio items
-        
-        allIpSnap.forEach(doc => {
-            const data = doc.data();
-            if (data.applicants && Array.isArray(data.applicants)) {
-                const hasMatch = data.applicants.some(applicant => 
-                    applicant && applicant.id && clientPersonIdSet.has(applicant.id)
-                );
-                if (hasMatch) {
-                    relevantRecords.push({ id: doc.id, ...data });
-                }
-            }
-        });
-
-        console.log(`📊 Toplam ${relevantRecords.length} portföy kaydı bulundu (Optimize sorgu)`);
-        
-        if (relevantRecords.length === 0) {
-            renderDavaItirazTable([]); // Boş tabloyu render et
-            return;
-        }
-
-        const PARENT_TYPE_IDS = ['7', '19', '20']; // İlgilendiğimiz transaction tipleri
-
-        // 4. OPTİMİZASYON: Tüm sorgu promise'lerini bir diziye topla
-        // 147 kaydın 147'si için de transaction sorgusu oluştur
-        const transactionPromises = relevantRecords.map(record => {
-            const transactionsRef = collection(db, 'ipRecords', record.id, 'transactions');
-            // Sorguyu optimize et: Sadece ilgili tipleri iste
-            const q = query(transactionsRef);
-            
-            // getDocs() promise'ini döndür
-            return getDocs(q).then(snapshot => ({ record, snapshot })); // record'u da result'a ekle
-        });
-
-        // 5. PARALEL ÇALIŞTIRMA: Tüm sorguları AYNI ANDA çalıştır
-        console.log(`⏳ ${transactionPromises.length} adet portföy kaydının işlem (transaction) dökümü paralel olarak çekiliyor...`);
-        const results = await Promise.all(transactionPromises);
-        console.log(`✅ ${results.length} adet portföy işlemi çekildi, veriler işleniyor.`);
-
-        const objectionRows = [];
+        // 3. Gerekli tanımlamalar
         const formatDate = (v) => {
             if (!v) return '-';
             try {
@@ -2703,131 +2657,149 @@ window.fetchAndDisplayObjections = async function() {
             } catch { return String(v); }
         };
 
-        // 6. Sonuçları işle (Bu döngüde 'await' YOK, bu yüzden çok hızlı)
-        for (const { record, snapshot } of results) {
-            if (snapshot.empty) continue; // Bu portföyde ilgili işlem yoksa atla
+        const PARENT_TYPE_IDS = ['7', '19', '20']; // İlgilendiğimiz İtiraz tipleri
+        const objectionRows = []; // Tüm (parent+child) satırları burada toplayacağız
 
-            const transactions = [];
-            snapshot.forEach(txDoc => {
-                transactions.push({ id: txDoc.id, ...txDoc.data() });
-            });
-
-            // Parent işlemleri filtrele
-            const parentTransactions = transactions.filter(tx =>
-            (tx.transactionHierarchy === 'parent' || !tx.parentId) &&
-            PARENT_TYPE_IDS.includes(String(tx.type)) // <-- FİLTRE BURAYA EKLENDİ
+        // ================================================================
+        // === YENİ MANTIK: SADECE KULLANICI = İTİRAZ SAHİBİ ===
+        // ================================================================
+        
+        console.log('🔄 Sadece Müvekkilin "İtiraz Sahibi" olduğu kayıtlar aranıyor...');
+        
+        // 'transactions' collectionGroup'unda 'relatedParty.id' (İtiraz Sahibi)
+        // müvekkilin ID'si olan İTİRAZ (7, 19, 20) PARENT işlemlerini bul.
+        const objectorQuery = query(
+            collectionGroup(db, 'transactions'),
+            where('type', 'in', PARENT_TYPE_IDS),
+            where('relatedParty.id', 'in', linkedPersonIds),
+            where('transactionHierarchy', '==', 'parent') // Sadece parent'ları bul
         );
+        
+        const objectorSnap = await getDocs(objectorQuery);
+        
+        console.log(`🔍 ${objectorSnap.size} adet potansiyel itiraz kaydı (3. taraf) bulundu.`);
 
-            // Satırları oluştur (Mevcut kodunuzdaki mantıkla aynı)
-            for (const parentTx of parentTransactions) {
-                const typeMeta = transactionTypesMap.get(String(parentTx.type));
-                const transactionTypeName = typeMeta?.alias || typeMeta?.name || `İşlem ${parentTx.type}`;
+        // Tüm alt sorguları paralel çalıştırmak için (Promise.all)
+        const part2Promises = objectorSnap.docs.map(async (txDoc) => {
+            const parentTx = { id: txDoc.id, ...txDoc.data() };
+            const recordId = parentTx.relatedIpRecordId;
 
-                const opponentName =
-                    parentTx.oppositionOwner ||
-                    parentTx.relatedParty?.name ||
-                    (Array.isArray(parentTx.objectionOwners) && parentTx.objectionOwners.length
-                        ? parentTx.objectionOwners.map(o => o.name).join(', ')
-                        : '-');
-
-                const bulletinNo = record.details?.brandInfo?.opposedMarkBulletinNo || parentTx.bulletinNo || '-';
-                const bulletinDate = record.details?.brandInfo?.opposedMarkBulletinDate || parentTx.bulletinDate || null;
-                const epatsDate = parentTx.epatsDocument?.documentDate || null;
-
-                let statusText = 'Karar Bekleniyor';
-                if (parentTx.requestResult !== undefined && parentTx.requestResult !== null && parentTx.requestResult !== '') {
-                    const REQUEST_RESULT_STATUS = {
-                        '24': 'Eksiklik Bildirimi', '28': 'Kabul', '29': 'Kısmi Kabul', '30': 'Ret',
-                        '31': 'B.S - Kabul', '32': 'B.S - Kısmi Kabul', '33': 'B.S - Ret',
-                        '34': 'İ.S - Kabul', '35': 'İ.S - Kısmi Kabul', '36': 'İ.S - Ret',
-                        '50': 'Kabul', '51': 'Kısmi Kabul', '52': 'Ret'
-                    };
-                    statusText = REQUEST_RESULT_STATUS[String(parentTx.requestResult)] || `Bilinmiyor (ID: ${parentTx.requestResult})`;
-                }
-
-                const originRaw = (record.origin || parentTx.origin || '').toString().toUpperCase().trim();
-                const originBucket = (originRaw === 'TÜRKPATENT' || originRaw === 'TURKPATENT' || originRaw === '')
-                ? 'TÜRKPATENT'
-                : 'YURTDISI';
-
-                // === BAŞLANGIÇ: YENİ AKORDEON MANTIĞI ===
-                
-                // 1. Bu parent'a ait child'ları bul (tüm transactions listesinden)
-                const childTransactions = transactions.filter(tx => 
-                    tx.parentId === parentTx.id && 
-                    tx.transactionHierarchy === 'child'
-                );
-                const hasChildren = childTransactions.length > 0;
-
-                // 2. Parent satırı (akordeon bayrakları ile) diziye ekle
-                objectionRows.push({
-                    id: parentTx.id,
-                    recordId: record.id,
-                    brandImageUrl: record.brandImageUrl || record.brandImage || '', // <-- YENİ EKLENDİ
-                    title: record.title || record.brandText || '',
-                    transactionTypeName,
-                    applicationNumber: record.applicationNumber || '-',
-                    applicantName: (record.applicants?.map?.(a => a.name).join(', ')) || '-',
-                    opponent: opponentName,
-                    bulletinDate: formatDate(bulletinDate),
-                    bulletinNo,
-                    epatsDate: formatDate(epatsDate),
-                    origin: originBucket,
-                    statusText,
-                    // Akordeon bayrakları
-                    isParent: true,
-                    hasChildren: hasChildren 
-                });
-
-                // 3. Child satırları (eğer varsa) diziye ekle
-                if (hasChildren) {
-                    for (const [subIndex, childTx] of childTransactions.entries()) {
-                        
-                        const childTypeMeta = transactionTypesMap.get(String(childTx.type));
-                        const childTxTypeName = childTypeMeta?.alias || childTypeMeta?.name || `İşlem ${childTx.type}`;
-                        const childOpponent = childTx.oppositionOwner || childTx.relatedParty?.name || '-';
-                        const childEpatsDate = childTx.epatsDocument?.documentDate || null;
-
-                        // Child status (Gerekirse bu mantığı genişletebilirsiniz)
-                        let childStatusText = 'İşlemde';
-                        if (childTx.requestResult) {
-                            const REQUEST_RESULT_STATUS = {
-                                '24': 'Eksiklik Bildirimi', '28': 'Kabul', '29': 'Kısmi Kabul', '30': 'Ret',
-                                '31': 'B.S - Kabul', '32': 'B.S - Kısmi Kabul', '33': 'B.S - Ret',
-                                '34': 'İ.S - Kabul', '35': 'İ.S - Kısmi Kabul', '36': 'İ.S - Ret',
-                                '50': 'Kabul', '51': 'Kısmi Kabul', '52': 'Ret'
-                            };
-                            childStatusText = REQUEST_RESULT_STATUS[String(childTx.requestResult)] || `Bilinmiyor (ID: ${childTx.requestResult})`;
-                        }
-
-                        objectionRows.push({
-                            id: childTx.id,
-                            parentId: parentTx.id, // Parent'a bağla
-                            recordId: record.id,
-                            brandImageUrl: record.brandImageUrl || record.brandImage || '', // <-- YENİ EKLENDİ
-                            title: record.title || record.brandText || '',
-                            transactionTypeName: childTxTypeName,
-                            applicationNumber: record.applicationNumber || '-', 
-                            applicantName: (record.applicants?.map?.(a => a.name).join(', ')) || '-',
-                            opponent: childOpponent,
-                            bulletinDate: '-',
-                            bulletinNo: '-',
-                            epatsDate: formatDate(childEpatsDate),
-                            origin: originBucket,
-                            statusText: childStatusText,
-                            // Akordeon bayrakları
-                            isParent: false,
-                            hasChildren: false,
-                            subIndex: subIndex + 1 // (Numaralandırma için 1.1, 1.2 vb.)
-                        });
-                    }
-                }
-                // === SON: YENİ AKORDEON MANTIĞI ===
+            if (!recordId) {
+                console.warn(`⚠️ Task ${parentTx.id} itiraz sahibi ile eşleşti ama 'relatedIpRecordId' alanı boş.`);
+                return null; // Bu işlemi atla
             }
 
-        }
+            // === 3. Taraf Kaydını İşle ===
+            
+            // 1. Portföy kaydını (ipRecord) çek (Başlık/Resim için)
+            const recordSnap = await getDoc(doc(db, 'ipRecords', recordId));
+            if (!recordSnap.exists()) {
+                console.warn(`⚠️ Kayıt ${recordId} bulunamadı, atlanıyor.`);
+                return null;
+            }
+            const record = recordSnap.data();
 
-        console.log(`✅ Toplam ${objectionRows.length} itiraz/dava satırı oluşturuldu (Optimize)`);
+            // 2. Bu parent işleme ait child'ları çek
+            const childTransactions = [];
+            const childQuery = query(
+                collection(db, 'ipRecords', recordId, 'transactions'), 
+                where('parentId', '==', parentTx.id),
+                where('transactionHierarchy', '==', 'child')
+            );
+            const childSnap = await getDocs(childQuery);
+            childSnap.forEach(childDoc => {
+                childTransactions.push({ id: childDoc.id, ...childDoc.data() });
+            });
+            
+            // 3. Parent objesini oluştur
+            const typeMeta = transactionTypesMap.get(String(parentTx.type));
+            const transactionTypeName = typeMeta?.alias || typeMeta?.name || `İşlem ${parentTx.type}`;
+            const opponentName = parentTx.oppositionOwner || parentTx.relatedParty?.name || '-';
+            const bulletinNo = record.details?.brandInfo?.opposedMarkBulletinNo || parentTx.bulletinNo || '-';
+            const bulletinDate = record.details?.brandInfo?.opposedMarkBulletinDate || parentTx.bulletinDate || null;
+            const epatsDate = parentTx.epatsDocument?.documentDate || null;
+
+            let statusText = 'Karar Bekleniyor';
+            if (parentTx.requestResult !== undefined && parentTx.requestResult !== null && parentTx.requestResult !== '') {
+                const REQUEST_RESULT_STATUS = {'24': 'Eksiklik Bildirimi', '28': 'Kabul', '29': 'Kısmi Kabul', '30': 'Ret', '31': 'B.S - Kabul', '32': 'B.S - Kısmi Kabul', '33': 'B.S - Ret', '34': 'İ.S - Kabul', '35': 'İ.S - Kısmi Kabul', '36': 'İ.S - Ret', '50': 'Kabul', '51': 'Kısmi Kabul', '52': 'Ret'};
+                statusText = REQUEST_RESULT_STATUS[String(parentTx.requestResult)] || `Bilinmiyor (ID: ${parentTx.requestResult})`;
+            }
+            const originRaw = (record.origin || parentTx.origin || '').toString().toUpperCase().trim();
+            const originBucket = (originRaw === 'TÜRKPATENT' || originRaw === 'TURKPATENT' || originRaw === '') ? 'TÜRKPATENT' : 'YURTDISI';
+
+            const hasChildren = childTransactions.length > 0;
+
+            const rowsToAdd = []; // Bu sorgu için eklenecek satırlar (parent+child)
+
+            // 4. Parent satırı ekle
+            rowsToAdd.push({
+                id: parentTx.id,
+                recordId: recordId,
+                brandImageUrl: record.brandImageUrl || record.brandImage || '',
+                title: record.title || record.brandText || '',
+                transactionTypeName,
+                applicationNumber: record.applicationNumber || '-',
+                applicantName: (record.applicants?.map?.(a => a.name).join(', ')) || '-', // Bu 3. taraf olacak
+                opponent: opponentName, // Bu müvekkil olacak
+                bulletinDate: formatDate(bulletinDate),
+                bulletinNo,
+                epatsDate: formatDate(epatsDate),
+                origin: originBucket,
+                statusText,
+                isParent: true,
+                hasChildren: hasChildren 
+            });
+
+            // 5. Child satırları ekle
+            if (hasChildren) {
+                for (const [subIndex, childTx] of childTransactions.entries()) {
+                    const childTypeMeta = transactionTypesMap.get(String(childTx.type));
+                    const childTxTypeName = childTypeMeta?.alias || childTypeMeta?.name || `İşlem ${childTx.type}`;
+                    const childOpponent = childTx.oppositionOwner || childTx.relatedParty?.name || '-';
+                    const childEpatsDate = childTx.epatsDocument?.documentDate || null;
+                    let childStatusText = 'İşlemde';
+                    if (childTx.requestResult) {
+                        const REQUEST_RESULT_STATUS = {'24': 'Eksiklik Bildirimi', '28': 'Kabul', '29': 'Kısmi Kabul', '30': 'Ret', '31': 'B.S - Kabul', '32': 'B.S - Kısmi Kabul', '33': 'B.S - Ret', '34': 'İ.S - Kabul', '35': 'İ.S - Kısmi Kabul', '36': 'İ.S - Ret', '50': 'Kabul', '51': 'Kısmi Kabul', '52': 'Ret'};
+                        childStatusText = REQUEST_RESULT_STATUS[String(childTx.requestResult)] || `Bilinmiyor (ID: ${childTx.requestResult})`;
+                    }
+                    rowsToAdd.push({
+                        id: childTx.id,
+                        parentId: parentTx.id,
+                        recordId: recordId,
+                        brandImageUrl: record.brandImageUrl || record.brandImage || '',
+                        title: record.title || record.brandText || '',
+                        transactionTypeName: childTxTypeName,
+                        applicationNumber: record.applicationNumber || '-', 
+                        applicantName: (record.applicants?.map?.(a => a.name).join(', ')) || '-',
+                        opponent: childOpponent,
+                        bulletinDate: '-',
+                        bulletinNo: '-',
+                        epatsDate: formatDate(childEpatsDate),
+                        origin: originBucket,
+                        statusText: childStatusText,
+                        isParent: false,
+                        hasChildren: false,
+                        subIndex: subIndex + 1
+                    });
+                }
+            }
+            
+            return rowsToAdd; // Bu sorgudan gelen satırları döndür
+        }); // (End of objectorSnap.docs.map)
+
+        // Gelen sonuçları bekle ve ana listeye ekle
+        const resultsPart2 = await Promise.all(part2Promises);
+        resultsPart2.forEach(rows => {
+            if (rows && Array.isArray(rows)) {
+                objectionRows.push(...rows);
+            }
+        });
+
+        // ================================================================
+        // === YENİ MANTIK SONU ===
+        // ================================================================
+
+        console.log(`✅ Toplam ${objectionRows.length} itiraz satırı (parent+child) oluşturuldu`);
 
         // 7. Global veriyi sakla
         window.davaItirazPaginationData.allData = objectionRows;
@@ -2859,8 +2831,8 @@ window.fetchAndDisplayObjections = async function() {
         renderDavaItirazTable(firstPageSlice, 0); 
 
     } catch (error) {
-        console.error('❌ Dava/İtiraz (Optimize) yükleme hatası:', error);
-        tbody.innerHTML = '<tr><td colspan="10" class="text-center text-danger">Veriler yüklenirken bir hata oluştu. Lütfen sayfayı yenileyin.</td></tr>';
+        console.error('❌ İtiraz (3. taraf) yükleme hatası:', error);
+        tbody.innerHTML = '<tr><td colspan="11" class="text-center text-danger">Veriler yüklenirken bir hata oluştu. Lütfen sayfayı yenileyin.</td></tr>';
     }
 };
 
