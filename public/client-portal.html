@@ -2857,7 +2857,7 @@ window.fetchAndDisplayObjections = async function() {
                 const hasChildren = childTransactions.length > 0;
                 const rowsToAdd = [];
 
-                // === 8. Parent satırı oluştur ===
+            // === 8. Parent satırı oluştur ===
                 rowsToAdd.push({
                     id: parentTx.id, // ✅ DÜZELTME: parentTx.id kullan
                     recordId: recordId,
@@ -2876,55 +2876,38 @@ window.fetchAndDisplayObjections = async function() {
                     hasChildren: hasChildren 
                 });
 
-                // === 9. Child satırları ekle ===
+            // === 9. Child satırları ekle ===
                 if (hasChildren) {
-                    for (const [subIndex, childTx] of childTransactions.entries()) {
+                    childTransactions.forEach((childTx, subIndex) => {
                         const childTypeMeta = transactionTypesMap.get(String(childTx.type));
                         const childTxTypeName = childTypeMeta?.alias || childTypeMeta?.name || `İşlem ${childTx.type}`;
                         const childOpponent = childTx.oppositionOwner || childTx.relatedParty?.name || '-';
                         const childEpatsDate = childTx.epatsDocument?.documentDate || null;
                         
-                        let childStatusText = 'İşlemde';
-                        if (childTx.requestResult) {
-                            const REQUEST_RESULT_STATUS = {
-                                '24': 'Eksiklik Bildirimi',
-                                '28': 'Kabul',
-                                '29': 'Kısmi Kabul',
-                                '30': 'Ret',
-                                '31': 'B.S - Kabul',
-                                '32': 'B.S - Kısmi Kabul',
-                                '33': 'B.S - Ret',
-                                '34': 'İ.S - Kabul',
-                                '35': 'İ.S - Kısmi Kabul',
-                                '36': 'İ.S - Ret',
-                                '50': 'Kabul',
-                                '51': 'Kısmi Kabul',
-                                '52': 'Ret'
-                            };
-                            childStatusText = REQUEST_RESULT_STATUS[String(childTx.requestResult)] || `Bilinmiyor (ID: ${childTx.requestResult})`;
-                        }
+                        // ✅ DÜZELTME: Child'larda durum bilgisi gösterme
+                        const childStatusText = '-';
                         
                         rowsToAdd.push({
-                        id: childTx.id,
-                        parentId: parentTx.id,
-                        recordId: recordId,
-                        brandImageUrl: record.brandImageUrl || record.brandImage || '',
-                        title: record.title || record.brandText || '',
-                        transactionTypeName: childTxTypeName,
-                        applicationNumber: record.applicationNumber || '-', 
-                        applicantName: (record.applicants?.map?.(a => a.name).join(', ')) || '-',
-                        opponent: childOpponent,
-                        bulletinDate: '-',
-                        bulletinNo: '-',
-                        epatsDate: formatDate(childEpatsDate),
-                        origin: originBucket,
-                        statusText: childStatusText,
-                        isParent: false,
-                        hasChildren: false,
-                        subIndex: subIndex + 1
+                            id: childTx.id,
+                            parentId: parentTx.id,
+                            recordId: recordId,
+                            brandImageUrl: record.brandImageUrl || record.brandImage || '', // ✅ ipRecords'dan
+                            title: record.title || record.brandText || '',
+                            transactionTypeName: childTxTypeName,
+                            applicationNumber: record.applicationNumber || '-', 
+                            applicantName: (record.applicants?.map?.(a => a.name).join(', ')) || '-',
+                            opponent: childOpponent,
+                            bulletinDate: '-',
+                            bulletinNo: '-',
+                            epatsDate: formatDate(childEpatsDate),
+                            origin: originBucket,
+                            statusText: childStatusText, // ✅ Her zaman '-'
+                            isParent: false,
+                            hasChildren: false,
+                            subIndex: subIndex + 1
+                        });
                     });
                 }
-            }
             return rowsToAdd;
                         } catch (error) {
                 console.error(`❌ Task ${taskDoc.id} işlenirken hata:`, error);
@@ -3032,7 +3015,7 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
                 <td><span class="badge badge-warning">${row.statusText}</span></td>
             `;
             tbody.appendChild(tr);
-
+            
             if (row.hasChildren) {
                 // Çocukları global diziden bul
                 const childRows = allData.filter(r => !r.isParent && r.parentId === row.id);
@@ -3052,7 +3035,6 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
                                         <th>Başvuru Sahibi</th>
                                         <th>İtiraz Sahibi</th>
                                         <th>İşlem Tarihi</th>
-                                        <th>Durum</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -3063,7 +3045,6 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
                                             <td>${childRow.applicantName}</td>
                                             <td>${childRow.opponent}</td>
                                             <td>${childRow.epatsDate}</td>
-                                            <td><span class="badge badge-info">${childRow.statusText}</span></td>
                                         </tr>
                                     `).join('')}
                                 </tbody>
