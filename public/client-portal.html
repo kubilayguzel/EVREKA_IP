@@ -2850,47 +2850,63 @@ window.fetchAndDisplayObjections = async function() {
                     console.log(`⚠️ requestResult bulunamadı, varsayılan: ${statusText}`);
                 }
             
-            const originRaw = (record.origin || parentTx?.origin || '').toString().toUpperCase().trim();
-            const originBucket = (originRaw === 'TÜRKPATENT' || originRaw === 'TURKPATENT' || originRaw === '') ? 'TÜRKPATENT' : 'YURTDISI';
+            // === 7. Origin (Menşe) bilgisini belirle ===
+                const originRaw = (record.origin || parentTx?.origin || '').toString().toUpperCase().trim();
+                const originBucket = (originRaw === 'TÜRKPATENT' || originRaw === 'TURKPATENT' || originRaw === '') ? 'TÜRKPATENT' : 'YURTDISI';
 
-            const hasChildren = childTransactions.length > 0;
-            const rowsToAdd = [];
+                const hasChildren = childTransactions.length > 0;
+                const rowsToAdd = [];
 
-            // 4. Parent satırı ekle
-            rowsToAdd.push({
-                id: parentTxId, // Ana ID olarak Task ID'sini kullan
-                recordId: recordId,
-                brandImageUrl: record.brandImageUrl || record.brandImage || '',
-                title: record.title || record.brandText || '',
-                transactionTypeName,
-                applicationNumber: record.applicationNumber || '-',
-                applicantName: (record.applicants?.map?.(a => a.name).join(', ')) || '-', // 3. taraf
-                opponent: opponentName, // Müvekkil
-                bulletinDate: formatDate(bulletinDate),
-                bulletinNo,
-                epatsDate: formatDate(epatsDate),
-                origin: originBucket,
-                statusText,
-                isParent: true,
-                hasChildren: hasChildren 
-            });
+                // === 8. Parent satırı oluştur ===
+                rowsToAdd.push({
+                    id: parentTx.id, // ✅ DÜZELTME: parentTx.id kullan
+                    recordId: recordId,
+                    brandImageUrl: record.brandImageUrl || record.brandImage || '',
+                    title: record.title || record.brandText || '',
+                    transactionTypeName,
+                    applicationNumber: record.applicationNumber || '-',
+                    applicantName: (record.applicants?.map?.(a => a.name).join(', ')) || '-',
+                    opponent: opponentName,
+                    bulletinDate: formatDate(bulletinDate),
+                    bulletinNo,
+                    epatsDate: formatDate(epatsDate),
+                    origin: originBucket,
+                    statusText,
+                    isParent: true,
+                    hasChildren: hasChildren 
+                });
 
-            // 5. Child satırları ekle
-            if (hasChildren) {
-                for (const [subIndex, childTx] of childTransactions.entries()) {
-                    // (Child satırları ekleme kodunuz burada... öncekiyle aynı, DOKUNMAYIN)
-                    const childTypeMeta = transactionTypesMap.get(String(childTx.type));
-                    const childTxTypeName = childTypeMeta?.alias || childTypeMeta?.name || `İşlem ${childTx.type}`;
-                    const childOpponent = childTx.oppositionOwner || childTx.relatedParty?.name || '-';
-                    const childEpatsDate = childTx.epatsDocument?.documentDate || null;
-                    let childStatusText = 'İşlemde';
-                    if (childTx.requestResult) {
-                        const REQUEST_RESULT_STATUS = {'24': 'Eksiklik Bildirimi', '28': 'Kabul', '29': 'Kısmi Kabul', '30': 'Ret', '31': 'B.S - Kabul', '32': 'B.S - Kısmi Kabul', '33': 'B.S - Ret', '34': 'İ.S - Kabul', '35': 'İ.S - Kısmi Kabul', '36': 'İ.S - Ret', '50': 'Kabul', '51': 'Kısmi Kabul', '52': 'Ret'};
-                        childStatusText = REQUEST_RESULT_STATUS[String(childTx.requestResult)] || `Bilinmiyor (ID: ${childTx.requestResult})`;
-                    }
-                    rowsToAdd.push({
+                // === 9. Child satırları ekle ===
+                if (hasChildren) {
+                    for (const [subIndex, childTx] of childTransactions.entries()) {
+                        const childTypeMeta = transactionTypesMap.get(String(childTx.type));
+                        const childTxTypeName = childTypeMeta?.alias || childTypeMeta?.name || `İşlem ${childTx.type}`;
+                        const childOpponent = childTx.oppositionOwner || childTx.relatedParty?.name || '-';
+                        const childEpatsDate = childTx.epatsDocument?.documentDate || null;
+                        
+                        let childStatusText = 'İşlemde';
+                        if (childTx.requestResult) {
+                            const REQUEST_RESULT_STATUS = {
+                                '24': 'Eksiklik Bildirimi',
+                                '28': 'Kabul',
+                                '29': 'Kısmi Kabul',
+                                '30': 'Ret',
+                                '31': 'B.S - Kabul',
+                                '32': 'B.S - Kısmi Kabul',
+                                '33': 'B.S - Ret',
+                                '34': 'İ.S - Kabul',
+                                '35': 'İ.S - Kısmi Kabul',
+                                '36': 'İ.S - Ret',
+                                '50': 'Kabul',
+                                '51': 'Kısmi Kabul',
+                                '52': 'Ret'
+                            };
+                            childStatusText = REQUEST_RESULT_STATUS[String(childTx.requestResult)] || `Bilinmiyor (ID: ${childTx.requestResult})`;
+                        }
+                        
+                        rowsToAdd.push({
                         id: childTx.id,
-                        parentId: parentTxId, // Parent'a bağla (Task ID'si)
+                        parentId: parentTx.id,
                         recordId: recordId,
                         brandImageUrl: record.brandImageUrl || record.brandImage || '',
                         title: record.title || record.brandText || '',
