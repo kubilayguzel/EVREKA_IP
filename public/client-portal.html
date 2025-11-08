@@ -2690,51 +2690,95 @@ window.fetchAndDisplayObjections = async function() {
         
         console.log(`🔍 ${objectorSnap.size} adet eşleşen 'task' kaydı (3. taraf) bulundu.`);
 
-// Eşleşen 'task'lar üzerinden 'transaction' ve 'ipRecord' bilgilerini al
+    // Eşleşen 'task'lar üzerinden 'transaction' ve 'ipRecord' bilgilerini al
         const processPromises = objectorSnap.docs.map(async (taskDoc) => {
             const taskData = taskDoc.data();
             const recordId = taskData.relatedIpRecordId;
             
-            // KRİTİK DÜZELTME: Eğer triggeringTransactionId boşsa (undefined), task'ın kendi ID'sini kullan
-            const parentTxId = taskData.triggeringTransactionId || taskDoc.id; 
-
-            if (!recordId || !parentTxId) {
-                console.warn(`⚠️ Task ${taskDoc.id} eşleşti ama 'relatedIpRecordId' (${recordId}) veya 'parentTxId' (${parentTxId}) eksik.`);
+            if (!recordId) {
+                console.warn(`⚠️ Task ${taskDoc.id} için 'relatedIpRecordId' eksik.`);
                 return null;
             }
 
-            // === Kayıtları ve İşlemleri Çek ===
-            const [recordSnap, parentTxSnap] = await Promise.all([
-                getDoc(doc(db, 'ipRecords', recordId)),
-                getDoc(doc(db, 'ipRecords', recordId, 'transactions', parentTxId))
-            ]);
+            console.log(`🔍 Task ${taskDoc.id} işleniyor - RecordId: ${recordId}`);
 
-            // =================================================================
-            // === 'portfolio.html' DEN ALINAN KRİTİK 'exists' KONTROLÜ ===
-            // =================================================================
-            
-            // SADECE 'ipRecord' belgesi var mı diye kontrol et
-            if (!recordSnap.exists()) {
-                 console.warn(`⚠️ Task ${taskDoc.id} için ipRecord (${recordId}) bulunamadı.`);
-                 return null; // Sadece bu durumda durdur
-            }
-            
-            const record = recordSnap.data();
-            // 'parentTx' (işlem) belgesi 'null' olabilir, bu bir hata değil.
-            const parentTx = parentTxSnap.exists() ? { id: parentTxSnap.id, ...parentTxSnap.data() } : null; 
-            // =================================================================
-
-            // 2. Bu parent işleme ait child'ları çek (Transaction 'null' olsa bile)
-            const childTransactions = [];
-            const childQuery = query(
-                collection(db, 'ipRecords', recordId, 'transactions'), 
-                where('parentId', '==', parentTxId), // <-- DÜZELTME: 'parentTx.id' yerine 'parentTxId' kullan
-                where('transactionHierarchy', '==', 'child')
-            );
-            const childSnap = await getDocs(childQuery);
-            childSnap.forEach(childDoc => {
-                childTransactions.push({ id: childDoc.id, ...childDoc.data() });
-            });
+            try {
+                // === 1. İpRecord'u çek ===
+                const recordSnap = await getDoc(doc(db, 'ipRecords', recordId));
+                
+                if (!recordSnap.exists()) {
+                    console.warn(`⚠️ Task ${taskDoc.id} için ipRecord (${recordId}) bulunamadı.`);
+                    return null;
+                }
+                
+                const record = recordSnap.data();
+                
+                // === 2. TÜM transaction'ları çek ===
+                const txQuery = query(collection(db, 'ipRecords', recordId, 'transactions'));
+                const txSnap = await getDocs(txQuery);
+                
+                const allTransactions = [];
+                txSnap.forEach(txDoc => {
+                    allTransactions.push({ id: txDoc.id, ...txDoc.data() });
+                });
+                
+                console.log(`📊 Record ${recordId} için ${allTransactions.length} transaction bulundu`);
+                
+                // === 3. Parent ve Child transaction'ları ayır ===
+                const PARENT_TYPE_IDS = ['7', '19', '20'];
+                
+                // Parent transaction'ları filtrele
+                const parentTransactions = allTransactions.filter(tx =>
+                    PARENT_TYPE_IDS.includes(String(tx.type)) &&
+                    (tx.transactionHierarchy === 'parent' || !tx.parentId)
+                );
+                
+                console.log(`📊 ${parentTransactions.length} parent transaction bulundu`);
+                
+                // === 4. Bu task ile ilişkili parent transaction'ı bul ===
+                let parentTx = null;
+                
+                // Önce triggeringTransactionId ile bul
+                if (taskData.triggeringTransactionId) {
+                    parentTx = parentTransactions.find(tx => tx.id === taskData.triggeringTransactionId);
+                    if (parentTx) {
+                        console.log(`✅ Parent transaction bulundu (triggeringTransactionId): ${parentTx.id}`);
+                    }
+                }
+                
+                // Bulunamadıysa, transactionId ile dene
+                if (!parentTx && taskData.transactionId) {
+                    parentTx = parentTransactions.find(tx => tx.id === taskData.transactionId);
+                    if (parentTx) {
+                        console.log(`✅ Parent transaction bulundu (transactionId): ${parentTx.id}`);
+                    }
+                }
+                
+                // Hala bulunamadıysa, ilk parent'ı al (fallback)
+                if (!parentTx && parentTransactions.length > 0) {
+                    parentTx = parentTransactions[0];
+                    console.warn(`⚠️ Parent transaction match bulunamadı, ilk parent kullanılıyor: ${parentTx.id}`);
+                }
+                
+                if (!parentTx) {
+                    console.warn(`⚠️ Task ${taskDoc.id} için uygun parent transaction bulunamadı`);
+                    return null;
+                }
+                
+                // === 5. Parent'ın child transaction'larını bul ===
+                const childTransactions = allTransactions.filter(tx =>
+                    tx.transactionHierarchy === 'child' && 
+                    tx.parentId === parentTx.id
+                );
+                
+                console.log(`📊 Parent ${parentTx.id} için ${childTransactions.length} child transaction bulundu`);
+                
+                // Child'ları timestamp'e göre sırala
+                childTransactions.sort((a, b) => {
+                    const dateA = new Date(a.timestamp || 0);
+                    const dateB = new Date(b.timestamp || 0);
+                    return dateA - dateB; // Eskiden yeniye
+                });
             
             // 3. Parent objesini oluştur (Veriyi 'transaction'dan VEYA 'task'dan al)
             const typeMeta = transactionTypesMap.get(String(taskData.taskType)); // Ana tip 'task'dan gelir
@@ -2752,23 +2796,59 @@ window.fetchAndDisplayObjections = async function() {
             const bulletinDate = record.details?.brandInfo?.opposedMarkBulletinDate || parentTx?.bulletinDate || taskData.details?.bulletinDate || null;
             const epatsDate = parentTx?.epatsDocument?.documentDate || null;
 
-            let statusText = 'Karar Bekleniyor';
-            
-            // Durumu ÖNCE parentTx'den (işlem) dene
-            let reqResult = parentTx?.requestResult; 
-            
-            // EĞER parentTx'de (işlem) durum yoksa, ana task'dan (görev) al
-            if (reqResult === undefined || reqResult === null) { // <-- Daha güçlü kontrol
-                if (taskData.requestResult !== undefined && taskData.requestResult !== null) {
-                    console.log(`(Durum: Task ${taskDoc.id} için 'taskData.requestResult' kullanılıyor)`);
-                    reqResult = taskData.requestResult; // <-- YEDEK KULLANIM
+// === 6. Durum (requestResult) hesaplama - Child öncelikli ===
+                let statusText = 'Karar Bekleniyor';
+                let reqResult = null;
+                
+                console.log(`🔍 Durum kontrolü - Parent: ${parentTx.id}, Child sayısı: ${childTransactions.length}`);
+                
+                // 1. Önce child transaction'lardan en güncel requestResult'ı al
+                if (childTransactions.length > 0) {
+                    // En son child'dan al (timestamp'e göre sıralandı, en yeni sonda)
+                    for (let i = childTransactions.length - 1; i >= 0; i--) {
+                        const child = childTransactions[i];
+                        if (child.requestResult !== undefined && child.requestResult !== null && child.requestResult !== '') {
+                            reqResult = child.requestResult;
+                            console.log(`✅ requestResult child'dan alındı (${child.id}): ${reqResult}`);
+                            break;
+                        }
+                    }
                 }
-            }
-
-            if (reqResult !== undefined && reqResult !== null && reqResult !== '') {
-                const REQUEST_RESULT_STATUS = {'24': 'Eksiklik Bildirimi', '28': 'Kabul', '29': 'Kısmi Kabul', '30': 'Ret', '31': 'B.S - Kabul', '32': 'B.S - Kısmi Kabul', '33': 'B.S - Ret', '34': 'İ.S - Kabul', '35': 'İ.S - Kısmi Kabul', '36': 'İ.S - Ret', '50': 'Kabul', '51': 'Kısmi Kabul', '52': 'Ret'};
-                statusText = REQUEST_RESULT_STATUS[String(reqResult)] || `Bilinmiyor (ID: ${reqResult})`;
-            }
+                
+                // 2. Child'da yoksa parent transaction'dan al
+                if ((reqResult === null || reqResult === undefined) && parentTx.requestResult) {
+                    reqResult = parentTx.requestResult;
+                    console.log(`✅ requestResult parent'tan alındı: ${reqResult}`);
+                }
+                
+                // 3. Hiçbirinde yoksa task'tan al
+                if ((reqResult === null || reqResult === undefined) && taskData.requestResult) {
+                    reqResult = taskData.requestResult;
+                    console.log(`✅ requestResult task'tan alındı: ${reqResult}`);
+                }
+                
+                // RequestResult'ı metne çevir
+                if (reqResult !== undefined && reqResult !== null && reqResult !== '') {
+                    const REQUEST_RESULT_STATUS = {
+                        '24': 'Eksiklik Bildirimi',
+                        '28': 'Kabul',
+                        '29': 'Kısmi Kabul',
+                        '30': 'Ret',
+                        '31': 'B.S - Kabul',
+                        '32': 'B.S - Kısmi Kabul',
+                        '33': 'B.S - Ret',
+                        '34': 'İ.S - Kabul',
+                        '35': 'İ.S - Kısmi Kabul',
+                        '36': 'İ.S - Ret',
+                        '50': 'Kabul',
+                        '51': 'Kısmi Kabul',
+                        '52': 'Ret'
+                    };
+                    statusText = REQUEST_RESULT_STATUS[String(reqResult)] || `Bilinmiyor (ID: ${reqResult})`;
+                    console.log(`✅ Final durum: ${statusText}`);
+                } else {
+                    console.log(`⚠️ requestResult bulunamadı, varsayılan: ${statusText}`);
+                }
             
             const originRaw = (record.origin || parentTx?.origin || '').toString().toUpperCase().trim();
             const originBucket = (originRaw === 'TÜRKPATENT' || originRaw === 'TURKPATENT' || originRaw === '') ? 'TÜRKPATENT' : 'YURTDISI';
@@ -2830,6 +2910,10 @@ window.fetchAndDisplayObjections = async function() {
                 }
             }
             return rowsToAdd;
+                        } catch (error) {
+                console.error(`❌ Task ${taskDoc.id} işlenirken hata:`, error);
+                return null;
+            }
         });
         
         // Gelen sonuçları bekle ve ana listeye ekle
