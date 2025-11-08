@@ -2737,7 +2737,7 @@ window.fetchAndDisplayObjections = async function() {
             });
             
             // 3. Parent objesini oluştur (Veriyi 'transaction'dan VEYA 'task'dan al)
-            const typeMeta = transactionTypesMap.get(String(parentTx.type)); // Ana tip 'parent transaction'dan gelir
+            const typeMeta = transactionTypesMap.get(String(taskData.taskType)); // Ana tip 'task'dan gelir
             const transactionTypeName = typeMeta?.alias || typeMeta?.name || `İşlem ${taskData.taskType}`;
             
             // İtiraz sahibi (opponent) müvekkildir.
@@ -2752,43 +2752,22 @@ window.fetchAndDisplayObjections = async function() {
             const bulletinDate = record.details?.brandInfo?.opposedMarkBulletinDate || parentTx?.bulletinDate || taskData.details?.bulletinDate || null;
             const epatsDate = parentTx?.epatsDocument?.documentDate || null;
 
-let statusText = 'Karar Bekleniyor';
-            let reqResult = null;
+            let statusText = 'Karar Bekleniyor';
             
-            console.log(`🔍 Durum kontrolü - Parent: ${parentTx.id}, Child sayısı: ${childTransactions.length}`);
+            // Durumu ÖNCE parentTx'den (işlem) dene
+            let reqResult = parentTx?.requestResult; 
             
-            // 1. Önce child transaction'lardan en güncel requestResult'ı al
-            if (childTransactions.length > 0) {
-                // En son child'dan al (timestamp'e göre sıralandı, en yeni sonda)
-                for (let i = childTransactions.length - 1; i >= 0; i--) {
-                    const child = childTransactions[i];
-                    if (child.requestResult !== undefined && child.requestResult !== null && child.requestResult !== '') {
-                        reqResult = child.requestResult;
-                        console.log(`✅ requestResult child'dan alındı (${child.id}): ${reqResult}`);
-                        break;
-                    }
+            // EĞER parentTx'de (işlem) durum yoksa, ana task'dan (görev) al
+            if (reqResult === undefined || reqResult === null) { // <-- Daha güçlü kontrol
+                if (taskData.requestResult !== undefined && taskData.requestResult !== null) {
+                    console.log(`(Durum: Task ${taskDoc.id} için 'taskData.requestResult' kullanılıyor)`);
+                    reqResult = taskData.requestResult; // <-- YEDEK KULLANIM
                 }
             }
-            
-            // 2. Child'da yoksa parent transaction'dan al
-            if ((reqResult === null || reqResult === undefined) && parentTx.requestResult) {
-                reqResult = parentTx.requestResult;
-                console.log(`✅ requestResult parent'tan alındı: ${reqResult}`);
-            }
-            
-            // 3. Hiçbirinde yoksa task'tan al
-            if ((reqResult === null || reqResult === undefined) && taskData.requestResult) {
-                reqResult = taskData.requestResult;
-                console.log(`✅ requestResult task'tan alındı: ${reqResult}`);
-            }
 
-            // RequestResult'ı metne çevir
             if (reqResult !== undefined && reqResult !== null && reqResult !== '') {
                 const REQUEST_RESULT_STATUS = {'24': 'Eksiklik Bildirimi', '28': 'Kabul', '29': 'Kısmi Kabul', '30': 'Ret', '31': 'B.S - Kabul', '32': 'B.S - Kısmi Kabul', '33': 'B.S - Ret', '34': 'İ.S - Kabul', '35': 'İ.S - Kısmi Kabul', '36': 'İ.S - Ret', '50': 'Kabul', '51': 'Kısmi Kabul', '52': 'Ret'};
-                statusText = REQUEST_RESULT_STATUS[String(reqResult)] || `Bilinmiyon (ID: ${reqResult})`;
-                console.log(`✅ Final durum: ${statusText}`);
-            } else {
-                console.log(`⚠️ requestResult bulunamadı, varsayılan: ${statusText}`);
+                statusText = REQUEST_RESULT_STATUS[String(reqResult)] || `Bilinmiyor (ID: ${reqResult})`;
             }
             
             const originRaw = (record.origin || parentTx?.origin || '').toString().toUpperCase().trim();
