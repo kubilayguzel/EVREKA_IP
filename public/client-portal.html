@@ -2858,8 +2858,12 @@ window.fetchAndDisplayObjections = async function() {
                 const rowsToAdd = [];
 
             // === 8. Parent satırı oluştur ===
+
+                const uniqueRowId = `${taskDoc.id}-${parentTx.id}`;
                 rowsToAdd.push({
-                    id: parentTx.id, // ✅ DÜZELTME: parentTx.id kullan
+                    id: uniqueRowId, // Benzersiz ID
+                    taskId: taskDoc.id, // Orijinal task ID'si
+                    transactionId: parentTx.id, // Orijinal transaction ID'si
                     recordId: recordId,
                     brandImageUrl: record.brandImageUrl || record.brandImage || '',
                     title: record.title || record.brandText || '',
@@ -2883,13 +2887,12 @@ window.fetchAndDisplayObjections = async function() {
                         const childTxTypeName = childTypeMeta?.alias || childTypeMeta?.name || `İşlem ${childTx.type}`;
                         const childOpponent = childTx.oppositionOwner || childTx.relatedParty?.name || '-';
                         const childEpatsDate = childTx.epatsDocument?.documentDate || null;
-                        
-                        // ✅ DÜZELTME: Child'larda durum bilgisi gösterme
                         const childStatusText = '-';
+                        const uniqueChildId = `${taskDoc.id}-${childTx.id}`;
                         
                         rowsToAdd.push({
-                            id: childTx.id,
-                            parentId: parentTx.id,
+                            id: uniqueChildId,
+                            parentId: uniqueRowId, // Parent'ın benzersiz ID'sine bağla
                             recordId: recordId,
                             brandImageUrl: record.brandImageUrl || record.brandImage || '', // ✅ ipRecords'dan
                             title: record.title || record.brandText || '',
@@ -2917,30 +2920,15 @@ window.fetchAndDisplayObjections = async function() {
         
         // Gelen sonuçları bekle ve ana listeye ekle
         const results = await Promise.all(processPromises);
-        
-        // ✅ DÜZELTME: Parent ID'sine göre duplicate'leri temizle
-        const seenParentIds = new Set();
-        
+
         results.forEach(rows => {
             if (rows && Array.isArray(rows)) {
-                // İlk satır parent olmalı
-                const parentRow = rows.find(r => r.isParent);
-                
-                if (parentRow) {
-                    // Eğer bu parent ID'si daha önce eklenmişse, atla
-                    if (seenParentIds.has(parentRow.id)) {
-                        console.log(`⚠️ Duplicate parent atlandı: ${parentRow.id}`);
-                        return;
-                    }
-                    seenParentIds.add(parentRow.id);
-                }
-                
                 objectionRows.push(...rows);
             }
         });
 
-        console.log(`✅ Toplam ${objectionRows.length} itiraz satırı (parent+child) oluşturuldu (${seenParentIds.size} benzersiz parent)`);
-
+        console.log(`✅ Toplam ${objectionRows.length} itiraz satırı (parent+child) oluşturuldu`);
+        
         // 7. Global veriyi sakla
         window.davaItirazPaginationData.allData = objectionRows;
         const allParentRows = objectionRows.filter(r => r.isParent);
