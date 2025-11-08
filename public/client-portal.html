@@ -2752,22 +2752,71 @@ window.fetchAndDisplayObjections = async function() {
             const bulletinDate = record.details?.brandInfo?.opposedMarkBulletinDate || parentTx?.bulletinDate || taskData.details?.bulletinDate || null;
             const epatsDate = parentTx?.epatsDocument?.documentDate || null;
 
-            let statusText = 'Karar Bekleniyor';
+let statusText = 'Karar Bekleniyor';
             
-            // Durumu ÖNCE parentTx'den (işlem) dene
-            let reqResult = parentTx?.requestResult; 
+            // ✅ requestResult'ı doğru sırayla kontrol et:
+            // 1) En son child transaction'dan al (en güncel karar)
+            // 2) Parent transaction'dan al
+            // 3) Task'tan al (fallback)
             
-            // EĞER parentTx'de (işlem) durum yoksa, ana task'dan (görev) al
-            if (reqResult === undefined || reqResult === null) { // <-- Daha güçlü kontrol
-                if (taskData.requestResult !== undefined && taskData.requestResult !== null) {
-                    console.log(`(Durum: Task ${taskDoc.id} için 'taskData.requestResult' kullanılıyor)`);
-                    reqResult = taskData.requestResult; // <-- YEDEK KULLANIM
+            let reqResult = null;
+            
+            // 1. Önce child transactions içinde requestResult var mı kontrol et (en güncel bilgi burada)
+            if (childTransactions && childTransactions.length > 0) {
+                // Child'ları timestamp'e göre sırala ve en son ekleneni al
+                const sortedChildren = [...childTransactions].sort((a, b) => {
+                    const dateA = new Date(a.timestamp || 0);
+                    const dateB = new Date(b.timestamp || 0);
+                    return dateB - dateA; // Yeniden eskiye
+                });
+                
+                // En son child'ın requestResult'ını kontrol et
+                for (const childTx of sortedChildren) {
+                    if (childTx.requestResult !== undefined && childTx.requestResult !== null && childTx.requestResult !== '') {
+                        reqResult = childTx.requestResult;
+                        console.log(`✅ Durum en son child transaction'dan alındı (${childTx.id}): ${reqResult}`);
+                        break; // İlk bulunan geçerli değeri al
+                    }
+                }
+            }
+            
+            // 2. Child'larda bulunamadıysa, parent transaction'dan al
+            if ((reqResult === null || reqResult === undefined) && parentTx) {
+                if (parentTx.requestResult !== undefined && parentTx.requestResult !== null && parentTx.requestResult !== '') {
+                    reqResult = parentTx.requestResult;
+                    console.log(`✅ Durum parent transaction'dan alındı (${parentTx.id}): ${reqResult}`);
+                }
+            }
+            
+            // 3. Hiçbirinde yoksa task'tan al (son çare)
+            if (reqResult === null || reqResult === undefined) {
+                if (taskData.requestResult !== undefined && taskData.requestResult !== null && taskData.requestResult !== '') {
+                    reqResult = taskData.requestResult;
+                    console.log(`✅ Durum task'tan alındı (${taskDoc.id}): ${reqResult}`);
                 }
             }
 
+            // RequestResult bulunduysa durumu çevir
             if (reqResult !== undefined && reqResult !== null && reqResult !== '') {
-                const REQUEST_RESULT_STATUS = {'24': 'Eksiklik Bildirimi', '28': 'Kabul', '29': 'Kısmi Kabul', '30': 'Ret', '31': 'B.S - Kabul', '32': 'B.S - Kısmi Kabul', '33': 'B.S - Ret', '34': 'İ.S - Kabul', '35': 'İ.S - Kısmi Kabul', '36': 'İ.S - Ret', '50': 'Kabul', '51': 'Kısmi Kabul', '52': 'Ret'};
+                const REQUEST_RESULT_STATUS = {
+                    '24': 'Eksiklik Bildirimi', 
+                    '28': 'Kabul', 
+                    '29': 'Kısmi Kabul', 
+                    '30': 'Ret', 
+                    '31': 'B.S - Kabul', 
+                    '32': 'B.S - Kısmi Kabul', 
+                    '33': 'B.S - Ret', 
+                    '34': 'İ.S - Kabul', 
+                    '35': 'İ.S - Kısmi Kabul', 
+                    '36': 'İ.S - Ret', 
+                    '50': 'Kabul', 
+                    '51': 'Kısmi Kabul', 
+                    '52': 'Ret'
+                };
                 statusText = REQUEST_RESULT_STATUS[String(reqResult)] || `Bilinmiyor (ID: ${reqResult})`;
+                console.log(`✅ Final durum metni: ${statusText}`);
+            } else {
+                console.log(`⚠️ RequestResult hiçbir yerde bulunamadı, varsayılan: ${statusText}`);
             }
             
             const originRaw = (record.origin || parentTx?.origin || '').toString().toUpperCase().trim();
