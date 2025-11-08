@@ -2917,17 +2917,29 @@ window.fetchAndDisplayObjections = async function() {
         
         // Gelen sonuçları bekle ve ana listeye ekle
         const results = await Promise.all(processPromises);
+        
+        // ✅ DÜZELTME: Parent ID'sine göre duplicate'leri temizle
+        const seenParentIds = new Set();
+        
         results.forEach(rows => {
             if (rows && Array.isArray(rows)) {
+                // İlk satır parent olmalı
+                const parentRow = rows.find(r => r.isParent);
+                
+                if (parentRow) {
+                    // Eğer bu parent ID'si daha önce eklenmişse, atla
+                    if (seenParentIds.has(parentRow.id)) {
+                        console.log(`⚠️ Duplicate parent atlandı: ${parentRow.id}`);
+                        return;
+                    }
+                    seenParentIds.add(parentRow.id);
+                }
+                
                 objectionRows.push(...rows);
             }
         });
 
-        // ================================================================
-        // === BASİT SORGU SONU ===
-        // ================================================================
-
-        console.log(`✅ Toplam ${objectionRows.length} itiraz satırı (parent+child) oluşturuldu`);
+        console.log(`✅ Toplam ${objectionRows.length} itiraz satırı (parent+child) oluşturuldu (${seenParentIds.size} benzersiz parent)`);
 
         // 7. Global veriyi sakla
         window.davaItirazPaginationData.allData = objectionRows;
@@ -2990,21 +3002,26 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
             
             const iconHtml = row.hasChildren ? '<i class="fas fa-chevron-right mr-2"></i>' : '';
             
-            if (row.hasChildren) {
+        if (row.hasChildren) {
+                // ✅ DÜZELTME: Benzersiz accordion ID kullan (recordId + transactionId)
+                const uniqueAccordionId = `itiraz-accordion-${row.recordId}-${row.id}`;
+                
                 tr.classList.add('accordion-header-row');
                 tr.setAttribute('data-toggle', 'collapse');
-                tr.setAttribute('data-target', `#itiraz-accordion-${row.id}`);
+                tr.setAttribute('data-target', `#${uniqueAccordionId}`);
                 tr.setAttribute('aria-expanded', 'false');
-                tr.setAttribute('aria-controls', `itiraz-accordion-${row.id}`);
-            }
-
-            // Marka Örneği için imgHtml hazırla (Marka tabı ile aynı stili kullanır)
-            const imgHtml = row.brandImageUrl ? `<img src="${row.brandImageUrl}" alt="marka" class="brand-thumb">` : '-';
-
+                tr.setAttribute('aria-controls', uniqueAccordionId);
+        }
+            // ✅ Marka görselini hazırla
+            const imgHtml = row.brandImageUrl 
+                ? `<img src="${row.brandImageUrl}" alt="marka" class="brand-thumb">` 
+                : '-';
+            
             // HTML'i 11 kolon olarak güncelle
             tr.innerHTML = `
                 <td>${iconHtml}${parentIndex}</td>
-                <td class="col-sample text-center">${imgHtml}</td> <td><a href="#" class="portfolio-detail-link" data-item-id="${row.recordId}" data-toggle="modal" data-target="#portfolioDetailModal">${row.title}</a></td>
+                <td class="col-sample text-center">${imgHtml}</td>
+                <td><a href="#" class="portfolio-detail-link" data-item-id="${row.recordId}" data-toggle="modal" data-target="#portfolioDetailModal">${row.title}</a></td>
                 <td>${row.transactionTypeName}</td>
                 <td>${row.applicationNumber}</td>
                 <td>${row.applicantName}</td>
@@ -3023,10 +3040,13 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
                 const detailRow = document.createElement('tr');
                 detailRow.setAttribute('data-origin', (row.origin || 'TÜRKPATENT'));
                 
+            // ✅ Aynı benzersiz ID'yi kullan
+                const uniqueAccordionId = `itiraz-accordion-${row.recordId}-${row.id}`;
+                
                 // Colspan 11 olarak güncellendi
                 detailRow.innerHTML = `
                     <td colspan="11" class="p-0"> 
-                        <div class="collapse" id="itiraz-accordion-${row.id}">
+                        <div class="collapse" id="${uniqueAccordionId}">
                             <table class="table mb-0 accordion-table">
                                 <thead>
                                     <tr>
