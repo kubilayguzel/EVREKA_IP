@@ -2968,8 +2968,65 @@ window.fetchAndDisplayObjections = async function() {
     }
 };
 
-// Tabloyu render eden fonksiyon (GLOBAL)
+// === BELGE LİNKİ OLUŞTURMA FONKSİYONU ===
+function _createDocLinkHtml(pdf) {
+    let iconClass = 'fas fa-file-pdf';
+    let titleText = pdf.fileName || 'Belge';
+    let btnClass = 'btn-danger';
+    let badgeHtml = '';
 
+    if (pdf.type === 'opposition_petition') {
+        iconClass = 'fas fa-gavel';
+        titleText = 'Karşı Taraf İtiraz Dilekçesi';
+        btnClass = 'btn-warning';
+    } else if (pdf.type === 'official_document') {
+        iconClass = 'fas fa-file-signature';
+        titleText = 'Resmi Yazı';
+        btnClass = 'btn-info';
+    } else if (pdf.isTransactionDoc) {
+        iconClass = 'fas fa-file-alt';
+        btnClass = 'btn-secondary';
+    } else if (pdf.evrakNo) {
+        badgeHtml = `<span class="badge badge-primary ml-1">${pdf.evrakNo}</span>`;
+    }
+
+    return `
+        <a href="${pdf.fileUrl}" 
+           target="_blank" 
+           class="btn ${btnClass} btn-sm mr-1 mb-1" 
+           title="${titleText}"
+           style="text-decoration:none;">
+            <i class="${iconClass}"></i> ${pdf.fileName}${badgeHtml}
+        </a>
+    `;
+}
+
+// === CHILD TRANSACTION İÇİN EVRAK HÜCRESİ OLUŞTURMA ===
+function renderDocsCell(childTransaction) {
+    const docs = Array.isArray(childTransaction.documents) ? childTransaction.documents : [];
+    
+    if (docs.length === 0) {
+        return '-';
+    }
+    
+    const docLinks = docs.map(doc => {
+        const fileName = doc.name || 'Belge';
+        const fileUrl = doc.downloadURL || doc.url || doc.path;
+        
+        if (!fileUrl) return '';
+        
+        return _createDocLinkHtml({
+            fileName: fileName,
+            fileUrl: fileUrl,
+            type: doc.type,
+            isTransactionDoc: true
+        });
+    }).filter(Boolean).join('');
+    
+    return docLinks || '-';
+}
+
+// Tabloyu render eden fonksiyon (GLOBAL)
 window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
     console.log(`📊 İtiraz Tablosu render ediliyor, sayfa ${Math.floor(startIndex / (window.davaItirazPaginationData.itemsPerPage || 10)) + 1}, ${parentRowsSlice.length} parent satır`);
     const tbody = document.getElementById('dava-itiraz-tbody');
