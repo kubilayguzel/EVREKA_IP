@@ -1119,10 +1119,8 @@ async handleIndexing(opts = {}) {
             if (this.pdfData?.fileUrl && transactionIdToAssociateFiles) {
             try {
                 const docId = generateUUID();
-                const storagePath =
-                this.pdfData.storagePath ||
-                guessStoragePathFromUrl(this.pdfData.fileUrl) ||
-                null;
+                // 🔒 Eski dokümanlarda path üretmiyoruz; sadece varsa kullanıyoruz
+                const storagePath = this.pdfData.storagePath ?? null;
 
                 const payload = {
                 documentDesignation: "Diğer",
@@ -1130,11 +1128,10 @@ async handleIndexing(opts = {}) {
                 id: docId,
                 name: this.pdfData.fileName || "resmi-yazi.pdf",
                 size: Number(this.pdfData.fileSize || this.pdfData.size || 0),
-                storagePath: storagePath,
+                storagePath, // eskiyse null kalır
                 type: "application/pdf",
                 uploadedAt: new Date().toISOString()
                 };
-
                 const txRef = doc(
                 collection(firebaseServices.db, 'ipRecords', this.matchedRecord.id, 'transactions'),
                 transactionIdToAssociateFiles
