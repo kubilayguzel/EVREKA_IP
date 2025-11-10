@@ -178,10 +178,11 @@ async handleTransactionCreated(transactionData) {
     }
 
     // 3.taraf portföy oluştur/ilişkilendir
-    const res = await this.createThirdPartyPortfolioFromBulletin(
-      transactionData.selectedIpRecord.id,
-      transactionData.id
-    );
+      this.currentTaskId = String(transactionData.id || '');
+      const res = await this.createThirdPartyPortfolioFromBulletin(
+        transactionData.selectedIpRecord.id,
+        transactionData.id
+      );
 
     // 🔁 Bayrak ve id'yi üst katmana garanti taşı
     return {
@@ -373,7 +374,7 @@ async handleTransactionCreated(transactionData) {
           designation: 'Yayına İtiraz',
           description: 'Yayına İtiraz',
           transactionHierarchy: 'parent',
-          triggeringTaskId: String(taskId),
+          triggeringTaskId: String(transactionId),
           ...(oppositionOwner ? { oppositionOwner } : {}),
           timestamp: new Date().toISOString(),
           userId:  u?.uid   || 'anonymous',
