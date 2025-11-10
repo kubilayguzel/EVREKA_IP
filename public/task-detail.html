@@ -1383,6 +1383,7 @@ async removeEpatsDocument() {
                 
                 updatedTaskData.relatedIpRecordId = this.selectedRelatedIpRecord ? this.selectedRelatedIpRecord.id : null;
                 updatedTaskData.relatedIpRecordTitle = this.selectedRelatedIpRecord ? this.selectedRelatedIpRecord.title : null;
+                updatedTaskData.taskOwner = this.selectedRelatedParty ? this.selectedRelatedParty.id : null;
                 updatedTaskData.details.relatedParty = this.selectedRelatedParty ? 
                     { id: this.selectedRelatedParty.id, name: this.selectedRelatedParty.name } : null;
                 
