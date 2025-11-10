@@ -770,22 +770,45 @@
                     const children = (txData.childrenMap || {})[parentTxId] || [];
                     if (!parent) return null;
 
-                    const hasChildren = children.length > 0;
+const hasChildren = children.length > 0;
                     const groupId = safeId(`${recordId}_parent_${parentTxId}`);
+                    
+                    // 🔥 Bu record için task belgelerini al
+                    const recordTaskDocs = this.objectionTasksMap.get(recordId) || new Map();
 
                     // --- PARENT BELGE ÇEKİMİ ---
-                    // Parent'ın manuel/doküman listesi
-                    let allParentDocs = (parent.documents || []).map(doc => ({
-                        fileName: doc.name || 'Belge',
-                        fileUrl: doc.url || doc.path,
-                        type: doc.type,
-                        isTransactionDoc: true
-                    }));
+                    let allParentDocs = [];
+                    const existingParentFileNames = new Set();
+                    const IS_OPPOSITION_PARENT = String(parent.type) === '20' || String(parent.type) === '19';
                     
-                    const existingParentFileNames = new Set(allParentDocs.map(d => d.fileName).filter(Boolean));
-                    const IS_OPPOSITION_PARENT = String(parent.type) === '20' || String(parent.type) === '19'; // Yayına İtiraz Parent'ları
-
-                    // Eğer Parent Task ile tetiklenmişse ePats ve diğer Task belgelerini al
+                    // Önce bulletinNo ile task belgelerini bul
+                    const parentBulletinNo = parent.bulletinNo || row.bulletinNo;
+                    if (parentBulletinNo && recordTaskDocs.has(parentBulletinNo)) {
+                        const taskDocs = recordTaskDocs.get(parentBulletinNo);
+                        taskDocs.forEach(doc => {
+                            allParentDocs.push(doc);
+                            existingParentFileNames.add(doc.fileName);
+                        });
+                    }
+                    
+                    // Parent'ın manuel/doküman listesini ekle
+                    if (Array.isArray(parent.documents)) {
+                        parent.documents.forEach(doc => {
+                            const fileName = doc.name || 'Belge';
+                            const fileUrl = doc.url || doc.path;
+                            if (fileUrl && !existingParentFileNames.has(fileName)) {
+                                allParentDocs.push({
+                                    fileName: fileName,
+                                    fileUrl: fileUrl,
+                                    type: doc.type,
+                                    isTransactionDoc: true
+                                });
+                                existingParentFileNames.add(fileName);
+                            }
+                        });
+                    }
+                    
+                    // triggeringTaskId varsa onun belgelerini de ekle
                     if (parent.triggeringTaskId) {
                         try {
                             const taskDocs = await fetchTaskDocuments(parent.triggeringTaskId);
@@ -838,14 +861,26 @@
                             const childTypeMeta = transactionTypesMap.get(String(child.type));
                             const childTypeName = childTypeMeta?.alias || childTypeMeta?.name || `İşlem ${child.type}`;
 
-                    // --- CHILD BELGE ÇEKİMİ ---
-                            let allChildDocs = (child.documents || []).map(doc => ({
-                                fileName: doc.name || 'Belge',
-                                fileUrl: doc.url || doc.path,
-                                type: doc.type,
-                                isManualDoc: true
-                            }));
-                            const existingChildFileNames = new Set(allChildDocs.map(d => d.fileName).filter(Boolean));
+                        // --- CHILD BELGE ÇEKİMİ ---
+                            let allChildDocs = [];
+                            const existingChildFileNames = new Set();
+                            
+                            // Child'ın manuel/doküman listesi
+                            if (Array.isArray(child.documents)) {
+                                child.documents.forEach(doc => {
+                                    const fileName = doc.name || 'Belge';
+                                    const fileUrl = doc.url || doc.path;
+                                    if (fileUrl) {
+                                        allChildDocs.push({
+                                            fileName: fileName,
+                                            fileUrl: fileUrl,
+                                            type: doc.type,
+                                            isManualDoc: true
+                                        });
+                                        existingChildFileNames.add(fileName);
+                                    }
+                                });
+                            }
                             
                             // triggeringTaskId varsa Task belgelerini çek
                             if (child.triggeringTaskId) {
@@ -1828,6 +1863,11 @@
             });
 
             try {
+                // 🔥 YENİ: Önce tüm itiraz task'larını yükle
+                console.log('📋 İtiraz task\'ları yükleniyor...');
+                this.objectionTasksMap = await fetchObjectionTasksWithDocuments();
+                console.log('✅ İtiraz task\'ları yüklendi:', this.objectionTasksMap.size, 'record için');
+                
                 // 1) Kayıtları hazırla / cache'le
                 let allRecords = this.allRecords;
                 if (!Array.isArray(allRecords) || allRecords.length === 0) {
