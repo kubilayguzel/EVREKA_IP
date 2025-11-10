@@ -456,6 +456,80 @@
             return [];
         }
         }
+
+        // 🔥 YENİ FONKSİYON: Task type'a göre (19, 20) task'ları çek ve ipRecord transaction'larıyla eşleştir
+        async function fetchObjectionTasksWithDocuments() {
+            try {
+                const tasksRef = collection(db, 'tasks');
+                
+                // taskType 19 veya 20 olan task'ları çek
+                const q19 = query(tasksRef, where('taskType', '==', '19'));
+                const q20 = query(tasksRef, where('taskType', '==', '20'));
+                
+                const [snapshot19, snapshot20] = await Promise.all([
+                    getDocs(q19),
+                    getDocs(q20)
+                ]);
+                
+                // recordId -> bulletinNo -> task documents mapping
+                const recordTaskMap = new Map();
+                
+                const processTaskSnapshot = (snapshot) => {
+                    snapshot.forEach(taskDoc => {
+                        const taskData = taskDoc.data();
+                        const recordId = taskData.relatedIpRecordId;
+                        const bulletinNo = taskData.details?.bulletinNo;
+                        
+                        if (!recordId || !bulletinNo) return;
+                        
+                        const docs = [];
+                        
+                        // 1. epatsDocument (ePats Dokümanı)
+                        if (taskData.details?.epatsDocument?.downloadURL) {
+                            docs.push({
+                                fileName: taskData.details.epatsDocument.name || 'ePats Belgesi',
+                                fileUrl: taskData.details.epatsDocument.downloadURL,
+                                evrakNo: taskData.details.epatsDocument.turkpatentEvrakNo,
+                                type: 'epats_document',
+                                documentType: 'epats'
+                            });
+                        }
+                        
+                        // 2. documents array (İtiraz Dilekçeleri)
+                        if (Array.isArray(taskData.documents)) {
+                            taskData.documents.forEach(doc => {
+                                if (doc.downloadURL) {
+                                    docs.push({
+                                        fileName: doc.name || 'İtiraz Dilekçesi',
+                                        fileUrl: doc.downloadURL,
+                                        type: doc.type || 'objection_petition',
+                                        documentType: 'petition'
+                                    });
+                                }
+                            });
+                        }
+                        
+                        if (docs.length > 0) {
+                            if (!recordTaskMap.has(recordId)) {
+                                recordTaskMap.set(recordId, new Map());
+                            }
+                            recordTaskMap.get(recordId).set(bulletinNo, docs);
+                        }
+                    });
+                };
+                
+                processTaskSnapshot(snapshot19);
+                processTaskSnapshot(snapshot20);
+                
+                console.log('📋 İtiraz task\'ları yüklendi:', recordTaskMap.size, 'record için');
+                return recordTaskMap;
+                
+            } catch (error) {
+                console.error('❌ İtiraz task\'ları yüklenirken hata:', error);
+                return new Map();
+            }
+        }
+
         function buildParentChild(transactions){
           const PARENT_TYPE_IDS = ['7','19','20'];
           const parentsMap = new Map();
@@ -623,10 +697,10 @@
                 this.filteredAndSortedRecords = [];
                 this.activeTypeFilter = 'all';
                 this.columnFilters = {};
+                this.objectionTasksMap = new Map();
                 this.sortBy = { column: 'applicationDate', direction: 'desc' };
                 this.selectedRecords = new Set();
                 this.objectionRows = [];
-                // === EKLENDİ: transaction cache
                 this.txCache = new Map(); // key: recordId, value: {transactions, parents, childrenMap}
             }
             onLookupsReady() { this.loadAllData(); }
