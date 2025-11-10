@@ -764,7 +764,7 @@
                             const childTypeMeta = transactionTypesMap.get(String(child.type));
                             const childTypeName = childTypeMeta?.alias || childTypeMeta?.name || `İşlem ${child.type}`;
 
-                            // --- CHILD BELGE ÇEKİMİ ---
+                    // --- CHILD BELGE ÇEKİMİ ---
                             let allChildDocs = (child.documents || []).map(doc => ({
                                 fileName: doc.name || 'Belge',
                                 fileUrl: doc.url || doc.path,
@@ -773,29 +773,28 @@
                             }));
                             const existingChildFileNames = new Set(allChildDocs.map(d => d.fileName).filter(Boolean));
                             
-                            const IS_CHILD_OPPOSITION_RESPONSE = String(child.type) === '38'; 
-                            const IS_CHILD_OPPOSITION_NOTICE = String(child.type) === '27';
-                            
-                            // Task ile tetiklenmiş Karşı Görüş (38) veya İtiraz Bildirimi (27) ise Task belgelerini çek
-                            if ((IS_CHILD_OPPOSITION_RESPONSE || IS_CHILD_OPPOSITION_NOTICE) && child.triggeringTaskId) {
-                                const taskDocs = await fetchTaskDocuments(child.triggeringTaskId); 
-                                taskDocs.forEach(doc => {
-                                    if (doc.fileName && !existingChildFileNames.has(doc.fileName)) {
-                                        allChildDocs.push(doc);
-                                        existingChildFileNames.add(doc.fileName);
-                                    }
-                                });
+                            // Tüm child transaction'lar için triggeringTaskId varsa Task belgelerini çek
+                            if (child.triggeringTaskId) {
+                                try {
+                                    const taskDocs = await fetchTaskDocuments(child.triggeringTaskId); 
+                                    taskDocs.forEach(doc => {
+                                        if (doc.fileName && !existingChildFileNames.has(doc.fileName)) {
+                                            allChildDocs.push(doc);
+                                            existingChildFileNames.add(doc.fileName);
+                                        }
+                                    });
+                                } catch (e) {
+                                    console.error(`Child task belgeleri çekilirken hata (Task ID: ${child.triggeringTaskId}):`, e);
+                                }
                             }
                             
-                            // 🔥 İtiraz Bildirimi (27) ise Parent'ın Task/Manuel belgelerini Child'a ekle
-                            if (IS_CHILD_OPPOSITION_NOTICE) {
-                                allParentDocs.forEach(doc => {
-                                    if (doc.fileName && !existingChildFileNames.has(doc.fileName)) {
-                                        allChildDocs.push({...doc, isParentDoc: true}); // Parent'tan geldiğini işaretle
-                                        existingChildFileNames.add(doc.fileName);
-                                    }
-                                });
-                            }
+                            // Parent'ın tüm belgelerini de Child'a ekle (Parent'tan gelen belgeleri işaretle)
+                            allParentDocs.forEach(doc => {
+                                if (doc.fileName && !existingChildFileNames.has(doc.fileName)) {
+                                    allChildDocs.push({...doc, isParentDoc: true}); // Parent'tan geldiğini işaretle
+                                    existingChildFileNames.add(doc.fileName);
+                                }
+                            });
                             
                             // Child Belge Linkleri HTML'i
                             const childDocLinks = allChildDocs.map(_createDocLinkHtml).join('');
