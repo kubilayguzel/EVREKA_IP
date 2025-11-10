@@ -770,26 +770,40 @@
                     const children = (txData.childrenMap || {})[parentTxId] || [];
                     if (!parent) return null;
 
-const hasChildren = children.length > 0;
+                    const hasChildren = children.length > 0;
                     const groupId = safeId(`${recordId}_parent_${parentTxId}`);
                     
-                    // 🔥 Bu record için task belgelerini al
-                    const recordTaskDocs = this.objectionTasksMap.get(recordId) || new Map();
-
-                    // --- PARENT BELGE ÇEKİMİ ---
+                    // --- PARENT BELGE ÇEKİMİ (sadece parent'ın kendisi) ---
                     let allParentDocs = [];
                     const existingParentFileNames = new Set();
-                    const IS_OPPOSITION_PARENT = String(parent.type) === '20' || String(parent.type) === '19';
-                    
-                    // Önce bulletinNo ile task belgelerini bul
-                    const parentBulletinNo = parent.bulletinNo || row.bulletinNo;
-                    if (parentBulletinNo && recordTaskDocs.has(parentBulletinNo)) {
-                        const taskDocs = recordTaskDocs.get(parentBulletinNo);
+
+                    // 1) Transaction üzerindeki manuel/ekli belgeler
+                    if (Array.isArray(parent.documents)) {
+                    parent.documents.forEach(doc => {
+                        const fileName = doc.name || 'Belge';
+                        const fileUrl = doc.downloadURL || doc.url || doc.path; // downloadURL'u da dene
+                        if (fileUrl && !existingParentFileNames.has(fileName)) {
+                        allParentDocs.push({ fileName, fileUrl, type: doc.type, isTransactionDoc: true });
+                        existingParentFileNames.add(fileName);
+                        }
+                    });
+                    }
+
+                    // 2) Sadece bu parent'ın triggeringTaskId'sinden gelen belgeler
+                    if (parent.triggeringTaskId) {
+                    try {
+                        const taskDocs = await fetchTaskDocuments(parent.triggeringTaskId);
                         taskDocs.forEach(doc => {
+                        if (doc.fileName && !existingParentFileNames.has(doc.fileName)) {
                             allParentDocs.push(doc);
                             existingParentFileNames.add(doc.fileName);
+                        }
                         });
+                    } catch (e) {
+                        console.error(`Task belgeleri çekilirken hata (ID: ${parent.triggeringTaskId}):`, e);
                     }
+                    }
+
                     
                     // Parent'ın manuel/doküman listesini ekle
                     if (Array.isArray(parent.documents)) {
@@ -1854,11 +1868,7 @@ const hasChildren = children.length > 0;
             });
 
             try {
-                // 🔥 YENİ: Önce tüm itiraz task'larını yükle
-                console.log('📋 İtiraz task\'ları yükleniyor...');
-                this.objectionTasksMap = await fetchObjectionTasksWithDocuments();
-                console.log('✅ İtiraz task\'ları yüklendi:', this.objectionTasksMap.size, 'record için');
-                
+               
                 // 1) Kayıtları hazırla / cache'le
                 let allRecords = this.allRecords;
                 if (!Array.isArray(allRecords) || allRecords.length === 0) {
