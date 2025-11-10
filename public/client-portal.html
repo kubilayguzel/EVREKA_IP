@@ -3067,39 +3067,50 @@ window.fetchAndDisplayObjections = async function() {
     }
 };
 
-// === BELGE LİNKİ OLUŞTURMA FONKSİYONU ===
+// === BELGE LİNKİ OLUŞTURMA FONKSİYONU (SADECE İKON) ===
 function _createDocLinkHtml(pdf) {
     let iconClass = 'fas fa-file-pdf';
     let titleText = pdf.fileName || 'Belge';
-    let btnClass = 'btn-danger';
+    let iconColor = '#dc3545'; // Kırmızı (PDF)
     let badgeHtml = '';
 
     if (pdf.type === 'opposition_petition') {
         iconClass = 'fas fa-gavel';
         titleText = 'Karşı Taraf İtiraz Dilekçesi';
-        btnClass = 'btn-warning';
+        iconColor = '#ffc107'; // Sarı
     } else if (pdf.type === 'official_document') {
         iconClass = 'fas fa-file-signature';
         titleText = 'Resmi Yazı';
-        btnClass = 'btn-info';
-    } else if (pdf.isTransactionDoc) {
+        iconColor = '#17a2b8'; // Mavi
+    } else if (pdf.type === 'epats_document') {
+        iconClass = 'fas fa-file-invoice';
+        titleText = `ePats: ${pdf.evrakNo || pdf.fileName}`;
+        iconColor = '#007bff'; // Koyu mavi
+        if (pdf.evrakNo) {
+            badgeHtml = `<span style="font-size:0.7em; margin-left:2px;">${pdf.evrakNo}</span>`;
+        }
+    } else if (pdf.type === 'task_document' || pdf.isTaskDoc) {
         iconClass = 'fas fa-file-alt';
-        btnClass = 'btn-secondary';
-    } else if (pdf.evrakNo) {
-        badgeHtml = `<span class="badge badge-primary ml-1">${pdf.evrakNo}</span>`;
+        titleText = 'Görev Belgesi: ' + pdf.fileName;
+        iconColor = '#6c757d'; // Gri
+    } else if (pdf.isParentDoc) {
+        iconClass = 'fas fa-file-pdf';
+        titleText = 'Parent Belge: ' + pdf.fileName;
+        iconColor = '#17a2b8'; // Mavi
+    } else if (pdf.isTransactionDoc || pdf.isManualDoc) {
+        iconClass = 'fas fa-file-alt';
+        iconColor = '#6c757d'; // Gri
     }
 
     return `
         <a href="${pdf.fileUrl}" 
            target="_blank" 
-           class="btn ${btnClass} btn-sm mr-1 mb-1" 
            title="${titleText}"
-           style="text-decoration:none;">
-            <i class="${iconClass}"></i> ${pdf.fileName}${badgeHtml}
+           style="color:${iconColor}; text-decoration:none; margin-right:8px; font-size:1.2em; display:inline-block;">
+            <i class="${iconClass}"></i>${badgeHtml}
         </a>
     `;
 }
-
 // === PARENT VE CHILD İÇİN EVRAK HÜCRESİ OLUŞTURMA ===
 function renderDocsCell(rowData) {
     // Parent için allParentDocs, Child için allChildDocs kullan
