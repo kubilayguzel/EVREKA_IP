@@ -2856,21 +2856,8 @@ window.fetchAndDisplayObjections = async function() {
             const epatsDate = parentTx?.epatsDocument?.documentDate || null;
 
             // === 6. DURUM SADECE PARENT REQUESTRESULT BAZ ALINIR ===
-            const parentResultCode = parentTx?.requestResult ?? null;
-            const parentStatusText = mapRequestResult(parentResultCode);
-
-            // parent satırına yaz
-            parentRow.requestResult = parentResultCode;
-            parentRow.statusText    = parentStatusText;
-            // (render fonksiyonun 'statusLabel' bekliyorsa onu da set et)
-            parentRow.statusLabel   = parentStatusText;
-
-            // tüm child satırlar da parent’ın durumunu göstersin
-            childRows.forEach(r => {
-            r.requestResult = parentResultCode;
-            r.statusText    = parentStatusText;
-            r.statusLabel   = parentStatusText;
-            });
+            const parentResultCode  = parentTx?.requestResult ?? null;
+            const parentStatusText  = mapRequestResult(parentResultCode);
             
             // === 7. Origin (Menşe) bilgisini belirle ===
                 const originRaw = (record.origin || parentTx?.origin || '').toString().toUpperCase().trim();
@@ -2897,7 +2884,7 @@ window.fetchAndDisplayObjections = async function() {
                     bulletinNo,
                     epatsDate: formatDate(epatsDate),
                     origin: originBucket,
-                    statusText,
+                    statusText: parentStatusText, 
                     isParent: true,
                     hasChildren: hasChildren 
                 });
@@ -2926,7 +2913,7 @@ window.fetchAndDisplayObjections = async function() {
                             bulletinNo: '-',
                             epatsDate: formatDate(childEpatsDate),
                             origin: originBucket,
-                            statusText: childStatusText, // ✅ Her zaman '-'
+                            statusText: childStatusText,
                             isParent: false,
                             hasChildren: false,
                             subIndex: subIndex + 1
@@ -2944,9 +2931,9 @@ window.fetchAndDisplayObjections = async function() {
         const results = await Promise.all(processPromises);
 
         results.forEach(rows => {
-            if (rows && Array.isArray(rows)) {
-                objectionRows.push(...rows);
-            }
+        if (rows && Array.isArray(rows)) {
+            objectionRows.push(...rows); // <-- doğru kullanım
+        }
         });
 
         console.log(`✅ Toplam ${objectionRows.length} itiraz satırı (parent+child) oluşturuldu`);
