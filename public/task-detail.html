@@ -1551,15 +1551,28 @@ async removeEpatsDocument() {
                     'serviceInvoiceParty': '#selectedServiceInvoicePartyDisplay .search-result-display-content'
                 }[targetField];
                 
+                const searchInputId = {
+                    'relatedParty': 'relatedPartySearch',
+                    'tpInvoiceParty': 'tpInvoicePartySearch',
+                    'serviceInvoiceParty': 'serviceInvoicePartySearch'
+                }[targetField];
+                
                 if (targetField === 'relatedParty') this.selectedRelatedParty = person;
                 else if (targetField === 'tpInvoiceParty') this.selectedTpInvoiceParty = person;
                 else if (targetField === 'serviceInvoiceParty') this.selectedServiceInvoiceParty = person;
 
                 const display = document.getElementById(displayId);
                 const content = document.querySelector(displayContentId);
-                content.innerHTML = `<p><b>Seçilen:</b> ${person.name}</p>`;
-                display.style.display = 'flex';
-                document.getElementById(displayId.replace('selected', 'related')).value = '';
+                if (content) {
+                    content.innerHTML = `<p><b>Seçilen:</b> ${person.name}</p>`;
+                }
+                if (display) {
+                    display.style.display = 'flex';
+                }
+                const searchInput = document.getElementById(searchInputId);
+                if (searchInput) {
+                    searchInput.value = '';
+                }
             }
             
             removeSelectedRelatedParty() {
