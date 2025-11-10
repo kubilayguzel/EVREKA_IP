@@ -862,22 +862,22 @@ const hasChildren = children.length > 0;
                         // --- CHILD BELGE ÇEKİMİ ---
                             let allChildDocs = [];
                             const existingChildFileNames = new Set();
-                            
+
                             // Child'ın manuel/doküman listesi
                             if (Array.isArray(child.documents)) {
-                                child.documents.forEach(doc => {
-                                    const fileName = doc.name || 'Belge';
-                                    const fileUrl = doc.url || doc.path;
-                                    if (fileUrl) {
-                                        allChildDocs.push({
-                                            fileName: fileName,
-                                            fileUrl: fileUrl,
-                                            type: doc.type,
-                                            isManualDoc: true
-                                        });
-                                        existingChildFileNames.add(fileName);
-                                    }
+                            child.documents.forEach(doc => {
+                                const fileName = doc.name || 'Belge';
+                                const fileUrl = doc.downloadURL || doc.url || doc.path; // <-- YENİ
+                                if (fileUrl) {
+                                allChildDocs.push({
+                                    fileName,
+                                    fileUrl,
+                                    type: doc.type,
+                                    isManualDoc: true
                                 });
+                                existingChildFileNames.add(fileName);
+                                }
+                            });
                             }
                             
                             // triggeringTaskId varsa Task belgelerini çek
@@ -903,9 +903,10 @@ const hasChildren = children.length > 0;
                                 }
                             });
                             
-                            // Child Belge Linkleri HTML'i - Child'da evrak gösterme
-                            const childDocLinks = '-';
-
+                            // Child Belge Linkleri HTML'i - Artık child evraklarını göster
+                            const childDocLinks = (allChildDocs.length > 0)
+                            ? allChildDocs.map(_createDocLinkHtml).join('')
+                            : '-';
 
                             const childTr = document.createElement('tr');
                             childTr.className = 'group-row child-row';
