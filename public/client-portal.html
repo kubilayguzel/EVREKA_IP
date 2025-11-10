@@ -3035,34 +3035,28 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
                 const uniqueAccordionId = `itiraz-accordion-${row.recordId}-${row.id}`;
                 
                 // Colspan 11 olarak güncellendi
-                detailRow.innerHTML = `
-                    <td colspan="11" class="p-0"> 
+                    detailRow.innerHTML = `
+                    <td colspan="11" class="p-0">
                         <div class="collapse" id="${uniqueAccordionId}">
-                            <table class="table mb-0 accordion-table">
-                                <thead>
-                                    <tr>
-                                        <th>#</th>
-                                        <th>İşlem Tipi</th>
-                                        <th>Başvuru Sahibi</th>
-                                        <th>İtiraz Sahibi</th>
-                                        <th>İşlem Tarihi</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    ${childRows.map(childRow => `
-                                        <tr data-origin="${childRow.origin || 'TÜRKPATENT'}">
-                                            <td>${parentIndex}.${childRow.subIndex}</td>
-                                            <td>${childRow.transactionTypeName}</td>
-                                            <td>${childRow.applicantName}</td>
-                                            <td>${childRow.opponent}</td>
-                                            <td>${childRow.epatsDate}</td>
-                                        </tr>
-                                    `).join('')}
-                                </tbody>
-                            </table>
+                        <table class="table mb-0 accordion-table">
+                            <thead>
+                            <tr>
+                                <th>İşlem Tipi</th>
+                                <th>İşlem Tarihi</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            ${childRows.map(childRow => `
+                                <tr data-origin="${childRow.origin || 'TÜRKPATENT'}">
+                                <td>${childRow.transactionTypeName}</td>
+                                <td>${childRow.epatsDate}</td>
+                                </tr>
+                            `).join('')}
+                            </tbody>
+                        </table>
                         </div>
                     </td>
-                `;
+                    `;
                 tbody.appendChild(detailRow);
             }
         }
