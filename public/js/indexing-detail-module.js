@@ -986,6 +986,8 @@ async handleIndexing(opts = {}) {
     // 🔥 İTİRAZ BİLDİRİMİ İÇİN DEĞİŞKENLERİ BAŞTA TANIMLA (scope için)
     let newParentTransactionId = null;
     let oppositionPetitionFileUrl = null;
+    let oppositionPdfFile = null; // 🔥 EKLENEN
+    let oppositionStoragePath = null; // 🔥 EKLENEN
 
     // 1. Alt işlem varsa oluştur
     if (childTypeId) {
@@ -1001,7 +1003,7 @@ async handleIndexing(opts = {}) {
             console.log('🔍 İtiraz Bildirimi tespit edildi, özel işlem başlatılıyor...');
             
             // PDF yükleme alanından dosyayı al
-            const oppositionPdfFile = document.getElementById('oppositionPetitionFile')?.files[0];
+            oppositionPdfFile = document.getElementById('oppositionPetitionFile')?.files[0]; // 🔥 const KALDIRILDI
             
             if (!oppositionPdfFile) {
                 throw new Error('İtiraz bildirimi için "Karşı Taraf İtiraz Dilekçesi" PDF dosyası yüklenmelidir.');
@@ -1017,8 +1019,8 @@ async handleIndexing(opts = {}) {
             // PDF'i storage'a yükle
             console.log('📤 Karşı taraf itiraz dilekçesi yükleniyor...');
             const timestamp = Date.now();
-            const storagePath = `opposition-petitions/${this.matchedRecord.id}/${timestamp}_${oppositionPdfFile.name}`;
-            const storageRef = ref(firebaseServices.storage, storagePath);
+            oppositionStoragePath = `opposition-petitions/${this.matchedRecord.id}/${timestamp}_${oppositionPdfFile.name}`; // 🔥 const KALDIRILDI, değişkene atandı
+            const storageRef = ref(firebaseServices.storage, oppositionStoragePath);
             
             await uploadBytes(storageRef, oppositionPdfFile);
             oppositionPetitionFileUrl = await getDownloadURL(storageRef);
