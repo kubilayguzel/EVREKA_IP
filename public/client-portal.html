@@ -2839,20 +2839,19 @@ window.fetchAndDisplayObjections = async function() {
             const epatsDate = parentTx?.epatsDocument?.documentDate || null;
 
             // === 6) Durum (requestResult) – SADECE parent'tan ===
-            let statusText = 'Karar Bekleniyor';
-            let reqResult = (parentTx.requestResult ?? null);
-
             const REQUEST_RESULT_STATUS = {
-            '24': 'Eksiklik Bildirimi',
-            '28': 'Kabul',            '29': 'Kısmi Kabul',     '30': 'Ret',
-            '31': 'B.S - Kabul',      '32': 'B.S - Kısmi Kabul','33': 'B.S - Ret',
-            '34': 'İ.S - Kabul',      '35': 'İ.S - Kısmi Kabul','36': 'İ.S - Ret',
-            '50': 'Kabul',            '51': 'Kısmi Kabul',     '52': 'Ret'
+            '24':'Eksiklik Bildirimi',
+            '28':'Kabul',            '29':'Kısmi Kabul',     '30':'Ret',
+            '31':'B.S - Kabul',      '32':'B.S - Kısmi Kabul','33':'B.S - Ret',
+            '34':'İ.S - Kabul',      '35':'İ.S - Kısmi Kabul','36':'İ.S - Ret',
+            '50':'Kabul',            '51':'Kısmi Kabul',     '52':'Ret'
             };
 
-            if (reqResult !== null && reqResult !== undefined && reqResult !== '') {
-            statusText = REQUEST_RESULT_STATUS[String(reqResult)] || `Bilinmiyor (ID: ${reqResult})`;
-            }
+            const reqResult = parentTx?.requestResult ?? null;
+            const parentStatusText =
+            (reqResult !== null && reqResult !== undefined && reqResult !== '')
+                ? (REQUEST_RESULT_STATUS[String(reqResult)] || `Bilinmiyor (ID: ${reqResult})`)
+                : 'Karar Bekleniyor';
             
             // === 7. Origin (Menşe) bilgisini belirle ===
                 const originRaw = (record.origin || parentTx?.origin || '').toString().toUpperCase().trim();
