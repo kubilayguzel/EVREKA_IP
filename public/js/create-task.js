@@ -79,7 +79,6 @@ function initTaskDatePickers(root=document) {
 }
 
 // Auto-init date pickers whenever relevant inputs appear in DOM
-// Auto-init date pickers whenever relevant inputs appear in DOM
 function installDateObserver() {
   const IDS = ['taskDueDate','priorityDate','lawsuitDate'];
   const tryInit = (root) => {
@@ -3412,6 +3411,7 @@ try {
       type: '19',
       description: 'Yayıma İtirazin Yeniden Incelenmesi',
       transactionHierarchy: 'parent',
+      triggeringTaskId: String(taskResult.id),
       timestamp: new Date().toISOString(),
       userId: (u && u.uid) || 'anonymous',
       userEmail: (u && u.email) || 'anonymous@example.com',
@@ -3800,7 +3800,8 @@ const officialFee = parseFloat(document.getElementById('officialFee')?.value) ||
             const parentTransactionData = {
                 type: selectedTransactionType.id,
                 description: `${selectedTransactionType.name} işlemi.`,
-                transactionHierarchy: 'parent'
+                transactionHierarchy: 'parent',
+                triggeringTaskId: String(taskResult.id)
             };
 
             const parentResult = await ipRecordsService.addTransactionToRecord(this.selectedIpRecord?.id, parentTransactionData);
