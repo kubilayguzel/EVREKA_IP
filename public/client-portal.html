@@ -2063,6 +2063,18 @@ async function fetchAndDisplayPortfolio() {
         }
     }
 
+// requestResult kodunu etiket metnine çevirir
+const mapRequestResult = (v) => {
+  if (v === undefined || v === null || v === '') return null;
+  const M = {
+    '24':'Eksiklik Bildirimi','28':'Kabul','29':'Kısmi Kabul','30':'Ret',
+    '31':'B.S - Kabul','32':'B.S - Kısmi Kabul','33':'B.S - Ret',
+    '34':'İ.S - Kabul','35':'İ.S - Kısmi Kabul','36':'İ.S - Ret',
+    '50':'Kabul','51':'Kısmi Kabul','52':'Ret'
+  };
+  return M[String(v)] || `Bilinmiyor (ID: ${v})`;
+};
+
 window.populateDashboardNumbers = async function (linkedPersonIds, allPortfolios){
     const portfolioCount = allPortfolios.length;
 
@@ -2843,59 +2855,20 @@ window.fetchAndDisplayObjections = async function() {
             const bulletinDate = record.details?.brandInfo?.opposedMarkBulletinDate || parentTx?.bulletinDate || taskData.details?.bulletinDate || null;
             const epatsDate = parentTx?.epatsDocument?.documentDate || null;
 
-// === 6. Durum (requestResult) hesaplama - Child öncelikli ===
-                let statusText = 'Karar Bekleniyor';
-                let reqResult = null;
-                
-                console.log(`🔍 Durum kontrolü - Parent: ${parentTx.id}, Child sayısı: ${childTransactions.length}`);
-                
-                // 1. Önce child transaction'lardan en güncel requestResult'ı al
-                if (childTransactions.length > 0) {
-                    // En son child'dan al (timestamp'e göre sıralandı, en yeni sonda)
-                    for (let i = childTransactions.length - 1; i >= 0; i--) {
-                        const child = childTransactions[i];
-                        if (child.requestResult !== undefined && child.requestResult !== null && child.requestResult !== '') {
-                            reqResult = child.requestResult;
-                            console.log(`✅ requestResult child'dan alındı (${child.id}): ${reqResult}`);
-                            break;
-                        }
-                    }
-                }
-                
-                // 2. Child'da yoksa parent transaction'dan al
-                if ((reqResult === null || reqResult === undefined) && parentTx.requestResult) {
-                    reqResult = parentTx.requestResult;
-                    console.log(`✅ requestResult parent'tan alındı: ${reqResult}`);
-                }
-                
-                // 3. Hiçbirinde yoksa task'tan al
-                if ((reqResult === null || reqResult === undefined) && taskData.requestResult) {
-                    reqResult = taskData.requestResult;
-                    console.log(`✅ requestResult task'tan alındı: ${reqResult}`);
-                }
-                
-                // RequestResult'ı metne çevir
-                if (reqResult !== undefined && reqResult !== null && reqResult !== '') {
-                    const REQUEST_RESULT_STATUS = {
-                        '24': 'Eksiklik Bildirimi',
-                        '28': 'Kabul',
-                        '29': 'Kısmi Kabul',
-                        '30': 'Ret',
-                        '31': 'B.S - Kabul',
-                        '32': 'B.S - Kısmi Kabul',
-                        '33': 'B.S - Ret',
-                        '34': 'İ.S - Kabul',
-                        '35': 'İ.S - Kısmi Kabul',
-                        '36': 'İ.S - Ret',
-                        '50': 'Kabul',
-                        '51': 'Kısmi Kabul',
-                        '52': 'Ret'
-                    };
-                    statusText = REQUEST_RESULT_STATUS[String(reqResult)] || `Bilinmiyor (ID: ${reqResult})`;
-                    console.log(`✅ Final durum: ${statusText}`);
-                } else {
-                    console.log(`⚠️ requestResult bulunamadı, varsayılan: ${statusText}`);
-                }
+            // === 6. DURUM SADECE PARENT REQUESTRESULT BAZ ALINIR ===
+            const parentResultCode = parentTx?.requestResult ?? null;
+            const parentStatusText = mapRequestResult(parentResultCode);
+
+            // parent satırına yaz
+            item.requestResult = parentResultCode;
+            item.statusText   = parentStatusText;
+
+            // tüm child satırlar da parent’ın durumunu göstersin
+            childRows.forEach(ch => {
+            ch.requestResult = parentResultCode;
+            ch.statusText    = parentStatusText;
+            });
+
             
             // === 7. Origin (Menşe) bilgisini belirle ===
                 const originRaw = (record.origin || parentTx?.origin || '').toString().toUpperCase().trim();
