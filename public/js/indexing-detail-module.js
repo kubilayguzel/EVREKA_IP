@@ -12,7 +12,7 @@ import {
 } from '../firebase-config.js';
 
 import { 
-    collection, query, where, doc, getDoc, getDocs, updateDoc
+    collection, query, where, doc, getDoc, getDocs, updateDoc, arrayUnion
 } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
 // utils.js'den yardımcı fonksiyonları import et
@@ -1115,27 +1115,33 @@ async handleIndexing(opts = {}) {
             console.log('Alt işlem başarıyla oluşturuldu, ID:', childTransactionId);
             console.log('🔍 PDF\'ler şu transaction\'a bağlanacak:', transactionIdToAssociateFiles);
 
-            // ✅ GENEL: İndekslenen PDF'i (varsa) ilgili transaction'a (child veya parent) ekle
+            // ✅ GENEL: İndekslenen PDF'i (varsa) ilgili transaction'a (child) ekle
             if (this.pdfData?.fileUrl && transactionIdToAssociateFiles) {
             try {
-                const indexedDocument = {
-                name: this.pdfData.fileName || 'Resmi Yazı',
-                type: 'official_document',
-                path: this.pdfData.fileUrl,
-                uploadedAt: new Date().toISOString(),
-                uploadedBy: this.currentUser?.uid || 'unknown',
-                pdfId: this.pdfData.id
+                const docId = generateUUID();
+                const storagePath =
+                this.pdfData.storagePath ||
+                guessStoragePathFromUrl(this.pdfData.fileUrl) ||
+                null;
+
+                const payload = {
+                documentDesignation: "Diğer",
+                downloadURL: this.pdfData.fileUrl,
+                id: docId,
+                name: this.pdfData.fileName || "resmi-yazi.pdf",
+                size: Number(this.pdfData.fileSize || this.pdfData.size || 0),
+                storagePath: storagePath,
+                type: "application/pdf",
+                uploadedAt: new Date().toISOString()
                 };
 
                 const txRef = doc(
                 collection(firebaseServices.db, 'ipRecords', this.matchedRecord.id, 'transactions'),
                 transactionIdToAssociateFiles
                 );
-                const txSnap = await getDoc(txRef);
-                const existingDocs = txSnap.data()?.documents || [];
-                await updateDoc(txRef, { documents: [...existingDocs, indexedDocument] });
 
-                console.log('✅ İndekslenen PDF transaction belgelerine eklendi:', transactionIdToAssociateFiles);
+                await updateDoc(txRef, { documents: arrayUnion(payload) });
+                console.log('✅ İndekslenen PDF child transaction belgelerine eklendi:', transactionIdToAssociateFiles);
             } catch (err) {
                 console.error('❌ PDF transaction belgelerine eklenemedi:', err);
                 showNotification('Resmi yazı belge olarak kaydedilemedi: ' + (err?.message || err), 'warning');
@@ -1511,69 +1517,32 @@ async handleIndexing(opts = {}) {
             console.log('📎 Karşı taraf itiraz dilekçesi child transaction\'a belge olarak ekleniyor...');
 
             try {
-                const oppositionDocument = {
-                    name: 'Karşı Taraf İtiraz Dilekçesi',
-                    type: 'opposition_petition',
-                    path: oppositionPetitionFileUrl,
-                    uploadedAt: new Date().toISOString(),
-                    uploadedBy: this.currentUser?.uid || 'unknown'
+                const oppositionDocId = generateUUID();
+                const oppositionPayload = {
+                documentDesignation: "Diğer",
+                downloadURL: oppositionPetitionFileUrl,
+                id: oppositionDocId,
+                name: oppositionPdfFile?.name || "opposition_petition.pdf",
+                size: Number(oppositionPdfFile?.size || 0),
+                storagePath: storagePath,                     // storagePath değişkenini yukarıda zaten set ettin
+                type: oppositionPdfFile?.type || "application/pdf",
+                uploadedAt: new Date().toISOString()
                 };
-                
-                // Transaction'a belge ekle
+
                 const transactionRef = doc(
                 collection(firebaseServices.db, 'ipRecords', this.matchedRecord.id, 'transactions'),
                 transactionIdToAssociateFiles
                 );
-                
-                // Mevcut belgeleri al ve yenisini ekle
-                const transactionSnap = await getDoc(transactionRef);
-                const existingDocs = transactionSnap.data()?.documents || [];
-                
-                await updateDoc(transactionRef, {
-                    documents: [...existingDocs, oppositionDocument]
-                });
-                
-                console.log('✅ Karşı taraf itiraz dilekçesi başarıyla eklendi');
+
+                await updateDoc(transactionRef, { documents: arrayUnion(oppositionPayload) });
+                console.log('✅ Karşı taraf itiraz dilekçesi belge olarak eklendi');
+
             } catch (error) {
                 console.error('❌ Karşı taraf dilekçesi eklenirken hata:', error);
                 showNotification('Karşı taraf dilekçesi kaydedilemedi: ' + error.message, 'warning');
             }
         }
 
-        // 🔥 YENİ: İndesklenen PDF'i de transaction belgelerine ekle (İtiraz bildirimi için)
-        if (childTypeId === '27' && newParentTransactionId && this.pdfData) {
-            console.log('📎 İndekslenen PDF parent transaction\'a belge olarak ekleniyor...');
-            
-            try {
-                const indexedDocument = {
-                    name: this.pdfData.fileName || 'Resmi Yazı',
-                    type: 'official_document',
-                    path: this.pdfData.fileUrl,
-                    uploadedAt: new Date().toISOString(),
-                    uploadedBy: this.currentUser?.uid || 'unknown',
-                    pdfId: this.pdfData.id
-                };
-                
-                // Transaction'a belge ekle
-                const transactionRef = doc(
-                    collection(firebaseServices.db, 'ipRecords', this.matchedRecord.id, 'transactions'),
-                    newParentTransactionId
-                );
-                
-                // Mevcut belgeleri al ve yenisini ekle
-                const transactionSnap = await getDoc(transactionRef);
-                const existingDocs = transactionSnap.data()?.documents || [];
-                
-                await updateDoc(transactionRef, {
-                    documents: [...existingDocs, indexedDocument]
-                });
-                
-                console.log('✅ İndekslenen PDF başarıyla transaction belgelerine eklendi');
-            } catch (error) {
-                console.error('❌ İndekslenen PDF eklenirken hata:', error);
-                showNotification('Resmi yazı belge olarak kaydedilemedi: ' + error.message, 'warning');
-            }
-        }
 
         // 5. Parent transaction'a requestResult = childTypeId yaz (son indekse göre güncellenir)
         if (this.selectedTransactionId && childTypeId) {
