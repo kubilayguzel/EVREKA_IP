@@ -2063,17 +2063,6 @@ async function fetchAndDisplayPortfolio() {
         }
     }
 
-// requestResult kodunu etiket metnine çevirir
-function mapRequestResult(v) {
-  if (v === undefined || v === null || v === '') return null;
-  const M = {
-    '24':'Eksiklik Bildirimi','28':'Kabul','29':'Kısmi Kabul','30':'Ret',
-    '31':'B.S - Kabul','32':'B.S - Kısmi Kabul','33':'B.S - Ret',
-    '34':'İ.S - Kabul','35':'İ.S - Kısmi Kabul','36':'İ.S - Ret',
-    '50':'Kabul','51':'Kısmi Kabul','52':'Ret'
-  };
-  return M[String(v)] || `Bilinmiyor (ID: ${v})`;
-}
 
 window.populateDashboardNumbers = async function (linkedPersonIds, allPortfolios){
     const portfolioCount = allPortfolios.length;
@@ -2794,36 +2783,30 @@ window.fetchAndDisplayObjections = async function() {
                 
                 console.log(`📊 ${parentTransactions.length} parent transaction bulundu`);
                 
-                // === 4. Bu task ile ilişkili parent transaction'ı bul ===
+                // === 4) Bu task ile ilişkili parent transaction'ı bul ===
                 let parentTx = null;
-                
-                // Önce triggeringTransactionId ile bul
+
+                // 4.1) Öncelik: triggeringTransactionId (varsa)
                 if (taskData.triggeringTransactionId) {
-                    parentTx = parentTransactions.find(tx => tx.id === taskData.triggeringTransactionId);
-                    if (parentTx) {
-                        console.log(`✅ Parent transaction bulundu (triggeringTransactionId): ${parentTx.id}`);
-                    }
+                parentTx = parentTransactions.find(tx => tx.id === taskData.triggeringTransactionId);
                 }
-                
-                // Bulunamadıysa, transactionId ile dene
-                if (!parentTx && taskData.transactionId) {
-                    parentTx = parentTransactions.find(tx => tx.id === taskData.transactionId);
-                    if (parentTx) {
-                        console.log(`✅ Parent transaction bulundu (transactionId): ${parentTx.id}`);
-                    }
-                }
-                
-                // Hala bulunamadıysa, ilk parent'ı al (fallback)
-                if (!parentTx && parentTransactions.length > 0) {
-                    parentTx = parentTransactions[0];
-                    console.warn(`⚠️ Parent transaction match bulunamadı, ilk parent kullanılıyor: ${parentTx.id}`);
-                }
-                
+
+                // 4.2) Yoksa: type == taskType (örn: 19 ya da 20)
                 if (!parentTx) {
-                    console.warn(`⚠️ Task ${taskDoc.id} için uygun parent transaction bulunamadı`);
-                    return null;
+                parentTx = parentTransactions
+                    .filter(tx => String(tx.type) === String(taskData.taskType))
+                    // aynı tipten birden fazla parent varsa, task.timestamp'tan
+                    // önceki en yakın olanı seç (yoksa en yeni)
+                    .sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0))
+                    [0] || null;
                 }
-                
+
+                // 4.3) Yine yoksa hiç parent seçme → satırı atla (yanlış eşleşme olmasın)
+                if (!parentTx) {
+                console.warn(`⚠️ Task ${taskDoc.id} için uygun parent transaction bulunamadı (type=${taskData.taskType}).`);
+                return null;
+                }
+
                 // === 5. Parent'ın child transaction'larını bul ===
                 const childTransactions = allTransactions.filter(tx =>
                     tx.transactionHierarchy === 'child' && 
@@ -2855,9 +2838,21 @@ window.fetchAndDisplayObjections = async function() {
             const bulletinDate = record.details?.brandInfo?.opposedMarkBulletinDate || parentTx?.bulletinDate || taskData.details?.bulletinDate || null;
             const epatsDate = parentTx?.epatsDocument?.documentDate || null;
 
-            // === 6. DURUM SADECE PARENT REQUESTRESULT BAZ ALINIR ===
-            const parentResultCode  = parentTx?.requestResult ?? null;
-            const parentStatusText  = mapRequestResult(parentResultCode);
+            // === 6) Durum (requestResult) – SADECE parent'tan ===
+            let statusText = 'Karar Bekleniyor';
+            let reqResult = (parentTx.requestResult ?? null);
+
+            const REQUEST_RESULT_STATUS = {
+            '24': 'Eksiklik Bildirimi',
+            '28': 'Kabul',            '29': 'Kısmi Kabul',     '30': 'Ret',
+            '31': 'B.S - Kabul',      '32': 'B.S - Kısmi Kabul','33': 'B.S - Ret',
+            '34': 'İ.S - Kabul',      '35': 'İ.S - Kısmi Kabul','36': 'İ.S - Ret',
+            '50': 'Kabul',            '51': 'Kısmi Kabul',     '52': 'Ret'
+            };
+
+            if (reqResult !== null && reqResult !== undefined && reqResult !== '') {
+            statusText = REQUEST_RESULT_STATUS[String(reqResult)] || `Bilinmiyor (ID: ${reqResult})`;
+            }
             
             // === 7. Origin (Menşe) bilgisini belirle ===
                 const originRaw = (record.origin || parentTx?.origin || '').toString().toUpperCase().trim();
