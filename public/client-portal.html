@@ -2883,9 +2883,16 @@ window.fetchAndDisplayObjections = async function() {
                     hasChildren: hasChildren 
                 });
 
-            // === 9. Child satırları ekle ===
+                // === 9. Child satırları ekle ===
                 if (hasChildren) {
-                    childTransactions.forEach((childTx, subIndex) => {
+                    // ✅ Önce tüm transaction ID'lerini topla (PDF'ler için)
+                    const allTxIds = [parentTx.id, ...childTransactions.map(c => c.id)];
+                    
+                    // ✅ PDF'leri transaction ID'sine göre grupla
+                    const pdfsByTransaction = await fetchPdfsForTransactions(allTxIds);
+                    
+                    // Child'ları asenkron olarak işle
+                    for (const [subIndex, childTx] of childTransactions.entries()) {
                         const childTypeMeta = transactionTypesMap.get(String(childTx.type));
                         const childTxTypeName = childTypeMeta?.alias || childTypeMeta?.name || `İşlem ${childTx.type}`;
                         const childOpponent = childTx.oppositionOwner || childTx.relatedParty?.name || '-';
@@ -2893,11 +2900,63 @@ window.fetchAndDisplayObjections = async function() {
                         const childStatusText = '-';
                         const uniqueChildId = `${taskDoc.id}-${childTx.id}`;
                         
+                        // ✅ Child transaction'a ait PDF'leri getir
+                        const childPdfs = pdfsByTransaction[childTx.id] || [];
+                        
+                        let allChildDocs = [...childPdfs];
+                        const existingFileNames = new Set(allChildDocs.map(d => d.fileName).filter(Boolean));
+                        
+                        // İtiraza Karşı Görüş (ID: 38) veya İtiraz Bildirimi (ID: 27)
+                        const IS_OPPOSITION_RESPONSE = String(childTx.type) === '38'; 
+                        const IS_OPPOSITION_NOTICE = String(childTx.type) === '27';
+
+                        // 🔥 ID 38 ve ID 27 için Task belgelerini çek
+                        if ((IS_OPPOSITION_RESPONSE || IS_OPPOSITION_NOTICE) && childTx.triggeringTaskId) {
+                             console.log(`🔍 Child işlem (${childTxTypeName}, ID:${childTx.type}) için task belgeleri çekiliyor:`, childTx.triggeringTaskId);
+                             
+                             const taskDocs = await fetchTaskDocuments(childTx.triggeringTaskId);
+                             
+                             taskDocs.forEach(doc => {
+                                if (doc.fileName && !existingFileNames.has(doc.fileName)) {
+                                    allChildDocs.push(doc);
+                                    existingFileNames.add(doc.fileName);
+                                }
+                             });
+                             console.log(`✅ Task sonrası toplam belge sayısı: ${allChildDocs.length}`);
+                        }
+                        
+                        // 🔥 İtiraz Bildirimi (ID: 27) ise parent'ın belgelerini de ekle
+                        if (IS_OPPOSITION_NOTICE) {
+                            console.log('🔍 İtiraz Bildirimi tespit edildi, parent belgeleri ekleniyor...');
+                            
+                            const parentTransactionDocs = parentTx.documents || [];
+                            const parentPdfsForChild = pdfsByTransaction[parentTx.id] || [];
+                            
+                            const parentDocsToAttach = [
+                                ...parentPdfsForChild,
+                                ...parentTransactionDocs.map(doc => ({
+                                  fileName: doc.name || 'Belge',
+                                  fileUrl: doc.path || doc.url || doc.downloadURL,
+                                  type: doc.type,
+                                  isParentDoc: true
+                                }))
+                            ];
+                            
+                            parentDocsToAttach.forEach(doc => {
+                                if (doc.fileName && !existingFileNames.has(doc.fileName)) {
+                                    allChildDocs.push(doc);
+                                    existingFileNames.add(doc.fileName);
+                                }
+                            });
+                            
+                            console.log('✅ İtiraz Bildirimi için son toplam belge sayısı:', allChildDocs.length);
+                        }
+                        
                         rowsToAdd.push({
                             id: uniqueChildId,
-                            parentId: uniqueRowId, // Parent'ın benzersiz ID'sine bağla
+                            parentId: uniqueRowId,
                             recordId: recordId,
-                            brandImageUrl: record.brandImageUrl || record.brandImage || '', // ✅ ipRecords'dan
+                            brandImageUrl: record.brandImageUrl || record.brandImage || '',
                             title: record.title || record.brandText || '',
                             transactionTypeName: childTxTypeName,
                             applicationNumber: record.applicationNumber || '-', 
@@ -2910,9 +2969,10 @@ window.fetchAndDisplayObjections = async function() {
                             statusText: childStatusText,
                             isParent: false,
                             hasChildren: false,
-                            subIndex: subIndex + 1
+                            subIndex: subIndex + 1,
+                            allChildDocs: allChildDocs // 🔥 EKLENEN ALAN - Evrakları sakla
                         });
-                    });
+                    }
                 }
             return rowsToAdd;
                         } catch (error) {
