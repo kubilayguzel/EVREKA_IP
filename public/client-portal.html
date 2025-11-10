@@ -2064,7 +2064,7 @@ async function fetchAndDisplayPortfolio() {
     }
 
 // requestResult kodunu etiket metnine çevirir
-const mapRequestResult = (v) => {
+function mapRequestResult(v) {
   if (v === undefined || v === null || v === '') return null;
   const M = {
     '24':'Eksiklik Bildirimi','28':'Kabul','29':'Kısmi Kabul','30':'Ret',
@@ -2073,7 +2073,7 @@ const mapRequestResult = (v) => {
     '50':'Kabul','51':'Kısmi Kabul','52':'Ret'
   };
   return M[String(v)] || `Bilinmiyor (ID: ${v})`;
-};
+}
 
 window.populateDashboardNumbers = async function (linkedPersonIds, allPortfolios){
     const portfolioCount = allPortfolios.length;
@@ -2860,15 +2860,17 @@ window.fetchAndDisplayObjections = async function() {
             const parentStatusText = mapRequestResult(parentResultCode);
 
             // parent satırına yaz
-            item.requestResult = parentResultCode;
-            item.statusText   = parentStatusText;
+            parentRow.requestResult = parentResultCode;
+            parentRow.statusText    = parentStatusText;
+            // (render fonksiyonun 'statusLabel' bekliyorsa onu da set et)
+            parentRow.statusLabel   = parentStatusText;
 
             // tüm child satırlar da parent’ın durumunu göstersin
-            childRows.forEach(ch => {
-            ch.requestResult = parentResultCode;
-            ch.statusText    = parentStatusText;
+            childRows.forEach(r => {
+            r.requestResult = parentResultCode;
+            r.statusText    = parentStatusText;
+            r.statusLabel   = parentStatusText;
             });
-
             
             // === 7. Origin (Menşe) bilgisini belirle ===
                 const originRaw = (record.origin || parentTx?.origin || '').toString().toUpperCase().trim();
