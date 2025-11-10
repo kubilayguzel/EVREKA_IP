@@ -373,6 +373,7 @@ async handleTransactionCreated(transactionData) {
           designation: 'Yayına İtiraz',
           description: 'Yayına İtiraz',
           transactionHierarchy: 'parent',
+          triggeringTaskId: String(taskId),
           ...(oppositionOwner ? { oppositionOwner } : {}),
           timestamp: new Date().toISOString(),
           userId:  u?.uid   || 'anonymous',
