@@ -2666,65 +2666,88 @@ window.fetchAndDisplayObjections = async function() {
         // === 'portfolio.html' DOSYASINDAN KOPYALANAN BASİT SORGU ===
         // ================================================================
         
-        console.log('🔄 "tasks" koleksiyonu sorgulanıyor (taskOwner veya taskOwnerIds alanı ile)...');
+        console.log('🔄 "tasks" koleksiyonu sorgulanıyor (owner, ownerIds, relatedParty, opponent)...');
 
-        // 'taskOwner' (dizi) ile sorgula
-        let simpleQuery = query(
-            collection(db, 'tasks'),
-            where('taskType', 'in', PARENT_TYPE_IDS_STR),
-            where('taskOwner', 'array-contains-any', linkedPersonIds)
+        const tasksCol = collection(db, 'tasks');
+        const idsForIn = linkedPersonIds.slice(0, 10); // Firestore 'in' ve 'array-contains-any' limiti 10
+
+        // 1) taskOwner (array) -> array-contains-any
+        const qOwner = query(
+        tasksCol,
+        where('taskType', 'in', PARENT_TYPE_IDS_STR),
+        where('taskOwner', 'array-contains-any', linkedPersonIds)
         );
 
-        let objectorSnap = await getDocs(simpleQuery);
-
-        // EĞER 'taskOwner' BAŞARISIZ OLURSA, 'taskOwnerIds' ile tekrar dene
-        if (objectorSnap.empty) {
-            console.warn("⚠️ 'taskOwner' ile 0 sonuç bulundu. 'taskOwnerIds' ile tekrar deneniyor...");
-            simpleQuery = query(
-                collection(db, 'tasks'),
-                where('taskType', 'in', PARENT_TYPE_IDS_STR),
-                where('taskOwnerIds', 'array-contains-any', linkedPersonIds) // Alternatif alan adı
-            );
-            objectorSnap = await getDocs(simpleQuery);
-        }
-        
-        // ➕ EK: taskOwner/taskOwnerIds yoksa 'opponent.id' ile de ara ve sonuçları birleştir
-        try {
-        // 'in' operatörü en fazla 10 eleman kabul eder → slice(0,10)
-        const oppQuery = query(
-            collection(db, 'tasks'),
-            where('taskType', 'in', PARENT_TYPE_IDS_STR),
-            where('opponent.id', 'in', linkedPersonIds.slice(0, 10))
+        // 2) taskOwnerIds (array) -> array-contains-any
+        const qOwnerIds = query(
+        tasksCol,
+        where('taskType', 'in', PARENT_TYPE_IDS_STR),
+        where('taskOwnerIds', 'array-contains-any', linkedPersonIds)
         );
-        const oppSnap = await getDocs(oppQuery);
 
-        if (!oppSnap.empty) {
-            // Mevcut objectorSnap + oppSnap birleştir (dupeleri id’ye göre ele)
-            const merged = new Map();
-            objectorSnap.docs.forEach(d => merged.set(d.id, d));
-            oppSnap.docs.forEach(d => merged.set(d.id, d));
+        // 3) details.relatedParty.id (string) -> in
+        const qRelatedParty = query(
+        tasksCol,
+        where('taskType', 'in', PARENT_TYPE_IDS_STR),
+        where('details.relatedParty.id', 'in', idsForIn)
+        );
 
-            // Birleştirilmiş dokümanları, aşağıda map'lediğiniz yerde kullanabilmek için
-            // objectorSnap benzeri bir diziye çeviriyoruz
-            objectorSnap = { docs: Array.from(merged.values()), size: merged.size };
-        }
-        } catch (e) {
-        console.warn("⚠️ opponent.id sorgusunda hata:", e);
-        }
+        // 4) opponent.id (string) -> in  (bazı eski kayıtlarda burada durabiliyor)
+        const qOpponent = query(
+        tasksCol,
+        where('taskType', 'in', PARENT_TYPE_IDS_STR),
+        where('opponent.id', 'in', idsForIn)
+        );
+
+        // Hepsini paralel çek ve birleştir
+        const [snapOwner, snapOwnerIds, snapRelated, snapOpp] = await Promise.all([
+        getDocs(qOwner),
+        getDocs(qOwnerIds),
+        getDocs(qRelatedParty),
+        getDocs(qOpponent),
+        ]);
+
+        const merged = new Map();
+        [snapOwner, snapOwnerIds, snapRelated, snapOpp].forEach(snap => {
+        snap?.docs?.forEach(d => merged.set(d.id, d));
+        });
+
+        // objectorSnap benzeri yapı
+        const objectorSnap = { docs: Array.from(merged.values()), size: merged.size };
 
         console.log(`🔍 ${objectorSnap.size} adet eşleşen 'task' kaydı (3. taraf) bulundu.`);
 
-    // Eşleşen 'task'lar üzerinden 'transaction' ve 'ipRecord' bilgilerini al
-        const processPromises = objectorSnap.docs.map(async (taskDoc) => {
-            const taskData = taskDoc.data();
-            const recordId = taskData.relatedIpRecordId;
-            
-            if (!recordId) {
-                console.warn(`⚠️ Task ${taskDoc.id} için 'relatedIpRecordId' eksik.`);
-                return null;
-            }
+        // --- Bellek içi ek yetki filtresi (güvenlik için aynen kalsın) ---
+        const AUTH_SET = new Set(linkedPersonIds);
+        const isAuthorizedTask = (t) => {
+        const ownerOk =
+            (typeof t.taskOwner === 'string' && AUTH_SET.has(t.taskOwner)) ||
+            (Array.isArray(t.taskOwner) && t.taskOwner.some(id => AUTH_SET.has(id))) ||
+            (Array.isArray(t.taskOwnerIds) && t.taskOwnerIds.some(id => AUTH_SET.has(id)));
 
-            console.log(`🔍 Task ${taskDoc.id} işleniyor - RecordId: ${recordId}`);
+        const relatedOk =
+            t?.details?.relatedParty?.id && AUTH_SET.has(t.details.relatedParty.id);
+
+        const relatedManyOk =
+            Array.isArray(t?.details?.relatedParties) &&
+            t.details.relatedParties.some(p => p?.id && AUTH_SET.has(p.id));
+
+        const opponentOk =
+            t?.opponent?.id && AUTH_SET.has(t.opponent.id);
+
+        return ownerOk || relatedOk || relatedManyOk || opponentOk;
+        };
+
+        const authorizedTaskDocs = objectorSnap.docs.filter(d => isAuthorizedTask(d.data()));
+
+        const processPromises = authorizedTaskDocs.map(async (taskDoc) => {
+        const taskData = taskDoc.data();
+        const recordId = taskData.relatedIpRecordId;
+        if (!recordId) {
+            console.warn(`⚠️ Task ${taskDoc.id} için 'relatedIpRecordId' eksik.`);
+            return null;
+        }
+        console.log(`🔍 Task ${taskDoc.id} işleniyor - RecordId: ${recordId}`);
 
             try {
                 // === 1. İpRecord'u çek ===
