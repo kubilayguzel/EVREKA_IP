@@ -996,6 +996,7 @@ async handleIndexing(opts = {}) {
             throw new Error('Alt işlem türü bulunamadı: ' + childTypeId);
         }
 
+        let oppositionStoragePath = null;
         if (childTypeId === '27') { // İtiraz Bildirimi
             console.log('🔍 İtiraz Bildirimi tespit edildi, özel işlem başlatılıyor...');
             
@@ -1521,7 +1522,7 @@ async handleIndexing(opts = {}) {
                 id: oppositionDocId,
                 name: oppositionPdfFile?.name || "opposition_petition.pdf",
                 size: Number(oppositionPdfFile?.size || 0),
-                storagePath: storagePath,                     // storagePath değişkenini yukarıda zaten set ettin
+                storagePath: oppositionStoragePath,
                 type: oppositionPdfFile?.type || "application/pdf",
                 uploadedAt: new Date().toISOString()
                 };
