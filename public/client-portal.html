@@ -2822,6 +2822,44 @@ window.fetchAndDisplayObjections = async function() {
                     return dateA - dateB; // Eskiden yeniye
                 });
             
+            // === PARENT İÇİN EVRAK TOPLAMA ===
+            let allParentDocs = [];
+            const existingParentFileNames = new Set();
+
+            // 1) Parent transaction üzerindeki manuel/ekli belgeler
+            if (Array.isArray(parentTx.documents)) {
+                parentTx.documents.forEach(doc => {
+                    const fileName = doc.name || 'Belge';
+                    const fileUrl = doc.downloadURL || doc.url || doc.path;
+                    if (fileUrl && !existingParentFileNames.has(fileName)) {
+                        allParentDocs.push({ 
+                            fileName, 
+                            fileUrl, 
+                            type: doc.type, 
+                            isTransactionDoc: true 
+                        });
+                        existingParentFileNames.add(fileName);
+                    }
+                });
+            }
+
+            // 2) Parent'ın triggeringTaskId'sinden gelen task belgelerini ekle
+            if (parentTx.triggeringTaskId) {
+                try {
+                    const parentTaskDocs = await fetchTaskDocuments(parentTx.triggeringTaskId);
+                    parentTaskDocs.forEach(doc => {
+                        if (doc.fileName && !existingParentFileNames.has(doc.fileName)) {
+                            allParentDocs.push(doc);
+                            existingParentFileNames.add(doc.fileName);
+                        }
+                    });
+                    console.log(`📄 Parent ${parentTx.id} için task belgelerinden ${parentTaskDocs.length} belge eklendi`);
+                } catch (e) {
+                    console.error(`Parent task belgeleri çekilirken hata (ID: ${parentTx.triggeringTaskId}):`, e);
+                }
+            }
+            
+            console.log(`📦 Parent ${parentTx.id} için toplam ${allParentDocs.length} belge toplandı`);
             // 3. Parent objesini oluştur (Veriyi 'transaction'dan VEYA 'task'dan al)
             const typeMeta = transactionTypesMap.get(String(taskData.taskType)); // Ana tip 'task'dan gelir
             const transactionTypeName = typeMeta?.alias || typeMeta?.name || `İşlem ${taskData.taskType}`;
@@ -2864,9 +2902,9 @@ window.fetchAndDisplayObjections = async function() {
 
                 const uniqueRowId = `${taskDoc.id}-${parentTx.id}`;
                 rowsToAdd.push({
-                    id: uniqueRowId, // Benzersiz ID
-                    taskId: taskDoc.id, // Orijinal task ID'si
-                    transactionId: parentTx.id, // Orijinal transaction ID'si
+                    id: uniqueRowId,
+                    taskId: taskDoc.id,
+                    transactionId: parentTx.id,
                     recordId: recordId,
                     brandImageUrl: record.brandImageUrl || record.brandImage || '',
                     title: record.title || record.brandText || '',
@@ -2880,7 +2918,8 @@ window.fetchAndDisplayObjections = async function() {
                     origin: originBucket,
                     statusText: parentStatusText, 
                     isParent: true,
-                    hasChildren: hasChildren 
+                    hasChildren: hasChildren,
+                    allParentDocs: allParentDocs // 🔥 EKLENEN - Parent evrakları
                 });
 
                 // === 9. Child satırları ekle ===
@@ -3061,17 +3100,24 @@ function _createDocLinkHtml(pdf) {
     `;
 }
 
-// === CHILD TRANSACTION İÇİN EVRAK HÜCRESİ OLUŞTURMA ===
-function renderDocsCell(childTransaction) {
-    const docs = Array.isArray(childTransaction.documents) ? childTransaction.documents : [];
+// === PARENT VE CHILD İÇİN EVRAK HÜCRESİ OLUŞTURMA ===
+function renderDocsCell(rowData) {
+    // Parent için allParentDocs, Child için allChildDocs kullan
+    const docs = rowData.allParentDocs || rowData.allChildDocs || (Array.isArray(rowData.documents) ? rowData.documents : []);
     
-    if (docs.length === 0) {
-        return '-';
+    if (!docs || docs.length === 0) {
+        return '<span class="text-muted">-</span>';
     }
     
     const docLinks = docs.map(doc => {
-        const fileName = doc.name || 'Belge';
-        const fileUrl = doc.downloadURL || doc.url || doc.path;
+        // Eğer doc zaten formatlanmış bir belge objesi ise direkt kullan
+        if (doc.fileUrl && doc.fileName) {
+            return _createDocLinkHtml(doc);
+        }
+        
+        // Değilse, eski formattan dönüştür
+        const fileName = doc.name || doc.fileName || 'Belge';
+        const fileUrl = doc.downloadURL || doc.url || doc.path || doc.fileUrl;
         
         if (!fileUrl) return '';
         
@@ -3083,9 +3129,8 @@ function renderDocsCell(childTransaction) {
         });
     }).filter(Boolean).join('');
     
-    return docLinks || '-';
+    return docLinks || '<span class="text-muted">-</span>';
 }
-
 
 // Tabloyu render eden fonksiyon (GLOBAL)
 window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
