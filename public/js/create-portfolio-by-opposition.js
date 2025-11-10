@@ -3,6 +3,8 @@
 
 import { getFirestore, doc, getDoc, addDoc, collection, query, where, getDocs, updateDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 import { ipRecordsService, authService} from '../firebase-config.js';
+import { getStorage, ref as storageRef, getDownloadURL } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js';
+
 
 class PortfolioByOppositionCreator {
     constructor() {
@@ -22,6 +24,28 @@ class PortfolioByOppositionCreator {
             console.error('❌ PortfolioByOpposition Firebase init error:', error);
         }
     }
+
+    /**
+ * Storage path'inden güvenli indirme URL'si üretir.
+ * Zaten http(s) ise olduğu gibi döndürür.
+ * Storage'dan alamazsa GitHub public path'e düşer.
+ */
+async resolveImageUrl(path) {
+  if (!path) return null;
+  if (/^https?:\/\//i.test(path)) return path;
+
+  try {
+    const storage = getStorage();
+    const url = await getDownloadURL(storageRef(storage, String(path)));
+    return url; // örn: https://firebasestorage.googleapis.com/v0/b/....?alt=media&token=...
+  } catch (e) {
+    console.warn('⚠️ getDownloadURL başarısız, public path’e düşülüyor:', e?.message || e);
+
+    // İsteğe bağlı: public mirror fallback (varsa)
+    const PUBLIC_BASE = 'https://kubilayguzel.github.io/EVREKA_IP/public/';
+    return PUBLIC_BASE + String(path).replace(/^\/+/, '');
+  }
+}
 
     /**
      * Bulletin kaydından 3.taraf portföy kaydı oluşturur ve task'ı günceller
@@ -54,7 +78,7 @@ async createThirdPartyPortfolioFromBulletin(bulletinRecordId, transactionId) {
     }
 
     // 2) Bulletin → Portföy formatına dönüştür
-    const portfolioData = this.mapBulletinToPortfolio(bulletinData.data, transactionId, bulletinDate);
+    const portfolioData = await this.mapBulletinToPortfolio(bulletinData.data, transactionId, bulletinDate);
 
     // 3) Portföy kaydını oluştur / duplikasyonda mevcut kaydı döndür
     //    (ipRecordsService tarafı { success, recordId, isExistingRecord } döndürmeli)
@@ -242,108 +266,95 @@ async handleTransactionCreated(transactionData) {
      * @param {string} transactionId - İlgili işlem ID'si
      * @returns {Object} Portföy kayıt verisi
      */
-    
-      mapBulletinToPortfolio(bulletinData, transactionId, bulletinDate = null) {
-        const now = new Date().toISOString();
 
-        // --- PATH → DOĞRUDAN URL ÇEVİRİCİ ---
-        const PUBLIC_BASE  = 'https://kubilayguzel.github.io/EVREKA_IP/public/';
-        const STORAGE_BASE = 'https://firebasestorage.googleapis.com/v0/b/ip-manager-production-aab4b.appspot.com/o/';
+async mapBulletinToPortfolio(bulletinData, transactionId, bulletinDate = null) {
+  const now = new Date().toISOString();
 
-        function resolveImageUrl(path) {
-          if (!path) return null;
-          const p = String(path).replace(/^\/+/, '');
-          // 1) Zaten tam URL ise dokunma
-          if (/^https?:\/\//i.test(p)) return p;
-          // 2) Bulletin görselleri GitHub Pages (public)
-          if (p.startsWith('bulletins/')) {
-            return PUBLIC_BASE + p;
-          }
-          // 3) Diğer storage path’leri → Firebase download (public bucket ise token gereksiz)
-          return STORAGE_BASE + encodeURIComponent(p) + '?alt=media';
-        }
-        // -------------------------------------
+  // 1) ham path
+  const imagePath = bulletinData.imagePath || null;
 
-        const applicants = Array.isArray(bulletinData.holders)
-          ? bulletinData.holders.map(holder => ({
-              id: `bulletin_holder_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-              name: holder.name || holder.holderName || holder.title || holder,
-              address: holder.address || holder.addressText || null,
-              country: holder.country || holder.countryCode || null,
-            }))
-          : [];
+  // 2) storage indirme URL'si (varsa), yoksa fallback
+  const brandImageUrl = await this.resolveImageUrl(imagePath);
 
-        const goodsAndServices = bulletinData.classNumbers?.map(classNum => ({
-          niceClass: classNum.toString(),
-          description: `Sınıf ${classNum} - Bulletin kaydından alınan`,
-          status: 'active'
-        })) || [];
+  const applicants = Array.isArray(bulletinData.holders)
+    ? bulletinData.holders.map(holder => ({
+        id: `bulletin_holder_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        name: holder.name || holder.holderName || holder.title || holder,
+        address: holder.address || holder.addressText || null,
+        country: holder.country || holder.countryCode || null,
+      }))
+    : [];
 
-        // 🔑 ham path + çözülmüş direkt URL
-        const imagePath = bulletinData.imagePath || null;
-        const directImageUrl = resolveImageUrl(imagePath);
+  const goodsAndServices = bulletinData.classNumbers?.map(classNum => ({
+    niceClass: classNum.toString(),
+    description: `Sınıf ${classNum} - Bulletin kaydından alınan`,
+    status: 'active'
+  })) || [];
 
-        const portfolioData = {
-          title: bulletinData.markName || `Başvuru No: ${bulletinData.applicationNo}`,
-          type: 'trademark',
-          portfoyStatus: 'active',
-          status: 'published_in_bulletin',
-          recordOwnerType: 'third_party',
+  const portfolioData = {
+    // Temel bilgiler
+    title: bulletinData.markName || `Başvuru No: ${bulletinData.applicationNo}`,
+    type: 'trademark',
+    portfoyStatus: 'active',
+    status: 'published_in_bulletin',
+    recordOwnerType: 'third_party',
 
-          applicationNumber: bulletinData.applicationNo || null,
-          applicationNo:     bulletinData.applicationNo || null,
-          applicationDate:   bulletinData.applicationDate || null,
-          registrationNumber: null,
-          registrationDate:   null,
-          renewalDate:        null,
+    // Başvuru/Tescil
+    applicationNumber: bulletinData.applicationNo || null,
+    applicationNo: bulletinData.applicationNo || null,
+    applicationDate: bulletinData.applicationDate || null,
+    registrationNumber: null,
+    registrationDate: null,
+    renewalDate: null,
 
-          // 👇 artık doğrudan URL yazıyoruz
-          brandText:     bulletinData.markName || null,
-          markName:      bulletinData.markName || null,
-          brandImageUrl: directImageUrl,     // ← KAYDEDİLEN ALAN: tam URL
-          imagePath:     imagePath,          // ham path’i de sakla (diagnostic)
+    // Marka
+    brandText: bulletinData.markName || null,
+    markName: bulletinData.markName || null,
+    brandImageUrl,            // ✅ Artık indirme URL'si
+    imagePath,                // ham path’i de sakla (debug/fallback için)
+    description: `Yayına itiraz (İş ID: ${transactionId}) için oluşturulan 3.taraf portföy kaydı`,
 
-          description: `Yayına itiraz (İş ID: ${transactionId}) için oluşturulan 3.taraf portföy kaydı`,
+    // İlişkiler
+    applicants,
+    priorities: [],
+    goodsAndServices,
 
-          applicants,
-          priorities: [],
-          goodsAndServices,
-
-          details: {
-            originalBulletinRecordId: null,
-            sourceBulletinRecordId: bulletinData.id,
-            relatedTransactionId: transactionId,
-            brandInfo: {
-              brandType: bulletinData.markType || null,
-              brandCategory: null,
-              brandExampleText: bulletinData.markName || null,
-              nonLatinAlphabet: null,
-              coverLetterRequest: null,
-              consentRequest: null,
-              brandImage: directImageUrl,    // ← listede fallback olarak da aynı direkt URL
-              brandImageName: null,
-              goodsAndServices,
-              opposedMarkBulletinNo:   bulletinData.bulletinNo || null,
-              opposedMarkBulletinDate: bulletinDate || null
-            }
-          },
-
-          createdAt: now,
-          updatedAt: now,
-          createdBy: 'opposition_automation',
-          createdFrom: 'bulletin_record'
-        };
-
-        console.log('📋 Bulletin → Portföy mapping tamamlandı:', {
-          markName: bulletinData.markName,
-          applicationNo: bulletinData.applicationNo,
-          applicantsCount: applicants.length,
-          goodsServicesCount: goodsAndServices.length
-        });
-
-        return portfolioData;
+    // Detay
+    details: {
+      originalBulletinRecordId: null,
+      sourceBulletinRecordId: bulletinData.id,
+      relatedTransactionId: transactionId,
+      brandInfo: {
+        brandType: bulletinData.markType || null,
+        brandCategory: null,
+        brandExampleText: bulletinData.markName || null,
+        nonLatinAlphabet: null,
+        coverLetterRequest: null,
+        consentRequest: null,
+        brandImage: brandImageUrl,  // ✅ aynı indirme URL'si
+        brandImageName: null,
+        goodsAndServices,
+        opposedMarkBulletinNo: bulletinData.bulletinNo || null,
+        opposedMarkBulletinDate: bulletinDate || null
       }
+    },
 
+    // Sistem
+    createdAt: now,
+    updatedAt: now,
+    createdBy: 'opposition_automation',
+    createdFrom: 'bulletin_record'
+  };
+
+  console.log('📋 Bulletin → Portföy mapping tamamlandı:', {
+    markName: bulletinData.markName,
+    applicationNo: bulletinData.applicationNo,
+    applicantsCount: applicants.length,
+    goodsServicesCount: goodsAndServices.length
+  });
+
+  return portfolioData;
+}
 
     /**
      * Portföy kaydını ipRecords koleksiyonuna kaydet
