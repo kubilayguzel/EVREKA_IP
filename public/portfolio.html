@@ -894,19 +894,11 @@ const hasChildren = children.length > 0;
                                     console.error(`Child task belgeleri çekilirken hata (Task ID: ${child.triggeringTaskId}):`, e);
                                 }
                             }
-                            
-                            // Parent'ın tüm belgelerini de Child'a ekle
-                            allParentDocs.forEach(doc => {
-                                if (doc.fileName && !existingChildFileNames.has(doc.fileName)) {
-                                    allChildDocs.push({...doc, isParentDoc: true});
-                                    existingChildFileNames.add(doc.fileName);
-                                }
-                            });
-                            
-                            // Child Belge Linkleri HTML'i - Artık child evraklarını göster
+                                                        
                             const childDocLinks = (allChildDocs.length > 0)
                             ? allChildDocs.map(_createDocLinkHtml).join('')
                             : '-';
+
 
                             const childTr = document.createElement('tr');
                             childTr.className = 'group-row child-row';
