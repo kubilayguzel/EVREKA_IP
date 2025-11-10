@@ -2688,6 +2688,30 @@ window.fetchAndDisplayObjections = async function() {
             objectorSnap = await getDocs(simpleQuery);
         }
         
+        // ➕ EK: taskOwner/taskOwnerIds yoksa 'opponent.id' ile de ara ve sonuçları birleştir
+        try {
+        // 'in' operatörü en fazla 10 eleman kabul eder → slice(0,10)
+        const oppQuery = query(
+            collection(db, 'tasks'),
+            where('taskType', 'in', PARENT_TYPE_IDS_STR),
+            where('opponent.id', 'in', linkedPersonIds.slice(0, 10))
+        );
+        const oppSnap = await getDocs(oppQuery);
+
+        if (!oppSnap.empty) {
+            // Mevcut objectorSnap + oppSnap birleştir (dupeleri id’ye göre ele)
+            const merged = new Map();
+            objectorSnap.docs.forEach(d => merged.set(d.id, d));
+            oppSnap.docs.forEach(d => merged.set(d.id, d));
+
+            // Birleştirilmiş dokümanları, aşağıda map'lediğiniz yerde kullanabilmek için
+            // objectorSnap benzeri bir diziye çeviriyoruz
+            objectorSnap = { docs: Array.from(merged.values()), size: merged.size };
+        }
+        } catch (e) {
+        console.warn("⚠️ opponent.id sorgusunda hata:", e);
+        }
+
         console.log(`🔍 ${objectorSnap.size} adet eşleşen 'task' kaydı (3. taraf) bulundu.`);
 
     // Eşleşen 'task'lar üzerinden 'transaction' ve 'ipRecord' bilgilerini al
