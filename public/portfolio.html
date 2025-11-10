@@ -773,7 +773,7 @@
                             }));
                             const existingChildFileNames = new Set(allChildDocs.map(d => d.fileName).filter(Boolean));
                             
-                            // Tüm child transaction'lar için triggeringTaskId varsa Task belgelerini çek
+                            // triggeringTaskId varsa Task belgelerini çek
                             if (child.triggeringTaskId) {
                                 try {
                                     const taskDocs = await fetchTaskDocuments(child.triggeringTaskId); 
@@ -788,10 +788,10 @@
                                 }
                             }
                             
-                            // Parent'ın tüm belgelerini de Child'a ekle (Parent'tan gelen belgeleri işaretle)
+                            // Parent'ın tüm belgelerini de Child'a ekle
                             allParentDocs.forEach(doc => {
                                 if (doc.fileName && !existingChildFileNames.has(doc.fileName)) {
-                                    allChildDocs.push({...doc, isParentDoc: true}); // Parent'tan geldiğini işaretle
+                                    allChildDocs.push({...doc, isParentDoc: true});
                                     existingChildFileNames.add(doc.fileName);
                                 }
                             });
