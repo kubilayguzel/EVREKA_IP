@@ -243,9 +243,14 @@ async handleTransactionCreated(transactionData) {
      * @returns {Object} Portföy kayıt verisi
      */
     mapBulletinToPortfolio(bulletinData, transactionId,bulletinDate = null) {
+        const PUBLIC_BASE = 'https://kubilayguzel.github.io/EVREKA_IP/public/';
+        const toPublicUrl = (p) => {
+          if (!p) return null;
+          if (/^https?:\/\//i.test(p)) return p;         // zaten URL ise dokunma
+          return PUBLIC_BASE + String(p).replace(/^\/+/, ''); // path -> tam URL
+        };
         const now = new Date().toISOString();
-        
-    const applicants = Array.isArray(bulletinData.holders)
+        const applicants = Array.isArray(bulletinData.holders)
         ? bulletinData.holders.map(holder => ({
             id: `bulletin_holder_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
             name: holder.name || holder.holderName || holder.title || holder, // string veya obje olabilir
@@ -280,7 +285,7 @@ async handleTransactionCreated(transactionData) {
             // Marka bilgileri
             brandText: bulletinData.markName || null,
             markName: bulletinData.markName || null, // ✅ EKLENDI: Alternatif alan adı
-            brandImageUrl: bulletinData.imagePath || null,
+            brandImageUrl: toPublicUrl(imagePath),
             imagePath: bulletinData.imagePath || null, // ✅ EKLENDI: Liste görünümü için
             description: `Yayına itiraz (İş ID: ${transactionId}) için oluşturulan 3.taraf portföy kaydı`,
             
@@ -301,7 +306,7 @@ async handleTransactionCreated(transactionData) {
                     nonLatinAlphabet: null,
                     coverLetterRequest: null,
                     consentRequest: null,
-                    brandImage: bulletinData.imagePath || null,
+                    brandImage: toPublicUrl(imagePath),
                     brandImageName: null,
                     goodsAndServices: goodsAndServices,
                     opposedMarkBulletinNo: bulletinData.bulletinNo || null,
