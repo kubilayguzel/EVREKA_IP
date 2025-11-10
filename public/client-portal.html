@@ -742,7 +742,7 @@ body.dark .opposition-owner-badge{
 #dava-itiraz-list th.col-transaction, #dava-itiraz-list td.col-transaction { width: 180px; }
 #dava-itiraz-list th.col-appno, #dava-itiraz-list td.col-appno { width: 140px; }
 #dava-itiraz-list th.col-applicant, #dava-itiraz-list td.col-applicant { width: 250px; }
-#dava-itiraz-list th.col-opponent, #dava-itiraz-list td.col-opponent { width: 250px; }
+#dava-itiraz-list th.col-docs, #dava-itiraz-list td.col-docs { width: 140px; white-space: nowrap;}
 #dava-itiraz-list th.col-bulletin-date, #dava-itiraz-list td.col-bulletin-date { width: 100px; }
 #dava-itiraz-list th.col-bulletin-no, #dava-itiraz-list td.col-bulletin-no { width: 90px; }
 #dava-itiraz-list th.col-process-date, #dava-itiraz-list td.col-process-date { width: 100px; }
@@ -1038,11 +1038,11 @@ body.dark .opposition-owner-badge{
                                         <th class="col-transaction">İşlem Tipi</th>
                                         <th class="col-appno">Başvuru No</th>
                                         <th class="col-applicant">Başvuru Sahibi</th>
-                                        <th class="col-opponent">İtiraz Sahibi</th>
                                         <th class="col-bulletin-date">Bülten Tarihi</th>
                                         <th class="col-bulletin-no">Bülten No</th>
                                         <th class="col-process-date">İşlem Tarihi</th>
                                         <th class="col-status">Durum</th>
+                                        <th class="col-docs">Evraklar</th>
                                     </tr>
                                 </thead>
                                 <tbody id="dava-itiraz-tbody">
@@ -3007,7 +3007,16 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
             const imgHtml = row.brandImageUrl 
                 ? `<img src="${row.brandImageUrl}" alt="marka" class="brand-thumb">` 
                 : '-';
-            
+            const parentDocsLinks = (Array.isArray(row?.epatsDocuments) ? row.epatsDocuments : [])
+                .map(pdf => {
+                    const title = pdf.evrakNo ? `ePats: ${pdf.evrakNo}` : (pdf.fileName || 'Belge');
+                    const url   = pdf.fileUrl || pdf.path;
+                    if (!url) return '';
+                    return `<a href="${url}" target="_blank" class="btn btn-sm btn-info mr-1">
+                            <i class="fas fa-file"></i>${pdf.evrakNo ? `<small class="ml-1">${pdf.evrakNo}</small>` : '' }
+                            </a>`;
+                }).join('') || '<span class="text-muted">-</span>';
+                
             // HTML'i 11 kolon olarak güncelle
             tr.innerHTML = `
                 <td>${iconHtml}${parentIndex}</td>
@@ -3016,47 +3025,53 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
                 <td>${row.transactionTypeName}</td>
                 <td>${row.applicationNumber}</td>
                 <td>${row.applicantName}</td>
-                <td>${row.opponent}</td> 
                 <td>${row.bulletinDate}</td>
                 <td>${row.bulletinNo}</td>
                 <td>${row.epatsDate}</td>
                 <td><span class="badge badge-warning">${row.statusText}</span></td>
+                <td class="col-docs">${renderDocsCell(row)}</td>
             `;
             tbody.appendChild(tr);
             
-            if (row.hasChildren) {
-                // Çocukları global diziden bul
+                if (row.hasChildren) {
+                // 1) Child kayıtları topla
                 const childRows = allData.filter(r => !r.isParent && r.parentId === row.id);
-                
+                if (!childRows.length) return; // çocuk yoksa tablo üretme
+
+                // 2) Parent tablodaki toplam kolon sayısını otomatik bul (colspan sabitini kırma)
+                const colSpan =
+                    tbody.closest('table')?.querySelectorAll('thead th').length || 11;
+
+                // 3) Benzersiz collapse hedefi
+                const uniqueAccordionId = `itiraz-accordion-${row.recordId}-${row.id}`;
+
+                // 4) Satırı oluştur
                 const detailRow = document.createElement('tr');
                 detailRow.setAttribute('data-origin', (row.origin || 'TÜRKPATENT'));
-                
-            // ✅ Aynı benzersiz ID'yi kullan
-                const uniqueAccordionId = `itiraz-accordion-${row.recordId}-${row.id}`;
-                
-                // Colspan 11 olarak güncellendi
-                    detailRow.innerHTML = `
-                    <td colspan="11" class="p-0">
-                        <div class="collapse" id="${uniqueAccordionId}">
+                detailRow.innerHTML = `
+                    <td colspan="${colSpan}" class="p-0">
+                    <div class="collapse" id="${uniqueAccordionId}">
                         <table class="table mb-0 accordion-table">
-                            <thead>
+                        <thead>
                             <tr>
-                                <th>İşlem Tipi</th>
-                                <th>İşlem Tarihi</th>
+                            <th>İşlem Tipi</th>
+                            <th>İşlem Tarihi</th>
+                            <th>Evraklar</th>
                             </tr>
-                            </thead>
-                            <tbody>
-                            ${childRows.map(childRow => `
-                                <tr data-origin="${childRow.origin || 'TÜRKPATENT'}">
-                                <td>${childRow.transactionTypeName}</td>
-                                <td>${childRow.epatsDate}</td>
-                                </tr>
+                        </thead>
+                        <tbody>
+                            ${childRows.map(cr => `
+                            <tr data-origin="${cr.origin || 'TÜRKPATENT'}">
+                                <td>${cr.transactionTypeName ?? '-'}</td>
+                                <td>${cr.epatsDate ?? '-'}</td>
+                                <td class="docs-cell">${renderDocsCell(cr)}</td>
+                            </tr>
                             `).join('')}
-                            </tbody>
+                        </tbody>
                         </table>
-                        </div>
+                    </div>
                     </td>
-                    `;
+                `;
                 tbody.appendChild(detailRow);
             }
         }
