@@ -824,9 +824,7 @@ const hasChildren = children.length > 0;
                     }
                     
                     // Parent Belge Linklerini Oluşturma
-                    const parentDocLinks = IS_OPPOSITION_PARENT 
-                        ? '-' // 🔥 İtiraz Parent'larında ikon gösterme
-                        : allParentDocs.map(_createDocLinkHtml).join(''); // 🔥 Diğerlerinde ikon göster
+                    const parentDocLinks = allParentDocs.map(_createDocLinkHtml).join('') || '-';
 
                     // Parent Satırını Oluştur
                     const parentTr = document.createElement('tr');
