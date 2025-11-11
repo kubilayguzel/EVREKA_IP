@@ -2056,22 +2056,101 @@ window.fetchAndDisplayInvoices = async function (linkedPersonIds) {
     }
 
     const tableBody = table.querySelector('tbody') || table.createTBody();
+    tableBody.innerHTML = '<tr><td colspan="6" class="text-center"><i class="fas fa-spinner fa-spin"></i> Yükleniyor...</td></tr>';
+    
+    // --- YARDIMCI FONKSİYONLAR ---
+    const currencyFormatter = (amount, currency) => {
+        try {
+            return new Intl.NumberFormat('tr-TR', { style: 'currency', currency: currency || 'TRY' })
+                .format(amount ?? 0);
+        } catch (e) {
+            return (amount ?? 0) + ' ' + (currency || 'TRY');
+        }
+    };
+
+    const formatDate = (timestamp) => {
+        if (!timestamp) return '-';
+        try {
+            let date;
+            if (timestamp && typeof timestamp === 'object' && typeof timestamp.toDate === 'function') {
+                date = timestamp.toDate();
+            } else if (timestamp && typeof timestamp === 'object' && timestamp.seconds) {
+                date = new Date(timestamp.seconds * 1000);
+            } else {
+                date = new Date(timestamp);
+            }
+            if (isNaN(date.getTime())) return '-';
+            return date.toLocaleDateString('tr-TR');
+        } catch (e) {
+            return '-';
+        }
+    };
+    // --- FONKSİYONLAR SONU ---
+
+    const allAccruals = [];
+    const chunkSize = 10;
+    
+    // linkedPersonIds listesini 10'arlı parçalara ayır (Firestore 'in' limiti)
+    for (let i = 0; i < linkedPersonIds.length; i += chunkSize) {
+        const chunk = linkedPersonIds.slice(i, i + chunkSize);
+        
+        // Firestore Sorgusu: serviceInvoiceParty.id, yetkili ID'lerden birinde olmalı
+        const q = query(
+          collection(db, 'accruals'),
+          where('serviceInvoiceParty.id', 'in', chunk)
+        );
+        
+        try {
+             const snap = await runGetDocs(q);
+             snap.forEach((d) => {
+                 // Duplicate kaydı engellemek için, aynı ID'ye sahip olanı ekleme kontrolü yapabilirsiniz
+                 // Ancak Firestore'da farklı query'lerle aynı kaydı çekme riski düşüktür.
+                 allAccruals.push({ id: d.id, ...d.data() });
+             });
+        } catch(error) {
+             console.error("Firestore 'in' sorgusu hatası:", error);
+             // Genellikle "The query requires an index" hatasıdır.
+             // Bu durumda kullanıcıya hata mesajı göstermek yerine sonraki parçaya geç.
+             if (i === 0) {
+                 // İlk sorgu başarısızsa yükleniyor mesajını kaldır
+                 tableBody.innerHTML = `<tr><td colspan="6" class="text-center text-danger">Veri tabanı hatası: Sorgu yapılamadı.</td></tr>`;
+                 return;
+             }
+        }
+    }
+
+    // Tekrar edenleri temizle (farklı sorgulardan aynı ID gelebilir)
+    const uniqueAccruals = Array.from(new Map(allAccruals.map(acc => [acc.id, acc])).values());
+    
     tableBody.innerHTML = '';
+    
+    uniqueAccruals.forEach((a) => {
+      let statusText;
+      let statusBadgeClass;
+      switch (a.status) {
+        case 'paid':
+          statusText = 'Ödendi';
+          statusBadgeClass = 'badge-success';
+          break;
+        case 'unpaid':
+          statusText = 'Ödenmemiş';
+          statusBadgeClass = 'badge-warning';
+          break;
+        case 'partially_paid':
+          statusText = 'Kısmen Ödendi';
+          statusBadgeClass = 'badge-warning';
+          break;
+        default:
+          statusText = 'Bilinmiyor';
+          statusBadgeClass = 'badge-secondary';
+      }
+        
+      const amountDisplay = currencyFormatter(a.totalAmount, a.totalAmountCurrency);
+      const dateDisplay = formatDate(a.createdAt);
+      const invoiceNo = a.invoiceNo || a.id?.substring(0, 8) || '-'; 
+      const description = a.taskTitle || 'Tahakkuk Kaydı';
 
-    // Firestore sorgusu
-    const q = query(
-      collection(db, 'accruals'),
-      where('personsRelatedIds', 'array-contains-any', linkedPersonIds)
-    );
-    const snap = await runGetDocs(q);
-
-    snap.forEach((d) => {
-      const a = d.data();
-      const statusBadge = a.isPaid
-        ? `<span class="badge badge-success">Ödendi</span>`
-        : `<span class="badge badge-warning">Ödenmemiş</span>`;
-
-      const actions = a.isPaid
+      const actions = (a.status === 'paid' || a.status === 'partially_paid')
         ? `<button class="btn btn-primary btn-sm btn-action"><i class="fas fa-download"></i> İndir</button>`
         : `<button class="btn btn-primary btn-sm btn-action"><i class="fas fa-download"></i> İndir</button>
            <button class="btn btn-success btn-sm btn-action"><i class="fas fa-lira-sign"></i> Öde</button>`;
@@ -2080,18 +2159,31 @@ window.fetchAndDisplayInvoices = async function (linkedPersonIds) {
         'beforeend',
         `
         <tr>
-          <td>${a.invoiceNo || '-'}</td>
-          <td>${a.date || '-'}</td>
-          <td>${a.description || '-'}</td>
-          <td>${a.amount || '-'}</td>
-          <td>${statusBadge}</td>
+          <td>${invoiceNo}</td>
+          <td>${dateDisplay}</td>
+          <td>${description}</td>
+          <td>${amountDisplay}</td>
+          <td><span class="badge ${statusBadgeClass}">${statusText}</span></td>
           <td>${actions}</td>
         </tr>
         `
       );
     });
+    
+    // Eğer kayıt yoksa
+    if (uniqueAccruals.length === 0) {
+         tableBody.insertAdjacentHTML(
+            'beforeend',
+            `<tr><td colspan="6" class="text-center text-muted">Müvekkiliniz ile ilişkili tahakkuk kaydı bulunmamaktadır.</td></tr>`
+        );
+    }
+
   } catch (err) {
-    console.error('Faturalar çekilirken hata:', err);
+    console.error('Faturalar çekilirken genel hata:', err);
+    const tableBody = document.querySelector('#invoices table tbody');
+    if (tableBody) {
+        tableBody.innerHTML = `<tr><td colspan="6" class="text-center text-danger">Veriler yüklenirken genel bir hata oluştu.</td></tr>`;
+    }
   }
 };
 
