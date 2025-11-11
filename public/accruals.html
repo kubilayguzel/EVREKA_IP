@@ -1038,7 +1038,7 @@
                 }
             }
 
-            searchPersons(query, target) {
+searchPersons(query, target) {
             const resultsContainerId = {
                 'tpInvoiceParty': 'tpInvoicePartyResults',
                 'serviceInvoiceParty': 'serviceInvoicePartyResults',
@@ -1051,7 +1051,11 @@
 
             container.innerHTML = '';
             const q = String(query || '').trim();
-            if (q.length < 2) { return; }
+            
+            if (q.length < 2) {
+                container.style.display = 'none';
+                return;
+            }
 
             // --- KAYNAĞI DİZİYE NORMALİZE ET ---
             const raw = this.allPersons;
@@ -1077,6 +1081,7 @@
 
             if (filtered.length === 0) {
                 container.innerHTML = '<p class="no-results-message">Kişi bulunamadı.</p>';
+                container.style.display = 'block';
                 return;
             }
 
@@ -1091,8 +1096,9 @@
                 item.addEventListener('click', () => this.selectPerson(p, target));
                 container.appendChild(item);
             });
+            
+            container.style.display = 'block';
             }
-
 
             selectPerson(person, target) {
                 const displayId = {
@@ -1123,6 +1129,17 @@
 
                 const display = document.getElementById(displayId);
                 display.innerHTML = `<p><b>Seçilen:</b> ${person.name}</p>`;
+                display.style.display = 'block';
+                
+                // Arama sonuçlarını gizle ve input'u temizle
+                const resultsContainer = document.getElementById(resultsId);
+                if (resultsContainer) {
+                    resultsContainer.innerHTML = '';
+                    resultsContainer.style.display = 'none';
+                }
+                
+                const inputField = document.getElementById(inputId);
+                if (inputField) inputField.value = '';
                 display.style.display = 'block';
 
                 document.getElementById(resultsId).innerHTML = '';
