@@ -2067,15 +2067,6 @@ async function fetchAndDisplayPortfolio() {
 window.populateDashboardNumbers = async function (linkedPersonIds, allPortfolios){
     const portfolioCount = allPortfolios.length;
 
-    // Firestore'daki gerçek değer: awaiting_client_approval
-    const taskQ = query(
-      collection(db, "tasks"),
-      where("personsRelatedIds", "array-contains-any", linkedPersonIds),
-      where("status","==","awaiting_client_approval")
-    );
-    const taskSnap = await runGetDocs(taskQ);
-    const pendingTasks = taskSnap.size;
-
     const accrualQ = query(
       collection(db, "accruals"),
       where("personsRelatedIds", "array-contains-any", linkedPersonIds),
@@ -2085,7 +2076,6 @@ window.populateDashboardNumbers = async function (linkedPersonIds, allPortfolios
     const unpaidInvoices = accrualSnap.size;
 
     writeDashSafe('#dashPortfolio',        portfolioCount);
-    writeDashSafe('#dashPendingApprovals', pendingTasks);
     writeDashSafe('#dashUnpaidInvoices',   unpaidInvoices);
 }
 
@@ -2624,13 +2614,20 @@ window.fetchAndDisplayTasks = async function(){
         }
     }
 
-    console.log('📊 Task sayaçları (GÜNCELLENMİŞ LOGIC):', { countPending, countRenewal, countBulletin, total: awaitingTasks.length });
+console.log('📊 Task sayaçları (GÜNCELLENMİŞ LOGIC):', { countPending, countRenewal, countBulletin, total: awaitingTasks.length });
+    
+    // ✅ YENİ: Toplamı hesapla
+    const totalPending = countPending + countRenewal + countBulletin;
 
+    // "İşlerim" (My Tasks) section counters
     $('#taskCount-pending-approval').text(countPending);
     $('#taskCount-renewal-approval').text(countRenewal);
     $('#taskCount-bulletin-watch').text(countBulletin);
-    // Marka toplamını da güncelle
-    $('#taskCount-marka-total').text(countPending + countRenewal + countBulletin);
+    $('#taskCount-marka-total').text(totalPending); // Zaten toplamı kullanıyordu
+    
+    // ✅ YENİ: Dashboard sayacını da burada güncelle
+    // (Bu, populateDashboardNumbers'ın eksik bıraktığı sayacı doldurur)
+    writeDashSafe('#dashPendingApprovals', totalPending);
     
   }catch(err){
     console.error('Tasks sayaclari doldurulurken hata:', err);
