@@ -2538,21 +2538,29 @@ window.fetchAndDisplayTasks = async function(){
         console.log("TASK DEBUG:", debugRow);
         window.__taskDebug.push(debugRow);
         
-    let isRelatedToClient = false;
+        let isRelatedToClient = false;
       
-      // Yayına İtiraz işleri (taskType=20) için SADECE clientId kontrolü
-      const isObjectionTask = (taskData.taskType === "20" || 
-                               taskData.taskType === 20 || 
-                               taskData.taskType === "objection_to_trademark_publication");
-      
-      if (isObjectionTask) {
-        isRelatedToClient = (clientIdInTask && linkedPersonIds.includes(clientIdInTask));
-      } else {
+        // Task Type 19 ve 20 için özel kural (taskOwner ile kontrol)
+        const isObjectionTask = (taskData.taskType === "19" || 
+                                taskData.taskType === 19 ||
+                                taskData.taskType === "20" || 
+                                taskData.taskType === 20 );
+
+        if (isObjectionTask) {
+        // Önce taskOwner'ı kontrol et (string olarak)
+        const taskOwnerId = taskData.taskOwner;
+        isRelatedToClient = (taskOwnerId && linkedPersonIds.includes(taskOwnerId));
+        
+        // Fallback: clientId kontrolü
+        if (!isRelatedToClient) {
+            isRelatedToClient = (clientIdInTask && linkedPersonIds.includes(clientIdInTask));
+        }
+        } else {
         // Diğer tüm görevler: Eski kural
         isRelatedToClient = 
             (relatedPartyId && linkedPersonIds.includes(relatedPartyId)) ||
             (Array.isArray(personsRelated) && personsRelated.some(id => linkedPersonIds.includes(id)));
-      }
+        }
       
       if (!isRelatedToClient) return;
       
