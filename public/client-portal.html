@@ -4047,13 +4047,20 @@ async function loadTransactions(ipRecordId) {
   var $ = window.jQuery;
   if (!$) return;
   
-  // 1. Sidebar linklerine tıklama olayını yakala
+// 1. Sidebar linklerine tıklama olayını yakala
   $('#sidebar a.nav-link[href^="#"]').on('click', function(e){
     e.preventDefault(); // Varsayılan anchor (sayfa içi zıplama) olayını durdur
     
-    // 🔥 SADECE BU: Bootstrap'in tab('show') metodunu kullanarak sekme içeriğini yönetmesini sağla.
-    // Bu, hem linki (.nav-link) aktif eder hem de içeriği (.tab-pane) gösterir.
-    $(this).tab('show');
+    // Tüm ana tab-pane'lerden show active sınıflarını kaldır
+    $('.content > .tab-content > .tab-pane').removeClass('show active');
+    
+    // Tıklanan sekmenin hedef tab-pane'ini bul ve aktif yap
+    const targetId = $(this).attr('href');
+    $(targetId).addClass('show active');
+    
+    // Sidebar'daki aktif link durumunu güncelle
+    $('#sidebar a.nav-link').removeClass('active');
+    $(this).addClass('active');
     
     // Sayfayı üste kaydır
     window.scrollTo({ top: 0, behavior: 'smooth' }); 
