@@ -2382,19 +2382,22 @@ $(function(){
 // Client Portal menü aktif durumu yönetimi (DÜZELTİLMİŞ)
 $(document).ready(function() {
 
-    // Dashboard'daki kartlara tıklama işlevselliği ekleme
+// Dashboard'daki kartlara tıklama işlevselliği ekleme
     // (Bu kod bloğu, yandaki menüyle çakışmıyor ve kalması gerekiyor)
     $('[data-target-tab]').on('click', function() {
         const targetTabId = $(this).data('target-tab');
 
-        // 1. Sidebar'daki ilgili linki bul ve içeriği göster
-        const $targetLink = $(`a[href="#${targetTabId}"]`); 
-
+        // Tüm ana tab-pane'lerden show active sınıflarını kaldır
+        $('.content > .tab-content > .tab-pane').removeClass('show active');
+        
+        // Hedef tab-pane'i aktif yap
+        $(`#${targetTabId}`).addClass('show active');
+        
+        // Sidebar'daki ilgili linki bul ve aktif yap
+        const $targetLink = $(`#sidebar a[href="#${targetTabId}"]`); 
         if ($targetLink.length) {
-            // Bootstrap'in tab gösterme fonksiyonunu tetikle
-            // Bu komut, en alttaki (3485. satır) "shown.bs.tab" event'ini
-            // tetikleyecek ve o event "active" sınıflarını yönetecek.
-            $targetLink.tab('show'); 
+            $('#sidebar a.nav-link').removeClass('active');
+            $targetLink.addClass('active');
             
             // Portföyüm sekmesine gidiliyorsa, içindeki Marka tab'ını da aktif et
             if (targetTabId === 'portfolio-content') {
@@ -2404,6 +2407,9 @@ $(document).ready(function() {
                 }, 100);
             }
         }
+        
+        // Sayfayı üste kaydır
+        window.scrollTo({ top: 0, behavior: 'smooth' });
     });
 });
 
@@ -4061,6 +4067,9 @@ async function loadTransactions(ipRecordId) {
     // Sidebar'daki aktif link durumunu güncelle
     $('#sidebar a.nav-link').removeClass('active');
     $(this).addClass('active');
+    
+    // shown.bs.tab event'ini manuel tetikle (diğer kodların çalışması için)
+    $(this).trigger('shown.bs.tab');
     
     // Sayfayı üste kaydır
     window.scrollTo({ top: 0, behavior: 'smooth' }); 
