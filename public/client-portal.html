@@ -1,12 +1,13 @@
 <!DOCTYPE html>
+
 <html lang="tr">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Müvekkil Portalı - Anasayfa</title>
-    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" rel="stylesheet">
-    <style>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Müvekkil Portalı - Anasayfa</title>
+<link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet"/>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" rel="stylesheet"/>
+<style>
         @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
         
         /* === Genel ve Koyu Tema Stilleri (Varsayılan) === */
@@ -415,21 +416,16 @@
 }
 #marka-list td, #marka-list th { vertical-align: middle; }
 </style>
-
 <style>
 /* Portföyüm alt menüsü kaldırıldı */
 #portfoy-accordion { display: none !important; }
 </style>
-
-
 <style>
 #portfolioTabsBar .nav-tabs .nav-link { white-space: nowrap; }
 @media (max-width: 576px){
   #portfolioTabsBar { gap: .5rem; }
 }
 </style>
-
-
 <style>
 /* İşlem Geçmişi: Açıklama kolonunu sola yasla */
 #modal-islemler table thead th:nth-child(2),
@@ -444,8 +440,6 @@
   line-height: 1.35;
 }
 </style>
-
-
 <style>
 /* Tabs sola yaslansın, filtre yanında boşlukla dursun */
 #portfolioTabsBar{
@@ -468,8 +462,6 @@
   #portfolioTabsBar #portfolioFilters{ margin-left:0; }
 }
 </style>
-
-
 <style>
 /* Portföy sekmeleri sola yaslı ve filtre yanında */
 #portfolioTabsBar{
@@ -487,8 +479,6 @@
   flex-grow:0;
 }
 </style>
-
-
 <style>
 /* Force tabs to left; filter sits next with small space */
 #portfolioTabsBar{
@@ -510,8 +500,6 @@
   justify-content:flex-start !important;
 }
 </style>
-
-
 <style>
 /* Menşe filtresi tabs listesinin sonunda nav-item olarak yer alır */
 #portfolioTopTabs {
@@ -774,690 +762,665 @@ body.dark .opposition-owner-badge{
 </style>
 </head>
 <body>
-    <header class="top-header">
-        <div class="theme-toggle custom-control custom-switch">
-            <input type="checkbox" class="custom-control-input" id="themeSwitch">
-            <label class="custom-control-label" for="themeSwitch" style="color: #b0b8c0;">Koyu Tema</label>
-        </div>
-        <div class="user-section">
-            <div class="user-avatar" id="userAvatar">?</div>
-            <div class="user-info">
-                <div class="user-name" id="userName">Yükleniyor...</div>
-                <div class="user-role" id="userRole">Kullanıcı</div>
-            </div>
-            <button class="logout-btn" id="logoutBtn">Çıkış</button>
-        </div>
-    </header>
-
-    <div id="sidebar">
-        <h4 class="header-title text-center mb-4">Evreka Portalı</h4>
-        <ul class="nav flex-column">
-            <li class="nav-item"><a class="nav-link active" href="#dashboard" data-toggle="tab" role="tab" aria-selected="true" aria-controls="dashboard"><i class="fas fa-tachometer-alt mr-2"></i>Dashboard</a></li>
-            <li class="nav-item">
-                <a class="nav-link" href="#portfolio-content" data-toggle="tab" role="tab" aria-selected="false" aria-controls="portfolio-content">
-                    <i class="fas fa-folder-open mr-2"></i>Portföyüm
+<header class="top-header">
+<div class="theme-toggle custom-control custom-switch">
+<input class="custom-control-input" id="themeSwitch" type="checkbox"/>
+<label class="custom-control-label" for="themeSwitch" style="color: #b0b8c0;">Koyu Tema</label>
+</div>
+<div class="user-section">
+<div class="user-avatar" id="userAvatar">?</div>
+<div class="user-info">
+<div class="user-name" id="userName">Yükleniyor...</div>
+<div class="user-role" id="userRole">Kullanıcı</div>
+</div>
+<button class="logout-btn" id="logoutBtn">Çıkış</button>
+</div>
+</header>
+<div id="sidebar">
+<h4 class="header-title text-center mb-4">Evreka Portalı</h4>
+<ul class="nav flex-column">
+<li class="nav-item"><a aria-controls="dashboard" aria-selected="true" class="nav-link active" data-toggle="tab" href="#dashboard" role="tab"><i class="fas fa-tachometer-alt mr-2"></i>Dashboard</a></li>
+<li class="nav-item">
+<a aria-controls="portfolio-content" aria-selected="false" class="nav-link" data-toggle="tab" href="#portfolio-content" role="tab">
+<i class="fas fa-folder-open mr-2"></i>Portföyüm
                 </a>
-                </li>
-            <li class="nav-item"><a class="nav-link" href="#tasks" data-toggle="tab" role="tab" aria-selected="false" aria-controls="tasks"><i class="fas fa-tasks mr-2"></i>İşlerim</a></li>
-            <li class="nav-item"><a class="nav-link" href="#invoices" data-toggle="tab" role="tab" aria-selected="false" aria-controls="invoices"><i class="fas fa-file-invoice-dollar mr-2"></i>Faturalarım</a></li>
-            <li class="nav-item"><a class="nav-link" href="#reports" data-toggle="tab" role="tab" aria-selected="false" aria-controls="reports"><i class="fas fa-chart-bar mr-2"></i>Raporlar</a></li>
-        </ul>
-    </div>
-
-    <div class="content content-with-topbar">
-        <div class="tab-content">
-            <div class="tab-pane fade show active" id="dashboard">
-                <h1 class="header-title">Hoş Geldiniz, <span id="welcomeUserName">Müvekkil Adı</span></h1>
-                <p class="lead">Portalınızda portföyünüzü, işlerinizi ve finansal bilgilerinizi yönetebilirsiniz.</p>
-                <div class="row mt-5">
-                    <div class="col-md-12 mb-4" id="card-portfolio" data-target-tab="portfolio-content">
-                        <div class="card p-4 text-center d-flex align-items-center flex-row justify-content-center" style="cursor: pointer;">
-                            <i class="fas fa-folder-open stat-icon text-info mr-4"></i>
-                            <div>
-                                <div id="dashPortfolio" class="stat-value">0</div>
-                                <div class="stat-label">Portföy Kaydım</div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-12 mb-4" id="card-tasks" data-target-tab="tasks">
-                        <div class="card p-4 text-center d-flex align-items-center flex-row justify-content-center" style="cursor: pointer;">
-                            <i class="fas fa-tasks stat-icon text-warning mr-4"></i>
-                            <div>
-                                <div id="dashPendingApprovals" class="stat-value">0</div>
-                                <div class="stat-label">Onay Bekleyen İşlem</div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-12 mb-4" id="card-invoices" data-target-tab="invoices">
-                        <div class="card p-4 text-center d-flex align-items-center flex-row justify-content-center" style="cursor: pointer;">
-                            <i class="fas fa-file-invoice-dollar stat-icon text-success mr-4"></i>
-                            <div>
-                                <div id="dashUnpaidInvoices" class="stat-value">0</div>
-                                <div class="stat-label">Ödenmemiş Fatura</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>          
-            <div class="tab-pane fade" id="portfolio-content">
-                <h1 class="header-title">Portföyüm</h1>
-                <p class="lead">Tüm portföy kayıtlarınızın detaylı listesi.</p>
-                
-                <div class="card p-4 mb-4">
-                    <h5 class="card-title">Filtreleme ve Arama</h5>
-                    <div class="form-row">
-                        <div class="form-group col-md-3">
-                            <label for="basvuruNo" class="text-muted">Başvuru No</label>
-                            <input type="text" class="form-control" id="basvuruNo" placeholder="Örn: 2023/12345">
-                        </div>
-                        <div class="form-group col-md-3">
-                            <label for="durum" class="text-muted">Durum</label>
-                            <select id="durum" class="form-control">
-                                <option selected>Tümü</option>
-                                <option>Başvuru</option>
-                                <option>Tescilli</option>
-                                <option>İtiraz</option>
-                                <option>Reddedildi</option>
-                            </select>
-                        </div>
-                        
-                        <div class="form-group col-md-3 d-flex align-items-end">
-                            <button class="btn btn-primary btn-block">Filtrele</button>
-                        </div>
-                    </div>
-                    <div class="form-row mt-3">
-                        <div class="col-md-12 d-flex justify-content-end">
-                            <button class="btn btn-secondary btn-sm mr-2"><i class="fas fa-file-excel mr-1"></i>Excel'e Aktar</button>
-                            <button class="btn btn-secondary btn-sm"><i class="fas fa-file-pdf mr-1"></i>PDF'e Aktar</button>
-                        </div>
-                    </div>
-                </div>
-
-                
-
+</li>
+<li class="nav-item"><a aria-controls="tasks" aria-selected="false" class="nav-link" data-toggle="tab" href="#tasks" role="tab"><i class="fas fa-tasks mr-2"></i>İşlerim</a></li>
+<li class="nav-item"><a aria-controls="invoices" aria-selected="false" class="nav-link" data-toggle="tab" href="#invoices" role="tab"><i class="fas fa-file-invoice-dollar mr-2"></i>Faturalarım</a></li>
+<li class="nav-item"><a aria-controls="reports" aria-selected="false" class="nav-link" data-toggle="tab" href="#reports" role="tab"><i class="fas fa-chart-bar mr-2"></i>Raporlar</a></li>
+</ul>
+</div>
+<div class="content content-with-topbar">
+<div class="tab-content">
+<div class="tab-pane fade show active" id="dashboard">
+<h1 class="header-title">Hoş Geldiniz, <span id="welcomeUserName">Müvekkil Adı</span></h1>
+<p class="lead">Portalınızda portföyünüzü, işlerinizi ve finansal bilgilerinizi yönetebilirsiniz.</p>
+<div class="row mt-5">
+<div class="col-md-12 mb-4" data-target-tab="portfolio-content" id="card-portfolio">
+<div class="card p-4 text-center d-flex align-items-center flex-row justify-content-center" style="cursor: pointer;">
+<i class="fas fa-folder-open stat-icon text-info mr-4"></i>
+<div>
+<div class="stat-value" id="dashPortfolio">0</div>
+<div class="stat-label">Portföy Kaydım</div>
+</div>
+</div>
+</div>
+<div class="col-md-12 mb-4" data-target-tab="tasks" id="card-tasks">
+<div class="card p-4 text-center d-flex align-items-center flex-row justify-content-center" style="cursor: pointer;">
+<i class="fas fa-tasks stat-icon text-warning mr-4"></i>
+<div>
+<div class="stat-value" id="dashPendingApprovals">0</div>
+<div class="stat-label">Onay Bekleyen İşlem</div>
+</div>
+</div>
+</div>
+<div class="col-md-12 mb-4" data-target-tab="invoices" id="card-invoices">
+<div class="card p-4 text-center d-flex align-items-center flex-row justify-content-center" style="cursor: pointer;">
+<i class="fas fa-file-invoice-dollar stat-icon text-success mr-4"></i>
+<div>
+<div class="stat-value" id="dashUnpaidInvoices">0</div>
+<div class="stat-label">Ödenmemiş Fatura</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="tab-pane fade" id="portfolio-content">
+<h1 class="header-title">Portföyüm</h1>
+<p class="lead">Tüm portföy kayıtlarınızın detaylı listesi.</p>
+<div class="card p-4 mb-4">
+<h5 class="card-title">Filtreleme ve Arama</h5>
+<div class="form-row">
+<div class="form-group col-md-3">
+<label class="text-muted" for="basvuruNo">Başvuru No</label>
+<input class="form-control" id="basvuruNo" placeholder="Örn: 2023/12345" type="text"/>
+</div>
+<div class="form-group col-md-3">
+<label class="text-muted" for="durum">Durum</label>
+<select class="form-control" id="durum">
+<option selected="">Tümü</option>
+<option>Başvuru</option>
+<option>Tescilli</option>
+<option>İtiraz</option>
+<option>Reddedildi</option>
+</select>
+</div>
+<div class="form-group col-md-3 d-flex align-items-end">
+<button class="btn btn-primary btn-block">Filtrele</button>
+</div>
+</div>
+<div class="form-row mt-3">
+<div class="col-md-12 d-flex justify-content-end">
+<button class="btn btn-secondary btn-sm mr-2"><i class="fas fa-file-excel mr-1"></i>Excel'e Aktar</button>
+<button class="btn btn-secondary btn-sm"><i class="fas fa-file-pdf mr-1"></i>PDF'e Aktar</button>
+</div>
+</div>
+</div>
 <div class="d-flex align-items-center justify-content-between flex-wrap mb-2" id="portfolioTabsBar">
 <ul class="nav nav-tabs mb-2 mb-sm-0" id="portfolioTopTabs" role="tablist">
 <li class="nav-item">
-      <a class="nav-link active" id="tab-marka" data-toggle="tab" href="#marka-list" role="tab" aria-controls="marka-list" aria-selected="true">Marka</a>
-    </li>
-    <li class="nav-item">
-      <a class="nav-link" id="tab-patent" data-toggle="tab" href="#patent-list" role="tab" aria-controls="patent-list" aria-selected="false">Patent</a>
-    </li>
-    <li class="nav-item">
-      <a class="nav-link" id="tab-tasarim" data-toggle="tab" href="#tasarim-list" role="tab" aria-controls="tasarim-list" aria-selected="false">Tasarım</a>
-    </li>
-    <li class="nav-item">
-      <a class="nav-link" id="tab-dava" data-toggle="tab" href="#dava-itiraz-list" role="tab" aria-controls="dava-itiraz-list" aria-selected="false">İtiraz</a>
-    </li>
-    <li class="nav-item d-flex align-items-center pl-2" id="portfolioFiltersNavItem" style="margin-left: .75rem;">
-      <label for="menseFilter" class="mb-0 mr-2">Menşe:</label>
-        <select id="menseFilter" class="form-control form-control-sm" style="max-width:220px">
-        <option value="HEPSI">Hepsi</option>
-        <option value="TÜRKPATENT" selected>TÜRKPATENT</option>
-        <option value="YURTDISI">Yurtdışı</option>
-        </select>
+<a aria-controls="marka-list" aria-selected="true" class="nav-link active" data-toggle="tab" href="#marka-list" id="tab-marka" role="tab">Marka</a>
+</li>
+<li class="nav-item">
+<a aria-controls="patent-list" aria-selected="false" class="nav-link" data-toggle="tab" href="#patent-list" id="tab-patent" role="tab">Patent</a>
+</li>
+<li class="nav-item">
+<a aria-controls="tasarim-list" aria-selected="false" class="nav-link" data-toggle="tab" href="#tasarim-list" id="tab-tasarim" role="tab">Tasarım</a>
+</li>
+<li class="nav-item">
+<a aria-controls="dava-itiraz-list" aria-selected="false" class="nav-link" data-toggle="tab" href="#dava-itiraz-list" id="tab-dava" role="tab">İtiraz</a>
+</li>
+<li class="nav-item d-flex align-items-center pl-2" id="portfolioFiltersNavItem" style="margin-left: .75rem;">
+<label class="mb-0 mr-2" for="menseFilter">Menşe:</label>
+<select class="form-control form-control-sm" id="menseFilter" style="max-width:220px">
+<option value="HEPSI">Hepsi</option>
+<option selected="" value="TÜRKPATENT">TÜRKPATENT</option>
+<option value="YURTDISI">Yurtdışı</option>
+</select>
 </li>
 </ul>
 </div>
 <div class="tab-content table-responsive mt-3">
-                    <div class="tab-pane fade show active" id="marka-list">
-                        <table class="table table-hover">
-                            <thead>
-                                <tr>
-                                    <th class="col-index">#</th>
-                                    <th class="col-origin">Menşe</th>
-                                    <th class="col-sample text-center">Marka Örneği</th>
-                                    <th class="col-brand">Marka</th>
-                                    <th class="col-appno">Başvuru No</th>
-                                    <th class="col-regno">Tescil No</th>
-                                    <th class="col-appdate">Başvuru Tarihi</th>
-                                    <th class="col-status">Durum</th>
-                                    <th class="col-classes">Sınıflar</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr>
-                                    <td>1</td>
-                                    <td><a href="#" data-toggle="modal" data-target="#portfolioDetailModal">Marka Adı 1 (TR)</a></td>
-                                    <td>2023/12345</td>
-                                    <td><span class="badge badge-primary">Başvuru</span></td>
-                                    <td>09, 35, 42</td>
-                                    <td>25.10.2023</td>
-                                </tr>
-                                <tr>
-                                    <td>2</td>
-                                    <td><a href="#" data-toggle="modal" data-target="#portfolioDetailModal">Marka Adı 2 (TR)</a></td>
-                                    <td>2023/11223</td>
-                                    <td><span class="badge badge-success">Tescilli</span></td>
-                                    <td>41</td>
-                                    <td>01.07.2023</td>
-                                </tr>
-                                <tr class="accordion-header-row" data-toggle="collapse" data-target="#accordion-yurtdisi-1" aria-expanded="false" aria-controls="accordion-yurtdisi-1">
-                                    <td><i class="fas fa-chevron-down mr-2"></i>3</td>
-                                    <td><a href="#">Marka Adı 3 (WIPO)</a></td>
-                                    <td>2023/IR001</td>
-                                    <td><span class="badge badge-warning">İtiraz</span></td>
-                                    <td>09, 35</td>
-                                    <td>15.08.2023</td>
-                                </tr>
-                                <tr>
-                                    <td colspan="6" class="p-0">
-                                        <div class="collapse" id="accordion-yurtdisi-1">
-                                            <table class="table mb-0 accordion-table">
-                                                <thead>
-                                                    <tr>
-                                                        <th>#</th>
-                                                        <th>Marka Adı</th>
-                                                        <th>Başvuru No</th>
-                                                        <th>Durum</th>
-                                                        <th>Sınıflar</th>
-                                                        <th>Son İşlem</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    <tr>
-                                                        <td>3.1</td>
-                                                        <td><a href="#" data-toggle="modal" data-target="#portfolioDetailModal">Marka Adı 3 (Almanya)</a></td>
-                                                        <td>2023/IR001</td>
-                                                        <td><span class="badge badge-warning">İtiraz</span></td>
-                                                        <td>09, 35</td>
-                                                        <td>15.08.2023</td>
-                                                    </tr>
-                                                    <tr>
-                                                        <td>3.2</td>
-                                                        <td><a href="#" data-toggle="modal" data-target="#portfolioDetailModal">Marka Adı 3 (Çin)</a></td>
-                                                        <td>2023/IR001</td>
-                                                        <td><span class="badge badge-primary">Başvuru</span></td>
-                                                        <td>09, 35</td>
-                                                        <td>10.07.2023</td>
-                                                    </tr>
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
-                        <div id="markaPagination" class="mt-3"></div>
-                    </div>
-                    <div class="tab-pane fade" id="patent-list">
-                        <table class="table table-hover">
-                            <thead>
-                                <tr>
-                                    <th>#</th>
-                                    <th>Marka Adı</th>
-                                    <th>Başvuru No</th>
-                                    <th>Durum</th>
-                                    <th>Sınıflar</th>
-                                    <th>Son İşlem</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr>
-                                    <td>1</td>
-                                    <td><a href="#" data-toggle="modal" data-target="#portfolioDetailModal">Patent Adı 1 (TR)</a></td>
-                                    <td>2023/54321</td>
-                                    <td><span class="badge badge-success">Tescilli</span></td>
-                                    <td>-</td>
-                                    <td>20.09.2023</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                    <div class="tab-pane fade" id="tasarim-list">
-                        <table class="table table-hover">
-                            <thead>
-                                <tr>
-                                    <th>#</th>
-                                    <th>Marka Adı</th>
-                                    <th>Başvuru No</th>
-                                    <th>Durum</th>
-                                    <th>Sınıflar</th>
-                                    <th>Son İşlem</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr>
-                                    <td>1</td>
-                                    <td><a href="#" data-toggle="modal" data-target="#portfolioDetailModal">Tasarım Adı 1 (TR)</a></td>
-                                    <td>2023/98765</td>
-                                    <td><span class="badge badge-warning">İtiraz</span></td>
-                                    <td>25</td>
-                                    <td>15.08.2023</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                        <div class="tab-pane fade" id="dava-itiraz-list">
-                            <table class="table table-hover">
-                                <thead>
-                                    <tr>
-                                        <th class="col-index">#</th>
-                                        <th class="col-sample text-center">Marka Örneği</th>
-                                        <th class="col-brand">M/T/B Adı</th>
-                                        <th class="col-transaction">İşlem Tipi</th>
-                                        <th class="col-appno">Başvuru No</th>
-                                        <th class="col-applicant">Başvuru Sahibi</th>
-                                        <th class="col-bulletin-date">Bülten Tarihi</th>
-                                        <th class="col-bulletin-no">Bülten No</th>
-                                        <th class="col-process-date">İşlem Tarihi</th>
-                                        <th class="col-status">Durum</th>
-                                        <th class="col-docs">Evraklar</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="dava-itiraz-tbody">
-                                    <!-- Dinamik olarak doldurulacak -->
-                                </tbody>
-                            </table>
-                            <div id="davaItirazPagination" class="mt-3"></div>
-                        </div>
-                </div>
-            </div>
+<div class="tab-pane fade show active" id="marka-list">
+<table class="table table-hover">
+<thead>
+<tr>
+<th class="col-index">#</th>
+<th class="col-origin">Menşe</th>
+<th class="col-sample text-center">Marka Örneği</th>
+<th class="col-brand">Marka</th>
+<th class="col-appno">Başvuru No</th>
+<th class="col-regno">Tescil No</th>
+<th class="col-appdate">Başvuru Tarihi</th>
+<th class="col-status">Durum</th>
+<th class="col-classes">Sınıflar</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td><a data-target="#portfolioDetailModal" data-toggle="modal" href="#">Marka Adı 1 (TR)</a></td>
+<td>2023/12345</td>
+<td><span class="badge badge-primary">Başvuru</span></td>
+<td>09, 35, 42</td>
+<td>25.10.2023</td>
+</tr>
+<tr>
+<td>2</td>
+<td><a data-target="#portfolioDetailModal" data-toggle="modal" href="#">Marka Adı 2 (TR)</a></td>
+<td>2023/11223</td>
+<td><span class="badge badge-success">Tescilli</span></td>
+<td>41</td>
+<td>01.07.2023</td>
+</tr>
+<tr aria-controls="accordion-yurtdisi-1" aria-expanded="false" class="accordion-header-row" data-target="#accordion-yurtdisi-1" data-toggle="collapse">
+<td><i class="fas fa-chevron-down mr-2"></i>3</td>
+<td><a href="#">Marka Adı 3 (WIPO)</a></td>
+<td>2023/IR001</td>
+<td><span class="badge badge-warning">İtiraz</span></td>
+<td>09, 35</td>
+<td>15.08.2023</td>
+</tr>
+<tr>
+<td class="p-0" colspan="6">
+<div class="collapse" id="accordion-yurtdisi-1">
+<table class="table mb-0 accordion-table">
+<thead>
+<tr>
+<th>#</th>
+<th>Marka Adı</th>
+<th>Başvuru No</th>
+<th>Durum</th>
+<th>Sınıflar</th>
+<th>Son İşlem</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>3.1</td>
+<td><a data-target="#portfolioDetailModal" data-toggle="modal" href="#">Marka Adı 3 (Almanya)</a></td>
+<td>2023/IR001</td>
+<td><span class="badge badge-warning">İtiraz</span></td>
+<td>09, 35</td>
+<td>15.08.2023</td>
+</tr>
+<tr>
+<td>3.2</td>
+<td><a data-target="#portfolioDetailModal" data-toggle="modal" href="#">Marka Adı 3 (Çin)</a></td>
+<td>2023/IR001</td>
+<td><span class="badge badge-primary">Başvuru</span></td>
+<td>09, 35</td>
+<td>10.07.2023</td>
+</tr>
+</tbody>
+</table>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+<div class="mt-3" id="markaPagination"></div>
+</div>
+<div class="tab-pane fade" id="patent-list">
+<table class="table table-hover">
+<thead>
+<tr>
+<th>#</th>
+<th>Marka Adı</th>
+<th>Başvuru No</th>
+<th>Durum</th>
+<th>Sınıflar</th>
+<th>Son İşlem</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td><a data-target="#portfolioDetailModal" data-toggle="modal" href="#">Patent Adı 1 (TR)</a></td>
+<td>2023/54321</td>
+<td><span class="badge badge-success">Tescilli</span></td>
+<td>-</td>
+<td>20.09.2023</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="tab-pane fade" id="tasarim-list">
+<table class="table table-hover">
+<thead>
+<tr>
+<th>#</th>
+<th>Marka Adı</th>
+<th>Başvuru No</th>
+<th>Durum</th>
+<th>Sınıflar</th>
+<th>Son İşlem</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td><a data-target="#portfolioDetailModal" data-toggle="modal" href="#">Tasarım Adı 1 (TR)</a></td>
+<td>2023/98765</td>
+<td><span class="badge badge-warning">İtiraz</span></td>
+<td>25</td>
+<td>15.08.2023</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="tab-pane fade" id="dava-itiraz-list">
+<table class="table table-hover">
+<thead>
+<tr>
+<th class="col-index">#</th>
+<th class="col-sample text-center">Marka Örneği</th>
+<th class="col-brand">M/T/B Adı</th>
+<th class="col-transaction">İşlem Tipi</th>
+<th class="col-appno">Başvuru No</th>
+<th class="col-applicant">Başvuru Sahibi</th>
+<th class="col-bulletin-date">Bülten Tarihi</th>
+<th class="col-bulletin-no">Bülten No</th>
+<th class="col-process-date">İşlem Tarihi</th>
+<th class="col-status">Durum</th>
+<th class="col-docs">Evraklar</th>
+</tr>
+</thead>
+<tbody id="dava-itiraz-tbody">
+<!-- Dinamik olarak doldurulacak -->
+</tbody>
+</table>
+<div class="mt-3" id="davaItirazPagination"></div>
+</div>
+</div>
+</div>
+<div class="tab-pane fade" id="tasks">
+<h1 class="header-title" id="tasksHeaderTitle">İşlerim</h1>
+<p class="lead" id="tasksLeadText">Lütfen incelemek istediğiniz fikri mülkiyet türünü seçin.</p>
+<div class="row mt-5" id="task-main-cards">
+<div class="col-md-3 mb-4 task-card-link" data-target-area="marka-tasks" style="cursor: pointer;">
+<div class="card p-4 text-center d-flex align-items-center flex-column justify-content-center h-100">
+<i class="fas fa-registered stat-icon text-info mb-3"></i>
+<div class="stat-label">Marka İşlemleri</div>
+<div class="stat-value" id="taskCount-marka-total">0</div>
+</div>
+</div>
+<div class="col-md-3 mb-4 task-card-link" data-target-area="patent-tasks" style="cursor: pointer;">
+<div class="card p-4 text-center d-flex align-items-center flex-column justify-content-center h-100">
+<i class="fas fa-microchip stat-icon text-warning mb-3"></i>
+<div class="stat-label">Patent İşlemleri</div>
+</div>
+</div>
+<div class="col-md-3 mb-4 task-card-link" data-target-area="tasarim-tasks" style="cursor: pointer;">
+<div class="card p-4 text-center d-flex align-items-center flex-column justify-content-center h-100">
+<i class="fas fa-palette stat-icon text-success mb-3"></i>
+<div class="stat-label">Tasarım İşlemleri</div>
+</div>
+</div>
+<div class="col-md-3 mb-4 task-card-link" data-target-area="dava-tasks" style="cursor: pointer;">
+<div class="card p-4 text-center d-flex align-items-center flex-column justify-content-center h-100">
+<i class="fas fa-gavel stat-icon text-danger mb-3"></i>
+<div class="stat-label">Dava &amp; İtiraz</div>
+</div>
+</div>
+</div>
+<div class="row mt-5" id="task-detail-cards" style="display: none;">
+<div class="col-md-3 mb-4 detail-card-link" data-task-type="pending-approval" style="cursor: pointer;">
+<div class="card p-3 text-center d-flex align-items-center flex-column justify-content-center h-100">
+<i class="fas fa-tasks stat-icon text-warning mb-3"></i>
+<div class="stat-label">Onay Bekleyen İşler</div>
+<div class="stat-value" id="taskCount-pending-approval">0</div>
+</div>
+</div>
+<div class="col-md-3 mb-4 detail-card-link" data-task-type="renewal-approval" style="cursor: pointer;">
+<div class="card p-3 text-center d-flex align-items-center flex-column justify-content-center h-100">
+<i class="fas fa-sync-alt stat-icon text-info mb-3"></i>
+<div class="stat-label">Yenileme Onayları</div>
+<div class="stat-value" id="taskCount-renewal-approval">0</div>
+</div>
+</div>
+<div class="col-md-3 mb-4 detail-card-link" data-task-type="bulletin-watch" style="cursor: pointer;">
+<div class="card p-3 text-center d-flex align-items-center flex-column justify-content-center h-100">
+<i class="fas fa-eye stat-icon text-primary mb-3"></i>
+<div class="stat-label">Bülten İzleme Bildirim Onayları</div>
+<div class="stat-value" id="taskCount-bulletin-watch">0</div>
+</div>
+</div>
+<div class="col-md-3 mb-4 detail-card-link" data-task-type="completed-tasks" style="cursor: pointer;">
+<div class="card p-3 text-center d-flex align-items-center flex-column justify-content-center h-100">
+<i class="fas fa-check-circle stat-icon text-success mb-3"></i>
+<div class="stat-label">Talimat Verilen/Tamamlanan İşler</div>
+</div>
+</div>
+</div>
+<div class="row mt-4" id="task-list-filters" style="display: none;">
+<div class="col-12">
+<div class="card p-3">
+<h6 class="card-title mb-3">İş Listesi Filtreleri</h6>
+<div class="form-row align-items-end">
+<div class="form-group col-md-5 mb-0">
+<label class="text-muted" for="taskSearchText">Başlıkta/ID'de Ara</label>
+<input class="form-control form-control-sm" id="taskSearchText" placeholder="İş Tipi, Başvuru No, Marka Adı veya ID..." type="text"/>
+</div>
+<div class="form-group col-md-4 mb-0">
+<label class="text-muted" for="taskStatusFilter">Durum</label>
+<select class="form-control form-control-sm" id="taskStatusFilter">
+<option selected="" value="TÜMÜ">Tümü</option>
+<option value="Açık">Açık</option>
+<option value="Devam Ediyor">Devam Ediyor</option>
+<option value="Tamamlandı">Tamamlandı</option>
+<option value="Beklemede">Beklemede</option>
+<option value="Müvekkil Onayı Bekliyor">Müvekkil Onayı Bekliyor</option>
+<option value="Müvekkil Onayı - Açıldı">Müvekkil Onayı - Açıldı</option>
+<option value="Müvekkil Onayı - Kapatıldı">Müvekkil Onayı - Kapatıldı</option>
+<option value="Müvekkil Cevaplamadı - Kapatıldı">Müvekkil Cevaplamadı - Kapatıldı</option>
+<option value="Kapalı">Kapalı</option>
+</select>
+</div>
+<div class="form-group col-md-3 mb-0">
+<button class="btn btn-primary btn-sm btn-block" id="applyTaskFilters">Filtrele</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="row mt-4" id="task-list-details" style="display: none;">
+<div class="col-12" id="task-list-container">
+</div>
+<div class="col-12" id="taskPagination"></div>
+</div>
+</div>
+</div>
+<div class="tab-pane fade" id="invoices">
+<h1 class="header-title">Faturalarım</h1>
+<p class="lead">Geçmiş ve ödenmemiş faturalarınızın listesi.</p>
+<div class="table-responsive mt-4">
+<table class="table table-hover">
+<thead>
+<tr>
+<th>Fatura No</th>
+<th>Tarih</th>
+<th>Açıklama</th>
+<th>Tutar</th>
+<th>Durum</th>
+<th>Aksiyon</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>INV-2023-001</td>
+<td>25.10.2023</td>
+<td>Marka tescil başvuru hizmet bedeli</td>
+<td>1.500 TL</td>
+<td><span class="badge badge-warning">Ödenmemiş</span></td>
+<td>
+<button class="btn btn-primary btn-sm btn-action"><i class="fas fa-download"></i> İndir</button>
+<button class="btn btn-success btn-sm btn-action"><i class="fas fa-lira-sign"></i> Öde</button>
+</td>
+</tr>
+<tr>
+<td>INV-2023-002</td>
+<td>10.09.2023</td>
+<td>Yıllık marka takip hizmeti</td>
+<td>800 TL</td>
+<td><span class="badge badge-success">Ödendi</span></td>
+<td>
+<button class="btn btn-primary btn-sm btn-action"><i class="fas fa-download"></i> İndir</button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<div class="tab-pane fade" id="reports">
+<h1 class="header-title">Raporlar</h1>
+<p class="lead">Portföyünüzle ilgili detaylı raporlara buradan ulaşabilirsiniz.</p>
+<div class="row mt-4">
+<div class="col-md-12 mb-4">
+<div class="card p-4">
+<h5 class="card-title text-info"><i class="fas fa-chart-line mr-2"></i>Portföy Değerlendirme Raporu</h5>
+<p class="text-muted">Portföyünüzdeki tüm varlıkların güncel durumunu ve gelecek süreçlerini içeren rapor.</p>
+<button class="btn btn-primary btn-sm mt-2"><i class="fas fa-download mr-1"></i>Raporu İndir</button>
+</div>
+</div>
+<div class="col-md-12 mb-4">
+<div class="card p-4">
+<h5 class="card-title text-info"><i class="fas fa-file-pdf mr-2"></i>Finansal Durum Raporu</h5>
+<p class="text-muted">Ödenmiş ve bekleyen tüm tahakkuk ve faturalarınızın özeti.</p>
+<button class="btn btn-primary btn-sm mt-2"><i class="fas fa-download mr-1"></i>Raporu İndir</button>
+</div>
+</div>
+<div class="col-md-12 mb-4">
+<div class="card p-4">
+<h5 class="card-title text-info"><i class="fas fa-history mr-2"></i>İşlem Geçmişi Dökümü</h5>
+<p class="text-muted">Tüm portföyünüzdeki tamamlanmış ve bekleyen işlemlerin detaylı listesi.</p>
+<button class="btn btn-primary btn-sm mt-2"><i class="fas fa-download mr-1"></i>Raporu İndir</button>
+</div>
+</div>
+</div>
+</div>
+</div>
 
-            <div class="tab-pane fade" id="tasks">
-                <h1 class="header-title" id="tasksHeaderTitle">İşlerim</h1>
-                <p class="lead" id="tasksLeadText">Lütfen incelemek istediğiniz fikri mülkiyet türünü seçin.</p>
-                
-                <div class="row mt-5" id="task-main-cards">
-                    
-                    <div class="col-md-3 mb-4 task-card-link" data-target-area="marka-tasks" style="cursor: pointer;">
-                    <div class="card p-4 text-center d-flex align-items-center flex-column justify-content-center h-100">
-                        <i class="fas fa-registered stat-icon text-info mb-3"></i>
-                        <div class="stat-label">Marka İşlemleri</div>
-                        <div class="stat-value" id="taskCount-marka-total">0</div>
-                    </div>
-                    </div>
-                   
-                    <div class="col-md-3 mb-4 task-card-link" data-target-area="patent-tasks" style="cursor: pointer;">
-                        <div class="card p-4 text-center d-flex align-items-center flex-column justify-content-center h-100">
-                            <i class="fas fa-microchip stat-icon text-warning mb-3"></i>
-                            <div class="stat-label">Patent İşlemleri</div>
-                        </div>
-                    </div>
-                    
-                    <div class="col-md-3 mb-4 task-card-link" data-target-area="tasarim-tasks" style="cursor: pointer;">
-                        <div class="card p-4 text-center d-flex align-items-center flex-column justify-content-center h-100">
-                            <i class="fas fa-palette stat-icon text-success mb-3"></i>
-                            <div class="stat-label">Tasarım İşlemleri</div>
-                        </div>
-                    </div>
-
-                    <div class="col-md-3 mb-4 task-card-link" data-target-area="dava-tasks" style="cursor: pointer;">
-                        <div class="card p-4 text-center d-flex align-items-center flex-column justify-content-center h-100">
-                            <i class="fas fa-gavel stat-icon text-danger mb-3"></i>
-                            <div class="stat-label">Dava & İtiraz</div>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="row mt-5" id="task-detail-cards" style="display: none;">
-                   
-                    <div class="col-md-3 mb-4 detail-card-link" data-task-type="pending-approval" style="cursor: pointer;">
-                        <div class="card p-3 text-center d-flex align-items-center flex-column justify-content-center h-100">
-                            <i class="fas fa-tasks stat-icon text-warning mb-3"></i>
-                            <div class="stat-label">Onay Bekleyen İşler</div>
-                            <div class="stat-value" id="taskCount-pending-approval">0</div>
-                        </div>
-                    </div>
-                    <div class="col-md-3 mb-4 detail-card-link" data-task-type="renewal-approval" style="cursor: pointer;">
-                        <div class="card p-3 text-center d-flex align-items-center flex-column justify-content-center h-100">
-                            <i class="fas fa-sync-alt stat-icon text-info mb-3"></i>
-                            <div class="stat-label">Yenileme Onayları</div>
-                            <div class="stat-value" id="taskCount-renewal-approval">0</div>
-                        </div>
-                    </div>
-                    <div class="col-md-3 mb-4 detail-card-link" data-task-type="bulletin-watch" style="cursor: pointer;">
-                        <div class="card p-3 text-center d-flex align-items-center flex-column justify-content-center h-100">
-                            <i class="fas fa-eye stat-icon text-primary mb-3"></i>
-                            <div class="stat-label">Bülten İzleme Bildirim Onayları</div>
-                            <div class="stat-value" id="taskCount-bulletin-watch">0</div>
-                        </div>
-                    </div>
-                        <div class="col-md-3 mb-4 detail-card-link" data-task-type="completed-tasks" style="cursor: pointer;">
-                            <div class="card p-3 text-center d-flex align-items-center flex-column justify-content-center h-100">
-                                <i class="fas fa-check-circle stat-icon text-success mb-3"></i>
-                                <div class="stat-label">Talimat Verilen/Tamamlanan İşler</div>
-                            </div>
-                        </div>
-                </div>
-                <div class="row mt-4" id="task-list-filters" style="display: none;">
-                    <div class="col-12">
-                        <div class="card p-3">
-                            <h6 class="card-title mb-3">İş Listesi Filtreleri</h6>
-                            <div class="form-row align-items-end">
-                                <div class="form-group col-md-5 mb-0">
-                                    <label for="taskSearchText" class="text-muted">Başlıkta/ID'de Ara</label>
-                                    <input type="text" class="form-control form-control-sm" id="taskSearchText" placeholder="İş Tipi, Başvuru No, Marka Adı veya ID...">
-                                </div>
-                                
-                                <div class="form-group col-md-4 mb-0">
-                                    <label for="taskStatusFilter" class="text-muted">Durum</label>
-                                    <select id="taskStatusFilter" class="form-control form-control-sm">
-                                        <option value="TÜMÜ" selected>Tümü</option>
-                                        <option value="Açık">Açık</option>
-                                        <option value="Devam Ediyor">Devam Ediyor</option>
-                                        <option value="Tamamlandı">Tamamlandı</option>
-                                        <option value="Beklemede">Beklemede</option>
-                                        <option value="Müvekkil Onayı Bekliyor">Müvekkil Onayı Bekliyor</option>
-                                        <option value="Müvekkil Onayı - Açıldı">Müvekkil Onayı - Açıldı</option>
-                                        <option value="Müvekkil Onayı - Kapatıldı">Müvekkil Onayı - Kapatıldı</option>
-                                        <option value="Müvekkil Cevaplamadı - Kapatıldı">Müvekkil Cevaplamadı - Kapatıldı</option>
-                                        <option value="Kapalı">Kapalı</option>
-                                    </select>
-                                </div>
-                                
-                                <div class="form-group col-md-3 mb-0">
-                                    <button class="btn btn-primary btn-sm btn-block" id="applyTaskFilters">Filtrele</button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="row mt-4" id="task-list-details" style="display: none;">
-                    <div class="col-12" id="task-list-container">
-                        </div>
-                    <div class="col-12" id="taskPagination"></div>
-                        </div>
-                </div>
-            </div>
-
-            <div class="tab-pane fade" id="invoices">
-                <h1 class="header-title">Faturalarım</h1>
-                <p class="lead">Geçmiş ve ödenmemiş faturalarınızın listesi.</p>
-                <div class="table-responsive mt-4">
-                    <table class="table table-hover">
-                        <thead>
-                            <tr>
-                                <th>Fatura No</th>
-                                <th>Tarih</th>
-                                <th>Açıklama</th>
-                                <th>Tutar</th>
-                                <th>Durum</th>
-                                <th>Aksiyon</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr>
-                                <td>INV-2023-001</td>
-                                <td>25.10.2023</td>
-                                <td>Marka tescil başvuru hizmet bedeli</td>
-                                <td>1.500 TL</td>
-                                <td><span class="badge badge-warning">Ödenmemiş</span></td>
-                                <td>
-                                    <button class="btn btn-primary btn-sm btn-action"><i class="fas fa-download"></i> İndir</button>
-                                    <button class="btn btn-success btn-sm btn-action"><i class="fas fa-lira-sign"></i> Öde</button>
-                                </td>
-                            </tr>
-                            <tr>
-                                <td>INV-2023-002</td>
-                                <td>10.09.2023</td>
-                                <td>Yıllık marka takip hizmeti</td>
-                                <td>800 TL</td>
-                                <td><span class="badge badge-success">Ödendi</span></td>
-                                <td>
-                                    <button class="btn btn-primary btn-sm btn-action"><i class="fas fa-download"></i> İndir</button>
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <div class="tab-pane fade" id="reports">
-                <h1 class="header-title">Raporlar</h1>
-                <p class="lead">Portföyünüzle ilgili detaylı raporlara buradan ulaşabilirsiniz.</p>
-                <div class="row mt-4">
-                    <div class="col-md-12 mb-4">
-                        <div class="card p-4">
-                            <h5 class="card-title text-info"><i class="fas fa-chart-line mr-2"></i>Portföy Değerlendirme Raporu</h5>
-                            <p class="text-muted">Portföyünüzdeki tüm varlıkların güncel durumunu ve gelecek süreçlerini içeren rapor.</p>
-                            <button class="btn btn-primary btn-sm mt-2"><i class="fas fa-download mr-1"></i>Raporu İndir</button>
-                        </div>
-                    </div>
-                    <div class="col-md-12 mb-4">
-                        <div class="card p-4">
-                            <h5 class="card-title text-info"><i class="fas fa-file-pdf mr-2"></i>Finansal Durum Raporu</h5>
-                            <p class="text-muted">Ödenmiş ve bekleyen tüm tahakkuk ve faturalarınızın özeti.</p>
-                            <button class="btn btn-primary btn-sm mt-2"><i class="fas fa-download mr-1"></i>Raporu İndir</button>
-                        </div>
-                    </div>
-                    <div class="col-md-12 mb-4">
-                        <div class="card p-4">
-                            <h5 class="card-title text-info"><i class="fas fa-history mr-2"></i>İşlem Geçmişi Dökümü</h5>
-                            <p class="text-muted">Tüm portföyünüzdeki tamamlanmış ve bekleyen işlemlerin detaylı listesi.</p>
-                            <button class="btn btn-primary btn-sm mt-2"><i class="fas fa-download mr-1"></i>Raporu İndir</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <div class="modal fade" id="portfolioDetailModal" tabindex="-1" role="dialog" aria-labelledby="portfolioDetailModalLabel" aria-hidden="true">
-      <div class="modal-dialog modal-xl" role="document">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h5 class="modal-title header-title" id="portfolioDetailModalLabel">Marka Adı 1 Detayları</h5>
-            <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-              <span aria-hidden="true">&times;</span>
-            </button>
-          </div>
-          <div class="modal-body">
-            <div class="row mb-4">
-                <div class="col-md-4">
-                    <div class="card p-3 h-100">
-                        <div class="card-header">Marka</div>
-                        <div class="card-body text-center">
-                            <img src="https://placehold.co/150x150/png" alt="Marka Örneği" style="max-width: 100%; height: auto; border-radius: 8px;">
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="card p-3 h-100">
-                        <div class="card-header">Varlık Detayları</div>
-                        <div class="card-body">
-                            <p><strong>Tür:</strong> Marka</p>
-                            <p><strong>Başvuru No:</strong> 2023/12345</p>
-                            <p><strong>Tescil No:</strong> -</p>
-                            <p><strong>Sınıf:</strong> 09, 35, 42</p>
-                            <p><strong>Durum:</strong> <span class="badge badge-primary">Başvuru</span></p>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="card p-3 h-100">
-                        <div class="card-header">Tarihler / Durum</div>
-                        <div class="card-body">
-                            <p><strong>Başvuru Tarihi:</strong> 25.10.2023</p>
-                            <p><strong>Tescil Tarihi:</strong> -</p>
-                            <p><strong>Yenileme Tarihi:</strong> -</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <ul class="nav nav-tabs" id="myTab" role="tablist">
-              <li class="nav-item"><a class="nav-link active" id="islemler-tab" data-toggle="tab" href="#modal-islemler" role="tab" aria-controls="modal-islemler" aria-selected="true">İşlemler</a></li>
-              <li class="nav-item"><a class="nav-link" id="esya-tab" data-toggle="tab" href="#modal-esya" role="tab" aria-controls="modal-esya" aria-selected="false">Eşya Listesi</a></li>
-              <li class="nav-item"><a class="nav-link" id="tahakkuklar-tab" data-toggle="tab" href="#modal-tahakkuklar" role="tab" aria-controls="modal-tahakkuklar" aria-selected="false">Tahakkuklar ve Faturalar</a></li>
-              <li class="nav-item"><a class="nav-link" id="belgeler-tab" data-toggle="tab" href="#modal-belgeler" role="tab" aria-controls="modal-belgeler" aria-selected="false">Belgeler</a></li>
-            </ul>
-            <div class="tab-content tab-content-card mt-3">
-              <div class="tab-pane fade" id="modal-islemler" role="tabpanel">
-                <h5 class="header-title">İşlem Geçmişi</h5>
-                <div class="table-responsive mt-3">
-                    <table class="table table-hover">
-                                <thead>
-                                    <tr>
-                                        <th>#</th>
-                                        <th>İşlem Açıklaması</th>
-                                        <th>Tarih</th>
-                                        <th>Evrak</th>
-                                    </tr>
-                                </thead>
-                        <tbody>
-                            <tr class="accordion-header-row" data-toggle="collapse" data-target="#islem-1" aria-expanded="false" aria-controls="islem-1">
-                                <td><i class="fas fa-chevron-down mr-2"></i>1</td>
-                                <td>Marka Başvurusu Hazırlığı</td>
-                                <td><span class="badge badge-success">Tamamlandı</span></td>
-                                <td>15.01.2023</td>
-                                <td><a href="#" class="btn btn-sm btn-info" target="_blank" title="Evrakı Görüntüle"><i class="fas fa-file-pdf"></i></a></td>
-                            </tr>
-                            <tr>
-                                <td colspan="5" class="p-0">
-                                    <div class="collapse" id="islem-1">
-                                        <table class="table mb-0 accordion-table">
-                                            <thead>
-                                                <tr>
-                                                    <th>#</th>
-                                                    <th>İşlem Açıklaması</th>
-                                                    <th>Durum</th>
-                                                    <th>Tarih</th>
-                                                    <th>Evrak</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                <tr>
-                                                    <td>1.1</td>
-                                                    <td>Evrakların Toplanması</td>
-                                                    <td><span class="badge badge-success">Tamamlandı</span></td>
-                                                    <td>10.01.2023</td>
-                                                    <td><a href="#" class="btn btn-sm btn-info" target="_blank" title="Evrakı Görüntüle"><i class="fas fa-file-pdf"></i></a></td>
-                                                </tr>
-                                                <tr>
-                                                    <td>1.2</td>
-                                                    <td>Başvuru Formunun Doldurulması</td>
-                                                    <td><span class="badge badge-success">Tamamlandı</span></td>
-                                                    <td>12.01.2023</td>
-                                                    <td><a href="#" class="btn btn-sm btn-info" target="_blank" title="Evrakı Görüntüle"><i class="fas fa-file-pdf"></i></a></td>
-                                                </tr>
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </td>
-                            </tr>
-                            
-                            <tr class="accordion-header-row" data-toggle="collapse" data-target="#islem-2" aria-expanded="false" aria-controls="islem-2">
-                                <td><i class="fas fa-chevron-down mr-2"></i>2</td>
-                                <td>Marka Tescil Başvurusu</td>
-                                <td><span class="badge badge-primary">Devam Ediyor</span></td>
-                                <td>20.01.2023</td>
-                                <td><a href="#" class="btn btn-sm btn-info" target="_blank" title="Evrakı Görüntüle"><i class="fas fa-file-pdf"></i></a></td>
-                            </tr>
-                            <tr>
-                                <td colspan="5" class="p-0">
-                                    <div class="collapse" id="islem-2">
-                                        <table class="table mb-0 accordion-table">
-                                            <thead>
-                                                <tr>
-                                                    <th>#</th>
-                                                    <th>İşlem Açıklaması</th>
-                                                    <th>Durum</th>
-                                                    <th>Tarih</th>
-                                                    <th>Evrak</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                <tr>
-                                                    <td>2.1</td>
-                                                    <td>TÜRKPATENT'e Bildirim</td>
-                                                    <td><span class="badge badge-success">Tamamlandı</span></td>
-                                                    <td>21.01.2023</td>
-                                                    <td><a href="#" class="btn btn-sm btn-info" target="_blank" title="Evrakı Görüntüle"><i class="fas fa-file-pdf"></i></a></td>
-                                                </tr>
-                                                <tr>
-                                                    <td>2.2</td>
-                                                    <td>İnceleme Aşaması</td>
-                                                    <td><span class="badge badge-primary">Beklemede</span></td>
-                                                    <td>25.01.2023</td>
-                                                    <td><a href="#" class="btn btn-sm btn-info" target="_blank" title="Evrakı Görüntüle"><i class="fas fa-file-pdf"></i></a></td>
-                                                </tr>
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </td>
-                            </tr>
-
-                            <tr class="accordion-header-row">
-                                <td>3</td>
-                                <td>Yenileme Hizmet Bedeli Tahakkuku</td>
-                                <td><span class="badge badge-warning">Onay Bekliyor</span></td>
-                                <td>10.03.2023</td>
-                                <td><a href="#" class="btn btn-sm btn-info" target="_blank" title="Evrakı Görüntüle"><i class="fas fa-file-pdf"></i></a></td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-              <div class="tab-pane fade" id="modal-esya" role="tabpanel">
-                <h5 class="header-title">Mal ve Hizmet Sınıfları</h5>
-                <div id="esyaListesiContent" class="mt-3">
-                  <p class="text-muted">Yükleniyor...</p>
-                </div>
-              </div>
-              <div class="tab-pane fade" id="modal-tahakkuklar" role="tabpanel">
-                <h5 class="header-title">Tahakkuk ve Fatura Bilgileri</h5>
-                <p>İlgili tahakkuklar ve faturalar burada listelenecektir.</p>
-              </div>
-              <div class="tab-pane fade" id="modal-belgeler" role="tabpanel">
-                <h5 class="header-title">Dosya ve Belgeler</h5>
-                <p>Bu kayda ait belgeler burada gösterilecektir.</p>
-              </div>
-            </div>
-          </div>
-          <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" data-dismiss="modal">Kapat</button>
-            <button type="button" class="btn btn-primary" data-dismiss="modal">Yeni İşlem Ekle</button>
-          </div>
-        </div>
-      </div>
-    </div>
+<div aria-hidden="true" aria-labelledby="portfolioDetailModalLabel" class="modal fade" id="portfolioDetailModal" role="dialog" tabindex="-1">
+<div class="modal-dialog modal-xl" role="document">
+<div class="modal-content">
+<div class="modal-header">
+<h5 class="modal-title header-title" id="portfolioDetailModalLabel">Marka Adı 1 Detayları</h5>
+<button aria-label="Close" class="close" data-dismiss="modal" type="button">
+<span aria-hidden="true">×</span>
+</button>
+</div>
+<div class="modal-body">
+<div class="row mb-4">
+<div class="col-md-4">
+<div class="card p-3 h-100">
+<div class="card-header">Marka</div>
+<div class="card-body text-center">
+<img alt="Marka Örneği" src="https://placehold.co/150x150/png" style="max-width: 100%; height: auto; border-radius: 8px;"/>
+</div>
+</div>
+</div>
+<div class="col-md-4">
+<div class="card p-3 h-100">
+<div class="card-header">Varlık Detayları</div>
+<div class="card-body">
+<p><strong>Tür:</strong> Marka</p>
+<p><strong>Başvuru No:</strong> 2023/12345</p>
+<p><strong>Tescil No:</strong> -</p>
+<p><strong>Sınıf:</strong> 09, 35, 42</p>
+<p><strong>Durum:</strong> <span class="badge badge-primary">Başvuru</span></p>
+</div>
+</div>
+</div>
+<div class="col-md-4">
+<div class="card p-3 h-100">
+<div class="card-header">Tarihler / Durum</div>
+<div class="card-body">
+<p><strong>Başvuru Tarihi:</strong> 25.10.2023</p>
+<p><strong>Tescil Tarihi:</strong> -</p>
+<p><strong>Yenileme Tarihi:</strong> -</p>
+</div>
+</div>
+</div>
+</div>
+<ul class="nav nav-tabs" id="myTab" role="tablist">
+<li class="nav-item"><a aria-controls="modal-islemler" aria-selected="true" class="nav-link active" data-toggle="tab" href="#modal-islemler" id="islemler-tab" role="tab">İşlemler</a></li>
+<li class="nav-item"><a aria-controls="modal-esya" aria-selected="false" class="nav-link" data-toggle="tab" href="#modal-esya" id="esya-tab" role="tab">Eşya Listesi</a></li>
+<li class="nav-item"><a aria-controls="modal-tahakkuklar" aria-selected="false" class="nav-link" data-toggle="tab" href="#modal-tahakkuklar" id="tahakkuklar-tab" role="tab">Tahakkuklar ve Faturalar</a></li>
+<li class="nav-item"><a aria-controls="modal-belgeler" aria-selected="false" class="nav-link" data-toggle="tab" href="#modal-belgeler" id="belgeler-tab" role="tab">Belgeler</a></li>
+</ul>
+<div class="tab-content tab-content-card mt-3">
+<div class="tab-pane fade" id="modal-islemler" role="tabpanel">
+<h5 class="header-title">İşlem Geçmişi</h5>
+<div class="table-responsive mt-3">
+<table class="table table-hover">
+<thead>
+<tr>
+<th>#</th>
+<th>İşlem Açıklaması</th>
+<th>Tarih</th>
+<th>Evrak</th>
+</tr>
+</thead>
+<tbody>
+<tr aria-controls="islem-1" aria-expanded="false" class="accordion-header-row" data-target="#islem-1" data-toggle="collapse">
+<td><i class="fas fa-chevron-down mr-2"></i>1</td>
+<td>Marka Başvurusu Hazırlığı</td>
+<td><span class="badge badge-success">Tamamlandı</span></td>
+<td>15.01.2023</td>
+<td><a class="btn btn-sm btn-info" href="#" target="_blank" title="Evrakı Görüntüle"><i class="fas fa-file-pdf"></i></a></td>
+</tr>
+<tr>
+<td class="p-0" colspan="5">
+<div class="collapse" id="islem-1">
+<table class="table mb-0 accordion-table">
+<thead>
+<tr>
+<th>#</th>
+<th>İşlem Açıklaması</th>
+<th>Durum</th>
+<th>Tarih</th>
+<th>Evrak</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1.1</td>
+<td>Evrakların Toplanması</td>
+<td><span class="badge badge-success">Tamamlandı</span></td>
+<td>10.01.2023</td>
+<td><a class="btn btn-sm btn-info" href="#" target="_blank" title="Evrakı Görüntüle"><i class="fas fa-file-pdf"></i></a></td>
+</tr>
+<tr>
+<td>1.2</td>
+<td>Başvuru Formunun Doldurulması</td>
+<td><span class="badge badge-success">Tamamlandı</span></td>
+<td>12.01.2023</td>
+<td><a class="btn btn-sm btn-info" href="#" target="_blank" title="Evrakı Görüntüle"><i class="fas fa-file-pdf"></i></a></td>
+</tr>
+</tbody>
+</table>
+</div>
+</td>
+</tr>
+<tr aria-controls="islem-2" aria-expanded="false" class="accordion-header-row" data-target="#islem-2" data-toggle="collapse">
+<td><i class="fas fa-chevron-down mr-2"></i>2</td>
+<td>Marka Tescil Başvurusu</td>
+<td><span class="badge badge-primary">Devam Ediyor</span></td>
+<td>20.01.2023</td>
+<td><a class="btn btn-sm btn-info" href="#" target="_blank" title="Evrakı Görüntüle"><i class="fas fa-file-pdf"></i></a></td>
+</tr>
+<tr>
+<td class="p-0" colspan="5">
+<div class="collapse" id="islem-2">
+<table class="table mb-0 accordion-table">
+<thead>
+<tr>
+<th>#</th>
+<th>İşlem Açıklaması</th>
+<th>Durum</th>
+<th>Tarih</th>
+<th>Evrak</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>2.1</td>
+<td>TÜRKPATENT'e Bildirim</td>
+<td><span class="badge badge-success">Tamamlandı</span></td>
+<td>21.01.2023</td>
+<td><a class="btn btn-sm btn-info" href="#" target="_blank" title="Evrakı Görüntüle"><i class="fas fa-file-pdf"></i></a></td>
+</tr>
+<tr>
+<td>2.2</td>
+<td>İnceleme Aşaması</td>
+<td><span class="badge badge-primary">Beklemede</span></td>
+<td>25.01.2023</td>
+<td><a class="btn btn-sm btn-info" href="#" target="_blank" title="Evrakı Görüntüle"><i class="fas fa-file-pdf"></i></a></td>
+</tr>
+</tbody>
+</table>
+</div>
+</td>
+</tr>
+<tr class="accordion-header-row">
+<td>3</td>
+<td>Yenileme Hizmet Bedeli Tahakkuku</td>
+<td><span class="badge badge-warning">Onay Bekliyor</span></td>
+<td>10.03.2023</td>
+<td><a class="btn btn-sm btn-info" href="#" target="_blank" title="Evrakı Görüntüle"><i class="fas fa-file-pdf"></i></a></td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<div class="tab-pane fade" id="modal-esya" role="tabpanel">
+<h5 class="header-title">Mal ve Hizmet Sınıfları</h5>
+<div class="mt-3" id="esyaListesiContent">
+<p class="text-muted">Yükleniyor...</p>
+</div>
+</div>
+<div class="tab-pane fade" id="modal-tahakkuklar" role="tabpanel">
+<h5 class="header-title">Tahakkuk ve Fatura Bilgileri</h5>
+<p>İlgili tahakkuklar ve faturalar burada listelenecektir.</p>
+</div>
+<div class="tab-pane fade" id="modal-belgeler" role="tabpanel">
+<h5 class="header-title">Dosya ve Belgeler</h5>
+<p>Bu kayda ait belgeler burada gösterilecektir.</p>
+</div>
+</div>
+</div>
+<div class="modal-footer">
+<button class="btn btn-secondary" data-dismiss="modal" type="button">Kapat</button>
+<button class="btn btn-primary" data-dismiss="modal" type="button">Yeni İşlem Ekle</button>
+</div>
+</div>
+</div>
+</div>
 <!-- Emtia Kıyaslama Modal -->
-    <div class="modal fade" id="goodsComparisonModal" tabindex="-1" role="dialog" aria-labelledby="goodsComparisonModalLabel" aria-hidden="true">
-      <div class="modal-dialog modal-xl" role="document">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h5 class="modal-title header-title" id="goodsComparisonModalLabel">Mal ve Hizmet Karşılaştırması</h5>
-            <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-              <span aria-hidden="true">&times;</span>
-            </button>
-          </div>
-          <div class="modal-body">
-            <div class="row">
-                <!-- İzlenen Marka Emtia -->
-                <div class="col-md-6">
-                    <div class="card p-3 h-100">
-                        <div class="card-header bg-info text-white">
-                            <h6 class="mb-0">İZLENEN MARKANIZ</h6>
-                        </div>
-                        <div class="card-body" id="monitoredGoodsContent" style="max-height: 500px; overflow-y: auto;">
-                            <p class="text-muted">Yükleniyor...</p>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Benzer Marka Emtia -->
-                <div class="col-md-6">
-                    <div class="card p-3 h-100">
-                        <div class="card-header bg-danger text-white">
-                            <h6 class="mb-0">BENZER MARKA</h6>
-                        </div>
-                        <div class="card-body" id="competitorGoodsContent" style="max-height: 500px; overflow-y: auto;">
-                            <p class="text-muted">Yükleniyor...</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-          </div>
-          <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" data-dismiss="modal">Kapat</button>
-          </div>
-        </div>
-      </div>
-    </div>
+<div aria-hidden="true" aria-labelledby="goodsComparisonModalLabel" class="modal fade" id="goodsComparisonModal" role="dialog" tabindex="-1">
+<div class="modal-dialog modal-xl" role="document">
+<div class="modal-content">
+<div class="modal-header">
+<h5 class="modal-title header-title" id="goodsComparisonModalLabel">Mal ve Hizmet Karşılaştırması</h5>
+<button aria-label="Close" class="close" data-dismiss="modal" type="button">
+<span aria-hidden="true">×</span>
+</button>
+</div>
+<div class="modal-body">
+<div class="row">
+<!-- İzlenen Marka Emtia -->
+<div class="col-md-6">
+<div class="card p-3 h-100">
+<div class="card-header bg-info text-white">
+<h6 class="mb-0">İZLENEN MARKANIZ</h6>
+</div>
+<div class="card-body" id="monitoredGoodsContent" style="max-height: 500px; overflow-y: auto;">
+<p class="text-muted">Yükleniyor...</p>
+</div>
+</div>
+</div>
+<!-- Benzer Marka Emtia -->
+<div class="col-md-6">
+<div class="card p-3 h-100">
+<div class="card-header bg-danger text-white">
+<h6 class="mb-0">BENZER MARKA</h6>
+</div>
+<div class="card-body" id="competitorGoodsContent" style="max-height: 500px; overflow-y: auto;">
+<p class="text-muted">Yükleniyor...</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="modal-footer">
+<button class="btn btn-secondary" data-dismiss="modal" type="button">Kapat</button>
+</div>
+</div>
+</div>
+</div>
 <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.2/dist/js/bootstrap.bundle.min.js"></script>
-
 <script type="module">
 
 // --- Early globals to avoid TDZ/hoisting issues ---
@@ -4042,7 +4005,6 @@ async function loadTransactions(ipRecordId) {
 });
 })();
 </script>
-
 <script>
 (function(){
   var $ = window.jQuery;
@@ -5190,8 +5152,8 @@ $(document).on('click', '.task-compare-goods', async function() {
 let queryInProgress = false;
 
 $(document).on('click', '.query-turkpatent-competitor', function(e) {
-    e.preventDefault();
-    e.stopPropagation();
+    
+    
     e.stopImmediatePropagation(); // ✅ Aynı element üzerindeki diğer handler'ları da durdur
     
     // ✅ Eğer işlem devam ediyorsa tekrar tetiklemeyi engelle
@@ -5372,7 +5334,7 @@ jQuery(document).ready(function($) {
     // 3. Filtrele Butonu (KeyUp/Change zaten anlık çalışıyor, bu sadece görsel amaçlı kalabilir)
     if (applyButton) {
         $(applyButton).on('click', function(e) {
-            e.preventDefault();
+            
             applyTaskListFilters();
         });
     }
