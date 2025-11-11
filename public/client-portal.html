@@ -4040,39 +4040,61 @@ async function loadTransactions(ipRecordId) {
     });
 });
 })();
-
 </script>
+
 <script>
+
 // --- Sidebar / Top-level tab behavior ---
 (function(){
   var $ = window.jQuery;
   if (!$) return;
-  // Click: show tab via Bootstrap and prevent default anchor jump scroll
-  $('#sidebar a[data-toggle="tab"]').on('click', function(e){
+  
+  // Sidebar'daki tab linklerine tıklandığında (Bootstrap'in varsayılanı)
+  $('#sidebar a.nav-link[href^="#"]').on('click', function(e){
     e.preventDefault();
+    
+    // 🔥 Önemli: Bootstrap'in .tab('show') metodunu kullan. 
+    // Bu, aktif sekmeyi doğru şekilde ayarlar.
     $(this).tab('show');
   });
-  // When a top-level tab is shown, mark only it as active and update hash
-  $('#sidebar a[data-toggle="tab"]').on('shown.bs.tab', function(e){
+  
+  // Sekme gösterildiğinde (Bootstrap'ten gelen olay)
+  $('#sidebar a.nav-link[href^="#"]').on('shown.bs.tab', function(e){
+    var targetId = $(e.target).attr('href'); // #dashboard, #invoices, vs.
+    
+    // Tüm ana sekmeleri pasif yap (SADECE ANA İÇERİK)
+    $('.content-with-topbar > .tab-content > .tab-pane').removeClass('show active');
+    
+    // Hedef sekmeyi aktif yap
+    $(targetId).addClass('show active');
+    
+    // Sidebar'daki aktif linki güncelle
     $('#sidebar .nav-link').removeClass('active');
     $(e.target).addClass('active');
+
     var href = $(e.target).attr('href');
     if (href && href.startsWith('#')) {
       history.replaceState(null, '', href);
     }
+    window.scrollTo({ top: 0, behavior: 'smooth' }); // Üste kaydır
   });
-  // Open tab from URL hash on load / hashchange
+  
+  // Sayfa yüklenirken hash'e göre veya varsayılan olarak Dashboard'u aç
   function openHashTab(){
     var hash = window.location.hash;
-    if (hash && $('#sidebar a[data-toggle="tab"][href="'+hash+'"]').length) {
-      $('#sidebar a[data-toggle="tab"][href="'+hash+'"]').tab('show');
+    if (hash && $('#sidebar a.nav-link[href="'+hash+'"]').length) {
+      $('#sidebar a.nav-link[href="'+hash+'"]').tab('show');
+    } else {
+      $('#sidebar a.nav-link[href="#dashboard"]').tab('show');
     }
   }
+  
   $(window).on('hashchange', openHashTab);
-  // Initial: if no hash, show dashboard
-  if (window.location.hash) openHashTab();
-  else $('#sidebar a[data-toggle="tab"][href="#dashboard"]').tab('show');
+  
+  // Sayfa yüklendiğinde çalıştır
+  openHashTab();
 })();
+
 // --- İşlerim Sayfası Navigasyon Mantığı ---
 
 const $tasksMain = $('#task-main-cards');
@@ -5362,39 +5384,6 @@ jQuery(document).ready(function($) {
         });
     }
 });
-</script>
-
-<script>
-  $(function () {
-    // Sidebar'daki sekme linkleri
-    $('#sidebar a.nav-link[href^="#"]').on('click', function (e) {
-      e.preventDefault();
-
-      var target = $(this).attr('href'); // örn: #invoices, #reports
-
-      // 🔥 DÜZELTME: Sadece ana içerik alanındaki tab-pane'leri hedefle
-      $('.content-with-topbar > .tab-content > .tab-pane').removeClass('show active');
-
-      // Hedef paneli aç
-      $(target).addClass('show active');
-
-      // Sidebar'daki aktif linki güncelle
-      $('#sidebar a.nav-link').removeClass('active').attr('aria-selected', 'false');
-      $(this).addClass('active').attr('aria-selected', 'true');
-
-      // Üste kaydır (istersen kaldırabilirsin)
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    });
-    
-    // Sayfa yüklenirken hash varsa ilgili sekmeyi aç
-    var hash = window.location.hash;
-    if (hash && $('#sidebar a.nav-link[href="'+hash+'"]').length) {
-        $('#sidebar a.nav-link[href="'+hash+'"]').trigger('click');
-    } else {
-        // Hash yoksa veya geçersizse Dashboard'u aç
-        $('#sidebar a.nav-link[href="#dashboard"]').trigger('click');
-    }
-  });
 </script>
 </body>
 </html>
