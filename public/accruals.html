@@ -1039,30 +1039,60 @@
             }
 
             searchPersons(query, target) {
-                const resultsContainerId = {
-                    'tpInvoiceParty': 'tpInvoicePartyResults',
-                    'serviceInvoiceParty': 'serviceInvoicePartyResults',
-                    'editTpInvoiceParty': 'editTpInvoicePartyResults',
-                    'editServiceInvoiceParty': 'editServiceInvoicePartyResults'
-                }[target];
+            const resultsContainerId = {
+                'tpInvoiceParty': 'tpInvoicePartyResults',
+                'serviceInvoiceParty': 'serviceInvoicePartyResults',
+                'editTpInvoiceParty': 'editTpInvoicePartyResults',
+                'editServiceInvoiceParty': 'editServiceInvoicePartyResults'
+            }[target];
 
-                const container = document.getElementById(resultsContainerId);
-                if (!container) return;
-                container.innerHTML = '';
-                if (query.length < 2) { container.innerHTML = ''; return; }
-                
-                const filtered = this.allPersons.filter(p => p.name.toLowerCase().includes(query.toLowerCase()));
-                if (filtered.length === 0) { container.innerHTML = '<p class="no-results-message">Kişi bulunamadı.</p>'; return; }
+            const container = document.getElementById(resultsContainerId);
+            if (!container) return;
 
-                filtered.forEach(p => {
-                    const item = document.createElement('div');
-                    item.className = 'search-result-item';
-                    item.dataset.id = p.id;
-                    item.innerHTML = `<div><b>${p.name}</b><br><small>${p.email || '-'}</small></div>`;
-                    item.addEventListener('click', () => this.selectPerson(p, target));
-                    container.appendChild(item);
-                });
+            container.innerHTML = '';
+            const q = String(query || '').trim();
+            if (q.length < 2) { return; }
+
+            // --- KAYNAĞI DİZİYE NORMALİZE ET ---
+            const raw = this.allPersons;
+            let personsList = [];
+
+            if (Array.isArray(raw)) {
+                personsList = raw;
+            } else if (raw && typeof raw === 'object' && ('name' in raw || 'displayName' in raw || 'id' in raw)) {
+                // Tek kişi nesnesi
+                personsList = [raw];
+            } else if (raw && typeof raw === 'object') {
+                // Map/obje (id -> kişi)
+                personsList = Object.values(raw);
+            } else if (typeof raw === 'string') {
+                // Sadece isim/string gelmişse
+                personsList = [{ id: raw, name: raw }];
+            } // değilse boş dizi kalır
+
+            // --- ARAMA ---
+            const filtered = personsList.filter(p =>
+                (p?.name || p?.displayName || '').toLowerCase().includes(q.toLowerCase())
+            );
+
+            if (filtered.length === 0) {
+                container.innerHTML = '<p class="no-results-message">Kişi bulunamadı.</p>';
+                return;
             }
+
+            // --- SONUÇLARI RENDER ET ---
+            filtered.forEach(p => {
+                const item = document.createElement('div');
+                item.className = 'search-result-item';
+                item.dataset.id = p.id;
+                const label = (p?.name || p?.displayName || '-');
+                const email = (p?.email || p?.mail || '-');
+                item.innerHTML = `<div><b>${label}</b><br><small>${email}</small></div>`;
+                item.addEventListener('click', () => this.selectPerson(p, target));
+                container.appendChild(item);
+            });
+            }
+
 
             selectPerson(person, target) {
                 const displayId = {
