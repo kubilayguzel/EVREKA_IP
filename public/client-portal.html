@@ -2381,46 +2381,20 @@ $(function(){
 
 // Client Portal menü aktif durumu yönetimi (DÜZELTİLMİŞ)
 $(document).ready(function() {
-    
-    // Portföyüm dropdown için özel yönetim
-    // (Bu link artık CSS ile gizlendi, ancak mantık çakışma yaratmıyordu)
-    $('a[data-target="#portfoy-accordion"]').on('click', function() {
-        // Tüm ana menü nav-link'lerden active sınıfını kaldır
-        $('.sidebar .nav-link').removeClass('active');
-        // Portföyüm linkine active sınıfını ekle
-        $(this).addClass('active');
-        
-        // Portfolio content'i göster
-        $('.tab-pane').removeClass('show active');
-        $('#portfolio-content').addClass('show active');
-        
-        // İlk tab'ı (Marka) aktif yap
-        setTimeout(() => {
-            $('#portfolioTopTabs a[href="#marka-list"]').tab('show');
-        }, 100);
-        
-        // Menşe filtresi uygula
-        if (typeof applyMenseFilterToActivePane === 'function') {
-          try { applyMenseFilterToActivePane(); } catch(_) {}
-        }
-    });
-    
-    // Portföy alt menüsü linklerine tıklandığında
-    $('#portfoy-accordion a[data-toggle="tab"]').on('click', function() {
-        // Ana portföyüm linkinin active durumunu koru
-        $('a[data-target="#portfoy-accordion"]').addClass('active');
-    });
 
     // Dashboard'daki kartlara tıklama işlevselliği ekleme
+    // (Bu kod bloğu, yandaki menüyle çakışmıyor ve kalması gerekiyor)
     $('[data-target-tab]').on('click', function() {
         const targetTabId = $(this).data('target-tab');
 
         // 1. Sidebar'daki ilgili linki bul ve içeriği göster
-        const $targetLink = $(`a[href="#${targetTabId}"]`); // #sidebar ihtiyacı yok, href'e göre bulması yeterli
+        const $targetLink = $(`a[href="#${targetTabId}"]`); 
 
         if ($targetLink.length) {
-            
-            $targetLink.tab('show'); // Sadece tab'ı göster
+            // Bootstrap'in tab gösterme fonksiyonunu tetikle
+            // Bu komut, en alttaki (3485. satır) "shown.bs.tab" event'ini
+            // tetikleyecek ve o event "active" sınıflarını yönetecek.
+            $targetLink.tab('show'); 
             
             // Portföyüm sekmesine gidiliyorsa, içindeki Marka tab'ını da aktif et
             if (targetTabId === 'portfolio-content') {
@@ -5388,7 +5362,20 @@ jQuery(document).ready(function($) {
         });
     }
 });
-
 </script>
+
+<script>
+  $(function () {
+    // YAN MENÜDEN tab tıklandığında ilgili paneli gerçekten göster
+    $('#sidebar a.nav-link[data-toggle="tab"]').on('click', function (e) {
+      e.preventDefault();
+      $('#sidebar a.nav-link').removeClass('active');
+      $(this).addClass('active');
+      $(this).tab('show');              // Bootstrap 4 tab açma
+      window.scrollTo({ top: 0, behavior: 'smooth' }); // sayfayı üste al
+    });
+  });
+</script>
+
 </body>
 </html>
