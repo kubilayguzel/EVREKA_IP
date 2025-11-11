@@ -2042,11 +2042,11 @@ async function fetchAndDisplayPortfolio() {
         populatePortfolioTable('#dava-itiraz-list', davaIItirazList);
         setDashboardLoading(false);
 
-        // Dashboard sayaçlarını doldur
-        await populateDashboardNumbers(linkedPersonIds, allPortfolios);
-
-        // İşlerim sekmesini doldur
+        // İşlerim sekmesini doldur (bu aynı zamanda pendingTasksCount'u da set eder)
         await fetchAndDisplayTasks(linkedPersonIds);
+
+        // Dashboard sayaçlarını doldur (artık task sayısı zaten set edilmiş)
+        await populateDashboardNumbers(linkedPersonIds, allPortfolios);
 
         // Faturalarım sekmesini doldur
         await window.fetchAndDisplayInvoices(linkedPersonIds);
