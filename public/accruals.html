@@ -547,21 +547,25 @@
             }
 
             // --- PERSONS ---
+            // ✅ TÜM kişileri yükle (arama fonksiyonu için gerekli)
             let personsMap = {};
-            if (personIds.size) {
-            if (personService.getPersonsByIds) {
+            if (personService.getPersons) {
+                const pRes = await personService.getPersons();
+                const persons = pRes?.success ? (pRes.data || pRes.items || []) : (Array.isArray(pRes) ? pRes : []);
+                personsMap = Object.fromEntries(persons.map(p => [p.id || p.personId, p]));
+            } else if (personService.getPersonsByIds && personIds.size) {
+                // Fallback: Sadece ihtiyaç duyulan kişileri yükle
                 const pRes = await personService.getPersonsByIds(Array.from(personIds));
                 const persons = pRes?.success ? (pRes.data || []) : [];
                 personsMap = Object.fromEntries(persons.map(p => [p.id || p.personId, p]));
-            } else {
-                personsMap = {};
-            }
             }
 
             // 4) Eski geniş dizileri doldurmak yerine Map tut (hafif)
             this.allTasks = tasksMap;
             this.allIpRecords = recordsMap;
             this.allPersons = Object.values(personsMap);
+            
+            console.log('✅ Yüklenen kişi sayısı:', this.allPersons.length);
 
             // 5) Render
             this.renderTable();
