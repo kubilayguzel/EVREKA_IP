@@ -2565,21 +2565,21 @@ window.fetchAndDisplayTasks = async function(){
     let countRenewal   = 0;
     let countBulletin  = 0;
 
-    // ✅ loadSampleTaskDetails ile aynı filtreleme mantığını kullan
+    // Task Type ID'ye göre doğrudan sayaç hesaplama
+    const renewalTaskTypes = ['22'];
+    const bulletinTaskTypes = ['20'];
+
     for(const t of awaitingTasks){
-      const meta  = await _getTransactionTypeMeta(t.taskType);
-      const label = _taskLabelGuess(t, meta);
+    const taskTypeStr = String(t.taskType);
 
-      const isRenewal = /yenileme/.test(label);
-      const isBulletin = RX_BULTEN.test(label) || t.taskType === '20' || t.taskType === 20;
-
-      if (isRenewal) {
+    if (renewalTaskTypes.includes(taskTypeStr)) {
         countRenewal++;
-      } else if (isBulletin) {
+    } else if (bulletinTaskTypes.includes(taskTypeStr)) {
         countBulletin++;
-      } else {
+    } else {
+        // Onay Bekleyen İşler: 19 ve diğer tüm task type'lar (22 ve 20 hariç)
         countPending++;
-      }
+    }
     }
 
     console.log('📊 Task sayaçları:', { countPending, countRenewal, countBulletin, total: awaitingTasks.length });
@@ -4337,28 +4337,32 @@ window.loadSampleTaskDetails = async function(taskType) {
             }
 
             console.log("DEBUG 2: BAŞARILI EŞLEŞME. Görev listeye ekleniyor. Task ID:", d.id, "Task Type:", taskData.taskType, "Task Status:", taskData.status);
-            
-            const meta  = await window._getTransactionTypeMeta(taskData.taskType);
-            const label = window._taskLabelGuess(taskData, meta);
-            const isRenewal = /yenileme/.test(label);
-            const isBulletin = window.RX_BULTEN.test(label) || taskData.taskType === '20';
+           
+            // Yenileme task type'ı
+            const renewalTaskTypes = ['22'];
+
+            // Bülten/Yayın İzleme task type'ları (Sadece Yayına İtiraz - 20)
+            const bulletinTaskTypes = ['20'];
+
             // Task type'a göre filtreleme
             if (taskType === 'pending-approval') {
-                if (!isRenewal && !isBulletin) {
+                // Onay Bekleyen İşler: Yenileme (22) ve Bülten (20) OLMAYAN herşey (19 dahil)
+                if (!renewalTaskTypes.includes(taskTypeStr) && !bulletinTaskTypes.includes(taskTypeStr)) {
                     matchingTasks.push({ id: d.id, ...taskData });
                 }
             } else if (taskType === 'renewal-approval') {
-                if (isRenewal) {
+                // Yenileme Onayları: Sadece task type 22
+                if (renewalTaskTypes.includes(taskTypeStr)) {
                     matchingTasks.push({ id: d.id, ...taskData });
                 }
             } else if (taskType === 'bulletin-watch') {
-                if (isBulletin) {
-                    // Bülten olarak filtrelenen task'ları log'layın
+                // Bülten İzleme: Sadece task type 20 (Yayına İtiraz)
+                if (bulletinTaskTypes.includes(taskTypeStr)) {
                     console.log("DEBUG 3: Bülten olarak filtrelenen Task ID:", d.id);
                     matchingTasks.push({ id: d.id, ...taskData });
                 }
             } else if (taskType === 'completed-tasks') {
-                // Completed tasks için zaten where koşulu yukarıda ayarlandı.
+                // Tamamlanan İşler: Tüm task'lar (zaten where koşulu yukarıda ayarlandı)
                 matchingTasks.push({ id: d.id, ...taskData });
             }
         }
