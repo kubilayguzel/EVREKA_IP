@@ -2042,11 +2042,11 @@ async function fetchAndDisplayPortfolio() {
         populatePortfolioTable('#dava-itiraz-list', davaIItirazList);
         setDashboardLoading(false);
 
-        // İşlerim sekmesini doldur (bu aynı zamanda pendingTasksCount'u da set eder)
-        await fetchAndDisplayTasks(linkedPersonIds);
-
-        // Dashboard sayaçlarını doldur (artık task sayısı zaten set edilmiş)
+        // Dashboard sayaçlarını doldur
         await populateDashboardNumbers(linkedPersonIds, allPortfolios);
+
+        // İşlerim sekmesini doldur
+        await fetchAndDisplayTasks(linkedPersonIds);
 
         // Faturalarım sekmesini doldur
         await window.fetchAndDisplayInvoices(linkedPersonIds);
@@ -2067,9 +2067,14 @@ async function fetchAndDisplayPortfolio() {
 window.populateDashboardNumbers = async function (linkedPersonIds, allPortfolios){
     const portfolioCount = allPortfolios.length;
 
-    // Onay bekleyen task sayısı - sadece window.taskCount değişkenini kullan
-    // Bu değişken fetchAndDisplayTasks fonksiyonunda set edilecek
-    const pendingTasks = window.pendingTasksCount || 0;
+    // Firestore'daki gerçek değer: awaiting_client_approval
+    const taskQ = query(
+      collection(db, "tasks"),
+      where("personsRelatedIds", "array-contains-any", linkedPersonIds),
+      where("status","==","awaiting_client_approval")
+    );
+    const taskSnap = await runGetDocs(taskQ);
+    const pendingTasks = taskSnap.size;
 
     const accrualQ = query(
       collection(db, "accruals"),
@@ -4339,8 +4344,6 @@ window.loadSampleTaskDetails = async function(taskType) {
 
             console.log("DEBUG 2: BAŞARILI EŞLEŞME. Görev listeye ekleniyor. Task ID:", d.id, "Task Type:", taskData.taskType, "Task Status:", taskData.status);
            
-            matchingTasks.push({ id: d.id, ...taskData });
-
             // Yenileme task type'ı
             const renewalTaskTypes = ['22'];
 
@@ -4460,17 +4463,6 @@ window.loadSampleTaskDetails = async function(taskType) {
         // BÜLTEN İZLEME İÇİN ÖZEL LİSTELEME SONU
         // ----------------------------------------------------
 
-        // Onay bekleyen task sayısını global değişkene kaydet
-        if (taskType !== 'completed-tasks') {
-            window.pendingTasksCount = matchingTasks.length;
-            console.log('✅ Onay bekleyen task sayısı güncellendi:', window.pendingTasksCount);
-            // Sayaçı direkt güncelle (writeDashSafe yerine direkt DOM güncellemesi)
-            const dashElement = document.querySelector('#dashPendingApprovals');
-            if (dashElement) {
-                dashElement.textContent = window.pendingTasksCount;
-            }
-        }
-        
         if (matchingTasks.length === 0) {
             container.innerHTML = '<p class="lead text-muted text-center mt-5">Bu kategoride iş bulunmamaktadır.</p>';
             if (window.taskPaginationData.pagination) {
