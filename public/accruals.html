@@ -561,7 +561,7 @@
             // 4) Eski geniş dizileri doldurmak yerine Map tut (hafif)
             this.allTasks = tasksMap;
             this.allIpRecords = recordsMap;
-            this.allPersons = personsMap;
+            this.allPersons = Object.values(personsMap);
 
             // 5) Render
             this.renderTable();
