@@ -2067,14 +2067,45 @@ async function fetchAndDisplayPortfolio() {
 window.populateDashboardNumbers = async function (linkedPersonIds, allPortfolios){
     const portfolioCount = allPortfolios.length;
 
-    // Firestore'daki gerçek değer: awaiting_client_approval
-    const taskQ = query(
+    // DÜZELTME: Birden fazla alan üzerinden task'ları filtrele
+    console.log('🔍 Dashboard sayaçları hesaplanıyor, linkedPersonIds:', linkedPersonIds);
+    
+    // 1. personsRelatedIds ile query
+    const taskQ1 = query(
       collection(db, "tasks"),
       where("personsRelatedIds", "array-contains-any", linkedPersonIds),
       where("status","==","awaiting_client_approval")
     );
-    const taskSnap = await runGetDocs(taskQ);
-    const pendingTasks = taskSnap.size;
+    
+    // 2. taskOwner ile query
+    const taskQ2 = query(
+      collection(db, "tasks"),
+      where("taskOwner", "array-contains-any", linkedPersonIds),
+      where("status","==","awaiting_client_approval")
+    );
+    
+    // 3. taskOwnerIds ile query
+    const taskQ3 = query(
+      collection(db, "tasks"),
+      where("taskOwnerIds", "array-contains-any", linkedPersonIds),
+      where("status","==","awaiting_client_approval")
+    );
+    
+    // Her üç sorguyu paralel çalıştır
+    const [snap1, snap2, snap3] = await Promise.all([
+        runGetDocs(taskQ1),
+        runGetDocs(taskQ2),
+        runGetDocs(taskQ3)
+    ]);
+    
+    // Unique task ID'lerini topla
+    const uniqueTaskIds = new Set();
+    [snap1, snap2, snap3].forEach(snap => {
+        snap.docs.forEach(doc => uniqueTaskIds.add(doc.id));
+    });
+    
+    const pendingTasks = uniqueTaskIds.size;
+    console.log('✅ Onay bekleyen task sayısı:', pendingTasks, 'Task IDs:', Array.from(uniqueTaskIds));
 
     const accrualQ = query(
       collection(db, "accruals"),
