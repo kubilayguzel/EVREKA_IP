@@ -792,15 +792,15 @@ body.dark .opposition-owner-badge{
     <div id="sidebar">
         <h4 class="header-title text-center mb-4">Evreka Portalı</h4>
         <ul class="nav flex-column">
-            <li class="nav-item"><a class="nav-link active" href="#dashboard" data-toggle="tab" role="tab" aria-selected="true" aria-controls="dashboard"><i class="fas fa-tachometer-alt mr-2"></i>Dashboard</a></li>
+            <li class="nav-item"><a class="nav-link active" href="#dashboard" role="tab" aria-selected="true" aria-controls="dashboard"><i class="fas fa-tachometer-alt mr-2"></i>Dashboard</a></li>
             <li class="nav-item">
-                <a class="nav-link" href="#portfolio-content" data-toggle="tab" role="tab" aria-selected="false" aria-controls="portfolio-content">
+                <a class="nav-link" href="#portfolio-content" role="tab" aria-selected="false" aria-controls="portfolio-content">
                     <i class="fas fa-folder-open mr-2"></i>Portföyüm
                 </a>
                 </li>
-            <li class="nav-item"><a class="nav-link" href="#tasks" data-toggle="tab" role="tab" aria-selected="false" aria-controls="tasks"><i class="fas fa-tasks mr-2"></i>İşlerim</a></li>
-            <li class="nav-item"><a class="nav-link" href="#invoices" data-toggle="tab" role="tab" aria-selected="false" aria-controls="invoices"><i class="fas fa-file-invoice-dollar mr-2"></i>Faturalarım</a></li>
-            <li class="nav-item"><a class="nav-link" href="#reports" data-toggle="tab" role="tab" aria-selected="false" aria-controls="reports"><i class="fas fa-chart-bar mr-2"></i>Raporlar</a></li>
+            <li class="nav-item"><a class="nav-link" href="#tasks" role="tab" aria-selected="false" aria-controls="tasks"><i class="fas fa-tasks mr-2"></i>İşlerim</a></li>
+            <li class="nav-item"><a class="nav-link" href="#invoices" role="tab" aria-selected="false" aria-controls="invoices"><i class="fas fa-file-invoice-dollar mr-2"></i>Faturalarım</a></li>
+            <li class="nav-item"><a class="nav-link" href="#reports" role="tab" aria-selected="false" aria-controls="reports"><i class="fas fa-chart-bar mr-2"></i>Raporlar</a></li>
         </ul>
     </div>
 
@@ -4056,13 +4056,14 @@ async function loadTransactions(ipRecordId) {
 // 1. Sidebar linklerine tıklama olayını yakala
   $('#sidebar a.nav-link[href^="#"]').on('click', function(e){
     e.preventDefault(); // Varsayılan anchor (sayfa içi zıplama) olayını durdur
+    e.stopPropagation(); // Bootstrap'in data-toggle işlemini durdur
     
-    // Tüm ana tab-pane'lerden show active sınıflarını kaldır
-    $('.content > .tab-content > .tab-pane').removeClass('show active');
+    // Tüm ana tab-pane'leri tamamen gizle
+    $('.content .tab-content > .tab-pane').removeClass('show active').hide();
     
-    // Tıklanan sekmenin hedef tab-pane'ini bul ve aktif yap
+    // Tıklanan sekmenin hedef tab-pane'ini bul, aktif yap ve göster
     const targetId = $(this).attr('href');
-    $(targetId).addClass('show active');
+    $(targetId).addClass('show active').show();
     
     // Sidebar'daki aktif link durumunu güncelle
     $('#sidebar a.nav-link').removeClass('active');
