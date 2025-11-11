@@ -2067,45 +2067,14 @@ async function fetchAndDisplayPortfolio() {
 window.populateDashboardNumbers = async function (linkedPersonIds, allPortfolios){
     const portfolioCount = allPortfolios.length;
 
-    // DÜZELTME: Birden fazla alan üzerinden task'ları filtrele
-    console.log('🔍 Dashboard sayaçları hesaplanıyor, linkedPersonIds:', linkedPersonIds);
-    
-    // 1. personsRelatedIds ile query
-    const taskQ1 = query(
+    // Firestore'daki gerçek değer: awaiting_client_approval
+    const taskQ = query(
       collection(db, "tasks"),
       where("personsRelatedIds", "array-contains-any", linkedPersonIds),
       where("status","==","awaiting_client_approval")
     );
-    
-    // 2. taskOwner ile query
-    const taskQ2 = query(
-      collection(db, "tasks"),
-      where("taskOwner", "array-contains-any", linkedPersonIds),
-      where("status","==","awaiting_client_approval")
-    );
-    
-    // 3. taskOwnerIds ile query
-    const taskQ3 = query(
-      collection(db, "tasks"),
-      where("taskOwnerIds", "array-contains-any", linkedPersonIds),
-      where("status","==","awaiting_client_approval")
-    );
-    
-    // Her üç sorguyu paralel çalıştır
-    const [snap1, snap2, snap3] = await Promise.all([
-        runGetDocs(taskQ1),
-        runGetDocs(taskQ2),
-        runGetDocs(taskQ3)
-    ]);
-    
-    // Unique task ID'lerini topla
-    const uniqueTaskIds = new Set();
-    [snap1, snap2, snap3].forEach(snap => {
-        snap.docs.forEach(doc => uniqueTaskIds.add(doc.id));
-    });
-    
-    const pendingTasks = uniqueTaskIds.size;
-    console.log('✅ Onay bekleyen task sayısı:', pendingTasks, 'Task IDs:', Array.from(uniqueTaskIds));
+    const taskSnap = await runGetDocs(taskQ);
+    const pendingTasks = taskSnap.size;
 
     const accrualQ = query(
       collection(db, "accruals"),
@@ -2537,6 +2506,8 @@ window.fetchAndDisplayTasks = async function(){
     if (!userSnapshot.exists()) return;
     
     const linkedPersonIds = userSnapshot.data().linkedPersonIds || [];
+    // ✅ YENİ: Set'i burada oluştur
+    const clientPersonIdSet = new Set(linkedPersonIds); 
     
     if (linkedPersonIds.length === 0) return;
     
@@ -2549,52 +2520,86 @@ window.fetchAndDisplayTasks = async function(){
 
     const awaitingTasks = [];
     window.__taskDebug = [];
-    snap.forEach(d => {
-      const taskData = d.data();
-      const relatedPartyId = taskData.details?.relatedParty?.id;
-      const personsRelated = taskData.personsRelatedIds || [];
-      const clientIdInTask = taskData.clientId || taskData.clientID;
 
-      // === DEBUG: personsRelatedIds ve ilgili alanlar ===
+    // ✅ DEĞİŞİKLİK: 'snap.forEach' asenkron sorgu için 'for...of' döngüsüne çevrildi
+    for (const d of snap.docs) {
+      const taskData = d.data();
+      // (clientIdInTask eski mantıktan kaldırıldı, yeni mantıkta kullanılıyor)
+      
+      // === DEBUG (kaldı) ===
         const debugRow = {
             taskId: d.id,
             taskType: taskData.taskType,
             status: taskData.status,
             personsRelatedIds: Array.isArray(taskData.personsRelatedIds) ? taskData.personsRelatedIds : null,
-            rawPersonsRelatedIds: taskData.personsRelatedIds, // tip/format görmek için
-            relatedPartyId,
-            clientIdInTask,
+            rawPersonsRelatedIds: taskData.personsRelatedIds,
+            relatedPartyId: taskData.details?.relatedParty?.id, // Eski mantığı loglamak için kalsın
+            clientIdInTask: taskData.clientId || taskData.clientID,
             typeofPersonsRelatedIds: typeof taskData.personsRelatedIds
         };
-        console.log("TASK DEBUG:", debugRow);
+        console.log("TASK DEBUG (Sayaç):", debugRow);
         window.__taskDebug.push(debugRow);
         
-        let isRelatedToClient = false;
-      
-        // Task Type 19 ve 20 için özel kural (taskOwner ile kontrol)
-        const taskTypeStr = String(taskData.taskType);
-        const isObjectionTask = ["19", "20"].includes(taskTypeStr);
+      // -----------------------------------------------------------------
+      // ✅ DEĞİŞİKLİK: Yetkilendirme mantığı 'loadSampleTaskDetails' ile %100 aynı olacak şekilde güncellendi
+      // -----------------------------------------------------------------
+      let isRelatedToClient = false;
+      const taskTypeStr = String(taskData.taskType);
 
-        if (isObjectionTask) {
-        // Önce taskOwner'ı kontrol et (string olarak)
-        const taskOwnerId = taskData.taskOwner;
-        isRelatedToClient = (taskOwnerId && linkedPersonIds.includes(taskOwnerId));
-        
-        // Fallback: clientId kontrolü
-        if (!isRelatedToClient) {
-            isRelatedToClient = (clientIdInTask && linkedPersonIds.includes(clientIdInTask));
-        }
-        } else {
-        // Diğer tüm görevler: Eski kural
-        isRelatedToClient = 
-            (relatedPartyId && linkedPersonIds.includes(relatedPartyId)) ||
-            (Array.isArray(personsRelated) && personsRelated.some(id => linkedPersonIds.includes(id)));
-        }
+      try {
+          // KURAL 1: İstisna (Task Type 19 ve 20)
+          if (taskTypeStr === '19' || taskTypeStr === '20') {
+              const taskOwnerId = taskData.taskOwner;
+              if (taskOwnerId && clientPersonIdSet.has(taskOwnerId)) {
+                  isRelatedToClient = true;
+              }
+              // Fallback Kural
+              if (!isRelatedToClient) {
+                  const clientIdInTask = taskData.clientId || taskData.clientID;
+                  if (clientIdInTask && clientPersonIdSet.has(clientIdInTask)) {
+                      isRelatedToClient = true;
+                  }
+              }
+          } 
+          // KURAL 2: Standart Kural (Diğer tüm task tipleri)
+          // 'loadSampleTaskDetails' Lojigini Kopyala
+          else {
+              const ipRecordId = taskData.relatedIpRecordId;
+              
+              if (ipRecordId) {
+                  // İlgili portföy kaydını veritabanından çek (DERİNLEMESİNE SORGU)
+                  const ipDocRef = doc(db, 'ipRecords', ipRecordId);
+                  const ipDocSnap = await getDoc(ipDocRef); // ASYNC ÇAĞRI
+
+                  if (ipDocSnap.exists()) {
+                      const ipData = ipDocSnap.data();
+                      
+                      // Portföy kaydının 'applicants' dizisini kontrol et
+                      if (ipData.applicants && Array.isArray(ipData.applicants)) {
+                          
+                          isRelatedToClient = ipData.applicants.some(applicant => 
+                              applicant && applicant.id && clientPersonIdSet.has(applicant.id)
+                          );
+                      }
+                  }
+              }
+          }
+      } catch (matchError) {
+           console.error(`DEBUG (fetchAndDisplayTasks) - EŞLEŞTİRME SIRASINDA HATA (Task ID: ${d.id}):`, matchError);
+           isRelatedToClient = false; // Hata durumunda güvenli olarak false ata
+      }
+      // -----------------------------------------------------------------
+      // ✅ END DEĞİŞİKLİK
+      // -----------------------------------------------------------------
       
-      if (!isRelatedToClient) return;
+      if (!isRelatedToClient) {
+          console.log(`DEBUG X (Sayaç): ELENEN GÖREV Task ID: ${d.id}, Eşleşme Başarısız.`);
+          continue; // ✅ 'return' yerine 'continue'
+      }
       
+      console.log(`DEBUG ✅ (Sayaç): EKLENEN GÖREV Task ID: ${d.id}, Task Type: ${taskData.taskType}`);
       awaitingTasks.push({ id:d.id, ...taskData });
-    });
+    } // --- 'for...of' döngüsü sonu ---
     
     window.__allClientTasks = awaitingTasks;
 
@@ -2602,36 +2607,35 @@ window.fetchAndDisplayTasks = async function(){
     let countRenewal   = 0;
     let countBulletin  = 0;
 
-    // Task Type ID'ye göre doğrudan sayaç hesaplama
+    // Task Type ID'ye göre doğrudan sayaç hesaplama (Bu kısım zaten doğruydu)
     const renewalTaskTypes = ['22'];
     const bulletinTaskTypes = ['20'];
 
     for(const t of awaitingTasks){
-    const taskTypeStr = String(t.taskType);
+        const taskTypeStr = String(t.taskType);
 
-    if (renewalTaskTypes.includes(taskTypeStr)) {
-        countRenewal++;
-    } else if (bulletinTaskTypes.includes(taskTypeStr)) {
-        countBulletin++;
-    } else {
-        // Onay Bekleyen İşler: 19 ve diğer tüm task type'lar (22 ve 20 hariç)
-        countPending++;
-    }
+        if (renewalTaskTypes.includes(taskTypeStr)) {
+            countRenewal++;
+        } else if (bulletinTaskTypes.includes(taskTypeStr)) {
+            countBulletin++;
+        } else {
+            // Onay Bekleyen İşler: 19 ve diğer tüm task type'lar (22 ve 20 hariç)
+            countPending++;
+        }
     }
 
-    console.log('📊 Task sayaçları:', { countPending, countRenewal, countBulletin, total: awaitingTasks.length });
+    console.log('📊 Task sayaçları (GÜNCELLENMİŞ LOGIC):', { countPending, countRenewal, countBulletin, total: awaitingTasks.length });
 
     $('#taskCount-pending-approval').text(countPending);
     $('#taskCount-renewal-approval').text(countRenewal);
     $('#taskCount-bulletin-watch').text(countBulletin);
+    // Marka toplamını da güncelle
     $('#taskCount-marka-total').text(countPending + countRenewal + countBulletin);
+    
   }catch(err){
     console.error('Tasks sayaclari doldurulurken hata:', err);
   }
 };
-
-// YAKLAŞIK SATIR 2596'DAKİ 'window.fetchAndDisplayObjections' FONKSİYONUNUN
-// TAMAMINI BU KOD BLOĞU İLE DEĞİŞTİRİN
 
 window.fetchAndDisplayObjections = async function() {
     console.log('🚀 fetchAndDisplayObjections (SADECE 3. TARAF - portfolio.html LOGIC) çağrıldı');
