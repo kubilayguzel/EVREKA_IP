@@ -5363,31 +5363,5 @@ jQuery(document).ready(function($) {
     }
 });
 </script>
-
-<script>
-  $(function () {
-    // Sidebar'daki sekme linkleri
-    $('#sidebar a.nav-link[href^="#"]').on('click', function (e) {
-      e.preventDefault();
-
-      var target = $(this).attr('href'); // örn: #invoices, #reports
-
-      // Tüm panelleri kapat
-      $('.tab-pane').removeClass('show active');
-
-      // Hedef paneli aç
-      $(target).addClass('show active');
-
-      // Sidebar'daki aktif linki güncelle
-      $('#sidebar a.nav-link').removeClass('active').attr('aria-selected', 'false');
-      $(this).addClass('active').attr('aria-selected', 'true');
-
-      // Üste kaydır (istersen kaldırabilirsin)
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    });
-  });
-</script>
-
-
 </body>
 </html>
