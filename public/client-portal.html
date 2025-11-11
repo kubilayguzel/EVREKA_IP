@@ -2384,14 +2384,14 @@ $(document).ready(function() {
 
 // Dashboard'daki kartlara tıklama işlevselliği ekleme
     // (Bu kod bloğu, yandaki menüyle çakışmıyor ve kalması gerekiyor)
-    $('[data-target-tab]').on('click', function() {
+$('[data-target-tab]').on('click', function() {
         const targetTabId = $(this).data('target-tab');
 
-        // Tüm ana tab-pane'lerden show active sınıflarını kaldır
-        $('.content > .tab-content > .tab-pane').removeClass('show active');
+        // Tüm ana tab-pane'leri tamamen gizle
+        $('.tab-content > .tab-pane').removeClass('show active').hide();
         
-        // Hedef tab-pane'i aktif yap
-        $(`#${targetTabId}`).addClass('show active');
+        // Hedef tab-pane'i göster
+        $(`#${targetTabId}`).addClass('show active').show();
         
         // Sidebar'daki ilgili linki bul ve aktif yap
         const $targetLink = $(`#sidebar a[href="#${targetTabId}"]`); 
@@ -4059,7 +4059,7 @@ async function loadTransactions(ipRecordId) {
     e.stopPropagation(); // Bootstrap'in data-toggle işlemini durdur
     
     // Tüm ana tab-pane'leri tamamen gizle
-    $('.content .tab-content > .tab-pane').removeClass('show active').hide();
+    $('.tab-content > .tab-pane').removeClass('show active').hide();
     
     // Tıklanan sekmenin hedef tab-pane'ini bul, aktif yap ve göster
     const targetId = $(this).attr('href');
