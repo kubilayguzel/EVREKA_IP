@@ -4464,8 +4464,11 @@ window.loadSampleTaskDetails = async function(taskType) {
         if (taskType !== 'completed-tasks') {
             window.pendingTasksCount = matchingTasks.length;
             console.log('✅ Onay bekleyen task sayısı güncellendi:', window.pendingTasksCount);
-            // Sayaçı hemen güncelle
-            writeDashSafe('#dashPendingApprovals', window.pendingTasksCount);
+            // Sayaçı direkt güncelle (writeDashSafe yerine direkt DOM güncellemesi)
+            const dashElement = document.querySelector('#dashPendingApprovals');
+            if (dashElement) {
+                dashElement.textContent = window.pendingTasksCount;
+            }
         }
         
         if (matchingTasks.length === 0) {
