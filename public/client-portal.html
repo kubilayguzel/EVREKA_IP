@@ -5366,16 +5366,28 @@ jQuery(document).ready(function($) {
 
 <script>
   $(function () {
-    // YAN MENÜDEN tab tıklandığında ilgili paneli gerçekten göster
-    $('#sidebar a.nav-link[data-toggle="tab"]').on('click', function (e) {
+    // Sidebar'daki sekme linkleri
+    $('#sidebar a.nav-link[href^="#"]').on('click', function (e) {
       e.preventDefault();
-      $('#sidebar a.nav-link').removeClass('active');
-      $(this).addClass('active');
-      $(this).tab('show');              // Bootstrap 4 tab açma
-      window.scrollTo({ top: 0, behavior: 'smooth' }); // sayfayı üste al
+
+      var target = $(this).attr('href'); // örn: #invoices, #reports
+
+      // Tüm panelleri kapat
+      $('.tab-pane').removeClass('show active');
+
+      // Hedef paneli aç
+      $(target).addClass('show active');
+
+      // Sidebar'daki aktif linki güncelle
+      $('#sidebar a.nav-link').removeClass('active').attr('aria-selected', 'false');
+      $(this).addClass('active').attr('aria-selected', 'true');
+
+      // Üste kaydır (istersen kaldırabilirsin)
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     });
   });
 </script>
+
 
 </body>
 </html>
