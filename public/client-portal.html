@@ -4043,55 +4043,51 @@ async function loadTransactions(ipRecordId) {
 </script>
 
 <script>
-
-// --- Sidebar / Top-level tab behavior ---
 (function(){
   var $ = window.jQuery;
   if (!$) return;
   
-  // Sidebar'daki tab linklerine tıklandığında (Bootstrap'in varsayılanı)
+  // 1. Sidebar linklerine tıklama olayını yakala
   $('#sidebar a.nav-link[href^="#"]').on('click', function(e){
-    e.preventDefault();
+    e.preventDefault(); // Varsayılan anchor (sayfa içi zıplama) olayını durdur
     
-    // 🔥 Önemli: Bootstrap'in .tab('show') metodunu kullan. 
-    // Bu, aktif sekmeyi doğru şekilde ayarlar.
+    // 🔥 SADECE BU: Bootstrap'in tab('show') metodunu kullanarak sekme içeriğini yönetmesini sağla.
+    // Bu, hem linki (.nav-link) aktif eder hem de içeriği (.tab-pane) gösterir.
     $(this).tab('show');
+    
+    // Sayfayı üste kaydır
+    window.scrollTo({ top: 0, behavior: 'smooth' }); 
   });
   
-  // Sekme gösterildiğinde (Bootstrap'ten gelen olay)
+  // 2. Sekme gösterildiğinde (Sadece ek işler ve hash yönetimi için)
   $('#sidebar a.nav-link[href^="#"]').on('shown.bs.tab', function(e){
-    var targetId = $(e.target).attr('href'); // #dashboard, #invoices, vs.
+    // Sidebar'daki aktif sınıfını manuel yönetmeye gerek yok, tab('show') hallediyor.
+    // Sadece Portföy sekmesi açıldığında içindeki Marka tab'ını da aktif et
+    if ($(e.target).attr('href') === '#portfolio-content') {
+        setTimeout(() => {
+            $('#portfolioTopTabs a[href="#marka-list"]').tab('show');
+        }, 50);
+    }
     
-    // Tüm ana sekmeleri pasif yap (SADECE ANA İÇERİK)
-    $('.content-with-topbar > .tab-content > .tab-pane').removeClass('show active');
-    
-    // Hedef sekmeyi aktif yap
-    $(targetId).addClass('show active');
-    
-    // Sidebar'daki aktif linki güncelle
-    $('#sidebar .nav-link').removeClass('active');
-    $(e.target).addClass('active');
-
+    // URL Hash yönetimi
     var href = $(e.target).attr('href');
     if (href && href.startsWith('#')) {
       history.replaceState(null, '', href);
     }
-    window.scrollTo({ top: 0, behavior: 'smooth' }); // Üste kaydır
   });
-  
-  // Sayfa yüklenirken hash'e göre veya varsayılan olarak Dashboard'u aç
+
+  // 3. Sayfa yüklendiğinde hash'e göre veya varsayılan olarak Dashboard'u aç
   function openHashTab(){
     var hash = window.location.hash;
     if (hash && $('#sidebar a.nav-link[href="'+hash+'"]').length) {
       $('#sidebar a.nav-link[href="'+hash+'"]').tab('show');
     } else {
+      // Hash yoksa Dashboard'u aç
       $('#sidebar a.nav-link[href="#dashboard"]').tab('show');
     }
   }
   
   $(window).on('hashchange', openHashTab);
-  
-  // Sayfa yüklendiğinde çalıştır
   openHashTab();
 })();
 
