@@ -2381,13 +2381,6 @@ $(function(){
 
 // Client Portal menü aktif durumu yönetimi
 $(document).ready(function() {
-    // Ana menü linklerine click event ekle (İşlerim, Faturalarım, Raporlar)
-    $('#sidebar .nav-link[data-toggle="tab"]').on('click', function() {
-        // Tüm ana menü nav-link'lerden active sınıfını kaldır
-        $('.sidebar .nav-link').removeClass('active');
-        // Tıklanan linke active sınıfını ekle
-        $(this).addClass('active');
-    });
     
     // Portföyüm dropdown için özel yönetim
     $('a[data-target="#portfoy-accordion"]').on('click', function() {
