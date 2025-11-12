@@ -3434,7 +3434,7 @@ const officialFee = parseFloat(document.getElementById('officialFee')?.value) ||
 
             const accrualData = {
                 taskId: taskResult.id,
-                taskTitle: taskData.title,
+                taskTitle: (selectedTransactionType && (selectedTransactionType.alias || selectedTransactionType.name)) || taskData.title,
                 officialFee: { amount: officialFee, currency: 'TRY' },
                 serviceFee: { amount: serviceFee, currency: 'TRY' },
                 vatRate,
@@ -3860,7 +3860,7 @@ const officialFee = parseFloat(document.getElementById('officialFee')?.value) ||
 
             const accrualData = {
                 taskId: taskResult.id,
-                taskTitle: taskData.title,
+                taskTitle: (selectedTransactionType && (selectedTransactionType.alias || selectedTransactionType.name)) || taskData.title,
                 officialFee: { amount: officialFee, currency: 'TRY' },
                 serviceFee: { amount: serviceFee, currency: 'TRY' },
                 vatRate,
