@@ -1207,235 +1207,241 @@ setupBaseFormListeners() {
     }
 
     renderBaseForm(container, taskTypeName, taskTypeId) {
-        const taskIdStr = asId(taskTypeId);
-        const needsRelatedParty = RELATED_PARTY_REQUIRED.has(taskIdStr);
-        const partyLabel = PARTY_LABEL_BY_ID[taskIdStr] || 'İlgili Taraf';
+    // 1. Task tip objesini en başta bul (ipType kontrolü için)
+    const selectedTaskTypeObj = this.allTransactionTypes.find(t => asId(t.id) === asId(taskTypeId));
+    
+    const taskIdStr = asId(taskTypeId);
+    const needsRelatedParty = RELATED_PARTY_REQUIRED.has(taskIdStr);
+    const partyLabel = PARTY_LABEL_BY_ID[taskIdStr] || 'İlgili Taraf';
 
     let specificFieldsHtml = '';
-        // 'litigation_yidk_annulment' ID'si ile gelen Dava İşleri için detayları ekler
-        const isLawsuitTask = taskTypeId === 'litigation_yidk_annulment'; 
+    
+    // 2. Dava Detayları için koşulu, ana tür (ipType) 'suit' ise diye güncelledik.
+    // Bu, 'litigation_yidk_annulment' gibi tüm dava tiplerini kapsar.
+    const isLawsuitTask = selectedTaskTypeObj?.ipType === 'suit'; 
 
-        if (isLawsuitTask) {
-            specificFieldsHtml = `
-                <div class="section-card">
-                    <h3 class="section-title">Dava Detayları</h3>
-                    <div class="form-grid">
-                        <div class="form-group full-width">
-                            <label for="subjectOfLawsuit" class="form-label">Dava Konusu ve Kısa Açıklaması</label>
-                            <textarea id="subjectOfLawsuit" name="subjectOfLawsuit" class="form-textarea" rows="3"></textarea>
-                        </div>
-                        <div class="form-group">
-                            <label for="clientRole" class="form-label">Müvekkil/Davacının Rolü</label>
-                            <select id="clientRole" name="clientRole" class="form-select">
-                                <option value="">Seçiniz...</option>
-                                <option value="davaci">Davacı (Plaintiff)</option>
-                                <option value="davali">Davalı (Defendant)</option>
-                                <option value="araci">Aracı / 3. Taraf</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label for="lawsuitOutcome" class="form-label">Dava Sonucu</label>
-                            <select id="lawsuitOutcome" name="lawsuitOutcome" class="form-select">
-                                <option value="">Seçiniz...</option>
-                                <option value="kazanildi">Kazanıldı (Lehte)</option>
-                                <option value="kaybedildi">Kaybedildi (Aleyhte)</option>
-                                <option value="anlasma">Anlaşma ile Sonuçlandı</option>
-                                <option value="devam">Devam Ediyor</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label for="courtName" class="form-label">Mahkeme Adı</label>
-                            <input type="text" id="courtName" name="courtName" class="form-input">
-                        </div>
-                        <div class="form-group">
-                            <label for="courtFileNumber" class="form-label">Dava Dosya Numarası</label>
-                            <input type="text" id="courtFileNumber" name="courtFileNumber" class="form-input">
-                        </div>
-                        <div class="form-group date-picker-group">
-                            <label for="lawsuitDate" class="form-label">Dava Tarihi</label>
-                            <input type="text" id="lawsuitDate" name="lawsuitDate" class="form-input">
-                        </div>
-                        <div class="form-group date-picker-group">
-                            <label for="lawsuitDecisionDate" class="form-label">Karar Tarihi</label>
-                            <input type="text" id="lawsuitDecisionDate" name="lawsuitDecisionDate" class="form-input">
-                        </div>
-                        <div class="form-group">
-                            <label for="opposingCounsel" class="form-label">Karşı Taraf Vekili (Eğer varsa)</label>
-                            <input type="text" id="opposingCounsel" name="opposingCounsel" class="form-input">
-                        </div>
-                        <div class="form-group">
-                            <label for="filingType" class="form-label">Dava Açılma Şekli</label>
-                            <select id="filingType" name="filingType" class="form-select">
-                                <option value="">Seçiniz...</option>
-                                <option value="edava">E-Dava</option>
-                                <option value="elden">Elden Başvuru</option>
-                                <option value="posta">Posta</option>
-                            </select>
-                        </div>
+    if (isLawsuitTask) {
+        specificFieldsHtml = `
+            <div class="section-card">
+                <h3 class="section-title">Dava Detayları</h3>
+                <div class="form-grid">
+                    <div class="form-group full-width">
+                        <label for="subjectOfLawsuit" class="form-label">Dava Konusu ve Kısa Açıklaması</label>
+                        <textarea id="subjectOfLawsuit" name="subjectOfLawsuit" class="form-textarea" rows="3"></textarea>
                     </div>
-                </div>
-            `;
-        }
-        container.innerHTML = `
-        <div class="section-card" id="card-asset">
-            <h3 class="section-title">2. İşleme Konu Varlık</h3>
-            <div class="form-group full-width">
-            <label for="ipRecordSearch" class="form-label">Portföyden Ara</label>
-            <div class="position-relative">
-                <input type="text" id="ipRecordSearch" class="form-input" placeholder="Başlık, dosya no, başvuru no, sahip adı...">
-                <div id="ipRecordSearchResults"
-                    style="position:absolute; top:100%; left:0; right:0; z-index:1000; background:#fff; border:1px solid #ddd; border-top:none; display:none; max-height:260px; overflow:auto;">
-                </div>
-            </div>
-            <div id="selectedIpRecordContainer" class="mt-2" style="display:none;">
-                <div class="p-2 border rounded d-flex justify-content-between align-items-center">
-                <div>
-                    <div class="text-muted" id="selectedIpRecordLabel"></div>
-                    <small class="text-secondary" id="selectedIpRecordMeta"></small>
-                </div>
-                <button type="button" class="btn btn-sm btn-outline-danger" id="clearSelectedIpRecord">Kaldır</button>
-                </div>
-            </div>
-            </div>
-            <div id="wipoAripoParentContainer" class="form-group full-width mt-4" style="display:none;">
-                <label class="form-label">Eklenen Ülkeler <span class="badge badge-light" id="wipoAripoChildCount">0</span></label>
-                <div id="wipoAripoChildList" class="selected-items-list">
-                    <div class="empty-state">
-                        <i class="fas fa-flag fa-3x text-muted mb-3"></i>
-                        <p class="text-muted">Bu işleme bağlı ülke kaydı bulunamadı.</p>
+                    <div class="form-group">
+                        <label for="clientRole" class="form-label">Müvekkil/Davacının Rolü</label>
+                        <select id="clientRole" name="clientRole" class="form-select">
+                            <option value="">Seçiniz...</option>
+                            <option value="davaci">Davacı (Plaintiff)</option>
+                            <option value="davali">Davalı (Defendant)</option>
+                            <option value="araci">Aracı / 3. Taraf</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="lawsuitOutcome" class="form-label">Dava Sonucu</label>
+                        <select id="lawsuitOutcome" name="lawsuitOutcome" class="form-select">
+                            <option value="">Seçiniz...</option>
+                            <option value="kazanildi">Kazanıldı (Lehte)</option>
+                            <option value="kaybedildi">Kaybedildi (Aleyhte)</option>
+                            <option value="anlasma">Anlaşma ile Sonuçlandı</option>
+                            <option value="devam">Devam Ediyor</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="courtName" class="form-label">Mahkeme Adı</label>
+                        <input type="text" id="courtName" name="courtName" class="form-input">
+                    </div>
+                    <div class="form-group">
+                        <label for="courtFileNumber" class="form-label">Dava Dosya Numarası</label>
+                        <input type="text" id="courtFileNumber" name="courtFileNumber" class="form-input">
+                    </div>
+                    <div class="form-group date-picker-group">
+                        <label for="lawsuitDate" class="form-label">Dava Tarihi</label>
+                        <input type="text" id="lawsuitDate" name="lawsuitDate" class="form-input">
+                    </div>
+                    <div class="form-group date-picker-group">
+                        <label for="lawsuitDecisionDate" class="form-label">Karar Tarihi</label>
+                        <input type="text" id="lawsuitDecisionDate" name="lawsuitDecisionDate" class="form-input">
+                    </div>
+                    <div class="form-group">
+                        <label for="opposingCounsel" class="form-label">Karşı Taraf Vekili (Eğer varsa)</label>
+                        <input type="text" id="opposingCounsel" name="opposingCounsel" class="form-input">
+                    </div>
+                    <div class="form-group">
+                        <label for="filingType" class="form-label">Dava Açılma Şekli</label>
+                        <select id="filingType" name="filingType" class="form-select">
+                            <option value="">Seçiniz...</option>
+                            <option value="edava">E-Dava</option>
+                            <option value="elden">Elden Başvuru</option>
+                            <option value="posta">Posta</option>
+                        </select>
                     </div>
                 </div>
             </div>
-            </div>
-
-        ${needsRelatedParty ? `
-            <div class="section-card" id="relatedPartySection">
-            <h3 class="section-title" id="relatedPartyTitle">3. ${partyLabel}</h3>
-
-            <div class="form-group full-width">
-                <label for="personSearchInput" class="form-label">Sistemdeki Kişilerden Ara</label>
-                <div class="d-flex" style="gap:10px; align-items:flex-start;">
-                <div class="search-input-wrapper" style="flex:1; position:relative;">
-                    <input type="text" id="personSearchInput" class="form-input" placeholder="Aramak için en az 2 karakter...">
-                    <div id="personSearchResults" class="search-results-list" style="display:none;"></div>
-                </div>
-                <button type="button" id="addNewPersonBtn" class="btn-small btn-add-person">
-                    <span>&#x2795;</span> Yeni Kişi
-                </button>
-                </div>
-            </div>
-
-            <div class="form-group full-width mt-2">
-                <label class="form-label">
-                Seçilen Taraflar <span class="badge badge-light ml-2" id="relatedPartyCount">0</span>
-                </label>
-                <div id="relatedPartyList" class="selected-items-list">
-                <div class="empty-state">
-                    <i class="fas fa-user-friends fa-3x text-muted mb-3"></i>
-                    <p class="text-muted">Henüz taraf eklenmedi.</p>
-                </div>
-                </div>
-            </div>
-            </div>
-        ` : ''}
-
-        ${specificFieldsHtml}
-        <div class="section-card" id="card-accrual">
-            <h3 class="section-title">Tahakkuk Bilgileri</h3>
-            <div class="form-grid">
-            <div class="form-group">
-                <label for="officialFee" class="form-label">Resmi Ücret</label>
-                <div class="input-with-currency">
-                <input type="number" id="officialFee" class="form-input" placeholder="0.00" step="0.01">
-                <select id="officialFeeCurrency" class="currency-select">
-                    <option value="TRY" selected>TL</option>
-                    <option value="EUR">EUR</option>
-                    <option value="USD">USD</option>
-                    <option value="CHF">CHF</option>
-                </select>
-                </div>
-            </div>
-            <div class="form-group">
-                <label for="serviceFee" class="form-label">Hizmet Bedeli</label>
-                <div class="input-with-currency">
-                <input type="number" id="serviceFee" class="form-input" placeholder="0.00" step="0.01">
-                <select id="serviceFeeCurrency" class="currency-select">
-                    <option value="TRY" selected>TL</option>
-                    <option value="EUR">EUR</option>
-                    <option value="USD">USD</option>
-                    <option value="CHF">CHF</option>
-                </select>
-                </div>
-            </div>
-            <div class="form-group">
-                <label for="vatRate" class="form-label">KDV Oranı (%)</label>
-                <input type="number" id="vatRate" class="form-input" value="20">
-            </div>
-            <div class="form-group">
-                <label for="totalAmountDisplay" class="form-label">Toplam Tutar</label>
-                <div id="totalAmountDisplay" class="total-amount-display">0.00 TRY</div>
-            </div>
-            <div class="form-group full-width">
-                <label class="checkbox-label">
-                <input type="checkbox" id="applyVatToOfficialFee" checked>
-                Resmi Ücrete KDV Uygula
-                </label>
-            </div>
-            <div class="form-group full-width">
-                <label for="tpInvoicePartySearch" class="form-label">Türk Patent Faturası Tarafı</label>
-                <input type="text" id="tpInvoicePartySearch" class="form-input" placeholder="Fatura tarafı arayın...">
-                <div id="tpInvoicePartyResults" class="search-results-list"></div>
-                <div id="selectedTpInvoicePartyDisplay" class="search-result-display" style="display:none;"></div>
-            </div>
-            <div class="form-group full-width">
-                <label for="serviceInvoicePartySearch" class="form-label">Hizmet Faturası Tarafı</label>
-                <input type="text" id="serviceInvoicePartySearch" class="form-input" placeholder="Fatura tarafı arayın...">
-                <div id="serviceInvoicePartyResults" class="search-results-list"></div>
-                <div id="selectedServiceInvoicePartyDisplay" class="search-result-display" style="display:none;"></div>
-            </div>
-            </div>
-        </div>
-
-        <div class="section-card" id="card-job">
-            <h3 class="section-title">İş Detayları ve Atama</h3>
-            <div class="form-grid">
-            <div class="form-group">
-                <label for="taskPriority" class="form-label">Öncelik</label>
-                <select id="taskPriority" class="form-select">
-                <option value="medium">Orta</option>
-                <option value="high">Yüksek</option>
-                <option value="low">Düşük</option>
-                </select>
-            </div>
-            <div class="form-group">
-                <label for="assignedTo" class="form-label">Atanacak Kullanıcı</label>
-                <select id="assignedTo" class="form-select">
-                <option value="">Seçiniz...</option>
-                </select>
-            </div>
-            <div class="form-group full-width">
-                <label for="taskDueDate" class="form-label">Operasyonel Son Tarih</label>
-                <input type="text" id="taskDueDate" class="form-input">
-            </div>
-            </div>
-        </div>
-
-        <div class="form-actions">
-            <button type="button" id="cancelBtn" class="btn btn-secondary">İptal</button>
-            <button type="submit" id="saveTaskBtn" class="btn btn-primary" disabled>İşi Oluştur ve Kaydet</button>
-        </div>
         `;
-        initTaskDatePickers(document);
-        const selectedTaskTypeObj = this.allTransactionTypes.find(t => asId(t.id) === asId(taskTypeId));
-        this.updateRelatedPartySectionVisibility(selectedTaskTypeObj);
-        this.renderSelectedRelatedParties();
-        this.setupDynamicFormListeners();
-        this.setupAccrualTabListeners();
-        this.setupBaseFormListeners();
-        this.updateButtonsAndTabs();
-        this.checkFormCompleteness();
-        this.initIpRecordSearchSelector();
     }
+    container.innerHTML = `
+    <div class="section-card" id="card-asset">
+        <h3 class="section-title">2. İşleme Konu Varlık</h3>
+        <div class="form-group full-width">
+        <label for="ipRecordSearch" class="form-label">Portföyden Ara</label>
+        <div class="position-relative">
+            <input type="text" id="ipRecordSearch" class="form-input" placeholder="Başlık, dosya no, başvuru no, sahip adı...">
+            <div id="ipRecordSearchResults"
+                style="position:absolute; top:100%; left:0; right:0; z-index:1000; background:#fff; border:1px solid #ddd; border-top:none; display:none; max-height:260px; overflow:auto;">
+            </div>
+        </div>
+        <div id="selectedIpRecordContainer" class="mt-2" style="display:none;">
+            <div class="p-2 border rounded d-flex justify-content-between align-items-center">
+            <div>
+                <div class="text-muted" id="selectedIpRecordLabel"></div>
+                <small class="text-secondary" id="selectedIpRecordMeta"></small>
+            </div>
+            <button type="button" class="btn btn-sm btn-outline-danger" id="clearSelectedIpRecord">Kaldır</button>
+            </div>
+        </div>
+        </div>
+        <div id="wipoAripoParentContainer" class="form-group full-width mt-4" style="display:none;">
+            <label class="form-label">Eklenen Ülkeler <span class="badge badge-light" id="wipoAripoChildCount">0</span></label>
+            <div id="wipoAripoChildList" class="selected-items-list">
+                <div class="empty-state">
+                    <i class="fas fa-flag fa-3x text-muted mb-3"></i>
+                    <p class="text-muted">Bu işleme bağlı ülke kaydı bulunamadı.</p>
+                </div>
+            </div>
+        </div>
+        </div>
+
+    ${needsRelatedParty ? `
+        <div class="section-card" id="relatedPartySection">
+        <h3 class="section-title" id="relatedPartyTitle">3. ${partyLabel}</h3>
+
+        <div class="form-group full-width">
+            <label for="personSearchInput" class="form-label">Sistemdeki Kişilerden Ara</label>
+            <div class="d-flex" style="gap:10px; align-items:flex-start;">
+            <div class="search-input-wrapper" style="flex:1; position:relative;">
+                <input type="text" id="personSearchInput" class="form-input" placeholder="Aramak için en az 2 karakter...">
+                <div id="personSearchResults" class="search-results-list" style="display:none;"></div>
+            </div>
+            <button type="button" id="addNewPersonBtn" class="btn-small btn-add-person">
+                <span>&#x2795;</span> Yeni Kişi
+            </button>
+            </div>
+        </div>
+
+        <div class="form-group full-width mt-2">
+            <label class="form-label">
+            Seçilen Taraflar <span class="badge badge-light ml-2" id="relatedPartyCount">0</span>
+            </label>
+            <div id="relatedPartyList" class="selected-items-list">
+            <div class="empty-state">
+                <i class="fas fa-user-friends fa-3x text-muted mb-3"></i>
+                <p class="text-muted">Henüz taraf eklenmedi.</p>
+            </div>
+            </div>
+        </div>
+        </div>
+    ` : ''}
+
+    ${specificFieldsHtml}
+    <div class="section-card" id="card-accrual">
+        <h3 class="section-title">Tahakkuk Bilgileri</h3>
+        <div class="form-grid">
+        <div class="form-group">
+            <label for="officialFee" class="form-label">Resmi Ücret</label>
+            <div class="input-with-currency">
+            <input type="number" id="officialFee" class="form-input" placeholder="0.00" step="0.01">
+            <select id="officialFeeCurrency" class="currency-select">
+                <option value="TRY" selected>TL</option>
+                <option value="EUR">EUR</option>
+                <option value="USD">USD</option>
+                <option value="CHF">CHF</option>
+            </select>
+            </div>
+        </div>
+        <div class="form-group">
+            <label for="serviceFee" class="form-label">Hizmet Bedeli</label>
+            <div class="input-with-currency">
+            <input type="number" id="serviceFee" class="form-input" placeholder="0.00" step="0.01">
+            <select id="serviceFeeCurrency" class="currency-select">
+                <option value="TRY" selected>TL</option>
+                <option value="EUR">EUR</option>
+                <option value="USD">USD</option>
+                <option value="CHF">CHF</option>
+            </select>
+            </div>
+        </div>
+        <div class="form-group">
+            <label for="vatRate" class="form-label">KDV Oranı (%)</label>
+            <input type="number" id="vatRate" class="form-input" value="20">
+        </div>
+        <div class="form-group">
+            <label for="totalAmountDisplay" class="form-label">Toplam Tutar</label>
+            <div id="totalAmountDisplay" class="total-amount-display">0.00 TRY</div>
+        </div>
+        <div class="form-group full-width">
+            <label class="checkbox-label">
+            <input type="checkbox" id="applyVatToOfficialFee" checked>
+            Resmi Ücrete KDV Uygula
+            </label>
+        </div>
+        <div class="form-group full-width">
+            <label for="tpInvoicePartySearch" class="form-label">Türk Patent Faturası Tarafı</label>
+            <input type="text" id="tpInvoicePartySearch" class="form-input" placeholder="Fatura tarafı arayın...">
+            <div id="tpInvoicePartyResults" class="search-results-list"></div>
+            <div id="selectedTpInvoicePartyDisplay" class="search-result-display" style="display:none;"></div>
+        </div>
+        <div class="form-group full-width">
+            <label for="serviceInvoicePartySearch" class="form-label">Hizmet Faturası Tarafı</label>
+            <input type="text" id="serviceInvoicePartySearch" class="form-input" placeholder="Fatura tarafı arayın...">
+            <div id="serviceInvoicePartyResults" class="search-results-list"></div>
+            <div id="selectedServiceInvoicePartyDisplay" class="search-result-display" style="display:none;"></div>
+        </div>
+        </div>
+    </div>
+
+    <div class="section-card" id="card-job">
+        <h3 class="section-title">İş Detayları ve Atama</h3>
+        <div class="form-grid">
+        <div class="form-group">
+            <label for="taskPriority" class="form-label">Öncelik</label>
+            <select id="taskPriority" class="form-select">
+            <option value="medium">Orta</option>
+            <option value="high">Yüksek</option>
+            <option value="low">Düşük</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="assignedTo" class="form-label">Atanacak Kullanıcı</label>
+            <select id="assignedTo" class="form-select">
+            <option value="">Seçiniz...</option>
+            </select>
+        </div>
+        <div class="form-group full-width">
+            <label for="taskDueDate" class="form-label">Operasyonel Son Tarih</label>
+            <input type="text" id="taskDueDate" class="form-input">
+        </div>
+        </div>
+    </div>
+
+    <div class="form-actions">
+        <button type="button" id="cancelBtn" class="btn btn-secondary">İptal</button>
+        <button type="submit" id="saveTaskBtn" class="btn btn-primary" disabled>İşi Oluştur ve Kaydet</button>
+    </div>
+    `;
+    initTaskDatePickers(document);
+    // Artık selectedTaskTypeObj en başta tanımlı.
+    this.updateRelatedPartySectionVisibility(selectedTaskTypeObj);
+    this.renderSelectedRelatedParties();
+    this.setupDynamicFormListeners();
+    this.setupAccrualTabListeners();
+    this.setupBaseFormListeners();
+    this.updateButtonsAndTabs();
+    this.checkFormCompleteness();
+    this.initIpRecordSearchSelector();
+}
+
 handleIpRecordChange(recordId) {
     console.log('🔄 handleIpRecordChange çağrıldı:', recordId);
     // 🔥 YENİ: Geri çekme işlemi kontrolü
