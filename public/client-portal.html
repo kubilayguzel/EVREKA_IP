@@ -2093,7 +2093,7 @@ window.populateDashboardNumbers = async function (linkedPersonIds, allPortfolios
     // Ödenmemiş (isPaid=false) ve kısmen ödenen (status='partially-paid') faturaları say
     const unpaidInvoices = accrualSnap.docs.filter(doc => {
       const data = doc.data();
-      return data.isPaid === false || data.status === 'partially-paid';
+      return data.isPaid === false || data.status === 'partially_paid';
     }).length;
 
     writeDashSafe('#dashPortfolio',        portfolioCount);
