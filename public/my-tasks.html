@@ -861,9 +861,27 @@
                         totalAmount = officialFee + (serviceFee * (1 + vatRate / 100));
                     }
 
+                    // alias bul – yoksa mevcut başlık kalsın
+                    let _extraAccrualTitle = this.currentTaskForAccrual?.title;
+                    try {
+                    const _typeId =
+                        this.currentTaskForAccrual?.specificTaskType ||
+                        this.currentTaskForAccrual?.taskTypeId ||
+                        this.currentTaskForAccrual?.type ||
+                        this.currentTaskForAccrual?.specificType;
+
+                    if (_typeId) {
+                        const _typesRes = await transactionTypeService.getFilteredTransactionTypes({ ids: [String(_typeId)] });
+                        if (_typesRes?.success && _typesRes?.data?.length) {
+                        const _t = _typesRes.data[0];
+                        _extraAccrualTitle = _t?.alias || _t?.name || _extraAccrualTitle;
+                        }
+                    }
+                    } catch(_e) { console.warn('alias lookup for extra accrual failed', _e); }
+
                     const newAccrualData = {
                         taskId: this.currentTaskForAccrual.id,
-                        taskTitle: this.currentTaskForAccrual.title,
+                        taskTitle: _extraAccrualTitle,
                         officialFee: {
                             amount: officialFee,
                             currency: document.getElementById('createMyTaskOfficialFeeCurrency').value
