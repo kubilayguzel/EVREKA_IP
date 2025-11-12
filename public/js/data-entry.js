@@ -1405,20 +1405,22 @@ initializeDatePickers() {
         } else if (ipType === 'design') {
                 const designTitle = document.getElementById('designTitle');
                 isComplete = designTitle && designTitle.value.trim();
-            } else if (ipType === 'suit') { // YENİ: Dava için zorunlu alan kontrolü
-                const clientRole = document.getElementById('clientRole')?.value;
-                const specificTaskType = document.getElementById('specificTaskType')?.value;
-                const suitCourt = document.getElementById('suitCourt')?.value;
-                const suitCaseNo = document.getElementById('suitCaseNo')?.value.trim();
-                
-                // Zorunlu alanlar: Müvekkil (this.suitClientPerson), Rol, İş Tipi, Mahkeme, Esas/Takip No
-                isComplete = 
-                    !!this.suitClientPerson && 
-                    !!clientRole && 
-                    !!specificTaskType && 
-                    !!suitCourt && 
-                    !!suitCaseNo;
-            }
+        } else if (ipType === 'suit') {
+            const clientRole = document.getElementById('clientRole')?.value;
+            const specificTaskType = document.getElementById('specificTaskType')?.value;
+            const suitCourt = document.getElementById('suitCourt')?.value;
+            const suitCaseNo = document.getElementById('suitCaseNo')?.value.trim();
+            const suitOpeningDate = document.getElementById('suitOpeningDate')?.value.trim(); // YENİ EKLENDİ
+            
+            // Zorunlu alanlar: Müvekkil, Rol, İş Tipi, Mahkeme, Esas/Takip No, Dava Tarihi
+            isComplete = 
+                !!this.suitClientPerson && 
+                !!clientRole && 
+                !!specificTaskType && 
+                !!suitCourt && 
+                !!suitCaseNo &&
+                !!suitOpeningDate; // YENİ KONTROL
+        }
 
             if (this.saveBtn) {
                 this.saveBtn.disabled = !isComplete;
@@ -2510,7 +2512,6 @@ async saveSuitPortfolio(portfolioData) {
     const opposingCounsel = document.getElementById('opposingCounsel')?.value.trim();
     const suitCaseNo = document.getElementById('suitCaseNo')?.value.trim();
     const suitOpeningDate = document.getElementById('suitOpeningDate')?.value;
-    const suitFilePath = document.getElementById('suitFilePath')?.value.trim();
     const countrySelect = document.getElementById('countrySelect')?.value;
     
     // ✅ GÜNCEL: Dava Durumu ve İşleme Konu Varlık bilgileri çekiliyor
@@ -2551,7 +2552,6 @@ async saveSuitPortfolio(portfolioData) {
             opposingCounsel: opposingCounsel || null,
             caseNo: suitCaseNo || null,
             openingDate: suitOpeningDate || null,
-            filePath: suitFilePath || null,
         },
         
         // ✅ GÜNCEL: Dava Durumu bilgisi ekleniyor
@@ -2613,11 +2613,11 @@ async saveSuitPortfolio(portfolioData) {
         });
     }
 
-    // === YENİ: Dava Detay Alanları HTML'i (renderSuitFields) ===
+// YENİ: Dava Detay Alanları HTML'i (renderSuitFields) ===
 renderSuitFields(taskName) {
     return `
-        <div class="card-header bg-secondary text-white">
-            <h5 class="mb-0">4. Dava Bilgileri</h5>
+        <div class="card-header bg-white border-bottom">
+            <h5 class="mb-0 text-primary">3. Dava Detayları</h5>
         </div>
         <div class="card-body">
             <div class="form-grid">
@@ -2672,12 +2672,7 @@ renderSuitFields(taskName) {
                     <input type="text" class="form-control date-picker" id="suitOpeningDate" required>
                 </div>
                 
-                <div class="form-group full-width">
-                    <label for="suitFilePath">Dosya Yolu (Evreka Cloud veya Drive)</label>
-                    <input type="text" class="form-control" id="suitFilePath">
                 </div>
-                
-            </div>
         </div>
     `;
 }
@@ -2689,9 +2684,9 @@ renderSuitClientSection() {
 
     // Müvekkil HTML'i
     const clientHtml = `
-        <div class="card mb-4" id="clientSection"> // İD EKLENDİ
-            <div class="card-header bg-info text-white">
-                <h5 class="mb-0">3. Müvekkil Bilgileri</h5>
+        <div class="card mb-4" id="clientSection">
+            <div class="card-header bg-white border-bottom">
+                <h5 class="mb-0 text-primary">1. Müvekkil Bilgileri</h5>
             </div>
             <div class="card-body">
                 <div class="form-grid">
@@ -2743,7 +2738,7 @@ renderSuitClientSection() {
         });
     });
     
-    // ✅ GÜNCELLEME: Müvekkil kartı eklendikten sonra 4. İşleme Konu Varlık bilgisini ekle
+    // ✅ GÜNCELLEME: Müvekkil kartı eklendikten sonra 2. İşleme Konu Varlık bilgisini ekle
     this.renderSuitSubjectAssetSection(); 
 }
 
@@ -2755,8 +2750,8 @@ renderSuitSubjectAssetSection() {
     // İşleme Konu Varlık HTML'i
     const assetHtml = `
         <div class="card mb-4" id="subjectAssetSection">
-            <div class="card-header bg-info text-white">
-                <h5 class="mb-0">4. İşleme Konu Varlık Bilgisi (Opsiyonel)</h5>
+            <div class="card-header bg-white border-bottom">
+                <h5 class="mb-0 text-primary">2. Dava Konusu (Portföy Varlığı)</h5>
             </div>
             <div class="card-body">
                 <div class="form-group full-width">
