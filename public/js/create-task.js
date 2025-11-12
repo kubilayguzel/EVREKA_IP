@@ -3198,11 +3198,18 @@ async getCountries() {
     }
 }
 // CreateTaskModule sınıfının içinde, herhangi bir yere ekleyebilirsiniz
-populateCountriesDropdown() {
-    const countrySelect = document.getElementById('priorityCountry');
+populateCountriesDropdown(dropdownId) {
+    const countrySelect = document.getElementById(dropdownId);
     if (!countrySelect) return;
 
-    countrySelect.innerHTML = '<option value="">Seçiniz...</option>'; // Önce mevcut seçenekleri temizle
+    countrySelect.innerHTML = '<option value="">Seçiniz...</option>'; 
+    
+    // 🚨 GÜNCELLEME: Veri kontrolü ekle
+    if (!this.allCountries || this.allCountries.length === 0) {
+        console.warn('⚠️ Hata: Ülke listesi (this.allCountries) boş veya yüklenemedi. Lütfen common/countries verisini kontrol edin.');
+        countrySelect.innerHTML += '<option value="" disabled>Ülkeler Yüklenemedi veya Boş</option>';
+        return;
+    }
 
     this.allCountries.forEach(country => {
         const option = document.createElement('option');
