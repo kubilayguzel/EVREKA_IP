@@ -1132,7 +1132,7 @@ body.dark .opposition-owner-badge{
 </div>
 <div class="fade tab-pane" id="invoices">
 <h1 class="header-title">Faturalarım</h1>
-<p class="lead">Geçmiş ve ödenmemiş faturalarınızın listesi.</p>
+<p class="lead">Fatura bilgilerinizin listesi.</p>
 <div class="table-responsive mt-4">
 <table class="table table-hover">
 <thead>
@@ -1142,7 +1142,7 @@ body.dark .opposition-owner-badge{
 <th>Açıklama</th>
 <th>Tutar</th>
 <th>Durum</th>
-<th>Aksiyon</th>
+<th>Fatura/Belge</th>
 </tr>
 </thead>
 <tbody>
@@ -2122,9 +2122,81 @@ window.fetchAndDisplayInvoices = async function (linkedPersonIds) {
     // Tekrar edenleri temizle (farklı sorgulardan aynı ID gelebilir)
     const uniqueAccruals = Array.from(new Map(allAccruals.map(acc => [acc.id, acc])).values());
     
+    // Fatura No'ya göre BÜYÜKTEN KÜÇÜĞE sırala
+    uniqueAccruals.sort((a, b) => {
+        const invoiceNoA = a.invoiceNo || a.id?.substring(0, 8) || '0';
+        const invoiceNoB = b.invoiceNo || b.id?.substring(0, 8) || '0';
+        // Sayısal karşılaştırma için
+        const numA = parseInt(invoiceNoA.replace(/\D/g, '')) || 0;
+        const numB = parseInt(invoiceNoB.replace(/\D/g, '')) || 0;
+        return numB - numA; // Büyükten küçüğe
+    });
+    
+    // Pagination için global değişken
+    if (!window.invoicesPaginationData) {
+        window.invoicesPaginationData = {
+            allData: [],
+            currentPage: 1,
+            itemsPerPage: 10
+        };
+    }
+    
+    window.invoicesPaginationData.allData = uniqueAccruals;
+    window.invoicesPaginationData.currentPage = 1;
+    
+    // İlk sayfayı render et
+    renderInvoicesPage();
+
+  } catch (err) {
+    console.error('Faturalar çekilirken genel hata:', err);
+    const tableBody = document.querySelector('#invoices table tbody');
+    if (tableBody) {
+        tableBody.innerHTML = `<tr><td colspan="6" class="text-center text-danger">Veriler yüklenirken genel bir hata oluştu.</td></tr>`;
+    }
+  }
+};
+
+// Faturaları sayfa sayfa gösteren fonksiyon
+window.renderInvoicesPage = function() {
+    const data = window.invoicesPaginationData;
+    const table = document.querySelector('#invoices table');
+    if (!table) return;
+    
+    const tableBody = table.querySelector('tbody') || table.createTBody();
     tableBody.innerHTML = '';
     
-    uniqueAccruals.forEach((a) => {
+    const startIdx = (data.currentPage - 1) * data.itemsPerPage;
+    const endIdx = startIdx + data.itemsPerPage;
+    const pageData = data.allData.slice(startIdx, endIdx);
+    
+    const currencyFormatter = (amount, currency) => {
+        try {
+            return new Intl.NumberFormat('tr-TR', { style: 'currency', currency: currency || 'TRY' })
+                .format(amount ?? 0);
+        } catch (e) {
+            return (amount ?? 0) + ' ' + (currency || 'TRY');
+        }
+    };
+
+    const formatDate = (timestamp) => {
+        if (!timestamp) return '-';
+        try {
+            let date;
+            if (timestamp && typeof timestamp === 'object' && typeof timestamp.toDate === 'function') {
+                date = timestamp.toDate();
+            } else if (timestamp && typeof timestamp === 'object' && timestamp.seconds) {
+                date = new Date(timestamp.seconds * 1000);
+            } else {
+                date = new Date(timestamp);
+            }
+            if (isNaN(date.getTime())) return '-';
+            return date.toLocaleDateString('tr-TR');
+        } catch (e) {
+            return '-';
+        }
+    };
+    
+    pageData.forEach((a) => {
       let statusText;
       let statusBadgeClass;
       switch (a.status) {
@@ -2138,7 +2210,7 @@ window.fetchAndDisplayInvoices = async function (linkedPersonIds) {
           break;
         case 'partially_paid':
           statusText = 'Kısmen Ödendi';
-          statusBadgeClass = 'badge-warning';
+          statusBadgeClass = 'badge-warning'; // Turuncu
           break;
         default:
           statusText = 'Bilinmiyor';
@@ -2171,20 +2243,93 @@ window.fetchAndDisplayInvoices = async function (linkedPersonIds) {
     });
     
     // Eğer kayıt yoksa
-    if (uniqueAccruals.length === 0) {
-         tableBody.insertAdjacentHTML(
-            'beforeend',
-            `<tr><td colspan="6" class="text-center text-muted">Müvekkiliniz ile ilişkili tahakkuk kaydı bulunmamaktadır.</td></tr>`
-        );
+    if (data.allData.length === 0) {
+         tableBody.innerHTML = `<tr><td colspan="6" class="text-center text-muted">Müvekkiliniz ile ilişkili tahakkuk kaydı bulunmamaktadır.</td></tr>`;
     }
+    
+    // Pagination kontrollerini render et
+    renderInvoicesPagination();
+};
 
-  } catch (err) {
-    console.error('Faturalar çekilirken genel hata:', err);
-    const tableBody = document.querySelector('#invoices table tbody');
-    if (tableBody) {
-        tableBody.innerHTML = `<tr><td colspan="6" class="text-center text-danger">Veriler yüklenirken genel bir hata oluştu.</td></tr>`;
+// Pagination kontrollerini oluştur
+window.renderInvoicesPagination = function() {
+    const data = window.invoicesPaginationData;
+    const totalPages = Math.ceil(data.allData.length / data.itemsPerPage);
+    
+    // Pagination container'ı bul veya oluştur
+    let paginationContainer = document.querySelector('#invoices .pagination-container');
+    if (!paginationContainer) {
+        const tableWrapper = document.querySelector('#invoices .table-responsive');
+        if (tableWrapper) {
+            paginationContainer = document.createElement('div');
+            paginationContainer.className = 'pagination-container mt-3 d-flex justify-content-between align-items-center';
+            tableWrapper.parentNode.insertBefore(paginationContainer, tableWrapper.nextSibling);
+        } else {
+            return;
+        }
     }
-  }
+    
+    if (totalPages <= 1) {
+        paginationContainer.innerHTML = '';
+        return;
+    }
+    
+    let paginationHTML = `
+        <div class="pagination-info">
+            <span>${data.allData.length} kayıttan ${((data.currentPage - 1) * data.itemsPerPage) + 1}-${Math.min(data.currentPage * data.itemsPerPage, data.allData.length)} arası gösteriliyor</span>
+        </div>
+        <nav>
+            <ul class="pagination mb-0">
+    `;
+    
+    // Önceki sayfa
+    paginationHTML += `
+        <li class="page-item ${data.currentPage === 1 ? 'disabled' : ''}">
+            <a class="page-link" href="#" onclick="window.goToInvoicesPage(${data.currentPage - 1}); return false;">
+                <i class="fas fa-chevron-left"></i>
+            </a>
+        </li>
+    `;
+    
+    // Sayfa numaraları
+    for (let i = 1; i <= totalPages; i++) {
+        if (i === 1 || i === totalPages || (i >= data.currentPage - 2 && i <= data.currentPage + 2)) {
+            paginationHTML += `
+                <li class="page-item ${i === data.currentPage ? 'active' : ''}">
+                    <a class="page-link" href="#" onclick="window.goToInvoicesPage(${i}); return false;">${i}</a>
+                </li>
+            `;
+        } else if (i === data.currentPage - 3 || i === data.currentPage + 3) {
+            paginationHTML += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
+        }
+    }
+    
+    // Sonraki sayfa
+    paginationHTML += `
+        <li class="page-item ${data.currentPage === totalPages ? 'disabled' : ''}">
+            <a class="page-link" href="#" onclick="window.goToInvoicesPage(${data.currentPage + 1}); return false;">
+                <i class="fas fa-chevron-right"></i>
+            </a>
+        </li>
+    `;
+    
+    paginationHTML += `
+            </ul>
+        </nav>
+    `;
+    
+    paginationContainer.innerHTML = paginationHTML;
+};
+
+// Sayfaya git fonksiyonu
+window.goToInvoicesPage = function(pageNum) {
+    const data = window.invoicesPaginationData;
+    const totalPages = Math.ceil(data.allData.length / data.itemsPerPage);
+    
+    if (pageNum < 1 || pageNum > totalPages) return;
+    
+    data.currentPage = pageNum;
+    renderInvoicesPage();
 };
 
 // === GLOBAL DEĞİŞKENLER (DOMContentLoaded'dan ÖNCE) ===
