@@ -17,7 +17,7 @@ function __pathFromDownloadURL(url) {
 
 function initTaskDatePickers(root=document) {
   try {
-    const IDS = ['taskDueDate','priorityDate','lawsuitDate'];
+    const IDS = ['taskDueDate','priorityDate','lawsuitDate', 'lawsuitDecisionDate']; // <-- lawsuitDecisionDate eklendi
     const dateRegex = /^\d{2}\.\d{2}\.\d{4}$/;
 
     const findAllById = (docOrNode, id) => {
@@ -1206,31 +1206,72 @@ setupBaseFormListeners() {
         this.handleOriginChange(document.getElementById('originSelect')?.value);
     }
 
-      renderBaseForm(container, taskTypeName, taskTypeId) {
+    renderBaseForm(container, taskTypeName, taskTypeId) {
         const taskIdStr = asId(taskTypeId);
         const needsRelatedParty = RELATED_PARTY_REQUIRED.has(taskIdStr);
         const partyLabel = PARTY_LABEL_BY_ID[taskIdStr] || 'İlgili Taraf';
 
-        let specificFieldsHtml = '';
-        if (taskTypeId === 'litigation_yidk_annulment') {
+    let specificFieldsHtml = '';
+        // 'litigation_yidk_annulment' ID'si ile gelen Dava İşleri için detayları ekler
+        const isLawsuitTask = taskTypeId === 'litigation_yidk_annulment'; 
+
+        if (isLawsuitTask) {
             specificFieldsHtml = `
-                <div class="form-section">
-                    <h3 class="section-title">2. Dava Bilgileri</h3>
-                    <div class="form-group full-width">
-                        <label for="subjectOfLawsuit" class="form-label">Dava Konusu</label>
-                        <textarea id="subjectOfLawsuit" name="subjectOfLawsuit" class="form-textarea"></textarea>
-                    </div>
-                    <div class="form-group">
-                        <label for="courtName" class="form-label">Mahkeme Adı</label>
-                        <input type="text" id="courtName" name="courtName" class="form-input">
-                    </div>
-                    <div class="form-group">
-                        <label for="courtFileNumber" class="form-label">Dava Dosya Numarası</label>
-                        <input type="text" id="courtFileNumber" name="courtFileNumber" class="form-input">
-                    </div>
-                    <div class="form-group date-picker-group">
-                        <label for="lawsuitDate" class="form-label">Dava Tarihi</label>
-                        <input type="text" id="lawsuitDate" name="lawsuitDate" class="form-input">
+                <div class="section-card">
+                    <h3 class="section-title">Dava Detayları</h3>
+                    <div class="form-grid">
+                        <div class="form-group full-width">
+                            <label for="subjectOfLawsuit" class="form-label">Dava Konusu ve Kısa Açıklaması</label>
+                            <textarea id="subjectOfLawsuit" name="subjectOfLawsuit" class="form-textarea" rows="3"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label for="clientRole" class="form-label">Müvekkil/Davacının Rolü</label>
+                            <select id="clientRole" name="clientRole" class="form-select">
+                                <option value="">Seçiniz...</option>
+                                <option value="davaci">Davacı (Plaintiff)</option>
+                                <option value="davali">Davalı (Defendant)</option>
+                                <option value="araci">Aracı / 3. Taraf</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="lawsuitOutcome" class="form-label">Dava Sonucu</label>
+                            <select id="lawsuitOutcome" name="lawsuitOutcome" class="form-select">
+                                <option value="">Seçiniz...</option>
+                                <option value="kazanildi">Kazanıldı (Lehte)</option>
+                                <option value="kaybedildi">Kaybedildi (Aleyhte)</option>
+                                <option value="anlasma">Anlaşma ile Sonuçlandı</option>
+                                <option value="devam">Devam Ediyor</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="courtName" class="form-label">Mahkeme Adı</label>
+                            <input type="text" id="courtName" name="courtName" class="form-input">
+                        </div>
+                        <div class="form-group">
+                            <label for="courtFileNumber" class="form-label">Dava Dosya Numarası</label>
+                            <input type="text" id="courtFileNumber" name="courtFileNumber" class="form-input">
+                        </div>
+                        <div class="form-group date-picker-group">
+                            <label for="lawsuitDate" class="form-label">Dava Tarihi</label>
+                            <input type="text" id="lawsuitDate" name="lawsuitDate" class="form-input">
+                        </div>
+                        <div class="form-group date-picker-group">
+                            <label for="lawsuitDecisionDate" class="form-label">Karar Tarihi</label>
+                            <input type="text" id="lawsuitDecisionDate" name="lawsuitDecisionDate" class="form-input">
+                        </div>
+                        <div class="form-group">
+                            <label for="opposingCounsel" class="form-label">Karşı Taraf Vekili (Eğer varsa)</label>
+                            <input type="text" id="opposingCounsel" name="opposingCounsel" class="form-input">
+                        </div>
+                        <div class="form-group">
+                            <label for="filingType" class="form-label">Dava Açılma Şekli</label>
+                            <select id="filingType" name="filingType" class="form-select">
+                                <option value="">Seçiniz...</option>
+                                <option value="edava">E-Dava</option>
+                                <option value="elden">Elden Başvuru</option>
+                                <option value="posta">Posta</option>
+                            </select>
+                        </div>
                     </div>
                 </div>
             `;
