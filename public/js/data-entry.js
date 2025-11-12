@@ -274,20 +274,63 @@ async loadAllData() {
             }
         }
 
-    populateOriginDropdown(dropdownId, selectedValue = 'TÜRKPATENT') {
-        const dropdown = document.getElementById(dropdownId);
-        if (!dropdown) return;
-        dropdown.innerHTML = ''; // Önceki seçenekleri temizle
-        ORIGIN_TYPES.forEach(origin => {
-            const option = document.createElement('option');
-            option.value = origin.value;
-            option.textContent = origin.text;
-            if (origin.value === selectedValue) {
-                option.selected = true;
-            }
-            dropdown.appendChild(option);
+// YENİ KOD (Değiştirilmesi Gereken Kısım)
+populateOriginDropdown(dropdownId, selectedValue = 'TÜRKPATENT', ipType) {
+    const dropdown = document.getElementById(dropdownId);
+    if (!dropdown) return;
+    
+    let filteredOrigins = ORIGIN_TYPES;
+    
+    // Dava (suit) için menşe seçeneklerini filtrele
+    if (ipType === 'suit') {
+        filteredOrigins = ORIGIN_TYPES.filter(origin => 
+            origin.value === 'TÜRKPATENT' || origin.value === 'Yurtdışı Ulusal'
+        ).map(origin => {
+             // Dava için menşe isimlerini ve değerlerini değiştir
+            if(origin.value === 'TÜRKPATENT') return { value: 'TURKEY_NATIONAL', text: 'TÜRKİYE' };
+            if(origin.value === 'Yurtdışı Ulusal') return { value: 'FOREIGN_NATIONAL', text: 'Yurtdışı' };
+            return origin;
         });
+        // Varsayılan değeri Dava tiplerine uygun olarak güncelle
+        selectedValue = selectedValue === 'TÜRKPATENT' ? 'TURKEY_NATIONAL' : selectedValue;
     }
+
+    dropdown.innerHTML = ''; // Önceki seçenekleri temizle
+    
+    // Menüde en üstte "Seçiniz" seçeneği her zaman olsun
+    const selectOption = document.createElement('option');
+    selectOption.value = "";
+    selectOption.textContent = "Seçiniz...";
+    dropdown.appendChild(selectOption);
+
+    filteredOrigins.forEach(origin => {
+        const option = document.createElement('option');
+        option.value = origin.value;
+        option.textContent = origin.text;
+        if (origin.value === selectedValue) {
+            option.selected = true;
+        }
+        // TÜRKPATENT/TURKEY_NATIONAL'ı varsayılan olarak seç
+        if (ipType === 'suit' && origin.value === 'TURKEY_NATIONAL') {
+            option.selected = true;
+        } else if (ipType !== 'suit' && origin.value === 'TÜRKPATENT') {
+             option.selected = true;
+        }
+        
+        // Eğer seçili bir değer varsa, onu kullan
+        if (selectedValue) {
+             option.selected = (origin.value === selectedValue);
+        }
+        
+        // Menüde Selectiniz seçeneği yoksa (eklendi) ve bu ilk seçenek değilse ekle
+        if (origin.value) {
+            dropdown.appendChild(option);
+        }
+    });
+    
+    // Menşe değişimi event'ini tetikle
+    dropdown.dispatchEvent(new Event('change'));
+}
    
 handleOriginChange(originType) {
         const countrySelectionContainer = document.getElementById('countrySelectionContainer');
@@ -347,72 +390,76 @@ handleOriginChange(originType) {
     }
 
 handleIPTypeChange(ipType) {
-        console.log('📋 IP türü değişti:', ipType);
-        
-        this.currentIpType = ipType;
-        
-        const isSuit = ipType === 'suit';
-        const ownerCard = document.getElementById('ownerCard');
-        const specificTaskTypeWrapper = document.getElementById('specificTaskTypeWrapper');
-        const originSelectWrapper = document.getElementById('originSelectWrapper');
-        const suitSpecificFieldsCard = document.getElementById('suitSpecificFieldsCard');
-        const dynamicFormContainer = document.getElementById('dynamicFormContainer');
-        const clientSection = document.querySelector('.card.mb-4[id="clientSection"]');
-        
-        // Temizle
-        dynamicFormContainer.innerHTML = '';
-        if (clientSection) clientSection.remove(); // Önceki müvekkil kartını kaldır
-        document.getElementById('countrySelectionContainer').style.display = 'none';
+    console.log('📋 IP türü değişti:', ipType);
+    
+    this.currentIpType = ipType;
+    
+    const isSuit = ipType === 'suit';
+    const ownerCard = document.getElementById('ownerCard');
+    const specificTaskTypeWrapper = document.getElementById('specificTaskTypeWrapper');
+    const originSelectWrapper = document.getElementById('originSelectWrapper');
+    const suitSpecificFieldsCard = document.getElementById('suitSpecificFieldsCard');
+    const dynamicFormContainer = document.getElementById('dynamicFormContainer');
+    // Not: Müvekkil kartı, renderSuitClientSection içinde suitSpecificFieldsCard'dan önce eklendiği için
+    // doğru bir şekilde seçilmesi gerekir.
+    const clientSection = document.querySelector('.card.mb-4[id="clientSection"]'); 
+    
+    // Temizle
+    dynamicFormContainer.innerHTML = '';
+    if (clientSection) clientSection.remove(); // Önceki müvekkil kartını kaldır
+    document.getElementById('countrySelectionContainer').style.display = 'none';
 
-        // 1. Kayıt Sahibi (Owner) Alanı Kontrolü (Dava seçildiğinde gizle)
-        if (ownerCard) {
-            ownerCard.style.display = isSuit ? 'none' : 'block';
-        }
-
-        if (isSuit) {
-            // Dava tipi seçildi:
-            specificTaskTypeWrapper.style.display = 'block';
-            originSelectWrapper.style.display = 'block';
-            suitSpecificFieldsCard.style.display = 'block';
-            
-            // Müvekkil bölümünü ve Dava Detaylarını ekle
-            this.renderSuitClientSection(); 
-
-            // Menşe doldurma ve olay tetikleme (Dava için Türkiye/Yurtdışı)
-            this.populateOriginDropdown('originSelect', 'TURKEY', ipType);
-            this.handleOriginChange(document.getElementById('originSelect')?.value);
-
-            // Spesifik İş Tipi doldurma (Dava için filtrelenmiş)
-            this.populateSpecificTaskTypeDropdown(ipType);
-            
-            // İlk yükleme/seçim anında Dava Detaylarını temizle
-            suitSpecificFieldsCard.querySelector('#suitSpecificFieldsContainer').innerHTML = '';
-
-
-        } else {
-            // Marka/Patent/Tasarım seçildi
-            specificTaskTypeWrapper.style.display = 'none';
-            originSelectWrapper.style.display = 'block'; 
-            suitSpecificFieldsCard.style.display = 'none';
-
-            // Normal IP render fonksiyonunu çağır
-            dynamicFormContainer.style.display = 'block';
-            
-            switch(ipType) {
-                case 'trademark': this.renderTrademarkForm(); break;
-                case 'patent': this.renderPatentForm(); break;
-                case 'design': this.renderDesignForm(); break;
-                default: dynamicFormContainer.innerHTML = ''; // IP türü seçilmezse temizle
-            }
-
-            // Orijinal Menşe Listesini doldur
-            this.populateOriginDropdown('originSelect', 'TÜRKPATENT', ipType);
-            this.handleOriginChange(document.getElementById('originSelect')?.value);
-
-        }
-
-        this.updateSaveButtonState();
+    // 1. Kayıt Sahibi (Owner) Alanı Kontrolü (Dava seçildiğinde gizle)
+    if (ownerCard) {
+        ownerCard.style.display = isSuit ? 'none' : 'block';
     }
+
+    if (isSuit) {
+        // Dava tipi seçildi:
+        specificTaskTypeWrapper.style.display = 'block';
+        originSelectWrapper.style.display = 'block';
+        suitSpecificFieldsCard.style.display = 'block';
+        
+        // Müvekkil bölümünü ekle (Bu aynı zamanda clientSection'ı DOM'a ekler)
+        this.renderSuitClientSection(); 
+
+        // Menşe doldurma ve olay tetikleme (Dava için Türkiye/Yurtdışı)
+        // Menşe değeri artık 'TURKEY_NATIONAL' olarak ayarlanır.
+        this.populateOriginDropdown('originSelect', 'TURKEY_NATIONAL', ipType); 
+        // handleOriginChange artık populateOriginDropdown içinde tetikleniyor.
+
+        // Spesifik İş Tipi doldurma (Dava için filtrelenmiş)
+        this.populateSpecificTaskTypeDropdown(ipType);
+        
+        // İlk yükleme/seçim anında Dava Detaylarını temizle
+        // İş Tipi seçilene kadar Dava Detayları boş kalır.
+        suitSpecificFieldsCard.querySelector('#suitSpecificFieldsContainer').innerHTML = '';
+
+
+    } else {
+        // Marka/Patent/Tasarım seçildi
+        specificTaskTypeWrapper.style.display = 'none';
+        originSelectWrapper.style.display = 'block'; 
+        suitSpecificFieldsCard.style.display = 'none';
+
+        // Normal IP render fonksiyonunu çağır
+        dynamicFormContainer.style.display = 'block';
+        
+        switch(ipType) {
+            case 'trademark': this.renderTrademarkForm(); break;
+            case 'patent': this.renderPatentForm(); break;
+            case 'design': this.renderDesignForm(); break;
+            default: dynamicFormContainer.innerHTML = ''; // IP türü seçilmezse temizle
+        }
+
+        // Orijinal Menşe Listesini doldur
+        this.populateOriginDropdown('originSelect', 'TÜRKPATENT', ipType);
+        this.handleOriginChange(document.getElementById('originSelect')?.value);
+
+    }
+
+    this.updateSaveButtonState();
+}
 
     // === YENİ: `handleSpecificTaskTypeChange` Fonksiyonu ===
     handleSpecificTaskTypeChange(e) {
@@ -1352,14 +1399,27 @@ initializeDatePickers() {
             const patentTitle = document.getElementById('patentTitle');
             isComplete = patentTitle && patentTitle.value.trim();
         } else if (ipType === 'design') {
-            const designTitle = document.getElementById('designTitle');
-            isComplete = designTitle && designTitle.value.trim();
-        }
+                const designTitle = document.getElementById('designTitle');
+                isComplete = designTitle && designTitle.value.trim();
+            } else if (ipType === 'suit') { // YENİ: Dava için zorunlu alan kontrolü
+                const clientRole = document.getElementById('clientRole')?.value;
+                const specificTaskType = document.getElementById('specificTaskType')?.value;
+                const suitCourt = document.getElementById('suitCourt')?.value;
+                const suitCaseNo = document.getElementById('suitCaseNo')?.value.trim();
+                
+                // Zorunlu alanlar: Müvekkil (this.suitClientPerson), Rol, İş Tipi, Mahkeme, Esas/Takip No
+                isComplete = 
+                    !!this.suitClientPerson && 
+                    !!clientRole && 
+                    !!specificTaskType && 
+                    !!suitCourt && 
+                    !!suitCaseNo;
+            }
 
-        if (this.saveBtn) {
-            this.saveBtn.disabled = !isComplete;
+            if (this.saveBtn) {
+                this.saveBtn.disabled = !isComplete;
+            }
         }
-    }
 
     async uploadFileToStorage(file, path) {
         if (!file || !path) {
@@ -1807,12 +1867,14 @@ populateFormFields(recordData) {
     };
 
     try {
-        if (ipType === 'trademark') {
+    if (ipType === 'trademark') {
             await this.saveTrademarkPortfolio(portfolioData);
         } else if (ipType === 'patent') {
             await this.savePatentPortfolio(portfolioData);
         } else if (ipType === 'design') {
             await this.saveDesignPortfolio(portfolioData);
+        } else if (ipType === 'suit') { // YENİ: Dava kaydetme
+            await this.saveSuitPortfolio(portfolioData);
         }
     } catch (error) {
         console.error('Portföy kaydı kaydetme hatası:', error);
@@ -2423,6 +2485,80 @@ async savePatentPortfolio(portfolioData) {
         window.location.href = 'portfolio.html';
     } else {
         throw new Error(result.error);
+    }
+}
+
+// YENİ FONKSİYON: saveSuitPortfolio
+async saveSuitPortfolio(portfolioData) {
+    const db = getFirestore();
+    const suitsColRef = collection(db, 'suits'); // Yeni suits tablosu
+
+    const ipType = portfolioData.ipType;
+    const origin = document.getElementById('originSelect')?.value;
+    const specificTaskType = this.suitSpecificTaskType; // handleSpecificTaskTypeChange'den gelen bilgi
+    const clientRole = document.getElementById('clientRole')?.value;
+    const clientPerson = this.suitClientPerson;
+
+    // Suit alanlarını topla
+    // Tahakkuk ve İş Detayları/Atama Hariç (Zaten renderSuitFields'ta yoklar)
+    const suitCourt = document.getElementById('suitCourt')?.value;
+    const suitDescription = document.getElementById('suitDescription')?.value.trim();
+    const opposingParty = document.getElementById('opposingParty')?.value.trim();
+    const opposingCounsel = document.getElementById('opposingCounsel')?.value.trim();
+    const suitCaseNo = document.getElementById('suitCaseNo')?.value.trim();
+    const suitOpeningDate = document.getElementById('suitOpeningDate')?.value;
+    const suitFilePath = document.getElementById('suitFilePath')?.value.trim();
+    const countrySelect = document.getElementById('countrySelect')?.value;
+    
+    // Zorunlu alan kontrolü (updateSaveButtonState'te yapılmıştı, burada tekrar edelim)
+    if (!clientRole || !clientPerson || !specificTaskType || !suitCourt || !suitCaseNo) {
+        alert('Lütfen Müvekkil, Rol, İş Tipi, Mahkeme ve Esas/Takip No alanlarını doldurun.');
+        return;
+    }
+    
+    const suitDataToSave = {
+        title: `${specificTaskType.alias || specificTaskType.name} - ${clientPerson.name}`,
+        type: ipType, // 'suit'
+        portfoyStatus: 'active',
+        status: 'filed', // Dava kayıtları için başlangıç durumu
+        recordOwnerType: 'self', 
+        
+        // Menşe ve Ülke
+        origin: origin || 'TURKEY_NATIONAL',
+        country: (origin === 'FOREIGN_NATIONAL' && countrySelect) ? countrySelect : null,
+        
+        // Müvekkil Bilgileri
+        client: clientPerson ? { id: clientPerson.id, name: clientPerson.name, role: clientRole } : null,
+        clientRole: clientRole || null,
+
+        // İş Tipi Bilgileri
+        transactionType: specificTaskType ? { id: specificTaskType.id, name: specificTaskType.name, alias: specificTaskType.alias } : null,
+        transactionTypeId: specificTaskType?.id || null,
+
+        // Dava Bilgileri
+        suitDetails: {
+            court: suitCourt || null,
+            description: suitDescription || null,
+            opposingParty: opposingParty || null,
+            opposingCounsel: opposingCounsel || null,
+            caseNo: suitCaseNo || null,
+            openingDate: suitOpeningDate || null,
+            filePath: suitFilePath || null,
+        },
+        
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+    };
+    
+    // Veritabanına kaydet (suits koleksiyonuna)
+    try {
+        const result = await addDoc(suitsColRef, suitDataToSave);
+        console.log('✅ Dava kaydı başarıyla oluşturuldu, ID:', result.id);
+        alert('Dava portföy kaydı başarıyla oluşturuldu!');
+        window.location.href = 'portfolio.html';
+    } catch (error) {
+        console.error('❌ Dava kaydı kaydedilirken hata oluştu:', error);
+        throw new Error('Dava kaydı kaydedilirken bir hata oluştu');
     }
 }
 
