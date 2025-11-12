@@ -2083,20 +2083,46 @@ async function fetchAndDisplayPortfolio() {
 window.populateDashboardNumbers = async function (linkedPersonIds, allPortfolios){
     const portfolioCount = allPortfolios.length;
 
-    // Tüm faturaları çek
-    const accrualQ = query(
-      collection(db, "accruals"),
-      where("personsRelatedIds", "array-contains-any", linkedPersonIds)
-    );
-    const accrualSnap = await runGetDocs(accrualQ);
+    // Tüm faturaları çek - fetchAndDisplayInvoices ile aynı mantık
+    const allAccruals = [];
+    const chunkSize = 10;
     
-    // Ödenmemiş (isPaid=false veya status='unpaid') ve kısmen ödenen (status='partially_paid') faturaları say
-    const unpaidInvoices = accrualSnap.docs.filter(doc => {
-      const data = doc.data();
-      return data.isPaid === false || 
-             data.status === 'unpaid' || 
-             data.status === 'partially_paid';
+    // linkedPersonIds listesini 10'arlı parçalara ayır (Firestore 'in' limiti)
+    for (let i = 0; i < linkedPersonIds.length; i += chunkSize) {
+        const chunk = linkedPersonIds.slice(i, i + chunkSize);
+        
+        try {
+            // Firestore Sorgusu: serviceInvoiceParty.id, yetkili ID'lerden birinde olmalı
+            const q = query(
+              collection(db, 'accruals'),
+              where('serviceInvoiceParty.id', 'in', chunk)
+            );
+            const snap = await runGetDocs(q);
+            snap.forEach((d) => {
+                allAccruals.push({ id: d.id, ...d.data() });
+            });
+        } catch(error) {
+            console.error("Dashboard fatura sayacı - Firestore sorgu hatası:", error);
+        }
+    }
+    
+    // Tekrar edenleri temizle
+    const uniqueAccruals = Array.from(new Map(allAccruals.map(acc => [acc.id, acc])).values());
+    
+    // Ödenmemiş ve kısmen ödenen faturaları say
+    const unpaidInvoices = uniqueAccruals.filter(acc => {
+      return acc.status === 'unpaid' || acc.status === 'partially_paid';
     }).length;
+    
+    console.log('📊 Dashboard Sayaçlar:', {
+        totalAccruals: uniqueAccruals.length,
+        unpaidCount: unpaidInvoices,
+        statusBreakdown: {
+            paid: uniqueAccruals.filter(a => a.status === 'paid').length,
+            unpaid: uniqueAccruals.filter(a => a.status === 'unpaid').length,
+            partially_paid: uniqueAccruals.filter(a => a.status === 'partially_paid').length
+        }
+    });
 
     writeDashSafe('#dashPortfolio',        portfolioCount);
     writeDashSafe('#dashUnpaidInvoices',   unpaidInvoices);
