@@ -2504,7 +2504,6 @@ async saveSuitPortfolio(portfolioData) {
     const clientPerson = this.suitClientPerson;
 
     // Suit alanlarını topla
-    // Tahakkuk ve İş Detayları/Atama Hariç (Zaten renderSuitFields'ta yoklar)
     const suitCourt = document.getElementById('suitCourt')?.value;
     const suitDescription = document.getElementById('suitDescription')?.value.trim();
     const opposingParty = document.getElementById('opposingParty')?.value.trim();
@@ -2514,9 +2513,13 @@ async saveSuitPortfolio(portfolioData) {
     const suitFilePath = document.getElementById('suitFilePath')?.value.trim();
     const countrySelect = document.getElementById('countrySelect')?.value;
     
-    // Zorunlu alan kontrolü (updateSaveButtonState'te yapılmıştı, burada tekrar edelim)
+    // ✅ GÜNCEL: Dava Durumu ve İşleme Konu Varlık bilgileri çekiliyor
+    const suitStatusSelect = document.getElementById('suitStatusSelect')?.value;
+    const subjectAsset = this.suitSubjectAsset; 
+    
+    // Zorunlu alan kontrolü
     if (!clientRole || !clientPerson || !specificTaskType || !suitCourt || !suitCaseNo) {
-        alert('Lütfen Müvekkil, Rol, İş Tipi, Mahkeme ve Esas/Takip No alanlarını doldurun.');
+        alert('Lütfen Müvekkil, Rol, İş Tipi, Mahkeme ve Esas No alanlarını doldurun.');
         return;
     }
     
@@ -2524,7 +2527,8 @@ async saveSuitPortfolio(portfolioData) {
         title: `${specificTaskType.alias || specificTaskType.name} - ${clientPerson.name}`,
         type: ipType, // 'suit'
         portfoyStatus: 'active',
-        status: 'filed', // Dava kayıtları için başlangıç durumu
+        // 'status' alanı yerine artık daha spesifik olan 'suitStatus' kullanılıyor
+        // status: 'filed', 
         recordOwnerType: 'self', 
         
         // Menşe ve Ülke
@@ -2549,6 +2553,12 @@ async saveSuitPortfolio(portfolioData) {
             openingDate: suitOpeningDate || null,
             filePath: suitFilePath || null,
         },
+        
+        // ✅ GÜNCEL: Dava Durumu bilgisi ekleniyor
+        suitStatus: suitStatusSelect || 'filed',
+    
+        // ✅ GÜNCEL: İşleme Konu Varlık bilgisi ekleniyor
+        subjectAsset: subjectAsset || null, 
         
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
@@ -2604,127 +2614,264 @@ async saveSuitPortfolio(portfolioData) {
     }
 
     // === YENİ: Dava Detay Alanları HTML'i (renderSuitFields) ===
-    renderSuitFields(taskName) {
-        // İş Detayları ve Tahakkuk hariç, son gereksinimlere uygun alanlar
-        return `
-            <div class="card-header bg-secondary text-white">
-                <h5 class="mb-0">4. Dava Bilgileri - ${taskName}</h5>
+renderSuitFields(taskName) {
+    return `
+        <div class="card-header bg-secondary text-white">
+            <h5 class="mb-0">4. Dava Bilgileri</h5>
+        </div>
+        <div class="card-body">
+            <div class="form-grid">
+                
+                <div class="form-group full-width">
+                    <label for="suitCourt" class="form-label">Mahkeme</label>
+                    <select id="suitCourt" name="suitCourt" class="form-select" required>
+                        <option value="">Seçiniz...</option>
+                        <option value="ankara_1_fsm">Ankara 1. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
+                        <option value="ankara_2_fsm">Ankara 2. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
+                        <option value="ankara_3_fsm">Ankara 3. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
+                        <option value="ankara_4_fsm">Ankara 4. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
+                        <option value="ankara_5_fsm">Ankara 5. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
+                        <option value="istinaf">Ankara Bölge Adliye Mahkemesi (İstinaf)</option>
+                        <option value="yargitay_11_hd">Yargıtay 11. Hukuk Dairesi</option>
+                    </select>
+                </div>
+
+                <div class="form-group full-width">
+                    <label for="suitDescription" class="form-label">Dava Konusu ve Kısa Açıklaması</label>
+                    <textarea class="form-control" id="suitDescription" rows="3"></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label for="opposingParty" class="form-label">Karşı Taraf</label>
+                    <input type="text" id="opposingParty" name="opposingParty" class="form-input" placeholder="Örn: X Firması">
+                </div>
+
+                <div class="form-group">
+                    <label for="opposingCounsel" class="form-label">Karşı Taraf Vekili</label>
+                    <input type="text" id="opposingCounsel" name="opposingCounsel" class="form-input" placeholder="Örn: Av. Y">
+                </div>
+                
+                <div class="form-group">
+                    <label for="suitStatusSelect" class="form-label">Dava Durumu</label>
+                    <select id="suitStatusSelect" class="form-select" required>
+                        <option value="filed">Dava Açıldı</option>
+                        <option value="continue">Devam Ediyor</option>
+                        <option value="judgment_made">Karar Verildi</option>
+                        <option value="closed">Kapandı</option>
+                        <option value="appeal">İstinaf/Temyiz Aşamasında</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="suitCaseNo" class="form-label">Esas No</label>
+                    <input type="text" class="form-control" id="suitCaseNo" placeholder="Örn: 2023/123 Esas">
+                </div>
+                
+                <div class="form-group">
+                    <label for="suitOpeningDate" class="form-label">Dava Tarihi</label>
+                    <input type="text" class="form-control date-picker" id="suitOpeningDate" required>
+                </div>
+                
+                <div class="form-group full-width">
+                    <label for="suitFilePath">Dosya Yolu (Evreka Cloud veya Drive)</label>
+                    <input type="text" class="form-control" id="suitFilePath">
+                </div>
+                
+            </div>
+        </div>
+    `;
+}
+    
+// YENİ: Müvekkil alanını render eden fonksiyon
+renderSuitClientSection() {
+    const suitFieldsCard = document.getElementById('suitSpecificFieldsCard');
+    if (!suitFieldsCard) return;
+
+    // Müvekkil HTML'i
+    const clientHtml = `
+        <div class="card mb-4" id="clientSection"> // İD EKLENDİ
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0">3. Müvekkil Bilgileri</h5>
             </div>
             <div class="card-body">
                 <div class="form-grid">
-                    
-                    <div class="form-group full-width">
-                        <label for="suitCourt" class="form-label">Mahkeme</label>
-                        <select id="suitCourt" name="suitCourt" class="form-select" required>
+                    <div class="form-group">
+                        <label for="clientRole" class="form-label">Müvekkil Rolü</label>
+                        <select id="clientRole" name="clientRole" class="form-select" required>
                             <option value="">Seçiniz...</option>
-                            <option value="ankara_1_fsm">Ankara 1. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
-                            <option value="ankara_2_fsm">Ankara 2. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
-                            <option value="ankara_3_fsm">Ankara 3. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
-                            <option value="ankara_4_fsm">Ankara 4. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
-                            <option value="ankara_5_fsm">Ankara 5. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
-                            <option value="istinaf">Ankara Bölge Adliye Mahkemesi (İstinaf)</option>
-                            <option value="yargitay_11_hd">Yargıtay 11. Hukuk Dairesi</option>
+                            <option value="davaci">Davacı (Plaintiff)</option>
+                            <option value="davali">Davalı (Defendant)</option>
                         </select>
                     </div>
-
-                    <div class="form-group full-width">
-                        <label for="suitDescription" class="form-label">Dava Konusu ve Kısa Açıklaması</label>
-                        <textarea class="form-control" id="suitDescription" rows="3"></textarea>
-                    </div>
-
                     <div class="form-group">
-                        <label for="opposingParty" class="form-label">Karşı Taraf</label>
-                        <input type="text" id="opposingParty" name="opposingParty" class="form-input" placeholder="Örn: X Firması">
-                    </div>
+                        </div>
+                </div>
 
-                    <div class="form-group">
-                        <label for="opposingCounsel" class="form-label">Karşı Taraf Vekili</label>
-                        <input type="text" id="opposingCounsel" name="opposingCounsel" class="form-input" placeholder="Örn: Av. Y">
+                <div class="form-group full-width mt-3">
+                    <label for="suitClientSearch" class="form-label">Müvekkil Ara (Sistemdeki Kişiler)</label>
+                    <div class="d-flex" style="gap:10px; align-items:flex-start;">
+                        <div class="search-input-wrapper" style="flex:1; position:relative;">
+                            <input type="text" id="suitClientSearch" class="form-input" placeholder="Müvekkil adı, e-posta..." autocomplete="off">
+                            <div id="suitClientSearchResults" class="search-results-list" style="display:none;"></div> 
+                        </div>
+                        <button type="button" id="addNewPersonBtn" class="btn-small btn-add-person">
+                            <span>&#x2795;</span> Yeni Kişi
+                        </button>
                     </div>
-
-                    <div class="form-group">
-                        <label for="suitCaseNo">Esas / Takip No</label>
-                        <input type="text" class="form-control" id="suitCaseNo">
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="suitOpeningDate">Dava Açılış / Başvuru Tarihi</label>
-                        <input type="text" class="form-control date-picker" id="suitOpeningDate" required>
-                    </div>
-                    
-                    <div class="form-group full-width">
-                        <label for="suitFilePath">Dosya Yolu (Evreka Cloud veya Drive)</label>
-                        <input type="text" class="form-control" id="suitFilePath">
-                    </div>
-                    
+                </div>
+                
+                <div id="selectedSuitClient" class="mt-2" style="display:none; padding: 10px; border: 1px solid #ccc; border-radius: 4px; background-color: #f8f9fa;">
+                    Seçilen: <span id="selectedSuitClientName"></span>
+                    <button type="button" class="btn btn-sm btn-danger ml-2" id="clearSuitClient">Kaldır</button>
                 </div>
             </div>
-        `;
-    }
+        </div>
+    `;
     
-    // YENİ: Müvekkil alanını render eden fonksiyon
-    renderSuitClientSection() {
-        const suitFieldsCard = document.getElementById('suitSpecificFieldsCard');
-        if (!suitFieldsCard) return;
+    // Dava Detayları kartından hemen önce DOM'a ekle
+    suitFieldsCard.insertAdjacentHTML('beforebegin', clientHtml);
 
-        // Müvekkil HTML'i
-        const clientHtml = `
-            <div class="card mb-4">
-                <div class="card-header bg-info text-white">
-                    <h5 class="mb-0">3. Müvekkil Bilgileri</h5>
+    // Müvekkil kaydı için yeni kişi ekleme listener'ını bağla
+    document.getElementById('addNewPersonBtn')?.addEventListener('click', () => {
+        openPersonModal((newPerson) => {
+            this.allPersons.push(newPerson); 
+            this.suitClientPerson = newPerson;
+            document.getElementById('selectedSuitClientName').textContent = newPerson.name;
+            document.getElementById('selectedSuitClient').style.display = 'block';
+            document.getElementById('suitClientSearch').style.display = 'none';
+            this.updateSaveButtonState();
+        });
+    });
+    
+    // ✅ GÜNCELLEME: Müvekkil kartı eklendikten sonra 4. İşleme Konu Varlık bilgisini ekle
+    this.renderSuitSubjectAssetSection(); 
+}
+
+// YENİ: İşleme Konu Varlık (Marka/Patent/Tasarım) seçimini render eden fonksiyon
+renderSuitSubjectAssetSection() {
+    const suitFieldsCard = document.getElementById('suitSpecificFieldsCard');
+    if (!suitFieldsCard) return;
+
+    // İşleme Konu Varlık HTML'i
+    const assetHtml = `
+        <div class="card mb-4" id="subjectAssetSection">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0">4. İşleme Konu Varlık Bilgisi (Opsiyonel)</h5>
+            </div>
+            <div class="card-body">
+                <div class="form-group full-width">
+                    <label for="subjectAssetSearch" class="form-label">Portföyden Varlık Ara (Marka, Patent, Tasarım)</label>
+                    <div class="search-input-wrapper" style="position:relative;">
+                        <input type="text" id="subjectAssetSearch" class="form-input" placeholder="Başlık, numara, tip..." autocomplete="off">
+                        <div id="subjectAssetSearchResults" class="search-results-list" style="display:none;"></div> 
+                    </div>
                 </div>
-                <div class="card-body">
-                    <div class="form-grid">
-                        <div class="form-group">
-                            <label for="clientRole" class="form-label">Müvekkil Rolü</label>
-                            <select id="clientRole" name="clientRole" class="form-select" required>
-                                <option value="">Seçiniz...</option>
-                                <option value="davaci">Davacı (Plaintiff)</option>
-                                <option value="davali">Davalı (Defendant)</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            </div>
-                    </div>
-
-                    <div class="form-group full-width mt-3">
-                        <label for="suitClientSearch" class="form-label">Müvekkil Ara (Sistemdeki Kişiler)</label>
-                        <div class="d-flex" style="gap:10px; align-items:flex-start;">
-                            <div class="search-input-wrapper" style="flex:1; position:relative;">
-                                <input type="text" id="suitClientSearch" class="form-input" placeholder="Müvekkil adı, e-posta..." autocomplete="off">
-                                <div id="suitClientSearchResults" class="search-results-list" style="display:none;"></div> 
-                            </div>
-                            <button type="button" id="addNewPersonBtn" class="btn-small btn-add-person">
-                                <span>&#x2795;</span> Yeni Kişi
-                            </button>
-                        </div>
-                    </div>
-                    
-                    <div id="selectedSuitClient" class="mt-2" style="display:none; padding: 10px; border: 1px solid #ccc; border-radius: 4px; background-color: #f8f9fa;">
-                        Seçilen: <span id="selectedSuitClientName"></span>
-                        <button type="button" class="btn btn-sm btn-danger ml-2" id="clearSuitClient">Kaldır</button>
-                    </div>
+                
+                <div id="selectedSubjectAsset" class="mt-3" style="display:none; padding: 10px; border: 1px solid #ccc; border-radius: 4px; background-color: #f8f9fa;">
+                    Seçilen: <span id="selectedSubjectAssetName" class="font-weight-bold"></span>
+                    (<span id="selectedSubjectAssetType"></span> - <span id="selectedSubjectAssetNumber"></span>)
+                    <button type="button" class="btn btn-sm btn-danger ml-2" id="clearSubjectAsset">Kaldır</button>
                 </div>
             </div>
-        `;
-        
-        // Dava Detayları kartından hemen önce DOM'a ekle
-        suitFieldsCard.insertAdjacentHTML('beforebegin', clientHtml);
+        </div>
+    `;
 
-        // Müvekkil kaydı için yeni kişi ekleme listener'ını bağla
-        document.getElementById('addNewPersonBtn')?.addEventListener('click', () => {
-            openPersonModal((newPerson) => {
-                this.allPersons.push(newPerson); 
-                this.suitClientPerson = newPerson;
-                document.getElementById('selectedSuitClientName').textContent = newPerson.name;
-                document.getElementById('selectedSuitClient').style.display = 'block';
-                document.getElementById('suitClientSearch').style.display = 'none';
-                this.updateSaveButtonState();
-            });
+    // Dava Detayları kartından hemen önce DOM'a ekle (suitSpecificFieldsCard'dan önce)
+    suitFieldsCard.insertAdjacentHTML('beforebegin', assetHtml);
+
+    // Asset arama ve seçim mantığını başlat
+    this.setupSuitSubjectAssetSearchSelectors();
+}
+
+// YENİ: İşleme Konu Varlık Arama Selector'larını Ayarlama (Basit Versiyon)
+setupSuitSubjectAssetSearchSelectors() {
+    // Bu metod için tam arama mantığı (FireStore'dan ipRecords çekme) eklenmemiştir. 
+    // Sadece UI etkileşimi ve state tutma mekanizması eklenmiştir. 
+    // Gerçek arama (searchAssets) ayrı bir geliştirme gerektirecektir.
+
+    const searchInput = document.getElementById('subjectAssetSearch');
+    const searchResults = document.getElementById('subjectAssetSearchResults');
+    const selectedDisplay = document.getElementById('selectedSubjectAsset');
+    const clearBtn = document.getElementById('clearSubjectAsset');
+
+    // State'i tutmak için yeni bir değişken
+    this.suitSubjectAsset = null;
+    
+    // ÖRNEK ARAMA FONKSİYONU (Gerçek FireStore/Service Entegrasyonu Gerekir)
+    const searchAssets = async (query) => {
+        // Normalde burada ipRecordsService.search(query, ['trademark', 'patent', 'design']) çağrılır.
+        const mockResults = [
+            { id: 'M-12345', title: 'Evreka Yazılım Markası', type: 'Marka', number: '2023/12345' },
+            { id: 'P-54321', title: 'Yeni Nesil Tekerlek Patenti', type: 'Patent', number: '2022/54321' },
+        ].filter(a => a.title.toLowerCase().includes(query.toLowerCase()));
+        
+        return mockResults;
+    };
+
+    if (searchInput) {
+        let timeout;
+        searchInput.addEventListener('input', (e) => {
+            clearTimeout(timeout);
+            const query = e.target.value.trim();
+            if (query.length < 3) {
+                searchResults.style.display = 'none';
+                return;
+            }
+
+            timeout = setTimeout(async () => {
+                const results = await searchAssets(query);
+                
+                if (results.length === 0) {
+                    searchResults.innerHTML = '<div class="no-results-message">Varlık bulunamadı.</div>';
+                } else {
+                    searchResults.innerHTML = results.map(asset => 
+                        `<div class="search-result-item" data-id="${asset.id}" data-type="${asset.type}" data-name="${asset.title}" data-number="${asset.number}">
+                            <strong>${asset.title}</strong> (${asset.type}, ${asset.number})
+                        </div>`
+                    ).join('');
+                }
+                searchResults.style.display = 'block';
+            }, 300);
         });
     }
     
-    // === YENİ: Müvekkil Arama Selector'larını Ayarlama ===
+    // Asset Seçim Mantığı
+    if (searchResults) {
+         searchResults.addEventListener('click', (e) => {
+            const item = e.target.closest('.search-result-item');
+            if (!item) return;
+
+            const asset = {
+                id: item.dataset.id,
+                title: item.dataset.name,
+                type: item.dataset.type,
+                number: item.dataset.number
+            };
+            
+            this.suitSubjectAsset = asset;
+            document.getElementById('selectedSubjectAssetName').textContent = asset.title;
+            document.getElementById('selectedSubjectAssetType').textContent = asset.type;
+            document.getElementById('selectedSubjectAssetNumber').textContent = asset.number;
+            
+            selectedDisplay.style.display = 'flex';
+            searchInput.style.display = 'none';
+            searchResults.style.display = 'none';
+            searchInput.value = '';
+        });
+    }
+    
+    // Kaldır Butonu Mantığı
+    if (clearBtn) {
+        clearBtn.addEventListener('click', () => {
+            this.suitSubjectAsset = null;
+            selectedDisplay.style.display = 'none';
+            searchInput.style.display = 'block';
+            searchInput.value = '';
+        });
+    }
+}
+
+// === YENİ: Müvekkil Arama Selector'larını Ayarlama ===
     setupSuitPersonSearchSelectors() {
         const clientSearchInput = document.getElementById('suitClientSearch');
         const searchResults = document.getElementById('suitClientSearchResults');
