@@ -477,10 +477,32 @@ handleIPTypeChange(ipType) {
         if (this.suitSpecificTaskType) {
             container.innerHTML = this.renderSuitFields(this.suitSpecificTaskType.alias || this.suitSpecificTaskType.name);
             this.setupSuitPersonSearchSelectors(); 
-            // Datepicker'ları başlat
-            if (typeof initTaskDatePickers === 'function') {
-                initTaskDatePickers(container);
-            }
+            
+            // ✅ Date Picker'ı başlat
+            setTimeout(() => {
+                if (typeof window.EvrekaDatePicker !== 'undefined' && window.EvrekaDatePicker.init) {
+                    window.EvrekaDatePicker.init(container);
+                    console.log('✅ Dava tarihi date picker başlatıldı');
+                }
+                
+                // Form alanı değişikliklerini dinle
+                const suitOpeningDate = document.getElementById('suitOpeningDate');
+                if (suitOpeningDate) {
+                    suitOpeningDate.addEventListener('change', () => {
+                        this.updateSaveButtonState();
+                    });
+                }
+                
+                // Diğer form alanları için de listener ekle
+                ['clientRole', 'suitCourt', 'suitCaseNo'].forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) {
+                        el.addEventListener('change', () => {
+                            this.updateSaveButtonState();
+                        });
+                    }
+                });
+            }, 100);
         } else {
             container.innerHTML = '';
         }
@@ -2670,7 +2692,15 @@ renderSuitFields(taskName) {
                 
                 <div class="form-group">
                     <label for="suitOpeningDate" class="form-label">Dava Tarihi</label>
-                    <input type="text" class="form-control date-picker" id="suitOpeningDate" required>
+                    <input 
+                        type="text" 
+                        class="form-control" 
+                        id="suitOpeningDate" 
+                        data-datepicker 
+                        data-date-format="Y-m-d" 
+                        data-alt-format="d.m.Y" 
+                        placeholder="gg.aa.yyyy"
+                        required>
                 </div>
                 
                 </div>
@@ -2793,15 +2823,58 @@ setupSuitSubjectAssetSearchSelectors() {
     // State'i tutmak için yeni bir değişken
     this.suitSubjectAsset = null;
     
-    // ÖRNEK ARAMA FONKSİYONU (Gerçek FireStore/Service Entegrasyonu Gerekir)
+    // ✅ GERÇEK ARAMA FONKSİYONU: İpRecords koleksiyonundan ara
     const searchAssets = async (query) => {
-        // Normalde burada ipRecordsService.search(query, ['trademark', 'patent', 'design']) çağrılır.
-        const mockResults = [
-            { id: 'M-12345', title: 'Evreka Yazılım Markası', type: 'Marka', number: '2023/12345' },
-            { id: 'P-54321', title: 'Yeni Nesil Tekerlek Patenti', type: 'Patent', number: '2022/54321' },
-        ].filter(a => a.title.toLowerCase().includes(query.toLowerCase()));
-        
-        return mockResults;
+        try {
+            const db = getFirestore();
+            const ipRecordsRef = collection(db, 'ipRecords');
+            
+            // Normalize query
+            const normalizedQuery = query.toLowerCase().trim();
+            
+            // Tüm ipRecords'ları çek ve client-side filtrele
+            const snapshot = await getDocs(ipRecordsRef);
+            const results = [];
+            
+            snapshot.forEach(doc => {
+                const data = doc.data();
+                const searchFields = [
+                    data.title,
+                    data.brandText,
+                    data.applicationNumber,
+                    data.registrationNumber,
+                    data.applicationNo,
+                    data.registrationNo,
+                    data.fileNo
+                ].filter(Boolean).map(f => String(f).toLowerCase());
+                
+                // Eğer herhangi bir alanda query bulunuyorsa ekle
+                if (searchFields.some(field => field.includes(normalizedQuery))) {
+                    const typeMap = {
+                        'trademark': 'Marka',
+                        'patent': 'Patent', 
+                        'design': 'Tasarım',
+                        'suit': 'Dava'
+                    };
+                    
+                    results.push({
+                        id: doc.id,
+                        title: data.title || data.brandText || 'İsimsiz',
+                        type: typeMap[data.type] || data.type || 'Diğer',
+                        number: data.applicationNumber || data.registrationNumber || data.applicationNo || data.registrationNo || data.fileNo || '-',
+                        origin: data.origin || 'TÜRKPATENT',
+                        rawData: data
+                    });
+                }
+            });
+            
+            console.log('🔍 Varlık arama sonuçları:', results.length, 'kayıt bulundu');
+            return results.slice(0, 50); // İlk 50 sonucu göster
+            
+        } catch (error) {
+            console.error('❌ Varlık arama hatası:', error);
+            return [];
+        }
     };
 
     if (searchInput) {
@@ -2849,10 +2922,13 @@ setupSuitSubjectAssetSearchSelectors() {
             document.getElementById('selectedSubjectAssetType').textContent = asset.type;
             document.getElementById('selectedSubjectAssetNumber').textContent = asset.number;
             
-            selectedDisplay.style.display = 'flex';
+            selectedDisplay.style.display = 'block';
             searchInput.style.display = 'none';
             searchResults.style.display = 'none';
             searchInput.value = '';
+            
+            // ✅ Kaydet buton kontrolünü tetikle
+            this.updateSaveButtonState();
         });
     }
     
@@ -2863,6 +2939,9 @@ setupSuitSubjectAssetSearchSelectors() {
             selectedDisplay.style.display = 'none';
             searchInput.style.display = 'block';
             searchInput.value = '';
+            
+            // ✅ Kaydet buton kontrolünü tetikle
+            this.updateSaveButtonState();
         });
     }
 }
