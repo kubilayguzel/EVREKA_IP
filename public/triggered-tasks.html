@@ -1017,11 +1017,7 @@
                     // alias bul – yoksa mevcut başlık kalsın
                     let _extraAccrualTitle = this.currentTaskForAccrual?.title;
                     try {
-                    const _typeId =
-                        this.currentTaskForAccrual?.specificTaskType ||
-                        this.currentTaskForAccrual?.taskTypeId ||
-                        this.currentTaskForAccrual?.type ||
-                        this.currentTaskForAccrual?.specificType;
+                    const _typeId = this.currentTaskForAccrual?.taskType
 
                     if (_typeId) {
                         const _typesRes = await transactionTypeService.getFilteredTransactionTypes({ ids: [String(_typeId)] });
