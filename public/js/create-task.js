@@ -1223,7 +1223,7 @@ renderBaseForm(container, taskTypeName, taskTypeId) {
 
     if (isLawsuitTask) {
         // ==============================================================
-        // 3. Müvekkil Bilgileri (Gereksinim 2)
+        // 3. Müvekkil Bilgileri 
         // ==============================================================
         lawsuitClientSectionHtml = `
             <div class="section-card" id="clientSection">
@@ -1270,27 +1270,27 @@ renderBaseForm(container, taskTypeName, taskTypeId) {
         `;
         
         // ==============================================================
-        // 4. Dava Bilgileri (Gereksinim 4 ve Kaldırılan Alanlar)
+        // 4. Dava Bilgileri 
+        // Dava Dosya Numarası, Dava Tarihi, Karar Tarihi, Dava Sonucu Kaldırıldı.
         // ==============================================================
         specificFieldsHtml = `
             <div class="section-card">
                 <h3 class="section-title">4. Dava Bilgileri</h3>
                 <div class="form-grid">
                     
-                    <div class="form-group">
+                    <div class="form-group full-width">
                         <label for="courtName" class="form-label">Mahkeme</label>
                         <select id="courtName" name="courtName" class="form-select">
                             <option value="">Seçiniz...</option>
                             <option value="ankara_1_fsm">Ankara 1. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
                             <option value="ankara_2_fsm">Ankara 2. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
                             <option value="ankara_3_fsm">Ankara 3. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
+                            <option value="ankara_4_fsm">Ankara 4. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
+                            <option value="ankara_5_fsm">Ankara 5. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
                             <option value="istinaf">Ankara Bölge Adliye Mahkemesi (İstinaf)</option>
                             <option value="yargitay_11_hd">Yargıtay 11. Hukuk Dairesi</option>
                         </select>
                     </div>
-
-                    <div class="form-group">
-                        </div>
 
                     <div class="form-group full-width">
                         <label for="subjectOfLawsuit" class="form-label">Dava Konusu ve Kısa Açıklaması</label>
@@ -1301,14 +1301,20 @@ renderBaseForm(container, taskTypeName, taskTypeId) {
         `;
         
         // ==============================================================
-        // 5. Karşı Taraf Bilgileri (Gereksinim 3)
+        // 5. Karşı Taraf Bilgileri (İki Ayrı Alan)
         // ==============================================================
         lawsuitOpponentSectionHtml = `
             <div class="section-card" id="opponentSection">
                 <h3 class="section-title">5. Karşı Taraf Bilgileri</h3>
-                <div class="form-group full-width">
-                    <label for="opposingPartyDetails" class="form-label">Karşı Taraf ve Vekil Bilgileri (Metin olarak giriniz)</label>
-                    <textarea id="opposingPartyDetails" name="opposingPartyDetails" class="form-textarea" rows="4" placeholder="Örn: Karşı Taraf: X Firması, Vekili: Av. Y"></textarea>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="opposingParty" class="form-label">Karşı Taraf</label>
+                        <input type="text" id="opposingParty" name="opposingParty" class="form-input" placeholder="Örn: X Firması">
+                    </div>
+                    <div class="form-group">
+                        <label for="opposingCounsel" class="form-label">Karşı Taraf Vekili</label>
+                        <input type="text" id="opposingCounsel" name="opposingCounsel" class="form-input" placeholder="Örn: Av. Y">
+                    </div>
                 </div>
             </div>
         `;
