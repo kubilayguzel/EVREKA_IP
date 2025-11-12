@@ -1223,7 +1223,7 @@ renderBaseForm(container, taskTypeName, taskTypeId) {
 
     if (isLawsuitTask) {
         // ==============================================================
-        // 3. Müvekkil Bilgileri (Requirement 2 - Custom Related Party)
+        // 3. Müvekkil Bilgileri (Gereksinim 2)
         // ==============================================================
         lawsuitClientSectionHtml = `
             <div class="section-card" id="clientSection">
@@ -1270,34 +1270,42 @@ renderBaseForm(container, taskTypeName, taskTypeId) {
         `;
         
         // ==============================================================
-        // Dava Bilgileri (Requirement 1 - Alanlar Kaldırıldı)
+        // 4. Dava Bilgileri (Gereksinim 4 ve Kaldırılan Alanlar)
         // ==============================================================
         specificFieldsHtml = `
             <div class="section-card">
-                <h3 class="section-title">Dava Bilgileri</h3>
+                <h3 class="section-title">4. Dava Bilgileri</h3>
                 <div class="form-grid">
+                    
+                    <div class="form-group">
+                        <label for="courtName" class="form-label">Mahkeme</label>
+                        <select id="courtName" name="courtName" class="form-select">
+                            <option value="">Seçiniz...</option>
+                            <option value="ankara_1_fsm">Ankara 1. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
+                            <option value="ankara_2_fsm">Ankara 2. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
+                            <option value="ankara_3_fsm">Ankara 3. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
+                            <option value="istinaf">Ankara Bölge Adliye Mahkemesi (İstinaf)</option>
+                            <option value="yargitay_11_hd">Yargıtay 11. Hukuk Dairesi</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        </div>
+
                     <div class="form-group full-width">
                         <label for="subjectOfLawsuit" class="form-label">Dava Konusu ve Kısa Açıklaması</label>
                         <textarea id="subjectOfLawsuit" name="subjectOfLawsuit" class="form-textarea" rows="3"></textarea>
-                    </div>
-                    <div class="form-group">
-                        <label for="courtName" class="form-label">Mahkeme Adı</label>
-                        <input type="text" id="courtName" name="courtName" class="form-input">
-                    </div>
-                    <div class="form-group">
-                        <label for="courtFileNumber" class="form-label">Dava Dosya Numarası</label>
-                        <input type="text" id="courtFileNumber" name="courtFileNumber" class="form-input">
                     </div>
                 </div>
             </div>
         `;
         
         // ==============================================================
-        // 4. Karşı Taraf Bilgileri (Requirement 3 - Yeni 4. Alan)
+        // 5. Karşı Taraf Bilgileri (Gereksinim 3)
         // ==============================================================
         lawsuitOpponentSectionHtml = `
             <div class="section-card" id="opponentSection">
-                <h3 class="section-title">4. Karşı Taraf Bilgileri</h3>
+                <h3 class="section-title">5. Karşı Taraf Bilgileri</h3>
                 <div class="form-group full-width">
                     <label for="opposingPartyDetails" class="form-label">Karşı Taraf ve Vekil Bilgileri (Metin olarak giriniz)</label>
                     <textarea id="opposingPartyDetails" name="opposingPartyDetails" class="form-textarea" rows="4" placeholder="Örn: Karşı Taraf: X Firması, Vekili: Av. Y"></textarea>
