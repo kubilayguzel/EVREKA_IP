@@ -1206,7 +1206,7 @@ setupBaseFormListeners() {
         this.handleOriginChange(document.getElementById('originSelect')?.value);
     }
 
-    renderBaseForm(container, taskTypeName, taskTypeId) {
+renderBaseForm(container, taskTypeName, taskTypeId) {
     // 1. Task tip objesini en başta bul (ipType kontrolü için)
     const selectedTaskTypeObj = this.allTransactionTypes.find(t => asId(t.id) === asId(taskTypeId));
     
@@ -1215,38 +1215,70 @@ setupBaseFormListeners() {
     const partyLabel = PARTY_LABEL_BY_ID[taskIdStr] || 'İlgili Taraf';
 
     let specificFieldsHtml = '';
+    let lawsuitClientSectionHtml = '';
+    let lawsuitOpponentSectionHtml = '';
     
-    // 2. Dava Detayları için koşulu, ana tür (ipType) 'suit' ise diye güncelledik.
-    // Bu, 'litigation_yidk_annulment' gibi tüm dava tiplerini kapsar.
+    // Dava tipini kontrol et
     const isLawsuitTask = selectedTaskTypeObj?.ipType === 'suit'; 
 
     if (isLawsuitTask) {
+        // ==============================================================
+        // 3. Müvekkil Bilgileri (Requirement 2 - Custom Related Party)
+        // ==============================================================
+        lawsuitClientSectionHtml = `
+            <div class="section-card" id="clientSection">
+            <h3 class="section-title" id="clientTitle">3. Müvekkil Bilgileri</h3>
+
+            <div class="form-grid">
+                <div class="form-group">
+                    <label for="clientRole" class="form-label">Müvekkil Rolü</label>
+                    <select id="clientRole" name="clientRole" class="form-select">
+                        <option value="">Seçiniz...</option>
+                        <option value="davaci">Davacı (Plaintiff)</option>
+                        <option value="davali">Davalı (Defendant)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    </div>
+            </div>
+
+            <div class="form-group full-width mt-3">
+                <label for="personSearchInput" class="form-label">Müvekkil Ara (Sistemdeki Kişiler)</label>
+                <div class="d-flex" style="gap:10px; align-items:flex-start;">
+                <div class="search-input-wrapper" style="flex:1; position:relative;">
+                    <input type="text" id="personSearchInput" class="form-input" placeholder="Müvekkil adı, e-posta...">
+                    <div id="personSearchResults" class="search-results-list" style="display:none;"></div> 
+                </div>
+                <button type="button" id="addNewPersonBtn" class="btn-small btn-add-person">
+                    <span>&#x2795;</span> Yeni Kişi
+                </button>
+                </div>
+            </div>
+
+            <div class="form-group full-width mt-2">
+                <label class="form-label">
+                Seçilen Müvekkil <span class="badge badge-light ml-2" id="relatedPartyCount">0</span>
+                </label>
+                <div id="relatedPartyList" class="selected-items-list">
+                <div class="empty-state">
+                    <i class="fas fa-user-friends fa-3x text-muted mb-3"></i>
+                    <p class="text-muted">Henüz müvekkil eklenmedi.</p>
+                </div>
+                </div>
+            </div>
+            </div>
+        `;
+        
+        // ==============================================================
+        // Dava Bilgileri (Requirement 1 - Alanlar Kaldırıldı)
+        // ==============================================================
         specificFieldsHtml = `
             <div class="section-card">
-                <h3 class="section-title">Dava Detayları</h3>
+                <h3 class="section-title">Dava Bilgileri</h3>
                 <div class="form-grid">
                     <div class="form-group full-width">
                         <label for="subjectOfLawsuit" class="form-label">Dava Konusu ve Kısa Açıklaması</label>
                         <textarea id="subjectOfLawsuit" name="subjectOfLawsuit" class="form-textarea" rows="3"></textarea>
-                    </div>
-                    <div class="form-group">
-                        <label for="clientRole" class="form-label">Müvekkil/Davacının Rolü</label>
-                        <select id="clientRole" name="clientRole" class="form-select">
-                            <option value="">Seçiniz...</option>
-                            <option value="davaci">Davacı (Plaintiff)</option>
-                            <option value="davali">Davalı (Defendant)</option>
-                            <option value="araci">Aracı / 3. Taraf</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label for="lawsuitOutcome" class="form-label">Dava Sonucu</label>
-                        <select id="lawsuitOutcome" name="lawsuitOutcome" class="form-select">
-                            <option value="">Seçiniz...</option>
-                            <option value="kazanildi">Kazanıldı (Lehte)</option>
-                            <option value="kaybedildi">Kaybedildi (Aleyhte)</option>
-                            <option value="anlasma">Anlaşma ile Sonuçlandı</option>
-                            <option value="devam">Devam Ediyor</option>
-                        </select>
                     </div>
                     <div class="form-group">
                         <label for="courtName" class="form-label">Mahkeme Adı</label>
@@ -1256,31 +1288,58 @@ setupBaseFormListeners() {
                         <label for="courtFileNumber" class="form-label">Dava Dosya Numarası</label>
                         <input type="text" id="courtFileNumber" name="courtFileNumber" class="form-input">
                     </div>
-                    <div class="form-group date-picker-group">
-                        <label for="lawsuitDate" class="form-label">Dava Tarihi</label>
-                        <input type="text" id="lawsuitDate" name="lawsuitDate" class="form-input">
-                    </div>
-                    <div class="form-group date-picker-group">
-                        <label for="lawsuitDecisionDate" class="form-label">Karar Tarihi</label>
-                        <input type="text" id="lawsuitDecisionDate" name="lawsuitDecisionDate" class="form-input">
-                    </div>
-                    <div class="form-group">
-                        <label for="opposingCounsel" class="form-label">Karşı Taraf Vekili (Eğer varsa)</label>
-                        <input type="text" id="opposingCounsel" name="opposingCounsel" class="form-input">
-                    </div>
-                    <div class="form-group">
-                        <label for="filingType" class="form-label">Dava Açılma Şekli</label>
-                        <select id="filingType" name="filingType" class="form-select">
-                            <option value="">Seçiniz...</option>
-                            <option value="edava">E-Dava</option>
-                            <option value="elden">Elden Başvuru</option>
-                            <option value="posta">Posta</option>
-                        </select>
-                    </div>
                 </div>
             </div>
         `;
+        
+        // ==============================================================
+        // 4. Karşı Taraf Bilgileri (Requirement 3 - Yeni 4. Alan)
+        // ==============================================================
+        lawsuitOpponentSectionHtml = `
+            <div class="section-card" id="opponentSection">
+                <h3 class="section-title">4. Karşı Taraf Bilgileri</h3>
+                <div class="form-group full-width">
+                    <label for="opposingPartyDetails" class="form-label">Karşı Taraf ve Vekil Bilgileri (Metin olarak giriniz)</label>
+                    <textarea id="opposingPartyDetails" name="opposingPartyDetails" class="form-textarea" rows="4" placeholder="Örn: Karşı Taraf: X Firması, Vekili: Av. Y"></textarea>
+                </div>
+            </div>
+        `;
+
     }
+    
+    // Generic Related Party Section - Yalnızca Dava işi değilse ve gerekiyorsa gösterilir.
+    const genericRelatedPartyHtml = !isLawsuitTask && needsRelatedParty ? `
+        <div class="section-card" id="relatedPartySection">
+        <h3 class="section-title" id="relatedPartyTitle">3. ${partyLabel}</h3>
+
+        <div class="form-group full-width">
+            <label for="personSearchInput" class="form-label">Sistemdeki Kişilerden Ara</label>
+            <div class="d-flex" style="gap:10px; align-items:flex-start;">
+            <div class="search-input-wrapper" style="flex:1; position:relative;">
+                <input type="text" id="personSearchInput" class="form-input" placeholder="Aramak için en az 2 karakter...">
+                <div id="personSearchResults" class="search-results-list" style="display:none;"></div>
+            </div>
+            <button type="button" id="addNewPersonBtn" class="btn-small btn-add-person">
+                <span>&#x2795;</span> Yeni Kişi
+            </button>
+            </div>
+        </div>
+
+        <div class="form-group full-width mt-2">
+            <label class="form-label">
+            Seçilen Taraflar <span class="badge badge-light ml-2" id="relatedPartyCount">0</span>
+            </label>
+            <div id="relatedPartyList" class="selected-items-list">
+            <div class="empty-state">
+                <i class="fas fa-user-friends fa-3x text-muted mb-3"></i>
+                <p class="text-muted">Henüz taraf eklenmedi.</p>
+            </div>
+            </div>
+        </div>
+        </div>
+    ` : '';
+
+
     container.innerHTML = `
     <div class="section-card" id="card-asset">
         <h3 class="section-title">2. İşleme Konu Varlık</h3>
@@ -1313,38 +1372,12 @@ setupBaseFormListeners() {
         </div>
         </div>
 
-    ${needsRelatedParty ? `
-        <div class="section-card" id="relatedPartySection">
-        <h3 class="section-title" id="relatedPartyTitle">3. ${partyLabel}</h3>
-
-        <div class="form-group full-width">
-            <label for="personSearchInput" class="form-label">Sistemdeki Kişilerden Ara</label>
-            <div class="d-flex" style="gap:10px; align-items:flex-start;">
-            <div class="search-input-wrapper" style="flex:1; position:relative;">
-                <input type="text" id="personSearchInput" class="form-input" placeholder="Aramak için en az 2 karakter...">
-                <div id="personSearchResults" class="search-results-list" style="display:none;"></div>
-            </div>
-            <button type="button" id="addNewPersonBtn" class="btn-small btn-add-person">
-                <span>&#x2795;</span> Yeni Kişi
-            </button>
-            </div>
-        </div>
-
-        <div class="form-group full-width mt-2">
-            <label class="form-label">
-            Seçilen Taraflar <span class="badge badge-light ml-2" id="relatedPartyCount">0</span>
-            </label>
-            <div id="relatedPartyList" class="selected-items-list">
-            <div class="empty-state">
-                <i class="fas fa-user-friends fa-3x text-muted mb-3"></i>
-                <p class="text-muted">Henüz taraf eklenmedi.</p>
-            </div>
-            </div>
-        </div>
-        </div>
-    ` : ''}
+    ${lawsuitClientSectionHtml || genericRelatedPartyHtml}
 
     ${specificFieldsHtml}
+
+    ${lawsuitOpponentSectionHtml}
+    
     <div class="section-card" id="card-accrual">
         <h3 class="section-title">Tahakkuk Bilgileri</h3>
         <div class="form-grid">
@@ -1431,7 +1464,7 @@ setupBaseFormListeners() {
     </div>
     `;
     initTaskDatePickers(document);
-    // Artık selectedTaskTypeObj en başta tanımlı.
+    // selectedTaskTypeObj yukarıda tanımlanmıştır.
     this.updateRelatedPartySectionVisibility(selectedTaskTypeObj);
     this.renderSelectedRelatedParties();
     this.setupDynamicFormListeners();
