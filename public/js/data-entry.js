@@ -211,7 +211,8 @@ console.log('🚀 Data Entry Module başlatılıyor...');
             await this.loadAllData();
             
             // ✅ YENİ: Menşe açılır listesini doldur ve varsayılan değeri ayarla.
-            this.populateOriginDropdown('originSelect');
+            this.currentIpType = this.ipTypeSelect.value || 'trademark';
+            this.populateOriginDropdown('originSelect', 'TÜRKPATENT', this.currentIpType);
             this.handleOriginChange(document.getElementById('originSelect').value);
 
             this.setupEventListeners();
@@ -259,6 +260,14 @@ async loadAllData() {
         if(originSelect){
             originSelect.addEventListener('change', (e) => {
                 this.handleOriginChange(e.target.value);
+            });
+        }
+        
+        // ✅ YENİ EKLENECEK: İş Tipi değiştiğinde tetiklenecek event
+        const specificTaskType = document.getElementById('specificTaskType');
+        if (specificTaskType) {
+            specificTaskType.addEventListener('change', (e) => {
+                this.handleSpecificTaskTypeChange(e);
             });
         }
 
@@ -423,18 +432,13 @@ handleIPTypeChange(ipType) {
         // Müvekkil bölümünü ekle (Bu aynı zamanda clientSection'ı DOM'a ekler)
         this.renderSuitClientSection(); 
 
-        // Menşe doldurma ve olay tetikleme (Dava için Türkiye/Yurtdışı)
-        // Menşe değeri artık 'TURKEY_NATIONAL' olarak ayarlanır.
         this.populateOriginDropdown('originSelect', 'TURKEY_NATIONAL', ipType); 
-        // handleOriginChange artık populateOriginDropdown içinde tetikleniyor.
 
         // Spesifik İş Tipi doldurma (Dava için filtrelenmiş)
         this.populateSpecificTaskTypeDropdown(ipType);
-        
-        // İlk yükleme/seçim anında Dava Detaylarını temizle
+
         // İş Tipi seçilene kadar Dava Detayları boş kalır.
         suitSpecificFieldsCard.querySelector('#suitSpecificFieldsContainer').innerHTML = '';
-
 
     } else {
         // Marka/Patent/Tasarım seçildi
