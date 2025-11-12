@@ -650,11 +650,24 @@ async fetchAndStoreBulletinData(bulletinId) {
     }
 }
 
-populateOriginDropdown(dropdownId, selectedValue = 'TÜRKPATENT') {
+populateOriginDropdown(dropdownId, selectedValue = 'TÜRKPATENT', mainIpType = null) { // mainIpType parametresi eklendi
         const dropdown = document.getElementById(dropdownId);
         if (!dropdown) return;
         dropdown.innerHTML = '';
-        ORIGIN_TYPES.forEach(origin => {
+        
+        // 🚨 YENİ: Dava (suit) için özel menşe listesi tanımlama
+        let originsToUse = ORIGIN_TYPES;
+
+        if (mainIpType === 'suit') {
+            originsToUse = [
+                { value: 'TURKEY', text: 'Türkiye' },
+                { value: 'FOREIGN_NATIONAL', text: 'Yurtdışı' }
+            ];
+            selectedValue = 'TURKEY'; // Varsayılanı Türkiye yap
+        }
+
+
+        originsToUse.forEach(origin => {
             const option = document.createElement('option');
             option.value = origin.value;
             option.textContent = origin.text;
@@ -877,37 +890,51 @@ async updateAssignedToDropdown(taskTypeId) {
 
         this.setupBrandExampleUploader();
     }
-    // ✅ YENİ: Menşe seçimi değiştiğinde ülke seçimini dinamik olarak oluşturan metot
-    handleOriginChange(originType) {
-        const container = document.getElementById('countrySelectionContainer');
-        const singleSelectWrapper = document.getElementById('singleCountrySelectWrapper');
-        const multiSelectWrapper = document.getElementById('multiCountrySelectWrapper');
-        const title = document.getElementById('countrySelectionTitle');
-        const specificTaskType = document.getElementById('specificTaskType');
 
-        if (!container || !singleSelectWrapper || !multiSelectWrapper || !title || !specificTaskType) return;
-        
-        const selectedTask = this.allTransactionTypes.find(t => t.id === specificTaskType.value);
-        const isTrademarkApplication = selectedTask?.alias === 'Başvuru' && selectedTask?.ipType === 'trademark';
+// ✅ YENİ: Menşe seçimi değiştiğinde ülke seçimini dinamik olarak oluşturan metot
+handleOriginChange(originType) {
+    const container = document.getElementById('countrySelectionContainer');
+    const singleSelectWrapper = document.getElementById('singleCountrySelectWrapper');
+    const multiSelectWrapper = document.getElementById('multiCountrySelectWrapper');
+    const title = document.getElementById('countrySelectionTitle');
+    const specificTaskType = document.getElementById('specificTaskType');
 
-        this.selectedCountries = [];
-        container.style.display = 'none';
-        singleSelectWrapper.style.display = 'none';
-        multiSelectWrapper.style.display = 'none';
+    if (!container || !singleSelectWrapper || !multiSelectWrapper || !title || !specificTaskType) return;
+    
+    const selectedTask = this.allTransactionTypes.find(t => t.id === specificTaskType.value);
+    const isTrademarkApplication = selectedTask?.alias === 'Başvuru' && selectedTask?.ipType === 'trademark';
+    // 🚨 YENİ: Ana iş tipi dava mı?
+    const mainIpType = document.getElementById('mainIpType')?.value;
+    const isLawsuit = mainIpType === 'suit';
 
-        if (originType === 'Yurtdışı Ulusal' && isTrademarkApplication) {
-            title.textContent = 'Menşe Ülke Seçimi';
-            container.style.display = 'block';
-            singleSelectWrapper.style.display = 'block';
-            this.populateCountriesDropdown('countrySelect');
-        } else if ((originType === 'WIPO' || originType === 'ARIPO') && isTrademarkApplication) {
-            title.textContent = `Seçim Yapılacak Ülkeler (${originType})`;
-            container.style.display = 'block';
-            multiSelectWrapper.style.display = 'block';
-            this.setupMultiCountrySelect();
-        }
+    this.selectedCountries = [];
+    container.style.display = 'none';
+    singleSelectWrapper.style.display = 'none';
+    multiSelectWrapper.style.display = 'none';
+
+    // 🚨 YENİ KOŞUL: Dava ve Yurtdışı menşe
+    if (isLawsuit && originType === 'FOREIGN_NATIONAL') {
+        title.textContent = 'Menşe Ülke Seçimi (Dava)';
+        container.style.display = 'block';
+        singleSelectWrapper.style.display = 'block';
+        // Bu fonksiyon common/countries verilerini yüklemeli
+        this.populateCountriesDropdown('countrySelect'); 
+    } 
+    // ORİJİNAL KOŞUL: Marka Başvurusu ve Yurtdışı Ulusal/WIPO/ARIPO
+    else if (originType === 'Yurtdışı Ulusal' && isTrademarkApplication) {
+        title.textContent = 'Menşe Ülke Seçimi';
+        container.style.display = 'block';
+        singleSelectWrapper.style.display = 'block';
+        this.populateCountriesDropdown('countrySelect');
+    } else if ((originType === 'WIPO' || originType === 'ARIPO') && isTrademarkApplication) {
+        title.textContent = `Seçim Yapılacak Ülkeler (${originType})`;
+        container.style.display = 'block';
+        multiSelectWrapper.style.display = 'block';
+        this.setupMultiCountrySelect();
     }
-    // ✅ YENİ: Çoklu ülke seçimi için arayüzü ve dinleyicileri ayarlar
+}
+
+// ✅ YENİ: Çoklu ülke seçimi için arayüzü ve dinleyicileri ayarlar
     setupMultiCountrySelect() {
         const input = document.getElementById('countriesMultiSelectInput');
         const resultsContainer = document.getElementById('countriesMultiSelectResults');
@@ -1175,36 +1202,42 @@ setupBaseFormListeners() {
             this.checkFormCompleteness();
         }
     }
-    async handleMainTypeChange(e) {
-        const mainType = e.target.value;
-        const specificTypeSelect = document.getElementById('specificTaskType');
-        const conditionalFieldsContainer = document.getElementById('conditionalFieldsContainer');
-        conditionalFieldsContainer.innerHTML = '';
-        const saveTaskBtn = document.getElementById('saveTaskBtn');
-        if (saveTaskBtn) saveTaskBtn.disabled = true;
-        specificTypeSelect.innerHTML = '<option value="">Önce İşin Ana Türünü Seçin</option>';
-        if (mainType) {
-            specificTypeSelect.innerHTML = '<option value="">Seçiniz...</option>';
-            const filteredTransactionTypes = this.allTransactionTypes.filter(type => {
-                const isParentAndMatchesIpType = (type.hierarchy === 'parent' && type.ipType === mainType);
-                const isTopLevelChildAndMatchesIpType = (
-                    type.hierarchy === 'child' &&
-                    type.isTopLevelSelectable &&
-                    (type.applicableToMainType.includes(mainType) || type.applicableToMainType.includes('all'))
-                );
-                return isParentAndMatchesIpType || isTopLevelChildAndMatchesIpType;
-            });
-            filteredTransactionTypes.sort((a, b) => (a.order || 999) - (b.order || 999));
-            filteredTransactionTypes.forEach(type => {
-                specificTypeSelect.innerHTML += `<option value="${type.id}">${type.alias || type.name}</option>`;
-            });
-            specificTypeSelect.disabled = false;
-        } else {
-            specificTypeSelect.disabled = true;
-        }
-        this.populateOriginDropdown('originSelect');
-        this.handleOriginChange(document.getElementById('originSelect')?.value);
+
+async handleMainTypeChange(e) {
+    const mainType = e.target.value;
+    const specificTypeSelect = document.getElementById('specificTaskType');
+    const conditionalFieldsContainer = document.getElementById('conditionalFieldsContainer');
+    conditionalFieldsContainer.innerHTML = '';
+    const saveTaskBtn = document.getElementById('saveTaskBtn');
+    if (saveTaskBtn) saveTaskBtn.disabled = true;
+    specificTypeSelect.innerHTML = '<option value="">Önce İşin Ana Türünü Seçin</option>';
+    if (mainType) {
+        specificTypeSelect.innerHTML = '<option value="">Seçiniz...</option>';
+        const filteredTransactionTypes = this.allTransactionTypes.filter(type => {
+            const isParentAndMatchesIpType = (type.hierarchy === 'parent' && type.ipType === mainType);
+            const isTopLevelChildAndMatchesIpType = (
+                type.hierarchy === 'child' &&
+                type.isTopLevelSelectable &&
+                (type.applicableToMainType.includes(mainType) || type.applicableToMainType.includes('all'))
+            );
+            return isParentAndMatchesIpType || isTopLevelChildAndMatchesIpType;
+        });
+        filteredTransactionTypes.sort((a, b) => (a.order || 999) - (b.order || 999));
+        filteredTransactionTypes.forEach(type => {
+            specificTypeSelect.innerHTML += `<option value="${type.id}">${type.alias || type.name}</option>`;
+        });
+        specificTypeSelect.disabled = false;
+    } else {
+        specificTypeSelect.disabled = true;
     }
+    
+    // 🚨 GÜNCELLEME: mainType parametresi eklenerek özel menşe listesi tetiklenir.
+    // selectedValue = null geçildi, böylece suit için varsayılan ('TURKEY') devreye girer.
+    this.populateOriginDropdown('originSelect', null, mainType); 
+    
+    // Menşe değişimi, eğer Yurtdışı seçilmişse, Ülke seçimi alanını açar.
+    this.handleOriginChange(document.getElementById('originSelect')?.value);
+}
 
 renderBaseForm(container, taskTypeName, taskTypeId) {
     // 1. Task tip objesini en başta bul (ipType kontrolü için)
