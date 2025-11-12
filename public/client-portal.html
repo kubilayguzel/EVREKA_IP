@@ -767,6 +767,49 @@ body.dark .opposition-owner-badge{
     z-index: 999;
     position: relative;
 }
+
+/* === Sıralanabilir Tablo Başlıkları === */
+.sortable {
+    cursor: pointer;
+    user-select: none;
+    position: relative;
+    padding-right: 20px !important;
+}
+
+.sortable:hover {
+    background-color: rgba(0, 0, 0, 0.05);
+}
+
+.dark-mode .sortable:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+.sortable i.fa-sort,
+.sortable i.fa-sort-up,
+.sortable i.fa-sort-down {
+    font-size: 0.75em;
+    opacity: 0.5;
+    margin-left: 5px;
+}
+
+.sortable:hover i.fa-sort,
+.sortable:hover i.fa-sort-up,
+.sortable:hover i.fa-sort-down {
+    opacity: 1;
+}
+
+.sortable.active i {
+    opacity: 1;
+    color: #4da6ff;
+}
+
+.dark-mode .sortable.active i {
+    color: #4da6ff;
+}
+
+.light-mode .sortable.active i {
+    color: #1e88e5;
+}
 </style>
 </head>
 <body>
@@ -839,22 +882,22 @@ body.dark .opposition-owner-badge{
 <div class="card p-4 mb-4">
 <h5 class="card-title">Filtreleme ve Arama</h5>
 <div class="form-row">
-<div class="form-group col-md-3">
-<label class="text-muted" for="basvuruNo">Başvuru No</label>
-<input class="form-control" id="basvuruNo" placeholder="Örn: 2023/12345" type="text"/>
+<div class="form-group col-md-6">
+<label class="text-muted" for="portfolioSearchText">Tabloda Ara (Marka, Başvuru No, Tescil No, Durum vb.)</label>
+<input class="form-control" id="portfolioSearchText" placeholder="Aramak istediğiniz metni girin..." type="text"/>
 </div>
 <div class="form-group col-md-3">
-<label class="text-muted" for="durum">Durum</label>
-<select class="form-control" id="durum">
-<option selected="">Tümü</option>
-<option>Başvuru</option>
-<option>Tescilli</option>
-<option>İtiraz</option>
-<option>Reddedildi</option>
+<label class="text-muted" for="portfolioDurumFilter">Durum</label>
+<select class="form-control" id="portfolioDurumFilter">
+<option selected="" value="TÜMÜ">Tümü</option>
+<option value="Başvuru">Başvuru</option>
+<option value="Tescilli">Tescilli</option>
+<option value="İtiraz">İtiraz</option>
+<option value="Reddedildi">Reddedildi</option>
 </select>
 </div>
 <div class="form-group col-md-3 d-flex align-items-end">
-<button class="btn btn-primary btn-block">Filtrele</button>
+<button class="btn btn-primary btn-block" id="portfolioFilterBtn">Filtrele</button>
 </div>
 </div>
 <div class="form-row mt-3">
@@ -893,15 +936,15 @@ body.dark .opposition-owner-badge{
 <table class="table table-hover">
 <thead>
 <tr>
-<th class="col-index">#</th>
-<th class="col-origin">Menşe</th>
+<th class="col-index sortable" data-sort="index"># <i class="fas fa-sort"></i></th>
+<th class="col-origin sortable" data-sort="origin">Menşe <i class="fas fa-sort"></i></th>
 <th class="col-sample text-center">Marka Örneği</th>
-<th class="col-brand">Marka</th>
-<th class="col-appno">Başvuru No</th>
-<th class="col-regno">Tescil No</th>
-<th class="col-appdate">Başvuru Tarihi</th>
-<th class="col-status">Durum</th>
-<th class="col-classes">Sınıflar</th>
+<th class="col-brand sortable" data-sort="brand">Marka <i class="fas fa-sort"></i></th>
+<th class="col-appno sortable" data-sort="appno">Başvuru No <i class="fas fa-sort"></i></th>
+<th class="col-regno sortable" data-sort="regno">Tescil No <i class="fas fa-sort"></i></th>
+<th class="col-appdate sortable" data-sort="appdate">Başvuru Tarihi <i class="fas fa-sort"></i></th>
+<th class="col-status sortable" data-sort="status">Durum <i class="fas fa-sort"></i></th>
+<th class="col-classes sortable" data-sort="classes">Sınıflar <i class="fas fa-sort"></i></th>
 </tr>
 </thead>
 <tbody>
@@ -1021,16 +1064,16 @@ body.dark .opposition-owner-badge{
 <table class="table table-hover">
 <thead>
 <tr>
-<th class="col-index">#</th>
+<th class="col-index sortable" data-sort="index"># <i class="fas fa-sort"></i></th>
 <th class="col-sample text-center">Marka Örneği</th>
-<th class="col-brand">M/T/B Adı</th>
-<th class="col-transaction">İşlem Tipi</th>
-<th class="col-appno">Başvuru No</th>
-<th class="col-applicant">Başvuru Sahibi</th>
-<th class="col-bulletin-date">Bülten Tarihi</th>
-<th class="col-bulletin-no">Bülten No</th>
-<th class="col-process-date">İşlem Tarihi</th>
-<th class="col-status">Durum</th>
+<th class="col-brand sortable" data-sort="brand">M/T/B Adı <i class="fas fa-sort"></i></th>
+<th class="col-transaction sortable" data-sort="transaction">İşlem Tipi <i class="fas fa-sort"></i></th>
+<th class="col-appno sortable" data-sort="appno">Başvuru No <i class="fas fa-sort"></i></th>
+<th class="col-applicant sortable" data-sort="applicant">Başvuru Sahibi <i class="fas fa-sort"></i></th>
+<th class="col-bulletin-date sortable" data-sort="bulletin-date">Bülten Tarihi <i class="fas fa-sort"></i></th>
+<th class="col-bulletin-no sortable" data-sort="bulletin-no">Bülten No <i class="fas fa-sort"></i></th>
+<th class="col-process-date sortable" data-sort="process-date">İşlem Tarihi <i class="fas fa-sort"></i></th>
+<th class="col-status sortable" data-sort="status">Durum <i class="fas fa-sort"></i></th>
 <th class="col-docs">Evraklar</th>
 </tr>
 </thead>
@@ -1141,15 +1184,36 @@ body.dark .opposition-owner-badge{
 <div class="fade tab-pane" id="invoices">
 <h1 class="header-title">Faturalarım</h1>
 <p class="lead">Fatura bilgilerinizin listesi.</p>
+<div class="card p-4 mb-4">
+<h5 class="card-title">Filtreleme ve Arama</h5>
+<div class="form-row">
+<div class="form-group col-md-6">
+<label class="text-muted" for="invoiceSearchText">Tabloda Ara (Fatura No, Açıklama, Tutar, Durum vb.)</label>
+<input class="form-control" id="invoiceSearchText" placeholder="Aramak istediğiniz metni girin..." type="text"/>
+</div>
+<div class="form-group col-md-3">
+<label class="text-muted" for="invoiceDurumFilter">Durum</label>
+<select class="form-control" id="invoiceDurumFilter">
+<option selected="" value="TÜMÜ">Tümü</option>
+<option value="Ödendi">Ödendi</option>
+<option value="Ödenmedi">Ödenmedi</option>
+<option value="Kısmen Ödendi">Kısmen Ödendi</option>
+</select>
+</div>
+<div class="form-group col-md-3 d-flex align-items-end">
+<button class="btn btn-primary btn-block" id="invoiceFilterBtn">Filtrele</button>
+</div>
+</div>
+</div>
 <div class="table-responsive mt-4">
 <table class="table table-hover">
 <thead>
 <tr>
-<th>Fatura No</th>
-<th>Tarih</th>
-<th>Açıklama</th>
-<th>Tutar</th>
-<th>Durum</th>
+<th class="sortable" data-sort="invoice-no">Fatura No <i class="fas fa-sort"></i></th>
+<th class="sortable" data-sort="date">Tarih <i class="fas fa-sort"></i></th>
+<th class="sortable" data-sort="description">Açıklama <i class="fas fa-sort"></i></th>
+<th class="sortable" data-sort="amount">Tutar <i class="fas fa-sort"></i></th>
+<th class="sortable" data-sort="status">Durum <i class="fas fa-sort"></i></th>
 <th>Fatura/Belge</th>
 </tr>
 </thead>
@@ -5498,6 +5562,279 @@ window.triggerTpQuery = function(applicationNo){
   if (!win) alert('Pop-up engellendi. Lütfen bu site için pop-up izni verin.');
 };
 
+
+// ============================================
+// GENEL TABLO SIRALAMA VE FİLTRELEME SİSTEMİ
+// ============================================
+
+// Global değişkenler
+window.portfolioSortConfig = {
+    column: null,
+    direction: 'asc',
+    currentTab: 'marka-list'
+};
+
+window.invoiceSortConfig = {
+    column: null,
+    direction: 'asc'
+};
+
+// Tablo sıralama fonksiyonu (genel)
+function sortTable(tableId, columnIndex, dataType = 'text') {
+    const table = document.querySelector(`#${tableId} table`);
+    if (!table) return;
+    
+    const tbody = table.querySelector('tbody');
+    const rows = Array.from(tbody.querySelectorAll('tr')).filter(row => {
+        // Accordion child row'ları hariç tut
+        return !row.querySelector('td[colspan]');
+    });
+    
+    // Mevcut sıralama yönünü belirle
+    const th = table.querySelectorAll('th')[columnIndex];
+    const currentDir = th.classList.contains('sort-asc') ? 'asc' : 'desc';
+    const newDir = currentDir === 'asc' ? 'desc' : 'asc';
+    
+    // Tüm başlıklardan aktif sınıfı kaldır
+    table.querySelectorAll('th').forEach(header => {
+        header.classList.remove('sort-asc', 'sort-desc', 'active');
+        const icon = header.querySelector('i');
+        if (icon) {
+            icon.className = 'fas fa-sort';
+        }
+    });
+    
+    // Yeni sıralamayı uygula
+    th.classList.add(newDir === 'asc' ? 'sort-asc' : 'sort-desc', 'active');
+    const icon = th.querySelector('i');
+    if (icon) {
+        icon.className = newDir === 'asc' ? 'fas fa-sort-up' : 'fas fa-sort-down';
+    }
+    
+    // Satırları sırala
+    rows.sort((a, b) => {
+        let aVal = a.cells[columnIndex]?.textContent.trim() || '';
+        let bVal = b.cells[columnIndex]?.textContent.trim() || '';
+        
+        // Badge içindeki metni al
+        const aBadge = a.cells[columnIndex]?.querySelector('.badge');
+        const bBadge = b.cells[columnIndex]?.querySelector('.badge');
+        if (aBadge) aVal = aBadge.textContent.trim();
+        if (bBadge) bVal = bBadge.textContent.trim();
+        
+        // Veri tipine göre karşılaştır
+        if (dataType === 'number') {
+            aVal = parseFloat(aVal.replace(/[^0-9.-]/g, '')) || 0;
+            bVal = parseFloat(bVal.replace(/[^0-9.-]/g, '')) || 0;
+            return newDir === 'asc' ? aVal - bVal : bVal - aVal;
+        } else if (dataType === 'date') {
+            // Tarih formatı: DD.MM.YYYY veya YYYY-MM-DD
+            const aDate = parseTurkishDate(aVal);
+            const bDate = parseTurkishDate(bVal);
+            return newDir === 'asc' ? aDate - bDate : bDate - aDate;
+        } else {
+            // Text karşılaştırma (Türkçe karakterlere duyarlı)
+            const comparison = aVal.localeCompare(bVal, 'tr', { sensitivity: 'base' });
+            return newDir === 'asc' ? comparison : -comparison;
+        }
+    });
+    
+    // Sıralanmış satırları tabloya geri ekle
+    rows.forEach(row => tbody.appendChild(row));
+}
+
+// Türkçe tarih formatını parse et (DD.MM.YYYY veya "-")
+function parseTurkishDate(dateStr) {
+    if (!dateStr || dateStr === '-' || dateStr.trim() === '') return new Date(0);
+    
+    // DD.MM.YYYY formatı
+    const parts = dateStr.split('.');
+    if (parts.length === 3) {
+        const day = parseInt(parts[0]);
+        const month = parseInt(parts[1]) - 1; // JS'de ay 0-11 arası
+        const year = parseInt(parts[2]);
+        return new Date(year, month, day);
+    }
+    
+    // Diğer formatlar için standart parse
+    return new Date(dateStr);
+}
+
+// Portföy filtreleme fonksiyonu
+function applyPortfolioFilters() {
+    const searchText = $('#portfolioSearchText').val().toLowerCase().trim();
+    const statusFilter = $('#portfolioDurumFilter').val();
+    const currentTab = $('#portfolioTopTabs .nav-link.active').attr('href').replace('#', '');
+    
+    const table = $(`#${currentTab} table tbody`);
+    let visibleCount = 0;
+    
+    table.find('tr').each(function() {
+        const row = $(this);
+        
+        // Accordion child row'ları atla
+        if (row.find('td[colspan]').length > 0) {
+            return;
+        }
+        
+        // Satırdaki tüm metni al
+        const rowText = row.text().toLowerCase();
+        
+        // Durum badge'ini al
+        const statusBadge = row.find('.badge').text().trim();
+        
+        // Filtreleme koşulları
+        const matchesSearch = !searchText || rowText.includes(searchText);
+        const matchesStatus = statusFilter === 'TÜMÜ' || statusBadge === statusFilter;
+        
+        if (matchesSearch && matchesStatus) {
+            row.show();
+            visibleCount++;
+        } else {
+            row.hide();
+        }
+    });
+    
+    // Sonuç mesajı (opsiyonel)
+    console.log(`Portföy filtre: ${visibleCount} kayıt gösteriliyor`);
+}
+
+// Fatura filtreleme fonksiyonu
+function applyInvoiceFilters() {
+    const searchText = $('#invoiceSearchText').val().toLowerCase().trim();
+    const statusFilter = $('#invoiceDurumFilter').val();
+    
+    const tbody = $('#invoices table tbody');
+    let visibleCount = 0;
+    
+    tbody.find('tr').each(function() {
+        const row = $(this);
+        const rowText = row.text().toLowerCase();
+        const statusBadge = row.find('.badge').text().trim();
+        
+        const matchesSearch = !searchText || rowText.includes(searchText);
+        const matchesStatus = statusFilter === 'TÜMÜ' || statusBadge === statusFilter;
+        
+        if (matchesSearch && matchesStatus) {
+            row.show();
+            visibleCount++;
+        } else {
+            row.hide();
+        }
+    });
+    
+    console.log(`Fatura filtre: ${visibleCount} kayıt gösteriliyor`);
+}
+
+// jQuery Document Ready
+jQuery(document).ready(function($) {
+    
+    // ========================================
+    // PORTFÖY TABLO SIRALAMA
+    // ========================================
+    
+    // Marka tablosu sıralama
+    $('#marka-list').on('click', 'th.sortable', function() {
+        const th = $(this);
+        const columnIndex = th.index();
+        const sortType = th.data('sort');
+        
+        // Veri tipini belirle
+        let dataType = 'text';
+        if (sortType === 'appdate') dataType = 'date';
+        if (sortType === 'index') dataType = 'number';
+        
+        sortTable('marka-list', columnIndex, dataType);
+    });
+    
+    // Patent tablosu sıralama
+    $('#patent-list').on('click', 'th.sortable', function() {
+        const th = $(this);
+        const columnIndex = th.index();
+        sortTable('patent-list', columnIndex, 'text');
+    });
+    
+    // Tasarım tablosu sıralama
+    $('#tasarim-list').on('click', 'th.sortable', function() {
+        const th = $(this);
+        const columnIndex = th.index();
+        sortTable('tasarim-list', columnIndex, 'text');
+    });
+    
+    // İtiraz tablosu sıralama
+    $('#dava-itiraz-list').on('click', 'th.sortable', function() {
+        const th = $(this);
+        const columnIndex = th.index();
+        const sortType = th.data('sort');
+        
+        let dataType = 'text';
+        if (sortType === 'bulletin-date' || sortType === 'process-date') dataType = 'date';
+        if (sortType === 'index') dataType = 'number';
+        
+        sortTable('dava-itiraz-list', columnIndex, dataType);
+    });
+    
+    // ========================================
+    // FATURA TABLO SIRALAMA
+    // ========================================
+    
+    $('#invoices').on('click', 'th.sortable', function() {
+        const th = $(this);
+        const columnIndex = th.index();
+        const sortType = th.data('sort');
+        
+        let dataType = 'text';
+        if (sortType === 'date') dataType = 'date';
+        if (sortType === 'amount') dataType = 'number';
+        
+        sortTable('invoices', columnIndex, dataType);
+    });
+    
+    // ========================================
+    // PORTFÖY FİLTRELEME EVENT LISTENERS
+    // ========================================
+    
+    // Arama inputu - anlık filtreleme
+    $('#portfolioSearchText').on('keyup', function() {
+        applyPortfolioFilters();
+    });
+    
+    // Durum filtresi - değişince filtrele
+    $('#portfolioDurumFilter').on('change', function() {
+        applyPortfolioFilters();
+    });
+    
+    // Filtrele butonu
+    $('#portfolioFilterBtn').on('click', function() {
+        applyPortfolioFilters();
+    });
+    
+    // Tab değiştiğinde filtreyi sıfırla
+    $('#portfolioTopTabs a[data-toggle="tab"]').on('shown.bs.tab', function(e) {
+        $('#portfolioSearchText').val('');
+        $('#portfolioDurumFilter').val('TÜMÜ');
+        applyPortfolioFilters();
+    });
+    
+    // ========================================
+    // FATURA FİLTRELEME EVENT LISTENERS
+    // ========================================
+    
+    // Arama inputu - anlık filtreleme
+    $('#invoiceSearchText').on('keyup', function() {
+        applyInvoiceFilters();
+    });
+    
+    // Durum filtresi - değişince filtrele
+    $('#invoiceDurumFilter').on('change', function() {
+        applyInvoiceFilters();
+    });
+    
+    // Filtrele butonu
+    $('#invoiceFilterBtn').on('click', function() {
+        applyInvoiceFilters();
+    });
+});
 // --- Filtre Event Listener'ları ---
 // jQuery yüklendikten sonra çalıştır
 jQuery(document).ready(function($) {
