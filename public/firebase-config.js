@@ -1081,9 +1081,32 @@ export const accrualService = {
         
         try {
             const accrualId = await getNextAccrualId();
-            
+            // Determine task title based on task's type alias
+            let computedTaskTitle = accrualData.taskTitle;
+            try {
+            if (accrualData.taskId) {
+                const taskSnap = await getDoc(doc(db, 'tasks', String(accrualData.taskId)));
+                if (taskSnap.exists()) {
+                const tdata = taskSnap.data();
+                // task type id için birkaç muhtemel alan adı
+                const typeId = tdata?.specificTaskType || tdata?.taskTypeId || tdata?.type || tdata?.specificType;
+                if (typeId) {
+                    const typeSnap = await getDoc(doc(db, 'transactionTypes', String(typeId)));
+                    if (typeSnap.exists()) {
+                    const td = typeSnap.data();
+                    // alias varsa onu, yoksa name’i kullan
+                    computedTaskTitle = td?.alias || td?.name || computedTaskTitle;
+                    }
+                }
+                }
+            }
+            } catch (e) {
+            console.warn('Task type alias lookup failed:', e?.message || e);
+            }
+
             const newAccrual = {
                 ...accrualData,
+                taskTitle: computedTaskTitle,
                 id: accrualId, 
                 status: 'unpaid',
                 createdAt: new Date().toISOString(),
