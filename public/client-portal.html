@@ -95,6 +95,10 @@
         .dark-mode .badge-registered { background-color: #5cb85c; color: #1a3b1c; }
         .dark-mode .badge-objection { background-color: #f0ad4e; color: #4e351b; }
         .dark-mode .badge-rejected { background-color: #d9534f; color: #3d1b1a; }
+        /* Fatura durumları için özel renkler */
+        .dark-mode .badge-partially-paid { background-color: #ff8c00; color: #fff; font-weight: 600; }
+        .dark-mode .badge-warning { background-color: #ffc107; color: #000; }
+        .dark-mode .badge-success { background-color: #28a745; color: #fff; }
         .dark-mode .modal-content {
             background-color: #36393e;
             color: #e0e0e0;
@@ -164,6 +168,10 @@
         .light-mode .badge-registered { background-color: #d4edda; color: #43a047; }
         .light-mode .badge-objection { background-color: #fff3e0; color: #fb8c00; }
         .light-mode .badge-rejected { background-color: #f8d7da; color: #e53935; }
+        /* Fatura durumları için özel renkler */
+        .light-mode .badge-partially-paid { background-color: #ff8c00; color: #fff; font-weight: 600; }
+        .light-mode .badge-warning { background-color: #ffc107; color: #000; }
+        .light-mode .badge-success { background-color: #28a745; color: #fff; }
         .light-mode .modal-content {
             background-color: #ffffff;
             color: #333;
@@ -1146,30 +1154,12 @@ body.dark .opposition-owner-badge{
 </tr>
 </thead>
 <tbody>
-<tr>
-<td>INV-2023-001</td>
-<td>25.10.2023</td>
-<td>Marka tescil başvuru hizmet bedeli</td>
-<td>1.500 TL</td>
-<td><span class="badge badge-warning">Ödenmemiş</span></td>
-<td>
-<button class="btn btn-primary btn-sm btn-action"><i class="fas fa-download"></i> İndir</button>
-<button class="btn btn-success btn-sm btn-action"><i class="fas fa-lira-sign"></i> Öde</button>
-</td>
-</tr>
-<tr>
-<td>INV-2023-002</td>
-<td>10.09.2023</td>
-<td>Yıllık marka takip hizmeti</td>
-<td>800 TL</td>
-<td><span class="badge badge-success">Ödendi</span></td>
-<td>
-<button class="btn btn-primary btn-sm btn-action"><i class="fas fa-download"></i> İndir</button>
-</td>
-</tr>
+<!-- Veriler JavaScript ile dinamik olarak yüklenecek -->
 </tbody>
 </table>
 </div>
+<!-- Pagination container buraya eklenecek -->
+<div id="invoices-pagination-container"></div>
 </div><div class="fade tab-pane" id="reports">
 <h1 class="header-title">Raporlar</h1>
 <p class="lead">Portföyünüzle ilgili detaylı raporlara buradan ulaşabilirsiniz.</p>
@@ -2210,7 +2200,7 @@ window.renderInvoicesPage = function() {
           break;
         case 'partially_paid':
           statusText = 'Kısmen Ödendi';
-          statusBadgeClass = 'badge-warning'; // Turuncu
+          statusBadgeClass = 'badge-partially-paid'; // Koyu turuncu
           break;
         default:
           statusText = 'Bilinmiyor';
@@ -2218,6 +2208,14 @@ window.renderInvoicesPage = function() {
       }
         
       const amountDisplay = currencyFormatter(a.totalAmount, a.totalAmountCurrency);
+      
+      // Kısmen ödendi durumunda kalan tutarı da göster
+      let amountDisplayWithRemaining = amountDisplay;
+      if (a.status === 'partially_paid' && a.remainingAmount !== undefined && a.remainingAmount > 0) {
+          const remainingDisplay = currencyFormatter(a.remainingAmount, a.totalAmountCurrency);
+          amountDisplayWithRemaining = `${amountDisplay}<br><small class="text-muted">(Kalan: ${remainingDisplay})</small>`;
+      }
+      
       const dateDisplay = formatDate(a.createdAt);
       const invoiceNo = a.invoiceNo || a.id?.substring(0, 8) || '-'; 
       const description = a.taskTitle || 'Tahakkuk Kaydı';
@@ -2234,7 +2232,7 @@ window.renderInvoicesPage = function() {
           <td>${invoiceNo}</td>
           <td>${dateDisplay}</td>
           <td>${description}</td>
-          <td>${amountDisplay}</td>
+          <td>${amountDisplayWithRemaining}</td>
           <td><span class="badge ${statusBadgeClass}">${statusText}</span></td>
           <td>${actions}</td>
         </tr>
@@ -2256,17 +2254,11 @@ window.renderInvoicesPagination = function() {
     const data = window.invoicesPaginationData;
     const totalPages = Math.ceil(data.allData.length / data.itemsPerPage);
     
-    // Pagination container'ı bul veya oluştur
-    let paginationContainer = document.querySelector('#invoices .pagination-container');
+    // Pagination container'ı bul
+    let paginationContainer = document.querySelector('#invoices-pagination-container');
     if (!paginationContainer) {
-        const tableWrapper = document.querySelector('#invoices .table-responsive');
-        if (tableWrapper) {
-            paginationContainer = document.createElement('div');
-            paginationContainer.className = 'pagination-container mt-3 d-flex justify-content-between align-items-center';
-            tableWrapper.parentNode.insertBefore(paginationContainer, tableWrapper.nextSibling);
-        } else {
-            return;
-        }
+        console.warn('Pagination container bulunamadı');
+        return;
     }
     
     if (totalPages <= 1) {
@@ -2275,11 +2267,12 @@ window.renderInvoicesPagination = function() {
     }
     
     let paginationHTML = `
-        <div class="pagination-info">
-            <span>${data.allData.length} kayıttan ${((data.currentPage - 1) * data.itemsPerPage) + 1}-${Math.min(data.currentPage * data.itemsPerPage, data.allData.length)} arası gösteriliyor</span>
-        </div>
-        <nav>
-            <ul class="pagination mb-0">
+        <div class="d-flex justify-content-between align-items-center mt-3">
+            <div class="pagination-info">
+                <span>${data.allData.length} kayıttan ${((data.currentPage - 1) * data.itemsPerPage) + 1}-${Math.min(data.currentPage * data.itemsPerPage, data.allData.length)} arası gösteriliyor</span>
+            </div>
+            <nav>
+                <ul class="pagination mb-0">
     `;
     
     // Önceki sayfa
@@ -2314,8 +2307,9 @@ window.renderInvoicesPagination = function() {
     `;
     
     paginationHTML += `
-            </ul>
-        </nav>
+                </ul>
+            </nav>
+        </div>
     `;
     
     paginationContainer.innerHTML = paginationHTML;
