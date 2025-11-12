@@ -2019,13 +2019,18 @@ async function fetchAndDisplayPortfolio() {
 window.populateDashboardNumbers = async function (linkedPersonIds, allPortfolios){
     const portfolioCount = allPortfolios.length;
 
+    // Tüm faturaları çek
     const accrualQ = query(
       collection(db, "accruals"),
-      where("personsRelatedIds", "array-contains-any", linkedPersonIds),
-      where("isPaid","==", false)
+      where("personsRelatedIds", "array-contains-any", linkedPersonIds)
     );
     const accrualSnap = await runGetDocs(accrualQ);
-    const unpaidInvoices = accrualSnap.size;
+    
+    // Ödenmemiş (isPaid=false) ve kısmen ödenen (status='partially-paid') faturaları say
+    const unpaidInvoices = accrualSnap.docs.filter(doc => {
+      const data = doc.data();
+      return data.isPaid === false || data.status === 'partially-paid';
+    }).length;
 
     writeDashSafe('#dashPortfolio',        portfolioCount);
     writeDashSafe('#dashUnpaidInvoices',   unpaidInvoices);
