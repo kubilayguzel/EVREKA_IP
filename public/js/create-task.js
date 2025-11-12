@@ -532,12 +532,33 @@ const doSearch = this.debounce(async (raw) => {
         });
         await this.fetchAndStoreBulletinData(this.selectedIpRecord.bulletinId);
     }
+    
+    // 🚨 DAVA İŞLEMİ İÇİN MENŞE KONTROLÜNÜ KALDIRMA MANTIĞI
+    const mainType = document.getElementById('mainIpType')?.value;
+    const isSuit = mainType === 'suit';
+    const countrySelectionContainer = document.getElementById('countrySelectionContainer');
 
-    // ✨ YENİ: Varlık seçimiyle menşe dropdown'ını güncelle
-    if (originSelect && this.selectedIpRecord.origin !== originSelect.value) {
-        originSelect.value = this.selectedIpRecord.origin;
+    if (isSuit && this.selectedIpRecord) {
+        // Dava işi ve Varlık seçildi: Menşe kontrolünü kaldır.
+        if (originSelect) {
+            // Origin'i varlığın menşei ile güncelle ve kilitle
+            originSelect.value = this.selectedIpRecord.origin;
+            originSelect.disabled = true; 
+        }
+        if (countrySelectionContainer) {
+            countrySelectionContainer.style.display = 'none'; // Ülke seçimini gizle
+        }
+        // handleOriginChange'i bir kez çağırıp menşe alanındaki ülke seçimini temizle
         this.handleOriginChange(this.selectedIpRecord.origin);
-        alert(`Seçilen varlığın menşei (${this.selectedIpRecord.origin}) olduğu için Menşe alanı otomatik olarak değiştirildi.`);
+        console.log('✅ Dava işi için varlık seçildi. Menşe seçimi kilitlendi ve ülke seçim alanı gizlendi.');
+        
+    } else {
+        // Marka/Patent gibi diğer işlemler için orijinal mantık (uyarı dahil)
+        if (originSelect && this.selectedIpRecord.origin !== originSelect.value) {
+            originSelect.value = this.selectedIpRecord.origin;
+            this.handleOriginChange(this.selectedIpRecord.origin);
+            alert(`Seçilen varlığın menşei (${this.selectedIpRecord.origin}) olduğu için Menşe alanı otomatik olarak değiştirildi.`);
+        }
     }
     
     // ✨ YENİ: WIPO/ARIPO özel işleme mantığı
@@ -592,11 +613,26 @@ const doSearch = this.debounce(async (raw) => {
       const t = selectedBox.querySelector('.ip-thumb');
       if (t) t.remove();
       this.checkFormCompleteness();
+      
+      // 🚨 DAVA İŞLEMİ İÇİN KİLİDİ KALDIRMA MANTIĞI
+      const mainType = document.getElementById('mainIpType')?.value;
+      const isSuit = mainType === 'suit';
+      const originSelect = document.getElementById('originSelect');
+
+      if (isSuit && originSelect) {
+          originSelect.disabled = false; // Yeniden etkinleştir
+          // Varsayılan menşe değerini tekrar ayarlayarak (Türkiye) handleOriginChange'i tetikleyelim
+          originSelect.value = 'TURKEY';
+      }
+
     if (this.selectedIpRecord && this.selectedIpRecord?.id) {this.handleIpRecordChange(this.selectedIpRecord?.id); }
     // ✨ YENİ: Parent kayıt kaldırılınca alt kayıtları da temizle
     this.selectedWipoAripoChildren = [];
     this.renderWipoAripoChildRecords();
     // ✨ YENİ SONU
+    
+    // Menşe değişimi mantığını tetikle (ülke seçimi tekrar görünür olabilir)
+    this.handleOriginChange(document.getElementById('originSelect')?.value);
   });
 }
 
