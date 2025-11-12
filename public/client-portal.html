@@ -2122,20 +2122,48 @@ window.fetchAndDisplayInvoices = async function (linkedPersonIds) {
         return numB - numA; // Büyükten küçüğe
     });
     
-    // Pagination için global değişken
+    // Pagination için global değişken - Portföy ile aynı yapı
     if (!window.invoicesPaginationData) {
         window.invoicesPaginationData = {
             allData: [],
             currentPage: 1,
-            itemsPerPage: 10
+            itemsPerPage: 10,
+            pagination: null
         };
     }
     
     window.invoicesPaginationData.allData = uniqueAccruals;
     window.invoicesPaginationData.currentPage = 1;
     
-    // İlk sayfayı render et
-    renderInvoicesPage();
+    console.log('📊 Fatura Pagination Debug:', {
+        totalRecords: uniqueAccruals.length,
+        itemsPerPage: window.invoicesPaginationData.itemsPerPage,
+        willShowPagination: uniqueAccruals.length > 10
+    });
+    
+    // Pagination instance'ı oluştur (ilk kez ise)
+    if (!window.invoicesPaginationData.pagination && typeof Pagination !== 'undefined') {
+        window.invoicesPaginationData.pagination = new Pagination({
+            itemsPerPage: 10,
+            containerId: 'invoices-pagination-container',
+            onPageChange: (page, perPage) => {
+                const start = (page - 1) * perPage;
+                const end = start + perPage;
+                const slice = window.invoicesPaginationData.allData.slice(start, end);
+                renderInvoicesTable(slice);
+            }
+        });
+    }
+    
+    // Pagination'ı güncelle ve ilk sayfayı göster
+    if (window.invoicesPaginationData.pagination) {
+        window.invoicesPaginationData.pagination.update(uniqueAccruals.length);
+        const firstPage = uniqueAccruals.slice(0, 10);
+        renderInvoicesTable(firstPage);
+    } else {
+        // Pagination modülü yüklenmemişse, eski yöntemi kullan
+        renderInvoicesPage();
+    }
 
   } catch (err) {
     console.error('Faturalar çekilirken genel hata:', err);
@@ -2146,18 +2174,13 @@ window.fetchAndDisplayInvoices = async function (linkedPersonIds) {
   }
 };
 
-// Faturaları sayfa sayfa gösteren fonksiyon
-window.renderInvoicesPage = function() {
-    const data = window.invoicesPaginationData;
+// Faturaları tabloya render eden fonksiyon
+window.renderInvoicesTable = function(pageData) {
     const table = document.querySelector('#invoices table');
     if (!table) return;
     
     const tableBody = table.querySelector('tbody') || table.createTBody();
     tableBody.innerHTML = '';
-    
-    const startIdx = (data.currentPage - 1) * data.itemsPerPage;
-    const endIdx = startIdx + data.itemsPerPage;
-    const pageData = data.allData.slice(startIdx, endIdx);
     
     const currencyFormatter = (amount, currency) => {
         try {
@@ -2241,89 +2264,22 @@ window.renderInvoicesPage = function() {
     });
     
     // Eğer kayıt yoksa
-    if (data.allData.length === 0) {
+    if (pageData.length === 0 && window.invoicesPaginationData.allData.length === 0) {
          tableBody.innerHTML = `<tr><td colspan="6" class="text-center text-muted">Müvekkiliniz ile ilişkili tahakkuk kaydı bulunmamaktadır.</td></tr>`;
     }
-    
-    // Pagination kontrollerini render et
-    renderInvoicesPagination();
 };
 
-// Pagination kontrollerini oluştur
-window.renderInvoicesPagination = function() {
+// Fallback: Pagination modülü yüklenmediyse kullanılır
+window.renderInvoicesPage = function() {
+    console.warn('⚠️ renderInvoicesPage called - Pagination modülü yüklü değil, basit render yapılıyor');
     const data = window.invoicesPaginationData;
-    const totalPages = Math.ceil(data.allData.length / data.itemsPerPage);
+    if (!data || !data.allData) return;
     
-    // Pagination container'ı bul
-    let paginationContainer = document.querySelector('#invoices-pagination-container');
-    if (!paginationContainer) {
-        console.warn('Pagination container bulunamadı');
-        return;
-    }
+    const startIdx = ((data.currentPage || 1) - 1) * (data.itemsPerPage || 10);
+    const endIdx = startIdx + (data.itemsPerPage || 10);
+    const pageData = data.allData.slice(startIdx, endIdx);
     
-    if (totalPages <= 1) {
-        paginationContainer.innerHTML = '';
-        return;
-    }
-    
-    let paginationHTML = `
-        <div class="d-flex justify-content-between align-items-center mt-3">
-            <div class="pagination-info">
-                <span>${data.allData.length} kayıttan ${((data.currentPage - 1) * data.itemsPerPage) + 1}-${Math.min(data.currentPage * data.itemsPerPage, data.allData.length)} arası gösteriliyor</span>
-            </div>
-            <nav>
-                <ul class="pagination mb-0">
-    `;
-    
-    // Önceki sayfa
-    paginationHTML += `
-        <li class="page-item ${data.currentPage === 1 ? 'disabled' : ''}">
-            <a class="page-link" href="#" onclick="window.goToInvoicesPage(${data.currentPage - 1}); return false;">
-                <i class="fas fa-chevron-left"></i>
-            </a>
-        </li>
-    `;
-    
-    // Sayfa numaraları
-    for (let i = 1; i <= totalPages; i++) {
-        if (i === 1 || i === totalPages || (i >= data.currentPage - 2 && i <= data.currentPage + 2)) {
-            paginationHTML += `
-                <li class="page-item ${i === data.currentPage ? 'active' : ''}">
-                    <a class="page-link" href="#" onclick="window.goToInvoicesPage(${i}); return false;">${i}</a>
-                </li>
-            `;
-        } else if (i === data.currentPage - 3 || i === data.currentPage + 3) {
-            paginationHTML += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
-        }
-    }
-    
-    // Sonraki sayfa
-    paginationHTML += `
-        <li class="page-item ${data.currentPage === totalPages ? 'disabled' : ''}">
-            <a class="page-link" href="#" onclick="window.goToInvoicesPage(${data.currentPage + 1}); return false;">
-                <i class="fas fa-chevron-right"></i>
-            </a>
-        </li>
-    `;
-    
-    paginationHTML += `
-                </ul>
-            </nav>
-        </div>
-    `;
-    
-    paginationContainer.innerHTML = paginationHTML;
-};
-
-// Sayfaya git fonksiyonu
-window.goToInvoicesPage = function(pageNum) {
-    const data = window.invoicesPaginationData;
-    const totalPages = Math.ceil(data.allData.length / data.itemsPerPage);
-    
-    if (pageNum < 1 || pageNum > totalPages) return;
-    
-    data.currentPage = pageNum;
-    renderInvoicesPage();
+    renderInvoicesTable(pageData);
 };
 
 // === GLOBAL DEĞİŞKENLER (DOMContentLoaded'dan ÖNCE) ===
