@@ -7,6 +7,21 @@ import {collection, doc, getDoc, getDocs, getFirestore, query, where , updateDoc
 import { STATUSES, ORIGIN_TYPES } from '../utils.js';
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
+function initTaskDatePickers(root = document) {
+    const dateFields = root.querySelectorAll('.date-picker');
+
+    dateFields.forEach(element => {
+        if (element) {
+            flatpickr(element, {
+                dateFormat: "d.m.Y",
+                allowInput: true,
+                locale: "tr",
+                // Diğer Flatpickr konfigürasyonları...
+            });
+        }
+    });
+}
+
 function __pathFromDownloadURL(url) {
   try {
     const m = String(url).match(/\/o\/(.+?)\?/);
