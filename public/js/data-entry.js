@@ -3,7 +3,7 @@ import { initializeNiceClassification, getSelectedNiceClasses, setSelectedNiceCl
 import { personService, ipRecordsService, storage, auth, transactionTypeService } from '../firebase-config.js';
 import { getStorage, ref, uploadBytes, deleteObject, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
 import { loadSharedLayout, openPersonModal, ensurePersonModal } from './layout-loader.js';
-import {collection, doc, getDoc, getDocs, getFirestore, query, where , updateDoc} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import {collection, doc, getDoc, getDocs, getFirestore, query, where , updateDoc,  addDoc, Timestamp} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { STATUSES, ORIGIN_TYPES } from '../utils.js';
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
@@ -198,6 +198,10 @@ constructor() {
         this.allCountries = [];
         this.currentIpType = null;
         this.selectedCountries = [];
+        this.allTransactionTypes = []; 
+        this.suitClientPerson = null;
+        this.suitSpecificTaskType = null;
+        this.authService = auth;
     }
 
 async init() {
@@ -221,23 +225,25 @@ console.log('🚀 Data Entry Module başlatılıyor...');
         }
     }
 
-    async loadAllData() {
-        try {
-            const [personsResult, countriesResult] = await Promise.all([
-                personService.getPersons(),
-                this.getCountries()
-            ]);
-            
-            this.allPersons = personsResult.success ? personsResult.data : [];
-            this.allCountries = countriesResult; // Yeni eklenen
-            
-            console.log('📊 Tüm veriler yüklendi:', this.allPersons.length, 'kişi,', this.allCountries.length, 'ülke.');
-        } catch (error) {
-            console.error('Veriler yüklenirken hata:', error);
-            this.allPersons = [];
-            this.allCountries = [];
-            }
-        }
+async loadAllData() {
+    try {
+        const [personsResult, countriesResult, transactionTypesResult] = await Promise.all([
+            personService.getPersons(),
+            this.getCountries(),
+            this.getTaskTypes(), // Yeni: Task types çekildi
+        ]);
+        
+        this.allPersons = personsResult.success ? personsResult.data : [];
+        this.allCountries = countriesResult; 
+        
+        console.log('📊 Tüm veriler yüklendi:', this.allPersons.length, 'kişi,', this.allCountries.length, 'ülke,', this.allTransactionTypes.length, 'iş tipi.');
+    } catch (error) {
+        console.error('Veriler yüklenirken hata:', error);
+        this.allPersons = [];
+        this.allCountries = [];
+        this.allTransactionTypes = [];
+    }
+}
 
     setupEventListeners() {
             console.log('🎯 Event listener kuruluyor...');
@@ -283,30 +289,41 @@ console.log('🚀 Data Entry Module başlatılıyor...');
         });
     }
    
-    handleOriginChange(originType) {
-        const container = document.getElementById('countrySelectionContainer');
+handleOriginChange(originType) {
+        const countrySelectionContainer = document.getElementById('countrySelectionContainer');
         const singleSelectWrapper = document.getElementById('singleCountrySelectWrapper');
         const multiSelectWrapper = document.getElementById('multiCountrySelectWrapper');
         const title = document.getElementById('countrySelectionTitle');
-        if (!container || !singleSelectWrapper || !multiSelectWrapper || !title) return;
+
+        if (!countrySelectionContainer || !singleSelectWrapper || !multiSelectWrapper || !title) return;
+
+        const ipType = document.getElementById('ipTypeSelect')?.value;
+        const isLawsuit = ipType === 'suit';
 
         this.selectedCountries = [];
-        container.style.display = 'none';
+        countrySelectionContainer.style.display = 'none';
         singleSelectWrapper.style.display = 'none';
         multiSelectWrapper.style.display = 'none';
 
-        if (originType === 'Yurtdışı Ulusal') {
-            title.textContent = 'Menşe Ülke Seçimi';
-            container.style.display = 'block';
+        // Dava ve Yurtdışı menşe
+        if (isLawsuit && originType === 'FOREIGN_NATIONAL') {
+            title.textContent = 'Menşe Ülke Seçimi (Dava)';
+            countrySelectionContainer.style.display = 'block';
             singleSelectWrapper.style.display = 'block';
             this.populateCountriesDropdown('countrySelect');
-        } else if (originType === 'WIPO' || originType === 'ARIPO') {
+        } 
+        // ORİJİNAL KOŞUL: Marka/Patent/Tasarım
+        else if (originType === 'Yurtdışı Ulusal' && ipType !== 'suit') {
+            title.textContent = 'Menşe Ülke Seçimi';
+            countrySelectionContainer.style.display = 'block';
+            singleSelectWrapper.style.display = 'block';
+            this.populateCountriesDropdown('countrySelect');
+        } else if ((originType === 'WIPO' || originType === 'ARIPO') && ipType !== 'suit') {
             title.textContent = `Seçim Yapılacak Ülkeler (${originType})`;
-            container.style.display = 'block';
+            countrySelectionContainer.style.display = 'block';
             multiSelectWrapper.style.display = 'block';
             this.setupMultiCountrySelect();
         }
-        this.updateFormFieldsBasedOnOrigin();
     }
 
     setupModalCloseButtons() {
@@ -329,27 +346,93 @@ console.log('🚀 Data Entry Module başlatılıyor...');
         }
     }
 
-    handleIPTypeChange(ipType) {
+handleIPTypeChange(ipType) {
         console.log('📋 IP türü değişti:', ipType);
         
-        this.dynamicFormContainer.innerHTML = '';
-        this.selectedApplicants = [];
-        this.priorities = []; // Rüçhan listesini temizle
-        this.isNiceInitialized = false;
-        this.uploadedBrandImage = null;
-        this.updateSaveButtonState();
+        this.currentIpType = ipType;
+        
+        const isSuit = ipType === 'suit';
+        const ownerCard = document.getElementById('ownerCard');
+        const specificTaskTypeWrapper = document.getElementById('specificTaskTypeWrapper');
+        const originSelectWrapper = document.getElementById('originSelectWrapper');
+        const suitSpecificFieldsCard = document.getElementById('suitSpecificFieldsCard');
+        const dynamicFormContainer = document.getElementById('dynamicFormContainer');
+        const clientSection = document.querySelector('.card.mb-4[id="clientSection"]');
+        
+        // Temizle
+        dynamicFormContainer.innerHTML = '';
+        if (clientSection) clientSection.remove(); // Önceki müvekkil kartını kaldır
+        document.getElementById('countrySelectionContainer').style.display = 'none';
 
-        switch(ipType) {
-            case 'trademark':
-                this.renderTrademarkForm();
-                break;
-            case 'patent':
-                this.renderPatentForm();
-                break;
-            case 'design':
-                this.renderDesignForm();
-                break;
+        // 1. Kayıt Sahibi (Owner) Alanı Kontrolü (Dava seçildiğinde gizle)
+        if (ownerCard) {
+            ownerCard.style.display = isSuit ? 'none' : 'block';
         }
+
+        if (isSuit) {
+            // Dava tipi seçildi:
+            specificTaskTypeWrapper.style.display = 'block';
+            originSelectWrapper.style.display = 'block';
+            suitSpecificFieldsCard.style.display = 'block';
+            
+            // Müvekkil bölümünü ve Dava Detaylarını ekle
+            this.renderSuitClientSection(); 
+
+            // Menşe doldurma ve olay tetikleme (Dava için Türkiye/Yurtdışı)
+            this.populateOriginDropdown('originSelect', 'TURKEY', ipType);
+            this.handleOriginChange(document.getElementById('originSelect')?.value);
+
+            // Spesifik İş Tipi doldurma (Dava için filtrelenmiş)
+            this.populateSpecificTaskTypeDropdown(ipType);
+            
+            // İlk yükleme/seçim anında Dava Detaylarını temizle
+            suitSpecificFieldsCard.querySelector('#suitSpecificFieldsContainer').innerHTML = '';
+
+
+        } else {
+            // Marka/Patent/Tasarım seçildi
+            specificTaskTypeWrapper.style.display = 'none';
+            originSelectWrapper.style.display = 'block'; 
+            suitSpecificFieldsCard.style.display = 'none';
+
+            // Normal IP render fonksiyonunu çağır
+            dynamicFormContainer.style.display = 'block';
+            
+            switch(ipType) {
+                case 'trademark': this.renderTrademarkForm(); break;
+                case 'patent': this.renderPatentForm(); break;
+                case 'design': this.renderDesignForm(); break;
+                default: dynamicFormContainer.innerHTML = ''; // IP türü seçilmezse temizle
+            }
+
+            // Orijinal Menşe Listesini doldur
+            this.populateOriginDropdown('originSelect', 'TÜRKPATENT', ipType);
+            this.handleOriginChange(document.getElementById('originSelect')?.value);
+
+        }
+
+        this.updateSaveButtonState();
+    }
+
+    // === YENİ: `handleSpecificTaskTypeChange` Fonksiyonu ===
+    handleSpecificTaskTypeChange(e) {
+        const taskTypeId = e.target.value;
+        const suitSpecificFieldsCard = document.getElementById('suitSpecificFieldsCard');
+        this.suitSpecificTaskType = this.allTransactionTypes.find(t => t.id === taskTypeId);
+
+        const container = document.getElementById('suitSpecificFieldsContainer');
+
+        if (this.suitSpecificTaskType) {
+            container.innerHTML = this.renderSuitFields(this.suitSpecificTaskType.alias || this.suitSpecificTaskType.name);
+            this.setupSuitPersonSearchSelectors(); 
+            // Datepicker'ları başlat
+            if (typeof initTaskDatePickers === 'function') {
+                initTaskDatePickers(container);
+            }
+        } else {
+            container.innerHTML = '';
+        }
+        this.updateSaveButtonState();
     }
 
     renderTrademarkForm() {
@@ -2342,6 +2425,217 @@ async savePatentPortfolio(portfolioData) {
         throw new Error(result.error);
     }
 }
+
+// === YENİ: Task Tiplerini Çekme Metodu ===
+    async getTaskTypes() {
+        try {
+            // transactionTypeService mevcut, bu yüzden onu kullanın
+            const r = await transactionTypeService.getTransactionTypes();
+            // Varsayılan olarak 'data' veya direkt dizi beklenir
+            const list = Array.isArray(r?.data) ? r.data : (Array.isArray(r) ? r : []); 
+            this.allTransactionTypes = list;
+            return list;
+        } catch (error) {
+            console.error('Task tipleri yüklenemedi:', error);
+            this.allTransactionTypes = [];
+            return [];
+        }
+    }
+    
+    // === YENİ: Dava için Spesifik İş Tipi Doldurma ===
+    populateSpecificTaskTypeDropdown(mainType) {
+        const dropdown = document.getElementById('specificTaskType');
+        if (!dropdown) return;
+
+        dropdown.innerHTML = '<option value="">Seçiniz...</option>';
+
+        if (!mainType || !this.allTransactionTypes) return;
+
+        // Dava (suit) tipine ait olanları ve hiyerarşisi 'parent' olanları filtrele
+        const filteredTypes = this.allTransactionTypes.filter(type =>
+            type.ipType === mainType && type.hierarchy === 'parent'
+        );
+
+        filteredTypes.sort((a, b) => (a.order || 999) - (b.order || 999));
+
+        filteredTypes.forEach(type => {
+            dropdown.innerHTML += `<option value="${type.id}">${type.alias || type.name}</option>`;
+        });
+    }
+
+    // === YENİ: Dava Detay Alanları HTML'i (renderSuitFields) ===
+    renderSuitFields(taskName) {
+        // İş Detayları ve Tahakkuk hariç, son gereksinimlere uygun alanlar
+        return `
+            <div class="card-header bg-secondary text-white">
+                <h5 class="mb-0">4. Dava Bilgileri - ${taskName}</h5>
+            </div>
+            <div class="card-body">
+                <div class="form-grid">
+                    
+                    <div class="form-group full-width">
+                        <label for="suitCourt" class="form-label">Mahkeme</label>
+                        <select id="suitCourt" name="suitCourt" class="form-select" required>
+                            <option value="">Seçiniz...</option>
+                            <option value="ankara_1_fsm">Ankara 1. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
+                            <option value="ankara_2_fsm">Ankara 2. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
+                            <option value="ankara_3_fsm">Ankara 3. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
+                            <option value="ankara_4_fsm">Ankara 4. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
+                            <option value="ankara_5_fsm">Ankara 5. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
+                            <option value="istinaf">Ankara Bölge Adliye Mahkemesi (İstinaf)</option>
+                            <option value="yargitay_11_hd">Yargıtay 11. Hukuk Dairesi</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group full-width">
+                        <label for="suitDescription" class="form-label">Dava Konusu ve Kısa Açıklaması</label>
+                        <textarea class="form-control" id="suitDescription" rows="3"></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="opposingParty" class="form-label">Karşı Taraf</label>
+                        <input type="text" id="opposingParty" name="opposingParty" class="form-input" placeholder="Örn: X Firması">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="opposingCounsel" class="form-label">Karşı Taraf Vekili</label>
+                        <input type="text" id="opposingCounsel" name="opposingCounsel" class="form-input" placeholder="Örn: Av. Y">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="suitCaseNo">Esas / Takip No</label>
+                        <input type="text" class="form-control" id="suitCaseNo">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="suitOpeningDate">Dava Açılış / Başvuru Tarihi</label>
+                        <input type="text" class="form-control date-picker" id="suitOpeningDate" required>
+                    </div>
+                    
+                    <div class="form-group full-width">
+                        <label for="suitFilePath">Dosya Yolu (Evreka Cloud veya Drive)</label>
+                        <input type="text" class="form-control" id="suitFilePath">
+                    </div>
+                    
+                </div>
+            </div>
+        `;
+    }
+    
+    // YENİ: Müvekkil alanını render eden fonksiyon
+    renderSuitClientSection() {
+        const suitFieldsCard = document.getElementById('suitSpecificFieldsCard');
+        if (!suitFieldsCard) return;
+
+        // Müvekkil HTML'i
+        const clientHtml = `
+            <div class="card mb-4">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">3. Müvekkil Bilgileri</h5>
+                </div>
+                <div class="card-body">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="clientRole" class="form-label">Müvekkil Rolü</label>
+                            <select id="clientRole" name="clientRole" class="form-select" required>
+                                <option value="">Seçiniz...</option>
+                                <option value="davaci">Davacı (Plaintiff)</option>
+                                <option value="davali">Davalı (Defendant)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            </div>
+                    </div>
+
+                    <div class="form-group full-width mt-3">
+                        <label for="suitClientSearch" class="form-label">Müvekkil Ara (Sistemdeki Kişiler)</label>
+                        <div class="d-flex" style="gap:10px; align-items:flex-start;">
+                            <div class="search-input-wrapper" style="flex:1; position:relative;">
+                                <input type="text" id="suitClientSearch" class="form-input" placeholder="Müvekkil adı, e-posta..." autocomplete="off">
+                                <div id="suitClientSearchResults" class="search-results-list" style="display:none;"></div> 
+                            </div>
+                            <button type="button" id="addNewPersonBtn" class="btn-small btn-add-person">
+                                <span>&#x2795;</span> Yeni Kişi
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div id="selectedSuitClient" class="mt-2" style="display:none; padding: 10px; border: 1px solid #ccc; border-radius: 4px; background-color: #f8f9fa;">
+                        Seçilen: <span id="selectedSuitClientName"></span>
+                        <button type="button" class="btn btn-sm btn-danger ml-2" id="clearSuitClient">Kaldır</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Dava Detayları kartından hemen önce DOM'a ekle
+        suitFieldsCard.insertAdjacentHTML('beforebegin', clientHtml);
+
+        // Müvekkil kaydı için yeni kişi ekleme listener'ını bağla
+        document.getElementById('addNewPersonBtn')?.addEventListener('click', () => {
+            openPersonModal((newPerson) => {
+                this.allPersons.push(newPerson); 
+                this.suitClientPerson = newPerson;
+                document.getElementById('selectedSuitClientName').textContent = newPerson.name;
+                document.getElementById('selectedSuitClient').style.display = 'block';
+                document.getElementById('suitClientSearch').style.display = 'none';
+                this.updateSaveButtonState();
+            });
+        });
+    }
+    
+    // === YENİ: Müvekkil Arama Selector'larını Ayarlama ===
+    setupSuitPersonSearchSelectors() {
+        const clientSearchInput = document.getElementById('suitClientSearch');
+        const searchResults = document.getElementById('suitClientSearchResults');
+        const selectedDisplay = document.getElementById('selectedSuitClient');
+        const selectedName = document.getElementById('selectedSuitClientName');
+        const clearBtn = document.getElementById('clearSuitClient');
+        const updateSaveButton = this.updateSaveButtonState.bind(this);
+
+        // Person Search Logic
+        if (clientSearchInput) {
+            clientSearchInput.addEventListener('input', (e) => {
+                const query = e.target.value.trim();
+                if (query.length < 2) {
+                    searchResults.style.display = 'none';
+                    return;
+                }
+                this.searchPersons(query, 'suitClient');
+            });
+        }
+        
+        // Person Select Logic
+        if (searchResults) {
+             searchResults.addEventListener('click', (e) => {
+                const item = e.target.closest('.search-result-item');
+                if (!item) return;
+
+                const personId = item.dataset.personId;
+                const person = this.allPersons.find(p => p.id === personId);
+                
+                if (person) {
+                    this.suitClientPerson = person;
+                    selectedName.textContent = person.name;
+                    selectedDisplay.style.display = 'block';
+                    clientSearchInput.style.display = 'none';
+                    searchResults.style.display = 'none';
+                    updateSaveButton();
+                }
+            });
+        }
+        
+        // Clear Logic
+        if (clearBtn) {
+            clearBtn.addEventListener('click', () => {
+                this.suitClientPerson = null;
+                selectedDisplay.style.display = 'none';
+                clientSearchInput.style.display = 'block';
+                clientSearchInput.value = '';
+                updateSaveButton();
+            });
+        }
+    }
 
 async getCountries() {
     try {
