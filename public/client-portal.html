@@ -921,6 +921,9 @@ body.dark .opposition-owner-badge{
 <li class="nav-item">
 <a aria-controls="dava-itiraz-list" aria-selected="false" class="nav-link" data-toggle="tab" href="#dava-itiraz-list" id="tab-dava" role="tab">İtiraz</a>
 </li>
+<li class="nav-item">
+<a aria-controls="dava-list" aria-selected="false" class="nav-link" data-toggle="tab" href="#dava-list" id="tab-dava-suits" role="tab">Dava</a>
+</li>
 <li class="nav-item d-flex align-items-center pl-2" id="portfolioFiltersNavItem" style="margin-left: .75rem;">
 <label class="mb-0 mr-2" for="menseFilter">Menşe:</label>
 <select class="form-control form-control-sm" id="menseFilter" style="max-width:220px">
@@ -1082,6 +1085,26 @@ body.dark .opposition-owner-badge{
 </tbody>
 </table>
 <div class="mt-3" id="davaItirazPagination"></div>
+</div>
+<div class="tab-pane fade" id="dava-list">
+<table class="table table-hover">
+<thead>
+<tr>
+<th class="col-index sortable" data-sort="index"># <i class="fas fa-sort"></i></th>
+<th class="col-case-no sortable" data-sort="case-no">Dava No <i class="fas fa-sort"></i></th>
+<th class="col-title sortable" data-sort="title">Dava Başlığı <i class="fas fa-sort"></i></th>
+<th class="col-subject sortable" data-sort="subject">Konu Varlık <i class="fas fa-sort"></i></th>
+<th class="col-court sortable" data-sort="court">Mahkeme <i class="fas fa-sort"></i></th>
+<th class="col-opposing sortable" data-sort="opposing">Karşı Taraf <i class="fas fa-sort"></i></th>
+<th class="col-opening-date sortable" data-sort="opening-date">Açılış Tarihi <i class="fas fa-sort"></i></th>
+<th class="col-status sortable" data-sort="status">Durum <i class="fas fa-sort"></i></th>
+</tr>
+</thead>
+<tbody id="dava-tbody">
+<!-- Dinamik olarak doldurulacak -->
+</tbody>
+</table>
+<div class="mt-3" id="davaPagination"></div>
 </div>
 </div>
 </div>
@@ -1426,6 +1449,70 @@ body.dark .opposition-owner-badge{
 <div class="modal-footer">
 <button class="btn btn-secondary" data-dismiss="modal" type="button">Kapat</button>
 <button class="btn btn-primary" data-dismiss="modal" type="button">Yeni İşlem Ekle</button>
+</div>
+</div>
+</div>
+</div>
+<!-- Dava Detay Modal -->
+<div aria-hidden="true" aria-labelledby="davaDetailModalLabel" class="modal fade" id="davaDetailModal" role="dialog" tabindex="-1">
+<div class="modal-dialog modal-xl" role="document">
+<div class="modal-content">
+<div class="modal-header">
+<h5 class="modal-title header-title" id="davaDetailModalLabel">Dava Detayları</h5>
+<button aria-label="Close" class="close" data-dismiss="modal" type="button">
+<span aria-hidden="true">×</span>
+</button>
+</div>
+<div class="modal-body">
+<div class="row mb-4">
+<div class="col-md-6">
+<div class="card p-3 h-100">
+<div class="card-header">Dava Bilgileri</div>
+<div class="card-body" id="davaInfoCard">
+<p><strong>Dava No:</strong> <span id="modal-dava-caseNo">-</span></p>
+<p><strong>Başlık:</strong> <span id="modal-dava-title">-</span></p>
+<p><strong>Mahkeme:</strong> <span id="modal-dava-court">-</span></p>
+<p><strong>Açılış Tarihi:</strong> <span id="modal-dava-openingDate">-</span></p>
+<p><strong>Durum:</strong> <span id="modal-dava-status">-</span></p>
+</div>
+</div>
+</div>
+<div class="col-md-6">
+<div class="card p-3 h-100">
+<div class="card-header">Taraflar</div>
+<div class="card-body" id="davaPartiesCard">
+<p><strong>Karşı Taraf:</strong> <span id="modal-dava-opposingParty">-</span></p>
+<p><strong>Karşı Taraf Avukatı:</strong> <span id="modal-dava-opposingCounsel">-</span></p>
+<p><strong>Müvekkil:</strong> <span id="modal-dava-client">-</span></p>
+</div>
+</div>
+</div>
+</div>
+<div class="row mb-4">
+<div class="col-md-12">
+<div class="card p-3">
+<div class="card-header">Konu Varlık</div>
+<div class="card-body" id="davaSubjectCard">
+<p><strong>Varlık Tipi:</strong> <span id="modal-dava-assetType">-</span></p>
+<p><strong>Varlık Adı:</strong> <span id="modal-dava-assetTitle">-</span></p>
+<p><strong>Başvuru/Tescil No:</strong> <span id="modal-dava-assetNumber">-</span></p>
+</div>
+</div>
+</div>
+</div>
+<div class="row">
+<div class="col-md-12">
+<div class="card p-3">
+<div class="card-header">Açıklama</div>
+<div class="card-body" id="davaDescCard">
+<p id="modal-dava-description">-</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="modal-footer">
+<button class="btn btn-secondary" data-dismiss="modal" type="button">Kapat</button>
 </div>
 </div>
 </div>
@@ -2066,6 +2153,9 @@ async function fetchAndDisplayPortfolio() {
 
         // Faturalarım sekmesini doldur
         await window.fetchAndDisplayInvoices(linkedPersonIds);
+        
+        // Dava kayıtlarını yükle
+        await window.fetchAndDisplaySuits();
 
     } catch (error) {
         console.error("Portföy verileri çekilirken bir hata oluştu:", error);
@@ -3310,6 +3400,196 @@ window.fetchAndDisplayObjections = async function() {
         }
     }
 };
+
+// === DAVA VERİLERİNİ YÜKLEME FONKSİYONU ===
+window.fetchAndDisplaySuits = async function() {
+    console.log('🚀 fetchAndDisplaySuits çağrıldı');
+    
+    const tbody = document.getElementById('dava-tbody');
+    if (!tbody) {
+        console.error('❌ #dava-tbody bulunamadı!');
+        return;
+    }
+    tbody.innerHTML = '<tr><td colspan="8" class="text-center"><i class="fas fa-spinner fa-spin"></i> Yükleniyor...</td></tr>';
+
+    try {
+        // 1. Kullanıcı ve Müvekkil ID'lerini al
+        const user = authService.getCurrentUser();
+        if (!user) {
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">Kullanıcı girişi yapılmamış.</td></tr>';
+            return;
+        }
+        
+        const userDocRef = doc(db, "users", user.uid);
+        const userSnapshot = await getDoc(userDocRef);
+        
+        if (!userSnapshot.exists()) {
+             tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">Kullanıcı verisi bulunamadı.</td></tr>';
+             return;
+        }
+        
+        const linkedPersonIds = userSnapshot.data().linkedPersonIds || [];
+        
+        if (linkedPersonIds.length === 0) {
+            console.log("Bağlı müvekkil bulunamadı.");
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">Bağlı müvekkil bulunamadı.</td></tr>';
+            return;
+        }
+        
+        console.log('🔍 Dava kayıtları yükleniyor... Yetkili IDler:', JSON.stringify(linkedPersonIds));
+
+        // 2. Tarih formatlama fonksiyonu
+        const formatDate = (v) => {
+            if (!v) return '-';
+            try {
+                let dt;
+                if (typeof v === 'string') dt = new Date(v);
+                else if (typeof v?.toDate === 'function') dt = v.toDate();
+                else if ('seconds' in (v||{})) dt = new Date(v.seconds*1000);
+                else if (v instanceof Date) dt = v;
+                else return String(v);
+                if (isNaN(dt.getTime())) return String(v);
+                const day = String(dt.getDate()).padStart(2, '0');
+                const month = String(dt.getMonth() + 1).padStart(2, '0');
+                const year = dt.getFullYear();
+                return `${day}/${month}/${year}`;
+            } catch { return String(v); }
+        };
+
+        // 3. Suits koleksiyonunu sorgula
+        const suitsCol = collection(db, 'suits');
+        const suitsQuery = query(suitsCol);
+        const suitsSnap = await getDocs(suitsQuery);
+        
+        console.log(`📥 Toplam ${suitsSnap.size} dava kaydı bulundu, filtreleme başlıyor...`);
+
+        const suitRows = [];
+        let index = 0;
+
+        suitsSnap.forEach(suitDoc => {
+            const suitData = suitDoc.data();
+            
+            // Client ID kontrolü
+            const clientId = suitData.client?.id;
+            if (!clientId || !linkedPersonIds.includes(clientId)) {
+                return; // Bu davayı atla
+            }
+
+            index++;
+            
+            // Dava bilgilerini çıkar
+            const caseNo = suitData.suitDetails?.caseNo || '-';
+            const title = suitData.suitDetails?.title || suitData.transactionType?.alias || 'Dava';
+            const subjectAssetTitle = suitData.subjectAsset?.title || '-';
+            const subjectAssetType = suitData.subjectAsset?.type || '-';
+            const court = suitData.suitDetails?.court || '-';
+            const opposingParty = suitData.suitDetails?.opposingParty || '-';
+            const openingDate = formatDate(suitData.suitDetails?.openingDate);
+            const suitStatus = suitData.suitDetails?.suitStatus || 'Devam Ediyor';
+            
+            // Durum badge'i
+            const statusBadgeClass = {
+                'Açık': 'warning',
+                'Devam Ediyor': 'info',
+                'Tamamlandı': 'success',
+                'Kapatıldı': 'secondary'
+            }[suitStatus] || 'info';
+
+            suitRows.push({
+                id: suitDoc.id,
+                index: index,
+                caseNo: caseNo,
+                title: title,
+                subjectAssetTitle: subjectAssetTitle,
+                subjectAssetType: subjectAssetType,
+                subjectAssetNumber: suitData.subjectAsset?.number || '-',
+                court: court,
+                opposingParty: opposingParty,
+                opposingCounsel: suitData.suitDetails?.opposingCounsel || '-',
+                openingDate: openingDate,
+                suitStatus: suitStatus,
+                statusBadgeClass: statusBadgeClass,
+                description: suitData.suitDetails?.description || '-',
+                clientName: suitData.client?.name || '-',
+                fullData: suitData
+            });
+        });
+
+        console.log(`✅ ${suitRows.length} adet yetkilendirilmiş dava kaydı bulundu`);
+
+        // 4. Tabloyu render et
+        if (suitRows.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">Henüz dava kaydı bulunmamaktadır.</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = '';
+        suitRows.forEach(row => {
+            const tr = document.createElement('tr');
+            tr.style.cursor = 'pointer';
+            tr.setAttribute('data-suit-id', row.id);
+            tr.classList.add('dava-row');
+            
+            tr.innerHTML = `
+                <td>${row.index}</td>
+                <td><strong>${row.caseNo}</strong></td>
+                <td><a href="#" class="dava-detail-link" data-suit-id="${row.id}">${row.title}</a></td>
+                <td>${row.subjectAssetTitle}<br><small class="text-muted">${row.subjectAssetType}</small></td>
+                <td>${row.court}</td>
+                <td>${row.opposingParty}</td>
+                <td>${row.openingDate}</td>
+                <td><span class="badge badge-${row.statusBadgeClass}">${row.suitStatus}</span></td>
+            `;
+            
+            tbody.appendChild(tr);
+        });
+
+        // 5. Dava verilerini global olarak sakla (modal için)
+        window.suitsData = suitRows;
+
+    } catch (error) {
+        console.error('❌ Dava yükleme hatası:', error);
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center text-danger">Veriler yüklenirken bir hata oluştu. Lütfen sayfayı yenileyin.</td></tr>';
+    }
+};
+
+// === DAVA DETAY MODAL AÇMA ===
+$(document).on('click', '.dava-detail-link', function(e) {
+    e.preventDefault();
+    const suitId = $(this).data('suit-id');
+    
+    if (!window.suitsData) {
+        console.error('Dava verileri yüklenmemiş!');
+        return;
+    }
+    
+    const suit = window.suitsData.find(s => s.id === suitId);
+    if (!suit) {
+        console.error('Dava bulunamadı:', suitId);
+        return;
+    }
+    
+    // Modal içeriğini doldur
+    $('#davaDetailModalLabel').text(suit.title);
+    $('#modal-dava-caseNo').text(suit.caseNo);
+    $('#modal-dava-title').text(suit.title);
+    $('#modal-dava-court').text(suit.court);
+    $('#modal-dava-openingDate').text(suit.openingDate);
+    $('#modal-dava-status').html(`<span class="badge badge-${suit.statusBadgeClass}">${suit.suitStatus}</span>`);
+    
+    $('#modal-dava-opposingParty').text(suit.opposingParty);
+    $('#modal-dava-opposingCounsel').text(suit.opposingCounsel);
+    $('#modal-dava-client').text(suit.clientName);
+    
+    $('#modal-dava-assetType').text(suit.subjectAssetType);
+    $('#modal-dava-assetTitle').text(suit.subjectAssetTitle);
+    $('#modal-dava-assetNumber').text(suit.subjectAssetNumber);
+    
+    $('#modal-dava-description').text(suit.description);
+    
+    // Modalı aç
+    $('#davaDetailModal').modal('show');
+});
 
 // === BELGE LİNKİ OLUŞTURMA FONKSİYONU (SADECE İKON) ===
 function _createDocLinkHtml(pdf) {
@@ -5832,6 +6112,19 @@ jQuery(document).ready(function($) {
         sortTable('dava-itiraz-list', columnIndex, dataType);
     });
     
+    // Dava tablosu sıralama
+    $('#dava-list').on('click', 'th.sortable', function() {
+        const th = $(this);
+        const columnIndex = th.index();
+        const sortType = th.data('sort');
+        
+        let dataType = 'text';
+        if (sortType === 'opening-date') dataType = 'date';
+        if (sortType === 'index') dataType = 'number';
+        
+        sortTable('dava-list', columnIndex, dataType);
+    });
+    
     // ========================================
     // FATURA TABLO SIRALAMA
     // ========================================
@@ -5872,6 +6165,14 @@ jQuery(document).ready(function($) {
         $('#portfolioSearchText').val('');
         $('#portfolioDurumFilter').val('TÜMÜ');
         applyPortfolioFilters();
+        
+        // Dava tabına geçildiğinde dava listesini yenile
+        const targetTab = $(e.target).attr('href');
+        if (targetTab === '#dava-list') {
+            if (typeof window.fetchAndDisplaySuits === 'function') {
+                window.fetchAndDisplaySuits();
+            }
+        }
     });
     
     // ========================================
