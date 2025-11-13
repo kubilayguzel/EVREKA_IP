@@ -3565,113 +3565,10 @@ async handleFormSubmit(e) {
             console.warn('relatedParties ekleme hatası:', e); 
         }
         const taskResult = await taskService.createTask(taskData);
+        
         if (!taskResult.success) {
             alert('İş oluşturulurken hata oluştu: ' + taskResult.error);
             return;
-        }
-
-        // 🆕 DAVA İŞİ İSE SUITS KOLEKSİYONUNA YAZ
-        const mainIpType = document.getElementById('mainIpType')?.value;
-        const taskTypeIpType = selectedTransactionType?.ipType;
-        
-        console.log('🔍 SUIT KONTROL:', {
-            mainIpType: mainIpType,
-            taskTypeIpType: taskTypeIpType,
-            taskResultId: taskResult.id,
-            kontrolSonucu: (mainIpType === 'suit' || taskTypeIpType === 'suit')
-        });
-        
-        if ((mainIpType === 'suit' || taskTypeIpType === 'suit') && taskResult.id) {
-            try {
-                console.log('📋 Dava kaydı oluşturuluyor (suits koleksiyonu)...');
-                
-                // Client bilgisini al (selectedRelatedParties'den ilk kişi)
-                const clientPerson = Array.isArray(this.selectedRelatedParties) && this.selectedRelatedParties.length > 0
-                    ? this.selectedRelatedParties[0]
-                    : null;
-                
-                // Suit data oluştur
-                const suitData = {
-                    // Client bilgisi
-                    client: clientPerson ? {
-                        id: clientPerson.id,
-                        name: clientPerson.name,
-                        email: clientPerson.email || '',
-                        phone: clientPerson.phone || ''
-                    } : null,
-                    
-                    // Client rolü (davacı/davalı)
-                    clientRole: document.getElementById('clientRole')?.value || '',
-                    
-                    // Transaction type bilgisi
-                    transactionType: selectedTransactionType ? {
-                        id: selectedTransactionType.id,
-                        name: selectedTransactionType.name,
-                        alias: selectedTransactionType.alias || selectedTransactionType.name,
-                        type: 'suit'
-                    } : null,
-                    
-                    transactionTypeId: selectedTransactionType?.id || null,
-                    alias: selectedTransactionType?.alias || selectedTransactionType?.name || '',
-                    
-                    // Suit Details
-                    suitDetails: {
-                        caseNo: '', // Form'da caseNo alanı yok, boş bırakılıyor
-                        court: document.getElementById('courtName')?.value || '',
-                        description: document.getElementById('subjectOfLawsuit')?.value || document.getElementById('taskDescription')?.value || '',
-                        openingDate: document.getElementById('lawsuitDate')?.value || null,
-                        opposingParty: document.getElementById('opposingParty')?.value || '',
-                        opposingCounsel: document.getElementById('opposingCounsel')?.value || ''
-                    },
-                    
-                    // Subject Asset (ilgili IP kaydı)
-                    subjectAsset: this.selectedIpRecord ? {
-                        id: this.selectedIpRecord.id,
-                        title: this.selectedIpRecord.title || this.selectedIpRecord.brandText || '',
-                        number: this.selectedIpRecord.applicationNumber || '',
-                        type: this.selectedIpRecord.type || ''
-                    } : null,
-                    
-                    // Suit Status
-                    suitStatus: 'continue', // Varsayılan: Devam ediyor
-                    
-                    // Title
-                    title: taskTitle || selectedTransactionType?.alias || '',
-                    
-                    // Timestamps
-                    createdAt: new Date().toISOString(),
-                    updatedAt: new Date().toISOString(),
-                    
-                    // Tetikleyen task
-                    triggeringTaskId: taskResult.id,
-                    
-                    // Portfolio status
-                    portfolioStatus: 'active',
-                    recordOwnerType: 'self',
-                    
-                    // Origin ve Country
-                    origin: document.getElementById('originSelect')?.value || 'TURKIYE_NATIONAL',
-                    country: document.getElementById('countrySelect')?.value || 'TR'
-                };
-                
-                // Firestore'a yaz
-                const { addDoc, collection } = await import("https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js");
-                const suitsRef = collection(db, 'suits');
-                const suitDocRef = await addDoc(suitsRef, suitData);
-                
-                console.log('✅ Dava kaydı oluşturuldu (Suit ID):', suitDocRef.id);
-                
-                // Alert mesajını güncelle
-                window.__suitRecordCreated = true;
-                window.__suitRecordId = suitDocRef.id;
-                
-            } catch (suitError) {
-                console.error('❌ Dava kaydı oluşturma hatası:', suitError);
-                // Task oluştu ama suit kaydı oluşmadı, kullanıcıya bilgi ver
-                alert('İş başarıyla oluşturuldu ancak dava kaydı oluşturulurken bir hata oluştu. Lütfen dava kaydını manuel olarak kontrol edin.');
-                window.__suitRecordCreated = false;
-                window.__suitRecordError = suitError.message;
-            }
         }
 
         
@@ -3902,10 +3799,112 @@ const officialFee = parseFloat(document.getElementById('officialFee')?.value) ||
     } else {
         // ✅ NORMAL İŞLER İÇİN MANTIK
         
-        if (!this.selectedIpRecord) {
+        // 🆕 DAVA İŞİ KONTROLÜ (Transaction Type ID = 49)
+        const isDavaIsi = (selectedTransactionType?.id === '49' || selectedTransactionType?.ipType === 'suit');
+        
+        console.log('🔍 Dava işi kontrolü:', {
+            transactionTypeId: selectedTransactionType?.id,
+            ipType: selectedTransactionType?.ipType,
+            isDavaIsi: isDavaIsi
+        });
+        
+        let newSuitRecordId = null;
+        
+        if (isDavaIsi) {
+            // 🏛️ DAVA İÇİN YENİ SUIT KAYDI OLUŞTUR
+            console.log('📋 Dava işi tespit edildi, suits koleksiyonuna kayıt oluşturuluyor...');
+            
+            try {
+                // Client bilgisini al
+                const clientPerson = Array.isArray(this.selectedRelatedParties) && this.selectedRelatedParties.length > 0
+                    ? this.selectedRelatedParties[0]
+                    : null;
+                
+                // Suit data hazırla
+                const newSuitData = {
+                    // Client bilgisi
+                    client: clientPerson ? {
+                        id: clientPerson.id,
+                        name: clientPerson.name,
+                        email: clientPerson.email || '',
+                        phone: clientPerson.phone || ''
+                    } : null,
+                    
+                    // Client rolü
+                    clientRole: document.getElementById('clientRole')?.value || '',
+                    
+                    // Transaction type
+                    transactionType: {
+                        id: selectedTransactionType.id,
+                        name: selectedTransactionType.name,
+                        alias: selectedTransactionType.alias || selectedTransactionType.name,
+                        type: 'suit'
+                    },
+                    
+                    transactionTypeId: selectedTransactionType.id,
+                    alias: selectedTransactionType.alias || selectedTransactionType.name,
+                    
+                    // Suit Details
+                    suitDetails: {
+                        caseNo: document.getElementById('caseNo')?.value || '',
+                        court: document.getElementById('courtName')?.value || '',
+                        description: document.getElementById('subjectOfLawsuit')?.value || taskDescription || '',
+                        openingDate: document.getElementById('lawsuitDate')?.value || null,
+                        opposingParty: document.getElementById('opposingParty')?.value || '',
+                        opposingCounsel: document.getElementById('opposingCounsel')?.value || ''
+                    },
+                    
+                    // Subject Asset (seçilmişse)
+                    subjectAsset: this.selectedIpRecord ? {
+                        id: this.selectedIpRecord.id,
+                        title: this.selectedIpRecord.title || this.selectedIpRecord.brandText || '',
+                        number: this.selectedIpRecord.applicationNumber || this.selectedIpRecord.registrationNumber || '',
+                        type: this.selectedIpRecord.type || ''
+                    } : null,
+                    
+                    // Suit Status
+                    suitStatus: 'continue',
+                    
+                    // Title
+                    title: taskTitle || selectedTransactionType.alias || selectedTransactionType.name,
+                    
+                    // Portfolio status
+                    portfolioStatus: 'active',
+                    recordOwnerType: 'self',
+                    
+                    // Origin ve Country
+                    origin: document.getElementById('originSelect')?.value || 'TURKIYE_NATIONAL',
+                    country: document.getElementById('countrySelect')?.value || 'TR',
+                    
+                    // Timestamps
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString()
+                };
+                
+                // Firestore'a yaz
+                const { addDoc, collection } = await import("https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js");
+                const suitsRef = collection(db, 'suits');
+                const suitDocRef = await addDoc(suitsRef, newSuitData);
+                
+                newSuitRecordId = suitDocRef.id;
+                
+                console.log('✅ Suit kaydı başarıyla oluşturuldu:', newSuitRecordId);
+                
+                // Task data'ya suit ID'yi ekle
+                taskData.relatedSuitId = newSuitRecordId;
+                taskData.relatedSuitTitle = newSuitData.title;
+                
+            } catch (suitError) {
+                console.error('❌ Suit kaydı oluşturma hatası:', suitError);
+                alert('Dava kaydı oluşturulurken hata oluştu: ' + suitError.message);
+                return;
+            }
+        } else if (!this.selectedIpRecord) {
+            // Dava işi değilse ve IP kaydı seçilmemişse hata ver
             alert('Lütfen işleme konu olacak bir portföy kaydı seçin.');
             return;
         }
+
 
 // ===== YENİ: Yayına İtiraz işi için otomatik tarih hesaplama =====
         const isPublicationOppositionTask = this.isPublicationOpposition(selectedTransactionType.id);
@@ -4054,7 +4053,8 @@ const officialFee = parseFloat(document.getElementById('officialFee')?.value) ||
 
         // ===== TARIH HESAPLAMA SONU =====
 
-        const taskResult = await taskService.createTask(taskData);  // ← BU SATIRDAN ÖNCE EKLE
+        const taskResult = await taskService.createTask(taskData);
+        
         if (!taskResult.success) {
             alert('İş oluşturulurken hata oluştu: ' + taskResult.error);
             return;
@@ -4216,14 +4216,16 @@ const officialFee = parseFloat(document.getElementById('officialFee')?.value) ||
             );
             } else {
             // Yayına itiraz işi değil veya otomasyon yapılmadı
-            alert('İş başarıyla oluşturuldu!');
+            const suitMsg = newSuitRecordId ? '\n\n✅ Dava kaydı oluşturuldu (Suit ID: ' + newSuitRecordId + ')' : '';
+            alert('İş başarıyla oluşturuldu!' + suitMsg);
             }
         } catch (err) {
             console.warn('⚠️ 3.taraf portföy otomasyonu sırasında beklenmeyen hata:', err);
             alert('İş başarıyla oluşturuldu!\n\nAncak 3.taraf portföy otomasyonu sırasında beklenmeyen bir hata oluştu.');
         }
         } else {
-        alert('İş başarıyla oluşturuldu!');
+        const suitMsg = newSuitRecordId ? '\n\n✅ Dava kaydı oluşturuldu (Suit ID: ' + newSuitRecordId + ')' : '';
+        alert('İş başarıyla oluşturuldu!' + suitMsg);
         }
 
         window.location.href = 'task-management.html';
