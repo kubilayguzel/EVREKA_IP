@@ -3572,7 +3572,16 @@ async handleFormSubmit(e) {
 
         // 🆕 DAVA İŞİ İSE SUITS KOLEKSİYONUNA YAZ
         const mainIpType = document.getElementById('mainIpType')?.value;
-        if (mainIpType === 'suit' && taskResult.id) {
+        const taskTypeIpType = selectedTransactionType?.ipType;
+        
+        console.log('🔍 SUIT KONTROL:', {
+            mainIpType: mainIpType,
+            taskTypeIpType: taskTypeIpType,
+            taskResultId: taskResult.id,
+            kontrolSonucu: (mainIpType === 'suit' || taskTypeIpType === 'suit')
+        });
+        
+        if ((mainIpType === 'suit' || taskTypeIpType === 'suit') && taskResult.id) {
             try {
                 console.log('📋 Dava kaydı oluşturuluyor (suits koleksiyonu)...');
                 
