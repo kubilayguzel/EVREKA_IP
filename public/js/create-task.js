@@ -3570,6 +3570,95 @@ async handleFormSubmit(e) {
             return;
         }
 
+        // 🆕 DAVA İŞİ İSE SUITS KOLEKSİYONUNA YAZ
+        const mainIpType = document.getElementById('mainIpType')?.value;
+        if (mainIpType === 'suit' && taskResult.id) {
+            try {
+                console.log('📋 Dava kaydı oluşturuluyor (suits koleksiyonu)...');
+                
+                // Client bilgisini al (selectedRelatedParties'den ilk kişi)
+                const clientPerson = Array.isArray(this.selectedRelatedParties) && this.selectedRelatedParties.length > 0
+                    ? this.selectedRelatedParties[0]
+                    : null;
+                
+                // Suit data oluştur
+                const suitData = {
+                    // Client bilgisi
+                    client: clientPerson ? {
+                        id: clientPerson.id,
+                        name: clientPerson.name,
+                        email: clientPerson.email || '',
+                        phone: clientPerson.phone || ''
+                    } : null,
+                    
+                    // Client rolü (davacı/davalı)
+                    clientRole: document.getElementById('clientRole')?.value || '',
+                    
+                    // Transaction type bilgisi
+                    transactionType: selectedTransactionType ? {
+                        id: selectedTransactionType.id,
+                        name: selectedTransactionType.name,
+                        alias: selectedTransactionType.alias || selectedTransactionType.name,
+                        type: 'suit'
+                    } : null,
+                    
+                    transactionTypeId: selectedTransactionType?.id || null,
+                    alias: selectedTransactionType?.alias || selectedTransactionType?.name || '',
+                    
+                    // Suit Details
+                    suitDetails: {
+                        caseNo: '', // Form'da caseNo alanı yok, boş bırakılıyor
+                        court: document.getElementById('courtName')?.value || '',
+                        description: document.getElementById('subjectOfLawsuit')?.value || document.getElementById('taskDescription')?.value || '',
+                        openingDate: document.getElementById('lawsuitDate')?.value || null,
+                        opposingParty: document.getElementById('opposingParty')?.value || '',
+                        opposingCounsel: document.getElementById('opposingCounsel')?.value || ''
+                    },
+                    
+                    // Subject Asset (ilgili IP kaydı)
+                    subjectAsset: this.selectedIpRecord ? {
+                        id: this.selectedIpRecord.id,
+                        title: this.selectedIpRecord.title || this.selectedIpRecord.brandText || '',
+                        number: this.selectedIpRecord.applicationNumber || '',
+                        type: this.selectedIpRecord.type || ''
+                    } : null,
+                    
+                    // Suit Status
+                    suitStatus: 'continue', // Varsayılan: Devam ediyor
+                    
+                    // Title
+                    title: taskTitle || selectedTransactionType?.alias || '',
+                    
+                    // Timestamps
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString(),
+                    
+                    // Tetikleyen task
+                    triggeringTaskId: taskResult.id,
+                    
+                    // Portfolio status
+                    portfolioStatus: 'active',
+                    recordOwnerType: 'self',
+                    
+                    // Origin ve Country
+                    origin: document.getElementById('originSelect')?.value || 'TURKIYE_NATIONAL',
+                    country: document.getElementById('countrySelect')?.value || 'TR'
+                };
+                
+                // Firestore'a yaz
+                const { addDoc, collection } = await import("https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js");
+                const suitsRef = collection(db, 'suits');
+                const suitDocRef = await addDoc(suitsRef, suitData);
+                
+                console.log('✅ Dava kaydı oluşturuldu (Suit ID):', suitDocRef.id);
+                
+            } catch (suitError) {
+                console.error('❌ Dava kaydı oluşturma hatası:', suitError);
+                // Task oluştu ama suit kaydı oluşmadı, kullanıcıya bilgi ver
+                alert('İş başarıyla oluşturuldu ancak dava kaydı oluşturulurken bir hata oluştu. Lütfen dava kaydını manuel olarak kontrol edin.');
+            }
+        }
+
         
 // ✅ Üçüncü taraf dosyasında 'Yayıma İtirazın Yeniden İncelenmesi' (type:19) için parent transaction ekle
 try {
