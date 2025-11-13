@@ -323,6 +323,15 @@
             <div id="modalBody" class="modal-body-content"></div>
         </div>
     </div>
+
+    <div id="suitDetailModal" class="modal">
+        <div class="modal-content">
+            <span class="close-modal-btn" id="closeSuitDetailModal">&times;</span>
+            <h3 class="modal-title" id="modalSuitTitle">Dava Detayı</h3>
+            <div id="modalSuitBody" class="modal-body-content"></div>
+        </div>
+    </div>
+
     <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.2/dist/js/bootstrap.bundle.min.js"></script>
 
@@ -970,6 +979,7 @@
 
                 pageData.forEach((row) => {
                     const tr = document.createElement('tr');
+                    tr.dataset.recordId = row.id || '';
                     
                     // Dava türüne göre arka plan rengi
                     const suitTypeStr = String(row.suitType || '');
@@ -978,6 +988,11 @@
                     } else if (suitTypeStr.includes('Tecavüz')) {
                         tr.style.backgroundColor = '#fff3e0'; // Turuncumsu
                     }
+
+                    const actions = `
+                        <button class="action-btn view-btn" data-id="${row.id}" data-type="suit">Görüntüle</button>
+                        <button class="action-btn edit-btn" data-id="${row.id}" data-type="suit">Düzenle</button>
+                    `;
 
                     tr.innerHTML = `
                         <td>${row.title || '-'}</td>
@@ -991,6 +1006,7 @@
                         <td>${row.openedDate || '-'}</td>
                         <td>${row.suitStatus || '-'}</td>
                         <td style="max-width: 200px; white-space: normal;">${row.description || '-'}</td>
+                        <td>${actions}</td>
                     `;
                     
                     frag.appendChild(tr);
@@ -1467,18 +1483,33 @@
                 document.getElementById('toggleRecordStatusBtn').addEventListener('click', () => this.toggleSelectedRecordsStatus());
                 document.getElementById('addToMonitoringBtn').addEventListener('click', () => this.addSelectedToMonitoring());
                 document.getElementById('closeRecordDetailModal').addEventListener('click', () => this.closeModal('recordDetailModal'));
+                document.getElementById('closeSuitDetailModal').addEventListener('click', () => this.closeModal('suitDetailModal'));
 
                 document.getElementById('portfolioTableBody').addEventListener('click', (e) => {
                     const button = e.target.closest('.action-btn');
                     if (!button) return;
                     e.preventDefault();
                     const recordId = button.dataset.id;
-                    if (button.classList.contains('edit-btn')) window.location.href = `data-entry.html?id=${recordId}`;
+                    const dataType = button.dataset.type;
+                    
+                    if (button.classList.contains('edit-btn')) {
+                        if (dataType === 'suit') {
+                            // Dava düzenleme sayfasına git
+                            window.location.href = `suit-edit.html?id=${recordId}`;
+                        } else {
+                            window.location.href = `data-entry.html?id=${recordId}`;
+                        }
+                    }
                     else if (button.classList.contains('delete-btn')) this.deleteRecord(recordId);
                     else if (button.classList.contains('view-btn')) {
-                      const url = new URL('portfolio-detail.html', window.location.href);
-                      url.searchParams.set('id', recordId);
-                      window.open(url.toString(), '_blank', 'noopener');
+                        if (dataType === 'suit') {
+                            // Dava modalını aç
+                            this.showSuitDetailModal(recordId);
+                        } else {
+                            const url = new URL('portfolio-detail.html', window.location.href);
+                            url.searchParams.set('id', recordId);
+                            window.open(url.toString(), '_blank', 'noopener');
+                        }
                     }
                 });
             }
@@ -1650,6 +1681,94 @@
                     await ipRecordsService.deleteRecord(recordId);
                     showNotification('Kayıt başarıyla silindi.', 'success');
                     this.loadAllData();
+                }
+            }
+
+            async showSuitDetailModal(suitId) {
+                const modal = document.getElementById('suitDetailModal');
+                const modalBody = document.getElementById('modalSuitBody');
+                modalBody.innerHTML = '<p>Yükleniyor...</p>';
+                modal.classList.add('show');
+
+                try {
+                    // Dava kaydını bul
+                    const suit = this.litigationRows.find(s => s.id === suitId);
+                    if (!suit) {
+                        throw new Error('Dava kaydı bulunamadı.');
+                    }
+
+                    document.getElementById('modalSuitTitle').textContent = `Dava Detayı: ${suit.caseNo || 'N/A'}`;
+
+                    modalBody.innerHTML = `
+                        <div class="modal-detail-section">
+                            <h4 class="modal-detail-section-title">Dava Bilgileri</h4>
+                            <div class="modal-detail-grid">
+                                <div class="detail-item">
+                                    <span class="detail-label">Dava No:</span>
+                                    <span class="detail-value">${suit.caseNo || '-'}</span>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="detail-label">Dava Türü:</span>
+                                    <span class="detail-value">${suit.suitType || '-'}</span>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="detail-label">Mahkeme:</span>
+                                    <span class="detail-value">${suit.court || '-'}</span>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="detail-label">Açılış Tarihi:</span>
+                                    <span class="detail-value">${suit.openedDate || '-'}</span>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="detail-label">Durum:</span>
+                                    <span class="detail-value">${suit.suitStatus || '-'}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="modal-detail-section">
+                            <h4 class="modal-detail-section-title">Taraflar</h4>
+                            <div class="modal-detail-grid">
+                                <div class="detail-item">
+                                    <span class="detail-label">Müvekkil:</span>
+                                    <span class="detail-value">${suit.client || '-'}</span>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="detail-label">Rol:</span>
+                                    <span class="detail-value">${suit.clientRole || '-'}</span>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="detail-label">Karşı Taraf:</span>
+                                    <span class="detail-value">${suit.opposingParty || '-'}</span>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="detail-label">Karşı Vekil:</span>
+                                    <span class="detail-value">${suit.opposingCounsel || '-'}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="modal-detail-section">
+                            <h4 class="modal-detail-section-title">Konu Varlık</h4>
+                            <div class="modal-detail-grid">
+                                <div class="detail-item full-width">
+                                    <span class="detail-label">Varlık Adı:</span>
+                                    <span class="detail-value">${suit.title || '-'}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="modal-detail-section">
+                            <h4 class="modal-detail-section-title">Açıklama</h4>
+                            <div class="detail-item full-width">
+                                <p class="detail-value">${suit.description || 'Açıklama bulunmamaktadır.'}</p>
+                            </div>
+                        </div>
+                    `;
+
+                } catch (error) {
+                    console.error('Dava detayı yüklenirken hata:', error);
+                    modalBody.innerHTML = '<p class="text-danger">Dava detayı yüklenirken bir hata oluştu.</p>';
                 }
             }
 
@@ -2218,7 +2337,8 @@
                         { key: 'opposingCounsel', label: 'Karşı Vekil', sortable: true, width: '150px' },
                         { key: 'openedDate', label: 'Açılış Tarihi', sortable: true, width: '120px' },
                         { key: 'suitStatus', label: 'Durum', sortable: true, width: '120px' },
-                        { key: 'description', label: 'Açıklama', sortable: false, width: '200px' }
+                        { key: 'description', label: 'Açıklama', sortable: false, width: '200px' },
+                        { key: 'actions', label: 'İşlemler', sortable: false, width: '200px' }
                     ]
                     : isObjections
                     ? [
