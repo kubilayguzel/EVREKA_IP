@@ -5843,10 +5843,10 @@ jQuery(document).ready(function($) {
         th.find('i').attr('class', newDir === 'asc' ? 'fas fa-sort-up' : 'fas fa-sort-down');
 
         // 4. Global "allData" dizisini (sadece parent'ları tutan) sırala
-        // Not: 'allData' zaten 'applyMenseFilterToActivePane' içinde parent'lara filtrelenmişti.
         paginatorData.allData.sort((a, b) => {
             let aVal, bVal;
-            const ptd = window.parseTurkishDate || parseTurkishDate;
+            // ⬇️ DEĞİŞİKLİK: 'parseTurkishDate' artık globalde
+            const ptd = window.parseTurkishDate; 
 
             switch(sortKey) {
                 case 'index':
@@ -5878,10 +5878,19 @@ jQuery(document).ready(function($) {
                     bVal = b.status || b.statusText || '';
                     break;
                 case 'classes':
-                    // Bu, populatePortfolioTable'da hesaplanan bir string.
-                    // 'classes' alanı veride array olarak varsa ilkini al:
-                    aVal = Array.isArray(a.classes) ? (a.classes[0] || 0) : 0;
-                    bVal = Array.isArray(b.classes) ? (b.classes[0] || 0) : 0;
+                    // ⬇️ DEĞİŞİKLİK: Sınıf sıralaması için daha robust bir yöntem
+                    const getFirstClass = (item) => {
+                        let cls = item.classes; // Verideki asıl 'classes' alanı
+                        if (Array.isArray(cls) && cls.length > 0) return parseInt(cls[0], 10) || 0;
+                        if (typeof cls === 'string') return parseInt(cls.split(',')[0], 10) || 0;
+                        // Fallback for goodsAndServicesByClass
+                        if (Array.isArray(item.goodsAndServicesByClass) && item.goodsAndServicesByClass.length > 0) {
+                            return parseInt(item.goodsAndServicesByClass[0].classNo, 10) || 0;
+                        }
+                        return 0;
+                    };
+                    aVal = getFirstClass(a);
+                    bVal = getFirstClass(b);
                     return newDir === 'asc' ? aVal - bVal : bVal - aVal;
                 default:
                     aVal = ''; bVal = '';
