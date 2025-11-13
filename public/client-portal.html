@@ -5607,69 +5607,123 @@ window.invoiceSortConfig = {
     direction: 'asc'
 };
 
-// Tablo sıralama fonksiyonu (genel)
+// Tablo sıralama fonksiyonu (genel) – parent + child grup halinde
 function sortTable(tableId, columnIndex, dataType = 'text') {
     const table = document.querySelector(`#${tableId} table`);
     if (!table) return;
-    
+
     const tbody = table.querySelector('tbody');
-    const rows = Array.from(tbody.querySelectorAll('tr')).filter(row => {
-        // Accordion child row'ları hariç tut
-        return !row.querySelector('td[colspan]');
-    });
-    
-    // Mevcut sıralama yönünü belirle
-    const th = table.querySelectorAll('th')[columnIndex];
-    const currentDir = th.classList.contains('sort-asc') ? 'asc' : 'desc';
-    const newDir = currentDir === 'asc' ? 'desc' : 'asc';
-    
-    // Tüm başlıklardan aktif sınıfı kaldır
-    table.querySelectorAll('th').forEach(header => {
+    if (!tbody) return;
+
+    // 1) Tüm satırları parent + child gruplarına ayır
+    const allRows = Array.from(tbody.querySelectorAll('tr'));
+    const groups = [];
+
+    for (let i = 0; i < allRows.length; i++) {
+        const row = allRows[i];
+        const isChild = !!row.querySelector('td[colspan]');
+
+        // Eğer row child ise, bir önceki parent grubuna ekle
+        if (isChild) {
+            if (groups.length > 0) {
+                groups[groups.length - 1].children.push(row);
+            } else {
+                // Güvenlik için: başta child gelmişse tek başına grup olarak ekle
+                groups.push({ parent: row, children: [] });
+            }
+            continue;
+        }
+
+        // Yeni parent grubu oluştur
+        const group = { parent: row, children: [] };
+
+        // Bu parent'ın arkasından gelen child satırları topla
+        let j = i + 1;
+        while (j < allRows.length && allRows[j].querySelector('td[colspan]')) {
+            group.children.push(allRows[j]);
+            j++;
+        }
+
+        groups.push(group);
+        i = j - 1; // dış döngüyü ileri at
+    }
+
+    // 2) Başlık ve sıralama yönünü ayarla
+    const headers = table.querySelectorAll('th');
+    const th = headers[columnIndex];
+    if (!th) return;
+
+    const isCurrentlyAsc = th.classList.contains('sort-asc');
+    const newDir = isCurrentlyAsc ? 'desc' : 'asc';
+
+    // Tüm başlıklardan eski class ve ikonları temizle
+    headers.forEach(header => {
         header.classList.remove('sort-asc', 'sort-desc', 'active');
         const icon = header.querySelector('i');
-        if (icon) {
-            icon.className = 'fas fa-sort';
-        }
+        if (icon) icon.className = 'fas fa-sort';
     });
-    
-    // Yeni sıralamayı uygula
+
+    // Tıklanan başlığa yeni class ve ikon ekle
     th.classList.add(newDir === 'asc' ? 'sort-asc' : 'sort-desc', 'active');
     const icon = th.querySelector('i');
-    if (icon) {
-        icon.className = newDir === 'asc' ? 'fas fa-sort-up' : 'fas fa-sort-down';
-    }
-    
-    // Satırları sırala
-    rows.sort((a, b) => {
-        let aVal = a.cells[columnIndex]?.textContent.trim() || '';
-        let bVal = b.cells[columnIndex]?.textContent.trim() || '';
-        
-        // Badge içindeki metni al
-        const aBadge = a.cells[columnIndex]?.querySelector('.badge');
-        const bBadge = b.cells[columnIndex]?.querySelector('.badge');
+    if (icon) icon.className = newDir === 'asc'
+        ? 'fas fa-sort-up'
+        : 'fas fa-sort-down';
+
+    // 3) Yardımcı tarih parse fonksiyonu (08/12/2025, 08.12.2025 vs.)
+    const parseDate = (value) => {
+        if (!value) return 0;
+
+        const parts = value.split(/[./-]/);
+        if (parts.length === 3) {
+            const [d, m, y] = parts.map(p => parseInt(p, 10));
+            const dt = new Date(y, (m || 1) - 1, d || 1);
+            if (!isNaN(dt.getTime())) return dt.getTime();
+        }
+
+        const dt = new Date(value);
+        return isNaN(dt.getTime()) ? 0 : dt.getTime();
+    };
+
+    // 4) Grupları, sadece PARENT satırın hücresine göre sırala
+    groups.sort((ga, gb) => {
+        const aRow = ga.parent;
+        const bRow = gb.parent;
+
+        let aVal = aRow.cells[columnIndex]?.textContent.trim() || '';
+        let bVal = bRow.cells[columnIndex]?.textContent.trim() || '';
+
+        // Hücrede badge varsa, badge içindeki metni kullan
+        const aBadge = aRow.cells[columnIndex]?.querySelector('.badge');
+        const bBadge = bRow.cells[columnIndex]?.querySelector('.badge');
         if (aBadge) aVal = aBadge.textContent.trim();
         if (bBadge) bVal = bBadge.textContent.trim();
-        
+
         // Veri tipine göre karşılaştır
         if (dataType === 'number') {
             aVal = parseFloat(aVal.replace(/[^0-9.-]/g, '')) || 0;
             bVal = parseFloat(bVal.replace(/[^0-9.-]/g, '')) || 0;
-            return newDir === 'asc' ? aVal - bVal : bVal - aVal;
         } else if (dataType === 'date') {
-            // Tarih formatı: DD.MM.YYYY veya YYYY-MM-DD
-            const aDate = parseTurkishDate(aVal);
-            const bDate = parseTurkishDate(bVal);
-            return newDir === 'asc' ? aDate - bDate : bDate - aDate;
+            aVal = parseDate(aVal);
+            bVal = parseDate(bVal);
         } else {
-            // Text karşılaştırma (Türkçe karakterlere duyarlı)
-            const comparison = aVal.localeCompare(bVal, 'tr', { sensitivity: 'base' });
-            return newDir === 'asc' ? comparison : -comparison;
+            aVal = aVal.toLocaleLowerCase('tr-TR');
+            bVal = bVal.toLocaleLowerCase('tr-TR');
         }
+
+        if (aVal < bVal) return newDir === 'asc' ? -1 : 1;
+        if (aVal > bVal) return newDir === 'asc' ? 1 : -1;
+        return 0;
     });
-    
-    // Sıralanmış satırları tabloya geri ekle
-    rows.forEach(row => tbody.appendChild(row));
+
+    // 5) tbody'yi baştan doldur – parent + child birlikte hareket etsin
+    tbody.innerHTML = '';
+    groups.forEach(group => {
+        if (group.parent) tbody.appendChild(group.parent);
+        group.children.forEach(child => tbody.appendChild(child));
+    });
 }
+
 
 // Türkçe tarih formatını parse et (DD.MM.YYYY veya "-")
 function parseTurkishDate(dateStr) {
