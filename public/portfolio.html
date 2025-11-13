@@ -971,13 +971,13 @@
                 pageData.forEach((row) => {
                     const tr = document.createElement('tr');
                     
-                // Dava türüne göre arka plan rengi
-                const suitTypeStr = String(row.suitType || '');
-                if (suitTypeStr.includes('İptal')) {
-                    tr.style.backgroundColor = '#ffebee'; // Kırmızımsı
-                } else if (suitTypeStr.includes('Tecavüz')) {
-                    tr.style.backgroundColor = '#fff3e0'; // Turuncumsu
-                }
+                    // Dava türüne göre arka plan rengi
+                    const suitTypeStr = String(row.suitType || '');
+                    if (suitTypeStr.includes('İptal')) {
+                        tr.style.backgroundColor = '#ffebee'; // Kırmızımsı
+                    } else if (suitTypeStr.includes('Tecavüz')) {
+                        tr.style.backgroundColor = '#fff3e0'; // Turuncumsu
+                    }
 
                     tr.innerHTML = `
                         <td>${row.title || '-'}</td>
@@ -2124,8 +2124,15 @@
                         const subjectAsset = data.subjectAsset || {};
                         const suitDetails = data.suitDetails || {};
                         
-                        // Dava türünü belirle (transaction type'tan)
-                        const suitType = data.alias || data.transactionType || '-';
+                        // Dava türünü belirle - transactionType objesi içindeki alias'ı al
+                        let suitType = '-';
+                        if (data.transactionType && typeof data.transactionType === 'object') {
+                            suitType = data.transactionType.alias || data.transactionType.name || '-';
+                        } else if (typeof data.transactionType === 'string') {
+                            suitType = data.transactionType;
+                        } else if (data.alias && typeof data.alias === 'string') {
+                            suitType = data.alias;
+                        }
                         
                         const row = {
                             id: docSnap.id,
@@ -2133,11 +2140,11 @@
                             suitType: suitType,
                             caseNo: suitDetails.caseNo || '-',
                             court: suitDetails.court || '-',
-                            client: data.client?.name || '-',
+                            client: (data.client && data.client.name) || data.clientName || '-',
                             clientRole: data.clientRole || '-',
                             opposingParty: suitDetails.opposingParty || '-',
                             opposingCounsel: suitDetails.opposingCounsel || '-',
-                            openedDate: suitDetails.openedDate ? fmtDate(suitDetails.openedDate) : '-',
+                            openedDate: suitDetails.openingDate ? fmtDate(suitDetails.openingDate) : '-',
                             suitStatus: this.formatSuitStatus(data.suitStatus) || '-',
                             description: suitDetails.description || '-',
                             subjectAssetNumber: subjectAsset.number || '-',
