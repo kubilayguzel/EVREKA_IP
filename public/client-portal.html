@@ -5595,6 +5595,22 @@ window.triggerTpQuery = function(applicationNo){
   if (!win) alert('Pop-up engellendi. Lütfen bu site için pop-up izni verin.');
 };
 
+// Türkçe tarih formatını parse et (DD.MM.YYYY veya "-")
+function parseTurkishDate(dateStr) {
+    if (!dateStr || dateStr === '-' || dateStr.trim() === '') return new Date(0);
+    
+    // DD.MM.YYYY formatı
+    const parts = dateStr.split('.');
+    if (parts.length === 3) {
+        const day = parseInt(parts[0]);
+        const month = parseInt(parts[1]) - 1; // JS'de ay 0-11 arası
+        const year = parseInt(parts[2]);
+        return new Date(year, month, day);
+    }
+    
+    // Diğer formatlar için standart parse
+    return new Date(dateStr);
+}
 
 // ============================================
 // GENEL TABLO SIRALAMA VE FİLTRELEME SİSTEMİ
@@ -5723,22 +5739,6 @@ function sortTable(tableId, columnIndex, dataType = 'text') {
     tbody.appendChild(fragment);
     
     // --- YENİ DOM YENİDEN OLUŞTURMA MANTIĞI SONU ---
-}
-// Türkçe tarih formatını parse et (DD.MM.YYYY veya "-")
-function parseTurkishDate(dateStr) {
-    if (!dateStr || dateStr === '-' || dateStr.trim() === '') return new Date(0);
-    
-    // DD.MM.YYYY formatı
-    const parts = dateStr.split('.');
-    if (parts.length === 3) {
-        const day = parseInt(parts[0]);
-        const month = parseInt(parts[1]) - 1; // JS'de ay 0-11 arası
-        const year = parseInt(parts[2]);
-        return new Date(year, month, day);
-    }
-    
-    // Diğer formatlar için standart parse
-    return new Date(dateStr);
 }
 
 // Portföy filtreleme fonksiyonu
