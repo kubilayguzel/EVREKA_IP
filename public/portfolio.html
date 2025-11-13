@@ -971,12 +971,13 @@
                 pageData.forEach((row) => {
                     const tr = document.createElement('tr');
                     
-                    // Dava türüne göre arka plan rengi
-                    if (row.suitType && row.suitType.includes('İptal')) {
-                        tr.style.backgroundColor = '#ffebee'; // Kırmızımsı
-                    } else if (row.suitType && row.suitType.includes('Tecavüz')) {
-                        tr.style.backgroundColor = '#fff3e0'; // Turuncumsu
-                    }
+                // Dava türüne göre arka plan rengi
+                const suitTypeStr = String(row.suitType || '');
+                if (suitTypeStr.includes('İptal')) {
+                    tr.style.backgroundColor = '#ffebee'; // Kırmızımsı
+                } else if (suitTypeStr.includes('Tecavüz')) {
+                    tr.style.backgroundColor = '#fff3e0'; // Turuncumsu
+                }
 
                     tr.innerHTML = `
                         <td>${row.title || '-'}</td>
