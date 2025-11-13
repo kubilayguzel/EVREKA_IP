@@ -3277,10 +3277,7 @@ window.fetchAndDisplayObjections = async function() {
         
         // 7. Global veriyi sakla
         window.davaItirazPaginationData.allData = objectionRows;
-        // ⬇️ DEĞİŞİKLİK: allParentRows'u global değişkene ata
-        window.davaItirazPaginationData.allParentRows = objectionRows.filter(r => r.isParent);
-        // const allParentRows = objectionRows.filter(r => r.isParent); // ⬆️ Bu satırı yukarıdakiyle değiştir
-        
+        const allParentRows = objectionRows.filter(r => r.isParent);
         const paginationContainerId = 'davaItirazPagination';
         const itemsPerPage = window.davaItirazPaginationData.itemsPerPage || 10;
 
@@ -3292,18 +3289,16 @@ window.fetchAndDisplayObjections = async function() {
                 onPageChange: (page, perPage) => {
                     const start = (page - 1) * perPage;
                     const end = start + perPage;
-                    // ⬇️ DEĞİŞİKLİK: Global değişkenden veriyi oku
-                    const parentSlice = window.davaItirazPaginationData.allParentRows.slice(start, end);
+                    const parentSlice = allParentRows.slice(start, end);
                     renderDavaItirazTable(parentSlice, start);
                 }
             });
         }
         
         // 9. Pagination'ı güncelle ve ilk sayfayı çiz
-        // ⬇️ DEĞİŞİKLİK: Global değişkenden veriyi oku
-        window.davaItirazPaginationData.pagination.update(window.davaItirazPaginationData.allParentRows.length);
-        const firstPageSlice = window.davaItirazPaginationData.allParentRows.slice(0, itemsPerPage);
-        renderDavaItirazTable(firstPageSlice, 0);
+        window.davaItirazPaginationData.pagination.update(allParentRows.length);
+        const firstPageSlice = allParentRows.slice(0, itemsPerPage);
+        renderDavaItirazTable(firstPageSlice, 0); 
 
     } catch (error) {
         console.error('❌ İtiraz (3. taraf - basit sorgu) yükleme hatası:', error);
@@ -5595,22 +5590,6 @@ window.triggerTpQuery = function(applicationNo){
   if (!win) alert('Pop-up engellendi. Lütfen bu site için pop-up izni verin.');
 };
 
-// Türkçe tarih formatını parse et (DD.MM.YYYY veya "-")
-function parseTurkishDate(dateStr) {
-    if (!dateStr || dateStr === '-' || dateStr.trim() === '') return new Date(0);
-    
-    // DD.MM.YYYY formatı
-    const parts = dateStr.split('.');
-    if (parts.length === 3) {
-        const day = parseInt(parts[0]);
-        const month = parseInt(parts[1]) - 1; // JS'de ay 0-11 arası
-        const year = parseInt(parts[2]);
-        return new Date(year, month, day);
-    }
-    
-    // Diğer formatlar için standart parse
-    return new Date(dateStr);
-}
 
 // ============================================
 // GENEL TABLO SIRALAMA VE FİLTRELEME SİSTEMİ
@@ -5634,43 +5613,10 @@ function sortTable(tableId, columnIndex, dataType = 'text') {
     if (!table) return;
     
     const tbody = table.querySelector('tbody');
-    if (!tbody) return;
-
-    // --- YENİ GRUPLAMA MANTIĞI BAŞLANGICI ---
-    
-    // 1. Tüm satırları al
-    const allRows = Array.from(tbody.querySelectorAll('tr'));
-    const parentGroups = []; // { parent: TR, child: TR | null } objelerini burada sakla
-
-    // 2. Ana (parent) ve alt (child) satırları birlikte grupla
-    for (let i = 0; i < allRows.length; i++) {
-        const row = allRows[i];
-        
-        // Eğer bu satır bir alt satırsa (colspan'ı varsa), 
-        // bir önceki ana satır tarafından zaten işlendiği için atla.
-        if (row.querySelector('td[colspan]')) {
-            continue;
-        }
-        
-        // Bu bir ana (parent) satır
-        const parentRow = row;
-        let childRow = null;
-        
-        // Bu ana satırdan hemen sonra gelen satırı kontrol et
-        if (i + 1 < allRows.length) {
-            const nextRow = allRows[i + 1];
-            // Eğer bir alt satırsa (colspan'ı varsa), bu ana satıra aittir.
-            if (nextRow.querySelector('td[colspan]')) {
-                childRow = nextRow;
-            }
-        }
-        
-        // Grubu (ana satır ve onun alt satırı) listeye ekle
-        parentGroups.push({ parent: parentRow, child: childRow });
-    }
-    
-    // --- YENİ GRUPLAMA MANTIĞI SONU ---
-
+    const rows = Array.from(tbody.querySelectorAll('tr')).filter(row => {
+        // Accordion child row'ları hariç tut
+        return !row.querySelector('td[colspan]');
+    });
     
     // Mevcut sıralama yönünü belirle
     const th = table.querySelectorAll('th')[columnIndex];
@@ -5678,7 +5624,7 @@ function sortTable(tableId, columnIndex, dataType = 'text') {
     const newDir = currentDir === 'asc' ? 'desc' : 'asc';
     
     // Tüm başlıklardan aktif sınıfı kaldır
-    table.querySelectorAll('th.sortable').forEach(header => {
+    table.querySelectorAll('th').forEach(header => {
         header.classList.remove('sort-asc', 'sort-desc', 'active');
         const icon = header.querySelector('i');
         if (icon) {
@@ -5693,24 +5639,24 @@ function sortTable(tableId, columnIndex, dataType = 'text') {
         icon.className = newDir === 'asc' ? 'fas fa-sort-up' : 'fas fa-sort-down';
     }
     
-    // Satırları sırala (Artık 'rows' yerine 'parentGroups' dizisini sıralıyoruz)
-    parentGroups.sort((a, b) => {
-        // Değerleri 'parent' objesinden al
-        let aVal = a.parent.cells[columnIndex]?.textContent.trim() || '';
-        let bVal = b.parent.cells[columnIndex]?.textContent.trim() || '';
+    // Satırları sırala
+    rows.sort((a, b) => {
+        let aVal = a.cells[columnIndex]?.textContent.trim() || '';
+        let bVal = b.cells[columnIndex]?.textContent.trim() || '';
         
-        // Badge içindeki metni al (Eski kodla aynı)
-        const aBadge = a.parent.cells[columnIndex]?.querySelector('.badge');
-        const bBadge = b.parent.cells[columnIndex]?.querySelector('.badge');
+        // Badge içindeki metni al
+        const aBadge = a.cells[columnIndex]?.querySelector('.badge');
+        const bBadge = b.cells[columnIndex]?.querySelector('.badge');
         if (aBadge) aVal = aBadge.textContent.trim();
         if (bBadge) bVal = bBadge.textContent.trim();
         
-        // Veri tipine göre karşılaştır (Eski kodla aynı)
+        // Veri tipine göre karşılaştır
         if (dataType === 'number') {
             aVal = parseFloat(aVal.replace(/[^0-9.-]/g, '')) || 0;
             bVal = parseFloat(bVal.replace(/[^0-9.-]/g, '')) || 0;
             return newDir === 'asc' ? aVal - bVal : bVal - aVal;
         } else if (dataType === 'date') {
+            // Tarih formatı: DD.MM.YYYY veya YYYY-MM-DD
             const aDate = parseTurkishDate(aVal);
             const bDate = parseTurkishDate(bVal);
             return newDir === 'asc' ? aDate - bDate : bDate - aDate;
@@ -5721,24 +5667,25 @@ function sortTable(tableId, columnIndex, dataType = 'text') {
         }
     });
     
-    // --- YENİ DOM YENİDEN OLUŞTURMA MANTIĞI ---
+    // Sıralanmış satırları tabloya geri ekle
+    rows.forEach(row => tbody.appendChild(row));
+}
+
+// Türkçe tarih formatını parse et (DD.MM.YYYY veya "-")
+function parseTurkishDate(dateStr) {
+    if (!dateStr || dateStr === '-' || dateStr.trim() === '') return new Date(0);
     
-    // 1. Performans için bir DocumentFragment oluştur
-    const fragment = document.createDocumentFragment();
+    // DD.MM.YYYY formatı
+    const parts = dateStr.split('.');
+    if (parts.length === 3) {
+        const day = parseInt(parts[0]);
+        const month = parseInt(parts[1]) - 1; // JS'de ay 0-11 arası
+        const year = parseInt(parts[2]);
+        return new Date(year, month, day);
+    }
     
-    // 2. Sıralanmış grupları fragment'a ekle
-    parentGroups.forEach(group => {
-        fragment.appendChild(group.parent); // Önce ana satırı ekle
-        if (group.child) {
-            fragment.appendChild(group.child); // Sonra (varsa) alt satırı ekle
-        }
-    });
-    
-    // 3. Tablo gövdesini (tbody) temizle ve sıralanmış fragment'ı tek seferde ekle
-    tbody.innerHTML = '';
-    tbody.appendChild(fragment);
-    
-    // --- YENİ DOM YENİDEN OLUŞTURMA MANTIĞI SONU ---
+    // Diğer formatlar için standart parse
+    return new Date(dateStr);
 }
 
 // Portföy filtreleme fonksiyonu
@@ -5813,101 +5760,21 @@ jQuery(document).ready(function($) {
     // ========================================
     // PORTFÖY TABLO SIRALAMA
     // ========================================
-// Marka tablosu sıralama (VERİ BAZLI - DÜZELTİLMİŞ TARİH)
+    
+    // Marka tablosu sıralama
     $('#marka-list').on('click', 'th.sortable', function() {
         const th = $(this);
-        const sortKey = th.data('sort');
-        const paginatorData = window.markaPaginationData;
-
-        if (!paginatorData || !paginatorData.allData || !paginatorData.pagination) {
-            console.warn('Marka paginator verisi bulunamadı, DOM sıralaması deneniyor.');
-            const columnIndex = th.index();
-            let dataType = 'text';
-            if (sortKey === 'appdate') dataType = 'date';
-            if (sortKey === 'index') dataType = 'number';
-            sortTable('marka-list', columnIndex, dataType); // Fallback
-            return;
-        }
-
-        // 1. Yönü belirle
-        let newDir;
-        if (th.hasClass('sort-asc')) newDir = 'desc';
-        else newDir = 'asc';
-
-        // 2. Başlıkları temizle
-        $('#marka-list th.sortable').not(th).removeClass('sort-asc sort-desc active').find('i').attr('class', 'fas fa-sort');
-
-        // 3. Tıklananı ayarla
-        th.removeClass('sort-asc sort-desc').addClass('active').addClass(newDir === 'asc' ? 'sort-asc' : 'sort-desc');
-        th.find('i').attr('class', newDir === 'asc' ? 'fas fa-sort-up' : 'fas fa-sort-down');
-
-        // 4. Global "allData" dizisini sırala
-        paginatorData.allData.sort((a, b) => {
-            let aVal, bVal;
-            
-            switch(sortKey) {
-                case 'index':
-                    aVal = a.applicationNumber || '';
-                    bVal = b.applicationNumber || '';
-                    break;
-                case 'origin':
-                    aVal = a.origin || 'TÜRKPATENT';
-                    bVal = b.origin || 'TÜRKPATENT';
-                    break;
-                case 'brand':
-                    aVal = a.title || a.brandText || '';
-                    bVal = b.title || b.brandText || '';
-                    break;
-                case 'appno':
-                    aVal = a.applicationNumber || a.applicationNo || '';
-                    bVal = b.applicationNumber || b.applicationNo || '';
-                    break;
-                case 'regno':
-                    aVal = a.registrationNumber || a.registrationNo || '';
-                    bVal = b.registrationNumber || b.registrationNo || '';
-                    break;
-                case 'appdate':
-                    // 🔥 YENİ: Ham veriyi (YYYY-MM-DD veya Firebase Timestamp) parse et
-                    const parseRawDate = (val) => {
-                        if (!val) return 0;
-                        if (typeof val === 'object' && val.seconds) { // Firebase Timestamp
-                            return val.seconds * 1000;
-                        }
-                        const dt = new Date(val).getTime(); // YYYY-MM-DD
-                        return isNaN(dt) ? 0 : dt;
-                    };
-                    aVal = parseRawDate(a.applicationDate || a.application_date);
-                    bVal = parseRawDate(b.applicationDate || b.application_date);
-                    return newDir === 'asc' ? aVal - bVal : bVal - aVal;
-                case 'status':
-                    aVal = a.status || a.statusText || '';
-                    bVal = b.status || b.statusText || '';
-                    break;
-                case 'classes':
-                    const getFirstClass = (item) => {
-                        let cls = item.classes; 
-                        if (Array.isArray(cls) && cls.length > 0) return parseInt(cls[0], 10) || 0;
-                        if (typeof cls === 'string') return parseInt(cls.split(',')[0], 10) || 0;
-                        if (Array.isArray(item.goodsAndServicesByClass) && item.goodsAndServicesByClass.length > 0) {
-                            return parseInt(item.goodsAndServicesByClass[0].classNo, 10) || 0;
-                        }
-                        return 0;
-                    };
-                    aVal = getFirstClass(a);
-                    bVal = getFirstClass(b);
-                    return newDir === 'asc' ? aVal - bVal : bVal - aVal;
-                default:
-                    aVal = ''; bVal = '';
-            }
-            
-            const comparison = aVal.toString().localeCompare(bVal.toString(), 'tr', { sensitivity: 'base' });
-            return newDir === 'asc' ? comparison : -comparison;
-        });
-
-        // 5. Pagination'ı 1. sayfaya resetle
-        paginatorData.pagination.goToPage(1);
+        const columnIndex = th.index();
+        const sortType = th.data('sort');
+        
+        // Veri tipini belirle
+        let dataType = 'text';
+        if (sortType === 'appdate') dataType = 'date';
+        if (sortType === 'index') dataType = 'number';
+        
+        sortTable('marka-list', columnIndex, dataType);
     });
-
+    
     // Patent tablosu sıralama
     $('#patent-list').on('click', 'th.sortable', function() {
         const th = $(this);
@@ -5922,97 +5789,17 @@ jQuery(document).ready(function($) {
         sortTable('tasarim-list', columnIndex, 'text');
     });
     
-// İtiraz tablosu sıralama (VERİ BAZLI - DÜZELTİLMİŞ TARİH)
+    // İtiraz tablosu sıralama
     $('#dava-itiraz-list').on('click', 'th.sortable', function() {
         const th = $(this);
-        const sortKey = th.data('sort');
-        const paginatorData = window.davaItirazPaginationData;
-
-        if (!paginatorData || !paginatorData.allParentRows || !paginatorData.pagination) {
-            console.warn('Dava/İtiraz paginator verisi bulunamadı, DOM sıralaması deneniyor.');
-            const columnIndex = th.index();
-            let dataType = 'text';
-            if (sortKey === 'bulletin-date' || sortKey === 'process-date') dataType = 'date';
-            if (sortKey === 'index') dataType = 'number';
-            sortTable('dava-itiraz-list', columnIndex, dataType); // Fallback
-            return;
-        }
-
-        // 1. Yönü belirle
-        let newDir;
-        if (th.hasClass('sort-asc')) newDir = 'desc';
-        else newDir = 'asc'; 
-
-        // 2. Başlıkları temizle
-        $('#dava-itiraz-list th.sortable').not(th).removeClass('sort-asc sort-desc active').find('i').attr('class', 'fas fa-sort');
-
-        // 3. Tıklananı ayarla
-        th.removeClass('sort-asc sort-desc').addClass('active').addClass(newDir === 'asc' ? 'sort-asc' : 'sort-desc');
-        th.find('i').attr('class', newDir === 'asc' ? 'fas fa-sort-up' : 'fas fa-sort-down');
-
-        // 4. Global "allParentRows" dizisini sırala
-        paginatorData.allParentRows.sort((a, b) => {
-            let aVal, bVal;
-
-            // 🔥 YENİ: Formatlanmış tarihi (GG/AA/YYYY) parse eden fonksiyon
-            const parseFormattedDate = (val) => {
-                if (!val || val === '-') return 0;
-                const parts = val.split(/[/.]/); // Hem / hem de . ayıracıyla çalışır
-                if (parts.length === 3) {
-                    // new Date(YIL, AY-1, GÜN)
-                    return new Date(Date.UTC(parts[2], parts[1] - 1, parts[0])).getTime();
-                }
-                const dt = new Date(val).getTime(); // Fallback
-                return isNaN(dt) ? 0 : dt;
-            };
-
-            switch(sortKey) {
-                case 'index':
-                    aVal = a.applicationNumber || '';
-                    bVal = b.applicationNumber || '';
-                    break;
-                case 'brand':
-                    aVal = a.title || '';
-                    bVal = b.title || '';
-                    break;
-                case 'transaction':
-                    aVal = a.transactionTypeName || '';
-                    bVal = b.transactionTypeName || '';
-                    break;
-                case 'appno':
-                    aVal = a.applicationNumber || '';
-                    bVal = b.applicationNumber || '';
-                    break;
-                case 'applicant':
-                    aVal = a.applicantName || '';
-                    bVal = b.applicantName || '';
-                    break;
-                case 'bulletin-date':
-                    aVal = parseFormattedDate(a.bulletinDate);
-                    bVal = parseFormattedDate(b.bulletinDate);
-                    return newDir === 'asc' ? aVal - bVal : bVal - aVal;
-                case 'bulletin-no':
-                    aVal = parseInt(a.bulletinNo, 10) || 0;
-                    bVal = parseInt(b.bulletinNo, 10) || 0;
-                    return newDir === 'asc' ? aVal - bVal : bVal - aVal;
-                case 'process-date':
-                    aVal = parseFormattedDate(a.epatsDate);
-                    bVal = parseFormattedDate(b.epatsDate);
-                    return newDir === 'asc' ? aVal - bVal : bVal - aVal;
-                case 'status':
-                    aVal = a.statusText || '';
-                    bVal = b.statusText || '';
-                    break;
-                default:
-                    aVal = ''; bVal = '';
-            }
-            
-            const comparison = aVal.toString().localeCompare(bVal.toString(), 'tr', { sensitivity: 'base' });
-            return newDir === 'asc' ? comparison : -comparison;
-        });
-
-        // 5. Pagination'ı 1. sayfaya resetle
-        paginatorData.pagination.goToPage(1);
+        const columnIndex = th.index();
+        const sortType = th.data('sort');
+        
+        let dataType = 'text';
+        if (sortType === 'bulletin-date' || sortType === 'process-date') dataType = 'date';
+        if (sortType === 'index') dataType = 'number';
+        
+        sortTable('dava-itiraz-list', columnIndex, dataType);
     });
     
     // ========================================
