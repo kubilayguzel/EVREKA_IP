@@ -2248,10 +2248,10 @@
                         { key: 'applicants', label: 'Baş.Sahibi', sortable: true, width: '200px' },
                         { key: 'actions', label: 'İşlemler', sortable: false, width: '250px' }
                     ];
-                if (!isObjections && !isTrademark) {
+                if (!isObjections && !isTrademark && !isLitigation) {
                     columns = columns.filter(col => col.key !== 'brandImage' && col.key !== 'origin' && col.key !== 'country');
                 }
-                if (!isObjections && !isTrademark) {
+                if (!isObjections && !isTrademark && !isLitigation) {
                     columns.splice(2, 0, { key: 'ipType', label: 'Kayıt Tipi', sortable: true, width: '100px' });
                 }
                 if (isAllTab && !columns.find(col => col.key === 'toggle')) {
