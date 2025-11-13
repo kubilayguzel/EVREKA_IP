@@ -5813,8 +5813,7 @@ jQuery(document).ready(function($) {
     // ========================================
     // PORTFÖY TABLO SIRALAMA
     // ========================================
-    
-// Marka tablosu sıralama (VERİ BAZLI)
+// Marka tablosu sıralama (VERİ BAZLI - DÜZELTİLMİŞ TARİH)
     $('#marka-list').on('click', 'th.sortable', function() {
         const th = $(this);
         const sortKey = th.data('sort');
@@ -5842,12 +5841,10 @@ jQuery(document).ready(function($) {
         th.removeClass('sort-asc sort-desc').addClass('active').addClass(newDir === 'asc' ? 'sort-asc' : 'sort-desc');
         th.find('i').attr('class', newDir === 'asc' ? 'fas fa-sort-up' : 'fas fa-sort-down');
 
-        // 4. Global "allData" dizisini (sadece parent'ları tutan) sırala
+        // 4. Global "allData" dizisini sırala
         paginatorData.allData.sort((a, b) => {
             let aVal, bVal;
-            // ⬇️ DEĞİŞİKLİK: 'parseTurkishDate' artık globalde
-            const ptd = window.parseTurkishDate; 
-
+            
             switch(sortKey) {
                 case 'index':
                     aVal = a.applicationNumber || '';
@@ -5870,20 +5867,27 @@ jQuery(document).ready(function($) {
                     bVal = b.registrationNumber || b.registrationNo || '';
                     break;
                 case 'appdate':
-                    aVal = ptd(a.applicationDate || a.application_date);
-                    bVal = ptd(a.applicationDate || b.application_date);
+                    // 🔥 YENİ: Ham veriyi (YYYY-MM-DD veya Firebase Timestamp) parse et
+                    const parseRawDate = (val) => {
+                        if (!val) return 0;
+                        if (typeof val === 'object' && val.seconds) { // Firebase Timestamp
+                            return val.seconds * 1000;
+                        }
+                        const dt = new Date(val).getTime(); // YYYY-MM-DD
+                        return isNaN(dt) ? 0 : dt;
+                    };
+                    aVal = parseRawDate(a.applicationDate || a.application_date);
+                    bVal = parseRawDate(b.applicationDate || b.application_date);
                     return newDir === 'asc' ? aVal - bVal : bVal - aVal;
                 case 'status':
                     aVal = a.status || a.statusText || '';
                     bVal = b.status || b.statusText || '';
                     break;
                 case 'classes':
-                    // ⬇️ DEĞİŞİKLİK: Sınıf sıralaması için daha robust bir yöntem
                     const getFirstClass = (item) => {
-                        let cls = item.classes; // Verideki asıl 'classes' alanı
+                        let cls = item.classes; 
                         if (Array.isArray(cls) && cls.length > 0) return parseInt(cls[0], 10) || 0;
                         if (typeof cls === 'string') return parseInt(cls.split(',')[0], 10) || 0;
-                        // Fallback for goodsAndServicesByClass
                         if (Array.isArray(item.goodsAndServicesByClass) && item.goodsAndServicesByClass.length > 0) {
                             return parseInt(item.goodsAndServicesByClass[0].classNo, 10) || 0;
                         }
@@ -5903,7 +5907,7 @@ jQuery(document).ready(function($) {
         // 5. Pagination'ı 1. sayfaya resetle
         paginatorData.pagination.goToPage(1);
     });
-    
+
     // Patent tablosu sıralama
     $('#patent-list').on('click', 'th.sortable', function() {
         const th = $(this);
@@ -5918,27 +5922,26 @@ jQuery(document).ready(function($) {
         sortTable('tasarim-list', columnIndex, 'text');
     });
     
-// İtiraz tablosu sıralama (VERİ BAZLI)
+// İtiraz tablosu sıralama (VERİ BAZLI - DÜZELTİLMİŞ TARİH)
     $('#dava-itiraz-list').on('click', 'th.sortable', function() {
         const th = $(this);
         const sortKey = th.data('sort');
         const paginatorData = window.davaItirazPaginationData;
 
-        // Eğer veri/pagination objeleri globalde yoksa, DOM sıralamasına geri dön (Fallback)
         if (!paginatorData || !paginatorData.allParentRows || !paginatorData.pagination) {
             console.warn('Dava/İtiraz paginator verisi bulunamadı, DOM sıralaması deneniyor.');
             const columnIndex = th.index();
             let dataType = 'text';
             if (sortKey === 'bulletin-date' || sortKey === 'process-date') dataType = 'date';
             if (sortKey === 'index') dataType = 'number';
-            sortTable('dava-itiraz-list', columnIndex, dataType); // Önceki (DOM) fonksiyona fallback
+            sortTable('dava-itiraz-list', columnIndex, dataType); // Fallback
             return;
         }
 
         // 1. Yönü belirle
         let newDir;
         if (th.hasClass('sort-asc')) newDir = 'desc';
-        else newDir = 'asc'; // 'desc' veya 'yok' ise 'asc' yap
+        else newDir = 'asc'; 
 
         // 2. Başlıkları temizle
         $('#dava-itiraz-list th.sortable').not(th).removeClass('sort-asc sort-desc active').find('i').attr('class', 'fas fa-sort');
@@ -5950,7 +5953,18 @@ jQuery(document).ready(function($) {
         // 4. Global "allParentRows" dizisini sırala
         paginatorData.allParentRows.sort((a, b) => {
             let aVal, bVal;
-            const ptd = window.parseTurkishDate || parseTurkishDate; 
+
+            // 🔥 YENİ: Formatlanmış tarihi (GG/AA/YYYY) parse eden fonksiyon
+            const parseFormattedDate = (val) => {
+                if (!val || val === '-') return 0;
+                const parts = val.split(/[/.]/); // Hem / hem de . ayıracıyla çalışır
+                if (parts.length === 3) {
+                    // new Date(YIL, AY-1, GÜN)
+                    return new Date(Date.UTC(parts[2], parts[1] - 1, parts[0])).getTime();
+                }
+                const dt = new Date(val).getTime(); // Fallback
+                return isNaN(dt) ? 0 : dt;
+            };
 
             switch(sortKey) {
                 case 'index':
@@ -5974,16 +5988,16 @@ jQuery(document).ready(function($) {
                     bVal = b.applicantName || '';
                     break;
                 case 'bulletin-date':
-                    aVal = ptd(a.bulletinDate);
-                    bVal = ptd(b.bulletinDate);
+                    aVal = parseFormattedDate(a.bulletinDate);
+                    bVal = parseFormattedDate(b.bulletinDate);
                     return newDir === 'asc' ? aVal - bVal : bVal - aVal;
                 case 'bulletin-no':
                     aVal = parseInt(a.bulletinNo, 10) || 0;
                     bVal = parseInt(b.bulletinNo, 10) || 0;
                     return newDir === 'asc' ? aVal - bVal : bVal - aVal;
                 case 'process-date':
-                    aVal = ptd(a.epatsDate);
-                    bVal = ptd(b.epatsDate);
+                    aVal = parseFormattedDate(a.epatsDate);
+                    bVal = parseFormattedDate(b.epatsDate);
                     return newDir === 'asc' ? aVal - bVal : bVal - aVal;
                 case 'status':
                     aVal = a.statusText || '';
@@ -5997,7 +6011,7 @@ jQuery(document).ready(function($) {
             return newDir === 'asc' ? comparison : -comparison;
         });
 
-        // 5. Pagination'ı 1. sayfaya resetle (Bu, 'onPageChange'i tetikleyip tabloyu yeniden çizecek)
+        // 5. Pagination'ı 1. sayfaya resetle
         paginatorData.pagination.goToPage(1);
     });
     
