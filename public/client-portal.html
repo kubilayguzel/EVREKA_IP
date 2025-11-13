@@ -5613,10 +5613,43 @@ function sortTable(tableId, columnIndex, dataType = 'text') {
     if (!table) return;
     
     const tbody = table.querySelector('tbody');
-    const rows = Array.from(tbody.querySelectorAll('tr')).filter(row => {
-        // Accordion child row'ları hariç tut
-        return !row.querySelector('td[colspan]');
-    });
+    if (!tbody) return;
+
+    // --- YENİ GRUPLAMA MANTIĞI BAŞLANGICI ---
+    
+    // 1. Tüm satırları al
+    const allRows = Array.from(tbody.querySelectorAll('tr'));
+    const parentGroups = []; // { parent: TR, child: TR | null } objelerini burada sakla
+
+    // 2. Ana (parent) ve alt (child) satırları birlikte grupla
+    for (let i = 0; i < allRows.length; i++) {
+        const row = allRows[i];
+        
+        // Eğer bu satır bir alt satırsa (colspan'ı varsa), 
+        // bir önceki ana satır tarafından zaten işlendiği için atla.
+        if (row.querySelector('td[colspan]')) {
+            continue;
+        }
+        
+        // Bu bir ana (parent) satır
+        const parentRow = row;
+        let childRow = null;
+        
+        // Bu ana satırdan hemen sonra gelen satırı kontrol et
+        if (i + 1 < allRows.length) {
+            const nextRow = allRows[i + 1];
+            // Eğer bir alt satırsa (colspan'ı varsa), bu ana satıra aittir.
+            if (nextRow.querySelector('td[colspan]')) {
+                childRow = nextRow;
+            }
+        }
+        
+        // Grubu (ana satır ve onun alt satırı) listeye ekle
+        parentGroups.push({ parent: parentRow, child: childRow });
+    }
+    
+    // --- YENİ GRUPLAMA MANTIĞI SONU ---
+
     
     // Mevcut sıralama yönünü belirle
     const th = table.querySelectorAll('th')[columnIndex];
@@ -5624,7 +5657,7 @@ function sortTable(tableId, columnIndex, dataType = 'text') {
     const newDir = currentDir === 'asc' ? 'desc' : 'asc';
     
     // Tüm başlıklardan aktif sınıfı kaldır
-    table.querySelectorAll('th').forEach(header => {
+    table.querySelectorAll('th.sortable').forEach(header => {
         header.classList.remove('sort-asc', 'sort-desc', 'active');
         const icon = header.querySelector('i');
         if (icon) {
@@ -5639,24 +5672,24 @@ function sortTable(tableId, columnIndex, dataType = 'text') {
         icon.className = newDir === 'asc' ? 'fas fa-sort-up' : 'fas fa-sort-down';
     }
     
-    // Satırları sırala
-    rows.sort((a, b) => {
-        let aVal = a.cells[columnIndex]?.textContent.trim() || '';
-        let bVal = b.cells[columnIndex]?.textContent.trim() || '';
+    // Satırları sırala (Artık 'rows' yerine 'parentGroups' dizisini sıralıyoruz)
+    parentGroups.sort((a, b) => {
+        // Değerleri 'parent' objesinden al
+        let aVal = a.parent.cells[columnIndex]?.textContent.trim() || '';
+        let bVal = b.parent.cells[columnIndex]?.textContent.trim() || '';
         
-        // Badge içindeki metni al
-        const aBadge = a.cells[columnIndex]?.querySelector('.badge');
-        const bBadge = b.cells[columnIndex]?.querySelector('.badge');
+        // Badge içindeki metni al (Eski kodla aynı)
+        const aBadge = a.parent.cells[columnIndex]?.querySelector('.badge');
+        const bBadge = b.parent.cells[columnIndex]?.querySelector('.badge');
         if (aBadge) aVal = aBadge.textContent.trim();
         if (bBadge) bVal = bBadge.textContent.trim();
         
-        // Veri tipine göre karşılaştır
+        // Veri tipine göre karşılaştır (Eski kodla aynı)
         if (dataType === 'number') {
             aVal = parseFloat(aVal.replace(/[^0-9.-]/g, '')) || 0;
             bVal = parseFloat(bVal.replace(/[^0-9.-]/g, '')) || 0;
             return newDir === 'asc' ? aVal - bVal : bVal - aVal;
         } else if (dataType === 'date') {
-            // Tarih formatı: DD.MM.YYYY veya YYYY-MM-DD
             const aDate = parseTurkishDate(aVal);
             const bDate = parseTurkishDate(bVal);
             return newDir === 'asc' ? aDate - bDate : bDate - aDate;
@@ -5667,10 +5700,25 @@ function sortTable(tableId, columnIndex, dataType = 'text') {
         }
     });
     
-    // Sıralanmış satırları tabloya geri ekle
-    rows.forEach(row => tbody.appendChild(row));
+    // --- YENİ DOM YENİDEN OLUŞTURMA MANTIĞI ---
+    
+    // 1. Performans için bir DocumentFragment oluştur
+    const fragment = document.createDocumentFragment();
+    
+    // 2. Sıralanmış grupları fragment'a ekle
+    parentGroups.forEach(group => {
+        fragment.appendChild(group.parent); // Önce ana satırı ekle
+        if (group.child) {
+            fragment.appendChild(group.child); // Sonra (varsa) alt satırı ekle
+        }
+    });
+    
+    // 3. Tablo gövdesini (tbody) temizle ve sıralanmış fragment'ı tek seferde ekle
+    tbody.innerHTML = '';
+    tbody.appendChild(fragment);
+    
+    // --- YENİ DOM YENİDEN OLUŞTURMA MANTIĞI SONU ---
 }
-
 // Türkçe tarih formatını parse et (DD.MM.YYYY veya "-")
 function parseTurkishDate(dateStr) {
     if (!dateStr || dateStr === '-' || dateStr.trim() === '') return new Date(0);
