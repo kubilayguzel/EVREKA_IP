@@ -3661,10 +3661,16 @@ async handleFormSubmit(e) {
                 
                 console.log('✅ Dava kaydı oluşturuldu (Suit ID):', suitDocRef.id);
                 
+                // Alert mesajını güncelle
+                window.__suitRecordCreated = true;
+                window.__suitRecordId = suitDocRef.id;
+                
             } catch (suitError) {
                 console.error('❌ Dava kaydı oluşturma hatası:', suitError);
                 // Task oluştu ama suit kaydı oluşmadı, kullanıcıya bilgi ver
                 alert('İş başarıyla oluşturuldu ancak dava kaydı oluşturulurken bir hata oluştu. Lütfen dava kaydını manuel olarak kontrol edin.');
+                window.__suitRecordCreated = false;
+                window.__suitRecordError = suitError.message;
             }
         }
 
@@ -3890,7 +3896,8 @@ const officialFee = parseFloat(document.getElementById('officialFee')?.value) ||
         }
         // ✨ GÜNCELLEME SONU
 
-        alert('İş ve ilgili kayıt başarıyla oluşturuldu!');
+        alert('İş ve ilgili kayıt başarıyla oluşturuldu!' + 
+              (window.__suitRecordCreated ? '\n✅ Dava kaydı da oluşturuldu (ID: ' + window.__suitRecordId + ')' : ''));
         window.location.href = 'task-management.html';
     } else {
         // ✅ NORMAL İŞLER İÇİN MANTIK
