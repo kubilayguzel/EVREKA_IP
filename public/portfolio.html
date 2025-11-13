@@ -701,6 +701,7 @@
                 this.sortBy = { column: 'applicationDate', direction: 'desc' };
                 this.selectedRecords = new Set();
                 this.objectionRows = [];
+                this.litigationRows = [];
                 this.txCache = new Map(); // key: recordId, value: {transactions, parents, childrenMap}
             }
             onLookupsReady() { this.loadAllData(); }
@@ -953,14 +954,67 @@
                 if (tableBody) tableBody.style.display = list.length > 0 ? 'table-row-group' : 'none';
                 if (noRecMsg) noRecMsg.style.display = list.length === 0 ? 'block' : 'none';
             }
+
+            async renderLitigationRows(list) {
+                const tableBody = document.getElementById('portfolioTableBody');
+                const noRecMsg = document.getElementById('noRecordsMessage');
+                if (!tableBody || list.length === 0) {
+                    if (tableBody) tableBody.style.display = 'none';
+                    if (noRecMsg) noRecMsg.style.display = 'block';
+                    return;
+                }
+
+                // Sayfalama ile sadece görünür veriyi render et
+                const pageData = pagination.getCurrentPageData(list);
+                const frag = document.createDocumentFragment();
+
+                pageData.forEach((row) => {
+                    const tr = document.createElement('tr');
+                    
+                    // Dava türüne göre arka plan rengi
+                    if (row.suitType && row.suitType.includes('İptal')) {
+                        tr.style.backgroundColor = '#ffebee'; // Kırmızımsı
+                    } else if (row.suitType && row.suitType.includes('Tecavüz')) {
+                        tr.style.backgroundColor = '#fff3e0'; // Turuncumsu
+                    }
+
+                    tr.innerHTML = `
+                        <td>${row.title || '-'}</td>
+                        <td>${row.suitType || '-'}</td>
+                        <td>${row.caseNo || '-'}</td>
+                        <td>${row.court || '-'}</td>
+                        <td>${row.client || '-'}</td>
+                        <td>${row.clientRole || '-'}</td>
+                        <td>${row.opposingParty || '-'}</td>
+                        <td>${row.opposingCounsel || '-'}</td>
+                        <td>${row.openedDate || '-'}</td>
+                        <td>${row.suitStatus || '-'}</td>
+                        <td style="max-width: 200px; white-space: normal;">${row.description || '-'}</td>
+                    `;
+                    
+                    frag.appendChild(tr);
+                });
+
+                tableBody.innerHTML = '';
+                tableBody.appendChild(frag);
+
+                if (tableBody) tableBody.style.display = list.length > 0 ? 'table-row-group' : 'none';
+                if (noRecMsg) noRecMsg.style.display = list.length === 0 ? 'block' : 'none';
+            }
             
             renderCurrentPage() {
                 const tableBody = document.getElementById('portfolioTableBody');
                 if (!tableBody || !pagination) return;
                 tableBody.innerHTML = '';
 
+                const isLitigation = (this.activeTypeFilter === 'litigation');
                 const isObjections = (this.activeTypeFilter === 'objections');
                 const isAccordionTab = (this.activeTypeFilter === 'all' || this.activeTypeFilter === 'trademark');
+
+                if (isLitigation) {
+                    this.renderLitigationRows(this.litigationRows || []);
+                    return;
+                }
 
                 if (isObjections) {
                     // applyFiltersAndSort zaten objectionRows'u filtreleyip sıralıyor ve pagination'ı güncelliyor
@@ -1165,6 +1219,51 @@
             applyFiltersAndSort() {
               const globalSearchTerm = (document.getElementById('searchBar').value || '').toLowerCase();
 
+              // Litigation sekmesi için arama ve filtreleme
+              if (this.activeTypeFilter === 'litigation') {
+                  let filtered = (this.litigationRows || []).filter(row => {
+                      if (globalSearchTerm) {
+                          const searchableText = `
+                              ${row.title || ''}
+                              ${row.suitType || ''}
+                              ${row.caseNo || ''}
+                              ${row.court || ''}
+                              ${row.client || ''}
+                              ${row.opposingParty || ''}
+                              ${row.suitStatus || ''}
+                          `.toLowerCase();
+                          if (!searchableText.includes(globalSearchTerm)) return false;
+                      }
+                      return Object.keys(this.columnFilters).every(key => {
+                          const filterValue = this.columnFilters[key];
+                          if (!filterValue) return true;
+                          let recordValue = String(row[key] || '');
+                          return recordValue.toLowerCase().includes(filterValue);
+                      });
+                  });
+
+                  if (this.sortBy.column) {
+                      const { column, direction } = this.sortBy;
+                      filtered.sort((a, b) => {
+                          let valA = a[column] || '';
+                          let valB = b[column] || '';
+                          if (column.includes('Date')) {
+                              valA = new Date(valA || 0);
+                              valB = new Date(valB || 0);
+                          }
+                          if (valA < valB) return direction === 'asc' ? -1 : 1;
+                          if (valA > valB) return direction === 'asc' ? 1 : -1;
+                          return 0;
+                      });
+                  }
+                if (pagination) {
+                    try { pagination.update(filtered.length); } catch (e) { console.warn('Pagination update error in filter:', e); }
+                }
+                this.renderLitigationRows(filtered);
+                return;
+              }
+
+              // Objections sekmesi için arama ve filtreleme
               if (this.activeTypeFilter === 'objections') {
                   let filtered = (this.objectionRows || []).filter(row => {
                       if (globalSearchTerm) {
@@ -1311,14 +1410,20 @@
                     if (globalSelect) globalSelect.checked = false;
                     this.initialRenderTableStructure();
                     
-                    if (this.activeTypeFilter === 'objections') {
-                    if (pagination) {
-                    try { (pagination.goToPage?.(1)) || (pagination.currentPage = 1); } catch {}
-                    }
-                    await this.loadObjectionRows();   // ilk render içeride yapılacak
-                    return;
+                    if (this.activeTypeFilter === 'litigation') {
+                        if (pagination) {
+                            try { (pagination.goToPage?.(1)) || (pagination.currentPage = 1); } catch {}
+                        }
+                        await this.loadLitigationRows();
+                        return;
+                    } else if (this.activeTypeFilter === 'objections') {
+                        if (pagination) {
+                            try { (pagination.goToPage?.(1)) || (pagination.currentPage = 1); } catch {}
+                        }
+                        await this.loadObjectionRows();   // ilk render içeride yapılacak
+                        return;
                     } else {
-                    this.applyFiltersAndSort();
+                        this.applyFiltersAndSort();
                     }
 
                 });
@@ -1997,15 +2102,117 @@
             }
 
 
+            async loadLitigationRows() {
+                const loading = new window.SimpleLoading();
+                loading.show({
+                    text: 'Davalar Yükleniyor',
+                    subtext: 'Suits koleksiyonundan veriler çekiliyor...'
+                });
+
+                try {
+                    // Firestore'dan suits koleksiyonunu çek
+                    const suitsCollection = collection(db, 'suits');
+                    const suitsSnapshot = await getDocs(suitsCollection);
+                    
+                    const allRows = [];
+
+                    suitsSnapshot.forEach((docSnap) => {
+                        const data = docSnap.data();
+                        
+                        // Konu varlık bilgisini al
+                        const subjectAsset = data.subjectAsset || {};
+                        const suitDetails = data.suitDetails || {};
+                        
+                        // Dava türünü belirle (transaction type'tan)
+                        const suitType = data.alias || data.transactionType || '-';
+                        
+                        const row = {
+                            id: docSnap.id,
+                            title: subjectAsset.title || data.title || '-',
+                            suitType: suitType,
+                            caseNo: suitDetails.caseNo || '-',
+                            court: suitDetails.court || '-',
+                            client: data.client?.name || '-',
+                            clientRole: data.clientRole || '-',
+                            opposingParty: suitDetails.opposingParty || '-',
+                            opposingCounsel: suitDetails.opposingCounsel || '-',
+                            openedDate: suitDetails.openedDate ? fmtDate(suitDetails.openedDate) : '-',
+                            suitStatus: this.formatSuitStatus(data.suitStatus) || '-',
+                            description: suitDetails.description || '-',
+                            subjectAssetNumber: subjectAsset.number || '-',
+                            subjectAssetType: subjectAsset.type || '-'
+                        };
+                        
+                        allRows.push(row);
+                    });
+
+                    // Sıralama: Açılış tarihine göre (en yeni önce)
+                    allRows.sort((a, b) => {
+                        const dateA = a.openedDate && a.openedDate !== '-' ? new Date(a.openedDate.split('.').reverse().join('-')) : new Date(0);
+                        const dateB = b.openedDate && b.openedDate !== '-' ? new Date(b.openedDate.split('.').reverse().join('-')) : new Date(0);
+                        return dateB - dateA;
+                    });
+
+                    this.litigationRows = allRows;
+                    
+                    // Pagination'ı güncelle
+                    if (this.pagination?.update) {
+                        try {
+                            if (this.pagination.currentPage !== 1) this.pagination.currentPage = 1;
+                            this.pagination.update(this.litigationRows.length);
+                        } catch (e) {
+                            console.warn('Pagination update error:', e);
+                        }
+                    }
+
+                    // Render et
+                    this.renderLitigationRows(this.litigationRows);
+
+                } catch (e) {
+                    console.error('❌ Davalar yüklenirken hata:', e);
+                    this.litigationRows = [];
+                    showNotification('Davalar yüklenirken bir hata oluştu', 'error');
+                } finally {
+                    try { loading.hide(); } catch {}
+                }
+            }
+
+            formatSuitStatus(status) {
+                const statusMap = {
+                    'continue': 'Devam Ediyor',
+                    'pending': 'Bekliyor',
+                    'closed': 'Kapandı',
+                    'won': 'Kazanıldı',
+                    'lost': 'Kaybedildi',
+                    'settled': 'Anlaşma ile Sonuçlandı'
+                };
+                return statusMap[status] || status || '-';
+            }
+
         initialRenderTableStructure() {
                 const headerRow = document.getElementById('portfolioTableHeaderRow');
                 const filterRow = document.getElementById('portfolioTableFilterRow');
                 headerRow.innerHTML = '';
                 filterRow.innerHTML = '';
+                const isLitigation = (this.activeTypeFilter === 'litigation');
                 const isObjections = (this.activeTypeFilter === 'objections');
                 const isTrademark = (this.activeTypeFilter === 'trademark');
                 const isAllTab = (this.activeTypeFilter === 'all');
-                let columns = isObjections
+                let columns = isLitigation
+                    ? [
+                        { key: 'title', label: 'Konu Varlık', sortable: true, width: '180px' },
+                        { key: 'suitType', label: 'Dava Türü', sortable: true, width: '150px' },
+                        { key: 'caseNo', label: 'Dava No', sortable: true, width: '120px' },
+                        { key: 'court', label: 'Mahkeme', sortable: true, width: '150px' },
+                        { key: 'client', label: 'Müvekkil', sortable: true, width: '150px' },
+                        { key: 'clientRole', label: 'Rol', sortable: true, width: '100px' },
+                        { key: 'opposingParty', label: 'Karşı Taraf', sortable: true, width: '150px' },
+                        { key: 'opposingCounsel', label: 'Karşı Vekil', sortable: true, width: '150px' },
+                        { key: 'openedDate', label: 'Açılış Tarihi', sortable: true, width: '120px' },
+                        { key: 'suitStatus', label: 'Durum', sortable: true, width: '120px' },
+                        { key: 'description', label: 'Açıklama', sortable: false, width: '200px' }
+                    ]
+                    : isObjections
                     ? [
                         { key: 'toggle', label: '', sortable: false, width: '44px' },
                         { key: 'title',           label: 'M/T/B Adı',   sortable: true,  width: '180px' },
