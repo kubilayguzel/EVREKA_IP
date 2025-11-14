@@ -1,0 +1,281 @@
+/* ===== GENEL STİLLER ===== */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Poppins', sans-serif;
+    overflow-x: hidden;
+}
+
+/* ===== SIDEBAR ===== */
+#sidebar {
+    min-height: 100vh;
+    width: 250px;
+    position: fixed;
+    top: 0;
+    left: 0;
+    transition: all 0.3s;
+    z-index: 999;
+    overflow-y: auto;
+}
+
+#sidebar .nav-link {
+    padding: 15px 20px;
+    transition: all 0.3s;
+    border-radius: 8px;
+    margin: 5px 10px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+#sidebar .nav-link i {
+    width: 20px;
+    text-align: center;
+}
+
+/* ===== CONTENT AREA ===== */
+#content {
+    margin-left: 250px;
+    padding: 20px;
+    min-height: 100vh;
+    transition: all 0.3s;
+}
+
+/* ===== HEADER ===== */
+.header-section {
+    margin-bottom: 30px;
+}
+
+.header-title {
+    font-size: 2.5rem;
+    font-weight: 700;
+    margin-bottom: 10px;
+}
+
+/* ===== CARDS ===== */
+.card {
+    border: none;
+    border-radius: 15px;
+    margin-bottom: 20px;
+    overflow: hidden;
+}
+
+.card-header {
+    font-weight: 600;
+    font-size: 1.1rem;
+    padding: 15px 20px;
+}
+
+.card-body {
+    padding: 20px;
+}
+
+/* ===== STAT CARDS ===== */
+.stat-card {
+    text-align: center;
+    padding: 20px;
+}
+
+.stat-number {
+    font-size: 2.5rem;
+    font-weight: 700;
+    line-height: 1;
+    margin-bottom: 10px;
+}
+
+.stat-label {
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+
+/* ===== TABLE ===== */
+.table-responsive {
+    border-radius: 15px;
+    overflow: hidden;
+}
+
+.table {
+    margin-bottom: 0;
+}
+
+.table thead th {
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.85rem;
+    letter-spacing: 0.5px;
+    padding: 15px;
+}
+
+.table tbody td {
+    padding: 15px;
+    vertical-align: middle;
+}
+
+/* ===== BADGES ===== */
+.badge {
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-weight: 600;
+    font-size: 0.8rem;
+}
+
+/* ===== BRAND IMAGE ===== */
+.brand-thumb {
+    height: 80px;
+    width: auto;
+    object-fit: contain;
+    border-radius: 6px;
+    transition: transform 0.3s ease;
+    cursor: pointer;
+}
+
+.brand-thumb:hover {
+    transform: scale(2.2);
+    z-index: 999;
+    position: relative;
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+}
+
+/* ===== TASK CARDS ===== */
+.task-card {
+    position: relative;
+    padding-top: 35px !important;
+    padding-left: 20px !important;
+    overflow: visible !important;
+}
+
+.task-number-tag {
+    position: absolute;
+    top: 8px;
+    left: 15px;
+    font-size: 1.3rem;
+    font-weight: 700;
+    line-height: 1;
+    color: #4da6ff;
+    opacity: 0.9;
+}
+
+.task-card .task-title {
+    margin-left: 30px;
+    margin-top: 0;
+}
+
+.task-brand-image {
+    height: 100px !important;
+    width: auto;
+    border-radius: 6px;
+    object-fit: contain;
+    transition: transform 0.3s ease;
+    cursor: pointer;
+    position: relative;
+}
+
+.task-brand-image:hover {
+    transform: scale(2.5) !important;
+    z-index: 9999 !important;
+    position: relative !important;
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3) !important;
+}
+
+/* ===== COMPARISON AREA ===== */
+.comparison-area {
+    border-top: 1px solid #585b63;
+    overflow: visible !important;
+    position: relative;
+    z-index: 1;
+}
+
+.task-card-comparison-item {
+    overflow: visible !important;
+}
+
+.task-card-comparison-item img {
+    border: 1px solid #585b63;
+}
+
+.task-card-comparison-item a:hover {
+    text-decoration: underline !important;
+    color: #66b3ff !important;
+}
+
+/* ===== OPPOSITION OWNER BADGE ===== */
+.opposition-owner-badge {
+    display: inline-block;
+    margin-left: 0.5rem;
+    padding: 0.15rem 0.45rem;
+    border-radius: 0.35rem;
+    font-size: 0.85em;
+    font-weight: 600;
+    line-height: 1;
+    background: #dc3545;
+    color: #fff;
+    border: 1px solid rgba(0,0,0,.15);
+    vertical-align: middle;
+}
+
+/* ===== FILTER SECTION ===== */
+#task-list-filters label {
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+
+#task-list-filters .form-control-sm {
+    font-size: 0.9rem;
+    line-height: 1.5;
+}
+
+#task-list-filters .card-title {
+    font-size: 1.1rem;
+}
+
+/* ===== PAGINATION ===== */
+.pagination {
+    margin-top: 20px;
+    justify-content: center;
+}
+
+/* ===== RESPONSIVE ===== */
+@media (max-width: 768px) {
+    #sidebar {
+        margin-left: -250px;
+    }
+    
+    #sidebar.active {
+        margin-left: 0;
+    }
+    
+    #content {
+        margin-left: 0;
+    }
+    
+    .header-title {
+        font-size: 1.8rem;
+    }
+    
+    .stat-number {
+        font-size: 2rem;
+    }
+}
+
+/* ===== SCROLLBAR ===== */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}
