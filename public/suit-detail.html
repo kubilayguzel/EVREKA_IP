@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IP Manager - Dava Detayı</title>
+    <link rel="stylesheet" href="css/shared-styles.css">
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333; display: flex; }
+        .page-wrapper { flex-grow: 1; display: flex; flex-direction: column; height: 100vh; overflow-y: auto; background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%); }
+        .main-container {width: 100%; padding: 30px; padding-top: 120px; margin: 0; }
+        
+        .page-header { background: rgba(255, 255, 255, 0.95); padding: 30px; border-radius: 20px; margin-bottom: 30px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1); }
+        .page-title { font-size: 2em; color: #1e3c72; margin-bottom: 10px; }
+        .page-subtitle { color: #666; font-size: 1.1em; }
+
+        .section-card {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 30px;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            margin-bottom: 25px;
+        }
+        
+        .suit-detail-container {
+            padding: 0; 
+            background: none; 
+            box-shadow: none; 
+        }
+
+        .section-title {
+            font-size: 1.3em;
+            color: #1e3c72;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #e1e8ed;
+        }
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 25px;
+        }
+        .form-group { margin-bottom: 25px; display: flex; flex-direction: column; }
+        .form-group.full-width { grid-column: 1 / -1; }
+        .form-label { display: block; margin-bottom: 8px; color: #333; font-weight: 500; }
+        .form-input, .form-select, .form-textarea {
+            width: 100%; padding: 12px 15px; border: 2px solid #e1e8ed;
+            border-radius: 10px; font-size: 1em; transition: all 0.3s ease;
+            background: white;
+        }
+        .form-input:focus, .form-select:focus, .form-textarea:focus {
+            outline: none; border-color: #1e3c72;
+            box-shadow: 0 0 0 3px rgba(30, 60, 114, 0.1);
+        }
+        .form-textarea { min-height: 120px; resize: vertical; }
+
+        .form-actions {
+            display: flex; justify-content: flex-end; gap: 10px;
+            padding-top: 20px; border-top: 1px solid #e9ecef; margin-top: 20px;
+        }
+        .btn { padding: 12px 25px; border: none; border-radius: 8px; font-size: 1em; font-weight: 600; cursor: pointer; transition: all 0.3s ease; }
+        .btn-primary { background: linear-gradient(45deg, #1e3c72, #2a5298); color: white; }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(30, 60, 114, 0.3); }
+        .btn-primary:disabled { background: #ccc; cursor: not-allowed; }
+        .btn-secondary { background: #6c757d; color: white; }
+        .btn-secondary:hover { background: #5a6268; }
+
+        /* Dosya Yükleme Alanı */
+        .file-upload-area {
+            border: 2px dashed #a8dadc;
+            border-radius: 12px;
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: #f1faee;
+            margin-top: 15px;
+        }
+        .file-upload-area:hover {
+            border-color: #457b9d;
+            background: #e0f2f7;
+        }
+        .file-upload-area.dragover {
+            border-color: #1e3c72;
+            background: #d4e9f7;
+        }
+        .upload-icon {
+            font-size: 3.5em;
+            color: #457b9d;
+            margin-bottom: 15px;
+        }
+        .upload-text {
+            font-size: 1.2em;
+            font-weight: 600;
+            color: #333;
+        }
+        .upload-subtext {
+            font-size: 0.9em;
+            color: #666;
+            margin-top: 5px;
+        }
+        .file-list-container {
+            margin-top: 25px;
+            border: 1px solid #e1e8ed;
+            border-radius: 12px;
+            overflow: hidden;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .file-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 20px;
+            border-bottom: 1px solid #eee;
+            background: white;
+        }
+        .file-item:last-child { border-bottom: none; }
+        .file-info { flex-grow: 1; display: flex; align-items: center; gap: 15px; }
+        .file-icon { font-size: 1.5em; color: #6c757d; }
+        .file-name { font-weight: 500; color: #333; }
+        .file-name a { color: #1e3c72; text-decoration: none; }
+        .file-name a:hover { text-decoration: underline; }
+        .file-size { font-size: 0.85em; color: #666; margin-left: 10px; }
+        .file-actions { display: flex; gap: 10px; align-items: center; }
+        .btn-remove-file {
+            background: #ff6b6b; color: white; border: none; width: 30px; height: 30px; border-radius: 50%;
+            font-size: 1.2em; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: background 0.3s ease;
+        }
+        .btn-remove-file:hover { background: #ff5252; }
+
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+        }
+        .loading-content {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            text-align: center;
+        }
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #1e3c72;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div id="notification-container" class="notification-container"></div>
+    <div id="layout-placeholder"></div>
+
+    <div class="page-wrapper">
+        <main class="main-container">
+            <section class="page-header">
+                <h1 class="page-title" id="suitTitle">Dava Detayı</h1>
+                <p class="page-subtitle">Dava bilgilerini görüntüleyin ve düzenleyin</p>
+            </section>
+
+            <div class="suit-detail-container">
+                <form id="suitForm">
+                    <!-- Dava Bilgileri -->
+                    <div class="section-card">
+                        <h3 class="section-title">Dava Bilgileri</h3>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label for="caseNo" class="form-label">Dava No *</label>
+                                <input type="text" id="caseNo" class="form-input" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="suitType" class="form-label">Dava Türü *</label>
+                                <input type="text" id="suitType" class="form-input" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="court" class="form-label">Mahkeme *</label>
+                                <input type="text" id="court" class="form-input" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="openedDate" class="form-label">Açılış Tarihi</label>
+                                <input type="date" id="openedDate" class="form-input">
+                            </div>
+                            <div class="form-group full-width">
+                                <label for="suitStatus" class="form-label">Durum</label>
+                                <select id="suitStatus" class="form-select">
+                                    <option value="Devam Ediyor">Devam Ediyor</option>
+                                    <option value="Sonuçlandı">Sonuçlandı</option>
+                                    <option value="Beklemede">Beklemede</option>
+                                    <option value="Kapatıldı">Kapatıldı</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Taraflar -->
+                    <div class="section-card">
+                        <h3 class="section-title">Taraflar</h3>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label for="clientName" class="form-label">Müvekkil *</label>
+                                <input type="text" id="clientName" class="form-input" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="clientRole" class="form-label">Müvekkil Rolü</label>
+                                <select id="clientRole" class="form-select">
+                                    <option value="Davacı">Davacı</option>
+                                    <option value="Davalı">Davalı</option>
+                                    <option value="Müdahil">Müdahil</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="opposingParty" class="form-label">Karşı Taraf</label>
+                                <input type="text" id="opposingParty" class="form-input">
+                            </div>
+                            <div class="form-group">
+                                <label for="opposingCounsel" class="form-label">Karşı Taraf Vekili</label>
+                                <input type="text" id="opposingCounsel" class="form-input">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Konu Varlık -->
+                    <div class="section-card">
+                        <h3 class="section-title">Konu Varlık</h3>
+                        <div class="form-grid">
+                            <div class="form-group full-width">
+                                <label for="subjectAssetTitle" class="form-label">Varlık Adı</label>
+                                <input type="text" id="subjectAssetTitle" class="form-input">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Açıklama -->
+                    <div class="section-card">
+                        <h3 class="section-title">Açıklama</h3>
+                        <div class="form-group full-width">
+                            <textarea id="description" class="form-textarea" placeholder="Dava ile ilgili detaylı açıklama..."></textarea>
+                        </div>
+                    </div>
+
+                    <!-- Belgeler -->
+                    <div class="section-card">
+                        <h3 class="section-title">Belgeler</h3>
+                        <div class="file-upload-area" id="fileUploadArea">
+                            <input type="file" id="fileInput" multiple hidden accept=".pdf,.doc,.docx,.jpg,.jpeg,.png">
+                            <div class="upload-icon">📄</div>
+                            <div class="upload-text">Dosyaları Buraya Sürükleyin veya Tıklayın</div>
+                            <div class="upload-subtext">PDF, DOCX, JPG, PNG dosyalarını destekler</div>
+                        </div>
+                        <div class="file-list-container" id="fileListContainer">
+                            <p style="text-align: center; color: #666; padding: 20px;">Bu davaya ait belge bulunmamaktadır.</p>
+                        </div>
+                    </div>
+
+                    <!-- Butonlar -->
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-secondary" id="cancelBtn">İptal</button>
+                        <button type="submit" class="btn btn-primary" id="saveSuitBtn">Değişiklikleri Kaydet</button>
+                    </div>
+                </form>
+            </div>
+        </main>
+    </div>
+
+    <script type="module">
+        import { loadSharedLayout } from './js/layout-loader.js';
+        import { db, auth, storage } from './firebase-config.js';
+        import { doc, getDoc, updateDoc, collection, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+        import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
+
+        // URL parametrelerinden dava ID'sini al
+        const params = new URLSearchParams(window.location.search);
+        const suitId = params.get('id');
+
+        let currentSuitData = null;
+        let currentDocuments = [];
+
+        // Notification fonksiyonu
+        function showNotification(message, type = 'info') {
+            const container = document.getElementById('notification-container');
+            const notification = document.createElement('div');
+            notification.className = `notification ${type}`;
+            notification.textContent = message;
+            container.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.classList.add('show');
+            }, 100);
+            
+            setTimeout(() => {
+                notification.classList.remove('show');
+                setTimeout(() => notification.remove(), 300);
+            }, 3000);
+        }
+
+        // Dosya boyutu formatlama
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+        }
+
+        // Loading göster/gizle
+        function showLoading() {
+            const overlay = document.createElement('div');
+            overlay.id = 'loadingOverlay';
+            overlay.className = 'loading-overlay';
+            overlay.innerHTML = `
+                <div class="loading-content">
+                    <div class="spinner"></div>
+                    <p>Yükleniyor...</p>
+                </div>
+            `;
+            document.body.appendChild(overlay);
+        }
+
+        function hideLoading() {
+            const overlay = document.getElementById('loadingOverlay');
+            if (overlay) overlay.remove();
+        }
+
+        // Başlangıç
+        (async function() {
+            await loadSharedLayout();
+            
+            onAuthStateChanged(auth, async (user) => {
+                if (!user) {
+                    window.location.href = 'login.html';
+                    return;
+                }
+
+                if (!suitId) {
+                    showNotification('Dava ID bulunamadı!', 'error');
+                    setTimeout(() => window.location.href = 'portfolio.html', 2000);
+                    return;
+                }
+
+                await loadSuitData();
+                setupEventListeners();
+            });
+        })();
+
+        // Dava verilerini yükle
+        async function loadSuitData() {
+            try {
+                showLoading();
+
+                // Suits koleksiyonundan davayı bul
+                const suitsRef = collection(db, 'suits');
+                const suitsSnapshot = await getDocs(suitsRef);
+                
+                let suitData = null;
+                suitsSnapshot.forEach(docSnap => {
+                    if (docSnap.id === suitId) {
+                        suitData = { id: docSnap.id, ...docSnap.data() };
+                    }
+                });
+
+                if (!suitData) {
+                    hideLoading();
+                    showNotification('Dava kaydı bulunamadı!', 'error');
+                    setTimeout(() => window.location.href = 'portfolio.html', 2000);
+                    return;
+                }
+
+                currentSuitData = suitData;
+                currentDocuments = suitData.documents || [];
+
+                // Sayfa başlığını güncelle
+                document.getElementById('suitTitle').textContent = `Dava Detayı: ${suitData.suitDetails?.caseNo || 'N/A'}`;
+
+                // Form alanlarını doldur
+                document.getElementById('caseNo').value = suitData.suitDetails?.caseNo || '';
+                document.getElementById('suitType').value = suitData.transactionType?.alias || '';
+                document.getElementById('court').value = suitData.suitDetails?.court || '';
+                
+                // Tarih formatını düzenle
+                if (suitData.suitDetails?.openingDate) {
+                    try {
+                        let date;
+                        if (suitData.suitDetails.openingDate.seconds) {
+                            date = new Date(suitData.suitDetails.openingDate.seconds * 1000);
+                        } else {
+                            date = new Date(suitData.suitDetails.openingDate);
+                        }
+                        
+                        if (!isNaN(date.getTime())) {
+                            document.getElementById('openedDate').value = date.toISOString().split('T')[0];
+                        }
+                    } catch (e) {
+                        console.warn('Tarih formatı hatası:', e);
+                    }
+                }
+                
+                document.getElementById('suitStatus').value = suitData.suitDetails?.suitStatus || 'Devam Ediyor';
+                document.getElementById('clientName').value = suitData.client?.name || '';
+                document.getElementById('clientRole').value = suitData.client?.clientRole || 'Davacı';
+                document.getElementById('opposingParty').value = suitData.suitDetails?.opposingParty || '';
+                document.getElementById('opposingCounsel').value = suitData.suitDetails?.opposingCounsel || '';
+                document.getElementById('subjectAssetTitle').value = suitData.subjectAsset?.title || '';
+                document.getElementById('description').value = suitData.suitDetails?.description || '';
+
+                // Belgeleri render et
+                renderDocuments();
+
+                hideLoading();
+
+            } catch (error) {
+                console.error('Dava verileri yüklenirken hata:', error);
+                hideLoading();
+                showNotification('Dava verileri yüklenirken bir hata oluştu.', 'error');
+            }
+        }
+
+        // Event listener'ları kur
+        function setupEventListeners() {
+            // Form submit
+            document.getElementById('suitForm').addEventListener('submit', handleFormSubmit);
+
+            // İptal butonu
+            document.getElementById('cancelBtn').addEventListener('click', () => {
+                if (confirm('Değişiklikler kaydedilmeyecek. Devam etmek istiyor musunuz?')) {
+                    window.location.href = 'portfolio.html';
+                }
+            });
+
+            // Dosya yükleme alanı
+            const fileUploadArea = document.getElementById('fileUploadArea');
+            const fileInput = document.getElementById('fileInput');
+
+            fileUploadArea.addEventListener('click', () => fileInput.click());
+            fileInput.addEventListener('change', (e) => handleFileUpload(e.target.files));
+
+            // Drag & Drop
+            fileUploadArea.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                fileUploadArea.classList.add('dragover');
+            });
+
+            fileUploadArea.addEventListener('dragleave', () => {
+                fileUploadArea.classList.remove('dragover');
+            });
+
+            fileUploadArea.addEventListener('drop', (e) => {
+                e.preventDefault();
+                fileUploadArea.classList.remove('dragover');
+                if (e.dataTransfer.files.length > 0) {
+                    handleFileUpload(e.dataTransfer.files);
+                }
+            });
+        }
+
+        // Dosya yükleme
+        async function handleFileUpload(files) {
+            if (!files || files.length === 0) return;
+
+            showLoading();
+
+            try {
+                const uploadedFiles = [];
+
+                for (const file of files) {
+                    // Benzersiz ID oluştur
+                    const fileId = crypto?.randomUUID?.() || `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+                    const storagePath = `suit_documents/${suitId}/${fileId}_${file.name}`;
+                    const fileStorageRef = storageRef(storage, storagePath);
+
+                    // Dosyayı storage'a yükle
+                    await uploadBytes(fileStorageRef, file);
+                    const downloadURL = await getDownloadURL(fileStorageRef);
+
+                    uploadedFiles.push({
+                        id: fileId,
+                        name: file.name,
+                        size: file.size,
+                        type: file.type,
+                        storagePath: storagePath,
+                        downloadURL: downloadURL,
+                        uploadedAt: new Date().toISOString()
+                    });
+                }
+
+                // Belgeleri listeye ekle
+                currentDocuments = [...currentDocuments, ...uploadedFiles];
+                
+                // Firestore'a kaydet
+                await saveDocumentsToFirestore();
+                
+                // Liste'yi güncelle
+                renderDocuments();
+
+                hideLoading();
+                showNotification('Belgeler başarıyla yüklendi!', 'success');
+
+            } catch (error) {
+                console.error('Dosya yükleme hatası:', error);
+                hideLoading();
+                showNotification('Dosya yüklenirken bir hata oluştu: ' + error.message, 'error');
+            }
+        }
+
+        // Belgeleri listele
+        function renderDocuments() {
+            const fileListContainer = document.getElementById('fileListContainer');
+            fileListContainer.innerHTML = '';
+
+            if (!currentDocuments || currentDocuments.length === 0) {
+                fileListContainer.innerHTML = '<p style="text-align: center; color: #666; padding: 20px;">Bu davaya ait belge bulunmamaktadır.</p>';
+                return;
+            }
+
+            currentDocuments.forEach(doc => {
+                const fileItem = document.createElement('div');
+                fileItem.classList.add('file-item');
+
+                const href = doc.downloadURL || doc.content || '#';
+
+                fileItem.innerHTML = `
+                    <div class="file-info">
+                        <span class="file-icon">📄</span>
+                        <div>
+                            <div class="file-name">
+                                <a href="${href}" ${doc.downloadURL ? 'target="_blank" rel="noopener"' : ''} download="${doc.name}">${doc.name}</a>
+                                <span class="file-size">${formatFileSize(doc.size)}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="file-actions">
+                        <button class="btn-remove-file" data-doc-id="${doc.id}" type="button">&times;</button>
+                    </div>
+                `;
+
+                // Silme butonu
+                fileItem.querySelector('.btn-remove-file').addEventListener('click', () => removeDocument(doc.id));
+
+                fileListContainer.appendChild(fileItem);
+            });
+        }
+
+        // Belgeyi sil
+        async function removeDocument(docId) {
+            const doc = currentDocuments.find(d => d.id === docId);
+            if (!doc) return;
+
+            if (!confirm('Bu belgeyi kaldırmak istediğinizden emin misiniz?')) return;
+
+            showLoading();
+
+            try {
+                // Storage'dan sil
+                if (doc.storagePath) {
+                    try {
+                        const fileRef = storageRef(storage, doc.storagePath);
+                        await deleteObject(fileRef);
+                    } catch (err) {
+                        console.warn('Storage silme hatası:', err);
+                    }
+                }
+
+                // Listeden çıkar
+                currentDocuments = currentDocuments.filter(d => d.id !== docId);
+                
+                // Firestore'a kaydet
+                await saveDocumentsToFirestore();
+                
+                // Listeyi güncelle
+                renderDocuments();
+
+                hideLoading();
+                showNotification('Belge başarıyla silindi.', 'success');
+
+            } catch (error) {
+                console.error('Belge silme hatası:', error);
+                hideLoading();
+                showNotification('Belge silinirken bir hata oluştu: ' + error.message, 'error');
+            }
+        }
+
+        // Belgeleri Firestore'a kaydet
+        async function saveDocumentsToFirestore() {
+            try {
+                const suitRef = doc(db, 'suits', suitId);
+                await updateDoc(suitRef, {
+                    documents: currentDocuments
+                });
+            } catch (error) {
+                console.error('Belgeler kaydedilirken hata:', error);
+                throw error;
+            }
+        }
+
+        // Form submit
+        async function handleFormSubmit(e) {
+            e.preventDefault();
+            
+            if (!confirm('Değişiklikleri kaydetmek istediğinizden emin misiniz?')) {
+                return;
+            }
+
+            showLoading();
+
+            try {
+                // Güncellenecek veriyi hazırla
+                const updatedData = {
+                    'suitDetails.caseNo': document.getElementById('caseNo').value,
+                    'transactionType.alias': document.getElementById('suitType').value,
+                    'suitDetails.court': document.getElementById('court').value,
+                    'suitDetails.openingDate': document.getElementById('openedDate').value ? new Date(document.getElementById('openedDate').value) : null,
+                    'suitDetails.suitStatus': document.getElementById('suitStatus').value,
+                    'client.name': document.getElementById('clientName').value,
+                    'client.clientRole': document.getElementById('clientRole').value,
+                    'suitDetails.opposingParty': document.getElementById('opposingParty').value,
+                    'suitDetails.opposingCounsel': document.getElementById('opposingCounsel').value,
+                    'subjectAsset.title': document.getElementById('subjectAssetTitle').value,
+                    'suitDetails.description': document.getElementById('description').value,
+                    'documents': currentDocuments
+                };
+
+                // Firestore'da güncelle
+                const suitRef = doc(db, 'suits', suitId);
+                await updateDoc(suitRef, updatedData);
+
+                hideLoading();
+                showNotification('Dava başarıyla güncellendi!', 'success');
+                
+                setTimeout(() => {
+                    window.location.href = 'portfolio.html';
+                }, 1500);
+
+            } catch (error) {
+                console.error('Kaydetme hatası:', error);
+                hideLoading();
+                showNotification('Dava kaydedilirken bir hata oluştu: ' + error.message, 'error');
+            }
+        }
+    </script>
+
+    <script type="module" src="./js/layout-loader.js"></script>
+    <script type="module" src="./firebase-config.js"></script>
+</body>
+</html>
