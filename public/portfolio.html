@@ -315,7 +315,104 @@
 
         </main>
     </div>
+    
+    <!-- SUIT EDIT MODAL -->
+    <div id="suitEditModal" class="modal">
+        <div class="modal-content" style="max-width: 1000px;">
+            <div class="modal-header">
+                <h3>Dava Düzenle</h3>
+                <span class="modal-close" data-modal="suitEditModal">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div id="suitEditLoading" class="loading" style="display: none;">Yükleniyor...</div>
+                
+                <form id="suitEditForm" style="display: none;">
+                    <!-- Dava Bilgileri -->
+                    <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                        <h4 style="margin-top: 0;">Dava Bilgileri</h4>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                            <div>
+                                <label>Dava No *</label>
+                                <input type="text" id="editCaseNo" class="form-control" required>
+                            </div>
+                            <div>
+                                <label>Dava Türü *</label>
+                                <input type="text" id="editSuitType" class="form-control" required>
+                            </div>
+                            <div>
+                                <label>Mahkeme *</label>
+                                <input type="text" id="editCourt" class="form-control" required>
+                            </div>
+                            <div>
+                                <label>Açılış Tarihi</label>
+                                <input type="date" id="editOpenedDate" class="form-control">
+                            </div>
+                            <div style="grid-column: 1 / -1;">
+                                <label>Durum</label>
+                                <select id="editSuitStatus" class="form-control">
+                                    <option value="Devam Ediyor">Devam Ediyor</option>
+                                    <option value="Sonuçlandı">Sonuçlandı</option>
+                                    <option value="Beklemede">Beklemede</option>
+                                    <option value="Kapatıldı">Kapatıldı</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
 
+                    <!-- Taraflar -->
+                    <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                        <h4 style="margin-top: 0;">Taraflar</h4>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                            <div>
+                                <label>Müvekkil *</label>
+                                <input type="text" id="editClientName" class="form-control" required>
+                            </div>
+                            <div>
+                                <label>Müvekkil Rolü</label>
+                                <select id="editClientRole" class="form-control">
+                                    <option value="Davacı">Davacı</option>
+                                    <option value="Davalı">Davalı</option>
+                                    <option value="Müdahil">Müdahil</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label>Karşı Taraf</label>
+                                <input type="text" id="editOpposingParty" class="form-control">
+                            </div>
+                            <div>
+                                <label>Karşı Taraf Vekili</label>
+                                <input type="text" id="editOpposingCounsel" class="form-control">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Konu Varlık -->
+                    <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                        <h4 style="margin-top: 0;">Konu Varlık</h4>
+                        <div>
+                            <label>Varlık Adı</label>
+                            <input type="text" id="editSubjectAssetTitle" class="form-control">
+                        </div>
+                    </div>
+
+                    <!-- Açıklama -->
+                    <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                        <h4 style="margin-top: 0;">Açıklama</h4>
+                        <div>
+                            <textarea id="editDescription" class="form-control" rows="4" placeholder="Dava ile ilgili detaylı açıklama..."></textarea>
+                        </div>
+                    </div>
+
+                    <div style="text-align: right;">
+                        <button type="button" class="btn-secondary" onclick="document.getElementById('suitEditModal').classList.remove('show')">İptal</button>
+                        <button type="submit" class="btn-primary">
+                            <i class="fas fa-save"></i> Kaydet
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
     <div id="recordDetailModal" class="modal">
         <div class="modal-content">
             <span class="close-modal-btn" id="closeRecordDetailModal">&times;</span>
@@ -1494,8 +1591,8 @@
                     
                     if (button.classList.contains('edit-btn')) {
                         if (dataType === 'suit') {
-                            // Dava düzenleme sayfasına git
-                            window.location.href = `suit-edit.html?id=${recordId}`;
+                            // Dava düzenleme modalını aç
+                            openSuitEditModal(recordId);
                         } else {
                             window.location.href = `data-entry.html?id=${recordId}`;
                         }
@@ -2470,7 +2567,114 @@
                     }
                 });
             };
-        })();
+        // DAVA DÜZENLE FONKSİYONLARI
+        let currentEditingSuitId = null;
+
+        window.openSuitEditModal = async function(suitId) {
+            currentEditingSuitId = suitId;
+            const modal = document.getElementById('suitEditModal');
+            const loading = document.getElementById('suitEditLoading');
+            const form = document.getElementById('suitEditForm');
+            
+            modal.classList.add('show');
+            loading.style.display = 'block';
+            form.style.display = 'none';
+
+            try {
+                // Suits koleksiyonundan davayı bul
+                const suitsRef = collection(db, 'suits');
+                const suitsSnapshot = await getDocs(suitsRef);
+                
+                let suitData = null;
+                suitsSnapshot.forEach(doc => {
+                    if (doc.id === suitId) {
+                        suitData = { id: doc.id, ...doc.data() };
+                    }
+                });
+
+                if (!suitData) {
+                    alert('Dava kaydı bulunamadı!');
+                    modal.classList.remove('show');
+                    return;
+                }
+
+                // Form alanlarını doldur
+                document.getElementById('editCaseNo').value = suitData.suitDetails?.caseNo || '';
+                document.getElementById('editSuitType').value = suitData.transactionType?.alias || '';
+                document.getElementById('editCourt').value = suitData.suitDetails?.court || '';
+                
+                // Tarih formatını düzenle
+                if (suitData.suitDetails?.openingDate) {
+                    const date = new Date(suitData.suitDetails.openingDate.seconds * 1000);
+                    document.getElementById('editOpenedDate').value = date.toISOString().split('T')[0];
+                }
+                
+                document.getElementById('editSuitStatus').value = suitData.suitDetails?.suitStatus || 'Devam Ediyor';
+                document.getElementById('editClientName').value = suitData.client?.name || '';
+                document.getElementById('editClientRole').value = suitData.client?.clientRole || 'Davacı';
+                document.getElementById('editOpposingParty').value = suitData.suitDetails?.opposingParty || '';
+                document.getElementById('editOpposingCounsel').value = suitData.suitDetails?.opposingCounsel || '';
+                document.getElementById('editSubjectAssetTitle').value = suitData.subjectAsset?.title || '';
+                document.getElementById('editDescription').value = suitData.suitDetails?.description || '';
+
+                loading.style.display = 'none';
+                form.style.display = 'block';
+
+            } catch (error) {
+                console.error('Dava verileri yüklenirken hata:', error);
+                alert('Dava verileri yüklenirken bir hata oluştu.');
+                modal.classList.remove('show');
+            }
+        };
+
+        // Form submit handler
+        document.getElementById('suitEditForm')?.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            if (!confirm('Değişiklikleri kaydetmek istediğinizden emin misiniz?')) {
+                return;
+            }
+
+            try {
+                const btn = e.target.querySelector('button[type="submit"]');
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Kaydediliyor...';
+
+                // Güncellenecek veriyi hazırla
+                const updatedData = {
+                    'suitDetails.caseNo': document.getElementById('editCaseNo').value,
+                    'transactionType.alias': document.getElementById('editSuitType').value,
+                    'suitDetails.court': document.getElementById('editCourt').value,
+                    'suitDetails.openingDate': document.getElementById('editOpenedDate').value ? new Date(document.getElementById('editOpenedDate').value) : null,
+                    'suitDetails.suitStatus': document.getElementById('editSuitStatus').value,
+                    'client.name': document.getElementById('editClientName').value,
+                    'client.clientRole': document.getElementById('editClientRole').value,
+                    'suitDetails.opposingParty': document.getElementById('editOpposingParty').value,
+                    'suitDetails.opposingCounsel': document.getElementById('editOpposingCounsel').value,
+                    'subjectAsset.title': document.getElementById('editSubjectAssetTitle').value,
+                    'suitDetails.description': document.getElementById('editDescription').value
+                };
+
+                // Firestore'da güncelle
+                const suitRef = doc(db, 'suits', currentEditingSuitId);
+                await updateDoc(suitRef, updatedData);
+
+                alert('Dava başarıyla güncellendi!');
+                document.getElementById('suitEditModal').classList.remove('show');
+                
+                // Tabloyu yenile
+                await loadPortfolioData();
+
+            } catch (error) {
+                console.error('Kaydetme hatası:', error);
+                alert('Dava kaydedilirken bir hata oluştu: ' + error.message);
+            } finally {
+                const btn = e.target.querySelector('button[type="submit"]');
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-save"></i> Kaydet';
+            }
+        });
+      })();
     </script>
 </body>
 </html>
