@@ -1,0 +1,203 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+
+/* ===== DARK MODE (Varsayılan) ===== */
+body.dark-mode {
+    font-family: 'Poppins', sans-serif; 
+    background-color: #2b2d31; 
+    color: #e0e0e0; 
+    transition: background-color 0.5s, color 0.5s;
+}
+
+.dark-mode #sidebar { 
+    background-color: #36393e; 
+    box-shadow: 2px 0 10px rgba(0,0,0,0.2);
+}
+
+.dark-mode #sidebar .nav-link { 
+    color: #b0b8c0;
+}
+
+.dark-mode #sidebar .nav-link:hover {
+    background-color: #3a3f45;
+    color: #b0b8c0;
+    transform: translateX(3px);
+}
+
+.dark-mode #sidebar .nav-link.active {
+    background-color: #40444b;
+    color: #4da6ff; 
+    transform: translateX(5px);
+}
+
+.dark-mode .header-title { 
+    color: #f8f9fa;
+}
+
+.dark-mode .lead { 
+    color: #b0b8c0; 
+}
+
+.dark-mode .card { 
+    background-color: #36393e; 
+    color: #e0e0e0;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1), box-shadow 0.3s;
+}
+
+.dark-mode .card:hover {
+    transform: translateY(-8px);
+    box-shadow: 0 12px 24px rgba(0,0,0,0.4);
+}
+
+.dark-mode .card-header {
+    background-color: #40444b;
+    border-bottom: 1px solid #585b63;
+    color: #f8f9fa;
+}
+
+.dark-mode .table-responsive {
+    background-color: #36393e;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+.dark-mode .table { 
+    color: #e0e0e0; 
+}
+
+.dark-mode .table thead th { 
+    border-bottom: 2px solid #585b63; 
+    color: #f8f9fa; 
+    font-weight: 600; 
+}
+
+.dark-mode .table tbody tr:hover { 
+    background-color: #40444b; 
+    color: #e0e0e0 !important;
+}
+
+.dark-mode .table tbody tr:hover a {
+    color: #4da6ff !important;
+}
+
+.dark-mode .badge-filed { background-color: #4da6ff; color: #1e3c72; }
+.dark-mode .badge-registered { background-color: #5cb85c; color: #1a3b1c; }
+.dark-mode .badge-objection { background-color: #f0ad4e; color: #4e351b; }
+.dark-mode .badge-rejected { background-color: #d9534f; color: #3d1b1a; }
+.dark-mode .badge-partially-paid { background-color: #ff8c00; color: #fff; font-weight: 600; }
+.dark-mode .badge-warning { background-color: #ffc107; color: #000; }
+
+/* ===== LIGHT MODE ===== */
+body.light-mode {
+    font-family: 'Poppins', sans-serif;
+    background-color: #f5f7fa;
+    color: #333;
+    transition: background-color 0.5s, color 0.5s;
+}
+
+.light-mode #sidebar {
+    background-color: #ffffff;
+    box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+}
+
+.light-mode #sidebar .nav-link {
+    color: #495057;
+}
+
+.light-mode #sidebar .nav-link:hover {
+    background-color: #e9ecef;
+    color: #495057;
+    transform: translateX(3px);
+}
+
+.light-mode #sidebar .nav-link.active {
+    background-color: #e3f2fd;
+    color: #1e88e5;
+    transform: translateX(5px);
+}
+
+.light-mode .header-title {
+    color: #212529;
+}
+
+.light-mode .lead {
+    color: #495057;
+}
+
+.light-mode .card {
+    background-color: #ffffff;
+    color: #333;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1), box-shadow 0.3s;
+}
+
+.light-mode .card:hover {
+    transform: translateY(-8px);
+    box-shadow: 0 12px 24px rgba(0,0,0,0.15);
+}
+
+.light-mode .card-header {
+    background-color: #f8f9fa;
+    border-bottom: 1px solid #dee2e6;
+    color: #212529;
+}
+
+.light-mode .table-responsive {
+    background-color: #ffffff;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.light-mode .table {
+    color: #333;
+}
+
+.light-mode .table thead th {
+    border-bottom: 2px solid #dee2e6;
+    color: #212529;
+    font-weight: 600;
+}
+
+.light-mode .table tbody tr:hover {
+    background-color: #f8f9fa;
+    color: #333 !important;
+}
+
+.light-mode .table tbody tr:hover a {
+    color: #1e88e5 !important;
+}
+
+.light-mode .badge-filed { background-color: #e3f2fd; color: #1565c0; }
+.light-mode .badge-registered { background-color: #e8f5e9; color: #2e7d32; }
+.light-mode .badge-objection { background-color: #fff3e0; color: #e65100; }
+.light-mode .badge-rejected { background-color: #ffebee; color: #c62828; }
+.light-mode .badge-partially-paid { background-color: #ff8c00; color: #fff; font-weight: 600; }
+.light-mode .badge-warning { background-color: #ffc107; color: #000; }
+
+/* ===== Sıralanabilir Tablo Başlıkları ===== */
+.sortable {
+    cursor: pointer;
+    user-select: none;
+    position: relative;
+    padding-right: 20px !important;
+}
+
+.sortable:hover {
+    background-color: rgba(0, 0, 0, 0.05);
+}
+
+.dark-mode .sortable:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+.sortable i.fa-sort,
+.sortable i.fa-sort-up,
+.sortable i.fa-sort-down {
+    font-size: 0.75em;
+    opacity: 0.5;
+    margin-left: 5px;
+}
+
+.sortable:hover i.fa-sort,
+.sortable:hover i.fa-sort-up,
+.sortable:hover i.fa-sort-down {
+    opacity: 1;
+}
