@@ -315,104 +315,6 @@
 
         </main>
     </div>
-    
-    <!-- SUIT EDIT MODAL -->
-    <div id="suitEditModal" class="modal">
-        <div class="modal-content" style="max-width: 1000px;">
-            <div class="modal-header">
-                <h3>Dava Düzenle</h3>
-                <span class="modal-close" data-modal="suitEditModal">&times;</span>
-            </div>
-            <div class="modal-body">
-                <div id="suitEditLoading" class="loading" style="display: none;">Yükleniyor...</div>
-                
-                <form id="suitEditForm" style="display: none;">
-                    <!-- Dava Bilgileri -->
-                    <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
-                        <h4 style="margin-top: 0;">Dava Bilgileri</h4>
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
-                            <div>
-                                <label>Dava No *</label>
-                                <input type="text" id="editCaseNo" class="form-control" required>
-                            </div>
-                            <div>
-                                <label>Dava Türü *</label>
-                                <input type="text" id="editSuitType" class="form-control" required>
-                            </div>
-                            <div>
-                                <label>Mahkeme *</label>
-                                <input type="text" id="editCourt" class="form-control" required>
-                            </div>
-                            <div>
-                                <label>Açılış Tarihi</label>
-                                <input type="date" id="editOpenedDate" class="form-control">
-                            </div>
-                            <div style="grid-column: 1 / -1;">
-                                <label>Durum</label>
-                                <select id="editSuitStatus" class="form-control">
-                                    <option value="Devam Ediyor">Devam Ediyor</option>
-                                    <option value="Sonuçlandı">Sonuçlandı</option>
-                                    <option value="Beklemede">Beklemede</option>
-                                    <option value="Kapatıldı">Kapatıldı</option>
-                                </select>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Taraflar -->
-                    <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
-                        <h4 style="margin-top: 0;">Taraflar</h4>
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
-                            <div>
-                                <label>Müvekkil *</label>
-                                <input type="text" id="editClientName" class="form-control" required>
-                            </div>
-                            <div>
-                                <label>Müvekkil Rolü</label>
-                                <select id="editClientRole" class="form-control">
-                                    <option value="Davacı">Davacı</option>
-                                    <option value="Davalı">Davalı</option>
-                                    <option value="Müdahil">Müdahil</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label>Karşı Taraf</label>
-                                <input type="text" id="editOpposingParty" class="form-control">
-                            </div>
-                            <div>
-                                <label>Karşı Taraf Vekili</label>
-                                <input type="text" id="editOpposingCounsel" class="form-control">
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Konu Varlık -->
-                    <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
-                        <h4 style="margin-top: 0;">Konu Varlık</h4>
-                        <div>
-                            <label>Varlık Adı</label>
-                            <input type="text" id="editSubjectAssetTitle" class="form-control">
-                        </div>
-                    </div>
-
-                    <!-- Açıklama -->
-                    <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
-                        <h4 style="margin-top: 0;">Açıklama</h4>
-                        <div>
-                            <textarea id="editDescription" class="form-control" rows="4" placeholder="Dava ile ilgili detaylı açıklama..."></textarea>
-                        </div>
-                    </div>
-
-                    <div style="text-align: right;">
-                        <button type="button" class="btn-secondary" onclick="document.getElementById('suitEditModal').classList.remove('show')">İptal</button>
-                        <button type="submit" class="btn-primary">
-                            <i class="fas fa-save"></i> Kaydet
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
     <div id="recordDetailModal" class="modal">
         <div class="modal-content">
             <span class="close-modal-btn" id="closeRecordDetailModal">&times;</span>
@@ -1591,8 +1493,8 @@
                     
                     if (button.classList.contains('edit-btn')) {
                         if (dataType === 'suit') {
-                            // Dava düzenleme modalını aç
-                            openSuitEditModal(recordId);
+                            // Dava düzenleme sayfasına git
+                            window.location.href = `suit-detail.html?id=${recordId}`;
                         } else {
                             window.location.href = `data-entry.html?id=${recordId}`;
                         }
@@ -1600,8 +1502,8 @@
                     else if (button.classList.contains('delete-btn')) this.deleteRecord(recordId);
                     else if (button.classList.contains('view-btn')) {
                         if (dataType === 'suit') {
-                            // Dava modalını aç
-                            this.showSuitDetailModal(recordId);
+                            // Dava detay sayfasına git
+                            window.location.href = `suit-detail.html?id=${recordId}`;
                         } else {
                             const url = new URL('portfolio-detail.html', window.location.href);
                             url.searchParams.set('id', recordId);
