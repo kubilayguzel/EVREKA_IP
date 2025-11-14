@@ -2605,8 +2605,24 @@
                 
                 // Tarih formatını düzenle
                 if (suitData.suitDetails?.openingDate) {
-                    const date = new Date(suitData.suitDetails.openingDate.seconds * 1000);
-                    document.getElementById('editOpenedDate').value = date.toISOString().split('T')[0];
+                    try {
+                        let date;
+                        // Eğer Firestore Timestamp ise
+                        if (suitData.suitDetails.openingDate.seconds) {
+                            date = new Date(suitData.suitDetails.openingDate.seconds * 1000);
+                        } 
+                        // Eğer string veya Date ise
+                        else {
+                            date = new Date(suitData.suitDetails.openingDate);
+                        }
+                        
+                        // Geçerli tarih kontrolü
+                        if (!isNaN(date.getTime())) {
+                            document.getElementById('editOpenedDate').value = date.toISOString().split('T')[0];
+                        }
+                    } catch (e) {
+                        console.warn('Tarih formatı hatası:', e);
+                    }
                 }
                 
                 document.getElementById('editSuitStatus').value = suitData.suitDetails?.suitStatus || 'Devam Ediyor';
