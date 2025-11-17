@@ -158,172 +158,304 @@ const ETEBS_ERROR_CODES = {
 
 // ETEBS API Proxy Function (Toptan Kayıt Modeli)
 export const etebsProxyV2 = onRequest(
-    {
-        region: 'europe-west1',
-        timeoutSeconds: 120, // Tek çağrıda çok iş yapılacağı için 2 dakikaya çıkarıldı
-        memory: '512MiB'     // Bellek de artırıldı
-    },
-    async (req, res) => {
-        return corsHandler(req, res, async () => {
-            if (req.method !== 'POST') {
-                return res.status(405).json({ success: false, error: 'Method not allowed' });
-            }
+  {
+    region: 'europe-west1',
+    timeoutSeconds: 120, // Tek çağrıda çok iş yapılacağı için 2 dakikaya çıkarıldı
+    memory: '512MiB'     // Bellek de artırıldı
+  },
+  async (req, res) => {
+    return corsHandler(req, res, async () => {
+      if (req.method !== 'POST') {
+        return res.status(405).json({ success: false, error: 'Method not allowed' });
+      }
 
-            try {
-                const { action, token, userId } = req.body;
-                
-                if (!action || !token || !userId) {
-                    return res.status(400).json({ success: false, error: 'Missing required parameters (action, token, or userId)' });
-                }
-                
-                let etebsData = null;
+      try {
+        const { action, token, userId } = req.body;
 
-                if (action !== 'process-daily-batch') {
-                     return res.status(400).json({ 
-                        success: false, 
-                        error: 'Invalid action. Only "process-daily-batch" is supported for ETEBS integration.' 
-                    });
-                }
+        // Temel parametre kontrolü
+        if (!action || !token || !userId) {
+          return res.status(400).json({
+            success: false,
+            error: 'Missing required parameters (action, token, or userId)'
+          });
+        }
 
-                // --- 1. GÜNLÜK TEBLİGAT LİSTESİNİ AL (API Call 1) ---
-                let apiUrl = 'https://epats.turkpatent.gov.tr/service/TP/DAILY_NOTIFICATIONS?apikey=etebs';
-                
-                const listResponse = await fetch(apiUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ TOKEN: token }),
-                    timeout: 30000
-                });
-                
-                if (!listResponse.ok) {
-                    throw new Error(`ETEBS List API HTTP ${listResponse.status}: ${listResponse.statusText}`);
-                }
-                
-                const listResult = await listResponse.json();
-                
-                // Gelen data yapısını kontrol et ve normalize et (örnek yanıta göre diziyi al)
-                const notifications = Array.isArray(listResult) ? listResult : (Array.isArray(listResult.notifications) ? listResult.notifications : []);
+        // Şu an sadece process-daily-batch destekleniyor
+        if (action !== 'process-daily-batch') {
+          return res.status(400).json({
+            success: false,
+            error: 'Invalid action. Only "process-daily-batch" is supported for ETEBS integration.'
+          });
+        }
 
-                console.log(`📊 ${notifications.length} tebligat bulundu. Batch indirme başlıyor...`);
-                
-                const savedDocuments = [];
-                const downloadFailures = [];
+        let etebsData = null;
 
-                // --- 2. HER BİR TEBLİGAT İÇİN PDF İNDİR VE KALICI KAYDET ---
-                const downloadQueue = notifications; 
+        // --- 1. GÜNLÜK TEBLİGAT LİSTESİNİ AL (API Call 1) ---
+        const listApiUrl =
+          'https://epats.turkpatent.gov.tr/service/TP/DAILY_NOTIFICATIONS?apikey=etebs';
 
-                for (let i = 0; i < downloadQueue.length; i++) {
-                    const notification = downloadQueue[i];
-                    const docNo = notification.EVRAK_NO;
-                    const belgeAciklamasi = notification.BELGE_ACIKLAMASI || "Belge";
-
-                    // Zaten bu evrakın Firebase'e kaydedilip kaydedilmediğini kontrol et
-                    const existingQuery = await adminDb.collection('unindexed_pdfs')
-                        .where('evrakNo', '==', docNo)
-                        .limit(1)
-                        .get();
-                        
-                    if (!existingQuery.empty) {
-                        const existingDoc = existingQuery.docs[0].data();
-                        savedDocuments.push({ ...existingDoc, id: existingQuery.docs[0].id, isPreExisting: true });
-                        console.log(`🔍 Kayıt zaten mevcut, indirme atlandı: ${docNo}`);
-                        continue; 
-                    }
-
-                    try {
-                        console.log(`⬇️ ${i + 1}/${downloadQueue.length} indirme: ${docNo}`);
-
-                        // 2a. DOWNLOAD_DOCUMENT API çağrısı (TEK HAKKI KULLAN)
-                        const downloadApiUrl = 'https://epats.turkpatent.gov.tr/service/TP/DOWNLOAD_DOCUMENT?apikey=etebs';
-                        const downloadReqBody = { TOKEN: token, DOCUMENT_NO: docNo };
-
-                        const downloadResponse = await fetch(downloadApiUrl, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify(downloadReqBody),
-                            timeout: 30000 
-                        });
-
-                        const downloadRawData = await downloadResponse.json();
-                        const downloadData = downloadRawData.DownloadDocumentResult || [];
-                        
-                        // ETEBS API Hata Kontrolü
-                        if (downloadRawData.IslemSonucKod && downloadRawData.IslemSonucKod !== '000') {
-                             const errorMsg = ETEBS_ERROR_CODES[downloadRawData.IslemSonucKod] || 'Bilinmeyen hata';
-                             downloadFailures.push({ docNo, reason: errorMsg, code: downloadRawData.IslemSonucKod, notification });
-                             console.warn(`❌ İndirme başarısız: ${docNo} - ${errorMsg}`);
-                             continue; 
-                        }
-                        
-                        if (downloadData.length > 0) {
-                            const base64Data = downloadData[0].BASE64;
-                            
-                            if (!base64Data || !base64Data.trim()) {
-                                downloadFailures.push({ docNo, reason: 'BASE64 veri dönmedi', code: '006', notification });
-                                continue;
-                            }
-
-                            // 2b. Firebase Storage'a yükle
-                            const pdfBuffer = Buffer.from(base64Data, 'base64');
-                            const safeDesc = belgeAciklamasi.replace(/[^a-zA-Z0-9_-]+/gi, '_').slice(0, 50);
-                            const fileName = `${docNo}_${safeDesc}.pdf`;
-                            const storagePath = `etebs_documents/${userId}/${docNo}/${fileName}`;
-                            
-                            const file = admin.storage().bucket().file(storagePath);
-                            await file.save(pdfBuffer, { contentType: 'application/pdf' });
-                            const fileUrl = `https://storage.googleapis.com/${admin.storage().bucket().name}/${storagePath}`;
-
-                            // 2c. Firestore'a kaydet (unindexed_pdfs)
-                            const firestoreDocRef = adminDb.collection('unindexed_pdfs').doc();
-                            const docData = {
-                                evrakNo: docNo,
-                                belgeAciklamasi: belgeAciklamasi,
-                                dosyaNo: notification.DOSYA_NO,
-                                dosyaTuru: notification.DOSYA_TURU,
-                                fileUrl: fileUrl,
-                                filePath: storagePath,
-                                uploadedAt: admin.firestore.FieldValue.serverTimestamp(),
-                                userId: userId,
-                                source: 'etebs',
-                                status: 'pending', 
-                                unindexedPdfId: firestoreDocRef.id // Kendi ID'si
-                            };
-                            
-                            await firestoreDocRef.set(docData);
-                            savedDocuments.push(docData);
-                            console.log(`✅ Yeni Kaydedildi: ${docNo}`);
-
-                        } else {
-                            downloadFailures.push({ docNo, reason: 'API başarılı ancak evrak boş döndü', code: 'API_EMPTY', notification });
-                        }
-                    } catch (downloadError) {
-                        console.error(`❌ ${docNo} indirme hatası:`, downloadError);
-                        downloadFailures.push({ docNo, reason: downloadError.message, code: 'PROXY_ERROR', notification });
-                    }
-                }
-
-                // 3. İSTEMCİYE ÖZET DÖNDÜR
-                etebsData = {
-                    success: true,
-                    message: `Batch tamamlandı. ${notifications.length} tebligat bulundu. ${savedDocuments.length} kayıt oluşturuldu/güncellendi.`,
-                    notifications: notifications,
-                    savedDocuments: savedDocuments, 
-                    failures: downloadFailures
-                };
-                
-                res.json({ success: true, data: etebsData, timestamp: new Date().toISOString() });
-
-            } catch (error) {
-                 res.status(500).json({
-                    success: false,
-                    error: 'Internal proxy error',
-                    code: 'PROXY_ERROR',
-                    message: error.message
-                });
-            }
+        const listResponse = await fetch(listApiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ TOKEN: token })
         });
-    }
+
+        if (!listResponse.ok) {
+          throw new Error(
+            `ETEBS List API HTTP ${listResponse.status}: ${listResponse.statusText}`
+          );
+        }
+
+        const listResult = await listResponse.json();
+
+        // Liste servisi için IslemSonucKod kontrolü
+        if (listResult && listResult.IslemSonucKod && listResult.IslemSonucKod !== '000') {
+          const errorMsg =
+            ETEBS_ERROR_CODES[listResult.IslemSonucKod] ||
+            listResult.IslemSonucAck ||
+            'Bilinmeyen liste hatası';
+
+          return res.status(400).json({
+            success: false,
+            error: errorMsg,
+            code: listResult.IslemSonucKod
+          });
+        }
+
+        // Gelen data yapısını normalize et
+        let notifications = [];
+        if (Array.isArray(listResult)) {
+          // Dokümandaki örneğe göre doğrudan dizi gelebilir
+          notifications = listResult;
+        } else if (Array.isArray(listResult.DAILY_NOTIFICATIONSResult)) {
+          notifications = listResult.DAILY_NOTIFICATIONSResult;
+        } else if (Array.isArray(listResult.DailyNotificationsResult)) {
+          notifications = listResult.DailyNotificationsResult;
+        } else if (Array.isArray(listResult.notifications)) {
+          // Mevcut front-end ile uyumlu
+          notifications = listResult.notifications;
+        }
+
+        console.log(
+          `📊 ${notifications.length} tebligat bulundu. Batch indirme başlıyor...`
+        );
+
+        // --- 2. HER BİR TEBLİGAT İÇİN PDF İNDİR VE KALICI KAYDET ---
+        const savedDocuments = [];
+        const downloadFailures = [];
+        const downloadQueue = notifications;
+
+        for (let i = 0; i < downloadQueue.length; i++) {
+          const notification = downloadQueue[i];
+
+          // EVRAK_NO her durumda string'e normalize edilsin
+          const docNo = String(
+            notification.EVRAK_NO || notification.evrakNo || ''
+          ).trim();
+
+          const belgeAciklamasi =
+            notification.BELGE_ACIKLAMASI ||
+            notification.belgeAciklamasi ||
+            'Belge';
+
+          if (!docNo) {
+            downloadFailures.push({
+              docNo: null,
+              reason: 'Geçersiz EVRAK_NO',
+              code: '004',
+              notification
+            });
+            continue;
+          }
+
+          // Daha önce bu evrak için PDF kaydı açılmış mı?
+          const existingQuery = await adminDb
+            .collection('unindexed_pdfs')
+            .where('evrakNo', '==', docNo)
+            .limit(1)
+            .get();
+
+          if (!existingQuery.empty) {
+            const existingDocSnap = existingQuery.docs[0];
+            const existingDoc = existingDocSnap.data();
+            savedDocuments.push({
+              ...existingDoc,
+              id: existingDocSnap.id,
+              isPreExisting: true
+            });
+            console.log(
+              `🔍 Kayıt zaten mevcut, indirme atlandı: ${docNo}`
+            );
+            continue;
+          }
+
+          try {
+            console.log(
+              `⬇️ ${i + 1}/${downloadQueue.length} indirme: ${docNo}`
+            );
+
+            // 2a. DOWNLOAD_DOCUMENT API çağrısı (TEK HAKKI KULLAN)
+            const downloadApiUrl =
+              'https://epats.turkpatent.gov.tr/service/TP/DOWNLOAD_DOCUMENT?apikey=etebs';
+
+            const downloadReqBody = {
+              TOKEN: token,
+              DOCUMENT_NO: docNo // Dokümanda string GUID + evrak no
+            };
+
+            const downloadResponse = await fetch(downloadApiUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(downloadReqBody),
+              timeout: 30000
+            });
+
+            if (!downloadResponse.ok) {
+              throw new Error(
+                `ETEBS Download API HTTP ${downloadResponse.status}: ${downloadResponse.statusText}`
+              );
+            }
+
+            const downloadRawData = await downloadResponse.json();
+
+            // 2a-1. ETEBS API Hata Kontrolü (IslemSonucKod)
+            const downloadErrorCode =
+              downloadRawData?.IslemSonucKod ||
+              downloadRawData?.DownloadDocumentResult?.IslemSonucKod;
+
+            if (downloadErrorCode && downloadErrorCode !== '000') {
+              const errorMsg =
+                ETEBS_ERROR_CODES[downloadErrorCode] ||
+                downloadRawData?.IslemSonucAck ||
+                downloadRawData?.DownloadDocumentResult?.IslemSonucAck ||
+                'Bilinmeyen indirme hatası';
+
+              downloadFailures.push({
+                docNo,
+                reason: errorMsg,
+                code: downloadErrorCode,
+                notification
+              });
+              console.warn(
+                `❌ İndirme başarısız: ${docNo} - ${errorMsg}`
+              );
+              continue;
+            }
+
+            // 2a-2. DownloadDocumentResult içindeki PDF'leri normalize et
+            let downloadData = [];
+            const resultNode =
+              downloadRawData?.DownloadDocumentResult || downloadRawData;
+
+            // Dokümandaki örneğe göre doğrudan dizi dönebilir
+            if (Array.isArray(resultNode)) {
+              downloadData = resultNode;
+            } else if (Array.isArray(resultNode?.DownloadDocumentRes)) {
+              // Bazı servislerde bu isimle dizi dönebiliyor, defansif bıraktık
+              downloadData = resultNode.DownloadDocumentRes;
+            } else if (resultNode && resultNode.BASE64) {
+              // Tek obje dönüyorsa
+              downloadData = [resultNode];
+            }
+
+            if (!downloadData.length) {
+              downloadFailures.push({
+                docNo,
+                reason: 'API başarılı ancak evrak boş döndü',
+                code: 'API_EMPTY',
+                notification
+              });
+              console.warn(`⚠️ İndirme boş döndü: ${docNo}`);
+              continue;
+            }
+
+            const firstAttachment = downloadData[0];
+            const base64Data = firstAttachment.BASE64;
+
+            if (!base64Data || !String(base64Data).trim()) {
+              downloadFailures.push({
+                docNo,
+                reason: 'BASE64 veri dönmedi',
+                code: '006', // Evraka Ait Ek Bulunamadı
+                notification
+              });
+              console.warn(`⚠️ BASE64 veri yok: ${docNo}`);
+              continue;
+            }
+
+            // 2b. Firebase Storage'a yükle
+            const pdfBuffer = Buffer.from(base64Data, 'base64');
+            const safeDesc = (belgeAciklamasi || 'Belge')
+              .replace(/[^a-zA-Z0-9_-]+/gi, '_')
+              .slice(0, 50);
+            const fileName = `${docNo}_${safeDesc}.pdf`;
+            const storagePath = `etebs_documents/${userId}/${docNo}/${fileName}`;
+
+            const file = admin.storage().bucket().file(storagePath);
+            await file.save(pdfBuffer, { contentType: 'application/pdf' });
+
+            const fileUrl = `https://storage.googleapis.com/${admin.storage().bucket().name}/${storagePath}`;
+
+            // 2c. Firestore'a kaydet (unindexed_pdfs)
+            const firestoreDocRef = adminDb
+              .collection('unindexed_pdfs')
+              .doc();
+
+            const docData = {
+              evrakNo: docNo,
+              belgeAciklamasi,
+              dosyaNo: notification.DOSYA_NO || notification.dosyaNo || null,
+              dosyaTuru:
+                notification.DOSYA_TURU || notification.dosyaTuru || null,
+              fileUrl,
+              filePath: storagePath,
+              uploadedAt: admin.firestore.FieldValue.serverTimestamp(),
+              userId,
+              source: 'etebs',
+              status: 'pending',
+              unindexedPdfId: firestoreDocRef.id // Kendi ID'si
+            };
+
+            await firestoreDocRef.set(docData);
+            savedDocuments.push(docData);
+            console.log(`✅ Yeni kaydedildi: ${docNo}`);
+          } catch (downloadError) {
+            console.error(`❌ ${docNo} indirme hatası:`, downloadError);
+            downloadFailures.push({
+              docNo,
+              reason: downloadError.message,
+              code: 'PROXY_ERROR',
+              notification
+            });
+          }
+        }
+
+        // 3. İSTEMCİYE ÖZET DÖNDÜR
+        etebsData = {
+          success: true,
+          message: `Batch tamamlandı. ${notifications.length} tebligat bulundu. ${savedDocuments.length} kayıt oluşturuldu/güncellendi.`,
+          notifications,
+          savedDocuments,
+          failures: downloadFailures
+        };
+
+        res.json({
+          success: true,
+          data: etebsData,
+          timestamp: new Date().toISOString()
+        });
+      } catch (error) {
+        res.status(500).json({
+          success: false,
+          error: 'Internal proxy error',
+          code: 'PROXY_ERROR',
+          message: error.message
+        });
+      }
+    });
+  }
 );
+
 
 // Health Check Function (v2 sözdizimi)
 export const etebsProxyHealthV2 = onRequest(
