@@ -4680,9 +4680,7 @@ $(document).on('click', '.task-card-link', function() {
             // Eğer diğer kartlar tıklanırsa (Patent, Tasarım), detay kartlarını gizle.
             if (targetArea !== 'marka-tasks') {
                 $tasksDetail.hide();
-                // Yapım aşamasında mesajı
-                $tasksHeader.text(headerText + ' - Yapım Aşamasında');
-                $tasksLead.text('Bu kategoriye ait alt işlemler henüz tanımlanmadı. Lütfen Marka İşlemleri sekmesini kullanın.');
+
             } else {
                  // Marka seçiliyse, detay kartlarının başlığını uygun şekilde ayarla
                  $tasksHeader.text('Marka İşlemleri');
@@ -4697,8 +4695,7 @@ $(document).on('click', '.task-card-link', function() {
         $tasksDetail.slideUp(300);
         $tasksDetail.data('current-area', '');
         // Yapım aşamasında mesajı
-        $tasksHeader.text(headerText + ' - Yapım Aşamasında');
-        $tasksLead.text('Bu kategoriye ait alt işlemler henüz tanımlanmadı. Lütfen Marka İşlemleri sekmesini kullanın.');
+
     }
 });
 
