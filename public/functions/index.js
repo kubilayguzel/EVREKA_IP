@@ -5354,6 +5354,29 @@ async function resolveApprovalAssignee(adminDb, taskTypeId = "22") {
 
   return { uid, email, reason: "ok" };
 }
+
+// Türkçe tarih formatını (GG.AA.YYYY veya GG/AA/YYYY) parse eden yardımcı fonksiyon
+function parseTurkishDate(dateStr) {
+  if (!dateStr || typeof dateStr !== 'string') return null;
+  
+  // GG.AA.YYYY veya GG/AA/YYYY formatını kontrol et
+  const match = dateStr.match(/^(\d{1,2})[./](\d{1,2})[./](\d{4})$/);
+  if (match) {
+    const day = parseInt(match[1], 10);
+    const month = parseInt(match[2], 10) - 1; // JavaScript ayları 0-indexed
+    const year = parseInt(match[3], 10);
+    const d = new Date(year, month, day);
+    // Geçerli tarih kontrolü
+    if (!isNaN(d.getTime()) && d.getDate() === day && d.getMonth() === month && d.getFullYear() === year) {
+      return d;
+    }
+  }
+  
+  // ISO formatı veya diğer formatları dene
+  const d = new Date(dateStr);
+  return isNaN(d.getTime()) ? null : d;
+}
+
 export const checkAndCreateRenewalTasks = onCall({ region: "europe-west1" }, async (request) => {
   logger.log('🔄 Renewal task check started manually with updated rules');
 
@@ -5415,18 +5438,20 @@ export const checkAndCreateRenewalTasks = onCall({ region: "europe-west1" }, asy
       if (ipRecord.renewalDate) {
         if (typeof ipRecord.renewalDate?.toDate === 'function') {
           renewalDate = ipRecord.renewalDate.toDate();
-        } else if (typeof ipRecord.renewalDate === 'string' || ipRecord.renewalDate instanceof Date) {
-          const d = new Date(ipRecord.renewalDate);
-          renewalDate = isNaN(d.getTime()) ? null : d;
+        } else if (typeof ipRecord.renewalDate === 'string') {
+          renewalDate = parseTurkishDate(ipRecord.renewalDate);
+        } else if (ipRecord.renewalDate instanceof Date) {
+          renewalDate = isNaN(ipRecord.renewalDate.getTime()) ? null : ipRecord.renewalDate;
         }
       }
       if (!renewalDate && ipRecord.applicationDate) {
         let appDate = null;
         if (typeof ipRecord.applicationDate?.toDate === 'function') {
           appDate = ipRecord.applicationDate.toDate();
-        } else if (typeof ipRecord.applicationDate === 'string' || ipRecord.applicationDate instanceof Date) {
-          const d = new Date(ipRecord.applicationDate);
-          appDate = isNaN(d.getTime()) ? null : d;
+        } else if (typeof ipRecord.applicationDate === 'string') {
+          appDate = parseTurkishDate(ipRecord.applicationDate);
+        } else if (ipRecord.applicationDate instanceof Date) {
+          appDate = isNaN(ipRecord.applicationDate.getTime()) ? null : ipRecord.applicationDate;
         }
         if (appDate) {
           const d = new Date(appDate);
