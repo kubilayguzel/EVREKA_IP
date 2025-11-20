@@ -672,6 +672,188 @@ window.fetchAndDisplaySuits = async function() {
     }
 };
 
+// === BELGE LİNKİ OLUŞTURMA FONKSİYONU (SADECE İKON) ===
+function _createDocLinkHtml(pdf) {
+    let iconClass = 'fas fa-file-pdf';
+    let titleText = pdf.fileName || 'Belge';
+    let iconColor = '#dc3545'; // Kırmızı (PDF)
+    let badgeHtml = '';
+
+    if (pdf.type === 'opposition_petition') {
+        iconClass = 'fas fa-gavel';
+        titleText = 'Karşı Taraf İtiraz Dilekçesi';
+        iconColor = '#ffc107'; // Sarı
+    } else if (pdf.type === 'official_document') {
+        iconClass = 'fas fa-file-signature';
+        titleText = 'Resmi Yazı';
+        iconColor = '#17a2b8'; // Mavi
+    } else if (pdf.type === 'epats_document') {
+        iconClass = 'fas fa-file-invoice';
+        titleText = `ePats: ${pdf.evrakNo || pdf.fileName}`;
+        iconColor = '#007bff'; // Koyu mavi
+        if (pdf.evrakNo) {
+            badgeHtml = `<span style="font-size:0.7em; margin-left:2px;">${pdf.evrakNo}</span>`;
+        }
+    } else if (pdf.type === 'task_document' || pdf.isTaskDoc) {
+        iconClass = 'fas fa-file-alt';
+        titleText = 'Görev Belgesi: ' + pdf.fileName;
+        iconColor = '#6c757d'; // Gri
+    } else if (pdf.isParentDoc) {
+        iconClass = 'fas fa-file-pdf';
+        titleText = 'Parent Belge: ' + pdf.fileName;
+        iconColor = '#17a2b8'; // Mavi
+    } else if (pdf.isTransactionDoc || pdf.isManualDoc) {
+        iconClass = 'fas fa-file-alt';
+        iconColor = '#6c757d'; // Gri
+    }
+
+    return `
+        <a href="${pdf.fileUrl}" 
+           target="_blank" 
+           title="${titleText}"
+           style="color:${iconColor}; text-decoration:none; margin-right:8px; font-size:1.2em; display:inline-block;">
+            <i class="${iconClass}"></i>${badgeHtml}
+        </a>
+    `;
+}
+
+// === PARENT VE CHILD İÇİN EVRAK HÜCRESİ OLUŞTURMA ===
+function renderDocsCell(rowData) {
+    // Parent için allParentDocs, Child için allChildDocs kullan
+    const docs = rowData.allParentDocs || rowData.allChildDocs || (Array.isArray(rowData.documents) ? rowData.documents : []);
+    
+    if (!docs || docs.length === 0) {
+        return '<span class="text-muted">-</span>';
+    }
+    
+    const docLinks = docs.map(doc => {
+        // Eğer doc zaten formatlanmış bir belge objesi ise direkt kullan
+        if (doc.fileUrl && doc.fileName) {
+            return _createDocLinkHtml(doc);
+        }
+        
+        // Değilse, eski formattan dönüştür
+        const fileName = doc.name || doc.fileName || 'Belge';
+        const fileUrl = doc.downloadURL || doc.url || doc.path || doc.fileUrl;
+        
+        if (!fileUrl) return '';
+        
+        return _createDocLinkHtml({
+            fileName: fileName,
+            fileUrl: fileUrl,
+            type: doc.type,
+            isTransactionDoc: true
+        });
+    }).filter(Boolean).join('');
+    
+    return docLinks || '<span class="text-muted">-</span>';
+}
+
+// Tabloyu render eden fonksiyon (GLOBAL)
+window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
+    console.log(`📊 İtiraz Tablosu render ediliyor, sayfa ${Math.floor(startIndex / (window.davaItirazPaginationData.itemsPerPage || 10)) + 1}, ${parentRowsSlice.length} parent satır`);
+    const tbody = document.getElementById('dava-itiraz-tbody');
+    if (!tbody) return;
+    
+    tbody.innerHTML = '';
+    const allData = window.davaItirazPaginationData.allData || []; // Tüm veriyi (parent+child) al
+    
+    // Kolon sayısı 11 oldu (Marka Örneği eklendi)
+    if (parentRowsSlice.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="11" class="text-center text-muted">Henüz itiraz kaydı bulunmamaktadır.</td></tr>';
+        return;
+    }
+
+    parentRowsSlice.forEach((row, index) => {
+        const parentIndex = startIndex + index + 1; // Gerçek sıra no
+        
+        if (row.isParent) {
+            const tr = document.createElement('tr');
+            tr.setAttribute('data-origin', (row.origin || 'TÜRKPATENT'));
+            
+            const iconHtml = row.hasChildren ? '<i class="fas fa-chevron-right mr-2"></i>' : '';
+            
+        if (row.hasChildren) {
+                // ✅ DÜZELTME: Benzersiz accordion ID kullan (recordId + transactionId)
+                const uniqueAccordionId = `itiraz-accordion-${row.recordId}-${row.id}`;
+                
+                tr.classList.add('accordion-header-row');
+                tr.setAttribute('data-toggle', 'collapse');
+                tr.setAttribute('data-target', `#${uniqueAccordionId}`);
+                tr.setAttribute('aria-expanded', 'false');
+                tr.setAttribute('aria-controls', uniqueAccordionId);
+        }
+            // ✅ Marka görselini hazırla
+            const imgHtml = row.brandImageUrl 
+                ? `<img src="${row.brandImageUrl}" alt="marka" class="brand-thumb">` 
+                : '-';
+            
+            // HTML'i 11 kolon olarak güncelle
+            tr.innerHTML = `
+                <td>${iconHtml}${parentIndex}</td>
+                <td class="col-sample text-center">${imgHtml}</td>
+                <td><a href="#" class="portfolio-detail-link" data-item-id="${row.recordId}" data-toggle="modal" data-target="#portfolioDetailModal">${row.title}</a></td>
+                <td>${row.transactionTypeName}</td>
+                <td>${row.applicationNumber}</td>
+                <td>${row.applicantName}</td>
+                <td>${row.bulletinDate}</td>
+                <td>${row.bulletinNo}</td>
+                <td>${row.epatsDate}</td>
+                <td><span class="badge badge-warning">${row.statusText}</span></td>
+                <td class="col-docs">${renderDocsCell(row)}</td>
+            `;
+            tbody.appendChild(tr);
+            
+                if (row.hasChildren) {
+                // 1) Child kayıtları topla
+                const childRows = allData.filter(r => !r.isParent && r.parentId === row.id);
+                if (!childRows.length) return; // çocuk yoksa tablo üretme
+
+                // 2) Parent tablodaki toplam kolon sayısını otomatik bul (colspan sabitini kırma)
+                const colSpan =
+                    tbody.closest('table')?.querySelectorAll('thead th').length || 11;
+
+                // 3) Benzersiz collapse hedefi
+                const uniqueAccordionId = `itiraz-accordion-${row.recordId}-${row.id}`;
+
+                // 4) Satırı oluştur
+                const detailRow = document.createElement('tr');
+                detailRow.setAttribute('data-origin', (row.origin || 'TÜRKPATENT'));
+                detailRow.innerHTML = `
+                    <td colspan="${colSpan}" class="p-0">
+                    <div class="collapse" id="${uniqueAccordionId}">
+                        <table class="table mb-0 accordion-table">
+                        <thead>
+                            <tr>
+                            <th>İşlem Tipi</th>
+                            <th>İşlem Tarihi</th>
+                            <th>Evraklar</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${childRows.map(cr => `
+                            <tr data-origin="${cr.origin || 'TÜRKPATENT'}">
+                                <td>${cr.transactionTypeName ?? '-'}</td>
+                                <td>${cr.epatsDate ?? '-'}</td>
+                                <td class="docs-cell">${renderDocsCell(cr)}</td>
+                            </tr>
+                            `).join('')}
+                        </tbody>
+                        </table>
+                    </div>
+                    </td>
+                `;
+                tbody.appendChild(detailRow);
+            }
+        }
+    }); // end forEach(row)
+
+    // Menşe filtresini uygula
+    if (typeof window.applyMenseFilterToActivePane === 'function') {
+        try { window.applyMenseFilterToActivePane(); } catch (_) {}
+    }
+}
+
 window.fetchAndDisplayObjections = async function() {
     console.log('🚀 fetchAndDisplayObjections (SADECE 3. TARAF - portfolio.html LOGIC) çağrıldı');
     
