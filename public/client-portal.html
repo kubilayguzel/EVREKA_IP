@@ -1157,9 +1157,18 @@ async function rejectTask(taskId) {
 // --- EVENTS ---
 $(document).ready(function() {
     initTheme();
-    authService.onAuthStateChanged(user => {
-        if (user) initPortal();
-        else window.location.href = 'index.html';
+
+    // Auth instance'ını alıyoruz
+    const auth = getAuth(); 
+
+    // Doğru kullanım: onAuthStateChanged bir fonksiyondur
+    onAuthStateChanged(auth, (user) => {
+        if (user) {
+            initPortal();
+        } else {
+            // Kullanıcı giriş yapmamışsa yönlendir
+            window.location.href = 'index.html';
+        }
     });
     
     // Delegations
