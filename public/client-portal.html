@@ -504,6 +504,199 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
     window.applyMenseFilterToActivePane();
 };
 
+window.fetchAndDisplayObjections = async function() {
+    console.log('🚀 fetchAndDisplayObjections (SADECE 3. TARAF) çağrıldı');
+    
+    const tbody = document.getElementById('dava-itiraz-tbody');
+    if (!tbody) {
+        console.error('❌ #dava-itiraz-tbody bulunamadı!');
+        return;
+    }
+    tbody.innerHTML = '<tr><td colspan="12" class="text-center"><i class="fas fa-spinner fa-spin"></i> Yükleniyor...</td></tr>';
+
+    try {
+        const user = authService.getCurrentUser();
+        if (!user) {
+            tbody.innerHTML = '<tr><td colspan="12" class="text-center text-muted">Kullanıcı girişi yapılmamış.</td></tr>';
+            return;
+        }
+        
+        const userDocRef = doc(db, "users", user.uid);
+        const userSnapshot = await getDoc(userDocRef);
+        
+        if (!userSnapshot.exists()) {
+             tbody.innerHTML = '<tr><td colspan="12" class="text-center text-muted">Kullanıcı verisi bulunamadı.</td></tr>';
+             return;
+        }
+        
+        const linkedPersonIds = userSnapshot.data().linkedPersonIds || [];
+        if (linkedPersonIds.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="12" class="text-center text-muted">Bağlı müvekkil bulunamadı.</td></tr>';
+            return;
+        }
+        
+        // Transaction Type'ları yükle
+        if (window.transactionTypesMap.size === 0 && window.transactionTypeService) {
+            const txTypesResult = await window.transactionTypeService.getTransactionTypes();
+            if (txTypesResult?.success) {
+                txTypesResult.data.forEach(type => {
+                    window.transactionTypesMap.set(String(type.id), type);
+                });
+            }
+        }
+
+        const PARENT_TYPE_IDS_STR = ['7', '19', '20']; 
+        const objectionRows = []; 
+        const tasksCol = collection(db, 'tasks');
+        const idsForIn = linkedPersonIds.slice(0, 10); 
+
+        // 4 Farklı Sorgu (Yetki Kontrolü)
+        const qOwner = query(tasksCol, where('taskType', 'in', PARENT_TYPE_IDS_STR), where('taskOwner', 'array-contains-any', linkedPersonIds));
+        const qOwnerIds = query(tasksCol, where('taskType', 'in', PARENT_TYPE_IDS_STR), where('taskOwnerIds', 'array-contains-any', linkedPersonIds));
+        const qRelatedParty = query(tasksCol, where('taskType', 'in', PARENT_TYPE_IDS_STR), where('details.relatedParty.id', 'in', idsForIn));
+        const qOpponent = query(tasksCol, where('taskType', 'in', PARENT_TYPE_IDS_STR), where('opponent.id', 'in', idsForIn));
+
+        const [snapOwner, snapOwnerIds, snapRelated, snapOpp] = await Promise.all([
+            getDocs(qOwner), getDocs(qOwnerIds), getDocs(qRelatedParty), getDocs(qOpponent)
+        ]);
+
+        const merged = new Map();
+        [snapOwner, snapOwnerIds, snapRelated, snapOpp].forEach(snap => {
+            snap?.docs?.forEach(d => merged.set(d.id, d));
+        });
+
+        // Bellek içi yetki filtresi
+        const AUTH_SET = new Set(linkedPersonIds);
+        const isAuthorizedTask = (t) => {
+            const ownerOk = (typeof t.taskOwner === 'string' && AUTH_SET.has(t.taskOwner)) ||
+                            (Array.isArray(t.taskOwner) && t.taskOwner.some(id => AUTH_SET.has(id))) ||
+                            (Array.isArray(t.taskOwnerIds) && t.taskOwnerIds.some(id => AUTH_SET.has(id)));
+            const relatedOk = t?.details?.relatedParty?.id && AUTH_SET.has(t.details.relatedParty.id);
+            const opponentOk = t?.opponent?.id && AUTH_SET.has(t.opponent.id);
+            return ownerOk || relatedOk || opponentOk;
+        };
+
+        const authorizedTaskDocs = Array.from(merged.values()).filter(d => isAuthorizedTask(d.data()));
+
+        // Her task için detayları çek
+        const processPromises = authorizedTaskDocs.map(async (taskDoc) => {
+            const taskData = taskDoc.data();
+            const recordId = taskData.relatedIpRecordId;
+            if (!recordId) return null;
+
+            try {
+                const recordSnap = await getDoc(doc(db, 'ipRecords', recordId));
+                if (!recordSnap.exists()) return null;
+                const record = recordSnap.data();
+
+                // Transactionları çek
+                const txQuery = query(collection(db, 'ipRecords', recordId, 'transactions'));
+                const txSnap = await getDocs(txQuery);
+                const allTransactions = [];
+                txSnap.forEach(txDoc => allTransactions.push({ id: txDoc.id, ...txDoc.data() }));
+
+                // Parent'ı bul
+                let parentTx = null;
+                if (taskData.triggeringTransactionId) {
+                    parentTx = allTransactions.find(tx => tx.id === taskData.triggeringTransactionId);
+                }
+                if (!parentTx) {
+                    parentTx = allTransactions
+                        .filter(tx => String(tx.type) === String(taskData.taskType) && (tx.transactionHierarchy === 'parent' || !tx.parentId))
+                        .sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0))[0];
+                }
+                if (!parentTx) return null;
+
+                // Childları bul
+                const childTransactions = allTransactions.filter(tx => tx.transactionHierarchy === 'child' && tx.parentId === parentTx.id)
+                    .sort((a, b) => new Date(a.timestamp || 0) - new Date(b.timestamp || 0));
+
+                // Belgeleri topla
+                const allParentDocs = [];
+                if (parentTx.documents) {
+                    parentTx.documents.forEach(d => allParentDocs.push({ fileName: d.name, fileUrl: d.path || d.downloadURL, type: d.type, isTransactionDoc: true }));
+                }
+
+                // Satır verisini hazırla
+                const typeMeta = window.transactionTypesMap.get(String(taskData.taskType));
+                const transactionTypeName = typeMeta?.alias || typeMeta?.name || `İşlem ${taskData.taskType}`;
+                const opponentName = parentTx.oppositionOwner || taskData.relatedParty?.name || '(Müvekkil)';
+                const originRaw = (record.origin || '').toString().toUpperCase();
+                const originBucket = (originRaw === 'TÜRKPATENT' || originRaw === 'TURKPATENT' || originRaw === '') ? 'TÜRKPATENT' : 'YURTDISI';
+
+                const rows = [];
+                const uniqueRowId = `${taskDoc.id}-${parentTx.id}`;
+                
+                rows.push({
+                    id: uniqueRowId,
+                    recordId: recordId,
+                    isParent: true,
+                    hasChildren: childTransactions.length > 0,
+                    title: record.title || record.brandText,
+                    brandImageUrl: record.brandImageUrl,
+                    transactionTypeName: transactionTypeName,
+                    applicationNumber: record.applicationNumber || '-',
+                    applicantName: (record.applicants || []).map(a => a.name).join(', '),
+                    bulletinDate: window.formatDateTR(record.details?.brandInfo?.opposedMarkBulletinDate),
+                    bulletinNo: record.details?.brandInfo?.opposedMarkBulletinNo || '-',
+                    epatsDate: window.formatDateTR(parentTx.epatsDocument?.documentDate),
+                    statusText: 'İşlemde',
+                    origin: originBucket,
+                    allParentDocs: allParentDocs
+                });
+
+                // Child satırları ekle (varsa)
+                childTransactions.forEach(childTx => {
+                    const cTypeMeta = window.transactionTypesMap.get(String(childTx.type));
+                    rows.push({
+                        id: `${taskDoc.id}-${childTx.id}`,
+                        parentId: uniqueRowId,
+                        isParent: false,
+                        transactionTypeName: cTypeMeta?.alias || `İşlem ${childTx.type}`,
+                        epatsDate: window.formatDateTR(childTx.epatsDocument?.documentDate),
+                        origin: originBucket,
+                        allChildDocs: childTx.documents // Basitleştirilmiş
+                    });
+                });
+
+                return rows;
+
+            } catch (err) {
+                console.error(err);
+                return null;
+            }
+        });
+
+        const results = await Promise.all(processPromises);
+        results.forEach(r => { if (r) objectionRows.push(...r); });
+
+        // Veriyi kaydet ve çiz
+        window.davaItirazPaginationData.allData = objectionRows;
+        
+        const allParentRows = objectionRows.filter(r => r.isParent);
+        
+        // Pagination güncelle
+        if (!window.davaItirazPaginationData.pagination) {
+            window.davaItirazPaginationData.pagination = new Pagination({
+                itemsPerPage: 10,
+                containerId: 'davaItirazPagination',
+                onPageChange: (page, perPage) => {
+                    const start = (page - 1) * perPage;
+                    const slice = allParentRows.slice(start, start + perPage);
+                    window.renderDavaItirazTable(slice, start);
+                }
+            });
+        }
+        window.davaItirazPaginationData.pagination.update(allParentRows.length);
+        window.renderDavaItirazTable(allParentRows.slice(0, 10), 0);
+
+    } catch (error) {
+        console.error('Hata:', error);
+        tbody.innerHTML = '<tr><td colspan="12" class="text-center text-danger">Hata oluştu.</td></tr>';
+    }
+};
+
+
 // 3. CHECK AUTHORIZATION
 window.checkTaskClientRelation = async function(taskData, clientPersonIdSet) {
     const taskTypeStr = String(taskData.taskType);
