@@ -1258,57 +1258,156 @@ async function rejectTask(taskId) {
     try { await updateDoc(doc(db, "tasks", taskId), { status: "müvekkil onayı - kapatıldı", rejectionDate: new Date().toISOString(), rejectionReason: reason }); alert('Reddedildi.'); window.location.reload(); } catch(e) { alert(e.message); }
 }
 
-// --- TRANSACTION LOADER (Portföy Detay İçin) ---
+// --- 3. TRANSACTION LOADER (Eski Yapıya Uygun) ---
 window.loadTransactions = async function(ipRecordId) {
+    const transactionsRef = collection(db, 'ipRecords', ipRecordId, 'transactions');
+    const q = query(transactionsRef);
+    const snapshot = await getDocs(q);
+    
+    const transactions = [];
+    snapshot.forEach(doc => {
+        transactions.push({ id: doc.id, ...doc.data() });
+    });
+    
+    // PDF'leri grupla
+    const pdfsByTransaction = await fetchPdfsForTransactions(transactions.map(tx => tx.id));
+    
+    // İşlem Adını Getiren Yardımcı
+    const getTransactionTypeAlias = async (typeId) => {
+        if (!typeId) return 'İşlem';
+        try {
+            // Cache kontrolü (Global map varsa kullan)
+            if(window.transactionTypesMap && window.transactionTypesMap.has(String(typeId))) {
+                const type = window.transactionTypesMap.get(String(typeId));
+                return type.alias || type.name || 'İşlem';
+            }
+            // Yoksa DB'den çek
+            const typeDoc = await getDoc(doc(db, 'transactionTypes', String(typeId)));
+            if (typeDoc.exists()) {
+                return typeDoc.data().alias || typeDoc.data().name || 'İşlem';
+            }
+        } catch (e) {}
+        return 'İşlem';
+    };
+    
+    // Tarih Formatlayıcı
+    const formatDate = (timestamp) => {
+        if (!timestamp) return '-';
+        try {
+            let date;
+            if (timestamp.toDate) date = timestamp.toDate();
+            else if (timestamp.seconds) date = new Date(timestamp.seconds * 1000);
+            else date = new Date(timestamp);
+            if (isNaN(date.getTime())) return '-';
+            return `${String(date.getDate()).padStart(2,'0')}.${String(date.getMonth()+1).padStart(2,'0')}.${date.getFullYear()}`;
+        } catch (e) { return '-'; }
+    };
+
+    // Tabloyu Hazırla
     const tableBody = $('#modal-islemler table tbody');
-    if (!tableBody.length) {
-        $('#modal-islemler').html('<div class="table-responsive"><table class="table table-hover"><thead><tr><th>#</th><th>İşlem</th><th>Tarih</th><th>Evrak</th></tr></thead><tbody></tbody></table></div>');
+    if(tableBody.length === 0) {
+         $('#modal-islemler').html('<div class="table-responsive"><table class="table table-hover"><thead><tr><th>#</th><th>İşlem Açıklaması</th><th>Tarih</th><th>Evrak</th></tr></thead><tbody></tbody></table></div>');
     }
     const tbody = $('#modal-islemler table tbody');
-    tbody.html('<tr><td colspan="4" class="text-center">Yükleniyor...</td></tr>');
+    tbody.empty();
+    
+    // İşlemleri Ayır (Parent/Child) ve Sırala
+    const parentTransactions = transactions.filter(t => t.transactionHierarchy === 'parent')
+        .sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0)); // Yeniden eskiye
+    
+    let rowIndex = 1;
 
-    try {
-        const q = query(collection(db, 'ipRecords', ipRecordId, 'transactions'));
-        const snap = await getDocs(q);
-        const transactions = [];
-        snap.forEach(d => transactions.push({ id: d.id, ...d.data() }));
+    // İşlemleri Döngüye Al
+    for (const parent of parentTransactions) {
+        const children = transactions.filter(t => t.transactionHierarchy === 'child' && t.parentId === parent.id)
+            .sort((a, b) => (a.timestamp?.seconds || 0) - (b.timestamp?.seconds || 0)); // Eskiden yeniye
+
+        const hasChildren = children.length > 0;
+        const accordionId = `transaction-${parent.id}`;
+        const transactionAlias = await getTransactionTypeAlias(parent.type);
         
-        transactions.sort((a, b) => {
-             const dA = a.timestamp ? new Date(a.timestamp.seconds * 1000) : new Date(0);
-             const dB = b.timestamp ? new Date(b.timestamp.seconds * 1000) : new Date(0);
-             return dB - dA;
-        });
-
-        tbody.empty();
-        if (transactions.length === 0) {
-            tbody.html('<tr><td colspan="4" class="text-center text-muted">İşlem geçmişi bulunamadı.</td></tr>');
-            return;
+        // Parent Belgeleri
+        const parentPdfs = pdfsByTransaction[parent.id] || [];
+        let epatsDocuments = [];
+        
+        // Task'tan gelen belge varsa ekle
+        if (parent.triggeringTaskId) {
+            const tDocs = await fetchTaskDocuments(parent.triggeringTaskId);
+            epatsDocuments = tDocs.filter(d => d.type === 'epats_document');
         }
 
-        const getTypeAlias = (typeId) => {
-            const type = window.transactionTypesMap.get(String(typeId));
-            return type ? (type.alias || type.name) : 'İşlem';
-        };
+        // Tüm Parent Belgelerini Birleştir
+        const allParentDocs = [
+            ...parentPdfs, 
+            ...epatsDocuments,
+            ...(parent.documents || []).map(doc => ({
+                fileName: doc.name || 'Belge', fileUrl: doc.path, type: doc.type
+            }))
+        ];
 
-        transactions.forEach((tx, i) => {
-            if (tx.transactionHierarchy === 'child') return;
+        // Belge Linkleri HTML
+        const parentPdfLinks = allParentDocs.map(pdf => {
+            const url = pdf.fileUrl || pdf.path;
+            if (!url) return '';
+            return `<a href="${url}" target="_blank" title="${pdf.fileName}" class="btn btn-sm btn-outline-danger mr-1"><i class="fas fa-file-pdf"></i></a>`;
+        }).join('');
 
-            const dateStr = window.formatDateTR(tx.timestamp);
-            const name = getTypeAlias(tx.type);
-            
-            let docHtml = '-';
-            if (tx.documents && tx.documents.length > 0) {
-                docHtml = tx.documents.map(d => `<a href="${d.path || d.url || d.downloadURL}" target="_blank" class="text-danger mr-2"><i class="fas fa-file-pdf"></i></a>`).join('');
-            } else if (tx.epatsDocument) {
-                docHtml = `<a href="${tx.epatsDocument.downloadURL}" target="_blank" class="text-info"><i class="fas fa-file-invoice"></i></a>`;
+        // Parent Satırı HTML
+        const parentRow = `
+            <tr class="${hasChildren ? 'accordion-header-row' : ''}" ${hasChildren ? `data-toggle="collapse" data-target="#${accordionId}"` : ''}>
+                <td>${hasChildren ? '<i class="fas fa-chevron-right mr-2"></i>' : ''}${rowIndex}</td>
+                <td>${transactionAlias}</td>
+                <td>${formatDate(parent.timestamp)}</td>
+                <td>${parentPdfLinks || '<span class="text-muted">-</span>'}</td>
+            </tr>
+        `;
+        tbody.append(parentRow);
+
+        // Child Satırları (Varsa)
+        if (hasChildren) {
+            let childRowsHtml = '';
+            for (const [idx, child] of children.entries()) {
+                const childAlias = await getTransactionTypeAlias(child.type);
+                const childPdfs = pdfsByTransaction[child.id] || [];
+                
+                // Task belgelerini de kontrol et
+                let childTaskDocs = [];
+                if(child.triggeringTaskId) {
+                    childTaskDocs = await fetchTaskDocuments(child.triggeringTaskId);
+                }
+                
+                const allChildDocs = [...childPdfs, ...childTaskDocs];
+                const childPdfLinks = allChildDocs.map(pdf => {
+                    const url = pdf.fileUrl || pdf.path;
+                    if(!url) return '';
+                    return `<a href="${url}" target="_blank" class="btn btn-sm btn-outline-info mr-1"><i class="fas fa-file-alt"></i></a>`;
+                }).join('');
+
+                childRowsHtml += `
+                    <tr>
+                        <td>${rowIndex}.${idx + 1}</td>
+                        <td>${childAlias}</td>
+                        <td>${formatDate(child.timestamp)}</td>
+                        <td>${childPdfLinks || '-'}</td>
+                    </tr>
+                `;
             }
 
-            tbody.append(`<tr><td>${i + 1}</td><td>${name}</td><td>${dateStr}</td><td>${docHtml}</td></tr>`);
-        });
-
-    } catch (e) {
-        console.error(e);
-        tbody.html('<tr><td colspan="4" class="text-danger">Hata oluştu.</td></tr>');
+            const childTableContainer = `
+                <tr>
+                    <td colspan="4" class="p-0">
+                        <div class="collapse" id="${accordionId}">
+                            <table class="table mb-0 accordion-table bg-light">
+                                <thead><tr><th>#</th><th>Alt İşlem</th><th>Tarih</th><th>Evrak</th></tr></thead>
+                                <tbody>${childRowsHtml}</tbody>
+                            </table>
+                        </div>
+                    </td>
+                </tr>
+            `;
+            tbody.append(childTableContainer);
+        }
+        rowIndex++;
     }
 };
 
@@ -1493,6 +1592,79 @@ $(document).ready(function() {
             $('body').toggleClass('dark-mode light-mode');
             localStorage.setItem('theme', $('body').hasClass('dark-mode') ? 'dark' : 'light');
         });
+    }
+
+    // --- 1. PDF GETİRME YARDIMCISI ---
+    async function fetchPdfsForTransactions(transactionIds) {
+    if (!transactionIds || transactionIds.length === 0) return {};
+    try {
+        const pdfMap = {};
+        // unindexed_pdfs koleksiyonundan PDF'leri çek
+        const pdfsQuery = query(
+        collection(db, 'unindexed_pdfs'),
+        where('associatedTransactionId', 'in', transactionIds),
+        where('status', '==', 'indexed')
+        );
+        const pdfsSnapshot = await getDocs(pdfsQuery);
+        
+        pdfsSnapshot.forEach(doc => {
+        const pdfData = doc.data();
+        const txId = pdfData.associatedTransactionId;
+        if (!pdfMap[txId]) pdfMap[txId] = [];
+        
+        pdfMap[txId].push({
+            id: doc.id,
+            fileName: pdfData.fileName || 'Belge',
+            fileUrl: pdfData.fileUrl || pdfData.url,
+            indexedAt: pdfData.indexedAt
+        });
+        });
+        return pdfMap;
+    } catch (error) {
+        console.error('PDF\'ler getirilirken hata:', error);
+        return {};
+    }
+    }
+
+    // --- 2. TASK BELGELERİNİ GETİRME YARDIMCISI ---
+    async function fetchTaskDocuments(taskId) {
+    if (!taskId) return [];
+    try {
+        const taskDoc = await getDoc(doc(db, 'tasks', taskId)); 
+        if (!taskDoc.exists()) return [];
+        
+        const taskData = taskDoc.data();
+        let docs = [];
+
+        // 1. ePats Belgesi
+        if (taskData.details?.epatsDocument) {
+        docs.push({
+            fileName: taskData.details.epatsDocument.name || 'ePats Belgesi',
+            fileUrl: taskData.details.epatsDocument.downloadURL,
+            evrakNo: taskData.details.epatsDocument.turkpatentEvrakNo,
+            type: 'epats_document'
+        });
+        }
+
+        // 2. Task Belgeleri
+        if (Array.isArray(taskData.documents)) {
+            taskData.documents.forEach(doc => {
+                const fileUrl = doc.downloadURL || doc.url || doc.path; 
+                if (fileUrl) { 
+                    docs.push({
+                        fileName: doc.name || 'Task Belgesi',
+                        fileUrl: fileUrl, 
+                        type: doc.type || 'task_document',
+                        isTaskDoc: true
+                    });
+                }
+            });
+        }
+        return docs;
+    } catch (error) {
+        console.error('Task belgeleri getirilirken hata:', taskId, error);
+        return [];
+    }
     }
 </script>
 </body>
