@@ -1724,20 +1724,13 @@ populateFormFields(recordData) {
                     // Her classNo için bir sayaç tutalım
                     const classCounters = {};
                     
-                    const flattenedGoodsAndServices = recordData.goodsAndServicesByClass.flatMap(group => {
+            // [DEĞİŞİKLİK] Sınıf bazında birleştirme (Aggregation)
+                    const flattenedGoodsAndServices = recordData.goodsAndServicesByClass.map(group => {
                         const classNo = group.classNo;
-                        
-                        // Bu sınıf için sayaç yoksa 1'den başlat
-                        if (!classCounters[classNo]) {
-                            classCounters[classNo] = 1;
-                        }
-                        
-                        // Her item için format: "(classNo-index) item"
-                        return (group.items || []).map(item => {
-                            const formattedItem = `(${classNo}-${classCounters[classNo]}) ${item}`;
-                            classCounters[classNo]++;
-                            return formattedItem;
-                        });
+                        // Dizi elemanlarını yeni satır karakteri ile birleştir
+                        const combinedItems = (group.items || []).join('\n');
+                        // Format: (35) Tüm maddeler
+                        return `(${classNo}) ${combinedItems}`;
                     });
                     
                     console.log('🎯 Nice sınıfları ayarlanıyor:', flattenedGoodsAndServices);
@@ -2133,22 +2126,32 @@ async saveTrademarkPortfolio(portfolioData) {
             brandImageUrl = null;
         }
 
-        // 3) goodsAndServices'i doğru formata dönüştür
+        // 3) goodsAndServices'i doğru formata dönüştür [GÜNCELLENDİ]
         const goodsAndServicesByClass = rawNiceClasses.reduce((acc, item) => {
-            // Formatı parse et: "(1-2) Gübreler ve topraklar" veya "1. (1-2) Gübreler"
-            const match = item.match(/^(?:\d+\.\s*)?\((\d+)-\d+\)\s*(.*)$/);
+            // Regex güncellemesi: (35) veya (35-1) formatını ve sonrasındaki çok satırlı metni yakalar
+            // [\s\S]* ifadesi yeni satırları da kapsar
+            const match = item.match(/^\((\d+)(?:-\d+)?\)\s*([\s\S]*)$/);
+            
             if (match) {
                 const classNo = parseInt(match[1]);
-                const text = match[2].trim();
+                const rawText = match[2].trim();
                 
-                // Sınıf zaten varsa items'a ekle, yoksa yeni obje oluştur
                 let classObj = acc.find(obj => obj.classNo === classNo);
                 if (!classObj) {
                     classObj = { classNo, items: [] };
                     acc.push(classObj);
                 }
-                if (text && !classObj.items.includes(text)) {
-                    classObj.items.push(text);
+
+                // Metni satırlara böl ve listeye ekle
+                if (rawText) {
+                    // Satır sonlarına göre böl, boşlukları temizle, boş satırları at
+                    const lines = rawText.split('\n').map(l => l.trim()).filter(Boolean);
+                    
+                    lines.forEach(line => {
+                        if (!classObj.items.includes(line)) {
+                            classObj.items.push(line);
+                        }
+                    });
                 }
             }
             return acc;
