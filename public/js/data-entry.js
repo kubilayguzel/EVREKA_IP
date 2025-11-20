@@ -1722,7 +1722,7 @@ populateFormFields(recordData) {
             if (recordData.goodsAndServicesByClass && recordData.goodsAndServicesByClass.length > 0) {
                 if (typeof setSelectedNiceClasses === 'function') {
                     
-                    // 1. Adım: Verileri Sınıf Numarasına göre grupla (DB'de parçalı kayıt varsa birleştir)
+                    // 1. Adım: Veritabanındaki verileri sınıf numarasına göre grupla
                     const groupedData = {};
                     
                     recordData.goodsAndServicesByClass.forEach(group => {
@@ -1730,23 +1730,23 @@ populateFormFields(recordData) {
                         if (!groupedData[classNo]) {
                             groupedData[classNo] = [];
                         }
-                        // Items array'ini ana listeye ekle
+                        // Items dizisini güvenli bir şekilde ekle
                         if (Array.isArray(group.items)) {
                             groupedData[classNo].push(...group.items);
                         }
                     });
 
-                    // 2. Adım: Widget formatına çevir (Her sınıf için TEK BİR madde: 35-1)
+                    // 2. Adım: Her sınıf için maddeleri birleştirip tek bir metin yap
                     const formattedClasses = Object.keys(groupedData).map(classNo => {
                         const items = groupedData[classNo];
-                        // Tüm maddeleri yeni satır (\n) ile birleştir
-                        const combinedText = items.join('\n');
+                        // Maddeleri alt alta birleştir
+                        const combinedText = items.join('\n'); 
                         
-                        // Widget'ın kabul ettiği format: (35-1) Tüm Metin
+                        // Format: (35-1) Tüm Metin Bloğu
                         return `(${classNo}-1) ${combinedText}`;
                     });
                     
-                    // 3. Adım: Veriyi sakla (Tab değişiminde kaybolmaması için) ve widget'a gönder
+                    // 3. Adım: Veriyi sakla ve widget'a gönder
                     this.storedNiceClasses = formattedClasses;
                     console.log('🎯 Nice sınıfları (Birleştirilmiş):', formattedClasses);
                     setSelectedNiceClasses(formattedClasses);
