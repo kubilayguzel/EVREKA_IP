@@ -77,8 +77,27 @@
     
     /* Portföy Tabs */
     #portfolioTabsBar { display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; margin-bottom: 0.5rem; }
+
+    /* === MODAL & TAB STİLLERİ (Eski Dosyadan) === */
+    .tab-content-card { 
+        background-color: #ffffff; 
+        box-shadow: 0 4px 12px rgba(0,0,0,0.05); 
+        padding: 20px;
+        border-radius: 0 0 8px 8px;
+        border: 1px solid #dee2e6;
+        border-top: none;
+    }
+    .dark-mode .tab-content-card {
+        background-color: #30343a;
+        border-color: #585b63;
+    }
+    .nav-tabs .nav-link { border-radius: 8px 8px 0 0; font-weight: 600; }
+    /* Modal içi tablar için */
+    #portfolioDetailModal .nav-tabs { border-bottom: 1px solid #dee2e6; }
+    .dark-mode #portfolioDetailModal .nav-tabs { border-bottom: 1px solid #585b63; }
     
     @media (max-width: 576px) { #portfolioTabsBar { gap: .5rem; } }
+    
 </style>
 </head>
 <body>
