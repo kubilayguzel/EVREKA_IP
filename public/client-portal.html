@@ -4998,23 +4998,54 @@ window.loadSampleTaskDetails = async function(taskType) {
 
         if (taskType === 'bulletin-watch') {
             const bulletinGroups = {};
-            
-            // Hata ayıklama satırını doğru parantezlerle kapatarak ekliyoruz:
-            console.log("DEBUG 4: Bülten taskları gruplanıyor. İlk 5 görev detayı:", 
-                matchingTasks.slice(0, 5).map(t => ({ id: t.id, bulletinNo: t.details?.bulletinNo }))
-            );
+            const expiredTasks = [];
+            const today = new Date();
+            today.setHours(0, 0, 0, 0); // Sadece tarih karşılaştırması için saati sıfırla
+
+            // Hata ayıklama
+            console.log("DEBUG 4: Bülten taskları ayrıştırılıyor. Toplam:", matchingTasks.length);
 
             matchingTasks.forEach(task => {
-                const bulletinNo = task.details?.bulletinNo || 'Bilinmeyen Bülten';
-                if (!bulletinGroups[bulletinNo]) {
-                    bulletinGroups[bulletinNo] = [];
+                // 1. Tarih Kontrolü (Süresi dolmuş mu?)
+                const dueVal = task.dueDate || task.officialDueDate || task.clientDueDate || task.deadline;
+                let isExpired = false;
+                
+                if (dueVal) {
+                    let d;
+                    // Firestore Timestamp veya String/Date kontrolü
+                    if (dueVal.seconds) {
+                        d = new Date(dueVal.seconds * 1000);
+                    } else {
+                        d = new Date(dueVal);
+                    }
+                    
+                    // Geçerli bir tarih ise karşılaştır
+                    if (!isNaN(d.getTime())) {
+                        d.setHours(0, 0, 0, 0);
+                        if (d < today) {
+                            isExpired = true;
+                        }
+                    }
                 }
-                bulletinGroups[bulletinNo].push(task);
+
+                // 2. Gruplama (Süresi dolanlar ayrı, aktifler bülten numarasına göre)
+                if (isExpired) {
+                    // Süresi dolmuş görevin kopyasını al ve statüsünü değiştir
+                    const expiredTask = { ...task, status: 'Bülten Kapandı' }; // Görüntüleme için statüyü değiştir
+                    expiredTasks.push(expiredTask);
+                } else {
+                    const bulletinNo = task.details?.bulletinNo || 'Bilinmeyen Bülten';
+                    if (!bulletinGroups[bulletinNo]) {
+                        bulletinGroups[bulletinNo] = [];
+                    }
+                    bulletinGroups[bulletinNo].push(task);
+                }
             });
 
             const sortedBulletinNos = Object.keys(bulletinGroups).sort((a, b) => b - a); // En yeni bülten başta
 
-            if (sortedBulletinNos.length === 0) {
+            // Eğer hiç kayıt yoksa
+            if (sortedBulletinNos.length === 0 && expiredTasks.length === 0) {
                 container.innerHTML = '<p class="lead text-muted text-center mt-5">Bu kategoride onay bekleyen bülten izleme işi bulunmamaktadır.</p>';
                 if (window.taskPaginationData.pagination) window.taskPaginationData.pagination.update(0);
                 return;
@@ -5024,8 +5055,9 @@ window.loadSampleTaskDetails = async function(taskType) {
             let tabNavHtml = '<ul class="nav nav-tabs mb-3" id="bulletinTabs" role="tablist">';
             let tabContentHtml = '<div class="tab-content" id="bulletinTabContent">';
 
+            // 1. Aktif Bülten Sekmeleri
             sortedBulletinNos.forEach((bulletinNo, index) => {
-                const isActive = index === 0;
+                const isActive = index === 0; // İlk bülten aktif olsun
                 const tabId = `bulletin-${bulletinNo}`;
                 const tabLinkClass = isActive ? 'active' : '';
                 const tabPaneClass = isActive ? 'show active' : '';
@@ -5046,32 +5078,74 @@ window.loadSampleTaskDetails = async function(taskType) {
                 `;
             });
 
+            // 2. "Önceki Bültenler" Sekmesi (Eğer süresi dolmuş iş varsa)
+            if (expiredTasks.length > 0) {
+                const isExpiredActive = sortedBulletinNos.length === 0; // Eğer hiç aktif bülten yoksa bu sekme aktif olsun
+                const expiredTabId = 'bulletin-expired';
+                const expiredLinkClass = isExpiredActive ? 'active' : '';
+                const expiredPaneClass = isExpiredActive ? 'show active' : '';
+
+                tabNavHtml += `
+                    <li class="nav-item">
+                        <a class="nav-link ${expiredLinkClass}" id="${expiredTabId}-tab" data-toggle="tab" href="#${expiredTabId}-pane" role="tab" aria-controls="${expiredTabId}-pane" aria-selected="${isExpiredActive}">
+                            Önceki Bültenler (${expiredTasks.length})
+                        </a>
+                    </li>
+                `;
+
+                tabContentHtml += `
+                    <div class="tab-pane fade ${expiredPaneClass}" id="${expiredTabId}-pane" role="tabpanel" aria-labelledby="${expiredTabId}-tab">
+                        <div class="alert alert-secondary mb-3">
+                            <i class="fas fa-info-circle mr-2"></i> Bu sekmede yer alan bildirimlerin yasal itiraz süresi dolmuştur.
+                        </div>
+                        <div class="row mt-4" id="bulletin-tasks-row-expired">
+                             </div>
+                    </div>
+                `;
+            }
+
             tabNavHtml += '</ul>';
             tabContentHtml += '</div>';
 
             // Ana konteynırı tab yapısıyla doldur
             container.innerHTML = tabNavHtml + tabContentHtml;
             
-            // İlk tab'ın içeriğini tasklarla doldur (Sadece ilk tab'ı başlangıçta yükleyelim)
-            const firstBulletinNo = sortedBulletinNos[0];
-            const tasksToRender = bulletinGroups[firstBulletinNo];
-            
-            // Pagination'ı geçici olarak gizle/sıfırla
+            // Pagination'ı gizle (Bülten yapısında kullanılmıyor)
             $('#taskPagination').hide();
+
+            // --- İÇERİKLERİ DOLDUR ---
+
+            // 1. İlk Aktif Bültenin İçeriğini Doldur
+            if (sortedBulletinNos.length > 0) {
+                const firstBulletinNo = sortedBulletinNos[0];
+                const tasksToRender = bulletinGroups[firstBulletinNo];
+                await window._renderTaskCardsToContainer(tasksToRender, `#bulletin-tasks-row-${firstBulletinNo}`, formatDate, taskType);
+            }
+
+            // 2. Eğer hiç aktif bülten yoksa ama eskiler varsa, "Önceki Bültenler"i hemen doldur
+            if (sortedBulletinNos.length === 0 && expiredTasks.length > 0) {
+                await window._renderTaskCardsToContainer(expiredTasks, `#bulletin-tasks-row-expired`, formatDate, taskType);
+            }
             
-            // İlk bültenin tasklarını render et
-            await window._renderTaskCardsToContainer(tasksToRender, `#bulletin-tasks-row-${firstBulletinNo}`, formatDate, taskType);
-            
-            // Tab click event'i ekle
+            // Tab click event'i (Lazy Loading)
             $(document).on('shown.bs.tab', '#bulletinTabs a[data-toggle="tab"]', async function (e) {
-                const targetPaneId = $(e.target).attr('href'); // #bulletin-474-pane
-                const targetBulletinNo = targetPaneId.split('-')[1]; // 474
-                const targetRowId = `#bulletin-tasks-row-${targetBulletinNo}`;
+                const targetPaneId = $(e.target).attr('href'); // örn: #bulletin-474-pane veya #bulletin-expired-pane
                 
-                // Zaten yüklü olup olmadığını kontrol et
-                if ($(targetRowId).html().trim() === '') {
-                    const tasks = bulletinGroups[targetBulletinNo];
-                    await window._renderTaskCardsToContainer(tasks, targetRowId, formatDate, taskType);
+                if (targetPaneId === '#bulletin-expired-pane') {
+                    // Önceki Bültenler sekmesi
+                    const targetRowId = `#bulletin-tasks-row-expired`;
+                    if ($(targetRowId).html().trim() === '') {
+                        await window._renderTaskCardsToContainer(expiredTasks, targetRowId, formatDate, taskType);
+                    }
+                } else {
+                    // Normal Bülten sekmeleri
+                    const targetBulletinNo = targetPaneId.split('-')[1]; // 474
+                    const targetRowId = `#bulletin-tasks-row-${targetBulletinNo}`;
+                    
+                    if ($(targetRowId).html().trim() === '') {
+                        const tasks = bulletinGroups[targetBulletinNo];
+                        await window._renderTaskCardsToContainer(tasks, targetRowId, formatDate, taskType);
+                    }
                 }
             });
 
