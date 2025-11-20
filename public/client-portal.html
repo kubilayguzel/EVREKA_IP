@@ -95,15 +95,16 @@
     #portfolioDetailModal .nav-tabs { border-bottom: 1px solid #dee2e6; }
     .dark-mode #portfolioDetailModal .nav-tabs { border-bottom: 1px solid #585b63; }
     
-    /* === DARK MODE DÜZELTMELERİ === */
-    body.dark-mode .text-muted { color: #a0a0a0 !important; }
+    /* === DARK MODE DÜZELTMELERİ (YENİ EKLENDİ) === */
+    body.dark-mode .text-muted { color: #b0b8c0 !important; }
     body.dark-mode .table { color: #e0e0e0; }
     body.dark-mode .table a { color: #66b3ff; }
-    body.dark-mode .modal-content .card { background-color: #2f3136; border: 1px solid #40444b; }
+    body.dark-mode .modal-content .card { background-color: #2f3136; border: 1px solid #40444b; color: #e0e0e0; }
     body.dark-mode .text-info { color: #17a2b8 !important; }
     body.dark-mode .text-primary { color: #4da6ff !important; }
     body.dark-mode .table td, body.dark-mode .table th { border-top: 1px solid #40444b; }
     body.dark-mode .table thead th { border-bottom: 2px solid #40444b; background-color: #202225; color: #fff; }
+    body.dark-mode .accordion-table { background-color: #292b2f !important; }
     
     @media (max-width: 576px) { #portfolioTabsBar { gap: .5rem; } }
 
@@ -866,33 +867,53 @@ $(document).ready(function() {
         window.loadSampleTaskDetails(type);
     });
     
-    // --- DASHBOARD KARTLARI YÖNLENDİRME (Geliştirilmiş) ---
+    // --- DASHBOARD KARTLARI YÖNLENDİRME (DÜZELTİLMİŞ) ---
     $('[data-target-tab]').on('click', function() {
-        const targetTabId = $(this).data('target-tab'); 
-        const cardId = $(this).attr('id'); 
+        const targetTabId = $(this).data('target-tab'); // 'portfolio-content', 'tasks' vb.
+        const cardId = $(this).attr('id'); // 'card-portfolio', 'card-tasks' vb.
         
+        // 1. Önce Sidebar'daki ana menü linkini bul ve tıkla
         const $sidebarLink = $(`#sidebar a[href="#${targetTabId}"]`);
         if ($sidebarLink.length) {
-            $sidebarLink.tab('show');
+            $sidebarLink.tab('show'); // Bootstrap tab'ı aç
         }
 
+        // 2. Gecikmeli olarak alt sekmeyi veya filtreyi tetikle
         setTimeout(() => {
             if (cardId === 'card-portfolio') {
-                $('#portfolioTopTabs a[href="#marka-list"]').tab('show');
+                // Portföy kartına tıklandıysa -> "Marka" sekmesini aç
+                if ($('#portfolioTopTabs a[href="#marka-list"]').length > 0) {
+                    $('#portfolioTopTabs a[href="#marka-list"]').tab('show');
+                }
             } 
             else if (cardId === 'card-tasks') {
+                // İşlerim kartına tıklandıysa -> Önce tüm aktiflikleri temizle
                 $('.task-card-link').removeClass('active-task-area');
+                
+                // "Marka İşlemleri" kartını bul ve tıkla (bu tıklama alt detayları açar)
                 const $markaTaskCard = $('.task-card-link[data-target-area="marka-tasks"]');
                 if ($markaTaskCard.length) {
                     $markaTaskCard.click(); 
-                    $('html, body').animate({ scrollTop: $markaTaskCard.offset().top - 100 }, 500);
+                    // Sayfayı o bölüme kaydır
+                    $('html, body').animate({
+                        scrollTop: $markaTaskCard.offset().top - 100
+                    }, 500);
                 }
             }
             else if (cardId === 'card-invoices') {
-                $('#invoiceDurumFilter').val('Ödenmedi').trigger('change');
+                // Faturalar sekmesine gidildiğinde filtreyi "Ödenmemiş" yap ve tetikle
+                const $filter = $('#invoiceDurumFilter');
+                if ($filter.length) {
+                    $filter.val('Ödenmedi').trigger('change');
+                    // Filtreleme fonksiyonunu manuel çağır (eğer change event yetmezse)
+                    if (typeof applyInvoiceFilters === 'function') {
+                        applyInvoiceFilters();
+                    }
+                }
             }
-        }, 150);
+        }, 200); // 200ms gecikme, tab geçişinin tamamlanmasını bekler
         
+        // Sayfayı yukarı kaydır (Tasks hariç, onu özel yönettik)
         if (cardId !== 'card-tasks') {
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
