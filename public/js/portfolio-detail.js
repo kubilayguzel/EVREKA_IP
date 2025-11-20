@@ -776,7 +776,27 @@ window.currentRecord = {
     renderHero(currentData);
 
     // Applicant + address
-    if (applicantEl) applicantEl.value = extractApplicantNames(currentData);
+    // Applicant + address (Refactor: ID üzerinden güncel isim çekme)
+    if (applicantEl) {
+      applicantEl.value = 'Yükleniyor...';
+      if (currentData.applicants && currentData.applicants.length > 0) {
+        try {
+          const names = await Promise.all(currentData.applicants.map(async (app) => {
+            if (!app.id) return app.name || '';
+            try {
+              const snap = await getDoc(doc(db, 'persons', app.id));
+              return snap.exists() ? (snap.data().name || app.name) : app.name;
+            } catch { return app.name; }
+          }));
+          applicantEl.value = names.filter(Boolean).join(', ');
+        } catch (err) {
+          console.error(err);
+          applicantEl.value = extractApplicantNames(currentData); // Hata olursa eski yöntem
+        }
+      } else {
+        applicantEl.value = extractApplicantNames(currentData);
+      }
+    }
     if (applicantAddressEl){
     const firstApplicantId = currentData.applicants?.[0]?.id;
     if (firstApplicantId){
