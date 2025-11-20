@@ -1729,8 +1729,8 @@ populateFormFields(recordData) {
                         const classNo = group.classNo;
                         // Dizi elemanlarını yeni satır karakteri ile birleştir
                         const combinedItems = (group.items || []).join('\n');
-                        // Format: (35) Tüm maddeler
-                        return `(${classNo}) ${combinedItems}`;
+            // Format: (35-1) Tüm maddeler (Modülün regex'ine uyması için -1 eklendi)
+            return `(${classNo}-1) ${combinedItems}`;
                     });
                     
                     console.log('🎯 Nice sınıfları ayarlanıyor:', flattenedGoodsAndServices);
