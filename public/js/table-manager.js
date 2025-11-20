@@ -319,9 +319,21 @@ class TableManager {
 
     // Bir kayıt ve sütun anahtarı için değeri döndüren yardımcı fonksiyon
     getRecordValueForColumn(record, columnKey) {
-        if (columnKey === 'owners') {
-            return record.owners ? record.owners.map(owner => this.allPersons.find(p => p.id === owner.id)?.name || '').filter(Boolean).join(' ') : '';
-        } else if (columnKey === 'applicationDate' || columnKey === 'operationalDueDate' || columnKey === 'officialDueDate') {
+        if (columnKey === 'owners' || columnKey === 'applicants') {
+            // Hem 'owners' hem 'applicants' alanlarını kontrol et
+            const list = record.applicants || record.owners || [];
+            if (!Array.isArray(list)) return '';
+            
+            return list.map(item => {
+                // ID varsa allPersons listesinden bul
+                if (item.id && this.allPersons) {
+                    const p = this.allPersons.find(person => person.id === item.id);
+                    if (p) return p.name;
+                }
+                // Yoksa kayıttaki ismi kullan
+                return item.name || '';
+            }).filter(Boolean).join(', ');
+        } else if (columnKey === 'applicationDate'|| columnKey === 'operationalDueDate' || columnKey === 'officialDueDate') {
             // Firestore Timestamp objesi ise Date objesine çevir
             if (record[columnKey] && typeof record[columnKey].toDate === 'function') {
                 return record[columnKey].toDate().toLocaleDateString('tr-TR');
