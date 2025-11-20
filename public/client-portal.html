@@ -2906,13 +2906,41 @@ window.fetchAndDisplayTasks = async function(){
     const renewalTaskTypes = ['22'];
     const bulletinTaskTypes = ['20'];
 
+// [GÜNCELLEME] Tarih kontrolü için bugünün tarihi
+    const todayForCount = new Date();
+    todayForCount.setHours(0, 0, 0, 0);
+
     for(const t of awaitingTasks){
         const taskTypeStr = String(t.taskType);
 
         if (renewalTaskTypes.includes(taskTypeStr)) {
             countRenewal++;
         } else if (bulletinTaskTypes.includes(taskTypeStr)) {
-            countBulletin++;
+            // [GÜNCELLEME] Sadece süresi dolmamış (aktif) bülten işlerini say
+            let isExpired = false;
+            const dueVal = t.dueDate || t.officialDueDate || t.clientDueDate || t.deadline;
+            
+            if (dueVal) {
+                let d;
+                if (dueVal.seconds) {
+                    d = new Date(dueVal.seconds * 1000);
+                } else {
+                    d = new Date(dueVal);
+                }
+                
+                if (!isNaN(d.getTime())) {
+                    d.setHours(0, 0, 0, 0);
+                    // Eğer son tarih bugünden küçükse (geçmişse) süresi dolmuştur
+                    if (d < todayForCount) {
+                        isExpired = true;
+                    }
+                }
+            }
+            
+            // Sadece aktif olanları sayaca ekle
+            if (!isExpired) {
+                countBulletin++;
+            }
         } else {
             // Onay Bekleyen İşler: 19 ve diğer tüm task type'lar (22 ve 20 hariç)
             countPending++;
