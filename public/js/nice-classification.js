@@ -56,8 +56,8 @@ export function setSelectedNiceClasses(classes) {
 
     classes.forEach(classString => {
         // Gelen string'i (örn: "1. (1-2) Gübreler ve topraklar" veya "(1-2) Gübreler") parçala
-        const match = classString.match(/^(?:\d+\. )?\((\d+-\d+)\)\s*(.*)$/);
-        
+        // [DEĞİŞİKLİK] Çok satırlı metinleri destekleyen Regex
+        const match = classString.match(/^(?:\d+\.\s*)?\((\d+-\d+)\)\s*([\s\S]*)$/);        
         if (match) {
             const code = match[1];
             const text = match[2];
@@ -558,7 +558,7 @@ function renderClass35_5Selected() {
             html += `
                 <div class="selected-class-item ${isCustom ? 'custom' : ''}">
                     <div class="selected-class-number">Sınıf ${displayCode}</div>
-                    <p class="selected-class-description">${item.text}</p>
+                    <p class="selected-class-description" style="white-space: pre-wrap;">${item.text}</p>
                     <button class="remove-selected-btn" data-key="${item.code}" title="Kaldır" onclick="removeClass35_5('${item.code}')">&times;</button>
                 </div>`;
         });
