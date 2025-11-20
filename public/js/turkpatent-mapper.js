@@ -462,7 +462,7 @@ const mappedStatus = mapStatusToUtils(turkpatentStatus);
 
     // Başvuru sahipleri
     applicants: Array.isArray(selectedApplicants)
-      ? selectedApplicants.map(a => ({ id: a.id, name: a.name, email: a.email || null }))
+      ? selectedApplicants.map(a => ({ id: a.id, email: a.email || null }))
       : [],
 
     // İşlem geçmişi
