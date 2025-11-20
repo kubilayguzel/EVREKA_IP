@@ -191,8 +191,12 @@ function createGoodsAndServicesByClass(inputGSC, niceClassesStr, details) {
         groupedByClass.set(classNo, []);
       }
       
+      // [GÜNCELLEME] Gelen maddeleri nokta (.) veya yeni satıra göre parçala
+      // Nokta işaretini ayırıcı olarak kullanır ve boşlukları temizler.
+      const splitItems = items.flatMap(item => item.split(/[\n.]/).map(s => s.trim()).filter(Boolean));
+      
       // Bu sınıfa ait items'ları ekle
-      groupedByClass.get(classNo).push(...items);
+      groupedByClass.get(classNo).push(...splitItems);
     });
     
     // Map'i array'e çevir ve sırala
