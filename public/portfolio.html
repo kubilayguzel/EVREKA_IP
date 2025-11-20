@@ -1069,7 +1069,16 @@
                       ...r,
                       status: (r.applicationStatus || r.status || r.statusText || '')
                     });
-                    const applicants = Array.isArray(r.applicants) ? r.applicants.map(a => a.name).join(', ') : (r.applicantName || '');
+                    // Refactor: Global allPersons listesinden ID ile isim bulma
+                    let applicants = '';
+                    if (Array.isArray(r.applicants)) {
+                        applicants = r.applicants.map(a => {
+                            const found = allPersons.find(p => p.id === a.id);
+                            return found ? found.name : (a.name || '');
+                        }).filter(Boolean).join(', ');
+                    } else {
+                        applicants = r.applicantName || '';
+                    }
                     const origin = r.origin || '-';
                     const countryCode = r.country || '-';
                     const countryName = getCountryName(countryCode);
@@ -1364,7 +1373,12 @@
 
                     let recordValue = '';
                     if (key === 'owners' || key === 'applicants') {
-                        recordValue = record.applicants?.map(a => a.name).join(' ') || '';
+                        // Refactor: Filtrelemede de ID bazlı isim kullan
+                        const list = record.applicants || [];
+                        recordValue = list.map(a => {
+                            const found = allPersons.find(p => p.id === a.id);
+                            return found ? found.name : (a.name || '');
+                        }).join(' ');
                     } else if (key === 'title') {
                         recordValue = record.title || record.brandText || '';
                     } else if (key === 'type' || key === 'recordType' || key === 'ipType') {
@@ -1386,9 +1400,15 @@
                       } else if (column === 'type' || column === 'recordType' || column === 'ipType') {
                           valA = a.type || '';
                           valB = b.type || '';
-                      } else if (column === 'owners') {
-                          valA = a.applicants?.map(app => app.name).join(', ') || '';
-                          valB = b.applicants?.map(app => app.name).join(', ') || '';
+                      } else if (column === 'owners' || column === 'applicants') {
+                          // Refactor: Sıralamada ID bazlı isim kullan
+                          const getNames = (rec) => (rec.applicants || []).map(app => {
+                              const found = allPersons.find(p => p.id === app.id);
+                              return found ? found.name : (app.name || '');
+                          }).join(', ');
+                          
+                          valA = getNames(a);
+                          valB = getNames(b);
                       } else {
                           valA = a[column] || '';
                           valB = b[column] || '';
