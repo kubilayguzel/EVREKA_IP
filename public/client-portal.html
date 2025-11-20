@@ -1102,6 +1102,87 @@ async function rejectTask(taskId) {
     try { await updateDoc(doc(db, "tasks", taskId), { status: "müvekkil onayı - kapatıldı", rejectionDate: new Date().toISOString(), rejectionReason: reason }); alert('Reddedildi.'); window.location.reload(); } catch(e) { alert(e.message); }
 }
 
+// --- TRANSACTION LOADER (Portföy Detay İçin) ---
+window.loadTransactions = async function(ipRecordId) {
+    const tableBody = $('#modal-islemler table tbody');
+    if (!tableBody.length) {
+        $('#modal-islemler').html('<div class="table-responsive"><table class="table table-hover"><thead><tr><th>#</th><th>İşlem</th><th>Tarih</th><th>Evrak</th></tr></thead><tbody></tbody></table></div>');
+    }
+    const tbody = $('#modal-islemler table tbody');
+    tbody.html('<tr><td colspan="4" class="text-center">Yükleniyor...</td></tr>');
+
+    try {
+        const q = query(collection(db, 'ipRecords', ipRecordId, 'transactions'));
+        const snap = await getDocs(q);
+        const transactions = [];
+        snap.forEach(d => transactions.push({ id: d.id, ...d.data() }));
+        
+        transactions.sort((a, b) => {
+             const dA = a.timestamp ? new Date(a.timestamp.seconds * 1000) : new Date(0);
+             const dB = b.timestamp ? new Date(b.timestamp.seconds * 1000) : new Date(0);
+             return dB - dA;
+        });
+
+        tbody.empty();
+        if (transactions.length === 0) {
+            tbody.html('<tr><td colspan="4" class="text-center text-muted">İşlem geçmişi bulunamadı.</td></tr>');
+            return;
+        }
+
+        const getTypeAlias = (typeId) => {
+            const type = window.transactionTypesMap.get(String(typeId));
+            return type ? (type.alias || type.name) : 'İşlem';
+        };
+
+        transactions.forEach((tx, i) => {
+            if (tx.transactionHierarchy === 'child') return;
+
+            const dateStr = window.formatDateTR(tx.timestamp);
+            const name = getTypeAlias(tx.type);
+            
+            let docHtml = '-';
+            if (tx.documents && tx.documents.length > 0) {
+                docHtml = tx.documents.map(d => `<a href="${d.path || d.url || d.downloadURL}" target="_blank" class="text-danger mr-2"><i class="fas fa-file-pdf"></i></a>`).join('');
+            } else if (tx.epatsDocument) {
+                docHtml = `<a href="${tx.epatsDocument.downloadURL}" target="_blank" class="text-info"><i class="fas fa-file-invoice"></i></a>`;
+            }
+
+            tbody.append(`<tr><td>${i + 1}</td><td>${name}</td><td>${dateStr}</td><td>${docHtml}</td></tr>`);
+        });
+
+    } catch (e) {
+        console.error(e);
+        tbody.html('<tr><td colspan="4" class="text-danger">Hata oluştu.</td></tr>');
+    }
+};
+
+// --- EMTİA YÜKLEME FONKSİYONLARI ---
+window.loadGoodsFromIpRecord = async function(ipRecordId) {
+    if (!ipRecordId) return 'Kayıt ID yok.';
+    try {
+        const docSnap = await getDoc(doc(db, 'ipRecords', ipRecordId));
+        if (!docSnap.exists()) return 'Kayıt bulunamadı.';
+        const data = docSnap.data();
+        if (data.goodsAndServicesByClass) {
+            return data.goodsAndServicesByClass.map(c => `<div class="mb-2"><strong class="text-info">Sınıf ${c.classNo}</strong><br>${c.items.join('; ')}</div>`).join('');
+        }
+        return 'Emtia bilgisi yok.';
+    } catch (e) { return 'Hata: ' + e.message; }
+};
+
+window.loadGoodsFromBulletinRecord = async function(objectId) {
+    if (!objectId) return 'Bülten ID yok.';
+    try {
+        const docSnap = await getDoc(doc(db, 'trademarkBulletinRecords', objectId));
+        if (!docSnap.exists()) return 'Bülten kaydı bulunamadı.';
+        const data = docSnap.data();
+        if (data.goods && Array.isArray(data.goods)) {
+            return data.goods.map(g => `<div class="mb-1 border-bottom pb-1">${g}</div>`).join('');
+        }
+        return 'Emtia bilgisi yok.';
+    } catch (e) { return 'Hata: ' + e.message; }
+};
+
 // --- EVENTS ---
 $(document).ready(function() {
     initTheme();
@@ -1132,7 +1213,7 @@ $(document).ready(function() {
     // Delegations
     $(document).on('click', '.task-approve', function() { approveTask($(this).data('id')); });
     $(document).on('click', '.task-reject', function() { rejectTask($(this).data('id')); });
-    
+
     // Kart Tıklamaları
     $('.task-card-link').click(function() {
         $('.task-card-link').removeClass('active-task-area'); $(this).addClass('active-task-area');
@@ -1145,17 +1226,71 @@ $(document).ready(function() {
         $('#task-list-details').slideDown().data('current-type', type);
         window.loadSampleTaskDetails(type);
     });
+    
+    // --- 1. PORTFÖY DETAY MODALI AÇMA ---
+    $(document).on('click', '.portfolio-detail-link', async function(e) {
+        e.preventDefault();
+        const itemId = $(this).data('item-id');
+        const allData = window.markaPaginationData?.allDataUnfiltered || [];
+        const item = allData.find(p => p.id === itemId);
+        if (!item) return; 
+        
+        $('#portfolioDetailModalLabel').text((item.title || item.brandText || 'Detaylar'));
+        const brandImg = item.brandImageUrl || item.brandImage || 'https://placehold.co/300x200?text=Görsel+Yok';
+        $('#portfolioDetailModal .card-body img').attr('src', brandImg);
+        
+        const type = item.type === 'trademark' ? 'Marka' : item.type === 'patent' ? 'Patent' : 'Tasarım';
+        const appNo = item.applicationNumber || '-';
+        const regNo = item.registrationNumber || '-';
+        let classes = '-';
+        if (item.goodsAndServicesByClass) classes = item.goodsAndServicesByClass.map(c => c.classNo).join(', ');
+        else if (item.classes) classes = Array.isArray(item.classes) ? item.classes.join(', ') : item.classes;
+        
+        const appDate = window.formatDateTR(item.applicationDate);
+        const regDate = window.formatDateTR(item.registrationDate);
+        
+        $('#portfolioDetailModal .row .col-md-4:eq(1) .card-body').html(`<p><strong>Tür:</strong> ${type}</p><p><strong>Başvuru No:</strong> ${appNo}</p><p><strong>Tescil No:</strong> ${regNo}</p><p><strong>Sınıf:</strong> ${classes}</p>`);
+        $('#portfolioDetailModal .row .col-md-4:eq(2) .card-body').html(`<p><strong>Başvuru Tarihi:</strong> ${appDate}</p><p><strong>Tescil Tarihi:</strong> ${regDate}</p><p><strong>Durum:</strong> <span class="badge badge-primary">${item.status || '-'}</span></p>`);
+        
+        if(window.loadTransactions) await window.loadTransactions(item.id);
+        $('#portfolioDetailModal').modal('show');
+    });
+
+    // --- 2. DAVA DETAY MODALI AÇMA ---
+    $(document).on('click', '.dava-detail-link', function(e) {
+        e.preventDefault();
+        const suitId = $(this).data('suit-id');
+        if (!window.suitsData) return;
+        const suit = window.suitsData.find(s => s.id === suitId);
+        if (!suit) return;
+        
+        $('#davaDetailModalLabel').text(suit.title);
+        const bodyHtml = `<div class="row"><div class="col-md-6"><div class="card mb-3"><div class="card-header">Dava Bilgileri</div><div class="card-body"><p><strong>Dava No:</strong> ${suit.caseNo}</p><p><strong>Mahkeme:</strong> ${suit.court}</p><p><strong>Açılış Tarihi:</strong> ${suit.openingDate}</p><p><strong>Durum:</strong> <span class="badge badge-${suit.statusBadgeClass}">${suit.suitStatus}</span></p></div></div></div><div class="col-md-6"><div class="card mb-3"><div class="card-header">Taraflar</div><div class="card-body"><p><strong>Karşı Taraf:</strong> ${suit.opposingParty}</p><p><strong>Karşı Taraf Vekili:</strong> ${suit.opposingCounsel}</p><p><strong>Müvekkil:</strong> ${suit.clientName}</p></div></div></div><div class="col-12"><div class="card"><div class="card-header">Konu Varlık</div><div class="card-body"><p><strong>${suit.subjectAssetType}:</strong> ${suit.subjectAssetTitle} (${suit.subjectAssetNumber})</p><hr><p><strong>Açıklama:</strong> ${suit.description}</p></div></div></div></div>`;
+        $('#davaDetailBody').html(bodyHtml);
+        $('#davaDetailModal').modal('show');
+    });
+
+    // --- 3. EMTİA KIYASLAMA MODALI AÇMA ---
+    $(document).on('click', '.task-compare-goods', async function() {
+        const ipRecordId = $(this).data('ip-record-id');
+        const bulletinObjectId = $(this).data('bulletin-object-id'); // Bu veri task HTML'inde olmalı
+        $('#goodsComparisonModal').modal('show');
+        $('#monitoredGoodsContent').html('<i class="fas fa-spinner fa-spin"></i> Yükleniyor...');
+        $('#competitorGoodsContent').html('<i class="fas fa-spinner fa-spin"></i> Yükleniyor...');
+        if(window.loadGoodsFromIpRecord) $('#monitoredGoodsContent').html(await window.loadGoodsFromIpRecord(ipRecordId));
+        if(window.loadGoodsFromBulletinRecord) $('#competitorGoodsContent').html(await window.loadGoodsFromBulletinRecord(bulletinObjectId));
+    });
 });
 
-// Theme Init
-function initTheme() {
-    const theme = localStorage.getItem('theme') || 'dark';
-    $('body').addClass(theme + '-mode');
-    $('#themeSwitch').prop('checked', theme === 'dark').change(function() {
-        $('body').toggleClass('dark-mode light-mode');
-        localStorage.setItem('theme', $('body').hasClass('dark-mode') ? 'dark' : 'light');
-    });
-}
+    // Theme Init
+    function initTheme() {
+        const theme = localStorage.getItem('theme') || 'dark';
+        $('body').addClass(theme + '-mode');
+        $('#themeSwitch').prop('checked', theme === 'dark').change(function() {
+            $('body').toggleClass('dark-mode light-mode');
+            localStorage.setItem('theme', $('body').hasClass('dark-mode') ? 'dark' : 'light');
+        });
+    }
 </script>
 </body>
 </html>
