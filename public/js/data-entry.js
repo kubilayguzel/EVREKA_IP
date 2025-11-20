@@ -2155,8 +2155,9 @@ async saveTrademarkPortfolio(portfolioData) {
 
                 // Metni satırlara böl ve listeye ekle
                 if (rawText) {
-                    // Satır sonlarına göre böl, boşlukları temizle, boş satırları at
-                    const lines = rawText.split('\n').map(l => l.trim()).filter(Boolean);
+                    // [GÜNCELLEME] Artık yeni satır (\n) veya nokta (.) ile bölüyoruz
+                    // Regex'teki \. nokta karakterini ifade eder.
+                    const lines = rawText.split(/[\n.]/).map(l => l.trim()).filter(Boolean);
                     
                     lines.forEach(line => {
                         if (!classObj.items.includes(line)) {
