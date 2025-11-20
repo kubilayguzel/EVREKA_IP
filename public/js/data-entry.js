@@ -1070,6 +1070,12 @@ initializeDatePickers() {
                             console.log('✅ Nice Classification başarıyla başlatıldı');
                             // Temizle butonu event listener'ı ekle
                             this.setupClearClassesButton();
+
+                            // [DEĞİŞİKLİK] Eğer daha önce yüklenmiş veri varsa, modül başlatılınca tekrar yükle
+                            if (this.storedNiceClasses && this.storedNiceClasses.length > 0) {
+                                console.log('🔄 Tab açılışında Nice sınıfları tekrar yükleniyor...');
+                                setSelectedNiceClasses(this.storedNiceClasses);
+                            }
                         })
                         .catch((error) => {
                             console.error('❌ Nice Classification başlatma hatası:', error);
@@ -1735,6 +1741,10 @@ populateFormFields(recordData) {
                     });
                     
                     console.log('🎯 Nice sınıfları ayarlanıyor:', flattenedGoodsAndServices);
+                    
+                    // [DEĞİŞİKLİK] Veriyi kaybetmemek için sınıfa kaydet
+                    this.storedNiceClasses = flattenedGoodsAndServices;
+                    
                     setSelectedNiceClasses(flattenedGoodsAndServices);
                 }
             }
