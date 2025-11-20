@@ -3793,16 +3793,20 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
 // ============================================
 // YENİ EKLEME: renderTaskPage fonksiyonu
 // ============================================
-window.renderTaskPage = function(page, perPage) {
+window.renderTaskPage = function(page, perPage, customData = null, customContainerId = null) {
     console.log('🎨 renderTaskPage çağrıldı - Sayfa:', page, 'PerPage:', perPage);
     
-    const container = document.getElementById('task-list-container');
+    // Konteyner seçimi: Özel ID verilmişse onu, yoksa varsayılanı kullan
+    const targetId = customContainerId || 'task-list-container';
+    const container = document.getElementById(targetId);
+    
     if (!container) {
-        console.error('❌ task-list-container bulunamadı!');
+        console.error(`❌ Konteyner bulunamadı: #${targetId}`);
         return;
     }
     
-    const allData = window.taskPaginationData.allData || [];
+    // Veri kaynağı: Özel veri verilmişse onu, yoksa global veriyi kullan
+    const allData = customData || window.taskPaginationData.allData || [];
     console.log('📊 Render edilecek veri sayısı:', allData.length);
     
     const startIndex = (page - 1) * perPage;
@@ -4904,11 +4908,89 @@ window.loadSampleTaskDetails = async function(taskType) {
                     console.log("DEBUG 3: Bülten olarak filtrelenen Task ID:", d.id);
                     matchingTasks.push({ id: d.id, ...taskData });
                 }
-            } else if (taskType === 'completed-tasks') {
-                // Tamamlanan İşler: Tüm task'lar (zaten where koşulu yukarıda ayarlandı)
-                matchingTasks.push({ id: d.id, ...taskData });
-            }
+        } else if (taskType === 'completed-tasks') {
+            // Tüm kayıtları havuza ekle
+            matchingTasks.push({ id: d.id, ...taskData });
         }
+    } // Döngü bitişi
+
+    // ----------------------------------------------------
+    // [YENİ] TALİMAT VERİLEN / TAMAMLANAN İŞLER İÇİN TABLI YAPI
+    // ----------------------------------------------------
+    if (taskType === 'completed-tasks') {
+        
+        // 1. Verileri Ayrıştır (Status'a göre)
+        const completedTasks = matchingTasks.filter(t => t.status === 'completed');
+        // "Aktif" olarak kabul edilenler: Completed olmayan diğer hepsi (Açık, Devam Ediyor, Kapalı vb.)
+        const activeTasks = matchingTasks.filter(t => t.status !== 'completed');
+
+        // 2. Tab Yapısını Oluştur
+        const tabsHtml = `
+            <ul class="nav nav-tabs mb-3" id="completedTaskTabs" role="tablist">
+                <li class="nav-item">
+                    <a class="nav-link active" id="tab-active-link" data-toggle="tab" href="#tab-active" role="tab" aria-controls="tab-active" aria-selected="true">
+                        Aktif (${activeTasks.length})
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" id="tab-completed-link" data-toggle="tab" href="#tab-completed" role="tab" aria-controls="tab-completed" aria-selected="false">
+                        Tamamlanan (${completedTasks.length})
+                    </a>
+                </li>
+            </ul>
+            <div class="tab-content" id="completedTaskTabContent">
+                <div class="tab-pane fade show active" id="tab-active" role="tabpanel" aria-labelledby="tab-active-link">
+                    <div class="row" id="container-active-tasks"></div>
+                    <div id="pagination-active-tasks" class="mt-3"></div>
+                </div>
+                <div class="tab-pane fade" id="tab-completed" role="tabpanel" aria-labelledby="tab-completed-link">
+                    <div class="row" id="container-completed-tasks"></div>
+                    <div id="pagination-completed-tasks" class="mt-3"></div>
+                </div>
+            </div>
+        `;
+
+        container.innerHTML = tabsHtml;
+
+        // 3. Ana Sayfalamayı Gizle (Kendi iç sayfalamalarını kullanacağız)
+        $('#taskPagination').hide();
+
+        // 4. Aktif Tabı İçin Pagination Başlat
+        if (activeTasks.length > 0) {
+            const activePagination = new Pagination({
+                itemsPerPage: 10,
+                containerId: 'pagination-active-tasks',
+                onPageChange: (page, perPage) => {
+                    // renderTaskPage'i özel parametrelerle çağır
+                    window.renderTaskPage(page, perPage, activeTasks, 'container-active-tasks');
+                }
+            });
+            activePagination.update(activeTasks.length);
+            window.renderTaskPage(1, 10, activeTasks, 'container-active-tasks');
+        } else {
+            document.getElementById('container-active-tasks').innerHTML = 
+                '<div class="col-12 text-center text-muted py-4">Aktif statüde iş bulunmamaktadır.</div>';
+        }
+
+        // 5. Tamamlanan Tabı İçin Pagination Başlat
+        if (completedTasks.length > 0) {
+            const completedPagination = new Pagination({
+                itemsPerPage: 10,
+                containerId: 'pagination-completed-tasks',
+                onPageChange: (page, perPage) => {
+                    window.renderTaskPage(page, perPage, completedTasks, 'container-completed-tasks');
+                }
+            });
+            completedPagination.update(completedTasks.length);
+            window.renderTaskPage(1, 10, completedTasks, 'container-completed-tasks');
+        } else {
+            document.getElementById('container-completed-tasks').innerHTML = 
+                '<div class="col-12 text-center text-muted py-4">Tamamlanmış iş bulunmamaktadır.</div>';
+        }
+
+        return; // Fonksiyondan çık (standart akışı atla)
+    }
+    // ----------------------------------------------------
         
         // ----------------------------------------------------
         // BÜLTEN İZLEME İÇİN ÖZEL LİSTELEME BAŞLANGIÇ
