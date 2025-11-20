@@ -9,30 +9,15 @@
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
 
-    /* === GENEL VE ORTAK STİLLER === */
+    /* === GENEL SAYFA YAPISI === */
     body { font-family: 'Poppins', sans-serif; transition: background-color 0.5s, color 0.5s; }
-    
-    /* Sidebar */
     #sidebar { height: 100vh; width: 250px; position: fixed; top: 0; left: 0; padding-top: 20px; z-index: 1001; }
     #sidebar .nav-link { font-weight: 500; padding: 12px 15px; margin-bottom: 5px; border-radius: 8px; transition: all 0.3s; transform-origin: left; }
     #sidebar .nav-link:hover, #sidebar .nav-link.active { transform: translateX(5px); }
-
-    /* İçerik Alanı */
     .content { margin-left: 250px; padding: 40px; }
     .content-with-topbar { margin-top: 60px; }
 
-    /* Kartlar */
-    .card { border-radius: 12px; border: none; transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1), box-shadow 0.3s; }
-    .card:hover { transform: translateY(-8px); cursor: pointer;}
-    .card-header { font-weight: 600; }
-
-    /* Tablo ve Liste */
-    .table-responsive { border-radius: 12px; padding: 20px; }
-    .table { font-size: 0.95rem; }
-    .table thead th { border-bottom: 2px solid; font-weight: 600; }
-    .table tbody tr:hover { cursor: pointer; }
-    
-    /* Top Header */
+    /* === HEADER & USER === */
     .top-header { background: #ffffff; box-shadow: 0 2px 5px rgba(0,0,0,0.1); position: fixed; top: 0; right: 0; left: 250px; z-index: 1000; display: flex; justify-content: space-between; align-items: center; padding: 10px 20px; height: 60px; transition: all 0.5s; }
     .user-section { display: flex; align-items: center; gap: 10px; }
     .user-avatar { width: 40px; height: 40px; border-radius: 50%; background-color: #1e3c72; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: bold; }
@@ -42,93 +27,58 @@
     .logout-btn:hover { background-color: #c9302c; }
     .theme-toggle { display: flex; align-items: center; gap: 10px; }
 
-    /* === TEMA: KOYU MOD === */
-    body.dark-mode { background-color: #2b2d31; color: #e0e0e0; }
-    .dark-mode #sidebar { background-color: #36393e; box-shadow: 2px 0 10px rgba(0,0,0,0.2); }
-    .dark-mode #sidebar .nav-link { color: #b0b8c0; }
-    .dark-mode #sidebar .nav-link:hover { background-color: #3a3f45; color: #b0b8c0; }
-    .dark-mode #sidebar .nav-link.active { background-color: #40444b; color: #4da6ff; }
-    .dark-mode .top-header { background-color: #36393e; box-shadow: 0 2px 5px rgba(0,0,0,0.3); }
-    .dark-mode .card { background-color: #36393e; color: #e0e0e0; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
-    .dark-mode .card:hover { box-shadow: 0 12px 24px rgba(0,0,0,0.4); }
-    .dark-mode .card-header { background-color: #40444b; border-bottom: 1px solid #585b63; color: #f8f9fa; }
-    .dark-mode .table-responsive { background-color: #36393e; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
-    .dark-mode .table { color: #e0e0e0; }
-    .dark-mode .table thead th { border-bottom: 2px solid #585b63; color: #f8f9fa; }
-    .dark-mode .table-hover tbody tr:hover { color: #e0e0e0 !important; background-color: #40444b !important; }
-    .dark-mode .table-hover tbody tr:hover a { color: #4da6ff !important; }
-    .dark-mode .modal-content { background-color: #36393e; color: #e0e0e0; border: 1px solid #585b63; }
-    .dark-mode .modal-header, .dark-mode .modal-footer { border-color: #585b63; }
-    .dark-mode .close { color: #fff !important; opacity: 1 !important; }
-    .dark-mode .form-control { background-color: #40444b; border-color: #585b63; color: #e0e0e0; }
-    .dark-mode .user-role { color: #b0b8c0; }
+    /* === KARTLAR & İSTATİSTİKLER === */
+    .card { border-radius: 12px; border: none; transition: transform 0.3s, box-shadow 0.3s; }
+    .card:hover { transform: translateY(-5px); cursor: pointer; }
+    .card-header { font-weight: 600; }
+    .stat-icon { font-size: 2.5em; }
+    .stat-value { font-size: 2.2em; font-weight: 700; line-height: 1; }
+    .stat-label { font-size: 1em; }
 
-    /* === TEMA: AÇIK MOD === */
-    body.light-mode { background-color: #f0f2f5; color: #333; }
-    .light-mode #sidebar { background-color: #ffffff; box-shadow: 2px 0 10px rgba(0,0,0,0.05); }
-    .light-mode #sidebar .nav-link { color: #555; }
-    .light-mode #sidebar .nav-link:hover, .light-mode #sidebar .nav-link.active { background-color: #e3f2fd; color: #1e88e5; }
-    .light-mode .card { background-color: #ffffff; color: #333; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
-    .light-mode .card-header { background-color: #f8f9fa; border-bottom: 1px solid #e9ecef; color: #1e3c72; }
-    .light-mode .table-responsive { background-color: #ffffff; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
-    .light-mode .table { color: #333; }
-    .light-mode .table thead th { border-bottom: 2px solid #e9ecef; color: #1e3c72; }
-    .light-mode .table tbody tr:hover { background-color: #f8f9fa; }
-    .light-mode .modal-content { background-color: #ffffff; color: #333; border: 1px solid #dee2e6; }
-    .light-mode .form-control { background-color: #fff; border-color: #ccc; color: #333; }
-
-    /* === BADGE RENKLERİ === */
-    .badge-filed { background-color: #e3f2fd; color: #1e88e5; }
-    .badge-registered { background-color: #d4edda; color: #43a047; }
-    .badge-objection { background-color: #fff3e0; color: #fb8c00; }
-    .badge-rejected { background-color: #f8d7da; color: #e53935; }
-    .badge-partially-paid { background-color: #ff8c00; color: #fff; font-weight: 600; }
-    .dark-mode .badge-filed { background-color: #4da6ff; color: #1e3c72; }
-    .dark-mode .badge-registered { background-color: #5cb85c; color: #1a3b1c; }
-    .dark-mode .badge-objection { background-color: #f0ad4e; color: #4e351b; }
-    .dark-mode .badge-rejected { background-color: #d9534f; color: #3d1b1a; }
-
-    /* === TASK KARTLARI === */
-    .task-card {
-        border-left: 5px solid; border-radius: 12px; padding: 20px; margin-bottom: 20px;
-        transition: all 0.3s; position: relative; overflow: visible !important;
-        padding-top: 35px !important; padding-left: 20px !important;
-    }
-    .task-card:hover { transform: translateY(-5px); }
-    .task-card-success { border-color: #5cb85c; }
-    .task-card-warning { border-color: #f0ad4e; }
-    .task-card-danger { border-color: #d9534f; }
-    .task-card-secondary { border-color: #6c757d; opacity: 0.8; }
-    .task-number-tag {
-        position: absolute; top: 8px; left: 15px; font-size: 1.3rem; font-weight: 700; 
-        line-height: 1; color: #4da6ff; opacity: 0.9;
-    }
-    .light-mode .task-number-tag { color: #1e88e5; }
-    .task-card .task-title { margin-left: 30px; margin-top: 0; font-size: 1.25rem; font-weight: 600; }
-    .task-card-link.active-task-area .card {
-        border: 2px solid #4da6ff; box-shadow: 0 0 15px rgba(77, 166, 255, 0.5); opacity: 1; transform: none;
-    }
-    .light-mode .task-card-link.active-task-area .card { border: 2px solid #1e88e5; }
-    .dark-mode .task-card-link:not(.active-task-area),
-    .light-mode .task-card-link:not(.active-task-area) { opacity: 0.6; transition: opacity 0.3s; }
-
-    /* === DİĞER BİLEŞENLER === */
-    #portfolioTabsBar { display:flex; align-items:center; justify-content:flex-start; flex-wrap:wrap; gap:.5rem 1rem; margin-bottom:.5rem; }
-    #portfolioTopTabs { margin-bottom:0 !important; margin-right:1rem !important; }
-    
+    /* === TABLO & LİSTE === */
+    .table-responsive { border-radius: 12px; padding: 20px; }
+    .table { font-size: 0.95rem; }
+    .table thead th { border-bottom: 2px solid; font-weight: 600; }
+    .sortable { cursor: pointer; user-select: none; padding-right: 20px !important; }
+    .sortable:hover { background-color: rgba(0, 0, 0, 0.05); }
     .accordion-header-row { cursor: pointer; transition: background-color 0.2s; }
     .accordion-header-row .fa-chevron-right { transition: transform 0.3s; }
     .accordion-header-row[aria-expanded="true"] .fa-chevron-right { transform: rotate(90deg); }
-    
-    .sortable { cursor: pointer; user-select: none; position: relative; padding-right: 20px !important; }
-    .sortable:hover { background-color: rgba(0, 0, 0, 0.05); }
-    .dark-mode .sortable:hover { background-color: rgba(255, 255, 255, 0.05); }
-    .sortable i { font-size: 0.75em; opacity: 0.5; margin-left: 5px; }
-    .sortable.active i, .sortable:hover i { opacity: 1; }
 
-    @media (max-width: 576px){
-        #portfolioTabsBar { gap: .5rem; }
-    }
+    /* === TEMA RENKLERİ (Light/Dark) === */
+    body.light-mode { background-color: #f0f2f5; color: #333; }
+    .light-mode #sidebar { background-color: #ffffff; box-shadow: 2px 0 10px rgba(0,0,0,0.05); }
+    .light-mode .nav-link { color: #555; }
+    .light-mode .nav-link:hover, .light-mode .nav-link.active { background-color: #e3f2fd; color: #1e88e5; }
+    .light-mode .card, .light-mode .table-responsive, .light-mode .modal-content { background-color: #ffffff; color: #333; }
+    .light-mode .table tbody tr:hover { background-color: #f8f9fa; }
+    
+    body.dark-mode { background-color: #2b2d31; color: #e0e0e0; }
+    .dark-mode #sidebar { background-color: #36393e; box-shadow: 2px 0 10px rgba(0,0,0,0.2); }
+    .dark-mode .nav-link { color: #b0b8c0; }
+    .dark-mode .nav-link:hover { background-color: #3a3f45; color: #b0b8c0; }
+    .dark-mode .nav-link.active { background-color: #40444b; color: #4da6ff; }
+    .dark-mode .top-header, .dark-mode .card, .dark-mode .table-responsive, .dark-mode .modal-content { background-color: #36393e; color: #e0e0e0; }
+    .dark-mode .card-header, .dark-mode .modal-header, .dark-mode .modal-footer { border-color: #585b63; }
+    .dark-mode .table-hover tbody tr:hover { background-color: #40444b !important; color: #e0e0e0 !important; }
+    .dark-mode .form-control { background-color: #40444b; border-color: #585b63; color: #e0e0e0; }
+
+    /* === ÖZEL BİLEŞENLER === */
+    /* Task Kartları */
+    .task-card { border-left: 5px solid; border-radius: 12px; padding: 20px; margin-bottom: 20px; position: relative; overflow: visible !important; padding-top: 35px !important; }
+    .task-card-success { border-color: #5cb85c; }
+    .task-card-warning { border-color: #f0ad4e; }
+    .task-card-danger { border-color: #d9534f; }
+    .task-number-tag { position: absolute; top: 8px; left: 15px; font-size: 1.3rem; font-weight: 700; color: #4da6ff; opacity: 0.9; }
+    
+    /* Marka Görselleri */
+    img.brand-thumb, .task-brand-image { height: 100px !important; width: auto; border-radius: 6px; object-fit: contain; transition: transform 0.3s; display: block; margin: 0 auto; }
+    img.brand-thumb:hover, .task-brand-image:hover { transform: scale(2.5); z-index: 999; position: relative; box-shadow: 0 8px 16px rgba(0,0,0,0.3); }
+    
+    /* Portföy Tabs */
+    #portfolioTabsBar { display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; margin-bottom: 0.5rem; }
+    
+    @media (max-width: 576px) { #portfolioTabsBar { gap: .5rem; } }
 </style>
 </head>
 <body>
@@ -139,7 +89,7 @@
     </div>
     <div class="user-section">
         <div class="user-avatar" id="userAvatar">?</div>
-        <div class="user-info"><div class="user-name" id="userName">Yükleniyor...</div><div class="user-role" id="userRole">Kullanıcı</div></div>
+        <div class="user-info"><div class="user-name" id="userName">...</div><div class="user-role" id="userRole">Kullanıcı</div></div>
         <button class="logout-btn" id="logoutBtn">Çıkış</button>
     </div>
 </header>
@@ -158,7 +108,7 @@
 <div class="content content-with-topbar">
     <div class="tab-content">
         <div class="tab-pane fade show active" id="dashboard">
-            <h1 class="header-title">Hoş Geldiniz, <span id="welcomeUserName">Müvekkil Adı</span></h1>
+            <h1 class="header-title">Hoş Geldiniz, <span id="welcomeUserName">...</span></h1>
             <p class="lead">Portalınızda portföyünüzü, işlerinizi ve finansal bilgilerinizi yönetebilirsiniz.</p>
             <div class="row mt-5">
                 <div class="col-md-12 mb-4" data-target-tab="portfolio-content" id="card-portfolio">
@@ -187,8 +137,8 @@
             <div class="card p-4 mb-4">
                 <h5 class="card-title">Filtreleme ve Arama</h5>
                 <div class="form-row">
-                    <div class="form-group col-md-6"><input class="form-control" id="portfolioSearchText" placeholder="Ara..." type="text"/></div>
-                    <div class="form-group col-md-3"><select class="form-control" id="portfolioDurumFilter"><option value="TÜMÜ">Tümü</option><option value="Başvuru">Başvuru</option></select></div>
+                    <div class="form-group col-md-6"><input class="form-control" id="portfolioSearchText" placeholder="Marka, Başvuru No vb..." type="text"/></div>
+                    <div class="form-group col-md-3"><select class="form-control" id="portfolioDurumFilter"><option value="TÜMÜ">Tümü</option><option value="Başvuru">Başvuru</option><option value="Tescilli">Tescilli</option><option value="İtiraz">İtiraz</option></select></div>
                     <div class="form-group col-md-3"><button class="btn btn-primary btn-block" id="portfolioFilterBtn">Filtrele</button></div>
                 </div>
             </div>
@@ -199,14 +149,27 @@
                     <li class="nav-item"><a class="nav-link" data-toggle="tab" href="#tasarim-list" role="tab">Tasarım</a></li>
                     <li class="nav-item"><a class="nav-link" data-toggle="tab" href="#dava-itiraz-list" role="tab">İtiraz</a></li>
                     <li class="nav-item"><a class="nav-link" data-toggle="tab" href="#dava-list" role="tab">Dava</a></li>
+                    <li class="nav-item d-flex align-items-center pl-2" id="portfolioFiltersNavItem">
+                        <label class="mb-0 mr-2">Menşe:</label>
+                        <select class="form-control form-control-sm" id="menseFilter"><option selected value="TÜRKPATENT">TÜRKPATENT</option><option value="YURTDISI">Yurtdışı</option><option value="HEPSI">Hepsi</option></select>
+                    </li>
                 </ul>
             </div>
             <div class="tab-content table-responsive mt-3">
-                <div class="tab-pane fade show active" id="marka-list"><table class="table table-hover"><thead><tr><th>#</th><th>Marka</th><th>Başvuru No</th><th>Durum</th></tr></thead><tbody></tbody></table><div id="markaPagination"></div></div>
+                <div class="tab-pane fade show active" id="marka-list">
+                    <table class="table table-hover"><thead><tr><th class="sortable" data-sort="index">#</th><th class="sortable" data-sort="brand">Marka</th><th class="sortable" data-sort="appno">Başvuru No</th><th>Durum</th></tr></thead><tbody></tbody></table>
+                    <div id="markaPagination"></div>
+                </div>
                 <div class="tab-pane fade" id="patent-list"><table class="table table-hover"><thead><tr><th>#</th><th>Başlık</th><th>Başvuru No</th><th>Durum</th></tr></thead><tbody></tbody></table></div>
                 <div class="tab-pane fade" id="tasarim-list"><table class="table table-hover"><thead><tr><th>#</th><th>Tasarım Adı</th><th>Başvuru No</th><th>Durum</th></tr></thead><tbody></tbody></table></div>
-                <div class="tab-pane fade" id="dava-itiraz-list"><table class="table table-hover"><thead><tr><th>#</th><th>İşlem Tipi</th><th>Başvuru No</th><th>Durum</th></tr></thead><tbody></tbody></table></div>
-                <div class="tab-pane fade" id="dava-list"><table class="table table-hover"><thead><tr><th>#</th><th>Dava No</th><th>Başlık</th><th>Durum</th></tr></thead><tbody></tbody></table></div>
+                <div class="tab-pane fade" id="dava-itiraz-list">
+                    <table class="table table-hover"><thead><tr><th class="sortable">#</th><th>Marka Örneği</th><th>M/T/B Adı</th><th>İşlem Tipi</th><th>Tarih</th><th>Durum</th><th>Evrak</th></tr></thead><tbody id="dava-itiraz-tbody"></tbody></table>
+                    <div id="davaItirazPagination"></div>
+                </div>
+                <div class="tab-pane fade" id="dava-list">
+                    <table class="table table-hover"><thead><tr><th>#</th><th>Dava No</th><th>Başlık</th><th>Durum</th></tr></thead><tbody id="dava-tbody"></tbody></table>
+                    <div id="davaPagination"></div>
+                </div>
             </div>
         </div>
 
@@ -268,16 +231,20 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.2/dist/js/bootstrap.bundle.min.js"></script>
 
 <script type="module">
-// --- GLOBAL HELPERS & IMPORTS ---
+// --- GLOBAL VARIABLES & HELPER FUNCTIONS ---
 import { authService, db } from './firebase-config.js';
 import { doc, getDoc, collection, getDocs, getDocsFromServer, query, where, updateDoc, limit } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 import PaginationModule from './js/pagination.js';
 
-const $ = window.jQuery;
-const runGetDocs = (typeof getDocsFromServer === 'function') ? getDocsFromServer : getDocs;
+window.Pagination = PaginationModule;
 window.taskPaginationData = { allData: [], currentPage: 1, itemsPerPage: 10, pagination: null };
+window.markaPaginationData = { allDataUnfiltered: [], allData: [], pagination: null };
+window.invoicesPaginationData = { allData: [], currentPage: 1, itemsPerPage: 10, pagination: null };
+window.davaItirazPaginationData = { allData: [], pagination: null };
+window.transactionTypesMap = new Map();
+const runGetDocs = (typeof getDocsFromServer === 'function') ? getDocsFromServer : getDocs;
 
-// 1. GLOBAL: Format Date TR
+// 1. DATE FORMATTER
 window.formatDateTR = function(v) {
     if (!v) return '-';
     try {
@@ -293,7 +260,14 @@ window.formatDateTR = function(v) {
     } catch { return '-'; }
 };
 
-// 2. GLOBAL: Yetki Kontrolü (Müvekkil İlişkisi)
+// 2. CURRENCY FORMATTER
+window.currencyFormatter = function(amount, currency) {
+    try {
+        return new Intl.NumberFormat('tr-TR', { style: 'currency', currency: currency || 'TRY' }).format(amount ?? 0);
+    } catch { return (amount ?? 0) + ' ' + (currency || 'TRY'); }
+};
+
+// 3. CHECK AUTHORIZATION
 window.checkTaskClientRelation = async function(taskData, clientPersonIdSet) {
     const taskTypeStr = String(taskData.taskType);
     try {
@@ -315,35 +289,25 @@ window.checkTaskClientRelation = async function(taskData, clientPersonIdSet) {
     return false;
 };
 
-// 3. GLOBAL: Task Kartı HTML Üretici
+// 4. TASK CARD GENERATOR
 window.createTaskCardHTML = function(task, index, isCompletedView, titleOverride) {
     const statusBadgeClass = {
         'open': 'primary', 'in_progress': 'info', 'completed': 'success', 'closed': 'secondary',
         'awaiting_client_approval': 'warning', 'müvekkil onayı - kapatıldı': 'danger', 'Bülten Kapandı': 'secondary'
     }[task.status] || 'secondary';
-    
     const statusText = {
         'awaiting_client_approval': 'Onay Bekliyor', 'müvekkil onayı - kapatıldı': 'Reddedildi/Kapandı'
     }[task.status] || task.status;
 
     let btns = '';
     if (isCompletedView) {
-        const reopen = (task.status === 'müvekkil onayı - kapatıldı') ? 
-            `<button class="btn btn-success btn-sm task-reopen" data-id="${task.id}"><i class="fas fa-folder-open"></i> Aç</button>` : '';
+        const reopen = (task.status === 'müvekkil onayı - kapatıldı') ? `<button class="btn btn-success btn-sm task-reopen" data-id="${task.id}"><i class="fas fa-folder-open"></i> Aç</button>` : '';
         btns = `<button class="btn btn-info btn-sm task-detail" data-id="${task.id}"><i class="fas fa-eye"></i></button>${reopen}`;
     } else {
         const isBulletin = (String(task.taskType) === '20');
-        const compareBtn = isBulletin ? 
-            `<button class="btn btn-warning btn-sm task-compare" data-id="${task.id}" data-ipid="${task.relatedIpRecordId}"><i class="fas fa-balance-scale"></i></button>` : '';
-        
-        btns = `
-            <button class="btn btn-success btn-sm task-approve" data-id="${task.id}"><i class="fas fa-check"></i></button>
-            <button class="btn btn-danger btn-sm task-reject" data-id="${task.id}"><i class="fas fa-times"></i></button>
-            <button class="btn btn-info btn-sm task-detail" data-id="${task.id}"><i class="fas fa-eye"></i></button>
-            ${compareBtn}
-        `;
+        const compareBtn = isBulletin ? `<button class="btn btn-warning btn-sm task-compare" data-id="${task.id}" data-ipid="${task.relatedIpRecordId}"><i class="fas fa-balance-scale"></i></button>` : '';
+        btns = `<button class="btn btn-success btn-sm task-approve" data-id="${task.id}"><i class="fas fa-check"></i></button><button class="btn btn-danger btn-sm task-reject" data-id="${task.id}"><i class="fas fa-times"></i></button><button class="btn btn-info btn-sm task-detail" data-id="${task.id}"><i class="fas fa-eye"></i></button>${compareBtn}`;
     }
-    
     const dateLabel = isCompletedView ? 'Oluşturma:' : 'Son Tarih:';
     const dateVal = isCompletedView ? task.createdAt : (task.dueDate || task.officialDueDate);
     const dateStr = window.formatDateTR(dateVal);
@@ -351,71 +315,48 @@ window.createTaskCardHTML = function(task, index, isCompletedView, titleOverride
     const cardColor = isCompletedView ? 'task-card-success' : 'task-card-warning';
     const opacity = (task.status === 'Bülten Kapandı') ? 'opacity: 0.7;' : '';
 
-    return `
-        <div class="col-md-12 mb-4" style="${opacity}">
-            <div class="task-card ${cardColor}" data-task-id="${task.id}">
-                <div class="task-number-tag">${index}.</div>
-                <h5 class="task-title">#${task.id} - ${titleOverride || task.title || 'Başlıksız'}</h5>
-                <div class="d-flex justify-content-between align-items-center mb-2">
-                    <small class="task-meta"><span class="badge badge-${statusBadgeClass}">${statusText}</span></small>
-                </div>
-                <div class="d-flex justify-content-between align-items-center">
-                    <small class="task-meta"><i class="fas fa-clock mr-1"></i>${dateLabel} ${dateStr}${note}</small>
-                    <div>${btns}</div>
-                </div>
-            </div>
-        </div>
-    `;
+    return `<div class="col-md-12 mb-4" style="${opacity}"><div class="task-card ${cardColor}" data-task-id="${task.id}"><div class="task-number-tag">${index}.</div><h5 class="task-title">#${task.id} - ${titleOverride || task.title || 'Başlıksız'}</h5><div class="d-flex justify-content-between align-items-center mb-2"><small class="task-meta"><span class="badge badge-${statusBadgeClass}">${statusText}</span></small></div><div class="d-flex justify-content-between align-items-center"><small class="task-meta"><i class="fas fa-clock mr-1"></i>${dateLabel} ${dateStr}${note}</small><div>${btns}</div></div></div></div>`;
 };
 
-// --- MAIN LOGIC ---
-
+// --- INITIALIZATION ---
 async function initPortal() {
     const user = authService.getCurrentUser();
     if (!user) return;
-    
-    // Kullanıcı bilgilerini göster
     $('#userName').text(user.displayName || user.email);
     $('#userAvatar').text((user.displayName||'U').charAt(0));
     
-    // Linked Persons
     const userSnap = await getDoc(doc(db, 'users', user.uid));
     if (!userSnap.exists()) return;
     const linkedIds = userSnap.data().linkedPersonIds || [];
     if (!linkedIds.length) return;
     
-    // Dashboard ve Listeleri Başlat
-    window.linkedPersonIds = linkedIds; // global ref
-    await fetchAndDisplayTasks(linkedIds);
-    // Diğer fetch fonksiyonları (portfolio, invoices) buraya eklenebilir...
+    window.linkedPersonIds = linkedIds; 
+    
+    // Initialize all modules
+    fetchAndDisplayPortfolio();
+    fetchAndDisplayTasks(linkedIds);
+    fetchAndDisplayInvoices(linkedIds);
+    fetchAndDisplaySuits();
+    fetchAndDisplayObjections();
 }
 
-// --- TASK LOGIC ---
-
+// --- TASK MODULE ---
 window.fetchAndDisplayTasks = async function(linkedIds) {
     const q = query(collection(db, 'tasks'), where('status', '==', 'awaiting_client_approval'));
     const snap = await runGetDocs(q);
-    
     const tasks = [];
     const clientSet = new Set(linkedIds);
-    
-    // 1. Yetki Kontrolü ve Toplama
     for (const d of snap.docs) {
         const t = d.data();
-        if (await window.checkTaskClientRelation(t, clientSet)) {
-            tasks.push({ id: d.id, ...t });
-        }
+        if (await window.checkTaskClientRelation(t, clientSet)) tasks.push({ id: d.id, ...t });
     }
     
-    // 2. Sayaçlar
     let cPending=0, cRenewal=0, cBulletin=0;
     const today = new Date(); today.setHours(0,0,0,0);
-    
     tasks.forEach(t => {
         const type = String(t.taskType);
         if (type === '22') cRenewal++;
         else if (type === '20') {
-            // Süre kontrolü (Bülten)
             const due = t.dueDate || t.officialDueDate;
             let isExpired = false;
             if (due) {
@@ -424,12 +365,9 @@ window.fetchAndDisplayTasks = async function(linkedIds) {
                 if (d < today) isExpired = true;
             }
             if (!isExpired) cBulletin++;
-        } else {
-            cPending++;
-        }
+        } else { cPending++; }
     });
     
-    // UI Güncelle
     $('#taskCount-pending-approval').text(cPending);
     $('#taskCount-renewal-approval').text(cRenewal);
     $('#taskCount-bulletin-watch').text(cBulletin);
@@ -440,202 +378,816 @@ window.fetchAndDisplayTasks = async function(linkedIds) {
 window.loadSampleTaskDetails = async function(taskType) {
     const container = document.getElementById('task-list-container');
     container.innerHTML = '<div class="text-center mt-5"><i class="fas fa-spinner fa-spin fa-3x"></i></div>';
-    
-    // Query Hazırla
     const tasksRef = collection(db, 'tasks');
-    let q = (taskType === 'completed-tasks') 
-        ? query(tasksRef, where('status', '!=', 'awaiting_client_approval')) // Geniş çek, client'ta filtrele
-        : query(tasksRef, where('status', '==', 'awaiting_client_approval'));
-        
+    let q = (taskType === 'completed-tasks') ? query(tasksRef, where('status', '!=', 'awaiting_client_approval')) : query(tasksRef, where('status', '==', 'awaiting_client_approval'));
     const snap = await runGetDocs(q);
     const tasks = [];
     const clientSet = new Set(window.linkedPersonIds);
-    
-    // Yetki Kontrolü
     for (const d of snap.docs) {
         const t = d.data();
-        if (await window.checkTaskClientRelation(t, clientSet)) {
-            tasks.push({ id: d.id, ...t });
-        }
+        if (await window.checkTaskClientRelation(t, clientSet)) tasks.push({ id: d.id, ...t });
     }
-    
-    // --- COMPLETED TASKS (TABLI YAPI) ---
+
+    // 1. COMPLETED TASKS (TABS)
     if (taskType === 'completed-tasks') {
         const completed = tasks.filter(t => t.status === 'completed');
         const active = tasks.filter(t => t.status !== 'completed');
-        
-        container.innerHTML = `
-            <ul class="nav nav-tabs mb-3" id="compTabs">
-                <li class="nav-item"><a class="nav-link active" data-toggle="tab" href="#tab-act">Aktif (${active.length})</a></li>
-                <li class="nav-item"><a class="nav-link" data-toggle="tab" href="#tab-fin">Tamamlanan (${completed.length})</a></li>
-            </ul>
-            <div class="tab-content">
-                <div class="tab-pane fade show active" id="tab-act"><div class="row" id="cont-act"></div><div id="pag-act"></div></div>
-                <div class="tab-pane fade" id="tab-fin"><div class="row" id="cont-fin"></div><div id="pag-fin"></div></div>
-            </div>`;
-            
-        // Pagination & Render Helper
+        container.innerHTML = `<ul class="nav nav-tabs mb-3"><li class="nav-item"><a class="nav-link active" data-toggle="tab" href="#tab-act">Aktif (${active.length})</a></li><li class="nav-item"><a class="nav-link" data-toggle="tab" href="#tab-fin">Tamamlanan (${completed.length})</a></li></ul><div class="tab-content"><div class="tab-pane fade show active" id="tab-act"><div class="row" id="cont-act"></div><div id="pag-act"></div></div><div class="tab-pane fade" id="tab-fin"><div class="row" id="cont-fin"></div><div id="pag-fin"></div></div></div>`;
         const setupTab = (data, contId, pagId) => {
-            if (!data.length) { document.getElementById(contId).innerHTML = '<p class="text-center text-muted p-3">Kayıt yok.</p>'; return; }
-            const pag = new window.Pagination({
-                itemsPerPage: 10, containerId: pagId,
-                onPageChange: (p, pp) => window.renderTaskPage(p, pp, data, contId)
-            });
+            if (!data.length) { document.getElementById(contId).innerHTML = '<p class="text-muted p-3">Kayıt yok.</p>'; return; }
+            const pag = new window.Pagination({ itemsPerPage: 10, containerId: pagId, onPageChange: (p, pp) => window.renderTaskPage(p, pp, data, contId) });
             pag.update(data.length);
             window.renderTaskPage(1, 10, data, contId);
         };
-        
         setupTab(active, 'cont-act', 'pag-act');
         setupTab(completed, 'cont-fin', 'pag-fin');
         $('#taskPagination').hide();
         return;
     }
-    
-    // --- BULLETIN WATCH (TABLI YAPI) ---
+
+    // 2. BULLETIN WATCH (TABS)
     if (taskType === 'bulletin-watch') {
-        const groups = {};
-        const expired = [];
-        const today = new Date(); today.setHours(0,0,0,0);
-        
+        const groups = {}; const expired = []; const today = new Date(); today.setHours(0,0,0,0);
         tasks.forEach(t => {
-            // Tarih Kontrolü
             const due = t.dueDate || t.officialDueDate;
             let isExp = false;
-            if (due) {
-                const d = due.seconds ? new Date(due.seconds*1000) : new Date(due);
-                d.setHours(0,0,0,0);
-                if (d < today) isExp = true;
-            }
-            
-            if (isExp) {
-                t.status = 'Bülten Kapandı'; // UI için override
-                expired.push(t);
-            } else {
-                const bNo = t.details?.bulletinNo || 'Diğer';
-                if (!groups[bNo]) groups[bNo] = [];
-                groups[bNo].push(t);
-            }
+            if (due) { const d = due.seconds ? new Date(due.seconds*1000) : new Date(due); d.setHours(0,0,0,0); if (d < today) isExp = true; }
+            if (isExp) { t.status = 'Bülten Kapandı'; expired.push(t); }
+            else { const bNo = t.details?.bulletinNo || 'Diğer'; if (!groups[bNo]) groups[bNo] = []; groups[bNo].push(t); }
         });
-        
         const bNumbers = Object.keys(groups).sort((a,b)=>b-a);
-        
-        let html = '<ul class="nav nav-tabs mb-3" id="bullTabs">';
-        let content = '<div class="tab-content">';
-        
-        // Aktif Bültenler
+        let html = '<ul class="nav nav-tabs mb-3">'; let content = '<div class="tab-content">';
         bNumbers.forEach((no, i) => {
             const active = i===0 ? 'active' : '';
             html += `<li class="nav-item"><a class="nav-link ${active}" data-toggle="tab" href="#b-${no}">Bülten ${no}</a></li>`;
             content += `<div class="tab-pane fade ${active ? 'show active' : ''}" id="b-${no}"><div class="row" id="row-b-${no}"></div></div>`;
         });
-        
-        // Önceki Bültenler
         if (expired.length > 0) {
             const cls = bNumbers.length === 0 ? 'active' : '';
             html += `<li class="nav-item"><a class="nav-link ${cls}" data-toggle="tab" href="#b-exp">Önceki Bültenler</a></li>`;
             content += `<div class="tab-pane fade ${cls ? 'show active' : ''}" id="b-exp"><div class="row" id="row-b-exp"></div></div>`;
         }
-        
         html += '</ul>'; content += '</div>';
         container.innerHTML = html + content;
-        
-        // Render Functions
-        const renderGroup = (items, elId) => {
-            // _renderTaskCardsToContainer mantığını buraya gömüyoruz
-            const el = document.getElementById(elId);
-            if(!el) return;
-            el.innerHTML = items.map((t, i) => window.createTaskCardHTML(t, i+1, false, t.title)).join('');
-        };
-        
+        const renderGroup = (items, elId) => { const el = document.getElementById(elId); if(el) el.innerHTML = items.map((t, i) => window.createTaskCardHTML(t, i+1, false, t.title)).join(''); };
         bNumbers.forEach(no => renderGroup(groups[no], `row-b-${no}`));
         if(expired.length) renderGroup(expired, 'row-b-exp');
-        
         $('#taskPagination').hide();
         return;
     }
-    
-    // --- STANDART LİSTELEME (Diğer Tipler) ---
-    // Filtreleme (Örn: pending-approval için renewal ve bulletin hariç)
+
+    // 3. STANDARD LISTING
     let finalTasks = tasks;
-    if (taskType === 'pending-approval') {
-        finalTasks = tasks.filter(t => String(t.taskType) !== '22' && String(t.taskType) !== '20');
-    } else if (taskType === 'renewal-approval') {
-        finalTasks = tasks.filter(t => String(t.taskType) === '22');
-    }
+    if (taskType === 'pending-approval') finalTasks = tasks.filter(t => String(t.taskType) !== '22' && String(t.taskType) !== '20');
+    else if (taskType === 'renewal-approval') finalTasks = tasks.filter(t => String(t.taskType) === '22');
     
-    // Pagination ile Render
     $('#taskPagination').show();
     window.taskPaginationData.allData = finalTasks;
-    window.taskPaginationData.pagination = new window.Pagination({
-        itemsPerPage: 10, containerId: 'taskPagination',
-        onPageChange: (p, pp) => window.renderTaskPage(p, pp)
-    });
+    window.taskPaginationData.pagination = new window.Pagination({ itemsPerPage: 10, containerId: 'taskPagination', onPageChange: (p, pp) => window.renderTaskPage(p, pp) });
     window.taskPaginationData.pagination.update(finalTasks.length);
     window.renderTaskPage(1, 10);
 };
 
-// 4. GLOBAL: Render Task Page (Esnek Yapı)
 window.renderTaskPage = function(page, perPage, customData = null, customContainerId = null) {
     const targetId = customContainerId || 'task-list-container';
     const container = document.getElementById(targetId);
     if (!container) return;
-    
     const data = customData || window.taskPaginationData.allData || [];
     const start = (page - 1) * perPage;
     const pageItems = data.slice(start, start + perPage);
-    
     const isComp = ($('#task-list-details').data('current-type') === 'completed-tasks');
-    
-    container.innerHTML = pageItems.map((t, i) => 
-        window.createTaskCardHTML(t, start + i + 1, isComp)
-    ).join('');
-    
+    container.innerHTML = pageItems.map((t, i) => window.createTaskCardHTML(t, start + i + 1, isComp)).join('');
     $('html, body').animate({ scrollTop: $(container).offset().top - 150 }, 300);
 };
 
-// --- ACTIONS ---
-
-async function approveTask(taskId) {
-    if(!confirm('Onaylıyor musunuz?')) return;
-    try {
-        await updateDoc(doc(db, "tasks", taskId), { status: "open", approvalDate: new Date().toISOString() });
-        alert('Onaylandı!');
-        // UI refresh
-        const type = $('#task-list-details').data('current-type');
-        if(type) window.loadSampleTaskDetails(type);
-        await window.fetchAndDisplayTasks(window.linkedPersonIds);
-    } catch(e) { alert('Hata: ' + e.message); }
+// --- PORTFOLIO MODULE ---
+async function fetchAndDisplayPortfolio() {
+    const user = authService.getCurrentUser();
+    if (!user) return;
+    const portfolioRef = collection(db, "ipRecords");
+    const q = query(collection(db, "ipRecords")); // Client-side filtering required due to array limits
+    const snap = await runGetDocs(q);
+    let allPortfolios = [];
+    snap.forEach(doc => {
+        const d = doc.data();
+        if (d.applicants && d.applicants.some(a => window.linkedPersonIds.includes(a.id))) allPortfolios.push({ id: doc.id, ...d });
+    });
+    // Set Dashboard Counters
+    $('#dashPortfolio').text(allPortfolios.length);
+    
+    // Populate Tables (Simplified)
+    window.markaPaginationData.allDataUnfiltered = allPortfolios.filter(p => p.type === 'trademark');
+    populatePortfolioTable('#marka-list', window.markaPaginationData.allDataUnfiltered.slice(0,10));
+    populatePortfolioTable('#patent-list', allPortfolios.filter(p => p.type === 'patent'));
+    populatePortfolioTable('#tasarim-list', allPortfolios.filter(p => p.type === 'design'));
+    // Pagination init logic here if needed
 }
 
-async function rejectTask(taskId) {
-    const reason = prompt('Red sebebi (opsiyonel):');
-    if(reason === null) return;
+function populatePortfolioTable(tableId, data) {
+    const tbody = $(tableId + ' tbody');
+    tbody.empty();
+    data.forEach((item, i) => {
+        const statusClass = item.status === 'registered' ? 'success' : 'primary';
+        const row = `<tr><td>${i+1}</td><td>${item.title || '-'}</td><td>${item.applicationNumber || '-'}</td><td><span class="badge badge-${statusClass}">${item.status || '-'}</span></td></tr>`;
+        tbody.append(row);
+    });
+}
+
+// --- INVOICE MODULE ---
+async function fetchAndDisplayInvoices(linkedIds) {
+    const allAccruals = [];
+    for (let i = 0; i < linkedIds.length; i += 10) {
+        const chunk = linkedIds.slice(i, i + 10);
+        const q = query(collection(db, 'accruals'), where('serviceInvoiceParty.id', 'in', chunk));
+        const snap = await runGetDocs(q);
+        snap.forEach(d => allAccruals.push({ id: d.id, ...d.data() }));
+    }
+    const unique = Array.from(new Map(allAccruals.map(a => [a.id, a])).values());
+    $('#dashUnpaidInvoices').text(unique.filter(a => a.status !== 'paid').length);
+    
+    window.invoicesPaginationData.allData = unique;
+    renderInvoicesTable(unique.slice(0, 10));
+}
+
+function renderInvoicesTable(data) {
+    const tbody = $('#invoices table tbody');
+    tbody.empty();
+    data.forEach(inv => {
+        const badge = inv.status === 'paid' ? 'success' : 'warning';
+        const row = `<tr><td>${inv.invoiceNo || '-'}</td><td>${window.formatDateTR(inv.createdAt)}</td><td>${inv.taskTitle || '-'}</td><td>${window.currencyFormatter(inv.totalAmount)}</td><td><span class="badge badge-${badge}">${inv.status}</span></td><td><button class="btn btn-sm btn-primary">İndir</button></td></tr>`;
+        tbody.append(row);
+    });
+}
+
+// --- SUITS & OBJECTIONS ---
+window.fetchAndDisplaySuits = async function() {
+    console.log('🚀 fetchAndDisplaySuits çağrıldı');
+    
+    const tbody = document.getElementById('dava-tbody');
+    if (!tbody) {
+        console.error('❌ #dava-tbody bulunamadı!');
+        return;
+    }
+    tbody.innerHTML = '<tr><td colspan="8" class="text-center"><i class="fas fa-spinner fa-spin"></i> Yükleniyor...</td></tr>';
+
     try {
-        await updateDoc(doc(db, "tasks", taskId), { status: "müvekkil onayı - kapatıldı", rejectionDate: new Date().toISOString(), rejectionReason: reason });
-        alert('Reddedildi.');
-        const type = $('#task-list-details').data('current-type');
-        if(type) window.loadSampleTaskDetails(type);
-        await window.fetchAndDisplayTasks(window.linkedPersonIds);
-    } catch(e) { alert('Hata: ' + e.message); }
+        // 1. Kullanıcı ve Müvekkil ID'lerini al
+        const user = authService.getCurrentUser();
+        if (!user) {
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">Kullanıcı girişi yapılmamış.</td></tr>';
+            return;
+        }
+        
+        const userDocRef = doc(db, "users", user.uid);
+        const userSnapshot = await getDoc(userDocRef);
+        
+        if (!userSnapshot.exists()) {
+             tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">Kullanıcı verisi bulunamadı.</td></tr>';
+             return;
+        }
+        
+        const linkedPersonIds = userSnapshot.data().linkedPersonIds || [];
+        
+        if (linkedPersonIds.length === 0) {
+            console.log("Bağlı müvekkil bulunamadı.");
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">Bağlı müvekkil bulunamadı.</td></tr>';
+            return;
+        }
+        
+        console.log('🔍 Dava kayıtları yükleniyor... Yetkili IDler:', JSON.stringify(linkedPersonIds));
+
+        // 2. Tarih formatlama fonksiyonu
+        const formatDate = (v) => {
+            if (!v) return '-';
+            try {
+                let dt;
+                if (typeof v === 'string') dt = new Date(v);
+                else if (typeof v?.toDate === 'function') dt = v.toDate();
+                else if ('seconds' in (v||{})) dt = new Date(v.seconds*1000);
+                else if (v instanceof Date) dt = v;
+                else return String(v);
+                if (isNaN(dt.getTime())) return String(v);
+                const day = String(dt.getDate()).padStart(2, '0');
+                const month = String(dt.getMonth() + 1).padStart(2, '0');
+                const year = dt.getFullYear();
+                return `${day}/${month}/${year}`;
+            } catch { return String(v); }
+        };
+
+        // 3. Suits koleksiyonunu sorgula
+        const suitsCol = collection(db, 'suits');
+        const suitsQuery = query(suitsCol);
+        const suitsSnap = await getDocs(suitsQuery);
+        
+        console.log(`📥 Toplam ${suitsSnap.size} dava kaydı bulundu, filtreleme başlıyor...`);
+
+        const suitRows = [];
+        let index = 0;
+
+        suitsSnap.forEach(suitDoc => {
+            const suitData = suitDoc.data();
+            
+            // Client ID kontrolü
+            const clientId = suitData.client?.id;
+            if (!clientId || !linkedPersonIds.includes(clientId)) {
+                return; // Bu davayı atla
+            }
+
+            index++;
+            
+            // Dava bilgilerini çıkar
+            const caseNo = suitData.suitDetails?.caseNo || '-';
+            const title = suitData.suitDetails?.title || suitData.transactionType?.alias || 'Dava';
+            const subjectAssetTitle = suitData.subjectAsset?.title || '-';
+            const subjectAssetType = suitData.subjectAsset?.type || '-';
+            const court = suitData.suitDetails?.court || '-';
+            const opposingParty = suitData.suitDetails?.opposingParty || '-';
+            const openingDate = formatDate(suitData.suitDetails?.openingDate);
+            const suitStatus = suitData.suitDetails?.suitStatus || 'Devam Ediyor';
+            
+            // Durum badge'i
+            const statusBadgeClass = {
+                'Açık': 'warning',
+                'Devam Ediyor': 'info',
+                'Tamamlandı': 'success',
+                'Kapatıldı': 'secondary'
+            }[suitStatus] || 'info';
+
+            suitRows.push({
+                id: suitDoc.id,
+                index: index,
+                caseNo: caseNo,
+                title: title,
+                subjectAssetTitle: subjectAssetTitle,
+                subjectAssetType: subjectAssetType,
+                subjectAssetNumber: suitData.subjectAsset?.number || '-',
+                court: court,
+                opposingParty: opposingParty,
+                opposingCounsel: suitData.suitDetails?.opposingCounsel || '-',
+                openingDate: openingDate,
+                suitStatus: suitStatus,
+                statusBadgeClass: statusBadgeClass,
+                description: suitData.suitDetails?.description || '-',
+                clientName: suitData.client?.name || '-',
+                fullData: suitData
+            });
+        });
+
+        console.log(`✅ ${suitRows.length} adet yetkilendirilmiş dava kaydı bulundu`);
+
+        // 4. Tabloyu render et
+        if (suitRows.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">Henüz dava kaydı bulunmamaktadır.</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = '';
+        suitRows.forEach(row => {
+            const tr = document.createElement('tr');
+            tr.style.cursor = 'pointer';
+            tr.setAttribute('data-suit-id', row.id);
+            tr.classList.add('dava-row');
+            
+            tr.innerHTML = `
+                <td>${row.index}</td>
+                <td><strong>${row.caseNo}</strong></td>
+                <td><a href="#" class="dava-detail-link" data-suit-id="${row.id}">${row.title}</a></td>
+                <td>${row.subjectAssetTitle}<br><small class="text-muted">${row.subjectAssetType}</small></td>
+                <td>${row.court}</td>
+                <td>${row.opposingParty}</td>
+                <td>${row.openingDate}</td>
+                <td><span class="badge badge-${row.statusBadgeClass}">${row.suitStatus}</span></td>
+            `;
+            
+            tbody.appendChild(tr);
+        });
+
+        // 5. Dava verilerini global olarak sakla (modal için)
+        window.suitsData = suitRows;
+
+    } catch (error) {
+        console.error('❌ Dava yükleme hatası:', error);
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center text-danger">Veriler yüklenirken bir hata oluştu. Lütfen sayfayı yenileyin.</td></tr>';
+    }
+};
+
+window.fetchAndDisplayObjections = async function() {
+    console.log('🚀 fetchAndDisplayObjections (SADECE 3. TARAF - portfolio.html LOGIC) çağrıldı');
+    
+    const tbody = document.getElementById('dava-itiraz-tbody');
+    if (!tbody) {
+        console.error('❌ #dava-itiraz-tbody bulunamadı!');
+        return;
+    }
+    tbody.innerHTML = '<tr><td colspan="11" class="text-center"><i class="fas fa-spinner fa-spin"></i> Yükleniyor...</td></tr>';
+
+    try {
+        // 1. Kullanıcı ve Müvekkil ID'lerini al
+        const user = authService.getCurrentUser();
+        if (!user) {
+            tbody.innerHTML = '<tr><td colspan="11" class="text-center text-muted">Kullanıcı girişi yapılmamış.</td></tr>';
+            return;
+        }
+        
+        const userDocRef = doc(db, "users", user.uid);
+        const userSnapshot = await getDoc(userDocRef);
+        
+        if (!userSnapshot.exists()) {
+             tbody.innerHTML = '<tr><td colspan="11" class="text-center text-muted">Kullanıcı verisi bulunamadı.</td></tr>';
+             return;
+        }
+        
+        const linkedPersonIds = userSnapshot.data().linkedPersonIds || [];
+        
+        if (linkedPersonIds.length === 0) {
+            console.log("Bağlı müvekkil bulunamadı.");
+            tbody.innerHTML = '<tr><td colspan="11" class="text-center text-muted">Bağlı müvekkil bulunamadı.</td></tr>';
+            return;
+        }
+        
+        console.log('🔍 İtiraz (Sadece 3. Taraf) yükleniyor... Yetkili IDler:', JSON.stringify(linkedPersonIds));
+
+        // 2. Transaction Type'ları yükle
+        if (transactionTypesMap.size === 0) {
+            const txTypesResult = await window.transactionTypeService?.getTransactionTypes();
+            if (txTypesResult?.success) {
+                txTypesResult.data.forEach(type => {
+                    transactionTypesMap.set(String(type.id), type);
+                });
+            }
+        }
+
+        // 3. Gerekli tanımlamalar
+        const formatDate = (v) => {
+            if (!v) return '-';
+            try {
+                let dt;
+                if (typeof v === 'string') dt = new Date(v);
+                else if (typeof v?.toDate === 'function') dt = v.toDate();
+                else if ('seconds' in (v||{})) dt = new Date(v.seconds*1000);
+                else if (v instanceof Date) dt = v;
+                else return String(v);
+                if (isNaN(dt.getTime())) return String(v);
+                const day = String(dt.getDate()).padStart(2, '0');
+                const month = String(dt.getMonth() + 1).padStart(2, '0');
+                const year = dt.getFullYear();
+                return `${day}/${month}/${year}`;
+            } catch { return String(v); }
+        };
+
+        const PARENT_TYPE_IDS_STR = ['7', '19', '20']; // İtiraz task tipleri
+        const objectionRows = []; // Tüm (parent+child) satırları burada toplayacağız
+
+        // ================================================================
+        // === 'portfolio.html' DOSYASINDAN KOPYALANAN BASİT SORGU ===
+        // ================================================================
+        
+        console.log('🔄 "tasks" koleksiyonu sorgulanıyor (owner, ownerIds, relatedParty, opponent)...');
+
+        const tasksCol = collection(db, 'tasks');
+        const idsForIn = linkedPersonIds.slice(0, 10); // Firestore 'in' ve 'array-contains-any' limiti 10
+
+        // 1) taskOwner (array) -> array-contains-any
+        const qOwner = query(
+        tasksCol,
+        where('taskType', 'in', PARENT_TYPE_IDS_STR),
+        where('taskOwner', 'array-contains-any', linkedPersonIds)
+        );
+
+        // 2) taskOwnerIds (array) -> array-contains-any
+        const qOwnerIds = query(
+        tasksCol,
+        where('taskType', 'in', PARENT_TYPE_IDS_STR),
+        where('taskOwnerIds', 'array-contains-any', linkedPersonIds)
+        );
+
+        // 3) details.relatedParty.id (string) -> in
+        const qRelatedParty = query(
+        tasksCol,
+        where('taskType', 'in', PARENT_TYPE_IDS_STR),
+        where('details.relatedParty.id', 'in', idsForIn)
+        );
+
+        // 4) opponent.id (string) -> in  (bazı eski kayıtlarda burada durabiliyor)
+        const qOpponent = query(
+        tasksCol,
+        where('taskType', 'in', PARENT_TYPE_IDS_STR),
+        where('opponent.id', 'in', idsForIn)
+        );
+
+        // Hepsini paralel çek ve birleştir
+        const [snapOwner, snapOwnerIds, snapRelated, snapOpp] = await Promise.all([
+        getDocs(qOwner),
+        getDocs(qOwnerIds),
+        getDocs(qRelatedParty),
+        getDocs(qOpponent),
+        ]);
+
+        const merged = new Map();
+        [snapOwner, snapOwnerIds, snapRelated, snapOpp].forEach(snap => {
+        snap?.docs?.forEach(d => merged.set(d.id, d));
+        });
+
+        // objectorSnap benzeri yapı
+        const objectorSnap = { docs: Array.from(merged.values()), size: merged.size };
+
+        console.log(`🔍 ${objectorSnap.size} adet eşleşen 'task' kaydı (3. taraf) bulundu.`);
+
+        // --- Bellek içi ek yetki filtresi (güvenlik için aynen kalsın) ---
+        const AUTH_SET = new Set(linkedPersonIds);
+        const isAuthorizedTask = (t) => {
+        const ownerOk =
+            (typeof t.taskOwner === 'string' && AUTH_SET.has(t.taskOwner)) ||
+            (Array.isArray(t.taskOwner) && t.taskOwner.some(id => AUTH_SET.has(id))) ||
+            (Array.isArray(t.taskOwnerIds) && t.taskOwnerIds.some(id => AUTH_SET.has(id)));
+
+        const relatedOk =
+            t?.details?.relatedParty?.id && AUTH_SET.has(t.details.relatedParty.id);
+
+        const relatedManyOk =
+            Array.isArray(t?.details?.relatedParties) &&
+            t.details.relatedParties.some(p => p?.id && AUTH_SET.has(p.id));
+
+        const opponentOk =
+            t?.opponent?.id && AUTH_SET.has(t.opponent.id);
+
+        return ownerOk || relatedOk || relatedManyOk || opponentOk;
+        };
+
+        const authorizedTaskDocs = objectorSnap.docs.filter(d => isAuthorizedTask(d.data()));
+
+        const processPromises = authorizedTaskDocs.map(async (taskDoc) => {
+        const taskData = taskDoc.data();
+        const recordId = taskData.relatedIpRecordId;
+        if (!recordId) {
+            console.warn(`⚠️ Task ${taskDoc.id} için 'relatedIpRecordId' eksik.`);
+            return null;
+        }
+        console.log(`🔍 Task ${taskDoc.id} işleniyor - RecordId: ${recordId}`);
+
+            try {
+                // === 1. İpRecord'u çek ===
+                const recordSnap = await getDoc(doc(db, 'ipRecords', recordId));
+                
+                if (!recordSnap.exists()) {
+                    console.warn(`⚠️ Task ${taskDoc.id} için ipRecord (${recordId}) bulunamadı.`);
+                    return null;
+                }
+                
+                const record = recordSnap.data();
+                
+                // === 2. TÜM transaction'ları çek ===
+                const txQuery = query(collection(db, 'ipRecords', recordId, 'transactions'));
+                const txSnap = await getDocs(txQuery);
+                
+                const allTransactions = [];
+                txSnap.forEach(txDoc => {
+                    allTransactions.push({ id: txDoc.id, ...txDoc.data() });
+                });
+                
+                console.log(`📊 Record ${recordId} için ${allTransactions.length} transaction bulundu`);
+                
+                // === 3. Parent ve Child transaction'ları ayır ===
+                const PARENT_TYPE_IDS = ['7', '19', '20'];
+                
+                // Parent transaction'ları filtrele
+                const parentTransactions = allTransactions.filter(tx =>
+                    PARENT_TYPE_IDS.includes(String(tx.type)) &&
+                    (tx.transactionHierarchy === 'parent' || !tx.parentId)
+                );
+                
+                console.log(`📊 ${parentTransactions.length} parent transaction bulundu`);
+                
+                // === 4) Bu task ile ilişkili parent transaction'ı bul ===
+                let parentTx = null;
+
+                // 4.1) Öncelik: triggeringTransactionId (varsa)
+                if (taskData.triggeringTransactionId) {
+                parentTx = parentTransactions.find(tx => tx.id === taskData.triggeringTransactionId);
+                }
+
+                // 4.2) Yoksa: type == taskType (örn: 19 ya da 20)
+                if (!parentTx) {
+                parentTx = parentTransactions
+                    .filter(tx => String(tx.type) === String(taskData.taskType))
+                    // aynı tipten birden fazla parent varsa, task.timestamp'tan
+                    // önceki en yakın olanı seç (yoksa en yeni)
+                    .sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0))
+                    [0] || null;
+                }
+
+                // 4.3) Yine yoksa hiç parent seçme → satırı atla (yanlış eşleşme olmasın)
+                if (!parentTx) {
+                console.warn(`⚠️ Task ${taskDoc.id} için uygun parent transaction bulunamadı (type=${taskData.taskType}).`);
+                return null;
+                }
+
+                // === 5. Parent'ın child transaction'larını bul ===
+                const childTransactions = allTransactions.filter(tx =>
+                    tx.transactionHierarchy === 'child' && 
+                    tx.parentId === parentTx.id
+                );
+                
+                console.log(`📊 Parent ${parentTx.id} için ${childTransactions.length} child transaction bulundu`);
+                
+                // Child'ları timestamp'e göre sırala
+                childTransactions.sort((a, b) => {
+                    const dateA = new Date(a.timestamp || 0);
+                    const dateB = new Date(b.timestamp || 0);
+                    return dateA - dateB; // Eskiden yeniye
+                });
+            
+            // === PARENT İÇİN EVRAK TOPLAMA ===
+            let allParentDocs = [];
+            const existingParentFileNames = new Set();
+
+            // 1) Parent transaction üzerindeki manuel/ekli belgeler
+            if (Array.isArray(parentTx.documents)) {
+                parentTx.documents.forEach(doc => {
+                    const fileName = doc.name || 'Belge';
+                    const fileUrl = doc.downloadURL || doc.url || doc.path;
+                    if (fileUrl && !existingParentFileNames.has(fileName)) {
+                        allParentDocs.push({ 
+                            fileName, 
+                            fileUrl, 
+                            type: doc.type, 
+                            isTransactionDoc: true 
+                        });
+                        existingParentFileNames.add(fileName);
+                    }
+                });
+            }
+
+            // 2) Parent'ın triggeringTaskId'sinden gelen task belgelerini ekle
+            if (parentTx.triggeringTaskId) {
+                try {
+                    const parentTaskDocs = await fetchTaskDocuments(parentTx.triggeringTaskId);
+                    parentTaskDocs.forEach(doc => {
+                        if (doc.fileName && !existingParentFileNames.has(doc.fileName)) {
+                            allParentDocs.push(doc);
+                            existingParentFileNames.add(doc.fileName);
+                        }
+                    });
+                    console.log(`📄 Parent ${parentTx.id} için task belgelerinden ${parentTaskDocs.length} belge eklendi`);
+                } catch (e) {
+                    console.error(`Parent task belgeleri çekilirken hata (ID: ${parentTx.triggeringTaskId}):`, e);
+                }
+            }
+            
+            console.log(`📦 Parent ${parentTx.id} için toplam ${allParentDocs.length} belge toplandı`);
+            // 3. Parent objesini oluştur (Veriyi 'transaction'dan VEYA 'task'dan al)
+            const typeMeta = transactionTypesMap.get(String(taskData.taskType)); // Ana tip 'task'dan gelir
+            const transactionTypeName = typeMeta?.alias || typeMeta?.name || `İşlem ${taskData.taskType}`;
+            
+            // İtiraz sahibi (opponent) müvekkildir.
+            // Önce parentTx'i (işlem) dene, yoksa taskData'yı (görev) dene
+            const opponentName = 
+                parentTx?.oppositionOwner || 
+                parentTx?.relatedParty?.name || 
+                taskData.relatedParty?.name || // <-- YEDEK KULLANIM
+                '(Müvekkil)';
+            
+            const bulletinNo = record.details?.brandInfo?.opposedMarkBulletinNo || parentTx?.bulletinNo || taskData.details?.bulletinNo || '-';
+            const bulletinDate = record.details?.brandInfo?.opposedMarkBulletinDate || parentTx?.bulletinDate || taskData.details?.bulletinDate || null;
+            const epatsDate = parentTx?.epatsDocument?.documentDate || null;
+
+            // === 6) Durum (requestResult) – SADECE parent'tan ===
+            const REQUEST_RESULT_STATUS = {
+            '24':'Eksiklik Bildirimi',
+            '28':'Kabul',            '29':'Kısmi Kabul',     '30':'Ret',
+            '31':'B.S - Kabul',      '32':'B.S - Kısmi Kabul','33':'B.S - Ret',
+            '34':'İ.S - Kabul',      '35':'İ.S - Kısmi Kabul','36':'İ.S - Ret',
+            '50':'Kabul',            '51':'Kısmi Kabul',     '52':'Ret'
+            };
+
+            const reqResult = parentTx?.requestResult ?? null;
+            const parentStatusText =
+            (reqResult !== null && reqResult !== undefined && reqResult !== '')
+                ? (REQUEST_RESULT_STATUS[String(reqResult)] || `Bilinmiyor (ID: ${reqResult})`)
+                : 'Karar Bekleniyor';
+            
+            // === 7. Origin (Menşe) bilgisini belirle ===
+                const originRaw = (record.origin || parentTx?.origin || '').toString().toUpperCase().trim();
+                const originBucket = (originRaw === 'TÜRKPATENT' || originRaw === 'TURKPATENT' || originRaw === '') ? 'TÜRKPATENT' : 'YURTDISI';
+
+                const hasChildren = childTransactions.length > 0;
+                const rowsToAdd = [];
+
+            // === 8. Parent satırı oluştur ===
+
+                const uniqueRowId = `${taskDoc.id}-${parentTx.id}`;
+                rowsToAdd.push({
+                    id: uniqueRowId,
+                    taskId: taskDoc.id,
+                    transactionId: parentTx.id,
+                    recordId: recordId,
+                    brandImageUrl: record.brandImageUrl || record.brandImage || '',
+                    title: record.title || record.brandText || '',
+                    transactionTypeName,
+                    applicationNumber: record.applicationNumber || '-',
+                    applicantName: (record.applicants?.map?.(a => a.name).join(', ')) || '-',
+                    opponent: opponentName,
+                    bulletinDate: formatDate(bulletinDate),
+                    bulletinNo,
+                    epatsDate: formatDate(epatsDate),
+                    origin: originBucket,
+                    statusText: parentStatusText, 
+                    isParent: true,
+                    hasChildren: hasChildren,
+                    allParentDocs: allParentDocs // 🔥 EKLENEN - Parent evrakları
+                });
+
+                // === 9. Child satırları ekle ===
+                if (hasChildren) {
+                    // ✅ Önce tüm transaction ID'lerini topla (PDF'ler için)
+                    const allTxIds = [parentTx.id, ...childTransactions.map(c => c.id)];
+                    
+                    // ✅ PDF'leri transaction ID'sine göre grupla
+                    const pdfsByTransaction = await fetchPdfsForTransactions(allTxIds);
+                    
+                    // Child'ları asenkron olarak işle
+                    for (const [subIndex, childTx] of childTransactions.entries()) {
+                        const childTypeMeta = transactionTypesMap.get(String(childTx.type));
+                        const childTxTypeName = childTypeMeta?.alias || childTypeMeta?.name || `İşlem ${childTx.type}`;
+                        const childOpponent = childTx.oppositionOwner || childTx.relatedParty?.name || '-';
+                        const childEpatsDate = childTx.epatsDocument?.documentDate || null;
+                        const childStatusText = '-';
+                        const uniqueChildId = `${taskDoc.id}-${childTx.id}`;
+                        
+                        // ✅ Child transaction'a ait PDF'leri getir
+                        const childPdfs = pdfsByTransaction[childTx.id] || [];
+                        
+                        let allChildDocs = [...childPdfs];
+                        const existingFileNames = new Set(allChildDocs.map(d => d.fileName).filter(Boolean));
+                        
+                        // İtiraza Karşı Görüş (ID: 38) veya İtiraz Bildirimi (ID: 27)
+                        const IS_OPPOSITION_RESPONSE = String(childTx.type) === '38'; 
+                        const IS_OPPOSITION_NOTICE = String(childTx.type) === '27';
+
+                        // 🔥 ID 38 ve ID 27 için Task belgelerini çek
+                        if ((IS_OPPOSITION_RESPONSE || IS_OPPOSITION_NOTICE) && childTx.triggeringTaskId) {
+                             console.log(`🔍 Child işlem (${childTxTypeName}, ID:${childTx.type}) için task belgeleri çekiliyor:`, childTx.triggeringTaskId);
+                             
+                             const taskDocs = await fetchTaskDocuments(childTx.triggeringTaskId);
+                             
+                             taskDocs.forEach(doc => {
+                                if (doc.fileName && !existingFileNames.has(doc.fileName)) {
+                                    allChildDocs.push(doc);
+                                    existingFileNames.add(doc.fileName);
+                                }
+                             });
+                             console.log(`✅ Task sonrası toplam belge sayısı: ${allChildDocs.length}`);
+                        }
+                        
+                        // 🔥 İtiraz Bildirimi (ID: 27) ise parent'ın belgelerini de ekle
+                        if (IS_OPPOSITION_NOTICE) {
+                            console.log('🔍 İtiraz Bildirimi tespit edildi, parent belgeleri ekleniyor...');
+                            
+                            const parentTransactionDocs = parentTx.documents || [];
+                            const parentPdfsForChild = pdfsByTransaction[parentTx.id] || [];
+                            
+                            const parentDocsToAttach = [
+                                ...parentPdfsForChild,
+                                ...parentTransactionDocs.map(doc => ({
+                                  fileName: doc.name || 'Belge',
+                                  fileUrl: doc.path || doc.url || doc.downloadURL,
+                                  type: doc.type,
+                                  isParentDoc: true
+                                }))
+                            ];
+                            
+                            parentDocsToAttach.forEach(doc => {
+                                if (doc.fileName && !existingFileNames.has(doc.fileName)) {
+                                    allChildDocs.push(doc);
+                                    existingFileNames.add(doc.fileName);
+                                }
+                            });
+                            
+                            console.log('✅ İtiraz Bildirimi için son toplam belge sayısı:', allChildDocs.length);
+                        }
+                        
+                        rowsToAdd.push({
+                            id: uniqueChildId,
+                            parentId: uniqueRowId,
+                            recordId: recordId,
+                            brandImageUrl: record.brandImageUrl || record.brandImage || '',
+                            title: record.title || record.brandText || '',
+                            transactionTypeName: childTxTypeName,
+                            applicationNumber: record.applicationNumber || '-', 
+                            applicantName: (record.applicants?.map?.(a => a.name).join(', ')) || '-',
+                            opponent: childOpponent,
+                            bulletinDate: '-',
+                            bulletinNo: '-',
+                            epatsDate: formatDate(childEpatsDate),
+                            origin: originBucket,
+                            statusText: childStatusText,
+                            isParent: false,
+                            hasChildren: false,
+                            subIndex: subIndex + 1,
+                            allChildDocs: allChildDocs // 🔥 EKLENEN ALAN - Evrakları sakla
+                        });
+                    }
+                }
+            return rowsToAdd;
+                        } catch (error) {
+                console.error(`❌ Task ${taskDoc.id} işlenirken hata:`, error);
+                return null;
+            }
+        });
+        
+        // Gelen sonuçları bekle ve ana listeye ekle
+        const results = await Promise.all(processPromises);
+
+        results.forEach(rows => {
+        if (rows && Array.isArray(rows)) {
+            objectionRows.push(...rows); // <-- doğru kullanım
+        }
+        });
+
+        console.log(`✅ Toplam ${objectionRows.length} itiraz satırı (parent+child) oluşturuldu`);
+        
+        // 7. Global veriyi sakla
+        window.davaItirazPaginationData.allData = objectionRows;
+        const allParentRows = objectionRows.filter(r => r.isParent);
+        const paginationContainerId = 'davaItirazPagination';
+        const itemsPerPage = window.davaItirazPaginationData.itemsPerPage || 10;
+
+        // 8. Pagination'ı başlat (eğer yoksa)
+        if (!window.davaItirazPaginationData.pagination) {
+            window.davaItirazPaginationData.pagination = new Pagination({
+                itemsPerPage: itemsPerPage,
+                containerId: paginationContainerId,
+                onPageChange: (page, perPage) => {
+                    const start = (page - 1) * perPage;
+                    const end = start + perPage;
+                    const parentSlice = allParentRows.slice(start, end);
+                    renderDavaItirazTable(parentSlice, start);
+                }
+            });
+        }
+        
+        // 9. Pagination'ı güncelle ve ilk sayfayı çiz
+        window.davaItirazPaginationData.pagination.update(allParentRows.length);
+        const firstPageSlice = allParentRows.slice(0, itemsPerPage);
+        renderDavaItirazTable(firstPageSlice, 0); 
+
+    } catch (error) {
+        console.error('❌ İtiraz (3. taraf - basit sorgu) yükleme hatası:', error);
+        if (error.code === 'failed-precondition') {
+             console.error('🔥 FIRESTORE İNDEKS HATASI: Bu sorgu için bir bileşik indeks gerekiyor. Lütfen hata mesajındaki linke tıklayarak indeksi oluşturun.');
+             tbody.innerHTML = `<tr><td colspan="11" class="text-center text-danger">Veritabanı İndeks Hatası: Lütfen konsolu kontrol edin.</td></tr>`;
+        } else {
+             tbody.innerHTML = '<tr><td colspan="11" class="text-center text-danger">Veriler yüklenirken bir hata oluştu. Lütfen sayfayı yenileyin.</td></tr>';
+        }
+    }
+};
+
+// --- ACTIONS ---
+async function approveTask(taskId) {
+    if(!confirm('Onaylıyor musunuz?')) return;
+    try { await updateDoc(doc(db, "tasks", taskId), { status: "open", approvalDate: new Date().toISOString() }); alert('Onaylandı!'); window.location.reload(); } catch(e) { alert(e.message); }
+}
+async function rejectTask(taskId) {
+    const reason = prompt('Red sebebi:');
+    if(!reason) return;
+    try { await updateDoc(doc(db, "tasks", taskId), { status: "müvekkil onayı - kapatıldı", rejectionDate: new Date().toISOString(), rejectionReason: reason }); alert('Reddedildi.'); window.location.reload(); } catch(e) { alert(e.message); }
 }
 
 // --- EVENTS ---
 $(document).ready(function() {
+    initTheme();
     authService.onAuthStateChanged(user => {
         if (user) initPortal();
         else window.location.href = 'index.html';
     });
     
-    // Task Action Delegations
+    // Delegations
     $(document).on('click', '.task-approve', function() { approveTask($(this).data('id')); });
     $(document).on('click', '.task-reject', function() { rejectTask($(this).data('id')); });
-    $(document).on('click', '.task-detail', function() { 
-        const id = $(this).data('id');
-        console.log('Detay:', id);
-        // Modal açma mantığı buraya eklenebilir (örn: ipRecordId ile)
+    
+    // Kart Tıklamaları
+    $('.task-card-link').click(function() {
+        $('.task-card-link').removeClass('active-task-area'); $(this).addClass('active-task-area');
+        const target = $(this).data('target-area');
+        if(target === 'marka-tasks') $('#task-detail-cards').slideDown(); else $('#task-detail-cards').slideUp();
+    });
+    
+    $('.detail-card-link').click(function() {
+        const type = $(this).data('task-type');
+        $('#task-list-details').slideDown().data('current-type', type);
+        window.loadSampleTaskDetails(type);
     });
 });
 
+// Theme Init
+function initTheme() {
+    const theme = localStorage.getItem('theme') || 'dark';
+    $('body').addClass(theme + '-mode');
+    $('#themeSwitch').prop('checked', theme === 'dark').change(function() {
+        $('body').toggleClass('dark-mode light-mode');
+        localStorage.setItem('theme', $('body').hasClass('dark-mode') ? 'dark' : 'light');
+    });
+}
 </script>
 </body>
 </html>
