@@ -55,6 +55,26 @@ const txCount   = document.getElementById('txCount');
 let currentData = null;
 let cachedTransactions = [];
 
+// --- STİL EKLEME (35. Sınıf Alt Kırılımları İçin) ---
+(function injectGoodsStyles() {
+    const styleId = 'custom-goods-styles';
+    if (document.getElementById(styleId)) return;
+    const style = document.createElement('style');
+    style.id = styleId;
+    style.innerHTML = `
+        .goods-sub-item {
+            margin-left: 25px;          /* İçeri girinti */
+            list-style-type: circle;    /* Farklı madde işareti (içi boş daire) */
+            color: #495057;             /* Hafif farklı renk (opsiyonel) */
+        }
+        .goods-header-item {
+            font-weight: 500;           /* Başlık kısmını biraz koyu yap */
+            list-style-type: disc;      /* Ana başlık dolu daire */
+        }
+    `;
+    document.head.appendChild(style);
+})();
+
 function fmtDate(d) {
   try {
     if (!d) return '-';
@@ -209,8 +229,8 @@ function renderGoodsList(rec){
       return `
         <div class="goods-group">
           <div class="goods-class">Nice ${classNo}</div>
-          ${items.length
-            ? `<ul class="goods-items">${items.map(t => `<li>${t}</li>`).join('')}</ul>`
+        ${items.length
+            ? `<ul class="goods-items">${generateFormattedGoodsList(classNo, items)}</ul>`
             : `<div class="text-muted">Bu sınıf için tanım yok.</div>`}
         </div>
       `;
@@ -808,6 +828,58 @@ window.currentRecord = {
     }
   }
 
+  // --- YARDIMCI FONKSİYON: 35. Sınıf Özelleştirilmiş Liste ---
+function generateFormattedGoodsList(classNo, items) {
+    // Sınıf 35 değilse standart liste döndür
+    if (String(classNo) !== '35') {
+        return items.map(t => `<li>${t}</li>`).join('');
+    }
+
+    let html = '';
+    let isIndentedSection = false; // Girintili bölüme geçildi mi?
+    const triggerPhrase = "satın alması için";
+    const startPhrase = "müşterilerin malları";
+
+    items.forEach(t => {
+        const text = t || '';
+        const lowerText = text.toLowerCase();
+
+        // 1. Tetikleyici cümleyi (Başlığı) bul
+        if (!isIndentedSection && lowerText.includes(startPhrase) && lowerText.includes(triggerPhrase)) {
+            // Cümleyi "satın alması için" ibaresinden böl
+            const regex = new RegExp(`(${triggerPhrase})`, 'i');
+            const match = text.match(regex);
+
+            if (match) {
+                const splitIndex = match.index + match[1].length;
+                const preText = text.substring(0, splitIndex); // Başlık kısmı
+                const postText = text.substring(splitIndex);   // Aynı satırda devam eden kısım
+
+                // Başlığı normal (veya vurgulu) ekle
+                html += `<li class="goods-header-item">${preText}</li>`;
+
+                // Eğer aynı satırda devam eden bir metin varsa (noktalama hariç), onu alt madde yap
+                if (postText.replace(/[:\s\.\-]/g, '').length > 0) {
+                    html += `<li class="goods-sub-item">${postText}</li>`;
+                }
+
+                isIndentedSection = true; // Bundan sonraki maddeler içeriden başlayacak
+                return; // Sonraki maddeye geç
+            }
+        }
+
+        // 2. Eğer girintili bölümdeysen, özel stil uygula
+        if (isIndentedSection) {
+            html += `<li class="goods-sub-item">${text}</li>`;
+        } 
+        // 3. Normal madde
+        else {
+            html += `<li>${text}</li>`;
+        }
+    });
+
+    return html;
+}
     // Eşya listesi
     renderGoodsList(currentData);
 
