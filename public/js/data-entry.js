@@ -1721,24 +1721,35 @@ populateFormFields(recordData) {
             // ✅ Nice sınıfları - goodsAndServicesByClass'tan yükle
             if (recordData.goodsAndServicesByClass && recordData.goodsAndServicesByClass.length > 0) {
                 if (typeof setSelectedNiceClasses === 'function') {
-                    // Her classNo için bir sayaç tutalım
-                    const classCounters = {};
                     
-            // [DEĞİŞİKLİK] Sınıf bazında birleştirme (Aggregation)
-                    const flattenedGoodsAndServices = recordData.goodsAndServicesByClass.map(group => {
+                    // 1. Adım: Verileri Sınıf Numarasına göre grupla (DB'de parçalı kayıt varsa birleştir)
+                    const groupedData = {};
+                    
+                    recordData.goodsAndServicesByClass.forEach(group => {
                         const classNo = group.classNo;
-                        // Dizi elemanlarını yeni satır karakteri ile birleştir
-                        const combinedItems = (group.items || []).join('\n');
-            // Format: (35-1) Tüm maddeler (Modülün regex'ine uyması için -1 eklendi)
-            return `(${classNo}-1) ${combinedItems}`;
+                        if (!groupedData[classNo]) {
+                            groupedData[classNo] = [];
+                        }
+                        // Items array'ini ana listeye ekle
+                        if (Array.isArray(group.items)) {
+                            groupedData[classNo].push(...group.items);
+                        }
+                    });
+
+                    // 2. Adım: Widget formatına çevir (Her sınıf için TEK BİR madde: 35-1)
+                    const formattedClasses = Object.keys(groupedData).map(classNo => {
+                        const items = groupedData[classNo];
+                        // Tüm maddeleri yeni satır (\n) ile birleştir
+                        const combinedText = items.join('\n');
+                        
+                        // Widget'ın kabul ettiği format: (35-1) Tüm Metin
+                        return `(${classNo}-1) ${combinedText}`;
                     });
                     
-                    console.log('🎯 Nice sınıfları ayarlanıyor:', flattenedGoodsAndServices);
-                    
-                    // [DEĞİŞİKLİK] Veriyi kaybetmemek için sınıfa kaydet
-                    this.storedNiceClasses = flattenedGoodsAndServices;
-                    
-                    setSelectedNiceClasses(flattenedGoodsAndServices);
+                    // 3. Adım: Veriyi sakla (Tab değişiminde kaybolmaması için) ve widget'a gönder
+                    this.storedNiceClasses = formattedClasses;
+                    console.log('🎯 Nice sınıfları (Birleştirilmiş):', formattedClasses);
+                    setSelectedNiceClasses(formattedClasses);
                 }
             }
 
