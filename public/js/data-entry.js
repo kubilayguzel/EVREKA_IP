@@ -2185,7 +2185,7 @@ async saveTrademarkPortfolio(portfolioData) {
                     return (no || dt) ? [{ bulletinNo: no || null, bulletinDate: dt || null }] : [];
                 })(),
                 
-                applicants: this.selectedApplicants.map(p => ({ id: p.id, name: p.name, email: p.email || null })),
+                applicants: this.selectedApplicants.map(p => ({ id: p.id, email: p.email || null })),
                 priorities: this.priorities,
                 goodsAndServicesByClass: goodsAndServicesByClass,
                 
@@ -2227,7 +2227,7 @@ async saveTrademarkPortfolio(portfolioData) {
                         return (no || dt) ? [{ bulletinNo: no || null, bulletinDate: dt || null }] : [];
                     })(),
                     
-                    applicants: this.selectedApplicants.map(p => ({ id: p.id, name: p.name, email: p.email || null })),
+                    applicants: this.selectedApplicants.map(p => ({ id: p.id, email: p.email || null })),
                     priorities: this.priorities,
                     goodsAndServicesByClass: goodsAndServicesByClass,
                     
@@ -2268,7 +2268,7 @@ async saveTrademarkPortfolio(portfolioData) {
                     return (no || dt) ? [{ bulletinNo: no || null, bulletinDate: dt || null }] : [];
                 })(),
                 
-                applicants: this.selectedApplicants.map(p => ({ id: p.id, name: p.name, email: p.email || null })),
+               applicants: this.selectedApplicants.map(p => ({ id: p.id, email: p.email || null })),
                 priorities: this.priorities,
                 goodsAndServicesByClass: goodsAndServicesByClass,
 
@@ -2462,7 +2462,6 @@ async savePatentPortfolio(portfolioData) {
         
         applicants: this.selectedApplicants.map(p => ({
             id: p.id,
-            name: p.name,
             email: p.email || null
         })),
         priorities: this.priorities,
@@ -3055,7 +3054,6 @@ async saveDesignPortfolio(portfolioData) {
         
         applicants: this.selectedApplicants.map(p => ({
             id: p.id,
-            name: p.name,
             email: p.email || null
         })),
         priorities: this.priorities,
