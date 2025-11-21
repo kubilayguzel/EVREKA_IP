@@ -1107,18 +1107,10 @@
                 try {
                     // A) Bülten Analiz Kaydını Çek (monitoringTrademarkRecords)
                     if(bulletinKey) {
-                         console.log('🔍 Bülten Kaydı Arıyorum:', { bulletinKey, monitoredId, bulletinDate: task.details?.bulletinDate });
-                         const monSnap = await getDoc(doc(db, 'monitoringTrademarkRecords', bulletinKey, 'trademarks', monitoredId));
-                         console.log('📄 Döküman Mevcut mu?', monSnap.exists());
+                        const monSnap = await getDoc(doc(db, 'monitoringTrademarkRecords', bulletinKey, 'trademarks', monitoredId));
                          if(monSnap.exists()) {
                              monitoringRecord = monSnap.data();
-                             console.log('✅ Monitoring Record Bulundu:', monitoringRecord);
-                             console.log('📊 Results Array:', monitoringRecord?.results);
-                         } else {
-                             console.warn('❌ Monitoring record bulunamadı!');
                          }
-                    } else {
-                         console.warn('⚠️ bulletinKey yok!', task.details);
                     }
                     // B) İzlenen Marka Kaydını Çek (ipRecords)
                     const ipSnap = await getDoc(doc(db, 'ipRecords', monitoredId));
@@ -1257,7 +1249,7 @@
                 buttons += detailBtn;
             } else {
                 buttons = `<button class="btn btn-success btn-sm btn-action task-approve mr-1" data-id="${task.id}"><i class="fas fa-check"></i> Onayla</button><button class="btn btn-danger btn-sm btn-action task-reject mr-1" data-id="${task.id}"><i class="fas fa-times"></i> Reddet</button>${detailBtn}`;
-                if(isBulletinWatch) buttons += `<button class="btn btn-warning btn-sm btn-action task-compare-goods" data-ip-record-id="${monitoredId}" data-bulletin-object-id="${task.details?.bulletinRecordId || ''}"><i class="fas fa-balance-scale"></i> Kıyasla</button>`;
+                if(isBulletinWatch) buttons += `<button class="btn btn-warning btn-sm btn-action task-compare-goods" data-task-id="${task.id}" data-ip-record-id="${monitoredId}" data-bulletin-object-id="${task.details?.bulletinRecordId || ''}"><i class="fas fa-balance-scale"></i> Kıyasla</button>`;
             }
 
             const dateVal = window.formatDateTR(task.dueDate || task.officialDueDate || task.createdAt);
@@ -1896,15 +1888,112 @@
             window.loadSampleTaskDetails(type);
         });
         
-        // Emtia Kıyaslama Modal
+// Emtia Kıyaslama Modal
         $(document).on('click', '.task-compare-goods', async function() {
+            const taskId = $(this).data('task-id');
+            const ipRecordId = $(this).data('ip-record-id');
+            const bulletinObjectId = $(this).data('bulletin-object-id');
+            
+            console.log('🔍 Emtia kıyaslama:', { taskId, ipRecordId, bulletinObjectId });
+            
+            // Modal'ı aç
             $('#goodsComparisonModal').modal('show');
-            const ipId = $(this).data('ip-record-id');
-            if(window.loadGoodsFromIpRecord) $('#monitoredGoodsContent').html(await window.loadGoodsFromIpRecord(ipId));
-            // Rakip emtia bilgisi genellikle task detaylarında veya bulletin record'da olur.
-            // Burada basitçe placeholder gösteriyoruz, eski kodda bulletinObjectId vardı.
-            $('#competitorGoodsContent').html('<div class="alert alert-info">Rakip emtia bilgisi bülten kaydından çekilmelidir.</div>');
+            
+            // İçerikleri temizle
+            $('#monitoredGoodsContent').html('<p class="text-muted">Yükleniyor...</p>');
+            $('#competitorGoodsContent').html('<p class="text-muted">Yükleniyor...</p>');
+            
+            try {
+                // İzlenen markanın emtia listesini çek
+                const monitoredGoodsHtml = await loadGoodsFromIpRecord(ipRecordId);
+                $('#monitoredGoodsContent').html(monitoredGoodsHtml);
+                
+                // Benzer markanın emtia listesini çek
+                const competitorGoodsHtml = await loadGoodsFromBulletinRecord(bulletinObjectId);
+                $('#competitorGoodsContent').html(competitorGoodsHtml);
+                
+            } catch (error) {
+                console.error('Emtia yükleme hatası:', error);
+                $('#monitoredGoodsContent').html('<p class="text-danger">Veriler yüklenirken hata oluştu.</p>');
+                $('#competitorGoodsContent').html('<p class="text-danger">Veriler yüklenirken hata oluştu.</p>');
+            }
         });
+
+        // İzlenen markanın emtia listesini ipRecords'dan çek
+        async function loadGoodsFromIpRecord(ipRecordId) {
+            if (!ipRecordId) return '<p class="text-muted">Kayıt ID bulunamadı.</p>';
+            
+            try {
+                const ipDoc = await getDoc(doc(db, 'ipRecords', ipRecordId));
+                if (!ipDoc.exists()) return '<p class="text-muted">Kayıt bulunamadı.</p>';
+                
+                const ipData = ipDoc.data();
+                const goodsByClass = ipData.goodsAndServicesByClass || [];
+                
+                if (goodsByClass.length === 0) {
+                    return '<p class="text-muted">Mal ve hizmet bilgisi bulunamadı.</p>';
+                }
+                
+                let html = '';
+                goodsByClass.forEach(cls => {
+                    const classNo = cls.classNo || '-';
+                    const items = (cls.items && Array.isArray(cls.items)) ? cls.items.join('; ') : 'Açıklama yok';
+                    
+                    html += `
+                        <div class="mb-3">
+                            <h6 class="text-primary">Sınıf ${classNo}</h6>
+                            <p style="font-size: 0.85rem;">${items}</p>
+                        </div>
+                    `;
+                });
+                
+                return html;
+                
+            } catch (error) {
+                console.error('IP Record emtia çekme hatası:', error);
+                return '<p class="text-danger">Veriler yüklenirken hata oluştu.</p>';
+            }
+        }
+
+        // Benzer markanın emtia listesini bulletin record'dan çek
+        async function loadGoodsFromBulletinRecord(objectId) {
+            if (!objectId) return '<p class="text-muted">Kayıt ID bulunamadı.</p>';
+            
+            try {
+                console.log('🔍 Bulletin objectID ile arama:', objectId);
+                
+                // Doğrudan objectID ile belgeye eriş
+                const bulletinDocRef = doc(db, 'trademarkBulletinRecords', objectId);
+                const bulletinSnap = await getDoc(bulletinDocRef);
+                
+                if (!bulletinSnap.exists()) {
+                    console.warn('⚠️ Bulletin kaydı bulunamadı:', objectId);
+                    return '<p class="text-muted">Mal ve hizmet bilgisi bulunamadı.</p>';
+                }
+                
+                const bulletinData = bulletinSnap.data();
+                console.log('✅ Bulletin verisi:', bulletinData);
+                
+                const goods = bulletinData.goods;
+                
+                if (!goods || !Array.isArray(goods) || goods.length === 0) {
+                    return '<p class="text-muted">Mal ve hizmet bilgisi bulunamadı.</p>';
+                }
+                
+                // goods array'ini HTML'e çevir
+                let html = '';
+                goods.forEach(item => {
+                    const goodsText = item || 'Açıklama yok';
+                    html += `<p style="font-size: 0.85rem; margin-bottom: 10px; line-height: 1.4;">${goodsText}</p>`;
+                });
+                
+                return html;
+                
+            } catch (error) {
+                console.error('❌ Bulletin record emtia çekme hatası:', error);
+                return '<p class="text-danger">Veriler yüklenirken hata oluştu. <br><small>' + error.message + '</small></p>';
+            }
+        }
 
 // --- PORTFÖY DETAY MODALI AÇMA VE VERİ DOLDURMA ---
     $(document).on('click', '.portfolio-detail-link', async function(e) {
