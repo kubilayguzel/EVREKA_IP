@@ -1575,6 +1575,29 @@
                 if(!parentTx) parentTx = allTx.filter(x=> String(x.type)===String(task.taskType)).sort((a,b)=>b.timestamp-a.timestamp)[0];
                 
                 if(parentTx) {
+                    // === Rakip Marka Bilgilerini Çek (trademarkBulletinRecords) ===
+                    let opponentMarkData = null;
+                    const targetAppNo = task.details?.targetAppNo || parentTx?.opposedMarkNumber;
+                    
+                    if (targetAppNo) {
+                        try {
+                            console.log('🔍 Rakip marka bilgileri çekiliyor:', targetAppNo);
+                            const bulletinQuery = query(
+                                collection(db, 'trademarkBulletinRecords'),
+                                where('applicationNo', '==', targetAppNo),
+                                limit(1)
+                            );
+                            const bulletinSnap = await getDocs(bulletinQuery);
+                            
+                            if (!bulletinSnap.empty) {
+                                opponentMarkData = bulletinSnap.docs[0].data();
+                                console.log('✅ Rakip marka bilgileri bulundu:', opponentMarkData);
+                            }
+                        } catch (err) {
+                            console.error('❌ Rakip marka bilgisi çekilirken hata:', err);
+                        }
+                    }
+                    
                     const children = allTx.filter(x => x.transactionHierarchy==='child' && x.parentId===parentTx.id);
                     const typeMeta = window.transactionTypesMap.get(String(task.taskType));
                     
@@ -1593,9 +1616,9 @@
                         title: rec.title || rec.brandText,
                         transactionTypeName: typeMeta?.alias || 'İşlem',
                         applicationNumber: rec.applicationNumber,
-                        applicantName: rec.applicants?.[0]?.name,
-                        bulletinDate: window.formatDateTR(rec.details?.brandInfo?.opposedMarkBulletinDate),
-                        bulletinNo: rec.details?.brandInfo?.opposedMarkBulletinNo,
+                        applicantName: opponentMarkData?.holders?.[0]?.name || rec.applicants?.[0]?.name || '-',
+                        bulletinDate: window.formatDateTR(opponentMarkData?.bulletinDate || rec.details?.brandInfo?.opposedMarkBulletinDate),
+                        bulletinNo: opponentMarkData?.bulletinNo || rec.details?.brandInfo?.opposedMarkBulletinNo || '-',
                         epatsDate: window.formatDateTR(parentTx.timestamp),
                         statusText: 'İşlemde',
                         allParentDocs: docs,
