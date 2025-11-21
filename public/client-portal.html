@@ -1061,47 +1061,57 @@
         await window._renderTaskCardsToContainer(finalTasks.slice(0,10), '#task-list-container', window.formatDateTR, taskType);
     };
 
-// --- ASENKRON TASK KART RENDER (GÖRSEL, SAHİP, BS, NOT VE RENK DÜZELTMELERİ) ---
+// --- ASENKRON TASK KART RENDER (MONITORING DATA FIX) ---
     window._renderTaskCardsToContainer = async function(tasksToRender, containerSelector, formatDate, taskType) {
         const container = document.querySelector(containerSelector);
         if (!container) return;
         container.innerHTML = '<div class="col-12 text-center py-5"><i class="fas fa-spinner fa-spin fa-2x text-muted"></i></div>';
 
-        // --- Görsel URL Dönüştürücü Helper ---
+        // Helper: Görsel URL
         const getImageUrl = (path) => {
             if (!path) return 'https://placehold.co/100x100?text=Yok';
-            if (path.startsWith('http')) return path; // Zaten link ise olduğu gibi dön
-            // Firebase Storage Link Yapısı
+            if (path.startsWith('http')) return path;
             return `https://firebasestorage.googleapis.com/v0/b/ip-manager-production-aab4b.firebasestorage.app/o/${encodeURIComponent(path)}?alt=media`;
+        };
+
+        // Helper: Skor Formatla (0.56 -> %57)
+        const formatScore = (val) => {
+            if (val === undefined || val === null || val === '') return null;
+            let num = parseFloat(val);
+            if (isNaN(num)) return val;
+            if (num <= 1 && num >= 0) num = num * 100; // 0-1 arasındaysa çevir
+            return `%${Math.round(num)}`;
         };
 
         const cardsHTML = await Promise.all(tasksToRender.map(async (task, index) => {
             const isCompletedView = (taskType === 'completed-tasks');
             const isBulletinWatch = (taskType === 'bulletin-watch');
             
-            // --- VERİ HAZIRLIĞI ---
-            let monitoredData = null;
+            // --- 1. VERİ ÇEKME (MONITORING RECORDS ÖNCELİKLİ) ---
+            let monitoredData = null; // İzlenen marka ana verisi
+            let monitoringRecord = null; // Bülten analiz kaydı
             const monitoredId = task.details?.monitoredMarkId || task.relatedIpRecordId;
             
-            // İzlenen marka verisini çek
             if (monitoredId) {
                 try {
-                    // Önce Monitoring tablosuna bak (Bülten verileri burada daha detaylı olabilir)
-                    // Eğer task.details.bulletinKey varsa oradan çek, yoksa ipRecords'a git
+                    // A) Önce Bülten Analiz Tablosuna Git (Başarı şansı vb. burada)
                     if(task.details?.bulletinKey) {
                          const monSnap = await getDoc(doc(db, 'monitoringTrademarkRecords', task.details.bulletinKey, 'trademarks', monitoredId));
-                         if(monSnap.exists()) monitoredData = monSnap.data();
+                         if(monSnap.exists()) {
+                             monitoringRecord = monSnap.data();
+                             monitoredData = monitoringRecord; // Görsel vb. için bunu kullan
+                         }
                     }
                     
-                    // Eğer yukarıdan veri gelmediyse standart ipRecords'dan çek
+                    // B) Eğer monitoring kaydı yoksa veya eksikse ipRecords'a git
                     if(!monitoredData) {
                         const ipSnap = await getDoc(doc(db, 'ipRecords', monitoredId));
                         if(ipSnap.exists()) monitoredData = ipSnap.data();
                     }
-                } catch(e) { console.log('Data fetch error', e); }
+                } catch(e) { console.log('Veri çekme hatası:', e); }
             }
 
-            // 1. BAŞLIK FORMATI
+            // --- 2. BAŞLIK FORMATI ---
             let cardTitle = `#${task.id} - ${task.title || 'İşlem'}`; 
             if (monitoredData && !isBulletinWatch) {
                 const taskName = (task.title || 'İşlem').toUpperCase();
@@ -1114,58 +1124,69 @@
                 cardTitle = `#${task.id} - ${task.title}`;
             }
 
-            // 2. BÜLTEN İZLEME İÇERİĞİ (Eksik veriler eklendi)
+            // --- 3. BÜLTEN DETAYLARI VE KIYASLAMA ---
             let comparisonRow = '';
             if (isBulletinWatch) {
-                // --- İzlenen Marka Verileri ---
+                // A) İZLENEN MARKA
                 const myImgPath = monitoredData?.brandImageUrl || monitoredData?.imagePath || '';
                 const myImgUrl = getImageUrl(myImgPath);
-                
                 const myClasses = (Array.isArray(monitoredData?.goodsAndServicesByClass) 
                     ? monitoredData.goodsAndServicesByClass.map(c=>c.classNo).join(', ') 
                     : monitoredData?.classes) || '-';
 
-                // --- Rakip Marka Verileri (Detaylı Arama) ---
-                let competitor = null;
+                // B) RAKİP MARKA (Veri Eşleştirme)
                 const targetAppNo = task.details?.targetAppNo;
-                
-                // 1. results dizisi içinde ara
-                if (monitoredData?.results && Array.isArray(monitoredData.results)) {
-                    competitor = monitoredData.results.find(r => r.applicationNo === targetAppNo);
-                }
-                // 2. Bulamazsan task details'e bak
-                if (!competitor) {
-                    competitor = {
-                        markName: task.details?.objectionTarget || 'Benzer Marka',
-                        applicationNo: task.details?.targetAppNo || '-',
-                        niceClasses: task.details?.targetNiceClasses,
-                        imagePath: task.details?.competitorBrandImage || task.details?.imagePath,
-                        holders: task.details?.competitorOwner ? [{name: task.details.competitorOwner}] : [],
-                        bs: task.details?.similarityScore // Bazen BS skoru burada olur
-                    };
+                let competitorData = null;
+
+                // 1. ADIM: MonitoringRecord içindeki results dizisinde ara
+                if (monitoringRecord?.results && Array.isArray(monitoringRecord.results)) {
+                    // Boşlukları temizleyerek güvenli eşleştirme yap
+                    competitorData = monitoringRecord.results.find(r => 
+                        String(r.applicationNo).replace(/\s/g, '') === String(targetAppNo).replace(/\s/g, '')
+                    );
                 }
 
-                const targetName = competitor?.markName || competitor?.brandText || 'Benzer Marka';
-                const targetNo = competitor?.applicationNo || '-';
-                const targetClasses = (Array.isArray(competitor?.niceClasses) ? competitor.niceClasses.join(', ') : competitor?.niceClasses) || '-';
-                const targetOwner = (competitor?.holders && competitor.holders.length > 0) ? competitor.holders[0].name : '-';
+                // Verileri Atama (Öncelik: MonitoringRecord -> Task Details)
+                const compName = competitorData?.markName || task.details?.objectionTarget || 'Benzer Marka';
+                const compNo = competitorData?.applicationNo || targetAppNo || '-';
                 
-                // Görsel URL dönüşümü
-                const targetImgUrl = getImageUrl(competitor?.imagePath);
-                const targetImgHtml = `<img src="${targetImgUrl}" class="task-brand-image" style="height:100px; width:auto; max-width:100%; object-fit:contain;">`;
+                // Sınıflar
+                let compClasses = competitorData?.niceClasses || task.details?.targetNiceClasses || '-';
+                if(Array.isArray(compClasses)) compClasses = compClasses.join(', ');
 
-                // BS ve Not (Varsa Göster)
+                // Görsel
+                const compImgPath = competitorData?.imagePath || task.details?.competitorBrandImage || task.details?.imagePath;
+                const compImgUrl = getImageUrl(compImgPath);
+                const compImgHtml = `<img src="${compImgUrl}" class="task-brand-image" style="height:100px; width:auto; max-width:100%; object-fit:contain;">`;
+
+                // SAHİP BİLGİSİ (Kritik Düzeltme)
+                let compOwner = '-';
+                if (competitorData?.holders && Array.isArray(competitorData.holders) && competitorData.holders.length > 0) {
+                    compOwner = competitorData.holders[0].name;
+                } else if (competitorData?.holderName) {
+                    compOwner = competitorData.holderName; // Bazen düz string gelebilir
+                } else if (task.details?.competitorOwner) {
+                    compOwner = task.details.competitorOwner;
+                }
+
+                // SKOR VE DEĞERLENDİRME (Kritik Düzeltme)
+                // Veri tabanında 'bs', 'similarityScore' veya 'score' olabilir.
+                const rawScore = competitorData?.bs ?? competitorData?.similarityScore ?? task.details?.similarityScore;
+                const displayScore = formatScore(rawScore);
+                const note = competitorData?.note ?? competitorData?.explanation ?? task.details?.note;
+
+                // Ek Bilgi HTML (BS ve Not)
                 let extraInfoHtml = '';
-                if (competitor?.bs || competitor?.note) {
+                if (displayScore || note) {
                     extraInfoHtml = `
-                    <div class="mt-2 pt-2 border-top border-secondary" style="font-size: 0.9rem;">
-                        ${competitor.bs ? `<span class="mr-3"><strong style="color:rgba(255,255,255,0.7)">Başarı Şansı:</strong> <span class="badge badge-warning">${competitor.bs}</span></span>` : ''}
-                        ${competitor.note ? `<span><strong style="color:rgba(255,255,255,0.7)">Değerlendirme:</strong> <span class="text-white-50 font-italic">${competitor.note}</span></span>` : ''}
+                    <div class="mt-3 pt-2 border-top border-secondary" style="font-size: 0.9rem;">
+                        ${displayScore ? `<span class="mr-3 d-block d-sm-inline mb-1"><strong style="color:rgba(255,255,255,0.7)">Başarı Şansı:</strong> <span class="badge badge-warning" style="font-size:0.9rem;">${displayScore}</span></span>` : ''}
+                        ${note ? `<span class="d-block d-sm-inline"><strong style="color:rgba(255,255,255,0.7)">Değerlendirme:</strong> <span class="text-white-50 font-italic">${note}</span></span>` : ''}
                     </div>`;
                 }
 
-                // Başlık Rengi (Label) Ayarı - Dark Mode İçin Açık Renk
-                const labelStyle = 'color: rgba(255, 255, 255, 0.6); font-weight: 500;';
+                // Style: Dark Mode için Beyaz Başlıklar
+                const labelStyle = 'color: rgba(255, 255, 255, 0.7); font-weight: 600;';
                 const valStyle = 'color: #fff; font-weight: 400;';
 
                 comparisonRow = `
@@ -1187,13 +1208,13 @@
                         <h6 class="text-danger font-weight-bold mb-3 text-left" style="font-size:1.1rem;">BENZER MARKA</h6>
                         <div class="d-flex align-items-start text-left">
                             <div class="mr-4" style="min-width:100px; text-align:center;">
-                                ${targetImgHtml}
+                                ${compImgHtml}
                             </div>
                             <div>
-                                <div class="font-weight-bold mb-2" style="font-size:1.2rem; ${valStyle}">${targetName}</div>
-                                <div style="font-size:1rem; margin-bottom:4px;"><span style="${labelStyle}">No:</span> <span style="${valStyle}">${targetNo}</span></div>
-                                <div style="font-size:1rem; margin-bottom:4px;"><span style="${labelStyle}">Sahip:</span> <span style="${valStyle}">${targetOwner}</span></div>
-                                <div style="font-size:1rem;"><span style="${labelStyle}">Sınıf:</span> <span style="${valStyle}">${targetClasses}</span></div>
+                                <div class="font-weight-bold mb-2" style="font-size:1.2rem; ${valStyle}">${compName}</div>
+                                <div style="font-size:1rem; margin-bottom:4px;"><span style="${labelStyle}">No:</span> <span style="${valStyle}">${compNo}</span></div>
+                                <div style="font-size:1rem; margin-bottom:4px;"><span style="${labelStyle}">Sahip:</span> <span style="${valStyle}">${compOwner}</span></div>
+                                <div style="font-size:1rem;"><span style="${labelStyle}">Sınıf:</span> <span style="${valStyle}">${compClasses}</span></div>
                             </div>
                         </div>
                         ${extraInfoHtml}
@@ -1201,7 +1222,7 @@
                 </div>`;
             }
 
-            // 3. STATUS VE BUTONLAR
+            // --- STATUS VE BUTONLAR ---
             const statusMap = { 
                 'awaiting_client_approval': { text: 'Onay Bekliyor', class: 'warning' }, 
                 'completed': { text: 'Tamamlandı', class: 'success' }, 
@@ -1233,7 +1254,7 @@
                 }
             }
 
-            // 4. TARİH VE UYARI
+            // --- TARİH VE UYARI ---
             const dateVal = window.formatDateTR(task.dueDate || task.officialDueDate || task.createdAt);
             const dateLabel = isCompletedView ? 'Oluşturma Tarihi:' : 'Son Onay Tarihi:';
             const dateWarning = !isCompletedView ? `<span class="text-muted ml-2 d-block d-sm-inline" style="font-size:0.85rem; font-style:italic;">(Bu tarih resmi son tarih olup, hak kaybı yaşanmaması adına talimatların bu tarihten en az 2 gün önce iletilmesi beklenmektedir.)</span>` : '';
