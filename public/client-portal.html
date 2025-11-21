@@ -1896,6 +1896,13 @@
             
             console.log('🔍 Emtia kıyaslama:', { taskId, ipRecordId, bulletinObjectId });
             
+            // Task verisini çek ve details'ı logla
+            const taskDoc = await getDoc(doc(db, 'tasks', String(taskId)));
+            if (taskDoc.exists()) {
+                const taskData = taskDoc.data();
+                console.log('📋 Task Details:', taskData.details);
+            }
+            
             // Modal'ı aç
             $('#goodsComparisonModal').modal('show');
             
