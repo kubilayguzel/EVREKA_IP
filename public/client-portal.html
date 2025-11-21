@@ -1742,11 +1742,25 @@
         }
     };
 
-    window.loadTransactions = async function(ipRecordId) {
+window.loadTransactions = async function(ipRecordId) {
         // Tabloyu temizle ve loading koy
         const tbody = $('#modal-islemler table tbody');
         if (tbody.length === 0) return;
         tbody.html('<tr><td colspan="4" class="text-center py-4"><i class="fas fa-spinner fa-spin"></i> İşlemler yükleniyor...</td></tr>');
+
+        // --- YENİ EKLENEN YARDIMCI FONKSİYON: BELGELERİ TEKİLE DÜŞÜR ---
+        const uniqueDocsFilter = (docs) => {
+            const seen = new Set();
+            return docs.filter(doc => {
+                // Dosya linkini al
+                const url = doc.fileUrl || doc.url || doc.path || doc.downloadURL;
+                // Link yoksa veya bu linki daha önce eklediysek listeye alma
+                if (!url || seen.has(url)) return false;
+                seen.add(url);
+                return true;
+            });
+        };
+        // --------------------------------------------------------------
 
         try {
             // 1. Transaction'ları Çek
@@ -1763,7 +1777,6 @@
             const pdfsByTransaction = await fetchPdfsForTransactions(transactions.map(tx => tx.id));
 
             // 3. İşlemleri Ayır (Parent/Child)
-            // Parent'ları tarihe göre (Yeniden eskiye)
             const parentTransactions = transactions
                 .filter(t => t.transactionHierarchy === 'parent' || !t.transactionHierarchy)
                 .sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
@@ -1795,25 +1808,26 @@
                     }
                 }
 
-                // Parent Belgeleri
+                // --- GÜNCELLEME: PARENT BELGELERİNİ TOPLA VE FİLTRELE ---
                 const parentPdfs = pdfsByTransaction[parent.id] || [];
-                // Task'tan gelen belge varsa (ePats vb.)
                 let taskDocs = [];
                 if (parent.triggeringTaskId) {
                     taskDocs = await fetchTaskDocuments(parent.triggeringTaskId);
                 }
 
-                // Tüm belgeleri birleştir
-                const allParentDocs = [
+                // Ham liste (kopyalar olabilir)
+                const rawParentDocs = [
                     ...parentPdfs,
                     ...taskDocs,
                     ...(parent.documents || []).map(d => ({ fileName: d.name, fileUrl: d.path || d.downloadURL, type: d.type }))
                 ];
 
-                // Belge Linkleri HTML
+                // Kopyaları temizle
+                const allParentDocs = uniqueDocsFilter(rawParentDocs);
+                // ---------------------------------------------------------
+
                 const parentDocLinks = allParentDocs.map(pdf => window._createDocLinkHtml(pdf)).join('');
 
-                // Parent Satırı
                 const parentRow = `
                     <tr class="${hasChildren ? 'accordion-header-row' : ''}" ${hasChildren ? `data-toggle="collapse" data-target="#${accordionId}" aria-expanded="false"` : ''}>
                         <td>${hasChildren ? '<i class="fas fa-chevron-right mr-2"></i>' : ''}${rowIndex}</td>
@@ -1824,7 +1838,6 @@
                 `;
                 tbody.append(parentRow);
 
-                // Child Satırları (Accordion İçinde)
                 if (hasChildren) {
                     let childRowsHtml = '';
                     for (const [idx, child] of children.entries()) {
@@ -1841,12 +1854,21 @@
                             }
                         }
 
-                        // Child Belgeleri
+                        // --- GÜNCELLEME: CHILD BELGELERİNİ TOPLA VE FİLTRELE ---
                         const childPdfs = pdfsByTransaction[child.id] || [];
                         let childTaskDocs = [];
                         if (child.triggeringTaskId) childTaskDocs = await fetchTaskDocuments(child.triggeringTaskId);
                         
-                        const allChildDocs = [...childPdfs, ...childTaskDocs, ...(child.documents || []).map(d => ({ fileName: d.name, fileUrl: d.path, type: d.type }))];
+                        const rawChildDocs = [
+                            ...childPdfs, 
+                            ...childTaskDocs, 
+                            ...(child.documents || []).map(d => ({ fileName: d.name, fileUrl: d.path || d.downloadURL, type: d.type }))
+                        ];
+                        
+                        // Kopyaları temizle
+                        const allChildDocs = uniqueDocsFilter(rawChildDocs);
+                        // -------------------------------------------------------
+
                         const childDocLinks = allChildDocs.map(pdf => window._createDocLinkHtml(pdf)).join('');
 
                         childRowsHtml += `
