@@ -1597,7 +1597,13 @@
                             console.error('❌ Rakip marka bilgisi çekilirken hata:', err);
                         }
                     }
-                    
+                    // Helper: Image URL'ini oluştur
+                    const getImageUrl = (path) => {
+                        if (!path) return 'https://placehold.co/100x100?text=Yok';
+                        if (path.startsWith('http')) return path;
+                        const cleanPath = path.replace(/['"]/g, '');
+                        return `https://firebasestorage.googleapis.com/v0/b/ip-manager-production-aab4b.firebasestorage.app/o/${encodeURIComponent(cleanPath)}?alt=media`;
+                    };
                     const children = allTx.filter(x => x.transactionHierarchy==='child' && x.parentId===parentTx.id);
                     const typeMeta = window.transactionTypesMap.get(String(task.taskType));
                     
@@ -1612,7 +1618,7 @@
                         recordId: task.relatedIpRecordId,
                         hasChildren: children.length > 0,
                         origin: rec.origin,
-                        brandImageUrl: opponentMarkData?.imagePath || rec.brandImageUrl,
+                        brandImageUrl: getImageUrl(opponentMarkData?.imagePath) || rec.brandImageUrl,
                         title: opponentMarkData?.markName || rec.title || rec.brandText,
                         transactionTypeName: typeMeta?.alias || 'İşlem',
                         applicationNumber: opponentMarkData?.applicationNo || rec.applicationNumber,
