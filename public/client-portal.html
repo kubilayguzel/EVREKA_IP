@@ -1072,43 +1072,108 @@
         container.innerHTML = cardsHTML.join('');
     };
 
-    // --- 3. FATURA MODÜLÜ ---
-    async function fetchAndDisplayInvoices(linkedIds) {
-        const allAccruals = [];
-        // 10'arlı chunklarla sorgu (Firestore limiti)
-        for (let i = 0; i < linkedIds.length; i += 10) {
-            const chunk = linkedIds.slice(i, i + 10);
-            const q = query(collection(db, 'accruals'), where('serviceInvoiceParty.id', 'in', chunk));
-            const snap = await runGetDocs(q);
-            snap.forEach(d => allAccruals.push({ id: d.id, ...d.data() }));
-        }
-        // Tekilleştir
-        const unique = Array.from(new Map(allAccruals.map(a => [a.id, a])).values());
-        $('#dashUnpaidInvoices').text(unique.filter(a => a.status !== 'paid').length);
+// --- 3. GÜNCELLENMİŞ FATURA MODÜLÜ ---
+    
+    // Veri Çekme ve Sayfalama Başlatma
+    window.fetchAndDisplayInvoices = async function(linkedIds) {
+        const container = $('#invoices-pagination-container');
+        const tbody = $('#invoices table tbody');
         
-        window.invoicesPaginationData.allData = unique.sort((a,b) => (b.invoiceNo||0) - (a.invoiceNo||0));
-        renderInvoicesTable(window.invoicesPaginationData.allData.slice(0, 10));
-    }
+        tbody.html('<tr><td colspan="6" class="text-center"><i class="fas fa-spinner fa-spin"></i> Yükleniyor...</td></tr>');
 
-    function renderInvoicesTable(data) {
+        try {
+            const allAccruals = [];
+            // 10'arlı chunklarla sorgu
+            for (let i = 0; i < linkedIds.length; i += 10) {
+                const chunk = linkedIds.slice(i, i + 10);
+                const q = query(collection(db, 'accruals'), where('serviceInvoiceParty.id', 'in', chunk));
+                const snap = await runGetDocs(q);
+                snap.forEach(d => allAccruals.push({ id: d.id, ...d.data() }));
+            }
+            
+            // Tekilleştir ve Sırala (En yeniden eskiye)
+            const unique = Array.from(new Map(allAccruals.map(a => [a.id, a])).values())
+                .sort((a,b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+            
+            $('#dashUnpaidInvoices').text(unique.filter(a => a.status !== 'paid').length);
+            
+            // Global veriye kaydet
+            window.invoicesPaginationData.allData = unique;
+            
+            // Pagination Başlat (Eğer daha önce başlatılmadıysa)
+            if (!window.invoicesPaginationData.pagination) {
+                window.invoicesPaginationData.pagination = new window.Pagination({
+                    itemsPerPage: 10,
+                    containerId: 'invoices-pagination-container',
+                    onPageChange: (page, perPage) => {
+                        const start = (page - 1) * perPage;
+                        const slice = window.invoicesPaginationData.allData.slice(start, start + perPage);
+                        window.renderInvoicesTable(slice);
+                    }
+                });
+            }
+            
+            // Pagination güncelle ve ilk sayfayı göster
+            window.invoicesPaginationData.pagination.update(unique.length);
+            window.renderInvoicesTable(unique.slice(0, 10));
+
+        } catch (error) {
+            console.error("Fatura yükleme hatası:", error);
+            tbody.html('<tr><td colspan="6" class="text-center text-danger">Veriler yüklenirken hata oluştu.</td></tr>');
+        }
+    };
+
+// Tablo Render (Türkçe Durum ve Fatura No Düzeltmesi)
+    window.renderInvoicesTable = function(data) {
         const tbody = $('#invoices table tbody');
         tbody.empty();
-        if(!data.length) { tbody.html('<tr><td colspan="6" class="text-center text-muted">Fatura yok.</td></tr>'); return; }
+        
+        if(!data || data.length === 0) { 
+            tbody.html('<tr><td colspan="6" class="text-center text-muted">Kayıt bulunamadı.</td></tr>'); 
+            return; 
+        }
         
         data.forEach(inv => {
-            const badge = inv.status === 'paid' ? 'success' : (inv.status === 'partially_paid' ? 'warning' : 'danger');
-            const row = `<tr>
-                <td>${inv.invoiceNo || '-'}</td>
-                <td>${window.formatDateTR(inv.createdAt)}</td>
-                <td>${inv.taskTitle || '-'}</td>
-                <td>${window.currencyFormatter(inv.totalAmount)}</td>
-                <td><span class="badge badge-${badge}">${inv.status}</span></td>
-                <td><button class="btn btn-sm btn-primary"><i class="fas fa-download"></i></button></td>
-            </tr>`;
+            // 1. Durum Tercümesi ve Renkler
+            let statusText = inv.status;
+            let badgeClass = 'secondary';
+            
+            if (inv.status === 'paid') {
+                statusText = 'Ödendi';
+                badgeClass = 'success'; // Yeşil
+            } else if (inv.status === 'unpaid') {
+                statusText = 'Ödenmedi';
+                badgeClass = 'danger';  // Kırmızı
+            } else if (inv.status === 'partially_paid') {
+                statusText = 'Kısmen Ödendi';
+                badgeClass = 'warning'; // Turuncu
+            }
+
+            // 2. Fatura No Fallback (No yoksa ID kullan)
+            // Fatura no varsa onu yaz, yoksa ID'nin ilk 8 karakterini büyük harfle yaz
+            const invoiceNoDisplay = inv.invoiceNo 
+                ? inv.invoiceNo 
+                : (inv.id ? `#${inv.id.substring(0,8).toUpperCase()}` : '-');
+
+            // 3. Tutar Formatı (Para birimi yoksa TRY varsay)
+            const amountDisplay = window.currencyFormatter(inv.totalAmount, inv.currency || 'TRY');
+
+            const row = `
+                <tr>
+                    <td class="font-weight-bold">${invoiceNoDisplay}</td>
+                    <td>${window.formatDateTR(inv.createdAt)}</td>
+                    <td>${inv.taskTitle || inv.description || 'Hizmet Bedeli'}</td>
+                    <td>${amountDisplay}</td>
+                    <td><span class="badge badge-${badgeClass}" style="font-size: 0.85rem;">${statusText}</span></td>
+                    <td>
+                        <button class="btn btn-sm btn-primary" title="İndir"><i class="fas fa-download"></i></button>
+                    </td>
+                </tr>
+            `;
             tbody.append(row);
         });
-    }
-
+    };
+    
     // --- 4. DAVA MODÜLÜ ---
     window.fetchAndDisplaySuits = async function() {
         const tbody = document.getElementById('dava-tbody');
