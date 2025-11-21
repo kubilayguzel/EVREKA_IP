@@ -9,98 +9,107 @@
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
 
-    /* === GENEL SAYFA YAPISI === */
+    /* === GENEL STİLLER === */
     body { font-family: 'Poppins', sans-serif; transition: background-color 0.3s, color 0.3s; }
+    
+    /* Sidebar & Layout */
     #sidebar { height: 100vh; width: 250px; position: fixed; top: 0; left: 0; padding-top: 20px; z-index: 1001; transition: all 0.3s; }
     #sidebar .nav-link { font-weight: 500; padding: 12px 15px; margin-bottom: 5px; border-radius: 8px; transition: all 0.3s; transform-origin: left; }
     #sidebar .nav-link:hover, #sidebar .nav-link.active { transform: translateX(5px); }
     .content { margin-left: 250px; padding: 40px; transition: margin-left 0.3s; }
     .content-with-topbar { margin-top: 60px; }
 
-    /* === HEADER & USER === */
-    .top-header { position: fixed; top: 0; right: 0; left: 250px; z-index: 1000; display: flex; justify-content: space-between; align-items: center; padding: 10px 20px; height: 60px; transition: all 0.3s; border-bottom: 1px solid rgba(0,0,0,0.05); }
-    .user-section { display: flex; align-items: center; gap: 10px; }
+    /* Top Header */
+    .top-header { position: fixed; top: 0; right: 0; left: 250px; z-index: 1000; display: flex; justify-content: space-between; align-items: center; padding: 10px 20px; height: 60px; transition: all 0.3s; }
     .user-avatar { width: 40px; height: 40px; border-radius: 50%; background-color: #1e3c72; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: bold; }
-    .user-name, .user-role { font-weight: 500; }
-    .user-role { color: #888; font-size: 0.8rem; }
-    .logout-btn { background-color: #d9534f; color: #fff; border: none; padding: 8px 15px; border-radius: 8px; cursor: pointer; transition: background-color 0.2s; }
+    .logout-btn { background-color: #d9534f; color: #fff; border: none; padding: 8px 15px; border-radius: 8px; cursor: pointer; }
     .logout-btn:hover { background-color: #c9302c; }
-    
-    /* === KARTLAR & İSTATİSTİKLER === */
-    .card { border-radius: 12px; border: none; transition: transform 0.3s, box-shadow 0.3s; overflow: hidden; }
-    .card:hover { transform: translateY(-5px); cursor: pointer; }
-    .card-header { font-weight: 600; border-bottom: 1px solid rgba(0,0,0,0.1); }
-    .stat-icon { font-size: 2.5em; }
-    .stat-value { font-size: 2.2em; font-weight: 700; line-height: 1; }
-    .stat-label { font-size: 1em; }
 
-    /* === TABLOLAR & FORM ELEMANLARI === */
+    /* Kartlar & İstatistikler */
+    .card { border-radius: 12px; border: none; transition: transform 0.3s, box-shadow 0.3s; overflow: hidden; }
+    .card:hover { transform: translateY(-5px); }
+    .card-header { font-weight: 600; border-bottom: 1px solid rgba(0,0,0,0.1); }
+    .stat-value { font-size: 2.2em; font-weight: 700; line-height: 1; }
+    
+    /* Tablolar */
     .table-responsive { border-radius: 12px; padding: 20px; }
     .table { font-size: 0.95rem; }
     .table thead th { border-bottom: 2px solid; font-weight: 600; white-space: nowrap; }
-    .table tbody tr { transition: background-color 0.2s; }
-    .sortable { cursor: pointer; user-select: none; padding-right: 20px !important; position: relative; }
-    .sortable:hover { background-color: rgba(0, 0, 0, 0.05); }
-    
-    /* === TEMA: LIGHT MODE === */
+    .sortable { cursor: pointer; }
+    .accordion-header-row { cursor: pointer; }
+    .accordion-header-row .fa-chevron-right { transition: transform 0.3s; }
+    .accordion-header-row[aria-expanded="true"] .fa-chevron-right { transform: rotate(90deg); }
+
+    /* === LIGHT MODE (Beyaz Tema) === */
     body.light-mode { background-color: #f0f2f5; color: #333; }
-    .light-mode .top-header { background-color: #ffffff; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
     .light-mode #sidebar { background-color: #ffffff; box-shadow: 2px 0 10px rgba(0,0,0,0.05); }
     .light-mode #sidebar .nav-link { color: #555; }
     .light-mode #sidebar .nav-link:hover, .light-mode #sidebar .nav-link.active { background-color: #e3f2fd; color: #1e88e5; }
-    .light-mode .card { background-color: #ffffff; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
-    .light-mode .table-responsive, .light-mode .modal-content { background-color: #ffffff; border: 1px solid #e0e0e0; }
+    .light-mode .top-header { background-color: #ffffff; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+    .light-mode .card { background-color: #ffffff; color: #333; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+    .light-mode .table-responsive { background-color: #ffffff; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
     .light-mode .table tbody tr:hover { background-color: #f8f9fa; }
     
-    /* === TEMA: DARK MODE (Detaylı) === */
+    /* Modal Light */
+    .light-mode .modal-content { background-color: #ffffff; border: 1px solid #dee2e6; color: #333; }
+    .light-mode .modal-header, .light-mode .modal-footer { border-color: #dee2e6; }
+    .light-mode .nav-tabs { border-bottom: 1px solid #dee2e6; }
+    .light-mode .nav-tabs .nav-link { color: #555; background-color: #f8f9fa; margin-right: 2px; }
+    .light-mode .nav-tabs .nav-link.active { background-color: #ffffff; color: #1e3c72; border-color: #dee2e6 #dee2e6 #ffffff; }
+    .light-mode .tab-content-card { background-color: #ffffff; border: 1px solid #dee2e6; border-top: none; padding: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+
+    /* === DARK MODE (Koyu Tema - Eski Dosyadan Restore Edildi) === */
     body.dark-mode { background-color: #2b2d31; color: #e0e0e0; }
-    .dark-mode .top-header { background-color: #36393e; border-bottom: 1px solid #40444b; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
-    .dark-mode #sidebar { background-color: #36393e; box-shadow: 2px 0 10px rgba(0,0,0,0.3); }
-    .dark-mode .nav-link { color: #b0b8c0; }
-    .dark-mode .nav-link:hover { background-color: #40444b; color: #fff; }
-    .dark-mode .nav-link.active { background-color: #4da6ff; color: #fff; box-shadow: 0 0 10px rgba(77, 166, 255, 0.3); }
     
-    /* Kartlar & Modal (Dark) */
+    /* Sidebar & Header */
+    .dark-mode #sidebar { background-color: #36393e; box-shadow: 2px 0 10px rgba(0,0,0,0.2); }
+    .dark-mode #sidebar .nav-link { color: #b0b8c0; }
+    .dark-mode #sidebar .nav-link:hover { background-color: #3a3f45; color: #b0b8c0; transform: translateX(3px); }
+    .dark-mode #sidebar .nav-link.active { background-color: #40444b; color: #4da6ff; transform: translateX(5px); }
+    .dark-mode .top-header { background-color: #36393e; box-shadow: 0 2px 5px rgba(0,0,0,0.3); border-bottom: 1px solid #40444b; }
+    
+    /* Kartlar */
     .dark-mode .card { background-color: #36393e; color: #e0e0e0; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
-    .dark-mode .card-header, .dark-mode .modal-header, .dark-mode .modal-footer { border-color: #40444b; background-color: #2f3136; }
-    .dark-mode .modal-content { background-color: #36393e; color: #e0e0e0; border: 1px solid #40444b; }
-    .dark-mode .close { color: #fff; text-shadow: none; opacity: 0.7; }
+    .dark-mode .card-header { background-color: #40444b; border-bottom: 1px solid #585b63; color: #f8f9fa; }
+    
+    /* Tablolar */
+    .dark-mode .table-responsive { background-color: #36393e; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+    .dark-mode .table { color: #e0e0e0; }
+    .dark-mode .table thead th { border-bottom: 2px solid #585b63; color: #f8f9fa; border-color: #585b63; }
+    .dark-mode .table td, .dark-mode .table th { border-top: 1px solid #585b63; }
+    .dark-mode .table-hover tbody tr:hover { background-color: #40444b !important; color: #e0e0e0 !important; }
+    
+    /* Modal & Tabs (Kritik Düzeltmeler) */
+    .dark-mode .modal-content { background-color: #36393e; color: #e0e0e0; border: 1px solid #585b63; }
+    .dark-mode .modal-header { border-bottom: 1px solid #585b63; }
+    .dark-mode .modal-footer { border-top: 1px solid #585b63; }
+    .dark-mode .close { color: #fff; opacity: 0.8; text-shadow: none; }
     .dark-mode .close:hover { opacity: 1; }
     
-    /* Tablolar (Dark) */
-    .dark-mode .table-responsive { background-color: #36393e; }
-    .dark-mode .table { color: #e0e0e0; }
-    .dark-mode .table thead th { border-color: #40444b; color: #fff; }
-    .dark-mode .table td, .dark-mode .table th { border-top: 1px solid #40444b; }
-    .dark-mode .table-hover tbody tr:hover { background-color: #40444b !important; color: #fff !important; }
-    .dark-mode .sortable:hover { background-color: rgba(255, 255, 255, 0.05); }
+    .dark-mode .nav-tabs { border-bottom: 1px solid #585b63; }
+    .dark-mode .nav-tabs .nav-link { color: #b0b8c0; background-color: #3a3f45; border-color: #3a3f45; margin-right: 2px; }
+    .dark-mode .nav-tabs .nav-link.active { background-color: #30343a !important; color: #4da6ff !important; border-color: #585b63 #585b63 #30343a; }
     
-    /* Form Elemanları (Dark) */
-    .dark-mode .form-control { background-color: #40444b; border-color: #50545b; color: #fff; }
-    .dark-mode .form-control:focus { background-color: #40444b; border-color: #4da6ff; color: #fff; box-shadow: 0 0 0 0.2rem rgba(77, 166, 255, 0.25); }
-    .dark-mode .text-muted { color: #999 !important; }
+    /* Bu sınıf eski dosyada modalın altındaki beyaz alanı koyulaştırmak için kullanılıyordu */
+    .dark-mode .tab-content-card { background-color: #30343a; border: 1px solid #585b63; border-top: none; padding: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
     
-    /* Tablar (Dark) */
-    .dark-mode .nav-tabs { border-bottom: 1px solid #40444b; }
-    .dark-mode .nav-tabs .nav-link { color: #b0b8c0; border: 1px solid transparent; }
-    .dark-mode .nav-tabs .nav-link:hover { border-color: #40444b #40444b #2b2d31; }
-    .dark-mode .nav-tabs .nav-link.active { background-color: #36393e; color: #4da6ff; border-color: #40444b #40444b #36393e; }
-    .dark-mode .tab-content-card { background-color: #36393e; border: 1px solid #40444b; border-top: none; }
-
+    /* Form Elemanları */
+    .dark-mode .form-control { background-color: #40444b; border-color: #585b63; color: #e0e0e0; }
+    .dark-mode .form-control:focus { background-color: #40444b; color: #fff; border-color: #4da6ff; }
+    
     /* Task Kartları */
-    .task-card { border-left: 5px solid; border-radius: 12px; padding: 20px; margin-bottom: 20px; position: relative; padding-top: 35px !important; background-color: inherit; transition: transform 0.2s; }
+    .task-card { border-left: 5px solid; border-radius: 12px; padding: 20px; margin-bottom: 20px; position: relative; padding-top: 35px !important; transition: transform 0.3s; }
     .light-mode .task-card { background-color: #fff; border: 1px solid #eee; border-left-width: 5px; }
-    .dark-mode .task-card { background-color: #2f3136; border: 1px solid #40444b; border-left-width: 5px; }
-    
+    .dark-mode .task-card { background-color: #36393e; border: 1px solid #585b63; border-left-width: 5px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
     .task-card-success { border-left-color: #5cb85c; }
     .task-card-warning { border-left-color: #f0ad4e; }
     .task-card-danger { border-left-color: #d9534f; }
     .task-number-tag { position: absolute; top: 8px; left: 15px; font-size: 1.3rem; font-weight: 700; color: #4da6ff; opacity: 0.9; }
     
-    /* Özel */
+    /* Görseller */
     img.brand-thumb, .task-brand-image { height: 100px !important; width: auto; border-radius: 6px; object-fit: contain; transition: transform 0.3s; display: block; margin: 0 auto; background-color: #fff; padding: 2px; }
     img.brand-thumb:hover, .task-brand-image:hover { transform: scale(2.5); z-index: 999; position: relative; box-shadow: 0 8px 16px rgba(0,0,0,0.3); }
-    
+
     @media (max-width: 576px) { 
         #sidebar { width: 0; overflow: hidden; }
         .content, .top-header { margin-left: 0; left: 0; width: 100%; }
@@ -1225,6 +1234,7 @@
             tbody.innerHTML = '<tr><td colspan="12" class="text-danger text-center">Hata oluştu.</td></tr>';
         }
     };
+
 // --- TEMA YÖNETİMİ FONKSİYONU ---
     function initTheme() {
         // 1. Kayıtlı temayı al veya varsayılan olarak 'dark' yap
@@ -1249,6 +1259,134 @@
             $(this).next('label').text(isChecked ? 'Koyu Tema' : 'Açık Tema');
         });
     }
+
+    window.loadTransactions = async function(ipRecordId) {
+        // Tabloyu temizle ve loading koy
+        const tbody = $('#modal-islemler table tbody');
+        if (tbody.length === 0) return;
+        tbody.html('<tr><td colspan="4" class="text-center py-4"><i class="fas fa-spinner fa-spin"></i> İşlemler yükleniyor...</td></tr>');
+
+        try {
+            // 1. Transaction'ları Çek
+            const transactionsRef = collection(db, 'ipRecords', ipRecordId, 'transactions');
+            const q = query(transactionsRef);
+            const snapshot = await getDocs(q);
+            
+            const transactions = [];
+            snapshot.forEach(doc => {
+                transactions.push({ id: doc.id, ...doc.data() });
+            });
+
+            // 2. PDF'leri Getir ve Grupla
+            const pdfsByTransaction = await fetchPdfsForTransactions(transactions.map(tx => tx.id));
+
+            // 3. İşlemleri Ayır (Parent/Child)
+            // Parent'ları tarihe göre (Yeniden eskiye)
+            const parentTransactions = transactions
+                .filter(t => t.transactionHierarchy === 'parent' || !t.transactionHierarchy)
+                .sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
+
+            tbody.empty();
+            let rowIndex = 1;
+
+            // 4. Döngü
+            for (const parent of parentTransactions) {
+                const children = transactions
+                    .filter(t => t.transactionHierarchy === 'child' && t.parentId === parent.id)
+                    .sort((a, b) => (a.timestamp?.seconds || 0) - (b.timestamp?.seconds || 0));
+
+                const hasChildren = children.length > 0;
+                const accordionId = `transaction-${parent.id}`;
+                
+                // İşlem Adını Bul
+                let transactionAlias = 'İşlem';
+                if (window.transactionTypesMap && window.transactionTypesMap.has(String(parent.type))) {
+                    const t = window.transactionTypesMap.get(String(parent.type));
+                    transactionAlias = t.alias || t.name;
+                }
+
+                // Parent Belgeleri
+                const parentPdfs = pdfsByTransaction[parent.id] || [];
+                // Task'tan gelen belge varsa (ePats vb.)
+                let taskDocs = [];
+                if (parent.triggeringTaskId) {
+                    taskDocs = await fetchTaskDocuments(parent.triggeringTaskId);
+                }
+
+                // Tüm belgeleri birleştir
+                const allParentDocs = [
+                    ...parentPdfs,
+                    ...taskDocs,
+                    ...(parent.documents || []).map(d => ({ fileName: d.name, fileUrl: d.path || d.downloadURL, type: d.type }))
+                ];
+
+                // Belge Linkleri HTML
+                const parentDocLinks = allParentDocs.map(pdf => window._createDocLinkHtml(pdf)).join('');
+
+                // Parent Satırı
+                const parentRow = `
+                    <tr class="${hasChildren ? 'accordion-header-row' : ''}" ${hasChildren ? `data-toggle="collapse" data-target="#${accordionId}" aria-expanded="false"` : ''}>
+                        <td>${hasChildren ? '<i class="fas fa-chevron-right mr-2"></i>' : ''}${rowIndex}</td>
+                        <td>${transactionAlias}</td>
+                        <td>${window.formatDateTR(parent.timestamp)}</td>
+                        <td>${parentDocLinks || '<span class="text-muted">-</span>'}</td>
+                    </tr>
+                `;
+                tbody.append(parentRow);
+
+                // Child Satırları (Accordion İçinde)
+                if (hasChildren) {
+                    let childRowsHtml = '';
+                    for (const [idx, child] of children.entries()) {
+                        let childAlias = 'Alt İşlem';
+                        if (window.transactionTypesMap.has(String(child.type))) {
+                            childAlias = window.transactionTypesMap.get(String(child.type)).alias;
+                        }
+
+                        // Child Belgeleri
+                        const childPdfs = pdfsByTransaction[child.id] || [];
+                        let childTaskDocs = [];
+                        if (child.triggeringTaskId) childTaskDocs = await fetchTaskDocuments(child.triggeringTaskId);
+                        
+                        const allChildDocs = [...childPdfs, ...childTaskDocs, ...(child.documents || []).map(d => ({ fileName: d.name, fileUrl: d.path, type: d.type }))];
+                        const childDocLinks = allChildDocs.map(pdf => window._createDocLinkHtml(pdf)).join('');
+
+                        childRowsHtml += `
+                            <tr>
+                                <td>${rowIndex}.${idx + 1}</td>
+                                <td>${childAlias}</td>
+                                <td>${window.formatDateTR(child.timestamp)}</td>
+                                <td>${childDocLinks || '-'}</td>
+                            </tr>
+                        `;
+                    }
+
+                    const detailRow = `
+                        <tr>
+                            <td colspan="4" class="p-0">
+                                <div class="collapse" id="${accordionId}">
+                                    <table class="table mb-0 accordion-table bg-light" style="font-size:0.9em;">
+                                        <thead><tr><th>#</th><th>İşlem Detayı</th><th>Tarih</th><th>Evrak</th></tr></thead>
+                                        <tbody>${childRowsHtml}</tbody>
+                                    </table>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                    tbody.append(detailRow);
+                }
+                rowIndex++;
+            }
+            
+            if (parentTransactions.length === 0) {
+                tbody.html('<tr><td colspan="4" class="text-center text-muted">İşlem geçmişi bulunamadı.</td></tr>');
+            }
+
+        } catch (error) {
+            console.error("Transaction Yükleme Hatası:", error);
+            tbody.html('<tr><td colspan="4" class="text-center text-danger">Veriler yüklenirken hata oluştu.</td></tr>');
+        }
+    };
 
     // --- EVENT LISTENERS & ACTIONS ---
     $(document).ready(function() {
