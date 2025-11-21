@@ -1095,13 +1095,19 @@
             let monitoringRecord = null; // Sağ Taraf (Analiz Kaydı - Results Array'i burada)
             
             const monitoredId = task.details?.monitoredMarkId || task.relatedIpRecordId;
-            const bulletinKey = task.details?.bulletinKey || task.details?.bulletinNo;
+            // bulletinKey formatı: "474_12102025" gibi olmalı
+            let bulletinKey = task.details?.bulletinKey;
+            if (!bulletinKey && task.details?.bulletinNo && task.details?.bulletinDate) {
+                // bulletinDate formatı "12/10/2025" ise "12102025" yap
+                const dateStr = task.details.bulletinDate.replace(/\//g, '');
+                bulletinKey = `${task.details.bulletinNo}_${dateStr}`;
+            }
             
             if (monitoredId) {
                 try {
                     // A) Bülten Analiz Kaydını Çek (monitoringTrademarkRecords)
                     if(bulletinKey) {
-                         console.log('🔍 Bülten Kaydı Arıyorum:', { bulletinKey, monitoredId });
+                         console.log('🔍 Bülten Kaydı Arıyorum:', { bulletinKey, monitoredId, bulletinDate: task.details?.bulletinDate });
                          const monSnap = await getDoc(doc(db, 'monitoringTrademarkRecords', bulletinKey, 'trademarks', monitoredId));
                          console.log('📄 Döküman Mevcut mu?', monSnap.exists());
                          if(monSnap.exists()) {
