@@ -114,6 +114,13 @@
         #sidebar { width: 0; overflow: hidden; }
         .content, .top-header { margin-left: 0; left: 0; width: 100%; }
     }
+    
+    /* === TABLO İÇİ BADGE DÜZELTMELERİ === */
+    .table .badge {
+        font-size: 0.9rem !important;      /* Yazı boyutunu büyüt */
+        padding: 0.6em 1em !important;     /* İç boşluğu artır */
+        font-weight: 500;                  /* Kalınlık ayarı */
+    }
 </style>
 </head>
 <body>
@@ -1532,5 +1539,61 @@
         $('#myTab a[href="#modal-islemler"]').tab('show');
         $('#portfolioDetailModal').modal('show');
     });
+    // --- 1. DASHBOARD YÖNLENDİRME LİNKLERİ (DÜZELTME) ---
+    $('[data-target-tab]').on('click', function() {
+        const targetTabId = $(this).data('target-tab');
+        // Sidebar'daki ilgili linki bul
+        const $targetLink = $(`#sidebar a[href="#${targetTabId}"]`);
+        
+        if ($targetLink.length) {
+            // Sekmeyi aktif et
+            $targetLink.tab('show');
+            
+            // Eğer "Portföyüm" seçildiyse, içindeki "Marka" sekmesini de varsayılan aç
+            if (targetTabId === 'portfolio-content') {
+                setTimeout(() => {
+                    $('#portfolioTopTabs a[href="#marka-list"]').tab('show');
+                }, 100);
+            }
+        }
+        // Sayfayı yukarı kaydır
+        window.scrollTo({ top: 0, behavior: 'smooth' });
     });
+
+    // --- 2. DAVA DETAY MODALI AÇMA (DÜZELTME) ---
+    $(document).on('click', '.dava-detail-link', function(e) {
+        e.preventDefault();
+        const suitId = $(this).data('suit-id');
+        
+        // Global 'suitsData' değişkeninden veriyi bul
+        if (!window.suitsData) return;
+        const suit = window.suitsData.find(s => s.id === suitId);
+        if (!suit) return;
+        
+        // Modal alanlarını doldur
+        $('#davaDetailModalLabel').text(suit.title || 'Dava Detayı');
+        $('#modal-dava-caseNo').text(suit.caseNo);
+        $('#modal-dava-title').text(suit.title);
+        $('#modal-dava-court').text(suit.court);
+        $('#modal-dava-openingDate').text(suit.openingDate);
+        
+        // Durum badge rengini belirle
+        const badgeClass = suit.suitStatus === 'Devam Ediyor' ? 'info' : 
+                          (suit.suitStatus === 'Tamamlandı' ? 'success' : 'secondary');
+        $('#modal-dava-status').html(`<span class="badge badge-${badgeClass}">${suit.suitStatus}</span>`);
+        
+        $('#modal-dava-opposingParty').text(suit.opposingParty);
+        $('#modal-dava-opposingCounsel').text(suit.opposingCounsel || '-');
+        $('#modal-dava-client').text(suit.clientName || '-');
+        
+        $('#modal-dava-assetType').text(suit.subjectAssetType || '-');
+        $('#modal-dava-assetTitle').text(suit.subjectAssetTitle || '-');
+        $('#modal-dava-assetNumber').text(suit.subjectAssetNumber || '-');
+        $('#modal-dava-description').text(suit.description || '-');
+        
+        // Modalı göster
+        $('#davaDetailModal').modal('show');
+    });
+    });
+    
 </script>
