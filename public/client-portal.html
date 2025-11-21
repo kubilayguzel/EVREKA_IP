@@ -1061,7 +1061,7 @@
         await window._renderTaskCardsToContainer(finalTasks.slice(0,10), '#task-list-container', window.formatDateTR, taskType);
     };
 
-// --- ASENKRON TASK KART RENDER (RESULTS ARRAY FIX) ---
+// --- ASENKRON TASK KART RENDER (ESNEK EŞLEŞTİRME DÜZELTMESİ) ---
     window._renderTaskCardsToContainer = async function(tasksToRender, containerSelector, formatDate, taskType) {
         const container = document.querySelector(containerSelector);
         if (!container) return;
@@ -1071,21 +1071,18 @@
         const getImageUrl = (path) => {
             if (!path) return 'https://placehold.co/100x100?text=Yok';
             if (path.startsWith('http')) return path;
-            return `https://firebasestorage.googleapis.com/v0/b/ip-manager-production-aab4b.firebasestorage.app/o/${encodeURIComponent(path)}?alt=media`;
+            // Tırnak işaretlerini temizle (DB'den "yol.jpg" gelirse)
+            const cleanPath = path.replace(/['"]/g, '');
+            return `https://firebasestorage.googleapis.com/v0/b/ip-manager-production-aab4b.firebasestorage.app/o/${encodeURIComponent(cleanPath)}?alt=media`;
         };
 
         // Helper: Skor Formatla
         const formatScore = (val) => {
             if (val === undefined || val === null || val === '') return null;
-            // Eğer string içinde % varsa temizle
-            let strVal = String(val).replace('%', '').trim();
+            let strVal = String(val).replace(/['"%]/g, '').trim(); // % ve tırnak temizle
             let num = parseFloat(strVal);
-            
-            if (isNaN(num)) return val; // Sayı değilse olduğu gibi döndür
-            
-            // Eğer 0-1 arasındaysa (0.7 gibi) 100 ile çarp
+            if (isNaN(num)) return val;
             if (num <= 1 && num > 0) return `%${Math.round(num * 100)}`;
-            // Eğer zaten 1'den büyükse (70 gibi) direkt yüzde ekle
             return `%${Math.round(num)}`;
         };
 
@@ -1093,21 +1090,20 @@
             const isCompletedView = (taskType === 'completed-tasks');
             const isBulletinWatch = (taskType === 'bulletin-watch');
             
-            // --- 1. VERİLERİ ÇEK ---
-            let monitoredData = null;   // Sol Taraf (Bizim Marka - ipRecords)
-            let monitoringRecord = null; // Sağ Taraf (Analiz Kaydı - monitoringTrademarkRecords)
+            // --- VERİ ÇEKME ---
+            let monitoredData = null;   // Sol Taraf (Bizim Marka)
+            let monitoringRecord = null; // Sağ Taraf (Analiz Kaydı - Results Array'i burada)
             
             const monitoredId = task.details?.monitoredMarkId || task.relatedIpRecordId;
             const bulletinKey = task.details?.bulletinKey;
             
             if (monitoredId) {
                 try {
-                    // A) Bülten Analiz Kaydını Çek
+                    // A) Bülten Analiz Kaydını Çek (monitoringTrademarkRecords)
                     if(bulletinKey) {
                          const monSnap = await getDoc(doc(db, 'monitoringTrademarkRecords', bulletinKey, 'trademarks', monitoredId));
                          if(monSnap.exists()) {
                              monitoringRecord = monSnap.data();
-                             // Görsel vb. için bunu kullanabiliriz ama ipRecords daha güvenilirdir
                          }
                     }
                     // B) İzlenen Marka Kaydını Çek (ipRecords)
@@ -1117,7 +1113,7 @@
                 } catch(e) { console.log('Data fetch error', e); }
             }
 
-            // --- 2. BAŞLIK FORMATI ---
+            // --- BAŞLIK FORMATI ---
             let cardTitle = `#${task.id} - ${task.title || 'İşlem'}`; 
             if (monitoredData && !isBulletinWatch) {
                 const taskName = (task.title || 'İşlem').toUpperCase();
@@ -1130,7 +1126,7 @@
                 cardTitle = `#${task.id} - ${task.title}`;
             }
 
-            // --- 3. BÜLTEN DETAYLARI VE KIYASLAMA ---
+            // --- BÜLTEN DETAYLARI ---
             let comparisonRow = '';
             if (isBulletinWatch) {
                 // SOL: İzlenen Marka
@@ -1140,21 +1136,22 @@
                     ? monitoredData.goodsAndServicesByClass.map(c=>c.classNo).join(', ') 
                     : monitoredData?.classes) || '-';
 
-                // SAĞ: Rakip Marka (Results Dizisinden Bulma)
-                const targetAppNo = task.details?.targetAppNo; // Task'taki rakip no (örn: "2025/097590")
+                // SAĞ: Rakip Marka (ESNEK EŞLEŞTİRME)
+                const targetAppNo = task.details?.targetAppNo; 
                 let competitor = null;
 
                 if (monitoringRecord && Array.isArray(monitoringRecord.results) && targetAppNo) {
-                    // targetAppNo ile results içindeki applicationNo'yu eşleştir
-                    // Tırnak işaretlerini ve boşlukları temizleyerek karşılaştır
+                    // Hedef numarayı temizle (boşluksuz, tırnaksız)
+                    const cleanTarget = String(targetAppNo).replace(/[^a-zA-Z0-9]/g, '');
+                    
                     competitor = monitoringRecord.results.find(r => {
-                        const rNo = String(r.applicationNo || '').replace(/['" ]/g, '');
-                        const tNo = String(targetAppNo).replace(/['" ]/g, '');
-                        return rNo === tNo;
+                        // DB'deki numarayı temizle
+                        const cleanResultNo = String(r.applicationNo || '').replace(/[^a-zA-Z0-9]/g, '');
+                        return cleanResultNo === cleanTarget;
                     });
                 }
 
-                // Eğer monitoringRecord'dan bulunamazsa Task Details'den yedekle
+                // Bulunamazsa Task Details'den yedekle
                 if (!competitor) {
                     competitor = {
                         markName: task.details?.objectionTarget,
@@ -1162,7 +1159,6 @@
                         imagePath: task.details?.competitorBrandImage,
                         bs: task.details?.similarityScore,
                         note: task.details?.note,
-                        // Holder yapısını simüle et
                         holders: task.details?.competitorOwner ? [{name: task.details.competitorOwner}] : []
                     };
                 }
@@ -1171,7 +1167,7 @@
                 const compName = competitor.markName || 'Benzer Marka';
                 const compNo = competitor.applicationNo || targetAppNo || '-';
                 
-                // Sınıflar (niceClasses string "29 / 30 /" formatında olabilir)
+                // Sınıflar
                 let compClasses = competitor.niceClasses || '-';
                 if (Array.isArray(compClasses)) compClasses = compClasses.join(', ');
 
@@ -1180,15 +1176,15 @@
                 const compImgUrl = getImageUrl(compImgPath);
                 const compImgHtml = `<img src="${compImgUrl}" class="task-brand-image" style="height:100px; width:auto; max-width:100%; object-fit:contain;">`;
 
-                // SAHİP (Holder Name)
+                // SAHİP (Holder)
                 let compOwner = '-';
                 if (competitor.holders && Array.isArray(competitor.holders) && competitor.holders.length > 0) {
-                    compOwner = competitor.holders[0].name;
+                    compOwner = competitor.holders[0].name || '-';
                 }
 
-                // SKOR (BS) ve NOT
-                const displayScore = formatScore(competitor.bs); // Veritabanındaki 'bs' alanı
-                const note = competitor.note; // Veritabanındaki 'note' alanı
+                // SKOR ve NOT
+                const displayScore = formatScore(competitor.bs);
+                const note = competitor.note;
 
                 // Ek Bilgiler HTML
                 let extraInfoHtml = '';
@@ -1200,7 +1196,6 @@
                     </div>`;
                 }
 
-                // Style
                 const labelStyle = 'color: rgba(255, 255, 255, 0.7); font-weight: 600;';
                 const valStyle = 'color: #fff; font-weight: 400;';
 
@@ -1237,39 +1232,20 @@
                 </div>`;
             }
 
-            // --- STATUS VE BUTONLAR ---
-            const statusMap = { 
-                'awaiting_client_approval': { text: 'Onay Bekliyor', class: 'warning' }, 
-                'completed': { text: 'Tamamlandı', class: 'success' }, 
-                'müvekkil onayı - kapatıldı': { text: 'Reddedildi/Kapandı', class: 'danger' },
-                'Bülten Kapandı': { text: 'Süresi Doldu', class: 'secondary' },
-                'open': { text: 'Açık', class: 'primary' }
-            };
+            // --- BUTONLAR VE TARİH ---
+            const statusMap = { 'awaiting_client_approval': { text: 'Onay Bekliyor', class: 'warning' }, 'completed': { text: 'Tamamlandı', class: 'success' }, 'müvekkil onayı - kapatıldı': { text: 'Reddedildi/Kapandı', class: 'danger' }, 'Bülten Kapandı': { text: 'Süresi Doldu', class: 'secondary' }, 'open': { text: 'Açık', class: 'primary' } };
             const stInfo = statusMap[task.status] || { text: task.status, class: 'secondary' };
 
             let buttons = '';
             const detailBtn = `<button class="btn btn-info btn-sm btn-action task-detail mr-1" data-task-id="${task.id}"><i class="fas fa-eye"></i> İncele</button>`;
-            
             if (isCompletedView) {
-                if(task.status.includes('kapatıldı')) {
-                    buttons += `<button class="btn btn-success btn-sm btn-action task-reopen mr-1" data-id="${task.id}"><i class="fas fa-folder-open"></i> İşi Aç</button>`;
-                }
+                if(task.status.includes('kapatıldı')) buttons += `<button class="btn btn-success btn-sm btn-action task-reopen mr-1" data-id="${task.id}"><i class="fas fa-folder-open"></i> İşi Aç</button>`;
                 buttons += detailBtn;
             } else {
-                buttons = `
-                <button class="btn btn-success btn-sm btn-action task-approve mr-1" data-id="${task.id}"><i class="fas fa-check"></i> Onayla</button>
-                <button class="btn btn-danger btn-sm btn-action task-reject mr-1" data-id="${task.id}"><i class="fas fa-times"></i> Reddet</button>
-                ${detailBtn}`;
-                
-                if(isBulletinWatch) {
-                    const bulletinObjId = task.details?.bulletinRecordId || task.details?.relatedBulletinId || '';
-                    buttons += `<button class="btn btn-warning btn-sm btn-action task-compare-goods" 
-                        data-ip-record-id="${monitoredId}" 
-                        data-bulletin-object-id="${bulletinObjId}"><i class="fas fa-balance-scale"></i> Kıyasla</button>`;
-                }
+                buttons = `<button class="btn btn-success btn-sm btn-action task-approve mr-1" data-id="${task.id}"><i class="fas fa-check"></i> Onayla</button><button class="btn btn-danger btn-sm btn-action task-reject mr-1" data-id="${task.id}"><i class="fas fa-times"></i> Reddet</button>${detailBtn}`;
+                if(isBulletinWatch) buttons += `<button class="btn btn-warning btn-sm btn-action task-compare-goods" data-ip-record-id="${monitoredId}" data-bulletin-object-id="${task.details?.bulletinRecordId || ''}"><i class="fas fa-balance-scale"></i> Kıyasla</button>`;
             }
 
-            // --- TARİH VE UYARI ---
             const dateVal = window.formatDateTR(task.dueDate || task.officialDueDate || task.createdAt);
             const dateLabel = isCompletedView ? 'Oluşturma Tarihi:' : 'Son Onay Tarihi:';
             const dateWarning = !isCompletedView ? `<span class="text-muted ml-2 d-block d-sm-inline" style="font-size:0.85rem; font-style:italic;">(Bu tarih resmi son tarih olup, hak kaybı yaşanmaması adına talimatların bu tarihten en az 2 gün önce iletilmesi beklenmektedir.)</span>` : '';
@@ -1280,16 +1256,9 @@
                     <div class="task-number-tag">${index + 1}.</div>
                     <h5 class="task-title ml-4">${cardTitle}</h5>
                     ${comparisonRow}
-                    <div class="ml-4 mt-2 mb-2">
-                        <span class="badge badge-${stInfo.class}" style="font-size:0.85rem;">${stInfo.text}</span>
-                    </div>
+                    <div class="ml-4 mt-2 mb-2"><span class="badge badge-${stInfo.class}" style="font-size:0.85rem;">${stInfo.text}</span></div>
                     <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mt-3">
-                        <div class="mb-2 mb-md-0">
-                            <small class="task-meta">
-                                <i class="fas fa-clock mr-1"></i> <strong>${dateLabel} ${dateVal}</strong>
-                                ${dateWarning}
-                            </small>
-                        </div>
+                        <div class="mb-2 mb-md-0"><small class="task-meta"><i class="fas fa-clock mr-1"></i> <strong>${dateLabel} ${dateVal}</strong>${dateWarning}</small></div>
                         <div class="text-right">${buttons}</div>
                     </div>
                 </div>
