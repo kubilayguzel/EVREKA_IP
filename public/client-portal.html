@@ -1095,7 +1095,7 @@
             let monitoringRecord = null; // Sağ Taraf (Analiz Kaydı - Results Array'i burada)
             
             const monitoredId = task.details?.monitoredMarkId || task.relatedIpRecordId;
-            const bulletinKey = task.details?.bulletinKey;
+            const bulletinKey = task.details?.bulletinKey || task.details?.bulletinNo;
             
             if (monitoredId) {
                 try {
