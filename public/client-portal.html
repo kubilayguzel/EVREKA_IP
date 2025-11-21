@@ -1061,7 +1061,7 @@
         await window._renderTaskCardsToContainer(finalTasks.slice(0,10), '#task-list-container', window.formatDateTR, taskType);
     };
 
-// --- ASENKRON TASK KART RENDER (UYARI METNİ DÜZELTMESİ) ---
+// --- ASENKRON TASK KART RENDER (ESKİ BAŞLIK FORMATI & BÜYÜK FONT DÜZELTMESİ) ---
     window._renderTaskCardsToContainer = async function(tasksToRender, containerSelector, formatDate, taskType) {
         const container = document.querySelector(containerSelector);
         if (!container) return;
@@ -1082,55 +1082,69 @@
                 } catch(e) { console.log('IP Record fetch error', e); }
             }
 
-            // 1. BAŞLIK FORMATI
-            let cardTitle = `#${task.id} - ${task.title || 'İşlem'}`;
-            if (monitoredData) {
-                const brandName = monitoredData.title || monitoredData.brandText || '';
-                if (!task.title.includes(brandName)) {
-                    cardTitle = `#${task.id} - ${brandName} ${task.title}`;
-                }
+            // 1. BAŞLIK FORMATI (#ID - İŞLEM - NO - MARKA)
+            let cardTitle = `#${task.id} - ${task.title || 'İşlem'}`; // Varsayılan
+            
+            if (monitoredData && !isBulletinWatch) {
+                // Yenileme ve Onay Bekleyenler için Özel Format
+                // Görseldeki format: #131 - YENİLEME - 2025/070184 - efes haus
+                const taskName = (task.title || 'İşlem').toUpperCase();
+                const appNo = monitoredData.applicationNumber || monitoredData.applicationNo || '-';
+                const brandName = monitoredData.title || monitoredData.brandText || '-';
+                
+                // Eğer task title içinde marka adı geçiyorsa temizleyelim ki iki kere yazmasın
+                let cleanTaskName = taskName.replace(brandName.toUpperCase(), '').trim();
+                // Başta veya sonda tire kalırsa temizle
+                cleanTaskName = cleanTaskName.replace(/^-|-$/g, '').trim(); 
+                if(!cleanTaskName) cleanTaskName = "İŞLEM";
+
+                cardTitle = `#${task.id} - ${cleanTaskName} - ${appNo} - ${brandName}`;
+            } else if (isBulletinWatch) {
+                // Bülten için başlık
+                cardTitle = `#${task.id} - ${task.title}`;
             }
 
-            // 2. BÜLTEN İZLEME İÇERİĞİ
+            // 2. BÜLTEN İZLEME İÇERİĞİ (Büyük Fontlar)
             let comparisonRow = '';
             if (isBulletinWatch) {
                 const myImgUrl = monitoredData?.brandImageUrl || 'https://placehold.co/100x100?text=Yok';
                 
                 const targetImgUrl = task.details?.competitorBrandImage || task.details?.imagePath || ''; 
                 const targetImgHtml = targetImgUrl 
-                    ? `<img src="${targetImgUrl}" class="task-brand-image" style="height:80px; width:auto; max-width:100%; object-fit:contain;">`
-                    : `<div class="bg-light d-flex align-items-center justify-content-center text-muted small" style="height:80px; width:80px; border:1px dashed #ccc;">Görsel<br>Yok</div>`;
+                    ? `<img src="${targetImgUrl}" class="task-brand-image" style="height:100px; width:auto; max-width:100%; object-fit:contain;">`
+                    : `<div class="bg-light d-flex align-items-center justify-content-center text-muted" style="height:100px; width:100px; border:1px dashed #ccc;">Görsel<br>Yok</div>`;
 
                 const myClasses = monitoredData?.goodsAndServicesByClass?.map(c=>c.classNo).join(', ') || '-';
                 const targetName = task.details?.objectionTarget || 'Benzer Marka';
                 const targetNo = task.details?.targetAppNo || '-';
                 const targetClasses = task.details?.targetNiceClasses || '-';
 
+                // FONT BOYUTU AYARLARI (Burada font-size artırıldı)
                 comparisonRow = `
                 <div class="row mt-3 pt-3 border-top border-secondary">
                     <div class="col-md-6 border-right border-secondary mb-3 mb-md-0">
-                        <h6 class="text-info small font-weight-bold mb-2 text-left">İZLENEN MARKANIZ</h6>
+                        <h6 class="text-info font-weight-bold mb-3 text-left" style="font-size:1.1rem;">İZLENEN MARKANIZ</h6>
                         <div class="d-flex align-items-center text-left">
-                            <div class="mr-3" style="min-width:80px; text-align:center;">
-                                <img src="${myImgUrl}" class="task-brand-image" style="height:80px; width:auto; max-width:100%; object-fit:contain;">
+                            <div class="mr-4" style="min-width:100px; text-align:center;">
+                                <img src="${myImgUrl}" class="task-brand-image" style="height:100px; width:auto; max-width:100%; object-fit:contain;">
                             </div>
                             <div>
-                                <div class="font-weight-bold mb-1" style="font-size:1rem;">${monitoredData?.title || '-'}</div>
-                                <div class="small text-muted">No: ${monitoredData?.applicationNumber || '-'}</div>
-                                <div class="small text-muted">Sınıf: ${myClasses}</div>
+                                <div class="font-weight-bold mb-2" style="font-size:1.2rem;">${monitoredData?.title || '-'}</div>
+                                <div class="text-muted" style="font-size:1rem; margin-bottom:4px;"><strong>No:</strong> ${monitoredData?.applicationNumber || '-'}</div>
+                                <div class="text-muted" style="font-size:1rem;"><strong>Sınıf:</strong> ${myClasses}</div>
                             </div>
                         </div>
                     </div>
                     <div class="col-md-6">
-                        <h6 class="text-danger small font-weight-bold mb-2 text-left">BENZER MARKA</h6>
+                        <h6 class="text-danger font-weight-bold mb-3 text-left" style="font-size:1.1rem;">BENZER MARKA</h6>
                         <div class="d-flex align-items-center text-left">
-                            <div class="mr-3" style="min-width:80px; text-align:center;">
+                            <div class="mr-4" style="min-width:100px; text-align:center;">
                                 ${targetImgHtml}
                             </div>
                             <div>
-                                <div class="font-weight-bold mb-1" style="font-size:1rem;">${targetName}</div>
-                                <div class="small text-muted">No: ${targetNo}</div>
-                                <div class="small text-muted">Sınıf: ${targetClasses}</div>
+                                <div class="font-weight-bold mb-2" style="font-size:1.2rem;">${targetName}</div>
+                                <div class="text-muted" style="font-size:1rem; margin-bottom:4px;"><strong>No:</strong> ${targetNo}</div>
+                                <div class="text-muted" style="font-size:1rem;"><strong>Sınıf:</strong> ${targetClasses}</div>
                             </div>
                         </div>
                     </div>
@@ -1170,10 +1184,9 @@
             }
 
             // 4. TARİH VE UYARI METNİ
-            const dateVal = window.formatDateTR(task.dueDate || task.createdAt);
-            const dateLabel = isCompletedView ? 'Oluşturma Tarihi:' : 'Son Tarih:';
+            const dateVal = window.formatDateTR(task.dueDate || task.officialDueDate || task.createdAt);
+            const dateLabel = isCompletedView ? 'Oluşturma Tarihi:' : 'Son Onay Tarihi:';
             
-            // Eksik olan uyarı metni buraya eklendi
             const dateWarning = !isCompletedView 
                 ? `<span class="text-muted ml-2 d-block d-sm-inline" style="font-size:0.85rem; font-style:italic;">(Bu tarih resmi son tarih olup, hak kaybı yaşanmaması adına talimatların bu tarihten en az 2 gün önce iletilmesi beklenmektedir.)</span>` 
                 : '';
@@ -1182,13 +1195,17 @@
             <div class="col-12 mb-4">
                 <div class="task-card task-card-${stInfo.class}" data-task-id="${task.id}">
                     <div class="task-number-tag">${index + 1}.</div>
+                    
                     <h5 class="task-title ml-4">${cardTitle}</h5>
                     
                     ${comparisonRow}
                     
+                    <div class="ml-4 mt-2 mb-2">
+                        <span class="badge badge-${stInfo.class}" style="font-size:0.85rem;">${stInfo.text}</span>
+                    </div>
+
                     <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mt-3">
                         <div class="mb-2 mb-md-0">
-                            <span class="badge badge-${stInfo.class} mr-2" style="font-size:0.85rem;">${stInfo.text}</span>
                             <small class="task-meta">
                                 <i class="fas fa-clock mr-1"></i> <strong>${dateLabel} ${dateVal}</strong>
                                 ${dateWarning}
@@ -1202,7 +1219,8 @@
 
         container.innerHTML = cardsHTML.join('');
     };
-    
+
+
 // --- 3. GÜNCELLENMİŞ FATURA MODÜLÜ ---
     
     // Veri Çekme ve Sayfalama Başlatma
