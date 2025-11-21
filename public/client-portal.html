@@ -180,6 +180,44 @@
         color: #b0b8c0 !important;
     }
 
+    /* === DÜZELTMELER: MODAL AKORDEON RENK VE HİZALAMA === */
+
+    /* 1. Akordeon İçindeki Beyaz Alanı Koyu Yapma */
+    /* Bootstrap'in 'bg-light' sınıfını dark modda eziyoruz */
+    .dark-mode .collapse .table,
+    .dark-mode .accordion-table,
+    .dark-mode .accordion-table.bg-light {
+        background-color: #2b2d31 !important; /* Modal ile uyumlu koyu renk */
+        color: #b0b8c0 !important;            /* Okunabilir açık gri yazı */
+        border: 1px solid #40444b;            /* Hafif çerçeve */
+    }
+
+    /* İç satırların renklerini düzeltme */
+    .dark-mode .accordion-table th,
+    .dark-mode .accordion-table td {
+        border-color: #40444b !important;     /* Çizgi rengi */
+        background-color: transparent !important;
+        color: inherit !important;
+    }
+
+    /* 2. Ok İşareti ve Sayının Alt Alta Kaymasını Engelleme */
+    /* İlk sütuna (ID sütunu) genişlik ve satır kırma yasağı veriyoruz */
+    #modal-islemler table td:first-child,
+    #modal-islemler table th:first-child {
+        white-space: nowrap !important;  /* Asla alt satıra geçme */
+        width: 1%;                       /* Sadece içerik kadar yer kapla */
+        min-width: 60px;                 /* Minimum genişlik tanı */
+        vertical-align: middle !important;
+        text-align: left;
+    }
+
+    /* İkon ile sayı arasına biraz boşluk bırak */
+    #modal-islemler .fa-chevron-right {
+        margin-right: 5px;
+        width: 15px; /* İkon genişliğini sabitle */
+        display: inline-block;
+    }
+
 </style>
 </head>
 <body>
