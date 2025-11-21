@@ -1785,6 +1785,14 @@
                 if (window.transactionTypesMap && window.transactionTypesMap.has(String(parent.type))) {
                     const t = window.transactionTypesMap.get(String(parent.type));
                     transactionAlias = t.alias || t.name;
+                    
+                    // Yayına İtiraz (type: 20) ise başvuru sahibini parantez içinde ekle
+                    if (String(parent.type) === '20') {
+                        const oppositionOwner = parent.oppositionOwner || parent.relatedParty?.name;
+                        if (oppositionOwner) {
+                            transactionAlias += ` (${oppositionOwner})`;
+                        }
+                    }
                 }
 
                 // Parent Belgeleri
@@ -1823,6 +1831,14 @@
                         let childAlias = 'Alt İşlem';
                         if (window.transactionTypesMap.has(String(child.type))) {
                             childAlias = window.transactionTypesMap.get(String(child.type)).alias;
+                            
+                            // Yayına İtiraz (type: 20) ise başvuru sahibini parantez içinde ekle
+                            if (String(child.type) === '20') {
+                                const oppositionOwner = child.oppositionOwner || child.relatedParty?.name;
+                                if (oppositionOwner) {
+                                    childAlias += ` (${oppositionOwner})`;
+                                }
+                            }
                         }
 
                         // Child Belgeleri
