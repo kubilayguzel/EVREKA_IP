@@ -739,7 +739,7 @@
             console.error("Portföy yükleme hatası:", error);
         }
     }
-    
+
     window.populatePortfolioTable = function(tableId, portfolioData, startIndex = 0) {
         const tableBody = document.querySelector(`${tableId} tbody`);
         if (!tableBody) return;
@@ -1002,7 +1002,7 @@
         await window._renderTaskCardsToContainer(finalTasks.slice(0,10), '#task-list-container', window.formatDateTR, taskType);
     };
 
-    // --- ASENKRON TASK KART RENDER (KIYASLAMA ÖZELLİKLİ) ---
+// --- ASENKRON TASK KART RENDER (ESKİ VERSİYON - ORİJİNAL YAPI) ---
     window._renderTaskCardsToContainer = async function(tasksToRender, containerSelector, formatDate, taskType) {
         const container = document.querySelector(containerSelector);
         if (!container) return;
@@ -1010,80 +1010,100 @@
 
         const cardsHTML = await Promise.all(tasksToRender.map(async (task, index) => {
             const isCompletedView = (taskType === 'completed-tasks');
+            const isBulletinWatch = (taskType === 'bulletin-watch');
             
-            // 1. İzlenen Marka Bilgisi
-            let myMarkHtml = '';
-            const monitoredId = task.details?.monitoredMarkId || task.relatedIpRecordId;
-            let monitoredData = null;
-            
-            if (monitoredId) {
-                // Basitçe ipRecords'dan çek (Performans için)
-                const ipSnap = await getDoc(doc(db, 'ipRecords', monitoredId));
-                if(ipSnap.exists()) {
-                    monitoredData = ipSnap.data();
-                    const imgUrl = monitoredData.brandImageUrl || 'https://placehold.co/100x100?text=Yok';
-                    const classes = monitoredData.goodsAndServicesByClass?.map(c=>c.classNo).join(', ') || '-';
-                    myMarkHtml = `
-                    <div class="col-6 border-right">
-                        <h6 class="text-info small font-weight-bold">İZLENEN MARKANIZ</h6>
-                        <div class="d-flex align-items-start">
-                            <img src="${imgUrl}" class="task-brand-image mr-2" style="width:60px;height:60px;object-fit:contain;">
-                            <div>
-                                <div class="font-weight-bold small">${monitoredData.title || monitoredData.brandText}</div>
-                                <div class="small text-muted">No: ${monitoredData.applicationNumber}</div>
-                                <div class="small text-muted">Sınıf: ${classes}</div>
-                            </div>
-                        </div>
-                    </div>`;
-                }
-            }
+            let comparisonRow = '';
 
-            // 2. Rakip Marka Bilgisi (Sadece Bülten İzlemede)
-            let compMarkHtml = '';
-            if (taskType === 'bulletin-watch') {
-                // details içinde basit bilgi var mı?
+            // SADECE Bülten İzleme ise detayları (Görsel/Kıyaslama) çek ve göster
+            // Diğer işlerde (Yenileme vb.) buraya hiç girmez, kart sade kalır.
+            if (isBulletinWatch) {
+                const monitoredId = task.details?.monitoredMarkId || task.relatedIpRecordId;
+                let myMarkHtml = '';
+                let compMarkHtml = '';
+
+                // 1. İzlenen Marka
+                if (monitoredId) {
+                    const ipSnap = await getDoc(doc(db, 'ipRecords', monitoredId));
+                    if(ipSnap.exists()) {
+                        const d = ipSnap.data();
+                        const imgUrl = d.brandImageUrl || 'https://placehold.co/100x100?text=Yok';
+                        // Sınıf verisi
+                        let classes = '-';
+                        if(Array.isArray(d.goodsAndServicesByClass)) classes = d.goodsAndServicesByClass.map(c=>c.classNo).join(', ');
+                        else if(d.classes) classes = Array.isArray(d.classes) ? d.classes.join(', ') : d.classes;
+
+                        myMarkHtml = `
+                        <div class="col-6 task-card-comparison-item border-right">
+                            <h6 class="text-info small font-weight-bold mb-2">İZLENEN MARKANIZ</h6>
+                            <div class="d-flex align-items-start">
+                                <img src="${imgUrl}" class="task-brand-image mr-2" style="height:80px; width:auto; object-fit:contain;">
+                                <div>
+                                    <div class="font-weight-bold small">${d.title || d.brandText || '-'}</div>
+                                    <div class="small text-muted">No: ${d.applicationNumber || '-'}</div>
+                                    <div class="small text-muted">Sınıf: ${classes}</div>
+                                </div>
+                            </div>
+                        </div>`;
+                    }
+                }
+
+                // 2. Rakip Marka
                 const targetName = task.details?.objectionTarget || 'Benzer Marka';
                 const targetNo = task.details?.targetAppNo || '-';
-                const targetClasses = task.details?.targetNiceClasses ? (Array.isArray(task.details.targetNiceClasses) ? task.details.targetNiceClasses.join(',') : task.details.targetNiceClasses) : '-';
+                const tClasses = task.details?.targetNiceClasses ? (Array.isArray(task.details.targetNiceClasses) ? task.details.targetNiceClasses.join(',') : task.details.targetNiceClasses) : '-';
                 
                 compMarkHtml = `
-                <div class="col-6">
-                    <h6 class="text-danger small font-weight-bold">BENZER MARKA</h6>
+                <div class="col-6 task-card-comparison-item">
+                    <h6 class="text-danger small font-weight-bold mb-2">BENZER MARKA</h6>
                     <div class="d-flex align-items-start">
-                        <div class="bg-light d-flex align-items-center justify-content-center mr-2" style="width:60px;height:60px;border:1px dashed #ccc;font-size:0.7rem;">Görsel Yok</div>
+                        <div class="bg-light d-flex align-items-center justify-content-center mr-2 small text-muted" style="height:80px; width:80px; border:1px dashed #ccc;">Görsel<br>Yok</div>
                         <div>
                             <div class="font-weight-bold small">${targetName}</div>
                             <div class="small text-muted">No: ${targetNo}</div>
-                            <div class="small text-muted">Sınıf: ${targetClasses}</div>
+                            <div class="small text-muted">Sınıf: ${tClasses}</div>
                         </div>
                     </div>
                 </div>`;
+
+                comparisonRow = `<div class="row mt-3 pt-3 border-top border-secondary">${myMarkHtml}${compMarkHtml}</div>`;
             }
 
-            // 3. Butonlar
-            const statusBadge = { 'awaiting_client_approval': 'warning', 'completed': 'success', 'müvekkil onayı - kapatıldı': 'danger' }[task.status] || 'secondary';
+            // 3. Butonlar ve Genel Yapı
+            const statusBadge = { 
+                'awaiting_client_approval': 'warning', 
+                'completed': 'success', 
+                'müvekkil onayı - kapatıldı': 'danger',
+                'Bülten Kapandı': 'secondary'
+            }[task.status] || 'secondary';
+            
             let buttons = '';
             if (isCompletedView) {
-                if(task.status.includes('kapatıldı')) buttons += `<button class="btn btn-success btn-sm task-reopen" data-id="${task.id}"><i class="fas fa-folder-open"></i> Aç</button>`;
+                if(task.status.includes('kapatıldı')) buttons += `<button class="btn btn-success btn-sm task-reopen mr-1" data-id="${task.id}"><i class="fas fa-folder-open"></i> Aç</button>`;
                 buttons += `<button class="btn btn-info btn-sm task-detail" data-id="${task.id}"><i class="fas fa-eye"></i></button>`;
             } else {
                 buttons = `
-                <button class="btn btn-success btn-sm task-approve" data-id="${task.id}"><i class="fas fa-check"></i></button>
-                <button class="btn btn-danger btn-sm task-reject" data-id="${task.id}"><i class="fas fa-times"></i></button>
-                <button class="btn btn-info btn-sm task-detail" data-id="${task.id}"><i class="fas fa-eye"></i></button>
-                ${taskType==='bulletin-watch' ? `<button class="btn btn-warning btn-sm task-compare-goods" data-ip-record-id="${monitoredId}"><i class="fas fa-balance-scale"></i></button>` : ''}`;
+                <button class="btn btn-success btn-sm task-approve mr-1" data-id="${task.id}"><i class="fas fa-check"></i></button>
+                <button class="btn btn-danger btn-sm task-reject mr-1" data-id="${task.id}"><i class="fas fa-times"></i></button>
+                <button class="btn btn-info btn-sm task-detail mr-1" data-id="${task.id}"><i class="fas fa-eye"></i></button>
+                ${isBulletinWatch ? `<button class="btn btn-warning btn-sm task-compare-goods" data-ip-record-id="${task.relatedIpRecordId}"><i class="fas fa-balance-scale"></i></button>` : ''}`;
             }
 
-            const comparisonRow = (myMarkHtml || compMarkHtml) ? `<div class="row mt-3 pt-3 border-top">${myMarkHtml}${compMarkHtml}</div>` : '';
+            // Başlık oluşturma
+            const cardTitle = `#${task.id} - ${task.title || 'İşlem'}`;
 
+            // KART HTML (Eski style sınıfları ile)
             return `
-            <div class="col-md-12 mb-4">
+            <div class="col-12 mb-4">
                 <div class="task-card task-card-${statusBadge}" data-task-id="${task.id}">
                     <div class="task-number-tag">${index + 1}.</div>
-                    <h5 class="task-title">#${task.id} - ${task.title || 'İşlem'}</h5>
+                    <h5 class="task-title ml-4">${cardTitle}</h5>
+                    
                     ${comparisonRow}
+                    
                     <div class="d-flex justify-content-between align-items-center mt-3">
-                        <small class="text-muted"><i class="fas fa-clock"></i> ${window.formatDateTR(task.dueDate || task.createdAt)}</small>
+                        <small class="task-meta">
+                            <i class="fas fa-clock mr-1"></i> ${window.formatDateTR(task.dueDate || task.createdAt)}
+                        </small>
                         <div>${buttons}</div>
                     </div>
                 </div>
@@ -1092,7 +1112,6 @@
 
         container.innerHTML = cardsHTML.join('');
     };
-
 // --- 3. GÜNCELLENMİŞ FATURA MODÜLÜ ---
     
     // Veri Çekme ve Sayfalama Başlatma
