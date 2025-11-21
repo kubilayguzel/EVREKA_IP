@@ -1204,7 +1204,31 @@
             tbody.innerHTML = '<tr><td colspan="12" class="text-danger text-center">Hata oluştu.</td></tr>';
         }
     };
+// --- TEMA YÖNETİMİ FONKSİYONU ---
+    function initTheme() {
+        // 1. Kayıtlı temayı al veya varsayılan olarak 'dark' yap
+        const savedTheme = localStorage.getItem('theme') || 'dark';
+        
+        // 2. Body'ye ilgili sınıfı ekle
+        $('body').removeClass('light-mode dark-mode').addClass(savedTheme + '-mode');
+        
+        // 3. Switch butonunun durumunu ayarla
+        $('#themeSwitch').prop('checked', savedTheme === 'dark');
+        $('.custom-control-label').text(savedTheme === 'dark' ? 'Koyu Tema' : 'Açık Tema');
 
+        // 4. Değişiklik olayını dinle (Önceki eventleri temizle - off)
+        $('#themeSwitch').off('change').on('change', function() {
+            const isChecked = $(this).is(':checked');
+            const newTheme = isChecked ? 'dark' : 'light';
+            
+            $('body').removeClass('light-mode dark-mode').addClass(newTheme + '-mode');
+            localStorage.setItem('theme', newTheme);
+            
+            // Label metnini güncelle
+            $(this).next('label').text(isChecked ? 'Koyu Tema' : 'Açık Tema');
+        });
+    }
+    
     // --- EVENT LISTENERS & ACTIONS ---
     $(document).ready(function() {
         initTheme();
