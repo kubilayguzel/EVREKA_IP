@@ -689,36 +689,57 @@
         }
     }
 
-    // --- 1. PORTFÖY MODÜLÜ ---
+// --- 1. GÜNCELLENMİŞ PORTFÖY MODÜLÜ (Pagination Dahil) ---
     async function fetchAndDisplayPortfolio() {
         const q = query(collection(db, "ipRecords")); 
-        // Not: Gerçek projede linkedIds ile 'where' veya security rules kullanılmalı, 
-        // burada client-side filtreleme yapıyoruz (eski kod yapısı).
-        const snap = await runGetDocs(q);
-        let allPortfolios = [];
         
-        snap.forEach(doc => {
-            const d = doc.data();
-            // Yetki kontrolü
-            if (d.applicants && d.applicants.some(a => window.linkedPersonIds.includes(a.id))) {
-                allPortfolios.push({ id: doc.id, ...d });
+        try {
+            const snap = await runGetDocs(q);
+            let allPortfolios = [];
+            
+            snap.forEach(doc => {
+                const d = doc.data();
+                if (d.applicants && d.applicants.some(a => window.linkedPersonIds.includes(a.id))) {
+                    allPortfolios.push({ id: doc.id, ...d });
+                }
+            });
+
+            $('#dashPortfolio').text(allPortfolios.length);
+            
+            // Verileri Tiplerine Göre Ayır
+            window.markaPaginationData.allDataUnfiltered = allPortfolios.filter(p => p.type === 'trademark' || p.type === 'Marka');
+            const patentList = allPortfolios.filter(p => p.type === 'patent' || p.type === 'Patent');
+            const tasarimList = allPortfolios.filter(p => p.type === 'design' || p.type === 'Tasarım');
+            
+            // --- MARKA PAGINATION BAŞLAT ---
+            if (!window.markaPaginationData.pagination) {
+                window.markaPaginationData.pagination = new window.Pagination({
+                    itemsPerPage: 10,
+                    containerId: 'markaPagination', // HTML'de bu ID'nin olduğundan emin olun
+                    onPageChange: (page, perPage) => {
+                        // Sayfa değişince mevcut filtreye göre (TÜRKPATENT/Hepsi) datayı yeniden dilimle
+                        // Not: applyMenseFilterToActivePane fonksiyonu DOM üzerinden çalıştığı için
+                        // burada önce datayı basıp sonra filtreyi tetiklemek en sağlıklısıdır.
+                        const start = (page - 1) * perPage;
+                        const slice = window.markaPaginationData.allDataUnfiltered.slice(start, start + perPage);
+                        window.populatePortfolioTable('#marka-list', slice, start);
+                    }
+                });
             }
-        });
+            
+            // Marka tablosunu ilk sayfa ile doldur
+            window.markaPaginationData.pagination.update(window.markaPaginationData.allDataUnfiltered.length);
+            window.populatePortfolioTable('#marka-list', window.markaPaginationData.allDataUnfiltered.slice(0,10));
 
-        $('#dashPortfolio').text(allPortfolios.length);
-        
-        // Global veriye kaydet
-        window.markaPaginationData.allDataUnfiltered = allPortfolios.filter(p => p.type === 'trademark' || p.type === 'Marka');
-        
-        // Tabloları Doldur
-        window.populatePortfolioTable('#marka-list', window.markaPaginationData.allDataUnfiltered.slice(0,10));
-        window.populatePortfolioTable('#patent-list', allPortfolios.filter(p => p.type === 'patent' || p.type === 'Patent'));
-        window.populatePortfolioTable('#tasarim-list', allPortfolios.filter(p => p.type === 'design' || p.type === 'Tasarım'));
-        
-        // Marka Pagination (Basit implementasyon)
-        // Gerçek pagination için event listener eklenmeli
+            // Diğer tablolar (Genelde az kayıt olduğu için pagination eklemedim, istenirse eklenebilir)
+            window.populatePortfolioTable('#patent-list', patentList);
+            window.populatePortfolioTable('#tasarim-list', tasarimList);
+            
+        } catch (error) {
+            console.error("Portföy yükleme hatası:", error);
+        }
     }
-
+    
     window.populatePortfolioTable = function(tableId, portfolioData, startIndex = 0) {
         const tableBody = document.querySelector(`${tableId} tbody`);
         if (!tableBody) return;
@@ -1173,7 +1194,7 @@
             tbody.append(row);
         });
     };
-    
+
     // --- 4. DAVA MODÜLÜ ---
     window.fetchAndDisplaySuits = async function() {
         const tbody = document.getElementById('dava-tbody');
