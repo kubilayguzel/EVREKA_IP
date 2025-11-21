@@ -1120,16 +1120,21 @@
             }
 
             // --- BAŞLIK FORMATI ---
-            let cardTitle = `#${task.id} - ${task.title || 'İşlem'}`; 
+            // İş tipini transaction type map'ten al
+            let taskTypeName = 'İşlem';
+            if (task.type && window.transactionTypesMap && window.transactionTypesMap.has(String(task.type))) {
+                taskTypeName = window.transactionTypesMap.get(String(task.type));
+            } else if (task.title) {
+                taskTypeName = task.title;
+            }
+
+            let cardTitle = `#${task.id} - ${taskTypeName}`; 
             if (monitoredData && !isBulletinWatch) {
-                const taskName = (task.title || 'İşlem').toUpperCase();
                 const appNo = monitoredData.applicationNumber || monitoredData.applicationNo || '-';
                 const brandName = monitoredData.title || monitoredData.brandText || '-';
-                let cleanTaskName = taskName.replace(brandName.toUpperCase(), '').trim().replace(/^-|-$/g, '').trim(); 
-                if(!cleanTaskName) cleanTaskName = "İŞLEM";
-                cardTitle = `#${task.id} - ${cleanTaskName} - ${appNo} - ${brandName}`;
+                cardTitle = `#${task.id} - ${taskTypeName} - ${appNo} - ${brandName}`;
             } else if (isBulletinWatch) {
-                cardTitle = `#${task.id} - ${task.title}`;
+                cardTitle = `#${task.id} - ${taskTypeName}`;
             }
 
             // --- BÜLTEN DETAYLARI ---
