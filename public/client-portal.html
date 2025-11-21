@@ -1249,7 +1249,7 @@
                 buttons += detailBtn;
             } else {
                 buttons = `<button class="btn btn-success btn-sm btn-action task-approve mr-1" data-id="${task.id}"><i class="fas fa-check"></i> Onayla</button><button class="btn btn-danger btn-sm btn-action task-reject mr-1" data-id="${task.id}"><i class="fas fa-times"></i> Reddet</button>${detailBtn}`;
-                if(isBulletinWatch) buttons += `<button class="btn btn-warning btn-sm btn-action task-compare-goods" data-task-id="${task.id}" data-ip-record-id="${monitoredId}" data-bulletin-object-id="${task.details?.bulletinRecordId || ''}"><i class="fas fa-balance-scale"></i> Kıyasla</button>`;
+                if(isBulletinWatch) buttons += `<button class="btn btn-warning btn-sm btn-action task-compare-goods" data-task-id="${task.id}" data-ip-record-id="${monitoredId}" data-bulletin-key="${bulletinKey}" data-target-app-no="${task.details?.targetAppNo || ''}"><i class="fas fa-balance-scale"></i> Kıyasla</button>`;
             }
 
             const dateVal = window.formatDateTR(task.dueDate || task.officialDueDate || task.createdAt);
@@ -1888,20 +1888,14 @@
             window.loadSampleTaskDetails(type);
         });
         
-// Emtia Kıyaslama Modal
+        // Emtia Kıyaslama Modal
         $(document).on('click', '.task-compare-goods', async function() {
             const taskId = $(this).data('task-id');
             const ipRecordId = $(this).data('ip-record-id');
-            const bulletinObjectId = $(this).data('bulletin-object-id');
+            const bulletinKey = $(this).data('bulletin-key');
+            const targetAppNo = $(this).data('target-app-no');
             
-            console.log('🔍 Emtia kıyaslama:', { taskId, ipRecordId, bulletinObjectId });
-            
-            // Task verisini çek ve details'ı logla
-            const taskDoc = await getDoc(doc(db, 'tasks', String(taskId)));
-            if (taskDoc.exists()) {
-                const taskData = taskDoc.data();
-                console.log('📋 Task Details:', taskData.details);
-            }
+            console.log('🔍 Emtia kıyaslama:', { taskId, ipRecordId, bulletinKey, targetAppNo });
             
             // Modal'ı aç
             $('#goodsComparisonModal').modal('show');
@@ -1915,8 +1909,8 @@
                 const monitoredGoodsHtml = await loadGoodsFromIpRecord(ipRecordId);
                 $('#monitoredGoodsContent').html(monitoredGoodsHtml);
                 
-                // Benzer markanın emtia listesini çek
-                const competitorGoodsHtml = await loadGoodsFromBulletinRecord(bulletinObjectId);
+                // Benzer markanın emtia listesini monitoringRecord'dan çek
+                const competitorGoodsHtml = await loadGoodsFromMonitoringRecord(bulletinKey, ipRecordId, targetAppNo);
                 $('#competitorGoodsContent').html(competitorGoodsHtml);
                 
             } catch (error) {
@@ -1998,6 +1992,66 @@
                 
             } catch (error) {
                 console.error('❌ Bulletin record emtia çekme hatası:', error);
+                return '<p class="text-danger">Veriler yüklenirken hata oluştu. <br><small>' + error.message + '</small></p>';
+            }
+        }
+
+        // Benzer markanın emtia listesini monitoring record'dan çek
+        async function loadGoodsFromMonitoringRecord(bulletinKey, monitoredId, targetAppNo) {
+            if (!bulletinKey || !monitoredId || !targetAppNo) {
+                return '<p class="text-muted">Gerekli bilgiler eksik.</p>';
+            }
+            
+            try {
+                console.log('🔍 Monitoring Record\'dan emtia çekiliyor:', { bulletinKey, monitoredId, targetAppNo });
+                
+                // Monitoring record'u çek
+                const monSnap = await getDoc(doc(db, 'monitoringTrademarkRecords', bulletinKey, 'trademarks', monitoredId));
+                
+                if (!monSnap.exists()) {
+                    console.warn('⚠️ Monitoring record bulunamadı');
+                    return '<p class="text-muted">Mal ve hizmet bilgisi bulunamadı.</p>';
+                }
+                
+                const monitoringRecord = monSnap.data();
+                console.log('✅ Monitoring Record bulundu:', monitoringRecord);
+                
+                if (!Array.isArray(monitoringRecord.results)) {
+                    return '<p class="text-muted">Sonuç bulunamadı.</p>';
+                }
+                
+                // targetAppNo ile eşleşen rakip markayı bul
+                const cleanTarget = String(targetAppNo).replace(/[^a-zA-Z0-9]/g, '');
+                const competitor = monitoringRecord.results.find(r => {
+                    const cleanResultNo = String(r.applicationNo || '').replace(/[^a-zA-Z0-9]/g, '');
+                    return cleanResultNo === cleanTarget;
+                });
+                
+                if (!competitor) {
+                    console.warn('⚠️ Rakip marka bulunamadı:', targetAppNo);
+                    return '<p class="text-muted">Rakip marka bilgisi bulunamadı.</p>';
+                }
+                
+                console.log('✅ Rakip marka bulundu:', competitor);
+                
+                // Eşya bilgilerini al
+                const goods = competitor.goodsAndServices;
+                
+                if (!goods || !Array.isArray(goods) || goods.length === 0) {
+                    return '<p class="text-muted">Mal ve hizmet bilgisi bulunamadı.</p>';
+                }
+                
+                // HTML'e çevir
+                let html = '';
+                goods.forEach(item => {
+                    const goodsText = item || 'Açıklama yok';
+                    html += `<p style="font-size: 0.85rem; margin-bottom: 10px; line-height: 1.4;">${goodsText}</p>`;
+                });
+                
+                return html;
+                
+            } catch (error) {
+                console.error('❌ Monitoring record emtia çekme hatası:', error);
                 return '<p class="text-danger">Veriler yüklenirken hata oluştu. <br><small>' + error.message + '</small></p>';
             }
         }
