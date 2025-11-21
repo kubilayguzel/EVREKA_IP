@@ -1956,46 +1956,6 @@
             }
         }
 
-        // Benzer markanın emtia listesini bulletin record'dan çek
-        async function loadGoodsFromBulletinRecord(objectId) {
-            if (!objectId) return '<p class="text-muted">Kayıt ID bulunamadı.</p>';
-            
-            try {
-                console.log('🔍 Bulletin objectID ile arama:', objectId);
-                
-                // Doğrudan objectID ile belgeye eriş
-                const bulletinDocRef = doc(db, 'trademarkBulletinRecords', objectId);
-                const bulletinSnap = await getDoc(bulletinDocRef);
-                
-                if (!bulletinSnap.exists()) {
-                    console.warn('⚠️ Bulletin kaydı bulunamadı:', objectId);
-                    return '<p class="text-muted">Mal ve hizmet bilgisi bulunamadı.</p>';
-                }
-                
-                const bulletinData = bulletinSnap.data();
-                console.log('✅ Bulletin verisi:', bulletinData);
-                
-                const goods = bulletinData.goods;
-                
-                if (!goods || !Array.isArray(goods) || goods.length === 0) {
-                    return '<p class="text-muted">Mal ve hizmet bilgisi bulunamadı.</p>';
-                }
-                
-                // goods array'ini HTML'e çevir
-                let html = '';
-                goods.forEach(item => {
-                    const goodsText = item || 'Açıklama yok';
-                    html += `<p style="font-size: 0.85rem; margin-bottom: 10px; line-height: 1.4;">${goodsText}</p>`;
-                });
-                
-                return html;
-                
-            } catch (error) {
-                console.error('❌ Bulletin record emtia çekme hatası:', error);
-                return '<p class="text-danger">Veriler yüklenirken hata oluştu. <br><small>' + error.message + '</small></p>';
-            }
-        }
-
         // Benzer markanın emtia listesini monitoring record'dan çek
         async function loadGoodsFromMonitoringRecord(bulletinKey, monitoredId, targetAppNo) {
             if (!bulletinKey || !monitoredId || !targetAppNo) {
@@ -2034,14 +1994,35 @@
                 
                 console.log('✅ Rakip marka bulundu:', competitor);
                 
-                // Eşya bilgilerini al
-                const goods = competitor.goodsAndServices;
+                // objectID'yi al ve trademarkBulletinRecords'dan eşya bilgilerini çek
+                const objectId = competitor.objectID;
+                
+                if (!objectId) {
+                    console.warn('⚠️ objectID bulunamadı');
+                    return '<p class="text-muted">Bülten kaydı bulunamadı.</p>';
+                }
+                
+                console.log('🔍 Bulletin objectID ile arama:', objectId);
+                
+                // trademarkBulletinRecords'dan eşya bilgilerini çek
+                const bulletinDocRef = doc(db, 'trademarkBulletinRecords', objectId);
+                const bulletinSnap = await getDoc(bulletinDocRef);
+                
+                if (!bulletinSnap.exists()) {
+                    console.warn('⚠️ Bulletin kaydı bulunamadı:', objectId);
+                    return '<p class="text-muted">Mal ve hizmet bilgisi bulunamadı.</p>';
+                }
+                
+                const bulletinData = bulletinSnap.data();
+                console.log('✅ Bulletin verisi:', bulletinData);
+                
+                const goods = bulletinData.goods;
                 
                 if (!goods || !Array.isArray(goods) || goods.length === 0) {
                     return '<p class="text-muted">Mal ve hizmet bilgisi bulunamadı.</p>';
                 }
                 
-                // HTML'e çevir
+                // goods array'ini HTML'e çevir
                 let html = '';
                 goods.forEach(item => {
                     const goodsText = item || 'Açıklama yok';
@@ -2055,7 +2036,6 @@
                 return '<p class="text-danger">Veriler yüklenirken hata oluştu. <br><small>' + error.message + '</small></p>';
             }
         }
-
 // --- PORTFÖY DETAY MODALI AÇMA VE VERİ DOLDURMA ---
     $(document).on('click', '.portfolio-detail-link', async function(e) {
         e.preventDefault();
