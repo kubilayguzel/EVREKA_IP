@@ -282,21 +282,22 @@
         </div>
     </div>
 </div>
-
 <div class="modal fade" id="portfolioDetailModal" tabindex="-1" role="dialog" aria-labelledby="portfolioDetailModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-xl" role="document">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title header-title" id="portfolioDetailModalLabel">Detaylar</h5>
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
             </div>
             <div class="modal-body">
                 <div class="row mb-4">
                     <div class="col-md-4">
                         <div class="card p-3 h-100">
                             <div class="card-header">Marka/Görsel</div>
-                            <div class="card-body text-center d-flex align-items-center justify-content-center">
-                                <img id="modal-img" src="" style="max-width: 100%; max-height: 150px; border-radius: 8px;" alt="Görsel">
+                            <div class="card-body text-center d-flex align-items-center justify-content-center" style="min-height: 150px;">
+                                <img id="modal-img" src="" style="max-width: 100%; max-height: 140px; border-radius: 8px; object-fit: contain;" alt="Görsel">
                             </div>
                         </div>
                     </div>
@@ -304,35 +305,56 @@
                         <div class="card p-3 h-100">
                             <div class="card-header">Varlık Detayları</div>
                             <div class="card-body" id="modal-details-card">
-                                </div>
+                                <div class="text-center text-muted mt-4"><i class="fas fa-spinner fa-spin"></i></div>
+                            </div>
                         </div>
                     </div>
                     <div class="col-md-4">
                         <div class="card p-3 h-100">
                             <div class="card-header">Tarihler / Durum</div>
                             <div class="card-body" id="modal-dates-card">
-                                </div>
+                                <div class="text-center text-muted mt-4"><i class="fas fa-spinner fa-spin"></i></div>
+                            </div>
                         </div>
                     </div>
                 </div>
 
                 <ul class="nav nav-tabs" id="myTab" role="tablist">
-                    <li class="nav-item"><a class="nav-link active" id="islemler-tab" data-toggle="tab" href="#modal-islemler" role="tab">İşlemler</a></li>
-                    <li class="nav-item"><a class="nav-link" id="esya-tab" data-toggle="tab" href="#modal-esya" role="tab">Eşya Listesi</a></li>
-                    <li class="nav-item"><a class="nav-link" id="tahakkuklar-tab" data-toggle="tab" href="#modal-tahakkuklar" role="tab">Faturalar</a></li>
+                    <li class="nav-item">
+                        <a class="nav-link active" id="islemler-tab" data-toggle="tab" href="#modal-islemler" role="tab">İşlemler</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" id="esya-tab" data-toggle="tab" href="#modal-esya" role="tab">Eşya Listesi</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" id="tahakkuklar-tab" data-toggle="tab" href="#modal-tahakkuklar" role="tab">Faturalar</a>
+                    </li>
                 </ul>
 
                 <div class="tab-content tab-content-card">
                     <div class="tab-pane fade show active" id="modal-islemler" role="tabpanel">
                         <div class="table-responsive">
-                            <table class="table table-hover mb-0"><thead><tr><th>#</th><th>İşlem</th><th>Tarih</th><th>Evrak</th></tr></thead><tbody></tbody></table>
+                            <table class="table table-hover mb-0">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 50px;">#</th>
+                                        <th>İşlem</th>
+                                        <th style="width: 120px;">Tarih</th>
+                                        <th>Evrak</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    </tbody>
+                            </table>
                         </div>
                     </div>
+                    
                     <div class="tab-pane fade" id="modal-esya" role="tabpanel">
-                        <div id="esyaListesiContent" class="mt-2"></div>
+                        <div id="esyaListesiContent" class="mt-3 p-2"></div>
                     </div>
+                    
                     <div class="tab-pane fade" id="modal-tahakkuklar" role="tabpanel">
-                        <p class="text-muted">Fatura bilgileri burada listelenecektir.</p>
+                        <div class="p-3 text-muted">İlgili fatura kaydı bulunamadı.</div>
                     </div>
                 </div>
             </div>
@@ -342,7 +364,6 @@
         </div>
     </div>
 </div>
-
 <div class="modal fade" id="davaDetailModal" tabindex="-1" role="dialog" aria-labelledby="davaDetailModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-xl" role="document">
         <div class="modal-content">
@@ -1228,7 +1249,7 @@
             $(this).next('label').text(isChecked ? 'Koyu Tema' : 'Açık Tema');
         });
     }
-    
+
     // --- EVENT LISTENERS & ACTIONS ---
     $(document).ready(function() {
         initTheme();
@@ -1286,25 +1307,92 @@
             $('#competitorGoodsContent').html('<div class="alert alert-info">Rakip emtia bilgisi bülten kaydından çekilmelidir.</div>');
         });
 
-        // Portföy Detay
-        $(document).on('click', '.portfolio-detail-link', async function(e){
-            e.preventDefault();
-            const id = $(this).data('item-id');
-            const item = window.markaPaginationData.allDataUnfiltered.find(x=>x.id===id) || {};
-            $('#portfolioDetailModalLabel').text(item.title || 'Detay');
-            $('#modal-img').attr('src', item.brandImageUrl || 'https://via.placeholder.com/150');
-            
-            // HTML Doldur
-            $('#modal-details-card').html(`<p><strong>B.No:</strong> ${item.applicationNumber}</p><p><strong>Sınıflar:</strong> ${item.goodsAndServicesByClass?.map(c=>c.classNo).join(',')}</p>`);
-            
-            // Transactionları Yükle (Basit)
-            const txQ = query(collection(db, 'ipRecords', id, 'transactions'));
-            const txSnap = await getDocs(txQ);
-            const txList = txSnap.docs.map(d=>d.data());
-            const txHtml = txList.map((t,i) => `<tr><td>${i+1}</td><td>${t.type}</td><td>${window.formatDateTR(t.timestamp)}</td><td>-</td></tr>`).join('');
-            $('#modal-islemler table tbody').html(txHtml);
-            
-            $('#portfolioDetailModal').modal('show');
-        });
+// --- PORTFÖY DETAY MODALI AÇMA VE VERİ DOLDURMA ---
+    $(document).on('click', '.portfolio-detail-link', async function(e) {
+        e.preventDefault();
+        const itemId = $(this).data('item-id');
+        
+        // Veriyi bul (Pagination verisinden veya filtrelenmemiş havuzdan)
+        let item = null;
+        if (window.markaPaginationData?.allDataUnfiltered) {
+            item = window.markaPaginationData.allDataUnfiltered.find(p => p.id === itemId);
+        }
+        // Eğer yukarıda bulunamazsa (örneğin patent listesindeyse), genel sorgu gerekebilir ama şimdilik bunu kullanıyoruz.
+        
+        if (!item) return;
+
+        // 1. Başlık ve Görsel
+        const title = item.title || item.brandText || item.markName || 'Marka Detayları';
+        $('#portfolioDetailModalLabel').text(title);
+        
+        const brandImg = item.brandImageUrl || item.brandImage || 'https://placehold.co/150x150/png?text=Gorsel+Yok';
+        $('#modal-img').attr('src', brandImg);
+
+        // 2. Veri Hazırlığı
+        const type = (item.type === 'trademark' || item.type === 'Marka') ? 'Marka' : 
+                     (item.type === 'patent' ? 'Patent' : 'Tasarım');
+        const appNo = item.applicationNumber || item.applicationNo || '-';
+        const regNo = item.registrationNumber || item.registrationNo || '-';
+        
+        // Sınıfları düzgün formatla
+        let classes = '-';
+        if (item.goodsAndServicesByClass && Array.isArray(item.goodsAndServicesByClass)) {
+            classes = item.goodsAndServicesByClass.map(c => c.classNo).join(', ');
+        } else if (item.classes) {
+            classes = Array.isArray(item.classes) ? item.classes.join(', ') : item.classes;
+        }
+
+        // Durum ve Tarihler
+        const status = item.status || item.statusText || 'Bilinmiyor';
+        const statusBadge = { 'Registered': 'success', 'Tescilli': 'success', 'Application': 'primary', 'Başvuru': 'primary' }[status] || 'warning';
+        
+        const appDate = window.formatDateTR(item.applicationDate || item.application_date);
+        const regDate = window.formatDateTR(item.registrationDate || item.registration_date);
+        const renewalDate = window.formatDateTR(item.renewalDate || item.renewal_date);
+
+        // 3. Kartları Doldur
+        // Varlık Detayları
+        $('#modal-details-card').html(`
+            <div class="mb-2"><strong>Tür:</strong> ${type}</div>
+            <div class="mb-2"><strong>Başvuru No:</strong> ${appNo}</div>
+            <div class="mb-2"><strong>Tescil No:</strong> ${regNo}</div>
+            <div class="mb-0"><strong>Sınıflar:</strong> ${classes}</div>
+        `);
+
+        // Tarihler / Durum (Eski kodda boş geliyordu, şimdi düzelttik)
+        $('#modal-dates-card').html(`
+            <div class="mb-2"><strong>Başvuru Tarihi:</strong> ${appDate}</div>
+            <div class="mb-2"><strong>Tescil Tarihi:</strong> ${regDate}</div>
+            <div class="mb-2"><strong>Yenileme Tarihi:</strong> ${renewalDate}</div>
+            <div class="mb-0"><strong>Durum:</strong> <span class="badge badge-${statusBadge}">${status}</span></div>
+        `);
+
+        // 4. Eşya Listesi Sekmesi
+        let esyaHtml = '<p class="text-muted text-center mt-3">Sınıflandırılmış eşya listesi bulunamadı.</p>';
+        if (item.goodsAndServicesByClass && item.goodsAndServicesByClass.length > 0) {
+            esyaHtml = item.goodsAndServicesByClass.map(cls => 
+                `<div class="mb-3 p-2 border-bottom">
+                    <strong class="text-info d-block mb-1">Sınıf ${cls.classNo}</strong>
+                    <span class="text-muted small">${cls.items ? cls.items.join('; ') : 'Detay yok'}</span>
+                </div>`
+            ).join('');
+        }
+        $('#esyaListesiContent').html(esyaHtml);
+
+        // 5. İŞLEMLERİ YÜKLE (Önemli: loadTransactions fonksiyonunu kullan)
+        // Tabloyu temizle ve loading koy
+        $('#modal-islemler table tbody').html('<tr><td colspan="4" class="text-center py-4"><i class="fas fa-spinner fa-spin"></i> İşlemler yükleniyor...</td></tr>');
+        
+        // Transactionları yükle
+        if (window.loadTransactions) {
+            await window.loadTransactions(item.id);
+        } else {
+            console.error("loadTransactions fonksiyonu bulunamadı!");
+        }
+
+        // Tabları sıfırla ve modalı aç
+        $('#myTab a[href="#modal-islemler"]').tab('show');
+        $('#portfolioDetailModal').modal('show');
+    });
     });
 </script>
