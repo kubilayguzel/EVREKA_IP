@@ -121,6 +121,65 @@
         padding: 0.6em 1em !important;     /* İç boşluğu artır */
         font-weight: 500;                  /* Kalınlık ayarı */
     }
+    
+    /* === DÜZELTMELER: İKONLAR VE FONT === */
+
+    /* 1. İkon Boyutlarını Büyütme */
+    .stat-icon {
+        font-size: 3rem !important; /* Dashboard ikonları (büyük) */
+    }
+
+    #sidebar .nav-link i {
+        font-size: 1.2rem;          /* Sol menü ikonları */
+        width: 30px;                /* İkon hizalaması için genişlik */
+        text-align: center;
+    }
+
+    /* Tablo içindeki buton ve belge ikonları */
+    .table .btn-sm i {
+        font-size: 1rem !important; 
+    }
+    
+    /* PDF, Word vb. belge ikonları */
+    a i.fa-file-pdf, 
+    a i.fa-file-word, 
+    a i.fa-file-alt, 
+    a i.fa-file-invoice,
+    a i.fa-gavel {
+        font-size: 1.3rem !important; /* Belge ikonlarını belirginleştir */
+        vertical-align: middle;
+    }
+
+    /* 2. Eşya Listesi (Goods List) Font Düzeltmesi */
+    #esyaListesiContent {
+        font-family: 'Poppins', sans-serif !important; /* Ana fontu zorla */
+    }
+
+    /* Sınıf Başlıkları (Örn: Sınıf 35) */
+    #esyaListesiContent strong.text-info {
+        font-size: 1.1rem;
+        font-weight: 600;
+        margin-bottom: 5px;
+        display: block;
+    }
+
+    /* Eşya Açıklamaları */
+    #esyaListesiContent .text-muted.small, 
+    #esyaListesiContent span,
+    #esyaListesiContent p {
+        font-size: 0.95rem !important; /* Okunaklı boyuta getir */
+        font-weight: 400;
+        line-height: 1.6;
+        color: #444;
+    }
+
+    /* Dark Mode Uyumu - Eşya Listesi */
+    body.dark-mode #esyaListesiContent .text-muted.small,
+    body.dark-mode #esyaListesiContent span,
+    body.dark-mode #esyaListesiContent p {
+        color: #b0b8c0 !important;
+    }
+
 </style>
 </head>
 <body>
@@ -1266,6 +1325,87 @@
             $(this).next('label').text(isChecked ? 'Koyu Tema' : 'Açık Tema');
         });
     }
+// 1. Transaction ID'lerine göre PDF'leri Toplu Çekme
+    window.fetchPdfsForTransactions = async function(transactionIds) {
+        if (!transactionIds || transactionIds.length === 0) return {};
+        
+        try {
+            const pdfMap = {};
+            // Firestore 'in' sorgusu en fazla 10 eleman kabul eder. 
+            // Bu yüzden ID listesini 10'arlı paketlere bölüyoruz.
+            const chunks = [];
+            for (let i = 0; i < transactionIds.length; i += 10) {
+                chunks.push(transactionIds.slice(i, i + 10));
+            }
+
+            for (const chunk of chunks) {
+                const q = query(
+                    collection(db, 'unindexed_pdfs'),
+                    where('associatedTransactionId', 'in', chunk),
+                    where('status', '==', 'indexed')
+                );
+                
+                const snapshot = await getDocs(q);
+                snapshot.forEach(doc => {
+                    const data = doc.data();
+                    const txId = data.associatedTransactionId;
+                    
+                    if (!pdfMap[txId]) pdfMap[txId] = [];
+                    
+                    pdfMap[txId].push({
+                        fileName: data.fileName || 'Belge',
+                        fileUrl: data.fileUrl || data.url || data.path, // Farklı isimlendirmeler için önlem
+                        type: 'transaction_doc',
+                        indexedAt: data.indexedAt
+                    });
+                });
+            }
+            return pdfMap;
+        } catch (error) {
+            console.error("PDF Fetch Hatası:", error);
+            return {};
+        }
+    };
+
+    // 2. Task (Görev) ID'sine göre Dokümanları Çekme
+    window.fetchTaskDocuments = async function(taskId) {
+        if (!taskId) return [];
+        try {
+            const taskDoc = await getDoc(doc(db, 'tasks', taskId));
+            if (!taskDoc.exists()) return [];
+            
+            const data = taskDoc.data();
+            const docs = [];
+
+            // A) ePats Belgesi (Varsa)
+            if (data.details?.epatsDocument) {
+                docs.push({
+                    fileName: data.details.epatsDocument.name || 'ePats Belgesi',
+                    fileUrl: data.details.epatsDocument.downloadURL || data.details.epatsDocument.url,
+                    type: 'epats_document',
+                    evrakNo: data.details.epatsDocument.turkpatentEvrakNo
+                });
+            }
+
+            // B) Task'a ekli diğer belgeler
+            if (Array.isArray(data.documents)) {
+                data.documents.forEach(d => {
+                    const url = d.downloadURL || d.url || d.path;
+                    if(url) {
+                        docs.push({
+                            fileName: d.name || 'Task Belgesi',
+                            fileUrl: url,
+                            type: 'task_document'
+                        });
+                    }
+                });
+            }
+            return docs;
+        } catch (error) {
+            console.error("Task Docs Hatası:", error);
+            return [];
+        }
+    };
 
     window.loadTransactions = async function(ipRecordId) {
         // Tabloyu temizle ve loading koy
