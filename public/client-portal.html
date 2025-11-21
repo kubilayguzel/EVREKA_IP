@@ -1123,7 +1123,8 @@
             // İş tipini transaction type map'ten al (taskType alanını kullan)
             let taskTypeName = 'İşlem';
             if (task.taskType && window.transactionTypesMap && window.transactionTypesMap.has(String(task.taskType))) {
-                taskTypeName = window.transactionTypesMap.get(String(task.taskType));
+                const typeObj = window.transactionTypesMap.get(String(task.taskType));
+                taskTypeName = typeObj?.alias || typeObj?.name || 'İşlem';
             } else if (task.title) {
                 taskTypeName = task.title;
             }
