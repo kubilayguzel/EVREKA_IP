@@ -1016,6 +1016,107 @@
         } catch(e) { console.error(e); }
     };
 
+    window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
+        const tbody = document.getElementById('dava-itiraz-tbody');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+        
+        // Eğer kayıt yoksa
+        if (!parentRowsSlice || parentRowsSlice.length === 0) { 
+            tbody.innerHTML = '<tr><td colspan="12" class="text-center text-muted">Henüz itiraz kaydı bulunmamaktadır.</td></tr>'; 
+            return; 
+        }
+
+        parentRowsSlice.forEach((row, index) => {
+            const parentIndex = startIndex + index + 1;
+            
+            if (row.isParent) {
+                const tr = document.createElement('tr');
+                tr.setAttribute('data-origin', (row.origin || 'TÜRKPATENT'));
+                
+                // Marka görseli
+                const imgHtml = row.brandImageUrl ? `<img src="${row.brandImageUrl}" alt="marka" class="brand-thumb" style="height:50px;">` : '-';
+                
+                // Child (alt işlem) var mı?
+                const hasChildren = row.hasChildren || (row.childrenData && row.childrenData.length > 0);
+                const iconHtml = hasChildren ? '<i class="fas fa-chevron-right mr-2"></i>' : '';
+                
+                if (hasChildren) {
+                    const uniqueAccordionId = `itiraz-accordion-${row.recordId}-${row.id}`;
+                    tr.classList.add('accordion-header-row');
+                    tr.setAttribute('data-toggle', 'collapse');
+                    tr.setAttribute('data-target', `#${uniqueAccordionId}`);
+                }
+
+                tr.innerHTML = `
+                    <td>${iconHtml}${parentIndex}</td>
+                    <td class="col-origin">${row.origin || '-'}</td>
+                    <td class="text-center">${imgHtml}</td>
+                    <td><a href="#" class="portfolio-detail-link" data-item-id="${row.recordId}">${row.title}</a></td>
+                    <td>${row.transactionTypeName}</td>
+                    <td>${row.applicationNumber}</td>
+                    <td>${row.applicantName}</td>
+                    <td>${row.bulletinDate}</td>
+                    <td>${row.bulletinNo}</td>
+                    <td>${row.epatsDate}</td>
+                    <td><span class="badge badge-warning">${row.statusText}</span></td>
+                    <td>${window.renderDocsCell(row)}</td>
+                `;
+                tbody.appendChild(tr);
+
+                // Alt satırları (Child Rows) ekle
+                if (hasChildren && row.childrenData) {
+                    const uniqueAccordionId = `itiraz-accordion-${row.recordId}-${row.id}`;
+                    const detailRow = document.createElement('tr');
+                    detailRow.setAttribute('data-origin', (row.origin || 'TÜRKPATENT'));
+                    
+                    // Alt işlemlerin HTML'ini oluştur
+                    const childrenHtml = row.childrenData.map(child => {
+                        // Child dokümanlarını formatla
+                        const childDocs = child.documents ? child.documents.map(d => ({
+                            fileName: d.name || 'Belge', 
+                            fileUrl: d.path || d.downloadURL, 
+                            type: d.type, 
+                            isTransactionDoc: true
+                        })) : [];
+                        
+                        // Child verisini row formatına uydurarak renderDocsCell'e gönder
+                        const childRowData = { allChildDocs: childDocs };
+                        
+                        // Tarih formatla (Timestamp ise)
+                        let childDate = '-';
+                        if(child.timestamp) childDate = window.formatDateTR(child.timestamp);
+
+                        // Tip adını al (Basitçe ID veya varsa alias)
+                        const typeName = window.transactionTypesMap.get(String(child.type))?.alias || `İşlem ${child.type}`;
+
+                        return `
+                            <tr data-origin="${row.origin || 'TÜRKPATENT'}">
+                                <td>${typeName}</td>
+                                <td>${childDate}</td>
+                                <td>${window.renderDocsCell(childRowData)}</td>
+                            </tr>
+                        `;
+                    }).join('');
+
+                    detailRow.innerHTML = `
+                        <td colspan="12" class="p-0">
+                            <div class="collapse" id="${uniqueAccordionId}">
+                                <table class="table mb-0 accordion-table bg-light">
+                                    <thead><tr><th>İşlem Tipi</th><th>İşlem Tarihi</th><th>Evraklar</th></tr></thead>
+                                    <tbody>${childrenHtml}</tbody>
+                                </table>
+                            </div>
+                        </td>`;
+                    tbody.appendChild(detailRow);
+                }
+            }
+        });
+        
+        // Menşe filtresini tekrar uygula (yeni satırlar geldiği için)
+        if(window.applyMenseFilterToActivePane) window.applyMenseFilterToActivePane();
+    };
+
     // --- 5. İTİRAZ MODÜLÜ (3. Taraf - Karmaşık) ---
     window.fetchAndDisplayObjections = async function() {
         const tbody = document.getElementById('dava-itiraz-tbody');
