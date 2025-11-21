@@ -1061,25 +1061,26 @@
         await window._renderTaskCardsToContainer(finalTasks.slice(0,10), '#task-list-container', window.formatDateTR, taskType);
     };
 
-// --- ASENKRON TASK KART RENDER (MONITORING DATA FIX) ---
+// --- ASENKRON TASK KART RENDER (DB YAPISINA UYGUN VERİ ÇEKME) ---
     window._renderTaskCardsToContainer = async function(tasksToRender, containerSelector, formatDate, taskType) {
         const container = document.querySelector(containerSelector);
         if (!container) return;
         container.innerHTML = '<div class="col-12 text-center py-5"><i class="fas fa-spinner fa-spin fa-2x text-muted"></i></div>';
 
-        // Helper: Görsel URL
+        // --- Görsel URL Helper ---
         const getImageUrl = (path) => {
             if (!path) return 'https://placehold.co/100x100?text=Yok';
             if (path.startsWith('http')) return path;
+            // Firebase Storage Link Yapısı (Bucket adınız kodda sabitlenmiştir)
             return `https://firebasestorage.googleapis.com/v0/b/ip-manager-production-aab4b.firebasestorage.app/o/${encodeURIComponent(path)}?alt=media`;
         };
 
-        // Helper: Skor Formatla (0.56 -> %57)
+        // --- Skor Formatlayıcı Helper ---
         const formatScore = (val) => {
             if (val === undefined || val === null || val === '') return null;
             let num = parseFloat(val);
             if (isNaN(num)) return val;
-            if (num <= 1 && num >= 0) num = num * 100; // 0-1 arasındaysa çevir
+            if (num <= 1 && num >= 0) num = num * 100; 
             return `%${Math.round(num)}`;
         };
 
@@ -1087,29 +1088,35 @@
             const isCompletedView = (taskType === 'completed-tasks');
             const isBulletinWatch = (taskType === 'bulletin-watch');
             
-            // --- 1. VERİ ÇEKME (MONITORING RECORDS ÖNCELİKLİ) ---
-            let monitoredData = null; // İzlenen marka ana verisi
-            let monitoringRecord = null; // Bülten analiz kaydı
-            const monitoredId = task.details?.monitoredMarkId || task.relatedIpRecordId;
+            // --- 1. VERİLERİ HAZIRLA ---
+            let monitoredData = null;   // Sol Taraf (Bizim Marka) - ipRecords'dan
+            let competitorData = null;  // Sağ Taraf (Rakip Marka) - monitoringTrademarkRecords'dan
             
-            if (monitoredId) {
-                try {
-                    // A) Önce Bülten Analiz Tablosuna Git (Başarı şansı vb. burada)
-                    if(task.details?.bulletinKey) {
-                         const monSnap = await getDoc(doc(db, 'monitoringTrademarkRecords', task.details.bulletinKey, 'trademarks', monitoredId));
-                         if(monSnap.exists()) {
-                             monitoringRecord = monSnap.data();
-                             monitoredData = monitoringRecord; // Görsel vb. için bunu kullan
-                         }
+            const monitoredId = task.details?.monitoredMarkId || task.relatedIpRecordId;
+            const bulletinKey = task.details?.bulletinKey;
+            const targetAppNo = task.details?.targetAppNo;
+
+            try {
+                // A) İzlenen Markayı Çek (ipRecords)
+                if (monitoredId) {
+                    const ipSnap = await getDoc(doc(db, 'ipRecords', monitoredId));
+                    if(ipSnap.exists()) monitoredData = ipSnap.data();
+                }
+
+                // B) Rakip Markayı Çek (monitoringTrademarkRecords -> trademarks Koleksiyonu)
+                if (isBulletinWatch && bulletinKey && targetAppNo) {
+                    // Doğrudan targetAppNo ile sorgu atıyoruz
+                    const q = query(
+                        collection(db, 'monitoringTrademarkRecords', bulletinKey, 'trademarks'),
+                        where('applicationNo', '==', targetAppNo),
+                        limit(1)
+                    );
+                    const querySnap = await getDocs(q);
+                    if (!querySnap.empty) {
+                        competitorData = querySnap.docs[0].data();
                     }
-                    
-                    // B) Eğer monitoring kaydı yoksa veya eksikse ipRecords'a git
-                    if(!monitoredData) {
-                        const ipSnap = await getDoc(doc(db, 'ipRecords', monitoredId));
-                        if(ipSnap.exists()) monitoredData = ipSnap.data();
-                    }
-                } catch(e) { console.log('Veri çekme hatası:', e); }
-            }
+                }
+            } catch(e) { console.log('Veri çekme hatası:', e); }
 
             // --- 2. BAŞLIK FORMATI ---
             let cardTitle = `#${task.id} - ${task.title || 'İşlem'}`; 
@@ -1124,58 +1131,43 @@
                 cardTitle = `#${task.id} - ${task.title}`;
             }
 
-            // --- 3. BÜLTEN DETAYLARI VE KIYASLAMA ---
+            // --- 3. BÜLTEN İZLEME İÇERİĞİ ---
             let comparisonRow = '';
             if (isBulletinWatch) {
-                // A) İZLENEN MARKA
+                // SOL: İzlenen Marka Görsel ve Bilgileri
                 const myImgPath = monitoredData?.brandImageUrl || monitoredData?.imagePath || '';
                 const myImgUrl = getImageUrl(myImgPath);
                 const myClasses = (Array.isArray(monitoredData?.goodsAndServicesByClass) 
                     ? monitoredData.goodsAndServicesByClass.map(c=>c.classNo).join(', ') 
                     : monitoredData?.classes) || '-';
 
-                // B) RAKİP MARKA (Veri Eşleştirme)
-                const targetAppNo = task.details?.targetAppNo;
-                let competitorData = null;
-
-                // 1. ADIM: MonitoringRecord içindeki results dizisinde ara
-                if (monitoringRecord?.results && Array.isArray(monitoringRecord.results)) {
-                    // Boşlukları temizleyerek güvenli eşleştirme yap
-                    competitorData = monitoringRecord.results.find(r => 
-                        String(r.applicationNo).replace(/\s/g, '') === String(targetAppNo).replace(/\s/g, '')
-                    );
-                }
-
-                // Verileri Atama (Öncelik: MonitoringRecord -> Task Details)
+                // SAĞ: Rakip Marka Verilerini Harmanla (DB'den gelen veriler öncelikli)
                 const compName = competitorData?.markName || task.details?.objectionTarget || 'Benzer Marka';
                 const compNo = competitorData?.applicationNo || targetAppNo || '-';
                 
-                // Sınıflar
+                // Sınıflar: DB'de 'niceClasses' string ("29 / 30 /") veya array olabilir
                 let compClasses = competitorData?.niceClasses || task.details?.targetNiceClasses || '-';
-                if(Array.isArray(compClasses)) compClasses = compClasses.join(', ');
+                if (Array.isArray(compClasses)) compClasses = compClasses.join(', ');
 
-                // Görsel
+                // Görsel: DB'deki imagePath öncelikli
                 const compImgPath = competitorData?.imagePath || task.details?.competitorBrandImage || task.details?.imagePath;
                 const compImgUrl = getImageUrl(compImgPath);
                 const compImgHtml = `<img src="${compImgUrl}" class="task-brand-image" style="height:100px; width:auto; max-width:100%; object-fit:contain;">`;
 
-                // SAHİP BİLGİSİ (Kritik Düzeltme)
+                // Sahip Bilgisi: holders dizisinden al (DB yapısı: holders: [{name: "OKAN..."}])
                 let compOwner = '-';
                 if (competitorData?.holders && Array.isArray(competitorData.holders) && competitorData.holders.length > 0) {
                     compOwner = competitorData.holders[0].name;
-                } else if (competitorData?.holderName) {
-                    compOwner = competitorData.holderName; // Bazen düz string gelebilir
                 } else if (task.details?.competitorOwner) {
                     compOwner = task.details.competitorOwner;
                 }
 
-                // SKOR VE DEĞERLENDİRME (Kritik Düzeltme)
-                // Veri tabanında 'bs', 'similarityScore' veya 'score' olabilir.
-                const rawScore = competitorData?.bs ?? competitorData?.similarityScore ?? task.details?.similarityScore;
+                // Skor ve Not
+                const rawScore = competitorData?.similarityScore ?? task.details?.similarityScore;
                 const displayScore = formatScore(rawScore);
-                const note = competitorData?.note ?? competitorData?.explanation ?? task.details?.note;
+                const note = competitorData?.note || task.details?.note;
 
-                // Ek Bilgi HTML (BS ve Not)
+                // Ek Bilgiler HTML
                 let extraInfoHtml = '';
                 if (displayScore || note) {
                     extraInfoHtml = `
@@ -1185,7 +1177,7 @@
                     </div>`;
                 }
 
-                // Style: Dark Mode için Beyaz Başlıklar
+                // Style Tanımları
                 const labelStyle = 'color: rgba(255, 255, 255, 0.7); font-weight: 600;';
                 const valStyle = 'color: #fff; font-weight: 400;';
 
@@ -1283,7 +1275,7 @@
 
         container.innerHTML = cardsHTML.join('');
     };
-
+    
 
 // --- 3. GÜNCELLENMİŞ FATURA MODÜLÜ ---
     
