@@ -1101,10 +1101,18 @@
                 try {
                     // A) Bülten Analiz Kaydını Çek (monitoringTrademarkRecords)
                     if(bulletinKey) {
+                         console.log('🔍 Bülten Kaydı Arıyorum:', { bulletinKey, monitoredId });
                          const monSnap = await getDoc(doc(db, 'monitoringTrademarkRecords', bulletinKey, 'trademarks', monitoredId));
+                         console.log('📄 Döküman Mevcut mu?', monSnap.exists());
                          if(monSnap.exists()) {
                              monitoringRecord = monSnap.data();
+                             console.log('✅ Monitoring Record Bulundu:', monitoringRecord);
+                             console.log('📊 Results Array:', monitoringRecord?.results);
+                         } else {
+                             console.warn('❌ Monitoring record bulunamadı!');
                          }
+                    } else {
+                         console.warn('⚠️ bulletinKey yok!', task.details);
                     }
                     // B) İzlenen Marka Kaydını Çek (ipRecords)
                     const ipSnap = await getDoc(doc(db, 'ipRecords', monitoredId));
