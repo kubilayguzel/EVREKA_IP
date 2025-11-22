@@ -1112,7 +1112,7 @@
         } catch(e) { console.error(e); }
     };
 
-    window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
+window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
         const tbody = document.getElementById('dava-itiraz-tbody');
         if (!tbody) return;
         tbody.innerHTML = '';
@@ -1134,7 +1134,8 @@
                     tr.setAttribute('data-target', `#${uniqueAccordionId}`);
                 }
 
-                tr.innerHTML = `<td>${iconHtml}${parentIndex}</td><td class="col-origin">${row.origin || '-'}</td><td class="text-center">${imgHtml}</td><td><a href="#" class="portfolio-detail-link" data-item-id="${row.recordId}">${row.title}</a></td><td>${row.transactionTypeName}</td><td>${row.applicationNumber}</td><td>${row.applicantName}</td><td>${row.bulletinDate}</td><td>${row.bulletinNo}</td><td>${row.epatsDate}</td><td><span class="badge badge-warning">${row.statusText}</span></td><td>${window.renderDocsCell(row)}</td>`;
+                // GÜNCELLEME: row.statusBadge kullanılıyor
+                tr.innerHTML = `<td>${iconHtml}${parentIndex}</td><td class="col-origin">${row.origin || '-'}</td><td class="text-center">${imgHtml}</td><td><a href="#" class="portfolio-detail-link" data-item-id="${row.recordId}">${row.title}</a></td><td>${row.transactionTypeName}</td><td>${row.applicationNumber}</td><td>${row.applicantName}</td><td>${row.bulletinDate}</td><td>${row.bulletinNo}</td><td>${row.epatsDate}</td><td><span class="badge badge-${row.statusBadge || 'warning'}">${row.statusText}</span></td><td>${window.renderDocsCell(row)}</td>`;
                 tbody.appendChild(tr);
 
                 if (hasChildren && row.childrenData) {
@@ -1158,30 +1159,76 @@
         if(window.applyMenseFilterToActivePane) window.applyMenseFilterToActivePane();
     };
 
-    // --- 5. İTİRAZ ---
+// --- 5. İTİRAZ MODÜLÜ (GÜNCELLENMİŞ) ---
     window.fetchAndDisplayObjections = async function() {
         const tbody = document.getElementById('dava-itiraz-tbody');
         if(!tbody) return;
-        tbody.innerHTML = '<tr><td colspan="12" class="text-center"><i class="fas fa-spinner fa-spin"></i></td></tr>';
+        tbody.innerHTML = '<tr><td colspan="12" class="text-center"><i class="fas fa-spinner fa-spin"></i> Yükleniyor...</td></tr>';
+        
+        // Request Result Haritası (Eski versiyondan alındı)
+        const REQUEST_RESULT_STATUS = {
+            '24': 'Eksiklik Bildirimi',
+            '28': 'Kabul',            '29': 'Kısmi Kabul',     '30': 'Ret',
+            '31': 'B.S - Kabul',      '32': 'B.S - Kısmi Kabul','33': 'B.S - Ret',
+            '34': 'İ.S - Kabul',      '35': 'İ.S - Kısmi Kabul','36': 'İ.S - Ret',
+            '50': 'Kabul',            '51': 'Kısmi Kabul',     '52': 'Ret'
+        };
+
         try {
             const PARENT_TYPES = ['7', '19', '20'];
             const q = query(collection(db, 'tasks'), where('taskType', 'in', PARENT_TYPES));
             const snap = await getDocs(q);
-            const relevantTasks = snap.docs.map(d=>({id:d.id, ...d.data()})).filter(t => window.checkTaskClientRelation(t, new Set(window.linkedPersonIds)));
+            
+            // Yetki kontrolü
+            const relevantTasks = snap.docs
+                .map(d=>({id:d.id, ...d.data()}))
+                .filter(t => window.checkTaskClientRelation(t, new Set(window.linkedPersonIds)));
+                
             const rows = [];
             
             for (const task of relevantTasks) {
+                // 1. Filtreleme: Kapatılmış taskları gösterme
+                const statusLower = (task.status || '').toLowerCase();
+                if (statusLower === 'müvekkil onayı - kapatıldı' || statusLower === 'müvekkil cevaplamadı - kapatıldı') {
+                    continue; 
+                }
+
                 if (!task.relatedIpRecordId) continue;
+                
                 const recSnap = await getDoc(doc(db, 'ipRecords', task.relatedIpRecordId));
                 if (!recSnap.exists()) continue;
                 const rec = recSnap.data();
+                
                 const txQ = query(collection(db, 'ipRecords', task.relatedIpRecordId, 'transactions'));
                 const txSnap = await getDocs(txQ);
                 const allTx = txSnap.docs.map(d=>({id:d.id, ...d.data()}));
+                
                 let parentTx = task.triggeringTransactionId ? allTx.find(x=>x.id === task.triggeringTransactionId) : null;
                 if(!parentTx) parentTx = allTx.filter(x=> String(x.type)===String(task.taskType)).sort((a,b)=>b.timestamp-a.timestamp)[0];
                 
                 if(parentTx) {
+                    // --- DURUM BELİRLEME MANTIĞI ---
+                    let computedStatus = 'Karar Bekleniyor';
+                    let badgeColor = 'secondary'; // Gri (Varsayılan)
+
+                    const rr = parentTx.requestResult;
+                    
+                    // Öncelik 1: Karar verilmiş mi? (Transaction Result)
+                    if (rr !== null && rr !== undefined && rr !== '' && REQUEST_RESULT_STATUS[String(rr)]) {
+                        computedStatus = REQUEST_RESULT_STATUS[String(rr)];
+                        // Renk belirleme
+                        if (computedStatus.includes('Ret')) badgeColor = 'danger'; // Kırmızı
+                        else if (computedStatus.includes('Kabul')) badgeColor = 'success'; // Yeşil
+                        else badgeColor = 'info'; // Mavi
+                    } 
+                    // Öncelik 2: Onay Bekliyor mu? (Task Status)
+                    else if (task.status === 'awaiting_client_approval' || task.status === 'Müvekkil Onayı Bekliyor') {
+                        computedStatus = 'Onay Bekliyor';
+                        badgeColor = 'warning'; // Turuncu
+                    }
+                    // Varsayılan: Karar Bekleniyor (secondary/gri)
+
+                    // --- Rakip Marka Verisi ---
                     let opponentMarkData = null;
                     const targetAppNo = task.details?.targetAppNo || parentTx?.opposedMarkNumber;
                     if (targetAppNo) {
@@ -1198,13 +1245,32 @@
                         const cleanPath = path.replace(/['"]/g, '');
                         return `https://firebasestorage.googleapis.com/v0/b/ip-manager-production-aab4b.firebasestorage.app/o/${encodeURIComponent(cleanPath)}?alt=media`;
                     };
+                    
                     const children = allTx.filter(x => x.transactionHierarchy==='child' && x.parentId===parentTx.id);
                     const typeMeta = window.transactionTypesMap.get(String(task.taskType));
                     const docs = [];
                     if(parentTx.documents) docs.push(...parentTx.documents.map(d=>({...d, isTransactionDoc:true})));
                     if(task.documents) docs.push(...task.documents.map(d=>({...d, isTaskDoc:true})));
                     
-                    rows.push({ isParent: true, id: task.id, recordId: task.relatedIpRecordId, hasChildren: children.length > 0, origin: rec.origin, brandImageUrl: getImageUrl(opponentMarkData?.imagePath) || rec.brandImageUrl, title: opponentMarkData?.markName || rec.title || rec.brandText, transactionTypeName: typeMeta?.alias || 'İşlem', applicationNumber: opponentMarkData?.applicationNo || rec.applicationNumber, applicantName: opponentMarkData?.holders?.[0]?.name || rec.applicants?.[0]?.name || '-', bulletinDate: window.formatDateTR(opponentMarkData?.bulletinDate || rec.details?.brandInfo?.opposedMarkBulletinDate), bulletinNo: opponentMarkData?.bulletinNo || rec.details?.brandInfo?.opposedMarkBulletinNo || '-', epatsDate: window.formatDateTR(parentTx.timestamp), statusText: 'İşlemde', allParentDocs: docs, childrenData: children });
+                    rows.push({ 
+                        isParent: true, 
+                        id: task.id, 
+                        recordId: task.relatedIpRecordId, 
+                        hasChildren: children.length > 0, 
+                        origin: rec.origin, 
+                        brandImageUrl: getImageUrl(opponentMarkData?.imagePath) || rec.brandImageUrl, 
+                        title: opponentMarkData?.markName || rec.title || rec.brandText, 
+                        transactionTypeName: typeMeta?.alias || 'İşlem', 
+                        applicationNumber: opponentMarkData?.applicationNo || rec.applicationNumber, 
+                        applicantName: opponentMarkData?.holders?.[0]?.name || rec.applicants?.[0]?.name || '-', 
+                        bulletinDate: window.formatDateTR(opponentMarkData?.bulletinDate || rec.details?.brandInfo?.opposedMarkBulletinDate), 
+                        bulletinNo: opponentMarkData?.bulletinNo || rec.details?.brandInfo?.opposedMarkBulletinNo || '-', 
+                        epatsDate: window.formatDateTR(parentTx.timestamp), 
+                        statusText: computedStatus,   // Hesaplanan Durum
+                        statusBadge: badgeColor,      // Hesaplanan Renk
+                        allParentDocs: docs, 
+                        childrenData: children 
+                    });
                 }
             }
             window.davaItirazPaginationData.allData = rows;
