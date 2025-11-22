@@ -2327,18 +2327,37 @@ window.toggleColumnFilter = function(icon, tableId, colIdx) {
         });
 
         // Navigasyon & Modallar
+        // İşlerim Ana Kart Tıklaması (Marka, Patent vb.)
         $('.task-card-link').click(function() { 
             $('.task-card-link').removeClass('active-task-area'); 
             $(this).addClass('active-task-area'); 
             const area = $(this).data('target-area'); 
-            if(area === 'marka-tasks') $('#task-detail-cards').slideDown(); else $('#task-detail-cards').slideUp(); 
+            
+            if(area === 'marka-tasks') {
+                $('#task-detail-cards').slideDown(); 
+            } else {
+                // Marka dışındakilere tıklanırsa alt detayları ve açık listeleri kapat
+                $('#task-detail-cards').slideUp();
+                $('#task-list-filters').slideUp(); // Filtreyi gizle
+                $('#task-list-details').slideUp(); // Listeyi gizle
+            }
         });
         
+        // İşlerim Detay Kart Tıklaması (Onay Bekleyen, Yenileme vb.)
         $('.detail-card-link').click(function() { 
             const type = $(this).data('task-type'); 
             $('.detail-card-link').removeClass('active-list-type');
             $(this).addClass('active-list-type');
+            
+            // --- DÜZELTME BURADA: Filtre alanını da aç ---
+            $('#task-list-filters').slideDown(); // <--- BU SATIR EKLENDİ
+            
             $('#task-list-details').slideDown(); 
+            
+            // Inputları temizle
+            $('#taskSearchText').val('');
+            $('#taskStatusFilter').val('TÜMÜ');
+            
             window.loadSampleTaskDetails(type); 
         });
         
