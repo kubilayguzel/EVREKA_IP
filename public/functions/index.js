@@ -633,8 +633,7 @@ export const createObjectionTask = onCall(
     memory: '256MiB'
   },
   async (request) => {
-    const { monitoredMarkId, similarMark, similarMarkName, bulletinNo, callerEmail } = request.data;
-    
+    const { monitoredMarkId, similarMark, similarMarkName, bulletinNo, callerEmail, bulletinRecordData } = request.data;    
     if (!monitoredMarkId || !similarMark || !bulletinNo) {
       throw new HttpsError('invalid-argument', 'Eksik parametre: monitoredMarkId, similarMark veya bulletinNo gereklidir.');
     }
@@ -800,6 +799,23 @@ export const createObjectionTask = onCall(
       await adminDb.collection('tasks').doc(taskId).set(taskData);
       logger.log(`✅ Yayına İtiraz İşi Oluşturuldu. Task ID: ${taskId}`);
 
+      // ✅ Bulletin kaydını oluştur (eğer bulletinRecordData sağlandıysa)
+      let createdBulletinRecordId = null;
+      if (bulletinRecordData) {
+        try {
+          const bulletinRecordRef = await adminDb.collection('trademarkBulletinRecords').add({
+            ...bulletinRecordData,
+            createdAt: FieldValue.serverTimestamp(),
+            createdBy: callerEmail || 'system',
+            source: 'similarity_search'
+          });
+          createdBulletinRecordId = bulletinRecordRef.id;
+          logger.log(`✅ Bulletin kaydı oluşturuldu: ${createdBulletinRecordId}`);
+        } catch (bulletinErr) {
+          logger.error('❌ Bulletin kaydı oluşturma hatası:', bulletinErr);
+        }
+      }
+
       // ✅ İzlenen markanın portföyüne transaction ekle
       try {
         // İtiraz sahibini belirle
@@ -840,7 +856,12 @@ export const createObjectionTask = onCall(
         // Hata olsa bile task oluşturuldu, devam et
       }
 
-      return { taskId, success: true, message: `İtiraz işi başarıyla oluşturuldu: ${taskId}` };
+      return { 
+              taskId, 
+              bulletinRecordId: createdBulletinRecordId,
+              success: true, 
+              message: `İtiraz işi başarıyla oluşturuldu: ${taskId}` 
+            };
     } catch (error) {
       logger.error('❌ İtiraz işi oluşturma hatası:', error);
       throw new HttpsError('internal', `İş oluşturulamadı: ${error.message}`);
