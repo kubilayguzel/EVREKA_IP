@@ -292,6 +292,36 @@
     }
     .dark-mode .filter-actions { border-top-color: #585b63; }
 
+    /* Filtre içi arama kutusu */
+    .filter-search-input {
+        width: 100%;
+        padding: 6px 10px;
+        margin-bottom: 8px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 0.85rem;
+        box-sizing: border-box; /* Padding dahil genişlik */
+    }
+    .dark-mode .filter-search-input {
+        background-color: #40444b;
+        border-color: #585b63;
+        color: #e0e0e0;
+    }
+    .dark-mode .filter-search-input::placeholder {
+        color: #888;
+    }
+    
+    /* Checkbox listesi için kaydırma alanı */
+    .filter-options-container {
+        max-height: 200px;
+        overflow-y: auto;
+        border-top: 1px solid #eee;
+        padding-top: 5px;
+    }
+    .dark-mode .filter-options-container {
+        border-top-color: #585b63;
+    }
+
     #modal-islemler table td:first-child { white-space: nowrap !important; width: 1%; min-width: 60px; }
     a i.fa-file-pdf, a i.fa-file-word, a i.fa-file-alt { font-size: 1.3rem !important; vertical-align: middle; }
 </style>
@@ -1804,35 +1834,91 @@
 
     // --- KOLON FİLTRE MENÜSÜ İŞLEMLERİ ---
     window.toggleColumnFilter = function(icon, tableId, colIdx) {
-        const existing = $(icon).next('.column-filter-dropdown');
-        if (existing.length) { existing.remove(); return; }
+        // Varsa mevcut dropdown'ı kapat
+        const existingDropdown = $(icon).next('.column-filter-dropdown');
+        if (existingDropdown.length > 0) {
+            existingDropdown.remove();
+            return;
+        }
+
+        // Diğer açık dropdownları kapat
         $('.column-filter-dropdown').remove();
 
+        // Veriden benzersiz değerleri topla
         const allData = window.markaPaginationData.allDataUnfiltered || [];
         const uniqueValues = new Set();
 
         allData.forEach(item => {
-            if (item.transactionHierarchy === 'child') return;
+            if (item.transactionHierarchy === 'child') return; // Childları atla
+            
             let val = '';
-            if (colIdx == 1) { 
-                const o = (item.origin || '').toUpperCase(); 
-                val = (o.includes('TURK') || o.includes('TÜRK')) ? 'TÜRKPATENT' : (item.country || 'Yurtdışı'); 
+            // Veri Eşleştirme (HTML data-col-idx ile uyumlu olmalı)
+            if (colIdx == 1) { // Menşe
+                const origin = (item.origin || '').toUpperCase();
+                val = (origin.includes('TURK') || origin.includes('TÜRK')) ? 'TÜRKPATENT' : (item.country || 'Yurtdışı');
             }
-            else if (colIdx == 3) val = item.title || item.brandText || '';
-            else if (colIdx == 7) val = item.status || '';
+            else if (colIdx == 3) val = item.title || item.brandText || ''; // Marka
+            else if (colIdx == 7) val = item.status || ''; // Durum
+
             if (val) uniqueValues.add(val.trim());
         });
 
-        const sorted = Array.from(uniqueValues).sort();
-        const options = sorted.map(v => {
-            const checked = (window.activeColumnFilters[colIdx] || []).includes(v) ? 'checked' : '';
-            return `<label class="filter-option"><input type="checkbox" value="${v}" ${checked}> ${v}</label>`;
+        // Listeyi Alfabetik Sırala
+        const sortedValues = Array.from(uniqueValues).sort((a, b) => a.localeCompare(b, 'tr'));
+        
+        // Checkbox Listesi HTML'i
+        let optionsHtml = sortedValues.map(val => {
+            // Daha önce seçili miydi kontrol et
+            const isChecked = (window.activeColumnFilters[colIdx] || []).includes(val) ? 'checked' : '';
+            return `<label class="filter-option" style="display:block; cursor:pointer;">
+                        <input type="checkbox" value="${val}" ${isChecked}> ${val}
+                    </label>`;
         }).join('');
 
-        const html = `<div class="column-filter-dropdown" onclick="event.stopPropagation()"><div style="max-height: 200px; overflow-y: auto;">${options}</div><div class="filter-actions"><button class="btn btn-xs btn-light" onclick="window.clearColFilter(${colIdx}, this)">Temizle</button><button class="btn btn-xs btn-primary" onclick="window.applyColFilter(${colIdx}, this)">Uygula</button></div></div>`;
-        $(icon).parent().append(html);
+        // Dropdown HTML (Arama Kutusu Eklendi)
+        const dropdownHtml = `
+            <div class="column-filter-dropdown" onclick="event.stopPropagation()" style="min-width:220px;">
+                
+                <input type="text" class="filter-search-input" placeholder="Listede ara..." onkeyup="window.filterDropdownList(this)">
+                
+                <div class="filter-options-container">
+                    ${optionsHtml}
+                </div>
+
+                <div class="filter-actions">
+                    <button class="btn btn-xs btn-light" onclick="window.clearColFilter(${colIdx}, this)">Temizle</button>
+                    <button class="btn btn-xs btn-primary" onclick="window.applyColFilter(${colIdx}, this)">Uygula</button>
+                </div>
+            </div>
+        `;
+
+        $(icon).parent().append(dropdownHtml);
         $(icon).next('.column-filter-dropdown').fadeIn(200);
+        
+        // Açıldığında arama kutusuna odaklan (Kullanıcı deneyimi için)
+        setTimeout(() => {
+            $(icon).next('.column-filter-dropdown').find('input[type="text"]').focus();
+        }, 100);
     };
+
+    // --- YENİ YARDIMCI FONKSİYON: LİSTE İÇİNDE ARAMA ---
+    window.filterDropdownList = function(inputElement) {
+        const filterText = inputElement.value.toLowerCase(); // Aranan metni küçük harfe çevir
+        const container = $(inputElement).next('.filter-options-container');
+        const labels = container.find('label.filter-option');
+
+        labels.each(function() {
+            const labelText = $(this).text().toLowerCase(); // Seçenek metni
+            
+            // Eşleşiyorsa göster, eşleşmiyorsa gizle
+            if (labelText.includes(filterText)) {
+                $(this).show();
+            } else {
+                $(this).hide();
+            }
+        });
+    };
+
 
     window.applyColFilter = function(colIdx, btn) {
         const container = $(btn).closest('.column-filter-dropdown');
