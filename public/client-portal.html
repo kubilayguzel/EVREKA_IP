@@ -130,6 +130,38 @@
         background-color: transparent !important;
         color: inherit !important;
     }
+    /* === İTİRAZ TABLOSU KOLON AYARLARI === */
+    #dava-itiraz-list table { table-layout: fixed; width: 100%; }
+
+    /* Kolon 1: # (Sıra No) */
+    #dava-itiraz-list th:nth-child(1), 
+    #dava-itiraz-list td:nth-child(1) { width: 50px; }
+
+    /* Kolon 2: Menşe */
+    #dava-itiraz-list th:nth-child(2), 
+    #dava-itiraz-list td:nth-child(2) { width: 90px; }
+
+    /* Kolon 3: Marka Örneği (Görsel) */
+    #dava-itiraz-list th:nth-child(3), 
+    #dava-itiraz-list td:nth-child(3) { width: 110px; }
+
+    /* Kolon 4: M/T/B Adı (DARALTILDI - Eskiden genişti) */
+    #dava-itiraz-list th:nth-child(4), 
+    #dava-itiraz-list td:nth-child(4) { width: 140px; word-wrap: break-word; white-space: normal; }
+
+    /* Kolon 5: İşlem Tipi (GENİŞLETİLDİ - Detaylı metinler sığsın) */
+    #dava-itiraz-list th:nth-child(5), 
+    #dava-itiraz-list td:nth-child(5) { width: 220px; word-wrap: break-word; white-space: normal; }
+
+    /* Diğer Kolonlar (Standart) */
+    #dava-itiraz-list th:nth-child(6), #dava-itiraz-list td:nth-child(6) { width: 130px; } /* Başvuru No */
+    #dava-itiraz-list th:nth-child(7), #dava-itiraz-list td:nth-child(7) { width: 180px; } /* Başvuru Sahibi */
+    #dava-itiraz-list th:nth-child(8), #dava-itiraz-list td:nth-child(8) { width: 100px; } /* Bülten Tarihi */
+    #dava-itiraz-list th:nth-child(9), #dava-itiraz-list td:nth-child(9) { width: 80px; }  /* Bülten No */
+    #dava-itiraz-list th:nth-child(10), #dava-itiraz-list td:nth-child(10) { width: 100px; } /* İşlem Tarihi */
+    #dava-itiraz-list th:nth-child(11), #dava-itiraz-list td:nth-child(11) { width: 130px; } /* Durum */
+    #dava-itiraz-list th:nth-child(12), #dava-itiraz-list td:nth-child(12) { width: 80px; }  /* Evrak */
+
     #modal-islemler table td:first-child { white-space: nowrap !important; width: 1%; min-width: 60px; }
     a i.fa-file-pdf, a i.fa-file-word, a i.fa-file-alt { font-size: 1.3rem !important; vertical-align: middle; }
 </style>
@@ -1159,13 +1191,13 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
         if(window.applyMenseFilterToActivePane) window.applyMenseFilterToActivePane();
     };
 
-// --- 5. İTİRAZ MODÜLÜ (GÜNCELLENMİŞ) ---
+// --- 5. İTİRAZ MODÜLÜ (GÜNCELLENMİŞ FİLTRE & STATÜ) ---
     window.fetchAndDisplayObjections = async function() {
         const tbody = document.getElementById('dava-itiraz-tbody');
         if(!tbody) return;
         tbody.innerHTML = '<tr><td colspan="12" class="text-center"><i class="fas fa-spinner fa-spin"></i> Yükleniyor...</td></tr>';
         
-        // Request Result Haritası (Eski versiyondan alındı)
+        // Request Result Haritası (Kod -> Metin)
         const REQUEST_RESULT_STATUS = {
             '24': 'Eksiklik Bildirimi',
             '28': 'Kabul',            '29': 'Kısmi Kabul',     '30': 'Ret',
@@ -1179,7 +1211,6 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
             const q = query(collection(db, 'tasks'), where('taskType', 'in', PARENT_TYPES));
             const snap = await getDocs(q);
             
-            // Yetki kontrolü
             const relevantTasks = snap.docs
                 .map(d=>({id:d.id, ...d.data()}))
                 .filter(t => window.checkTaskClientRelation(t, new Set(window.linkedPersonIds)));
@@ -1187,9 +1218,14 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
             const rows = [];
             
             for (const task of relevantTasks) {
-                // 1. Filtreleme: Kapatılmış taskları gösterme
-                const statusLower = (task.status || '').toLowerCase();
-                if (statusLower === 'müvekkil onayı - kapatıldı' || statusLower === 'müvekkil cevaplamadı - kapatıldı') {
+                // 1. GÜNCELLENMİŞ FİLTRELEME: DB kodlarına göre kontrol
+                const statusRaw = (task.status || '').trim(); // Büyük/küçük harf hassas olabilir, o yüzden direkt alıyoruz
+                
+                // İstemediğimiz statüleri (kodlarını) hariç tut
+                if (statusRaw === 'client_approval_closed' || 
+                    statusRaw === 'client_no_response_closed' ||
+                    statusRaw === 'müvekkil onayı - kapatıldı' || 
+                    statusRaw === 'müvekkil cevaplamadı - kapatıldı') {
                     continue; 
                 }
 
@@ -1207,27 +1243,25 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
                 if(!parentTx) parentTx = allTx.filter(x=> String(x.type)===String(task.taskType)).sort((a,b)=>b.timestamp-a.timestamp)[0];
                 
                 if(parentTx) {
-                    // --- DURUM BELİRLEME MANTIĞI ---
+                    // --- GÜNCELLENMİŞ DURUM MANTIĞI ---
                     let computedStatus = 'Karar Bekleniyor';
-                    let badgeColor = 'secondary'; // Gri (Varsayılan)
+                    let badgeColor = 'secondary'; // Gri
 
                     const rr = parentTx.requestResult;
                     
-                    // Öncelik 1: Karar verilmiş mi? (Transaction Result)
+                    // Durum 1: Karar verilmiş mi? (Transaction Result)
                     if (rr !== null && rr !== undefined && rr !== '' && REQUEST_RESULT_STATUS[String(rr)]) {
                         computedStatus = REQUEST_RESULT_STATUS[String(rr)];
-                        // Renk belirleme
-                        if (computedStatus.includes('Ret')) badgeColor = 'danger'; // Kırmızı
-                        else if (computedStatus.includes('Kabul')) badgeColor = 'success'; // Yeşil
-                        else badgeColor = 'info'; // Mavi
+                        if (computedStatus.includes('Ret')) badgeColor = 'danger';
+                        else if (computedStatus.includes('Kabul')) badgeColor = 'success';
+                        else badgeColor = 'info';
                     } 
-                    // Öncelik 2: Onay Bekliyor mu? (Task Status)
-                    else if (task.status === 'awaiting_client_approval' || task.status === 'Müvekkil Onayı Bekliyor') {
+                    // Durum 2: Onay Bekliyor mu? (awaiting_client_approval)
+                    else if (statusRaw === 'awaiting_client_approval' || statusRaw === 'Müvekkil Onayı Bekliyor') {
                         computedStatus = 'Onay Bekliyor';
                         badgeColor = 'warning'; // Turuncu
                     }
-                    // Varsayılan: Karar Bekleniyor (secondary/gri)
-
+                    
                     // --- Rakip Marka Verisi ---
                     let opponentMarkData = null;
                     const targetAppNo = task.details?.targetAppNo || parentTx?.opposedMarkNumber;
@@ -1266,8 +1300,8 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
                         bulletinDate: window.formatDateTR(opponentMarkData?.bulletinDate || rec.details?.brandInfo?.opposedMarkBulletinDate), 
                         bulletinNo: opponentMarkData?.bulletinNo || rec.details?.brandInfo?.opposedMarkBulletinNo || '-', 
                         epatsDate: window.formatDateTR(parentTx.timestamp), 
-                        statusText: computedStatus,   // Hesaplanan Durum
-                        statusBadge: badgeColor,      // Hesaplanan Renk
+                        statusText: computedStatus,   
+                        statusBadge: badgeColor,      
                         allParentDocs: docs, 
                         childrenData: children 
                     });
@@ -1280,7 +1314,7 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
             tbody.innerHTML = '<tr><td colspan="12" class="text-danger text-center">Hata oluştu.</td></tr>';
         }
     };
-
+    
     // --- PDF & LOAD TRANSACTIONS ---
     window.fetchPdfsForTransactions = async function(transactionIds) {
         if (!transactionIds || transactionIds.length === 0) return {};
