@@ -630,43 +630,49 @@
         }).filter(Boolean).join('') || '<span class="text-muted">-</span>';
     };
 
-// === GÜNCELLENMİŞ FİLTRELEME (VERİ TABANLI) ===
+    // === GÜNCELLENMİŞ FİLTRELEME VE NUMARALANDIRMA DÜZELTMESİ ===
     window.applyMenseFilterToActivePane = function() {
         const val = $("#menseFilter").val() || 'TÜRKPATENT';
         const activeTabId = $('#portfolioTopTabs a.nav-link.active').attr('href');
         
-        // Eğer aktif tab Marka listesi ise Veri Bazlı Filtreleme yap (Pagination düzelsin diye)
+        // Sadece Marka listesi için özel veri işleme (Pagination ve Sıralama düzelsin diye)
         if (activeTabId === '#marka-list' && window.markaPaginationData) {
             const allData = window.markaPaginationData.allDataUnfiltered || [];
-            let filteredData = [];
+            
+            // 1. ADIM: Veriyi Süz (Filter)
+            // Hem Menşe'ye göre hem de 'child' kayıtları ana listeden çıkarmak için
+            let filteredData = allData.filter(item => {
+                // A) Child kayıtları ana listede gösterme (Numara atlamasını engeller)
+                // Child kayıtlar zaten parent'ın altında akordeon olarak çıkıyor.
+                if (item.transactionHierarchy === 'child') return false;
 
-            if (val === 'HEPSI') {
-                filteredData = allData;
-            } else if (val === 'TÜRKPATENT') {
-                filteredData = allData.filter(item => {
-                    const origin = (item.origin || 'TÜRKPATENT').toString().toUpperCase();
-                    return origin.includes('TURK') || origin.includes('TÜRK');
-                });
-            } else if (val === 'YURTDISI') {
-                filteredData = allData.filter(item => {
-                    const origin = (item.origin || 'TÜRKPATENT').toString().toUpperCase();
-                    return !origin.includes('TURK') && !origin.includes('TÜRK');
-                });
-            }
+                // B) Menşe Filtresi
+                const origin = (item.origin || 'TÜRKPATENT').toString().toUpperCase();
+                const isTurk = origin.includes('TURK') || origin.includes('TÜRK');
 
-            // Global veriyi güncelle
+                if (val === 'HEPSI') return true;
+                if (val === 'TÜRKPATENT') return isTurk;
+                if (val === 'YURTDISI') return !isTurk;
+                
+                return true;
+            });
+
+            // 2. ADIM: Global veriyi güncelle
             window.markaPaginationData.allData = filteredData;
 
-            // Pagination'ı güncelle ve ilk sayfaya dön
+            // 3. ADIM: Pagination'ı güncelle ve ilk sayfayı çiz
             if (window.markaPaginationData.pagination) {
+                // Sayfa sayısını yeni veri uzunluğuna göre ayarla
                 window.markaPaginationData.pagination.update(filteredData.length);
                 
-                // Tabloyu yeniden çiz (Sıfırdan başladığı için indexler 1,2,3 diye düzelir)
-                const slice = filteredData.slice(0, 10); // İlk sayfa
+                // İlk sayfayı al (Örn: 10 kayıt)
+                const slice = filteredData.slice(0, 10); 
+                
+                // Tabloyu temiz veriyle yeniden doldur (Artık indexler 1,2,3 diye gidecek)
                 window.populatePortfolioTable('#marka-list', slice, 0);
             }
             
-            // Kolon Göster/Gizle (Menşe Kolonu)
+            // 4. ADIM: Menşe Kolonunu Göster/Gizle
             if (val === 'TÜRKPATENT') {
                 $('#marka-list th.col-origin, #marka-list td.col-origin').hide();
             } else {
@@ -674,12 +680,12 @@
             }
 
         } else {
-            // Diğer tablar için (Patent, Tasarım vb.) eski CSS gizleme yöntemi devam edebilir
-            // veya onlar için de benzer paginationData yapısı kurduysanız yukarıdaki mantığı uygulayabilirsiniz.
+            // Diğer sekmeler (Patent, Tasarım vb.) için standart CSS gizleme
             const paneSelector = activeTabId;
             $(`${paneSelector} tbody tr`).each(function() {
                 const row = $(this);
-                if (row.find('td[colspan]').length > 0) return; // Detay satırlarını atla
+                // Detay/Akordeon satırlarını etkileme
+                if (row.find('td[colspan]').length > 0) return; 
                 
                 const rowOrigin = (row.attr('data-origin') || 'TÜRKPATENT').toUpperCase();
                 const isTurk = rowOrigin.includes('TURK') || rowOrigin.includes('TÜRK');
@@ -690,6 +696,8 @@
             });
         }
     };
+
+
 
     // --- INIT ---
     async function initPortal() {
