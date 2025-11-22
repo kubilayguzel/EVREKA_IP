@@ -130,48 +130,52 @@
         background-color: transparent !important;
         color: inherit !important;
     }
-/* === İTİRAZ TABLOSU KOLON AYARLARI (SAYFAYA YAYILAN) === */
-#dava-itiraz-list table { 
-    table-layout: fixed; /* Hücre içeriği taşarsa tabloyu bozma */
-    width: 100%;         /* Tabloyu sayfaya tam yay */
-}
+    /* === İTİRAZ TABLOSU TAM EKRAN VE KOLON AYARI (GÜNCELLENMİŞ) === */
 
-/* --- SABİT GENİŞLİKLİ KOLONLAR (Dar olması gerekenler) --- */
-#dava-itiraz-list th:nth-child(1), td:nth-child(1) { width: 50px; }  /* # */
-#dava-itiraz-list th:nth-child(2), td:nth-child(2) { width: 90px; }  /* Menşe */
-#dava-itiraz-list th:nth-child(3), td:nth-child(3) { width: 110px; } /* Görsel */
-#dava-itiraz-list th:nth-child(6), td:nth-child(6) { width: 120px; } /* Başvuru No */
-#dava-itiraz-list th:nth-child(8), td:nth-child(8) { width: 100px; } /* Bülten Tarihi */
-#dava-itiraz-list th:nth-child(9), td:nth-child(9) { width: 80px; }  /* Bülten No */
-#dava-itiraz-list th:nth-child(10), td:nth-child(10) { width: 100px; } /* İşlem Tarihi */
-#dava-itiraz-list th:nth-child(11), td:nth-child(11) { width: 140px; } /* Durum */
-#dava-itiraz-list th:nth-child(12), td:nth-child(12) { width: 60px; }  /* Evrak */
+    /* 1. Tabloyu Kapsayıcıya %100 Zorla */
+    #dava-itiraz-list table { 
+        table-layout: fixed !important; /* Sabit yerleşim algoritması */
+        width: 100% !important;         /* Ekrana tam yay */
+        min-width: 1000px;              /* Mobil için min genişlik */
+        border-collapse: collapse;
+    }
 
-/* --- ESNEK KOLONLAR (Kalan boşluğu dolduracaklar) --- */
+    /* --- SABİT GENİŞLİKLİ KOLONLAR (Dar olması gerekenler) --- */
+    #dava-itiraz-list th:nth-child(1), #dava-itiraz-list td:nth-child(1) { width: 50px; }  /* # */
+    #dava-itiraz-list th:nth-child(2), #dava-itiraz-list td:nth-child(2) { width: 90px; }  /* Menşe */
+    #dava-itiraz-list th:nth-child(3), #dava-itiraz-list td:nth-child(3) { width: 110px; } /* Görsel */
+    #dava-itiraz-list th:nth-child(6), #dava-itiraz-list td:nth-child(6) { width: 130px; } /* Başvuru No */
+    #dava-itiraz-list th:nth-child(8), #dava-itiraz-list td:nth-child(8) { width: 100px; } /* Bülten Tarihi */
+    #dava-itiraz-list th:nth-child(9), #dava-itiraz-list td:nth-child(9) { width: 80px; }  /* Bülten No */
+    #dava-itiraz-list th:nth-child(10), #dava-itiraz-list td:nth-child(10) { width: 100px; } /* İşlem Tarihi */
+    #dava-itiraz-list th:nth-child(11), #dava-itiraz-list td:nth-child(11) { width: 140px; } /* Durum */
+    #dava-itiraz-list th:nth-child(12), #dava-itiraz-list td:nth-child(12) { width: 60px; }  /* Evrak */
 
-/* 4. Kolon: M/T/B Adı (Biraz daraltılmış) */
-#dava-itiraz-list th:nth-child(4), 
-#dava-itiraz-list td:nth-child(4) { 
-    width: 12%; /* Ekranın %12'sini kapla */
-    word-wrap: break-word; 
-    white-space: normal; 
-}
+    /* --- ESNEK KOLONLAR --- */
 
-/* 5. Kolon: İşlem Tipi (Genişletilmiş - En çok yer buna lazım) */
-#dava-itiraz-list th:nth-child(5), 
-#dava-itiraz-list td:nth-child(5) { 
-    width: 18%; /* Ekranın %18'ini kapla */
-    word-wrap: break-word; 
-    white-space: normal; 
-}
+    /* 4. Kolon: M/T/B Adı (DARALTIMIŞ - %12) */
+    #dava-itiraz-list th:nth-child(4), 
+    #dava-itiraz-list td:nth-child(4) { 
+        width: 12%; 
+        word-wrap: break-word; 
+        white-space: normal; 
+    }
 
-/* 7. Kolon: Başvuru Sahibi (Kalan tüm boşluğu doldurur) */
-#dava-itiraz-list th:nth-child(7), 
-#dava-itiraz-list td:nth-child(7) { 
-    width: auto; /* Kalan boşluğu otomatik doldur */
-    word-wrap: break-word; 
-    white-space: normal; 
-}
+    /* 5. Kolon: İşlem Tipi (GENİŞLETİLMİŞ - %20) */
+    #dava-itiraz-list th:nth-child(5), 
+    #dava-itiraz-list td:nth-child(5) { 
+        width: 20%; 
+        word-wrap: break-word; 
+        white-space: normal; 
+    }
+
+    /* 7. Kolon: Başvuru Sahibi (KALAN ALANI DOLDURUR) */
+    /* ÖNEMLİ: Buraya width verme! Fixed layout'ta width verilmeyen kolon kalan tüm alanı kaplar */
+    #dava-itiraz-list th:nth-child(7), 
+    #dava-itiraz-list td:nth-child(7) { 
+        word-wrap: break-word; 
+        white-space: normal; 
+    }
 
     #modal-islemler table td:first-child { white-space: nowrap !important; width: 1%; min-width: 60px; }
     a i.fa-file-pdf, a i.fa-file-word, a i.fa-file-alt { font-size: 1.3rem !important; vertical-align: middle; }
