@@ -630,29 +630,65 @@
         }).filter(Boolean).join('') || '<span class="text-muted">-</span>';
     };
 
+// === GÜNCELLENMİŞ FİLTRELEME (VERİ TABANLI) ===
     window.applyMenseFilterToActivePane = function() {
         const val = $("#menseFilter").val() || 'TÜRKPATENT';
         const activeTabId = $('#portfolioTopTabs a.nav-link.active').attr('href');
-        if (!activeTabId) return;
         
-        const paneSelector = activeTabId; 
-        if (val === 'TÜRKPATENT') {
-            $(`${paneSelector} th.col-origin, ${paneSelector} td.col-origin`).hide();
-        } else {
-            $(`${paneSelector} th.col-origin, ${paneSelector} td.col-origin`).show();
-        }
-        
-        $(`${paneSelector} tbody tr`).each(function() {
-            const row = $(this);
-            if (row.find('td[colspan]').length > 0) return; // Accordion detaylarını atla
-            
-            const rowOrigin = (row.attr('data-origin') || 'TÜRKPATENT').toUpperCase();
-            const isTurk = rowOrigin.includes('TURK') || rowOrigin.includes('TÜRK');
+        // Eğer aktif tab Marka listesi ise Veri Bazlı Filtreleme yap (Pagination düzelsin diye)
+        if (activeTabId === '#marka-list' && window.markaPaginationData) {
+            const allData = window.markaPaginationData.allDataUnfiltered || [];
+            let filteredData = [];
 
-            if (val === 'HEPSI') row.show();
-            else if (val === 'TÜRKPATENT') isTurk ? row.show() : row.hide();
-            else if (val === 'YURTDISI') !isTurk ? row.show() : row.hide();
-        });
+            if (val === 'HEPSI') {
+                filteredData = allData;
+            } else if (val === 'TÜRKPATENT') {
+                filteredData = allData.filter(item => {
+                    const origin = (item.origin || 'TÜRKPATENT').toString().toUpperCase();
+                    return origin.includes('TURK') || origin.includes('TÜRK');
+                });
+            } else if (val === 'YURTDISI') {
+                filteredData = allData.filter(item => {
+                    const origin = (item.origin || 'TÜRKPATENT').toString().toUpperCase();
+                    return !origin.includes('TURK') && !origin.includes('TÜRK');
+                });
+            }
+
+            // Global veriyi güncelle
+            window.markaPaginationData.allData = filteredData;
+
+            // Pagination'ı güncelle ve ilk sayfaya dön
+            if (window.markaPaginationData.pagination) {
+                window.markaPaginationData.pagination.update(filteredData.length);
+                
+                // Tabloyu yeniden çiz (Sıfırdan başladığı için indexler 1,2,3 diye düzelir)
+                const slice = filteredData.slice(0, 10); // İlk sayfa
+                window.populatePortfolioTable('#marka-list', slice, 0);
+            }
+            
+            // Kolon Göster/Gizle (Menşe Kolonu)
+            if (val === 'TÜRKPATENT') {
+                $('#marka-list th.col-origin, #marka-list td.col-origin').hide();
+            } else {
+                $('#marka-list th.col-origin, #marka-list td.col-origin').show();
+            }
+
+        } else {
+            // Diğer tablar için (Patent, Tasarım vb.) eski CSS gizleme yöntemi devam edebilir
+            // veya onlar için de benzer paginationData yapısı kurduysanız yukarıdaki mantığı uygulayabilirsiniz.
+            const paneSelector = activeTabId;
+            $(`${paneSelector} tbody tr`).each(function() {
+                const row = $(this);
+                if (row.find('td[colspan]').length > 0) return; // Detay satırlarını atla
+                
+                const rowOrigin = (row.attr('data-origin') || 'TÜRKPATENT').toUpperCase();
+                const isTurk = rowOrigin.includes('TURK') || rowOrigin.includes('TÜRK');
+
+                if (val === 'HEPSI') row.show();
+                else if (val === 'TÜRKPATENT') isTurk ? row.show() : row.hide();
+                else if (val === 'YURTDISI') !isTurk ? row.show() : row.hide();
+            });
+        }
     };
 
     // --- INIT ---
