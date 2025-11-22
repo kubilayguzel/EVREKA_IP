@@ -1429,24 +1429,106 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
         });
     }
 
-    // --- LISTENERS ---
+// --- LISTENERS ---
     $(document).ready(function() {
         initTheme();
         const auth = getAuth(); 
         onAuthStateChanged(auth, (user) => { if (user) initPortal(); else window.location.href = 'index.html'; });
+        
         $('#logoutBtn').click(() => auth.signOut());
+        
+        // Filtreler
         $('#menseFilter').change(window.applyMenseFilterToActivePane);
         $('a[data-toggle="tab"]').on('shown.bs.tab', window.applyMenseFilterToActivePane);
-        $(document).on('click', '.task-approve', async function() { if(confirm('Onaylıyor musunuz?')) { await updateDoc(doc(db, "tasks", $(this).data('id')), { status: "open", approvalDate: new Date().toISOString() }); alert('Onaylandı!'); initPortal(); } });
-        $(document).on('click', '.task-reject', async function() { const r = prompt('Red sebebi:'); if(r) { await updateDoc(doc(db, "tasks", $(this).data('id')), { status: "müvekkil onayı - kapatıldı", rejectionDate: new Date().toISOString(), rejectionReason: r }); alert('Reddedildi.'); initPortal(); } });
-        $('.task-card-link').click(function() { $('.task-card-link').removeClass('active-task-area'); $(this).addClass('active-task-area'); const area = $(this).data('target-area'); if(area === 'marka-tasks') $('#task-detail-cards').slideDown(); else $('#task-detail-cards').slideUp(); });
-        $('.detail-card-link').click(function() { const type = $(this).data('task-type'); $('#task-list-details').slideDown(); window.loadSampleTaskDetails(type); });
-        $(document).on('click', '.task-compare-goods', async function() { const taskId = $(this).data('task-id'); const ipRecordId = $(this).data('ip-record-id'); const bulletinKey = $(this).data('bulletin-key'); const targetAppNo = $(this).data('target-app-no'); $('#goodsComparisonModal').modal('show'); $('#monitoredGoodsContent').html('<p class="text-muted">Yükleniyor...</p>'); $('#competitorGoodsContent').html('<p class="text-muted">Yükleniyor...</p>'); try { const monitoredGoodsHtml = await loadGoodsFromIpRecord(ipRecordId); $('#monitoredGoodsContent').html(monitoredGoodsHtml); const competitorGoodsHtml = await loadGoodsFromMonitoringRecord(bulletinKey, ipRecordId, targetAppNo); $('#competitorGoodsContent').html(competitorGoodsHtml); } catch (error) { console.error('Emtia yükleme hatası:', error); $('#monitoredGoodsContent').html('<p class="text-danger">Hata.</p>'); $('#competitorGoodsContent').html('<p class="text-danger">Hata.</p>'); } });
+        
+        // --- GÖREV ONAYLA (DÜZELTİLDİ) ---
+        $(document).on('click', '.task-approve', async function() { 
+            // 🔥 HATA ÇÖZÜMÜ: ID'yi String'e çevir
+            const taskId = String($(this).data('id'));
+            
+            if(confirm('Onaylıyor musunuz?')) { 
+                try {
+                    await updateDoc(doc(db, "tasks", taskId), { 
+                        status: "open", 
+                        approvalDate: new Date().toISOString() 
+                    }); 
+                    alert('Onaylandı!'); 
+                    initPortal(); 
+                } catch(e) {
+                    console.error("Onay hatası:", e);
+                    alert("Hata: " + e.message);
+                }
+            } 
+        });
+        
+        // --- GÖREV REDDET (DÜZELTİLDİ) ---
+        $(document).on('click', '.task-reject', async function() { 
+            // 🔥 HATA ÇÖZÜMÜ: ID'yi String'e çevir
+            const taskId = String($(this).data('id'));
+            const r = prompt('Red sebebi:'); 
+            
+            if(r) { 
+                try {
+                    await updateDoc(doc(db, "tasks", taskId), { 
+                        status: "müvekkil onayı - kapatıldı", 
+                        rejectionDate: new Date().toISOString(), 
+                        rejectionReason: r 
+                    }); 
+                    alert('Reddedildi.'); 
+                    initPortal(); 
+                } catch(e) {
+                    console.error("Red hatası:", e);
+                    alert("Hata: " + e.message);
+                }
+            } 
+        });
+
+        // --- DİĞER AKSİYONLAR ---
+        $('.task-card-link').click(function() { 
+            $('.task-card-link').removeClass('active-task-area'); 
+            $(this).addClass('active-task-area'); 
+            const area = $(this).data('target-area'); 
+            if(area === 'marka-tasks') $('#task-detail-cards').slideDown(); else $('#task-detail-cards').slideUp(); 
+        });
+        
+        $('.detail-card-link').click(function() { 
+            const type = $(this).data('task-type'); 
+            $('#task-list-details').slideDown(); 
+            window.loadSampleTaskDetails(type); 
+        });
+        
+        $(document).on('click', '.task-compare-goods', async function() { 
+            const taskId = $(this).data('task-id'); 
+            const ipRecordId = $(this).data('ip-record-id'); 
+            const bulletinKey = $(this).data('bulletin-key'); 
+            const targetAppNo = $(this).data('target-app-no'); 
+            $('#goodsComparisonModal').modal('show'); 
+            $('#monitoredGoodsContent').html('<p class="text-muted">Yükleniyor...</p>'); 
+            $('#competitorGoodsContent').html('<p class="text-muted">Yükleniyor...</p>'); 
+            try { 
+                const monitoredGoodsHtml = await loadGoodsFromIpRecord(ipRecordId); 
+                $('#monitoredGoodsContent').html(monitoredGoodsHtml); 
+                const competitorGoodsHtml = await loadGoodsFromMonitoringRecord(bulletinKey, ipRecordId, targetAppNo); 
+                $('#competitorGoodsContent').html(competitorGoodsHtml); 
+            } catch (error) { 
+                console.error('Emtia yükleme hatası:', error); 
+                $('#monitoredGoodsContent').html('<p class="text-danger">Hata.</p>'); 
+                $('#competitorGoodsContent').html('<p class="text-danger">Hata.</p>'); 
+            } 
+        });
+
+        // Helper Fonksiyonlar
         async function loadGoodsFromIpRecord(ipRecordId) { if (!ipRecordId) return '<p class="text-muted">ID yok.</p>'; try { const ipDoc = await getDoc(doc(db, 'ipRecords', ipRecordId)); if (!ipDoc.exists()) return '<p class="text-muted">Kayıt yok.</p>'; const goodsByClass = ipDoc.data().goodsAndServicesByClass || []; if (goodsByClass.length === 0) return '<p class="text-muted">Veri yok.</p>'; return goodsByClass.map(cls => `<div class="mb-3"><h6 class="text-primary">Sınıf ${cls.classNo||'-'}</h6><p style="font-size: 0.85rem;">${(cls.items&&Array.isArray(cls.items))?cls.items.join('; '):'Yok'}</p></div>`).join(''); } catch (error) { return '<p class="text-danger">Hata.</p>'; } }
+        
         async function loadGoodsFromMonitoringRecord(bulletinKey, monitoredId, targetAppNo) { if (!bulletinKey || !monitoredId || !targetAppNo) return '<p class="text-muted">Eksik bilgi.</p>'; try { const monSnap = await getDoc(doc(db, 'monitoringTrademarkRecords', bulletinKey, 'trademarks', monitoredId)); if (!monSnap.exists()) return '<p class="text-muted">Kayıt yok.</p>'; const monitoringRecord = monSnap.data(); if (!Array.isArray(monitoringRecord.results)) return '<p class="text-muted">Sonuç yok.</p>'; const cleanTarget = String(targetAppNo).replace(/[^a-zA-Z0-9]/g, ''); const competitor = monitoringRecord.results.find(r => String(r.applicationNo || '').replace(/[^a-zA-Z0-9]/g, '') === cleanTarget); if (!competitor || !competitor.objectID) return '<p class="text-muted">Rakip bulunamadı.</p>'; const bulletinSnap = await getDoc(doc(db, 'trademarkBulletinRecords', competitor.objectID)); if (!bulletinSnap.exists()) return '<p class="text-muted">Bülten detayı yok.</p>'; const goods = bulletinSnap.data().goods; if (!goods || !Array.isArray(goods)) return '<p class="text-muted">Mal listesi yok.</p>'; return goods.map(item => `<p style="font-size: 0.85rem; margin-bottom: 10px;">${item||'Yok'}</p>`).join(''); } catch (error) { return '<p class="text-danger">Hata.</p>'; } }
+        
+        // Portföy Detay
         $(document).on('click', '.portfolio-detail-link', async function(e) { e.preventDefault(); const itemId = $(this).data('item-id'); let item = null; if (window.markaPaginationData?.allDataUnfiltered) item = window.markaPaginationData.allDataUnfiltered.find(p => p.id === itemId); if (!item) return; const title = item.title || item.brandText || item.markName || 'Detaylar'; $('#portfolioDetailModalLabel').text(title); const brandImg = item.brandImageUrl || item.brandImage || 'https://placehold.co/150x150/png?text=Gorsel+Yok'; $('#modal-img').attr('src', brandImg); const type = (item.type === 'trademark' || item.type === 'Marka') ? 'Marka' : (item.type === 'patent' ? 'Patent' : 'Tasarım'); const appNo = item.applicationNumber || item.applicationNo || '-'; const regNo = item.registrationNumber || item.registrationNo || '-'; let classes = '-'; if (item.goodsAndServicesByClass && Array.isArray(item.goodsAndServicesByClass)) classes = item.goodsAndServicesByClass.map(c => c.classNo).join(', '); else if (item.classes) classes = Array.isArray(item.classes) ? item.classes.join(', ') : item.classes; const status = item.status || item.statusText || 'Bilinmiyor'; const statusBadge = { 'Registered': 'success', 'Tescilli': 'success', 'Application': 'primary', 'Başvuru': 'primary' }[status] || 'warning'; const appDate = window.formatDateTR(item.applicationDate || item.application_date); const regDate = window.formatDateTR(item.registrationDate || item.registration_date); const renewalDate = window.formatDateTR(item.renewalDate || item.renewal_date); $('#modal-details-card').html(`<div class="mb-2"><strong>Tür:</strong> ${type}</div><div class="mb-2"><strong>Başvuru No:</strong> ${appNo}</div><div class="mb-2"><strong>Tescil No:</strong> ${regNo}</div><div class="mb-0"><strong>Sınıflar:</strong> ${classes}</div>`); $('#modal-dates-card').html(`<div class="mb-2"><strong>Başvuru Tarihi:</strong> ${appDate}</div><div class="mb-2"><strong>Tescil Tarihi:</strong> ${regDate}</div><div class="mb-2"><strong>Yenileme Tarihi:</strong> ${renewalDate}</div><div class="mb-0"><strong>Durum:</strong> <span class="badge badge-${statusBadge}">${status}</span></div>`); let esyaHtml = '<p class="text-muted text-center mt-3">Liste yok.</p>'; if (item.goodsAndServicesByClass && item.goodsAndServicesByClass.length > 0) { esyaHtml = item.goodsAndServicesByClass.map(cls => `<div class="mb-3 p-2 border-bottom"><strong class="text-info d-block mb-1">Sınıf ${cls.classNo}</strong><span class="text-muted small">${cls.items ? cls.items.join('; ') : 'Detay yok'}</span></div>`).join(''); } $('#esyaListesiContent').html(esyaHtml); $('#modal-islemler table tbody').html('<tr><td colspan="4" class="text-center py-4"><i class="fas fa-spinner fa-spin"></i> İşlemler yükleniyor...</td></tr>'); if (window.loadTransactions) await window.loadTransactions(item.id); $('#myTab a[href="#modal-islemler"]').tab('show'); $('#portfolioDetailModal').modal('show'); });
+        
         $('[data-target-tab]').on('click', function() { const targetTabId = $(this).data('target-tab'); const $targetLink = $(`#sidebar a[href="#${targetTabId}"]`); if ($targetLink.length) { $targetLink.tab('show'); if (targetTabId === 'portfolio-content') setTimeout(() => { $('#portfolioTopTabs a[href="#marka-list"]').tab('show'); }, 100); } window.scrollTo({ top: 0, behavior: 'smooth' }); });
+        
         $(document).on('click', '.dava-detail-link', function(e) { e.preventDefault(); const suitId = $(this).data('suit-id'); if (!window.suitsData) return; const suit = window.suitsData.find(s => s.id === suitId); if (!suit) return; $('#davaDetailModalLabel').text(suit.title || 'Dava Detayı'); $('#modal-dava-caseNo').text(suit.caseNo); $('#modal-dava-title').text(suit.title); $('#modal-dava-court').text(suit.court); $('#modal-dava-openingDate').text(suit.openingDate); const badgeClass = suit.suitStatus === 'Devam Ediyor' ? 'info' : (suit.suitStatus === 'Tamamlandı' ? 'success' : 'secondary'); $('#modal-dava-status').html(`<span class="badge badge-${badgeClass}">${suit.suitStatus}</span>`); $('#modal-dava-opposingParty').text(suit.opposingParty); $('#modal-dava-opposingCounsel').text(suit.opposingCounsel || '-'); $('#modal-dava-client').text(suit.clientName || '-'); $('#modal-dava-assetType').text(suit.subjectAssetType || '-'); $('#modal-dava-assetTitle').text(suit.subjectAssetTitle || '-'); $('#modal-dava-assetNumber').text(suit.subjectAssetNumber || '-'); $('#modal-dava-description').text(suit.description || '-'); $('#davaDetailModal').modal('show'); });
+        
         $(document).on('click', '.task-detail', async function(e) { e.preventDefault(); const taskId = $(this).data('task-id'); if(!taskId) return; try { const docSnap = await getDoc(doc(db, 'tasks', String(taskId))); if (!docSnap.exists()) { alert('İşlem bulunamadı.'); return; } const taskData = docSnap.data(); const ipId = taskData.relatedIpRecordId; if (ipId) { const $tempLink = $('<a>', { 'class': 'portfolio-detail-link', 'data-item-id': ipId, 'href': '#' }); $('body').append($tempLink); $tempLink.trigger('click'); $tempLink.remove(); } else { alert('İlişkili portföy kaydı yok.'); } } catch(err) { console.error('Modal hatası:', err); } });
     });
 </script>
