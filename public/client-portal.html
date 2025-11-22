@@ -892,7 +892,7 @@
             }
         }
     };
-    
+
     // --- 2. İŞLERİM (TASKS) ---
     window.checkTaskClientRelation = async function(taskData, clientPersonIdSet) {
         const taskTypeStr = String(taskData.taskType);
@@ -1334,18 +1334,28 @@
         } catch(e) { console.error(e); }
     };
 
-window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
+// === İTİRAZ TABLOSU RENDER (GÜNCELLENMİŞ) ===
+    window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
         const tbody = document.getElementById('dava-itiraz-tbody');
         if (!tbody) return;
         tbody.innerHTML = '';
-        if (!parentRowsSlice || parentRowsSlice.length === 0) { tbody.innerHTML = '<tr><td colspan="12" class="text-center text-muted">Henüz itiraz kaydı bulunmamaktadır.</td></tr>'; return; }
+        
+        if (!parentRowsSlice || parentRowsSlice.length === 0) { 
+            tbody.innerHTML = '<tr><td colspan="12" class="text-center text-muted">Henüz itiraz kaydı bulunmamaktadır.</td></tr>'; 
+            return; 
+        }
 
         parentRowsSlice.forEach((row, index) => {
             const parentIndex = startIndex + index + 1;
             if (row.isParent) {
                 const tr = document.createElement('tr');
                 tr.setAttribute('data-origin', (row.origin || 'TÜRKPATENT'));
-                const imgHtml = row.brandImageUrl ? `<img src="${row.brandImageUrl}" alt="marka" class="brand-thumb" style="height:50px;">` : '<img src="https://placehold.co/100x100?text=Yok" alt="yok" class="brand-thumb" style="height:50px;">';
+                
+                // Görsel (Yeni CSS yapısına uygun)
+                const imgHtml = row.brandImageUrl 
+                    ? `<img src="${row.brandImageUrl}" alt="marka" class="brand-thumb">` 
+                    : '<img src="https://placehold.co/100x100?text=Yok" alt="yok" class="brand-thumb">';
+                
                 const hasChildren = row.hasChildren || (row.childrenData && row.childrenData.length > 0);
                 const iconHtml = hasChildren ? '<i class="fas fa-chevron-right mr-2"></i>' : '';
                 
@@ -1356,8 +1366,20 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
                     tr.setAttribute('data-target', `#${uniqueAccordionId}`);
                 }
 
-                // GÜNCELLEME: row.statusBadge kullanılıyor
-                tr.innerHTML = `<td>${iconHtml}${parentIndex}</td><td class="col-origin">${row.origin || '-'}</td><td class="text-center">${imgHtml}</td><td><a href="#" class="portfolio-detail-link" data-item-id="${row.recordId}">${row.title}</a></td><td>${row.transactionTypeName}</td><td>${row.applicationNumber}</td><td>${row.applicantName}</td><td>${row.bulletinDate}</td><td>${row.bulletinNo}</td><td>${row.epatsDate}</td><td><span class="badge badge-${row.statusBadge || 'warning'}">${row.statusText}</span></td><td>${window.renderDocsCell(row)}</td>`;
+                tr.innerHTML = `
+                    <td>${iconHtml}${parentIndex}</td>
+                    <td class="col-origin">${row.origin || '-'}</td>
+                    <td class="text-center">${imgHtml}</td>
+                    <td><a href="#" class="portfolio-detail-link" data-item-id="${row.recordId}">${row.title}</a></td>
+                    <td>${row.transactionTypeName}</td>
+                    <td>${row.applicationNumber}</td>
+                    <td>${row.applicantName}</td>
+                    <td>${row.bulletinDate}</td>
+                    <td>${row.bulletinNo}</td>
+                    <td>${row.epatsDate}</td>
+                    <td><span class="badge badge-${row.statusBadge || 'warning'}">${row.statusText}</span></td>
+                    <td>${window.renderDocsCell(row)}</td>`;
+                
                 tbody.appendChild(tr);
 
                 if (hasChildren && row.childrenData) {
@@ -1378,7 +1400,15 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
                 }
             }
         });
-        if(window.applyMenseFilterToActivePane) window.applyMenseFilterToActivePane();
+        
+        // --- DÜZELTME: Yeni master filter fonksiyonunu çağır (varsa) ---
+        if(window.applyMasterFilter) {
+            // Sadece şu an "İtiraz" sekmesi aktifse filtre uygula (gereksiz çalışmayı önle)
+            const activeTab = document.querySelector('#portfolioTopTabs .nav-link.active');
+            if(activeTab && activeTab.getAttribute('href') === '#dava-itiraz-list') {
+                window.applyMasterFilter();
+            }
+        }
     };
 
 // --- 5. İTİRAZ MODÜLÜ (GÜNCELLENMİŞ FİLTRE & STATÜ) ---
