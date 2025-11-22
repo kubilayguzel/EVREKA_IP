@@ -1198,11 +1198,46 @@ const handleOwnerReportAndNotifyGeneration = async (event) => {
         console.log(`✅ [6.${i + 1}] CF yanıtı`, {
           index: i + 1,
           taskId: taskResponse?.data?.taskId,
+          bulletinRecordId: taskResponse?.data?.bulletinRecordId,
           success: taskResponse?.data?.success,
           message: taskResponse?.data?.message,
         });
 
-        if (taskResponse?.data?.success) createdTaskCount++;
+        if (taskResponse?.data?.success) {
+          createdTaskCount++;
+          
+          // ✅ YENİ: 3.taraf portföy kaydı oluştur
+          const taskId = taskResponse?.data?.taskId;
+          const bulletinRecordId = taskResponse?.data?.bulletinRecordId || r.bulletinRecordId;
+          
+          if (taskId && bulletinRecordId && window.portfolioByOppositionCreator) {
+            try {
+              console.log(`🔄 [6.${i + 1}.1] 3.taraf portföy oluşturuluyor...`, {
+                bulletinRecordId,
+                taskId
+              });
+
+              const portfolioResult = await window.portfolioByOppositionCreator.createThirdPartyPortfolioFromBulletin(
+                bulletinRecordId,
+                taskId
+              );
+
+              if (portfolioResult?.success && portfolioResult?.recordId) {
+                console.log(`✅ [6.${i + 1}.2] 3.taraf portföy ${portfolioResult.isExistingRecord ? 'ilişkilendirildi' : 'oluşturuldu'} (ID: ${portfolioResult.recordId})`);
+              } else {
+                console.warn(`⚠️ [6.${i + 1}.2] 3.taraf portföy oluşturulamadı:`, portfolioResult?.error);
+              }
+            } catch (portfolioErr) {
+              console.error(`❌ [6.${i + 1}.2] 3.taraf portföy hatası:`, portfolioErr);
+            }
+          } else {
+            console.warn(`⚠️ [6.${i + 1}.1] 3.taraf portföy için gerekli veriler eksik:`, {
+              hasTaskId: !!taskId,
+              hasBulletinRecordId: !!bulletinRecordId,
+              hasCreator: !!window.portfolioByOppositionCreator
+            });
+          }
+        }
         
       } catch (e) {
         console.error(`❌ [6.${i + 1}] İtiraz işi oluşturma hatası`, {
