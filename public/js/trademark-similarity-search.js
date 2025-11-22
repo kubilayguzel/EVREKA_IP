@@ -1181,6 +1181,12 @@ const handleOwnerReportAndNotifyGeneration = async (event) => {
           markName: r.markName
         });
         
+        console.log(`🔍 TEST [6.${i + 1}] r objesi:`, {
+          applicationNo: r.applicationNo,
+          bulletinRecordId: r.bulletinRecordId,
+          allKeys: Object.keys(r)
+        });
+
          // İş oluştur
         const taskResponse = await createObjectionTaskFn({
           monitoredMarkId: r.monitoredTrademarkId,
