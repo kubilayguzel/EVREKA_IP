@@ -1173,7 +1173,7 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
             if (row.isParent) {
                 const tr = document.createElement('tr');
                 tr.setAttribute('data-origin', (row.origin || 'TÜRKPATENT'));
-                const imgHtml = row.brandImageUrl ? `<img src="${row.brandImageUrl}" alt="marka" class="brand-thumb" style="height:50px;">` : '-';
+                const imgHtml = row.brandImageUrl ? `<img src="${row.brandImageUrl}" alt="marka" class="brand-thumb" style="height:50px;">` : '<img src="https://placehold.co/100x100?text=Yok" alt="yok" class="brand-thumb" style="height:50px;">';
                 const hasChildren = row.hasChildren || (row.childrenData && row.childrenData.length > 0);
                 const iconHtml = hasChildren ? '<i class="fas fa-chevron-right mr-2"></i>' : '';
                 
