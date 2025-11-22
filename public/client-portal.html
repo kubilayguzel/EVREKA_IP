@@ -778,49 +778,66 @@
         }
     }
 
+// === PORTFÖY TABLOSU DOLDURMA (GÜNCELLENMİŞ) ===
     window.populatePortfolioTable = function(tableId, portfolioData, startIndex = 0) {
         const tableBody = document.querySelector(`${tableId} tbody`);
         if (!tableBody) return;
         tableBody.innerHTML = '';
 
         if (!portfolioData || portfolioData.length === 0) {
-            tableBody.innerHTML = '<tr><td colspan="9" class="text-center text-muted">Kayıt bulunamadı.</td></tr>';
+            // Kolon sayısını tabloya göre ayarla
+            const colSpan = tableId === '#marka-list' ? 9 : 6;
+            tableBody.innerHTML = `<tr><td colspan="${colSpan}" class="text-center text-muted">Kayıt bulunamadı.</td></tr>`;
             return;
         }
 
         portfolioData.forEach((item, index) => {
             const actualIndex = startIndex + index;
             const mainRow = document.createElement('tr');
+            
+            // Menşe Belirleme
             const originRaw = (item.origin || 'TÜRKPATENT').toString().trim().toUpperCase();
             const originBucket = (originRaw.includes('TURK') || originRaw.includes('TÜRK')) ? 'TÜRKPATENT' : 'YURTDISI';
             const originDisplay = (originBucket === 'TÜRKPATENT') ? 'TÜRKPATENT' : (item.country || item.origin || 'Yurtdışı');
             
+            // Parent-Child Kontrolü
             const isParent = item.transactionHierarchy === 'parent';
             const isChild = item.transactionHierarchy === 'child';
+            
+            // Child kayıtları ana döngüde basma (Akordeon içinde olacaklar)
             if (isChild) return;
 
+            // Parent ise child kayıtları bul
             let childRecords = [];
             if (isParent && window.markaPaginationData.allDataUnfiltered) {
                 childRecords = window.markaPaginationData.allDataUnfiltered.filter(p => p.parentId === item.id);
             }
             const isInternational = isParent && childRecords.length > 0;
 
+            // Veri Hazırlama
             const title = item.title || item.brandText || item.patentTitle || 'İsimsiz';
             const appNo = item.applicationNumber || item.applicationNo || '-';
             const statusText = item.status || item.statusText || 'Bilinmiyor';
             const appDate = window.formatDateTR(item.applicationDate || item.application_date);
             
+            // Sınıflar
             const classes = (() => {
                 if (Array.isArray(item.goodsAndServicesByClass)) return item.goodsAndServicesByClass.map(c => c.classNo).join(', ');
                 if (item.classes) return Array.isArray(item.classes) ? item.classes.join(', ') : item.classes;
                 return '-';
             })();
 
+            // Badge Rengi
             const badgeClass = { 'Başvuru': 'primary', 'Tescilli': 'success', 'İtiraz': 'warning', 'Reddedildi': 'danger' }[statusText] || 'secondary';
-            const imgHtml = (item.brandImageUrl || item.brandImage) ? `<img src="${item.brandImageUrl || item.brandImage}" class="brand-thumb" style="height:50px;">` : '-';
+            
+            // Görsel (Yeni CSS ile uyumlu)
+            const imgHtml = (item.brandImageUrl || item.brandImage) 
+                ? `<img src="${item.brandImageUrl || item.brandImage}" class="brand-thumb">` 
+                : '-';
 
             mainRow.setAttribute('data-origin', originBucket);
 
+            // Tabloya Göre İçerik
             if (tableId === '#marka-list') {
                 mainRow.innerHTML = `
                     <td class="col-index">${isInternational ? '<i class="fas fa-chevron-right mr-2"></i>' : ''}${actualIndex + 1}</td>
@@ -839,11 +856,13 @@
                     mainRow.setAttribute('data-target', `#accordion-yurtdisi-${item.id}`);
                 }
             } else {
+                // Patent, Tasarım vb.
                 mainRow.innerHTML = `<td>${actualIndex + 1}</td>${tableId==='#tasarim-list'?`<td class="text-center">${imgHtml}</td>`:''}<td><a href="#" class="portfolio-detail-link" data-item-id="${item.id}" data-toggle="modal" data-target="#portfolioDetailModal">${title}</a></td><td>${appNo}</td><td><span class="badge badge-${badgeClass}">${statusText}</span></td>${tableId==='#patent-list'?`<td>${appDate}</td>`:`<td>${classes}</td>`}`;
             }
 
             tableBody.appendChild(mainRow);
 
+            // Varsa Akordeon Detay Satırını Ekle
             if (tableId === '#marka-list' && isInternational) {
                 const detailRow = document.createElement('tr');
                 detailRow.setAttribute('data-origin', originBucket);
@@ -861,9 +880,19 @@
                 tableBody.appendChild(detailRow);
             }
         });
-        window.applyMenseFilterToActivePane();
-    };
 
+        // --- DÜZELTME BURADA: Eski fonksiyon çağrısını kaldırdık ve manuel kontrol ekledik ---
+        // Menşe kolonunu filtreye göre gizle/göster
+        if (tableId === '#marka-list') {
+            const currentFilter = $("#menseFilter").val() || 'TÜRKPATENT';
+            if (currentFilter === 'TÜRKPATENT') {
+                $('#marka-list th.col-origin, #marka-list td.col-origin').hide();
+            } else {
+                $('#marka-list th.col-origin, #marka-list td.col-origin').show();
+            }
+        }
+    };
+    
     // --- 2. İŞLERİM (TASKS) ---
     window.checkTaskClientRelation = async function(taskData, clientPersonIdSet) {
         const taskTypeStr = String(taskData.taskType);
