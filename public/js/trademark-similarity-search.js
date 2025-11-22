@@ -1634,6 +1634,13 @@ const handleGlobalReportAndNotifyGeneration = async (event) => {
           continue;
         }
         
+        // 🔍 TEST: r objesindeki tüm alanları göster
+        console.log(`🔍 TEST [Global ${i + 1}] r objesi:`, {
+          applicationNo: r.applicationNo,
+          bulletinRecordId: r.bulletinRecordId,
+          allKeys: Object.keys(r)
+        });
+        
         const resp = await createObjectionTaskFn({
           monitoredMarkId: r.monitoredTrademarkId,
           similarMark: {
@@ -1647,7 +1654,52 @@ const handleGlobalReportAndNotifyGeneration = async (event) => {
           callerEmail
         });
         
-        if (resp?.data?.success) createdTaskCount++;
+        if (resp?.data?.success) {
+          createdTaskCount++;
+          
+          // ✅ YENİ: 3.taraf portföy kaydı oluştur
+          const taskId = resp?.data?.taskId;
+          const bulletinRecordId = r.bulletinRecordId;
+          
+          console.log(`🔍 [Global ${i + 1}.1] 3.taraf portföy için veriler:`, {
+            taskId,
+            bulletinRecordId,
+            hasCreator: !!window.portfolioByOppositionCreator
+          });
+          
+          if (taskId && bulletinRecordId && window.portfolioByOppositionCreator) {
+            try {
+              console.log(`🔄 [Global ${i + 1}.2] 3.taraf portföy oluşturuluyor...`, {
+                bulletinRecordId,
+                taskId,
+                applicationNo: r.applicationNo
+              });
+
+              const portfolioResult = await window.portfolioByOppositionCreator.createThirdPartyPortfolioFromBulletin(
+                bulletinRecordId,
+                taskId
+              );
+
+              if (portfolioResult?.success && portfolioResult?.recordId) {
+                const actionType = portfolioResult.isExistingRecord ? 'ilişkilendirildi' : 'oluşturuldu';
+                console.log(`✅ [Global ${i + 1}.3] 3.taraf portföy ${actionType} (ID: ${portfolioResult.recordId})`);
+              } else {
+                console.warn(`⚠️ [Global ${i + 1}.3] 3.taraf portföy oluşturulamadı:`, portfolioResult?.error);
+              }
+            } catch (portfolioErr) {
+              console.error(`❌ [Global ${i + 1}.3] 3.taraf portföy hatası:`, {
+                message: portfolioErr?.message,
+                stack: portfolioErr?.stack
+              });
+            }
+          } else {
+            console.warn(`⚠️ [Global ${i + 1}.2] 3.taraf portföy için gerekli veriler eksik:`, {
+              hasTaskId: !!taskId,
+              hasBulletinRecordId: !!bulletinRecordId,
+              hasCreator: !!window.portfolioByOppositionCreator
+            });
+          }
+        }
         
       } catch (e) {
         console.error('[Global] createObjectionTask error:', {
