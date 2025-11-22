@@ -1635,10 +1635,11 @@ const handleGlobalReportAndNotifyGeneration = async (event) => {
         }
         
         // 🔍 TEST: r objesindeki tüm alanları göster
-        console.log(`🔍 TEST [Global ${i + 1}] r objesi:`, {
-          applicationNo: r.applicationNo,
-          bulletinRecordId: r.bulletinRecordId,
-          allKeys: Object.keys(r)
+        console.log(`🔍 TEST [Global ${i + 1}] r objesi TAM:`, r);
+        console.log(`🔍 TEST [Global ${i + 1}] portfolioByOppositionCreator:`, {
+          exists: !!window.portfolioByOppositionCreator,
+          type: typeof window.portfolioByOppositionCreator,
+          methods: window.portfolioByOppositionCreator ? Object.keys(window.portfolioByOppositionCreator) : []
         });
         
         const resp = await createObjectionTaskFn({
