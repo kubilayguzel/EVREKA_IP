@@ -130,52 +130,37 @@
         background-color: transparent !important;
         color: inherit !important;
     }
-    /* === İTİRAZ TABLOSU TAM EKRAN VE KOLON AYARI (GÜNCELLENMİŞ) === */
+    /* === İTİRAZ TABLOSU KOLON AYARLARI === */
+    #dava-itiraz-list table { table-layout: fixed; width: 100%; }
 
-    /* 1. Tabloyu Kapsayıcıya %100 Zorla */
-    #dava-itiraz-list table { 
-        table-layout: fixed !important; /* Sabit yerleşim algoritması */
-        width: 100% !important;         /* Ekrana tam yay */
-        min-width: 1000px;              /* Mobil için min genişlik */
-        border-collapse: collapse;
-    }
+    /* Kolon 1: # (Sıra No) */
+    #dava-itiraz-list th:nth-child(1), 
+    #dava-itiraz-list td:nth-child(1) { width: 50px; }
 
-    /* --- SABİT GENİŞLİKLİ KOLONLAR (Dar olması gerekenler) --- */
-    #dava-itiraz-list th:nth-child(1), #dava-itiraz-list td:nth-child(1) { width: 50px; }  /* # */
-    #dava-itiraz-list th:nth-child(2), #dava-itiraz-list td:nth-child(2) { width: 90px; }  /* Menşe */
-    #dava-itiraz-list th:nth-child(3), #dava-itiraz-list td:nth-child(3) { width: 110px; } /* Görsel */
+    /* Kolon 2: Menşe */
+    #dava-itiraz-list th:nth-child(2), 
+    #dava-itiraz-list td:nth-child(2) { width: 90px; }
+
+    /* Kolon 3: Marka Örneği (Görsel) */
+    #dava-itiraz-list th:nth-child(3), 
+    #dava-itiraz-list td:nth-child(3) { width: 110px; }
+
+    /* Kolon 4: M/T/B Adı (DARALTILDI - Eskiden genişti) */
+    #dava-itiraz-list th:nth-child(4), 
+    #dava-itiraz-list td:nth-child(4) { width: 140px; word-wrap: break-word; white-space: normal; }
+
+    /* Kolon 5: İşlem Tipi (GENİŞLETİLDİ - Detaylı metinler sığsın) */
+    #dava-itiraz-list th:nth-child(5), 
+    #dava-itiraz-list td:nth-child(5) { width: 220px; word-wrap: break-word; white-space: normal; }
+
+    /* Diğer Kolonlar (Standart) */
     #dava-itiraz-list th:nth-child(6), #dava-itiraz-list td:nth-child(6) { width: 130px; } /* Başvuru No */
+    #dava-itiraz-list th:nth-child(7), #dava-itiraz-list td:nth-child(7) { width: 180px; } /* Başvuru Sahibi */
     #dava-itiraz-list th:nth-child(8), #dava-itiraz-list td:nth-child(8) { width: 100px; } /* Bülten Tarihi */
     #dava-itiraz-list th:nth-child(9), #dava-itiraz-list td:nth-child(9) { width: 80px; }  /* Bülten No */
     #dava-itiraz-list th:nth-child(10), #dava-itiraz-list td:nth-child(10) { width: 100px; } /* İşlem Tarihi */
-    #dava-itiraz-list th:nth-child(11), #dava-itiraz-list td:nth-child(11) { width: 140px; } /* Durum */
-    #dava-itiraz-list th:nth-child(12), #dava-itiraz-list td:nth-child(12) { width: 60px; }  /* Evrak */
-
-    /* --- ESNEK KOLONLAR --- */
-
-    /* 4. Kolon: M/T/B Adı (DARALTIMIŞ - %12) */
-    #dava-itiraz-list th:nth-child(4), 
-    #dava-itiraz-list td:nth-child(4) { 
-        width: 12%; 
-        word-wrap: break-word; 
-        white-space: normal; 
-    }
-
-    /* 5. Kolon: İşlem Tipi (GENİŞLETİLMİŞ - %20) */
-    #dava-itiraz-list th:nth-child(5), 
-    #dava-itiraz-list td:nth-child(5) { 
-        width: 20%; 
-        word-wrap: break-word; 
-        white-space: normal; 
-    }
-
-    /* 7. Kolon: Başvuru Sahibi (KALAN ALANI DOLDURUR) */
-    /* ÖNEMLİ: Buraya width verme! Fixed layout'ta width verilmeyen kolon kalan tüm alanı kaplar */
-    #dava-itiraz-list th:nth-child(7), 
-    #dava-itiraz-list td:nth-child(7) { 
-        word-wrap: break-word; 
-        white-space: normal; 
-    }
+    #dava-itiraz-list th:nth-child(11), #dava-itiraz-list td:nth-child(11) { width: 130px; } /* Durum */
+    #dava-itiraz-list th:nth-child(12), #dava-itiraz-list td:nth-child(12) { width: 80px; }  /* Evrak */
 
     #modal-islemler table td:first-child { white-space: nowrap !important; width: 1%; min-width: 60px; }
     a i.fa-file-pdf, a i.fa-file-word, a i.fa-file-alt { font-size: 1.3rem !important; vertical-align: middle; }
@@ -1329,7 +1314,7 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
             tbody.innerHTML = '<tr><td colspan="12" class="text-danger text-center">Hata oluştu.</td></tr>';
         }
     };
-
+    
     // --- PDF & LOAD TRANSACTIONS ---
     window.fetchPdfsForTransactions = async function(transactionIds) {
         if (!transactionIds || transactionIds.length === 0) return {};
