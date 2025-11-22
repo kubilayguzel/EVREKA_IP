@@ -1643,16 +1643,27 @@ const handleGlobalReportAndNotifyGeneration = async (event) => {
         });
         
         const resp = await createObjectionTaskFn({
-          monitoredMarkId: r.monitoredTrademarkId,
-          similarMark: {
+        monitoredMarkId: r.monitoredTrademarkId,
+        similarMark: {
             applicationNo: r.applicationNo,
             markName: r.markName,
             niceClasses: r.niceClasses,
             similarityScore: r.similarityScore
-          },
-          similarMarkName: r.markName,
-          bulletinNo: bNo,
-          callerEmail
+        },
+        similarMarkName: r.markName,
+        bulletinNo: bNo,
+        callerEmail,
+        bulletinRecordData: {
+            bulletinId: r.bulletinId,
+            bulletinNo: bNo,
+            markName: r.markName,
+            applicationNo: r.applicationNo,
+            applicationDate: r.applicationDate,
+            imagePath: r.imagePath,
+            niceClasses: r.niceClasses,
+            holders: r.holders || [],
+            classNumbers: r.niceClasses ? r.niceClasses.split(/[,\/\s]+/).filter(Boolean).map(n => parseInt(n.trim())) : []
+        }
         });
         
         if (resp?.data?.success) {
@@ -1660,7 +1671,7 @@ const handleGlobalReportAndNotifyGeneration = async (event) => {
           
         // ✅ YENİ: 3.taraf portföy kaydı oluştur
         const taskId = resp?.data?.taskId;
-        const bulletinRecordId = r.bulletinId || r.bulletinRecordId;    
+        const bulletinRecordId = resp?.data?.bulletinRecordId || r.bulletinRecordId || r.bulletinId;    
 
           console.log(`🔍 [Global ${i + 1}.1] 3.taraf portföy için veriler:`, {
             taskId,
