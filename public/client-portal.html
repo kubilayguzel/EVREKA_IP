@@ -1476,7 +1476,7 @@
     };
 
 // === İTİRAZ TABLOSU RENDER (GÜNCELLENMİŞ) ===
-    window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
+window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
         const tbody = document.getElementById('dava-itiraz-tbody');
         if (!tbody) return;
         tbody.innerHTML = '';
@@ -1492,7 +1492,6 @@
                 const tr = document.createElement('tr');
                 tr.setAttribute('data-origin', (row.origin || 'TÜRKPATENT'));
                 
-                // Görsel (Yeni CSS yapısına uygun)
                 const imgHtml = row.brandImageUrl 
                     ? `<img src="${row.brandImageUrl}" alt="marka" class="brand-thumb">` 
                     : '<img src="https://placehold.co/100x100?text=Yok" alt="yok" class="brand-thumb">';
@@ -1541,15 +1540,6 @@
                 }
             }
         });
-        
-        // --- DÜZELTME: Yeni master filter fonksiyonunu çağır (varsa) ---
-        if(window.applyMasterFilter) {
-            // Sadece şu an "İtiraz" sekmesi aktifse filtre uygula (gereksiz çalışmayı önle)
-            const activeTab = document.querySelector('#portfolioTopTabs .nav-link.active');
-            if(activeTab && activeTab.getAttribute('href') === '#dava-itiraz-list') {
-                window.applyMasterFilter();
-            }
-        }
     };
 
 // --- 5. İTİRAZ MODÜLÜ (GÜNCELLENMİŞ FİLTRE & STATÜ) ---
@@ -1815,6 +1805,50 @@
             $(this).next('label').text(isChecked ? 'Koyu Tema' : 'Açık Tema');
         });
     }
+
+    // === GLOBAL HELPER FONKSİYONLAR (READY DIŞINDA OLMALI) ===
+    
+    window.loadGoodsFromIpRecord = async function(ipRecordId) {
+        if (!ipRecordId) return '<p class="text-muted">ID yok.</p>';
+        try {
+            const ipDoc = await getDoc(doc(db, 'ipRecords', ipRecordId));
+            if (!ipDoc.exists()) return '<p class="text-muted">Kayıt yok.</p>';
+            const goodsByClass = ipDoc.data().goodsAndServicesByClass || [];
+            if (goodsByClass.length === 0) return '<p class="text-muted">Veri yok.</p>';
+            
+            return goodsByClass.map(cls => 
+                `<div class="mb-3">
+                    <h6 class="text-primary">Sınıf ${cls.classNo||'-'}</h6>
+                    <p style="font-size: 0.85rem;">${(cls.items&&Array.isArray(cls.items))?cls.items.join('; '):'Yok'}</p>
+                </div>`
+            ).join('');
+        } catch (error) { return '<p class="text-danger">Hata.</p>'; }
+    };
+
+    window.loadGoodsFromMonitoringRecord = async function(bulletinKey, monitoredId, targetAppNo) {
+        if (!bulletinKey || !monitoredId || !targetAppNo) return '<p class="text-muted">Eksik bilgi.</p>';
+        try {
+            const monSnap = await getDoc(doc(db, 'monitoringTrademarkRecords', bulletinKey, 'trademarks', monitoredId));
+            if (!monSnap.exists()) return '<p class="text-muted">Kayıt yok.</p>';
+            
+            const monitoringRecord = monSnap.data();
+            if (!Array.isArray(monitoringRecord.results)) return '<p class="text-muted">Sonuç yok.</p>';
+            
+            const cleanTarget = String(targetAppNo).replace(/[^a-zA-Z0-9]/g, '');
+            const competitor = monitoringRecord.results.find(r => String(r.applicationNo || '').replace(/[^a-zA-Z0-9]/g, '') === cleanTarget);
+            
+            if (!competitor || !competitor.objectID) return '<p class="text-muted">Rakip bulunamadı.</p>';
+            
+            const bulletinSnap = await getDoc(doc(db, 'trademarkBulletinRecords', competitor.objectID));
+            if (!bulletinSnap.exists()) return '<p class="text-muted">Bülten detayı yok.</p>';
+            
+            const goods = bulletinSnap.data().goods;
+            if (!goods || !Array.isArray(goods)) return '<p class="text-muted">Mal listesi yok.</p>';
+            
+            return goods.map(item => `<p style="font-size: 0.85rem; margin-bottom: 10px;">${item||'Yok'}</p>`).join('');
+        } catch (error) { return '<p class="text-danger">Hata.</p>'; }
+    };
+    
 // === 1. TABLO SIRALAMA FONKSİYONU (Parent-Child Destekli) ===
     window.parseTurkishDate = function(dateStr) {
         if (!dateStr || dateStr === '-' || dateStr.trim() === '') return new Date(0);
