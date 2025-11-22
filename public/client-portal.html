@@ -337,17 +337,17 @@
                     <table class="table table-hover">
                         <thead>
                             <tr>
-                                <th class="sortable">#</th>
-                                <th class="col-origin">Menşe</th>
+                                <th class="sortable" data-sort="index"># <i class="fas fa-sort"></i></th>
+                                <th class="col-origin sortable" data-sort="text">Menşe <i class="fas fa-sort"></i></th>
                                 <th class="text-center">Marka Örneği</th>
-                                <th>M/T/B Adı</th>
-                                <th>İşlem Tipi</th>
-                                <th>Başvuru No</th>
-                                <th>Başvuru Sahibi</th>
-                                <th>Bülten Tarihi</th>
-                                <th>Bülten No</th>
-                                <th>İşlem Tarihi</th>
-                                <th>Durum</th>
+                                <th class="sortable" data-sort="text">M/T/B Adı <i class="fas fa-sort"></i></th>
+                                <th class="sortable" data-sort="text">İşlem Tipi <i class="fas fa-sort"></i></th>
+                                <th class="sortable" data-sort="text">Başvuru No <i class="fas fa-sort"></i></th>
+                                <th class="sortable" data-sort="text">Başvuru Sahibi <i class="fas fa-sort"></i></th>
+                                <th class="sortable" data-sort="date">Bülten Tarihi <i class="fas fa-sort"></i></th>
+                                <th class="sortable" data-sort="text">Bülten No <i class="fas fa-sort"></i></th>
+                                <th class="sortable" data-sort="date">İşlem Tarihi <i class="fas fa-sort"></i></th>
+                                <th class="sortable" data-sort="text">Durum <i class="fas fa-sort"></i></th>
                                 <th>Evrak</th>
                             </tr>
                         </thead>
@@ -356,7 +356,21 @@
                     <div id="davaItirazPagination"></div>
                 </div>
                 <div class="tab-pane fade" id="dava-list">
-                    <table class="table table-hover"><thead><tr><th>#</th><th>Dava No</th><th>Başlık</th><th>Konu Varlık</th><th>Mahkeme</th><th>Karşı Taraf</th><th>Açılış Tarihi</th><th>Durum</th></tr></thead><tbody id="dava-tbody"></tbody></table>
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th class="sortable" data-sort="index"># <i class="fas fa-sort"></i></th>
+                                <th class="sortable" data-sort="text">Dava No <i class="fas fa-sort"></i></th>
+                                <th class="sortable" data-sort="text">Başlık <i class="fas fa-sort"></i></th>
+                                <th class="sortable" data-sort="text">Konu Varlık <i class="fas fa-sort"></i></th>
+                                <th class="sortable" data-sort="text">Mahkeme <i class="fas fa-sort"></i></th>
+                                <th class="sortable" data-sort="text">Karşı Taraf <i class="fas fa-sort"></i></th>
+                                <th class="sortable" data-sort="date">Açılış Tarihi <i class="fas fa-sort"></i></th>
+                                <th class="sortable" data-sort="text">Durum <i class="fas fa-sort"></i></th>
+                            </tr>
+                        </thead>
+                        <tbody id="dava-tbody"></tbody>
+                    </table>
                     <div id="davaPagination"></div>
                 </div>
             </div>
@@ -400,7 +414,19 @@
                 </div>
             </div>
             <div class="table-responsive mt-4">
-                <table class="table table-hover"><thead><tr><th>Fatura No</th><th>Tarih</th><th>Açıklama</th><th>Tutar</th><th>Durum</th><th>İşlem</th></tr></thead><tbody></tbody></table>
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th class="sortable" data-sort="text">Fatura No <i class="fas fa-sort"></i></th>
+                            <th class="sortable" data-sort="date">Tarih <i class="fas fa-sort"></i></th>
+                            <th class="sortable" data-sort="text">Açıklama <i class="fas fa-sort"></i></th>
+                            <th class="sortable" data-sort="amount">Tutar <i class="fas fa-sort"></i></th>
+                            <th class="sortable" data-sort="text">Durum <i class="fas fa-sort"></i></th>
+                            <th>İşlem</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
             </div>
             <div id="invoices-pagination-container"></div>
         </div>
