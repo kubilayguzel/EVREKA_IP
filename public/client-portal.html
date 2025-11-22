@@ -162,6 +162,68 @@
     #dava-itiraz-list th:nth-child(11), #dava-itiraz-list td:nth-child(11) { width: 10%; } /* Durum */
     #dava-itiraz-list th:nth-child(12), #dava-itiraz-list td:nth-child(12) { width: 6%; }  /* Evrak */
 
+
+    /* === 1. MARKA GÖRSEL DÜZELTMESİ === */
+    /* Tüm tablo içi marka görsellerini 50px yüksekliğe zorla (Büyümeyi engeller) */
+    .table .brand-thumb {
+        height: 50px !important; 
+        width: auto;
+        max-width: 100px;
+        object-fit: contain;
+        display: block;
+        margin: 0 auto;
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+        background-color: transparent;
+    }
+
+    /* Hover (Üzerine gelince) efekti - Eski koddaki gibi büyütme */
+    .table .brand-thumb:hover {
+        transform: scale(3.5); /* Biraz daha belirgin büyüme */
+        z-index: 9999;
+        position: relative;
+        box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        background-color: #fff; /* Arkası şeffafsa karışmaması için beyaz fon */
+        border-radius: 4px;
+    }
+
+    /* === 2. SIRALAMA (SORTING) STİLLERİ === */
+    .sortable {
+        cursor: pointer;
+        position: relative;
+        padding-right: 20px !important; /* İkon için yer */
+        user-select: none;
+    }
+
+    .sortable:hover {
+        background-color: rgba(0, 0, 0, 0.05); /* Hafif gri hover */
+    }
+
+    .dark-mode .sortable:hover {
+        background-color: rgba(255, 255, 255, 0.05);
+    }
+
+    /* İkonların varsayılan hali (silik) */
+    .sortable i.fa-sort,
+    .sortable i.fa-sort-up,
+    .sortable i.fa-sort-down {
+        font-size: 0.8em;
+        margin-left: 5px;
+        opacity: 0.3;
+        position: absolute;
+        right: 8px;
+        top: 50%;
+        transform: translateY(-50%);
+    }
+
+    .sortable:hover i {
+        opacity: 0.7;
+    }
+
+    /* Aktif sıralama kolonu (Mavi ve belirgin) */
+    .sortable.active i {
+        opacity: 1;
+        color: #4da6ff; /* Tema rengi */
+    }
     #modal-islemler table td:first-child { white-space: nowrap !important; width: 1%; min-width: 60px; }
     a i.fa-file-pdf, a i.fa-file-word, a i.fa-file-alt { font-size: 1.3rem !important; vertical-align: middle; }
 </style>
@@ -245,15 +307,14 @@
                     <table class="table table-hover">
                         <thead>
                             <tr>
-                                <th class="sortable" data-sort="index">#</th>
-                                <th class="col-origin sortable" data-sort="origin">Menşe</th>
-                                <th class="col-sample text-center">Marka Örneği</th>
-                                <th class="sortable" data-sort="brand">Marka</th>
-                                <th class="sortable" data-sort="appno">Başvuru No</th>
-                                <th class="col-regno sortable" data-sort="regno">Tescil No</th>
-                                <th class="col-appdate sortable" data-sort="appdate">Başvuru Tarihi</th>
-                                <th>Durum</th>
-                                <th class="col-classes sortable" data-sort="classes">Sınıflar</th>
+                                <th class="sortable" data-sort="index"># <i class="fas fa-sort"></i></th>
+                                <th class="col-origin sortable" data-sort="origin">Menşe <i class="fas fa-sort"></i></th>
+                                <th class="col-sample text-center">Marka Örneği</th> <th class="sortable" data-sort="brand">Marka <i class="fas fa-sort"></i></th>
+                                <th class="sortable" data-sort="appno">Başvuru No <i class="fas fa-sort"></i></th>
+                                <th class="col-regno sortable" data-sort="regno">Tescil No <i class="fas fa-sort"></i></th>
+                                <th class="col-appdate sortable" data-sort="appdate">Başvuru Tarihi <i class="fas fa-sort"></i></th>
+                                <th class="sortable" data-sort="status">Durum <i class="fas fa-sort"></i></th>
+                                <th class="col-classes sortable" data-sort="classes">Sınıflar <i class="fas fa-sort"></i></th>
                             </tr>
                         </thead>
                         <tbody></tbody>
@@ -1428,6 +1489,186 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
             $(this).next('label').text(isChecked ? 'Koyu Tema' : 'Açık Tema');
         });
     }
+
+    // === TABLO SIRALAMA FONKSİYONLARI (Eski Koddan Uyarlandı) ===
+
+// 1. Türkçe Tarih Parse Edici (DD.MM.YYYY formatı için)
+window.parseTurkishDate = function(dateStr) {
+    if (!dateStr || dateStr === '-' || dateStr.trim() === '') return new Date(0);
+    
+    // DD.MM.YYYY formatı kontrolü
+    const parts = dateStr.trim().split('.');
+    if (parts.length === 3) {
+        const day = parseInt(parts[0], 10);
+        const month = parseInt(parts[1], 10) - 1; // JS ayları 0-11 arasıdır
+        const year = parseInt(parts[2], 10);
+        return new Date(year, month, day);
+    }
+    
+    // Diğer formatlar (ISO vb.)
+    return new Date(dateStr);
+};
+
+// 2. Ana Sıralama Fonksiyonu
+window.sortTable = function(tableId, columnIndex, dataType = 'text') {
+    const table = document.querySelector(`#${tableId} table`);
+    if (!table) return;
+
+    const tbody = table.querySelector('tbody');
+    if (!tbody) return;
+
+    // Sadece doğrudan TR çocuklarını al
+    const rows = Array.from(tbody.children).filter(r => r.tagName === 'TR');
+    if (rows.length === 0) return;
+
+    // --- GRUPLAMA MANTIĞI (Parent + Child Birlikte) ---
+    const groups = [];
+    let currentParent = null;
+
+    rows.forEach(row => {
+        // Detay satırı mı? (colspan içeriyor mu veya class'ı var mı?)
+        // Yeni kodda detay satırları genellikle bir <div> içinde collapse barındırır ve colspan="9" vb. olur.
+        const isDetailRow = row.querySelector('td[colspan]') !== null;
+
+        if (!isDetailRow) {
+            // Bu bir PARENT satırıdır. Yeni grup başlat.
+            currentParent = { parent: row, detail: null };
+            groups.push(currentParent);
+        } else {
+            // Bu bir CHILD/DETAY satırıdır. Mevcut parent'a bağla.
+            if (currentParent) {
+                currentParent.detail = row;
+            } else {
+                // Yetim child (olmaması gerekir ama güvenli olsun)
+                groups.push({ parent: null, detail: row });
+            }
+        }
+    });
+
+    // --- SIRALAMA YÖNÜNÜ BELİRLE ---
+    const headers = table.querySelectorAll('th');
+    const th = headers[columnIndex];
+    if (!th) return;
+
+    const isCurrentlyAsc = th.classList.contains('sort-asc');
+    const newDir = isCurrentlyAsc ? 'desc' : 'asc';
+
+    // Başlık sınıflarını ve ikonları güncelle
+    headers.forEach(header => {
+        header.classList.remove('sort-asc', 'sort-desc', 'active');
+        const icon = header.querySelector('i');
+        if (icon) icon.className = 'fas fa-sort'; // Varsayılan ikon
+    });
+
+    th.classList.add(newDir === 'asc' ? 'sort-asc' : 'sort-desc', 'active');
+    const activeIcon = th.querySelector('i');
+    if (activeIcon) {
+        activeIcon.className = newDir === 'asc' ? 'fas fa-sort-up' : 'fas fa-sort-down';
+    }
+
+    // --- DEĞER OKUMA YARDIMCISI ---
+    const getComparableValue = (row) => {
+        if (!row) return '';
+        
+        // Hücreyi seç
+        const cell = row.cells[columnIndex];
+        if (!cell) return '';
+
+        let value = cell.textContent.trim();
+
+        // Eğer hücre içinde badge varsa, badge metnini baz al (Durum kolonu için)
+        const badge = cell.querySelector('.badge');
+        if (badge) value = badge.textContent.trim();
+
+        // Eğer hücre sadece bir link ise
+        const link = cell.querySelector('a');
+        if (link && !badge) value = link.textContent.trim();
+
+        if (dataType === 'number') {
+            // Sayı dışındaki karakterleri temizle
+            return parseFloat(value.replace(/[^0-9.-]/g, '')) || 0;
+        } else if (dataType === 'date') {
+            return window.parseTurkishDate(value).getTime();
+        } else {
+            return value.toLocaleLowerCase('tr-TR');
+        }
+    };
+
+    // --- GRUPLARI SIRALA ---
+    groups.sort((gA, gB) => {
+        // Eğer parent yoksa (hatalı veri) sona at
+        if (!gA.parent) return 1;
+        if (!gB.parent) return -1;
+
+        const valA = getComparableValue(gA.parent);
+        const valB = getComparableValue(gB.parent);
+
+        if (valA < valB) return newDir === 'asc' ? -1 : 1;
+        if (valA > valB) return newDir === 'asc' ? 1 : -1;
+        return 0;
+    });
+
+    // --- DOM'A GERİ YAZ ---
+    // Mevcut tbody'yi boşaltıp sıralı grupları ekle
+    // innerHTML = '' yapmak yerine appendChild kullanmak mevcut event listener'ları korur
+    groups.forEach(g => {
+        if (g.parent) tbody.appendChild(g.parent);
+        if (g.detail) tbody.appendChild(g.detail);
+    });
+};
+
+// === EVENT LISTENER'LARI BAĞLA ===
+$(document).ready(function() {
+    // Marka Listesi Sıralama
+    $('#marka-list').on('click', 'th.sortable', function() {
+        const index = $(this).index();
+        const sortType = $(this).data('sort');
+        
+        // Veri tipini belirle
+        let type = 'text';
+        if (sortType === 'appdate') type = 'date';
+        if (sortType === 'index' || sortType === 'appno') type = 'number';
+        
+        window.sortTable('marka-list', index, type);
+    });
+
+    // İtiraz Listesi Sıralama
+    $('#dava-itiraz-list').on('click', 'th.sortable', function() {
+        const index = $(this).index();
+        const sortType = $(this).data('sort');
+        
+        let type = 'text';
+        if (sortType === 'bulletin-date' || sortType === 'process-date') type = 'date';
+        if (sortType === 'index') type = 'number';
+        
+        window.sortTable('dava-itiraz-list', index, type);
+    });
+
+    // Dava Listesi Sıralama
+    $('#dava-list').on('click', 'th.sortable', function() {
+        const index = $(this).index();
+        const sortType = $(this).data('sort');
+        
+        let type = 'text';
+        if (sortType === 'opening-date') type = 'date';
+        if (sortType === 'index') type = 'number';
+        
+        window.sortTable('dava-list', index, type);
+    });
+    
+    // Faturalar Sıralama
+    $('#invoices').on('click', 'th.sortable', function() {
+         const index = $(this).index();
+         // Faturalarda 'Fatura/Belge' kolonu actions olduğu için sortable olmayabilir
+         // Tarih vb. tespiti:
+         const headerText = $(this).text().trim().toLowerCase();
+         let type = 'text';
+         if(headerText.includes('tarih')) type = 'date';
+         if(headerText.includes('tutar')) type = 'number';
+         
+         window.sortTable('invoices', index, type);
+    });
+});
 
 // --- LISTENERS ---
     $(document).ready(function() {
