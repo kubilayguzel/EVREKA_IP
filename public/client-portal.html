@@ -782,14 +782,22 @@
         $('#dashPendingApprovals').text(total);
     };
 
+    // Detaylı Task Listeleme (GÜNCELLENMİŞ)
     window.loadSampleTaskDetails = async function(taskType) {
         const container = document.getElementById('task-list-container');
         container.innerHTML = '<div class="text-center mt-5"><i class="fas fa-spinner fa-spin fa-3x"></i><p class="mt-2">Veriler analiz ediliyor...</p></div>';
         
         const tasksRef = collection(db, 'tasks');
-        let q = (taskType === 'completed-tasks') 
-            ? query(tasksRef, where('status', '!=', 'awaiting_client_approval')) 
-            : query(tasksRef, where('status', '==', 'awaiting_client_approval'));
+        let q;
+        
+        // Sorgu Mantığı:
+        if (taskType === 'completed-tasks') {
+            // Onay bekleyenler HARİÇ her şeyi çek (Aktif ve Kapananları burada ayıracağız)
+            q = query(tasksRef, where('status', '!=', 'awaiting_client_approval'));
+        } else {
+            // Sadece onay bekleyenleri çek
+            q = query(tasksRef, where('status', '==', 'awaiting_client_approval'));
+        }
             
         const snap = await runGetDocs(q);
         const tasks = [];
@@ -800,26 +808,34 @@
             if (await window.checkTaskClientRelation(t, clientSet)) tasks.push({ id: d.id, ...t });
         }
 
+        // A) TALİMAT VERİLEN / TAMAMLANAN İŞLER (Sekmeli Yapı) - GÜNCELLENDİ
         if (taskType === 'completed-tasks') {
-            const completed = tasks.filter(t => t.status === 'completed');
-            const active = tasks.filter(t => t.status !== 'completed');
+            // AKTİF STATÜLER: open, in_progress, pending
+            const activeStatuses = ['open', 'in_progress', 'pending'];
+            
+            // Filtreleme
+            const active = tasks.filter(t => activeStatuses.includes(t.status));
+            const closed = tasks.filter(t => !activeStatuses.includes(t.status)); // Geri kalan hepsi (completed, closed, rejected vb.)
             
             container.innerHTML = `
                 <ul class="nav nav-tabs mb-3">
                     <li class="nav-item"><a class="nav-link active" data-toggle="tab" href="#tab-act">Aktif (${active.length})</a></li>
-                    <li class="nav-item"><a class="nav-link" data-toggle="tab" href="#tab-fin">Tamamlanan (${completed.length})</a></li>
+                    <li class="nav-item"><a class="nav-link" data-toggle="tab" href="#tab-fin">Kapanan (${closed.length})</a></li>
                 </ul>
                 <div class="tab-content">
                     <div class="tab-pane fade show active" id="tab-act"><div class="row" id="cont-act"></div><div id="pag-act"></div></div>
                     <div class="tab-pane fade" id="tab-fin"><div class="row" id="cont-fin"></div><div id="pag-fin"></div></div>
                 </div>`;
             
+            // Render işlemleri
             await window._renderTaskCardsToContainer(active.slice(0,10), '#cont-act', window.formatDateTR, taskType);
-            if(completed.length) await window._renderTaskCardsToContainer(completed.slice(0,10), '#cont-fin', window.formatDateTR, taskType);
+            if(closed.length) await window._renderTaskCardsToContainer(closed.slice(0,10), '#cont-fin', window.formatDateTR, taskType);
+            
             $('#taskPagination').hide();
             return;
         }
 
+        // B) BÜLTEN İZLEME (Mevcut kod aynen kalıyor)
         if (taskType === 'bulletin-watch') {
             const groups = {}; 
             const expired = []; 
@@ -867,6 +883,7 @@
             return;
         }
 
+        // C) STANDART LİSTELEME (Pending Approval, Renewal Approval vb.)
         let finalTasks = tasks;
         if (taskType === 'pending-approval') finalTasks = tasks.filter(t => String(t.taskType) !== '22' && String(t.taskType) !== '20');
         else if (taskType === 'renewal-approval') finalTasks = tasks.filter(t => String(t.taskType) === '22');
@@ -875,6 +892,7 @@
         window.taskPaginationData.allData = finalTasks;
         await window._renderTaskCardsToContainer(finalTasks.slice(0,10), '#task-list-container', window.formatDateTR, taskType);
     };
+
 
     window._renderTaskCardsToContainer = async function(tasksToRender, containerSelector, formatDate, taskType) {
         const container = document.querySelector(containerSelector);
@@ -1441,19 +1459,52 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
         $('#menseFilter').change(window.applyMenseFilterToActivePane);
         $('a[data-toggle="tab"]').on('shown.bs.tab', window.applyMenseFilterToActivePane);
         
-        // --- GÖREV ONAYLA (DÜZELTİLDİ) ---
+        // --- GÖREV ONAYLA (DÜZELTİLDİ: Sayfa Yenileme Eklendi) ---
         $(document).on('click', '.task-approve', async function() { 
-            // 🔥 HATA ÇÖZÜMÜ: ID'yi String'e çevir
             const taskId = String($(this).data('id'));
             
-            if(confirm('Onaylıyor musunuz?')) { 
+            if(confirm('Bu işi onaylamak istediğinizden emin misiniz?')) { 
                 try {
+                    // 1. Firestore Güncelleme
                     await updateDoc(doc(db, "tasks", taskId), { 
                         status: "open", 
                         approvalDate: new Date().toISOString() 
                     }); 
-                    alert('Onaylandı!'); 
-                    initPortal(); 
+                    
+                    alert('İş başarıyla onaylandı!'); 
+                    
+                    // 2. Sayaçları Güncelle (Arka planda)
+                    if(window.linkedPersonIds) window.fetchAndDisplayTasks(window.linkedPersonIds);
+
+                    // 3. Açık Olan Listeyi Yeniden Yükle (Anlık Görüntü Güncellemesi)
+                    // Hangi tip listenin açık olduğunu data attribute'dan veya URL'den anlayabiliriz ama
+                    // genellikle onay butonu 'pending-approval', 'renewal-approval' veya 'bulletin-watch' içindedir.
+                    // En güvenli yol, şu an görünür olan listeyi tekrar çağırmaktır.
+                    
+                    // Butonun içinde bulunduğu konteyneri kontrol edelim (Basit çözüm: Hangi sekme açıksa onu yenile)
+                    // 'Onay Bekleyenler' açıksa:
+                    if($('#task-list-details').is(':visible')) {
+                        // Şu an hangi tipin listelendiğini bulmamız lazım.
+                        // Ancak basitçe o anki butonu DOM'dan silmek de bir UX hilesidir.
+                        // Biz veriyi yenileyelim:
+                        
+                        // Eğer bülten izleme içerisindeysek (class kontrolü veya id kontrolü)
+                        const isBulletin = $(this).closest('.tab-pane').attr('id')?.startsWith('b-');
+                        
+                        if(isBulletin) {
+                             window.loadSampleTaskDetails('bulletin-watch');
+                        } else {
+                             // Genel 'Onay Bekleyenler' veya 'Yenileme' varsayımı
+                             // Tıklanan butonun parent'ı üzerinden tip tahmini zor olabilir, 
+                             // bu yüzden son açılan listeyi global bir değişkende tutmak iyi olurdu.
+                             // Şimdilik en yaygın senaryo için:
+                             const activeCard = $('.detail-card-link.active-task-area'); // Kendi yazdığımız CSS class'ı yoksa çalışmaz.
+                             
+                             // Alternatif: Butonun bulunduğu satırı sil (En hızlı çözüm)
+                             $(this).closest('.col-12.mb-4').fadeOut(300, function(){ $(this).remove(); });
+                        }
+                    }
+                    
                 } catch(e) {
                     console.error("Onay hatası:", e);
                     alert("Hata: " + e.message);
@@ -1461,9 +1512,8 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
             } 
         });
         
-        // --- GÖREV REDDET (DÜZELTİLDİ) ---
+        // --- GÖREV REDDET (DÜZELTİLDİ: Sayfa Yenileme Eklendi) ---
         $(document).on('click', '.task-reject', async function() { 
-            // 🔥 HATA ÇÖZÜMÜ: ID'yi String'e çevir
             const taskId = String($(this).data('id'));
             const r = prompt('Red sebebi:'); 
             
@@ -1474,8 +1524,15 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
                         rejectionDate: new Date().toISOString(), 
                         rejectionReason: r 
                     }); 
-                    alert('Reddedildi.'); 
-                    initPortal(); 
+                    
+                    alert('İş reddedildi.'); 
+                    
+                    // Sayaçları güncelle
+                    if(window.linkedPersonIds) window.fetchAndDisplayTasks(window.linkedPersonIds);
+                    
+                    // Kartı ekrandan sil (Sayfa yenilemeye gerek kalmadan)
+                    $(this).closest('.col-12.mb-4').fadeOut(300, function(){ $(this).remove(); });
+
                 } catch(e) {
                     console.error("Red hatası:", e);
                     alert("Hata: " + e.message);
@@ -1493,6 +1550,10 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
         
         $('.detail-card-link').click(function() { 
             const type = $(this).data('task-type'); 
+            // Açık olan kartı işaretlemek için class ekleyelim (Onay sonrası yenileme için kullanılabilir)
+            $('.detail-card-link').removeClass('active-list-type');
+            $(this).addClass('active-list-type');
+            
             $('#task-list-details').slideDown(); 
             window.loadSampleTaskDetails(type); 
         });
