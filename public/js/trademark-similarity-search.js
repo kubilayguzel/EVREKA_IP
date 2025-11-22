@@ -1181,7 +1181,7 @@ const handleOwnerReportAndNotifyGeneration = async (event) => {
           markName: r.markName
         });
         
-        // İş oluştur
+         // İş oluştur
         const taskResponse = await createObjectionTaskFn({
           monitoredMarkId: r.monitoredTrademarkId,
           similarMark: {
@@ -1198,7 +1198,6 @@ const handleOwnerReportAndNotifyGeneration = async (event) => {
         console.log(`✅ [6.${i + 1}] CF yanıtı`, {
           index: i + 1,
           taskId: taskResponse?.data?.taskId,
-          bulletinRecordId: taskResponse?.data?.bulletinRecordId,
           success: taskResponse?.data?.success,
           message: taskResponse?.data?.message,
         });
@@ -1208,13 +1207,20 @@ const handleOwnerReportAndNotifyGeneration = async (event) => {
           
           // ✅ YENİ: 3.taraf portföy kaydı oluştur
           const taskId = taskResponse?.data?.taskId;
-          const bulletinRecordId = taskResponse?.data?.bulletinRecordId || r.bulletinRecordId;
+          const bulletinRecordId = r.bulletinRecordId; // allSimilarResults'tan al
+          
+          console.log(`🔍 [6.${i + 1}.1] 3.taraf portföy için veriler:`, {
+            taskId,
+            bulletinRecordId,
+            hasCreator: !!window.portfolioByOppositionCreator
+          });
           
           if (taskId && bulletinRecordId && window.portfolioByOppositionCreator) {
             try {
-              console.log(`🔄 [6.${i + 1}.1] 3.taraf portföy oluşturuluyor...`, {
+              console.log(`🔄 [6.${i + 1}.2] 3.taraf portföy oluşturuluyor...`, {
                 bulletinRecordId,
-                taskId
+                taskId,
+                applicationNo: r.applicationNo
               });
 
               const portfolioResult = await window.portfolioByOppositionCreator.createThirdPartyPortfolioFromBulletin(
@@ -1223,15 +1229,19 @@ const handleOwnerReportAndNotifyGeneration = async (event) => {
               );
 
               if (portfolioResult?.success && portfolioResult?.recordId) {
-                console.log(`✅ [6.${i + 1}.2] 3.taraf portföy ${portfolioResult.isExistingRecord ? 'ilişkilendirildi' : 'oluşturuldu'} (ID: ${portfolioResult.recordId})`);
+                const actionType = portfolioResult.isExistingRecord ? 'ilişkilendirildi' : 'oluşturuldu';
+                console.log(`✅ [6.${i + 1}.3] 3.taraf portföy ${actionType} (ID: ${portfolioResult.recordId})`);
               } else {
-                console.warn(`⚠️ [6.${i + 1}.2] 3.taraf portföy oluşturulamadı:`, portfolioResult?.error);
+                console.warn(`⚠️ [6.${i + 1}.3] 3.taraf portföy oluşturulamadı:`, portfolioResult?.error);
               }
             } catch (portfolioErr) {
-              console.error(`❌ [6.${i + 1}.2] 3.taraf portföy hatası:`, portfolioErr);
+              console.error(`❌ [6.${i + 1}.3] 3.taraf portföy hatası:`, {
+                message: portfolioErr?.message,
+                stack: portfolioErr?.stack
+              });
             }
           } else {
-            console.warn(`⚠️ [6.${i + 1}.1] 3.taraf portföy için gerekli veriler eksik:`, {
+            console.warn(`⚠️ [6.${i + 1}.2] 3.taraf portföy için gerekli veriler eksik:`, {
               hasTaskId: !!taskId,
               hasBulletinRecordId: !!bulletinRecordId,
               hasCreator: !!window.portfolioByOppositionCreator
