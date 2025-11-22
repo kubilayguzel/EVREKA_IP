@@ -1658,10 +1658,10 @@ const handleGlobalReportAndNotifyGeneration = async (event) => {
         if (resp?.data?.success) {
           createdTaskCount++;
           
-          // ✅ YENİ: 3.taraf portföy kaydı oluştur
-          const taskId = resp?.data?.taskId;
-          const bulletinRecordId = r.bulletinRecordId;
-          
+        // ✅ YENİ: 3.taraf portföy kaydı oluştur
+        const taskId = resp?.data?.taskId;
+        const bulletinRecordId = r.bulletinId || r.bulletinRecordId;    
+
           console.log(`🔍 [Global ${i + 1}.1] 3.taraf portföy için veriler:`, {
             taskId,
             bulletinRecordId,
