@@ -702,7 +702,9 @@
 
     // 1. İşlerim (Tasks) Verisi
     window.taskPaginationData = { 
-        allData: [], 
+        allDataUnfiltered: [], // Ham veri (Filtreleme için)
+        allData: [],           // Filtrelenmiş veri
+        currentType: '',       // 'pending-approval', 'bulletin-watch' vb.
         currentPage: 1, 
         itemsPerPage: 10, 
         pagination: null 
@@ -1058,114 +1060,51 @@
     // Detaylı Task Listeleme (GÜNCELLENMİŞ)
     window.loadSampleTaskDetails = async function(taskType) {
         const container = document.getElementById('task-list-container');
-        container.innerHTML = '<div class="text-center mt-5"><i class="fas fa-spinner fa-spin fa-3x"></i><p class="mt-2">Veriler analiz ediliyor...</p></div>';
+        container.innerHTML = '<div class="text-center mt-5"><i class="fas fa-spinner fa-spin fa-3x"></i><p class="mt-2">Veriler yükleniyor...</p></div>';
         
+        // Aktif tipi kaydet (Filtreleme fonksiyonu bunu kullanacak)
+        window.taskPaginationData.currentType = taskType;
+        
+        // Filtre inputlarını temizle
+        $('#taskSearchText').val('');
+        $('#taskStatusFilter').val('TÜMÜ');
+
         const tasksRef = collection(db, 'tasks');
         let q;
         
-        // Sorgu Mantığı:
+        // Sorgu
         if (taskType === 'completed-tasks') {
-            // Onay bekleyenler HARİÇ her şeyi çek (Aktif ve Kapananları burada ayıracağız)
             q = query(tasksRef, where('status', '!=', 'awaiting_client_approval'));
         } else {
-            // Sadece onay bekleyenleri çek
             q = query(tasksRef, where('status', '==', 'awaiting_client_approval'));
         }
             
         const snap = await runGetDocs(q);
-        const tasks = [];
+        let rawTasks = [];
         const clientSet = new Set(window.linkedPersonIds);
         
+        // Veri Çekme ve Yetki
         for (const d of snap.docs) {
             const t = d.data();
-            if (await window.checkTaskClientRelation(t, clientSet)) tasks.push({ id: d.id, ...t });
+            if (await window.checkTaskClientRelation(t, clientSet)) rawTasks.push({ id: d.id, ...t });
         }
 
-        // A) TALİMAT VERİLEN / TAMAMLANAN İŞLER (Sekmeli Yapı) - GÜNCELLENDİ
-        if (taskType === 'completed-tasks') {
-            // AKTİF STATÜLER: open, in_progress, pending
-            const activeStatuses = ['open', 'in_progress', 'pending'];
-            
-            // Filtreleme
-            const active = tasks.filter(t => activeStatuses.includes(t.status));
-            const closed = tasks.filter(t => !activeStatuses.includes(t.status)); // Geri kalan hepsi (completed, closed, rejected vb.)
-            
-            container.innerHTML = `
-                <ul class="nav nav-tabs mb-3">
-                    <li class="nav-item"><a class="nav-link active" data-toggle="tab" href="#tab-act">Aktif (${active.length})</a></li>
-                    <li class="nav-item"><a class="nav-link" data-toggle="tab" href="#tab-fin">Kapanan (${closed.length})</a></li>
-                </ul>
-                <div class="tab-content">
-                    <div class="tab-pane fade show active" id="tab-act"><div class="row" id="cont-act"></div><div id="pag-act"></div></div>
-                    <div class="tab-pane fade" id="tab-fin"><div class="row" id="cont-fin"></div><div id="pag-fin"></div></div>
-                </div>`;
-            
-            // Render işlemleri
-            await window._renderTaskCardsToContainer(active.slice(0,10), '#cont-act', window.formatDateTR, taskType);
-            if(closed.length) await window._renderTaskCardsToContainer(closed.slice(0,10), '#cont-fin', window.formatDateTR, taskType);
-            
-            $('#taskPagination').hide();
-            return;
+        // Task Tipine Göre Ön Filtreleme (Backend'den karışık gelebilir)
+        let finalTasks = rawTasks;
+        if (taskType === 'pending-approval') {
+            finalTasks = rawTasks.filter(t => String(t.taskType) !== '22' && String(t.taskType) !== '20');
+        } else if (taskType === 'renewal-approval') {
+            finalTasks = rawTasks.filter(t => String(t.taskType) === '22');
+        } else if (taskType === 'bulletin-watch') {
+            finalTasks = rawTasks.filter(t => String(t.taskType) === '20');
         }
 
-        // B) BÜLTEN İZLEME (Mevcut kod aynen kalıyor)
-        if (taskType === 'bulletin-watch') {
-            const groups = {}; 
-            const expired = []; 
-            const today = new Date(); today.setHours(0,0,0,0);
-            
-            tasks.forEach(t => {
-                if (String(t.taskType) !== '20') return;
-                const due = t.dueDate || t.officialDueDate;
-                let isExp = false;
-                if (due) { const d = due.seconds ? new Date(due.seconds*1000) : new Date(due); d.setHours(0,0,0,0); if (d < today) isExp = true; }
-                
-                if (isExp) { t.status = 'Bülten Kapandı'; expired.push(t); }
-                else { const bNo = t.details?.bulletinNo || 'Diğer'; if (!groups[bNo]) groups[bNo] = []; groups[bNo].push(t); }
-            });
-            
-            const bNumbers = Object.keys(groups).sort((a,b)=>b-a);
-            if (bNumbers.length === 0 && expired.length === 0) {
-                container.innerHTML = '<p class="text-center text-muted p-4">Kayıt bulunamadı.</p>';
-                return;
-            }
-
-            let html = '<ul class="nav nav-tabs mb-3">'; 
-            let content = '<div class="tab-content">';
-            
-            bNumbers.forEach((no, i) => {
-                const active = i===0 ? 'active' : '';
-                html += `<li class="nav-item"><a class="nav-link ${active}" data-toggle="tab" href="#b-${no}">Bülten ${no}</a></li>`;
-                content += `<div class="tab-pane fade ${active ? 'show active' : ''}" id="b-${no}"><div class="row" id="row-b-${no}"></div></div>`;
-            });
-            
-            if (expired.length > 0) {
-                const cls = bNumbers.length === 0 ? 'active' : '';
-                html += `<li class="nav-item"><a class="nav-link ${cls}" data-toggle="tab" href="#b-exp">Önceki Bültenler</a></li>`;
-                content += `<div class="tab-pane fade ${cls ? 'show active' : ''}" id="b-exp"><div class="alert alert-secondary">Bu bültenlerin süresi dolmuştur.</div><div class="row" id="row-b-exp"></div></div>`;
-            }
-            
-            html += '</ul>'; content += '</div>';
-            container.innerHTML = html + content;
-            
-            for (const no of bNumbers) {
-                await window._renderTaskCardsToContainer(groups[no], `#row-b-${no}`, window.formatDateTR, taskType);
-            }
-            if(expired.length) await window._renderTaskCardsToContainer(expired, '#row-b-exp', window.formatDateTR, taskType);
-            $('#taskPagination').hide();
-            return;
-        }
-
-        // C) STANDART LİSTELEME (Pending Approval, Renewal Approval vb.)
-        let finalTasks = tasks;
-        if (taskType === 'pending-approval') finalTasks = tasks.filter(t => String(t.taskType) !== '22' && String(t.taskType) !== '20');
-        else if (taskType === 'renewal-approval') finalTasks = tasks.filter(t => String(t.taskType) === '22');
+        // VERİYİ GLOBAL STATE'E KAYDET
+        window.taskPaginationData.allDataUnfiltered = finalTasks;
         
-        $('#taskPagination').show();
-        window.taskPaginationData.allData = finalTasks;
-        await window._renderTaskCardsToContainer(finalTasks.slice(0,10), '#task-list-container', window.formatDateTR, taskType);
+        // FİLTRELEMEYİ TETİKLE (Bu fonksiyon ekrana çizimi yapacak)
+        window.applyTaskFilter();
     };
-
 
     window._renderTaskCardsToContainer = async function(tasksToRender, containerSelector, formatDate, taskType) {
         const container = document.querySelector(containerSelector);
@@ -1806,8 +1745,147 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
         });
     }
 
-    // === GLOBAL HELPER FONKSİYONLAR (READY DIŞINDA OLMALI) ===
-    
+// === GLOBAL HELPER FONKSİYONLAR (READY DIŞINDA OLMALI) ===
+    // === GÖREV (TASK) FİLTRELEME FONKSİYONU ===
+    window.applyTaskFilter = function() {
+        const searchText = $('#taskSearchText').val().toLowerCase().trim();
+        const statusFilter = $('#taskStatusFilter').val();
+        const taskType = window.taskPaginationData.currentType;
+        const allData = window.taskPaginationData.allDataUnfiltered || [];
+
+        // 1. FİLTRELEME MANTIĞI
+        let filteredTasks = allData.filter(t => {
+            // A) Metin Araması (ID, Başlık, Marka Adı, Başvuru No)
+            if (searchText) {
+                const searchable = [
+                    t.id,
+                    t.title,
+                    t.description,
+                    t.details?.objectionTarget,
+                    t.details?.targetAppNo,
+                    t.details?.bulletinNo
+                ].join(' ').toLowerCase();
+                
+                if (!searchable.includes(searchText)) return false;
+            }
+
+            // B) Durum Filtresi
+            if (statusFilter && statusFilter !== 'TÜMÜ') {
+                if (t.status !== statusFilter) return false;
+            }
+
+            return true;
+        });
+
+        window.taskPaginationData.allData = filteredTasks;
+        const container = document.getElementById('task-list-container');
+        const formatDate = window.formatDateTR;
+
+        // 2. GÖRÜNÜM MANTIĞI (Task Tipine Göre Render)
+        
+        // A) TAMAMLANAN İŞLER (Sekmeli Yapı)
+        if (taskType === 'completed-tasks') {
+            const activeStatuses = ['open', 'in_progress', 'pending'];
+            const active = filteredTasks.filter(t => activeStatuses.includes(t.status));
+            const closed = filteredTasks.filter(t => !activeStatuses.includes(t.status));
+            
+            container.innerHTML = `
+                <ul class="nav nav-tabs mb-3">
+                    <li class="nav-item"><a class="nav-link active" data-toggle="tab" href="#tab-act">Aktif (${active.length})</a></li>
+                    <li class="nav-item"><a class="nav-link" data-toggle="tab" href="#tab-fin">Kapanan (${closed.length})</a></li>
+                </ul>
+                <div class="tab-content">
+                    <div class="tab-pane fade show active" id="tab-act"><div class="row" id="cont-act"></div></div>
+                    <div class="tab-pane fade" id="tab-fin"><div class="row" id="cont-fin"></div></div>
+                </div>`;
+            
+            window._renderTaskCardsToContainer(active.slice(0,10), '#cont-act', formatDate, taskType);
+            if(closed.length) window._renderTaskCardsToContainer(closed.slice(0,10), '#cont-fin', formatDate, taskType);
+            $('#taskPagination').hide();
+            return;
+        }
+
+        // B) BÜLTEN İZLEME (Gruplu Yapı)
+        if (taskType === 'bulletin-watch') {
+            const groups = {}; 
+            const expired = []; 
+            const today = new Date(); today.setHours(0,0,0,0);
+            
+            filteredTasks.forEach(t => {
+                const due = t.dueDate || t.officialDueDate;
+                let isExp = false;
+                if (due) { const d = due.seconds ? new Date(due.seconds*1000) : new Date(due); d.setHours(0,0,0,0); if (d < today) isExp = true; }
+                if (isExp) { 
+                    // Sadece görüntüleme amaçlı status değiştiriyoruz, orijinal veriyi bozmuyoruz
+                    const tClone = {...t, status: 'Bülten Kapandı'}; 
+                    expired.push(tClone); 
+                } else { 
+                    const bNo = t.details?.bulletinNo || 'Diğer'; 
+                    if (!groups[bNo]) groups[bNo] = []; 
+                    groups[bNo].push(t); 
+                }
+            });
+            
+            const bNumbers = Object.keys(groups).sort((a,b)=>b-a);
+            
+            if (bNumbers.length === 0 && expired.length === 0) {
+                container.innerHTML = '<div class="text-center text-muted p-4">Aranan kriterlere uygun kayıt bulunamadı.</div>';
+                return;
+            }
+
+            let html = '<ul class="nav nav-tabs mb-3">'; 
+            let content = '<div class="tab-content">';
+            
+            bNumbers.forEach((no, i) => {
+                const active = i===0 ? 'active' : '';
+                html += `<li class="nav-item"><a class="nav-link ${active}" data-toggle="tab" href="#b-${no}">Bülten ${no} (${groups[no].length})</a></li>`;
+                content += `<div class="tab-pane fade ${active ? 'show active' : ''}" id="b-${no}"><div class="row" id="row-b-${no}"></div></div>`;
+            });
+            
+            if (expired.length > 0) {
+                const cls = bNumbers.length === 0 ? 'active' : '';
+                html += `<li class="nav-item"><a class="nav-link ${cls}" data-toggle="tab" href="#b-exp">Önceki Bültenler (${expired.length})</a></li>`;
+                content += `<div class="tab-pane fade ${cls ? 'show active' : ''}" id="b-exp"><div class="alert alert-secondary">Bu bildirimlerin süresi dolmuştur.</div><div class="row" id="row-b-exp"></div></div>`;
+            }
+            
+            html += '</ul>'; content += '</div>';
+            container.innerHTML = html + content;
+            
+            for (const no of bNumbers) {
+                window._renderTaskCardsToContainer(groups[no], `#row-b-${no}`, formatDate, taskType);
+            }
+            if(expired.length) window._renderTaskCardsToContainer(expired, '#row-b-exp', formatDate, taskType);
+            $('#taskPagination').hide();
+            return;
+        }
+
+        // C) STANDART LİSTELEME (Pagination ile)
+        if (filteredTasks.length === 0) {
+            container.innerHTML = '<div class="text-center text-muted p-4">Aranan kriterlere uygun kayıt bulunamadı.</div>';
+            $('#taskPagination').hide();
+            return;
+        }
+
+        $('#taskPagination').show();
+        
+        if (!window.taskPaginationData.pagination && window.Pagination) {
+            window.taskPaginationData.pagination = new window.Pagination({
+                itemsPerPage: 10,
+                containerId: 'taskPagination',
+                onPageChange: (page, perPage) => {
+                    const start = (page - 1) * perPage;
+                    const slice = window.taskPaginationData.allData.slice(start, start + perPage);
+                    window._renderTaskCardsToContainer(slice, '#task-list-container', formatDate, taskType);
+                }
+            });
+        }
+        
+        if (window.taskPaginationData.pagination) {
+            window.taskPaginationData.pagination.update(filteredTasks.length);
+        }
+        window._renderTaskCardsToContainer(filteredTasks.slice(0,10), '#task-list-container', formatDate, taskType);
+    };
+
     window.loadGoodsFromIpRecord = async function(ipRecordId) {
         if (!ipRecordId) return '<p class="text-muted">ID yok.</p>';
         try {
@@ -1848,7 +1926,7 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
             return goods.map(item => `<p style="font-size: 0.85rem; margin-bottom: 10px;">${item||'Yok'}</p>`).join('');
         } catch (error) { return '<p class="text-danger">Hata.</p>'; }
     };
-    
+
 // === 1. TABLO SIRALAMA FONKSİYONU (Parent-Child Destekli) ===
     window.parseTurkishDate = function(dateStr) {
         if (!dateStr || dateStr === '-' || dateStr.trim() === '') return new Date(0);
@@ -2207,6 +2285,9 @@ window.toggleColumnFilter = function(icon, tableId, colIdx) {
         $('#portfolioDurumFilter').off('change').on('change', window.applyMasterFilter);
         $('#portfolioFilterBtn').off('click').on('click', window.applyMasterFilter);
         $('a[data-toggle="tab"]').on('shown.bs.tab', function(e) { window.applyMasterFilter(); });
+        $('#taskSearchText').off('keyup').on('keyup', function() {window.applyTaskFilter(); });
+        $('#taskStatusFilter').off('change').on('change', function() {window.applyTaskFilter(); });
+        $('#applyTaskFilters').off('click').on('click', function() {window.applyTaskFilter();});
 
         // Filtre Menüsünü Kapatma
         $(document).on('click', function(e) {
