@@ -2426,32 +2426,35 @@ window.toggleColumnFilter = function(icon, tableId, colIdx) {
         window.applyMasterFilter();
     };
 
-// === YARDIMCI: Görseli Base64 Formatına Çevir ===
+    // === YARDIMCI: Görseli Base64 Formatına Çevir (Hata Korumalı) ===
 window.imageUrlToBase64 = async function(url) {
     if (!url || url.length < 10) return null;
     try {
-        const response = await fetch(url);
+        // 'Anonymous' modu CORS için önemlidir
+        const response = await fetch(url, { mode: 'cors', credentials: 'omit' });
+        if (!response.ok) throw new Error('Resim indirilemedi');
+        
         const blob = await response.blob();
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
             reader.onloadend = () => resolve(reader.result);
-            reader.onerror = reject;
+            reader.onerror = () => resolve(null); // Hata olursa null dön, patlama
             reader.readAsDataURL(blob);
         });
     } catch (e) {
-        console.warn("Görsel yüklenemedi:", url);
+        console.warn("Görsel yüklenemedi (CORS veya Network hatası):", url);
+        // Hata durumunda null dönüyoruz ki export işlemi devam etsin
         return null;
     }
 };
 
-// === GELİŞMİŞ EXPORT YÖNETİCİSİ (V3 - ExcelJS ve Base64 Görsel) ===
+// === GELİŞMİŞ EXPORT YÖNETİCİSİ (V4 - Fallback Link Destekli) ===
 window.exportActiveTable = async function(type) {
     const activeTabId = $('#portfolioTopTabs a.nav-link.active').attr('href');
     let dataToExport = [];
     let fileName = 'Portfoy_Listesi';
     let headers = [];
 
-    // Statü Çevirisi
     const translateStatus = (status) => {
         const map = {
             'filed': 'Başvuru', 'registered': 'Tescilli', 'pending': 'Bekliyor',
@@ -2461,34 +2464,31 @@ window.exportActiveTable = async function(type) {
         return map[String(status).toLowerCase()] || status || '-';
     };
 
-    // Sadece Marka Listesi için
     if (activeTabId === '#marka-list') {
         fileName = 'Marka_Portfoy_Raporu';
         const rawData = window.markaPaginationData?.allData || [];
         
-        // Yükleniyor uyarısı verelim (Görselleri işlemek zaman alabilir)
         const btnIcon = type === 'excel' ? '.fa-file-excel' : '.fa-file-pdf';
         const originalBtnHtml = $(btnIcon).parent().html();
         $(btnIcon).parent().html('<i class="fas fa-spinner fa-spin"></i>').prop('disabled', true);
 
         try {
-            // Veriyi Hazırla ve Görselleri İndir
             for (const item of rawData) {
-                // 1. Görseli Base64'e çevir (Hem Excel hem PDF için gerekli)
                 let base64Image = null;
+                // Görsel URL'si varsa indirmeyi dene
                 const imgUrl = item.brandImageUrl || item.brandImage;
                 if (imgUrl) {
                     base64Image = await window.imageUrlToBase64(imgUrl);
                 }
 
-                // A. Parent Kaydı
                 const originRaw = (item.origin || 'TÜRKPATENT').toString().toUpperCase();
                 const originDisplay = (originRaw.includes('TURK')) ? 'TÜRKPATENT' : (item.country || item.origin || 'Yurtdışı');
                 
                 dataToExport.push({
                     type: 'parent',
                     mense: originDisplay,
-                    base64Image: base64Image, // Base64 verisi buraya
+                    base64Image: base64Image,
+                    originalImageUrl: imgUrl, // Linki saklıyoruz (Fallback için)
                     markaAdi: item.title || item.brandText || '-',
                     basvuruNo: item.applicationNumber || '-',
                     tescilNo: item.internationalRegNumber || item.wipoIrNumber || item.registrationNumber || '-',
@@ -2498,7 +2498,6 @@ window.exportActiveTable = async function(type) {
                     siniflar: (Array.isArray(item.goodsAndServicesByClass) ? item.goodsAndServicesByClass.map(c=>c.classNo).join(', ') : item.classes) || '-'
                 });
 
-                // B. Child Kayıtlar
                 const children = window.markaPaginationData.allDataUnfiltered.filter(p => p.parentId === item.id);
                 if (children.length > 0) {
                     for (let idx = 0; idx < children.length; idx++) {
@@ -2512,7 +2511,8 @@ window.exportActiveTable = async function(type) {
                         dataToExport.push({
                             type: 'child',
                             mense: childOrigin,
-                            base64Image: null, // Child'da görsel yok varsayıyoruz
+                            base64Image: null,
+                            originalImageUrl: null,
                             markaAdi: `   ↳ ${idx+1}. ${item.title || ''}`,
                             basvuruNo: child.applicationNumber || '-',
                             tescilNo: '-',
@@ -2525,10 +2525,8 @@ window.exportActiveTable = async function(type) {
                 }
             }
         } catch (e) {
-            console.error(e);
-            alert('Veri hazırlanırken hata oluştu.');
-            $(btnIcon).parent().html(originalBtnHtml).prop('disabled', false);
-            return;
+            console.error("Export Hatası:", e);
+            alert('Veri hazırlanırken hata oluştu, ancak işlem devam ediyor.');
         }
 
         headers = [
@@ -2552,7 +2550,6 @@ window.exportActiveTable = async function(type) {
             await window.generatePDF(dataToExport, headers, finalFileName);
         }
         
-        // Butonu eski haline getir
         $(btnIcon).parent().html(originalBtnHtml).prop('disabled', false);
 
     } else {
@@ -2560,35 +2557,42 @@ window.exportActiveTable = async function(type) {
     }
 };
 
-// === EXCEL OLUŞTURUCU (ExcelJS ile Gerçek Resim Gömme) ===
+// === EXCEL OLUŞTURUCU (Link Fallback Destekli) ===
 window.generateExcelWithImages = async function(data, headers, filename) {
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet('Marka Listesi');
 
-    // 1. Kolonları Ayarla
     sheet.columns = headers.map(h => ({ header: h.title, key: h.key, width: h.width }));
 
-    // 2. Satırları Ekle
     data.forEach(item => {
-        // Görsel verisini (uzun string) hücreye text olarak yazma, boş bırak
+        // Base64 verisini metin olarak yazma
         const rowData = { ...item, base64Image: '' }; 
         const row = sheet.addRow(rowData);
         
-        // Child satır renklendirmesi
+        // Child satır stili
         if (item.type === 'child') {
             row.eachCell((cell) => {
                 cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF5F5F5' } };
                 cell.font = { italic: true, color: { argb: 'FF555555' } };
             });
         } else {
-            // Parent satır yüksekliği (Resim için)
             row.height = 60; 
-            // Dikey ortalama
             row.eachCell((cell) => { cell.alignment = { vertical: 'middle', wrapText: true }; });
+        }
+
+        // EĞER RESİM İNDİRİLEMEDİYSE AMA URL VARSA -> LİNK KOY
+        if (!item.base64Image && item.originalImageUrl && item.type === 'parent') {
+            const cell = row.getCell(2); // Görsel kolonu (index 2)
+            cell.value = {
+                text: 'Görsel Linki',
+                hyperlink: item.originalImageUrl,
+                tooltip: 'Görsele gitmek için tıklayın'
+            };
+            cell.font = { color: { argb: 'FF0000FF' }, underline: true };
         }
     });
 
-    // 3. Görselleri Hücrelere Göm
+    // Resim varsa göm
     for (let i = 0; i < data.length; i++) {
         const item = data[i];
         if (item.base64Image) {
@@ -2596,18 +2600,14 @@ window.generateExcelWithImages = async function(data, headers, filename) {
                 base64: item.base64Image,
                 extension: 'png',
             });
-
-            // Resmi 2. satırdan itibaren (başlık hariç) ilgili satırın 2. kolonuna (B kolonu -> index 1) yerleştir
-            // col: 1 -> B kolonu
             sheet.addImage(imageId, {
-                tl: { col: 1, row: i + 1 }, // Top-Left
-                br: { col: 2, row: i + 2 }, // Bottom-Right (Bir hücre kadar)
+                tl: { col: 1, row: i + 1 },
+                br: { col: 2, row: i + 2 },
                 editAs: 'oneCell'
             });
         }
     }
 
-    // 4. İndir
     const buffer = await workbook.xlsx.writeBuffer();
     const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
     const link = document.createElement('a');
