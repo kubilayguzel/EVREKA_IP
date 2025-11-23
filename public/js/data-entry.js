@@ -1665,13 +1665,20 @@ populateFormFields(recordData) {
                     }
                 }, 50);
             } else if ((recordData.origin === 'WIPO' || recordData.origin === 'ARIPO') && recordData.transactionHierarchy === 'child') {
-                // Child kayıtlarda ülke selectini göster ve doldur
-                this.handleOriginChange('Yurtdışı Ulusal');
-                setTimeout(() => {
-                    const countrySelect = document.getElementById('countrySelect');
-                    if (countrySelect && recordData.country) {
-                        countrySelect.value = recordData.country;
+                // Child kayıtlarda ülkeyi selectedCountries array'ine ekle ve render et
+                if (recordData.country) {
+                    const country = this.allCountries.find(c => c.code === recordData.country);
+                    if (country) {
+                        this.selectedCountries = [{ code: country.code, name: country.name }];
+                    } else {
+                        this.selectedCountries = [{ code: recordData.country, name: recordData.country }];
                     }
+                }
+                // Çoklu ülke seçim arayüzünü göster
+                this.handleOriginChange('WIPO');
+                // Render et
+                setTimeout(() => {
+                    this.renderSelectedCountries();
                 }, 50);
             } else if (recordData.origin === 'WIPO' || recordData.origin === 'ARIPO') {
                 this.handleOriginChange(recordData.origin);
