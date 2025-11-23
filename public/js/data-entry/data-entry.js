@@ -1,13 +1,22 @@
-// js/data-entry.js
-import { initializeNiceClassification, getSelectedNiceClasses, setSelectedNiceClasses } from './nice-classification.js';
-import { personService, ipRecordsService, storage, auth, transactionTypeService } from '../firebase-config.js';
-import { getStorage, ref, uploadBytes, deleteObject, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
-import { loadSharedLayout, openPersonModal, ensurePersonModal } from './layout-loader.js';
-import {collection, doc, getDoc, getDocs, getFirestore, query, where , updateDoc,  addDoc, Timestamp} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-import { STATUSES, ORIGIN_TYPES } from '../utils.js';
-import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+// js/data-entry/data-entry.js
+
+// 1. Bir üst klasöre (js/) çıkıp oradaki dosyaları çağırıyoruz
+import { initializeNiceClassification, getSelectedNiceClasses, setSelectedNiceClasses } from '../nice-classification.js';
+import { loadSharedLayout, openPersonModal, ensurePersonModal } from '../layout-loader.js';
+
+// 2. İki üst klasöre (ana dizine) çıkıp oradaki dosyaları çağırıyoruz
+// (Eski kodunda '../' idi, şimdi bir klasör daha indiğimiz için '../../' oldu)
+import { personService, ipRecordsService, storage, auth, transactionTypeService } from '../../firebase-config.js';
+import { STATUSES, ORIGIN_TYPES } from '../../utils.js';
+
+// 3. Aynı klasördeki (js/data-entry/) kardeş dosyaları çağırıyoruz (Bunlar ./ kalır)
 import { FormTemplates } from './form-templates.js';
 import { TrademarkStrategy, PatentStrategy, DesignStrategy, SuitStrategy } from './strategies.js';
+
+// 4. CDN (https://...) linkleri olduğu gibi kalır, değişiklik gerekmez
+import { getStorage, ref, uploadBytes, deleteObject, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
+import { collection, doc, getDoc, getDocs, getFirestore, query, where , updateDoc,  addDoc, Timestamp} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
 function __pathFromDownloadURL(url) {
   try {
