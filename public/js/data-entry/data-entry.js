@@ -1708,7 +1708,7 @@ async handleSavePortfolio() {
             }
             // ============================================================
 
-            window.location.href = 'portfolio.html';
+            // window.location.href = 'portfolio.html';
 
         } catch (error) {
             console.error('Kaydetme hatası:', error);
@@ -1912,34 +1912,38 @@ async saveIpRecordWithStrategy(data) {
             // 2. Child Kayıtlar (Döngü)
             console.log('🔄 Child kayıtlar oluşturuluyor...');
             
-            // Promise.all kullanarak paralel oluşturuyoruz
             const promises = this.selectedCountries.map(async (country) => {
                 try {
-                    const childData = { 
-                        ...data, 
-                        transactionHierarchy: 'child', 
-                        parentId: parentId,
-                        country: country.code,
-                        
-                        // 🛠️ KRİTİK DÜZELTME: Child kayıtlarda başvuru numarasını boşaltıyoruz
-                        // Böylece duplicate (mükerrer) hatasına takılmıyorlar.
-                        applicationNumber: null, 
-                        registrationNumber: null, // Tescil no da çakışmasın
+                    // Veriyi kopyala
+                    const childData = { ...data };
 
-                        // IR numaralarını taşı
-                        wipoIR: parentData.wipoIR,
-                        aripoIR: parentData.aripoIR,
-                        
-                        createdFrom: 'wipo_child_generation'
-                    };
+                    // 🧹 TEMİZLİK: Child kayıtta olmaması gereken veya çakışma yaratacak alanları SİLİYORUZ
+                    delete childData.applicationNumber; // Parent'ın başvuru numarası child'da olmamalı
+                    delete childData.registrationNumber; // Tescil numarası çakışmamalı
+                    delete childData.internationalRegNumber; // Bu wipoIR alanına taşınacak
+                    delete childData.countries; // Child kayıtta ülke listesi dizisine gerek yok
+
+                    // ✅ EKLEMELER: Child'a özel alanları set et
+                    childData.transactionHierarchy = 'child';
+                    childData.parentId = parentId;
+                    childData.country = country.code;
+                    childData.createdFrom = 'wipo_child_generation';
+                    
+                    // IR Numaralarını ekle
+                    childData.wipoIR = parentData.wipoIR;
+                    childData.aripoIR = parentData.aripoIR;
+
+                    console.log(`➡️ Child verisi hazırlanıyor (${country.code})...`);
 
                     const res = await ipRecordsService.createRecordFromDataEntry(childData);
+                    
                     if(res.success) {
                         console.log(`✅ Child Eklendi: ${country.code}`);
                         return res;
                     } else {
                         console.error(`❌ Child Hatası (${country.code}):`, res.error);
-                        return null;
+                        // Hatayı throw edelim ki Promise.all yakalasın veya konsolda kırmızı görelim
+                        throw new Error(res.error);
                     }
                 } catch (err) {
                     console.error(`❌ Child Beklenmeyen Hata (${country.code}):`, err);
