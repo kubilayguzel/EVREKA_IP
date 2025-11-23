@@ -695,6 +695,70 @@ class DataEntryModule {
         }
     }
 
+    // Parent'taki değişiklikleri Child'lara aktarır
+    async propagateUpdatesToChildren(parentId, parentData) {
+        console.log('🔄 Child Güncelleme (Propagation) başlatılıyor...');
+        try {
+            const db = getFirestore();
+            
+            // 1. Bu Parent'a bağlı tüm child'ları bul
+            const q = query(
+                collection(db, 'ipRecords'),
+                where('parentId', '==', parentId),
+                where('transactionHierarchy', '==', 'child')
+            );
+            
+            const snapshot = await getDocs(q);
+            
+            if (snapshot.empty) {
+                console.log('⚠️ Güncellenecek child kayıt bulunamadı.');
+                return;
+            }
+
+            // 2. Güncellenecek alanları hazırla
+            const updates = {
+                title: parentData.title || parentData.brandText || null,
+                brandText: parentData.brandText || null,
+                description: parentData.description || null,
+                status: parentData.status || null,
+                
+                // Tarihler
+                applicationDate: parentData.applicationDate || null,
+                registrationDate: parentData.registrationDate || null,
+                renewalDate: parentData.renewalDate || null,
+                
+                // Görsel
+                brandImageUrl: parentData.brandImageUrl || null,
+                
+                // Listeler
+                applicants: parentData.applicants,
+                goodsAndServicesByClass: parentData.goodsAndServicesByClass,
+                
+                updatedAt: new Date().toISOString()
+            };
+
+            // IR Numarası (Varsa güncelle)
+            const irNumber = parentData.internationalRegNumber || parentData.registrationNumber;
+            if (parentData.origin === 'WIPO') updates.wipoIR = irNumber || null;
+            if (parentData.origin === 'ARIPO') updates.aripoIR = irNumber || null;
+
+            // 🧹 TEMİZLİK: Değeri 'undefined' olanları sil
+            Object.keys(updates).forEach(key => {
+                if (updates[key] === undefined) delete updates[key];
+            });
+
+            // 3. Tüm child'ları güncelle
+            const updatePromises = snapshot.docs.map(doc => updateDoc(doc.ref, updates));
+            
+            await Promise.all(updatePromises);
+            console.log(`✅ ${updatePromises.length} adet child kayıt başarıyla güncellendi.`);
+
+        } catch (error) {
+            console.error('❌ Child güncelleme hatası:', error);
+            // Hatayı fırlatmıyoruz ki ana işlem durmasın, sadece logluyoruz
+        }
+    }
+
     // Bu fonksiyonun böyle olduğundan emin ol (Sınıfın altında)
     async addTransactionForNewRecord(recordId, ipType, hierarchy = 'parent') {
         const TX_IDS = { trademark: '2', patent: '5', design: '8' };
