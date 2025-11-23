@@ -816,9 +816,9 @@ export const createObjectionTask = onCall(
         }
       }
 
-      // ✅ İzlenen markanın portföyüne transaction ekle
+      // ✅ Üçüncü taraf portföy kaydına (3rd party ipRecord) transaction ekle
       try {
-        // İtiraz sahibini belirle
+        // İtiraz sahibini belirle (müvekkil)
         let oppositionOwnerName = null;
         if (clientId) {
           try {
@@ -831,26 +831,31 @@ export const createObjectionTask = onCall(
           }
         }
 
-        // İzlenen markanın ipRecords kaydına transaction ekle
-        const transactionsRef = adminDb
-          .collection('ipRecords')
-          .doc(relatedIpRecordId)
-          .collection('transactions');
-        
-        await transactionsRef.add({
-          type: '20',
-          designation: 'Yayına İtiraz',
-          description: 'Yayına İtiraz',
-          transactionHierarchy: 'parent',
-          // ❌ triggeringTaskId YOK - Manuel oluşturulan iş
-          ...(oppositionOwnerName ? { oppositionOwner: oppositionOwnerName } : {}),
-          timestamp: admin.firestore.FieldValue.serverTimestamp(),
-          userId: 'cloud_function',
-          userEmail: callerEmail || 'system@evreka.com',
-          userName: 'Cloud Function'
-        });
-        
-        logger.log(`✅ İzlenen marka portföyüne transaction eklendi. RecordId=${relatedIpRecordId}`);
+        // ✅ DEĞİŞİKLİK: Transaction, 3rd party portföy kaydına eklenmeli
+        // thirdPartyIpRecordId, portfolioByOppositionCreator tarafından oluşturulan kayıt ID'si
+        if (!thirdPartyIpRecordId) {
+          logger.warn('⚠️ thirdPartyIpRecordId bulunamadı, transaction eklenemedi');
+        } else {
+          const transactionsRef = adminDb
+            .collection('ipRecords')
+            .doc(thirdPartyIpRecordId)
+            .collection('transactions');
+          
+          await transactionsRef.add({
+            type: '20',
+            designation: 'Yayına İtiraz',
+            description: 'Yayına İtiraz',
+            transactionHierarchy: 'parent',
+            // ❌ triggeringTaskId YOK - Manuel oluşturulan iş
+            ...(oppositionOwnerName ? { oppositionOwner: oppositionOwnerName } : {}),
+            timestamp: admin.firestore.FieldValue.serverTimestamp(),
+            userId: 'cloud_function',
+            userEmail: callerEmail || 'system@evreka.com',
+            userName: 'Cloud Function'
+          });
+          
+          logger.log(`✅ Üçüncü taraf portföy kaydına transaction eklendi: ${thirdPartyIpRecordId}`);
+        }
       } catch (txErr) {
         logger.error('❌ Transaction eklenirken hata:', txErr);
         // Hata olsa bile task oluşturuldu, devam et
