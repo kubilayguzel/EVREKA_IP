@@ -582,10 +582,90 @@
             </div>
             <div id="invoices-pagination-container"></div>
         </div>
-
         <div class="fade tab-pane" id="reports">
-            <h1 class="header-title">Raporlar</h1>
-            <div class="row mt-4"><div class="col-md-12 mb-4"><div class="card p-4"><h5 class="card-title text-info">Portföy Raporu</h5><button class="btn btn-primary btn-sm mt-2">İndir</button></div></div></div>
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1 class="header-title">Yönetim Raporları</h1>
+                <div>
+                    <button class="btn btn-outline-secondary btn-sm mr-2" onclick="window.refreshCharts()"><i class="fas fa-sync-alt"></i> Yenile</button>
+                    <button class="btn btn-primary btn-sm"><i class="fas fa-file-pdf"></i> Tümünü İndir (PDF)</button>
+                </div>
+            </div>
+
+            <div class="row mb-4">
+                <div class="col-md-3">
+                    <div class="card p-3 border-left-primary shadow-sm">
+                        <div class="text-muted small text-uppercase font-weight-bold">Toplam Varlık</div>
+                        <div class="h3 mb-0 font-weight-bold text-gray-800" id="rep-total-assets">-</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card p-3 border-left-success shadow-sm">
+                        <div class="text-muted small text-uppercase font-weight-bold">Tescil Oranı</div>
+                        <div class="h3 mb-0 font-weight-bold text-gray-800" id="rep-success-rate">% -</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card p-3 border-left-warning shadow-sm">
+                        <div class="text-muted small text-uppercase font-weight-bold">Riskli (İtiraz/Dava)</div>
+                        <div class="h3 mb-0 font-weight-bold text-gray-800" id="rep-risk-count">-</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card p-3 border-left-info shadow-sm">
+                        <div class="text-muted small text-uppercase font-weight-bold">Tahmini Yıllık Gider</div>
+                        <div class="h3 mb-0 font-weight-bold text-gray-800" id="rep-budget-est">₺ -</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-lg-6 mb-4">
+                    <div class="card shadow mb-4 h-100">
+                        <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                            <h6 class="m-0 font-weight-bold text-primary">Varlık Türü Dağılımı</h6>
+                        </div>
+                        <div class="card-body">
+                            <div id="chart-portfolio-dist"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-6 mb-4">
+                    <div class="card shadow mb-4 h-100">
+                        <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                            <h6 class="m-0 font-weight-bold text-success">Gelecek 6 Ay Tahmini Bütçe</h6>
+                            <small class="text-muted">Yenileme Tarihlerine Göre</small>
+                        </div>
+                        <div class="card-body">
+                            <div id="chart-budget-forecast"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-lg-6 mb-4">
+                    <div class="card shadow mb-4 h-100">
+                        <div class="card-header py-3">
+                            <h6 class="m-0 font-weight-bold text-info">Sektörel Koruma Analizi (Nice Sınıfları)</h6>
+                        </div>
+                        <div class="card-body">
+                            <div id="chart-class-radar"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-6 mb-4">
+                    <div class="card shadow mb-4 h-100">
+                        <div class="card-header py-3">
+                            <h6 class="m-0 font-weight-bold text-warning">Coğrafi Dağılım (Menşe)</h6>
+                        </div>
+                        <div class="card-body">
+                            <div id="chart-geo-dist"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -714,6 +794,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.29/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
 
 <script type="module">
     import { authService, db } from './firebase-config.js';
