@@ -547,7 +547,7 @@
 <script type="module">
     import Pagination from './js/pagination.js'; // <- DIŞARIDAN İÇERİ AKTARILDI
     import { loadSharedLayout } from './js/layout-loader.js';
-    import { monitoringService, personService, ipRecordsService } from './firebase-config.js';
+    import { monitoringService, personService, ipRecordsService,taskService } from './firebase-config.js';
     import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
     import { showNotification } from './utils.js';
 
@@ -911,12 +911,24 @@ if (currentPageData.length === 0) {
         }
     };
 
-   const getOwnerNames = (item) => {
+const getOwnerNames = (item) => {
     try {
-        // ÖNCE: Firebase'deki asıl yapı - applicants array
+        // ÖNCE: Firebase'deki asıl yapı - applicants array (sadece id içerir)
         if (item.applicants && Array.isArray(item.applicants) && item.applicants.length > 0) {
             return item.applicants
-                .map(applicant => applicant.name || 'Bilinmeyen Sahip')
+                .map(applicant => {
+                    // Applicant bir obje ve id içeriyorsa, persons'dan ismi bul
+                    if (typeof applicant === 'object' && applicant.id) {
+                        const match = allPersons.find(p => p.id === applicant.id);
+                        return match ? match.name : `ID:${applicant.id} (Bulunamadı)`;
+                    }
+                    // Eski veri yapısı: applicant.name varsa direkt kullan
+                    if (typeof applicant === 'object' && applicant.name) {
+                        return applicant.name;
+                    }
+                    // String ise direkt kullan
+                    return String(applicant);
+                })
                 .filter(name => name && name.trim() !== '')
                 .join(', ');
         }
@@ -944,7 +956,8 @@ if (currentPageData.length === 0) {
     }
     return '-';
 };
-    const renderMonitoringTable = (data, userUid) => {
+
+const renderMonitoringTable = (data, userUid) => {
         allMonitoringData = data || [];
         const filterSection = document.getElementById('filterSection');
         if (filterSection && allMonitoringData.length > 0) {
@@ -952,6 +965,98 @@ if (currentPageData.length === 0) {
         }
         applyFilters();
     };
+
+    /**
+ * create-task.js mantığıyla birebir uyumlu
+ * 3. Taraf (Third Party) IP Record oluşturucu
+ */
+async function createThirdPartyRecordFromMonitoring(monitoringItem) {
+    console.log('urce: Monitoring Item:', monitoringItem);
+
+    // 1. Nice Sınıflarını Dönüştür (Array -> Object yapısı)
+    // create-task.js'deki goodsAndServicesByClass yapısı
+    const goodsByClass = (monitoringItem.niceClasses || []).map(cls => ({
+        classNo: String(cls),
+        items: [] // İzleme verisinde detay metni olmadığından boş array
+    }));
+
+    // 2. Başvuru Sahiplerini Dönüştür (Applicants)
+    // Monitoring verisinde holders, owners veya applicants olarak gelebilir
+    const rawHolders = monitoringItem.holders || monitoringItem.owners || monitoringItem.applicants || [];
+    let applicants = [];
+    
+    if (Array.isArray(rawHolders)) {
+        applicants = rawHolders.map(h => ({
+            name: h.name || h.holderName || (typeof h === 'string' ? h : ''),
+            email: null, // 3. taraf olduğu için bilinmiyor
+            id: null     // Sistemde kayıtlı değil
+        }));
+    } else if (typeof rawHolders === 'string') {
+        applicants.push({ name: rawHolders, email: null, id: null });
+    }
+
+    // Yedek kontrol: ownerName string alanı varsa ve liste boşsa
+    if (applicants.length === 0 && monitoringItem.ownerName) {
+        applicants.push({ name: monitoringItem.ownerName, email: null, id: null });
+    }
+
+    // 3. IP Record Veri Objesini Hazırla (create-task.js yapısı)
+    const ipRecordData = {
+        // --- Temel Bilgiler ---
+        title: monitoringItem.markName || monitoringItem.title || 'Bilinmeyen Marka',
+        type: 'trademark',          
+        portfoyStatus: 'active',    
+        status: 'published',        // Bülten yayını aşamasında
+        
+        // --- KRİTİK: 3. Taraf Dosyası Olarak İşaretle ---
+        recordOwnerType: 'third_party', 
+        
+        // --- Menşe ve Detaylar ---
+        origin: 'TÜRKPATENT',       
+        country: 'TR',
+        
+        // --- Numaralar ve Tarihler ---
+        applicationNumber: monitoringItem.applicationNo || monitoringItem.applicationNumber,
+        // Tarih formatı kontrolü (YYYY-MM-DD olmalı)
+        applicationDate: monitoringItem.applicationDate ? new Date(monitoringItem.applicationDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+        registrationNumber: null,
+        registrationDate: null,
+        renewalDate: null,
+        
+        // --- Görsel ---
+        // create-task.js'deki gibi brandImageUrl alanına atanır
+        brandImageUrl: monitoringItem.imagePath || monitoringItem.brandImageUrl || null,
+        brandText: monitoringItem.markName || null,
+        
+        // --- Listeler ---
+        applicants: applicants,
+        goodsAndServicesByClass: goodsByClass,
+        
+        // --- Bülten Detayları (İtiraz dilekçeleri için kritik) ---
+        details: {
+            brandInfo: {
+                opposedMarkBulletinNo: monitoringItem.bulletinNo || null,
+                opposedMarkBulletinDate: monitoringItem.bulletinDate || null 
+            }
+        },
+        
+        // --- Sistem Alanları ---
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+    };
+
+    console.log('🚀 3. Taraf IP Kaydı Hazırlandı:', ipRecordData);
+
+    // 4. Kaydı Veritabanına Gönder
+    const result = await ipRecordsService.createRecord(ipRecordData);
+    
+    if (result.success) {
+        console.log('✅ IP Kaydı oluşturuldu. ID:', result.id);
+        return result.id;
+    } else {
+        throw new Error('IP kaydı oluşturulamadı: ' + result.error);
+    }
+}
 
     const updateSelectedButtonState = () => {
         const selectedCountSpan = document.getElementById('selectedCount');
