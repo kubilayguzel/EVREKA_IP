@@ -2531,7 +2531,7 @@ window.exportActiveTable = async function(type) {
 
         headers = [
             { key: 'mense', title: 'Menşe', width: 15 },
-            { key: 'base64Image', title: 'Görsel', width: 20 },
+            { key: 'base64Image', title: 'Görsel', width: 15 },
             { key: 'markaAdi', title: 'Marka Adı', width: 30 },
             { key: 'basvuruNo', title: 'Başvuru No', width: 20 },
             { key: 'tescilNo', title: 'Tescil / WIPO No', width: 20 },
@@ -2565,24 +2565,24 @@ window.generateExcelWithImages = async function(data, headers, filename) {
     sheet.columns = headers.map(h => ({ header: h.title, key: h.key, width: h.width }));
 
     data.forEach(item => {
-        // Base64 verisini metin olarak yazma
         const rowData = { ...item, base64Image: '' }; 
         const row = sheet.addRow(rowData);
         
-        // Child satır stili
         if (item.type === 'child') {
             row.eachCell((cell) => {
                 cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF5F5F5' } };
                 cell.font = { italic: true, color: { argb: 'FF555555' } };
             });
         } else {
-            row.height = 60; 
+            // --- DEĞİŞİKLİK BURADA: Satır yüksekliği artırıldı ---
+            row.height = 90; // 60 yerine 90 yapıldı (Resimler kareye yaklaşsın diye)
+            
             row.eachCell((cell) => { cell.alignment = { vertical: 'middle', wrapText: true }; });
         }
 
-        // EĞER RESİM İNDİRİLEMEDİYSE AMA URL VARSA -> LİNK KOY
+        // Link Fallback
         if (!item.base64Image && item.originalImageUrl && item.type === 'parent') {
-            const cell = row.getCell(2); // Görsel kolonu (index 2)
+            const cell = row.getCell(2); 
             cell.value = {
                 text: 'Görsel Linki',
                 hyperlink: item.originalImageUrl,
@@ -2592,7 +2592,7 @@ window.generateExcelWithImages = async function(data, headers, filename) {
         }
     });
 
-    // Resim varsa göm
+    // Görselleri Hücrelere Göm
     for (let i = 0; i < data.length; i++) {
         const item = data[i];
         if (item.base64Image) {
@@ -2600,6 +2600,8 @@ window.generateExcelWithImages = async function(data, headers, filename) {
                 base64: item.base64Image,
                 extension: 'png',
             });
+            
+            // Resmi hücreye tam sığdır (editAs: 'oneCell')
             sheet.addImage(imageId, {
                 tl: { col: 1, row: i + 1 },
                 br: { col: 2, row: i + 2 },
