@@ -16,7 +16,7 @@ import { TrademarkStrategy, PatentStrategy, DesignStrategy, SuitStrategy } from 
 // 4. CDN (https://...) linkleri olduğu gibi kalır, değişiklik gerekmez
 import { getStorage, ref, uploadBytes, deleteObject, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
 import { collection, doc, getDoc, getDocs, getFirestore, query, where , updateDoc,  addDoc, Timestamp} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js"; 
 
 function __pathFromDownloadURL(url) {
   try {
