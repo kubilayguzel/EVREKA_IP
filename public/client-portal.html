@@ -379,14 +379,31 @@
 
         <div class="tab-pane fade" id="portfolio-content">
             <h1 class="header-title">Portföyüm</h1>
-            <div class="card p-4 mb-4">
-                <h5 class="card-title">Filtreleme ve Arama</h5>
-                <div class="form-row">
-                    <div class="form-group col-md-6"><input class="form-control" id="portfolioSearchText" placeholder="Marka, Başvuru No vb..." type="text"/></div>
-                    <div class="form-group col-md-3"><select class="form-control" id="portfolioDurumFilter"><option value="TÜMÜ">Tümü</option><option value="Başvuru">Başvuru</option><option value="Tescilli">Tescilli</option><option value="İtiraz">İtiraz</option></select></div>
-                    <div class="form-group col-md-3"><button class="btn btn-primary btn-block" id="portfolioFilterBtn">Filtrele</button></div>
+                <div class="card p-4 mb-4">
+                    <h5 class="card-title">Filtreleme ve Arama</h5>
+                    <div class="form-row">
+                        <div class="form-group col-md-5">
+                            <input class="form-control" id="portfolioSearchText" placeholder="Marka, Başvuru No vb..." type="text"/>
+                        </div>
+                        <div class="form-group col-md-3">
+                            <select class="form-control" id="portfolioDurumFilter">
+                                <option value="TÜMÜ">Tümü</option>
+                                <option value="Başvuru">Başvuru</option>
+                                <option value="Tescilli">Tescilli</option>
+                                <option value="İtiraz">İtiraz</option>
+                            </select>
+                        </div>
+                        <div class="form-group col-md-2">
+                            <button class="btn btn-primary btn-block" id="portfolioFilterBtn">Filtrele</button>
+                        </div>
+                        <div class="form-group col-md-2">
+                            <div class="btn-group btn-block">
+                                <button type="button" class="btn btn-success" onclick="window.exportActiveTable('excel')" title="Excel'e Aktar"><i class="fas fa-file-excel"></i></button>
+                                <button type="button" class="btn btn-danger" onclick="window.exportActiveTable('pdf')" title="PDF'e Aktar"><i class="fas fa-file-pdf"></i></button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-            </div>
             <div class="d-flex align-items-center justify-content-between flex-wrap mb-2" id="portfolioTabsBar">
                 <ul class="nav nav-tabs mb-2 mb-sm-0" id="portfolioTopTabs" role="tablist">
                     <li class="nav-item"><a class="nav-link active" data-toggle="tab" href="#marka-list" role="tab">Marka</a></li>
@@ -694,6 +711,9 @@
 
 <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.29/jspdf.plugin.autotable.min.js"></script>
 
 <script type="module">
     import { authService, db } from './firebase-config.js';
@@ -2406,7 +2426,161 @@ window.toggleColumnFilter = function(icon, tableId, colIdx) {
         window.applyMasterFilter();
     };
 
-    // === 3. TÜM EVENT LISTENER'LAR (DOCUMENT READY) ===
+// === GENEL EXPORT YÖNETİCİSİ ===
+    window.exportActiveTable = function(type) {
+    // 1. Aktif Sekmeyi Bul
+    const activeTabId = $('#portfolioTopTabs a.nav-link.active').attr('href');
+    let dataToExport = [];
+    let fileName = 'Portfoy_Listesi';
+    let headers = []; // { key: 'veri_objesindeki_key', title: 'Excel_Basligi' }
+
+    // 2. Sekmeye Göre Veri Kaynağını ve Başlıkları Belirle
+    if (activeTabId === '#marka-list') {
+        fileName = 'Marka_Listesi';
+        // Globalde tuttuğumuz filtrelenmiş veriyi alıyoruz
+        const rawData = window.markaPaginationData?.allData || [];
+        
+        // Veriyi düzleştirme (Flatten) ve temizleme
+        dataToExport = rawData.map(item => ({
+            menise: (item.origin || 'TÜRKPATENT').includes('TURK') ? 'TÜRKPATENT' : (item.country || 'Yurtdışı'),
+            markaAdi: item.title || item.brandText || '-',
+            basvuruNo: item.applicationNumber || '-',
+            tescilNo: item.internationalRegNumber || item.wipoIrNumber || item.registrationNumber || '-',
+            basvuruTarihi: window.formatDateTR(item.applicationDate),
+            yenilemeTarihi: window.formatDateTR(item.renewalDate),
+            durum: item.status || item.statusText || '-',
+            siniflar: (Array.isArray(item.goodsAndServicesByClass) ? item.goodsAndServicesByClass.map(c=>c.classNo).join(', ') : item.classes) || '-'
+        }));
+
+        headers = [
+            { key: 'menise', title: 'Menşe' },
+            { key: 'markaAdi', title: 'Marka Adı' },
+            { key: 'basvuruNo', title: 'Başvuru No' },
+            { key: 'tescilNo', title: 'Tescil No' },
+            { key: 'basvuruTarihi', title: 'Başvuru Tarihi' },
+            { key: 'yenilemeTarihi', title: 'Yenileme Tarihi' },
+            { key: 'durum', title: 'Durum' },
+            { key: 'siniflar', title: 'Sınıflar' }
+        ];
+
+    } else if (activeTabId === '#dava-itiraz-list') {
+        fileName = 'Itiraz_Listesi';
+        const rawData = window.davaItirazPaginationData?.allData || [];
+        
+        dataToExport = rawData.map(item => ({
+            islemTipi: item.transactionTypeName || '-',
+            markaAdi: item.title || '-',
+            basvuruNo: item.applicationNumber || '-',
+            karsiTaraf: item.applicantName || '-',
+            islemTarihi: item.epatsDate || '-',
+            durum: item.statusText || '-'
+        }));
+
+        headers = [
+            { key: 'islemTipi', title: 'İşlem Tipi' },
+            { key: 'markaAdi', title: 'Marka/Konu' },
+            { key: 'basvuruNo', title: 'Başvuru No' },
+            { key: 'karsiTaraf', title: 'Karşı Taraf' },
+            { key: 'islemTarihi', title: 'Tarih' },
+            { key: 'durum', title: 'Durum' }
+        ];
+
+    } else if (activeTabId === '#dava-list') {
+        fileName = 'Dava_Listesi';
+        const rawData = window.davaPaginationData?.allData || [];
+
+        dataToExport = rawData.map(item => ({
+            davaNo: item.caseNo || '-',
+            baslik: item.title || '-',
+            mahkeme: item.court || '-',
+            karsiTaraf: item.opposingParty || '-',
+            acilisTarihi: item.openingDate || '-',
+            durum: item.suitStatus || '-'
+        }));
+
+        headers = [
+            { key: 'davaNo', title: 'Dava No' },
+            { key: 'baslik', title: 'Konu' },
+            { key: 'mahkeme', title: 'Mahkeme' },
+            { key: 'karsiTaraf', title: 'Karşı Taraf' },
+            { key: 'acilisTarihi', title: 'Açılış Tarihi' },
+            { key: 'durum', title: 'Durum' }
+        ];
+    } else {
+        alert('Bu sekme için export özelliği henüz aktif değil veya veri yok.');
+        return;
+    }
+
+    if (dataToExport.length === 0) {
+        alert('Dışa aktarılacak veri bulunamadı.');
+        return;
+    }
+
+    // 3. Export İşlemini Tetikle
+    const today = new Date().toISOString().slice(0,10);
+    const finalFileName = `${fileName}_${today}`;
+
+    if (type === 'excel') {
+        window.generateExcel(dataToExport, headers, finalFileName);
+    } else if (type === 'pdf') {
+        window.generatePDF(dataToExport, headers, finalFileName);
+    }
+};
+
+// === HELPER: EXCEL OLUŞTURUCU ===
+    window.generateExcel = function(data, headers, filename) {
+    // 1. Veriyi Excel formatına uygun hale getir (Başlıkları kullanarak)
+    const excelData = data.map(row => {
+        let newRow = {};
+        headers.forEach(h => {
+            newRow[h.title] = row[h.key];
+        });
+        return newRow;
+    });
+
+    // 2. Workbook oluştur
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(excelData);
+
+    // Kolon genişliklerini ayarla (Otomatik sığdırma basit versiyon)
+    const wscols = headers.map(() => ({ wch: 20 }));
+    ws['!cols'] = wscols;
+
+    XLSX.utils.book_append_sheet(wb, ws, "Liste");
+    XLSX.writeFile(wb, `${filename}.xlsx`);
+};
+
+// === HELPER: PDF OLUŞTURUCU ===
+    window.generatePDF = function(data, headers, filename) {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+
+    // Font sorunu için basit çözüm: Standart font kullanıyoruz. 
+    // Türkçe karakterlerde (ş,ğ) sorun çıkarsa özel font yüklemek gerekir.
+    // Şimdilik jsPDF'in varsayılan fontuyla ilerliyoruz.
+    
+    // Tablo Başlıkları
+    const head = [headers.map(h => h.title)];
+    // Tablo Verileri
+    const body = data.map(row => headers.map(h => row[h.key]));
+
+    doc.text("Portföy Raporu", 14, 15);
+    doc.setFontSize(10);
+    doc.text(`Tarih: ${new Date().toLocaleDateString('tr-TR')}`, 14, 22);
+
+    doc.autoTable({
+        head: head,
+        body: body,
+        startY: 25,
+        theme: 'grid',
+        styles: { fontSize: 8, font: 'helvetica' }, // Türkçe karakter desteği sınırlı olabilir
+        headStyles: { fillColor: [41, 128, 185] } // Mavi başlık
+    });
+
+    doc.save(`${filename}.pdf`);
+};
+
+// === 3. TÜM EVENT LISTENER'LAR (DOCUMENT READY) ===
     $(document).ready(function() {
         
         // Başlangıç
@@ -2449,7 +2623,7 @@ window.toggleColumnFilter = function(icon, tableId, colIdx) {
         $('#invoiceDurumFilter').off('change').on('change', function() { 
             window.applyInvoiceFilter(); 
         });
-        
+
         // Filtre Menüsünü Kapatma
         $(document).on('click', function(e) {
             if (!$(e.target).closest('.column-filter-dropdown').length && !$(e.target).hasClass('filter-icon')) {
