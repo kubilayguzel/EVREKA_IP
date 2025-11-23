@@ -210,6 +210,7 @@ class DataEntryModule {
     }
 
     handleOriginChange(originType) {
+        this.updateRegistrationInputUI(originType);
         const countrySelectionContainer = document.getElementById('countrySelectionContainer');
         const singleSelectWrapper = document.getElementById('singleCountrySelectWrapper');
         const multiSelectWrapper = document.getElementById('multiCountrySelectWrapper');
@@ -242,6 +243,26 @@ class DataEntryModule {
             countrySelectionContainer.style.display = 'block';
             multiSelectWrapper.style.display = 'block';
             this.setupMultiCountrySelect();
+        }
+    }
+
+    // ✅ YENİ FONKSİYON: Arayüzde Tescil No alanını IR No olarak değiştirir
+    updateRegistrationInputUI(origin) {
+        const regLabel = document.getElementById('registrationNumberLabel');
+        const regInput = document.getElementById('registrationNumber');
+        
+        if (!regLabel || !regInput) return;
+
+        if (origin === 'WIPO') {
+            regLabel.textContent = 'WIPO IR Numarası';
+            regInput.placeholder = 'WIPO IR Numarasını girin...';
+        } else if (origin === 'ARIPO') {
+            regLabel.textContent = 'ARIPO IR Numarası';
+            regInput.placeholder = 'ARIPO IR Numarasını girin...';
+        } else {
+            // Varsayılan (TÜRKPATENT vb.)
+            regLabel.textContent = 'Tescil Numarası';
+            regInput.placeholder = 'Tescil numarasını girin';
         }
     }
 
@@ -395,7 +416,7 @@ class DataEntryModule {
             return;
         }
 
-        // 1. Veriyi Topla
+        // 1. Veriyi Topla (Strategy Pattern)
         const recordData = strategy.collectData(this);
 
         // 2. Validasyon
@@ -405,9 +426,10 @@ class DataEntryModule {
             return;
         }
 
-        // 3. Ortak Alanlar
+        // 3. Ortak Alanları Ekle (Metadata)
         recordData.recordOwnerType = this.recordOwnerTypeSelect.value;
         
+        // Create tarihi sadece yeni kayıtta, Update tarihi her zaman
         if (!this.editingRecordId) {
             recordData.createdAt = new Date().toISOString(); 
         }
@@ -417,16 +439,27 @@ class DataEntryModule {
             this.saveBtn.disabled = true;
             this.saveBtn.textContent = 'İşleniyor...';
 
-            // --- RESİM YÜKLEME ---
+            // ============================================================
+            // 🖼️ DOSYA YÜKLEME (Sadece Marka ve Dosya Seçiliyse)
+            // ============================================================
             if (ipType === 'trademark') {
                 if (this.uploadedBrandImage instanceof File) {
-                    console.log('📤 Resim yükleniyor...');
+                    console.log('📤 Resim Storage\'a yükleniyor...');
                     this.saveBtn.textContent = 'Resim Yükleniyor...';
+                    
                     const fileName = `${Date.now()}_${this.uploadedBrandImage.name}`;
-                    const downloadURL = await this.uploadFileToStorage(this.uploadedBrandImage, `brand-images/${fileName}`);
-                    if (downloadURL) recordData.brandImageUrl = downloadURL;
-                    else throw new Error("Resim yüklenemedi.");
+                    const storagePath = `brand-images/${fileName}`;
+                    
+                    const downloadURL = await this.uploadFileToStorage(this.uploadedBrandImage, storagePath);
+                    
+                    if (downloadURL) {
+                        recordData.brandImageUrl = downloadURL;
+                        console.log('✅ Resim yüklendi, URL:', downloadURL);
+                    } else {
+                        throw new Error("Resim yüklenemedi.");
+                    }
                 } else if (typeof this.uploadedBrandImage === 'string') {
+                    // Mevcut URL'i koru
                     recordData.brandImageUrl = this.uploadedBrandImage;
                 }
             }
@@ -434,21 +467,23 @@ class DataEntryModule {
             this.saveBtn.textContent = 'Kaydediliyor...';
 
             // ============================================================
-            // 🛠️ DÜZELTME BURADA (EDIT MODU)
+            // 🔄 KAYIT İŞLEMİ (EDIT vs CREATE)
             // ============================================================
             
             if (this.editingRecordId) {
-                // --- UPDATE MODU ---
+                // --- GÜNCELLEME (UPDATE) MODU ---
                 console.log('✏️ Güncelleme modu, ID:', this.editingRecordId);
 
                 if (ipType === 'suit') {
+                    // Dava Güncelleme
                     const db = getFirestore();
-                    await updateDoc(doc(db, 'suits', this.editingRecordId), recordData);
-                    alert('Dava kaydı güncellendi.');
+                    const suitRef = doc(db, 'suits', this.editingRecordId);
+                    await updateDoc(suitRef, recordData);
+                    alert('Dava kaydı başarıyla güncellendi.');
                 } else {
                     
-                    // ⚠️ KRİTİK DÜZELTME: WIPO/ARIPO ise güncel ülke listesini Parent verisine ekle
-                    // Böylece Parent kayıt "Benim artık DE ve FR ülkelerim var" diyecek.
+                    // ⚠️ WIPO/ARIPO Kontrolü: Parent'ın ülke listesini güncelle
+                    // Eğer ekrandan yeni ülke seçildiyse, bunu Parent verisine işle.
                     if (recordData.origin === 'WIPO' || recordData.origin === 'ARIPO') {
                         if (this.selectedCountries && this.selectedCountries.length > 0) {
                             recordData.countries = this.selectedCountries.map(c => c.code);
@@ -456,40 +491,54 @@ class DataEntryModule {
                         }
                     }
 
-                    // 1. Parent Kaydı Güncelle (Artık countries dizisi de gidiyor)
+                    // 1. Parent Kaydı Güncelle
                     const result = await ipRecordsService.updateRecord(this.editingRecordId, recordData);
                     
-                    if (!result.success) throw new Error(result.error || 'Güncelleme başarısız.');
+                    if (!result.success) {
+                        throw new Error(result.error || 'Güncelleme başarısız.');
+                    }
                     
-                    // 2. Child Kayıtları Senkronize Et (Eksikleri Yarat)
+                    // 2. WIPO/ARIPO Child İşlemleri (Senkronizasyon)
                     if (recordData.origin === 'WIPO' || recordData.origin === 'ARIPO') {
-                        console.log('🔄 Child Senkronizasyonu...');
+                        console.log('🔄 Child Senkronizasyonu başlatılıyor...');
+                        
+                        // A) Eksik olan (yeni eklenen) ülkeleri yarat
                         await this.syncAndCreateMissingChildren(this.editingRecordId, recordData);
+
+                        // B) Mevcut Child kayıtlarına değişiklikleri yay (İsim, tarih, IR No vb.)
+                        await this.propagateUpdatesToChildren(this.editingRecordId, recordData);
                     }
 
-                    alert('Kayıt ve ülke listesi başarıyla güncellendi.');
+                    alert('Kayıt ve bağlı tüm dosyalar başarıyla güncellendi.');
                 }
 
             } else {
-                // --- CREATE MODU (Burada değişiklik yok, zaten çalışıyor) ---
+                // --- YENİ KAYIT (CREATE) MODU ---
                 console.log('➕ Yeni kayıt modu...');
+                
                 if (ipType === 'suit') {
                     const db = getFirestore();
-                    await addDoc(collection(db, 'suits'), recordData);
-                    alert('Dava kaydı oluşturuldu!');
+                    const suitsColRef = collection(db, 'suits');
+                    await addDoc(suitsColRef, recordData);
+                    alert('Dava kaydı başarıyla oluşturuldu!');
                 } else {
+                    // Parent + Child oluşturma mantığı burada (Create Modu)
                     await this.saveIpRecordWithStrategy(recordData); 
                 }
             }
 
+            // Başarılı ise yönlendir
             window.location.href = 'portfolio.html';
 
         } catch (error) {
             console.error('Kaydetme hatası:', error);
-            const msg = error.message?.includes('duplikasyon') 
-                ? 'HATA: Bu kayıt zaten mevcut.' 
-                : ('Bir hata oluştu: ' + error.message);
-            alert(msg);
+            
+            // Mükerrer kayıt hatası kontrolü
+            if (error.message && error.message.includes('duplikasyon')) {
+                alert('HATA: Bu kayıt zaten mevcut (Aynı numara ile).');
+            } else {
+                alert('Bir hata oluştu: ' + error.message);
+            }
         } finally {
             this.saveBtn.disabled = false;
             this.saveBtn.textContent = 'Kaydet';
@@ -1046,6 +1095,7 @@ class DataEntryModule {
             const originSelect = document.getElementById('originSelect');
             if (originSelect && recordData.origin) {
                 this.populateOriginDropdown('originSelect', recordData.origin, ipType);
+                this.updateRegistrationInputUI(recordData.origin);
                 
                 // Child Kayıt Kontrolü (Read-Only Ülke)
                 if ((recordData.origin === 'WIPO' || recordData.origin === 'ARIPO') && recordData.transactionHierarchy === 'child') {
