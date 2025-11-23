@@ -443,6 +443,41 @@ export const ipRecordsService = {
         }
     },
 
+    // ✅ YENİ EKLENECEK FONKSİYON: Parent ve Child'ları birlikte siler
+    async deleteParentWithChildren(parentId) {
+        if (!isFirebaseAvailable) return { success: false, error: "Firebase kullanılamıyor." };
+
+        try {
+            console.log(`🗑️ Cascading Delete başlatılıyor. Parent ID: ${parentId}`);
+
+            // 1. Önce bu Parent'a bağlı Child kayıtları bul
+            // TransactionHierarchy kontrolü ile sadece 'child' olanları seçiyoruz
+            const childQuery = query(
+                collection(db, 'ipRecords'),
+                where('parentId', '==', parentId),
+                where('transactionHierarchy', '==', 'child')
+            );
+
+            const childSnapshot = await getDocs(childQuery);
+
+            // 2. Bulunan Child kayıtları sil
+            // Not: Burada 'this.deleteRecord' çağırıyoruz ki child'ın altındaki transaction'lar da temizlensin.
+            const deleteChildPromises = childSnapshot.docs.map(doc => this.deleteRecord(doc.id));
+            
+            await Promise.all(deleteChildPromises);
+            console.log(`✅ ${childSnapshot.size} adet alt kayıt (child) başarıyla silindi.`);
+
+            // 3. Son olarak Ana Kaydı (Parent) sil
+            const result = await this.deleteRecord(parentId);
+
+            return result;
+
+        } catch (error) {
+            console.error('❌ Toplu silme işlemi sırasında hata:', error);
+            return { success: false, error: error.message };
+        }
+    },
+    
     // ipRecordsService içine ekle
     async getObjectionParents(limitCount = 50) {
     if (!isFirebaseAvailable) return { success: true, data: [] };
