@@ -1605,55 +1605,86 @@ populateFormFields(recordData) {
 }
 
 async handleSavePortfolio() {
-    const ipType = this.ipTypeSelect.value;
-    const strategy = this.strategies[ipType];
+        const ipType = this.ipTypeSelect.value;
+        const strategy = this.strategies[ipType];
 
-    if (!strategy) {
-        alert('Geçersiz IP Türü');
-        return;
-    }
-
-    // 1. Veriyi Topla (Strategy yapar)
-    // Context olarak 'this' yani DataEntryModule'ün kendisini gönderiyoruz ki 
-    // selectedApplicants, uploadedBrandImage vb. verilere erişebilsin.
-    const recordData = strategy.collectData(this);
-
-    // 2. Validasyon (Strategy yapar)
-    const error = strategy.validate(recordData, this);
-    if (error) {
-        alert(error);
-        return;
-    }
-
-    // 3. Ortak Alanları Ekle (Record Owner Type vb.)
-    recordData.recordOwnerType = this.recordOwnerTypeSelect.value;
-    recordData.createdAt = new Date().toISOString();
-
-    try {
-        this.saveBtn.disabled = true;
-        this.saveBtn.textContent = 'Kaydediliyor...';
-
-        if (ipType === 'suit') {
-            // Davalar 'suits' koleksiyonuna gidiyor
-            const db = getFirestore(); // Import ettiğinden emin ol
-            const suitsColRef = collection(db, 'suits');
-            await addDoc(suitsColRef, recordData);
-            alert('Dava kaydı başarıyla oluşturuldu!');
-        } else {
-
-            await this.saveIpRecordWithStrategy(recordData); 
+        if (!strategy) {
+            alert('Geçersiz IP Türü');
+            return;
         }
 
-        window.location.href = 'portfolio.html';
+        // 1. Veriyi Topla
+        const recordData = strategy.collectData(this);
 
-    } catch (error) {
-        console.error('Kaydetme hatası:', error);
-        alert('Bir hata oluştu: ' + error.message);
-    } finally {
-        this.saveBtn.disabled = false;
-        this.saveBtn.textContent = 'Kaydet';
+        // 2. Validasyon
+        const error = strategy.validate(recordData, this);
+        if (error) {
+            alert(error);
+            return;
+        }
+
+        // 3. Ortak Alanları Ekle
+        recordData.recordOwnerType = this.recordOwnerTypeSelect.value;
+        recordData.createdAt = new Date().toISOString();
+
+        try {
+            this.saveBtn.disabled = true;
+            this.saveBtn.textContent = 'İşleniyor...';
+
+            // ============================================================
+            // 🛠️ YENİ EKLENEN KISIM: Dosya Yükleme Mantığı
+            // ============================================================
+            
+            // Eğer Marka formuysa ve bir resim dosyası seçilmişse
+            if (ipType === 'trademark') {
+                // this.uploadedBrandImage kullanıcının seçtiği ham dosyadır
+                if (this.uploadedBrandImage instanceof File) {
+                    console.log('📤 Resim Storage\'a yükleniyor...');
+                    this.saveBtn.textContent = 'Resim Yükleniyor...';
+                    
+                    const fileName = `${Date.now()}_${this.uploadedBrandImage.name}`;
+                    const storagePath = `brand-images/${fileName}`;
+                    
+                    // Eski dosyandaki upload fonksiyonunu çağırıyoruz
+                    const downloadURL = await this.uploadFileToStorage(this.uploadedBrandImage, storagePath);
+                    
+                    if (downloadURL) {
+                        recordData.brandImageUrl = downloadURL; // Dosya objesini URL string'i ile değiştir
+                        console.log('✅ Resim yüklendi, URL:', downloadURL);
+                    } else {
+                        throw new Error("Resim sunucuya yüklenemedi, işlem iptal edildi.");
+                    }
+                } 
+                // Eğer yeni resim seçilmediyse ama düzenleme modundaysak ve eski URL duruyorsa
+                else if (typeof this.uploadedBrandImage === 'string') {
+                    recordData.brandImageUrl = this.uploadedBrandImage;
+                }
+            }
+            // ============================================================
+
+            this.saveBtn.textContent = 'Kaydediliyor...';
+
+            if (ipType === 'suit') {
+                const db = getFirestore();
+                const suitsColRef = collection(db, 'suits');
+                await addDoc(suitsColRef, recordData);
+                alert('Dava kaydı başarıyla oluşturuldu!');
+            } else {
+                // Burada artık recordData.brandImageUrl bir string (URL), hata vermeyecek.
+                await this.saveIpRecordWithStrategy(recordData); 
+            }
+
+            // Başarılı ise yönlendir
+            window.location.href = 'portfolio.html';
+
+        } catch (error) {
+            console.error('Kaydetme hatası:', error);
+            alert('Bir hata oluştu: ' + error.message);
+        } finally {
+            this.saveBtn.disabled = false;
+            this.saveBtn.textContent = 'Kaydet';
+        }
     }
-}
 
 /**
  * WIPO/ARIPO parent kaydında ülke listesi değiştiyse:
