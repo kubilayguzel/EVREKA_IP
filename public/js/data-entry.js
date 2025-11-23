@@ -1659,7 +1659,46 @@ populateFormFields(recordData) {
             }
             
         // ✅ YENİ: Origin değerine göre ülke seçimini ayarla
-            if (recordData.origin === 'Yurtdışı Ulusal') {
+            // ÖNCELİKLE CHILD KONTROLÜ
+            if ((recordData.origin === 'WIPO' || recordData.origin === 'ARIPO') && recordData.transactionHierarchy === 'child') {
+                console.log('🔍 WIPO/ARIPO Child kaydı yükleniyor, ülke:', recordData.country);
+                
+                // Child kayıtlarda ülkeyi selectedCountries array'ine ekle
+                if (recordData.country) {
+                    const country = this.allCountries.find(c => c.code === recordData.country);
+                    if (country) {
+                        this.selectedCountries = [{ code: country.code, name: country.name }];
+                        console.log('✅ Ülke bulundu:', country);
+                    } else {
+                        this.selectedCountries = [{ code: recordData.country, name: recordData.country }];
+                        console.log('⚠️ Ülke bulunamadı, kod kullanılıyor:', recordData.country);
+                    }
+                }
+                
+                // Çoklu ülke seçim arayüzünü MANUEL olarak göster (handleOriginChange kullanma)
+                const countrySelectionContainer = document.getElementById('countrySelectionContainer');
+                const multiSelectWrapper = document.getElementById('multiCountrySelectWrapper');
+                const singleSelectWrapper = document.getElementById('singleCountrySelectWrapper');
+                const title = document.getElementById('countrySelectionTitle');
+                
+                if (countrySelectionContainer && multiSelectWrapper && title) {
+                    title.textContent = `Seçim Yapılacak Ülkeler (${recordData.origin})`;
+                    countrySelectionContainer.style.display = 'block';
+                    singleSelectWrapper.style.display = 'none';
+                    multiSelectWrapper.style.display = 'block';
+                    this.setupMultiCountrySelect();
+                    console.log('✅ Çoklu ülke seçim arayüzü gösterildi');
+                } else {
+                    console.log('❌ Ülke seçim container\'ları bulunamadı');
+                }
+                
+                // Render et
+                setTimeout(() => {
+                    this.renderSelectedCountries();
+                    console.log('✅ Child ülke bilgisi render edildi:', this.selectedCountries);
+                }, 100);
+                
+            } else if (recordData.origin === 'Yurtdışı Ulusal') {
                 this.handleOriginChange(recordData.origin);
                 setTimeout(() => {
                     const countrySelect = document.getElementById('countrySelect');
@@ -1667,23 +1706,8 @@ populateFormFields(recordData) {
                         countrySelect.value = recordData.country;
                     }
                 }, 50);
-            } else if ((recordData.origin === 'WIPO' || recordData.origin === 'ARIPO') && recordData.transactionHierarchy === 'child') {
-                // Child kayıtlarda ülkeyi selectedCountries array'ine ekle ve render et
-                if (recordData.country) {
-                    const country = this.allCountries.find(c => c.code === recordData.country);
-                    if (country) {
-                        this.selectedCountries = [{ code: country.code, name: country.name }];
-                    } else {
-                        this.selectedCountries = [{ code: recordData.country, name: recordData.country }];
-                    }
-                }
-                // Çoklu ülke seçim arayüzünü göster
-                this.handleOriginChange('WIPO');
-                // Render et
-                setTimeout(() => {
-                    this.renderSelectedCountries();
-                }, 50);
             } else if (recordData.origin === 'WIPO' || recordData.origin === 'ARIPO') {
+                // PARENT kayıtlar için
                 this.handleOriginChange(recordData.origin);
                 // Çoklu seçim için veriyi state'e yükle ve render et
                 if (Array.isArray(recordData.countries)) {
