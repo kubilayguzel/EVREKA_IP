@@ -1675,19 +1675,25 @@ populateFormFields(recordData) {
                     }
                 }
                 
-                // Çoklu ülke seçim arayüzünü MANUEL olarak göster (handleOriginChange kullanma)
+                // Çoklu ülke seçim arayüzünü MANUEL olarak göster ama READ-ONLY yap
                 const countrySelectionContainer = document.getElementById('countrySelectionContainer');
                 const multiSelectWrapper = document.getElementById('multiCountrySelectWrapper');
                 const singleSelectWrapper = document.getElementById('singleCountrySelectWrapper');
                 const title = document.getElementById('countrySelectionTitle');
+                const searchInput = document.getElementById('countriesMultiSelectInput');
                 
                 if (countrySelectionContainer && multiSelectWrapper && title) {
-                    title.textContent = `Seçim Yapılacak Ülkeler (${recordData.origin})`;
+                    title.textContent = `Ülke (Değiştirilemez)`;
                     countrySelectionContainer.style.display = 'block';
                     singleSelectWrapper.style.display = 'none';
                     multiSelectWrapper.style.display = 'block';
-                    this.setupMultiCountrySelect();
-                    console.log('✅ Çoklu ülke seçim arayüzü gösterildi');
+                    
+                    // Arama inputunu gizle (child'da ülke değiştirilemez)
+                    if (searchInput) {
+                        searchInput.closest('.form-group').style.display = 'none';
+                    }
+                    
+                    console.log('✅ Child ülke read-only olarak gösterildi');
                 } else {
                     console.log('❌ Ülke seçim container\'ları bulunamadı');
                 }
@@ -1695,7 +1701,10 @@ populateFormFields(recordData) {
                 // Render et
                 setTimeout(() => {
                     this.renderSelectedCountries();
-                    console.log('✅ Child ülke bilgisi render edildi:', this.selectedCountries);
+                    // X butonlarını kaldır (child'da ülke silinmez)
+                    const removeButtons = document.querySelectorAll('#selectedCountriesList .remove-selected-item-btn');
+                    removeButtons.forEach(btn => btn.style.display = 'none');
+                    console.log('✅ Child ülke bilgisi read-only render edildi:', this.selectedCountries);
                 }, 100);
                 
             } else if (recordData.origin === 'Yurtdışı Ulusal') {
