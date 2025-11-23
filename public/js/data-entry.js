@@ -1612,7 +1612,10 @@ async loadRecordForEditing() {
 populateFormFields(recordData) {
     if (!recordData) return;
 
-    console.log('🔄 Form alanları doldruluyor:', recordData);
+    console.log('🔄 Form alanları doldruluyor:', JSON.stringify(recordData, null, 2));
+    console.log('📍 Origin:', recordData.origin);
+    console.log('📍 TransactionHierarchy:', recordData.transactionHierarchy);
+    console.log('📍 Country:', recordData.country);
 
     // IP türünü ayarla ve formu yeniden render et
     const ipType = recordData.type || recordData.ipType; // Yeni yapıda 'type' alanı
