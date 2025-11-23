@@ -1878,15 +1878,10 @@ async saveIpRecordWithStrategy(data) {
         const isInternational = (data.origin === 'WIPO' || data.origin === 'ARIPO');
         const hasCountries = this.selectedCountries && this.selectedCountries.length > 0;
 
-        console.log('🌍 WIPO Kontrol:', { 
-            origin: data.origin, 
-            isInt: isInternational, 
-            count: this.selectedCountries.length 
-        });
+        console.log('🌍 WIPO/ARIPO Temiz Kayıt Modu:', { origin: data.origin });
 
         if (isInternational && hasCountries) {
-            // === SENARYO A: WIPO/ARIPO (Parent + Children) ===
-            console.log('🚀 WIPO Modu devrede...');
+            console.log('🚀 Uluslararası Kayıt Başlıyor (Alanlar temizlenerek)...');
 
             // 1. Parent Hazırlığı
             const parentData = { 
@@ -1895,11 +1890,18 @@ async saveIpRecordWithStrategy(data) {
                 countries: this.selectedCountries.map(c => c.code)
             };
 
-            // IR Numarası Ayarı
+            // 🧹 Önce her iki alanı da objeden SİLİYORUZ (Clean Slate)
+            delete parentData.wipoIR;
+            delete parentData.aripoIR;
+
+            // Numarayı al
+            const irNumber = data.internationalRegNumber || data.registrationNumber;
+
+            // Sadece ilgili alanı EKLE (Diğeri silindiği için oluşmayacak)
             if (data.origin === 'WIPO') {
-                parentData.wipoIR = data.internationalRegNumber || data.registrationNumber;
-            } else {
-                parentData.aripoIR = data.internationalRegNumber || data.registrationNumber;
+                parentData.wipoIR = irNumber;
+            } else if (data.origin === 'ARIPO') {
+                parentData.aripoIR = irNumber;
             }
 
             // Parent Oluştur
@@ -1917,23 +1919,32 @@ async saveIpRecordWithStrategy(data) {
                     // Veriyi kopyala
                     const childData = { ...data };
 
-                    // 🧹 TEMİZLİK: Child kayıtta olmaması gereken veya çakışma yaratacak alanları SİLİYORUZ
-                    delete childData.applicationNumber; // Parent'ın başvuru numarası child'da olmamalı
-                    delete childData.registrationNumber; // Tescil numarası çakışmamalı
-                    delete childData.internationalRegNumber; // Bu wipoIR alanına taşınacak
-                    delete childData.countries; // Child kayıtta ülke listesi dizisine gerek yok
+                    // 🧹 TEMİZLİK: Gereksiz tüm alanları SİLİYORUZ
+                    delete childData.applicationNumber; 
+                    delete childData.registrationNumber; 
+                    delete childData.internationalRegNumber; 
+                    delete childData.countries; 
+                    
+                    // 🧹 Kritik Nokta: WIPO/ARIPO alanlarını da önce siliyoruz
+                    delete childData.wipoIR;
+                    delete childData.aripoIR;
 
-                    // ✅ EKLEMELER: Child'a özel alanları set et
+                    // ✅ EKLEMELER: Child'a özel alanlar
                     childData.transactionHierarchy = 'child';
                     childData.parentId = parentId;
                     childData.country = country.code;
                     childData.createdFrom = 'wipo_child_generation';
                     
-                    // IR Numaralarını ekle
-                    childData.wipoIR = parentData.wipoIR;
-                    childData.aripoIR = parentData.aripoIR;
+                    // Sadece Parent'ta var olan alanı Child'a ekle
+                    // (Parent'ta olmayan alan undefined döner, if içine girmez)
+                    if (parentData.wipoIR) {
+                        childData.wipoIR = parentData.wipoIR;
+                    }
+                    if (parentData.aripoIR) {
+                        childData.aripoIR = parentData.aripoIR;
+                    }
 
-                    console.log(`➡️ Child verisi hazırlanıyor (${country.code})...`);
+                    console.log(`➡️ Child hazırlanıyor (${country.code})...`);
 
                     const res = await ipRecordsService.createRecordFromDataEntry(childData);
                     
@@ -1942,7 +1953,6 @@ async saveIpRecordWithStrategy(data) {
                         return res;
                     } else {
                         console.error(`❌ Child Hatası (${country.code}):`, res.error);
-                        // Hatayı throw edelim ki Promise.all yakalasın veya konsolda kırmızı görelim
                         throw new Error(res.error);
                     }
                 } catch (err) {
@@ -1952,15 +1962,23 @@ async saveIpRecordWithStrategy(data) {
             });
 
             await Promise.all(promises);
-            console.log('🏁 WIPO işlemi tamamlandı.');
+            console.log('🏁 İşlem tamamlandı.');
 
-            // Transaction (Sadece Parent'a)
+            // Transaction (Parent)
             await this.addTransactionForNewRecord(parentId, data.ipType);
 
         } else {
             // === SENARYO B: TEKİL KAYIT ===
             console.log('📍 Tekil Kayıt Modu');
             
+            // Tekil kayıtta da temizlik yapalım
+            // Eğer TÜRKPATENT ise ne wipoIR ne aripoIR olmamalı
+            if (data.origin === 'TÜRKPATENT' || data.origin === 'Yurtdışı Ulusal' || data.origin === 'TURKEY_NATIONAL') {
+                 delete data.wipoIR;
+                 delete data.aripoIR;
+                 delete data.internationalRegNumber;
+            }
+
             if (data.origin === 'Yurtdışı Ulusal' && !data.country) {
                 const countrySelect = document.getElementById('countrySelect');
                 if (countrySelect) data.country = countrySelect.value;
