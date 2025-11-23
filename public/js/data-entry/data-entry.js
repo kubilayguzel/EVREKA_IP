@@ -392,7 +392,7 @@ class DataEntryModule {
             return;
         }
 
-        // 1. Veriyi Topla (Strategy Pattern)
+        // 1. Veriyi Topla
         const recordData = strategy.collectData(this);
 
         // 2. Validasyon
@@ -402,10 +402,9 @@ class DataEntryModule {
             return;
         }
 
-        // 3. Ortak Alanları Ekle (Metadata)
+        // 3. Ortak Alanlar
         recordData.recordOwnerType = this.recordOwnerTypeSelect.value;
         
-        // Tarihçeler: Create tarihi sadece yeni kayıtta, Update tarihi her zaman
         if (!this.editingRecordId) {
             recordData.createdAt = new Date().toISOString(); 
         }
@@ -415,27 +414,16 @@ class DataEntryModule {
             this.saveBtn.disabled = true;
             this.saveBtn.textContent = 'İşleniyor...';
 
-            // ============================================================
-            // 🖼️ DOSYA YÜKLEME (Sadece Marka ve Dosya Seçiliyse)
-            // ============================================================
+            // --- RESİM YÜKLEME ---
             if (ipType === 'trademark') {
                 if (this.uploadedBrandImage instanceof File) {
-                    console.log('📤 Resim Storage\'a yükleniyor...');
+                    console.log('📤 Resim yükleniyor...');
                     this.saveBtn.textContent = 'Resim Yükleniyor...';
-                    
                     const fileName = `${Date.now()}_${this.uploadedBrandImage.name}`;
-                    const storagePath = `brand-images/${fileName}`;
-                    
-                    const downloadURL = await this.uploadFileToStorage(this.uploadedBrandImage, storagePath);
-                    
-                    if (downloadURL) {
-                        recordData.brandImageUrl = downloadURL;
-                        console.log('✅ Resim yüklendi, URL:', downloadURL);
-                    } else {
-                        throw new Error("Resim yüklenemedi.");
-                    }
+                    const downloadURL = await this.uploadFileToStorage(this.uploadedBrandImage, `brand-images/${fileName}`);
+                    if (downloadURL) recordData.brandImageUrl = downloadURL;
+                    else throw new Error("Resim yüklenemedi.");
                 } else if (typeof this.uploadedBrandImage === 'string') {
-                    // Mevcut URL'i koru
                     recordData.brandImageUrl = this.uploadedBrandImage;
                 }
             }
@@ -443,63 +431,62 @@ class DataEntryModule {
             this.saveBtn.textContent = 'Kaydediliyor...';
 
             // ============================================================
-            // 🔄 KAYIT İŞLEMİ (EDIT vs CREATE)
+            // 🛠️ DÜZELTME BURADA (EDIT MODU)
             // ============================================================
             
             if (this.editingRecordId) {
-                // --- GÜNCELLEME (UPDATE) MODU ---
+                // --- UPDATE MODU ---
                 console.log('✏️ Güncelleme modu, ID:', this.editingRecordId);
 
                 if (ipType === 'suit') {
-                    // Dava Güncelleme
                     const db = getFirestore();
-                    const suitRef = doc(db, 'suits', this.editingRecordId);
-                    await updateDoc(suitRef, recordData);
-                    alert('Dava kaydı başarıyla güncellendi.');
+                    await updateDoc(doc(db, 'suits', this.editingRecordId), recordData);
+                    alert('Dava kaydı güncellendi.');
                 } else {
-                    // Marka/Patent/Tasarım Güncelleme
+                    
+                    // ⚠️ KRİTİK DÜZELTME: WIPO/ARIPO ise güncel ülke listesini Parent verisine ekle
+                    // Böylece Parent kayıt "Benim artık DE ve FR ülkelerim var" diyecek.
+                    if (recordData.origin === 'WIPO' || recordData.origin === 'ARIPO') {
+                        if (this.selectedCountries && this.selectedCountries.length > 0) {
+                            recordData.countries = this.selectedCountries.map(c => c.code);
+                            console.log('🌍 Parent ülke listesi güncelleniyor:', recordData.countries);
+                        }
+                    }
+
+                    // 1. Parent Kaydı Güncelle (Artık countries dizisi de gidiyor)
                     const result = await ipRecordsService.updateRecord(this.editingRecordId, recordData);
                     
-                    if (!result.success) {
-                        throw new Error(result.error || 'Güncelleme başarısız.');
-                    }
+                    if (!result.success) throw new Error(result.error || 'Güncelleme başarısız.');
                     
-                    // ✅ YENİ: WIPO/ARIPO ise Child Kayıtları Senkronize Et (Yeni eklenen ülkeler için)
+                    // 2. Child Kayıtları Senkronize Et (Eksikleri Yarat)
                     if (recordData.origin === 'WIPO' || recordData.origin === 'ARIPO') {
-                        console.log('🔄 WIPO/ARIPO Senkronizasyonu başlatılıyor...');
-                        // Bu fonksiyonu sınıfına eklediğinden emin ol
+                        console.log('🔄 Child Senkronizasyonu...');
                         await this.syncAndCreateMissingChildren(this.editingRecordId, recordData);
                     }
 
-                    alert('Kayıt başarıyla güncellendi.');
+                    alert('Kayıt ve ülke listesi başarıyla güncellendi.');
                 }
 
             } else {
-                // --- YENİ KAYIT (CREATE) MODU ---
+                // --- CREATE MODU (Burada değişiklik yok, zaten çalışıyor) ---
                 console.log('➕ Yeni kayıt modu...');
-                
                 if (ipType === 'suit') {
                     const db = getFirestore();
-                    const suitsColRef = collection(db, 'suits');
-                    await addDoc(suitsColRef, recordData);
-                    alert('Dava kaydı başarıyla oluşturuldu!');
+                    await addDoc(collection(db, 'suits'), recordData);
+                    alert('Dava kaydı oluşturuldu!');
                 } else {
-                    // Parent + Child oluşturma mantığı burada
                     await this.saveIpRecordWithStrategy(recordData); 
                 }
             }
 
-            // Başarılı ise yönlendir
             window.location.href = 'portfolio.html';
 
         } catch (error) {
             console.error('Kaydetme hatası:', error);
-            // Mükerrer kayıt hatası kontrolü
-            if (error.message && error.message.includes('duplikasyon')) {
-                alert('HATA: Bu kayıt zaten mevcut olduğu için işlem yapılamadı. Lütfen numarayı kontrol edin.');
-            } else {
-                alert('Bir hata oluştu: ' + error.message);
-            }
+            const msg = error.message?.includes('duplikasyon') 
+                ? 'HATA: Bu kayıt zaten mevcut.' 
+                : ('Bir hata oluştu: ' + error.message);
+            alert(msg);
         } finally {
             this.saveBtn.disabled = false;
             this.saveBtn.textContent = 'Kaydet';
