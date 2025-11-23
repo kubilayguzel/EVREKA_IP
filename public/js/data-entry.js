@@ -798,11 +798,18 @@ handleIPTypeChange(ipType) {
         // Durum select'ini STATUSES.trademark ile doldur
         const stSel = document.getElementById('trademarkStatus');
         if (stSel) {
-        stSel.innerHTML = STATUSES.trademark
-            .map(s => `<option value="${s.value}">${s.text}</option>`)
-            .join('');
-        // Varsayılan olarak "filed"
-        if (!stSel.value) stSel.value = 'filed';
+            // Boş option ekle
+            const emptyOpt = '<option value="">Durum Seçiniz...</option>';
+            const statusOptions = STATUSES.trademark
+                .map(s => `<option value="${s.value}">${s.text}</option>`)
+                .join('');
+            stSel.innerHTML = emptyOpt + statusOptions;
+            
+            // Düzenleme modunda değilse varsayılan değer atama
+            // (Düzenleme modundaysa populateFormFields içinde set edilecek)
+            if (!this.editingRecordId) {
+                stSel.value = '';
+            }
         }
 
         this.setupDynamicFormListeners();
@@ -1673,6 +1680,7 @@ populateFormFields(recordData) {
                     .join(',');
                 }
             }
+        
         // Marka özel alanları
         if (this.currentIpType === 'trademark') {
             const brandType = document.getElementById('brandType');
@@ -1691,6 +1699,12 @@ populateFormFields(recordData) {
             // ✅ Açıklama ana seviyeden
             const description = document.getElementById('brandDescription');
             if (description) description.value = recordData.description || '';
+            
+            // ✅ Status alanını doldur
+            const trademarkStatus = document.getElementById('trademarkStatus');
+            if (trademarkStatus && recordData.status) {
+                trademarkStatus.value = recordData.status;
+            }
             
             const b0 = Array.isArray(recordData.bulletins) ? recordData.bulletins[0] : null;
             const bNo = document.getElementById('bulletinNo');
