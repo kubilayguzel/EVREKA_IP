@@ -2404,34 +2404,43 @@ async saveTrademarkPortfolio(portfolioData) {
                 console.log('🔍 Parent kaydı güncelleniyor, country alanı silindi');
             }
 
-            result = await ipRecordsService.updateRecord(this.editingRecordId, dataToUpdate);
+    result = await ipRecordsService.updateRecord(this.editingRecordId, dataToUpdate);
             
         
-    // --- Child propagation modaldan seçilen ülkelere
-    try {
-    const __cp = this.__childProp || {};
-    if (__cp.isParentWipoAripo && Array.isArray(__cp.selectedChildCountries) && __cp.selectedChildCountries.length > 0) {
-        console.log('🔄 Modal seçimlerine göre child propagation başlatılıyor:', __cp.selectedChildCountries);
-        const parentUpdateFields = this.collectPortfolioFields();
-        const propagationResult = await this.propagateToSelectedChildren(__cp.parentRecord || {}, __cp.selectedChildCountries, parentUpdateFields);
-        console.log('✅ Child propagation tamamlandı:', propagationResult);
+    // --- Child propagation modaldan seçilen ülkelere (SADECE PARENT GÜNCELLEMESINDE)
+    if (dataToUpdate.transactionHierarchy !== 'child') {
+        try {
+        const __cp = this.__childProp || {};
+        if (__cp.isParentWipoAripo && Array.isArray(__cp.selectedChildCountries) && __cp.selectedChildCountries.length > 0) {
+            console.log('🔄 Modal seçimlerine göre child propagation başlatılıyor:', __cp.selectedChildCountries);
+            const parentUpdateFields = this.collectPortfolioFields();
+            const propagationResult = await this.propagateToSelectedChildren(__cp.parentRecord || {}, __cp.selectedChildCountries, parentUpdateFields);
+            console.log('✅ Child propagation tamamlandı:', propagationResult);
+        } else {
+            console.log('ℹ️ Child propagation atlandı - modal seçimi yok veya parent WIPO/ARIPO değil');
+        }
+        } catch(e) { 
+        console.warn('❌ Child propagation hatası:', e); 
+        alert('Parent güncellendi ancak bazı child kayıtlar güncellenemedi.');
+        }
     } else {
-        console.log('ℹ️ Child propagation atlandı - modal seçimi yok veya parent WIPO/ARIPO değil');
+        console.log('ℹ️ Child kaydı güncelleniyor, propagation atlandı');
     }
-    } catch(e) { 
-    console.warn('❌ Child propagation hatası:', e); 
-    alert('Parent güncellendi ancak bazı child kayıtlar güncellenemedi.');
-    }
+    
     // --- Propagate to selected child countries (if any) ---
         results.push(result);
             if (!result.success) success = false;
             mainRecordId = this.editingRecordId;
 
-            // ✅ WIPO/ARIPO ise child senkronizasyonu yap
-            try {
-                await this.syncWipoAripoChildren(this.editingRecordId, safeParentData);
-            } catch (e) {
-                console.warn('WIPO/ARIPO child senkronizasyonu uyarısı:', e);
+            // ✅ WIPO/ARIPO PARENT ise child senkronizasyonu yap (CHILD GÜNCELLEMESINDE YAPMA)
+            if (dataToUpdate.transactionHierarchy !== 'child') {
+                try {
+                    await this.syncWipoAripoChildren(this.editingRecordId, dataToUpdate);
+                } catch (e) {
+                    console.warn('WIPO/ARIPO child senkronizasyonu uyarısı:', e);
+                }
+            } else {
+                console.log('ℹ️ Child kaydı güncelleniyor, syncWipoAripoChildren atlandı');
             }
 
             // 🔚 Düzenleme modunda tek update yapıp döngüyü bitir
