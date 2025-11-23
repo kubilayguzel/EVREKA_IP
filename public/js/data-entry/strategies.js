@@ -1,27 +1,31 @@
-// js/strategies.js
-import { FormTemplates } from './form-templates.js'; // Az önce oluşturduğun dosya
-import { getSelectedNiceClasses } from '../nice-classification.js'; // Mevcut dosyan
-import { STATUSES } from '../../utils.js'; // Mevcut dosyan 
+// js/data-entry/strategies.js
 
-// Ortak Yardımcı Fonksiyonlar
+import { FormTemplates } from './form-templates.js';
+import { getSelectedNiceClasses } from '../nice-classification.js';
+import { STATUSES } from '../../utils.js';
+
+// Yardımcı: ID'den değer al
 const getVal = (id) => document.getElementById(id)?.value?.trim() || null;
 
+// Yardımcı: Tarih formatını DD.MM.YYYY -> YYYY-MM-DD çevirir
+const formatDate = (dateStr) => {
+    if (!dateStr) return null;
+    const parts = dateStr.split('.');
+    if (parts.length === 3) {
+        return `${parts[2]}-${parts[1]}-${parts[0]}`;
+    }
+    return dateStr;
+};
+
 class BaseStrategy {
-    render(container) {
-        container.innerHTML = '';
-    }
-    
-    // Validasyon mesajı döndürür, sorun yoksa null döner
-    validate(data) {
-        return null; 
-    }
+    render(container) { container.innerHTML = ''; }
+    validate(data) { return null; }
 }
 
 export class TrademarkStrategy extends BaseStrategy {
     render(container, isEditMode = false) {
         container.innerHTML = FormTemplates.getTrademarkForm();
         
-        // Durum select'ini doldur
         const stSel = document.getElementById('trademarkStatus');
         if (stSel) {
             const emptyOpt = '<option value="">Durum Seçiniz...</option>';
@@ -34,11 +38,10 @@ export class TrademarkStrategy extends BaseStrategy {
     }
 
     collectData(context) {
-        // Context: Ana sınıftan gelen veriler (this.selectedApplicants, vb.)
         const origin = getVal('originSelect');
         const brandText = getVal('brandExampleText');
         
-        // Nice Sınıflarını Formatla
+        // Nice Sınıflarını Daha Temiz Formatla
         let goodsAndServicesByClass = [];
         try {
             const rawNiceClasses = getSelectedNiceClasses();
@@ -54,9 +57,14 @@ export class TrademarkStrategy extends BaseStrategy {
                             acc.push(classObj);
                         }
                         if (rawText) {
-                            const lines = rawText.split(/[\n.]/).map(l => l.trim()).filter(Boolean);
+                            // Nokta veya yeni satıra göre böl ama parantez artıklarını temizle
+                            const lines = rawText.split(/[\n]/).map(l => l.trim()).filter(Boolean);
                             lines.forEach(line => {
-                                if (!classObj.items.includes(line)) classObj.items.push(line);
+                                // ".)" veya ")" gibi hatalı bitişleri temizle
+                                const cleanLine = line.replace(/^\)+|\)+$/g, '').trim(); 
+                                if (cleanLine && !classObj.items.includes(cleanLine)) {
+                                    classObj.items.push(cleanLine);
+                                }
                             });
                         }
                     }
@@ -65,29 +73,48 @@ export class TrademarkStrategy extends BaseStrategy {
             }
         } catch (e) { console.warn('Nice classes hatası:', e); }
 
+        // WIPO/ARIPO kontrolü
+        const isInternational = (origin === 'WIPO' || origin === 'ARIPO');
+
+        // Bülten verisi
+        const bulletinNo = getVal('bulletinNo');
+        const bulletinDate = getVal('bulletinDate');
+        const bulletins = (bulletinNo || bulletinDate) 
+            ? [{ bulletinNo, bulletinDate: formatDate(bulletinDate) }] 
+            : [];
+
         return {
+            // --- EKSİK OLAN ALANLAR EKLENDİ ---
             ipType: 'trademark',
+            type: 'trademark',           // <-- EKLENDİ (Detay sayfası için şart)
+            portfoyStatus: 'active',     // <-- EKLENDİ (Varsayılan aktif)
+            // ----------------------------------
+
             title: brandText,
             brandText: brandText,
-            applicationNumber: getVal('applicationNumber'), // Normal başvuru
-            internationalRegNumber: getVal('registrationNumber'), // WIPO/ARIPO IR No buraya giriliyor
-            applicationDate: getVal('applicationDate'),
-            registrationDate: getVal('registrationDate'),
-            renewalDate: getVal('renewalDate'),
+            
+            // Tarih formatlarını düzelt
+            applicationDate: formatDate(getVal('applicationDate')),
+            registrationDate: formatDate(getVal('registrationDate')),
+            renewalDate: formatDate(getVal('renewalDate')),
+            
+            // Numara Mantığı Düzeltildi
+            applicationNumber: getVal('applicationNumber'),
+            // Eğer WIPO değilse, 'registrationNumber' alanını 'registrationNumber' olarak kaydet.
+            // Eskiden yanlışlıkla internationalRegNumber'a atıyorduk.
+            registrationNumber: !isInternational ? getVal('registrationNumber') : null,
+            internationalRegNumber: isInternational ? getVal('registrationNumber') : null, 
+
             description: getVal('brandDescription'),
             status: getVal('trademarkStatus'),
             brandType: getVal('brandType'),
             brandCategory: getVal('brandCategory'),
-            bulletins: (getVal('bulletinNo') || getVal('bulletinDate')) 
-                ? [{ bulletinNo: getVal('bulletinNo'), bulletinDate: getVal('bulletinDate') }] 
-                : [],
+            bulletins: bulletins,
             
-            // Context'ten gelenler
             origin: origin,
             applicants: context.selectedApplicants.map(p => ({ id: p.id, email: p.email || null })),
             priorities: context.priorities || [],
             goodsAndServicesByClass: goodsAndServicesByClass,
-            // Dosya URL'i context'ten gelecek
             brandImageUrl: context.uploadedBrandImage
         };
     }
@@ -96,7 +123,6 @@ export class TrademarkStrategy extends BaseStrategy {
         if (!data.brandText) return 'Marka adı (Metni) zorunludur.';
         if (!data.applicants || data.applicants.length === 0) return 'En az bir başvuru sahibi seçmelisiniz.';
         
-        // WIPO/ARIPO Kontrolü
         if ((data.origin === 'WIPO' || data.origin === 'ARIPO')) {
             if (!data.internationalRegNumber) return `${data.origin} için IR Numarası (Tescil No alanında) zorunludur.`;
             if (!context.selectedCountries || context.selectedCountries.length === 0) return 'En az bir ülke seçmelisiniz.';
@@ -104,110 +130,82 @@ export class TrademarkStrategy extends BaseStrategy {
         
         if (!data.goodsAndServicesByClass || data.goodsAndServicesByClass.length === 0) return 'En az bir mal/hizmet sınıfı seçmelisiniz.';
 
-        return null; // Validasyon geçti
+        return null;
     }
 }
 
+// Diğer sınıflar (PatentStrategy, DesignStrategy, SuitStrategy) aynı kalabilir...
 export class PatentStrategy extends BaseStrategy {
-    render(container) {
-        container.innerHTML = FormTemplates.getPatentForm();
-    }
-
+    render(container) { container.innerHTML = FormTemplates.getPatentForm(); }
     collectData(context) {
         const title = getVal('patentTitle');
         return {
             ipType: 'patent',
+            type: 'patent', // <-- Patent için de ekle
+            portfoyStatus: 'active',
             title: title,
             applicationNumber: getVal('patentApplicationNumber'),
             description: getVal('patentDescription'),
-            status: 'başvuru', // Varsayılan
-            
+            status: 'başvuru',
             origin: getVal('originSelect'),
             applicants: context.selectedApplicants.map(p => ({ id: p.id, email: p.email || null })),
             priorities: context.priorities || [],
-            
             details: { patentInfo: { patentTitle: title, description: getVal('patentDescription') } }
         };
     }
-
-    validate(data) {
-        if (!data.title) return 'Patent başlığı zorunludur.';
-        return null;
-    }
+    validate(data) { if (!data.title) return 'Patent başlığı zorunludur.'; return null; }
 }
-
+// Design ve Suit sınıflarını da benzer mantıkla 'type' ekleyerek güncellemelisin.
 export class DesignStrategy extends BaseStrategy {
-    render(container) {
-        container.innerHTML = FormTemplates.getDesignForm();
-    }
-
+    render(container) { container.innerHTML = FormTemplates.getDesignForm(); }
     collectData(context) {
         const title = getVal('designTitle');
         return {
             ipType: 'design',
+            type: 'design', // <-- Tasarım için de ekle
+            portfoyStatus: 'active',
             title: title,
             applicationNumber: getVal('designApplicationNumber'),
             description: getVal('designDescription'),
             status: 'başvuru',
-            
             origin: getVal('originSelect'),
             applicants: context.selectedApplicants.map(p => ({ id: p.id, email: p.email || null })),
             priorities: context.priorities || [],
-            
             details: { designInfo: { designTitle: title, description: getVal('designDescription') } }
         };
     }
-
-    validate(data) {
-        if (!data.title) return 'Tasarım başlığı zorunludur.';
-        return null;
-    }
+    validate(data) { if (!data.title) return 'Tasarım başlığı zorunludur.'; return null; }
 }
-
 export class SuitStrategy extends BaseStrategy {
-    render(container) {
-        // Suit için alanlar dinamik eklendiği için burada sadece container temizlenip bırakılabilir
-        // veya ana yapı kurulabilir. DataEntryModule içinde renderSuitFields kullanılıyor.
-        // Şimdilik boş bırakıyoruz, çünkü Suit render mantığı biraz daha karmaşık (Task Type seçimine bağlı).
-        container.innerHTML = '<div id="suitSpecificFieldsContainer"></div>';
-    }
-    
-    // Suit için özel render helper
-    renderSpecificFields(taskName) {
-        return FormTemplates.getClientSection() + FormTemplates.getSubjectAssetSection() + FormTemplates.getSuitFields(taskName);
-    }
-
+    render(container) { container.innerHTML = '<div id="suitSpecificFieldsContainer"></div>'; }
+    renderSpecificFields(taskName) { return FormTemplates.getClientSection() + FormTemplates.getSubjectAssetSection() + FormTemplates.getSuitFields(taskName); }
     collectData(context) {
         const specificTaskType = context.suitSpecificTaskType;
         const clientPerson = context.suitClientPerson;
         const clientRole = getVal('clientRole');
-        
         return {
             ipType: 'suit',
+            type: 'suit', // <-- Dava için de ekle
+            portfoyStatus: 'active',
             title: specificTaskType ? `${specificTaskType.alias || specificTaskType.name} - ${clientPerson?.name}` : 'Yeni Dava',
-            
             origin: getVal('originSelect') || 'TURKEY_NATIONAL',
             country: getVal('countrySelect'),
-            
             client: clientPerson ? { id: clientPerson.id, name: clientPerson.name, role: clientRole } : null,
             clientRole: clientRole,
-            
             transactionType: specificTaskType ? { id: specificTaskType.id, name: specificTaskType.name, alias: specificTaskType.alias } : null,
             transactionTypeId: specificTaskType?.id || null,
-            
             suitDetails: {
                 court: getVal('suitCourt'),
                 description: getVal('suitDescription'),
                 opposingParty: getVal('opposingParty'),
                 opposingCounsel: getVal('opposingCounsel'),
                 caseNo: getVal('suitCaseNo'),
-                openingDate: getVal('suitOpeningDate'),
+                openingDate: formatDate(getVal('suitOpeningDate')), // Tarih formatı
             },
             suitStatus: getVal('suitStatusSelect') || 'filed',
             subjectAsset: context.suitSubjectAsset || null
         };
     }
-
     validate(data) {
         if (!data.client) return 'Müvekkil seçimi zorunludur.';
         if (!data.clientRole) return 'Müvekkil rolü seçimi zorunludur.';
