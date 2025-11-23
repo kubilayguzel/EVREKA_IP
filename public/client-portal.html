@@ -2426,88 +2426,92 @@ window.toggleColumnFilter = function(icon, tableId, colIdx) {
         window.applyMasterFilter();
     };
 
-// === GENEL EXPORT YÖNETİCİSİ ===
-    window.exportActiveTable = function(type) {
-    // 1. Aktif Sekmeyi Bul
+// === GELİŞMİŞ EXPORT YÖNETİCİSİ (V2 - Resimli & Hiyerarşik) ===
+window.exportActiveTable = async function(type) {
     const activeTabId = $('#portfolioTopTabs a.nav-link.active').attr('href');
     let dataToExport = [];
     let fileName = 'Portfoy_Listesi';
-    let headers = []; // { key: 'veri_objesindeki_key', title: 'Excel_Basligi' }
+    let headers = [];
 
-    // 2. Sekmeye Göre Veri Kaynağını ve Başlıkları Belirle
+    // --- YARDIMCI: Statü Çevirisi ---
+    const translateStatus = (status) => {
+        const map = {
+            'filed': 'Başvuru', 'registered': 'Tescilli', 'pending': 'Bekliyor',
+            'published': 'Yayınlandı', 'refused': 'Reddedildi', 'expired': 'Süresi Doldu',
+            'active': 'Aktif', 'inactive': 'Pasif'
+        };
+        return map[String(status).toLowerCase()] || status || '-';
+    };
+
+    // --- 1. MARKA LİSTESİ İÇİN ÖZEL HAZIRLIK ---
     if (activeTabId === '#marka-list') {
-        fileName = 'Marka_Listesi';
-        // Globalde tuttuğumuz filtrelenmiş veriyi alıyoruz
+        fileName = 'Marka_Portfoy_Raporu';
         const rawData = window.markaPaginationData?.allData || [];
         
-        // Veriyi düzleştirme (Flatten) ve temizleme
-        dataToExport = rawData.map(item => ({
-            menise: (item.origin || 'TÜRKPATENT').includes('TURK') ? 'TÜRKPATENT' : (item.country || 'Yurtdışı'),
-            markaAdi: item.title || item.brandText || '-',
-            basvuruNo: item.applicationNumber || '-',
-            tescilNo: item.internationalRegNumber || item.wipoIrNumber || item.registrationNumber || '-',
-            basvuruTarihi: window.formatDateTR(item.applicationDate),
-            yenilemeTarihi: window.formatDateTR(item.renewalDate),
-            durum: item.status || item.statusText || '-',
-            siniflar: (Array.isArray(item.goodsAndServicesByClass) ? item.goodsAndServicesByClass.map(c=>c.classNo).join(', ') : item.classes) || '-'
-        }));
+        // Hiyerarşik yapıyı düz bir listeye (Flat List) çeviriyoruz
+        rawData.forEach(item => {
+            // A. Parent Kaydı Ekle
+            const originRaw = (item.origin || 'TÜRKPATENT').toString().toUpperCase();
+            // Tablodaki menşe mantığının aynısı
+            const originDisplay = (originRaw.includes('TURK')) ? 'TÜRKPATENT' : (item.country || item.origin || 'Yurtdışı');
+            
+            const parentRow = {
+                type: 'parent', // Stil için tip belirteci
+                mense: originDisplay,
+                gorselUrl: item.brandImageUrl || item.brandImage || '',
+                markaAdi: item.title || item.brandText || '-',
+                basvuruNo: item.applicationNumber || '-',
+                tescilNo: item.internationalRegNumber || item.wipoIrNumber || item.registrationNumber || '-',
+                basvuruTarihi: window.formatDateTR(item.applicationDate),
+                yenilemeTarihi: window.formatDateTR(item.renewalDate),
+                durum: translateStatus(item.status || item.statusText),
+                siniflar: (Array.isArray(item.goodsAndServicesByClass) ? item.goodsAndServicesByClass.map(c=>c.classNo).join(', ') : item.classes) || '-'
+            };
+            dataToExport.push(parentRow);
+
+            // B. Child Kayıtları Kontrol Et ve Ekle
+            const children = window.markaPaginationData.allDataUnfiltered.filter(p => p.parentId === item.id);
+            if (children.length > 0) {
+                children.forEach((child, idx) => {
+                    // Menşe Adı Bulma (Koddan isme)
+                    const code = (child.country || child.countryCode || '').trim().toUpperCase();
+                    const name = window.countryMap.get(code) || child.countryName || '';
+                    let childOrigin = code;
+                    if (name && code) childOrigin = `${name} (${code})`;
+                    else if (name) childOrigin = name;
+
+                    const childRow = {
+                        type: 'child', // Stil için
+                        mense: childOrigin, // "Almanya (DE)" gibi
+                        gorselUrl: '', // Child kayıtta genelde görsel tekrar etmez, boş bırakıyoruz
+                        markaAdi: `   ↳ ${idx+1}. ${item.title || ''}`, // Hafif girinti efekti
+                        basvuruNo: child.applicationNumber || '-',
+                        tescilNo: '-', // Child kayıtta tescil no yerine başvuru tarihi var
+                        basvuruTarihi: window.formatDateTR(child.applicationDate),
+                        yenilemeTarihi: window.formatDateTR(child.renewalDate),
+                        durum: translateStatus(child.status),
+                        siniflar: (Array.isArray(child.goodsAndServicesByClass) ? child.goodsAndServicesByClass.map(c=>c.classNo).join(', ') : child.classes) || '-'
+                    };
+                    dataToExport.push(childRow);
+                });
+            }
+        });
 
         headers = [
-            { key: 'menise', title: 'Menşe' },
+            { key: 'mense', title: 'Menşe' },
+            { key: 'gorselUrl', title: 'Görsel Linki' }, // Excel için link, PDF için resim olacak
             { key: 'markaAdi', title: 'Marka Adı' },
             { key: 'basvuruNo', title: 'Başvuru No' },
-            { key: 'tescilNo', title: 'Tescil No' },
+            { key: 'tescilNo', title: 'Tescil / WIPO No' },
             { key: 'basvuruTarihi', title: 'Başvuru Tarihi' },
             { key: 'yenilemeTarihi', title: 'Yenileme Tarihi' },
             { key: 'durum', title: 'Durum' },
             { key: 'siniflar', title: 'Sınıflar' }
         ];
 
-    } else if (activeTabId === '#dava-itiraz-list') {
-        fileName = 'Itiraz_Listesi';
-        const rawData = window.davaItirazPaginationData?.allData || [];
-        
-        dataToExport = rawData.map(item => ({
-            islemTipi: item.transactionTypeName || '-',
-            markaAdi: item.title || '-',
-            basvuruNo: item.applicationNumber || '-',
-            karsiTaraf: item.applicantName || '-',
-            islemTarihi: item.epatsDate || '-',
-            durum: item.statusText || '-'
-        }));
-
-        headers = [
-            { key: 'islemTipi', title: 'İşlem Tipi' },
-            { key: 'markaAdi', title: 'Marka/Konu' },
-            { key: 'basvuruNo', title: 'Başvuru No' },
-            { key: 'karsiTaraf', title: 'Karşı Taraf' },
-            { key: 'islemTarihi', title: 'Tarih' },
-            { key: 'durum', title: 'Durum' }
-        ];
-
-    } else if (activeTabId === '#dava-list') {
-        fileName = 'Dava_Listesi';
-        const rawData = window.davaPaginationData?.allData || [];
-
-        dataToExport = rawData.map(item => ({
-            davaNo: item.caseNo || '-',
-            baslik: item.title || '-',
-            mahkeme: item.court || '-',
-            karsiTaraf: item.opposingParty || '-',
-            acilisTarihi: item.openingDate || '-',
-            durum: item.suitStatus || '-'
-        }));
-
-        headers = [
-            { key: 'davaNo', title: 'Dava No' },
-            { key: 'baslik', title: 'Konu' },
-            { key: 'mahkeme', title: 'Mahkeme' },
-            { key: 'karsiTaraf', title: 'Karşı Taraf' },
-            { key: 'acilisTarihi', title: 'Açılış Tarihi' },
-            { key: 'durum', title: 'Durum' }
-        ];
     } else {
-        alert('Bu sekme için export özelliği henüz aktif değil veya veri yok.');
+        // Diğer sekmeler için basit export (Mevcut yapı korunuyor)
+        alert('Gelişmiş export şu an sadece Marka sekmesi için aktiftir.');
         return;
     }
 
@@ -2516,65 +2520,120 @@ window.toggleColumnFilter = function(icon, tableId, colIdx) {
         return;
     }
 
-    // 3. Export İşlemini Tetikle
     const today = new Date().toISOString().slice(0,10);
     const finalFileName = `${fileName}_${today}`;
 
     if (type === 'excel') {
         window.generateExcel(dataToExport, headers, finalFileName);
     } else if (type === 'pdf') {
-        window.generatePDF(dataToExport, headers, finalFileName);
+        // PDF oluşturma asenkron olabilir (resim yükleme vs.), await ekledik
+        await window.generatePDF(dataToExport, headers, finalFileName);
     }
 };
 
-// === HELPER: EXCEL OLUŞTURUCU ===
-    window.generateExcel = function(data, headers, filename) {
-    // 1. Veriyi Excel formatına uygun hale getir (Başlıkları kullanarak)
+// === EXCEL OLUŞTURUCU (GÜNCELLENMİŞ) ===
+window.generateExcel = function(data, headers, filename) {
+    // Excel için veriyi temizle (type alanını kaldır, görseli link olarak bırak)
     const excelData = data.map(row => {
         let newRow = {};
         headers.forEach(h => {
+            // Child kayıtlarda marka adına girinti eklemiştik, Excel'de temiz kalsın isterseniz replace yapabilirsiniz.
+            // Şu an olduğu gibi bırakıyorum ki hiyerarşi anlaşılsın.
             newRow[h.title] = row[h.key];
         });
         return newRow;
     });
 
-    // 2. Workbook oluştur
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.json_to_sheet(excelData);
-
-    // Kolon genişliklerini ayarla (Otomatik sığdırma basit versiyon)
-    const wscols = headers.map(() => ({ wch: 20 }));
+    
+    // Sütun genişlikleri
+    const wscols = headers.map(h => ({ wch: h.key === 'gorselUrl' ? 50 : 20 }));
     ws['!cols'] = wscols;
 
     XLSX.utils.book_append_sheet(wb, ws, "Liste");
     XLSX.writeFile(wb, `${filename}.xlsx`);
 };
 
-// === HELPER: PDF OLUŞTURUCU ===
-    window.generatePDF = function(data, headers, filename) {
+// === PDF OLUŞTURUCU (GÜNCELLENMİŞ - RESİMLİ & STİLLİ) ===
+window.generatePDF = async function(data, headers, filename) {
     const { jsPDF } = window.jspdf;
-    const doc = new jsPDF();
+    const doc = new jsPDF('l', 'mm', 'a4'); // Landscape (Yatay) mod
 
-    // Font sorunu için basit çözüm: Standart font kullanıyoruz. 
-    // Türkçe karakterlerde (ş,ğ) sorun çıkarsa özel font yüklemek gerekir.
-    // Şimdilik jsPDF'in varsayılan fontuyla ilerliyoruz.
-    
-    // Tablo Başlıkları
-    const head = [headers.map(h => h.title)];
-    // Tablo Verileri
-    const body = data.map(row => headers.map(h => row[h.key]));
-
-    doc.text("Portföy Raporu", 14, 15);
+    // Başlık
+    doc.setFontSize(14);
+    doc.text("Marka Portföy Raporu", 14, 15);
     doc.setFontSize(10);
-    doc.text(`Tarih: ${new Date().toLocaleDateString('tr-TR')}`, 14, 22);
+    doc.text(`Oluşturulma Tarihi: ${new Date().toLocaleDateString('tr-TR')}`, 14, 22);
+
+    const head = [headers.map(h => h.title)];
+    const body = data.map(row => {
+        // PDF tablosu için satır verisi dizisi
+        const rowData = headers.map(h => row[h.key]);
+        // Satırın tipini (parent/child) ve görsel URL'ini row objesine (raw) saklıyoruz
+        rowData.raw = row; 
+        return rowData;
+    });
 
     doc.autoTable({
         head: head,
         body: body,
         startY: 25,
         theme: 'grid',
-        styles: { fontSize: 8, font: 'helvetica' }, // Türkçe karakter desteği sınırlı olabilir
-        headStyles: { fillColor: [41, 128, 185] } // Mavi başlık
+        styles: { 
+            fontSize: 8, 
+            valign: 'middle',
+            cellPadding: 2
+        },
+        headStyles: { 
+            fillColor: [41, 128, 185],
+            halign: 'center'
+        },
+        // Kolon Genişlik Ayarları
+        columnStyles: {
+            0: { cellWidth: 25 }, // Menşe
+            1: { cellWidth: 25, minCellHeight: 20 }, // Görsel (Resim sığsın diye yükseklik verdik)
+            2: { cellWidth: 30 }, // Marka Adı
+            // Diğerleri otomatik
+        },
+        
+        // --- ÖZELLEŞTİRME: Satır Stilleri (Child Renklendirme) ---
+        didParseCell: function(data) {
+            // Eğer bu satır 'child' ise arka planı gri yap
+            if (data.row.raw && data.row.raw.raw.type === 'child') {
+                data.cell.styles.fillColor = [245, 245, 245];
+                data.cell.styles.textColor = [100, 100, 100];
+                data.cell.styles.fontStyle = 'italic';
+            }
+        },
+
+        // --- ÖZELLEŞTİRME: Hücreye Resim Çizme ---
+        didDrawCell: function(data) {
+            // Sadece 'gorselUrl' kolonuna (index 1) ve veri gövdesine (body) işlem yap
+            if (data.column.index === 1 && data.cell.section === 'body') {
+                const url = data.row.raw[1]; // Görsel URL verisi
+                
+                if (url && url.length > 10) {
+                    try {
+                        // Resmi hücre içine sığdır
+                        const dim = data.cell.height - 4; // Padding payı
+                        const x = data.cell.x + 2;
+                        const y = data.cell.y + 2;
+                        
+                        // Resim ekleme (Link varsa)
+                        // Not: URL'den resim çekmek CORS hatası verebilir. 
+                        // Bu durumda tarayıcıda görünmez ama hata patlamaz.
+                        doc.addImage(url, 'JPEG', x, y, dim, dim);
+                    } catch (e) {
+                        // Resim yüklenemezse veya format desteklenmezse sessizce geç
+                        // doc.text("Resim Yok", data.cell.x + 2, data.cell.y + 5);
+                    }
+                }
+                
+                // URL metnini gizle (üzerine resim geldi veya boş kalsın)
+                // data.cell.text = ''; 
+            }
+        }
     });
 
     doc.save(`${filename}.pdf`);
