@@ -1874,48 +1874,100 @@ async syncWipoAripoChildren(parentId, parentDataFromForm) {
 }
 
 async saveIpRecordWithStrategy(data) {
-    // WIPO/ARIPO ve Çoklu Ülke Mantığı
-    if ((data.origin === 'WIPO' || data.origin === 'ARIPO') && this.selectedCountries.length > 0) {
+        // Kontroller
+        const isInternational = (data.origin === 'WIPO' || data.origin === 'ARIPO');
+        const hasCountries = this.selectedCountries && this.selectedCountries.length > 0;
 
-        // 1. Parent Kayıt (Ülkesiz)
-        const parentData = { ...data, transactionHierarchy: 'parent', countries: this.selectedCountries.map(c=>c.code) };
-        // Parent'ta wipoIR zaten data'nın içinde var (internationalRegNumber olarak mapledik mi? Hayır, collectData'da düzelttik)
-        // Stratejide internationalRegNumber olarak almıştık, onu wipoIR/aripoIR'a çevirelim
-        if(data.origin === 'WIPO') parentData.wipoIR = data.internationalRegNumber;
-        else parentData.aripoIR = data.internationalRegNumber;
-
-        const parentResult = await ipRecordsService.createRecordFromDataEntry(parentData);
-        if(!parentResult.success) throw new Error(parentResult.error);
-        const parentId = parentResult.id;
-
-        // 2. Child Kayıtlar (Her ülke için)
-        const promises = this.selectedCountries.map(country => {
-            const childData = { 
-                ...data, 
-                transactionHierarchy: 'child', 
-                parentId: parentId,
-                country: country.code,
-                // Child'da IR no yine olsun
-                wipoIR: parentData.wipoIR,
-                aripoIR: parentData.aripoIR
-            };
-            return ipRecordsService.createRecordFromDataEntry(childData);
+        console.log('🌍 WIPO Kontrol:', { 
+            origin: data.origin, 
+            isInt: isInternational, 
+            count: this.selectedCountries.length 
         });
 
-        await Promise.all(promises);
+        if (isInternational && hasCountries) {
+            // === SENARYO A: WIPO/ARIPO (Parent + Children) ===
+            console.log('🚀 WIPO Modu devrede...');
 
-        // Transaction Ekleme (Parent için)
-        await this.addTransactionForNewRecord(parentId, data.ipType);
+            // 1. Parent Hazırlığı
+            const parentData = { 
+                ...data, 
+                transactionHierarchy: 'parent', 
+                countries: this.selectedCountries.map(c => c.code)
+            };
 
-    } else {
-        // Tekil Kayıt (TÜRKPATENT veya Yurtdışı Ulusal Tek Ülke)
-        const result = await ipRecordsService.createRecordFromDataEntry(data);
-        if(!result.success) throw new Error(result.error);
+            // IR Numarası Ayarı
+            if (data.origin === 'WIPO') {
+                parentData.wipoIR = data.internationalRegNumber || data.registrationNumber;
+            } else {
+                parentData.aripoIR = data.internationalRegNumber || data.registrationNumber;
+            }
 
-        // Transaction Ekleme
-        await this.addTransactionForNewRecord(result.id, data.ipType);
+            // Parent Oluştur
+            const parentResult = await ipRecordsService.createRecordFromDataEntry(parentData);
+            if (!parentResult.success) throw new Error('Parent kayıt hatası: ' + parentResult.error);
+            
+            const parentId = parentResult.id;
+            console.log('✅ Parent OK. ID:', parentId);
+
+            // 2. Child Kayıtlar (Döngü)
+            console.log('🔄 Child kayıtlar oluşturuluyor...');
+            
+            // Promise.all kullanarak paralel oluşturuyoruz
+            const promises = this.selectedCountries.map(async (country) => {
+                try {
+                    const childData = { 
+                        ...data, 
+                        transactionHierarchy: 'child', 
+                        parentId: parentId,
+                        country: country.code,
+                        
+                        // 🛠️ KRİTİK DÜZELTME: Child kayıtlarda başvuru numarasını boşaltıyoruz
+                        // Böylece duplicate (mükerrer) hatasına takılmıyorlar.
+                        applicationNumber: null, 
+                        registrationNumber: null, // Tescil no da çakışmasın
+
+                        // IR numaralarını taşı
+                        wipoIR: parentData.wipoIR,
+                        aripoIR: parentData.aripoIR,
+                        
+                        createdFrom: 'wipo_child_generation'
+                    };
+
+                    const res = await ipRecordsService.createRecordFromDataEntry(childData);
+                    if(res.success) {
+                        console.log(`✅ Child Eklendi: ${country.code}`);
+                        return res;
+                    } else {
+                        console.error(`❌ Child Hatası (${country.code}):`, res.error);
+                        return null;
+                    }
+                } catch (err) {
+                    console.error(`❌ Child Beklenmeyen Hata (${country.code}):`, err);
+                    return null;
+                }
+            });
+
+            await Promise.all(promises);
+            console.log('🏁 WIPO işlemi tamamlandı.');
+
+            // Transaction (Sadece Parent'a)
+            await this.addTransactionForNewRecord(parentId, data.ipType);
+
+        } else {
+            // === SENARYO B: TEKİL KAYIT ===
+            console.log('📍 Tekil Kayıt Modu');
+            
+            if (data.origin === 'Yurtdışı Ulusal' && !data.country) {
+                const countrySelect = document.getElementById('countrySelect');
+                if (countrySelect) data.country = countrySelect.value;
+            }
+
+            const result = await ipRecordsService.createRecordFromDataEntry(data);
+            if (!result.success) throw new Error(result.error);
+
+            await this.addTransactionForNewRecord(result.id, data.ipType);
+        }
     }
-}
 
 // Transaction ekleme kodunu da ayırdık (DRY prensibi)
 async addTransactionForNewRecord(recordId, ipType) {
