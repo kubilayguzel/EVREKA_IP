@@ -2618,49 +2618,47 @@ window.generateExcelWithImages = async function(data, headers, filename) {
     link.click();
 };
 
-// === PDF OLUŞTURUCU (V3 - Profesyonel Tasarım) ===
+// === PDF OLUŞTURUCU (V4 - Hata Düzeltildi ve Girinti Ayarlandı) ===
 window.generatePDF = async function(data, headers, filename) {
     const { jsPDF } = window.jspdf;
     
-    // A4 Yatay (Landscape) format
+    // A4 Yatay (Landscape)
     const doc = new jsPDF('l', 'mm', 'a4');
 
-    // --- 1. Sayfa Başlığı ve Bilgiler ---
+    // --- 1. Başlık ve Bilgiler ---
     doc.setFont("helvetica", "bold");
     doc.setFontSize(18);
-    doc.setTextColor(41, 128, 185); // Mavi Başlık
+    doc.setTextColor(41, 128, 185); // Mavi
     doc.text("Marka Portföy Raporu", 14, 15);
     
     doc.setFont("helvetica", "normal");
     doc.setFontSize(10);
-    doc.setTextColor(100); // Gri metin
+    doc.setTextColor(100);
     doc.text(`Oluşturulma Tarihi: ${new Date().toLocaleDateString('tr-TR')}`, 14, 22);
     
-    // Sağ üst köşe (Opsiyonel Şirket Adı)
-    doc.setFontSize(10);
     doc.text("IP Yönetim Sistemi", 280, 15, { align: 'right' });
 
-    // --- 2. Tablo Verisini Hazırlama ---
+    // --- 2. Veri Hazırlığı ---
     const head = [headers.map(h => h.title)];
     const body = data.map(row => {
         const rowArray = headers.map(h => row[h.key]);
-        rowArray.raw = row; // Stil işlemleri için ham veriyi sakla
+        rowArray.raw = row; // Stil kontrolü için ham veriyi sakla
         return rowArray;
     });
 
-    // --- 3. Tabloyu Çizdirme ---
+    // --- 3. Tablo Çizimi ---
     doc.autoTable({
         head: head,
         body: body,
         startY: 28,
-        theme: 'grid', // Çizgili tema
+        theme: 'grid',
         
         // Genel Stiller
         styles: { 
-            font: "helvetica", // Türkçe karakterler için "Roboto" gibi özel font gerekebilir, standartta helvetica en iyisidir
+            font: "helvetica",
             fontSize: 8, 
-            valign: 'middle', // Dikey ortalama
-            cellPadding: 3,
+            valign: 'middle',
+            cellPadding: 3, // Varsayılan padding
             overflow: 'linebreak',
             lineWidth: 0.1,
             lineColor: [200, 200, 200]
@@ -2668,7 +2666,7 @@ window.generatePDF = async function(data, headers, filename) {
 
         // Başlık Stili
         headStyles: { 
-            fillColor: [41, 128, 185], // Koyu Mavi
+            fillColor: [41, 128, 185],
             textColor: 255,
             fontStyle: 'bold',
             halign: 'center',
@@ -2676,42 +2674,44 @@ window.generatePDF = async function(data, headers, filename) {
             minCellHeight: 10
         },
 
-        // Kolon Genişlik Ayarları (Toplam ~270mm alanımız var)
+        // Sütun Genişlikleri
         columnStyles: {
             0: { cellWidth: 25 }, // Menşe
-            1: { cellWidth: 22, minCellHeight: 22 }, // Görsel (Kare olması için minHeight)
-            2: { cellWidth: 45 }, // Marka Adı (Geniş)
+            1: { cellWidth: 22, minCellHeight: 22 }, // Görsel
+            2: { cellWidth: 45 }, // Marka Adı
             3: { cellWidth: 25 }, // Başvuru No
             4: { cellWidth: 25 }, // Tescil No
-            5: { cellWidth: 22, halign: 'center' }, // Başvuru Tarihi
-            6: { cellWidth: 22, halign: 'center' }, // Yenileme Tarihi
+            5: { cellWidth: 22, halign: 'center' }, // Başvuru T.
+            6: { cellWidth: 22, halign: 'center' }, // Yenileme T.
             7: { cellWidth: 25, halign: 'center' }, // Durum
-            8: { cellWidth: 'auto' } // Sınıflar (Kalan yer)
+            8: { cellWidth: 'auto' } // Sınıflar
         },
 
-        // --- SATIR STİLİ VE GİRİNTİ (DidParseCell) ---
+        // --- HÜCRE AYRIŞTIRMA (Stil ve Girinti) ---
         didParseCell: function(data) {
             const rowData = data.row.raw;
             
-            // Sadece Body satırları için
+            // Sadece Body bölümü için işlem yap
             if (data.section === 'body' && rowData && rowData.raw) {
                 
-                // CHILD (ALT) KAYITLAR İÇİN STİL
+                // CHILD (ALT) KAYITLAR
                 if (rowData.raw.type === 'child') {
-                    // Arka plan gri
+                    // Arka plan rengi (Gri)
                     data.cell.styles.fillColor = [248, 249, 250]; 
                     data.cell.styles.textColor = [80, 80, 80];
                     
-                    // Marka Adı kolonunda (index 2) girinti yapalım
+                    // Marka Adı kolonunda (index 2) girinti
                     if (data.column.index === 2) {
                          data.cell.styles.fontStyle = 'italic';
-                         // Not: jsPDF-AutoTable'da padding ile girinti simüle edilir
-                         data.cell.padding = { top: 3, bottom: 3, left: 8, right: 3 };
+                         
+                         // --- HATA DÜZELTİLDİ ---
+                         // data.cell.padding yerine data.cell.styles.cellPadding kullanıldı
+                         data.cell.styles.cellPadding = { top: 3, bottom: 3, left: 10, right: 3 };
                     }
                 } 
-                // PARENT (ANA) KAYITLAR İÇİN STİL
+                // PARENT (ANA) KAYITLAR
                 else {
-                    // Marka Adı kalın olsun
+                    // Marka adını kalın yap
                     if (data.column.index === 2) {
                         data.cell.styles.fontStyle = 'bold';
                     }
@@ -2719,39 +2719,34 @@ window.generatePDF = async function(data, headers, filename) {
             }
         },
 
-        // --- GÖRSEL ÇİZDİRME (DidDrawCell) ---
+        // --- GÖRSEL ÇİZDİRME ---
         didDrawCell: function(data) {
-            // Sadece Body bölümü ve Görsel Kolonu (Index 1)
+            // Sadece Görsel Kolonu (Index 1) ve Body bölümü
             if (data.section === 'body' && data.column.index === 1) {
                 const rawItem = data.row.raw.raw;
                 
-                // Görsel verisi var mı?
                 if (rawItem && rawItem.base64Image) {
                     try {
                         const imgData = rawItem.base64Image;
-                        
-                        // Hücre boyutları
                         const cellWidth = data.cell.width;
                         const cellHeight = data.cell.height;
-                        
-                        // Resim boyutu (Padding payı bırakarak)
                         const padding = 2;
                         const dim = Math.min(cellWidth, cellHeight) - (padding * 2);
                         
-                        // Resmi hücrenin tam ortasına yerleştir
+                        // Ortala
                         const x = data.cell.x + (cellWidth - dim) / 2;
                         const y = data.cell.y + (cellHeight - dim) / 2;
 
                         doc.addImage(imgData, 'PNG', x, y, dim, dim);
                     } catch (err) {
-                        // Hata olursa sessizce geç
+                        // Hata olursa görseli atla
                     }
                 }
             }
         }
     });
 
-    // Sayfa Numaraları Ekleme
+    // Sayfa Numaraları
     const pageCount = doc.internal.getNumberOfPages();
     doc.setFontSize(8);
     for(let i = 1; i <= pageCount; i++) {
