@@ -699,7 +699,8 @@
 
 // === GLOBAL DEĞİŞKENLER (GÜNCELLENMİŞ) ===
     window.Pagination = PaginationModule;
-
+    window.countryMap = new Map(); // Ülke kodlarını isme çevirmek için
+    
     // 1. İşlerim (Tasks) Verisi
     window.taskPaginationData = { 
         allDataUnfiltered: [], // Ham veri (Filtreleme için)
@@ -806,36 +807,40 @@
     };
 
     // --- INIT ---
+   
     async function initPortal() {
-        const user = authService.getCurrentUser();
-        if (!user) return;
-        $('#userName').text(user.displayName || user.email);
-        $('#userAvatar').text((user.displayName||'U').charAt(0).toUpperCase());
-        $('#welcomeUserName').text(user.displayName || user.email);
-        
-        try {
-            // 1. Transaction Type'ları ÖNCE yükle (Tüm modüller için gerekli)
-            const typesSnap = await getDocs(collection(db, 'transactionTypes'));
-            typesSnap.forEach(d => window.transactionTypesMap.set(d.id, d.data()));
+    const user = authService.getCurrentUser();
+    if (!user) return;
+    $('#userName').text(user.displayName || user.email);
+    $('#userAvatar').text((user.displayName||'U').charAt(0).toUpperCase());
+    $('#welcomeUserName').text(user.displayName || user.email);
+    
+    try {
+        // ÖNCE Ülkeleri ve Transaction Tiplerini yükle
+        await Promise.all([
+            window.fetchCountries(), // YENİ EKLENEN
+            (async () => {
+                const typesSnap = await getDocs(collection(db, 'transactionTypes'));
+                typesSnap.forEach(d => window.transactionTypesMap.set(d.id, d.data()));
+            })()
+        ]);
 
-            // 2. Kullanıcı Verisi
-            const userSnap = await getDoc(doc(db, 'users', user.uid));
-            if (!userSnap.exists()) return;
-            const linkedIds = userSnap.data().linkedPersonIds || [];
-            if (!linkedIds.length) return;
-            
-            window.linkedPersonIds = linkedIds; 
-            
-            // 3. Modülleri Başlat
-            fetchAndDisplayPortfolio();
-            fetchAndDisplayTasks(linkedIds);
-            fetchAndDisplayInvoices(linkedIds);
-            fetchAndDisplaySuits();
-            fetchAndDisplayObjections();
-        } catch (e) {
-            console.error("Init Error:", e);
-        }
+        const userSnap = await getDoc(doc(db, 'users', user.uid));
+        if (!userSnap.exists()) return;
+        const linkedIds = userSnap.data().linkedPersonIds || [];
+        if (!linkedIds.length) return;
+        
+        window.linkedPersonIds = linkedIds; 
+        
+        fetchAndDisplayPortfolio();
+        fetchAndDisplayTasks(linkedIds);
+        fetchAndDisplayInvoices(linkedIds);
+        fetchAndDisplaySuits();
+        fetchAndDisplayObjections();
+    } catch (e) {
+        console.error("Init Error:", e);
     }
+}
 
     // --- 1. PORTFÖY ---
     async function fetchAndDisplayPortfolio() {
@@ -893,7 +898,6 @@ window.populatePortfolioTable = function(tableId, portfolioData, startIndex = 0)
         return;
     }
 
-    // Sınıf bilgisini ayıklamak için yardımcı fonksiyon
     const getClassesString = (dataItem) => {
         if (Array.isArray(dataItem.goodsAndServicesByClass) && dataItem.goodsAndServicesByClass.length > 0) {
             return dataItem.goodsAndServicesByClass.map(c => c.classNo).join(', ');
@@ -913,33 +917,34 @@ window.populatePortfolioTable = function(tableId, portfolioData, startIndex = 0)
         const originBucket = (originRaw.includes('TURK') || originRaw.includes('TÜRK')) ? 'TÜRKPATENT' : 'YURTDISI';
         const originDisplay = (originBucket === 'TÜRKPATENT') ? 'TÜRKPATENT' : (item.country || item.origin || 'Yurtdışı');
         
-        // Parent-Child Kontrolü
         const isParent = item.transactionHierarchy === 'parent';
         const isChild = item.transactionHierarchy === 'child';
         
-        // Child kayıtları ana döngüde basma (Akordeon içinde olacaklar)
-        if (isChild) return;
+        if (isChild) return; // Child kayıtları atla, parent içinde işlenecek
 
-        // Parent ise child kayıtları bul
         let childRecords = [];
         if (isParent && window.markaPaginationData.allDataUnfiltered) {
             childRecords = window.markaPaginationData.allDataUnfiltered.filter(p => p.parentId === item.id);
         }
         const isInternational = isParent && childRecords.length > 0;
 
-        // Veri Hazırlama (Parent)
         const title = item.title || item.brandText || item.patentTitle || 'İsimsiz';
         const appNo = item.applicationNumber || item.applicationNo || '-';
         const statusText = item.status || item.statusText || 'Bilinmiyor';
         const appDate = window.formatDateTR(item.applicationDate || item.application_date);
         
-        // Parent Tescil No / WIPO IR No Gösterimi
-        // Eğer WIPO ise veya wipoIrNumber varsa onu göster, yoksa standart registrationNumber
-        const regNoDisplay = (item.wipoIrNumber) ? item.wipoIrNumber : (item.registrationNumber || '-');
+        // --- DÜZELTME 1: WIPO için internationalRegNumber kontrolü ---
+        // Veritabanı görselinize göre alan adı: internationalRegNumber
+        let regNoDisplay = '-';
+        if (item.internationalRegNumber) {
+            regNoDisplay = item.internationalRegNumber;
+        } else if (item.wipoIrNumber) {
+            regNoDisplay = item.wipoIrNumber;
+        } else if (item.registrationNumber) {
+            regNoDisplay = item.registrationNumber;
+        }
 
         const classes = getClassesString(item);
-
-        // Badge Rengi
         const badgeClass = { 'Başvuru': 'primary', 'Tescilli': 'success', 'İtiraz': 'warning', 'Reddedildi': 'danger' }[statusText] || 'secondary';
         
         const imgHtml = (item.brandImageUrl || item.brandImage) 
@@ -948,7 +953,6 @@ window.populatePortfolioTable = function(tableId, portfolioData, startIndex = 0)
 
         mainRow.setAttribute('data-origin', originBucket);
 
-        // Tabloya Göre İçerik
         if (tableId === '#marka-list') {
             mainRow.innerHTML = `
                 <td class="col-index">${isInternational ? '<i class="fas fa-chevron-right mr-2"></i>' : ''}${actualIndex + 1}</td>
@@ -956,7 +960,8 @@ window.populatePortfolioTable = function(tableId, portfolioData, startIndex = 0)
                 <td class="col-sample text-center">${imgHtml}</td>
                 <td class="col-brand"><a href="#" class="portfolio-detail-link" data-item-id="${item.id}" data-toggle="modal" data-target="#portfolioDetailModal">${title}</a></td>
                 <td class="col-appno">${appNo}</td>
-                <td class="col-regno">${regNoDisplay}</td> <td class="col-appdate">${appDate}</td>
+                <td class="col-regno">${regNoDisplay}</td>
+                <td class="col-appdate">${appDate}</td>
                 <td class="col-status"><span class="badge badge-${badgeClass}">${statusText}</span></td>
                 <td class="col-classes">${classes}</td>`;
             
@@ -966,43 +971,43 @@ window.populatePortfolioTable = function(tableId, portfolioData, startIndex = 0)
                 mainRow.setAttribute('data-target', `#accordion-yurtdisi-${item.id}`);
             }
         } else {
-            // Patent, Tasarım vb.
             mainRow.innerHTML = `<td>${actualIndex + 1}</td>${tableId==='#tasarim-list'?`<td class="text-center">${imgHtml}</td>`:''}<td><a href="#" class="portfolio-detail-link" data-item-id="${item.id}" data-toggle="modal" data-target="#portfolioDetailModal">${title}</a></td><td>${appNo}</td><td><span class="badge badge-${badgeClass}">${statusText}</span></td>${tableId==='#patent-list'?`<td>${appDate}</td>`:`<td>${classes}</td>`}`;
         }
 
         tableBody.appendChild(mainRow);
 
-        // --- CHILD (ALT) KAYITLAR TABLOSU GÜNCELLEMESİ ---
+        // --- DÜZELTME 2: Child Kayıtlarda Menşe Formatı ---
         if (tableId === '#marka-list' && isInternational) {
             const detailRow = document.createElement('tr');
             detailRow.setAttribute('data-origin', originBucket);
             
-            // Child kayıtların HTML'ini oluştur
             const childRowsHtml = childRecords.map((sub, idx) => {
-                // 1. Child Sınıf Bilgisi Düzeltme
                 const subClasses = getClassesString(sub);
 
-                // 2. Menşe Formatı: Ülke Adı (Ülke Kodu)
-                // Veritabanında countryName alanı varsa onu kullanır, yoksa country'i (genelde kodu) kullanır.
-                const cName = sub.countryName || sub.country || ''; 
-                const cCode = sub.countryCode || ''; 
+                // Kod veritabanında 'country' veya 'countryCode' alanında olabilir
+                const code = (sub.country || sub.countryCode || '').trim().toUpperCase();
                 
-                let originStr = cName;
-                if (cName && cCode && cName !== cCode) {
-                    originStr = `${cName} (${cCode})`;
-                } else if (cCode && !cName) {
-                    originStr = cCode;
+                // common/countries'den çekilen haritadan ismini bul
+                const name = window.countryMap.get(code) || sub.countryName || '';
+                
+                // Format: İsim (Kod) -> Almanya (DE)
+                let originStr = code;
+                if (name && code) {
+                    originStr = `${name} (${code})`;
+                } else if (name) {
+                    originStr = name;
                 }
 
-                // 3. Tarih
                 const subAppDate = window.formatDateTR(sub.applicationDate);
 
                 return `<tr>
                     <td>${actualIndex+1}.${idx+1}</td>
                     <td>${originStr}</td>
                     <td>${sub.applicationNumber||'-'}</td>
-                    <td>${subAppDate}</td> <td>${sub.status||'-'}</td>
-                    <td>${subClasses}</td> </tr>`;
+                    <td>${subAppDate}</td>
+                    <td>${sub.status||'-'}</td>
+                    <td>${subClasses}</td>
+                </tr>`;
             }).join('');
 
             detailRow.innerHTML = `
@@ -1029,7 +1034,6 @@ window.populatePortfolioTable = function(tableId, portfolioData, startIndex = 0)
         }
     });
 
-    // Filtreleme sonrası menşe kolonunu gizle/göster kontrolü
     if (tableId === '#marka-list') {
         const currentFilter = $("#menseFilter").val() || 'TÜRKPATENT';
         if (currentFilter === 'TÜRKPATENT') {
@@ -1039,7 +1043,31 @@ window.populatePortfolioTable = function(tableId, portfolioData, startIndex = 0)
         }
     }
 };
-    // --- 2. İŞLERİM (TASKS) ---
+
+// === YENİ FONKSİYON: Ülke Listesini Çek ===
+window.fetchCountries = async function() {
+    try {
+        // Ekran görüntüsüne göre yol: collection('common') -> doc('countries')
+        const docRef = doc(db, 'common', 'countries');
+        const docSnap = await getDoc(docRef);
+        
+        if (docSnap.exists()) {
+            const data = docSnap.data();
+            // 'list' array'i içinde {code: "AF", name: "Afganistan"} formatında duruyor
+            if (data.list && Array.isArray(data.list)) {
+                data.list.forEach(country => {
+                    if (country.code && country.name) {
+                        window.countryMap.set(country.code, country.name);
+                    }
+                });
+            }
+        }
+    } catch (error) {
+        console.error("Ülke listesi yüklenemedi:", error);
+    }
+};
+
+// --- 2. İŞLERİM (TASKS) ---
     window.checkTaskClientRelation = async function(taskData, clientPersonIdSet) {
         const taskTypeStr = String(taskData.taskType);
         try {
