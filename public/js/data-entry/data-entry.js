@@ -1625,7 +1625,8 @@ async handleSavePortfolio() {
 
         // 3. Ortak Alanları Ekle
         recordData.recordOwnerType = this.recordOwnerTypeSelect.value;
-        recordData.createdAt = new Date().toISOString();
+        recordData.createdAt = new Date().toISOString(); 
+        recordData.updatedAt = new Date().toISOString();
 
         try {
             this.saveBtn.disabled = true;
