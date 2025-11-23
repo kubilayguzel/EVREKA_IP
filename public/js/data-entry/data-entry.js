@@ -1708,7 +1708,7 @@ async handleSavePortfolio() {
             }
             // ============================================================
 
-            // window.location.href = 'portfolio.html';
+        window.location.href = 'portfolio.html';
 
         } catch (error) {
             console.error('Kaydetme hatası:', error);
