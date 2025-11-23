@@ -322,8 +322,15 @@
         border-top-color: #585b63;
     }
 
+    /* Rapor Kartları İçin Sol Çizgi Renkleri */
+    .border-left-primary { border-left: 4px solid #4e73df !important; }
+    .border-left-success { border-left: 4px solid #1cc88a !important; }
+    .border-left-info { border-left: 4px solid #36b9cc !important; }
+    .border-left-warning { border-left: 4px solid #f6c23e !important; }
+
     #modal-islemler table td:first-child { white-space: nowrap !important; width: 1%; min-width: 60px; }
     a i.fa-file-pdf, a i.fa-file-word, a i.fa-file-alt { font-size: 1.3rem !important; vertical-align: middle; }
+
 </style>
 </head>
 <body>
@@ -617,7 +624,7 @@
                     </div>
                 </div>
             </div>
-            
+
             <div class="row">
                 <div class="col-lg-6 mb-4">
                     <div class="card shadow mb-4 h-100">
@@ -2838,6 +2845,133 @@ window.generatePDF = async function(data, headers, filename) {
     doc.save(`${filename}.pdf`);
 };
 
+// === RAPORLAR MODÜLÜ (YENİ) ===
+window.initReports = function() {
+    console.log("Raporlar hazırlanıyor...");
+    
+    // Veriyi Marka tablosunun kaynağından alıyoruz
+    const allData = window.markaPaginationData?.allDataUnfiltered || [];
+    
+    if (allData.length === 0) {
+        $('#chart-portfolio-dist').html('<p class="text-center mt-5 text-muted">Analiz edilecek veri bulunamadı veya henüz yüklenmedi.</p>');
+        return;
+    }
+
+    // --- ANALİZ MANTIĞI ---
+    let typeCounts = {};
+    let registeredCount = 0;
+    let originCounts = { 'Yerli (TR)': 0, 'Yurtdışı': 0 };
+    let classCounts = {};
+    let budgetForecast = {};
+    const monthNames = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"];
+
+    allData.forEach(item => {
+        // 1. Tür Sayımı
+        const t = item.iptype || item.type || 'Marka'; // Veritabanı alan adınıza göre
+        typeCounts[t] = (typeCounts[t] || 0) + 1;
+
+        // 2. Başarı Oranı (Tescilli mi?)
+        const st = (item.status || item.statusText || '').toLowerCase();
+        if (st.includes('tescil') || st.includes('registered')) registeredCount++;
+
+        // 3. Menşe
+        const originRaw = (item.origin || '').toString().toUpperCase();
+        if (originRaw.includes('TURK') || originRaw.includes('TÜRK')) originCounts['Yerli (TR)']++;
+        else originCounts['Yurtdışı']++;
+
+        // 4. Sınıflar
+        let classes = [];
+        if (Array.isArray(item.goodsAndServicesByClass)) classes = item.goodsAndServicesByClass.map(c => c.classNo);
+        else if (Array.isArray(item.classes)) classes = item.classes;
+        else if (item.classes) classes = String(item.classes).split(',').map(s=>s.trim());
+        
+        classes.forEach(c => { if(c) classCounts[c] = (classCounts[c] || 0) + 1; });
+
+        // 5. Bütçe (Renewal Date'e göre)
+        if (item.renewalDate) {
+            // Tarih formatını düzelt (String veya Timestamp olabilir)
+            let rDate;
+            if (item.renewalDate && item.renewalDate.toDate) rDate = item.renewalDate.toDate();
+            else rDate = new Date(item.renewalDate);
+
+            const now = new Date();
+            // Gelecek 12 ay kontrolü
+            if (rDate > now && rDate < new Date(now.getFullYear() + 1, now.getMonth(), now.getDate())) {
+                const key = `${rDate.getFullYear()}-${rDate.getMonth()}`;
+                // Varsayılan maliyetler
+                const cost = (originRaw.includes('TURK')) ? 4500 : 15000; 
+                budgetForecast[key] = (budgetForecast[key] || 0) + cost;
+            }
+        }
+    });
+
+    // KARTLARI DOLDUR
+    $('#rep-total-assets').text(allData.length);
+    $('#rep-success-rate').text('%' + Math.round((registeredCount / allData.length) * 100));
+    
+    // Riskli (İtiraz veya Dava kelimesi geçenler)
+    const riskCount = allData.filter(i => {
+        const s = (i.status || '').toLowerCase();
+        return s.includes('itiraz') || s.includes('dava') || s.includes('opposi');
+    }).length;
+    $('#rep-risk-count').text(riskCount);
+
+    const totalBudget = Object.values(budgetForecast).reduce((a,b)=>a+b, 0);
+    $('#rep-budget-est').text('₺' + totalBudget.toLocaleString('tr-TR'));
+
+    // GRAFİK ÇİZDİRME YARDIMCISI
+    const renderChart = (id, options) => {
+        document.querySelector("#" + id).innerHTML = "";
+        const defaultOpts = {
+            fontFamily: 'inherit',
+            theme: { mode: $('body').hasClass('dark-mode') ? 'dark' : 'light' },
+            toolbar: { show: false }
+        };
+        const chart = new ApexCharts(document.querySelector("#" + id), { ...defaultOpts, ...options });
+        chart.render();
+    };
+
+    // 1. DONUT GRAFİK (Portföy)
+    renderChart('chart-portfolio-dist', {
+        series: Object.values(typeCounts),
+        labels: Object.keys(typeCounts),
+        chart: { type: 'donut', height: 300 },
+        colors: ['#4e73df', '#1cc88a', '#36b9cc'],
+        legend: { position: 'bottom' }
+    });
+
+    // 2. BAR GRAFİK (Bütçe)
+    const sortedKeys = Object.keys(budgetForecast).sort();
+    renderChart('chart-budget-forecast', {
+        series: [{ name: 'Tahmini Tutar', data: sortedKeys.map(k => budgetForecast[k]) }],
+        chart: { type: 'bar', height: 300 },
+        colors: ['#1cc88a'],
+        xaxis: { categories: sortedKeys.map(k => {
+            const [y, m] = k.split('-');
+            return `${monthNames[parseInt(m)]} ${y}`;
+        })},
+        dataLabels: { enabled: true, formatter: (val) => '₺' + val.toLocaleString() }
+    });
+
+    // 3. RADAR GRAFİK (Sınıflar)
+    const topClasses = Object.entries(classCounts).sort((a,b)=>b[1]-a[1]).slice(0, 8);
+    renderChart('chart-class-radar', {
+        series: [{ name: 'Adet', data: topClasses.map(x => x[1]) }],
+        chart: { type: 'radar', height: 300 },
+        labels: topClasses.map(x => `Sınıf ${x[0]}`),
+        colors: ['#36b9cc']
+    });
+
+    // 4. PASTA GRAFİK (Coğrafi)
+    renderChart('chart-geo-dist', {
+        series: Object.values(originCounts),
+        labels: Object.keys(originCounts),
+        chart: { type: 'pie', height: 300 },
+        colors: ['#e74a3b', '#4e73df'],
+        legend: { position: 'bottom' }
+    });
+};
+
 // === 3. TÜM EVENT LISTENER'LAR (DOCUMENT READY) ===
     $(document).ready(function() {
         
@@ -2880,6 +3014,16 @@ window.generatePDF = async function(data, headers, filename) {
 
         $('#invoiceDurumFilter').off('change').on('change', function() { 
             window.applyInvoiceFilter(); 
+        });
+
+        // --- RAPORLAR SEKMESİ TETİKLEYİCİSİ ---
+        // Kullanıcı Raporlar sekmesine tıkladığında çalışır
+        $('a[data-toggle="tab"][href="#reports"]').on('shown.bs.tab', function (e) {
+            // Eğer Marka verisi henüz çekilmediyse grafikler boş gelebilir,
+            // ama initPortal zaten veriyi çekmiş olacağı için sorun olmaz.
+            if (window.initReports) {
+                window.initReports();
+            }
         });
 
         // Filtre Menüsünü Kapatma
