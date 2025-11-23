@@ -269,17 +269,20 @@ class DataEntryModule {
         this._populateStatusDropdown('trademark');
         this.setupDynamicFormListeners();
         this.setupBrandExampleUploader();
-        this.setupClearClassesButton(); 
+        this.setupClearClassesButton();
+        this.populateCountriesDropdown('priorityCountry');
         this.updateSaveButtonState();
     }
 
     renderPatentForm() {
         this.dynamicFormContainer.innerHTML = FormTemplates.getPatentForm();
+        this.populateCountriesDropdown('priorityCountry');
         this.updateSaveButtonState();
     }
 
     renderDesignForm() {
         this.dynamicFormContainer.innerHTML = FormTemplates.getDesignForm();
+        this.populateCountriesDropdown('priorityCountry');
         this.updateSaveButtonState();
     }
 
