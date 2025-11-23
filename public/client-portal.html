@@ -882,120 +882,163 @@
     }
 
 // === PORTFÖY TABLOSU DOLDURMA (GÜNCELLENMİŞ) ===
-    window.populatePortfolioTable = function(tableId, portfolioData, startIndex = 0) {
-        const tableBody = document.querySelector(`${tableId} tbody`);
-        if (!tableBody) return;
-        tableBody.innerHTML = '';
+window.populatePortfolioTable = function(tableId, portfolioData, startIndex = 0) {
+    const tableBody = document.querySelector(`${tableId} tbody`);
+    if (!tableBody) return;
+    tableBody.innerHTML = '';
 
-        if (!portfolioData || portfolioData.length === 0) {
-            // Kolon sayısını tabloya göre ayarla
-            const colSpan = tableId === '#marka-list' ? 9 : 6;
-            tableBody.innerHTML = `<tr><td colspan="${colSpan}" class="text-center text-muted">Kayıt bulunamadı.</td></tr>`;
-            return;
+    if (!portfolioData || portfolioData.length === 0) {
+        const colSpan = tableId === '#marka-list' ? 9 : 6;
+        tableBody.innerHTML = `<tr><td colspan="${colSpan}" class="text-center text-muted">Kayıt bulunamadı.</td></tr>`;
+        return;
+    }
+
+    // Sınıf bilgisini ayıklamak için yardımcı fonksiyon
+    const getClassesString = (dataItem) => {
+        if (Array.isArray(dataItem.goodsAndServicesByClass) && dataItem.goodsAndServicesByClass.length > 0) {
+            return dataItem.goodsAndServicesByClass.map(c => c.classNo).join(', ');
         }
-
-        portfolioData.forEach((item, index) => {
-            const actualIndex = startIndex + index;
-            const mainRow = document.createElement('tr');
-            
-            // Menşe Belirleme
-            const originRaw = (item.origin || 'TÜRKPATENT').toString().trim().toUpperCase();
-            const originBucket = (originRaw.includes('TURK') || originRaw.includes('TÜRK')) ? 'TÜRKPATENT' : 'YURTDISI';
-            const originDisplay = (originBucket === 'TÜRKPATENT') ? 'TÜRKPATENT' : (item.country || item.origin || 'Yurtdışı');
-            
-            // Parent-Child Kontrolü
-            const isParent = item.transactionHierarchy === 'parent';
-            const isChild = item.transactionHierarchy === 'child';
-            
-            // Child kayıtları ana döngüde basma (Akordeon içinde olacaklar)
-            if (isChild) return;
-
-            // Parent ise child kayıtları bul
-            let childRecords = [];
-            if (isParent && window.markaPaginationData.allDataUnfiltered) {
-                childRecords = window.markaPaginationData.allDataUnfiltered.filter(p => p.parentId === item.id);
-            }
-            const isInternational = isParent && childRecords.length > 0;
-
-            // Veri Hazırlama
-            const title = item.title || item.brandText || item.patentTitle || 'İsimsiz';
-            const appNo = item.applicationNumber || item.applicationNo || '-';
-            const statusText = item.status || item.statusText || 'Bilinmiyor';
-            const appDate = window.formatDateTR(item.applicationDate || item.application_date);
-            
-            // Sınıflar
-            const classes = (() => {
-                if (Array.isArray(item.goodsAndServicesByClass)) return item.goodsAndServicesByClass.map(c => c.classNo).join(', ');
-                if (item.classes) return Array.isArray(item.classes) ? item.classes.join(', ') : item.classes;
-                return '-';
-            })();
-
-            // Badge Rengi
-            const badgeClass = { 'Başvuru': 'primary', 'Tescilli': 'success', 'İtiraz': 'warning', 'Reddedildi': 'danger' }[statusText] || 'secondary';
-            
-            // Görsel (Yeni CSS ile uyumlu)
-            const imgHtml = (item.brandImageUrl || item.brandImage) 
-                ? `<img src="${item.brandImageUrl || item.brandImage}" class="brand-thumb">` 
-                : '-';
-
-            mainRow.setAttribute('data-origin', originBucket);
-
-            // Tabloya Göre İçerik
-            if (tableId === '#marka-list') {
-                mainRow.innerHTML = `
-                    <td class="col-index">${isInternational ? '<i class="fas fa-chevron-right mr-2"></i>' : ''}${actualIndex + 1}</td>
-                    <td class="col-origin">${originDisplay}</td>
-                    <td class="col-sample text-center">${imgHtml}</td>
-                    <td class="col-brand"><a href="#" class="portfolio-detail-link" data-item-id="${item.id}" data-toggle="modal" data-target="#portfolioDetailModal">${title}</a></td>
-                    <td class="col-appno">${appNo}</td>
-                    <td class="col-regno">${item.registrationNumber || '-'}</td>
-                    <td class="col-appdate">${appDate}</td>
-                    <td class="col-status"><span class="badge badge-${badgeClass}">${statusText}</span></td>
-                    <td class="col-classes">${classes}</td>`;
-                
-                if (isInternational) {
-                    mainRow.classList.add('accordion-header-row');
-                    mainRow.setAttribute('data-toggle', 'collapse');
-                    mainRow.setAttribute('data-target', `#accordion-yurtdisi-${item.id}`);
-                }
-            } else {
-                // Patent, Tasarım vb.
-                mainRow.innerHTML = `<td>${actualIndex + 1}</td>${tableId==='#tasarim-list'?`<td class="text-center">${imgHtml}</td>`:''}<td><a href="#" class="portfolio-detail-link" data-item-id="${item.id}" data-toggle="modal" data-target="#portfolioDetailModal">${title}</a></td><td>${appNo}</td><td><span class="badge badge-${badgeClass}">${statusText}</span></td>${tableId==='#patent-list'?`<td>${appDate}</td>`:`<td>${classes}</td>`}`;
-            }
-
-            tableBody.appendChild(mainRow);
-
-            // Varsa Akordeon Detay Satırını Ekle
-            if (tableId === '#marka-list' && isInternational) {
-                const detailRow = document.createElement('tr');
-                detailRow.setAttribute('data-origin', originBucket);
-                detailRow.innerHTML = `
-                <td colspan="9" class="p-0">
-                    <div class="collapse" id="accordion-yurtdisi-${item.id}">
-                        <table class="table mb-0 accordion-table bg-light">
-                            <thead><tr><th>#</th><th>Menşe</th><th>Başvuru No</th><th>Tescil No</th><th>Durum</th><th>Sınıflar</th></tr></thead>
-                            <tbody>
-                                ${childRecords.map((sub, idx) => `<tr><td>${actualIndex+1}.${idx+1}</td><td>${sub.country||'YD'}</td><td>${sub.applicationNumber||'-'}</td><td>${sub.registrationNumber||'-'}</td><td>${sub.status||'-'}</td><td>${sub.classes||'-'}</td></tr>`).join('')}
-                            </tbody>
-                        </table>
-                    </div>
-                </td>`;
-                tableBody.appendChild(detailRow);
-            }
-        });
-
-        // --- DÜZELTME BURADA: Eski fonksiyon çağrısını kaldırdık ve manuel kontrol ekledik ---
-        // Menşe kolonunu filtreye göre gizle/göster
-        if (tableId === '#marka-list') {
-            const currentFilter = $("#menseFilter").val() || 'TÜRKPATENT';
-            if (currentFilter === 'TÜRKPATENT') {
-                $('#marka-list th.col-origin, #marka-list td.col-origin').hide();
-            } else {
-                $('#marka-list th.col-origin, #marka-list td.col-origin').show();
-            }
+        if (Array.isArray(dataItem.classes)) {
+            return dataItem.classes.join(', ');
         }
+        return dataItem.classes || '-';
     };
 
+    portfolioData.forEach((item, index) => {
+        const actualIndex = startIndex + index;
+        const mainRow = document.createElement('tr');
+        
+        // Menşe Belirleme
+        const originRaw = (item.origin || 'TÜRKPATENT').toString().trim().toUpperCase();
+        const originBucket = (originRaw.includes('TURK') || originRaw.includes('TÜRK')) ? 'TÜRKPATENT' : 'YURTDISI';
+        const originDisplay = (originBucket === 'TÜRKPATENT') ? 'TÜRKPATENT' : (item.country || item.origin || 'Yurtdışı');
+        
+        // Parent-Child Kontrolü
+        const isParent = item.transactionHierarchy === 'parent';
+        const isChild = item.transactionHierarchy === 'child';
+        
+        // Child kayıtları ana döngüde basma (Akordeon içinde olacaklar)
+        if (isChild) return;
+
+        // Parent ise child kayıtları bul
+        let childRecords = [];
+        if (isParent && window.markaPaginationData.allDataUnfiltered) {
+            childRecords = window.markaPaginationData.allDataUnfiltered.filter(p => p.parentId === item.id);
+        }
+        const isInternational = isParent && childRecords.length > 0;
+
+        // Veri Hazırlama (Parent)
+        const title = item.title || item.brandText || item.patentTitle || 'İsimsiz';
+        const appNo = item.applicationNumber || item.applicationNo || '-';
+        const statusText = item.status || item.statusText || 'Bilinmiyor';
+        const appDate = window.formatDateTR(item.applicationDate || item.application_date);
+        
+        // Parent Tescil No / WIPO IR No Gösterimi
+        // Eğer WIPO ise veya wipoIrNumber varsa onu göster, yoksa standart registrationNumber
+        const regNoDisplay = (item.wipoIrNumber) ? item.wipoIrNumber : (item.registrationNumber || '-');
+
+        const classes = getClassesString(item);
+
+        // Badge Rengi
+        const badgeClass = { 'Başvuru': 'primary', 'Tescilli': 'success', 'İtiraz': 'warning', 'Reddedildi': 'danger' }[statusText] || 'secondary';
+        
+        const imgHtml = (item.brandImageUrl || item.brandImage) 
+            ? `<img src="${item.brandImageUrl || item.brandImage}" class="brand-thumb">` 
+            : '-';
+
+        mainRow.setAttribute('data-origin', originBucket);
+
+        // Tabloya Göre İçerik
+        if (tableId === '#marka-list') {
+            mainRow.innerHTML = `
+                <td class="col-index">${isInternational ? '<i class="fas fa-chevron-right mr-2"></i>' : ''}${actualIndex + 1}</td>
+                <td class="col-origin">${originDisplay}</td>
+                <td class="col-sample text-center">${imgHtml}</td>
+                <td class="col-brand"><a href="#" class="portfolio-detail-link" data-item-id="${item.id}" data-toggle="modal" data-target="#portfolioDetailModal">${title}</a></td>
+                <td class="col-appno">${appNo}</td>
+                <td class="col-regno">${regNoDisplay}</td> <td class="col-appdate">${appDate}</td>
+                <td class="col-status"><span class="badge badge-${badgeClass}">${statusText}</span></td>
+                <td class="col-classes">${classes}</td>`;
+            
+            if (isInternational) {
+                mainRow.classList.add('accordion-header-row');
+                mainRow.setAttribute('data-toggle', 'collapse');
+                mainRow.setAttribute('data-target', `#accordion-yurtdisi-${item.id}`);
+            }
+        } else {
+            // Patent, Tasarım vb.
+            mainRow.innerHTML = `<td>${actualIndex + 1}</td>${tableId==='#tasarim-list'?`<td class="text-center">${imgHtml}</td>`:''}<td><a href="#" class="portfolio-detail-link" data-item-id="${item.id}" data-toggle="modal" data-target="#portfolioDetailModal">${title}</a></td><td>${appNo}</td><td><span class="badge badge-${badgeClass}">${statusText}</span></td>${tableId==='#patent-list'?`<td>${appDate}</td>`:`<td>${classes}</td>`}`;
+        }
+
+        tableBody.appendChild(mainRow);
+
+        // --- CHILD (ALT) KAYITLAR TABLOSU GÜNCELLEMESİ ---
+        if (tableId === '#marka-list' && isInternational) {
+            const detailRow = document.createElement('tr');
+            detailRow.setAttribute('data-origin', originBucket);
+            
+            // Child kayıtların HTML'ini oluştur
+            const childRowsHtml = childRecords.map((sub, idx) => {
+                // 1. Child Sınıf Bilgisi Düzeltme
+                const subClasses = getClassesString(sub);
+
+                // 2. Menşe Formatı: Ülke Adı (Ülke Kodu)
+                // Veritabanında countryName alanı varsa onu kullanır, yoksa country'i (genelde kodu) kullanır.
+                const cName = sub.countryName || sub.country || ''; 
+                const cCode = sub.countryCode || ''; 
+                
+                let originStr = cName;
+                if (cName && cCode && cName !== cCode) {
+                    originStr = `${cName} (${cCode})`;
+                } else if (cCode && !cName) {
+                    originStr = cCode;
+                }
+
+                // 3. Tarih
+                const subAppDate = window.formatDateTR(sub.applicationDate);
+
+                return `<tr>
+                    <td>${actualIndex+1}.${idx+1}</td>
+                    <td>${originStr}</td>
+                    <td>${sub.applicationNumber||'-'}</td>
+                    <td>${subAppDate}</td> <td>${sub.status||'-'}</td>
+                    <td>${subClasses}</td> </tr>`;
+            }).join('');
+
+            detailRow.innerHTML = `
+            <td colspan="9" class="p-0">
+                <div class="collapse" id="accordion-yurtdisi-${item.id}">
+                    <table class="table mb-0 accordion-table bg-light">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Menşe</th>
+                                <th>Başvuru No</th>
+                                <th>Başvuru Tarihi</th>
+                                <th>Durum</th>
+                                <th>Sınıflar</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${childRowsHtml}
+                        </tbody>
+                    </table>
+                </div>
+            </td>`;
+            tableBody.appendChild(detailRow);
+        }
+    });
+
+    // Filtreleme sonrası menşe kolonunu gizle/göster kontrolü
+    if (tableId === '#marka-list') {
+        const currentFilter = $("#menseFilter").val() || 'TÜRKPATENT';
+        if (currentFilter === 'TÜRKPATENT') {
+            $('#marka-list th.col-origin, #marka-list td.col-origin').hide();
+        } else {
+            $('#marka-list th.col-origin, #marka-list td.col-origin').show();
+        }
+    }
+};
     // --- 2. İŞLERİM (TASKS) ---
     window.checkTaskClientRelation = async function(taskData, clientPersonIdSet) {
         const taskTypeStr = String(taskData.taskType);
