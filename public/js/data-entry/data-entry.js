@@ -1227,10 +1227,21 @@ class DataEntryModule {
                 setVal(`${ipType}Description`, recordData.description);
             }
 
-            // Listeler (Applicants & Priorities)
-            if (recordData.applicants) {
-                this.selectedApplicants = recordData.applicants;
+            // ✅ Başvuru sahipleri - İsim Eşleştirme Düzeltmesi
+            if (recordData.applicants && recordData.applicants.length > 0) {
+                this.selectedApplicants = recordData.applicants.map(applicant => {
+                    // Veritabanında isim yoksa, ID ile sistemdeki kişi listesinden (this.allPersons) bul
+                    const personFromList = this.allPersons.find(p => p.id === applicant.id);
+                    
+                    return {
+                        id: applicant.id,
+                        // İsim önceliği: Kayıttaki isim -> Listeden bulunan isim -> 'İsimsiz Kişi'
+                        name: applicant.name || (personFromList ? personFromList.name : 'İsimsiz Kişi'),
+                        email: applicant.email || (personFromList ? personFromList.email : '')
+                    };
+                });
                 this.renderSelectedApplicants();
+                console.log('👥 Başvuru sahipleri isimleriyle yüklendi:', this.selectedApplicants);
             }
             if (recordData.priorities) {
                 this.priorities = recordData.priorities;
