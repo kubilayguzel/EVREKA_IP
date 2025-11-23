@@ -174,6 +174,12 @@ function renderRegistryInfo(record) {
   if (el.registryStatus) {
     el.registryStatus.innerHTML = '';
 
+    // Boş option ekle (eğer status yoksa bu seçili kalacak)
+    const emptyOpt = document.createElement('option');
+    emptyOpt.value = '';
+    emptyOpt.textContent = 'Durum Seçiniz...';
+    el.registryStatus.appendChild(emptyOpt);
+
     statusesArray.forEach(st => {
       const opt = document.createElement('option');
       opt.value = st.value;
@@ -193,6 +199,9 @@ function renderRegistryInfo(record) {
         el.registryStatus.appendChild(opt);
         el.registryStatus.value = currentStatus;
       }
+    } else {
+      // Status yoksa boş option seçili kalsın
+      el.registryStatus.value = '';
     }
   }
 
