@@ -1,7 +1,7 @@
 // js/strategies.js
 import { FormTemplates } from './form-templates.js'; // Az önce oluşturduğun dosya
-import { getSelectedNiceClasses } from './nice-classification.js'; // Mevcut dosyan
-import { STATUSES } from '../utils.js'; // Mevcut dosyan
+import { getSelectedNiceClasses } from '../nice-classification.js'; // Mevcut dosyan
+import { STATUSES } from '../../utils.js'; // Mevcut dosyan 
 
 // Ortak Yardımcı Fonksiyonlar
 const getVal = (id) => document.getElementById(id)?.value?.trim() || null;
