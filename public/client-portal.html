@@ -2618,62 +2618,146 @@ window.generateExcelWithImages = async function(data, headers, filename) {
     link.click();
 };
 
-// === PDF OLUŞTURUCU (Hata Düzeltildi + Base64 Resim) ===
+// === PDF OLUŞTURUCU (V3 - Profesyonel Tasarım) ===
 window.generatePDF = async function(data, headers, filename) {
     const { jsPDF } = window.jspdf;
+    
+    // A4 Yatay (Landscape) format
     const doc = new jsPDF('l', 'mm', 'a4');
 
-    doc.setFontSize(14);
+    // --- 1. Sayfa Başlığı ve Bilgiler ---
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(18);
+    doc.setTextColor(41, 128, 185); // Mavi Başlık
     doc.text("Marka Portföy Raporu", 14, 15);
+    
+    doc.setFont("helvetica", "normal");
     doc.setFontSize(10);
-    doc.text(`Tarih: ${new Date().toLocaleDateString('tr-TR')}`, 14, 22);
+    doc.setTextColor(100); // Gri metin
+    doc.text(`Oluşturulma Tarihi: ${new Date().toLocaleDateString('tr-TR')}`, 14, 22);
+    
+    // Sağ üst köşe (Opsiyonel Şirket Adı)
+    doc.setFontSize(10);
+    doc.text("IP Yönetim Sistemi", 280, 15, { align: 'right' });
 
+    // --- 2. Tablo Verisini Hazırlama ---
     const head = [headers.map(h => h.title)];
     const body = data.map(row => {
         const rowArray = headers.map(h => row[h.key]);
-        // Hata almamak için row objesini raw property'sine ekliyoruz
-        rowArray.raw = row; 
+        rowArray.raw = row; // Stil işlemleri için ham veriyi sakla
         return rowArray;
     });
 
+    // --- 3. Tabloyu Çizdirme ---
     doc.autoTable({
         head: head,
         body: body,
-        startY: 25,
-        theme: 'grid',
-        styles: { fontSize: 8, valign: 'middle', cellPadding: 2 },
-        headStyles: { fillColor: [41, 128, 185], halign: 'center' },
-        columnStyles: { 1: { cellWidth: 25, minCellHeight: 20 } }, // Görsel kolonu genişliği
+        startY: 28,
+        theme: 'grid', // Çizgili tema
+        
+        // Genel Stiller
+        styles: { 
+            font: "helvetica", // Türkçe karakterler için "Roboto" gibi özel font gerekebilir, standartta helvetica en iyisidir
+            fontSize: 8, 
+            valign: 'middle', // Dikey ortalama
+            cellPadding: 3,
+            overflow: 'linebreak',
+            lineWidth: 0.1,
+            lineColor: [200, 200, 200]
+        },
 
-        // --- HATA DÜZELTİLDİ: didParseCell ---
+        // Başlık Stili
+        headStyles: { 
+            fillColor: [41, 128, 185], // Koyu Mavi
+            textColor: 255,
+            fontStyle: 'bold',
+            halign: 'center',
+            valign: 'middle',
+            minCellHeight: 10
+        },
+
+        // Kolon Genişlik Ayarları (Toplam ~270mm alanımız var)
+        columnStyles: {
+            0: { cellWidth: 25 }, // Menşe
+            1: { cellWidth: 22, minCellHeight: 22 }, // Görsel (Kare olması için minHeight)
+            2: { cellWidth: 45 }, // Marka Adı (Geniş)
+            3: { cellWidth: 25 }, // Başvuru No
+            4: { cellWidth: 25 }, // Tescil No
+            5: { cellWidth: 22, halign: 'center' }, // Başvuru Tarihi
+            6: { cellWidth: 22, halign: 'center' }, // Yenileme Tarihi
+            7: { cellWidth: 25, halign: 'center' }, // Durum
+            8: { cellWidth: 'auto' } // Sınıflar (Kalan yer)
+        },
+
+        // --- SATIR STİLİ VE GİRİNTİ (DidParseCell) ---
         didParseCell: function(data) {
-            // Sadece BODY bölümünde ve raw verisi varsa çalıştır
-            if (data.row.section === 'body' && data.row.raw && data.row.raw.raw) {
-                if (data.row.raw.raw.type === 'child') {
-                    data.cell.styles.fillColor = [245, 245, 245];
-                    data.cell.styles.textColor = [100, 100, 100];
-                    data.cell.styles.fontStyle = 'italic';
+            const rowData = data.row.raw;
+            
+            // Sadece Body satırları için
+            if (data.section === 'body' && rowData && rowData.raw) {
+                
+                // CHILD (ALT) KAYITLAR İÇİN STİL
+                if (rowData.raw.type === 'child') {
+                    // Arka plan gri
+                    data.cell.styles.fillColor = [248, 249, 250]; 
+                    data.cell.styles.textColor = [80, 80, 80];
+                    
+                    // Marka Adı kolonunda (index 2) girinti yapalım
+                    if (data.column.index === 2) {
+                         data.cell.styles.fontStyle = 'italic';
+                         // Not: jsPDF-AutoTable'da padding ile girinti simüle edilir
+                         data.cell.padding = { top: 3, bottom: 3, left: 8, right: 3 };
+                    }
+                } 
+                // PARENT (ANA) KAYITLAR İÇİN STİL
+                else {
+                    // Marka Adı kalın olsun
+                    if (data.column.index === 2) {
+                        data.cell.styles.fontStyle = 'bold';
+                    }
                 }
             }
         },
 
-        // --- Resim Çizme (Base64) ---
+        // --- GÖRSEL ÇİZDİRME (DidDrawCell) ---
         didDrawCell: function(data) {
-            // Sadece body bölümü ve görsel kolonu (index 1)
+            // Sadece Body bölümü ve Görsel Kolonu (Index 1)
             if (data.section === 'body' && data.column.index === 1) {
-                // Base64 verisi data.row.raw.raw.base64Image içinde
-                if (data.row.raw && data.row.raw.raw && data.row.raw.raw.base64Image) {
+                const rawItem = data.row.raw.raw;
+                
+                // Görsel verisi var mı?
+                if (rawItem && rawItem.base64Image) {
                     try {
-                        const imgData = data.row.raw.raw.base64Image;
-                        const dim = data.cell.height - 4;
-                        doc.addImage(imgData, 'PNG', data.cell.x + 2, data.cell.y + 2, dim, dim);
+                        const imgData = rawItem.base64Image;
+                        
+                        // Hücre boyutları
+                        const cellWidth = data.cell.width;
+                        const cellHeight = data.cell.height;
+                        
+                        // Resim boyutu (Padding payı bırakarak)
+                        const padding = 2;
+                        const dim = Math.min(cellWidth, cellHeight) - (padding * 2);
+                        
+                        // Resmi hücrenin tam ortasına yerleştir
+                        const x = data.cell.x + (cellWidth - dim) / 2;
+                        const y = data.cell.y + (cellHeight - dim) / 2;
+
+                        doc.addImage(imgData, 'PNG', x, y, dim, dim);
                     } catch (err) {
-                        // Hata olursa boş geç
+                        // Hata olursa sessizce geç
                     }
                 }
             }
         }
     });
+
+    // Sayfa Numaraları Ekleme
+    const pageCount = doc.internal.getNumberOfPages();
+    doc.setFontSize(8);
+    for(let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.text('Sayfa ' + i + ' / ' + pageCount, 285, 200, { align: 'right' });
+    }
 
     doc.save(`${filename}.pdf`);
 };
