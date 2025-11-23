@@ -668,7 +668,7 @@
                             <h6 class="m-0 font-weight-bold text-warning">Coğrafi Dağılım (Menşe)</h6>
                         </div>
                         <div class="card-body">
-                            <div id="chart-geo-dist"></div>
+                            <div id="world-map-markers" style="height: 300px; width: 100%;"></div>
                         </div>
                     </div>
                 </div>
@@ -802,6 +802,9 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.29/jspdf.plugin.autotable.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/jsvectormap/dist/css/jsvectormap.min.css" />
+<script src="https://cdn.jsdelivr.net/npm/jsvectormap"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsvectormap/dist/maps/world.js"></script>
 
 <script type="module">
     import { authService, db } from './firebase-config.js';
@@ -2962,13 +2965,65 @@ window.initReports = function() {
         colors: ['#36b9cc']
     });
 
-    // 4. PASTA GRAFİK (Coğrafi)
-    renderChart('chart-geo-dist', {
-        series: Object.values(originCounts),
-        labels: Object.keys(originCounts),
-        chart: { type: 'pie', height: 300 },
-        colors: ['#e74a3b', '#4e73df'],
-        legend: { position: 'bottom' }
+// --- 4. DÜNYA HARİTASI (YENİ) ---
+    // Önce harita verisini { "TR": 50, "DE": 4 } formatına getirelim
+    let mapData = {};
+    
+    allData.forEach(item => {
+        let code = '';
+        const originRaw = (item.origin || '').toString().toUpperCase();
+        
+        // TÜRKPATENT ise 'TR' kodu ver
+        if (originRaw.includes('TURK') || originRaw.includes('TÜRK')) {
+            code = 'TR';
+        } 
+        // Yurtdışı ise ülke kodunu al (örn: DE, US, GB)
+        else if (item.country || item.countryCode) {
+            code = (item.country || item.countryCode).toUpperCase().trim();
+        }
+        
+        // WIPO veya EUIPO gibi kodlar haritada ülke olarak çıkmaz, 
+        // onları pas geçiyoruz veya merkezlerine atayabiliriz (Opsiyonel).
+        // Sadece geçerli 2 haneli ülke kodlarını sayalım.
+        if (code && code.length === 2) {
+            mapData[code] = (mapData[code] || 0) + 1;
+        }
+    });
+
+    // Eğer eski harita varsa temizle (Yenile butonuna basıldığında üst üste binmemesi için)
+    document.querySelector("#world-map-markers").innerHTML = "";
+
+    // Haritayı Çiz
+    new jsVectorMap({
+        selector: '#world-map-markers',
+        map: 'world',
+        // Harita Görünüm Ayarları
+        zoomButtons: true,
+        zoomOnScroll: false,
+        regionStyle: {
+            initial: {
+                fill: '#e3eaef', // Boş ülkelerin rengi (Açık Gri)
+                stroke: 'none',
+                "stroke-width": 0,
+                "stroke-opacity": 0
+            },
+            hover: {
+                fillOpacity: 0.7,
+                cursor: 'pointer'
+            }
+        },
+        // Veriye Göre Renklendirme (Mavinin tonları)
+        visualizeData: {
+            scale: ['#a2cffe', '#2e59d9'], // Açık Mavi -> Koyu Mavi (Yoğunluğa göre)
+            values: mapData // Hazırladığımız {TR: 50, DE: 2} verisi
+        },
+        // Tooltip (Üzerine gelince sayı gösterme)
+        onRegionTooltipShow(event, tooltip, code) {
+            const count = mapData[code] || 0;
+            tooltip.text(
+                `<strong>${tooltip.text()}</strong>: ${count} Marka/Patent`
+            , true); // HTML içeriğine izin ver
+        }
     });
 };
 
