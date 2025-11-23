@@ -1917,7 +1917,7 @@ populateFormFields(recordData) {
     let portfolioData = {
         ipType: ipType,
         portfoyStatus: 'active', // ✅ Kayıt durumu için portfoyStatus
-        status: 'filed', // ✅ Başvuru durumu için status - default filed
+        status: null, // ✅ Status değeri ilgili fonksiyonda set edilecek
         createdAt: new Date().toISOString(),
         recordOwnerType: this.recordOwnerTypeSelect.value,
         details: {}
@@ -2195,7 +2195,7 @@ async saveTrademarkPortfolio(portfolioData) {
                 title: brandText,
                 type: 'trademark',
                 portfoyStatus: 'active',
-                status: document.getElementById('trademarkStatus')?.value || 'filed',
+                status: document.getElementById('trademarkStatus')?.value || null,
                 recordOwnerType: this.recordOwnerTypeSelect.value,
                 origin: origin,
                 countries: selectedCountries,
@@ -2239,7 +2239,7 @@ async saveTrademarkPortfolio(portfolioData) {
                     title: brandText,
                     type: 'trademark',
                     portfoyStatus: 'active',
-                    status: document.getElementById('trademarkStatus')?.value || 'filed',
+                    status: document.getElementById('trademarkStatus')?.value || null,
                     recordOwnerType: this.recordOwnerTypeSelect.value,
                     origin: origin,
                     country: country.code,
@@ -2282,7 +2282,7 @@ async saveTrademarkPortfolio(portfolioData) {
                 title: brandText,
                 type: 'trademark',
                 portfoyStatus: 'active',
-                status: document.getElementById('trademarkStatus')?.value || 'filed',
+                status: document.getElementById('trademarkStatus')?.value || null,
                 recordOwnerType: this.recordOwnerTypeSelect.value,
                 origin: origin || 'TÜRKPATENT',
                 country: selectedCountry || null,
