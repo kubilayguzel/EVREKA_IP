@@ -2109,153 +2109,149 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
     window.activeColumnFilters = {}; 
 
 window.applyMasterFilter = function() {
-        // 1. Hangi Tab Aktif?
-        const activeTabLink = $('#portfolioTopTabs a.nav-link.active');
-        const activeTabId = activeTabLink.attr('href'); // #marka-list, #dava-itiraz-list, #dava-list
-        
-        // Hangi veri seti üzerinde çalışacağız?
-        let targetDataObj = null;
-        let renderFunction = null;
-        let tableId = '';
+    // 1. Hangi Tab Aktif?
+    const activeTabLink = $('#portfolioTopTabs a.nav-link.active');
+    const activeTabId = activeTabLink.attr('href'); 
+    
+    let targetDataObj = null;
+    let renderFunction = null;
+    let tableId = '';
 
-        if (activeTabId === '#marka-list') {
-            targetDataObj = window.markaPaginationData;
-            renderFunction = window.populatePortfolioTable;
-            tableId = 'marka-list';
-        } else if (activeTabId === '#dava-itiraz-list') {
-            targetDataObj = window.davaItirazPaginationData;
-            renderFunction = window.renderDavaItirazTable;
-            tableId = 'dava-itiraz-list';
-        } else if (activeTabId === '#dava-list') {
-            targetDataObj = window.davaPaginationData; // Yeni oluşturduğumuz
-            renderFunction = window.renderDavaTable;   // Birazdan tanımlayacağız
-            tableId = 'dava-list';
-        } else {
-            return; // Desteklenmeyen tab
+    if (activeTabId === '#marka-list') {
+        targetDataObj = window.markaPaginationData;
+        renderFunction = window.populatePortfolioTable;
+        tableId = 'marka-list';
+    } else if (activeTabId === '#dava-itiraz-list') {
+        targetDataObj = window.davaItirazPaginationData;
+        renderFunction = window.renderDavaItirazTable;
+        tableId = 'dava-itiraz-list';
+    } else if (activeTabId === '#dava-list') {
+        targetDataObj = window.davaPaginationData;
+        renderFunction = window.renderDavaTable;
+        tableId = 'dava-list';
+    } else {
+        return;
+    }
+
+    if (!targetDataObj || !targetDataObj.allDataUnfiltered) return;
+
+    const menseVal = $("#menseFilter").val() || 'TÜRKPATENT';
+    const searchVal = $("#portfolioSearchText").val().toLowerCase().trim();
+    const statusVal = $("#portfolioDurumFilter").val();
+
+    const allData = targetDataObj.allDataUnfiltered;
+
+    // 3. Filtreleme Mantığı
+    let filteredData = allData.filter(item => {
+        // A) Child kayıtları doğrudan listeleme (Parent üzerinden kontrol edeceğiz)
+        if (item.transactionHierarchy === 'child' || item.isChild) return false;
+
+        // B) Menşe Kontrolü
+        if (item.origin) {
+            const origin = (item.origin || 'TÜRKPATENT').toString().toUpperCase();
+            const isTurk = origin.includes('TURK') || origin.includes('TÜRK');
+            if (menseVal === 'TÜRKPATENT' && !isTurk) return false;
+            if (menseVal === 'YURTDISI' && isTurk) return false;
         }
 
-        if (!targetDataObj || !targetDataObj.allDataUnfiltered) return;
+        // C) Global Arama (GÜNCELLENDİ: Child Kayıtları da kapsar)
+        if (searchVal) {
+            // 1. Parent verilerini topla
+            let searchableText = Object.values(item).map(v => 
+                (v && typeof v === 'object') ? '' : String(v).toLowerCase()
+            ).join(' ');
 
-        // 2. Filtre Değerlerini Al
-        const menseVal = $("#menseFilter").val() || 'TÜRKPATENT';
-        const searchVal = $("#portfolioSearchText").val().toLowerCase().trim();
-        const statusVal = $("#portfolioDurumFilter").val();
-
-        const allData = targetDataObj.allDataUnfiltered;
-
-        // 3. Filtreleme Mantığı
-        let filteredData = allData.filter(item => {
-            // A) Child kayıtları ele (Sadece parent'lar listelenir)
-            if (item.transactionHierarchy === 'child' || item.isChild) return false;
-
-            // B) Menşe Kontrolü (Sadece bu alan varsa)
-            if (item.origin) {
-                const origin = (item.origin || 'TÜRKPATENT').toString().toUpperCase();
-                const isTurk = origin.includes('TURK') || origin.includes('TÜRK');
-                if (menseVal === 'TÜRKPATENT' && !isTurk) return false;
-                if (menseVal === 'YURTDISI' && isTurk) return false;
+            // Özel alanlar
+            if(item.caseNo) searchableText += ' ' + item.caseNo.toLowerCase();
+            if(item.opposingParty) searchableText += ' ' + item.opposingParty.toLowerCase();
+            
+            // 2. Child verilerini topla (Eğer Marka Listesiyse)
+            if (tableId === 'marka-list') {
+                const children = allData.filter(c => c.parentId === item.id);
+                children.forEach(child => {
+                    // Child'ın standart alanları
+                    searchableText += ' ' + Object.values(child).map(v => 
+                        (v && typeof v === 'object') ? '' : String(v).toLowerCase()
+                    ).join(' ');
+                    
+                    // Child Ülke Adı (Koddan isme çevrim - örn: "DE" ise "Almanya" da aransın)
+                    if (child.country || child.countryCode) {
+                        const code = (child.country || child.countryCode).toUpperCase();
+                        const countryName = window.countryMap.get(code);
+                        if (countryName) searchableText += ' ' + countryName.toLowerCase();
+                    }
+                });
             }
 
-            // C) Global Arama (Input) - Tüm alanlarda ara
-            if (searchVal) {
-                // Aranacak alanları birleştir
-                const searchableValues = Object.values(item).map(v => 
-                    (v && typeof v === 'object') ? '' : String(v).toLowerCase()
-                );
-                // Dava/İtiraz özel alanları
-                if(item.caseNo) searchableValues.push(item.caseNo.toLowerCase());
-                if(item.opposingParty) searchableValues.push(item.opposingParty.toLowerCase());
-                if(item.transactionTypeName) searchableValues.push(item.transactionTypeName.toLowerCase());
-                
-                const fullText = searchableValues.join(' ');
-                if (!fullText.includes(searchVal)) return false;
+            // 3. Arama yap
+            if (!searchableText.includes(searchVal)) return false;
+        }
+
+        // D) Durum Filtresi
+        if (statusVal && statusVal !== 'TÜMÜ') {
+            const st = item.status || item.statusText || item.suitStatus || '';
+            // Statü İngilizce olsa bile Türkçe arama yapmak için map kontrolü gerekebilir
+            // Ancak basit string eşleşmesi çoğu durumda yeterlidir.
+            if (!st.toLowerCase().includes(statusVal.toLowerCase())) return false;
+        }
+
+        // E) Kolon Filtreleri (Mevcut mantık)
+        for (const [key, selectedValues] of Object.entries(window.activeColumnFilters)) {
+            if (!key.startsWith(tableId + '-')) continue;
+            const colIdx = key.split('-').pop();
+            let cellValue = '';
+
+            if (tableId === 'marka-list') {
+                const isTurk = (item.origin||'').toUpperCase().includes('TURK');
+                if (colIdx == '1') cellValue = isTurk ? 'TÜRKPATENT' : (item.country || 'Yurtdışı');
+                if (colIdx == '3') cellValue = item.title || item.brandText || '';
+                if (colIdx == '7') cellValue = item.status || '';
             }
+            // ... (Diğer tablolar için mantık aynı kalır)
 
-            // D) Durum Dropdown (Sadece status alanı varsa)
-            if (statusVal && statusVal !== 'TÜMÜ') {
-                const st = item.status || item.statusText || item.suitStatus || '';
-                if (!st.includes(statusVal)) return false;
+            if (!selectedValues.includes(cellValue.trim())) return false;
+        }
+
+        return true;
+    });
+
+    // 4. Veriyi Güncelle ve Render Et
+    targetDataObj.allData = filteredData;
+    
+    let paginationContainerId = '';
+    if (tableId === 'marka-list') paginationContainerId = 'markaPagination';
+    else if (tableId === 'dava-itiraz-list') paginationContainerId = 'davaItirazPagination';
+    else if (tableId === 'dava-list') paginationContainerId = 'davaPagination';
+
+    if (!targetDataObj.pagination && window.Pagination && paginationContainerId) {
+        targetDataObj.pagination = new window.Pagination({
+            itemsPerPage: 10,
+            containerId: paginationContainerId,
+            onPageChange: (page, perPage) => {
+                const start = (page - 1) * perPage;
+                const slice = targetDataObj.allData.slice(start, start + perPage);
+                renderFunction(`#${tableId}`, slice, start); 
             }
-
-            // E) Kolon Filtreleri (Excel Tarzı)
-            // activeColumnFilters yapısı: { 'marka-list-3': ['Değer1', 'Değer2'] } şeklinde benzersiz key kullanacağız
-            for (const [key, selectedValues] of Object.entries(window.activeColumnFilters)) {
-                if (!key.startsWith(tableId + '-')) continue; // Bu tabloya ait değilse geç
-                if (!selectedValues || selectedValues.length === 0) continue;
-
-                const colIdx = key.split('-').pop(); // "marka-list-3" -> "3"
-                let cellValue = '';
-
-                // --- MARKA TABLOSU ---
-                if (tableId === 'marka-list') {
-                    const isTurk = (item.origin||'').toUpperCase().includes('TURK');
-                    if (colIdx == '1') cellValue = isTurk ? 'TÜRKPATENT' : (item.country || 'Yurtdışı');
-                    if (colIdx == '3') cellValue = item.title || item.brandText || '';
-                    if (colIdx == '7') cellValue = item.status || '';
-                }
-                // --- İTİRAZ TABLOSU ---
-                else if (tableId === 'dava-itiraz-list') {
-                    if (colIdx == '3') cellValue = item.title || '';
-                    if (colIdx == '4') cellValue = item.transactionTypeName || '';
-                    if (colIdx == '6') cellValue = item.applicantName || '';
-                    if (colIdx == '10') cellValue = item.statusText || '';
-                }
-                // --- DAVA TABLOSU ---
-                else if (tableId === 'dava-list') {
-                    if (colIdx == '1') cellValue = item.caseNo || '';
-                    if (colIdx == '2') cellValue = item.title || '';
-                    if (colIdx == '4') cellValue = item.court || '';
-                    if (colIdx == '5') cellValue = item.opposingParty || '';
-                    if (colIdx == '7') cellValue = item.suitStatus || '';
-                }
-
-                // Seçili değerlerden biriyle eşleşiyor mu?
-                if (!selectedValues.includes(cellValue.trim())) return false;
-            }
-
-            return true;
         });
+    }
 
-        // 4. Veriyi Güncelle ve Render Et
-        targetDataObj.allData = filteredData;
-        
-        // Pagination Başlat (Eğer yoksa)
-        let paginationContainerId = '';
-        if (tableId === 'marka-list') paginationContainerId = 'markaPagination';
-        else if (tableId === 'dava-itiraz-list') paginationContainerId = 'davaItirazPagination';
-        else if (tableId === 'dava-list') paginationContainerId = 'davaPagination';
-
-        if (!targetDataObj.pagination && window.Pagination && paginationContainerId) {
-            targetDataObj.pagination = new window.Pagination({
-                itemsPerPage: 10,
-                containerId: paginationContainerId,
-                onPageChange: (page, perPage) => {
-                    const start = (page - 1) * perPage;
-                    const slice = targetDataObj.allData.slice(start, start + perPage);
-                    // Render fonksiyonunu çağır
-                    renderFunction(`#${tableId}`, slice, start); 
-                }
-            });
+    if (targetDataObj.pagination) {
+        targetDataObj.pagination.update(filteredData.length);
+        // İlk sayfaya dön
+        targetDataObj.pagination.currentPage = 1; 
+        const slice = filteredData.slice(0, 10);
+        if(tableId === 'dava-itiraz-list' || tableId === 'dava-list') {
+             renderFunction(slice, 0);
+        } else {
+             renderFunction(`#${tableId}`, slice, 0);
         }
+    }
 
-        // Pagination Güncelle ve İlk Sayfayı Çiz
-        if (targetDataObj.pagination) {
-            targetDataObj.pagination.update(filteredData.length);
-            const slice = filteredData.slice(0, 10);
-            // Not: Render fonksiyonlarınızın imzası (selector, data, start) uyumlu olmalı
-            if(tableId === 'dava-itiraz-list' || tableId === 'dava-list') {
-                 renderFunction(slice, 0); // Bu fonksiyonlar selector almayabilir, mevcut yapıya göre düzeltin
-            } else {
-                 renderFunction(`#${tableId}`, slice, 0);
-            }
-        }
-
-        // Menşe Kolonu Yönetimi (Sadece Marka ve İtiraz için anlamlı)
-        if (tableId !== 'dava-list') {
-            if (menseVal === 'TÜRKPATENT') $(`#${tableId} th.col-origin, #${tableId} td.col-origin`).hide();
-            else $(`#${tableId} th.col-origin, #${tableId} td.col-origin`).show();
-        }
-    };
+    if (tableId !== 'dava-list') {
+        if (menseVal === 'TÜRKPATENT') $(`#${tableId} th.col-origin, #${tableId} td.col-origin`).hide();
+        else $(`#${tableId} th.col-origin, #${tableId} td.col-origin`).show();
+    }
+};
 
 window.toggleColumnFilter = function(icon, tableId, colIdx) {
         const existing = $(icon).next('.column-filter-dropdown');
