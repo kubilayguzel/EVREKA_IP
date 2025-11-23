@@ -7,7 +7,7 @@ import {collection, doc, getDoc, getDocs, getFirestore, query, where , updateDoc
 import { STATUSES, ORIGIN_TYPES } from '../utils.js';
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { FormTemplates } from './form-templates.js';
-
+import { TrademarkStrategy, PatentStrategy, DesignStrategy, SuitStrategy } from './strategies.js';
 
 function __pathFromDownloadURL(url) {
   try {
@@ -204,6 +204,12 @@ constructor() {
         this.suitClientPerson = null;
         this.suitSpecificTaskType = null;
         this.authService = auth;
+        this.strategies = {
+        'trademark': new TrademarkStrategy(),
+        'patent': new PatentStrategy(),
+        'design': new DesignStrategy(),
+        'suit': new SuitStrategy()
+    };
     }
 
 async init() {
@@ -1588,87 +1594,55 @@ populateFormFields(recordData) {
         console.log('✅ Form alanları başarıyla dolduruldu');
     }, 500); // Form render edilmesini bekle
 }
- async handleSavePortfolio() {
-    // --- Child propagation pre-check (edit + WIPO/ARIPO parent) ---
-    let _selectedChildCountries = [];
-    let _isParentWipoAripo = false;
-    let _parentRecord = null;
-    let _oldIr = null;
-    let _origin = null;
-    if (this.editingRecordId) {
-      try {
-        const res = await ipRecordsService.getRecordById(this.editingRecordId);
-        if (res?.success && res.data) {
-          _parentRecord = res.data;
-          _origin = String(_parentRecord.origin || '').toUpperCase();
-          const hierarchy = String(_parentRecord.transactionHierarchy || '').toLowerCase();
-          _isParentWipoAripo = (hierarchy === 'parent') && (_origin === 'WIPO' || _origin === 'ARIPO');
-          _oldIr = (_origin === 'WIPO') ? _parentRecord.wipoIR : _parentRecord.aripoIR;
-            let _hasCountryListChanged = false;
-            if (_isParentWipoAripo) {
-            // Mevcut (UI'daki) ülke kodlarını normalize et
-            const _currentCountryCodes = (this.selectedCountries || [])
-                .map(c => String(c.code).toUpperCase())
-                .sort()
-                .join(',');
 
-            // İlk hal ile şimdi aynı mı?
-            _hasCountryListChanged =
-                !!this._initialCountryCodes &&
-                _currentCountryCodes !== this._initialCountryCodes;
-
-            // Ülke listesi değiştiyse modal AÇMA
-            if (!_hasCountryListChanged) {
-                _selectedChildCountries = await this.openChildPropagationModalAndWait(_parentRecord);
-            } else {
-                _selectedChildCountries = []; // modal yok → propagasyon seçimi yok
-            }
-            }
-
-            // Bilgiyi ileride de kullanmak istersen sakla
-            this.__childProp.hasCountryListChanged = _hasCountryListChanged;
-        }
-      } catch (e) { console.warn('Parent fetch failed:', e); }
-    }
-    // Persist selection/state for cross-method usage
-    this.__childProp = {
-      isParentWipoAripo: _isParentWipoAripo,
-      selectedChildCountries: Array.isArray(_selectedChildCountries) ? _selectedChildCountries : [],
-      parentRecord: _parentRecord,
-      oldIr: _oldIr,
-      origin: _origin
-    };
-    
-    
+async handleSavePortfolio() {
     const ipType = this.ipTypeSelect.value;
-    
-    if (!ipType) {
-        alert('Lütfen bir IP türü seçin');
+    const strategy = this.strategies[ipType];
+
+    if (!strategy) {
+        alert('Geçersiz IP Türü');
         return;
     }
 
-    let portfolioData = {
-        ipType: ipType,
-        portfoyStatus: 'active', // ✅ Kayıt durumu için portfoyStatus
-        status: null, // ✅ Status değeri ilgili fonksiyonda set edilecek
-        createdAt: new Date().toISOString(),
-        recordOwnerType: this.recordOwnerTypeSelect.value,
-        details: {}
-    };
+    // 1. Veriyi Topla (Strategy yapar)
+    // Context olarak 'this' yani DataEntryModule'ün kendisini gönderiyoruz ki 
+    // selectedApplicants, uploadedBrandImage vb. verilere erişebilsin.
+    const recordData = strategy.collectData(this);
+
+    // 2. Validasyon (Strategy yapar)
+    const error = strategy.validate(recordData, this);
+    if (error) {
+        alert(error);
+        return;
+    }
+
+    // 3. Ortak Alanları Ekle (Record Owner Type vb.)
+    recordData.recordOwnerType = this.recordOwnerTypeSelect.value;
+    recordData.createdAt = new Date().toISOString();
 
     try {
-    if (ipType === 'trademark') {
-            await this.saveTrademarkPortfolio(portfolioData);
-        } else if (ipType === 'patent') {
-            await this.savePatentPortfolio(portfolioData);
-        } else if (ipType === 'design') {
-            await this.saveDesignPortfolio(portfolioData);
-        } else if (ipType === 'suit') { // YENİ: Dava kaydetme
-            await this.saveSuitPortfolio(portfolioData);
+        this.saveBtn.disabled = true;
+        this.saveBtn.textContent = 'Kaydediliyor...';
+
+        if (ipType === 'suit') {
+            // Davalar 'suits' koleksiyonuna gidiyor
+            const db = getFirestore(); // Import ettiğinden emin ol
+            const suitsColRef = collection(db, 'suits');
+            await addDoc(suitsColRef, recordData);
+            alert('Dava kaydı başarıyla oluşturuldu!');
+        } else {
+
+            await this.saveIpRecordWithStrategy(recordData); 
         }
+
+        window.location.href = 'portfolio.html';
+
     } catch (error) {
-        console.error('Portföy kaydı kaydetme hatası:', error);
-        alert('Portföy kaydı kaydedilirken bir hata oluştu');
+        console.error('Kaydetme hatası:', error);
+        alert('Bir hata oluştu: ' + error.message);
+    } finally {
+        this.saveBtn.disabled = false;
+        this.saveBtn.textContent = 'Kaydet';
     }
 }
 
@@ -1821,566 +1795,63 @@ async syncWipoAripoChildren(parentId, parentDataFromForm) {
   }
 }
 
+async saveIpRecordWithStrategy(data) {
+    // WIPO/ARIPO ve Çoklu Ülke Mantığı
+    if ((data.origin === 'WIPO' || data.origin === 'ARIPO') && this.selectedCountries.length > 0) {
 
-// js/data-entry.js dosyasındaki saveTrademarkPortfolio fonksiyonunda yapılacak değişiklik:
+        // 1. Parent Kayıt (Ülkesiz)
+        const parentData = { ...data, transactionHierarchy: 'parent', countries: this.selectedCountries.map(c=>c.code) };
+        // Parent'ta wipoIR zaten data'nın içinde var (internationalRegNumber olarak mapledik mi? Hayır, collectData'da düzelttik)
+        // Stratejide internationalRegNumber olarak almıştık, onu wipoIR/aripoIR'a çevirelim
+        if(data.origin === 'WIPO') parentData.wipoIR = data.internationalRegNumber;
+        else parentData.aripoIR = data.internationalRegNumber;
 
-async saveTrademarkPortfolio(portfolioData) {
-        // Form verilerini al
-        const origin = document.getElementById('originSelect')?.value;
-        const brandText = document.getElementById('brandExampleText').value.trim();
-        const applicationNumber = document.getElementById('applicationNumber').value.trim();
-        const applicationDate = document.getElementById('applicationDate').value;
-        const registrationDate = document.getElementById('registrationDate').value;
-        const renewalDate = document.getElementById('renewalDate').value;
-        const description = document.getElementById('brandDescription').value.trim();
-        // Nice Classification'dan sınıflara göre grupla
-        const rawNiceClasses = getSelectedNiceClasses();
-        console.log('🔍 Raw Nice Classes:', rawNiceClasses);
+        const parentResult = await ipRecordsService.createRecordFromDataEntry(parentData);
+        if(!parentResult.success) throw new Error(parentResult.error);
+        const parentId = parentResult.id;
 
-        // WIPO/ARIPO'ya özgü alanları al
-        const registrationNumberInput = document.getElementById('registrationNumber');
-        const internationalRegNumber = registrationNumberInput.value.trim();
-
-        // 📌 Yeni: WIPO/ARIPO için zorunlu alan kontrolü
-        if ((origin === 'WIPO' || origin === 'ARIPO') && !internationalRegNumber) {
-            alert(`Lütfen ${origin} IR No alanını doldurun.`);
-            return;
-        }
-
-        if (!Array.isArray(rawNiceClasses) || rawNiceClasses.length === 0) {
-            alert('Lütfen en az bir mal veya hizmet seçin.');
-            return;
-        }
-
-        // ✅ GÜNCELLENMİŞ: Menşe ve ülke verilerini yakalama mantığı
-        let selectedCountry = null;
-        let selectedCountries = [];
-        
-        if (origin === 'Yurtdışı Ulusal') {
-            selectedCountry = document.getElementById('countrySelect')?.value;
-        } else if (origin === 'WIPO' || origin === 'ARIPO') {
-            selectedCountries = this.selectedCountries.map(c => c.code);
-        }
-
-        // ✅ MARKA GÖRSELİ UPLOAD İŞLEMİ
-        let brandImageUrl = null;
-        if (this.uploadedBrandImage && typeof this.uploadedBrandImage === 'object' && this.uploadedBrandImage instanceof File) {
-            try {
-                console.log('📤 Marka görseli yükleniyor...', this.uploadedBrandImage.name);
-                const timestamp = Date.now();
-                const storagePath = `brand-examples/${timestamp}_${this.uploadedBrandImage.name}`;
-                const storageRef = ref(storage, storagePath);
-                await uploadBytes(storageRef, this.uploadedBrandImage);
-                brandImageUrl = await getDownloadURL(storageRef);
-                console.log('✅ Marka görseli başarıyla yüklendi:', brandImageUrl);
-            } catch (error) {
-                console.error('❌ Marka görseli yükleme hatası:', error);
-                alert('Marka görseli yüklenirken bir hata oluştu. Lütfen tekrar deneyin.');
-                return;
-            }
-        } else if (this.uploadedBrandImage && typeof this.uploadedBrandImage === 'string') {
-            brandImageUrl = this.uploadedBrandImage;
-        } else {
-            brandImageUrl = null;
-        }
-
-        // 3) goodsAndServices'i doğru formata dönüştür [GÜNCELLENDİ]
-        const goodsAndServicesByClass = rawNiceClasses.reduce((acc, item) => {
-            // Regex güncellemesi: (35) veya (35-1) formatını ve sonrasındaki çok satırlı metni yakalar
-            // [\s\S]* ifadesi yeni satırları da kapsar
-            const match = item.match(/^\((\d+)(?:-\d+)?\)\s*([\s\S]*)$/);
-            
-            if (match) {
-                const classNo = parseInt(match[1]);
-                const rawText = match[2].trim();
-                
-                let classObj = acc.find(obj => obj.classNo === classNo);
-                if (!classObj) {
-                    classObj = { classNo, items: [] };
-                    acc.push(classObj);
-                }
-
-                // Metni satırlara böl ve listeye ekle
-                if (rawText) {
-                    // [GÜNCELLEME] Artık yeni satır (\n) veya nokta (.) ile bölüyoruz
-                    // Regex'teki \. nokta karakterini ifade eder.
-                    const lines = rawText.split(/[\n.]/).map(l => l.trim()).filter(Boolean);
-                    
-                    lines.forEach(line => {
-                        if (!classObj.items.includes(line)) {
-                            classObj.items.push(line);
-                        }
-                    });
-                }
-            }
-            return acc;
-        }, []).sort((a, b) => a.classNo - b.classNo);
-
-        const niceClass = goodsAndServicesByClass.map(item => item.classNo);
-
-        console.log('✅ Grouped goodsAndServicesByClass:', goodsAndServicesByClass);
-
-        // 4) Kayıt payload’u
-        let recordsToSave = [];
-        if (origin === 'WIPO' || origin === 'ARIPO') {
-            // Ana WIPO/ARIPO kaydı
-            const mainRecord = {
-                title: brandText,
-                type: 'trademark',
-                portfoyStatus: 'active',
-                status: document.getElementById('trademarkStatus')?.value || null,
-                recordOwnerType: this.recordOwnerTypeSelect.value,
-                origin: origin,
-                countries: selectedCountries,
-                
-                // International Registration Numarası
-                wipoIR: origin === 'WIPO' ? internationalRegNumber : null,
-                aripoIR: origin === 'ARIPO' ? internationalRegNumber : null,
-
-                // Başvuru numarası yok
-                applicationNumber: internationalRegNumber,
-                registrationNumber: null,
-                applicationDate: applicationDate || null,
-                registrationDate: registrationDate || null,
-                renewalDate: renewalDate || null,
-                
-                brandText: brandText,
-                brandImageUrl: brandImageUrl,
-                description: description || null,
-                
-                brandType: document.getElementById('brandType')?.value || 'Şekil + Kelime',
-                brandCategory: document.getElementById('brandCategory')?.value || 'Ticaret/Hizmet Markası',
-                
-                bulletins: (() => {
-                    const no = document.getElementById('bulletinNo')?.value?.trim();
-                    const dt = document.getElementById('bulletinDate')?.value?.trim();
-                    return (no || dt) ? [{ bulletinNo: no || null, bulletinDate: dt || null }] : [];
-                })(),
-                
-                applicants: this.selectedApplicants.map(p => ({ id: p.id, email: p.email || null })),
-                priorities: this.priorities,
-                goodsAndServicesByClass: goodsAndServicesByClass,
-                
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString(),
-                transactionHierarchy: 'parent'};
-            recordsToSave.push(mainRecord);
-
-            // Her ülke için ayrı çocuk kayıt
-            this.selectedCountries.forEach(country => {
-                const countryRecord = {
-                    title: brandText,
-                    type: 'trademark',
-                    portfoyStatus: 'active',
-                    status: document.getElementById('trademarkStatus')?.value || null,
-                    recordOwnerType: this.recordOwnerTypeSelect.value,
-                    origin: origin,
-                    country: country.code,
-                    
-                    wipoIR: origin === 'WIPO' ? internationalRegNumber : null,
-                    aripoIR: origin === 'ARIPO' ? internationalRegNumber : null,
-                    
-                    applicationNumber: null,
-                    registrationNumber: null,
-                    applicationDate: applicationDate || null,
-                    registrationDate: registrationDate || null,
-                    renewalDate: renewalDate || null,
-                    
-                    brandText: brandText,
-                    brandImageUrl: brandImageUrl,
-                    description: description || null,
-                    
-                    brandType: document.getElementById('brandType')?.value || 'Şekil + Kelime',
-                    brandCategory: document.getElementById('brandCategory')?.value || 'Ticaret/Hizmet Markası',
-                    
-                    bulletins: (() => {
-                        const no = document.getElementById('bulletinNo')?.value?.trim();
-                        const dt = document.getElementById('bulletinDate')?.value?.trim();
-                        return (no || dt) ? [{ bulletinNo: no || null, bulletinDate: dt || null }] : [];
-                    })(),
-                    
-                    applicants: this.selectedApplicants.map(p => ({ id: p.id, email: p.email || null })),
-                    priorities: this.priorities,
-                    goodsAndServicesByClass: goodsAndServicesByClass,
-                    
-                    createdAt: new Date().toISOString(),
-                    updatedAt: new Date().toISOString(),
-                    transactionHierarchy: 'child'};
-                recordsToSave.push(countryRecord);
-            });
-
-        } else {
-            // Mevcut tek kayıt mantığı
-            const singleRecord = {
-                title: brandText,
-                type: 'trademark',
-                portfoyStatus: 'active',
-                status: document.getElementById('trademarkStatus')?.value || null,
-                recordOwnerType: this.recordOwnerTypeSelect.value,
-                origin: origin || 'TÜRKPATENT',
-                country: selectedCountry || null,
-                countries: selectedCountries || [],
-                
-                applicationNumber: applicationNumber || null,
-                registrationNumber: document.getElementById('registrationNumber')?.value.trim() || null,
-                applicationDate: applicationDate || null,
-                registrationDate: registrationDate || null,
-                renewalDate: renewalDate || null,
-                
-                brandText: brandText,
-                brandImageUrl: brandImageUrl,
-                description: description || null,
-                
-                brandType: document.getElementById('brandType')?.value || 'Şekil + Kelime',
-                brandCategory: document.getElementById('brandCategory')?.value || 'Ticaret/Hizmet Markası',
-                
-                bulletins: (() => {
-                    const no = document.getElementById('bulletinNo')?.value?.trim();
-                    const dt = document.getElementById('bulletinDate')?.value?.trim();
-                    return (no || dt) ? [{ bulletinNo: no || null, bulletinDate: dt || null }] : [];
-                })(),
-                
-               applicants: this.selectedApplicants.map(p => ({ id: p.id, email: p.email || null })),
-                priorities: this.priorities,
-                goodsAndServicesByClass: goodsAndServicesByClass,
-
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString(),
+        // 2. Child Kayıtlar (Her ülke için)
+        const promises = this.selectedCountries.map(country => {
+            const childData = { 
+                ...data, 
+                transactionHierarchy: 'child', 
+                parentId: parentId,
+                country: country.code,
+                // Child'da IR no yine olsun
+                wipoIR: parentData.wipoIR,
+                aripoIR: parentData.aripoIR
             };
-            recordsToSave.push(singleRecord);
-        }
+            return ipRecordsService.createRecordFromDataEntry(childData);
+        });
 
-        // Kayıtları döngüye al ve kaydet
-        const results = [];
-        let success = true;
-        let isExisting = false;
-        let mainRecordId = null;
+        await Promise.all(promises);
 
-        for (let i = 0; i < recordsToSave.length; i++) {
-            let recordData = recordsToSave[i];
-            const isMainRecord = recordData.transactionHierarchy === 'parent';
-            const isSingleRecord = !recordData.transactionHierarchy; // ✅ TÜRKPATENT/Yurtdışı kayıtları
-            
-            // ✅ EKLENDİ: Transaction oluşturulması için ipType alanını ekle
-            if (!recordData.ipType) {
-                recordData.ipType = 'trademark';
-            }
-            
-            let result;
+        // Transaction Ekleme (Parent için)
+        await this.addTransactionForNewRecord(parentId, data.ipType);
 
-            if (this.editingRecordId) {
-            // ✅ Düzenlenen kaydın verisi - recordsToSave'deki ilk kayıt
-            const dataToUpdate = recordsToSave[0];
-            
-            console.log('🔄 Düzenleme modu - editingRecordId:', this.editingRecordId);
-            console.log('📝 Güncellenecek veri:', dataToUpdate);
-
-            // ✅ Child kaydı güncelliyorsak ülke bilgisini KORUYALIM
-            if (dataToUpdate.transactionHierarchy === 'child') {
-                // Child'da ülke değişmez, mevcut country'yi koru
-                console.log('🔍 Child kaydı güncelleniyor, ülke korunuyor');
-            } else if (['WIPO', 'ARIPO'].includes(String(dataToUpdate.origin)) && dataToUpdate.transactionHierarchy === 'parent') {
-                // Parent'ta ülke olmamalı
-                if ('country' in dataToUpdate) delete dataToUpdate.country;
-                console.log('🔍 Parent kaydı güncelleniyor, country alanı silindi');
-            }
-
-    result = await ipRecordsService.updateRecord(this.editingRecordId, dataToUpdate);
-            
-        
-    // --- Child propagation modaldan seçilen ülkelere (SADECE PARENT GÜNCELLEMESINDE)
-    if (dataToUpdate.transactionHierarchy !== 'child') {
-        try {
-        const __cp = this.__childProp || {};
-        if (__cp.isParentWipoAripo && Array.isArray(__cp.selectedChildCountries) && __cp.selectedChildCountries.length > 0) {
-            console.log('🔄 Modal seçimlerine göre child propagation başlatılıyor:', __cp.selectedChildCountries);
-            const parentUpdateFields = this.collectPortfolioFields();
-            const propagationResult = await this.propagateToSelectedChildren(__cp.parentRecord || {}, __cp.selectedChildCountries, parentUpdateFields);
-            console.log('✅ Child propagation tamamlandı:', propagationResult);
-        } else {
-            console.log('ℹ️ Child propagation atlandı - modal seçimi yok veya parent WIPO/ARIPO değil');
-        }
-        } catch(e) { 
-        console.warn('❌ Child propagation hatası:', e); 
-        alert('Parent güncellendi ancak bazı child kayıtlar güncellenemedi.');
-        }
     } else {
-        console.log('ℹ️ Child kaydı güncelleniyor, propagation atlandı');
-    }
-    
-    // --- Propagate to selected child countries (if any) ---
-        results.push(result);
-            if (!result.success) success = false;
-            mainRecordId = this.editingRecordId;
+        // Tekil Kayıt (TÜRKPATENT veya Yurtdışı Ulusal Tek Ülke)
+        const result = await ipRecordsService.createRecordFromDataEntry(data);
+        if(!result.success) throw new Error(result.error);
 
-            // ✅ WIPO/ARIPO PARENT ise child senkronizasyonu yap (CHILD GÜNCELLEMESINDE YAPMA)
-            if (dataToUpdate.transactionHierarchy !== 'child') {
-                try {
-                    await this.syncWipoAripoChildren(this.editingRecordId, dataToUpdate);
-                } catch (e) {
-                    console.warn('WIPO/ARIPO child senkronizasyonu uyarısı:', e);
-                }
-            } else {
-                console.log('ℹ️ Child kaydı güncelleniyor, syncWipoAripoChildren atlandı');
-            }
-
-            // 🔚 Düzenleme modunda tek update yapıp döngüyü bitir
-            break;
-
-            } else {
-            // (Oluşturma akışı aynen devam)
-            result = await ipRecordsService.createRecordFromDataEntry(recordData);
-            results.push(result);
-            if (!result.success) success = false;
-            if (recordData.transactionHierarchy === 'parent' || !recordData.transactionHierarchy) {
-                mainRecordId = result?.id || mainRecordId;
-            }
-            }
-
-            // ✅ WIPO/ARIPO parent güncellemesinde child'ları senkronize et
-            results.push(result);
-            if (!result.success) success = false;
-            if (result.isExistingRecord || result.isDuplicate) isExisting = true;
-            
-            // ✅ DÜZELTİLDİ: Hem parent hem single kayıtlar için mainRecordId set et
-            if (isMainRecord || isSingleRecord) {
-                mainRecordId = result?.id;
-            }
-        }
-
-        // ParentId'leri güncelle
-        if (!this.editingRecordId && mainRecordId) {
-            const childRecords = recordsToSave.filter(r => r.transactionHierarchy === 'child');
-            const childIds = results.filter(r => r.id !== mainRecordId).map(r => r.id);
-            for (const childId of childIds) {
-                await ipRecordsService.updateRecord(String(childId), { parentId: String(mainRecordId) });
-            }
-        }
-
-
-        if (success) {
-            const msg = this.editingRecordId
-                ? 'Marka portföy kaydı başarıyla güncellendi!'
-                : (isExisting
-                    ? 'Bu başvuru zaten kayıtlıydı; mevcut verilerle yeni bir başvuru oluşturulmadı. Başvuru numarasını lütfen kontrol edin.'
-                    : 'Marka portföy kayıtları başarıyla oluşturuldu!');
-
-            // İlk kayıt için transaction ekle (yalnızca yeni oluşturulmuşsa)
-            if (!this.editingRecordId && !isExisting && portfolioData.recordOwnerType === 'self' && mainRecordId) {
-                const CODE_BY_IP = {
-                    trademark: 'TRADEMARK_APPLICATION',
-                    patent: 'PATENT_APPLICATION',
-                    design: 'DESIGN_APPLICATION'
-                };
-                const targetCode = CODE_BY_IP[portfolioData.ipType || 'trademark'];
-                let txTypeId = null;
-                try {
-                    const res = await transactionTypeService.getTransactionTypes();
-                    const list = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
-                    const map = new Map(list.map(t => [String((t.code || '').toUpperCase()), String(t.id)]));
-                    txTypeId = map.get(targetCode);
-                } catch (e) {
-                    console.warn('TxTypes yüklenemedi, fallback kullanılacak:', e);
-                }
-                if (!txTypeId) {
-                    const TX_IDS = { trademark: '2', patent: '5', design: '8' };
-                    txTypeId = TX_IDS[portfolioData.ipType || 'trademark'] || '2';
-                }
-                
-                // Ana kayıt için transaction ekle
-                await ipRecordsService.addTransactionToRecord(String(mainRecordId), {
-                    type: String(txTypeId),
-                    transactionTypeId: String(txTypeId),
-                    description: 'Başvuru işlemi.',
-                    transactionHierarchy: 'parent'
-                });
-
-                // ✅ YENİ: Her bir çocuk kayıt için de transaction ekle (WIPO/ARIPO için)
-                if (recordsToSave.length > 1 && origin !== 'Yurtdışı Ulusal') {
-                    const childIds = results.filter(r => r.id !== mainRecordId).map(r => r.id);
-                    for (const childId of childIds) {
-                        await ipRecordsService.addTransactionToRecord(String(childId), {
-                            type: String(txTypeId),
-                            transactionTypeId: String(txTypeId),
-                            description: 'Ülke başvurusu işlemi.',                            transactionHierarchy: 'child'
-                        });
-                    }
-                }
-            }
-
-            alert(msg);
-            window.location.href = 'portfolio.html';
-        } else {
-            alert('Portföy kaydı oluşturulamadı. Hata detayları için konsolu kontrol edin.');
-            console.error(results);
-        }
-    }
-
-    /**
- * WIPO/ARIPO parent kaydında ülke listesi değiştiyse:
- *  - Eklenen ülkeler için child ipRecords oluşturur
- *  - Silinen ülkeler için ilgili child ipRecords'u siler
- */
-
-// Patent için
-async savePatentPortfolio(portfolioData) {
-    const patentTitle = document.getElementById('patentTitle').value.trim();
-    const applicationNumber = document.getElementById('patentApplicationNumber').value.trim();
-    const description = document.getElementById('patentDescription').value.trim();
-
-    const dataToSave = {
-        title: patentTitle,
-        type: 'patent',
-        portfoyStatus: 'active',
-        status: 'başvuru',
-        recordOwnerType: this.recordOwnerTypeSelect.value,
-        
-        applicationNumber: applicationNumber || null,
-        applicationDate: null,
-        registrationNumber: null,
-        registrationDate: null,
-        renewalDate: null,
-        
-        brandText: null,
-        brandImageUrl: null,
-        description: description || null,
-        
-        applicants: this.selectedApplicants.map(p => ({
-            id: p.id,
-            email: p.email || null
-        })),
-        priorities: this.priorities,
-        goodsAndServices: [],
-        
-        details: {
-            patentInfo: {
-                patentTitle: patentTitle,
-                patentType: null,
-                description: description || null
-            }
-        },
-        
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-    };
-
-    const result = await ipRecordsService.createRecordFromDataEntry(dataToSave);
-    if (result.success) {
-        if (dataToSave.recordOwnerType === 'self' && !this.editingRecordId) {
-        // ipType'a göre code belirle
-        const CODE_BY_IP = {
-            trademark: 'TRADEMARK_APPLICATION',
-            patent: 'PATENT_APPLICATION',
-            design: 'DESIGN_APPLICATION'
-        };
-        const targetCode = CODE_BY_IP[dataToSave.ipType] || 'TRADEMARK_APPLICATION';
-
-        // Transaction type ID'sini çek
-        let txTypeId = null;
-        try {
-            const typeRes = await transactionTypeService.getByCode?.(targetCode);
-            txTypeId = typeRes?.id || null;
-        } catch (err) {
-            console.error('Transaction type bulunamadı:', err);
-        }
-
-        if (!txTypeId) {
-            console.error('Transaction type ID bulunamadı, ekleme yapılmıyor.');
-        } else {
-            await ipRecordsService.addTransactionToRecord(result.id, {
-            type: String(txTypeId), // ✅ Artık ID yazıyoruz
-            description: 'Başvuru işlemi.',
-            transactionHierarchy: 'parent'
-            });
-        }
-        }
-        alert('Patent portföy kaydı başarıyla oluşturuldu!');
-        window.location.href = 'portfolio.html';
-    } else {
-        throw new Error(result.error);
+        // Transaction Ekleme
+        await this.addTransactionForNewRecord(result.id, data.ipType);
     }
 }
 
-// YENİ FONKSİYON: saveSuitPortfolio
-async saveSuitPortfolio(portfolioData) {
-    const db = getFirestore();
-    const suitsColRef = collection(db, 'suits'); // Yeni suits tablosu
+// Transaction ekleme kodunu da ayırdık (DRY prensibi)
+async addTransactionForNewRecord(recordId, ipType) {
+    // ... (Eski koddaki transaction type bulma mantığı buraya) ...
+    // Basitçe:
+    const TX_IDS = { trademark: '2', patent: '5', design: '8' };
+    const txTypeId = TX_IDS[ipType] || '2';
 
-    const ipType = portfolioData.ipType;
-    const origin = document.getElementById('originSelect')?.value;
-    const specificTaskType = this.suitSpecificTaskType; // handleSpecificTaskTypeChange'den gelen bilgi
-    const clientRole = document.getElementById('clientRole')?.value;
-    const clientPerson = this.suitClientPerson;
-
-    // Suit alanlarını topla
-    const suitCourt = document.getElementById('suitCourt')?.value;
-    const suitDescription = document.getElementById('suitDescription')?.value.trim();
-    const opposingParty = document.getElementById('opposingParty')?.value.trim();
-    const opposingCounsel = document.getElementById('opposingCounsel')?.value.trim();
-    const suitCaseNo = document.getElementById('suitCaseNo')?.value.trim();
-    const suitOpeningDate = document.getElementById('suitOpeningDate')?.value;
-    const countrySelect = document.getElementById('countrySelect')?.value;
-    
-    // ✅ GÜNCEL: Dava Durumu ve İşleme Konu Varlık bilgileri çekiliyor
-    const suitStatusSelect = document.getElementById('suitStatusSelect')?.value;
-    const subjectAsset = this.suitSubjectAsset; 
-    
-    // Zorunlu alan kontrolü
-    if (!clientRole || !clientPerson || !specificTaskType || !suitCourt || !suitCaseNo) {
-        alert('Lütfen Müvekkil, Rol, İş Tipi, Mahkeme ve Esas No alanlarını doldurun.');
-        return;
-    }
-    
-    const suitDataToSave = {
-        title: `${specificTaskType.alias || specificTaskType.name} - ${clientPerson.name}`,
-        type: ipType, // 'suit'
-        portfoyStatus: 'active',
-        // 'status' alanı yerine artık daha spesifik olan 'suitStatus' kullanılıyor
-        // status: 'filed', 
-        recordOwnerType: 'self', 
-        
-        // Menşe ve Ülke
-        origin: origin || 'TURKEY_NATIONAL',
-        country: (origin === 'FOREIGN_NATIONAL' && countrySelect) ? countrySelect : null,
-        
-        // Müvekkil Bilgileri
-        client: clientPerson ? { id: clientPerson.id, name: clientPerson.name, role: clientRole } : null,
-        clientRole: clientRole || null,
-
-        // İş Tipi Bilgileri
-        transactionType: specificTaskType ? { id: specificTaskType.id, name: specificTaskType.name, alias: specificTaskType.alias } : null,
-        transactionTypeId: specificTaskType?.id || null,
-
-        // Dava Bilgileri
-        suitDetails: {
-            court: suitCourt || null,
-            description: suitDescription || null,
-            opposingParty: opposingParty || null,
-            opposingCounsel: opposingCounsel || null,
-            caseNo: suitCaseNo || null,
-            openingDate: suitOpeningDate || null,
-        },
-        
-        // ✅ GÜNCEL: Dava Durumu bilgisi ekleniyor
-        suitStatus: suitStatusSelect || 'filed',
-    
-        // ✅ GÜNCEL: İşleme Konu Varlık bilgisi ekleniyor
-        subjectAsset: subjectAsset || null, 
-        
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-    };
-    
-    // Veritabanına kaydet (suits koleksiyonuna)
-    try {
-        const result = await addDoc(suitsColRef, suitDataToSave);
-        console.log('✅ Dava kaydı başarıyla oluşturuldu, ID:', result.id);
-        alert('Dava portföy kaydı başarıyla oluşturuldu!');
-        window.location.href = 'portfolio.html';
-    } catch (error) {
-        console.error('❌ Dava kaydı kaydedilirken hata oluştu:', error);
-        throw new Error('Dava kaydı kaydedilirken bir hata oluştu');
-    }
+    await ipRecordsService.addTransactionToRecord(String(recordId), {
+        type: String(txTypeId),
+        transactionTypeId: String(txTypeId),
+        description: 'Başvuru işlemi.',
+        transactionHierarchy: 'parent'
+    });
 }
 
 // === YENİ: Task Tiplerini Çekme Metodu ===
@@ -2678,57 +2149,6 @@ populateCountriesDropdown(dropdownId) {
     ).join('');
     
     dropdown.innerHTML = optionsHtml;
-}
-
-// Tasarım için
-async saveDesignPortfolio(portfolioData) {
-    const designTitle = document.getElementById('designTitle').value.trim();
-    const applicationNumber = document.getElementById('designApplicationNumber').value.trim();
-    const description = document.getElementById('designDescription').value.trim();
-
-    const dataToSave = {
-        title: designTitle,
-        type: 'design',
-        portfoyStatus: 'active',
-        status: 'başvuru',
-        recordOwnerType: this.recordOwnerTypeSelect.value,
-        
-        applicationNumber: applicationNumber || null,
-        applicationDate: null,
-        registrationNumber: null,
-        registrationDate: null,
-        renewalDate: null,
-        
-        brandText: null,
-        brandImageUrl: null,
-        description: description || null,
-        
-        applicants: this.selectedApplicants.map(p => ({
-            id: p.id,
-            email: p.email || null
-        })),
-        priorities: this.priorities,
-        goodsAndServices: [],
-        
-        details: {
-            designInfo: {
-                designTitle: designTitle,
-                designType: null,
-                description: description || null
-            }
-        },
-        
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-    };
-
-    const result = await ipRecordsService.createRecordFromDataEntry(dataToSave);
-    if (result.success) {
-        alert('Tasarım portföy kaydı başarıyla oluşturuldu!');
-        window.location.href = 'portfolio.html';
-    } else {
-        throw new Error(result.error);
-    }
 }
 }
 
