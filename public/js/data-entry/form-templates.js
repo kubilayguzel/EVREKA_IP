@@ -393,4 +393,4 @@ export const FormTemplates = {
             </div>
         </div>
     `
-};
+}; 
