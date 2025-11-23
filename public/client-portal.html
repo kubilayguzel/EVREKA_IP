@@ -898,6 +898,41 @@ window.populatePortfolioTable = function(tableId, portfolioData, startIndex = 0)
         return;
     }
 
+    // --- YARDIMCI: Statü Çeviri ve Renk Belirleme ---
+    const getStatusDetails = (statusRaw) => {
+        if (!statusRaw) return { text: '-', className: 'secondary' };
+        
+        const s = String(statusRaw).toLowerCase().trim();
+
+        // İngilizce -> Türkçe Haritalama ve Renk Kodları
+        const map = {
+            // İngilizce Kaynaklar
+            'filed':        { text: 'Başvuru',    className: 'primary' },
+            'registered':   { text: 'Tescilli',   className: 'success' },
+            'registration': { text: 'Tescilli',   className: 'success' },
+            'published':    { text: 'Yayınlandı', className: 'info' },
+            'publication':  { text: 'Yayınlandı', className: 'info' },
+            'refused':      { text: 'Reddedildi', className: 'danger' },
+            'rejected':     { text: 'Reddedildi', className: 'danger' },
+            'withdrawn':    { text: 'Geri Çekildi', className: 'secondary' },
+            'expired':      { text: 'Süresi Doldu', className: 'dark' },
+            'pending':      { text: 'Bekliyor',   className: 'warning' },
+            'active':       { text: 'Aktif',      className: 'success' },
+            'inactive':     { text: 'Pasif',      className: 'secondary' },
+            
+            // Mevcut Türkçe Kaynaklar (Renk ataması için)
+            'başvuru':      { text: 'Başvuru',    className: 'primary' },
+            'tescilli':     { text: 'Tescilli',   className: 'success' },
+            'itiraz':       { text: 'İtiraz',     className: 'warning' },
+            'devam ediyor': { text: 'Devam Ediyor', className: 'info' },
+            'reddedildi':   { text: 'Reddedildi', className: 'danger' }
+        };
+
+        // Eşleşme varsa döndür, yoksa varsayılan olarak gelen metni gri bas
+        return map[s] || { text: statusRaw, className: 'secondary' };
+    };
+
+    // --- YARDIMCI: Sınıf Listesi ---
     const getClassesString = (dataItem) => {
         if (Array.isArray(dataItem.goodsAndServicesByClass) && dataItem.goodsAndServicesByClass.length > 0) {
             return dataItem.goodsAndServicesByClass.map(c => c.classNo).join(', ');
@@ -912,7 +947,7 @@ window.populatePortfolioTable = function(tableId, portfolioData, startIndex = 0)
         const actualIndex = startIndex + index;
         const mainRow = document.createElement('tr');
         
-        // Menşe Belirleme
+        // Menşe
         const originRaw = (item.origin || 'TÜRKPATENT').toString().trim().toUpperCase();
         const originBucket = (originRaw.includes('TURK') || originRaw.includes('TÜRK')) ? 'TÜRKPATENT' : 'YURTDISI';
         const originDisplay = (originBucket === 'TÜRKPATENT') ? 'TÜRKPATENT' : (item.country || item.origin || 'Yurtdışı');
@@ -920,32 +955,30 @@ window.populatePortfolioTable = function(tableId, portfolioData, startIndex = 0)
         const isParent = item.transactionHierarchy === 'parent';
         const isChild = item.transactionHierarchy === 'child';
         
-        if (isChild) return; // Child kayıtları atla, parent içinde işlenecek
+        if (isChild) return; 
 
+        // Parent ile ilişkili child kayıtları bul
         let childRecords = [];
         if (isParent && window.markaPaginationData.allDataUnfiltered) {
             childRecords = window.markaPaginationData.allDataUnfiltered.filter(p => p.parentId === item.id);
         }
         const isInternational = isParent && childRecords.length > 0;
 
+        // Veriler
         const title = item.title || item.brandText || item.patentTitle || 'İsimsiz';
         const appNo = item.applicationNumber || item.applicationNo || '-';
-        const statusText = item.status || item.statusText || 'Bilinmiyor';
         const appDate = window.formatDateTR(item.applicationDate || item.application_date);
         
-        // --- DÜZELTME 1: WIPO için internationalRegNumber kontrolü ---
-        // Veritabanı görselinize göre alan adı: internationalRegNumber
+        // Statü İşlemi (Parent)
+        const statusObj = getStatusDetails(item.status || item.statusText);
+
+        // Tescil No / WIPO No
         let regNoDisplay = '-';
-        if (item.internationalRegNumber) {
-            regNoDisplay = item.internationalRegNumber;
-        } else if (item.wipoIrNumber) {
-            regNoDisplay = item.wipoIrNumber;
-        } else if (item.registrationNumber) {
-            regNoDisplay = item.registrationNumber;
-        }
+        if (item.internationalRegNumber) regNoDisplay = item.internationalRegNumber;
+        else if (item.wipoIrNumber) regNoDisplay = item.wipoIrNumber;
+        else if (item.registrationNumber) regNoDisplay = item.registrationNumber;
 
         const classes = getClassesString(item);
-        const badgeClass = { 'Başvuru': 'primary', 'Tescilli': 'success', 'İtiraz': 'warning', 'Reddedildi': 'danger' }[statusText] || 'secondary';
         
         const imgHtml = (item.brandImageUrl || item.brandImage) 
             ? `<img src="${item.brandImageUrl || item.brandImage}" class="brand-thumb">` 
@@ -953,6 +986,7 @@ window.populatePortfolioTable = function(tableId, portfolioData, startIndex = 0)
 
         mainRow.setAttribute('data-origin', originBucket);
 
+        // --- PARENT SATIRI OLUŞTURMA ---
         if (tableId === '#marka-list') {
             mainRow.innerHTML = `
                 <td class="col-index">${isInternational ? '<i class="fas fa-chevron-right mr-2"></i>' : ''}${actualIndex + 1}</td>
@@ -962,7 +996,7 @@ window.populatePortfolioTable = function(tableId, portfolioData, startIndex = 0)
                 <td class="col-appno">${appNo}</td>
                 <td class="col-regno">${regNoDisplay}</td>
                 <td class="col-appdate">${appDate}</td>
-                <td class="col-status"><span class="badge badge-${badgeClass}">${statusText}</span></td>
+                <td class="col-status"><span class="badge badge-${statusObj.className}">${statusObj.text}</span></td>
                 <td class="col-classes">${classes}</td>`;
             
             if (isInternational) {
@@ -971,42 +1005,38 @@ window.populatePortfolioTable = function(tableId, portfolioData, startIndex = 0)
                 mainRow.setAttribute('data-target', `#accordion-yurtdisi-${item.id}`);
             }
         } else {
-            mainRow.innerHTML = `<td>${actualIndex + 1}</td>${tableId==='#tasarim-list'?`<td class="text-center">${imgHtml}</td>`:''}<td><a href="#" class="portfolio-detail-link" data-item-id="${item.id}" data-toggle="modal" data-target="#portfolioDetailModal">${title}</a></td><td>${appNo}</td><td><span class="badge badge-${badgeClass}">${statusText}</span></td>${tableId==='#patent-list'?`<td>${appDate}</td>`:`<td>${classes}</td>`}`;
+            // Diğer tablolar (Patent vb.)
+            mainRow.innerHTML = `<td>${actualIndex + 1}</td>${tableId==='#tasarim-list'?`<td class="text-center">${imgHtml}</td>`:''}<td><a href="#" class="portfolio-detail-link" data-item-id="${item.id}" data-toggle="modal" data-target="#portfolioDetailModal">${title}</a></td><td>${appNo}</td><td><span class="badge badge-${statusObj.className}">${statusObj.text}</span></td>${tableId==='#patent-list'?`<td>${appDate}</td>`:`<td>${classes}</td>`}`;
         }
 
         tableBody.appendChild(mainRow);
 
-        // --- DÜZELTME 2: Child Kayıtlarda Menşe Formatı ---
+        // --- CHILD (ALT) SATIRLARI OLUŞTURMA ---
         if (tableId === '#marka-list' && isInternational) {
             const detailRow = document.createElement('tr');
             detailRow.setAttribute('data-origin', originBucket);
             
             const childRowsHtml = childRecords.map((sub, idx) => {
                 const subClasses = getClassesString(sub);
-
-                // Kod veritabanında 'country' veya 'countryCode' alanında olabilir
+                
+                // Menşe Adı Bulma
                 const code = (sub.country || sub.countryCode || '').trim().toUpperCase();
-                
-                // common/countries'den çekilen haritadan ismini bul
                 const name = window.countryMap.get(code) || sub.countryName || '';
-                
-                // Format: İsim (Kod) -> Almanya (DE)
                 let originStr = code;
-                if (name && code) {
-                    originStr = `${name} (${code})`;
-                } else if (name) {
-                    originStr = name;
-                }
+                if (name && code) originStr = `${name} (${code})`;
+                else if (name) originStr = name;
 
                 const subAppDate = window.formatDateTR(sub.applicationDate);
+                
+                // --- Statü Çevirisi ve Renklendirme (Child) ---
+                const subStatusObj = getStatusDetails(sub.status);
 
                 return `<tr>
                     <td>${actualIndex+1}.${idx+1}</td>
                     <td>${originStr}</td>
                     <td>${sub.applicationNumber||'-'}</td>
                     <td>${subAppDate}</td>
-                    <td>${sub.status||'-'}</td>
-                    <td>${subClasses}</td>
+                    <td><span class="badge badge-${subStatusObj.className}">${subStatusObj.text}</span></td> <td>${subClasses}</td>
                 </tr>`;
             }).join('');
 
@@ -1034,6 +1064,7 @@ window.populatePortfolioTable = function(tableId, portfolioData, startIndex = 0)
         }
     });
 
+    // Menşe Filtresi Kontrolü
     if (tableId === '#marka-list') {
         const currentFilter = $("#menseFilter").val() || 'TÜRKPATENT';
         if (currentFilter === 'TÜRKPATENT') {
