@@ -1881,7 +1881,7 @@ async saveIpRecordWithStrategy(data) {
         console.log('🌍 WIPO/ARIPO Temiz Kayıt Modu:', { origin: data.origin });
 
         if (isInternational && hasCountries) {
-            console.log('🚀 Uluslararası Kayıt Başlıyor (Alanlar temizlenerek)...');
+            console.log('🚀 Uluslararası Kayıt Başlıyor...');
 
             // 1. Parent Hazırlığı
             const parentData = { 
@@ -1890,19 +1890,12 @@ async saveIpRecordWithStrategy(data) {
                 countries: this.selectedCountries.map(c => c.code)
             };
 
-            // 🧹 Önce her iki alanı da objeden SİLİYORUZ (Clean Slate)
+            // WIPO/ARIPO Temizliği
             delete parentData.wipoIR;
             delete parentData.aripoIR;
-
-            // Numarayı al
             const irNumber = data.internationalRegNumber || data.registrationNumber;
-
-            // Sadece ilgili alanı EKLE (Diğeri silindiği için oluşmayacak)
-            if (data.origin === 'WIPO') {
-                parentData.wipoIR = irNumber;
-            } else if (data.origin === 'ARIPO') {
-                parentData.aripoIR = irNumber;
-            }
+            if (data.origin === 'WIPO') parentData.wipoIR = irNumber;
+            else if (data.origin === 'ARIPO') parentData.aripoIR = irNumber;
 
             // Parent Oluştur
             const parentResult = await ipRecordsService.createRecordFromDataEntry(parentData);
@@ -1916,33 +1909,24 @@ async saveIpRecordWithStrategy(data) {
             
             const promises = this.selectedCountries.map(async (country) => {
                 try {
-                    // Veriyi kopyala
                     const childData = { ...data };
 
-                    // 🧹 TEMİZLİK: Gereksiz tüm alanları SİLİYORUZ
+                    // 🧹 TEMİZLİK
                     delete childData.applicationNumber; 
                     delete childData.registrationNumber; 
                     delete childData.internationalRegNumber; 
                     delete childData.countries; 
-                    
-                    // 🧹 Kritik Nokta: WIPO/ARIPO alanlarını da önce siliyoruz
                     delete childData.wipoIR;
                     delete childData.aripoIR;
 
-                    // ✅ EKLEMELER: Child'a özel alanlar
+                    // ✅ EKLEMELER
                     childData.transactionHierarchy = 'child';
                     childData.parentId = parentId;
                     childData.country = country.code;
                     childData.createdFrom = 'wipo_child_generation';
                     
-                    // Sadece Parent'ta var olan alanı Child'a ekle
-                    // (Parent'ta olmayan alan undefined döner, if içine girmez)
-                    if (parentData.wipoIR) {
-                        childData.wipoIR = parentData.wipoIR;
-                    }
-                    if (parentData.aripoIR) {
-                        childData.aripoIR = parentData.aripoIR;
-                    }
+                    if (parentData.wipoIR) childData.wipoIR = parentData.wipoIR;
+                    if (parentData.aripoIR) childData.aripoIR = parentData.aripoIR;
 
                     console.log(`➡️ Child hazırlanıyor (${country.code})...`);
 
@@ -1950,6 +1934,11 @@ async saveIpRecordWithStrategy(data) {
                     
                     if(res.success) {
                         console.log(`✅ Child Eklendi: ${country.code}`);
+                        
+                        // 🛠️ DÜZELTME BURADA: Child için Transaction Oluştur
+                        // 'child' parametresi gönderiyoruz
+                        await this.addTransactionForNewRecord(res.id, data.ipType, 'child');
+                        
                         return res;
                     } else {
                         console.error(`❌ Child Hatası (${country.code}):`, res.error);
@@ -1964,15 +1953,13 @@ async saveIpRecordWithStrategy(data) {
             await Promise.all(promises);
             console.log('🏁 İşlem tamamlandı.');
 
-            // Transaction (Parent)
-            await this.addTransactionForNewRecord(parentId, data.ipType);
+            // Transaction (Parent için - 'parent' parametresiyle)
+            await this.addTransactionForNewRecord(parentId, data.ipType, 'parent');
 
         } else {
             // === SENARYO B: TEKİL KAYIT ===
             console.log('📍 Tekil Kayıt Modu');
             
-            // Tekil kayıtta da temizlik yapalım
-            // Eğer TÜRKPATENT ise ne wipoIR ne aripoIR olmamalı
             if (data.origin === 'TÜRKPATENT' || data.origin === 'Yurtdışı Ulusal' || data.origin === 'TURKEY_NATIONAL') {
                  delete data.wipoIR;
                  delete data.aripoIR;
@@ -1987,24 +1974,32 @@ async saveIpRecordWithStrategy(data) {
             const result = await ipRecordsService.createRecordFromDataEntry(data);
             if (!result.success) throw new Error(result.error);
 
-            await this.addTransactionForNewRecord(result.id, data.ipType);
+            // Transaction (Tekil kayıt da bir nevi parent sayılır veya hiyerarşisizdir, 
+            // ama 'parent' olarak işaretlemek genelde güvenlidir veya boş geçilebilir)
+            await this.addTransactionForNewRecord(result.id, data.ipType, 'parent');
         }
     }
 
-// Transaction ekleme kodunu da ayırdık (DRY prensibi)
-async addTransactionForNewRecord(recordId, ipType) {
-    // ... (Eski koddaki transaction type bulma mantığı buraya) ...
-    // Basitçe:
-    const TX_IDS = { trademark: '2', patent: '5', design: '8' };
-    const txTypeId = TX_IDS[ipType] || '2';
+// Hiyerarşi parametresi (hierarchy) eklendi, varsayılanı 'parent'
+    async addTransactionForNewRecord(recordId, ipType, hierarchy = 'parent') {
+        const TX_IDS = { trademark: '2', patent: '5', design: '8' };
+        const txTypeId = TX_IDS[ipType] || '2';
+        
+        // Child kayıtlar için açıklama biraz daha farklı olabilir
+        const description = hierarchy === 'child' ? 'Ülke başvurusu işlemi.' : 'Başvuru işlemi.';
 
-    await ipRecordsService.addTransactionToRecord(String(recordId), {
-        type: String(txTypeId),
-        transactionTypeId: String(txTypeId),
-        description: 'Başvuru işlemi.',
-        transactionHierarchy: 'parent'
-    });
-}
+        try {
+            await ipRecordsService.addTransactionToRecord(String(recordId), {
+                type: String(txTypeId),
+                transactionTypeId: String(txTypeId),
+                description: description,
+                transactionHierarchy: hierarchy // <-- Dinamik oldu
+            });
+            console.log(`✅ Transaction eklendi (${hierarchy}): ${recordId}`);
+        } catch (error) {
+            console.error(`❌ Transaction eklenemedi (${hierarchy}):`, error);
+        }
+    }
 
 // === YENİ: Task Tiplerini Çekme Metodu ===
     async getTaskTypes() {
