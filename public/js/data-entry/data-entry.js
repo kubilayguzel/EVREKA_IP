@@ -1625,20 +1625,19 @@ async handleSavePortfolio() {
 
         // 3. Ortak Alanları Ekle
         recordData.recordOwnerType = this.recordOwnerTypeSelect.value;
-        recordData.createdAt = new Date().toISOString(); 
-        recordData.updatedAt = new Date().toISOString();
+        
+        // Tarihçeler
+        if (!this.editingRecordId) {
+            recordData.createdAt = new Date().toISOString(); // Sadece yeni kayıtta
+        }
+        recordData.updatedAt = new Date().toISOString(); // Her işlemde güncelle
 
         try {
             this.saveBtn.disabled = true;
             this.saveBtn.textContent = 'İşleniyor...';
 
-            // ============================================================
-            // 🛠️ YENİ EKLENEN KISIM: Dosya Yükleme Mantığı
-            // ============================================================
-            
-            // Eğer Marka formuysa ve bir resim dosyası seçilmişse
+            // --- DOSYA YÜKLEME MANTIĞI (Aynı kalıyor) ---
             if (ipType === 'trademark') {
-                // this.uploadedBrandImage kullanıcının seçtiği ham dosyadır
                 if (this.uploadedBrandImage instanceof File) {
                     console.log('📤 Resim Storage\'a yükleniyor...');
                     this.saveBtn.textContent = 'Resim Yükleniyor...';
@@ -1646,41 +1645,79 @@ async handleSavePortfolio() {
                     const fileName = `${Date.now()}_${this.uploadedBrandImage.name}`;
                     const storagePath = `brand-images/${fileName}`;
                     
-                    // Eski dosyandaki upload fonksiyonunu çağırıyoruz
                     const downloadURL = await this.uploadFileToStorage(this.uploadedBrandImage, storagePath);
                     
                     if (downloadURL) {
-                        recordData.brandImageUrl = downloadURL; // Dosya objesini URL string'i ile değiştir
+                        recordData.brandImageUrl = downloadURL;
                         console.log('✅ Resim yüklendi, URL:', downloadURL);
                     } else {
-                        throw new Error("Resim sunucuya yüklenemedi, işlem iptal edildi.");
+                        throw new Error("Resim yüklenemedi.");
                     }
-                } 
-                // Eğer yeni resim seçilmediyse ama düzenleme modundaysak ve eski URL duruyorsa
-                else if (typeof this.uploadedBrandImage === 'string') {
+                } else if (typeof this.uploadedBrandImage === 'string') {
                     recordData.brandImageUrl = this.uploadedBrandImage;
+                }
+            }
+            // ----------------------------------------------
+
+            this.saveBtn.textContent = 'Kaydediliyor...';
+
+            // ============================================================
+            // 🛠️ DÜZELTME: EDİT MANTIĞI EKLENDİ
+            // ============================================================
+            
+            if (this.editingRecordId) {
+                // --- GÜNCELLEME (UPDATE) MODU ---
+                console.log('✏️ Mevcut kayıt güncelleniyor ID:', this.editingRecordId);
+
+                if (ipType === 'suit') {
+                    // Dava Güncelleme
+                    const db = getFirestore();
+                    const suitRef = doc(db, 'suits', this.editingRecordId);
+                    await updateDoc(suitRef, recordData);
+                    alert('Dava kaydı başarıyla güncellendi.');
+                } else {
+                    // Marka/Patent/Tasarım Güncelleme
+                    // createRecord yerine updateRecord kullanıyoruz. 
+                    // Bu sayede duplikasyon kontrolüne takılmıyoruz.
+                    const result = await ipRecordsService.updateRecord(this.editingRecordId, recordData);
+                    
+                    if (!result.success) {
+                        throw new Error(result.error || 'Güncelleme başarısız.');
+                    }
+                    
+                    // Eğer WIPO/ARIPO parent kaydı güncellendiyse ve çocukları senkronize etmek istersen:
+                    // (İsteğe bağlı, şimdilik sadece ana kaydı güncelliyoruz)
+                    // await this.syncWipoAripoChildren(this.editingRecordId, recordData);
+
+                    alert('Kayıt başarıyla güncellendi.');
+                }
+
+            } else {
+                // --- YENİ KAYIT (CREATE) MODU ---
+                console.log('➕ Yeni kayıt oluşturuluyor...');
+                
+                if (ipType === 'suit') {
+                    const db = getFirestore();
+                    const suitsColRef = collection(db, 'suits');
+                    await addDoc(suitsColRef, recordData);
+                    alert('Dava kaydı başarıyla oluşturuldu!');
+                } else {
+                    // Burası duplicate kontrolü yapan orijinal fonksiyonu çağırır
+                    await this.saveIpRecordWithStrategy(recordData); 
                 }
             }
             // ============================================================
 
-            this.saveBtn.textContent = 'Kaydediliyor...';
-
-            if (ipType === 'suit') {
-                const db = getFirestore();
-                const suitsColRef = collection(db, 'suits');
-                await addDoc(suitsColRef, recordData);
-                alert('Dava kaydı başarıyla oluşturuldu!');
-            } else {
-                // Burada artık recordData.brandImageUrl bir string (URL), hata vermeyecek.
-                await this.saveIpRecordWithStrategy(recordData); 
-            }
-
-            // Başarılı ise yönlendir
             window.location.href = 'portfolio.html';
 
         } catch (error) {
             console.error('Kaydetme hatası:', error);
-            alert('Bir hata oluştu: ' + error.message);
+            // Hatayı kullanıcıya gösterirken duplicate hatasını daha net belirtelim
+            if (error.message && error.message.includes('duplikasyon')) {
+                alert('HATA: Bu kayıt zaten mevcut olduğu için işlem yapılamadı. Lütfen numarayı kontrol edin.');
+            } else {
+                alert('Bir hata oluştu: ' + error.message);
+            }
         } finally {
             this.saveBtn.disabled = false;
             this.saveBtn.textContent = 'Kaydet';
