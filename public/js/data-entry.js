@@ -2388,19 +2388,23 @@ async saveTrademarkPortfolio(portfolioData) {
             let result;
 
             if (this.editingRecordId) {
-            // ✅ Düzenlemede sadece PARENT kaydı güncelle
-            const parentData =
-                recordsToSave.find(r => r.transactionHierarchy === 'parent') ||
-                recordsToSave[0]; // (Tekli TÜRKPATENT/Yurtdışı Ulusal kayıtlarda parent yoksa ilkini al)
+            // ✅ Düzenlenen kaydın verisi - recordsToSave'deki ilk kayıt
+            const dataToUpdate = recordsToSave[0];
+            
+            console.log('🔄 Düzenleme modu - editingRecordId:', this.editingRecordId);
+            console.log('📝 Güncellenecek veri:', dataToUpdate);
 
-            // ✅ Parent olduğunu garanti et ve parent’a ülke yazılmasını engelle
-            const safeParentData = { ...parentData };
-            if (['WIPO', 'ARIPO'].includes(String(safeParentData.origin))) {
-                safeParentData.transactionHierarchy = 'parent';
-                if ('country' in safeParentData) delete safeParentData.country;
+            // ✅ Child kaydı güncelliyorsak ülke bilgisini KORUYALIM
+            if (dataToUpdate.transactionHierarchy === 'child') {
+                // Child'da ülke değişmez, mevcut country'yi koru
+                console.log('🔍 Child kaydı güncelleniyor, ülke korunuyor');
+            } else if (['WIPO', 'ARIPO'].includes(String(dataToUpdate.origin)) && dataToUpdate.transactionHierarchy === 'parent') {
+                // Parent'ta ülke olmamalı
+                if ('country' in dataToUpdate) delete dataToUpdate.country;
+                console.log('🔍 Parent kaydı güncelleniyor, country alanı silindi');
             }
 
-            result = await ipRecordsService.updateRecord(this.editingRecordId, safeParentData);
+            result = await ipRecordsService.updateRecord(this.editingRecordId, dataToUpdate);
             
         
     // --- Child propagation modaldan seçilen ülkelere
