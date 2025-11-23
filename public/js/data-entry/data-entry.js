@@ -481,7 +481,14 @@ class DataEntryModule {
                     await updateDoc(suitRef, recordData);
                     alert('Dava kaydı başarıyla güncellendi.');
                 } else {
-                    
+                    // ⚠️ WIPO/ARIPO İÇİN EKSİK PARÇA BURADAYDI:
+                    // updateRecord yapmadan önce 'wipoIR' veya 'aripoIR' alanını doldurmalıyız.
+                    if (recordData.origin === 'WIPO') {
+                        recordData.wipoIR = recordData.internationalRegNumber || recordData.registrationNumber;
+                    } else if (recordData.origin === 'ARIPO') {
+                        recordData.aripoIR = recordData.internationalRegNumber || recordData.registrationNumber;
+                    }
+
                     // ⚠️ WIPO/ARIPO Kontrolü: Parent'ın ülke listesini güncelle
                     // Eğer ekrandan yeni ülke seçildiyse, bunu Parent verisine işle.
                     if (recordData.origin === 'WIPO' || recordData.origin === 'ARIPO') {
