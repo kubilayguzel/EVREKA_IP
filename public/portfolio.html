@@ -1830,24 +1830,22 @@
             async showRecordDetailModal(recordId) {
                 const modal = document.getElementById('recordDetailModal');
                 const modalBody = document.getElementById('modalBody');
-                modalBody.innerHTML = '<div class="text-center p-5"><div class="spinner-border text-primary"></div><p class="mt-2">Detaylar yükleniyor...</p></div>';
+                modalBody.innerHTML = '<div class="text-center p-5"><div class="spinner-border text-primary"></div><p class="mt-2">Yükleniyor...</p></div>';
                 modal.classList.add('show');
 
                 try {
-                    // 1. Kayıt Verilerini Çek
                     const recordResult = await ipRecordsService.getRecordById(recordId);
                     if (!recordResult.success || !recordResult.data) throw new Error('Kayıt bulunamadı.');
+
                     const record = recordResult.data;
 
                     document.getElementById('modalRecordTitle').textContent = `Kayıt Detayı: ${record.title || record.brandText || 'N/A'}`;
 
-                    // 2. Yardımcılar
                     const getOwnerNames = (applicants) => {
                         if (!applicants || applicants.length === 0) return 'Belirtilmemiş';
                         return applicants.map(a => a.name || 'Bilinmeyen').join(', ');
                     };
 
-                    // 3. Görsel ve Temel Bilgiler
                     let imageHtml = '';
                     const imageSrc = (record.type === 'trademark') ? (record.brandImageUrl || record.details?.brandInfo?.brandImage) : null;
                     if (imageSrc) {
@@ -1855,17 +1853,20 @@
                                         <div class="text-center"><img src="${imageSrc}" alt="Marka Görseli" class="record-image-display" style="max-height:150px;"></div>`;
                     }
 
-                    const statusDisplay = this.getDisplayStatus(record);
+                    const statusDisplay = record.status === 'application_filed' ? 'Başvuru Yapıldı' :
+                                             record.status === 'registered' ? 'Tescilli' :
+                                             record.status === 'renewed' ? 'Yenilendi' :
+                                             record.status === 'invalid' ? 'Hükümsüz' :
+                                             record.status === 'opposed' ? 'İtiraz Edildi' :
+                                             (record.status || '-');
                     const ipTypeDisplay = record.type === 'trademark' ? 'Marka' : (record.type === 'patent' ? 'Patent' : (record.type === 'design' ? 'Tasarım' : (record.type || '-')));
 
-                    // 4. Kayda Ait Ana Belgeler (Record Documents)
                     let documentsHtml = '<ul class="document-list"><li>Henüz belge yok.</li></ul>';
                     if (Array.isArray(record.documents) && record.documents.length > 0) {
                         documentsHtml = '<ul class="document-list">' + record.documents
                             .map(doc => `<li><a href="${doc.content || doc.url || doc.downloadURL}" download="${doc.name}" target="_blank"><span class="doc-icon">📄</span>${doc.name} (${formatFileSize(doc.size)}) - ${doc.documentDesignation || 'Belge'}</a></li>`).join('') + '</ul>';
                     }
 
-                    // 5. İŞLEM GEÇMİŞİ (Transaction History) - KRİTİK BÖLÜM
                     let transactionsHtml = '<div class="accordion-transaction-history">';
 
                     try {
@@ -1880,111 +1881,82 @@
                         if (allTransactions.length === 0) {
                             transactionsHtml += '<p class="text-muted">Henüz işlem geçmişi yok.</p>';
                         } else {
-                            // 🔥 BELGE TOPLAYICI YARDIMCI FONKSİYON
-                            const collectTransactionDocs = async (tx) => {
+                            // 🔥 YENİ: Belge Toplama Yardımcısı
+                            const collectDocs = async (tx) => {
                                 const docs = [];
-                                const seenUrls = new Set(); // Tekrarları önle
-
-                                const pushDoc = (d) => {
+                                const seen = new Set();
+                                const push = (d) => {
                                     const url = d.fileUrl || d.url || d.downloadURL || d.path;
-                                    if (url && !seenUrls.has(url)) {
-                                        seenUrls.add(url);
-                                        docs.push({
-                                            fileName: d.name || d.fileName || 'Belge',
-                                            fileUrl: url,
-                                            type: d.type || 'generic',
-                                            isManualDoc: true 
-                                        });
+                                    if (url && !seen.has(url)) {
+                                        seen.add(url);
+                                        docs.push({ ...d, fileUrl: url });
                                     }
                                 };
 
-                                // A. İndekslenen Ana Evrak (relatedPdfUrl)
-                                if (tx.relatedPdfUrl) {
-                                    pushDoc({ fileName: 'Resmi Yazı', fileUrl: tx.relatedPdfUrl, type: 'official_document' });
-                                }
-
-                                // B. İtiraz Dilekçesi (oppositionPetitionFileUrl)
-                                if (tx.oppositionPetitionFileUrl) {
-                                    pushDoc({ fileName: 'İtiraz Dilekçesi', fileUrl: tx.oppositionPetitionFileUrl, type: 'opposition_petition' });
-                                }
-
-                                // C. Manuel Eklenen Belgeler (documents array)
-                                if (Array.isArray(tx.documents)) {
-                                    tx.documents.forEach(pushDoc);
-                                }
-
-                                // D. Bağlı Görev Belgeleri (ePats vb.)
+                                // 1. İndekslenen PDF
+                                if (tx.relatedPdfUrl) push({ fileName: 'Resmi Yazı', fileUrl: tx.relatedPdfUrl, type: 'official_document' });
+                                // 2. İtiraz Dilekçesi
+                                if (tx.oppositionPetitionFileUrl) push({ fileName: 'İtiraz Dilekçesi', fileUrl: tx.oppositionPetitionFileUrl, type: 'opposition_petition' });
+                                // 3. Documents Array
+                                if (Array.isArray(tx.documents)) tx.documents.forEach(d => push({ ...d, fileName: d.name || 'Belge' }));
+                                // 4. Task Belgeleri
                                 if (tx.triggeringTaskId) {
                                     try {
-                                        // fetchTaskDocuments global scope'ta tanımlı olmalı
                                         const taskDocs = await fetchTaskDocuments(tx.triggeringTaskId);
-                                        taskDocs.forEach(pushDoc);
-                                    } catch(e) { console.warn('Task docs error', e); }
+                                        taskDocs.forEach(push);
+                                    } catch (e) {}
                                 }
                                 return docs;
                             };
 
-                            // Hiyerarşiyi Kur
-                            const { parents: parentTransactions, childrenMap } = buildParentChild(allTransactions);
+                            const { parents, childrenMap } = organizeTransactions(allTransactions);
 
-                            // Döngü (Async for loop kullanıyoruz ki belgeleri bekleyebilelim)
-                            for (const parent of parentTransactions) {
+                            for (const parent of parents) {
                                 const parentType = allTransactionTypes.find(t => t.id === parent.type || t.id === String(parent.type));
                                 const parentName = parentType ? (parentType.alias || parentType.name) : `İşlem ${parent.type}`;
                                 const parentDate = new Date(parent.timestamp).toLocaleDateString('tr-TR');
                                 const parentTime = new Date(parent.timestamp).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
                                 
-                                // Parent Belgelerini Al ve HTML'e Çevir
-                                const parentDocs = await collectTransactionDocs(parent);
+                                const parentDocs = await collectDocs(parent);
                                 const parentDocsHtml = parentDocs.map(_createDocLinkHtml).join('');
-
+                                
                                 const children = childrenMap[parent.id] || [];
                                 const hasChildren = children.length > 0;
 
                                 transactionsHtml += `
                                     <div class="accordion-transaction-item">
                                         <div class="accordion-transaction-header ${hasChildren ? 'has-children' : ''}"
-                                            data-parent-id="${parent.id}" style="cursor: pointer;">
-                                            
-                                            <div class="transaction-main-info">
-                                                <div style="min-width: 20px; text-align: center;">
-                                                    ${hasChildren ? '<span class="accordion-icon">▶</span>' : ''}
-                                                </div>
-                                                <div class="transaction-details">
-                                                    <div class="transaction-name-date">
-                                                        ${parentName} <span class="text-muted small font-weight-normal"> - ${parentDate} ${parentTime}</span>
-                                                    </div>
+                                            data-parent-id="${parent.id}" style="cursor: pointer; display:flex; justify-content:space-between; align-items:center; padding: 10px 15px;">
+                                            <div class="transaction-main-info" style="flex:1;">
+                                                <div style="display:flex; align-items:center;">
+                                                    ${hasChildren ? '<span class="accordion-icon mr-2">▶</span>' : ''}
+                                                    <strong>${parentName}</strong> 
+                                                    <span class="text-muted ml-2 small">${parentDate} ${parentTime}</span>
                                                 </div>
                                             </div>
-
-                                            <div class="transaction-meta">
-                                                <div class="transaction-pdfs d-flex align-items-center">
-                                                    ${parentDocsHtml}
-                                                </div>
-                                                ${hasChildren ? `<span class="child-count ml-2">${children.length} alt işlem</span>` : ''}
+                                            <div class="transaction-meta" style="display:flex; align-items:center;">
+                                                <div class="transaction-docs mr-2">${parentDocsHtml}</div>
+                                                ${hasChildren ? `<span class="badge badge-light border">${children.length} alt</span>` : ''}
                                             </div>
                                         </div>
 
                                         ${hasChildren ? `
-                                            <div class="accordion-transaction-children" id="children-${parent.id}" style="display: none;">
+                                            <div class="accordion-transaction-children" id="children-${parent.id}" style="display: none; padding-left: 20px; background:#f9f9f9;">
                                                 ${(await Promise.all(children.map(async child => {
                                                     const childType = allTransactionTypes.find(t => t.id === child.type || t.id === String(child.type));
-                                                    const childName = childType ? (childType.alias || childType.name) : `Bilinmeyen İşlem (ID: ${child.type})`;
+                                                    const childName = childType ? (childType.alias || childType.name) : `İşlem ${child.type}`;
                                                     const childDate = new Date(child.timestamp).toLocaleDateString('tr-TR');
                                                     const childTime = new Date(child.timestamp).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
                                                     
-                                                    // Child Belgelerini Al ve HTML'e Çevir
-                                                    const childDocs = await collectTransactionDocs(child);
+                                                    const childDocs = await collectDocs(child);
                                                     const childDocsHtml = childDocs.map(_createDocLinkHtml).join('');
 
                                                     return `
-                                                        <div class="child-transaction-item">
-                                                            <div class="child-transaction-content" style="flex: 1;">
-                                                                <div class="child-transaction-name-date">
-                                                                    ${childName} <span class="text-muted small"> - ${childDate} ${childTime}</span>
-                                                                </div>
+                                                        <div class="child-transaction-item" style="display:flex; justify-content:space-between; align-items:center; padding: 8px; border-top: 1px solid #eee;">
+                                                            <div class="child-transaction-content">
+                                                                <span>↳ ${childName}</span> <small class="text-muted ml-2">${childDate} ${childTime}</small>
                                                             </div>
-                                                            <div class="child-transaction-pdfs d-flex align-items-center">
+                                                            <div class="child-transaction-docs">
                                                                 ${childDocsHtml}
                                                             </div>
                                                         </div>
@@ -2003,7 +1975,6 @@
 
                     transactionsHtml += '</div>';
 
-                    // Modal İçeriğini HTML'e Bas
                     modalBody.innerHTML = `
                         <div class="modal-detail-grid">
                             <div class="modal-detail-item"><div class="modal-detail-label">IP Türü</div><div class="modal-detail-value">${ipTypeDisplay}</div></div>
@@ -2025,14 +1996,11 @@
                         <div class="modal-detail-item" style="grid-column: 1 / -1;">${transactionsHtml}</div>
                     `;
 
-                    // Accordion Tıklama Dinleyicisi
                     const modalEl = document.getElementById('recordDetailModal');
                     const headers = modalEl.querySelectorAll('.accordion-transaction-header[data-parent-id]');
                     headers.forEach(header => {
                         header.addEventListener('click', function(e) {
-                            // Link veya butona tıklandıysa accordion'u açma
-                            if (e.target.closest('a') || e.target.closest('button') || e.target.closest('.action-btn')) return;
-
+                            if (e.target.closest('a') || e.target.closest('button')) return;
                             const parentId = this.getAttribute('data-parent-id');
                             const childrenContainer = document.getElementById(`children-${parentId}`);
                             const icon = this.querySelector('.accordion-icon');
@@ -2057,7 +2025,7 @@
                     console.error('Modal detay hatası:', error);
                 }
             }
-            
+
             closeModal(modalId) {
                 const modal = document.getElementById(modalId);
                 if (modal) modal.classList.remove('show');
