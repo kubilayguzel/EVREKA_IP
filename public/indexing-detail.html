@@ -154,56 +154,57 @@
                                 <div class="spinner-border text-primary mb-3" role="status"></div>
                                 <p class="text-muted">Analiz ediliyor...</p>
                             </div>
+                                <div id="analysisResults" style="display: none;">
+                                    
+                                    <div class="alert alert-light border small mb-3 rounded bg-light">
+                                        <strong>Analiz Özeti:</strong> <span id="analysisSummary" class="text-muted">...</span>
+                                    </div>
 
-                            <div id="analysisResults" style="display: none;">
-                                
-                                <div class="alert alert-light border small mb-3 rounded bg-light">
-                                    <strong>Analiz Özeti:</strong> <span id="analysisSummary" class="text-muted">...</span>
+                                    <div class="form-group">
+                                        <label class="font-weight-bold small text-muted mb-1">Tespit Edilen Tarih (Tebliğ Tarihi)</label>
+                                        <input type="date" id="detectedDate" class="form-control">
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label class="font-weight-bold small text-muted mb-1">
+                                            Bağlı Olduğu İşlem (Parent)
+                                            <i class="fas fa-info-circle text-info" title="Bu evrak hangi ana işlemin devamı?"></i>
+                                        </label>
+                                        <select id="parentTransactionSelect" class="form-control">
+                                            <option value="">-- Önce Kayıt Seçiniz --</option>
+                                        </select>
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label class="font-weight-bold small text-muted mb-1">İşlem Türü (Evrak Tipi)</label>
+                                        <select id="detectedType" class="form-control" disabled>
+                                            <option value="">-- Önce Bağlı İşlem Seçiniz --</option>
+                                        </select>
+                                    </div>
+
+                                    <div id="oppositionSection" style="display: none; background: #fff3cd; padding: 10px; border-radius: 8px; margin-bottom: 15px;">
+                                        <h6 class="text-warning font-weight-bold small"><i class="fas fa-exclamation-triangle mr-1"></i>İtiraz Detayları</h6>
+                                        
+                                        <div class="form-group mb-2">
+                                            <label class="small font-weight-bold">İtiraz Sahibi</label>
+                                            <input type="text" id="oppositionOwnerInput" class="form-control form-control-sm" placeholder="İtiraz eden kişi/kurum...">
+                                        </div>
+
+                                        <div class="form-group mb-0">
+                                            <label class="small font-weight-bold">Karşı Taraf İtiraz Dilekçesi (PDF)</label>
+                                            <input type="file" id="oppositionPetitionFile" class="form-control-file small" accept="application/pdf">
+                                        </div>
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label class="font-weight-bold small text-muted mb-1">Açıklama / Notlar</label>
+                                        <textarea id="transactionNotes" class="form-control" rows="4"></textarea>
+                                    </div>
+
+                                    <button id="saveTransactionBtn" class="btn btn-primary btn-block py-2 mt-4 shadow-sm font-weight-bold">
+                                        <i class="fas fa-check-circle mr-2"></i> Onayla ve Kaydet
+                                    </button>
                                 </div>
-
-                                <div class="form-group">
-                                    <label class="font-weight-bold small text-muted mb-1">Tespit Edilen Tarih</label>
-                                    <input type="date" id="detectedDate" class="form-control">
-                                </div>
-
-                                <div class="form-group">
-                                    <label class="font-weight-bold small text-muted mb-1">İşlem Türü (Evrak Tipi)</label>
-                                    <select id="detectedType" class="form-control">
-                                        <option value="general">Genel Evrak</option>
-                                        <option value="publish">Marka Yayını</option>
-                                        <option value="partial_publish">Kısmi Yayın</option>
-                                        <option value="rejection">Başvuru Reddi</option>
-                                        <option value="opposition">Yayına İtiraz</option>
-                                        <option value="registration">Tescil Belgesi</option>
-                                        <option value="deficiency">Şekli Eksiklik</option>
-                                        <option value="renewal">Yenileme</option>
-                                        <option value="decision">Karar</option>
-                                    </select>
-                                </div>
-
-                                <div class="form-group">
-                                    <label class="font-weight-bold small text-muted mb-1">
-                                        Bağlı Olduğu İşlem (Hangi aşamaya ait?)
-                                        <i class="fas fa-info-circle text-info" title="Örn: 'Karar' evrağı 'Başvuru' işlemine bağlıdır."></i>
-                                    </label>
-                                    <select id="parentTransactionSelect" class="form-control">
-                                        <option value="">-- Bağımsız İşlem --</option>
-                                    </select>
-                                    <small class="text-muted" id="parentTransactionInfo" style="display:none;">
-                                        Seçili işlem altına kaydedilecek.
-                                    </small>
-                                </div>
-
-                                <div class="form-group">
-                                    <label class="font-weight-bold small text-muted mb-1">Açıklama / Notlar</label>
-                                    <textarea id="transactionNotes" class="form-control" rows="4"></textarea>
-                                </div>
-
-                                <button id="saveTransactionBtn" class="btn btn-primary btn-block py-2 mt-4 shadow-sm font-weight-bold">
-                                    <i class="fas fa-check-circle mr-2"></i> Onayla ve Kaydet
-                                </button>
-                            </div>
-
                         </div>
                     </div>
                 </div>
