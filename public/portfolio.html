@@ -1830,7 +1830,7 @@
             async showRecordDetailModal(recordId) {
                 const modal = document.getElementById('recordDetailModal');
                 const modalBody = document.getElementById('modalBody');
-                modalBody.innerHTML = '<p>Yükleniyor...</p>';
+                modalBody.innerHTML = '<div class="text-center p-5"><div class="spinner-border text-primary"></div><p class="mt-2">Detaylar yükleniyor...</p></div>';
                 modal.classList.add('show');
 
                 try {
@@ -1850,7 +1850,7 @@
                     const imageSrc = (record.type === 'trademark') ? (record.brandImageUrl || record.details?.brandInfo?.brandImage) : null;
                     if (imageSrc) {
                         imageHtml = `<h4 class="modal-detail-section-title">Marka Görseli</h4>
-                                        <img src="${imageSrc}" alt="Marka Görseli" class="record-image-display">`;
+                                        <div class="text-center"><img src="${imageSrc}" alt="Marka Görseli" class="record-image-display" style="max-height:150px;"></div>`;
                     }
 
                     const statusDisplay = record.status === 'application_filed' ? 'Başvuru Yapıldı' :
@@ -1871,85 +1871,128 @@
 
                     try {
                         const [transactionTypesResult, transResult] = await Promise.all([
-                        transactionTypeService.getTransactionTypes(),
-                        ipRecordsService.getTransactionsForRecord(recordId)
+                            transactionTypeService.getTransactionTypes(),
+                            ipRecordsService.getTransactionsForRecord(recordId)
                         ]);
 
-                        const allTransactionTypes = Array.isArray(transactionTypesResult?.data)
-                        ? transactionTypesResult.data : [];
-
-                        const allTransactions = transResult?.success && Array.isArray(transResult.transactions)
-                        ? transResult.transactions : [];
+                        const allTransactionTypes = Array.isArray(transactionTypesResult?.data) ? transactionTypesResult.data : [];
+                        const allTransactions = transResult?.success && Array.isArray(transResult.transactions) ? transResult.transactions : [];
 
                         if (allTransactions.length === 0) {
                             transactionsHtml += '<p class="text-muted">Henüz işlem geçmişi yok.</p>';
                         } else {
-                            const parentTransactions = [];
-                            const childrenMap = {};
-
-                            allTransactions.forEach(tx => {
-                                if (tx.transactionHierarchy === 'parent' || !tx.parentId) {
-                                    parentTransactions.push(tx);
-                                    childrenMap[tx.id] = [];
-                                }
-                            });
-                            allTransactions.forEach(tx => {
-                                if (tx.transactionHierarchy === 'child' && tx.parentId) {
-                                    if (childrenMap[tx.parentId]) {
-                                        childrenMap[tx.parentId].push(tx);
+                            // Transaction Helper: Belgeleri toplayan fonksiyon
+                            const getTransactionDocuments = async (tx) => {
+                                const docs = [];
+                                const seenUrls = new Set();
+                                const addDoc = (d) => {
+                                    const url = d.fileUrl || d.url || d.path || d.downloadURL;
+                                    if (url && !seenUrls.has(url)) {
+                                        docs.push({ ...d, fileUrl: url });
+                                        seenUrls.add(url);
                                     }
-                                }
-                            });
-                            Object.keys(childrenMap).forEach(parentId => {
-                                childrenMap[parentId].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-                            });
-                            parentTransactions.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+                                };
 
-                            parentTransactions.forEach((parent) => {
+                                // 1. İndekslenen Ana PDF (relatedPdfUrl)
+                                if (tx.relatedPdfUrl) addDoc({ fileName: 'İndekslenen Belge', fileUrl: tx.relatedPdfUrl, type: 'indexed_doc', icon: 'fas fa-file-import', btnClass: 'btn-info' });
+                                
+                                // 2. İtiraz Dilekçesi (oppositionPetitionFileUrl)
+                                if (tx.oppositionPetitionFileUrl) addDoc({ fileName: 'İtiraz Dilekçesi', fileUrl: tx.oppositionPetitionFileUrl, type: 'opposition_petition', icon: 'fas fa-gavel', btnClass: 'btn-warning' });
+
+                                // 3. Documents Array (Manuel eklenenler)
+                                if (Array.isArray(tx.documents)) {
+                                    tx.documents.forEach(d => addDoc({
+                                        fileName: d.name || 'Belge',
+                                        fileUrl: d.downloadURL || d.url || d.path,
+                                        type: d.type || 'attached_doc',
+                                        icon: 'fas fa-paperclip',
+                                        btnClass: 'btn-secondary'
+                                    }));
+                                }
+                                
+                                // 4. Bağlı Görev (Task) Belgeleri (ePats vb.)
+                                if (tx.triggeringTaskId) {
+                                    try {
+                                        const taskDocs = await fetchTaskDocuments(tx.triggeringTaskId);
+                                        taskDocs.forEach(d => addDoc({
+                                            ...d,
+                                            fileName: d.fileName || 'Görev Belgesi',
+                                            icon: d.type === 'epats_document' ? 'fas fa-file-invoice' : 'fas fa-file-alt',
+                                            btnClass: d.type === 'epats_document' ? 'btn-primary' : 'btn-secondary'
+                                        }));
+                                    } catch(e) { console.warn('Task docs fetch error', e); }
+                                }
+                                return docs;
+                            };
+
+                            // Hiyerarşiyi kur
+                            const { parentTransactions, childrenMap } = await this.organizeTransactionHierarchy(allTransactions);
+
+                            // Render Loop (for...of ile async bekleyerek)
+                            for (const parent of parentTransactions) {
                                 const parentType = allTransactionTypes.find(t => t.id === parent.type || t.id === String(parent.type));
-                                const parentName = parentType ? (parentType.alias || parentType.name) : `Bilinmeyen İşlem (ID: ${parent.type})`;
+                                const parentName = parentType ? (parentType.alias || parentType.name) : `İşlem ${parent.type}`;
                                 const parentDate = new Date(parent.timestamp).toLocaleDateString('tr-TR');
-                                const parentTime = new Date(parent.timestamp).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+                                
+                                // Parent Belgelerini Çek
+                                const parentDocs = await getTransactionDocuments(parent);
+                                const parentDocsHtml = parentDocs.map(doc => 
+                                    `<a onclick="window.open('${doc.fileUrl}', '_blank')" class="action-btn ${doc.btnClass || 'btn-secondary'} btn-sm mr-1" title="${doc.fileName}"><i class="${doc.icon || 'fas fa-file'}"></i></a>`
+                                ).join('');
+
                                 const children = childrenMap[parent.id] || [];
                                 const hasChildren = children.length > 0;
 
                                 transactionsHtml += `
                                     <div class="accordion-transaction-item">
                                         <div class="accordion-transaction-header ${hasChildren ? 'has-children' : ''}"
-                                            data-parent-id="${parent.id}" style="cursor: pointer;">
-                                            <div class="transaction-main-info">
-                                                <div class="transaction-details">
-                                                    <div class="transaction-name-date">
-                                                        ${hasChildren ? '<span class="accordion-icon">▶</span>' : ''}
-                                                        ${parentName} - ${parentDate} ${parentTime}
-                                                    </div>
+                                            data-parent-id="${parent.id}" style="cursor: pointer; padding: 10px 15px; border-bottom: 1px solid #eee;">
+                                            <div class="transaction-main-info" style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
+                                                <div style="display:flex; align-items:center;">
+                                                    ${hasChildren ? '<span class="accordion-icon mr-2">▶</span>' : '<span class="accordion-icon-empty mr-2" style="width:12px; display:inline-block;"></span>'}
+                                                    <strong>${parentName}</strong> 
+                                                    <span class="text-muted ml-2 small">${parentDate}</span>
                                                 </div>
-                                            </div>
-                                            <div class="transaction-meta">
-                                                ${hasChildren ? `<span class="child-count">${children.length} alt işlem</span>` : ''}
+                                                
+                                                <div class="transaction-actions" style="display: flex; align-items: center;">
+                                                    <div class="transaction-docs mr-3">
+                                                        ${parentDocsHtml}
+                                                    </div>
+                                                    ${hasChildren ? `<span class="badge badge-light border">${children.length} alt işlem</span>` : ''}
+                                                </div>
                                             </div>
                                         </div>
 
                                         ${hasChildren ? `
-                                            <div class="accordion-transaction-children" id="children-${parent.id}" style="display: none;">
-                                                ${children.map(child => {
+                                            <div class="accordion-transaction-children" id="children-${parent.id}" style="display: none; background: #f9f9f9; padding: 10px 20px;">
+                                                ${(await Promise.all(children.map(async child => {
                                                     const childType = allTransactionTypes.find(t => t.id === child.type || t.id === String(child.type));
-                                                    const childName = childType ? (childType.alias || childType.name) : `Bilinmeyen İşlem (ID: ${child.type})`;
+                                                    const childName = childType ? (childType.alias || childType.name) : `İşlem ${child.type}`;
                                                     const childDate = new Date(child.timestamp).toLocaleDateString('tr-TR');
-                                                    const childTime = new Date(child.timestamp).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+                                                    
+                                                    // Child Belgelerini Çek
+                                                    const childDocs = await getTransactionDocuments(child);
+                                                    const childDocsHtml = childDocs.map(doc => 
+                                                        `<a onclick="window.open('${doc.fileUrl}', '_blank')" class="action-btn ${doc.btnClass || 'btn-secondary'} btn-sm mr-1" title="${doc.fileName}"><i class="${doc.icon || 'fas fa-file'}"></i></a>`
+                                                    ).join('');
+
                                                     return `
-                                                        <div class="child-transaction-item">
+                                                        <div class="child-transaction-item" style="display: flex; justify-content: space-between; align-items: center; padding: 5px 0; border-bottom: 1px dashed #e0e0e0;">
                                                             <div class="child-transaction-content">
-                                                                <div class="child-transaction-name-date">${childName} - ${childDate} ${childTime}</div>
+                                                                <i class="fas fa-level-up-alt fa-rotate-90 mr-2 text-muted"></i>
+                                                                ${childName} <span class="text-muted small">(${childDate})</span>
+                                                            </div>
+                                                            <div class="child-transaction-docs">
+                                                                ${childDocsHtml}
                                                             </div>
                                                         </div>
                                                     `;
-                                                }).join('')}
+                                                }))).join('')}
                                             </div>
                                         ` : ''}
                                     </div>
                                 `;
-                            });
+                            }
                         }
                     } catch (txError) {
                         console.error('Transaction geçmişi yüklenirken hata:', txError);
@@ -1979,23 +2022,25 @@
                         <div class="modal-detail-item" style="grid-column: 1 / -1;">${transactionsHtml}</div>
                     `;
 
+                    // Accordion Event Listeners
                     const modalEl = document.getElementById('recordDetailModal');
                     const headers = modalEl.querySelectorAll('.accordion-transaction-header[data-parent-id]');
                     headers.forEach(header => {
-                        header.addEventListener('click', function() {
+                        header.addEventListener('click', function(e) {
+                            // Linklere tıklanınca accordion açılmasın
+                            if (e.target.closest('a') || e.target.closest('button')) return;
+
                             const parentId = this.getAttribute('data-parent-id');
                             const childrenContainer = document.getElementById(`children-${parentId}`);
                             const icon = this.querySelector('.accordion-icon');
-                            if (childrenContainer && icon) {
+                            if (childrenContainer) {
                                 const isVisible = childrenContainer.style.display !== 'none';
                                 if (isVisible) {
                                     childrenContainer.style.display = 'none';
-                                    icon.textContent = '▶';
-                                    icon.classList.remove('expanded');
+                                    if(icon) { icon.textContent = '▶'; icon.classList.remove('expanded'); }
                                 } else {
                                     childrenContainer.style.display = 'block';
-                                    icon.textContent = '▼';
-                                    icon.classList.add('expanded');
+                                    if(icon) { icon.textContent = '▼'; icon.classList.add('expanded'); }
                                 }
                             }
                         });
@@ -2003,7 +2048,7 @@
 
                 } catch (error) {
                     const modalBody = document.getElementById('modalBody');
-                    modalBody.innerHTML = `<p class="error-message">Kayıt detayları yüklenirken hata oluştu: ${error.message}</p>`;
+                    modalBody.innerHTML = `<p class="text-danger">Kayıt detayları yüklenirken hata oluştu: ${error.message}</p>`;
                     console.error('Modal detay hatası:', error);
                 }
             }
