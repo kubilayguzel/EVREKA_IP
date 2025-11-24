@@ -550,12 +550,18 @@ async function renderTransactionsAccordion(recordId){
             const addChildDoc = (docObj) => {
                 const name = docObj.fileName || docObj.name || 'Belge';
                 const url = docObj.fileUrl || docObj.downloadURL || docObj.url || docObj.path;
+                
+                // Tip belirleme mantığı ekliyoruz
+                let finalType = docObj.type || 'child_doc';
+                if (docObj.documentDesignation === 'Resmi Yazı') finalType = 'official_document';
+                else if (docObj.documentDesignation === 'İtiraz Dilekçesi') finalType = 'opposition_petition';
+
                 if (url && !existingFileNames.has(name)) {
                     existingFileNames.add(name);
                     allChildDocs.push({
                         fileName: name,
                         fileUrl: url,
-                        type: docObj.type || 'child_doc',
+                        type: finalType, // <--- Düzeltilmiş tip
                         evrakNo: docObj.evrakNo,
                         isTaskDoc: docObj.isTaskDoc || false
                     });
@@ -640,7 +646,7 @@ async function renderTransactionsAccordion(recordId){
               ...transactionDocs.map(doc => ({
                   fileName: doc.name || doc.fileName || 'Belge',
                   fileUrl: doc.path || doc.url || doc.downloadURL,
-                  type: doc.type
+                  type: (doc.documentDesignation === 'Resmi Yazı') ? 'official_document' : doc.type
               }))
           ];
           // Özel alanlar
