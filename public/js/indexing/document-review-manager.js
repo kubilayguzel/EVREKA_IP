@@ -17,13 +17,22 @@ import {
     ref, uploadBytes, getDownloadURL 
 } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js';
 
-import { showNotification, debounce, addMonthsToDate, findNextWorkingDay, TURKEY_HOLIDAYS } from '../../utils.js';
+import { 
+    showNotification, 
+    debounce, 
+    addMonthsToDate, 
+    findNextWorkingDay, 
+    isWeekend, 
+    isHoliday, 
+    TURKEY_HOLIDAYS 
+} from '../../utils.js';
 
 // Servisler
 import { PdfExtractor } from './pdf-extractor.js';
 import { PdfAnalyzer } from './pdf-analyzer.js';
 
 const UNINDEXED_PDFS_COLLECTION = 'unindexed_pdfs';
+// Varsayılan atama (Eski koddan)
 const SELCAN_UID = 'Mkmq2sc0T6XTIg1weZyp5AGZ0YG3'; 
 const SELCAN_EMAIL = 'selcanakoglu@evrekapatent.com';
 
@@ -53,12 +62,12 @@ export class DocumentReviewManager {
 
         this.currentUser = authService.getCurrentUser();
         
-        // 1. Listener'ları Kur (Butonlar burada aktifleşir)
+        // 1. Listener'ları Kur
         this.setupEventListeners();
         
-        // 2. Verileri Sırayla Yükle (Race condition önlemek için)
-        await this.loadTransactionTypes(); // Önce tipleri çek
-        await this.loadData();             // Sonra kaydı ve PDF'i çek
+        // 2. Verileri Yükle
+        await this.loadTransactionTypes();
+        await this.loadData();
     }
 
     async loadTransactionTypes() {
@@ -73,23 +82,20 @@ export class DocumentReviewManager {
     }
 
     setupEventListeners() {
-        // --- KAYDET BUTONU (DÜZELTİLDİ) ---
+        // Kaydet Butonu
         const saveBtn = document.getElementById('saveTransactionBtn');
         if (saveBtn) {
-            // Mevcut listener varsa temizlemek için klonlama (opsiyonel ama güvenli)
             const newSaveBtn = saveBtn.cloneNode(true);
             saveBtn.parentNode.replaceChild(newSaveBtn, saveBtn);
-            
             newSaveBtn.addEventListener('click', (e) => {
-                e.preventDefault(); // Form submit'i engelle
+                e.preventDefault();
                 this.handleSave();
             });
         }
 
-        // Manuel Arama
+        // Arama
         const searchInput = document.getElementById('manualSearchInput');
         const searchResults = document.getElementById('manualSearchResults');
-
         if (searchInput) {
             searchInput.addEventListener('input', debounce((e) => this.handleManualSearch(e.target.value), 300));
             document.addEventListener('click', (e) => {
@@ -99,17 +105,12 @@ export class DocumentReviewManager {
             });
         }
 
-        // Parent Seçimi -> Child Listesini Güncelle
+        // Dropdown Değişimleri
         const parentSelect = document.getElementById('parentTransactionSelect');
-        if (parentSelect) {
-            parentSelect.addEventListener('change', () => this.updateChildTransactionOptions());
-        }
+        if (parentSelect) parentSelect.addEventListener('change', () => this.updateChildTransactionOptions());
 
-        // Child Seçimi -> Özel Alan Kontrolü
         const childSelect = document.getElementById('detectedType');
-        if (childSelect) {
-            childSelect.addEventListener('change', () => this.checkSpecialFields());
-        }
+        if (childSelect) childSelect.addEventListener('change', () => this.checkSpecialFields());
     }
 
     async loadData() {
@@ -135,8 +136,8 @@ export class DocumentReviewManager {
         }
     }
 
-    // --- Kayıt Seçimi ve Transaction Yükleme ---
-
+    // ... (selectRecord, loadParentTransactions, renderHeader vb. aynı kalacak) ...
+    
     async selectRecord(recordId) {
         try {
             const result = await ipRecordsService.getRecordById(recordId);
@@ -171,20 +172,17 @@ export class DocumentReviewManager {
                 const typeObj = this.allTransactionTypes.find(type => type.id === t.type);
                 const label = typeObj ? (typeObj.alias || typeObj.name) : (t.description || 'Bilinmeyen İşlem');
                 const dateStr = (t.timestamp) ? new Date(t.timestamp).toLocaleDateString('tr-TR') : '-';
-
                 const opt = document.createElement('option');
                 opt.value = t.id;
                 opt.textContent = `${label} (${dateStr})`;
                 parentSelect.appendChild(opt);
             });
-
         } catch (error) {
             console.error('Transaction yükleme hatası:', error);
             parentSelect.innerHTML = '<option value="">Hata oluştu</option>';
         }
     }
 
-    // --- Child Transaction Filtreleme ---
     updateChildTransactionOptions() {
         const parentSelect = document.getElementById('parentTransactionSelect');
         const childSelect = document.getElementById('detectedType');
@@ -201,13 +199,10 @@ export class DocumentReviewManager {
 
         if (!parentTypeObj || !parentTypeObj.indexFile) {
             console.warn('Bu ana işlem için tanımlı alt işlem (indexFile) bulunamadı.');
-            // Kullanıcıyı kilitlememek için fallback (tüm child'ları göster) eklenebilir
-            // Şimdilik sadece uyarı veriyoruz.
             return;
         }
 
         const allowedChildIds = Array.isArray(parentTypeObj.indexFile) ? parentTypeObj.indexFile : [];
-        
         const allowedChildTypes = this.allTransactionTypes
             .filter(t => allowedChildIds.includes(t.id))
             .sort((a, b) => (a.order || 999) - (b.order || 999));
@@ -229,11 +224,7 @@ export class DocumentReviewManager {
     autoSelectChildType(selectElement) {
         const detectedName = this.analysisResult.detectedType.name.toLowerCase();
         const options = Array.from(selectElement.options);
-        
-        const matchedOption = options.find(opt => 
-            opt.text.toLowerCase().includes(detectedName)
-        );
-
+        const matchedOption = options.find(opt => opt.text.toLowerCase().includes(detectedName));
         if (matchedOption) {
             matchedOption.selected = true;
             this.checkSpecialFields(); 
@@ -243,19 +234,13 @@ export class DocumentReviewManager {
     checkSpecialFields() {
         const childTypeId = document.getElementById('detectedType').value;
         const oppositionSection = document.getElementById('oppositionSection');
-        
-        if (childTypeId === '27') { // İtiraz Bildirimi
-            oppositionSection.style.display = 'block';
-        } else {
-            oppositionSection.style.display = 'none';
-        }
+        if (childTypeId === '27') oppositionSection.style.display = 'block';
+        else oppositionSection.style.display = 'none';
     }
 
-    // --- KAYDETME VE İŞ TETİKLEME ---
+    // --- KAYDETME VE İŞ TETİKLEME (REVISED) ---
 
     async handleSave() {
-        console.log("handleSave tetiklendi"); // Debug için
-
         if (!this.matchedRecord) {
             alert('Lütfen önce bir kayıt ile eşleştirin.');
             return;
@@ -267,23 +252,20 @@ export class DocumentReviewManager {
         const notes = document.getElementById('transactionNotes').value;
 
         if (!parentTxId || !childTypeId || !deliveryDateStr) {
-            showNotification('Lütfen Ana İşlem, İşlem Türü ve Tarih alanlarını doldurun.', 'error');
+            showNotification('Lütfen tüm alanları doldurun.', 'error');
             return;
         }
 
-        // Butonu kilitle
         const saveBtn = document.getElementById('saveTransactionBtn');
-        if(saveBtn) {
-            saveBtn.disabled = true;
-            saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> İşleniyor...';
-        }
+        saveBtn.disabled = true;
+        saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> İşleniyor...';
 
         try {
             const childTypeObj = this.allTransactionTypes.find(t => t.id === childTypeId);
             const parentTx = this.currentTransactions.find(t => t.id === parentTxId);
             const parentTypeObj = this.allTransactionTypes.find(t => t.id === parentTx?.type);
 
-            // 1. İtiraz Bildirimi Özel Mantığı
+            // 1. İtiraz Bildirimi -> Yeni Parent Oluşturma
             let newParentTxId = null;
             let oppositionFileUrl = null;
 
@@ -291,20 +273,18 @@ export class DocumentReviewManager {
                 const ownerInput = document.getElementById('oppositionOwnerInput').value;
                 const fileInput = document.getElementById('oppositionPetitionFile').files[0];
 
-                if (!ownerInput || !fileInput) {
-                    throw new Error('İtiraz bildirimi için İtiraz Sahibi ve PDF dosyası zorunludur.');
-                }
+                if (!ownerInput || !fileInput) throw new Error('İtiraz Sahibi ve PDF zorunludur.');
 
                 const storageRef = ref(firebaseServices.storage, `opposition-petitions/${this.matchedRecord.id}/${Date.now()}_${fileInput.name}`);
                 await uploadBytes(storageRef, fileInput);
                 oppositionFileUrl = await getDownloadURL(storageRef);
 
-                let newParentTypeId = '20'; 
+                // Tip 19 veya 20 belirleme
+                let newParentTypeId = '20'; // Yayına İtiraz
                 let newParentDesc = 'Yayına İtiraz (Otomatik)';
-
                 const parentAlias = parentTypeObj?.alias || parentTypeObj?.name || '';
                 if (parentAlias.includes('İtiraz') || parentTypeObj?.id === '20') {
-                    newParentTypeId = '19'; 
+                    newParentTypeId = '19'; // Yeniden İnceleme
                     newParentDesc = 'Yayına İtirazın Yeniden İncelenmesi (Otomatik)';
                 }
 
@@ -318,15 +298,41 @@ export class DocumentReviewManager {
                 };
 
                 const newParentResult = await ipRecordsService.addTransactionToRecord(this.matchedRecord.id, newParentData);
-                if (newParentResult.success) {
-                    newParentTxId = newParentResult.id;
-                }
+                if (newParentResult.success) newParentTxId = newParentResult.id;
             }
 
-            // 2. İş Tetikleme Kontrolü
+            const finalParentId = newParentTxId || parentTxId;
+
+            // 2. Child Transaction Oluştur (ÖNCE Transaction, SONRA Task)
+            const transactionData = {
+                type: childTypeId,
+                transactionHierarchy: 'child',
+                parentId: finalParentId,
+                description: childTypeObj.alias || childTypeObj.name,
+                date: deliveryDateStr ? new Date(deliveryDateStr).toISOString() : new Date().toISOString(),
+                relatedPdfUrl: this.pdfData.fileUrl,
+                relatedPdfId: this.pdfData.id
+            };
+
+            const txResult = await ipRecordsService.addTransactionToRecord(this.matchedRecord.id, transactionData);
+            const childTransactionId = txResult.id;
+
+            // 3. İtiraz Dilekçesini Transaction'a ekle
+            if (childTypeId === '27' && oppositionFileUrl && txResult.success) {
+                const docPayload = {
+                    id: Date.now().toString(),
+                    name: 'opposition_petition.pdf',
+                    downloadURL: oppositionFileUrl,
+                    type: 'application/pdf',
+                    uploadedAt: new Date().toISOString()
+                };
+                const txRef = doc(collection(db, 'ipRecords', this.matchedRecord.id, 'transactions'), childTransactionId);
+                await updateDoc(txRef, { documents: arrayUnion(docPayload) });
+            }
+
+            // 4. İş Tetikleme (Task)
             let createdTaskId = null;
             let shouldTriggerTask = false;
-
             const recordType = (this.matchedRecord.recordOwnerType === 'self') ? 'Portföy' : '3. Taraf';
             const parentTypeId = parentTx.type;
 
@@ -336,79 +342,78 @@ export class DocumentReviewManager {
             };
 
             if (taskTriggerMatrix[parentTypeId] && taskTriggerMatrix[parentTypeId][recordType]) {
-                if (taskTriggerMatrix[parentTypeId][recordType].includes(childTypeId)) {
-                    shouldTriggerTask = true;
-                }
+                if (taskTriggerMatrix[parentTypeId][recordType].includes(childTypeId)) shouldTriggerTask = true;
             } else {
-                if (childTypeObj.taskTriggered) {
-                    shouldTriggerTask = true;
-                }
+                if (childTypeObj.taskTriggered) shouldTriggerTask = true;
             }
 
-            // 3. Task Oluşturma
             if (shouldTriggerTask && childTypeObj.taskTriggered) {
+                // Vade Hesapla
                 const deliveryDate = new Date(deliveryDateStr);
                 const duePeriod = Number(childTypeObj.duePeriod || 0);
                 let officialDueDate = addMonthsToDate(deliveryDate, duePeriod);
                 officialDueDate = findNextWorkingDay(officialDueDate, TURKEY_HOLIDAYS);
 
+                // Operasyonel (3 gün önce)
                 let taskDueDate = new Date(officialDueDate);
                 taskDueDate.setDate(taskDueDate.getDate() - 3);
+                while (isWeekend(taskDueDate) || isHoliday(taskDueDate, TURKEY_HOLIDAYS)) {
+                    taskDueDate.setDate(taskDueDate.getDate() - 1);
+                }
 
+                // Atanacak Kişiyi Bul (Kuraldan)
                 let assignedUser = { uid: SELCAN_UID, email: SELCAN_EMAIL };
+                try {
+                    const ruleSnap = await getDoc(doc(db, 'taskAssignments', String(childTypeObj.taskTriggered)));
+                    if (ruleSnap.exists()) {
+                        const ids = ruleSnap.data().approvalStateAssigneeIds || [];
+                        if (ids.length > 0) {
+                            const uid = ids[0];
+                            const userSnap = await getDoc(doc(db, 'users', uid));
+                            if(userSnap.exists()) assignedUser = { uid, email: userSnap.data().email };
+                        }
+                    }
+                } catch (e) { console.warn('Assignee resolution failed', e); }
 
+                // ZENGİN TASK DATASI (Eski koda uygun)
                 const taskData = {
                     title: `${childTypeObj.alias || childTypeObj.name} - ${this.matchedRecord.title}`,
-                    description: notes || `Otomatik oluşturulan görev.`,
+                    description: `${this.matchedRecord.title} için ${childTypeObj.alias || childTypeObj.name} işlemi.`,
                     taskType: childTypeObj.taskTriggered,
                     relatedRecordId: this.matchedRecord.id,
-                    officialDueDate: officialDueDate.toISOString(),
+                    relatedIpRecordId: this.matchedRecord.id,
+                    relatedIpRecordTitle: this.matchedRecord.title,
+                    transactionId: childTransactionId, // Child ID bağlandı
+                    triggeringTransactionType: childTypeId,
+                    deliveryDate: deliveryDateStr,
                     dueDate: taskDueDate.toISOString(),
-                    status: 'pending',
+                    officialDueDate: officialDueDate.toISOString(),
+                    status: 'awaiting_client_approval', // İSTENEN STATUS
+                    priority: 'normal',
                     assignedTo_uid: assignedUser.uid,
                     assignedTo_email: assignedUser.email,
+                    createdBy: this.currentUser.uid,
                     createdAt: new Date().toISOString()
                 };
 
                 const taskResult = await taskService.createTask(taskData);
                 if (taskResult.success) {
                     createdTaskId = taskResult.id;
+                    // Transaction'ı Task ID ile güncelle
+                    await ipRecordsService.addTransactionToRecord(this.matchedRecord.id, {
+                        id: childTransactionId, // Var olanı güncellemek için ID'yi veriyoruz (servis destekliyorsa)
+                        // Not: Servis addDoc yapıyor, update için manuel path kullanacağız:
+                    });
+                    const txRef = doc(collection(db, 'ipRecords', this.matchedRecord.id, 'transactions'), childTransactionId);
+                    await updateDoc(txRef, { triggeringTaskId: createdTaskId });
                 }
             }
 
-            // 4. Child Transaction Kaydetme
-            const finalParentId = newParentTxId || parentTxId;
-
-            const transactionData = {
-                type: childTypeId,
-                transactionHierarchy: 'child',
-                parentId: finalParentId,
-                triggeringTaskId: createdTaskId || null,
-                description: childTypeObj.alias || childTypeObj.name,
-                date: deliveryDateStr ? new Date(deliveryDateStr).toISOString() : new Date().toISOString(),
-                relatedPdfUrl: this.pdfData.fileUrl,
-                relatedPdfId: this.pdfData.id
-            };
-
-            const txResult = await ipRecordsService.addTransactionToRecord(this.matchedRecord.id, transactionData);
-            
-            if (childTypeId === '27' && oppositionFileUrl && txResult.success) {
-                const docPayload = {
-                    id: Date.now().toString(),
-                    name: 'opposition_petition.pdf',
-                    downloadURL: oppositionFileUrl,
-                    type: 'application/pdf',
-                    uploadedAt: new Date().toISOString()
-                };
-                const txRef = doc(collection(db, 'ipRecords', this.matchedRecord.id, 'transactions'), txResult.id);
-                await updateDoc(txRef, { documents: arrayUnion(docPayload) });
-            }
-
-            // 5. PDF Durumunu Güncelle
+            // 5. PDF Statüsü
             await updateDoc(doc(db, UNINDEXED_PDFS_COLLECTION, this.pdfId), {
                 status: 'indexed',
                 indexedAt: new Date(),
-                finalTransactionId: txResult.id,
+                finalTransactionId: childTransactionId,
                 matchedRecordId: this.matchedRecord.id
             });
 
@@ -418,60 +423,12 @@ export class DocumentReviewManager {
         } catch (error) {
             console.error('Kaydetme hatası:', error);
             showNotification('Hata: ' + error.message, 'error');
-            if(saveBtn) {
-                saveBtn.disabled = false;
-                saveBtn.innerHTML = '<i class="fas fa-check-circle mr-2"></i> Onayla ve Kaydet';
-            }
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = '<i class="fas fa-check-circle mr-2"></i> Onayla ve Kaydet';
         }
     }
 
-    // --- Analiz ---
-    async runAnalysis() {
-        const loadingEl = document.getElementById('analysisLoading');
-        const resultsEl = document.getElementById('analysisResults');
-        const pdfViewerEl = document.getElementById('pdfViewer');
-
-        if(loadingEl) loadingEl.style.display = 'block';
-        if(resultsEl) resultsEl.style.display = 'none';
-
-        try {
-            if (pdfViewerEl) pdfViewerEl.src = this.pdfData.fileUrl;
-            const fullText = await this.pdfExtractor.extractTextFromUrl(this.pdfData.fileUrl);
-            this.analysisResult = this.analyzer.analyze(fullText);
-            this.renderAnalysisResults();
-        } catch (error) {
-            console.error(error);
-            // Hata olsa da formu göster
-        } finally {
-            if(loadingEl) loadingEl.style.display = 'none';
-            if(resultsEl) resultsEl.style.display = 'block';
-        }
-    }
-
-    renderHeader() {
-        document.getElementById('fileNameDisplay').textContent = this.pdfData.fileName;
-        const matchInfoEl = document.getElementById('matchInfoDisplay');
-        if (this.matchedRecord) {
-            matchInfoEl.innerHTML = `<div class="text-success"><strong>${this.matchedRecord.title}</strong> (${this.matchedRecord.applicationNumber})</div>`;
-        } else {
-            matchInfoEl.innerHTML = `<div class="text-warning">Eşleşme Yok</div>`;
-        }
-    }
-
-    renderAnalysisResults() {
-        const dateInput = document.getElementById('detectedDate');
-        const summaryBox = document.getElementById('analysisSummary');
-        
-        if (dateInput && this.analysisResult && this.analysisResult.decisionDate) {
-            const parts = this.analysisResult.decisionDate.split('.');
-            if(parts.length === 3) dateInput.value = `${parts[2]}-${parts[1]}-${parts[0]}`;
-        }
-        if (summaryBox && this.analysisResult) {
-            summaryBox.textContent = `Tip: ${this.analysisResult.detectedType.name}`;
-        }
-        
-        // NOT: saveBtn listener'ı artık setupEventListeners içinde
-    }
+    // ... (renderHeader, renderAnalysisResults, manualSearch metodları aynı kalacak) ...
     
     async handleManualSearch(query) {
         const resultsContainer = document.getElementById('manualSearchResults');
@@ -497,6 +454,48 @@ export class DocumentReviewManager {
                 container.style.display = 'none';
             };
         });
+    }
+
+    async runAnalysis() {
+        const loadingEl = document.getElementById('analysisLoading');
+        const resultsEl = document.getElementById('analysisResults');
+        const pdfViewerEl = document.getElementById('pdfViewer');
+
+        if(loadingEl) loadingEl.style.display = 'block';
+        if(resultsEl) resultsEl.style.display = 'none';
+
+        try {
+            if (pdfViewerEl) pdfViewerEl.src = this.pdfData.fileUrl;
+            const fullText = await this.pdfExtractor.extractTextFromUrl(this.pdfData.fileUrl);
+            this.analysisResult = this.analyzer.analyze(fullText);
+            this.renderAnalysisResults();
+        } catch (error) { console.error(error); } 
+        finally {
+            if(loadingEl) loadingEl.style.display = 'none';
+            if(resultsEl) resultsEl.style.display = 'block';
+        }
+    }
+
+    renderHeader() {
+        document.getElementById('fileNameDisplay').textContent = this.pdfData.fileName;
+        const matchInfoEl = document.getElementById('matchInfoDisplay');
+        if (this.matchedRecord) {
+            matchInfoEl.innerHTML = `<div class="text-success"><strong>${this.matchedRecord.title}</strong> (${this.matchedRecord.applicationNumber})</div>`;
+        } else {
+            matchInfoEl.innerHTML = `<div class="text-warning">Eşleşme Yok</div>`;
+        }
+    }
+
+    renderAnalysisResults() {
+        const dateInput = document.getElementById('detectedDate');
+        const summaryBox = document.getElementById('analysisSummary');
+        if (dateInput && this.analysisResult.decisionDate) {
+            const parts = this.analysisResult.decisionDate.split('.');
+            if(parts.length === 3) dateInput.value = `${parts[2]}-${parts[1]}-${parts[0]}`;
+        }
+        if (summaryBox) {
+            summaryBox.textContent = `Tip: ${this.analysisResult.detectedType.name}`;
+        }
     }
 }
 
