@@ -249,8 +249,6 @@ export class DocumentReviewManager {
                 parentId: finalParentId,
                 description: childTypeObj.alias || childTypeObj.name,
                 date: deliveryDateStr ? new Date(deliveryDateStr).toISOString() : new Date().toISOString(),
-                relatedPdfUrl: this.pdfData.fileUrl,
-                relatedPdfId: this.pdfData.id
             };
 
             const txResult = await ipRecordsService.addTransactionToRecord(this.matchedRecord.id, transactionData);
