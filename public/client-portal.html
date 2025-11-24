@@ -589,91 +589,135 @@
             </div>
             <div id="invoices-pagination-container"></div>
         </div>
-        <div class="fade tab-pane" id="reports">
-            <div class="d-flex justify-content-between align-items-center mb-4">
-                <h1 class="header-title">Yönetim Raporları</h1>
-                <div>
-                    <button class="btn btn-outline-secondary btn-sm mr-2" onclick="window.refreshCharts()"><i class="fas fa-sync-alt"></i> Yenile</button>
-                    <button class="btn btn-primary btn-sm"><i class="fas fa-file-pdf"></i> Tümünü İndir (PDF)</button>
+            <div class="tab-pane fade" id="reports" role="tabpanel" aria-labelledby="reports-tab">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h1 class="header-title">Yönetim ve Performans Raporları</h1>
+                    <div>
+                        <button class="btn btn-outline-secondary btn-sm mr-2" onclick="window.initReports()"><i class="fas fa-sync-alt"></i> Verileri Yenile</button>
+                    </div>
+                </div>
+
+                <div class="row mb-4">
+                    <div class="col-12">
+                        <div class="card shadow mb-4">
+                            <div class="card-header py-3 bg-white d-flex flex-row align-items-center justify-content-between">
+                                <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-globe-americas mr-2"></i>Global Varlık Dağılımı</h6>
+                                <span class="badge badge-primary badge-pill" id="rep-total-countries">0 Ülke</span>
+                            </div>
+                            <div class="card-body p-0">
+                                <div id="world-map-markers" style="height: 450px; width: 100%;"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row mb-4">
+                    <div class="col-md-3">
+                        <div class="card p-3 border-left-primary shadow-sm h-100">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <div class="text-muted small text-uppercase font-weight-bold">Toplam Varlık</div>
+                                    <div class="h3 mb-0 font-weight-bold text-gray-800" id="rep-total-assets">-</div>
+                                </div>
+                                <i class="fas fa-folder fa-2x text-gray-300"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card p-3 border-left-warning shadow-sm h-100">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <div class="text-muted small text-uppercase font-weight-bold">Onay Bekleyen İş</div>
+                                    <div class="h3 mb-0 font-weight-bold text-gray-800" id="rep-pending-tasks">-</div>
+                                </div>
+                                <i class="fas fa-clock fa-2x text-gray-300"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card p-3 border-left-danger shadow-sm h-100">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <div class="text-muted small text-uppercase font-weight-bold">Aktif Dava/İtiraz</div>
+                                    <div class="h3 mb-0 font-weight-bold text-gray-800" id="rep-active-legal">-</div>
+                                </div>
+                                <i class="fas fa-gavel fa-2x text-gray-300"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card p-3 border-left-success shadow-sm h-100">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <div class="text-muted small text-uppercase font-weight-bold">Tahmini Bütçe (Yıllık)</div>
+                                    <div class="h3 mb-0 font-weight-bold text-gray-800" id="rep-budget-est">-</div>
+                                </div>
+                                <i class="fas fa-coins fa-2x text-gray-300"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <h5 class="mb-3 text-gray-800 border-bottom pb-2">Hukuki ve Operasyonel Analiz</h5>
+                <div class="row">
+                    <div class="col-lg-4 mb-4">
+                        <div class="card shadow mb-4 h-100">
+                            <div class="card-header py-3"><h6 class="m-0 font-weight-bold text-danger">Hukuki Süreç Durumu</h6></div>
+                            <div class="card-body">
+                                <div id="chart-legal-status"></div>
+                                <div class="mt-2 text-center small text-muted">Aktif Dava ve İtirazların Dağılımı</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-lg-8 mb-4">
+                        <div class="card shadow mb-4 h-100">
+                            <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                                <h6 class="m-0 font-weight-bold text-warning">İlerleme Bekleyen İşler (>6 Ay)</h6>
+                                <small class="text-danger font-weight-bold">Kritik Uyarılar</small>
+                            </div>
+                            <div class="card-body p-0">
+                                <div class="table-responsive">
+                                    <table class="table table-striped table-sm mb-0">
+                                        <thead class="thead-light">
+                                            <tr>
+                                                <th>Marka/Konu</th>
+                                                <th>İşlem Tipi</th>
+                                                <th>Bekleme Süresi</th>
+                                                <th>Durum</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="rep-stuck-list">
+                                            </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <h5 class="mb-3 text-gray-800 border-bottom pb-2">Portföy Dağılımı</h5>
+                <div class="row">
+                    <div class="col-lg-4 mb-4">
+                        <div class="card shadow mb-4 h-100">
+                            <div class="card-header py-3"><h6 class="m-0 font-weight-bold text-primary">Varlık Türü</h6></div>
+                            <div class="card-body"><div id="chart-portfolio-dist"></div></div>
+                        </div>
+                    </div>
+                    <div class="col-lg-4 mb-4">
+                        <div class="card shadow mb-4 h-100">
+                            <div class="card-header py-3"><h6 class="m-0 font-weight-bold text-info">Sektörel Dağılım (Sınıflar)</h6></div>
+                            <div class="card-body"><div id="chart-class-radar"></div></div>
+                        </div>
+                    </div>
+                    <div class="col-lg-4 mb-4">
+                        <div class="card shadow mb-4 h-100">
+                            <div class="card-header py-3"><h6 class="m-0 font-weight-bold text-success">6 Aylık Bütçe Projeksiyonu</h6></div>
+                            <div class="card-body"><div id="chart-budget-forecast"></div></div>
+                        </div>
+                    </div>
                 </div>
             </div>
-
-            <div class="row mb-4">
-                <div class="col-md-3">
-                    <div class="card p-3 border-left-primary shadow-sm">
-                        <div class="text-muted small text-uppercase font-weight-bold">Toplam Varlık</div>
-                        <div class="h3 mb-0 font-weight-bold text-gray-800" id="rep-total-assets">-</div>
-                    </div>
-                </div>
-                <div class="col-md-3">
-                    <div class="card p-3 border-left-success shadow-sm">
-                        <div class="text-muted small text-uppercase font-weight-bold">Tescil Oranı</div>
-                        <div class="h3 mb-0 font-weight-bold text-gray-800" id="rep-success-rate">% -</div>
-                    </div>
-                </div>
-                <div class="col-md-3">
-                    <div class="card p-3 border-left-warning shadow-sm">
-                        <div class="text-muted small text-uppercase font-weight-bold">Riskli (İtiraz/Dava)</div>
-                        <div class="h3 mb-0 font-weight-bold text-gray-800" id="rep-risk-count">-</div>
-                    </div>
-                </div>
-                <div class="col-md-3">
-                    <div class="card p-3 border-left-info shadow-sm">
-                        <div class="text-muted small text-uppercase font-weight-bold">Tahmini Yıllık Gider</div>
-                        <div class="h3 mb-0 font-weight-bold text-gray-800" id="rep-budget-est">₺ -</div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="row">
-                <div class="col-lg-6 mb-4">
-                    <div class="card shadow mb-4 h-100">
-                        <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
-                            <h6 class="m-0 font-weight-bold text-primary">Varlık Türü Dağılımı</h6>
-                        </div>
-                        <div class="card-body">
-                            <div id="chart-portfolio-dist"></div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="col-lg-6 mb-4">
-                    <div class="card shadow mb-4 h-100">
-                        <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
-                            <h6 class="m-0 font-weight-bold text-success">Gelecek 6 Ay Tahmini Bütçe</h6>
-                            <small class="text-muted">Yenileme Tarihlerine Göre</small>
-                        </div>
-                        <div class="card-body">
-                            <div id="chart-budget-forecast"></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="row">
-                <div class="col-lg-6 mb-4">
-                    <div class="card shadow mb-4 h-100">
-                        <div class="card-header py-3">
-                            <h6 class="m-0 font-weight-bold text-info">Sektörel Koruma Analizi (Nice Sınıfları)</h6>
-                        </div>
-                        <div class="card-body">
-                            <div id="chart-class-radar"></div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="col-lg-6 mb-4">
-                    <div class="card shadow mb-4 h-100">
-                        <div class="card-header py-3">
-                            <h6 class="m-0 font-weight-bold text-warning">Coğrafi Dağılım (Menşe)</h6>
-                        </div>
-                        <div class="card-body">
-                            <div id="world-map-markers" style="height: 300px; width: 100%;"></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
     </div>
 </div>
 
@@ -2848,182 +2892,243 @@ window.generatePDF = async function(data, headers, filename) {
     doc.save(`${filename}.pdf`);
 };
 
-// === RAPORLAR MODÜLÜ (YENİ) ===
+// === RAPORLAR MODÜLÜ (TAM VE NİHAİ VERSİYON) ===
 window.initReports = function() {
-    console.log("Raporlar hazırlanıyor...");
+    console.log("Raporlar ve Analizler Hazırlanıyor...");
+
+    // --- 1. VERİ KAYNAKLARINI TOPLA ---
+    // Portföy Verisi (Marka, Patent vb.)
+    const portfolioData = window.markaPaginationData?.allDataUnfiltered || [];
     
-    // Veriyi Marka tablosunun kaynağından alıyoruz
-    const allData = window.markaPaginationData?.allDataUnfiltered || [];
+    // Hukuki Veri (Dava ve İtirazlar birleştiriliyor)
+    const legalData = (window.davaItirazPaginationData?.allDataUnfiltered || [])
+                      .concat(window.davaPaginationData?.allDataUnfiltered || []);
     
-    if (allData.length === 0) {
-        $('#chart-portfolio-dist').html('<p class="text-center mt-5 text-muted">Analiz edilecek veri bulunamadı veya henüz yüklenmedi.</p>');
+    // Görev Verisi (Onay bekleyen işler için)
+    const taskData = window.taskPaginationData?.allDataUnfiltered || [];
+
+    // Veri kontrolü
+    if (portfolioData.length === 0) {
+        $('#world-map-markers').html('<div class="d-flex justify-content-center align-items-center h-100 text-muted">Analiz edilecek veri bulunamadı.</div>');
         return;
     }
 
-    // --- ANALİZ MANTIĞI ---
-    let typeCounts = {};
-    let registeredCount = 0;
-    let originCounts = { 'Yerli (TR)': 0, 'Yurtdışı': 0 };
-    let classCounts = {};
-    let budgetForecast = {};
+    // --- 2. ANALİZ DEĞİŞKENLERİ ---
+    let mapData = {};                 // Harita için { "TR": 50, "DE": 10 }
+    let uniqueCountries = new Set();  // Ülke sayısını bulmak için
+    let typeCounts = {};              // Donut grafik için { "Marka": 100, "Patent": 20 }
+    let classCounts = {};             // Radar grafik için { "35": 50, "9": 30 }
+    let budgetForecast = {};          // Bütçe grafiği için { "2025-11": 15000 }
     const monthNames = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"];
 
-    allData.forEach(item => {
-        // 1. Tür Sayımı
-        const t = item.iptype || item.type || 'Marka'; // Veritabanı alan adınıza göre
+    // Tarih işlemleri için yardımcılar
+    const now = new Date();
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(now.getMonth() - 6);
+    const nextYear = new Date();
+    nextYear.setFullYear(now.getFullYear() + 1);
+
+    // --- 3. ANA DÖNGÜ (PORTFÖY VERİSİ ANALİZİ) ---
+    portfolioData.forEach(item => {
+        // A) COĞRAFİ VERİ
+        let code = '';
+        const originRaw = (item.origin || '').toString().toUpperCase();
+        if (originRaw.includes('TURK') || originRaw.includes('TÜRK')) { 
+            code = 'TR'; 
+        } else if (item.country || item.countryCode) { 
+            code = (item.country || item.countryCode).toUpperCase().trim(); 
+        }
+        
+        if (code && code.length === 2) {
+            mapData[code] = (mapData[code] || 0) + 1;
+            uniqueCountries.add(code);
+        }
+
+        // B) VARLIK TÜRÜ
+        const t = item.iptype || item.type || 'Marka';
         typeCounts[t] = (typeCounts[t] || 0) + 1;
 
-        // 2. Başarı Oranı (Tescilli mi?)
-        const st = (item.status || item.statusText || '').toLowerCase();
-        if (st.includes('tescil') || st.includes('registered')) registeredCount++;
-
-        // 3. Menşe
-        const originRaw = (item.origin || '').toString().toUpperCase();
-        if (originRaw.includes('TURK') || originRaw.includes('TÜRK')) originCounts['Yerli (TR)']++;
-        else originCounts['Yurtdışı']++;
-
-        // 4. Sınıflar
+        // C) SINIFLAR (NICE)
         let classes = [];
         if (Array.isArray(item.goodsAndServicesByClass)) classes = item.goodsAndServicesByClass.map(c => c.classNo);
-        else if (Array.isArray(item.classes)) classes = item.classes;
-        else if (item.classes) classes = String(item.classes).split(',').map(s=>s.trim());
+        else if (item.classes) classes = String(item.classes).split(',');
         
-        classes.forEach(c => { if(c) classCounts[c] = (classCounts[c] || 0) + 1; });
+        classes.forEach(c => { 
+            if(c) {
+                const cleanC = c.toString().trim();
+                classCounts[cleanC] = (classCounts[cleanC] || 0) + 1; 
+            }
+        });
 
-        // 5. Bütçe (Renewal Date'e göre)
+        // D) BÜTÇE PROJEKSİYONU (Yenileme Tarihine Göre)
         if (item.renewalDate) {
-            // Tarih formatını düzelt (String veya Timestamp olabilir)
-            let rDate;
-            if (item.renewalDate && item.renewalDate.toDate) rDate = item.renewalDate.toDate();
-            else rDate = new Date(item.renewalDate);
-
-            const now = new Date();
-            // Gelecek 12 ay kontrolü
-            if (rDate > now && rDate < new Date(now.getFullYear() + 1, now.getMonth(), now.getDate())) {
-                const key = `${rDate.getFullYear()}-${rDate.getMonth()}`;
-                // Varsayılan maliyetler
+            // Tarihi objeye çevir (Firebase Timestamp veya String olabilir)
+            let rDate = item.renewalDate.toDate ? item.renewalDate.toDate() : new Date(item.renewalDate);
+            
+            // Sadece gelecek 12 ay içindekileri al
+            if (rDate > now && rDate < nextYear) {
+                const key = `${rDate.getFullYear()}-${rDate.getMonth()}`; // Örn: 2025-10
+                // Tahmini Maliyet (Yerli: 4500 TL, Yurtdışı: 15000 TL varsayımı)
                 const cost = (originRaw.includes('TURK')) ? 4500 : 15000; 
                 budgetForecast[key] = (budgetForecast[key] || 0) + cost;
             }
         }
     });
 
-    // KARTLARI DOLDUR
-    $('#rep-total-assets').text(allData.length);
-    $('#rep-success-rate').text('%' + Math.round((registeredCount / allData.length) * 100));
+    // --- 4. HARİTA ÇİZİMİ (jsVectorMap) ---
+    const mapContainer = document.querySelector("#world-map-markers");
+    mapContainer.innerHTML = ""; // Önce temizle
     
-    // Riskli (İtiraz veya Dava kelimesi geçenler)
-    const riskCount = allData.filter(i => {
-        const s = (i.status || '').toLowerCase();
-        return s.includes('itiraz') || s.includes('dava') || s.includes('opposi');
-    }).length;
-    $('#rep-risk-count').text(riskCount);
+    // Harita verisi boşsa haritayı çizme
+    if (Object.keys(mapData).length > 0) {
+        new jsVectorMap({
+            selector: '#world-map-markers',
+            map: 'world',
+            zoomButtons: true,
+            zoomOnScroll: false,
+            regionStyle: {
+                initial: { fill: '#e3eaef', stroke: 'none', "stroke-width": 0 },
+                hover: { fillOpacity: 0.7, cursor: 'pointer' }
+            },
+            visualizeData: {
+                scale: ['#a2cffe', '#2e59d9'], // Açık Mavi -> Koyu Mavi
+                values: mapData
+            },
+            onRegionTooltipShow(event, tooltip, code) {
+                const count = mapData[code] || 0;
+                if (count > 0) {
+                    tooltip.text(`<strong>${tooltip.text()}</strong>: ${count} Dosya`, true);
+                }
+            }
+        });
+    }
 
+    // --- 5. KPI KARTLARINI DOLDUR ---
+    $('#rep-total-assets').text(portfolioData.length);
+    $('#rep-total-countries').text(uniqueCountries.size + ' Ülke');
+
+    // Onay Bekleyen İşler (Task Data'dan)
+    const pendingTasks = taskData.filter(t => t.status === 'waiting_approval' || t.status === 'pending').length;
+    $('#rep-pending-tasks').text(pendingTasks);
+
+    // Aktif Hukuki Süreçler (Sonuçlanmamış olanlar)
+    const activeLegal = legalData.filter(l => {
+        const s = (l.statusText || l.status || '').toLowerCase();
+        return !s.includes('sonuç') && !s.includes('kapalı') && !s.includes('bit');
+    }).length;
+    $('#rep-active-legal').text(activeLegal);
+
+    // Toplam Tahmini Bütçe
     const totalBudget = Object.values(budgetForecast).reduce((a,b)=>a+b, 0);
     $('#rep-budget-est').text('₺' + totalBudget.toLocaleString('tr-TR'));
 
-    // GRAFİK ÇİZDİRME YARDIMCISI
+
+    // --- 6. KRİTİK TABLO: SÜRÜNCEMEDE KALAN İŞLER ---
+    // Filtre: Statüsü 'başvuru/filed' OLAN ve Tarihi 6 aydan ESKİ olanlar
+    const stuckItems = portfolioData.filter(item => {
+        const status = (item.status || item.statusText || '').toLowerCase();
+        const appDate = item.applicationDate ? (item.applicationDate.toDate ? item.applicationDate.toDate() : new Date(item.applicationDate)) : null;
+        
+        const isFiled = status === 'başvuru' || status === 'filed' || status === 'pending';
+        return isFiled && appDate && appDate < sixMonthsAgo;
+    }).sort((a,b) => {
+        // En eskiden yeniye sırala
+        const dateA = a.applicationDate.toDate ? a.applicationDate.toDate() : new Date(a.applicationDate);
+        const dateB = b.applicationDate.toDate ? b.applicationDate.toDate() : new Date(b.applicationDate);
+        return dateA - dateB;
+    }).slice(0, 5); // Sadece en kritik 5 tanesi
+
+    const stuckTableBody = $('#rep-stuck-list');
+    stuckTableBody.empty();
+    
+    if (stuckItems.length === 0) {
+        stuckTableBody.html('<tr><td colspan="4" class="text-center text-success py-3"><i class="fas fa-check-circle"></i> Harika! Sürüncemede kalan işiniz bulunmuyor.</td></tr>');
+    } else {
+        stuckItems.forEach(item => {
+            const appDate = item.applicationDate.toDate ? item.applicationDate.toDate() : new Date(item.applicationDate);
+            const diffTime = Math.abs(now - appDate);
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+            
+            stuckTableBody.append(`
+                <tr>
+                    <td><div class="font-weight-bold text-truncate" style="max-width: 150px;">${item.title || item.brandText}</div></td>
+                    <td><span class="badge badge-light border">Başvuru Aşamasında</span></td>
+                    <td class="text-danger font-weight-bold">${diffDays} Gündür</td>
+                    <td><small class="text-muted">İlerleme Yok</small></td>
+                </tr>
+            `);
+        });
+    }
+
+    // --- 7. APEXCHARTS GRAFİKLERİ ---
+    
+    // Grafik Render Yardımcısı
     const renderChart = (id, options) => {
-        document.querySelector("#" + id).innerHTML = "";
-        const defaultOpts = {
+        const el = document.querySelector("#" + id);
+        if(!el) return;
+        el.innerHTML = "";
+        const chart = new ApexCharts(el, { 
             fontFamily: 'inherit',
             theme: { mode: $('body').hasClass('dark-mode') ? 'dark' : 'light' },
-            toolbar: { show: false }
-        };
-        const chart = new ApexCharts(document.querySelector("#" + id), { ...defaultOpts, ...options });
+            toolbar: { show: false }, 
+            ...options 
+        });
         chart.render();
     };
 
-    // 1. DONUT GRAFİK (Portföy)
+    // GRAFİK A: Varlık Türü (Donut)
     renderChart('chart-portfolio-dist', {
         series: Object.values(typeCounts),
         labels: Object.keys(typeCounts),
-        chart: { type: 'donut', height: 300 },
+        chart: { type: 'donut', height: 260 },
         colors: ['#4e73df', '#1cc88a', '#36b9cc'],
-        legend: { position: 'bottom' }
+        legend: { position: 'bottom' },
+        plotOptions: { pie: { donut: { size: '65%' } } }
     });
 
-    // 2. BAR GRAFİK (Bütçe)
-    const sortedKeys = Object.keys(budgetForecast).sort();
-    renderChart('chart-budget-forecast', {
-        series: [{ name: 'Tahmini Tutar', data: sortedKeys.map(k => budgetForecast[k]) }],
-        chart: { type: 'bar', height: 300 },
-        colors: ['#1cc88a'],
-        xaxis: { categories: sortedKeys.map(k => {
-            const [y, m] = k.split('-');
-            return `${monthNames[parseInt(m)]} ${y}`;
-        })},
-        dataLabels: { enabled: true, formatter: (val) => '₺' + val.toLocaleString() }
+    // GRAFİK B: Hukuki Başarı Durumu (Bar)
+    let legalStatusCounts = { 'Devam Eden': 0, 'Lehe (Kazanılan)': 0, 'Aleyhe (Kaybedilen)': 0 };
+    legalData.forEach(l => {
+        const s = (l.statusText || l.status || '').toLowerCase();
+        if (s.includes('kabul') || s.includes('kısmen kabul') || s.includes('lehe')) legalStatusCounts['Lehe (Kazanılan)']++;
+        else if (s.includes('red') || s.includes('aleyhe')) legalStatusCounts['Aleyhe (Kaybedilen)']++;
+        else legalStatusCounts['Devam Eden']++;
     });
 
-    // 3. RADAR GRAFİK (Sınıflar)
-    const topClasses = Object.entries(classCounts).sort((a,b)=>b[1]-a[1]).slice(0, 8);
+    renderChart('chart-legal-status', {
+        series: [{ name: 'Dosya Sayısı', data: Object.values(legalStatusCounts) }],
+        chart: { type: 'bar', height: 260 },
+        plotOptions: { bar: { borderRadius: 4, horizontal: true, distributed: true } },
+        colors: ['#f6c23e', '#1cc88a', '#e74a3b'], // Sarı(Devam), Yeşil(Kazan), Kırmızı(Kaybet)
+        xaxis: { categories: Object.keys(legalStatusCounts) },
+        legend: { show: false }
+    });
+
+    // GRAFİK C: Sınıf Analizi (Radar)
+    const topClasses = Object.entries(classCounts).sort((a,b)=>b[1]-a[1]).slice(0, 6);
     renderChart('chart-class-radar', {
-        series: [{ name: 'Adet', data: topClasses.map(x => x[1]) }],
-        chart: { type: 'radar', height: 300 },
+        series: [{ name: 'Marka Sayısı', data: topClasses.map(x => x[1]) }],
+        chart: { type: 'radar', height: 260 },
         labels: topClasses.map(x => `Sınıf ${x[0]}`),
+        fill: { opacity: 0.2 },
+        stroke: { width: 2 },
+        markers: { size: 4 },
         colors: ['#36b9cc']
     });
 
-// --- 4. DÜNYA HARİTASI (YENİ) ---
-    // Önce harita verisini { "TR": 50, "DE": 4 } formatına getirelim
-    let mapData = {};
-    
-    allData.forEach(item => {
-        let code = '';
-        const originRaw = (item.origin || '').toString().toUpperCase();
-        
-        // TÜRKPATENT ise 'TR' kodu ver
-        if (originRaw.includes('TURK') || originRaw.includes('TÜRK')) {
-            code = 'TR';
-        } 
-        // Yurtdışı ise ülke kodunu al (örn: DE, US, GB)
-        else if (item.country || item.countryCode) {
-            code = (item.country || item.countryCode).toUpperCase().trim();
-        }
-        
-        // WIPO veya EUIPO gibi kodlar haritada ülke olarak çıkmaz, 
-        // onları pas geçiyoruz veya merkezlerine atayabiliriz (Opsiyonel).
-        // Sadece geçerli 2 haneli ülke kodlarını sayalım.
-        if (code && code.length === 2) {
-            mapData[code] = (mapData[code] || 0) + 1;
-        }
-    });
-
-    // Eğer eski harita varsa temizle (Yenile butonuna basıldığında üst üste binmemesi için)
-    document.querySelector("#world-map-markers").innerHTML = "";
-
-    // Haritayı Çiz
-    new jsVectorMap({
-        selector: '#world-map-markers',
-        map: 'world',
-        // Harita Görünüm Ayarları
-        zoomButtons: true,
-        zoomOnScroll: false,
-        regionStyle: {
-            initial: {
-                fill: '#e3eaef', // Boş ülkelerin rengi (Açık Gri)
-                stroke: 'none',
-                "stroke-width": 0,
-                "stroke-opacity": 0
-            },
-            hover: {
-                fillOpacity: 0.7,
-                cursor: 'pointer'
-            }
-        },
-        // Veriye Göre Renklendirme (Mavinin tonları)
-        visualizeData: {
-            scale: ['#a2cffe', '#2e59d9'], // Açık Mavi -> Koyu Mavi (Yoğunluğa göre)
-            values: mapData // Hazırladığımız {TR: 50, DE: 2} verisi
-        },
-        // Tooltip (Üzerine gelince sayı gösterme)
-        onRegionTooltipShow(event, tooltip, code) {
-            const count = mapData[code] || 0;
-            tooltip.text(
-                `<strong>${tooltip.text()}</strong>: ${count} Marka/Patent`
-            , true); // HTML içeriğine izin ver
-        }
+    // GRAFİK D: Bütçe Projeksiyonu (Bar)
+    const sortedBudgetKeys = Object.keys(budgetForecast).sort();
+    renderChart('chart-budget-forecast', {
+        series: [{ name: 'Tahmini Tutar', data: sortedBudgetKeys.map(k => budgetForecast[k]) }],
+        chart: { type: 'bar', height: 260 },
+        colors: ['#4e73df'],
+        xaxis: { categories: sortedBudgetKeys.map(k => {
+            const [y, m] = k.split('-');
+            return `${monthNames[parseInt(m)]} ${y}`;
+        })},
+        yaxis: { labels: { formatter: (val) => (val/1000).toFixed(1) + 'k' } },
+        dataLabels: { enabled: false },
+        tooltip: { y: { formatter: (val) => '₺' + val.toLocaleString() } }
     });
 };
 
