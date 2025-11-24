@@ -342,26 +342,34 @@ export class DocumentReviewManager {
                 }
             }
 
-            // 🔥 KRİTİK EKLENEN BÖLÜM: Tetiklenen İş İçin Transaction Oluşturma
-            // DÜZELTME: Sadece Tip 27 değil, task tetikleyen HER işlem için transaction oluşturulmalı.
+            // 🔥 DÜZELTME: Tetiklenen işin hiyerarşisini dinamik belirleme
             if (createdTaskId && childTypeObj.taskTriggered) {
                 console.log(`🔥 Tetiklenen İş (${childTypeObj.taskTriggered}) için transaction oluşturuluyor...`);
                 
-                // Tetiklenen işlem tipinin adını bul (örn: Yayına İtirazın Yeniden İncelenmesi)
+                // 1. Tetiklenen işlem tipinin detaylarını bul
                 const triggeredTypeObj = this.allTransactionTypes.find(t => t.id === childTypeObj.taskTriggered);
+                
+                // 2. İsim ve Hiyerarşiyi al (Varsayılanlar: 'Otomatik İşlem' ve 'child')
                 const triggeredTypeName = triggeredTypeObj ? (triggeredTypeObj.alias || triggeredTypeObj.name) : 'Otomatik İşlem';
+                const targetHierarchy = triggeredTypeObj?.hierarchy || 'child'; 
 
-                const triggeredChildData = {
-                    type: childTypeObj.taskTriggered, // Tetiklenen işin ID'si dinamik olarak alınır
+                // 3. Transaction verisini hazırla
+                const triggeredTransactionData = {
+                    type: childTypeObj.taskTriggered,
                     description: `${triggeredTypeName} (Otomatik)`,
-                    parentId: finalParentId, // Mevcut parent (finalParentId) kullanılır
-                    transactionHierarchy: 'child',
-                    triggeringTaskId: String(createdTaskId), // Task ile bağla
+                    transactionHierarchy: targetHierarchy, // <--- DİNAMİK HİYERARŞİ (Artık 'child' zorlanmıyor)
+                    triggeringTaskId: String(createdTaskId),
                     timestamp: new Date().toISOString()
                 };
 
-                await ipRecordsService.addTransactionToRecord(this.matchedRecord.id, triggeredChildData);
-                console.log('✅ Tetiklenen iş için transaction başarıyla oluşturuldu.');
+                // 4. Eğer işlem 'child' ise bir parent'a bağlanmalı. 'parent' ise bağımsız olmalı.
+                if (targetHierarchy === 'child') {
+                    triggeredTransactionData.parentId = finalParentId;
+                }
+                // else: parentId eklemiyoruz, böylece bu işlem portföyde yeni bir "Ana İşlem" (Accordion satırı) olarak görünür.
+
+                await ipRecordsService.addTransactionToRecord(this.matchedRecord.id, triggeredTransactionData);
+                console.log('✅ Tetiklenen iş için transaction başarıyla oluşturuldu. Hiyerarşi:', targetHierarchy);
             }
 
             // 5. PDF Statüsü
