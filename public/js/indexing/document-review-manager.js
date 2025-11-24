@@ -345,20 +345,25 @@ export class DocumentReviewManager {
             }
 
             // 🔥 KRİTİK EKLENEN BÖLÜM: Tetiklenen İş İçin Transaction Oluşturma
-            // Eğer İtiraz Bildirimi (27) ise ve iş (Response ID: 38) tetiklendiyse, 38 tipinde bir transaction da ekle.
-            if (childTypeId === '27' && createdTaskId && newParentTxId) {
-                console.log('🔥 İtiraz Karşı Görüş (Type 38) transaction\'ı oluşturuluyor...');
+            // DÜZELTME: Sadece Tip 27 değil, task tetikleyen HER işlem için transaction oluşturulmalı.
+            if (createdTaskId && childTypeObj.taskTriggered) {
+                console.log(`🔥 Tetiklenen İş (${childTypeObj.taskTriggered}) için transaction oluşturuluyor...`);
+                
+                // Tetiklenen işlem tipinin adını bul (örn: Yayına İtirazın Yeniden İncelenmesi)
+                const triggeredTypeObj = this.allTransactionTypes.find(t => t.id === childTypeObj.taskTriggered);
+                const triggeredTypeName = triggeredTypeObj ? (triggeredTypeObj.alias || triggeredTypeObj.name) : 'Otomatik İşlem';
+
                 const triggeredChildData = {
-                    type: '38', // İtiraza Karşı Görüş ID'si
-                    description: 'İtiraza Karşı Görüş (Otomatik)',
-                    parentId: newParentTxId,
+                    type: childTypeObj.taskTriggered, // Tetiklenen işin ID'si dinamik olarak alınır
+                    description: `${triggeredTypeName} (Otomatik)`,
+                    parentId: finalParentId, // Mevcut parent (finalParentId) kullanılır
                     transactionHierarchy: 'child',
                     triggeringTaskId: String(createdTaskId), // Task ile bağla
-                    timestamp: new Date().toISOString() // O anki tarih
+                    timestamp: new Date().toISOString()
                 };
 
                 await ipRecordsService.addTransactionToRecord(this.matchedRecord.id, triggeredChildData);
-                console.log('✅ Tetiklenen iş için transaction oluşturuldu.');
+                console.log('✅ Tetiklenen iş için transaction başarıyla oluşturuldu.');
             }
 
             // 5. PDF Statüsü
