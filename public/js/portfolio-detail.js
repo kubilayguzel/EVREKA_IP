@@ -698,9 +698,17 @@ async function renderTransactionsAccordion(recordId){
       });
 
       const parentPdfIcons = uniqueParentDocs.map(pdf => {
-          // Basit ikon mantığı
-          return `<a onclick="window.open('${pdf.fileUrl}', '_blank')" class="action-btn btn-secondary btn-sm mr-1" title="${pdf.fileName}" style="cursor:pointer;">
-             <i class="fas fa-file-alt"></i>
+          let colorClass = 'doc-color-red';
+          
+          if (pdf.type === 'opposition_petition') colorClass = 'doc-color-orange';
+          else if (pdf.type === 'official_document') colorClass = 'doc-color-green';
+          else if (pdf.type === 'epats_document') colorClass = 'doc-color-blue';
+
+          return `<a onclick="window.open('${pdf.fileUrl}', '_blank')" 
+                     class="doc-link-item ${colorClass}" 
+                     title="${pdf.fileName}" 
+                     style="cursor:pointer;">
+             <i class="fas fa-file-pdf"></i>
           </a>`;
       }).join(' ');
 
