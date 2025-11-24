@@ -565,7 +565,7 @@
     import { showNotification, formatFileSize, readFileAsDataURL, TASK_STATUSES, TURKEY_HOLIDAYS, addMonthsToDate, isWeekend, isHoliday, findNextWorkingDay } from './utils.js';
     import { loadSharedLayout, ensurePersonModal, openPersonModal } from './js/layout-loader.js';
     import { getStorage, ref, uploadBytes, deleteObject, getDownloadURL } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js';
-    import { resolveApprovalStateAssignee } from './js/indexing-detail-module.js';
+    import { resolveApprovalStateAssignee } from './js/indexing/document-review-manager.js';
 
     document.addEventListener('DOMContentLoaded', async () => {
         await loadSharedLayout();
