@@ -20,18 +20,17 @@
             background-color: #f8f9fa;
         }
 
-        /* Ana İçerik Alanı Düzeltmesi */
+        /* --- LAYOUT FIX (Top Bar Sorunu Çözümü) --- */
         .main-content {
             width: 100%;
             min-height: 100vh;
-            /* Sidebar varsa shared-styles.css margin-left verir. 
-               Yoksa veya eziliyorsa burası devreye girer. */
-            padding-top: 20px; 
+            /* Top bar yüksekliği kadar boşluk bırakıyoruz */
+            padding-top: 80px; 
             transition: margin-left 0.3s;
         }
 
         .container-fluid {
-            max-width: 100% !important; /* Genişliği kısıtlamayı engelle */
+            max-width: 100% !important;
             padding-left: 25px;
             padding-right: 25px;
         }
@@ -44,10 +43,9 @@
 
         /* PDF Görüntüleyici Alanı */
         .pdf-card-body {
-            /* Ekran yüksekliğinin %85'ini kaplasın */
-            height: 85vh; 
+            height: 80vh; 
             min-height: 600px;
-            background-color: #525659; /* PDF Viewer arka plan rengi */
+            background-color: #525659;
             overflow: hidden;
             position: relative;
         }
@@ -59,13 +57,35 @@
             display: block;
         }
         
-        /* Sağ Panel (Analiz Formu) */
+        /* Sağ Panel */
         .analysis-panel {
-            height: 85vh; /* PDF ile aynı yükseklik */
+            height: 80vh; 
             min-height: 600px;
-            overflow-y: auto; /* İçerik taşarsa scroll çıksın */
+            overflow-y: auto;
             background-color: #fff;
         }
+
+        /* Arama Sonuçları Stili */
+        .search-results-dropdown {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            max-height: 200px;
+            overflow-y: auto;
+            z-index: 1000;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            display: none;
+        }
+        .search-result-item {
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+        }
+        .search-result-item:hover { background-color: #f8f9fa; }
 
         .shadow-sm { box-shadow: 0 10px 24px rgba(0,0,0,0.08) !important; }
     </style>
@@ -94,8 +114,22 @@
                 </a>
             </div>
 
-            <div id="matchInfoDisplay" class="mb-3">
+            <div class="card mb-3 shadow-sm">
+                <div class="card-body p-3 d-flex justify-content-between align-items-center">
+                    <div id="matchInfoDisplay" class="d-flex align-items-center flex-grow-1">
+                        </div>
+                    
+                    <div class="position-relative ml-3" style="min-width: 300px;">
+                        <div class="input-group">
+                            <input type="text" id="manualSearchInput" class="form-control" placeholder="Kayıt Ara (Marka Adı / No)...">
+                            <div class="input-group-append">
+                                <span class="input-group-text"><i class="fas fa-search"></i></span>
+                            </div>
+                        </div>
+                        <div id="manualSearchResults" class="search-results-dropdown"></div>
+                    </div>
                 </div>
+            </div>
 
             <div class="row">
                 <div class="col-lg-8 pr-lg-2 mb-4">
@@ -112,34 +146,28 @@
                 <div class="col-lg-4 pl-lg-2 mb-4">
                     <div class="card shadow-sm h-100">
                         <div class="card-header bg-white border-bottom py-2">
-                            <h6 class="mb-0 text-primary font-weight-bold"><i class="fas fa-robot mr-2"></i>Yapay Zeka Analizi</h6>
+                            <h6 class="mb-0 text-primary font-weight-bold"><i class="fas fa-robot mr-2"></i>İndeksleme Detayları</h6>
                         </div>
                         <div class="card-body analysis-panel p-3">
                             
                             <div id="analysisLoading" class="text-center py-5">
                                 <div class="spinner-border text-primary mb-3" role="status"></div>
-                                <p class="text-muted">Evrak okunuyor ve analiz ediliyor...</p>
+                                <p class="text-muted">Analiz ediliyor...</p>
                             </div>
 
                             <div id="analysisResults" style="display: none;">
                                 
-                                <div class="alert alert-light border small mb-3 rounded" style="background-color: #f8f9fa;">
-                                    <div class="d-flex">
-                                        <i class="fas fa-info-circle text-info mt-1 mr-2"></i>
-                                        <div style="flex:1">
-                                            <strong class="text-dark">Analiz Özeti:</strong><br>
-                                            <span id="analysisSummary" class="text-muted" style="white-space: pre-wrap;">Analiz bekleniyor...</span>
-                                        </div>
-                                    </div>
+                                <div class="alert alert-light border small mb-3 rounded bg-light">
+                                    <strong>Analiz Özeti:</strong> <span id="analysisSummary" class="text-muted">...</span>
                                 </div>
 
                                 <div class="form-group">
-                                    <label class="font-weight-bold small text-uppercase text-muted mb-1">Tespit Edilen Tarih</label>
+                                    <label class="font-weight-bold small text-muted mb-1">Tespit Edilen Tarih</label>
                                     <input type="date" id="detectedDate" class="form-control">
                                 </div>
 
                                 <div class="form-group">
-                                    <label class="font-weight-bold small text-uppercase text-muted mb-1">İşlem Türü</label>
+                                    <label class="font-weight-bold small text-muted mb-1">İşlem Türü (Evrak Tipi)</label>
                                     <select id="detectedType" class="form-control">
                                         <option value="general">Genel Evrak</option>
                                         <option value="publish">Marka Yayını</option>
@@ -148,16 +176,31 @@
                                         <option value="opposition">Yayına İtiraz</option>
                                         <option value="registration">Tescil Belgesi</option>
                                         <option value="deficiency">Şekli Eksiklik</option>
+                                        <option value="renewal">Yenileme</option>
+                                        <option value="decision">Karar</option>
                                     </select>
                                 </div>
 
                                 <div class="form-group">
-                                    <label class="font-weight-bold small text-uppercase text-muted mb-1">Açıklama / Notlar</label>
-                                    <textarea id="transactionNotes" class="form-control" rows="5" placeholder="İşlem ile ilgili notlarınız..."></textarea>
+                                    <label class="font-weight-bold small text-muted mb-1">
+                                        Bağlı Olduğu İşlem (Hangi aşamaya ait?)
+                                        <i class="fas fa-info-circle text-info" title="Örn: 'Karar' evrağı 'Başvuru' işlemine bağlıdır."></i>
+                                    </label>
+                                    <select id="parentTransactionSelect" class="form-control">
+                                        <option value="">-- Bağımsız İşlem --</option>
+                                    </select>
+                                    <small class="text-muted" id="parentTransactionInfo" style="display:none;">
+                                        Seçili işlem altına kaydedilecek.
+                                    </small>
+                                </div>
+
+                                <div class="form-group">
+                                    <label class="font-weight-bold small text-muted mb-1">Açıklama / Notlar</label>
+                                    <textarea id="transactionNotes" class="form-control" rows="4"></textarea>
                                 </div>
 
                                 <button id="saveTransactionBtn" class="btn btn-primary btn-block py-2 mt-4 shadow-sm font-weight-bold">
-                                    <i class="fas fa-check-circle mr-2"></i> Onayla ve İşle
+                                    <i class="fas fa-check-circle mr-2"></i> Onayla ve Kaydet
                                 </button>
                             </div>
 
@@ -174,9 +217,7 @@
     
     <script type="module">
         import { loadSharedLayout } from './js/layout-loader.js';
-        
         document.addEventListener('DOMContentLoaded', () => {
-            // Sidebar'ı yükle
             loadSharedLayout({ activeMenuLink: 'bulk-indexing-page.html' });
         });
     </script>
