@@ -32,7 +32,6 @@ import { PdfExtractor } from './pdf-extractor.js';
 import { PdfAnalyzer } from './pdf-analyzer.js';
 
 const UNINDEXED_PDFS_COLLECTION = 'unindexed_pdfs';
-// Varsayılan atama (Eski koddan)
 const SELCAN_UID = 'Mkmq2sc0T6XTIg1weZyp5AGZ0YG3'; 
 const SELCAN_EMAIL = 'selcanakoglu@evrekapatent.com';
 
@@ -54,18 +53,16 @@ export class DocumentReviewManager {
     }
 
     async init() {
+        // Sadece PDF ID varsa çalış, yoksa (örneğin task-detail sayfasında import ediliyorsa) dur.
         if (!this.pdfId) {
-            alert('PDF ID bulunamadı!');
-            window.location.href = 'bulk-indexing-page.html';
+            // Buradaki alert'i kaldırdık, çünkü bu dosya başka sayfalarca sadece fonksiyon importu için de kullanılıyor olabilir.
+            console.log('DocumentReviewManager: PDF ID yok, otomatik başlatma atlandı.');
             return;
         }
 
         this.currentUser = authService.getCurrentUser();
         
-        // 1. Listener'ları Kur
         this.setupEventListeners();
-        
-        // 2. Verileri Yükle
         await this.loadTransactionTypes();
         await this.loadData();
     }
@@ -82,7 +79,6 @@ export class DocumentReviewManager {
     }
 
     setupEventListeners() {
-        // Kaydet Butonu
         const saveBtn = document.getElementById('saveTransactionBtn');
         if (saveBtn) {
             const newSaveBtn = saveBtn.cloneNode(true);
@@ -93,7 +89,6 @@ export class DocumentReviewManager {
             });
         }
 
-        // Arama
         const searchInput = document.getElementById('manualSearchInput');
         const searchResults = document.getElementById('manualSearchResults');
         if (searchInput) {
@@ -105,7 +100,6 @@ export class DocumentReviewManager {
             });
         }
 
-        // Dropdown Değişimleri
         const parentSelect = document.getElementById('parentTransactionSelect');
         if (parentSelect) parentSelect.addEventListener('change', () => this.updateChildTransactionOptions());
 
@@ -136,8 +130,6 @@ export class DocumentReviewManager {
         }
     }
 
-    // ... (selectRecord, loadParentTransactions, renderHeader vb. aynı kalacak) ...
-    
     async selectRecord(recordId) {
         try {
             const result = await ipRecordsService.getRecordById(recordId);
@@ -234,11 +226,10 @@ export class DocumentReviewManager {
     checkSpecialFields() {
         const childTypeId = document.getElementById('detectedType').value;
         const oppositionSection = document.getElementById('oppositionSection');
+        
         if (childTypeId === '27') oppositionSection.style.display = 'block';
         else oppositionSection.style.display = 'none';
     }
-
-    // --- KAYDETME VE İŞ TETİKLEME (REVISED) ---
 
     async handleSave() {
         if (!this.matchedRecord) {
@@ -252,7 +243,7 @@ export class DocumentReviewManager {
         const notes = document.getElementById('transactionNotes').value;
 
         if (!parentTxId || !childTypeId || !deliveryDateStr) {
-            showNotification('Lütfen tüm alanları doldurun.', 'error');
+            showNotification('Lütfen Ana İşlem, İşlem Türü ve Tarih alanlarını doldurun.', 'error');
             return;
         }
 
@@ -279,7 +270,6 @@ export class DocumentReviewManager {
                 await uploadBytes(storageRef, fileInput);
                 oppositionFileUrl = await getDownloadURL(storageRef);
 
-                // Tip 19 veya 20 belirleme
                 let newParentTypeId = '20'; // Yayına İtiraz
                 let newParentDesc = 'Yayına İtiraz (Otomatik)';
                 const parentAlias = parentTypeObj?.alias || parentTypeObj?.name || '';
@@ -317,7 +307,6 @@ export class DocumentReviewManager {
             const txResult = await ipRecordsService.addTransactionToRecord(this.matchedRecord.id, transactionData);
             const childTransactionId = txResult.id;
 
-            // 3. İtiraz Dilekçesini Transaction'a ekle
             if (childTypeId === '27' && oppositionFileUrl && txResult.success) {
                 const docPayload = {
                     id: Date.now().toString(),
@@ -330,7 +319,7 @@ export class DocumentReviewManager {
                 await updateDoc(txRef, { documents: arrayUnion(docPayload) });
             }
 
-            // 4. İş Tetikleme (Task)
+            // 3. İş Tetikleme (Task)
             let createdTaskId = null;
             let shouldTriggerTask = false;
             const recordType = (this.matchedRecord.recordOwnerType === 'self') ? 'Portföy' : '3. Taraf';
@@ -348,37 +337,34 @@ export class DocumentReviewManager {
             }
 
             if (shouldTriggerTask && childTypeObj.taskTriggered) {
-                // Vade Hesapla
                 const deliveryDate = new Date(deliveryDateStr);
                 const duePeriod = Number(childTypeObj.duePeriod || 0);
-                let officialDueDate = addMonthsToDate(deliveryDate, duePeriod);
-                officialDueDate = findNextWorkingDay(officialDueDate, TURKEY_HOLIDAYS);
+                
+                // Resmi vade
+                const rawOfficialDueDate = addMonthsToDate(deliveryDate, duePeriod);
+                let officialDueDate = findNextWorkingDay(rawOfficialDueDate, TURKEY_HOLIDAYS);
 
-                // Operasyonel (3 gün önce)
+                // Operasyonel vade (3 gün önce)
                 let taskDueDate = new Date(officialDueDate);
                 taskDueDate.setDate(taskDueDate.getDate() - 3);
+                // Hafta sonu kontrolü
                 while (isWeekend(taskDueDate) || isHoliday(taskDueDate, TURKEY_HOLIDAYS)) {
                     taskDueDate.setDate(taskDueDate.getDate() - 1);
                 }
 
                 // Atanacak Kişiyi Bul (Kuraldan)
                 let assignedUser = { uid: SELCAN_UID, email: SELCAN_EMAIL };
-                try {
-                    const ruleSnap = await getDoc(doc(db, 'taskAssignments', String(childTypeObj.taskTriggered)));
-                    if (ruleSnap.exists()) {
-                        const ids = ruleSnap.data().approvalStateAssigneeIds || [];
-                        if (ids.length > 0) {
-                            const uid = ids[0];
-                            const userSnap = await getDoc(doc(db, 'users', uid));
-                            if(userSnap.exists()) assignedUser = { uid, email: userSnap.data().email };
-                        }
-                    }
-                } catch (e) { console.warn('Assignee resolution failed', e); }
+                
+                // Onaycıyı Çözümle
+                const assigneeData = await resolveApprovalStateAssignee();
+                if (assigneeData.uid) {
+                    assignedUser = { uid: assigneeData.uid, email: assigneeData.email };
+                }
 
-                // ZENGİN TASK DATASI (Eski koda uygun)
+                // ZENGİN TASK DATASI
                 const taskData = {
                     title: `${childTypeObj.alias || childTypeObj.name} - ${this.matchedRecord.title}`,
-                    description: `${this.matchedRecord.title} için ${childTypeObj.alias || childTypeObj.name} işlemi.`,
+                    description: notes || `Otomatik oluşturulan görev.`,
                     taskType: childTypeObj.taskTriggered,
                     relatedRecordId: this.matchedRecord.id,
                     relatedIpRecordId: this.matchedRecord.id,
@@ -400,16 +386,12 @@ export class DocumentReviewManager {
                 if (taskResult.success) {
                     createdTaskId = taskResult.id;
                     // Transaction'ı Task ID ile güncelle
-                    await ipRecordsService.addTransactionToRecord(this.matchedRecord.id, {
-                        id: childTransactionId, // Var olanı güncellemek için ID'yi veriyoruz (servis destekliyorsa)
-                        // Not: Servis addDoc yapıyor, update için manuel path kullanacağız:
-                    });
                     const txRef = doc(collection(db, 'ipRecords', this.matchedRecord.id, 'transactions'), childTransactionId);
                     await updateDoc(txRef, { triggeringTaskId: createdTaskId });
                 }
             }
 
-            // 5. PDF Statüsü
+            // 4. PDF Durumunu Güncelle
             await updateDoc(doc(db, UNINDEXED_PDFS_COLLECTION, this.pdfId), {
                 status: 'indexed',
                 indexedAt: new Date(),
@@ -428,34 +410,7 @@ export class DocumentReviewManager {
         }
     }
 
-    // ... (renderHeader, renderAnalysisResults, manualSearch metodları aynı kalacak) ...
-    
-    async handleManualSearch(query) {
-        const resultsContainer = document.getElementById('manualSearchResults');
-        if (!query || query.length < 3) { resultsContainer.style.display = 'none'; return; }
-        const result = await ipRecordsService.searchRecords(query);
-        if (result.success) this.renderSearchResults(result.data);
-    }
-
-    renderSearchResults(results) {
-        const container = document.getElementById('manualSearchResults');
-        container.innerHTML = '';
-        container.style.display = results.length ? 'block' : 'none';
-        if (!results.length) { container.innerHTML = '<div class="p-2">Sonuç yok</div>'; return; }
-        
-        container.innerHTML = results.map(r => `
-            <div class="search-result-item p-2 border-bottom" style="cursor:pointer" data-id="${r.id}">
-                <strong>${r.title}</strong> <small>${r.applicationNumber}</small>
-            </div>`).join('');
-            
-        container.querySelectorAll('.search-result-item').forEach(el => {
-            el.onclick = () => {
-                this.selectRecord(el.dataset.id);
-                container.style.display = 'none';
-            };
-        });
-    }
-
+    // --- Diğer Yardımcılar ---
     async runAnalysis() {
         const loadingEl = document.getElementById('analysisLoading');
         const resultsEl = document.getElementById('analysisResults');
@@ -497,6 +452,53 @@ export class DocumentReviewManager {
             summaryBox.textContent = `Tip: ${this.analysisResult.detectedType.name}`;
         }
     }
+    
+    async handleManualSearch(query) {
+        const resultsContainer = document.getElementById('manualSearchResults');
+        if (!query || query.length < 3) { resultsContainer.style.display = 'none'; return; }
+        const result = await ipRecordsService.searchRecords(query);
+        if (result.success) this.renderSearchResults(result.data);
+    }
+
+    renderSearchResults(results) {
+        const container = document.getElementById('manualSearchResults');
+        container.innerHTML = '';
+        container.style.display = results.length ? 'block' : 'none';
+        if (!results.length) { container.innerHTML = '<div class="p-2">Sonuç yok</div>'; return; }
+        
+        container.innerHTML = results.map(r => `
+            <div class="search-result-item p-2 border-bottom" style="cursor:pointer" data-id="${r.id}">
+                <strong>${r.title}</strong> <small>${r.applicationNumber}</small>
+            </div>`).join('');
+            
+        container.querySelectorAll('.search-result-item').forEach(el => {
+            el.onclick = () => {
+                this.selectRecord(el.dataset.id);
+                container.style.display = 'none';
+            };
+        });
+    }
+}
+
+// --- EXPORTED FUNCTION FOR TASK ASSIGNEE RESOLUTION ---
+export async function resolveApprovalStateAssignee() {
+  try {
+    const ruleRef  = doc(db, 'taskAssignments', 'approval');
+    const ruleSnap = await getDoc(ruleRef);
+    if (!ruleSnap.exists()) return { uid: null, email: null, reason: 'rule_not_found' };
+
+    const ids = ruleSnap.data()?.approvalStateAssigneeIds;
+    const uid = Array.isArray(ids) ? ids.find(v => typeof v === 'string' && v.trim()) : null;
+    if (!uid) return { uid: null, email: null, reason: 'empty_list' };
+
+    const userSnap = await getDoc(doc(db, 'users', uid));
+    const email = userSnap.exists() ? (userSnap.data().email || null) : null;
+
+    return { uid, email, reason: 'ok' };
+  } catch (err) {
+    console.warn('[resolveApprovalStateAssignee] failed:', err?.message || err);
+    return { uid: null, email: null, reason: 'error' };
+  }
 }
 
 document.addEventListener('DOMContentLoaded', () => {
