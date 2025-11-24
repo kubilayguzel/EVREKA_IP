@@ -472,6 +472,7 @@ function _createDocLinkHtml(pdf) {
 
 async function renderTransactionsAccordion(recordId){
   try{
+    // 1. Verileri Çek
     const txRes = await ipRecordsService.getTransactionsForRecord(recordId);
     const list = (txRes?.success && Array.isArray(txRes.transactions)) ? txRes.transactions : [];
     cachedTransactions = list;
@@ -486,18 +487,17 @@ async function renderTransactionsAccordion(recordId){
       });
     }
 
-    // ✅ PDF'leri transaction ID'sine göre grupla
+    // 2. PDF'leri Grupla (Unindexed)
     const pdfsByTransaction = await fetchPdfsForTransactions(list.map(tx => tx.id));
-
     const {parents, childrenMap} = organizeTransactions(list);
+
     if (!parents.length){
       if (txAccordion) txAccordion.innerHTML = '<div class="p-3 text-muted">Henüz işlem geçmişi yok.</div>';
       return;
     }
 
-    // ✅ Parent transaction'lar için ePats bilgilerini topla
+    // 3. Parent Transaction'lar için ePats Hazırlığı
     const parentsWithEpats = await Promise.all(parents.map(async (p) => {
-      // ✅ Parent transaction'ın triggeringTaskId'si varsa, task'tan ePats evraklarını al
       let epatsDocuments = [];
       if (p.triggeringTaskId) {
         try {
@@ -508,21 +508,18 @@ async function renderTransactionsAccordion(recordId){
               epatsDocuments.push({
                 fileName: taskData.details.epatsDocument.name || 'ePats Belgesi',
                 fileUrl: taskData.details.epatsDocument.downloadURL,
-                evrakNo: taskData.details.epatsDocument.turkpatentEvrakNo
+                evrakNo: taskData.details.epatsDocument.turkpatentEvrakNo,
+                type: 'epats_document'
               });
             }
           }
-        } catch (err) {
-          console.warn('⚠️ Task ePats bilgisi alınamadı:', p.triggeringTaskId, err);
-        }
+        } catch (err) { console.warn('Task ePats error:', err); }
       }
-      
-      // 🔥 YENİ: Transaction'ın kendi documents array'ini de ekle
       const transactionDocs = p.documents || [];
       return { ...p, epatsDocuments, transactionDocs };
     }));
 
-    // Alt işlemleri eşzamanlı olarak render etmek için Promise.all kullanıyoruz
+    // 4. Render Döngüsü
     const parentTransactionRenderPromises = parentsWithEpats.map(async p => {
           const tmeta = typeMap.get(String(p.type));
           const tname = tmeta ? (tmeta.alias || tmeta.name) : `İşlem ${p.type}`;
@@ -530,79 +527,94 @@ async function renderTransactionsAccordion(recordId){
           const children = childrenMap[p.id] || [];
           const hasChildren = children.length > 0;
           
-          // 🔥 YENİ: İtiraz sahibi bilgisini ekle (varsa)
           const oppositionOwnerBadge = p.oppositionOwner 
             ? `<span class="badge badge-warning ml-2" style="font-size: 0.85em;">📋 ${p.oppositionOwner}</span>` 
             : '';
 
-      // ✅ Parent transaction'a ait PDF'leri getir
+      // Parent Belgeleri
       const parentPdfs = pdfsByTransaction[p.id] || [];
-      // ePats evrakları zaten p.epatsDocuments içinde
       const epatsDocuments = p.epatsDocuments || [];
+      const transactionDocs = p.transactionDocs || [];
 
-
-      const childrenHtmlContents = await Promise.all(children.map(async c => { // <<< ASENKRON MAP
+      // --- CHILD RENDER ---
+      const childrenHtmlContents = await Promise.all(children.map(async c => {
             const cm = typeMap.get(String(c.type));
             const cn = cm ? (cm.alias || cm.name) : `İşlem ${c.type}`;
             const ct = fmtDateTime(c.timestamp);
             
-            // ✅ Child transaction'a ait PDF'leri getir
-            const childPdfs = pdfsByTransaction[c.id] || [];
+            // --- Child Belge Toplama ---
+            let allChildDocs = [];
+            const existingFileNames = new Set();
             
-            let allChildDocs = [...childPdfs];
-            const existingFileNames = new Set(allChildDocs.map(d => d.fileName).filter(Boolean));
-            
-            // 🔥 GÜNCEL: İtiraza Karşı Görüş (ID: 38) veya İtiraz Bildirimi (ID: 27) ise Task belgelerini çek
-            const IS_OPPOSITION_RESPONSE = String(c.type) === '38'; // İtiraza Karşı Görüş
-            const IS_OPPOSITION_NOTICE = String(c.type) === '27'; // İtiraz Bildirimi
-            
-            if ((IS_OPPOSITION_RESPONSE || IS_OPPOSITION_NOTICE) && c.triggeringTaskId) {
-                 console.log(`🔍 Child işlem (${cn}, ID:${c.type}) için task belgeleri çekiliyor:`, c.triggeringTaskId);
-                 
-                 const taskDocs = await fetchTaskDocuments(c.triggeringTaskId);
-                 
-                 // Task belgelerini, dosya adlarına göre benzersizleştirerek/kontrol ederek ekle
-                 taskDocs.forEach(doc => {
-                    if (doc.fileName && !existingFileNames.has(doc.fileName)) {
-                        allChildDocs.push(doc);
-                        existingFileNames.add(doc.fileName);
-                    }
-                 });
-                 console.log(`✅ Task sonrası toplam belge sayısı: ${allChildDocs.length}`);
+            // Helper: Belge Ekle
+            const addChildDoc = (docObj) => {
+                const name = docObj.fileName || docObj.name || 'Belge';
+                const url = docObj.fileUrl || docObj.downloadURL || docObj.url || docObj.path;
+                if (url && !existingFileNames.has(name)) {
+                    existingFileNames.add(name);
+                    allChildDocs.push({
+                        fileName: name,
+                        fileUrl: url,
+                        type: docObj.type || 'child_doc',
+                        evrakNo: docObj.evrakNo,
+                        isTaskDoc: docObj.isTaskDoc || false
+                    });
+                }
+            };
+
+            // A. Unindexed PDF'ler
+            const childUnindexedPdfs = pdfsByTransaction[c.id] || [];
+            childUnindexedPdfs.forEach(addChildDoc);
+
+            // B. Child Transaction 'documents' Array (BURASI EKSİKTİ)
+            if (Array.isArray(c.documents)) {
+                c.documents.forEach(addChildDoc);
             }
 
-            // İtiraz Bildirimi (ID: 27) ise, parent'ın belgelerini de ekle (eski mantık korunuyor)
-            if (IS_OPPOSITION_NOTICE) {
-                console.log('🔍 İtiraz Bildirimi tespit edildi, parent belgeleri ekleniyor...');
-                
-                // Parent'ın transaction.documents array'ini ekle
-                const parentTransactionDocs = p.transactionDocs || [];
-                
-                // Parent'ın PDF'lerini ekle (unindexed_pdfs'ten gelenler)
-                const parentPdfsForChild = pdfsByTransaction[p.id] || [];
-                
-                const parentDocsToAttach = [
-                    ...parentPdfsForChild,
-                    ...parentTransactionDocs.map(doc => ({
-                      fileName: doc.name || 'Belge',
-                      fileUrl: doc.path || doc.downloadURL, // Fix path/url
-                      type: doc.type,
-                      isParentDoc: true
-                    }))
-                ];
-                
-                parentDocsToAttach.forEach(doc => {
-                    if (doc.fileName && !existingFileNames.has(doc.fileName)) {
-                        allChildDocs.push(doc);
-                        existingFileNames.add(doc.fileName);
-                    }
-                });
-                
-                console.log('✅ İtiraz Bildirimi için son toplam belge sayısı:', allChildDocs.length);
+            // C. Child Task Belgeleri
+            if (c.triggeringTaskId) {
+                 try {
+                     const taskDocs = await fetchTaskDocuments(c.triggeringTaskId);
+                     taskDocs.forEach(addChildDoc);
+                 } catch (e) { console.error('Child task docs error:', e); }
             }
-            
-            // Belge ikonlarını render et
-            const pdfIcons = allChildDocs.map(pdf => _createDocLinkHtml(pdf)).join(' ');
+
+            // D. İtiraz Bildirimi Özel Durumu (Parent'tan kopyala)
+            const IS_OPPOSITION_NOTICE = String(c.type) === '27';
+            if (IS_OPPOSITION_NOTICE) {
+                // Parent'ın documents array'i
+                transactionDocs.forEach(addChildDoc);
+                // Parent'ın unindexed PDF'leri
+                parentPdfs.forEach(addChildDoc);
+                // Parent'ın özel alanı (İtiraz Dilekçesi)
+                if (p.oppositionPetitionFileUrl) {
+                    addChildDoc({ fileName: 'İtiraz Dilekçesi', fileUrl: p.oppositionPetitionFileUrl, type: 'opposition_petition' });
+                }
+            }
+
+            // İkonları Oluştur
+            const pdfIcons = allChildDocs.map(pdf => {
+                let iconClass = 'fas fa-file-pdf';
+                let titleText = pdf.fileName;
+                let btnClass = 'btn-secondary'; // Varsayılan gri
+                let badgeHtml = '';
+
+                if (pdf.type === 'opposition_petition' || pdf.fileName.includes('İtiraz Dilekçesi')) {
+                    iconClass = 'fas fa-gavel'; btnClass = 'btn-warning'; // Sarı
+                } else if (pdf.type === 'official_document' || pdf.fileName.includes('Resmi Yazı')) {
+                    iconClass = 'fas fa-file-signature'; btnClass = 'btn-info'; // Mavi
+                } else if (pdf.type === 'epats_document') {
+                    iconClass = 'fas fa-file-invoice'; btnClass = 'btn-primary'; // Koyu Mavi
+                    if (pdf.evrakNo) badgeHtml = `<span class="badge badge-light ml-1">${pdf.evrakNo}</span>`;
+                } else if (pdf.fileName.toLowerCase().endsWith('.pdf')) {
+                    btnClass = 'btn-danger'; // PDF ise kırmızı
+                }
+
+                // window.open ile güvenli açma
+                return `<a onclick="window.open('${pdf.fileUrl}', '_blank')" title="${titleText}" class="action-btn ${btnClass} btn-sm mr-1 mb-1" style="cursor: pointer; padding: 4px 8px;">
+                    <i class="${iconClass}"></i>${badgeHtml}
+                </a>`;
+            }).join(' ');
 
             return `<div class="child-transaction-item">
               <div class="child-transaction-content">
@@ -610,51 +622,57 @@ async function renderTransactionsAccordion(recordId){
               </div>
               ${pdfIcons ? `<div class="child-transaction-pdfs">${pdfIcons}</div>` : ''}
             </div>`;
-          })); // <<< ASENKRON MAP SONU
+      }));
 
       const childrenHtml = hasChildren ? `
-        <div class="accordion-transaction-children" id="children-${p.id}">
-          ${childrenHtmlContents.join('')}
+        <div class="accordion-transaction-children" id="children-${p.id}" style="display: block;"> ${childrenHtmlContents.join('')}
         </div>` : '';
 
+      // --- PARENT GÖRÜNÜMÜ ---
+      const isOppositionParent = String(p.type) === '20' || String(p.type) === '19';
+      
+      let allParentDocs = [];
+      if (!isOppositionParent) {
+          // Normal parent: Tüm belgeleri göster
+          allParentDocs = [
+              ...parentPdfs, 
+              ...epatsDocuments,
+              ...transactionDocs.map(doc => ({
+                  fileName: doc.name || doc.fileName || 'Belge',
+                  fileUrl: doc.path || doc.url || doc.downloadURL,
+                  type: doc.type
+              }))
+          ];
+          // Özel alanlar
+          if(p.relatedPdfUrl) allParentDocs.push({fileName: 'Resmi Yazı', fileUrl: p.relatedPdfUrl, type: 'official_document'});
+          if(p.oppositionPetitionFileUrl) allParentDocs.push({fileName: 'İtiraz Dilekçesi', fileUrl: p.oppositionPetitionFileUrl, type: 'opposition_petition'});
+      } else {
+          // İtiraz parent: Sadece ePats göster, diğerleri child'a gitti
+          allParentDocs = [...epatsDocuments];
+      }
 
-// 🔥 GÜNCEL: Parent'a ait tüm belgeler (PDF'ler + ePats + transaction.documents)
-const transactionDocs = p.transactionDocs || [];
+      // Tekrarları temizle
+      const uniqueParentDocs = [];
+      const seenParentUrls = new Set();
+      allParentDocs.forEach(d => {
+          const url = d.fileUrl || d.url || d.path || d.downloadURL;
+          if(url && !seenParentUrls.has(url)) {
+              seenParentUrls.add(url);
+              uniqueParentDocs.push({...d, fileUrl: url});
+          }
+      });
 
-// 🔥 YENİ: Yayına İtiraz (ID: 20) veya Yayına İtirazın Yeniden İncelenmesi (ID: 19) ise PDF ikonlarını gizle
-const isOppositionParent = String(p.type) === '20' || String(p.type) === '19';
+      const parentPdfIcons = uniqueParentDocs.map(pdf => {
+          // Basit ikon mantığı
+          return `<a onclick="window.open('${pdf.fileUrl}', '_blank')" class="action-btn btn-secondary btn-sm mr-1" title="${pdf.fileName}" style="cursor:pointer;">
+             <i class="fas fa-file-alt"></i>
+          </a>`;
+      }).join(' ');
 
-console.log('🔍 Parent transaction kontrol:', {
-  parentId: p.id,
-  parentTypeId: p.type,
-  parentTypeName: tname,
-  isOppositionParent,
-  transactionDocsCount: transactionDocs.length,
-  parentPdfsCount: parentPdfs.length,
-  epatsCount: epatsDocuments.length
-});
-
-let allParentDocs = [];
-// Normal parent'lar için tüm belgeleri göster
-// (İtiraz parentları için gizlemek istenirse buradaki if mantığı açılabilir, şu an hepsi açık)
-  allParentDocs = [
-    ...parentPdfs, 
-    ...epatsDocuments,
-    ...transactionDocs.map(doc => ({
-      fileName: doc.name || 'Belge',
-      fileUrl: doc.path || doc.downloadURL,
-      type: doc.type,
-      isTransactionDoc: true
-    }))
-  ];
-
-
-const parentPdfIcons = allParentDocs.map(pdf => _createDocLinkHtml(pdf)).join(' ');
-
-    return `<div class="accordion-transaction-item">
+      return `<div class="accordion-transaction-item">
         <div class="accordion-transaction-header ${hasChildren ? 'has-children' : ''}" data-parent-id="${p.id}">
           <div class="transaction-main-info">
-            <div class="${hasChildren ? 'accordion-icon' : 'accordion-icon-empty'}">${hasChildren ? '▶' : ''}</div>
+            <div class="${hasChildren ? 'accordion-icon expanded' : 'accordion-icon-empty'}">${hasChildren ? '▼' : ''}</div>
             <div class="transaction-details">
               <div class="transaction-name-date">${tname} ${oppositionOwnerBadge} - ${d} ${t}</div>
             </div>
@@ -666,14 +684,15 @@ const parentPdfIcons = allParentDocs.map(pdf => _createDocLinkHtml(pdf)).join(' 
         </div>
         ${childrenHtml}
       </div>`;
-    }); // <<< AWAIT'LENEN PROMISE MAP'TEN ÇIKAN DİZİ
+    });
 
     const finalHtml = await Promise.all(parentTransactionRenderPromises).then(results => results.join(''));
     if (txAccordion) txAccordion.innerHTML = finalHtml;
-    // Bind toggles
-    txAccordion?.querySelectorAll('.accordion-transaction-header[data-parent-id]')
-      .forEach(header => {
-        header.addEventListener('click', function(){
+    
+    // Tıklama olaylarını bağla (Accordion aç/kapa)
+    txAccordion?.querySelectorAll('.accordion-transaction-header[data-parent-id]').forEach(header => {
+        header.addEventListener('click', function(e){
+          if (e.target.closest('a') || e.target.closest('button')) return;
           const pid = this.getAttribute('data-parent-id');
           const cont = document.getElementById(`children-${pid}`);
           const icon = this.querySelector('.accordion-icon');
@@ -685,9 +704,9 @@ const parentPdfIcons = allParentDocs.map(pdf => _createDocLinkHtml(pdf)).join(' 
             icon.classList.toggle('expanded', !isVisible);
           }
         });
-      });
+    });
 
-  }catch(e){
+  } catch(e){
     console.error('renderTransactionsAccordion error', e);
     if (txAccordion) txAccordion.innerHTML = '<div class="p-3 text-danger">İşlem geçmişi yüklenirken hata oluştu.</div>';
   }
