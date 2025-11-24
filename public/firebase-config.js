@@ -2,6 +2,8 @@ import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebas
 import {
     getAuth,
     signInWithEmailAndPassword,
+    setPersistence,
+    browserLocalPersistence,
     createUserWithEmailAndPassword,
     signOut,
     onAuthStateChanged,
@@ -32,6 +34,16 @@ let isFirebaseAvailable = false;
 try {
     app = initializeApp(firebaseConfig);
     auth = getAuth(app);
+    // 🔥 BU KOD BLOĞUNU EKLEYİN: Oturumu 'Local Storage'a sabitler
+    // Böylece yeni sekme açıldığında oturum düşmez.
+    setPersistence(auth, browserLocalPersistence)
+        .then(() => {
+            console.log("✅ Auth persistence set to LOCAL");
+        })
+        .catch((error) => {
+            console.error("❌ Auth persistence error:", error);
+        });
+
     db = initializeFirestore(app, {
     experimentalAutoDetectLongPolling: true,
     // experimentalForceLongPolling: true,   // gerekiyorsa aç
