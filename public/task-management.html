@@ -712,13 +712,21 @@
                     const noTasksMessage = document.getElementById('noTasksMessage');
                     tableBody.innerHTML = '';
 
-                    const searchTerm = document.getElementById('taskSearchInput').value.toLowerCase();
+                    // Arama terimini güvenli al
+                    const searchTerm = (document.getElementById('taskSearchInput').value || '').toLowerCase();
+                    
                     const filteredTasks = this.allTasks.filter(task => {
+                        // Her alan için güvenli erişim (null check)
+                        const title = (task.title || '').toLowerCase();
+                        const relatedTitle = (task.relatedIpRecordTitle || '').toLowerCase();
+                        const type = (task.taskType || '').toLowerCase();
+                        const status = (task.status || '').toLowerCase();
+
                         const matchesSearch = 
-                            task.title.toLowerCase().includes(searchTerm) ||
-                            (task.relatedIpRecordTitle && task.relatedIpRecordTitle.toLowerCase().includes(searchTerm)) ||
-                            (task.taskType && task.taskType.toLowerCase().includes(searchTerm)) ||
-                            (task.status && task.status.toLowerCase().includes(searchTerm));
+                            title.includes(searchTerm) ||
+                            relatedTitle.includes(searchTerm) ||
+                            type.includes(searchTerm) ||
+                            status.includes(searchTerm);
 
                         return matchesSearch;
                     });
@@ -733,30 +741,29 @@
                         const ipRecord = this.allIpRecords.find(r => r.id === task.relatedIpRecordId);
                         const relatedRecordDisplay = ipRecord ? (ipRecord.applicationNumber || ipRecord.title || 'Kayıt Bulunamadı') : 'N/A';
                         const row = document.createElement('tr');
-                        // Durum sınıfını ve metnini statusDisplayMap'ten al
-                        const statusClass = `status-${task.status.replace(/ /g, '_').toLowerCase()}`; // Alt çizgi kullanımı
-                        const statusText = this.statusDisplayMap[task.status] || task.status; // Türkçe karşılık
                         
-                        const priorityClass = `priority-${task.priority.toLowerCase()}`;
+                        // GÜVENLİ DURUM VE ÖNCELİK OLUŞTURMA
+                        const safeStatus = (task.status || '').toString();
+                        const statusClass = `status-${safeStatus.replace(/ /g, '_').toLowerCase()}`; 
+                        const statusText = this.statusDisplayMap[safeStatus] || safeStatus; 
+                        
+                        const safePriority = (task.priority || 'normal').toString(); // Varsayılan normal
+                        const priorityClass = `priority-${safePriority.toLowerCase()}`;
                         
                         // İşlem tipi objesini bul
                         const transactionTypeObj = this.allTransactionTypes.find(t => t.id === task.taskType);
-                        // Görünen adı alias veya name'den al, yoksa task.taskType'ı kullan
                         const taskTypeDisplayName = transactionTypeObj ? (transactionTypeObj.alias || transactionTypeObj.name) : (task.taskType || 'Bilinmiyor');
 
-
-                        // Atanan kişiyi bulma
                         const assignedUser = this.allUsers.find(user => user.id === task.assignedTo_uid);
                         const assignedToDisplayName = assignedUser ? (assignedUser.displayName || assignedUser.email) : 'Atanmamış';
-                        const dueDateObj =
-                        task.dueDate
+                        
+                        const dueDateObj = task.dueDate
                             ? (task.dueDate.toDate ? task.dueDate.toDate() : new Date(task.dueDate))
                             : null;
                         const dueISO = dueDateObj ? dueDateObj.toISOString().slice(0, 10) : '';
                         const dueDisplay = dueDateObj ? dueDateObj.toLocaleDateString('tr-TR') : 'Belirtilmemiş';
 
-                        const officialDateObj =
-                        task.officialDueDate
+                        const officialDateObj = task.officialDueDate
                             ? (task.officialDueDate.toDate
                                 ? task.officialDueDate.toDate()
                                 : (task.officialDueDate.seconds
@@ -770,7 +777,7 @@
                             <td>${task.id}</td>
                             <td>${relatedRecordDisplay}</td>
                             <td>${taskTypeDisplayName}</td>
-                            <td><span class="priority-badge ${priorityClass}">${task.priority}</span></td>
+                            <td><span class="priority-badge ${priorityClass}">${safePriority}</span></td>
                             <td>${assignedToDisplayName}</td>
                             <td data-field="operationalDue" data-date="${dueISO}">
                             ${dueDisplay}
@@ -783,12 +790,16 @@
                                 <button class="action-btn view-btn" data-id="${task.id}">Görüntüle</button>
                                 <button class="action-btn edit-btn" data-id="${task.id}">Düzenle</button>
                                 <button class="action-btn delete-btn" data-id="${task.id}">Sil</button>
-                                ${task.status !== 'completed' && task.status !== 'cancelled' ? `<button class="action-btn assign-btn" data-id="${task.id}">Ata</button>` : ''}
+                                ${safeStatus !== 'completed' && safeStatus !== 'cancelled' ? `<button class="action-btn assign-btn" data-id="${task.id}">Ata</button>` : ''}
                                 <button class="action-btn add-accrual-btn" data-id="${task.id}">Ek Tahakkuk Oluştur</button> </td>
                         `;
                         tableBody.appendChild(row);
                     });
-                DeadlineHighlighter.refresh('taskManagement');
+                    
+                    // DeadlineHighlighter varsa tetikle
+                    if (window.DeadlineHighlighter && typeof window.DeadlineHighlighter.refresh === 'function') {
+                        window.DeadlineHighlighter.refresh('taskManagement');
+                    }
                 }
 
                 async deleteTask(taskId) {
@@ -965,9 +976,12 @@
                     const container = document.getElementById(resultsContainerId);
                     if (!container) return;
                     container.innerHTML = '';
-                    if (query.length < 2) { container.innerHTML = ''; return; }
+                    if (!query || query.length < 2) { container.innerHTML = ''; return; }
                     
-                    const filtered = this.allPersons.filter(p => p.name.toLowerCase().includes(query.toLowerCase()));
+                    const safeQuery = query.toLowerCase();
+                    // GÜVENLİ FİLTRELEME: p.name kontrolü
+                    const filtered = this.allPersons.filter(p => (p.name || '').toLowerCase().includes(safeQuery));
+                    
                     if (filtered.length === 0) { container.innerHTML = '<p class="no-results-message">Kişi bulunamadı.</p>'; return; }
 
                     filtered.forEach(p => {
@@ -979,7 +993,7 @@
                         container.appendChild(item);
                     });
                 }
-
+                
                 selectPersonForCreateTaskAccrual(person, target) {
                     const displayId = {
                         'createTaskTpInvoiceParty': 'createTaskSelectedTpInvoicePartyDisplay',
