@@ -532,3 +532,15 @@ export const ORIGIN_TYPES = [
     { value: 'OAPI', text: 'OAPI' },
     { value: 'Yurtdışı Ulusal', text: 'Yurtdışı Ulusal' }
 ];
+
+export function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+}
