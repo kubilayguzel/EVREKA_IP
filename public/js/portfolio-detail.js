@@ -905,7 +905,8 @@ window.currentRecord = {
 // Bootstrap
 (async () => {
   await loadSharedLayout({ activeMenuLink: 'portfolio.html' });
-  // Sadece olası sabit topbar yüksekliği kadar it (36..120px aralığı)
+  
+  // Layout padding ayarları
   const wrapper = document.querySelector('.page-wrapper');
   const candidates = ['.navbar.fixed-top','.app-header','.site-header','header .navbar','nav.navbar.fixed-top'];
   let h = 0;
@@ -918,10 +919,29 @@ window.currentRecord = {
   }
   if (wrapper) wrapper.style.paddingTop = (h ? (h+12) : 16) + 'px';
 
-  onAuthStateChanged(auth, async (user) => {
-    if (!user) { window.location.href = 'index.html'; return; }
-    await loadRecord();
+  // ✅ DÜZELTME: Firebase'in kendi içindeki hazırlık sürecini bekle
+  try {
+      await auth.authStateReady(); 
+  } catch (e) {
+      console.warn("Auth state ready check failed, continuing...", e);
+  }
+
+  const user = auth.currentUser;
+
+  if (!user) {
+      // Gerçekten kullanıcı yoksa yönlendir
+      window.location.href = 'index.html';
+      return;
+  }
+
+  // Kullanıcı varsa kaydı yükle
+  await loadRecord();
+
+  // Oturum açıkken çıkış yapılırsa (Logout) anında yakalamak için listener'ı yine de başlat
+  onAuthStateChanged(auth, (u) => {
+    if (!u) window.location.href = 'index.html';
   });
+
 })();
 
 // Initialize type other visibility
