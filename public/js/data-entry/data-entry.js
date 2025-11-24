@@ -617,76 +617,78 @@ class DataEntryModule {
     // ✅ YENİ FONKSİYON: Parent güncellendiğinde yeni eklenen ülkeleri yaratır
     async syncAndCreateMissingChildren(parentId, parentData) {
         try {
+            console.log('🔄 Child Senkronizasyonu Başladı. ParentID:', parentId);
             const db = getFirestore();
             
-            // 1. Mevcut Child Kayıtları Bul (Veritabanından)
-            // Parent ID'si eşleşen ve hiyerarşisi 'child' olanları çekiyoruz
+            // 1. ADIM: Mevcut Child Kayıtları Bul
+            // NOT: İndeks hatasından kaçınmak için sadece parentId ile çekiyoruz.
+            // Filtrelemeyi aşağıda JavaScript ile yapacağız.
             const q = query(
                 collection(db, 'ipRecords'),
-                where('parentId', '==', parentId),
-                where('transactionHierarchy', '==', 'child')
+                where('parentId', '==', parentId)
             );
             
             const querySnapshot = await getDocs(q);
             const existingCountryCodes = [];
+
             querySnapshot.forEach((doc) => {
                 const data = doc.data();
-                if (data.country) existingCountryCodes.push(data.country);
+                // Sadece 'child' olanları ve ülke kodu dolu olanları listeye al
+                if (data.transactionHierarchy === 'child' && data.country) {
+                    // Kodlardaki olası boşlukları temizle (trim)
+                    existingCountryCodes.push(String(data.country).trim());
+                }
             });
 
-            console.log('🔎 Mevcut Child Ülkeler:', existingCountryCodes);
-            console.log('📝 Formdan Gelen Ülkeler:', this.selectedCountries);
+            console.log('🔎 Veritabanında Bulunan Child Ülkeler:', existingCountryCodes);
+            console.log('📝 Formdaki Seçili Ülkeler:', this.selectedCountries.map(c => c.code));
 
-            // 2. Yeni Eklenen Ülkeleri Tespit Et
-            // Formda olup veritabanında olmayanlar
-            const countriesToCreate = this.selectedCountries.filter(
-                c => !existingCountryCodes.includes(c.code)
-            );
+            // 2. ADIM: Sadece LİSTEDE OLMAYAN yeni ülkeleri belirle
+            const countriesToCreate = this.selectedCountries.filter(c => {
+                const formCountryCode = String(c.code).trim();
+                // Eğer veritabanındaki listede BU KOD YOKSA, listeye ekle
+                return !existingCountryCodes.includes(formCountryCode);
+            });
 
             if (countriesToCreate.length === 0) {
-                console.log('✅ Senkronizasyon tamam: Yeni eklenecek ülke yok.');
-                return;
+                console.log('✅ Yeni eklenecek ülke yok. Mevcut kayıtlar korunuyor.');
+                return; // Fonksiyondan çık, hiçbir şey yaratma.
             }
 
             console.log('🚀 Oluşturulacak Yeni Ülkeler:', countriesToCreate.map(c => c.code));
 
-            // 3. Eksik Olanları Yarat
+            // 3. ADIM: Eksik Olanları Yarat
             const promises = countriesToCreate.map(async (country) => {
                 try {
+                    // Parent verisini kopyala
                     const childData = { ...parentData };
 
-                    // 🧹 TEMİZLİK (Parent verisinden arındırma)
+                    // 🧹 TEMİZLİK: Parent'a ait veya gereksiz alanları sil
                     delete childData.applicationNumber; 
                     delete childData.registrationNumber; 
                     delete childData.internationalRegNumber; 
                     delete childData.countries; 
                     delete childData.wipoIR;
                     delete childData.aripoIR;
+                    delete childData.id; // Kopyalanan ID'yi sil, yeni ID oluşsun
 
-                    // ✅ EKLEMELER
+                    // ✅ CHILD VERİSİ
                     childData.transactionHierarchy = 'child';
                     childData.parentId = parentId;
                     childData.country = country.code;
-                    childData.createdFrom = 'wipo_update_sync'; // Farklı bir kaynak etiketi
+                    childData.createdFrom = 'wipo_update_sync'; 
 
-                    // IR Numaralarını Parent'tan al (WIPO/ARIPO ayrımı)
-                    // Not: parentData formdan geldiği için wipoIR/aripoIR alanları olmayabilir (stratejide temizledik mi?)
-                    // Bu yüzden original form verisine bakmak daha güvenli olabilir ama
-                    // Stratejide 'internationalRegNumber' olarak topluyoruz.
+                    // IR Numaralarını ayarla
                     const irNumber = parentData.internationalRegNumber || parentData.registrationNumber;
-                    
                     if (parentData.origin === 'WIPO') childData.wipoIR = irNumber;
                     else if (parentData.origin === 'ARIPO') childData.aripoIR = irNumber;
 
-                    console.log(`➡️ Yeni Child Hazırlanıyor: ${country.code}`);
+                    console.log(`➡️ Yeni Child Kaydı Oluşturuluyor: ${country.code}`);
 
                     const res = await ipRecordsService.createRecordFromDataEntry(childData);
                     
                     if (res.success) {
-                        console.log(`✅ Child Başarıyla Eklendi: ${country.code}`);
-                        
-                        // 🛠️ TRANSACTION EKLEME (Sorun 2 Çözümü)
-                        // Yeni eklenen bu child için başvuru işlemini ekle
+                        // Yeni kayıt için transaction ekle
                         await this.addTransactionForNewRecord(res.id, parentData.ipType, 'child');
                     }
                 } catch (err) {
@@ -695,7 +697,7 @@ class DataEntryModule {
             });
 
             await Promise.all(promises);
-            console.log('🏁 Senkronizasyon işlemi bitti.');
+            console.log('🏁 Senkronizasyon işlemi tamamlandı.');
 
         } catch (error) {
             console.error('❌ Senkronizasyon ana hatası:', error);
