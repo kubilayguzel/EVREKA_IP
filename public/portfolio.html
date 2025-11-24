@@ -685,19 +685,28 @@
 
         class PortfolioModule {
             getDisplayStatus(r) {
+                // Güvenlik kontrolü: r boşsa hemen çık
+                if (!r) return '-';
+
                 const rawStatus = (r.status || r.applicationStatus || r.statusText || '').toString().toLowerCase();
                 const ipType = (r.type || r.recordType || r.ipType || '').toString().toLowerCase();
+                
                 const statusList = STATUSES[ipType];
                 const ORG_SET = new Set(['wipo','aripo','euipo','oapi']);
+                
                 if (ORG_SET.has(rawStatus)) {
-                  const alt = (r.applicationStatus || r.statusText || '').toString();
-                  return alt || '-';
+                const alt = (r.applicationStatus || r.statusText || '').toString();
+                return alt || '-';
                 }
-                if (statusList) {
-                    const match = statusList.find(s => s.value.toLowerCase() === rawStatus);
+                
+                if (statusList && Array.isArray(statusList)) {
+                    // KRİTİK DÜZELTME: s.value var mı diye kontrol etmeden toLowerCase() yapma!
+                    const match = statusList.find(s => s.value && s.value.toLowerCase() === rawStatus);
                     if (match) return match.text;
                 }
-                return rawStatus || '-';
+                
+                if (!rawStatus) return '-';
+                return rawStatus.charAt(0).toUpperCase() + rawStatus.slice(1);
             }
 
             constructor() {
@@ -1241,195 +1250,222 @@
                 wireAccordion();
             }
 
+            // public/portfolio.html içinde PortfolioModule sınıfının applyFiltersAndSort metodu:
+
             applyFiltersAndSort() {
-              const globalSearchTerm = (document.getElementById('searchBar').value || '').toLowerCase();
+                const globalSearchTerm = (document.getElementById('searchBar').value || '').toLowerCase();
 
-              // Litigation sekmesi için arama ve filtreleme
-              if (this.activeTypeFilter === 'litigation') {
-                  let filtered = (this.litigationRows || []).filter(row => {
-                      if (globalSearchTerm) {
-                          const searchableText = `
-                              ${row.title || ''}
-                              ${row.suitType || ''}
-                              ${row.caseNo || ''}
-                              ${row.court || ''}
-                              ${row.client || ''}
-                              ${row.opposingParty || ''}
-                              ${row.suitStatus || ''}
-                          `.toLowerCase();
-                          if (!searchableText.includes(globalSearchTerm)) return false;
-                      }
-                      return Object.keys(this.columnFilters).every(key => {
-                          const filterValue = this.columnFilters[key];
-                          if (!filterValue) return true;
-                          let recordValue = String(row[key] || '');
-                          return recordValue.toLowerCase().includes(filterValue);
-                      });
-                  });
+                // 1. Litigation (Davalar) Sekmesi için Filtreleme
+                if (this.activeTypeFilter === 'litigation') {
+                    let filtered = (this.litigationRows || []).filter(row => {
+                        // Global Arama
+                        if (globalSearchTerm) {
+                            const searchableText = `
+                                ${row.title || ''}
+                                ${row.suitType || ''}
+                                ${row.caseNo || ''}
+                                ${row.court || ''}
+                                ${row.client || ''}
+                                ${row.opposingParty || ''}
+                                ${row.suitStatus || ''}
+                            `.toLowerCase();
+                            if (!searchableText.includes(globalSearchTerm)) return false;
+                        }
+                        // Sütun Filtreleri
+                        return Object.keys(this.columnFilters).every(key => {
+                            const filterValue = this.columnFilters[key];
+                            if (!filterValue) return true;
+                            
+                            // Güvenli string dönüşümü
+                            let recordValue = String(row[key] || '');
+                            return recordValue.toLowerCase().includes(filterValue);
+                        });
+                    });
 
-                  if (this.sortBy.column) {
-                      const { column, direction } = this.sortBy;
-                      filtered.sort((a, b) => {
-                          let valA = a[column] || '';
-                          let valB = b[column] || '';
-                          if (column.includes('Date')) {
-                              valA = new Date(valA || 0);
-                              valB = new Date(valB || 0);
-                          }
-                          if (valA < valB) return direction === 'asc' ? -1 : 1;
-                          if (valA > valB) return direction === 'asc' ? 1 : -1;
-                          return 0;
-                      });
-                  }
-                if (pagination) {
-                    try { pagination.update(filtered.length); } catch (e) { console.warn('Pagination update error in filter:', e); }
-                }
-                this.renderLitigationRows(filtered);
-                return;
-              }
-
-              // Objections sekmesi için arama ve filtreleme
-              if (this.activeTypeFilter === 'objections') {
-                  let filtered = (this.objectionRows || []).filter(row => {
-                      if (globalSearchTerm) {
-                          const searchableText = `
-                              ${row.transactionTypeName || ''}
-                              ${row.applicationNumber || ''}
-                              ${row.applicantName || ''}
-                              ${row.opponent || ''}
-                              ${row.statusText || ''}
-                          `.toLowerCase();
-                          if (!searchableText.includes(globalSearchTerm)) return false;
-                      }
-                      return Object.keys(this.columnFilters).every(key => {
-                          const filterValue = this.columnFilters[key];
-                          if (!filterValue) return true;
-                          let recordValue = String(row[key] || '');
-                          return recordValue.toLowerCase().includes(filterValue);
-                      });
-                  });
-
-                  if (this.sortBy.column) {
-                      const { column, direction } = this.sortBy;
-                      filtered.sort((a, b) => {
-                          let valA = a[column] || '';
-                          let valB = b[column] || '';
-                          if (column.includes('Date')) {
-                              valA = new Date(valA || 0);
-                              valB = new Date(valB || 0);
-                          }
-                          if (valA < valB) return direction === 'asc' ? -1 : 1;
-                          if (valA > valB) return direction === 'asc' ? 1 : -1;
-                          return 0;
-                      });
-                  }
-                if (pagination) {
-                    // Sayfalama toplam kayıt sayısını günceller
-                    try { pagination.update(filtered.length); } catch (e) { console.warn('Pagination update error in filter:', e); }
-                }
-                this.renderObjectionRows(filtered);
-                return;
-              }
-
-            let filtered = this.allRecords.filter(record => {
-                let tabMatch = false;
-                
-                // 1. Sekme Eşleşmesi ve Kayıt Sahipliği Kontrolü
-                if (this.activeTypeFilter === 'all') {
-                    // 'Tümü' sekmesinde sadece SELF kayıtlarını göster
-                    tabMatch = (record.recordOwnerType !== 'third_party');
-                } else if (this.activeTypeFilter === 'trademark') {
-                    // 'Marka' sekmesinde sadece SELF marka kayıtlarını göster
-                    tabMatch = record.type === 'trademark' && record.recordOwnerType !== 'third_party';
-                } else if (this.activeTypeFilter === 'litigation') {
-                    // 'Davalar' sekmesinde sadece SELF kayıtlarını göster
-                    tabMatch = (record.recordOwnerType !== 'third_party') && Array.isArray(record.transactions) && record.transactions.some(t => (t.type || '').includes('Dava'));
-                } else if (this.activeTypeFilter === 'objections') {
-                    // 🔥 İTİRAZLAR SEKME DÜZELTMESİ: Tüm kayıtları kullan (self VE third_party)
-                    tabMatch = true; 
-                } else {
-                    // Patent/Tasarım gibi diğer sekmelerde sadece tür eşleşmesini kontrol et (varsayılan olarak SELF kabul ediliyor)
-                    tabMatch = record.type === this.activeTypeFilter;
-                }
-
-                if (!tabMatch) return false;
-
-                // 2. Global Arama ve Sütun Filtreleri (Bu kısım aynı kalacak)
-                if (globalSearchTerm) {
-                    const searchableText = `
-                        ${record.title || ''}
-                        ${record.brandText || ''}
-                        ${record.applicationNumber || ''}
-                        ${record.status || ''}
-                        ${record.type || ''}
-                        ${record.applicants?.map(a => a.name).join(' ') || ''}
-                    `.toLowerCase();
-                    if (!searchableText.includes(globalSearchTerm)) return false;
-                }
-
-                return Object.keys(this.columnFilters).every(key => {
-                    const filterValue = this.columnFilters[key];
-                    if (!filterValue) return true;
-
-                    let recordValue = '';
-                    if (key === 'owners' || key === 'applicants') {
-                        // Refactor: Filtrelemede de ID bazlı isim kullan
-                        const list = record.applicants || [];
-                        recordValue = list.map(a => {
-                            const found = allPersons.find(p => p.id === a.id);
-                            return found ? found.name : (a.name || '');
-                        }).join(' ');
-                    } else if (key === 'title') {
-                        recordValue = record.title || record.brandText || '';
-                    } else if (key === 'type' || key === 'recordType' || key === 'ipType') {
-                        recordValue = record.type || '';
-                    } else {
-                        recordValue = String(record[key] || '');
+                    // Sıralama
+                    if (this.sortBy.column) {
+                        const { column, direction } = this.sortBy;
+                        filtered.sort((a, b) => {
+                            let valA = a[column] || '';
+                            let valB = b[column] || '';
+                            if (column.includes('Date')) {
+                                valA = new Date(valA || 0);
+                                valB = new Date(valB || 0);
+                            }
+                            if (valA < valB) return direction === 'asc' ? -1 : 1;
+                            if (valA > valB) return direction === 'asc' ? 1 : -1;
+                            return 0;
+                        });
                     }
-                    return recordValue.toLowerCase().includes(filterValue);
+                    
+                    // Pagination ve Render
+                    if (pagination) {
+                        try { pagination.update(filtered.length); } catch (e) { console.warn('Pagination update error in filter:', e); }
+                    }
+                    this.renderLitigationRows(filtered);
+                    return;
+                }
+
+                // 2. Objections (İtirazlar) Sekmesi için Filtreleme
+                if (this.activeTypeFilter === 'objections') {
+                    let filtered = (this.objectionRows || []).filter(row => {
+                        // Global Arama
+                        if (globalSearchTerm) {
+                            const searchableText = `
+                                ${row.transactionTypeName || ''}
+                                ${row.applicationNumber || ''}
+                                ${row.applicantName || ''}
+                                ${row.opponent || ''}
+                                ${row.statusText || ''}
+                            `.toLowerCase();
+                            if (!searchableText.includes(globalSearchTerm)) return false;
+                        }
+                        // Sütun Filtreleri
+                        return Object.keys(this.columnFilters).every(key => {
+                            const filterValue = this.columnFilters[key];
+                            if (!filterValue) return true;
+                            
+                            let recordValue = String(row[key] || '');
+                            return recordValue.toLowerCase().includes(filterValue);
+                        });
+                    });
+
+                    // Sıralama
+                    if (this.sortBy.column) {
+                        const { column, direction } = this.sortBy;
+                        filtered.sort((a, b) => {
+                            let valA = a[column] || '';
+                            let valB = b[column] || '';
+                            if (column.includes('Date')) {
+                                valA = new Date(valA || 0);
+                                valB = new Date(valB || 0);
+                            }
+                            if (valA < valB) return direction === 'asc' ? -1 : 1;
+                            if (valA > valB) return direction === 'asc' ? 1 : -1;
+                            return 0;
+                        });
+                    }
+                    
+                    // Pagination ve Render
+                    if (pagination) {
+                        try { pagination.update(filtered.length); } catch (e) { console.warn('Pagination update error in filter:', e); }
+                    }
+                    this.renderObjectionRows(filtered);
+                    return;
+                }
+
+                // 3. Ana Filtreleme (Tüm Kayıtlar / Marka / Patent vb.)
+                let filtered = this.allRecords.filter(record => {
+                    let tabMatch = false;
+                    
+                    // Sekme Eşleşmesi ve Kayıt Sahipliği Kontrolü
+                    if (this.activeTypeFilter === 'all') {
+                        tabMatch = (record.recordOwnerType !== 'third_party');
+                    } else if (this.activeTypeFilter === 'trademark') {
+                        tabMatch = record.type === 'trademark' && record.recordOwnerType !== 'third_party';
+                    } else if (this.activeTypeFilter === 'litigation') {
+                        // Bu kısım yukarıdaki 'if' bloğuna girdiği için burası teorik olarak çalışmaz ama güvenlik için kalsın
+                        tabMatch = (record.recordOwnerType !== 'third_party') && Array.isArray(record.transactions) && record.transactions.some(t => (t.type || '').includes('Dava'));
+                    } else if (this.activeTypeFilter === 'objections') {
+                        tabMatch = true; // İtirazlar için tüm kayıtları dahil et
+                    } else {
+                        tabMatch = record.type === this.activeTypeFilter;
+                    }
+
+                    if (!tabMatch) return false;
+
+                    // Global Arama
+                    if (globalSearchTerm) {
+                        const searchableText = `
+                            ${record.title || ''}
+                            ${record.brandText || ''}
+                            ${record.applicationNumber || ''}
+                            ${record.status || ''}
+                            ${record.type || ''}
+                            ${record.applicants?.map(a => a.name).join(' ') || ''}
+                        `.toLowerCase();
+                        if (!searchableText.includes(globalSearchTerm)) return false;
+                    }
+
+                    // Sütun Filtreleri
+                    return Object.keys(this.columnFilters).every(key => {
+                        const filterValue = this.columnFilters[key];
+                        if (!filterValue) return true;
+
+                        let recordValue = '';
+                        if (key === 'owners' || key === 'applicants') {
+                            const list = record.applicants || [];
+                            recordValue = list.map(a => {
+                                // allPersons tanımlı mı kontrol et
+                                const found = (typeof allPersons !== 'undefined') ? allPersons.find(p => p.id === a.id) : null;
+                                return found ? found.name : (a.name || '');
+                            }).join(' ');
+                        } else if (key === 'title') {
+                            recordValue = record.title || record.brandText || '';
+                        } else if (key === 'type' || key === 'recordType' || key === 'ipType') {
+                            recordValue = record.type || '';
+                        } else {
+                            // KRİTİK GÜNCELLEME: undefined/null kontrolü
+                            recordValue = String(record[key] || '');
+                        }
+                        
+                        return recordValue.toLowerCase().includes(filterValue);
+                    });
                 });
-            });
 
-              if (this.sortBy.column) {
-                  const { column, direction } = this.sortBy;
-                  filtered.sort((a, b) => {
-                      let valA, valB;
-                      if (column === 'title') {
-                          valA = a.title || a.brandText || '';
-                          valB = b.title || b.brandText || '';
-                      } else if (column === 'type' || column === 'recordType' || column === 'ipType') {
-                          valA = a.type || '';
-                          valB = b.type || '';
-                      } else if (column === 'owners' || column === 'applicants') {
-                          // Refactor: Sıralamada ID bazlı isim kullan
-                          const getNames = (rec) => (rec.applicants || []).map(app => {
-                              const found = allPersons.find(p => p.id === app.id);
-                              return found ? found.name : (app.name || '');
-                          }).join(', ');
-                          
-                          valA = getNames(a);
-                          valB = getNames(b);
-                      } else {
-                          valA = a[column] || '';
-                          valB = b[column] || '';
-                      }
-                      if (column.includes('Date')) {
-                          valA = new Date(valA || 0);
-                          valB = new Date(valB || 0);
-                      }
-                      if (valA < valB) return direction === 'asc' ? -1 : 1;
-                      if (valA > valB) return direction === 'asc' ? 1 : -1;
-                      return 0;
-                  });
-              }
+                // Sıralama
+                if (this.sortBy.column) {
+                    const { column, direction } = this.sortBy;
+                    filtered.sort((a, b) => {
+                        let valA, valB;
+                        
+                        if (column === 'title') {
+                            valA = a.title || a.brandText || '';
+                            valB = b.title || b.brandText || '';
+                        } else if (column === 'type' || column === 'recordType' || column === 'ipType') {
+                            valA = a.type || '';
+                            valB = b.type || '';
+                        } else if (column === 'owners' || column === 'applicants') {
+                            const getNames = (rec) => (rec.applicants || []).map(app => {
+                                const found = (typeof allPersons !== 'undefined') ? allPersons.find(p => p.id === app.id) : null;
+                                return found ? found.name : (app.name || '');
+                            }).join(', ');
+                            
+                            valA = getNames(a);
+                            valB = getNames(b);
+                        } else {
+                            valA = a[column] || '';
+                            valB = b[column] || '';
+                        }
 
-              this.filteredAndSortedRecords = filtered;
-              if (pagination) pagination.update(this.filteredAndSortedRecords.length);
+                        // Tarih Sıralaması
+                        if (column.includes('Date')) {
+                            valA = new Date(valA || 0);
+                            valB = new Date(valB || 0);
+                        }
 
-              document.getElementById('portfolioTableBody').style.display = this.filteredAndSortedRecords.length > 0 ? 'table-row-group' : 'none';
-              document.getElementById('noRecordsMessage').style.display = this.filteredAndSortedRecords.length === 0 ? 'block' : 'none';
+                        // String Karşılaştırma (Türkçe karakter desteği)
+                        if (typeof valA === 'string' && typeof valB === 'string') {
+                            return direction === 'asc' ? valA.localeCompare(valB, 'tr-TR') : valB.localeCompare(valA, 'tr-TR');
+                        }
 
-              this.renderCurrentPage();
+                        if (valA < valB) return direction === 'asc' ? -1 : 1;
+                        if (valA > valB) return direction === 'asc' ? 1 : -1;
+                        return 0;
+                    });
+                }
+
+                // Sonuçları Kaydet ve UI Güncelle
+                this.filteredAndSortedRecords = filtered;
+                if (pagination) pagination.update(this.filteredAndSortedRecords.length);
+
+                const tbody = document.getElementById('portfolioTableBody');
+                const noMsg = document.getElementById('noRecordsMessage');
+                
+                if(tbody) tbody.style.display = this.filteredAndSortedRecords.length > 0 ? 'table-row-group' : 'none';
+                if(noMsg) noMsg.style.display = this.filteredAndSortedRecords.length === 0 ? 'block' : 'none';
+
+                this.renderCurrentPage();
             }
 
             setupEventListeners() {
