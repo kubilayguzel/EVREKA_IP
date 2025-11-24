@@ -13,15 +13,45 @@
 
     <style>
         :root{ --card-radius: 16px; }
-        .card { border-radius: var(--card-radius); }
-        .shadow-sm { box-shadow: 0 10px 24px rgba(0,0,0,0.08) !important; }
         
-        /* PDF Viewer Specific Styles */
-        .pdf-card-body {
-            height: 85vh; /* Height relative to viewport */
-            background-color: #525659;
-            overflow: hidden;
+        html, body {
+            height: 100%;
+            margin: 0;
+            background-color: #f8f9fa;
         }
+
+        /* Ana İçerik Alanı Düzeltmesi */
+        .main-content {
+            width: 100%;
+            min-height: 100vh;
+            /* Sidebar varsa shared-styles.css margin-left verir. 
+               Yoksa veya eziliyorsa burası devreye girer. */
+            padding-top: 20px; 
+            transition: margin-left 0.3s;
+        }
+
+        .container-fluid {
+            max-width: 100% !important; /* Genişliği kısıtlamayı engelle */
+            padding-left: 25px;
+            padding-right: 25px;
+        }
+
+        .card { 
+            border-radius: var(--card-radius); 
+            border: none;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        }
+
+        /* PDF Görüntüleyici Alanı */
+        .pdf-card-body {
+            /* Ekran yüksekliğinin %85'ini kaplasın */
+            height: 85vh; 
+            min-height: 600px;
+            background-color: #525659; /* PDF Viewer arka plan rengi */
+            overflow: hidden;
+            position: relative;
+        }
+        
         #pdfViewer {
             width: 100%;
             height: 100%;
@@ -29,10 +59,15 @@
             display: block;
         }
         
+        /* Sağ Panel (Analiz Formu) */
         .analysis-panel {
-            height: 85vh; /* Match PDF height */
-            overflow-y: auto;
+            height: 85vh; /* PDF ile aynı yükseklik */
+            min-height: 600px;
+            overflow-y: auto; /* İçerik taşarsa scroll çıksın */
+            background-color: #fff;
         }
+
+        .shadow-sm { box-shadow: 0 10px 24px rgba(0,0,0,0.08) !important; }
     </style>
 </head>
 <body>
@@ -45,25 +80,27 @@
     <div id="layout-placeholder"></div>
 
     <div class="main-content">
-        <div class="container-fluid p-4">
+        <div class="container-fluid">
             
-            <div class="d-flex justify-content-between align-items-center mb-4">
+            <div class="d-flex justify-content-between align-items-center mb-3">
                 <div>
-                    <h4 class="mb-1"><i class="fas fa-file-contract mr-2"></i>Evrak Analizi ve İndeksleme</h4>
-                    <p class="text-muted mb-0" id="fileNameDisplay">Dosya yükleniyor...</p>
+                    <h4 class="mb-1 text-dark font-weight-bold">
+                        <i class="fas fa-file-contract mr-2 text-primary"></i>Evrak Analizi ve İndeksleme
+                    </h4>
+                    <p class="text-muted mb-0 small" id="fileNameDisplay">Dosya yükleniyor...</p>
                 </div>
-                <a href="bulk-indexing-page.html" class="btn btn-outline-secondary">
+                <a href="bulk-indexing-page.html" class="btn btn-outline-secondary btn-sm px-3">
                     <i class="fas fa-arrow-left mr-1"></i> Listeye Dön
                 </a>
             </div>
 
-            <div id="matchInfoDisplay" class="mb-4">
+            <div id="matchInfoDisplay" class="mb-3">
                 </div>
 
             <div class="row">
-                <div class="col-lg-7 mb-4">
+                <div class="col-lg-8 pr-lg-2 mb-4">
                     <div class="card shadow-sm h-100">
-                        <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                        <div class="card-header bg-white border-bottom py-2">
                             <h6 class="mb-0 font-weight-bold text-dark"><i class="fas fa-file-pdf mr-2 text-danger"></i>Evrak Önizleme</h6>
                         </div>
                         <div class="card-body p-0 pdf-card-body">
@@ -72,12 +109,12 @@
                     </div>
                 </div>
 
-                <div class="col-lg-5 mb-4">
+                <div class="col-lg-4 pl-lg-2 mb-4">
                     <div class="card shadow-sm h-100">
-                        <div class="card-header bg-white border-bottom">
-                            <h6 class="mb-0 text-primary font-weight-bold"><i class="fas fa-magic mr-2"></i>Yapay Zeka Analizi</h6>
+                        <div class="card-header bg-white border-bottom py-2">
+                            <h6 class="mb-0 text-primary font-weight-bold"><i class="fas fa-robot mr-2"></i>Yapay Zeka Analizi</h6>
                         </div>
-                        <div class="card-body analysis-panel">
+                        <div class="card-body analysis-panel p-3">
                             
                             <div id="analysisLoading" class="text-center py-5">
                                 <div class="spinner-border text-primary mb-3" role="status"></div>
@@ -86,24 +123,24 @@
 
                             <div id="analysisResults" style="display: none;">
                                 
-                                <div class="alert alert-info small mb-4 shadow-sm border-0" style="background-color: #e3f2fd; color: #0d47a1;">
+                                <div class="alert alert-light border small mb-3 rounded" style="background-color: #f8f9fa;">
                                     <div class="d-flex">
-                                        <i class="fas fa-info-circle fa-lg mt-1 mr-2"></i>
-                                        <div>
-                                            <strong>Analiz Özeti:</strong><br>
-                                            <span id="analysisSummary" style="white-space: pre-wrap;">Analiz bekleniyor...</span>
+                                        <i class="fas fa-info-circle text-info mt-1 mr-2"></i>
+                                        <div style="flex:1">
+                                            <strong class="text-dark">Analiz Özeti:</strong><br>
+                                            <span id="analysisSummary" class="text-muted" style="white-space: pre-wrap;">Analiz bekleniyor...</span>
                                         </div>
                                     </div>
                                 </div>
 
                                 <div class="form-group">
-                                    <label class="font-weight-bold text-dark">Tespit Edilen Tarih</label>
-                                    <input type="date" id="detectedDate" class="form-control form-control-lg">
+                                    <label class="font-weight-bold small text-uppercase text-muted mb-1">Tespit Edilen Tarih</label>
+                                    <input type="date" id="detectedDate" class="form-control">
                                 </div>
 
                                 <div class="form-group">
-                                    <label class="font-weight-bold text-dark">İşlem Türü</label>
-                                    <select id="detectedType" class="form-control form-control-lg">
+                                    <label class="font-weight-bold small text-uppercase text-muted mb-1">İşlem Türü</label>
+                                    <select id="detectedType" class="form-control">
                                         <option value="general">Genel Evrak</option>
                                         <option value="publish">Marka Yayını</option>
                                         <option value="partial_publish">Kısmi Yayın</option>
@@ -115,13 +152,11 @@
                                 </div>
 
                                 <div class="form-group">
-                                    <label class="font-weight-bold text-dark">Açıklama / Notlar</label>
-                                    <textarea id="transactionNotes" class="form-control" rows="4" placeholder="İşlem ile ilgili notlarınız..."></textarea>
+                                    <label class="font-weight-bold small text-uppercase text-muted mb-1">Açıklama / Notlar</label>
+                                    <textarea id="transactionNotes" class="form-control" rows="5" placeholder="İşlem ile ilgili notlarınız..."></textarea>
                                 </div>
 
-                                <hr class="my-4">
-
-                                <button id="saveTransactionBtn" class="btn btn-primary btn-lg btn-block shadow-sm">
+                                <button id="saveTransactionBtn" class="btn btn-primary btn-block py-2 mt-4 shadow-sm font-weight-bold">
                                     <i class="fas fa-check-circle mr-2"></i> Onayla ve İşle
                                 </button>
                             </div>
@@ -141,7 +176,7 @@
         import { loadSharedLayout } from './js/layout-loader.js';
         
         document.addEventListener('DOMContentLoaded', () => {
-            // Updated to load inside #layout-placeholder
+            // Sidebar'ı yükle
             loadSharedLayout({ activeMenuLink: 'bulk-indexing-page.html' });
         });
     </script>
