@@ -12,20 +12,25 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
 
     <style>
-        /* Özelleştirilmiş Stiller */
         :root{ --card-radius: 16px; }
         .card { border-radius: var(--card-radius); }
         .shadow-sm { box-shadow: 0 10px 24px rgba(0,0,0,0.08) !important; }
         
+        /* PDF Viewer Specific Styles */
+        .pdf-card-body {
+            height: 85vh; /* Height relative to viewport */
+            background-color: #525659;
+            overflow: hidden;
+        }
         #pdfViewer {
             width: 100%;
-            height: 800px;
+            height: 100%;
             border: none;
-            background-color: #525659;
+            display: block;
         }
         
         .analysis-panel {
-            height: 800px;
+            height: 85vh; /* Match PDF height */
             overflow-y: auto;
         }
     </style>
@@ -37,111 +42,107 @@
         <div class="loading-text mt-2">İşleniyor...</div>
     </div>
 
-    <div id="layout-container">
-        <div class="main-content">
-            <div class="container-fluid p-4">
-                
-                <div class="d-flex justify-content-between align-items-center mb-4">
-                    <div>
-                        <h4 class="mb-1"><i class="fas fa-file-contract mr-2"></i>Evrak Analizi ve İndeksleme</h4>
-                        <p class="text-muted mb-0" id="fileNameDisplay">Dosya yükleniyor...</p>
-                    </div>
-                    <a href="bulk-indexing-page.html" class="btn btn-outline-secondary">
-                        <i class="fas fa-arrow-left mr-1"></i> Listeye Dön
-                    </a>
+    <div id="layout-placeholder"></div>
+
+    <div class="main-content">
+        <div class="container-fluid p-4">
+            
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <h4 class="mb-1"><i class="fas fa-file-contract mr-2"></i>Evrak Analizi ve İndeksleme</h4>
+                    <p class="text-muted mb-0" id="fileNameDisplay">Dosya yükleniyor...</p>
+                </div>
+                <a href="bulk-indexing-page.html" class="btn btn-outline-secondary">
+                    <i class="fas fa-arrow-left mr-1"></i> Listeye Dön
+                </a>
+            </div>
+
+            <div id="matchInfoDisplay" class="mb-4">
                 </div>
 
-                <div id="matchInfoDisplay" class="mb-4">
-                    </div>
-
-                <div class="row">
-                    <div class="col-lg-7">
-                        <div class="card shadow-sm h-100">
-                            <div class="card-header bg-light d-flex justify-content-between align-items-center">
-                                <h6 class="mb-0 font-weight-bold text-dark"><i class="fas fa-file-pdf mr-2 text-danger"></i>Evrak Önizleme</h6>
-                            </div>
-                            <div class="card-body p-0">
-                                <iframe id="pdfViewer"></iframe>
-                            </div>
+            <div class="row">
+                <div class="col-lg-7 mb-4">
+                    <div class="card shadow-sm h-100">
+                        <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                            <h6 class="mb-0 font-weight-bold text-dark"><i class="fas fa-file-pdf mr-2 text-danger"></i>Evrak Önizleme</h6>
+                        </div>
+                        <div class="card-body p-0 pdf-card-body">
+                            <iframe id="pdfViewer" allow="fullscreen"></iframe>
                         </div>
                     </div>
+                </div>
 
-                    <div class="col-lg-5">
-                        <div class="card shadow-sm h-100">
-                            <div class="card-header bg-white border-bottom">
-                                <h6 class="mb-0 text-primary font-weight-bold"><i class="fas fa-magic mr-2"></i>Yapay Zeka Analizi</h6>
+                <div class="col-lg-5 mb-4">
+                    <div class="card shadow-sm h-100">
+                        <div class="card-header bg-white border-bottom">
+                            <h6 class="mb-0 text-primary font-weight-bold"><i class="fas fa-magic mr-2"></i>Yapay Zeka Analizi</h6>
+                        </div>
+                        <div class="card-body analysis-panel">
+                            
+                            <div id="analysisLoading" class="text-center py-5">
+                                <div class="spinner-border text-primary mb-3" role="status"></div>
+                                <p class="text-muted">Evrak okunuyor ve analiz ediliyor...</p>
                             </div>
-                            <div class="card-body analysis-panel">
-                                
-                                <div id="analysisLoading" class="text-center py-5">
-                                    <div class="spinner-border text-primary mb-3" role="status"></div>
-                                    <p class="text-muted">Evrak okunuyor ve analiz ediliyor...</p>
-                                </div>
 
-                                <div id="analysisResults" style="display: none;">
-                                    
-                                    <div class="alert alert-info small mb-4 shadow-sm border-0" style="background-color: #e3f2fd; color: #0d47a1;">
-                                        <div class="d-flex">
-                                            <i class="fas fa-info-circle fa-lg mt-1 mr-2"></i>
-                                            <div>
-                                                <strong>Analiz Özeti:</strong><br>
-                                                <span id="analysisSummary" style="white-space: pre-wrap;">Analiz bekleniyor...</span>
-                                            </div>
+                            <div id="analysisResults" style="display: none;">
+                                
+                                <div class="alert alert-info small mb-4 shadow-sm border-0" style="background-color: #e3f2fd; color: #0d47a1;">
+                                    <div class="d-flex">
+                                        <i class="fas fa-info-circle fa-lg mt-1 mr-2"></i>
+                                        <div>
+                                            <strong>Analiz Özeti:</strong><br>
+                                            <span id="analysisSummary" style="white-space: pre-wrap;">Analiz bekleniyor...</span>
                                         </div>
                                     </div>
-
-                                    <div class="form-group">
-                                        <label class="font-weight-bold text-dark">Tespit Edilen Tarih</label>
-                                        <input type="date" id="detectedDate" class="form-control form-control-lg">
-                                    </div>
-
-                                    <div class="form-group">
-                                        <label class="font-weight-bold text-dark">İşlem Türü</label>
-                                        <select id="detectedType" class="form-control form-control-lg">
-                                            <option value="general">Genel Evrak</option>
-                                            <option value="publish">Marka Yayını</option>
-                                            <option value="partial_publish">Kısmi Yayın</option>
-                                            <option value="rejection">Başvuru Reddi</option>
-                                            <option value="opposition">Yayına İtiraz</option>
-                                            <option value="registration">Tescil Belgesi</option>
-                                            <option value="deficiency">Şekli Eksiklik</option>
-                                        </select>
-                                    </div>
-
-                                    <div class="form-group">
-                                        <label class="font-weight-bold text-dark">Açıklama / Notlar</label>
-                                        <textarea id="transactionNotes" class="form-control" rows="4" placeholder="İşlem ile ilgili notlarınız..."></textarea>
-                                    </div>
-
-                                    <hr class="my-4">
-
-                                    <button id="saveTransactionBtn" class="btn btn-primary btn-lg btn-block shadow-sm">
-                                        <i class="fas fa-check-circle mr-2"></i> Onayla ve İşle
-                                    </button>
                                 </div>
 
+                                <div class="form-group">
+                                    <label class="font-weight-bold text-dark">Tespit Edilen Tarih</label>
+                                    <input type="date" id="detectedDate" class="form-control form-control-lg">
+                                </div>
+
+                                <div class="form-group">
+                                    <label class="font-weight-bold text-dark">İşlem Türü</label>
+                                    <select id="detectedType" class="form-control form-control-lg">
+                                        <option value="general">Genel Evrak</option>
+                                        <option value="publish">Marka Yayını</option>
+                                        <option value="partial_publish">Kısmi Yayın</option>
+                                        <option value="rejection">Başvuru Reddi</option>
+                                        <option value="opposition">Yayına İtiraz</option>
+                                        <option value="registration">Tescil Belgesi</option>
+                                        <option value="deficiency">Şekli Eksiklik</option>
+                                    </select>
+                                </div>
+
+                                <div class="form-group">
+                                    <label class="font-weight-bold text-dark">Açıklama / Notlar</label>
+                                    <textarea id="transactionNotes" class="form-control" rows="4" placeholder="İşlem ile ilgili notlarınız..."></textarea>
+                                </div>
+
+                                <hr class="my-4">
+
+                                <button id="saveTransactionBtn" class="btn btn-primary btn-lg btn-block shadow-sm">
+                                    <i class="fas fa-check-circle mr-2"></i> Onayla ve İşle
+                                </button>
                             </div>
+
                         </div>
                     </div>
                 </div>
-
             </div>
+
         </div>
     </div>
 
     <script type="module" src="js/layout-loader.js"></script>
-
     <script type="module" src="js/indexing/document-review-manager.js"></script>
     
     <script type="module">
         import { loadSharedLayout } from './js/layout-loader.js';
         
         document.addEventListener('DOMContentLoaded', () => {
-            // Layout'u yükle
+            // Updated to load inside #layout-placeholder
             loadSharedLayout({ activeMenuLink: 'bulk-indexing-page.html' });
-            
-            // DocumentReviewManager kendini otomatik başlatıyor (constructor içinde init var),
-            // o yüzden burada ekstra bir şey çağırmamıza gerek yok.
         });
     </script>
 </body>
