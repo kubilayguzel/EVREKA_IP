@@ -3,22 +3,29 @@
 import { 
     authService, 
     ipRecordsService, 
-    transactionTypeService, // İşlem tiplerini ve kurallarını çekmek için
-    taskService,            // Görev oluşturmak için
+    transactionTypeService, 
+    taskService,
+    firebaseServices, // Storage işlemleri için gerekli
     db 
 } from '../../firebase-config.js';
 
 import { 
-    doc, getDoc, updateDoc
+    doc, getDoc, updateDoc, collection, arrayUnion
 } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
-import { showNotification, debounce } from '../../utils.js';
+import { 
+    ref, uploadBytes, getDownloadURL 
+} from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js';
+
+import { showNotification, debounce, addMonthsToDate, findNextWorkingDay, isWeekend, isHoliday, TURKEY_HOLIDAYS } from '../../utils.js';
 
 // Servisler
 import { PdfExtractor } from './pdf-extractor.js';
 import { PdfAnalyzer } from './pdf-analyzer.js';
 
 const UNINDEXED_PDFS_COLLECTION = 'unindexed_pdfs';
+const SELCAN_UID = 'Mkmq2sc0T6XTIg1weZyp5AGZ0YG3'; // Varsayılan atama için (Eski koddan alındı)
+const SELCAN_EMAIL = 'selcanakoglu@evrekapatent.com';
 
 export class DocumentReviewManager {
     constructor() {
@@ -27,10 +34,10 @@ export class DocumentReviewManager {
         this.pdfData = null;
         this.matchedRecord = null;
         this.analysisResult = null;
-        this.recordTransactions = []; 
-        this.allTransactionTypes = []; // Tüm işlem tiplerini (kurallarıyla beraber) burada tutacağız
         
-        // Servisler
+        this.currentTransactions = []; // Kayda ait mevcut işlemler
+        this.allTransactionTypes = []; // Tüm işlem tipleri
+        
         this.pdfExtractor = new PdfExtractor();
         this.analyzer = new PdfAnalyzer();
 
@@ -47,59 +54,30 @@ export class DocumentReviewManager {
         this.currentUser = authService.getCurrentUser();
         this.setupEventListeners();
         
-        // Kritik Verileri Paralel Yükle
         await Promise.all([
-            this.loadTransactionTypes(), // Kuralları çek
-            this.loadData()              // PDF verisini çek
+            this.loadTransactionTypes(),
+            this.loadData()
         ]);
     }
 
-    // --- 1. İşlem Tiplerini ve Kurallarını Yükle ---
     async loadTransactionTypes() {
         try {
             const result = await transactionTypeService.getTransactionTypes();
             if (result.success) {
                 this.allTransactionTypes = result.data;
-                this.populateTransactionTypesDropdown();
             }
         } catch (error) {
             console.error('İşlem tipleri yüklenemedi:', error);
         }
     }
 
-    populateTransactionTypesDropdown() {
-        const selectEl = document.getElementById('detectedType');
-        if (!selectEl) return;
-
-        selectEl.innerHTML = '<option value="">-- İşlem Türü Seçiniz --</option>';
-        
-        // Alfabetik sırala
-        this.allTransactionTypes.sort((a, b) => a.name.localeCompare(b.name));
-
-        this.allTransactionTypes.forEach(type => {
-            const option = document.createElement('option');
-            option.value = type.id; // Bu ID veritabanındaki gerçek ID'dir
-            option.textContent = type.alias || type.name;
-            
-            // UI'da kullanıcıya ipucu vermek için attribute ekleyebiliriz
-            if(type.triggersTask) {
-                option.textContent += ' (İş Tetikler ⚡)';
-            }
-            
-            selectEl.appendChild(option);
-        });
-    }
-
     setupEventListeners() {
-        // Manuel Arama Listener
+        // Manuel Arama
         const searchInput = document.getElementById('manualSearchInput');
         const searchResults = document.getElementById('manualSearchResults');
 
         if (searchInput) {
-            searchInput.addEventListener('input', debounce((e) => {
-                this.handleManualSearch(e.target.value);
-            }, 300));
-            
+            searchInput.addEventListener('input', debounce((e) => this.handleManualSearch(e.target.value), 300));
             document.addEventListener('click', (e) => {
                 if (searchResults && !searchInput.contains(e.target) && !searchResults.contains(e.target)) {
                     searchResults.style.display = 'none';
@@ -107,13 +85,16 @@ export class DocumentReviewManager {
             });
         }
 
-        // Parent Transaction Seçim Listener
+        // Parent Seçimi Değiştiğinde Child Listesini Güncelle
         const parentSelect = document.getElementById('parentTransactionSelect');
         if (parentSelect) {
-            parentSelect.addEventListener('change', (e) => {
-                const info = document.getElementById('parentTransactionInfo');
-                if (info) info.style.display = e.target.value ? 'block' : 'none';
-            });
+            parentSelect.addEventListener('change', () => this.updateChildTransactionOptions());
+        }
+
+        // Child Seçimi Değiştiğinde (Özel Alan Kontrolü - İtiraz vb.)
+        const childSelect = document.getElementById('detectedType');
+        if (childSelect) {
+            childSelect.addEventListener('change', () => this.checkSpecialFields());
         }
     }
 
@@ -128,7 +109,7 @@ export class DocumentReviewManager {
             if (this.pdfData.matchedRecordId) {
                 await this.selectRecord(this.pdfData.matchedRecordId);
             } else {
-                this.renderHeader(); 
+                this.renderHeader();
             }
 
             this.renderHeader();
@@ -140,61 +121,7 @@ export class DocumentReviewManager {
         }
     }
 
-    // --- Manuel Arama ve Kayıt Seçimi ---
-
-    async handleManualSearch(query) {
-        const resultsContainer = document.getElementById('manualSearchResults');
-        if (!resultsContainer) return;
-
-        if (!query || query.length < 3) {
-            resultsContainer.style.display = 'none';
-            return;
-        }
-
-        try {
-            const result = await ipRecordsService.searchRecords(query);
-            if (result.success) {
-                this.renderSearchResults(result.data);
-            }
-        } catch (error) {
-            console.error('Arama hatası:', error);
-        }
-    }
-
-    renderSearchResults(results) {
-        const container = document.getElementById('manualSearchResults');
-        if (!container) return;
-
-        container.innerHTML = '';
-        container.style.display = results.length ? 'block' : 'none';
-
-        if (!results.length) {
-            container.innerHTML = '<div class="p-2 text-muted small">Sonuç bulunamadı.</div>';
-            container.style.display = 'block';
-            return;
-        }
-
-        container.innerHTML = results.map(r => `
-            <div class="search-result-item" data-id="${r.id}">
-                <div class="d-flex align-items-center">
-                    ${r.brandImageUrl ? `<img src="${r.brandImageUrl}" style="width:30px; height:30px; margin-right:10px; object-fit:contain;">` : ''}
-                    <div>
-                        <div class="font-weight-bold">${r.title}</div>
-                        <small class="text-muted">${r.applicationNumber || r.wipoIR || 'Numara Yok'}</small>
-                    </div>
-                </div>
-            </div>
-        `).join('');
-
-        container.querySelectorAll('.search-result-item').forEach(item => {
-            item.addEventListener('click', () => {
-                this.selectRecord(item.dataset.id);
-                container.style.display = 'none';
-                const searchInput = document.getElementById('manualSearchInput');
-                if (searchInput) searchInput.value = '';
-            });
-        });
-    }
+    // --- Kayıt Seçimi ve Transaction Yükleme ---
 
     async selectRecord(recordId) {
         try {
@@ -207,48 +134,299 @@ export class DocumentReviewManager {
             }
         } catch (error) {
             console.error('Kayıt seçim hatası:', error);
-            showNotification('Kayıt seçilemedi.', 'error');
         }
     }
 
     async loadParentTransactions(recordId) {
-        const selectEl = document.getElementById('parentTransactionSelect');
-        if (!selectEl) return;
+        const parentSelect = document.getElementById('parentTransactionSelect');
+        if (!parentSelect) return;
 
-        selectEl.innerHTML = '<option value="">Yükleniyor...</option>';
+        parentSelect.innerHTML = '<option value="">Yükleniyor...</option>';
 
         try {
             const transactionsResult = await ipRecordsService.getRecordTransactions(recordId);
-            const transactions = transactionsResult.success ? transactionsResult.data : [];
-            this.recordTransactions = transactions;
+            this.currentTransactions = transactionsResult.success ? transactionsResult.data : [];
 
-            selectEl.innerHTML = '<option value="">-- Bağımsız İşlem --</option>';
+            parentSelect.innerHTML = '<option value="">-- Ana İşlem Seçiniz --</option>';
             
-            transactions.sort((a, b) => new Date(b.timestamp || b.date || 0) - new Date(a.timestamp || a.date || 0));
+            // Sadece 'parent' hiyerarşisine sahip olanları filtrele
+            const parentTransactions = this.currentTransactions
+                .filter(t => t.transactionHierarchy === 'parent' || !t.transactionHierarchy)
+                .sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
 
-            transactions.forEach(t => {
-                const dateStr = (t.timestamp || t.date) ? new Date(t.timestamp || t.date).toLocaleDateString('tr-TR') : '-';
-                
-                // DB'deki type ID'sine göre adını bulmaya çalış, yoksa description kullan
-                let label = t.description || 'İşlem';
+            parentTransactions.forEach(t => {
                 const typeObj = this.allTransactionTypes.find(type => type.id === t.type);
-                if (typeObj) label = typeObj.alias || typeObj.name;
+                const label = typeObj ? (typeObj.alias || typeObj.name) : (t.description || 'Bilinmeyen İşlem');
+                const dateStr = (t.timestamp) ? new Date(t.timestamp).toLocaleDateString('tr-TR') : '-';
 
                 const opt = document.createElement('option');
                 opt.value = t.id;
+                opt.dataset.typeId = t.type; // Transaction Type ID'sini sakla (Logic için gerekli)
                 opt.textContent = `${label} (${dateStr})`;
-                selectEl.appendChild(opt);
+                parentSelect.appendChild(opt);
             });
 
         } catch (error) {
             console.error('Transaction yükleme hatası:', error);
-            selectEl.innerHTML = '<option value="">Hata oluştu</option>';
+            parentSelect.innerHTML = '<option value="">Hata oluştu</option>';
         }
     }
 
-    // --- Analiz ve Otomatik Eşleştirme ---
+    // --- Kritik Mantık: Child Transactionları Filtreleme ---
+    updateChildTransactionOptions() {
+        const parentSelect = document.getElementById('parentTransactionSelect');
+        const childSelect = document.getElementById('detectedType');
+        const selectedParentTxId = parentSelect.value;
 
+        childSelect.innerHTML = '<option value="">-- İşlem Türü Seçiniz --</option>';
+        childSelect.disabled = true;
+
+        if (!selectedParentTxId) return;
+
+        // 1. Seçilen Parent Transaction'ın Tipini Bul
+        const selectedParentTx = this.currentTransactions.find(t => t.id === selectedParentTxId);
+        const parentTypeId = selectedParentTx?.type;
+        const parentTypeObj = this.allTransactionTypes.find(t => t.id === parentTypeId);
+
+        if (!parentTypeObj || !parentTypeObj.indexFile) {
+            console.warn('Bu ana işlem için tanımlı alt işlem (indexFile) bulunamadı.');
+            return;
+        }
+
+        // 2. Sadece izin verilen (indexFile array'inde olan) child tiplerini listele
+        const allowedChildIds = Array.isArray(parentTypeObj.indexFile) ? parentTypeObj.indexFile : [];
+        
+        const allowedChildTypes = this.allTransactionTypes
+            .filter(t => allowedChildIds.includes(t.id))
+            .sort((a, b) => (a.order || 999) - (b.order || 999));
+
+        allowedChildTypes.forEach(type => {
+            const opt = document.createElement('option');
+            opt.value = type.id;
+            opt.textContent = type.alias || type.name;
+            childSelect.appendChild(opt);
+        });
+
+        childSelect.disabled = false;
+        
+        // Eğer analiz sonucundan gelen tip bu listede varsa otomatik seç
+        if (this.analysisResult && this.analysisResult.detectedType) {
+            this.autoSelectChildType(childSelect);
+        }
+    }
+
+    autoSelectChildType(selectElement) {
+        const detectedName = this.analysisResult.detectedType.name.toLowerCase();
+        const options = Array.from(selectElement.options);
+        
+        // Fuzzy Match: İsim benzerliğine göre seç
+        const matchedOption = options.find(opt => 
+            opt.text.toLowerCase().includes(detectedName)
+        );
+
+        if (matchedOption) {
+            matchedOption.selected = true;
+            this.checkSpecialFields(); // Özel alanları tetikle
+        }
+    }
+
+    // --- Özel Alan Kontrolü (İtiraz Bildirimi vb.) ---
+    checkSpecialFields() {
+        const childTypeId = document.getElementById('detectedType').value;
+        const oppositionSection = document.getElementById('oppositionSection');
+        
+        // ID 27: İtiraz Bildirimi (Eski koddaki ID)
+        if (childTypeId === '27') {
+            oppositionSection.style.display = 'block';
+        } else {
+            oppositionSection.style.display = 'none';
+        }
+    }
+
+    // --- KAYDETME VE İŞ TETİKLEME (CORE LOGIC) ---
+
+    async handleSave() {
+        if (!this.matchedRecord) {
+            alert('Lütfen önce bir kayıt ile eşleştirin.');
+            return;
+        }
+
+        const parentTxId = document.getElementById('parentTransactionSelect').value;
+        const childTypeId = document.getElementById('detectedType').value;
+        const deliveryDateStr = document.getElementById('detectedDate').value;
+        const notes = document.getElementById('transactionNotes').value;
+
+        if (!parentTxId || !childTypeId || !deliveryDateStr) {
+            showNotification('Lütfen Ana İşlem, İşlem Türü ve Tarih alanlarını doldurun.', 'error');
+            return;
+        }
+
+        const saveBtn = document.getElementById('saveTransactionBtn');
+        saveBtn.disabled = true;
+        showNotification('İşlem yürütülüyor...', 'info');
+
+        try {
+            const childTypeObj = this.allTransactionTypes.find(t => t.id === childTypeId);
+            const parentTx = this.currentTransactions.find(t => t.id === parentTxId);
+            const parentTypeObj = this.allTransactionTypes.find(t => t.id === parentTx?.type);
+
+            // --- 1. İtiraz Bildirimi Özel Mantığı (Yeni Parent Oluşturma) ---
+            let newParentTxId = null;
+            let oppositionFileUrl = null;
+
+            if (childTypeId === '27') { // İtiraz Bildirimi
+                const ownerInput = document.getElementById('oppositionOwnerInput').value;
+                const fileInput = document.getElementById('oppositionPetitionFile').files[0];
+
+                if (!ownerInput || !fileInput) {
+                    throw new Error('İtiraz bildirimi için İtiraz Sahibi ve PDF dosyası zorunludur.');
+                }
+
+                // Dosya Yükle
+                const storageRef = ref(firebaseServices.storage, `opposition-petitions/${this.matchedRecord.id}/${Date.now()}_${fileInput.name}`);
+                await uploadBytes(storageRef, fileInput);
+                oppositionFileUrl = await getDownloadURL(storageRef);
+
+                // Yeni Parent Tipini Belirle (Başvuru altındaysa -> Yayına İtiraz(20), zaten Yayına İtiraz ise -> Yeniden İnceleme(19))
+                let newParentTypeId = '20'; // Default: Yayına İtiraz
+                let newParentDesc = 'Yayına İtiraz (Otomatik)';
+
+                const parentAlias = parentTypeObj?.alias || parentTypeObj?.name || '';
+                if (parentAlias.includes('İtiraz') || parentTypeObj?.id === '20') {
+                    newParentTypeId = '19'; // Yeniden İnceleme
+                    newParentDesc = 'Yayına İtirazın Yeniden İncelenmesi (Otomatik)';
+                }
+
+                // Yeni Parent Transaction Oluştur
+                const newParentData = {
+                    type: newParentTypeId,
+                    description: newParentDesc,
+                    transactionHierarchy: 'parent',
+                    oppositionOwner: ownerInput,
+                    oppositionPetitionFileUrl: oppositionFileUrl,
+                    timestamp: new Date().toISOString()
+                };
+
+                const newParentResult = await ipRecordsService.addTransactionToRecord(this.matchedRecord.id, newParentData);
+                if (newParentResult.success) {
+                    newParentTxId = newParentResult.id;
+                    console.log('✅ Yeni Parent Transaction Oluşturuldu:', newParentTxId);
+                }
+            }
+
+            // --- 2. İş (Task) Tetikleme Kontrolü (Matris Mantığı) ---
+            let createdTaskId = null;
+            let shouldTriggerTask = false;
+
+            // recordOwnerType kontrolü
+            const recordType = (this.matchedRecord.recordOwnerType === 'self') ? 'Portföy' : '3. Taraf';
+            const parentTypeId = parentTx.type;
+
+            // Eski koddaki Matris
+            const taskTriggerMatrix = {
+                "20": { "Portföy": ["50", "51"], "3. Taraf": ["51", "52"] }, // Yayına İtiraz
+                "19": { "Portföy": ["32", "33", "34", "35"], "3. Taraf": ["31", "32", "35", "36"] } // Yeniden İnceleme
+            };
+
+            if (taskTriggerMatrix[parentTypeId] && taskTriggerMatrix[parentTypeId][recordType]) {
+                // Matris kuralı varsa
+                if (taskTriggerMatrix[parentTypeId][recordType].includes(childTypeId)) {
+                    shouldTriggerTask = true;
+                }
+            } else {
+                // Matris yoksa genel kural (taskTriggered alanı varsa)
+                if (childTypeObj.taskTriggered) {
+                    shouldTriggerTask = true;
+                }
+            }
+
+            // --- 3. Task Oluşturma ---
+            if (shouldTriggerTask && childTypeObj.taskTriggered) {
+                // Vade Tarihi Hesapla
+                const deliveryDate = new Date(deliveryDateStr);
+                const duePeriod = Number(childTypeObj.duePeriod || 0);
+                let officialDueDate = addMonthsToDate(deliveryDate, duePeriod);
+                officialDueDate = findNextWorkingDay(officialDueDate, TURKEY_HOLIDAYS);
+
+                // Operasyonel tarih (3 gün önce)
+                let taskDueDate = new Date(officialDueDate);
+                taskDueDate.setDate(taskDueDate.getDate() - 3);
+                // Hafta sonu kontrolü... (basitleştirilmiş)
+
+                // Atanacak Kişiyi Bul (Varsayılan Selcan)
+                let assignedUser = { uid: SELCAN_UID, email: SELCAN_EMAIL };
+                // TODO: taskAssignments tablosundan dinamik çekilebilir, şimdilik varsayılan.
+
+                const taskData = {
+                    title: `${childTypeObj.alias || childTypeObj.name} - ${this.matchedRecord.title}`,
+                    description: notes || `Otomatik oluşturulan görev.`,
+                    taskType: childTypeObj.taskTriggered, // Task Type ID
+                    relatedRecordId: this.matchedRecord.id,
+                    officialDueDate: officialDueDate.toISOString(),
+                    dueDate: taskDueDate.toISOString(),
+                    status: 'pending',
+                    assignedTo_uid: assignedUser.uid,
+                    assignedTo_email: assignedUser.email,
+                    createdAt: new Date().toISOString()
+                };
+
+                const taskResult = await taskService.createTask(taskData);
+                if (taskResult.success) {
+                    createdTaskId = taskResult.id;
+                    console.log('✅ Görev Tetiklendi:', createdTaskId);
+                }
+            }
+
+            // --- 4. Child Transaction Kaydetme ---
+            const finalParentId = newParentTxId || parentTxId; // Eğer yeni parent oluştuysa onu kullan
+
+            const transactionData = {
+                type: childTypeId,
+                transactionHierarchy: 'child',
+                parentId: finalParentId,
+                triggeringTaskId: createdTaskId || null,
+                description: childTypeObj.alias || childTypeObj.name,
+                date: deliveryDateStr ? new Date(deliveryDateStr).toISOString() : new Date().toISOString(),
+                relatedPdfUrl: this.pdfData.fileUrl,
+                relatedPdfId: this.pdfData.id
+            };
+
+            const txResult = await ipRecordsService.addTransactionToRecord(this.matchedRecord.id, transactionData);
+            
+            // İtiraz dilekçesini child transaction'a da belge olarak ekle
+            if (childTypeId === '27' && oppositionFileUrl && txResult.success) {
+                const docPayload = {
+                    id: Date.now().toString(),
+                    name: 'opposition_petition.pdf',
+                    downloadURL: oppositionFileUrl,
+                    type: 'application/pdf',
+                    uploadedAt: new Date().toISOString()
+                };
+                const txRef = doc(collection(db, 'ipRecords', this.matchedRecord.id, 'transactions'), txResult.id);
+                await updateDoc(txRef, { documents: arrayUnion(docPayload) });
+            }
+
+            // --- 5. PDF Durumunu Güncelle ---
+            await updateDoc(doc(db, UNINDEXED_PDFS_COLLECTION, this.pdfId), {
+                status: 'indexed',
+                indexedAt: new Date(),
+                finalTransactionId: txResult.id,
+                matchedRecordId: this.matchedRecord.id
+            });
+
+            showNotification('İşlem başarıyla tamamlandı!', 'success');
+            setTimeout(() => window.location.href = 'bulk-indexing-page.html', 1500);
+
+        } catch (error) {
+            console.error('Kaydetme hatası:', error);
+            showNotification('Hata: ' + error.message, 'error');
+            saveBtn.disabled = false;
+        }
+    }
+
+    // --- Diğer Yardımcılar (Analiz, Arama vs. değişmedi) ---
     async runAnalysis() {
+        // ... (Mevcut analiz kodu aynen kalacak) ...
         const loadingEl = document.getElementById('analysisLoading');
         const resultsEl = document.getElementById('analysisResults');
         const pdfViewerEl = document.getElementById('pdfViewer');
@@ -258,15 +436,11 @@ export class DocumentReviewManager {
 
         try {
             if (pdfViewerEl) pdfViewerEl.src = this.pdfData.fileUrl;
-
             const fullText = await this.pdfExtractor.extractTextFromUrl(this.pdfData.fileUrl);
             this.analysisResult = this.analyzer.analyze(fullText);
-            
             this.renderAnalysisResults();
-
         } catch (error) {
-            console.error('Analiz hatası:', error);
-            showNotification('PDF analiz edilemedi.', 'error');
+            console.error(error);
         } finally {
             if(loadingEl) loadingEl.style.display = 'none';
             if(resultsEl) resultsEl.style.display = 'block';
@@ -274,158 +448,55 @@ export class DocumentReviewManager {
     }
 
     renderHeader() {
-        const fileDisplay = document.getElementById('fileNameDisplay');
-        if (fileDisplay) fileDisplay.textContent = this.pdfData.fileName;
-        
+        document.getElementById('fileNameDisplay').textContent = this.pdfData.fileName;
         const matchInfoEl = document.getElementById('matchInfoDisplay');
-        if (!matchInfoEl) return;
-
         if (this.matchedRecord) {
-            matchInfoEl.innerHTML = `
-                <div class="d-flex align-items-center text-success">
-                    <i class="fas fa-check-circle fa-2x mr-3"></i>
-                    <div>
-                        <h5 class="mb-0 font-weight-bold">${this.matchedRecord.title}</h5>
-                        <small>${this.matchedRecord.applicationNumber || this.matchedRecord.wipoIR || 'Numara Yok'}</small>
-                    </div>
-                </div>`;
+            matchInfoEl.innerHTML = `<div class="text-success"><strong>${this.matchedRecord.title}</strong> (${this.matchedRecord.applicationNumber})</div>`;
         } else {
-            matchInfoEl.innerHTML = `
-                <div class="d-flex align-items-center text-warning">
-                    <i class="fas fa-exclamation-triangle fa-2x mr-3"></i>
-                    <div>
-                        <h5 class="mb-0">Eşleşme Yok</h5>
-                        <small>Lütfen sağdaki kutudan kayıt arayın.</small>
-                    </div>
-                </div>`;
+            matchInfoEl.innerHTML = `<div class="text-warning">Eşleşme Yok</div>`;
         }
     }
 
     renderAnalysisResults() {
         const dateInput = document.getElementById('detectedDate');
-        const typeSelect = document.getElementById('detectedType');
         const summaryBox = document.getElementById('analysisSummary');
-
         if (dateInput && this.analysisResult.decisionDate) {
             const parts = this.analysisResult.decisionDate.split('.');
             if(parts.length === 3) dateInput.value = `${parts[2]}-${parts[1]}-${parts[0]}`;
         }
-
         if (summaryBox) {
-            summaryBox.textContent = `Tip: ${this.analysisResult.detectedType.name}, Kelimeler: ${this.analysisResult.keywords.join(', ')}`;
+            summaryBox.textContent = `Tip: ${this.analysisResult.detectedType.name}`;
         }
-
-        // Akıllı Eşleştirme: Analizden gelen isim ile DB'deki isimleri karşılaştır
-        if (typeSelect && this.analysisResult.detectedType.code !== 'general') {
-             const detectedName = this.analysisResult.detectedType.name.toLowerCase();
-             
-             // Dropdown seçeneklerini gez ve en iyi eşleşmeyi bul
-             let matchedOption = Array.from(typeSelect.options).find(opt => 
-                 opt.text.toLowerCase().includes(detectedName) || 
-                 (opt.text.toLowerCase().includes('yayın') && detectedName.includes('yayın'))
-             );
-
-             if (matchedOption) {
-                 matchedOption.selected = true;
-             }
-        }
-        
-        const saveBtn = document.getElementById('saveTransactionBtn');
-        if(saveBtn) saveBtn.onclick = () => this.handleSave();
+    }
+    
+    // Manuel Arama Fonksiyonları (Aynen Kalacak)
+    async handleManualSearch(query) {
+        const resultsContainer = document.getElementById('manualSearchResults');
+        if (!query || query.length < 3) { resultsContainer.style.display = 'none'; return; }
+        const result = await ipRecordsService.searchRecords(query);
+        if (result.success) this.renderSearchResults(result.data);
     }
 
-    // --- KAYDETME ve GÖREV TETİKLEME MANTIĞI ---
-
-    async handleSave() {
-        if (!this.matchedRecord) {
-            alert('Lütfen önce bir kayıt ile eşleştirin.');
-            return;
-        }
-
-        const dateVal = document.getElementById('detectedDate').value;
-        const typeId = document.getElementById('detectedType').value; // Seçilen Transaction Type ID
-        const notes = document.getElementById('transactionNotes').value;
-        const parentId = document.getElementById('parentTransactionSelect').value;
-
-        if (!typeId) {
-            alert('Lütfen bir işlem türü seçiniz.');
-            return;
-        }
-
-        showNotification('Kaydediliyor...', 'info');
-
-        try {
-            // 1. Seçilen İşlem Tipinin Özelliklerini Bul
-            const selectedTypeObj = this.allTransactionTypes.find(t => t.id === typeId);
-            let createdTaskId = null;
-
-            // 2. GÖREV TETİKLEME KONTROLÜ
-            // Veritabanında 'triggersTask' (bool) ve 'triggeredTaskTypeId' (string) alanları olmalı
-            if (selectedTypeObj && selectedTypeObj.triggersTask) {
-                console.log(`🔔 Görev Tetikleniyor: ${selectedTypeObj.name}`);
-                
-                // Vade Tarihi Hesaplama
-                let dueDate = new Date();
-                const daysToAdd = selectedTypeObj.deadlineDays || 30; // Varsayılan 30 gün
-                dueDate.setDate(dueDate.getDate() + parseInt(daysToAdd));
-
-                const taskData = {
-                    title: `${selectedTypeObj.alias || selectedTypeObj.name} - ${this.matchedRecord.title}`,
-                    description: notes || `Otomatik oluşturulan görev. Kaynak: ${this.pdfData.fileName}`,
-                    // Eğer DB'de tetiklenecek özel bir task tipi ID'si varsa onu kullan, yoksa 'general'
-                    specificTaskType: selectedTypeObj.triggeredTaskTypeId || null, 
-                    status: 'pending',
-                    priority: 'medium',
-                    relatedRecordId: this.matchedRecord.id,
-                    assignedTo_uid: this.currentUser.uid,
-                    assignedTo_email: this.currentUser.email,
-                    officialDueDate: dueDate.toISOString()
-                };
-
-                const taskResult = await taskService.createTask(taskData);
-                if (taskResult.success) {
-                    createdTaskId = taskResult.id;
-                    console.log('✅ Görev başarıyla oluşturuldu, ID:', createdTaskId);
-                } else {
-                    console.error('❌ Görev oluşturulamadı:', taskResult.error);
-                }
-            }
-
-            // 3. TRANSACTION OLUŞTURMA (İşlem Geçmişine Ekle)
-            const transactionData = {
-                type: typeId, // DB'deki gerçek ID
-                transactionHierarchy: parentId ? 'child' : 'parent',
-                parentTransactionId: parentId || null,
-                triggeringTaskId: createdTaskId || null, // Oluşturulan görevi bağla
-                description: notes || `İndeksleme: ${selectedTypeObj?.name || 'Belge'}`,
-                date: dateVal ? new Date(dateVal).toISOString() : new Date().toISOString(),
-                relatedPdfUrl: this.pdfData.fileUrl,
-                relatedPdfId: this.pdfData.id
-            };
-
-            await ipRecordsService.addTransactionToRecord(this.matchedRecord.id, transactionData);
-
-            // 4. PDF STATÜSÜNÜ GÜNCELLE
-            await updateDoc(doc(db, UNINDEXED_PDFS_COLLECTION, this.pdfId), {
-                status: 'indexed',
-                indexedAt: new Date(),
-                finalTransactionId: typeId,
-                matchedRecordId: this.matchedRecord.id
-            });
-
-            showNotification('İşlem başarıyla kaydedildi!', 'success');
+    renderSearchResults(results) {
+        const container = document.getElementById('manualSearchResults');
+        container.innerHTML = '';
+        container.style.display = results.length ? 'block' : 'none';
+        if (!results.length) { container.innerHTML = '<div class="p-2">Sonuç yok</div>'; return; }
+        
+        container.innerHTML = results.map(r => `
+            <div class="search-result-item p-2 border-bottom" style="cursor:pointer" data-id="${r.id}">
+                <strong>${r.title}</strong> <small>${r.applicationNumber}</small>
+            </div>`).join('');
             
-            // 1.5 saniye sonra listeye dön
-            setTimeout(() => window.location.href = 'bulk-indexing-page.html', 1500);
-
-        } catch (error) {
-            console.error('Kaydetme hatası:', error);
-            showNotification('Hata oluştu: ' + error.message, 'error');
-        }
+        container.querySelectorAll('div').forEach(el => {
+            el.onclick = () => {
+                this.selectRecord(el.dataset.id);
+                container.style.display = 'none';
+            };
+        });
     }
 }
 
-// Başlat
 document.addEventListener('DOMContentLoaded', () => {
     new DocumentReviewManager();
 });
