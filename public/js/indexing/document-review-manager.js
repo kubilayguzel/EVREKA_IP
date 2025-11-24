@@ -4,17 +4,17 @@ import {
     authService, 
     ipRecordsService, 
     db 
-} from '../firebase-config.js';
+} from '../../firebase-config.js';
 
 import { 
     doc, getDoc, updateDoc
 } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
-import { showNotification, debounce } from '../utils.js';
+import { showNotification, debounce } from '../../utils.js';
 
 // Servisler
-import { PdfExtractor } from './services/pdf-extractor.js';
-import { PdfAnalyzer } from './services/pdf-analyzer.js';
+import { PdfExtractor } from './pdf-extractor.js';
+import { PdfAnalyzer } from './pdf-analyzer.js';
 
 const UNINDEXED_PDFS_COLLECTION = 'unindexed_pdfs';
 
