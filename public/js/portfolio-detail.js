@@ -722,7 +722,6 @@ async function renderTransactionsAccordion(recordId){
           </div>
           <div class="transaction-meta">
             ${parentPdfIcons ? `<div class="transaction-pdfs">${parentPdfIcons}</div>` : ''}
-            ${hasChildren ? `<span class="child-count">${children.length} alt işlem</span>` : ''}
           </div>
         </div>
         ${childrenHtml}
