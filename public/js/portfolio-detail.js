@@ -904,9 +904,6 @@ window.currentRecord = {
 
 // Bootstrap
 (async () => {
-  await loadSharedLayout({ activeMenuLink: 'portfolio.html' });
-
-  // Layout padding ayarları (senin mevcut kodun)
   const wrapper = document.querySelector('.page-wrapper');
   const candidates = ['.navbar.fixed-top','.app-header','.site-header','header .navbar','nav.navbar.fixed-top'];
   let h = 0;
@@ -918,19 +915,27 @@ window.currentRecord = {
     }
   }
   if (wrapper) wrapper.style.paddingTop = (h ? (h+12) : 16) + 'px';
-
   onAuthStateChanged(auth, async (user) => {
     if (!user) {
-      // Oturum yoksa login sayfasına gönder
       window.location.href = 'index.html';
       return;
     }
-
-    // Oturum varsa kaydı yükle
+    if (!localStorage.getItem('currentUser')) {
+       const tokenResult = await user.getIdTokenResult();
+       const userData = {
+           uid: user.uid,
+           email: user.email,
+           displayName: user.displayName,
+           role: tokenResult.claims.role || 'user',
+           isSuperAdmin: tokenResult.claims.role === 'superadmin'
+       };
+       localStorage.setItem('currentUser', JSON.stringify(userData));
+    }
     try {
+      await loadSharedLayout({ activeMenuLink: 'portfolio.html' });
       await loadRecord();
     } catch (e) {
-      console.error('loadRecord error', e);
+      console.error('Yükleme hatası:', e);
     }
   });
 
