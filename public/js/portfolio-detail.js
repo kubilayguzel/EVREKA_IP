@@ -574,18 +574,25 @@ async function renderTransactionsAccordion(recordId){
             const addChildDoc = (docObj) => {
                 const name = docObj.fileName || docObj.name || 'Belge';
                 const url = docObj.fileUrl || docObj.downloadURL || docObj.url || docObj.path;
+                
+                // Tip belirleme mantığı
+                let finalType = docObj.type || 'child_doc';
+                if (docObj.documentDesignation === 'Resmi Yazı') finalType = 'official_document';
+                else if (docObj.documentDesignation === 'İtiraz Dilekçesi') finalType = 'opposition_petition';
+
                 if (url && !existingFileNames.has(name)) {
                     existingFileNames.add(name);
                     allChildDocs.push({
                         fileName: name,
                         fileUrl: url,
-                        type: docObj.type || 'child_doc',
-                        evrakNo: docObj.evrakNo
+                        type: finalType,
+                        evrakNo: docObj.evrakNo,
+                        isTaskDoc: docObj.isTaskDoc || false
                     });
                 }
             };
 
-            // A. Unindexed PDF'ler
+            // A. Unindexed PDF'ler (Sadece bu child'a ait olanlar)
             const childUnindexedPdfs = pdfsByTransaction[c.id] || [];
             childUnindexedPdfs.forEach(addChildDoc);
 
@@ -603,34 +610,44 @@ async function renderTransactionsAccordion(recordId){
             }
 
             // D. İtiraz Bildirimi Özel Durumu - DÜZELTİLDİ
-            // Artık Parent'ın bütün evraklarını buraya eklemiyoruz.
-            // Sadece İtiraz Dilekçesi varsa onu alıyoruz.
+            // Sorun: Parent'ın TÜM belgelerini kopyalıyordu.
+            // Çözüm: Sadece 'İtiraz Dilekçesi'ni al, diğerlerini alma.
             const IS_OPPOSITION_NOTICE = String(c.type) === '27';
             if (IS_OPPOSITION_NOTICE) {
+                // Parent'ın genel belgelerini KOPYALAMA (transactionDocs.forEach KALDIRILDI)
+                // Parent'ın unindexed PDF'lerini KOPYALAMA (parentPdfs.forEach KALDIRILDI)
+                
+                // Sadece İtiraz Dilekçesi varsa onu al (Çünkü bu genelde parent'ta tutuluyor)
                 if (p.oppositionPetitionFileUrl) {
                     addChildDoc({ fileName: 'İtiraz Dilekçesi', fileUrl: p.oppositionPetitionFileUrl, type: 'opposition_petition' });
                 }
             }
 
-            // İKONLARI OLUŞTUR (Sıra Bazlı Renklendirme)
-            const pdfIcons = allChildDocs.map((pdf, index) => {
-                let iconClass = 'fas fa-file-pdf';
+            // İKONLARI OLUŞTUR - GÜNCELLENDİ (PDF İkonu + Renk Kodları)
+            const pdfIcons = allChildDocs.map(pdf => {
+                let colorClass = 'doc-color-red'; // Varsayılan Kırmızı
                 let titleText = pdf.fileName;
-                let btnClass = 'btn-secondary'; // Varsayılan Gri
-                let badgeHtml = '';
+                let badgeText = ''; // Evrak No vb.
 
-                // 1. PDF Mavi, 2. PDF Turuncu
-                if (index === 0) btnClass = 'btn-primary';      // Mavi
-                else if (index === 1) btnClass = 'btn-warning'; // Turuncu
-
-                // ePats ise numara göster
-                if (pdf.type === 'epats_document' && pdf.evrakNo) {
-                    iconClass = 'fas fa-file-invoice';
-                    badgeHtml = `<span class="badge badge-light ml-1" style="font-size:0.7em">${pdf.evrakNo}</span>`;
+                // Tip kontrolü ve renk ataması
+                if (pdf.type === 'opposition_petition' || pdf.fileName.includes('İtiraz Dilekçesi')) {
+                    colorClass = 'doc-color-orange';
+                } else if (pdf.type === 'official_document' || pdf.fileName.includes('Resmi Yazı')) {
+                    colorClass = 'doc-color-green';
+                } else if (pdf.type === 'epats_document') {
+                    colorClass = 'doc-color-blue';
+                    if (pdf.evrakNo) badgeText = `(${pdf.evrakNo})`;
+                } else if (pdf.type === 'task_document' || pdf.isTaskDoc) {
+                    colorClass = 'doc-color-purple';
                 }
 
-                return `<a onclick="window.open('${pdf.fileUrl}', '_blank')" title="${titleText}" class="btn btn-sm ${btnClass} mr-1 mb-1" style="cursor: pointer;">
-                    <i class="${iconClass}"></i>${badgeHtml}
+                // Yeni HTML Yapısı (Buton değil, şık link)
+                return `<a onclick="window.open('${pdf.fileUrl}', '_blank')" 
+                           title="${titleText}" 
+                           class="doc-link-item ${colorClass}" 
+                           style="cursor: pointer;">
+                    <i class="fas fa-file-pdf"></i>
+                    <span>${badgeText || 'PDF Görüntüle'}</span>
                 </a>`;
             }).join(' ');
 
@@ -638,7 +655,7 @@ async function renderTransactionsAccordion(recordId){
               <div class="child-transaction-content">
                 <div class="child-transaction-name-date">${cn} - ${ct.d} ${ct.t}</div>
               </div>
-              ${pdfIcons ? `<div class="child-transaction-pdfs">${pdfIcons}</div>` : ''}
+              ${pdfIcons ? `<div class="child-transaction-pdfs d-flex align-items-center flex-wrap">${pdfIcons}</div>` : ''}
             </div>`;
       }));
 
@@ -680,15 +697,18 @@ async function renderTransactionsAccordion(recordId){
           }
       });
 
-      const parentPdfIcons = uniqueParentDocs.map((pdf, index) => {
-          let btnClass = 'btn-secondary'; // Varsayılan Gri
+      const parentPdfIcons = uniqueParentDocs.map(pdf => {
+          let colorClass = 'doc-color-red';
           
-          // 1. PDF Mavi, 2. PDF Turuncu
-          if (index === 0) btnClass = 'btn-primary';      // Mavi
-          else if (index === 1) btnClass = 'btn-warning'; // Turuncu
+          if (pdf.type === 'opposition_petition') colorClass = 'doc-color-orange';
+          else if (pdf.type === 'official_document') colorClass = 'doc-color-green';
+          else if (pdf.type === 'epats_document') colorClass = 'doc-color-blue';
 
-          return `<a onclick="window.open('${pdf.fileUrl}', '_blank')" class="action-btn ${btnClass} btn-sm mr-1" title="${pdf.fileName}" style="cursor:pointer;">
-             <i class="fas fa-file-alt"></i>
+          return `<a onclick="window.open('${pdf.fileUrl}', '_blank')" 
+                     class="doc-link-item ${colorClass}" 
+                     title="${pdf.fileName}" 
+                     style="cursor:pointer;">
+             <i class="fas fa-file-pdf"></i>
           </a>`;
       }).join(' ');
 
