@@ -393,7 +393,10 @@ export const ipRecordsService = {
         try {
             const transactionsRef = collection(db, 'ipRecords', recordId, 'transactions');
             const q = query(transactionsRef, orderBy('timestamp', 'asc')); 
-            const querySnapshot = await getDocs(q);
+            
+            // DÜZELTME: Cache'i atla, veriyi sunucudan (Server) zorla getir
+            const querySnapshot = await getDocsFromServer(q); 
+            
             const transactions = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             return { success: true, transactions: transactions };
         } catch (error) {
