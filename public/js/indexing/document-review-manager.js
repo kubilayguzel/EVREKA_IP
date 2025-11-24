@@ -5,7 +5,7 @@ import {
     ipRecordsService, 
     transactionTypeService, 
     taskService,
-    firebaseServices, // Storage işlemleri için gerekli
+    firebaseServices,
     db 
 } from '../../firebase-config.js';
 
@@ -17,14 +17,14 @@ import {
     ref, uploadBytes, getDownloadURL 
 } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js';
 
-import { showNotification, debounce, addMonthsToDate, findNextWorkingDay, isWeekend, isHoliday, TURKEY_HOLIDAYS } from '../../utils.js';
+import { showNotification, debounce, addMonthsToDate, findNextWorkingDay, TURKEY_HOLIDAYS } from '../../utils.js';
 
 // Servisler
 import { PdfExtractor } from './pdf-extractor.js';
 import { PdfAnalyzer } from './pdf-analyzer.js';
 
 const UNINDEXED_PDFS_COLLECTION = 'unindexed_pdfs';
-const SELCAN_UID = 'Mkmq2sc0T6XTIg1weZyp5AGZ0YG3'; // Varsayılan atama için (Eski koddan alındı)
+const SELCAN_UID = 'Mkmq2sc0T6XTIg1weZyp5AGZ0YG3'; 
 const SELCAN_EMAIL = 'selcanakoglu@evrekapatent.com';
 
 export class DocumentReviewManager {
@@ -35,8 +35,8 @@ export class DocumentReviewManager {
         this.matchedRecord = null;
         this.analysisResult = null;
         
-        this.currentTransactions = []; // Kayda ait mevcut işlemler
-        this.allTransactionTypes = []; // Tüm işlem tipleri
+        this.currentTransactions = []; 
+        this.allTransactionTypes = []; 
         
         this.pdfExtractor = new PdfExtractor();
         this.analyzer = new PdfAnalyzer();
@@ -52,12 +52,13 @@ export class DocumentReviewManager {
         }
 
         this.currentUser = authService.getCurrentUser();
+        
+        // 1. Listener'ları Kur (Butonlar burada aktifleşir)
         this.setupEventListeners();
         
-        await Promise.all([
-            this.loadTransactionTypes(),
-            this.loadData()
-        ]);
+        // 2. Verileri Sırayla Yükle (Race condition önlemek için)
+        await this.loadTransactionTypes(); // Önce tipleri çek
+        await this.loadData();             // Sonra kaydı ve PDF'i çek
     }
 
     async loadTransactionTypes() {
@@ -72,6 +73,19 @@ export class DocumentReviewManager {
     }
 
     setupEventListeners() {
+        // --- KAYDET BUTONU (DÜZELTİLDİ) ---
+        const saveBtn = document.getElementById('saveTransactionBtn');
+        if (saveBtn) {
+            // Mevcut listener varsa temizlemek için klonlama (opsiyonel ama güvenli)
+            const newSaveBtn = saveBtn.cloneNode(true);
+            saveBtn.parentNode.replaceChild(newSaveBtn, saveBtn);
+            
+            newSaveBtn.addEventListener('click', (e) => {
+                e.preventDefault(); // Form submit'i engelle
+                this.handleSave();
+            });
+        }
+
         // Manuel Arama
         const searchInput = document.getElementById('manualSearchInput');
         const searchResults = document.getElementById('manualSearchResults');
@@ -85,13 +99,13 @@ export class DocumentReviewManager {
             });
         }
 
-        // Parent Seçimi Değiştiğinde Child Listesini Güncelle
+        // Parent Seçimi -> Child Listesini Güncelle
         const parentSelect = document.getElementById('parentTransactionSelect');
         if (parentSelect) {
             parentSelect.addEventListener('change', () => this.updateChildTransactionOptions());
         }
 
-        // Child Seçimi Değiştiğinde (Özel Alan Kontrolü - İtiraz vb.)
+        // Child Seçimi -> Özel Alan Kontrolü
         const childSelect = document.getElementById('detectedType');
         if (childSelect) {
             childSelect.addEventListener('change', () => this.checkSpecialFields());
@@ -117,7 +131,7 @@ export class DocumentReviewManager {
 
         } catch (error) {
             console.error('Veri yükleme hatası:', error);
-            showNotification('Hata: ' + error.message, 'error');
+            showNotification('Veri yükleme hatası: ' + error.message, 'error');
         }
     }
 
@@ -149,7 +163,6 @@ export class DocumentReviewManager {
 
             parentSelect.innerHTML = '<option value="">-- Ana İşlem Seçiniz --</option>';
             
-            // Sadece 'parent' hiyerarşisine sahip olanları filtrele
             const parentTransactions = this.currentTransactions
                 .filter(t => t.transactionHierarchy === 'parent' || !t.transactionHierarchy)
                 .sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
@@ -161,7 +174,6 @@ export class DocumentReviewManager {
 
                 const opt = document.createElement('option');
                 opt.value = t.id;
-                opt.dataset.typeId = t.type; // Transaction Type ID'sini sakla (Logic için gerekli)
                 opt.textContent = `${label} (${dateStr})`;
                 parentSelect.appendChild(opt);
             });
@@ -172,7 +184,7 @@ export class DocumentReviewManager {
         }
     }
 
-    // --- Kritik Mantık: Child Transactionları Filtreleme ---
+    // --- Child Transaction Filtreleme ---
     updateChildTransactionOptions() {
         const parentSelect = document.getElementById('parentTransactionSelect');
         const childSelect = document.getElementById('detectedType');
@@ -183,17 +195,17 @@ export class DocumentReviewManager {
 
         if (!selectedParentTxId) return;
 
-        // 1. Seçilen Parent Transaction'ın Tipini Bul
         const selectedParentTx = this.currentTransactions.find(t => t.id === selectedParentTxId);
         const parentTypeId = selectedParentTx?.type;
         const parentTypeObj = this.allTransactionTypes.find(t => t.id === parentTypeId);
 
         if (!parentTypeObj || !parentTypeObj.indexFile) {
             console.warn('Bu ana işlem için tanımlı alt işlem (indexFile) bulunamadı.');
+            // Kullanıcıyı kilitlememek için fallback (tüm child'ları göster) eklenebilir
+            // Şimdilik sadece uyarı veriyoruz.
             return;
         }
 
-        // 2. Sadece izin verilen (indexFile array'inde olan) child tiplerini listele
         const allowedChildIds = Array.isArray(parentTypeObj.indexFile) ? parentTypeObj.indexFile : [];
         
         const allowedChildTypes = this.allTransactionTypes
@@ -209,7 +221,6 @@ export class DocumentReviewManager {
 
         childSelect.disabled = false;
         
-        // Eğer analiz sonucundan gelen tip bu listede varsa otomatik seç
         if (this.analysisResult && this.analysisResult.detectedType) {
             this.autoSelectChildType(childSelect);
         }
@@ -219,33 +230,32 @@ export class DocumentReviewManager {
         const detectedName = this.analysisResult.detectedType.name.toLowerCase();
         const options = Array.from(selectElement.options);
         
-        // Fuzzy Match: İsim benzerliğine göre seç
         const matchedOption = options.find(opt => 
             opt.text.toLowerCase().includes(detectedName)
         );
 
         if (matchedOption) {
             matchedOption.selected = true;
-            this.checkSpecialFields(); // Özel alanları tetikle
+            this.checkSpecialFields(); 
         }
     }
 
-    // --- Özel Alan Kontrolü (İtiraz Bildirimi vb.) ---
     checkSpecialFields() {
         const childTypeId = document.getElementById('detectedType').value;
         const oppositionSection = document.getElementById('oppositionSection');
         
-        // ID 27: İtiraz Bildirimi (Eski koddaki ID)
-        if (childTypeId === '27') {
+        if (childTypeId === '27') { // İtiraz Bildirimi
             oppositionSection.style.display = 'block';
         } else {
             oppositionSection.style.display = 'none';
         }
     }
 
-    // --- KAYDETME VE İŞ TETİKLEME (CORE LOGIC) ---
+    // --- KAYDETME VE İŞ TETİKLEME ---
 
     async handleSave() {
+        console.log("handleSave tetiklendi"); // Debug için
+
         if (!this.matchedRecord) {
             alert('Lütfen önce bir kayıt ile eşleştirin.');
             return;
@@ -261,20 +271,23 @@ export class DocumentReviewManager {
             return;
         }
 
+        // Butonu kilitle
         const saveBtn = document.getElementById('saveTransactionBtn');
-        saveBtn.disabled = true;
-        showNotification('İşlem yürütülüyor...', 'info');
+        if(saveBtn) {
+            saveBtn.disabled = true;
+            saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> İşleniyor...';
+        }
 
         try {
             const childTypeObj = this.allTransactionTypes.find(t => t.id === childTypeId);
             const parentTx = this.currentTransactions.find(t => t.id === parentTxId);
             const parentTypeObj = this.allTransactionTypes.find(t => t.id === parentTx?.type);
 
-            // --- 1. İtiraz Bildirimi Özel Mantığı (Yeni Parent Oluşturma) ---
+            // 1. İtiraz Bildirimi Özel Mantığı
             let newParentTxId = null;
             let oppositionFileUrl = null;
 
-            if (childTypeId === '27') { // İtiraz Bildirimi
+            if (childTypeId === '27') {
                 const ownerInput = document.getElementById('oppositionOwnerInput').value;
                 const fileInput = document.getElementById('oppositionPetitionFile').files[0];
 
@@ -282,22 +295,19 @@ export class DocumentReviewManager {
                     throw new Error('İtiraz bildirimi için İtiraz Sahibi ve PDF dosyası zorunludur.');
                 }
 
-                // Dosya Yükle
                 const storageRef = ref(firebaseServices.storage, `opposition-petitions/${this.matchedRecord.id}/${Date.now()}_${fileInput.name}`);
                 await uploadBytes(storageRef, fileInput);
                 oppositionFileUrl = await getDownloadURL(storageRef);
 
-                // Yeni Parent Tipini Belirle (Başvuru altındaysa -> Yayına İtiraz(20), zaten Yayına İtiraz ise -> Yeniden İnceleme(19))
-                let newParentTypeId = '20'; // Default: Yayına İtiraz
+                let newParentTypeId = '20'; 
                 let newParentDesc = 'Yayına İtiraz (Otomatik)';
 
                 const parentAlias = parentTypeObj?.alias || parentTypeObj?.name || '';
                 if (parentAlias.includes('İtiraz') || parentTypeObj?.id === '20') {
-                    newParentTypeId = '19'; // Yeniden İnceleme
+                    newParentTypeId = '19'; 
                     newParentDesc = 'Yayına İtirazın Yeniden İncelenmesi (Otomatik)';
                 }
 
-                // Yeni Parent Transaction Oluştur
                 const newParentData = {
                     type: newParentTypeId,
                     description: newParentDesc,
@@ -310,57 +320,47 @@ export class DocumentReviewManager {
                 const newParentResult = await ipRecordsService.addTransactionToRecord(this.matchedRecord.id, newParentData);
                 if (newParentResult.success) {
                     newParentTxId = newParentResult.id;
-                    console.log('✅ Yeni Parent Transaction Oluşturuldu:', newParentTxId);
                 }
             }
 
-            // --- 2. İş (Task) Tetikleme Kontrolü (Matris Mantığı) ---
+            // 2. İş Tetikleme Kontrolü
             let createdTaskId = null;
             let shouldTriggerTask = false;
 
-            // recordOwnerType kontrolü
             const recordType = (this.matchedRecord.recordOwnerType === 'self') ? 'Portföy' : '3. Taraf';
             const parentTypeId = parentTx.type;
 
-            // Eski koddaki Matris
             const taskTriggerMatrix = {
-                "20": { "Portföy": ["50", "51"], "3. Taraf": ["51", "52"] }, // Yayına İtiraz
-                "19": { "Portföy": ["32", "33", "34", "35"], "3. Taraf": ["31", "32", "35", "36"] } // Yeniden İnceleme
+                "20": { "Portföy": ["50", "51"], "3. Taraf": ["51", "52"] },
+                "19": { "Portföy": ["32", "33", "34", "35"], "3. Taraf": ["31", "32", "35", "36"] }
             };
 
             if (taskTriggerMatrix[parentTypeId] && taskTriggerMatrix[parentTypeId][recordType]) {
-                // Matris kuralı varsa
                 if (taskTriggerMatrix[parentTypeId][recordType].includes(childTypeId)) {
                     shouldTriggerTask = true;
                 }
             } else {
-                // Matris yoksa genel kural (taskTriggered alanı varsa)
                 if (childTypeObj.taskTriggered) {
                     shouldTriggerTask = true;
                 }
             }
 
-            // --- 3. Task Oluşturma ---
+            // 3. Task Oluşturma
             if (shouldTriggerTask && childTypeObj.taskTriggered) {
-                // Vade Tarihi Hesapla
                 const deliveryDate = new Date(deliveryDateStr);
                 const duePeriod = Number(childTypeObj.duePeriod || 0);
                 let officialDueDate = addMonthsToDate(deliveryDate, duePeriod);
                 officialDueDate = findNextWorkingDay(officialDueDate, TURKEY_HOLIDAYS);
 
-                // Operasyonel tarih (3 gün önce)
                 let taskDueDate = new Date(officialDueDate);
                 taskDueDate.setDate(taskDueDate.getDate() - 3);
-                // Hafta sonu kontrolü... (basitleştirilmiş)
 
-                // Atanacak Kişiyi Bul (Varsayılan Selcan)
                 let assignedUser = { uid: SELCAN_UID, email: SELCAN_EMAIL };
-                // TODO: taskAssignments tablosundan dinamik çekilebilir, şimdilik varsayılan.
 
                 const taskData = {
                     title: `${childTypeObj.alias || childTypeObj.name} - ${this.matchedRecord.title}`,
                     description: notes || `Otomatik oluşturulan görev.`,
-                    taskType: childTypeObj.taskTriggered, // Task Type ID
+                    taskType: childTypeObj.taskTriggered,
                     relatedRecordId: this.matchedRecord.id,
                     officialDueDate: officialDueDate.toISOString(),
                     dueDate: taskDueDate.toISOString(),
@@ -373,12 +373,11 @@ export class DocumentReviewManager {
                 const taskResult = await taskService.createTask(taskData);
                 if (taskResult.success) {
                     createdTaskId = taskResult.id;
-                    console.log('✅ Görev Tetiklendi:', createdTaskId);
                 }
             }
 
-            // --- 4. Child Transaction Kaydetme ---
-            const finalParentId = newParentTxId || parentTxId; // Eğer yeni parent oluştuysa onu kullan
+            // 4. Child Transaction Kaydetme
+            const finalParentId = newParentTxId || parentTxId;
 
             const transactionData = {
                 type: childTypeId,
@@ -393,7 +392,6 @@ export class DocumentReviewManager {
 
             const txResult = await ipRecordsService.addTransactionToRecord(this.matchedRecord.id, transactionData);
             
-            // İtiraz dilekçesini child transaction'a da belge olarak ekle
             if (childTypeId === '27' && oppositionFileUrl && txResult.success) {
                 const docPayload = {
                     id: Date.now().toString(),
@@ -406,7 +404,7 @@ export class DocumentReviewManager {
                 await updateDoc(txRef, { documents: arrayUnion(docPayload) });
             }
 
-            // --- 5. PDF Durumunu Güncelle ---
+            // 5. PDF Durumunu Güncelle
             await updateDoc(doc(db, UNINDEXED_PDFS_COLLECTION, this.pdfId), {
                 status: 'indexed',
                 indexedAt: new Date(),
@@ -420,13 +418,15 @@ export class DocumentReviewManager {
         } catch (error) {
             console.error('Kaydetme hatası:', error);
             showNotification('Hata: ' + error.message, 'error');
-            saveBtn.disabled = false;
+            if(saveBtn) {
+                saveBtn.disabled = false;
+                saveBtn.innerHTML = '<i class="fas fa-check-circle mr-2"></i> Onayla ve Kaydet';
+            }
         }
     }
 
-    // --- Diğer Yardımcılar (Analiz, Arama vs. değişmedi) ---
+    // --- Analiz ---
     async runAnalysis() {
-        // ... (Mevcut analiz kodu aynen kalacak) ...
         const loadingEl = document.getElementById('analysisLoading');
         const resultsEl = document.getElementById('analysisResults');
         const pdfViewerEl = document.getElementById('pdfViewer');
@@ -441,6 +441,7 @@ export class DocumentReviewManager {
             this.renderAnalysisResults();
         } catch (error) {
             console.error(error);
+            // Hata olsa da formu göster
         } finally {
             if(loadingEl) loadingEl.style.display = 'none';
             if(resultsEl) resultsEl.style.display = 'block';
@@ -460,16 +461,18 @@ export class DocumentReviewManager {
     renderAnalysisResults() {
         const dateInput = document.getElementById('detectedDate');
         const summaryBox = document.getElementById('analysisSummary');
-        if (dateInput && this.analysisResult.decisionDate) {
+        
+        if (dateInput && this.analysisResult && this.analysisResult.decisionDate) {
             const parts = this.analysisResult.decisionDate.split('.');
             if(parts.length === 3) dateInput.value = `${parts[2]}-${parts[1]}-${parts[0]}`;
         }
-        if (summaryBox) {
+        if (summaryBox && this.analysisResult) {
             summaryBox.textContent = `Tip: ${this.analysisResult.detectedType.name}`;
         }
+        
+        // NOT: saveBtn listener'ı artık setupEventListeners içinde
     }
     
-    // Manuel Arama Fonksiyonları (Aynen Kalacak)
     async handleManualSearch(query) {
         const resultsContainer = document.getElementById('manualSearchResults');
         if (!query || query.length < 3) { resultsContainer.style.display = 'none'; return; }
@@ -488,7 +491,7 @@ export class DocumentReviewManager {
                 <strong>${r.title}</strong> <small>${r.applicationNumber}</small>
             </div>`).join('');
             
-        container.querySelectorAll('div').forEach(el => {
+        container.querySelectorAll('.search-result-item').forEach(el => {
             el.onclick = () => {
                 this.selectRecord(el.dataset.id);
                 container.style.display = 'none';
