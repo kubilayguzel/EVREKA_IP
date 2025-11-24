@@ -551,6 +551,37 @@ export const ipRecordsService = {
             return { success: false, error: error.message };
         }
     },
+    async searchRecords(searchTerm) {
+        if (!isFirebaseAvailable) return { success: false, error: "Firebase kullanılamıyor." };
+        if (!searchTerm || searchTerm.length < 3) return { success: true, data: [] };
+
+        try {
+            const term = searchTerm.toLowerCase();
+            
+            // Not: Firestore'da 'contains' sorgusu olmadığı için son 500 kaydı çekip 
+            // istemci tarafında filtreliyoruz. Performans için ilerde Algolia kullanılabilir.
+            const q = query(collection(db, 'ipRecords'), orderBy('createdAt', 'desc'), limit(500));
+            const snapshot = await getDocs(q);
+            
+            const results = [];
+            snapshot.forEach(doc => {
+                const data = doc.data();
+                const title = (data.title || '').toLowerCase();
+                const appNo = (data.applicationNumber || '').toLowerCase();
+                const wipoNo = (data.wipoIR || '').toLowerCase();
+                const aripoNo = (data.aripoIR || '').toLowerCase();
+
+                if (title.includes(term) || appNo.includes(term) || wipoNo.includes(term) || aripoNo.includes(term)) {
+                    results.push({ id: doc.id, ...data });
+                }
+            });
+
+            return { success: true, data: results };
+        } catch (error) {
+            console.error("Kayıt arama hatası:", error);
+            return { success: false, error: error.message };
+        }
+    }
 };
 
 // --- YENİ EKLENDİ: Persons Service ---
