@@ -1,6 +1,6 @@
 // public/js/indexing/document-review-manager.js
 
-// 1. Importları Düzelt (İki üst klasöre çıkış)
+// 1. İki üst klasöre çıkarak config ve utils dosyalarını alıyoruz
 import { 
     authService, 
     ipRecordsService, 
@@ -13,7 +13,7 @@ import {
 
 import { showNotification, debounce } from '../../utils.js';
 
-// Servisler (Aynı klasörde oldukları için ./)
+// 2. Servisler aynı klasörde olduğu için ./ ile alıyoruz
 import { PdfExtractor } from './pdf-extractor.js';
 import { PdfAnalyzer } from './pdf-analyzer.js';
 
@@ -57,9 +57,9 @@ export class DocumentReviewManager {
                 this.handleManualSearch(e.target.value);
             }, 300));
             
-            // Dışarı tıklayınca kapat
+            // Dışarı tıklayınca sonuçları kapat
             document.addEventListener('click', (e) => {
-                if (!searchInput.contains(e.target) && !searchResults.contains(e.target)) {
+                if (searchResults && !searchInput.contains(e.target) && !searchResults.contains(e.target)) {
                     searchResults.style.display = 'none';
                 }
             });
@@ -105,14 +105,20 @@ export class DocumentReviewManager {
 
     async handleManualSearch(query) {
         const resultsContainer = document.getElementById('manualSearchResults');
+        if (!resultsContainer) return;
+
         if (!query || query.length < 3) {
             resultsContainer.style.display = 'none';
             return;
         }
 
         try {
-            const results = await ipRecordsService.searchRecords(query);
-            this.renderSearchResults(results);
+            const result = await ipRecordsService.searchRecords(query);
+            if (result.success) {
+                this.renderSearchResults(result.data);
+            } else {
+                console.error("Arama hatası:", result.error);
+            }
         } catch (error) {
             console.error('Arama hatası:', error);
         }
@@ -120,11 +126,14 @@ export class DocumentReviewManager {
 
     renderSearchResults(results) {
         const container = document.getElementById('manualSearchResults');
+        if (!container) return;
+
         container.innerHTML = '';
         container.style.display = results.length ? 'block' : 'none';
 
         if (!results.length) {
             container.innerHTML = '<div class="p-2 text-muted small">Sonuç bulunamadı.</div>';
+            container.style.display = 'block'; // "Bulunamadı" mesajını göster
             return;
         }
 
@@ -134,7 +143,7 @@ export class DocumentReviewManager {
                     ${r.brandImageUrl ? `<img src="${r.brandImageUrl}" style="width:30px; height:30px; margin-right:10px; object-fit:contain;">` : ''}
                     <div>
                         <div class="font-weight-bold">${r.title}</div>
-                        <small class="text-muted">${r.applicationNumber || 'No Yok'}</small>
+                        <small class="text-muted">${r.applicationNumber || r.wipoIR || 'Numara Yok'}</small>
                     </div>
                 </div>
             </div>
@@ -145,7 +154,8 @@ export class DocumentReviewManager {
             item.addEventListener('click', () => {
                 this.selectRecord(item.dataset.id);
                 container.style.display = 'none';
-                document.getElementById('manualSearchInput').value = '';
+                const searchInput = document.getElementById('manualSearchInput');
+                if (searchInput) searchInput.value = '';
             });
         });
     }
@@ -177,20 +187,20 @@ export class DocumentReviewManager {
         selectEl.innerHTML = '<option value="">Yükleniyor...</option>';
 
         try {
-            // Transactionları çek
-            const transactionsResult = await ipRecordsService.getTransactions(recordId);
+            // Transactionları çek (firebase-config.js içindeki doğru metod adı: getRecordTransactions)
+            const transactionsResult = await ipRecordsService.getRecordTransactions(recordId);
             const transactions = transactionsResult.success ? transactionsResult.data : [];
             this.recordTransactions = transactions;
 
             // Select'i doldur
             selectEl.innerHTML = '<option value="">-- Bağımsız İşlem --</option>';
             
-            // Tarihe göre sırala (Yeni en üstte)
-            transactions.sort((a, b) => new Date(b.date || b.created_at) - new Date(a.date || a.created_at));
+            // Parent olabilecek işlemleri filtrele (İsteğe bağlı, şimdilik hepsini gösteriyoruz)
+            // Tarihe göre sırala
+            transactions.sort((a, b) => new Date(b.timestamp || b.date || 0) - new Date(a.timestamp || a.date || 0));
 
             transactions.forEach(t => {
-                // Sadece parent olabilecek işlemleri listele (veya hepsini)
-                const dateStr = t.date ? new Date(t.date).toLocaleDateString('tr-TR') : '-';
+                const dateStr = (t.timestamp || t.date) ? new Date(t.timestamp || t.date).toLocaleDateString('tr-TR') : '-';
                 const opt = document.createElement('option');
                 opt.value = t.id;
                 opt.textContent = `${t.description || t.type} (${dateStr})`;
@@ -231,9 +241,12 @@ export class DocumentReviewManager {
     }
 
     renderHeader() {
-        document.getElementById('fileNameDisplay').textContent = this.pdfData.fileName;
+        const fileDisplay = document.getElementById('fileNameDisplay');
+        if (fileDisplay) fileDisplay.textContent = this.pdfData.fileName;
         
         const matchInfoEl = document.getElementById('matchInfoDisplay');
+        if (!matchInfoEl) return;
+
         if (this.matchedRecord) {
             matchInfoEl.innerHTML = `
                 <div class="d-flex align-items-center text-success">
@@ -288,7 +301,8 @@ export class DocumentReviewManager {
         const dateVal = document.getElementById('detectedDate').value;
         const typeVal = document.getElementById('detectedType').value;
         const notes = document.getElementById('transactionNotes').value;
-        const parentId = document.getElementById('parentTransactionSelect').value; // Seçilen Parent ID
+        const parentSelect = document.getElementById('parentTransactionSelect');
+        const parentId = parentSelect ? parentSelect.value : null;
 
         showNotification('Kaydediliyor...', 'info');
 
@@ -296,8 +310,9 @@ export class DocumentReviewManager {
             // 1. Transaction Oluştur
             const transactionData = {
                 type: typeVal,
-                transactionHierarchy: 'child', // Bu işlem bir child olacak mı? Genelde yeni evraklar bir child işlemdir.
-                parentTransactionId: parentId || null, // Eğer seçildiyse bağla
+                // Eğer bir parent seçildiyse 'child', seçilmediyse 'parent' veya duruma göre 'independent'
+                transactionHierarchy: parentId ? 'child' : 'parent',
+                parentTransactionId: parentId || null,
                 description: notes || `İndeksleme: ${this.analysisResult.detectedType.name}`,
                 date: dateVal ? new Date(dateVal).toISOString() : new Date().toISOString(),
                 relatedPdfUrl: this.pdfData.fileUrl,
@@ -311,7 +326,7 @@ export class DocumentReviewManager {
                 status: 'indexed',
                 indexedAt: new Date(),
                 finalTransactionId: typeVal,
-                matchedRecordId: this.matchedRecord.id // Eğer manuel değiştirdiyse bunu da güncelle
+                matchedRecordId: this.matchedRecord.id
             });
 
             showNotification('İşlem tamamlandı!', 'success');
