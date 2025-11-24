@@ -1,9 +1,10 @@
 // public/js/indexing/document-review-manager.js
 
-// 1. İki üst klasöre çıkarak config ve utils dosyalarını alıyoruz
 import { 
     authService, 
     ipRecordsService, 
+    transactionTypeService, // İşlem tiplerini ve kurallarını çekmek için
+    taskService,            // Görev oluşturmak için
     db 
 } from '../../firebase-config.js';
 
@@ -13,7 +14,7 @@ import {
 
 import { showNotification, debounce } from '../../utils.js';
 
-// 2. Servisler aynı klasörde olduğu için ./ ile alıyoruz
+// Servisler
 import { PdfExtractor } from './pdf-extractor.js';
 import { PdfAnalyzer } from './pdf-analyzer.js';
 
@@ -26,9 +27,10 @@ export class DocumentReviewManager {
         this.pdfData = null;
         this.matchedRecord = null;
         this.analysisResult = null;
-        this.recordTransactions = []; // Kayda ait geçmiş işlemler
+        this.recordTransactions = []; 
+        this.allTransactionTypes = []; // Tüm işlem tiplerini (kurallarıyla beraber) burada tutacağız
         
-        // Servisleri başlat
+        // Servisler
         this.pdfExtractor = new PdfExtractor();
         this.analyzer = new PdfAnalyzer();
 
@@ -43,12 +45,53 @@ export class DocumentReviewManager {
         }
 
         this.currentUser = authService.getCurrentUser();
-        this.setupEventListeners(); // Listenerları ekle
-        await this.loadData();
+        this.setupEventListeners();
+        
+        // Kritik Verileri Paralel Yükle
+        await Promise.all([
+            this.loadTransactionTypes(), // Kuralları çek
+            this.loadData()              // PDF verisini çek
+        ]);
+    }
+
+    // --- 1. İşlem Tiplerini ve Kurallarını Yükle ---
+    async loadTransactionTypes() {
+        try {
+            const result = await transactionTypeService.getTransactionTypes();
+            if (result.success) {
+                this.allTransactionTypes = result.data;
+                this.populateTransactionTypesDropdown();
+            }
+        } catch (error) {
+            console.error('İşlem tipleri yüklenemedi:', error);
+        }
+    }
+
+    populateTransactionTypesDropdown() {
+        const selectEl = document.getElementById('detectedType');
+        if (!selectEl) return;
+
+        selectEl.innerHTML = '<option value="">-- İşlem Türü Seçiniz --</option>';
+        
+        // Alfabetik sırala
+        this.allTransactionTypes.sort((a, b) => a.name.localeCompare(b.name));
+
+        this.allTransactionTypes.forEach(type => {
+            const option = document.createElement('option');
+            option.value = type.id; // Bu ID veritabanındaki gerçek ID'dir
+            option.textContent = type.alias || type.name;
+            
+            // UI'da kullanıcıya ipucu vermek için attribute ekleyebiliriz
+            if(type.triggersTask) {
+                option.textContent += ' (İş Tetikler ⚡)';
+            }
+            
+            selectEl.appendChild(option);
+        });
     }
 
     setupEventListeners() {
-        // Manuel Arama Listener (Debounce ile)
+        // Manuel Arama Listener
         const searchInput = document.getElementById('manualSearchInput');
         const searchResults = document.getElementById('manualSearchResults');
 
@@ -57,7 +100,6 @@ export class DocumentReviewManager {
                 this.handleManualSearch(e.target.value);
             }, 300));
             
-            // Dışarı tıklayınca sonuçları kapat
             document.addEventListener('click', (e) => {
                 if (searchResults && !searchInput.contains(e.target) && !searchResults.contains(e.target)) {
                     searchResults.style.display = 'none';
@@ -77,21 +119,18 @@ export class DocumentReviewManager {
 
     async loadData() {
         try {
-            // 1. PDF Verisini Getir
             const docRef = doc(db, UNINDEXED_PDFS_COLLECTION, this.pdfId);
             const docSnap = await getDoc(docRef);
             
             if (!docSnap.exists()) throw new Error('PDF kaydı bulunamadı.');
             this.pdfData = { id: docSnap.id, ...docSnap.data() };
 
-            // 2. Eşleşen Kayıt Varsa Getir ve Transactionları Yükle
             if (this.pdfData.matchedRecordId) {
                 await this.selectRecord(this.pdfData.matchedRecordId);
             } else {
-                this.renderHeader(); // Eşleşme yoksa boş header göster
+                this.renderHeader(); 
             }
 
-            // 3. Analizi Başlat
             this.renderHeader();
             await this.runAnalysis();
 
@@ -116,8 +155,6 @@ export class DocumentReviewManager {
             const result = await ipRecordsService.searchRecords(query);
             if (result.success) {
                 this.renderSearchResults(result.data);
-            } else {
-                console.error("Arama hatası:", result.error);
             }
         } catch (error) {
             console.error('Arama hatası:', error);
@@ -133,7 +170,7 @@ export class DocumentReviewManager {
 
         if (!results.length) {
             container.innerHTML = '<div class="p-2 text-muted small">Sonuç bulunamadı.</div>';
-            container.style.display = 'block'; // "Bulunamadı" mesajını göster
+            container.style.display = 'block';
             return;
         }
 
@@ -149,7 +186,6 @@ export class DocumentReviewManager {
             </div>
         `).join('');
 
-        // Tıklama olaylarını ekle
         container.querySelectorAll('.search-result-item').forEach(item => {
             item.addEventListener('click', () => {
                 this.selectRecord(item.dataset.id);
@@ -166,10 +202,7 @@ export class DocumentReviewManager {
             if (result.success) {
                 this.matchedRecord = result.data;
                 this.renderHeader();
-                
-                // Kayıt değiştiğinde parent transactionları yükle
                 await this.loadParentTransactions(recordId);
-                
                 showNotification('Kayıt seçildi: ' + this.matchedRecord.title, 'success');
             }
         } catch (error) {
@@ -178,8 +211,6 @@ export class DocumentReviewManager {
         }
     }
 
-    // --- Parent Transaction Yükleme ---
-
     async loadParentTransactions(recordId) {
         const selectEl = document.getElementById('parentTransactionSelect');
         if (!selectEl) return;
@@ -187,23 +218,25 @@ export class DocumentReviewManager {
         selectEl.innerHTML = '<option value="">Yükleniyor...</option>';
 
         try {
-            // Transactionları çek (firebase-config.js içindeki doğru metod adı: getRecordTransactions)
             const transactionsResult = await ipRecordsService.getRecordTransactions(recordId);
             const transactions = transactionsResult.success ? transactionsResult.data : [];
             this.recordTransactions = transactions;
 
-            // Select'i doldur
             selectEl.innerHTML = '<option value="">-- Bağımsız İşlem --</option>';
             
-            // Parent olabilecek işlemleri filtrele (İsteğe bağlı, şimdilik hepsini gösteriyoruz)
-            // Tarihe göre sırala
             transactions.sort((a, b) => new Date(b.timestamp || b.date || 0) - new Date(a.timestamp || a.date || 0));
 
             transactions.forEach(t => {
                 const dateStr = (t.timestamp || t.date) ? new Date(t.timestamp || t.date).toLocaleDateString('tr-TR') : '-';
+                
+                // DB'deki type ID'sine göre adını bulmaya çalış, yoksa description kullan
+                let label = t.description || 'İşlem';
+                const typeObj = this.allTransactionTypes.find(type => type.id === t.type);
+                if (typeObj) label = typeObj.alias || typeObj.name;
+
                 const opt = document.createElement('option');
                 opt.value = t.id;
-                opt.textContent = `${t.description || t.type} (${dateStr})`;
+                opt.textContent = `${label} (${dateStr})`;
                 selectEl.appendChild(opt);
             });
 
@@ -213,7 +246,7 @@ export class DocumentReviewManager {
         }
     }
 
-    // --- Analiz ve Kaydetme ---
+    // --- Analiz ve Otomatik Eşleştirme ---
 
     async runAnalysis() {
         const loadingEl = document.getElementById('analysisLoading');
@@ -282,15 +315,26 @@ export class DocumentReviewManager {
             summaryBox.textContent = `Tip: ${this.analysisResult.detectedType.name}, Kelimeler: ${this.analysisResult.keywords.join(', ')}`;
         }
 
+        // Akıllı Eşleştirme: Analizden gelen isim ile DB'deki isimleri karşılaştır
         if (typeSelect && this.analysisResult.detectedType.code !== 'general') {
-             Array.from(typeSelect.options).forEach(opt => {
-                 if (opt.text.includes(this.analysisResult.detectedType.name)) opt.selected = true;
-             });
+             const detectedName = this.analysisResult.detectedType.name.toLowerCase();
+             
+             // Dropdown seçeneklerini gez ve en iyi eşleşmeyi bul
+             let matchedOption = Array.from(typeSelect.options).find(opt => 
+                 opt.text.toLowerCase().includes(detectedName) || 
+                 (opt.text.toLowerCase().includes('yayın') && detectedName.includes('yayın'))
+             );
+
+             if (matchedOption) {
+                 matchedOption.selected = true;
+             }
         }
         
         const saveBtn = document.getElementById('saveTransactionBtn');
         if(saveBtn) saveBtn.onclick = () => this.handleSave();
     }
+
+    // --- KAYDETME ve GÖREV TETİKLEME MANTIĞI ---
 
     async handleSave() {
         if (!this.matchedRecord) {
@@ -299,21 +343,61 @@ export class DocumentReviewManager {
         }
 
         const dateVal = document.getElementById('detectedDate').value;
-        const typeVal = document.getElementById('detectedType').value;
+        const typeId = document.getElementById('detectedType').value; // Seçilen Transaction Type ID
         const notes = document.getElementById('transactionNotes').value;
-        const parentSelect = document.getElementById('parentTransactionSelect');
-        const parentId = parentSelect ? parentSelect.value : null;
+        const parentId = document.getElementById('parentTransactionSelect').value;
+
+        if (!typeId) {
+            alert('Lütfen bir işlem türü seçiniz.');
+            return;
+        }
 
         showNotification('Kaydediliyor...', 'info');
 
         try {
-            // 1. Transaction Oluştur
+            // 1. Seçilen İşlem Tipinin Özelliklerini Bul
+            const selectedTypeObj = this.allTransactionTypes.find(t => t.id === typeId);
+            let createdTaskId = null;
+
+            // 2. GÖREV TETİKLEME KONTROLÜ
+            // Veritabanında 'triggersTask' (bool) ve 'triggeredTaskTypeId' (string) alanları olmalı
+            if (selectedTypeObj && selectedTypeObj.triggersTask) {
+                console.log(`🔔 Görev Tetikleniyor: ${selectedTypeObj.name}`);
+                
+                // Vade Tarihi Hesaplama
+                let dueDate = new Date();
+                const daysToAdd = selectedTypeObj.deadlineDays || 30; // Varsayılan 30 gün
+                dueDate.setDate(dueDate.getDate() + parseInt(daysToAdd));
+
+                const taskData = {
+                    title: `${selectedTypeObj.alias || selectedTypeObj.name} - ${this.matchedRecord.title}`,
+                    description: notes || `Otomatik oluşturulan görev. Kaynak: ${this.pdfData.fileName}`,
+                    // Eğer DB'de tetiklenecek özel bir task tipi ID'si varsa onu kullan, yoksa 'general'
+                    specificTaskType: selectedTypeObj.triggeredTaskTypeId || null, 
+                    status: 'pending',
+                    priority: 'medium',
+                    relatedRecordId: this.matchedRecord.id,
+                    assignedTo_uid: this.currentUser.uid,
+                    assignedTo_email: this.currentUser.email,
+                    officialDueDate: dueDate.toISOString()
+                };
+
+                const taskResult = await taskService.createTask(taskData);
+                if (taskResult.success) {
+                    createdTaskId = taskResult.id;
+                    console.log('✅ Görev başarıyla oluşturuldu, ID:', createdTaskId);
+                } else {
+                    console.error('❌ Görev oluşturulamadı:', taskResult.error);
+                }
+            }
+
+            // 3. TRANSACTION OLUŞTURMA (İşlem Geçmişine Ekle)
             const transactionData = {
-                type: typeVal,
-                // Eğer bir parent seçildiyse 'child', seçilmediyse 'parent' veya duruma göre 'independent'
+                type: typeId, // DB'deki gerçek ID
                 transactionHierarchy: parentId ? 'child' : 'parent',
                 parentTransactionId: parentId || null,
-                description: notes || `İndeksleme: ${this.analysisResult.detectedType.name}`,
+                triggeringTaskId: createdTaskId || null, // Oluşturulan görevi bağla
+                description: notes || `İndeksleme: ${selectedTypeObj?.name || 'Belge'}`,
                 date: dateVal ? new Date(dateVal).toISOString() : new Date().toISOString(),
                 relatedPdfUrl: this.pdfData.fileUrl,
                 relatedPdfId: this.pdfData.id
@@ -321,20 +405,22 @@ export class DocumentReviewManager {
 
             await ipRecordsService.addTransactionToRecord(this.matchedRecord.id, transactionData);
 
-            // 2. PDF Statüsünü Güncelle
+            // 4. PDF STATÜSÜNÜ GÜNCELLE
             await updateDoc(doc(db, UNINDEXED_PDFS_COLLECTION, this.pdfId), {
                 status: 'indexed',
                 indexedAt: new Date(),
-                finalTransactionId: typeVal,
+                finalTransactionId: typeId,
                 matchedRecordId: this.matchedRecord.id
             });
 
-            showNotification('İşlem tamamlandı!', 'success');
+            showNotification('İşlem başarıyla kaydedildi!', 'success');
+            
+            // 1.5 saniye sonra listeye dön
             setTimeout(() => window.location.href = 'bulk-indexing-page.html', 1500);
 
         } catch (error) {
-            console.error('Hata:', error);
-            showNotification('Hata: ' + error.message, 'error');
+            console.error('Kaydetme hatası:', error);
+            showNotification('Hata oluştu: ' + error.message, 'error');
         }
     }
 }
