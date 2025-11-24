@@ -1,5 +1,6 @@
 // public/js/indexing/document-review-manager.js
 
+// 1. Importları Düzelt (İki üst klasöre çıkış)
 import { 
     authService, 
     ipRecordsService, 
@@ -12,7 +13,7 @@ import {
 
 import { showNotification, debounce } from '../../utils.js';
 
-// Servisler
+// Servisler (Aynı klasörde oldukları için ./)
 import { PdfExtractor } from './pdf-extractor.js';
 import { PdfAnalyzer } from './pdf-analyzer.js';
 
@@ -27,7 +28,7 @@ export class DocumentReviewManager {
         this.analysisResult = null;
         this.recordTransactions = []; // Kayda ait geçmiş işlemler
         
-        // Servisler
+        // Servisleri başlat
         this.pdfExtractor = new PdfExtractor();
         this.analyzer = new PdfAnalyzer();
 
@@ -42,7 +43,7 @@ export class DocumentReviewManager {
         }
 
         this.currentUser = authService.getCurrentUser();
-        this.setupEventListeners();
+        this.setupEventListeners(); // Listenerları ekle
         await this.loadData();
     }
 
@@ -83,7 +84,7 @@ export class DocumentReviewManager {
             if (!docSnap.exists()) throw new Error('PDF kaydı bulunamadı.');
             this.pdfData = { id: docSnap.id, ...docSnap.data() };
 
-            // 2. Eşleşen Kayıt Varsa Getir
+            // 2. Eşleşen Kayıt Varsa Getir ve Transactionları Yükle
             if (this.pdfData.matchedRecordId) {
                 await this.selectRecord(this.pdfData.matchedRecordId);
             } else {
@@ -122,7 +123,10 @@ export class DocumentReviewManager {
         container.innerHTML = '';
         container.style.display = results.length ? 'block' : 'none';
 
-        if (!results.length) return;
+        if (!results.length) {
+            container.innerHTML = '<div class="p-2 text-muted small">Sonuç bulunamadı.</div>';
+            return;
+        }
 
         container.innerHTML = results.map(r => `
             <div class="search-result-item" data-id="${r.id}">
@@ -185,7 +189,7 @@ export class DocumentReviewManager {
             transactions.sort((a, b) => new Date(b.date || b.created_at) - new Date(a.date || a.created_at));
 
             transactions.forEach(t => {
-                // Sadece anlamlı işlemleri listele (isteğe bağlı filtre eklenebilir)
+                // Sadece parent olabilecek işlemleri listele (veya hepsini)
                 const dateStr = t.date ? new Date(t.date).toLocaleDateString('tr-TR') : '-';
                 const opt = document.createElement('option');
                 opt.value = t.id;
