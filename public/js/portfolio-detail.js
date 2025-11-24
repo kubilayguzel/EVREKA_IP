@@ -902,82 +902,40 @@ window.currentRecord = {
   }
 }
 
-// Bootstrap - GÜÇLENDİRİLMİŞ BAŞLATMA MANTIĞI
+// Bootstrap
 (async () => {
-  // 1. İlk yükleme mesajını göster (Kullanıcı boş ekrana bakmasın)
-  if (loadingEl) {
-      loadingEl.classList.remove('d-none');
-      loadingEl.innerHTML = '<div class="spinner-border spinner-border-sm text-primary" role="status"></div> Oturum doğrulanıyor...';
+  await loadSharedLayout({ activeMenuLink: 'portfolio.html' });
+
+  // Layout padding ayarları (senin mevcut kodun)
+  const wrapper = document.querySelector('.page-wrapper');
+  const candidates = ['.navbar.fixed-top','.app-header','.site-header','header .navbar','nav.navbar.fixed-top'];
+  let h = 0;
+  for (const sel of candidates){
+    const el = document.querySelector(sel);
+    if (el){
+      const hh = el.getBoundingClientRect().height;
+      if (hh > 36 && hh < 120){ h = hh; break; }
+    }
   }
+  if (wrapper) wrapper.style.paddingTop = (h ? (h+12) : 16) + 'px';
 
-  try {
-      // 2. KRİTİK: Firebase'in yerel veritabanından oturumu yüklemesini bekle
-      await auth.authStateReady();
-  } catch (e) {
-      console.warn("Auth state check warning:", e);
-  }
-
-  // 3. Firebase tarafında kullanıcı var mı?
-  const user = auth.currentUser;
-
-  if (!user) {
-      // Gerçekten kullanıcı yok, login sayfasına gönder
-      console.log("Kullanıcı bulunamadı, login sayfasına yönlendiriliyor.");
+  onAuthStateChanged(auth, async (user) => {
+    if (!user) {
+      // Oturum yoksa login sayfasına gönder
       window.location.href = 'index.html';
       return;
-  }
+    }
 
-  // 4. KRİTİK: LocalStorage Senkronizasyonu
-  // Sayfa yeni sekmede açıldığında Firebase user var ama localStorage boş olabilir.
-  // layout-loader.js localStorage'a baktığı için burayı manuel doldurmalıyız.
-  if (!localStorage.getItem('currentUser')) {
-      try {
-          const tokenResult = await user.getIdTokenResult();
-          const role = tokenResult.claims.role || 'user';
-          
-          const syncedUser = {
-              uid: user.uid,
-              email: user.email,
-              displayName: user.displayName || user.email,
-              role: role,
-              isSuperAdmin: role === 'superadmin'
-          };
-          localStorage.setItem('currentUser', JSON.stringify(syncedUser));
-          console.log("✅ LocalStorage Firebase ile senkronize edildi.");
-      } catch (err) {
-          console.error("Token parse hatası:", err);
-      }
-  }
-
-  // 5. Artık güvenle arayüzü yükleyebiliriz
-  try {
-      await loadSharedLayout({ activeMenuLink: 'portfolio.html' });
-      
-      // Navbar yüksekliğine göre padding ayarı
-      const wrapper = document.querySelector('.page-wrapper');
-      if (wrapper) {
-          const headerEl = document.querySelector('.navbar.fixed-top') || document.querySelector('header');
-          const h = headerEl ? headerEl.getBoundingClientRect().height : 0;
-          wrapper.style.paddingTop = (h > 30 ? h + 16 : 76) + 'px';
-      }
-
-      // Kayıt verilerini çek
+    // Oturum varsa kaydı yükle
+    try {
       await loadRecord();
-
-  } catch (err) {
-      console.error("Sayfa yükleme hatası:", err);
-      if (loadingEl) {
-          loadingEl.className = 'alert alert-danger';
-          loadingEl.textContent = 'Sayfa yüklenirken bir hata oluştu. Lütfen sayfayı yenileyin.';
-      }
-  }
-
-  // 6. Oturum açıkken "Çıkış Yap" butonuna basılırsa anında yakala
-  onAuthStateChanged(auth, (u) => {
-    if (!u) window.location.href = 'index.html';
+    } catch (e) {
+      console.error('loadRecord error', e);
+    }
   });
 
 })();
+
 
 // Initialize type other visibility
 if (docTypeEl) docTypeEl.dispatchEvent(new Event('change'));
