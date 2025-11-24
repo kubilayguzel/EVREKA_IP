@@ -55,22 +55,46 @@ const txCount   = document.getElementById('txCount');
 let currentData = null;
 let cachedTransactions = [];
 
-// --- STİL EKLEME (35. Sınıf Alt Kırılımları İçin) ---
+// --- STİL EKLEME (35. Sınıf ve Yeni Belge İkonları İçin) ---
 (function injectGoodsStyles() {
     const styleId = 'custom-goods-styles';
     if (document.getElementById(styleId)) return;
     const style = document.createElement('style');
     style.id = styleId;
     style.innerHTML = `
-        .goods-sub-item {
-            margin-left: 25px;          /* İçeri girinti */
-            list-style-type: circle;    /* Farklı madde işareti (içi boş daire) */
-            color: #495057;             /* Hafif farklı renk (opsiyonel) */
+        /* Goods Listesi */
+        .goods-sub-item { margin-left: 25px; list-style-type: circle; color: #495057; }
+        .goods-header-item { font-weight: 500; list-style-type: disc; }
+        
+        /* Yeni Belge İkonları */
+        .doc-link-item {
+            display: inline-flex;
+            align-items: center;
+            text-decoration: none !important;
+            margin-right: 12px;
+            margin-bottom: 4px;
+            padding: 4px 8px;
+            border-radius: 6px;
+            background-color: #f8f9fa;
+            transition: all 0.2s ease;
+            border: 1px solid transparent;
         }
-        .goods-header-item {
-            font-weight: 500;           /* Başlık kısmını biraz koyu yap */
-            list-style-type: disc;      /* Ana başlık dolu daire */
-        }
+        .doc-link-item:hover { transform: translateY(-1px); box-shadow: 0 2px 5px rgba(0,0,0,0.1); background-color: #fff; }
+        
+        .doc-link-item i { font-size: 1.3em; margin-right: 6px; }
+        .doc-link-item span { font-size: 0.85em; color: #555; font-weight: 500; }
+        
+        /* Renk Kodları */
+        .doc-color-red i { color: #dc3545; }      /* Standart PDF */
+        .doc-color-blue i { color: #0d6efd; }     /* ePats */
+        .doc-color-green i { color: #198754; }    /* Resmi Yazı */
+        .doc-color-orange i { color: #fd7e14; }   /* İtiraz Dilekçesi */
+        .doc-color-purple i { color: #6f42c1; }   /* Task Belgesi */
+        
+        .doc-link-item:hover.doc-color-red { border-color: #dc3545; }
+        .doc-link-item:hover.doc-color-blue { border-color: #0d6efd; }
+        .doc-link-item:hover.doc-color-green { border-color: #198754; }
+        .doc-link-item:hover.doc-color-orange { border-color: #fd7e14; }
     `;
     document.head.appendChild(style);
 })();
@@ -551,7 +575,7 @@ async function renderTransactionsAccordion(recordId){
                 const name = docObj.fileName || docObj.name || 'Belge';
                 const url = docObj.fileUrl || docObj.downloadURL || docObj.url || docObj.path;
                 
-                // Tip belirleme mantığı ekliyoruz
+                // Tip belirleme mantığı
                 let finalType = docObj.type || 'child_doc';
                 if (docObj.documentDesignation === 'Resmi Yazı') finalType = 'official_document';
                 else if (docObj.documentDesignation === 'İtiraz Dilekçesi') finalType = 'opposition_petition';
@@ -561,18 +585,18 @@ async function renderTransactionsAccordion(recordId){
                     allChildDocs.push({
                         fileName: name,
                         fileUrl: url,
-                        type: finalType, // <--- Düzeltilmiş tip
+                        type: finalType,
                         evrakNo: docObj.evrakNo,
                         isTaskDoc: docObj.isTaskDoc || false
                     });
                 }
             };
 
-            // A. Unindexed PDF'ler
+            // A. Unindexed PDF'ler (Sadece bu child'a ait olanlar)
             const childUnindexedPdfs = pdfsByTransaction[c.id] || [];
             childUnindexedPdfs.forEach(addChildDoc);
 
-            // B. Child Transaction 'documents' Array (BURASI EKSİKTİ)
+            // B. Child Transaction 'documents' Array
             if (Array.isArray(c.documents)) {
                 c.documents.forEach(addChildDoc);
             }
@@ -585,40 +609,45 @@ async function renderTransactionsAccordion(recordId){
                  } catch (e) { console.error('Child task docs error:', e); }
             }
 
-            // D. İtiraz Bildirimi Özel Durumu (Parent'tan kopyala)
+            // D. İtiraz Bildirimi Özel Durumu - DÜZELTİLDİ
+            // Sorun: Parent'ın TÜM belgelerini kopyalıyordu.
+            // Çözüm: Sadece 'İtiraz Dilekçesi'ni al, diğerlerini alma.
             const IS_OPPOSITION_NOTICE = String(c.type) === '27';
             if (IS_OPPOSITION_NOTICE) {
-                // Parent'ın documents array'i
-                transactionDocs.forEach(addChildDoc);
-                // Parent'ın unindexed PDF'leri
-                parentPdfs.forEach(addChildDoc);
-                // Parent'ın özel alanı (İtiraz Dilekçesi)
+                // Parent'ın genel belgelerini KOPYALAMA (transactionDocs.forEach KALDIRILDI)
+                // Parent'ın unindexed PDF'lerini KOPYALAMA (parentPdfs.forEach KALDIRILDI)
+                
+                // Sadece İtiraz Dilekçesi varsa onu al (Çünkü bu genelde parent'ta tutuluyor)
                 if (p.oppositionPetitionFileUrl) {
                     addChildDoc({ fileName: 'İtiraz Dilekçesi', fileUrl: p.oppositionPetitionFileUrl, type: 'opposition_petition' });
                 }
             }
 
-            // İkonları Oluştur
+            // İKONLARI OLUŞTUR - GÜNCELLENDİ (PDF İkonu + Renk Kodları)
             const pdfIcons = allChildDocs.map(pdf => {
-                let iconClass = 'fas fa-file-pdf';
+                let colorClass = 'doc-color-red'; // Varsayılan Kırmızı
                 let titleText = pdf.fileName;
-                let btnClass = 'btn-secondary'; // Varsayılan gri
-                let badgeHtml = '';
+                let badgeText = ''; // Evrak No vb.
 
+                // Tip kontrolü ve renk ataması
                 if (pdf.type === 'opposition_petition' || pdf.fileName.includes('İtiraz Dilekçesi')) {
-                    iconClass = 'fas fa-gavel'; btnClass = 'btn-warning'; // Sarı
+                    colorClass = 'doc-color-orange';
                 } else if (pdf.type === 'official_document' || pdf.fileName.includes('Resmi Yazı')) {
-                    iconClass = 'fas fa-file-signature'; btnClass = 'btn-info'; // Mavi
+                    colorClass = 'doc-color-green';
                 } else if (pdf.type === 'epats_document') {
-                    iconClass = 'fas fa-file-invoice'; btnClass = 'btn-primary'; // Koyu Mavi
-                    if (pdf.evrakNo) badgeHtml = `<span class="badge badge-light ml-1">${pdf.evrakNo}</span>`;
-                } else if (pdf.fileName.toLowerCase().endsWith('.pdf')) {
-                    btnClass = 'btn-danger'; // PDF ise kırmızı
+                    colorClass = 'doc-color-blue';
+                    if (pdf.evrakNo) badgeText = `(${pdf.evrakNo})`;
+                } else if (pdf.type === 'task_document' || pdf.isTaskDoc) {
+                    colorClass = 'doc-color-purple';
                 }
 
-                // window.open ile güvenli açma
-                return `<a onclick="window.open('${pdf.fileUrl}', '_blank')" title="${titleText}" class="action-btn ${btnClass} btn-sm mr-1 mb-1" style="cursor: pointer; padding: 4px 8px;">
-                    <i class="${iconClass}"></i>${badgeHtml}
+                // Yeni HTML Yapısı (Buton değil, şık link)
+                return `<a onclick="window.open('${pdf.fileUrl}', '_blank')" 
+                           title="${titleText}" 
+                           class="doc-link-item ${colorClass}" 
+                           style="cursor: pointer;">
+                    <i class="fas fa-file-pdf"></i>
+                    <span>${badgeText || 'PDF Görüntüle'}</span>
                 </a>`;
             }).join(' ');
 
@@ -626,7 +655,7 @@ async function renderTransactionsAccordion(recordId){
               <div class="child-transaction-content">
                 <div class="child-transaction-name-date">${cn} - ${ct.d} ${ct.t}</div>
               </div>
-              ${pdfIcons ? `<div class="child-transaction-pdfs">${pdfIcons}</div>` : ''}
+              ${pdfIcons ? `<div class="child-transaction-pdfs d-flex align-items-center flex-wrap">${pdfIcons}</div>` : ''}
             </div>`;
       }));
 
