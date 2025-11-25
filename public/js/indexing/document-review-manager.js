@@ -342,37 +342,43 @@ export class DocumentReviewManager {
                 }
             }
 
-            // 🔥 DÜZELTME: Tetiklenen işin hiyerarşisini dinamik belirleme
+            // Tetiklenen işin hiyerarşisini dinamik belirleme
             if (createdTaskId && childTypeObj.taskTriggered) {
-                console.log(`🔥 Tetiklenen İş (${childTypeObj.taskTriggered}) için transaction oluşturuluyor...`);
-                
-                // 1. Tetiklenen işlem tipinin detaylarını bul
                 const triggeredTypeObj = this.allTransactionTypes.find(t => t.id === childTypeObj.taskTriggered);
-                
-                // 2. İsim ve Hiyerarşiyi al (Varsayılanlar: 'Otomatik İşlem' ve 'child')
                 const triggeredTypeName = triggeredTypeObj ? (triggeredTypeObj.alias || triggeredTypeObj.name) : 'Otomatik İşlem';
                 const targetHierarchy = triggeredTypeObj?.hierarchy || 'child'; 
 
-                // 3. Transaction verisini hazırla
                 const triggeredTransactionData = {
                     type: childTypeObj.taskTriggered,
                     description: `${triggeredTypeName} (Otomatik)`,
-                    transactionHierarchy: targetHierarchy, // <--- DİNAMİK HİYERARŞİ (Artık 'child' zorlanmıyor)
+                    transactionHierarchy: targetHierarchy,
                     triggeringTaskId: String(createdTaskId),
                     timestamp: new Date().toISOString()
                 };
 
-                // 4. Eğer işlem 'child' ise bir parent'a bağlanmalı. 'parent' ise bağımsız olmalı.
                 if (targetHierarchy === 'child') {
                     triggeredTransactionData.parentId = finalParentId;
                 }
-                // else: parentId eklemiyoruz, böylece bu işlem portföyde yeni bir "Ana İşlem" (Accordion satırı) olarak görünür.
 
                 await ipRecordsService.addTransactionToRecord(this.matchedRecord.id, triggeredTransactionData);
-                console.log('✅ Tetiklenen iş için transaction başarıyla oluşturuldu. Hiyerarşi:', targetHierarchy);
             }
 
-            // 5. PDF Statüsü
+            // 🔥 6. REQUEST RESULT GÜNCELLEME (Ana İşleme Sonucu Yaz)
+            // Bu kısım, indeksleme kararının (childTypeId) ana işleme (parent) yazılmasını sağlar.
+            if (finalParentId && childTypeId) {
+                try {
+                    const parentTxRef = doc(db, 'ipRecords', this.matchedRecord.id, 'transactions', finalParentId);
+                    await updateDoc(parentTxRef, { 
+                        requestResult: childTypeId, 
+                        requestResultUpdatedAt: new Date().toISOString() 
+                    });
+                    console.log('✅ Parent requestResult güncellendi:', finalParentId, childTypeId);
+                } catch (err) {
+                    console.error('requestResult güncellenemedi:', err);
+                }
+            }
+
+            // 7. PDF Statüsü
             await updateDoc(doc(db, UNINDEXED_PDFS_COLLECTION, this.pdfId), {
                 status: 'indexed',
                 indexedAt: new Date(),
