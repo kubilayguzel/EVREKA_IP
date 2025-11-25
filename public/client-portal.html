@@ -1981,36 +1981,74 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
         } catch (error) { console.error("Task Docs Hatası:", error); return []; }
     };
 
-    window.loadTransactions = async function(ipRecordId) {
+window.loadTransactions = async function(ipRecordId) {
         const tbody = $('#modal-islemler table tbody');
         if (tbody.length === 0) return;
         tbody.html('<tr><td colspan="4" class="text-center py-4"><i class="fas fa-spinner fa-spin"></i> İşlemler yükleniyor...</td></tr>');
-        const uniqueDocsFilter = (docs) => { const seen = new Set(); return docs.filter(doc => { const url = doc.fileUrl || doc.url || doc.path || doc.downloadURL; if (!url || seen.has(url)) return false; seen.add(url); return true; }); };
+        
+        // Benzersizleştirme fonksiyonu (URL'e göre)
+        const uniqueDocsFilter = (docs) => { 
+            const seen = new Set(); 
+            return docs.filter(doc => { 
+                const url = doc.fileUrl || doc.url || doc.path || doc.downloadURL; 
+                if (!url || seen.has(url)) return false; 
+                seen.add(url); 
+                return true; 
+            }); 
+        };
 
         try {
             const transactionsRef = collection(db, 'ipRecords', ipRecordId, 'transactions');
             const snapshot = await getDocs(query(transactionsRef));
             const transactions = [];
             snapshot.forEach(doc => transactions.push({ id: doc.id, ...doc.data() }));
+            
+            // Unindexed PDF'leri çek
             const pdfsByTransaction = await window.fetchPdfsForTransactions(transactions.map(tx => tx.id));
-            const parentTransactions = transactions.filter(t => t.transactionHierarchy === 'parent' || !t.transactionHierarchy).sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
+            
+            // Parent'ları sırala
+            const parentTransactions = transactions
+                .filter(t => t.transactionHierarchy === 'parent' || !t.transactionHierarchy)
+                .sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
 
             tbody.empty();
             let rowIndex = 1;
+            
             for (const parent of parentTransactions) {
-                const children = transactions.filter(t => t.transactionHierarchy === 'child' && t.parentId === parent.id).sort((a, b) => (a.timestamp?.seconds || 0) - (b.timestamp?.seconds || 0));
+                const children = transactions
+                    .filter(t => t.transactionHierarchy === 'child' && t.parentId === parent.id)
+                    .sort((a, b) => (a.timestamp?.seconds || 0) - (b.timestamp?.seconds || 0));
+                
                 const hasChildren = children.length > 0;
                 const accordionId = `transaction-${parent.id}`;
+                
                 let transactionAlias = 'İşlem';
                 if (window.transactionTypesMap && window.transactionTypesMap.has(String(parent.type))) {
                     const t = window.transactionTypesMap.get(String(parent.type));
                     transactionAlias = t.alias || t.name;
-                    if (String(parent.type) === '20') { const oppositionOwner = parent.oppositionOwner || parent.relatedParty?.name; if (oppositionOwner) transactionAlias += ` (${oppositionOwner})`; }
+                    if (String(parent.type) === '20') { 
+                        const oppositionOwner = parent.oppositionOwner || parent.relatedParty?.name; 
+                        if (oppositionOwner) transactionAlias += ` (${oppositionOwner})`; 
+                    }
                 }
+
+                // --- PARENT BELGE MANTIĞI (DÜZELTİLDİ) ---
+                // 1. Transaction Belgelerini Topla (Unindexed + Direct)
                 const parentPdfs = pdfsByTransaction[parent.id] || [];
-                let taskDocs = [];
-                if (parent.triggeringTaskId) taskDocs = await window.fetchTaskDocuments(parent.triggeringTaskId);
-                const rawParentDocs = [...parentPdfs, ...taskDocs, ...(parent.documents || []).map(d => ({ fileName: d.name, fileUrl: d.path || d.downloadURL, type: d.type }))];
+                const parentDirectDocs = (parent.documents || []).map(d => ({ 
+                    fileName: d.name, 
+                    fileUrl: d.path || d.downloadURL, 
+                    type: d.type 
+                }));
+                
+                let rawParentDocs = [...parentPdfs, ...parentDirectDocs];
+
+                // 2. FALLBACK: Eğer hiç belge yoksa Task'a git
+                if (rawParentDocs.length === 0 && parent.triggeringTaskId) {
+                    const taskDocs = await window.fetchTaskDocuments(parent.triggeringTaskId);
+                    rawParentDocs = [...rawParentDocs, ...taskDocs];
+                }
+
                 const allParentDocs = uniqueDocsFilter(rawParentDocs);
                 const parentDocLinks = allParentDocs.map(pdf => window._createDocLinkHtml(pdf)).join('');
 
@@ -2023,14 +2061,32 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
                         let childAlias = 'Alt İşlem';
                         if (window.transactionTypesMap.has(String(child.type))) {
                             childAlias = window.transactionTypesMap.get(String(child.type)).alias;
-                            if (String(child.type) === '20') { const oppositionOwner = child.oppositionOwner || child.relatedParty?.name; if (oppositionOwner) childAlias += ` (${oppositionOwner})`; }
+                            if (String(child.type) === '20') { 
+                                const oppositionOwner = child.oppositionOwner || child.relatedParty?.name; 
+                                if (oppositionOwner) childAlias += ` (${oppositionOwner})`; 
+                            }
                         }
+
+                        // --- CHILD BELGE MANTIĞI (DÜZELTİLDİ) ---
+                        // 1. Child Transaction Belgelerini Topla
                         const childPdfs = pdfsByTransaction[child.id] || [];
-                        let childTaskDocs = [];
-                        if (child.triggeringTaskId) childTaskDocs = await window.fetchTaskDocuments(child.triggeringTaskId);
-                        const rawChildDocs = [...childPdfs, ...childTaskDocs, ...(child.documents || []).map(d => ({ fileName: d.name, fileUrl: d.path || d.downloadURL, type: d.type }))];
+                        const childDirectDocs = (child.documents || []).map(d => ({ 
+                            fileName: d.name, 
+                            fileUrl: d.path || d.downloadURL, 
+                            type: d.type 
+                        }));
+                        
+                        let rawChildDocs = [...childPdfs, ...childDirectDocs];
+
+                        // 2. FALLBACK: Eğer hiç belge yoksa Child Task'a git
+                        if (rawChildDocs.length === 0 && child.triggeringTaskId) {
+                            const childTaskDocs = await window.fetchTaskDocuments(child.triggeringTaskId);
+                            rawChildDocs = [...rawChildDocs, ...childTaskDocs];
+                        }
+
                         const allChildDocs = uniqueDocsFilter(rawChildDocs);
                         const childDocLinks = allChildDocs.map(pdf => window._createDocLinkHtml(pdf)).join('');
+                        
                         childRowsHtml += `<tr><td>${rowIndex}.${idx + 1}</td><td>${childAlias}</td><td>${window.formatDateTR(child.timestamp)}</td><td>${childDocLinks || '-'}</td></tr>`;
                     }
                     const detailRow = `<tr><td colspan="4" class="p-0"><div class="collapse" id="${accordionId}"><table class="table mb-0 accordion-table bg-light" style="font-size:0.9em;"><thead><tr><th>#</th><th>İşlem Detayı</th><th>Tarih</th><th>Evrak</th></tr></thead><tbody>${childRowsHtml}</tbody></table></div></td></tr>`;
@@ -2039,9 +2095,12 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
                 rowIndex++;
             }
             if (parentTransactions.length === 0) tbody.html('<tr><td colspan="4" class="text-center text-muted">İşlem geçmişi bulunamadı.</td></tr>');
-        } catch (error) { console.error("Transaction Yükleme Hatası:", error); tbody.html('<tr><td colspan="4" class="text-center text-danger">Veriler yüklenirken hata oluştu.</td></tr>'); }
+        } catch (error) { 
+            console.error("Transaction Yükleme Hatası:", error); 
+            tbody.html('<tr><td colspan="4" class="text-center text-danger">Veriler yüklenirken hata oluştu.</td></tr>'); 
+        }
     };
-
+    
     function initTheme() {
         const savedTheme = localStorage.getItem('theme') || 'dark';
         $('body').removeClass('light-mode dark-mode').addClass(savedTheme + '-mode');
