@@ -2225,3 +2225,49 @@ export const firebaseServices = {
     getDownloadURL: getDownloadURL, 
     deleteObject: deleteObject,
  };
+
+ // ------------------------------------------------------
+// Genel Auth Helper'ları
+// ------------------------------------------------------
+
+let authUserReadyPromise = null;
+
+/**
+ * Uygulama genelinde "auth hazır + kullanıcı ne" bilgisini döner.
+ * 
+ * options:
+ *  - requireAuth: true => kullanıcı yoksa redirect et
+ *  - redirectTo: yönlenecek sayfa (default: 'index.html')
+ */
+export function waitForAuthUser(options = {}) {
+    const { requireAuth = false, redirectTo = 'index.html' } = options;
+
+    if (!authUserReadyPromise) {
+        authUserReadyPromise = new Promise((resolve) => {
+            // onAuthStateChanged ilk kez tetiklenince kullanıcı bilgisini alıyoruz
+            const unsubscribe = onAuthStateChanged(auth, (user) => {
+                unsubscribe();
+                resolve(user || null);
+            });
+        });
+    }
+
+    return authUserReadyPromise.then(user => {
+        if (requireAuth && !user) {
+            window.location.href = redirectTo;
+            return null;
+        }
+        return user;
+    });
+}
+
+/**
+ * Oturum açıkken logout olursa otomatik olarak login sayfasına döndürür.
+ */
+export function redirectOnLogout(redirectTo = 'index.html') {
+    onAuthStateChanged(auth, (user) => {
+        if (!user) {
+            window.location.href = redirectTo;
+        }
+    });
+}
