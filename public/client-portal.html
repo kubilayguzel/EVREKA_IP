@@ -1999,7 +1999,6 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
         };
 
         // --- 1. ÖNCELİK LİSTESİ (Küçük sayı en üstte çıkar) ---
-        // Not: Veritabanındaki ID'lerin tam olarak bu olduğundan emin oluyoruz.
         const typePriority = {
             '2': 1,   // Başvuru (En Üst)
             '7': 2,   // Karara İtiraz
@@ -2015,12 +2014,11 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
             
             snapshot.forEach(doc => {
                 const data = doc.data();
-                // Type verisini garantiye al (type yoksa transactionType'a bak)
                 const safeType = data.type || data.transactionType || ''; 
                 transactions.push({ 
                     id: doc.id, 
                     ...data,
-                    type: safeType // Düzeltilmiş type
+                    type: safeType
                 }); 
             });
             
@@ -2036,24 +2034,15 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
                     const typeA = String(a.type).trim();
                     const typeB = String(b.type).trim();
                     
-                    // Öncelik kontrolü (Listede yoksa 999)
                     const pA = typePriority[typeA] || 999;
                     const pB = typePriority[typeB] || 999;
 
-                    // DEBUG: Sıralamayı konsolda görmek için
-                    // console.log(`Sort: ${typeA}(${pA}) vs ${typeB}(${pB})`);
-
                     // A) Öncelik Farklıysa: Önceliği küçük olan (1) ÜSTE
-                    if (pA !== pB) {
-                        return pA - pB; 
-                    }
+                    if (pA !== pB) return pA - pB; 
 
-                    // B) Öncelik Aynıysa (veya ikisi de diğer): TARİHE GÖRE (Eskiden Yeniye)
-                    // En yeni tarih en altta olsun istendiği için (a - b) değil (a - b) yani artan sıralama.
-                    // Eğer veritabanında tarih yoksa 0 kabul et.
+                    // B) Öncelik Aynıysa: TARİHE GÖRE (Eskiden Yeniye / En yeni en altta)
                     const dateA = a.timestamp?.seconds || 0;
                     const dateB = b.timestamp?.seconds || 0;
-                    
                     return dateA - dateB; 
                 });
 
@@ -2063,7 +2052,6 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
             // --- 4. RENDER DÖNGÜSÜ ---
             for (const parent of parentTransactions) {
                 
-                // Child işlemleri Tarihe göre sırala (Eskiden Yeniye)
                 const children = transactions
                     .filter(t => t.transactionHierarchy === 'child' && t.parentId === parent.id)
                     .sort((a, b) => (a.timestamp?.seconds || 0) - (b.timestamp?.seconds || 0));
@@ -2071,22 +2059,20 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
                 const hasChildren = children.length > 0;
                 const accordionId = `transaction-${parent.id}`;
                 
-                // İşlem Adını Bul
+                // İşlem Adı
                 let transactionAlias = 'İşlem';
                 if (window.transactionTypesMap && window.transactionTypesMap.has(String(parent.type))) {
                     const t = window.transactionTypesMap.get(String(parent.type));
                     transactionAlias = t.alias || t.name;
-                    // Yayına itiraz ise kimin itiraz ettiğini göster
                     if (String(parent.type) === '20') { 
                         const oppositionOwner = parent.oppositionOwner || parent.relatedParty?.name; 
                         if (oppositionOwner) transactionAlias += ` (${oppositionOwner})`; 
                     }
                 } else {
-                    // Type map'te yoksa description'ı göster veya type ID'yi yaz
                     if(parent.description) transactionAlias = parent.description;
                 }
 
-                // --- Rozet (Badge) Gösterimi ---
+                // --- ROZET (BADGE) MANTIĞI (GÜNCELLENDİ) ---
                 let resultBadge = '';
                 if (parent.requestResult) {
                     const rrId = String(parent.requestResult);
@@ -2094,12 +2080,39 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
                     
                     if (resultType) {
                         const resultName = resultType.alias || resultType.name;
-                        let badgeColor = 'info';
-                        
                         const lowerName = resultName.toLowerCase();
-                        if(lowerName.includes('ret') || lowerName.includes('red')) badgeColor = 'danger';
-                        else if(lowerName.includes('kabul') || lowerName.includes('onay')) badgeColor = 'success';
-                        else if(lowerName.includes('kısmen')) badgeColor = 'warning';
+                        const parentType = String(parent.type);
+                        
+                        let badgeColor = 'info'; // Varsayılan
+
+                        // 1. Yayına İtiraz (Type 20) - SİZE İTİRAZ EDİLDİ
+                        if (parentType === '20') {
+                            // Kabul (Aleyhinize) -> Kırmızı
+                            if (lowerName.includes('kabul')) {
+                                badgeColor = 'danger';
+                            } 
+                            // Diğerleri (Ret vb. - Lehinize) -> Yeşil
+                            else {
+                                badgeColor = 'success';
+                            }
+                        } 
+                        // 2. YİYİ (Type 19) - SİZİN İTİRAZINIZ
+                        else if (parentType === '19') {
+                            // Ret (Aleyhinize) -> Kırmızı
+                            if (lowerName.includes('ret') || lowerName.includes('red') || lowerName.includes('reddi')) {
+                                badgeColor = 'danger';
+                            } 
+                            // Diğerleri (Kabul vb. - Lehinize) -> Yeşil
+                            else {
+                                badgeColor = 'success';
+                            }
+                        } 
+                        // 3. Diğer İşlemler (Standart Mantık)
+                        else {
+                            if(lowerName.includes('ret') || lowerName.includes('red')) badgeColor = 'danger';
+                            else if(lowerName.includes('kabul') || lowerName.includes('onay')) badgeColor = 'success';
+                            else if(lowerName.includes('kısmen')) badgeColor = 'warning';
+                        }
 
                         resultBadge = `<span class="badge badge-${badgeColor} ml-2" style="font-size: 0.85em;">🏁 ${resultName}</span>`;
                     }
@@ -2115,7 +2128,6 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
                 
                 let rawParentDocs = [...parentPdfs, ...parentDirectDocs];
 
-                // Eğer işlemde belge YOKSA, Task'a git
                 if (rawParentDocs.length === 0 && parent.triggeringTaskId) {
                     const taskDocs = await window.fetchTaskDocuments(parent.triggeringTaskId);
                     rawParentDocs = [...rawParentDocs, ...taskDocs];
@@ -2124,7 +2136,6 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
                 const allParentDocs = uniqueDocsFilter(rawParentDocs);
                 const parentDocLinks = allParentDocs.map(pdf => window._createDocLinkHtml(pdf)).join('');
 
-                // Satırı Ekle
                 const parentRow = `
                     <tr class="${hasChildren ? 'accordion-header-row' : ''}" ${hasChildren ? `data-toggle="collapse" data-target="#${accordionId}" aria-expanded="false"` : ''}>
                         <td>${hasChildren ? '<i class="fas fa-chevron-right mr-2"></i>' : ''}${rowIndex}</td>
@@ -2134,7 +2145,6 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
                     </tr>`;
                 tbody.append(parentRow);
 
-                // Child Satırları
                 if (hasChildren) {
                     let childRowsHtml = '';
                     for (const [idx, child] of children.entries()) {
@@ -2147,7 +2157,6 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
                             }
                         }
 
-                        // Child Belge Mantığı
                         const childPdfs = pdfsByTransaction[child.id] || [];
                         const childDirectDocs = (child.documents || []).map(d => ({ 
                             fileName: d.name, fileUrl: d.path || d.downloadURL, type: d.type 
