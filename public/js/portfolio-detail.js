@@ -6,11 +6,11 @@ import { doc, getDoc, collection, query, where, getDocs, getFirestore } from "ht
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { ref, uploadBytes, getDownloadURL, deleteObject, getStorage } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
 
-// URL
+// URL Params
 const params = new URLSearchParams(location.search);
 const recordId = params.get('id');
 
-// DOM Elementleri
+// DOM Elements
 const loadingEl = document.getElementById('loading');
 const rootEl = document.getElementById('detail-root');
 const applicantEl = document.getElementById('applicantName');
@@ -168,6 +168,7 @@ function renderHero(rec){
   }
 }
 
+// Fallback applicant names
 function extractApplicantNames(rec){
   const arr = Array.isArray(rec.applicants) ? rec.applicants : [];
   if (arr.length) return arr.map(a => a?.name).filter(Boolean).join(', ');
@@ -305,6 +306,7 @@ function organizeTransactions(txList){
   return {parents, childrenMap};
 }
 
+// PDF Fetcher (Unindexed PDFs) - Sadece ilgili Transaction ID'ye ait olanlar
 async function fetchPdfsForTransactions(transactionIds) {
   if (!transactionIds || transactionIds.length === 0) return {};
   try {
@@ -330,40 +332,6 @@ async function fetchPdfsForTransactions(transactionIds) {
   } catch (error) {
     console.error('PDF\'ler getirilirken hata:', error);
     return {};
-  }
-}
-
-async function fetchTaskDocuments(taskId) {
-  if (!taskId) return [];
-  try {
-    const taskDoc = await getDoc(doc(db, 'tasks', taskId));
-    if (!taskDoc.exists()) return [];
-    const taskData = taskDoc.data();
-    let docs = [];
-    if (taskData.details?.epatsDocument) {
-      docs.push({
-        fileName: taskData.details.epatsDocument.name || 'ePats Belgesi',
-        fileUrl: taskData.details.epatsDocument.downloadURL,
-        evrakNo: taskData.details.epatsDocument.turkpatentEvrakNo,
-        type: 'epats_document'
-      });
-    }
-    if (Array.isArray(taskData.documents)) {
-        taskData.documents.forEach(doc => {
-            const fileUrl = doc.downloadURL || doc.url || doc.path;
-            if (fileUrl) { 
-                docs.push({
-                    fileName: doc.name || 'Task Belgesi',
-                    fileUrl: fileUrl, 
-                    type: doc.type || 'task_document'
-                });
-            }
-        });
-    }
-    return docs;
-  } catch (error) {
-    console.error('Task belgeleri getirilirken hata:', taskId, error);
-    return [];
   }
 }
 
@@ -393,30 +361,8 @@ async function renderTransactionsAccordion(recordId){
       return;
     }
 
-    // 2. Parent'lar için hazırlık
-    const parentsWithEpats = await Promise.all(parents.map(async (p) => {
-      let epatsDocuments = [];
-      if (p.triggeringTaskId) {
-        try {
-          const taskDoc = await getDoc(doc(db, 'tasks', p.triggeringTaskId));
-          if (taskDoc.exists()) {
-            const taskData = taskDoc.data();
-            if (taskData.details?.epatsDocument) {
-              epatsDocuments.push({
-                fileName: taskData.details.epatsDocument.name || 'ePats Belgesi',
-                fileUrl: taskData.details.epatsDocument.downloadURL,
-                evrakNo: taskData.details.epatsDocument.turkpatentEvrakNo,
-                type: 'epats_document'
-              });
-            }
-          }
-        } catch (err) { console.warn('Task ePats error:', err); }
-      }
-      return { ...p, epatsDocuments };
-    }));
-
-    // 3. Render
-    const parentTransactionRenderPromises = parentsWithEpats.map(async p => {
+    // 2. Render Loop
+    const parentTransactionRenderPromises = parents.map(async p => {
           const tmeta = typeMap.get(String(p.type));
           const tname = tmeta ? (tmeta.alias || tmeta.name) : `İşlem ${p.type}`;
           const {d,t} = fmtDateTime(p.timestamp);
@@ -427,13 +373,13 @@ async function renderTransactionsAccordion(recordId){
             ? `<span class="badge badge-warning ml-2" style="font-size: 0.85em;">📋 ${p.oppositionOwner}</span>` 
             : '';
 
-      // --- CHILD RENDER (Kalici Çözüm: URL Bazlı Deduplication) ---
+      // --- CHILD RENDER ---
       const childrenHtmlContents = await Promise.all(children.map(async c => {
             const cm = typeMap.get(String(c.type));
             const cn = cm ? (cm.alias || cm.name) : `İşlem ${c.type}`;
             const ct = fmtDateTime(c.timestamp);
             
-            // 🔥 URL'e Göre Benzersiz Belge Havuzu
+            // 🔥 TEMİZLİK: Sadece bu Child'a ait belgeler. Task belgelerini çekmiyoruz.
             const uniqueDocsMap = new Map();
 
             // Yardımcı: Havuza Ekleme Fonksiyonu
@@ -442,7 +388,7 @@ async function renderTransactionsAccordion(recordId){
                 const name = docObj.fileName || docObj.name || 'Belge';
                 if (!url) return;
 
-                // URL zaten varsa ekleme (veya güncelle). Şu an ilk geleni koruyoruz.
+                // URL zaten varsa ekleme.
                 if (!uniqueDocsMap.has(url)) {
                     uniqueDocsMap.set(url, {
                         fileName: name,
@@ -452,7 +398,7 @@ async function renderTransactionsAccordion(recordId){
                 }
             };
 
-            // Kaynak 1: Unindexed PDF'ler
+            // Kaynak 1: Unindexed PDF'ler (Bu child ID'si ile eşleşenler)
             const childUnindexedPdfs = pdfsByTransaction[c.id] || [];
             childUnindexedPdfs.forEach(addToPool);
 
@@ -461,18 +407,11 @@ async function renderTransactionsAccordion(recordId){
                 c.documents.forEach(addToPool);
             }
 
-            // Kaynak 3: Task Belgeleri
-            if (c.triggeringTaskId) {
-                 try {
-                     const taskDocs = await fetchTaskDocuments(c.triggeringTaskId);
-                     taskDocs.forEach(addToPool);
-                 } catch (e) { console.error('Child task docs error:', e); }
-            }
+            // NOT: Task belgeleri (fetchTaskDocuments) İPTAL EDİLDİ.
 
-            // Map'ten Array'e dönüştür (Artık hepsi benzersiz)
             const uniqueDocsArray = Array.from(uniqueDocsMap.values());
 
-            // İKONLARI OLUŞTUR
+            // İKONLARI OLUŞTUR (Mavi/Turuncu)
             const pdfIcons = uniqueDocsArray.map((pdf, idx) => {
                 const colorClass = (idx === 0) ? 'doc-color-blue' : 'doc-color-orange';
                 return `<a onclick="window.open('${pdf.fileUrl}', '_blank')" 
@@ -496,7 +435,8 @@ async function renderTransactionsAccordion(recordId){
              ${childrenHtmlContents.join('')}
         </div>` : '';
 
-      // --- PARENT BELGELERİ (Aynı Deduplication Mantığı) ---
+      // --- PARENT BELGELERİ ---
+      // 🔥 TEMİZLİK: Parent belgelerine Child belgeleri veya Task belgeleri karıştırılmıyor.
       const parentUniqueMap = new Map();
       const addToParentPool = (d) => {
           const url = d.fileUrl || d.url || d.path || d.downloadURL;
@@ -505,12 +445,14 @@ async function renderTransactionsAccordion(recordId){
           }
       };
 
-      // Kaynaklar
-      (pdfsByTransaction[p.id] || []).forEach(addToParentPool);
-      (p.epatsDocuments || []).forEach(addToParentPool);
-      (p.documents || []).forEach(addToParentPool); // Parent'in kendi dokümanları
+      // Kaynaklar (Sadece Parent'a ait)
+      (pdfsByTransaction[p.id] || []).forEach(addToParentPool); // Unindexed (Parent ID ile)
+      (p.documents || []).forEach(addToParentPool); // Parent'in kendi dokümanları array'i
+      // Özel alanlar (Varsa)
       if(p.relatedPdfUrl) addToParentPool({fileName: 'Resmi Yazı', fileUrl: p.relatedPdfUrl});
       if(p.oppositionPetitionFileUrl) addToParentPool({fileName: 'İtiraz Dilekçesi', fileUrl: p.oppositionPetitionFileUrl});
+      
+      // NOT: Task belgeleri ve Child belgeleri buraya EKLENMİYOR.
 
       const parentUniqueDocs = Array.from(parentUniqueMap.values());
 
@@ -526,7 +468,7 @@ async function renderTransactionsAccordion(recordId){
       return `<div class="accordion-transaction-item">
         <div class="accordion-transaction-header ${hasChildren ? 'has-children' : ''}" data-parent-id="${p.id}">
           <div class="transaction-main-info">
-            <div class="${hasChildren ? 'accordion-icon expanded' : 'accordion-icon-empty'}">${hasChildren ? '▼' : ''}</div>
+            <div class="${hasChildren ? 'accordion-icon expanded' : 'accordion-icon-empty'}">${hasChildren ? '▶' : ''}</div>
             <div class="transaction-details">
               <div class="transaction-name-date">${tname} ${oppositionOwnerBadge} - ${d} ${t}</div>
             </div>
@@ -542,32 +484,29 @@ async function renderTransactionsAccordion(recordId){
     const finalHtml = await Promise.all(parentTransactionRenderPromises).then(results => results.join(''));
     if (txAccordion) txAccordion.innerHTML = finalHtml;
     
-    // Tıklama Olayları (Simge Yönü Düzeltildi)
+    // Tıklama Olayları
     txAccordion?.querySelectorAll('.accordion-transaction-header[data-parent-id]').forEach(header => {
+        // İkon başlangıç durumu (Kapalı -> ▶)
+        const icon = header.querySelector('.accordion-icon');
+        if (icon && header.classList.contains('has-children')) {
+            icon.textContent = '▶';
+            icon.classList.remove('expanded');
+        }
+
         header.addEventListener('click', function(e){
           if (e.target.closest('a') || e.target.closest('button')) return;
           const pid = this.getAttribute('data-parent-id');
           const cont = document.getElementById(`children-${pid}`);
-          const icon = this.querySelector('.accordion-icon');
+          const icn = this.querySelector('.accordion-icon');
           if (!cont) return;
           const isVisible = cont.style.display !== 'none';
           
           cont.style.display = isVisible ? 'none' : 'block';
-          if (icon){
-            // Kapalıyken (none) -> Ok (▶) değil aslında kodda ▼ kullanılmış varsayılan olarak, 
-            // ama kullanıcı isteğine göre "default kapalı" yaptık. 
-            // Burada: Açılınca "▼", Kapanınca "▶" yapıyoruz.
-            icon.textContent = isVisible ? '▶' : '▼'; 
-            icon.classList.toggle('expanded', !isVisible);
+          if (icn){
+            icn.textContent = isVisible ? '▶' : '▼'; 
+            icn.classList.toggle('expanded', !isVisible);
           }
         });
-        
-        // Default kapalı olduğu için ikonları başlangıçta düzelt (▶)
-        const icon = header.querySelector('.accordion-icon');
-        if(icon && header.classList.contains('has-children')) {
-            icon.textContent = '▶'; 
-            icon.classList.remove('expanded');
-        }
     });
 
   } catch(e){
@@ -576,8 +515,7 @@ async function renderTransactionsAccordion(recordId){
   }
 }
 
-// ... Kalan Kodlar (LoadRecord vb.) Aynen Devam Eder ...
-// (Dosya bütünlüğü için aşağısı öncekiyle aynıdır)
+// ... Kalan Kodlar (Filter, Add Doc vb.) Aynen Devam Eder ...
 
 txFilter?.addEventListener('input', () => {
   const q = (txFilter.value || '').toLowerCase();
@@ -686,15 +624,36 @@ async function loadRecord(){
 
     renderHero(currentData);
     
+    // --- APPLICANT (SAHİP) İSMİ DÜZELTME (Persons tablosundan çekme) ---
     if (applicantEl) {
       applicantEl.value = 'Yükleniyor...';
       if (currentData.applicants && currentData.applicants.length > 0) {
-          const names = currentData.applicants.map(a => a.name).filter(Boolean).join(', ');
-          applicantEl.value = names || extractApplicantNames(currentData);
+        try {
+          const names = await Promise.all(currentData.applicants.map(async (app) => {
+            // Eğer applicant ID varsa persons tablosundan ismini çek
+            if (app.id) {
+                try {
+                    const personRef = doc(db, 'persons', app.id);
+                    const snap = await getDoc(personRef);
+                    if (snap.exists()) {
+                        return snap.data().name || app.name;
+                    }
+                } catch(e) { console.warn('Applicant fetch error:', e); }
+            }
+            // ID yoksa veya fetch hatası varsa kayıttaki ismi kullan
+            return app.name || '';
+          }));
+          
+          applicantEl.value = names.filter(Boolean).join(', ');
+        } catch (err) {
+          console.error(err);
+          applicantEl.value = extractApplicantNames(currentData);
+        }
       } else {
         applicantEl.value = extractApplicantNames(currentData);
       }
     }
+
     if (applicantAddressEl){
         const firstApplicantId = currentData.applicants?.[0]?.id;
         if (firstApplicantId){
