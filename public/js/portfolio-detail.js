@@ -168,7 +168,6 @@ function renderHero(rec){
   }
 }
 
-// Fallback applicant names
 function extractApplicantNames(rec){
   const arr = Array.isArray(rec.applicants) ? rec.applicants : [];
   if (arr.length) return arr.map(a => a?.name).filter(Boolean).join(', ');
@@ -306,7 +305,6 @@ function organizeTransactions(txList){
   return {parents, childrenMap};
 }
 
-// PDF Fetcher (Unindexed PDFs) - Sadece ilgili Transaction ID'ye ait olanlar
 async function fetchPdfsForTransactions(transactionIds) {
   if (!transactionIds || transactionIds.length === 0) return {};
   try {
@@ -332,6 +330,45 @@ async function fetchPdfsForTransactions(transactionIds) {
   } catch (error) {
     console.error('PDF\'ler getirilirken hata:', error);
     return {};
+  }
+}
+
+// 🔥 Helper: Task Dokümanlarını Getir (ePats + Documents)
+async function fetchTaskDocuments(taskId) {
+  if (!taskId) return [];
+  try {
+    const taskDoc = await getDoc(doc(db, 'tasks', taskId));
+    if (!taskDoc.exists()) return [];
+    const taskData = taskDoc.data();
+    let docs = [];
+    
+    // 1. ePats Belgesi
+    if (taskData.details?.epatsDocument) {
+      docs.push({
+        fileName: taskData.details.epatsDocument.name || 'ePats Belgesi',
+        fileUrl: taskData.details.epatsDocument.downloadURL,
+        evrakNo: taskData.details.epatsDocument.turkpatentEvrakNo,
+        type: 'epats_document'
+      });
+    }
+
+    // 2. Task'ın "documents" dizisi (İtiraz dilekçeleri vs. burada olabilir)
+    if (Array.isArray(taskData.documents)) {
+        taskData.documents.forEach(doc => {
+            const fileUrl = doc.downloadURL || doc.url || doc.path;
+            if (fileUrl) { 
+                docs.push({
+                    fileName: doc.name || 'Task Belgesi',
+                    fileUrl: fileUrl, 
+                    type: doc.type || 'task_document'
+                });
+            }
+        });
+    }
+    return docs;
+  } catch (error) {
+    console.error('Task belgeleri getirilirken hata:', taskId, error);
+    return [];
   }
 }
 
@@ -361,8 +398,20 @@ async function renderTransactionsAccordion(recordId){
       return;
     }
 
-    // 2. Render Loop
-    const parentTransactionRenderPromises = parents.map(async p => {
+    // 2. Parent'lar için hazırlık (Task Belgelerini De Çekiyoruz!)
+    const parentsWithTaskDocs = await Promise.all(parents.map(async (p) => {
+      let taskDocs = [];
+      if (p.triggeringTaskId) {
+        try {
+          // Sadece ePats değil, Task'ın tüm belgelerini çekiyoruz
+          taskDocs = await fetchTaskDocuments(p.triggeringTaskId);
+        } catch (err) { console.warn('Parent task docs error:', err); }
+      }
+      return { ...p, taskDocs };
+    }));
+
+    // 3. Render
+    const parentTransactionRenderPromises = parentsWithTaskDocs.map(async p => {
           const tmeta = typeMap.get(String(p.type));
           const tname = tmeta ? (tmeta.alias || tmeta.name) : `İşlem ${p.type}`;
           const {d,t} = fmtDateTime(p.timestamp);
@@ -379,7 +428,7 @@ async function renderTransactionsAccordion(recordId){
             const cn = cm ? (cm.alias || cm.name) : `İşlem ${c.type}`;
             const ct = fmtDateTime(c.timestamp);
             
-            // 🔥 TEMİZLİK: Sadece bu Child'a ait belgeler. Task belgelerini çekmiyoruz.
+            // 🔥 Belge Havuzu (Deduplication)
             const uniqueDocsMap = new Map();
 
             // Yardımcı: Havuza Ekleme Fonksiyonu
@@ -388,7 +437,6 @@ async function renderTransactionsAccordion(recordId){
                 const name = docObj.fileName || docObj.name || 'Belge';
                 if (!url) return;
 
-                // URL zaten varsa ekleme.
                 if (!uniqueDocsMap.has(url)) {
                     uniqueDocsMap.set(url, {
                         fileName: name,
@@ -398,20 +446,27 @@ async function renderTransactionsAccordion(recordId){
                 }
             };
 
-            // Kaynak 1: Unindexed PDF'ler (Bu child ID'si ile eşleşenler)
+            // Kaynak 1: Unindexed PDF'ler
             const childUnindexedPdfs = pdfsByTransaction[c.id] || [];
             childUnindexedPdfs.forEach(addToPool);
 
-            // Kaynak 2: İşlemin Kendi Belgeleri (Transaction Documents)
+            // Kaynak 2: İşlemin Kendi Belgeleri
             if (Array.isArray(c.documents)) {
                 c.documents.forEach(addToPool);
             }
 
-            // NOT: Task belgeleri (fetchTaskDocuments) İPTAL EDİLDİ.
+            // Kaynak 3: Task Belgeleri (ARTIK AKTİF!)
+            // Eğer bu child işlemini bir Task tetiklediyse, o task'ın belgelerini de göster
+            if (c.triggeringTaskId) {
+                 try {
+                     const childTaskDocs = await fetchTaskDocuments(c.triggeringTaskId);
+                     childTaskDocs.forEach(addToPool);
+                 } catch (e) { console.error('Child task docs error:', e); }
+            }
 
             const uniqueDocsArray = Array.from(uniqueDocsMap.values());
 
-            // İKONLARI OLUŞTUR (Mavi/Turuncu)
+            // İKONLAR (Mavi/Turuncu)
             const pdfIcons = uniqueDocsArray.map((pdf, idx) => {
                 const colorClass = (idx === 0) ? 'doc-color-blue' : 'doc-color-orange';
                 return `<a onclick="window.open('${pdf.fileUrl}', '_blank')" 
@@ -429,14 +484,13 @@ async function renderTransactionsAccordion(recordId){
             </div>`;
       }));
 
-      // --- AKORDEON KAPALI BAŞLANGIÇ (display: none) ---
+      // --- AKORDEON KAPALI BAŞLANGIÇ ---
       const childrenHtml = hasChildren ? `
         <div class="accordion-transaction-children" id="children-${p.id}" style="display: none;">
              ${childrenHtmlContents.join('')}
         </div>` : '';
 
       // --- PARENT BELGELERİ ---
-      // 🔥 TEMİZLİK: Parent belgelerine Child belgeleri veya Task belgeleri karıştırılmıyor.
       const parentUniqueMap = new Map();
       const addToParentPool = (d) => {
           const url = d.fileUrl || d.url || d.path || d.downloadURL;
@@ -445,14 +499,16 @@ async function renderTransactionsAccordion(recordId){
           }
       };
 
-      // Kaynaklar (Sadece Parent'a ait)
-      (pdfsByTransaction[p.id] || []).forEach(addToParentPool); // Unindexed (Parent ID ile)
-      (p.documents || []).forEach(addToParentPool); // Parent'in kendi dokümanları array'i
-      // Özel alanlar (Varsa)
+      // Kaynaklar (Parent)
+      (pdfsByTransaction[p.id] || []).forEach(addToParentPool);
+      (p.documents || []).forEach(addToParentPool);
+      
+      // Kaynak: Task Belgeleri (ARTIK AKTİF!)
+      (p.taskDocs || []).forEach(addToParentPool);
+
+      // Özel alanlar
       if(p.relatedPdfUrl) addToParentPool({fileName: 'Resmi Yazı', fileUrl: p.relatedPdfUrl});
       if(p.oppositionPetitionFileUrl) addToParentPool({fileName: 'İtiraz Dilekçesi', fileUrl: p.oppositionPetitionFileUrl});
-      
-      // NOT: Task belgeleri ve Child belgeleri buraya EKLENMİYOR.
 
       const parentUniqueDocs = Array.from(parentUniqueMap.values());
 
@@ -486,7 +542,6 @@ async function renderTransactionsAccordion(recordId){
     
     // Tıklama Olayları
     txAccordion?.querySelectorAll('.accordion-transaction-header[data-parent-id]').forEach(header => {
-        // İkon başlangıç durumu (Kapalı -> ▶)
         const icon = header.querySelector('.accordion-icon');
         if (icon && header.classList.contains('has-children')) {
             icon.textContent = '▶';
@@ -515,7 +570,7 @@ async function renderTransactionsAccordion(recordId){
   }
 }
 
-// ... Kalan Kodlar (Filter, Add Doc vb.) Aynen Devam Eder ...
+// ... Kalan Kodlar Aynen Devam Eder ...
 
 txFilter?.addEventListener('input', () => {
   const q = (txFilter.value || '').toLowerCase();
@@ -624,13 +679,12 @@ async function loadRecord(){
 
     renderHero(currentData);
     
-    // --- APPLICANT (SAHİP) İSMİ DÜZELTME (Persons tablosundan çekme) ---
+    // --- APPLICANT (SAHİP) İSMİ DÜZELTME ---
     if (applicantEl) {
       applicantEl.value = 'Yükleniyor...';
       if (currentData.applicants && currentData.applicants.length > 0) {
         try {
           const names = await Promise.all(currentData.applicants.map(async (app) => {
-            // Eğer applicant ID varsa persons tablosundan ismini çek
             if (app.id) {
                 try {
                     const personRef = doc(db, 'persons', app.id);
@@ -640,7 +694,6 @@ async function loadRecord(){
                     }
                 } catch(e) { console.warn('Applicant fetch error:', e); }
             }
-            // ID yoksa veya fetch hatası varsa kayıttaki ismi kullan
             return app.name || '';
           }));
           
