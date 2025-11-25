@@ -45,41 +45,26 @@ document.getElementById('docFile')?.addEventListener('change', (e)=>{
   if (nameEl) nameEl.value = f ? f.name : '';
 });
 
-// --- STİL EKLEME (Mavi/Turuncu İkonlar ve 35. Sınıf) ---
+// --- STİL EKLEME ---
 (function injectGoodsStyles() {
     const styleId = 'custom-goods-styles';
     if (document.getElementById(styleId)) return;
     const style = document.createElement('style');
     style.id = styleId;
     style.innerHTML = `
-        /* Goods Listesi */
         .goods-sub-item { margin-left: 25px; list-style-type: circle; color: #495057; }
         .goods-header-item { font-weight: 500; list-style-type: disc; }
-        
-        /* Belge İkonları */
         .doc-link-item {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            text-decoration: none !important;
-            margin-right: 8px;
-            margin-bottom: 4px;
-            padding: 6px;
-            border-radius: 6px;
-            background-color: #f8f9fa;
-            transition: all 0.2s ease;
-            border: 1px solid transparent;
-            width: 32px;
-            height: 32px;
-            cursor: pointer;
+            display: inline-flex; align-items: center; justify-content: center;
+            text-decoration: none !important; margin-right: 8px; margin-bottom: 4px;
+            padding: 6px; border-radius: 6px; background-color: #f8f9fa;
+            transition: all 0.2s ease; border: 1px solid transparent;
+            width: 32px; height: 32px; cursor: pointer;
         }
         .doc-link-item:hover { transform: translateY(-1px); box-shadow: 0 2px 5px rgba(0,0,0,0.1); background-color: #fff; }
         .doc-link-item i { font-size: 1.2em; }
-        
-        /* Renk Kodları */
-        .doc-color-blue i { color: #0d6efd; }     /* İlk Belge: Mavi */
-        .doc-color-orange i { color: #fd7e14; }   /* Sonraki Belgeler: Turuncu */
-        
+        .doc-color-blue i { color: #0d6efd; }
+        .doc-color-orange i { color: #fd7e14; }
         .doc-link-item:hover.doc-color-blue { border-color: #0d6efd; }
         .doc-link-item:hover.doc-color-orange { border-color: #fd7e14; }
     `;
@@ -305,35 +290,7 @@ function organizeTransactions(txList){
   return {parents, childrenMap};
 }
 
-async function fetchPdfsForTransactions(transactionIds) {
-  if (!transactionIds || transactionIds.length === 0) return {};
-  try {
-    const pdfMap = {};
-    const pdfsQuery = query(
-      collection(db, 'unindexed_pdfs'),
-      where('associatedTransactionId', 'in', transactionIds),
-      where('status', '==', 'indexed')
-    );
-    const pdfsSnapshot = await getDocs(pdfsQuery);
-    pdfsSnapshot.forEach(doc => {
-      const pdfData = doc.data();
-      const txId = pdfData.associatedTransactionId;
-      if (!pdfMap[txId]) { pdfMap[txId] = []; }
-      pdfMap[txId].push({
-        id: doc.id,
-        fileName: pdfData.fileName || 'Belge',
-        fileUrl: pdfData.fileUrl || pdfData.url,
-        indexedAt: pdfData.indexedAt
-      });
-    });
-    return pdfMap;
-  } catch (error) {
-    console.error('PDF\'ler getirilirken hata:', error);
-    return {};
-  }
-}
-
-// 🔥 Helper: Task Dokümanlarını Getir (ePats + Documents)
+// Task Dokümanları Helper
 async function fetchTaskDocuments(taskId) {
   if (!taskId) return [];
   try {
@@ -352,7 +309,7 @@ async function fetchTaskDocuments(taskId) {
       });
     }
 
-    // 2. Task'ın "documents" dizisi (İtiraz dilekçeleri vs. burada olabilir)
+    // 2. Task'ın "documents" dizisi
     if (Array.isArray(taskData.documents)) {
         taskData.documents.forEach(doc => {
             const fileUrl = doc.downloadURL || doc.url || doc.path;
@@ -372,10 +329,9 @@ async function fetchTaskDocuments(taskId) {
   }
 }
 
-// --- ANA DEĞİŞİKLİK BURADA: renderTransactionsAccordion ---
+// --- ANA DÜZENLEME: Transaction > Task Fallback Mantığı ---
 async function renderTransactionsAccordion(recordId){
   try{
-    // 1. Verileri Çek
     const txRes = await ipRecordsService.getTransactionsForRecord(recordId);
     const list = (txRes?.success && Array.isArray(txRes.transactions)) ? txRes.transactions : [];
     cachedTransactions = list;
@@ -390,7 +346,8 @@ async function renderTransactionsAccordion(recordId){
       });
     }
 
-    const pdfsByTransaction = await fetchPdfsForTransactions(list.map(tx => tx.id));
+    // unindexed_pdfs çağrısı KALDIRILDI.
+
     const {parents, childrenMap} = organizeTransactions(list);
 
     if (!parents.length){
@@ -398,20 +355,8 @@ async function renderTransactionsAccordion(recordId){
       return;
     }
 
-    // 2. Parent'lar için hazırlık (Task Belgelerini De Çekiyoruz!)
-    const parentsWithTaskDocs = await Promise.all(parents.map(async (p) => {
-      let taskDocs = [];
-      if (p.triggeringTaskId) {
-        try {
-          // Sadece ePats değil, Task'ın tüm belgelerini çekiyoruz
-          taskDocs = await fetchTaskDocuments(p.triggeringTaskId);
-        } catch (err) { console.warn('Parent task docs error:', err); }
-      }
-      return { ...p, taskDocs };
-    }));
-
-    // 3. Render
-    const parentTransactionRenderPromises = parentsWithTaskDocs.map(async p => {
+    // RENDER PARENTS
+    const parentTransactionRenderPromises = parents.map(async p => {
           const tmeta = typeMap.get(String(p.type));
           const tname = tmeta ? (tmeta.alias || tmeta.name) : `İşlem ${p.type}`;
           const {d,t} = fmtDateTime(p.timestamp);
@@ -428,46 +373,33 @@ async function renderTransactionsAccordion(recordId){
             const cn = cm ? (cm.alias || cm.name) : `İşlem ${c.type}`;
             const ct = fmtDateTime(c.timestamp);
             
-            // 🔥 Belge Havuzu (Deduplication)
-            const uniqueDocsMap = new Map();
-
-            // Yardımcı: Havuza Ekleme Fonksiyonu
-            const addToPool = (docObj) => {
-                const url = docObj.fileUrl || docObj.downloadURL || docObj.url || docObj.path;
-                const name = docObj.fileName || docObj.name || 'Belge';
-                if (!url) return;
-
-                if (!uniqueDocsMap.has(url)) {
-                    uniqueDocsMap.set(url, {
-                        fileName: name,
-                        fileUrl: url,
-                        type: docObj.type || 'child_doc'
-                    });
+            // 1. Transaction Belgelerini Topla
+            const txDocs = [];
+            const seenUrls = new Set();
+            
+            const addDoc = (d) => {
+                const url = d.fileUrl || d.url || d.path || d.downloadURL;
+                const name = d.fileName || d.name || 'Belge';
+                if(url && !seenUrls.has(url)){
+                    seenUrls.add(url);
+                    txDocs.push({ fileName: name, fileUrl: url, type: d.type || 'child_doc' });
                 }
             };
 
-            // Kaynak 1: Unindexed PDF'ler
-            const childUnindexedPdfs = pdfsByTransaction[c.id] || [];
-            childUnindexedPdfs.forEach(addToPool);
-
-            // Kaynak 2: İşlemin Kendi Belgeleri
             if (Array.isArray(c.documents)) {
-                c.documents.forEach(addToPool);
+                c.documents.forEach(addDoc);
             }
 
-            // Kaynak 3: Task Belgeleri (ARTIK AKTİF!)
-            // Eğer bu child işlemini bir Task tetiklediyse, o task'ın belgelerini de göster
-            if (c.triggeringTaskId) {
+            // 2. FALLBACK: Eğer Transaction belgesi YOKSA ve Task varsa, Task'tan çek.
+            if (txDocs.length === 0 && c.triggeringTaskId) {
                  try {
-                     const childTaskDocs = await fetchTaskDocuments(c.triggeringTaskId);
-                     childTaskDocs.forEach(addToPool);
+                     const taskDocs = await fetchTaskDocuments(c.triggeringTaskId);
+                     taskDocs.forEach(addDoc);
                  } catch (e) { console.error('Child task docs error:', e); }
             }
 
-            const uniqueDocsArray = Array.from(uniqueDocsMap.values());
-
             // İKONLAR (Mavi/Turuncu)
-            const pdfIcons = uniqueDocsArray.map((pdf, idx) => {
+            const pdfIcons = txDocs.map((pdf, idx) => {
                 const colorClass = (idx === 0) ? 'doc-color-blue' : 'doc-color-orange';
                 return `<a onclick="window.open('${pdf.fileUrl}', '_blank')" 
                            title="${pdf.fileName}" 
@@ -484,35 +416,39 @@ async function renderTransactionsAccordion(recordId){
             </div>`;
       }));
 
-      // --- AKORDEON KAPALI BAŞLANGIÇ ---
       const childrenHtml = hasChildren ? `
         <div class="accordion-transaction-children" id="children-${p.id}" style="display: none;">
              ${childrenHtmlContents.join('')}
         </div>` : '';
 
       // --- PARENT BELGELERİ ---
-      const parentUniqueMap = new Map();
-      const addToParentPool = (d) => {
+      const parentTxDocs = [];
+      const parentSeen = new Set();
+      
+      const addParentDoc = (d) => {
           const url = d.fileUrl || d.url || d.path || d.downloadURL;
-          if(url && !parentUniqueMap.has(url)) {
-             parentUniqueMap.set(url, { ...d, fileUrl: url });
+          const name = d.fileName || d.name || 'Belge';
+          if(url && !parentSeen.has(url)){
+              parentSeen.add(url);
+              parentTxDocs.push({ fileName: name, fileUrl: url, type: d.type || 'parent_doc' });
           }
       };
 
-      // Kaynaklar (Parent)
-      (pdfsByTransaction[p.id] || []).forEach(addToParentPool);
-      (p.documents || []).forEach(addToParentPool);
-      
-      // Kaynak: Task Belgeleri (ARTIK AKTİF!)
-      (p.taskDocs || []).forEach(addToParentPool);
+      // 1. Transaction Belgeleri
+      (p.documents || []).forEach(addParentDoc);
+      // Özel alanlar da Transaction belgesi sayılır
+      if(p.relatedPdfUrl) addParentDoc({fileName: 'Resmi Yazı', fileUrl: p.relatedPdfUrl});
+      if(p.oppositionPetitionFileUrl) addParentDoc({fileName: 'İtiraz Dilekçesi', fileUrl: p.oppositionPetitionFileUrl});
 
-      // Özel alanlar
-      if(p.relatedPdfUrl) addToParentPool({fileName: 'Resmi Yazı', fileUrl: p.relatedPdfUrl});
-      if(p.oppositionPetitionFileUrl) addToParentPool({fileName: 'İtiraz Dilekçesi', fileUrl: p.oppositionPetitionFileUrl});
+      // 2. FALLBACK: Eğer hiç belge yoksa ve Task varsa
+      if (parentTxDocs.length === 0 && p.triggeringTaskId) {
+           try {
+               const taskDocs = await fetchTaskDocuments(p.triggeringTaskId);
+               taskDocs.forEach(addParentDoc);
+           } catch(e) { console.warn('Parent task doc fetch err', e); }
+      }
 
-      const parentUniqueDocs = Array.from(parentUniqueMap.values());
-
-      const parentPdfIcons = parentUniqueDocs.map((pdf, idx) => {
+      const parentPdfIcons = parentTxDocs.map((pdf, idx) => {
           const colorClass = (idx === 0) ? 'doc-color-blue' : 'doc-color-orange';
           return `<a onclick="window.open('${pdf.fileUrl}', '_blank')" 
                      class="doc-link-item ${colorClass}" 
@@ -547,7 +483,6 @@ async function renderTransactionsAccordion(recordId){
             icon.textContent = '▶';
             icon.classList.remove('expanded');
         }
-
         header.addEventListener('click', function(e){
           if (e.target.closest('a') || e.target.closest('button')) return;
           const pid = this.getAttribute('data-parent-id');
@@ -555,7 +490,6 @@ async function renderTransactionsAccordion(recordId){
           const icn = this.querySelector('.accordion-icon');
           if (!cont) return;
           const isVisible = cont.style.display !== 'none';
-          
           cont.style.display = isVisible ? 'none' : 'block';
           if (icn){
             icn.textContent = isVisible ? '▶' : '▼'; 
@@ -679,7 +613,6 @@ async function loadRecord(){
 
     renderHero(currentData);
     
-    // --- APPLICANT (SAHİP) İSMİ DÜZELTME ---
     if (applicantEl) {
       applicantEl.value = 'Yükleniyor...';
       if (currentData.applicants && currentData.applicants.length > 0) {
@@ -696,7 +629,6 @@ async function loadRecord(){
             }
             return app.name || '';
           }));
-          
           applicantEl.value = names.filter(Boolean).join(', ');
         } catch (err) {
           console.error(err);
@@ -758,7 +690,6 @@ docsTbody?.addEventListener('click', async (ev) => {
   if (!btn) return;
   const idx = Number(btn.getAttribute('data-index'));
   if (Number.isNaN(idx)) return;
-  
   if (!confirm('Silmek istediğinize emin misiniz?')) return;
   
   const docs = currentData.documents.filter((_,i) => i !== idx);
@@ -784,7 +715,6 @@ window.triggerTpQuery = function(applicationNo){
   const appNo = (applicationNo || '').toString().trim();
   const fallbackUrl = `https://opts.turkpatent.gov.tr/trademark#bn=${encodeURIComponent(appNo)}`;
   const EXT_ID = 'gkhmldkbjmnipikgjabmlilibllikapk';
-
   try {
     if (typeof chrome !== 'undefined' && chrome.runtime) {
       chrome.runtime.sendMessage(EXT_ID, { type: 'SORGULA', data: appNo }, (res) => {
