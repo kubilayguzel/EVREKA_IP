@@ -10,24 +10,16 @@ import { ref, uploadBytes, getDownloadURL, deleteObject, getStorage } from "http
 const params = new URLSearchParams(location.search);
 const recordId = params.get('id');
 
-// DOM
+// DOM Elementleri
 const loadingEl = document.getElementById('loading');
 const rootEl = document.getElementById('detail-root');
-
-// Fields
 const applicantEl = document.getElementById('applicantName');
 const applicantAddressEl = document.getElementById('applicantAddress');
-
-// HERO
 const heroCard = document.getElementById('heroCard');
 const heroTitleEl = document.getElementById('heroTitle');
 const brandImageEl = document.getElementById('brandImage');
 const heroKv = document.getElementById('heroKv');
-
-// Goods
 const goodsContainer = document.getElementById('goodsContainer');
-
-// Documents
 const addDocToggleBtn = document.getElementById('addDocToggleBtn');
 const addDocForm = document.getElementById('addDocForm');
 const docNameEl = document.getElementById('docName');
@@ -39,15 +31,6 @@ const docSaveBtn = document.getElementById('docSaveBtn');
 const docCancelBtn = document.getElementById('docCancelBtn');
 const docsTbody = document.getElementById('documentsTbody');
 const docCount  = document.getElementById('docCount');
-
-// Dosya seçimi yansıtma
-document.getElementById('docFile')?.addEventListener('change', (e)=>{
-  const f = e.target.files && e.target.files[0];
-  const nameEl = document.getElementById('docFileName');
-  if (nameEl) nameEl.value = f ? f.name : '';
-});
-
-// Transactions
 const txAccordion = document.getElementById('txAccordion');
 const txFilter = document.getElementById('txFilter');
 const txCount   = document.getElementById('txCount');
@@ -55,7 +38,14 @@ const txCount   = document.getElementById('txCount');
 let currentData = null;
 let cachedTransactions = [];
 
-// --- STİL EKLEME (35. Sınıf ve Mavi/Turuncu İkonlar İçin) ---
+// Dosya seçimi input listener
+document.getElementById('docFile')?.addEventListener('change', (e)=>{
+  const f = e.target.files && e.target.files[0];
+  const nameEl = document.getElementById('docFileName');
+  if (nameEl) nameEl.value = f ? f.name : '';
+});
+
+// --- STİL EKLEME (Mavi/Turuncu İkonlar ve 35. Sınıf) ---
 (function injectGoodsStyles() {
     const styleId = 'custom-goods-styles';
     if (document.getElementById(styleId)) return;
@@ -66,13 +56,13 @@ let cachedTransactions = [];
         .goods-sub-item { margin-left: 25px; list-style-type: circle; color: #495057; }
         .goods-header-item { font-weight: 500; list-style-type: disc; }
         
-        /* Belge İkonları - Link Görünümü */
+        /* Belge İkonları */
         .doc-link-item {
             display: inline-flex;
             align-items: center;
             justify-content: center;
             text-decoration: none !important;
-            margin-right: 8px; /* İkonlar arası boşluk */
+            margin-right: 8px;
             margin-bottom: 4px;
             padding: 6px;
             border-radius: 6px;
@@ -81,12 +71,12 @@ let cachedTransactions = [];
             border: 1px solid transparent;
             width: 32px;
             height: 32px;
+            cursor: pointer;
         }
         .doc-link-item:hover { transform: translateY(-1px); box-shadow: 0 2px 5px rgba(0,0,0,0.1); background-color: #fff; }
-        
         .doc-link-item i { font-size: 1.2em; }
         
-        /* Renk Kodları - Mavi ve Turuncu */
+        /* Renk Kodları */
         .doc-color-blue i { color: #0d6efd; }     /* İlk Belge: Mavi */
         .doc-color-orange i { color: #fd7e14; }   /* Sonraki Belgeler: Turuncu */
         
@@ -96,7 +86,7 @@ let cachedTransactions = [];
     document.head.appendChild(style);
 })();
 
-// ... (fmtDate, fmtDateTime, getStatusText gibi yardımcı fonksiyonlar aynen kalıyor) ...
+// --- Yardımcı Fonksiyonlar ---
 function fmtDate(d) {
   try {
     if (!d) return '-';
@@ -110,11 +100,13 @@ function fmtDate(d) {
     return dt.toLocaleDateString('tr-TR');
   } catch { return String(d); }
 }
+
 function getStatusText(ipType, statusValue) {
   const list = (STATUSES?.[ipType] || []);
   const m = list.find(s => s.value === statusValue);
   return m ? m.text : (statusValue ?? '-');
 }
+
 function fmtDateTime(ts){
   try{
     if(!ts) return {d:'-', t:'-'};
@@ -139,6 +131,7 @@ function extractNiceFromGsbc(gsbc) {
   return [];
 }
 
+// --- Render Fonksiyonları ---
 function renderHero(rec){
   const imgSrc = (rec.type === 'trademark') ? (rec.brandImageUrl || rec.details?.brandInfo?.brandImage) : null;
   const title = rec.title || rec.brandText || '—';
@@ -175,19 +168,10 @@ function renderHero(rec){
   }
 }
 
-// Başvuru sahibi bilgileri (Aynen Kalıyor)
 function extractApplicantNames(rec){
   const arr = Array.isArray(rec.applicants) ? rec.applicants : [];
   if (arr.length) return arr.map(a => a?.name).filter(Boolean).join(', ');
   return rec.ownerName || rec.applicantName || '';
-}
-
-function composeAddressTriple(address, province, countryName){
-  const parts = [address, province, countryName]
-    .map(p => (p == null ? '' : String(p).trim()))
-    .filter(p => p.length > 0);
-  if (!parts.length) return '';
-  return parts.join(' - ').replace(/\s*-\s*/g, ' - ').replace(/\s+/g, ' ').trim();
 }
 
 async function fetchApplicantAddress(applicantId){
@@ -208,7 +192,6 @@ async function fetchApplicantAddress(applicantId){
   }
 }
 
-// Eşya Listesi Render (Aynen Kalıyor)
 function generateFormattedGoodsList(classNo, items) {
     if (String(classNo) !== '35') {
         return items.map(t => `<li>${t}</li>`).join('');
@@ -274,7 +257,6 @@ function renderGoodsList(rec){
     }).join('');
 }
 
-// Ekli Belgeler Render (Tablo)
 function renderDocuments(docs){
   const arr = Array.isArray(docs) ? docs : [];
   if (docCount) docCount.textContent = String(arr.length);
@@ -301,7 +283,7 @@ function renderDocuments(docs){
   docsTbody.innerHTML = rows;
 }
 
-// Transactions Helper
+// Transaction Helpers
 function organizeTransactions(txList){
   const parents = [];
   const childrenMap = {};
@@ -323,7 +305,6 @@ function organizeTransactions(txList){
   return {parents, childrenMap};
 }
 
-// PDF Fetcher Helpers
 async function fetchPdfsForTransactions(transactionIds) {
   if (!transactionIds || transactionIds.length === 0) return {};
   try {
@@ -343,13 +324,6 @@ async function fetchPdfsForTransactions(transactionIds) {
         fileName: pdfData.fileName || 'Belge',
         fileUrl: pdfData.fileUrl || pdfData.url,
         indexedAt: pdfData.indexedAt
-      });
-    });
-    Object.keys(pdfMap).forEach(txId => {
-      pdfMap[txId].sort((a, b) => {
-        const dateA = a.indexedAt?.toDate?.() || new Date(a.indexedAt);
-        const dateB = b.indexedAt?.toDate?.() || new Date(b.indexedAt);
-        return dateB - dateA;
       });
     });
     return pdfMap;
@@ -381,8 +355,7 @@ async function fetchTaskDocuments(taskId) {
                 docs.push({
                     fileName: doc.name || 'Task Belgesi',
                     fileUrl: fileUrl, 
-                    type: doc.type || 'task_document',
-                    isTaskDoc: true
+                    type: doc.type || 'task_document'
                 });
             }
         });
@@ -394,7 +367,7 @@ async function fetchTaskDocuments(taskId) {
   }
 }
 
-// --- ANA FONKSİYON: Transaction Accordion Render ---
+// --- ANA DEĞİŞİKLİK BURADA: renderTransactionsAccordion ---
 async function renderTransactionsAccordion(recordId){
   try{
     // 1. Verileri Çek
@@ -439,8 +412,7 @@ async function renderTransactionsAccordion(recordId){
           }
         } catch (err) { console.warn('Task ePats error:', err); }
       }
-      const transactionDocs = p.documents || [];
-      return { ...p, epatsDocuments, transactionDocs };
+      return { ...p, epatsDocuments };
     }));
 
     // 3. Render
@@ -455,24 +427,24 @@ async function renderTransactionsAccordion(recordId){
             ? `<span class="badge badge-warning ml-2" style="font-size: 0.85em;">📋 ${p.oppositionOwner}</span>` 
             : '';
 
-      // --- CHILD RENDER ---
+      // --- CHILD RENDER (Kalici Çözüm: URL Bazlı Deduplication) ---
       const childrenHtmlContents = await Promise.all(children.map(async c => {
             const cm = typeMap.get(String(c.type));
             const cn = cm ? (cm.alias || cm.name) : `İşlem ${c.type}`;
             const ct = fmtDateTime(c.timestamp);
             
-            // --- Child Belge Toplama ---
-            let allChildDocs = [];
-            const existingFileNames = new Set();
-            
-            // Helper: Belge Ekle
-            const addChildDoc = (docObj) => {
-                const name = docObj.fileName || docObj.name || 'Belge';
+            // 🔥 URL'e Göre Benzersiz Belge Havuzu
+            const uniqueDocsMap = new Map();
+
+            // Yardımcı: Havuza Ekleme Fonksiyonu
+            const addToPool = (docObj) => {
                 const url = docObj.fileUrl || docObj.downloadURL || docObj.url || docObj.path;
-                
-                if (url && !existingFileNames.has(name)) {
-                    existingFileNames.add(name);
-                    allChildDocs.push({
+                const name = docObj.fileName || docObj.name || 'Belge';
+                if (!url) return;
+
+                // URL zaten varsa ekleme (veya güncelle). Şu an ilk geleni koruyoruz.
+                if (!uniqueDocsMap.has(url)) {
+                    uniqueDocsMap.set(url, {
                         fileName: name,
                         fileUrl: url,
                         type: docObj.type || 'child_doc'
@@ -480,50 +452,32 @@ async function renderTransactionsAccordion(recordId){
                 }
             };
 
-            // ÖZEL DURUM: İtiraz Bildirimi (Genellikle Tip 27 veya bağlamına göre)
-            // Eğer işlem tipi "İtiraz Bildirimi" ise veya kullanıcı "transactionında var olan documents" dediyse:
-            // Sadece bu child'ın kendi 'documents' dizisini kullan. Task veya Unindexed karıştırma.
-            const IS_OPPOSITION_NOTICE = String(c.type) === '27'; // Tip kodunu teyit etmek gerekebilir, kullanıcı 27/İtiraz dediği varsayılıyor.
-            
-            if (IS_OPPOSITION_NOTICE) {
-                // Sadece explicit 'documents' array
-                if (Array.isArray(c.documents)) {
-                    c.documents.forEach(addChildDoc);
-                }
-                // Eğer burada dosya yoksa ve parent'ta itiraz dilekçesi varsa onu ekle (opsiyonel, mükerrerliği önlemek için kapalı tutulabilir)
-                if (allChildDocs.length === 0 && p.oppositionPetitionFileUrl) {
-                     addChildDoc({ fileName: 'İtiraz Dilekçesi', fileUrl: p.oppositionPetitionFileUrl, type: 'opposition_petition' });
-                }
-            } else {
-                // Diğer tüm işlemler için standart toplama mantığı (Unindexed + DocArray + Task)
-                
-                // A. Unindexed PDF'ler
-                const childUnindexedPdfs = pdfsByTransaction[c.id] || [];
-                childUnindexedPdfs.forEach(addChildDoc);
+            // Kaynak 1: Unindexed PDF'ler
+            const childUnindexedPdfs = pdfsByTransaction[c.id] || [];
+            childUnindexedPdfs.forEach(addToPool);
 
-                // B. Child Transaction 'documents' Array
-                if (Array.isArray(c.documents)) {
-                    c.documents.forEach(addChildDoc);
-                }
-
-                // C. Child Task Belgeleri
-                if (c.triggeringTaskId) {
-                     try {
-                         const taskDocs = await fetchTaskDocuments(c.triggeringTaskId);
-                         taskDocs.forEach(addChildDoc);
-                     } catch (e) { console.error('Child task docs error:', e); }
-                }
+            // Kaynak 2: İşlemin Kendi Belgeleri (Transaction Documents)
+            if (Array.isArray(c.documents)) {
+                c.documents.forEach(addToPool);
             }
 
-            // İKONLARI OLUŞTUR (SADECE MAVİ VE TURUNCU)
-            // Mantık: İlk belge (index 0) MAVİ, diğerleri TURUNCU.
-            const pdfIcons = allChildDocs.map((pdf, idx) => {
+            // Kaynak 3: Task Belgeleri
+            if (c.triggeringTaskId) {
+                 try {
+                     const taskDocs = await fetchTaskDocuments(c.triggeringTaskId);
+                     taskDocs.forEach(addToPool);
+                 } catch (e) { console.error('Child task docs error:', e); }
+            }
+
+            // Map'ten Array'e dönüştür (Artık hepsi benzersiz)
+            const uniqueDocsArray = Array.from(uniqueDocsMap.values());
+
+            // İKONLARI OLUŞTUR
+            const pdfIcons = uniqueDocsArray.map((pdf, idx) => {
                 const colorClass = (idx === 0) ? 'doc-color-blue' : 'doc-color-orange';
-                
                 return `<a onclick="window.open('${pdf.fileUrl}', '_blank')" 
                            title="${pdf.fileName}" 
-                           class="doc-link-item ${colorClass}" 
-                           style="cursor: pointer;">
+                           class="doc-link-item ${colorClass}">
                     <i class="fas fa-file-pdf"></i>
                 </a>`;
             }).join(' ');
@@ -536,57 +490,35 @@ async function renderTransactionsAccordion(recordId){
             </div>`;
       }));
 
-      // --- AKORDEON KAPALI BAŞLANGIÇ ---
-      // style="display: none;" eklendi.
+      // --- AKORDEON KAPALI BAŞLANGIÇ (display: none) ---
       const childrenHtml = hasChildren ? `
         <div class="accordion-transaction-children" id="children-${p.id}" style="display: none;">
              ${childrenHtmlContents.join('')}
         </div>` : '';
 
-      // --- PARENT GÖRÜNÜMÜ ---
-      // Parent belgeleri için de aynı renk mantığı
-      const isOppositionParent = String(p.type) === '20' || String(p.type) === '19';
-      let allParentDocs = [];
-      
-      // Parent belge toplama mantığı (önceki gibi)
-      const parentPdfs = pdfsByTransaction[p.id] || [];
-      const epatsDocuments = p.epatsDocuments || [];
-      const transactionDocs = p.transactionDocs || [];
-
-      if (!isOppositionParent) {
-          allParentDocs = [
-              ...parentPdfs, 
-              ...epatsDocuments,
-              ...transactionDocs.map(doc => ({
-                  fileName: doc.name || doc.fileName || 'Belge',
-                  fileUrl: doc.path || doc.url || doc.downloadURL,
-                  type: 'parent_doc'
-              }))
-          ];
-          if(p.relatedPdfUrl) allParentDocs.push({fileName: 'Resmi Yazı', fileUrl: p.relatedPdfUrl, type: 'official_document'});
-          if(p.oppositionPetitionFileUrl) allParentDocs.push({fileName: 'İtiraz Dilekçesi', fileUrl: p.oppositionPetitionFileUrl, type: 'opposition_petition'});
-      } else {
-          allParentDocs = [...epatsDocuments];
-      }
-
-      // Tekrarları temizle
-      const uniqueParentDocs = [];
-      const seenParentUrls = new Set();
-      allParentDocs.forEach(d => {
+      // --- PARENT BELGELERİ (Aynı Deduplication Mantığı) ---
+      const parentUniqueMap = new Map();
+      const addToParentPool = (d) => {
           const url = d.fileUrl || d.url || d.path || d.downloadURL;
-          if(url && !seenParentUrls.has(url)) {
-              seenParentUrls.add(url);
-              uniqueParentDocs.push({...d, fileUrl: url});
+          if(url && !parentUniqueMap.has(url)) {
+             parentUniqueMap.set(url, { ...d, fileUrl: url });
           }
-      });
+      };
 
-      // Parent İkonları
-      const parentPdfIcons = uniqueParentDocs.map((pdf, idx) => {
+      // Kaynaklar
+      (pdfsByTransaction[p.id] || []).forEach(addToParentPool);
+      (p.epatsDocuments || []).forEach(addToParentPool);
+      (p.documents || []).forEach(addToParentPool); // Parent'in kendi dokümanları
+      if(p.relatedPdfUrl) addToParentPool({fileName: 'Resmi Yazı', fileUrl: p.relatedPdfUrl});
+      if(p.oppositionPetitionFileUrl) addToParentPool({fileName: 'İtiraz Dilekçesi', fileUrl: p.oppositionPetitionFileUrl});
+
+      const parentUniqueDocs = Array.from(parentUniqueMap.values());
+
+      const parentPdfIcons = parentUniqueDocs.map((pdf, idx) => {
           const colorClass = (idx === 0) ? 'doc-color-blue' : 'doc-color-orange';
           return `<a onclick="window.open('${pdf.fileUrl}', '_blank')" 
                      class="doc-link-item ${colorClass}" 
-                     title="${pdf.fileName}" 
-                     style="cursor:pointer;">
+                     title="${pdf.fileName}">
              <i class="fas fa-file-pdf"></i>
           </a>`;
       }).join(' ');
@@ -610,7 +542,7 @@ async function renderTransactionsAccordion(recordId){
     const finalHtml = await Promise.all(parentTransactionRenderPromises).then(results => results.join(''));
     if (txAccordion) txAccordion.innerHTML = finalHtml;
     
-    // Tıklama olaylarını bağla (Accordion aç/kapa)
+    // Tıklama Olayları (Simge Yönü Düzeltildi)
     txAccordion?.querySelectorAll('.accordion-transaction-header[data-parent-id]').forEach(header => {
         header.addEventListener('click', function(e){
           if (e.target.closest('a') || e.target.closest('button')) return;
@@ -619,12 +551,23 @@ async function renderTransactionsAccordion(recordId){
           const icon = this.querySelector('.accordion-icon');
           if (!cont) return;
           const isVisible = cont.style.display !== 'none';
+          
           cont.style.display = isVisible ? 'none' : 'block';
           if (icon){
-            icon.textContent = isVisible ? '▼' : '▶'; // Kapalıyken Ok (▶), Açıkken Aşağı (▼)
+            // Kapalıyken (none) -> Ok (▶) değil aslında kodda ▼ kullanılmış varsayılan olarak, 
+            // ama kullanıcı isteğine göre "default kapalı" yaptık. 
+            // Burada: Açılınca "▼", Kapanınca "▶" yapıyoruz.
+            icon.textContent = isVisible ? '▶' : '▼'; 
             icon.classList.toggle('expanded', !isVisible);
           }
         });
+        
+        // Default kapalı olduğu için ikonları başlangıçta düzelt (▶)
+        const icon = header.querySelector('.accordion-icon');
+        if(icon && header.classList.contains('has-children')) {
+            icon.textContent = '▶'; 
+            icon.classList.remove('expanded');
+        }
     });
 
   } catch(e){
@@ -633,9 +576,9 @@ async function renderTransactionsAccordion(recordId){
   }
 }
 
-// ... (Kalan kodlar ve event listener'lar aynen kalıyor) ...
+// ... Kalan Kodlar (LoadRecord vb.) Aynen Devam Eder ...
+// (Dosya bütünlüğü için aşağısı öncekiyle aynıdır)
 
-// Filter Listener
 txFilter?.addEventListener('input', () => {
   const q = (txFilter.value || '').toLowerCase();
   const items = Array.from(txAccordion.querySelectorAll('.accordion-transaction-item'));
@@ -645,16 +588,15 @@ txFilter?.addEventListener('input', () => {
   });
 });
 
-// Belge Ekleme/Silme ve LoadRecord kısımları aynen devam eder...
-// (Dosyanın geri kalanı önceki haliyle aynıdır, sadece yukarıdaki renderTransactionsAccordion ve injectGoodsStyles değişti)
+if (docTypeEl) docTypeEl.dispatchEvent(new Event('change'));
 
-// Type 'Diğer' alanını göster/gizle
 docTypeEl?.addEventListener('change', () => {
   const isOther = (docTypeEl.value === 'other');
   if (docTypeOtherWrap){
     docTypeOtherWrap.classList.toggle('d-none', !isOther);
   }
 });
+
 addDocToggleBtn?.addEventListener('click', () => {
   addDocForm.classList.toggle('d-none');
   if (!addDocForm.classList.contains('d-none')) docNameEl.focus();
@@ -694,7 +636,7 @@ docSaveBtn?.addEventListener('click', async () => {
 
     const docs = Array.isArray(currentData.documents) ? [currentData.documents] : [];
     docs.push(newDoc);
-    const res = await ipRecordsService.updateRecord(recordId, { documents: docs, docPaths: [], updatedAt: new Date() }); // docPaths ignored for simplicity here
+    const res = await ipRecordsService.updateRecord(recordId, { documents: docs, docPaths: [], updatedAt: new Date() });
     
     if (!res?.success) throw new Error('Belge ekleme başarısız.');
     
@@ -727,7 +669,6 @@ async function loadRecord(){
     }
     currentData = res.data;
     
-    // TP Button Logic
     function _normalize(str){ return (str || '').toString().toUpperCase().replace('Ü','U').replace('İ','I'); }
     function _isTurkPatentOrigin(rec){
       const candidates = [
@@ -775,7 +716,6 @@ async function loadRecord(){
   }
 }
 
-// Bootstrap
 (async () => {
   const wrapper = document.querySelector('.page-wrapper');
   if (wrapper) wrapper.style.paddingTop = '80px'; 
@@ -801,8 +741,6 @@ async function loadRecord(){
   });
 })();
 
-if (docTypeEl) docTypeEl.dispatchEvent(new Event('change'));
-
 docsTbody?.addEventListener('click', async (ev) => {
   const btn = ev.target.closest('.btn-doc-remove');
   if (!btn) return;
@@ -811,14 +749,12 @@ docsTbody?.addEventListener('click', async (ev) => {
   
   if (!confirm('Silmek istediğinize emin misiniz?')) return;
   
-  // Basit silme mantığı (Storage silme işlemi tam hali için orijinal koddaki logic korunabilir)
   const docs = currentData.documents.filter((_,i) => i !== idx);
   await ipRecordsService.updateRecord(recordId, { documents: docs, docPaths: [], updatedAt: new Date() });
   currentData.documents = docs;
   renderDocuments(currentData.documents);
 });
 
-// TP Query
 const tpQueryBtn = document.getElementById('tpQueryBtn');
 if (tpQueryBtn) {
   tpQueryBtn.addEventListener('click', () => {
@@ -832,7 +768,6 @@ if (tpQueryBtn) {
   });
 }
 
-// Global Trigger (Eklenti için)
 window.triggerTpQuery = function(applicationNo){
   const appNo = (applicationNo || '').toString().trim();
   const fallbackUrl = `https://opts.turkpatent.gov.tr/trademark#bn=${encodeURIComponent(appNo)}`;
