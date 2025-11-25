@@ -1,6 +1,6 @@
 // js/portfolio-detail.js
 import { loadSharedLayout } from './layout-loader.js';
-import { ipRecordsService, transactionTypeService, auth, db, storage } from '../firebase-config.js';
+import { ipRecordsService, transactionTypeService, auth, db, storage, waitForAuthUser, redirectOnLogout } from '../firebase-config.js';
 import { formatFileSize, STATUSES } from '../utils.js';
 import { doc, getDoc, collection, query, where, getDocs, getFirestore } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
@@ -660,30 +660,35 @@ async function loadRecord(){
   }
 }
 
+// Bootstrap
 (async () => {
+  await loadSharedLayout({ activeMenuLink: 'portfolio.html' });
+
+  // layout padding hesapları (senin mevcut kodun)
   const wrapper = document.querySelector('.page-wrapper');
-  if (wrapper) wrapper.style.paddingTop = '80px'; 
-  onAuthStateChanged(auth, async (user) => {
-    if (!user) {
-      window.location.href = 'index.html';
-      return;
+  const candidates = ['.navbar.fixed-top','.app-header','.site-header','header .navbar','nav.navbar.fixed-top'];
+  let h = 0;
+  for (const sel of candidates){
+    const el = document.querySelector(sel);
+    if (el){
+      const hh = el.getBoundingClientRect().height;
+      if (hh > 36 && hh < 120){ h = hh; break; }
     }
-    if (!localStorage.getItem('currentUser')) {
-       const tokenResult = await user.getIdTokenResult();
-       localStorage.setItem('currentUser', JSON.stringify({
-           uid: user.uid,
-           email: user.email,
-           role: tokenResult.claims.role || 'user'
-       }));
-    }
-    try {
-      await loadSharedLayout({ activeMenuLink: 'portfolio.html' });
-      await loadRecord();
-    } catch (e) {
-      console.error('Yükleme hatası:', e);
-    }
-  });
+  }
+  if (wrapper) wrapper.style.paddingTop = (h ? (h+12) : 16) + 'px';
+
+  // 🔑 Ortak helper ile auth kontrolü
+  const user = await waitForAuthUser({ requireAuth: true, redirectTo: 'index.html' });
+  if (!user) return; // redirect oldu zaten
+
+  // Logout olursa her zaman login sayfasına dön
+  redirectOnLogout('index.html');
+
+  // Kullanıcı kesin olarak var, artık kaydı rahatça yükleyebilirsin
+  await loadRecord();
+
 })();
+
 
 docsTbody?.addEventListener('click', async (ev) => {
   const btn = ev.target.closest('.btn-doc-remove');
