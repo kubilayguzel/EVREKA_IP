@@ -2408,143 +2408,69 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
         return new Date(dateStr);
     };
 
-// === GLOBAL TABLE SORT (TÜM VERİYİ SIRALAR) ===
     window.sortTable = function(tableId, columnIndex, dataType = 'text') {
-        const listId = tableId.replace('#', '');
-        let dataObj = null;
-        let renderFn = null;
-        let getValueFn = null;
+        const selector = tableId.startsWith('#') ? tableId : '#' + tableId;
+        const table = document.querySelector(`${selector} table`);
+        if (!table) return;
+        const tbody = table.querySelector('tbody');
+        if (!tbody) return;
 
-        // 1. Hangi Tablo ve Veri Kaynağı?
-        if (listId === 'marka-list') {
-            dataObj = window.markaPaginationData;
-            renderFn = (slice, start) => window.populatePortfolioTable('#marka-list', slice, start);
-            
-            // Marka verisi RAW (işlenmemiş) formatta
-            getValueFn = (item) => {
-                if (columnIndex === 1) return (item.origin || item.country || '').toLowerCase();
-                if (columnIndex === 3) return (item.title || item.brandText || '').toLowerCase();
-                if (columnIndex === 4) return (item.applicationNumber || '').toLowerCase();
-                if (columnIndex === 5) return (item.registrationNumber || item.internationalRegNumber || '').toLowerCase();
-                if (columnIndex === 6) return item.applicationDate; // Tarih (Raw)
-                if (columnIndex === 7) return item.renewalDate;     // Tarih (Raw)
-                if (columnIndex === 8) return (item.status || '').toLowerCase();
-                return '';
-            };
-        } 
-        else if (listId === 'dava-itiraz-list') {
-            dataObj = window.davaItirazPaginationData;
-            renderFn = (slice, start) => window.renderDavaItirazTable(slice, start);
-            
-            // İtiraz verisi İŞLENMİŞ formatta (Tarihler string olabilir)
-            getValueFn = (item) => {
-                if (columnIndex === 1) return (item.origin || '').toLowerCase();
-                if (columnIndex === 3) return (item.title || '').toLowerCase();
-                if (columnIndex === 4) return (item.transactionTypeName || '').toLowerCase();
-                if (columnIndex === 6) return (item.applicantName || '').toLowerCase();
-                if (columnIndex === 7) return item.bulletinDate; // String tarih (dd.mm.yyyy)
-                if (columnIndex === 9) return item.epatsDate;    // String tarih
-                if (columnIndex === 10) return (item.statusText || '').toLowerCase();
-                return '';
-            };
-        }
-        else if (listId === 'dava-list') {
-            dataObj = window.davaPaginationData;
-            renderFn = (slice, start) => window.renderDavaTable(slice, start);
-            
-            getValueFn = (item) => {
-                if (columnIndex === 1) return (item.caseNo || '').toLowerCase();
-                if (columnIndex === 2) return (item.title || '').toLowerCase();
-                if (columnIndex === 4) return (item.court || '').toLowerCase();
-                if (columnIndex === 6) return item.openingDate; // String tarih
-                if (columnIndex === 7) return (item.suitStatus || '').toLowerCase();
-                return '';
-            };
-        }
-        else if (listId === 'invoices') { // Faturalar ID'si "invoices" ama tablo ID'si genelde "invoices table"
-            // invoices ID'li div içinde tablo var
-            dataObj = window.invoicesPaginationData;
-            renderFn = (slice) => window.renderInvoicesTable(slice);
-            
-            getValueFn = (item) => {
-                if (columnIndex === 0) return (item.invoiceNo || '').toLowerCase();
-                if (columnIndex === 1) return item.createdAt; // Raw tarih
-                if (columnIndex === 2) return (item.taskTitle || item.description || '').toLowerCase();
-                if (columnIndex === 3) return item.totalAmount || 0;
-                if (columnIndex === 4) return (item.status || '').toLowerCase();
-                return '';
-            };
-        }
+        const rows = Array.from(tbody.children);
+        const groups = [];
+        let currentGroup = null;
 
-        // Veri yoksa çık
-        if (!dataObj || !dataObj.allData || dataObj.allData.length === 0) return;
+        // Parent-Child Gruplama
+        rows.forEach(row => {
+            const isDetailRow = row.querySelector('td[colspan]') !== null;
+            if (!isDetailRow) {
+                currentGroup = { parent: row, detail: null };
+                groups.push(currentGroup);
+            } else {
+                if (currentGroup) currentGroup.detail = row;
+            }
+        });
 
-        // 2. Sıralama Yönünü Belirle (UI Güncelle)
-        const table = document.querySelector(`#${listId} table`) || document.querySelector(`#${listId} .table`);
-        if(!table) return;
+        // Sıralama Yönü
         const th = table.querySelectorAll('thead th')[columnIndex];
-        const isAsc = !th.classList.contains('sort-asc'); // Tıklandığında tersine çevir
-
-        // İkonları sıfırla
+        const isAsc = !th.classList.contains('sort-asc');
+        
         table.querySelectorAll('thead th').forEach(h => {
             h.classList.remove('sort-asc', 'sort-desc');
-            const icon = h.querySelector('i');
-            if(icon) icon.className = 'fas fa-sort';
+            if(h.querySelector('i')) h.querySelector('i').className = 'fas fa-sort';
         });
-        // Yeni ikonu ayarla
-        th.classList.add(isAsc ? 'sort-asc' : 'sort-desc');
-        const activeIcon = th.querySelector('i');
-        if(activeIcon) activeIcon.className = isAsc ? 'fas fa-sort-up' : 'fas fa-sort-down';
 
-        // 3. Helper: Değer Dönüştürme (Date Parsing)
-        const normalize = (val) => {
-            if (!val) return (dataType === 'amount' || dataType === 'number') ? 0 : '';
-            
-            // Tarih İşleme
-            if (dataType === 'date') {
-                // Eğer zaten Date veya Timestamp objesi ise
-                if (val.toDate) return val.toDate().getTime(); // Firebase Timestamp
-                if (val instanceof Date) return val.getTime();
-                
-                // Eğer String ise (dd.mm.yyyy)
-                if (typeof val === 'string' && val.includes('.')) {
-                    return window.parseTurkishDate(val).getTime();
-                }
-                return 0;
-            }
-            
-            return val;
+        th.classList.add(isAsc ? 'sort-asc' : 'sort-desc');
+        if(th.querySelector('i')) th.querySelector('i').className = isAsc ? 'fas fa-sort-up' : 'fas fa-sort-down';
+
+        const getCellValue = (tr, idx) => {
+            const cell = tr.children[idx];
+            if(!cell) return '';
+            let val = cell.innerText.trim();
+            const badge = cell.querySelector('.badge');
+            if (badge) val = badge.innerText.trim();
+            else if (cell.querySelector('a')) val = cell.querySelector('a').innerText.trim();
+
+            if (dataType === 'amount') return parseFloat(val.replace(/\./g, '').replace(',', '.').replace(/[^0-9.]/g, '')) || 0;
+            if (dataType === 'number' || dataType === 'index') return parseFloat(val.replace(/[^0-9.-]/g, '')) || 0;
+            if (dataType === 'date') return window.parseTurkishDate(val).getTime();
+            return val.toLowerCase();
         };
 
-        // 4. Veriyi Sırala (allData üzerinde)
-        dataObj.allData.sort((a, b) => {
-            let valA = normalize(getValueFn(a));
-            let valB = normalize(getValueFn(b));
-
+        groups.sort((a, b) => {
+            const valA = getCellValue(a.parent, columnIndex);
+            const valB = getCellValue(b.parent, columnIndex);
             if (valA < valB) return isAsc ? -1 : 1;
             if (valA > valB) return isAsc ? 1 : -1;
             return 0;
         });
 
-        // 5. Sayfayı Başa Al ve Tabloyu Yeniden Çiz
-        if (dataObj.pagination) {
-            dataObj.pagination.currentPage = 1; // Sayfa 1'e dön
-            const perPage = dataObj.pagination.itemsPerPage || 10;
-            const slice = dataObj.allData.slice(0, perPage);
-            
-            // Her tablonun render fonksiyonu parametreleri biraz farklı olabilir
-            if (listId === 'invoices') {
-                renderFn(slice);
-            } else {
-                renderFn(slice, 0);
-            }
-        } else {
-            // Sayfalama yoksa hepsini çiz
-            if (listId === 'invoices') renderFn(dataObj.allData);
-            else renderFn(dataObj.allData, 0);
-        }
+        tbody.innerHTML = '';
+        groups.forEach(g => {
+            tbody.appendChild(g.parent);
+            if (g.detail) tbody.appendChild(g.detail);
+        });
     };
-    
+
     // === 2. MASTER FİLTRELEME FONKSİYONLARI ===
     window.activeColumnFilters = {}; 
 
