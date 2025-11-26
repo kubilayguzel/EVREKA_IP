@@ -1002,7 +1002,7 @@
 }
 
     // --- 1. PORTFÖY ---
-    async function fetchAndDisplayPortfolio() {
+async function fetchAndDisplayPortfolio() {
         const q = query(collection(db, "ipRecords")); 
         try {
             const snap = await runGetDocs(q);
@@ -1017,7 +1017,12 @@
 
             $('#dashPortfolio').text(allPortfolios.length);
             
+            // Ham Veriyi Kaydet
             window.markaPaginationData.allDataUnfiltered = allPortfolios.filter(p => p.type === 'trademark' || p.type === 'Marka');
+            
+            // 🔥 DÜZELTME BURADA: Aktif veriyi (allData) başlangıçta ham veriye eşitle
+            window.markaPaginationData.allData = [...window.markaPaginationData.allDataUnfiltered];
+
             const patentList = allPortfolios.filter(p => p.type === 'patent' || p.type === 'Patent');
             const tasarimList = allPortfolios.filter(p => p.type === 'design' || p.type === 'Tasarım');
             
@@ -1027,16 +1032,19 @@
                     containerId: 'markaPagination',
                     onPageChange: (page, perPage) => {
                         const start = (page - 1) * perPage;
-                        const slice = window.markaPaginationData.allDataUnfiltered.slice(start, start + perPage);
+                        // allData üzerinden dilimle (sıralanmış/filtrelenmiş veri)
+                        const slice = window.markaPaginationData.allData.slice(start, start + perPage);
                         window.populatePortfolioTable('#marka-list', slice, start);
                     }
                 });
             }
             
             if (window.markaPaginationData.pagination) {
-                window.markaPaginationData.pagination.update(window.markaPaginationData.allDataUnfiltered.length);
+                window.markaPaginationData.pagination.update(window.markaPaginationData.allData.length);
             }
-            window.populatePortfolioTable('#marka-list', window.markaPaginationData.allDataUnfiltered.slice(0,10));
+            
+            // İlk sayfayı allData üzerinden göster
+            window.populatePortfolioTable('#marka-list', window.markaPaginationData.allData.slice(0,10));
             window.populatePortfolioTable('#patent-list', patentList);
             window.populatePortfolioTable('#tasarim-list', tasarimList);
             
@@ -1044,6 +1052,7 @@
             console.error("Portföy yükleme hatası:", error);
         }
     }
+
 
 // === PORTFÖY TABLOSU DOLDURMA (GÜNCELLENMİŞ) ===
 window.populatePortfolioTable = function(tableId, portfolioData, startIndex = 0) {
@@ -2407,70 +2416,127 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
         }
         return new Date(dateStr);
     };
-
+// === GLOBAL TABLE SORT (GÜNCELLENDİ: Tarih Algılama İyileştirildi) ===
     window.sortTable = function(tableId, columnIndex, dataType = 'text') {
-        const selector = tableId.startsWith('#') ? tableId : '#' + tableId;
-        const table = document.querySelector(`${selector} table`);
-        if (!table) return;
-        const tbody = table.querySelector('tbody');
-        if (!tbody) return;
+        const listId = tableId.replace('#', '');
+        let dataObj = null;
+        let renderFn = null;
+        let getValueFn = null;
 
-        const rows = Array.from(tbody.children);
-        const groups = [];
-        let currentGroup = null;
+        // 1. Hangi Tablo?
+        if (listId === 'marka-list') {
+            dataObj = window.markaPaginationData;
+            renderFn = (slice, start) => window.populatePortfolioTable('#marka-list', slice, start);
+            getValueFn = (item) => {
+                if (columnIndex === 1) return (item.origin || item.country || '').toLowerCase();
+                if (columnIndex === 3) return (item.title || item.brandText || '').toLowerCase();
+                if (columnIndex === 4) return (item.applicationNumber || '').toLowerCase();
+                if (columnIndex === 5) return (item.registrationNumber || item.internationalRegNumber || '').toLowerCase();
+                if (columnIndex === 6) return item.applicationDate; 
+                if (columnIndex === 7) return item.renewalDate;     
+                if (columnIndex === 8) return (item.status || '').toLowerCase();
+                return '';
+            };
+        } else if (listId === 'dava-itiraz-list') {
+            dataObj = window.davaItirazPaginationData;
+            renderFn = (slice, start) => window.renderDavaItirazTable(slice, start);
+            getValueFn = (item) => {
+                if (columnIndex === 1) return (item.origin || '').toLowerCase();
+                if (columnIndex === 3) return (item.title || '').toLowerCase();
+                if (columnIndex === 4) return (item.transactionTypeName || '').toLowerCase();
+                if (columnIndex === 6) return (item.applicantName || '').toLowerCase();
+                if (columnIndex === 7) return item.bulletinDate; 
+                if (columnIndex === 9) return item.epatsDate;    
+                if (columnIndex === 10) return (item.statusText || '').toLowerCase();
+                return '';
+            };
+        } else if (listId === 'dava-list') {
+            dataObj = window.davaPaginationData;
+            renderFn = (slice, start) => window.renderDavaTable(slice, start);
+            getValueFn = (item) => {
+                if (columnIndex === 1) return (item.caseNo || '').toLowerCase();
+                if (columnIndex === 2) return (item.title || '').toLowerCase();
+                if (columnIndex === 4) return (item.court || '').toLowerCase();
+                if (columnIndex === 6) return item.openingDate; 
+                if (columnIndex === 7) return (item.suitStatus || '').toLowerCase();
+                return '';
+            };
+        } else if (listId === 'invoices') {
+            dataObj = window.invoicesPaginationData;
+            renderFn = (slice) => window.renderInvoicesTable(slice);
+            getValueFn = (item) => {
+                if (columnIndex === 0) return (item.invoiceNo || '').toLowerCase();
+                if (columnIndex === 1) return item.createdAt; 
+                if (columnIndex === 2) return (item.taskTitle || item.description || '').toLowerCase();
+                if (columnIndex === 3) return item.totalAmount || 0;
+                if (columnIndex === 4) return (item.status || '').toLowerCase();
+                return '';
+            };
+        }
 
-        // Parent-Child Gruplama
-        rows.forEach(row => {
-            const isDetailRow = row.querySelector('td[colspan]') !== null;
-            if (!isDetailRow) {
-                currentGroup = { parent: row, detail: null };
-                groups.push(currentGroup);
-            } else {
-                if (currentGroup) currentGroup.detail = row;
-            }
-        });
+        if (!dataObj || !dataObj.allData || dataObj.allData.length === 0) return;
 
-        // Sıralama Yönü
+        // 2. Sıralama Yönü
+        const table = document.querySelector(`#${listId} table`) || document.querySelector(`#${listId} .table`);
+        if(!table) return;
         const th = table.querySelectorAll('thead th')[columnIndex];
         const isAsc = !th.classList.contains('sort-asc');
-        
+
         table.querySelectorAll('thead th').forEach(h => {
             h.classList.remove('sort-asc', 'sort-desc');
-            if(h.querySelector('i')) h.querySelector('i').className = 'fas fa-sort';
+            const icon = h.querySelector('i');
+            if(icon) icon.className = 'fas fa-sort';
         });
-
         th.classList.add(isAsc ? 'sort-asc' : 'sort-desc');
-        if(th.querySelector('i')) th.querySelector('i').className = isAsc ? 'fas fa-sort-up' : 'fas fa-sort-down';
+        const activeIcon = th.querySelector('i');
+        if(activeIcon) activeIcon.className = isAsc ? 'fas fa-sort-up' : 'fas fa-sort-down';
 
-        const getCellValue = (tr, idx) => {
-            const cell = tr.children[idx];
-            if(!cell) return '';
-            let val = cell.innerText.trim();
-            const badge = cell.querySelector('.badge');
-            if (badge) val = badge.innerText.trim();
-            else if (cell.querySelector('a')) val = cell.querySelector('a').innerText.trim();
-
-            if (dataType === 'amount') return parseFloat(val.replace(/\./g, '').replace(',', '.').replace(/[^0-9.]/g, '')) || 0;
-            if (dataType === 'number' || dataType === 'index') return parseFloat(val.replace(/[^0-9.-]/g, '')) || 0;
-            if (dataType === 'date') return window.parseTurkishDate(val).getTime();
-            return val.toLowerCase();
+        // 3. Değer Dönüştürme (Helper)
+        const normalize = (val) => {
+            if (val === null || val === undefined) return (dataType === 'amount' || dataType === 'number') ? 0 : '';
+            
+            // Tarih İşleme (Geliştirilmiş)
+            if (dataType === 'date') {
+                // 1. Firebase Timestamp
+                if (val.toDate && typeof val.toDate === 'function') return val.toDate().getTime();
+                // 2. JS Date Objesi
+                if (val instanceof Date) return val.getTime();
+                // 3. String Tarih
+                if (typeof val === 'string') {
+                    // "15.05.2023" formatı
+                    if (val.includes('.')) return window.parseTurkishDate(val).getTime();
+                    // ISO formatı "2023-05-15..."
+                    const parsed = Date.parse(val);
+                    if (!isNaN(parsed)) return parsed;
+                }
+                return 0;
+            }
+            return val;
         };
 
-        groups.sort((a, b) => {
-            const valA = getCellValue(a.parent, columnIndex);
-            const valB = getCellValue(b.parent, columnIndex);
+        // 4. Sıralama (Tüm Veri Üzerinde)
+        dataObj.allData.sort((a, b) => {
+            let valA = normalize(getValueFn(a));
+            let valB = normalize(getValueFn(b));
+
             if (valA < valB) return isAsc ? -1 : 1;
             if (valA > valB) return isAsc ? 1 : -1;
             return 0;
         });
 
-        tbody.innerHTML = '';
-        groups.forEach(g => {
-            tbody.appendChild(g.parent);
-            if (g.detail) tbody.appendChild(g.detail);
-        });
+        // 5. Sayfayı Başa Al ve Yeniden Çiz
+        if (dataObj.pagination) {
+            dataObj.pagination.currentPage = 1;
+            const perPage = dataObj.pagination.itemsPerPage || 10;
+            const slice = dataObj.allData.slice(0, perPage);
+            if (listId === 'invoices') renderFn(slice);
+            else renderFn(slice, 0);
+        } else {
+            if (listId === 'invoices') renderFn(dataObj.allData);
+            else renderFn(dataObj.allData, 0);
+        }
     };
-
+    
     // === 2. MASTER FİLTRELEME FONKSİYONLARI ===
     window.activeColumnFilters = {}; 
 
