@@ -1596,13 +1596,22 @@ window.fetchCountries = async function() {
             else if (inv.status === 'partially_paid') { statusText = 'Kısmen Ödendi'; badgeClass = 'warning'; }
 
             const invoiceNoDisplay = inv.invoiceNo || (inv.id ? `#${inv.id.substring(0,8).toUpperCase()}` : '-');
-            const amountDisplay = window.currencyFormatter(inv.totalAmount, inv.currency || 'TRY');
+            
+            // --- TUTAR GÖSTERİMİ GÜNCELLEMESİ ---
+            let amountDisplay = window.currencyFormatter(inv.totalAmount, inv.currency || 'TRY');
+            
+            // Eğer kısmen ödenmişse ve kalan tutar (remainingAmount) verisi varsa göster
+            if (inv.status === 'partially_paid' && inv.remainingAmount !== undefined && inv.remainingAmount !== null) {
+                const remainingFormatted = window.currencyFormatter(inv.remainingAmount, inv.currency || 'TRY');
+                // Alt satıra küçük ve kırmızı fontla ekle
+                amountDisplay += `<div class="small text-danger mt-1 font-weight-bold" style="font-size: 0.85em;">(Kalan: ${remainingFormatted})</div>`;
+            }
 
             const row = `<tr><td class="font-weight-bold">${invoiceNoDisplay}</td><td>${window.formatDateTR(inv.createdAt)}</td><td>${inv.taskTitle || inv.description || 'Hizmet Bedeli'}</td><td>${amountDisplay}</td><td><span class="badge badge-${badgeClass}" style="font-size: 0.85rem;">${statusText}</span></td><td><button class="btn btn-sm btn-primary" title="İndir"><i class="fas fa-download"></i></button></td></tr>`;
             tbody.append(row);
         });
     };
-  
+
     window.applyInvoiceFilter = function() {
     // 1. Girdileri Al
     const searchText = $('#invoiceSearchText').val().toLowerCase().trim();
