@@ -1595,10 +1595,10 @@ window.fetchAndDisplayInvoices = async function(linkedIds) {
         console.log("🔵 Fatura yükleme başladı. Bağlı ID'ler:", linkedIds);
         
         const tbody = $('#invoices table tbody');
-        tbody.html('<tr><td colspan="7" class="text-center"><i class="fas fa-spinner fa-spin"></i> Yükleniyor...</td></tr>');
+        tbody.html('<tr><td colspan="9" class="text-center"><i class="fas fa-spinner fa-spin"></i> Yükleniyor...</td></tr>');
 
         if (!linkedIds || linkedIds.length === 0) {
-            tbody.html('<tr><td colspan="7" class="text-center text-muted">Bağlı hesap bilgisi bulunamadı.</td></tr>');
+            tbody.html('<tr><td colspan="9" class="text-center text-muted">Bağlı hesap bilgisi bulunamadı.</td></tr>');
             return;
         }
 
