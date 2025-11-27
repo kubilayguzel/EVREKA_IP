@@ -586,11 +586,13 @@
                     <thead>
                         <tr>
                             <th class="sortable" data-sort="text">Fatura No <i class="fas fa-sort"></i></th>
+                            <th class="sortable" data-sort="text">Başvuru No <i class="fas fa-sort"></i></th>
+                            
                             <th class="sortable" data-sort="date">Tarih <i class="fas fa-sort"></i></th>
                             <th class="sortable" data-sort="text">Açıklama <i class="fas fa-sort"></i></th>
                             <th class="sortable" data-sort="amount">Tutar <i class="fas fa-sort"></i></th>
                             <th class="sortable" data-sort="text">Durum <i class="fas fa-sort"></i></th>
-                            <th>İşlem</th>
+                            <th>Fatura/Debit</th>
                         </tr>
                     </thead>
                     <tbody></tbody>
@@ -1639,10 +1641,15 @@ window.fetchAndDisplayTasks = async function(linkedIds) {
     window.updateDashboardCounts();
 };
 
-    window.renderInvoicesTable = function(data) {
+window.renderInvoicesTable = function(data) {
         const tbody = $('#invoices table tbody');
         tbody.empty();
-        if(!data || data.length === 0) { tbody.html('<tr><td colspan="6" class="text-center text-muted">Kayıt bulunamadı.</td></tr>'); return; }
+        
+        // Colspan 6'dan 7'ye çıkarıldı (yeni sütun için)
+        if(!data || data.length === 0) { 
+            tbody.html('<tr><td colspan="7" class="text-center text-muted">Kayıt bulunamadı.</td></tr>'); 
+            return; 
+        }
         
         data.forEach(inv => {
             let statusText = inv.status;
@@ -1653,21 +1660,35 @@ window.fetchAndDisplayTasks = async function(linkedIds) {
 
             const invoiceNoDisplay = inv.invoiceNo || (inv.id ? `#${inv.id.substring(0,8).toUpperCase()}` : '-');
             
-            // --- TUTAR GÖSTERİMİ GÜNCELLEMESİ ---
+            // --- TUTAR VE PARA BİRİMİ GÜNCELLEMESİ ---
+            // Veritabanındaki 'currency' alanını kullanır (yoksa varsayılan TRY)
             let amountDisplay = window.currencyFormatter(inv.totalAmount, inv.currency || 'TRY');
             
-            // Eğer kısmen ödenmişse ve kalan tutar (remainingAmount) verisi varsa göster
+            // Kısmen ödeme bilgisi
             if (inv.status === 'partially_paid' && inv.remainingAmount !== undefined && inv.remainingAmount !== null) {
                 const remainingFormatted = window.currencyFormatter(inv.remainingAmount, inv.currency || 'TRY');
-                // Alt satıra küçük ve kırmızı fontla ekle
                 amountDisplay += `<div class="small text-danger mt-1 font-weight-bold" style="font-size: 0.85em;">(Kalan: ${remainingFormatted})</div>`;
             }
 
-            const row = `<tr><td class="font-weight-bold">${invoiceNoDisplay}</td><td>${window.formatDateTR(inv.createdAt)}</td><td>${inv.taskTitle || inv.description || 'Hizmet Bedeli'}</td><td>${amountDisplay}</td><td><span class="badge badge-${badgeClass}" style="font-size: 0.85rem;">${statusText}</span></td><td><button class="btn btn-sm btn-primary" title="İndir"><i class="fas fa-download"></i></button></td></tr>`;
+            // Başvuru Numarası (Veritabanında 'applicationNumber' olarak kayıtlıysa)
+            const appNoDisplay = inv.applicationNumber || '-';
+
+            const row = `<tr>
+                <td class="font-weight-bold">${invoiceNoDisplay}</td>
+                <td>${appNoDisplay}</td> <td>${window.formatDateTR(inv.createdAt)}</td>
+                <td>${inv.taskTitle || inv.description || 'Hizmet Bedeli'}</td>
+                <td>${amountDisplay}</td>
+                <td><span class="badge badge-${badgeClass}" style="font-size: 0.85rem;">${statusText}</span></td>
+                <td>
+                    <button class="btn btn-sm btn-primary" title="Fatura/Debit İndir">
+                        <i class="fas fa-download"></i>
+                    </button>
+                </td>
+            </tr>`;
             tbody.append(row);
         });
     };
-
+    
     window.applyInvoiceFilter = function() {
     const searchText = $('#invoiceSearchText').val().toLowerCase().trim();
     const statusFilter = $('#invoiceDurumFilter').val();
@@ -1790,7 +1811,7 @@ window.fetchAndDisplaySuits = async function() {
 
         } catch(e) { console.error(e); }
     };
-    
+
 // === İTİRAZ TABLOSU RENDER (GÜNCELLENMİŞ) ===
 window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
         const tbody = document.getElementById('dava-itiraz-tbody');
@@ -2592,12 +2613,14 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
         } else if (listId === 'invoices') {
             dataObj = window.invoicesPaginationData;
             renderFn = (slice) => window.renderInvoicesTable(slice);
+            
             getValueFn = (item) => {
                 if (columnIndex === 0) return (item.invoiceNo || '').toLowerCase();
-                if (columnIndex === 1) return item.createdAt; 
-                if (columnIndex === 2) return (item.taskTitle || item.description || '').toLowerCase();
-                if (columnIndex === 3) return item.totalAmount || 0;
-                if (columnIndex === 4) return (item.status || '').toLowerCase();
+                if (columnIndex === 1) return (item.applicationNumber || '').toLowerCase(); // YENİ: Başvuru No
+                if (columnIndex === 2) return item.createdAt; // Tarih
+                if (columnIndex === 3) return (item.taskTitle || item.description || '').toLowerCase(); // Açıklama
+                if (columnIndex === 4) return item.totalAmount || 0; // Tutar
+                if (columnIndex === 5) return (item.status || '').toLowerCase(); // Durum
                 return '';
             };
         }
