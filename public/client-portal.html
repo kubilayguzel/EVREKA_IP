@@ -587,10 +587,13 @@
                         <tr>
                             <th class="sortable" data-sort="text">Fatura No <i class="fas fa-sort"></i></th>
                             <th class="sortable" data-sort="text">Başvuru No <i class="fas fa-sort"></i></th>
-                            
                             <th class="sortable" data-sort="date">Tarih <i class="fas fa-sort"></i></th>
                             <th class="sortable" data-sort="text">Açıklama <i class="fas fa-sort"></i></th>
-                            <th class="sortable" data-sort="amount">Tutar <i class="fas fa-sort"></i></th>
+                            
+                            <th class="sortable" data-sort="amount">Resmi Ücret <i class="fas fa-sort"></i></th>
+                            <th class="sortable" data-sort="amount">Hizmet Ücreti <i class="fas fa-sort"></i></th>
+                            <th class="sortable" data-sort="amount">Toplam Tutar <i class="fas fa-sort"></i></th>
+                            
                             <th class="sortable" data-sort="text">Durum <i class="fas fa-sort"></i></th>
                             <th>Fatura/Debit</th>
                         </tr>
@@ -1707,12 +1710,13 @@ window.fetchAndDisplayInvoices = async function(linkedIds) {
         window.updateDashboardCounts();
     };
 
-window.renderInvoicesTable = function(data) {
+    window.renderInvoicesTable = function(data) {
         const tbody = $('#invoices table tbody');
         tbody.empty();
         
+        // Colspan 7'den 9'a çıkarıldı
         if(!data || data.length === 0) { 
-            tbody.html('<tr><td colspan="7" class="text-center text-muted">Kayıt bulunamadı.</td></tr>'); 
+            tbody.html('<tr><td colspan="9" class="text-center text-muted">Kayıt bulunamadı.</td></tr>'); 
             return; 
         }
         
@@ -1724,7 +1728,7 @@ window.renderInvoicesTable = function(data) {
             if(upper === 'DOLAR' || upper === 'USD') return 'USD';
             if(upper === 'STERLIN' || upper === 'GBP') return 'GBP';
             if(upper === 'TL' || upper === 'TRL' || upper === 'TRY') return 'TRY';
-            return upper; // Bilinmiyorsa olduğu gibi döndür (örn: CHF)
+            return upper;
         };
 
         data.forEach(inv => {
@@ -1735,16 +1739,21 @@ window.renderInvoicesTable = function(data) {
             else if (inv.status === 'partially_paid') { statusText = 'Kısmen Ödendi'; badgeClass = 'warning'; }
 
             const invoiceNoDisplay = inv.invoiceNo || (inv.id ? `#${inv.id.substring(0,8).toUpperCase()}` : '-');
-            const appNoDisplay = inv.applicationNumber || '-'; // Dolu gelmeli
+            const appNoDisplay = inv.applicationNumber || '-';
             
-            // --- TUTAR VE PARA BİRİMİ GÜNCELLEMESİ ---
+            // --- TUTAR HESAPLAMALARI ---
             const currencyCode = normalizeCurrency(inv.currency);
-            let amountDisplay = window.currencyFormatter(inv.totalAmount, currencyCode);
             
-            // Kısmen ödeme bilgisi
+            // Resmi ve Hizmet Ücretleri (Boşsa 0 kabul et)
+            const officialDisplay = window.currencyFormatter(inv.officialFee || 0, currencyCode);
+            const serviceDisplay = window.currencyFormatter(inv.serviceFee || 0, currencyCode);
+            
+            // Toplam Tutar ve Kalan Bilgisi
+            let totalDisplay = window.currencyFormatter(inv.totalAmount || 0, currencyCode);
+            
             if (inv.status === 'partially_paid' && inv.remainingAmount !== undefined && inv.remainingAmount !== null) {
                 const remainingFormatted = window.currencyFormatter(inv.remainingAmount, currencyCode);
-                amountDisplay += `<div class="small text-danger mt-1 font-weight-bold" style="font-size: 0.85em;">(Kalan: ${remainingFormatted})</div>`;
+                totalDisplay += `<div class="small text-danger mt-1 font-weight-bold" style="font-size: 0.85em;">(Kalan: ${remainingFormatted})</div>`;
             }
 
             const row = `<tr>
@@ -1752,7 +1761,11 @@ window.renderInvoicesTable = function(data) {
                 <td>${appNoDisplay}</td>
                 <td>${window.formatDateTR(inv.createdAt)}</td>
                 <td>${inv.taskTitle || inv.description || 'Hizmet Bedeli'}</td>
-                <td>${amountDisplay}</td>
+                
+                <td>${officialDisplay}</td>
+                <td>${serviceDisplay}</td>
+                <td class="font-weight-bold">${totalDisplay}</td>
+                
                 <td><span class="badge badge-${badgeClass}" style="font-size: 0.85rem;">${statusText}</span></td>
                 <td>
                     <button class="btn btn-sm btn-primary" title="Fatura/Debit İndir">
@@ -1764,7 +1777,6 @@ window.renderInvoicesTable = function(data) {
         });
     };
 
-    
     window.applyInvoiceFilter = function() {
     const searchText = $('#invoiceSearchText').val().toLowerCase().trim();
     const statusFilter = $('#invoiceDurumFilter').val();
@@ -2692,11 +2704,16 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
             
             getValueFn = (item) => {
                 if (columnIndex === 0) return (item.invoiceNo || '').toLowerCase();
-                if (columnIndex === 1) return (item.applicationNumber || '').toLowerCase(); // YENİ: Başvuru No
-                if (columnIndex === 2) return item.createdAt; // Tarih
-                if (columnIndex === 3) return (item.taskTitle || item.description || '').toLowerCase(); // Açıklama
-                if (columnIndex === 4) return item.totalAmount || 0; // Tutar
-                if (columnIndex === 5) return (item.status || '').toLowerCase(); // Durum
+                if (columnIndex === 1) return (item.applicationNumber || '').toLowerCase();
+                if (columnIndex === 2) return item.createdAt; 
+                if (columnIndex === 3) return (item.taskTitle || item.description || '').toLowerCase();
+                
+                // YENİ SIRALAMA İNDEKSLERİ
+                if (columnIndex === 4) return item.officialFee || 0; // Resmi Ücret
+                if (columnIndex === 5) return item.serviceFee || 0;  // Hizmet Ücreti
+                if (columnIndex === 6) return item.totalAmount || 0; // Toplam Tutar
+                
+                if (columnIndex === 7) return (item.status || '').toLowerCase(); // Durum
                 return '';
             };
         }
