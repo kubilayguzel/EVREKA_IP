@@ -1286,25 +1286,62 @@ window.fetchCountries = async function() {
 
 // --- 2. İŞLERİM (TASKS) ---
     window.checkTaskClientRelation = async function(taskData, clientPersonIdSet) {
-        const taskTypeStr = String(taskData.taskType);
-        try {
-            if (['19', '20'].includes(taskTypeStr)) {
-                if (taskData.taskOwner && clientPersonIdSet.has(taskData.taskOwner)) return true;
-                const cid = taskData.clientId || taskData.clientID;
-                if (cid && clientPersonIdSet.has(cid)) return true;
-            } else {
-                const ipId = taskData.relatedIpRecordId;
-                if (ipId) {
-                    const snap = await getDoc(doc(db, 'ipRecords', ipId));
+        // Görev ile ilişkili müşteri ID'lerini tutacak dizi
+        if (!taskData._relatedClientIds) taskData._relatedClientIds = [];
+        
+        let isMatch = false;
+        
+        // 1. Doğrudan Görev Üzerindeki ID'ler (Varsa)
+        if (taskData.clientId && clientPersonIdSet.has(taskData.clientId)) {
+            if (!taskData._relatedClientIds.includes(taskData.clientId)) {
+                taskData._relatedClientIds.push(taskData.clientId);
+            }
+            isMatch = true;
+        }
+        if (taskData.taskOwner && clientPersonIdSet.has(taskData.taskOwner)) {
+            if (!taskData._relatedClientIds.includes(taskData.taskOwner)) {
+                taskData._relatedClientIds.push(taskData.taskOwner);
+            }
+            isMatch = true;
+        }
+        
+        // 2. İlişkili IP Kaydı (Marka/Patent) Üzerinden Kontrol
+        if (taskData.relatedIpRecordId) {
+            try {
+                let applicants = [];
+                
+                // Önce hafızadaki portföy verisine bak (Hız için)
+                if (window.allPortfolioData) {
+                    const localRec = window.allPortfolioData.find(r => r.id === taskData.relatedIpRecordId);
+                    if (localRec && localRec.applicants) applicants = localRec.applicants;
+                }
+                
+                // Hafızada yoksa veritabanından çek
+                if (applicants.length === 0) {
+                    const snap = await getDoc(doc(db, 'ipRecords', taskData.relatedIpRecordId));
                     if (snap.exists()) {
-                        const applicants = snap.data().applicants || [];
-                        if (Array.isArray(applicants) && applicants.some(a => a.id && clientPersonIdSet.has(a.id))) return true;
+                        applicants = snap.data().applicants || [];
                     }
                 }
-            }
-        } catch (e) { console.error('Yetki hatası:', e); }
-        return false;
+                
+                // Müşteri bu kaydın sahipleri arasında mı?
+                if (Array.isArray(applicants)) {
+                    applicants.forEach(app => {
+                        if (app.id && clientPersonIdSet.has(app.id)) {
+                            // Eşleşme bulundu, ID'yi kaydet
+                            if (!taskData._relatedClientIds.includes(app.id)) {
+                                taskData._relatedClientIds.push(app.id);
+                            }
+                            isMatch = true;
+                        }
+                    });
+                }
+            } catch (e) { console.error('Task IP check error', e); }
+        }
+        
+        return isMatch;
     };
+
 
 window.fetchAndDisplayTasks = async function(linkedIds) {
         const q = query(collection(db, 'tasks'), where('status', '==', 'awaiting_client_approval'));
@@ -2244,7 +2281,6 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
         
         if (selectedClient !== 'ALL') {
             filteredPortfolio = allPortfolios.filter(item => {
-                // Applicants dizisi içinde ID var mı?
                 return item.applicants && Array.isArray(item.applicants) && item.applicants.some(a => a.id === selectedClient);
             });
         }
@@ -2256,11 +2292,8 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
 
         if (selectedClient !== 'ALL') {
             filteredTasks = allTasks.filter(t => {
-                // Task filtreleme mantığı (clientId veya taskOwner)
-                if (t.clientId) return t.clientId === selectedClient;
-                if (t.taskOwner) return t.taskOwner === selectedClient;
-                // Eğer client bilgisi yoksa varsayılan olarak göster veya gizle (burada gizlemeyi tercih ediyoruz)
-                return false;
+                // YENİ: Zenginleştirilmiş veri üzerinden kontrol
+                return t._relatedClientIds && t._relatedClientIds.includes(selectedClient);
             });
         }
 
@@ -2305,152 +2338,156 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
         $('#dashUnpaidInvoices').text(unpaidCount);
     };
 
+
 // === GÖREV (TASK) FİLTRELEME FONKSİYONU ===
-window.applyTaskFilter = function() {
-    const searchText = $('#taskSearchText').val().toLowerCase().trim();
-    const statusFilter = $('#taskStatusFilter').val();
-    const taskType = window.taskPaginationData.currentType;
-    const allData = window.taskPaginationData.allDataUnfiltered || [];
-    const selectedClient = window.selectedClientId; // Global Müşteri Seçimi
+    window.applyTaskFilter = function() {
+        const searchText = $('#taskSearchText').val().toLowerCase().trim();
+        const statusFilter = $('#taskStatusFilter').val();
+        const taskType = window.taskPaginationData.currentType;
+        const allData = window.taskPaginationData.allDataUnfiltered || [];
+        const selectedClient = window.selectedClientId; // Global Müşteri Seçimi
 
-    // 1. FİLTRELEME
-    let filteredTasks = allData.filter(t => {
-        // A) MÜŞTERİ SEÇİMİ FİLTRESİ
-        if (selectedClient && selectedClient !== 'ALL') {
-            // Task verisinde clientId varsa kontrol et
-            if (t.clientId && t.clientId !== selectedClient) return false;
-            // Task verisinde clientId yoksa ama taskOwner varsa kontrol et (Opsiyonel)
-            // if (!t.clientId && t.taskOwner && t.taskOwner !== selectedClient) return false;
-        }
-
-        // B) Metin Araması
-        if (searchText) {
-            const searchable = [
-                t.id,
-                t.title,
-                t.description,
-                t.details?.objectionTarget,
-                t.details?.targetAppNo,
-                t.details?.bulletinNo
-            ].join(' ').toLowerCase();
-            
-            if (!searchable.includes(searchText)) return false;
-        }
-
-        // C) Durum Filtresi
-        if (statusFilter && statusFilter !== 'TÜMÜ') {
-            if (t.status !== statusFilter) return false;
-        }
-
-        return true;
-    });
-
-    // 2. Render Hazırlığı
-    window.taskPaginationData.allData = filteredTasks;
-    const container = document.getElementById('task-list-container');
-    const formatDate = window.formatDateTR;
-
-    // A) Completed Tasks Görünümü
-    if (taskType === 'completed-tasks') {
-        const activeStatuses = ['open', 'in_progress', 'pending'];
-        const active = filteredTasks.filter(t => activeStatuses.includes(t.status));
-        const closed = filteredTasks.filter(t => !activeStatuses.includes(t.status));
-        
-        container.innerHTML = `
-            <ul class="nav nav-tabs mb-3">
-                <li class="nav-item"><a class="nav-link active" data-toggle="tab" href="#tab-act">Aktif (${active.length})</a></li>
-                <li class="nav-item"><a class="nav-link" data-toggle="tab" href="#tab-fin">Kapanan (${closed.length})</a></li>
-            </ul>
-            <div class="tab-content">
-                <div class="tab-pane fade show active" id="tab-act"><div class="row" id="cont-act"></div></div>
-                <div class="tab-pane fade" id="tab-fin"><div class="row" id="cont-fin"></div></div>
-            </div>`;
-        
-        window._renderTaskCardsToContainer(active.slice(0,10), '#cont-act', formatDate, taskType);
-        if(closed.length) window._renderTaskCardsToContainer(closed.slice(0,10), '#cont-fin', formatDate, taskType);
-        $('#taskPagination').hide();
-        return;
-    }
-
-    // B) Bulletin Watch Görünümü
-    if (taskType === 'bulletin-watch') {
-        const groups = {}; 
-        const expired = []; 
-        const today = new Date(); today.setHours(0,0,0,0);
-        
-        filteredTasks.forEach(t => {
-            const due = t.dueDate || t.officialDueDate;
-            let isExp = false;
-            if (due) { const d = due.seconds ? new Date(due.seconds*1000) : new Date(due); d.setHours(0,0,0,0); if (d < today) isExp = true; }
-            if (isExp) { 
-                const tClone = {...t, status: 'Bülten Kapandı'}; 
-                expired.push(tClone); 
-            } else { 
-                const bNo = t.details?.bulletinNo || 'Diğer'; 
-                if (!groups[bNo]) groups[bNo] = []; 
-                groups[bNo].push(t); 
+        // 1. FİLTRELEME
+        let filteredTasks = allData.filter(t => {
+            // A) MÜŞTERİ SEÇİMİ FİLTRESİ (GÜÇLENDİRİLMİŞ)
+            if (selectedClient && selectedClient !== 'ALL') {
+                // Eğer task bu müşteriye ait olarak işaretlenmemişse gizle
+                if (!t._relatedClientIds || !t._relatedClientIds.includes(selectedClient)) {
+                    return false;
+                }
             }
+
+            // B) Metin Araması
+            if (searchText) {
+                const searchable = [
+                    t.id,
+                    t.title,
+                    t.description,
+                    t.details?.objectionTarget,
+                    t.details?.targetAppNo,
+                    t.details?.bulletinNo
+                ].join(' ').toLowerCase();
+                
+                if (!searchable.includes(searchText)) return false;
+            }
+
+            // C) Durum Filtresi
+            if (statusFilter && statusFilter !== 'TÜMÜ') {
+                if (t.status !== statusFilter) return false;
+            }
+
+            return true;
         });
-        
-        const bNumbers = Object.keys(groups).sort((a,b)=>b-a);
-        
-        if (bNumbers.length === 0 && expired.length === 0) {
-            container.innerHTML = '<div class="text-center text-muted p-4">Aranan kriterlere uygun kayıt bulunamadı.</div>';
+
+        // 2. Render Hazırlığı (Devamı aynı)
+        window.taskPaginationData.allData = filteredTasks;
+        const container = document.getElementById('task-list-container');
+        const formatDate = window.formatDateTR;
+
+        // ... (Fonksiyonun geri kalanı aynı, dokunmanıza gerek yok) ...
+        // A) Completed Tasks Görünümü
+        if (taskType === 'completed-tasks') {
+            // ... (Kalan kodlar aynı) ...
+            const activeStatuses = ['open', 'in_progress', 'pending'];
+            const active = filteredTasks.filter(t => activeStatuses.includes(t.status));
+            const closed = filteredTasks.filter(t => !activeStatuses.includes(t.status));
+            
+            container.innerHTML = `
+                <ul class="nav nav-tabs mb-3">
+                    <li class="nav-item"><a class="nav-link active" data-toggle="tab" href="#tab-act">Aktif (${active.length})</a></li>
+                    <li class="nav-item"><a class="nav-link" data-toggle="tab" href="#tab-fin">Kapanan (${closed.length})</a></li>
+                </ul>
+                <div class="tab-content">
+                    <div class="tab-pane fade show active" id="tab-act"><div class="row" id="cont-act"></div></div>
+                    <div class="tab-pane fade" id="tab-fin"><div class="row" id="cont-fin"></div></div>
+                </div>`;
+            
+            window._renderTaskCardsToContainer(active.slice(0,10), '#cont-act', formatDate, taskType);
+            if(closed.length) window._renderTaskCardsToContainer(closed.slice(0,10), '#cont-fin', formatDate, taskType);
+            $('#taskPagination').hide();
             return;
         }
 
-        let html = '<ul class="nav nav-tabs mb-3">'; 
-        let content = '<div class="tab-content">';
-        
-        bNumbers.forEach((no, i) => {
-            const active = i===0 ? 'active' : '';
-            html += `<li class="nav-item"><a class="nav-link ${active}" data-toggle="tab" href="#b-${no}">Bülten ${no} (${groups[no].length})</a></li>`;
-            content += `<div class="tab-pane fade ${active ? 'show active' : ''}" id="b-${no}"><div class="row" id="row-b-${no}"></div></div>`;
-        });
-        
-        if (expired.length > 0) {
-            const cls = bNumbers.length === 0 ? 'active' : '';
-            html += `<li class="nav-item"><a class="nav-link ${cls}" data-toggle="tab" href="#b-exp">Önceki Bültenler (${expired.length})</a></li>`;
-            content += `<div class="tab-pane fade ${cls ? 'show active' : ''}" id="b-exp"><div class="alert alert-secondary">Bu bildirimlerin süresi dolmuştur.</div><div class="row" id="row-b-exp"></div></div>`;
-        }
-        
-        html += '</ul>'; content += '</div>';
-        container.innerHTML = html + content;
-        
-        for (const no of bNumbers) {
-            window._renderTaskCardsToContainer(groups[no], `#row-b-${no}`, formatDate, taskType);
-        }
-        if(expired.length) window._renderTaskCardsToContainer(expired, '#row-b-exp', formatDate, taskType);
-        $('#taskPagination').hide();
-        return;
-    }
-
-    // C) Standart Liste Görünümü
-    if (filteredTasks.length === 0) {
-        container.innerHTML = '<div class="text-center text-muted p-4">Aranan kriterlere uygun kayıt bulunamadı.</div>';
-        $('#taskPagination').hide();
-        return;
-    }
-
-    $('#taskPagination').show();
-    
-    if (!window.taskPaginationData.pagination && window.Pagination) {
-        window.taskPaginationData.pagination = new window.Pagination({
-            itemsPerPage: 10,
-            containerId: 'taskPagination',
-            onPageChange: (page, perPage) => {
-                const start = (page - 1) * perPage;
-                const slice = window.taskPaginationData.allData.slice(start, start + perPage);
-                window._renderTaskCardsToContainer(slice, '#task-list-container', formatDate, taskType);
+        // B) Bulletin Watch Görünümü
+        if (taskType === 'bulletin-watch') {
+            const groups = {}; 
+            const expired = []; 
+            const today = new Date(); today.setHours(0,0,0,0);
+            
+            filteredTasks.forEach(t => {
+                const due = t.dueDate || t.officialDueDate;
+                let isExp = false;
+                if (due) { const d = due.seconds ? new Date(due.seconds*1000) : new Date(due); d.setHours(0,0,0,0); if (d < today) isExp = true; }
+                if (isExp) { 
+                    const tClone = {...t, status: 'Bülten Kapandı'}; 
+                    expired.push(tClone); 
+                } else { 
+                    const bNo = t.details?.bulletinNo || 'Diğer'; 
+                    if (!groups[bNo]) groups[bNo] = []; 
+                    groups[bNo].push(t); 
+                }
+            });
+            
+            const bNumbers = Object.keys(groups).sort((a,b)=>b-a);
+            
+            if (bNumbers.length === 0 && expired.length === 0) {
+                container.innerHTML = '<div class="text-center text-muted p-4">Aranan kriterlere uygun kayıt bulunamadı.</div>';
+                return;
             }
-        });
-    }
-    
-    if (window.taskPaginationData.pagination) {
-        window.taskPaginationData.pagination.update(filteredTasks.length);
-    }
-    window._renderTaskCardsToContainer(filteredTasks.slice(0,10), '#task-list-container', formatDate, taskType);
-};
+
+            let html = '<ul class="nav nav-tabs mb-3">'; 
+            let content = '<div class="tab-content">';
+            
+            bNumbers.forEach((no, i) => {
+                const active = i===0 ? 'active' : '';
+                html += `<li class="nav-item"><a class="nav-link ${active}" data-toggle="tab" href="#b-${no}">Bülten ${no} (${groups[no].length})</a></li>`;
+                content += `<div class="tab-pane fade ${active ? 'show active' : ''}" id="b-${no}"><div class="row" id="row-b-${no}"></div></div>`;
+            });
+            
+            if (expired.length > 0) {
+                const cls = bNumbers.length === 0 ? 'active' : '';
+                html += `<li class="nav-item"><a class="nav-link ${cls}" data-toggle="tab" href="#b-exp">Önceki Bültenler (${expired.length})</a></li>`;
+                content += `<div class="tab-pane fade ${cls ? 'show active' : ''}" id="b-exp"><div class="alert alert-secondary">Bu bildirimlerin süresi dolmuştur.</div><div class="row" id="row-b-exp"></div></div>`;
+            }
+            
+            html += '</ul>'; content += '</div>';
+            container.innerHTML = html + content;
+            
+            for (const no of bNumbers) {
+                window._renderTaskCardsToContainer(groups[no], `#row-b-${no}`, formatDate, taskType);
+            }
+            if(expired.length) window._renderTaskCardsToContainer(expired, '#row-b-exp', formatDate, taskType);
+            $('#taskPagination').hide();
+            return;
+        }
+
+        // C) Standart Liste Görünümü
+        if (filteredTasks.length === 0) {
+            container.innerHTML = '<div class="text-center text-muted p-4">Aranan kriterlere uygun kayıt bulunamadı.</div>';
+            $('#taskPagination').hide();
+            return;
+        }
+
+        $('#taskPagination').show();
+        
+        if (!window.taskPaginationData.pagination && window.Pagination) {
+            window.taskPaginationData.pagination = new window.Pagination({
+                itemsPerPage: 10,
+                containerId: 'taskPagination',
+                onPageChange: (page, perPage) => {
+                    const start = (page - 1) * perPage;
+                    const slice = window.taskPaginationData.allData.slice(start, start + perPage);
+                    window._renderTaskCardsToContainer(slice, '#task-list-container', formatDate, taskType);
+                }
+            });
+        }
+        
+        if (window.taskPaginationData.pagination) {
+            window.taskPaginationData.pagination.update(filteredTasks.length);
+        }
+        window._renderTaskCardsToContainer(filteredTasks.slice(0,10), '#task-list-container', formatDate, taskType);
+    };
+
 
     window.loadGoodsFromIpRecord = async function(ipRecordId) {
         if (!ipRecordId) return '<p class="text-muted">ID yok.</p>';
