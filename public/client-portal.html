@@ -1732,7 +1732,7 @@ window.fetchAndDisplayTasks = async function(linkedIds) {
         });
     };
 
-    window.fetchAndDisplaySuits = async function() {
+window.fetchAndDisplaySuits = async function() {
         const tbody = document.getElementById('dava-tbody');
         if (tbody) tbody.innerHTML = '<tr><td colspan="8" class="text-center"><i class="fas fa-spinner fa-spin"></i> Yükleniyor...</td></tr>';
 
@@ -1744,6 +1744,7 @@ window.fetchAndDisplayTasks = async function(linkedIds) {
             
             snap.forEach(d => {
                 const s = d.data();
+                // Yetki kontrolü
                 if (s.client?.id && window.linkedPersonIds.includes(s.client.id)) {
                     idx++;
                     suitRows.push({ 
@@ -1755,8 +1756,12 @@ window.fetchAndDisplayTasks = async function(linkedIds) {
                         opposingParty: s.suitDetails?.opposingParty || '-', 
                         openingDate: window.formatDateTR(s.suitDetails?.openingDate), 
                         status: s.suitDetails?.suitStatus || 'Devam Ediyor',
-                        suitStatus: s.suitDetails?.suitStatus || 'Devam Ediyor', // Filtreleme için
+                        suitStatus: s.suitDetails?.suitStatus || 'Devam Ediyor',
                         ...s.suitDetails, 
+                        
+                        // 🔥 DÜZELTME BURADA: Filtreleme için client objesini ekledik
+                        client: s.client, 
+                        
                         clientName: s.client?.name, 
                         subjectAssetTitle: s.subjectAsset?.title, 
                         subjectAssetType: s.subjectAsset?.type, 
@@ -1767,16 +1772,13 @@ window.fetchAndDisplayTasks = async function(linkedIds) {
 
             // Global State'e Kaydet
             window.davaPaginationData.allDataUnfiltered = suitRows;
-            window.suitsData = suitRows; // Modal için de gerekli
+            window.suitsData = suitRows; 
 
             // Filtre ve Render Tetikle
-            // Eğer şu an Dava sekmesi açıksa filtrele, değilse bekle
             if($('#portfolioTopTabs a.nav-link.active').attr('href') === '#dava-list') {
                 window.applyMasterFilter();
             } else {
-                // İlk yükleme için manuel init (Filtresiz ilk sayfa)
                 window.davaPaginationData.allData = suitRows;
-                // Pagination init
                  window.davaPaginationData.pagination = new window.Pagination({
                     itemsPerPage: 10,
                     containerId: 'davaPagination',
@@ -1788,7 +1790,7 @@ window.fetchAndDisplayTasks = async function(linkedIds) {
 
         } catch(e) { console.error(e); }
     };
-
+    
 // === İTİRAZ TABLOSU RENDER (GÜNCELLENMİŞ) ===
 window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
         const tbody = document.getElementById('dava-itiraz-tbody');
