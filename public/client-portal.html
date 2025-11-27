@@ -1709,40 +1709,38 @@ window.fetchAndDisplayInvoices = async function(linkedIds) {
         
         window.updateDashboardCounts();
     };
-    
+
     window.renderInvoicesTable = function(data) {
         const tbody = $('#invoices table tbody');
         tbody.empty();
         
-        // Colspan 9'dan 10'a çıkarıldı (Yeni 'İş No' sütunu için)
         if(!data || data.length === 0) { 
             tbody.html('<tr><td colspan="10" class="text-center text-muted">Kayıt bulunamadı.</td></tr>'); 
             return; 
         }
         
-        // Currency Helper
+        // Currency Normalizer Helper
         const normalizeCurrency = (c) => {
             if(!c) return 'TRY';
             const upper = String(c).toUpperCase().trim();
             if(upper === 'EURO' || upper === 'AVRO' || upper === 'EUR') return 'EUR';
             if(upper === 'DOLAR' || upper === 'USD') return 'USD';
             if(upper === 'STERLIN' || upper === 'GBP') return 'GBP';
-            return 'TRY'; // Varsayılan
+            return 'TRY';
         };
 
-        // Güvenli Sayı Dönüştürücü (NaN hatasını önler)
-        const parseAmount = (val) => {
-            if (typeof val === 'number') return val;
-            if (!val) return 0;
-            // String temizliği: "1.200,50" -> 1200.50
-            let s = String(val).trim();
-            if (s.includes(',') && s.includes('.')) {
-                 s = s.replace(/\./g, '').replace(',', '.');
-            } else if (s.includes(',')) {
-                 s = s.replace(',', '.');
+        // Veri Çıkarma Yardımcısı (Obje veya Sayı kontrolü)
+        const extractFee = (field) => {
+            if (field && typeof field === 'object') {
+                return { 
+                    amount: Number(field.amount) || 0, 
+                    currency: normalizeCurrency(field.currency) 
+                };
             }
-            const f = parseFloat(s);
-            return isNaN(f) ? 0 : f;
+            return { 
+                amount: Number(field) || 0, 
+                currency: 'TRY' // Varsayılan
+            };
         };
 
         data.forEach(inv => {
@@ -1755,33 +1753,49 @@ window.fetchAndDisplayInvoices = async function(linkedIds) {
             const invoiceNoDisplay = inv.invoiceNo || (inv.id ? `#${inv.id.substring(0,8).toUpperCase()}` : '-');
             const appNoDisplay = inv.applicationNumber || '-';
             
-            // YENİ: Task ID (İş No)
+            // Task ID Linki
             const taskIdDisplay = inv.taskId ? `<a href="#" class="task-detail" data-task-id="${inv.taskId}">#${inv.taskId}</a>` : '-';
             
-            // --- TUTAR HESAPLAMALARI (GÜVENLİ) ---
-            const currencyCode = normalizeCurrency(inv.currency);
+            // --- TUTAR VE PARA BİRİMİ MANTIĞI ---
+            const offData = extractFee(inv.officialFee);
+            const srvData = extractFee(inv.serviceFee);
             
-            // Parse edilmiş sayısal değerleri al
-            const offVal = parseAmount(inv.officialFee);
-            const srvVal = parseAmount(inv.serviceFee);
-            const totVal = parseAmount(inv.totalAmount);
+            // Toplam Tutar ve Para Birimi Belirleme
+            let totalVal = 0;
+            if (inv.totalAmount && typeof inv.totalAmount === 'object') {
+                totalVal = Number(inv.totalAmount.amount) || 0;
+            } else {
+                totalVal = Number(inv.totalAmount) || 0;
+            }
+
+            // Para Birimi Önceliği:
+            // 1. Veritabanındaki 'totalAmountCurrency' TRY değilse onu kullan
+            // 2. Alt kalemlerde EUR/USD varsa ve ana para birimi TRY ise, alt kalemi kullan
+            let finalCurrency = normalizeCurrency(inv.totalAmountCurrency || inv.currency);
             
-            const officialDisplay = window.currencyFormatter(offVal, currencyCode);
-            const serviceDisplay = window.currencyFormatter(srvVal, currencyCode);
-            let totalDisplay = window.currencyFormatter(totVal, currencyCode);
+            if (finalCurrency === 'TRY') {
+                if (offData.currency !== 'TRY') finalCurrency = offData.currency;
+                else if (srvData.currency !== 'TRY') finalCurrency = srvData.currency;
+            }
+
+            // Formatlama
+            const officialDisplay = window.currencyFormatter(offData.amount, finalCurrency);
+            const serviceDisplay = window.currencyFormatter(srvData.amount, finalCurrency);
+            let totalDisplay = window.currencyFormatter(totalVal, finalCurrency);
             
             // Kısmen ödeme bilgisi
             if (inv.status === 'partially_paid') {
-                const remVal = parseAmount(inv.remainingAmount);
+                const remVal = Number(inv.remainingAmount) || 0;
                 if (remVal > 0) {
-                    const remainingFormatted = window.currencyFormatter(remVal, currencyCode);
+                    const remainingFormatted = window.currencyFormatter(remVal, finalCurrency);
                     totalDisplay += `<div class="small text-danger mt-1 font-weight-bold" style="font-size: 0.85em;">(Kalan: ${remainingFormatted})</div>`;
                 }
             }
 
             const row = `<tr>
                 <td class="font-weight-bold">${invoiceNoDisplay}</td>
-                <td>${taskIdDisplay}</td> <td>${appNoDisplay}</td>
+                <td>${taskIdDisplay}</td>
+                <td>${appNoDisplay}</td>
                 <td>${window.formatDateTR(inv.createdAt)}</td>
                 <td>${inv.taskTitle || inv.description || 'Hizmet Bedeli'}</td>
                 
@@ -2727,18 +2741,21 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
             
             getValueFn = (item) => {
                 if (columnIndex === 0) return (item.invoiceNo || '').toLowerCase();
-                
-                // YENİ: İş No (Task ID)
                 if (columnIndex === 1) return (item.taskId || '').toLowerCase();
+                if (columnIndex === 2) return (item.applicationNumber || '').toLowerCase();
+                if (columnIndex === 3) return item.createdAt;
+                if (columnIndex === 4) return (item.taskTitle || item.description || '').toLowerCase();
                 
-                if (columnIndex === 2) return (item.applicationNumber || '').toLowerCase(); // Kaydı
-                if (columnIndex === 3) return item.createdAt; // Kaydı
-                if (columnIndex === 4) return (item.taskTitle || item.description || '').toLowerCase(); // Kaydı
-                
-                // TUTARLAR (Sayısal sıralama için parseAmount mantığı burada da geçerli olmalı ama şimdilik doğrudan alıyoruz)
-                if (columnIndex === 5) return item.officialFee || 0; 
-                if (columnIndex === 6) return item.serviceFee || 0;  
-                if (columnIndex === 7) return item.totalAmount || 0; 
+                // Helper: Obje içinden amount'u al veya direkt sayıyı al
+                const getAmt = (val) => {
+                    if (val && typeof val === 'object') return Number(val.amount) || 0;
+                    return Number(val) || 0;
+                };
+
+                // TUTARLAR (Doğru sıralama için)
+                if (columnIndex === 5) return getAmt(item.officialFee); 
+                if (columnIndex === 6) return getAmt(item.serviceFee);  
+                if (columnIndex === 7) return getAmt(item.totalAmount); 
                 
                 if (columnIndex === 8) return (item.status || '').toLowerCase();
                 return '';
