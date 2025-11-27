@@ -1030,8 +1030,8 @@ async function initPortal() {
         }
     }
 
-    // --- 1. PORTFÖY ---
-async function fetchAndDisplayPortfolio() {
+// --- 1. PORTFÖY ---
+    async function fetchAndDisplayPortfolio() {
         const q = query(collection(db, "ipRecords")); 
         try {
             const snap = await runGetDocs(q);
@@ -1044,12 +1044,14 @@ async function fetchAndDisplayPortfolio() {
                 }
             });
 
-            $('#dashPortfolio').text(allPortfolios.length);
+            // 🔥 Veriyi Global Değişkene Kaydet
+            window.allPortfolioData = allPortfolios;
+
+            // 🔥 Dashboard'u Güncelle
+            window.updateDashboardCounts();
             
-            // Ham Veriyi Kaydet
+            // Ham Veriyi Kaydet (Marka Listesi İçin)
             window.markaPaginationData.allDataUnfiltered = allPortfolios.filter(p => p.type === 'trademark' || p.type === 'Marka');
-            
-            // 🔥 DÜZELTME BURADA: Aktif veriyi (allData) başlangıçta ham veriye eşitle
             window.markaPaginationData.allData = [...window.markaPaginationData.allDataUnfiltered];
 
             const patentList = allPortfolios.filter(p => p.type === 'patent' || p.type === 'Patent');
@@ -1061,7 +1063,6 @@ async function fetchAndDisplayPortfolio() {
                     containerId: 'markaPagination',
                     onPageChange: (page, perPage) => {
                         const start = (page - 1) * perPage;
-                        // allData üzerinden dilimle (sıralanmış/filtrelenmiş veri)
                         const slice = window.markaPaginationData.allData.slice(start, start + perPage);
                         window.populatePortfolioTable('#marka-list', slice, start);
                     }
@@ -1072,7 +1073,6 @@ async function fetchAndDisplayPortfolio() {
                 window.markaPaginationData.pagination.update(window.markaPaginationData.allData.length);
             }
             
-            // İlk sayfayı allData üzerinden göster
             window.populatePortfolioTable('#marka-list', window.markaPaginationData.allData.slice(0,10));
             window.populatePortfolioTable('#patent-list', patentList);
             window.populatePortfolioTable('#tasarim-list', tasarimList);
@@ -1081,7 +1081,6 @@ async function fetchAndDisplayPortfolio() {
             console.error("Portföy yükleme hatası:", error);
         }
     }
-
 
 // === PORTFÖY TABLOSU DOLDURMA (GÜNCELLENMİŞ) ===
 window.populatePortfolioTable = function(tableId, portfolioData, startIndex = 0) {
@@ -1307,7 +1306,7 @@ window.fetchCountries = async function() {
         return false;
     };
 
-    window.fetchAndDisplayTasks = async function(linkedIds) {
+window.fetchAndDisplayTasks = async function(linkedIds) {
         const q = query(collection(db, 'tasks'), where('status', '==', 'awaiting_client_approval'));
         const snap = await runGetDocs(q);
         const tasks = [];
@@ -1318,32 +1317,11 @@ window.fetchCountries = async function() {
             if (await window.checkTaskClientRelation(t, clientSet)) tasks.push({ id: d.id, ...t });
         }
         
-        let cPending=0, cRenewal=0, cBulletin=0;
-        const today = new Date(); today.setHours(0,0,0,0);
-        
-        tasks.forEach(t => {
-            const type = String(t.taskType);
-            if (type === '22') cRenewal++; 
-            else if (type === '20') { 
-                const due = t.dueDate || t.officialDueDate;
-                let isExpired = false;
-                if (due) {
-                    const d = due.seconds ? new Date(due.seconds*1000) : new Date(due);
-                    d.setHours(0,0,0,0);
-                    if (d < today) isExpired = true;
-                }
-                if (!isExpired) cBulletin++;
-            } else { 
-                cPending++;
-            }
-        });
-        
-        $('#taskCount-pending-approval').text(cPending);
-        $('#taskCount-renewal-approval').text(cRenewal);
-        $('#taskCount-bulletin-watch').text(cBulletin);
-        const total = cPending + cRenewal + cBulletin;
-        $('#taskCount-marka-total').text(total);
-        $('#dashPendingApprovals').text(total);
+        // 🔥 Veriyi Global Değişkene Kaydet
+        window.dashboardTasksData = tasks;
+
+        // 🔥 Dashboard'u Güncelle (Hesaplamalar artık updateDashboardCounts içinde yapılıyor)
+        window.updateDashboardCounts();
     };
 
     // Detaylı Task Listeleme (GÜNCELLENMİŞ)
@@ -1619,6 +1597,9 @@ window.fetchCountries = async function() {
         console.error("Fatura yükleme hatası:", error);
         tbody.html('<tr><td colspan="6" class="text-center text-danger">Veriler yüklenirken hata oluştu.</td></tr>');
     }
+
+    // 🔥 Dashboard Sayaçlarını Güncelle
+    window.updateDashboardCounts();
 };
 
     window.renderInvoicesTable = function(data) {
@@ -2251,7 +2232,80 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
     }
 
 // === GLOBAL HELPER FONKSİYONLAR (READY DIŞINDA OLMALI) ===
-    // === GÖREV (TASK) FİLTRELEME FONKSİYONU ===
+
+// === DASHBOARD SAYAÇLARINI GÜNCELLE ===
+    window.updateDashboardCounts = function() {
+        const selectedClient = window.selectedClientId; // 'ALL' veya ID
+        console.log("📊 Dashboard sayaçları güncelleniyor. Seçili Client:", selectedClient);
+
+        // 1. PORTFÖY SAYACI
+        const allPortfolios = window.allPortfolioData || [];
+        let filteredPortfolio = allPortfolios;
+        
+        if (selectedClient !== 'ALL') {
+            filteredPortfolio = allPortfolios.filter(item => {
+                // Applicants dizisi içinde ID var mı?
+                return item.applicants && Array.isArray(item.applicants) && item.applicants.some(a => a.id === selectedClient);
+            });
+        }
+        $('#dashPortfolio').text(filteredPortfolio.length);
+
+        // 2. GÖREV (TASK) SAYAÇLARI
+        const allTasks = window.dashboardTasksData || [];
+        let filteredTasks = allTasks;
+
+        if (selectedClient !== 'ALL') {
+            filteredTasks = allTasks.filter(t => {
+                // Task filtreleme mantığı (clientId veya taskOwner)
+                if (t.clientId) return t.clientId === selectedClient;
+                if (t.taskOwner) return t.taskOwner === selectedClient;
+                // Eğer client bilgisi yoksa varsayılan olarak göster veya gizle (burada gizlemeyi tercih ediyoruz)
+                return false;
+            });
+        }
+
+        let cPending = 0, cRenewal = 0, cBulletin = 0;
+        const today = new Date(); today.setHours(0,0,0,0);
+
+        filteredTasks.forEach(t => {
+            const type = String(t.taskType);
+            if (type === '22') {
+                cRenewal++;
+            } else if (type === '20') { 
+                const due = t.dueDate || t.officialDueDate;
+                let isExpired = false;
+                if (due) {
+                    const d = due.seconds ? new Date(due.seconds*1000) : new Date(due);
+                    d.setHours(0,0,0,0);
+                    if (d < today) isExpired = true;
+                }
+                if (!isExpired) cBulletin++;
+            } else { 
+                cPending++;
+            }
+        });
+
+        $('#taskCount-pending-approval').text(cPending);
+        $('#taskCount-renewal-approval').text(cRenewal);
+        $('#taskCount-bulletin-watch').text(cBulletin);
+        
+        const totalPending = cPending + cRenewal + cBulletin;
+        $('#taskCount-marka-total').text(totalPending);
+        $('#dashPendingApprovals').text(totalPending);
+
+        // 3. FATURA SAYACI
+        const allInvoices = window.invoicesPaginationData?.allDataUnfiltered || [];
+        let filteredInvoices = allInvoices;
+
+        if (selectedClient !== 'ALL') {
+            filteredInvoices = allInvoices.filter(inv => inv.serviceInvoiceParty?.id === selectedClient);
+        }
+
+        const unpaidCount = filteredInvoices.filter(a => a.status === 'unpaid').length;
+        $('#dashUnpaidInvoices').text(unpaidCount);
+    };
+
+// === GÖREV (TASK) FİLTRELEME FONKSİYONU ===
 window.applyTaskFilter = function() {
     const searchText = $('#taskSearchText').val().toLowerCase().trim();
     const statusFilter = $('#taskStatusFilter').val();
@@ -3268,7 +3322,10 @@ window.generatePDF = async function(data, headers, filename) {
         window.applyMasterFilter(); // Portföy
         window.applyTaskFilter();   // İşlerim
         window.applyInvoiceFilter(); // Faturalar
-        // Dava ve İtiraz filtrelemesi (applyMasterFilter içinde handle ediliyor ama suit-list özel olabilir)
+        
+        // 🔥 Dashboard Sayaçlarını Yeniden Hesapla
+        window.updateDashboardCounts();
+
         if ($('#portfolioTopTabs a.nav-link.active').attr('href') === '#dava-list') {
              window.applyMasterFilter(); 
         }
