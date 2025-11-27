@@ -1588,69 +1588,145 @@ window.fetchAndDisplayTasks = async function(linkedIds) {
     };
 
 // --- 3. FATURA ---
-    window.fetchAndDisplayInvoices = async function(linkedIds) {
-    const tbody = $('#invoices table tbody');
-    tbody.html('<tr><td colspan="6" class="text-center"><i class="fas fa-spinner fa-spin"></i> Yükleniyor...</td></tr>');
+window.fetchAndDisplayInvoices = async function(linkedIds) {
+        console.log("🔵 Fatura yükleme başladı. Bağlı ID'ler:", linkedIds);
+        
+        const tbody = $('#invoices table tbody');
+        tbody.html('<tr><td colspan="7" class="text-center"><i class="fas fa-spinner fa-spin"></i> Yükleniyor...</td></tr>');
 
-    try {
-        const allAccruals = [];
-        // Chunk işlemi (mevcut mantık)
-        for (let i = 0; i < linkedIds.length; i += 10) {
-            const chunk = linkedIds.slice(i, i + 10);
-            const q = query(collection(db, 'accruals'), where('serviceInvoiceParty.id', 'in', chunk));
-            const snap = await runGetDocs(q);
-            snap.forEach(d => allAccruals.push({ id: d.id, ...d.data() }));
+        if (!linkedIds || linkedIds.length === 0) {
+            tbody.html('<tr><td colspan="7" class="text-center text-muted">Bağlı hesap bilgisi bulunamadı.</td></tr>');
+            return;
         }
-        
-        // Tekilleştirme ve Sıralama
-        const unique = Array.from(new Map(allAccruals.map(a => [a.id, a])).values())
-            .sort((a,b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
-        
-        $('#dashUnpaidInvoices').text(unique.filter(a => a.status === 'unpaid').length);
-        
-        // --- DEĞİŞİKLİK BURADA: Hem ham veriyi hem aktif veriyi saklıyoruz ---
-        window.invoicesPaginationData.allDataUnfiltered = unique; // Filtresiz Kaynak
-        window.invoicesPaginationData.allData = unique;           // Ekranda Görünen
-        
-        if (!window.invoicesPaginationData.pagination && window.Pagination) {
-            window.invoicesPaginationData.pagination = new window.Pagination({
-                itemsPerPage: 10,
-                containerId: 'invoices-pagination-container',
-                onPageChange: (page, perPage) => {
-                    const start = (page - 1) * perPage;
-                    // allData üzerinden dilimle (filtrelenmiş veri)
-                    const slice = window.invoicesPaginationData.allData.slice(start, start + perPage);
-                    window.renderInvoicesTable(slice);
+
+        try {
+            const allAccruals = [];
+            
+            // 1. Faturaları Çek (Chunking ile)
+            for (let i = 0; i < linkedIds.length; i += 10) {
+                const chunk = linkedIds.slice(i, i + 10);
+                const q = query(collection(db, 'accruals'), where('serviceInvoiceParty.id', 'in', chunk));
+                const snap = await runGetDocs(q);
+                snap.forEach(d => allAccruals.push({ id: d.id, ...d.data() }));
+            }
+            
+            // Tekilleştirme
+            const unique = Array.from(new Map(allAccruals.map(a => [a.id, a])).values())
+                .sort((a,b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+
+            // 2. Task ve IP Bilgilerini Getir (Başvuru No İçin)
+            // Benzersiz Task ID'lerini topla
+            const taskIds = [...new Set(unique.map(i => i.taskId).filter(Boolean))];
+            const taskMap = new Map(); // taskId -> { relatedIpRecordId }
+
+            if (taskIds.length > 0) {
+                // Task'leri parça parça çek
+                for (let i = 0; i < taskIds.length; i += 10) {
+                    const chunk = taskIds.slice(i, i + 10);
+                    // Belge ID'sine (__name__) göre sorgu
+                    const tQ = query(collection(db, 'tasks'), where('__name__', 'in', chunk));
+                    const tSnap = await getDocs(tQ);
+                    tSnap.forEach(d => taskMap.set(d.id, d.data()));
+                }
+            }
+
+            // Benzersiz IP ID'lerini topla
+            const ipIds = [...new Set(Array.from(taskMap.values()).map(t => t.relatedIpRecordId).filter(Boolean))];
+            const ipMap = new Map(); // ipId -> applicationNumber
+
+            if (ipIds.length > 0) {
+                // Önce eldeki portföy verisine bak (Hız kazandırır)
+                const localData = window.allPortfolioData || [];
+                const missingIpIds = [];
+
+                ipIds.forEach(id => {
+                    const found = localData.find(p => p.id === id);
+                    if (found) {
+                        ipMap.set(id, found.applicationNumber);
+                    } else {
+                        missingIpIds.push(id);
+                    }
+                });
+
+                // Eksik IP kayıtlarını veritabanından çek
+                if (missingIpIds.length > 0) {
+                    for (let i = 0; i < missingIpIds.length; i += 10) {
+                        const chunk = missingIpIds.slice(i, i + 10);
+                        const ipQ = query(collection(db, 'ipRecords'), where('__name__', 'in', chunk));
+                        const ipSnap = await getDocs(ipQ);
+                        ipSnap.forEach(d => {
+                            ipMap.set(d.id, d.data().applicationNumber);
+                        });
+                    }
+                }
+            }
+
+            // 3. Verileri Birleştir (Faturaya Başvuru No Ekle)
+            unique.forEach(inv => {
+                if (inv.taskId) {
+                    const task = taskMap.get(inv.taskId);
+                    if (task && task.relatedIpRecordId) {
+                        inv.applicationNumber = ipMap.get(task.relatedIpRecordId);
+                    }
                 }
             });
+
+            // State Güncelleme
+            $('#dashUnpaidInvoices').text(unique.filter(a => a.status === 'unpaid').length);
+            window.invoicesPaginationData.allDataUnfiltered = unique; 
+            window.invoicesPaginationData.allData = unique;           
+            
+            if (!window.invoicesPaginationData.pagination && window.Pagination) {
+                window.invoicesPaginationData.pagination = new window.Pagination({
+                    itemsPerPage: 10,
+                    containerId: 'invoices-pagination-container',
+                    onPageChange: (page, perPage) => {
+                        const start = (page - 1) * perPage;
+                        const slice = window.invoicesPaginationData.allData.slice(start, start + perPage);
+                        window.renderInvoicesTable(slice);
+                    }
+                });
+            }
+
+            if (window.invoicesPaginationData.pagination) window.invoicesPaginationData.pagination.update(unique.length);
+            
+            $('#invoiceSearchText').val('');
+            $('#invoiceDurumFilter').val('TÜMÜ');
+            
+            if (unique.length > 0) {
+                window.renderInvoicesTable(unique.slice(0, 10));
+            } else {
+                tbody.html('<tr><td colspan="7" class="text-center text-muted">Görüntülenecek fatura bulunamadı.</td></tr>');
+            }
+
+        } catch (error) {
+            console.error("❌ Fatura yükleme hatası:", error);
+            tbody.html('<tr><td colspan="7" class="text-center text-danger">Veriler yüklenirken hata oluştu.</td></tr>');
         }
-
-        if (window.invoicesPaginationData.pagination) window.invoicesPaginationData.pagination.update(unique.length);
         
-        // İlk yüklemede filtreleri sıfırla ve tabloyu çiz
-        $('#invoiceSearchText').val('');
-        $('#invoiceDurumFilter').val('TÜMÜ');
-        window.renderInvoicesTable(unique.slice(0, 10));
-
-    } catch (error) {
-        console.error("Fatura yükleme hatası:", error);
-        tbody.html('<tr><td colspan="6" class="text-center text-danger">Veriler yüklenirken hata oluştu.</td></tr>');
-    }
-
-    // 🔥 Dashboard Sayaçlarını Güncelle
-    window.updateDashboardCounts();
-};
+        window.updateDashboardCounts();
+    };
 
 window.renderInvoicesTable = function(data) {
         const tbody = $('#invoices table tbody');
         tbody.empty();
         
-        // Colspan 6'dan 7'ye çıkarıldı (yeni sütun için)
         if(!data || data.length === 0) { 
             tbody.html('<tr><td colspan="7" class="text-center text-muted">Kayıt bulunamadı.</td></tr>'); 
             return; 
         }
         
+        // Currency Normalizer Helper
+        const normalizeCurrency = (c) => {
+            if(!c) return 'TRY';
+            const upper = String(c).toUpperCase().trim();
+            if(upper === 'EURO' || upper === 'AVRO') return 'EUR';
+            if(upper === 'DOLAR' || upper === 'USD') return 'USD';
+            if(upper === 'STERLIN' || upper === 'GBP') return 'GBP';
+            if(upper === 'TL' || upper === 'TRL' || upper === 'TRY') return 'TRY';
+            return upper; // Bilinmiyorsa olduğu gibi döndür (örn: CHF)
+        };
+
         data.forEach(inv => {
             let statusText = inv.status;
             let badgeClass = 'secondary';
@@ -1659,23 +1735,22 @@ window.renderInvoicesTable = function(data) {
             else if (inv.status === 'partially_paid') { statusText = 'Kısmen Ödendi'; badgeClass = 'warning'; }
 
             const invoiceNoDisplay = inv.invoiceNo || (inv.id ? `#${inv.id.substring(0,8).toUpperCase()}` : '-');
+            const appNoDisplay = inv.applicationNumber || '-'; // Dolu gelmeli
             
             // --- TUTAR VE PARA BİRİMİ GÜNCELLEMESİ ---
-            // Veritabanındaki 'currency' alanını kullanır (yoksa varsayılan TRY)
-            let amountDisplay = window.currencyFormatter(inv.totalAmount, inv.currency || 'TRY');
+            const currencyCode = normalizeCurrency(inv.currency);
+            let amountDisplay = window.currencyFormatter(inv.totalAmount, currencyCode);
             
             // Kısmen ödeme bilgisi
             if (inv.status === 'partially_paid' && inv.remainingAmount !== undefined && inv.remainingAmount !== null) {
-                const remainingFormatted = window.currencyFormatter(inv.remainingAmount, inv.currency || 'TRY');
+                const remainingFormatted = window.currencyFormatter(inv.remainingAmount, currencyCode);
                 amountDisplay += `<div class="small text-danger mt-1 font-weight-bold" style="font-size: 0.85em;">(Kalan: ${remainingFormatted})</div>`;
             }
 
-            // Başvuru Numarası (Veritabanında 'applicationNumber' olarak kayıtlıysa)
-            const appNoDisplay = inv.applicationNumber || '-';
-
             const row = `<tr>
                 <td class="font-weight-bold">${invoiceNoDisplay}</td>
-                <td>${appNoDisplay}</td> <td>${window.formatDateTR(inv.createdAt)}</td>
+                <td>${appNoDisplay}</td>
+                <td>${window.formatDateTR(inv.createdAt)}</td>
                 <td>${inv.taskTitle || inv.description || 'Hizmet Bedeli'}</td>
                 <td>${amountDisplay}</td>
                 <td><span class="badge badge-${badgeClass}" style="font-size: 0.85rem;">${statusText}</span></td>
@@ -1688,6 +1763,7 @@ window.renderInvoicesTable = function(data) {
             tbody.append(row);
         });
     };
+
     
     window.applyInvoiceFilter = function() {
     const searchText = $('#invoiceSearchText').val().toLowerCase().trim();
