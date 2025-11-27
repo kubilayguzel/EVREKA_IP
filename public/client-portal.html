@@ -586,14 +586,14 @@
                     <thead>
                         <tr>
                             <th class="sortable" data-sort="text">Fatura No <i class="fas fa-sort"></i></th>
+                            <th class="sortable" data-sort="text">İş No <i class="fas fa-sort"></i></th>
+                            
                             <th class="sortable" data-sort="text">Başvuru No <i class="fas fa-sort"></i></th>
                             <th class="sortable" data-sort="date">Tarih <i class="fas fa-sort"></i></th>
                             <th class="sortable" data-sort="text">Açıklama <i class="fas fa-sort"></i></th>
-                            
                             <th class="sortable" data-sort="amount">Resmi Ücret <i class="fas fa-sort"></i></th>
                             <th class="sortable" data-sort="amount">Hizmet Ücreti <i class="fas fa-sort"></i></th>
                             <th class="sortable" data-sort="amount">Toplam Tutar <i class="fas fa-sort"></i></th>
-                            
                             <th class="sortable" data-sort="text">Durum <i class="fas fa-sort"></i></th>
                             <th>Fatura/Debit</th>
                         </tr>
@@ -1709,26 +1709,40 @@ window.fetchAndDisplayInvoices = async function(linkedIds) {
         
         window.updateDashboardCounts();
     };
-
+    
     window.renderInvoicesTable = function(data) {
         const tbody = $('#invoices table tbody');
         tbody.empty();
         
-        // Colspan 7'den 9'a çıkarıldı
+        // Colspan 9'dan 10'a çıkarıldı (Yeni 'İş No' sütunu için)
         if(!data || data.length === 0) { 
-            tbody.html('<tr><td colspan="9" class="text-center text-muted">Kayıt bulunamadı.</td></tr>'); 
+            tbody.html('<tr><td colspan="10" class="text-center text-muted">Kayıt bulunamadı.</td></tr>'); 
             return; 
         }
         
-        // Currency Normalizer Helper
+        // Currency Helper
         const normalizeCurrency = (c) => {
             if(!c) return 'TRY';
             const upper = String(c).toUpperCase().trim();
-            if(upper === 'EURO' || upper === 'AVRO') return 'EUR';
+            if(upper === 'EURO' || upper === 'AVRO' || upper === 'EUR') return 'EUR';
             if(upper === 'DOLAR' || upper === 'USD') return 'USD';
             if(upper === 'STERLIN' || upper === 'GBP') return 'GBP';
-            if(upper === 'TL' || upper === 'TRL' || upper === 'TRY') return 'TRY';
-            return upper;
+            return 'TRY'; // Varsayılan
+        };
+
+        // Güvenli Sayı Dönüştürücü (NaN hatasını önler)
+        const parseAmount = (val) => {
+            if (typeof val === 'number') return val;
+            if (!val) return 0;
+            // String temizliği: "1.200,50" -> 1200.50
+            let s = String(val).trim();
+            if (s.includes(',') && s.includes('.')) {
+                 s = s.replace(/\./g, '').replace(',', '.');
+            } else if (s.includes(',')) {
+                 s = s.replace(',', '.');
+            }
+            const f = parseFloat(s);
+            return isNaN(f) ? 0 : f;
         };
 
         data.forEach(inv => {
@@ -1741,24 +1755,33 @@ window.fetchAndDisplayInvoices = async function(linkedIds) {
             const invoiceNoDisplay = inv.invoiceNo || (inv.id ? `#${inv.id.substring(0,8).toUpperCase()}` : '-');
             const appNoDisplay = inv.applicationNumber || '-';
             
-            // --- TUTAR HESAPLAMALARI ---
+            // YENİ: Task ID (İş No)
+            const taskIdDisplay = inv.taskId ? `<a href="#" class="task-detail" data-task-id="${inv.taskId}">#${inv.taskId}</a>` : '-';
+            
+            // --- TUTAR HESAPLAMALARI (GÜVENLİ) ---
             const currencyCode = normalizeCurrency(inv.currency);
             
-            // Resmi ve Hizmet Ücretleri (Boşsa 0 kabul et)
-            const officialDisplay = window.currencyFormatter(inv.officialFee || 0, currencyCode);
-            const serviceDisplay = window.currencyFormatter(inv.serviceFee || 0, currencyCode);
+            // Parse edilmiş sayısal değerleri al
+            const offVal = parseAmount(inv.officialFee);
+            const srvVal = parseAmount(inv.serviceFee);
+            const totVal = parseAmount(inv.totalAmount);
             
-            // Toplam Tutar ve Kalan Bilgisi
-            let totalDisplay = window.currencyFormatter(inv.totalAmount || 0, currencyCode);
+            const officialDisplay = window.currencyFormatter(offVal, currencyCode);
+            const serviceDisplay = window.currencyFormatter(srvVal, currencyCode);
+            let totalDisplay = window.currencyFormatter(totVal, currencyCode);
             
-            if (inv.status === 'partially_paid' && inv.remainingAmount !== undefined && inv.remainingAmount !== null) {
-                const remainingFormatted = window.currencyFormatter(inv.remainingAmount, currencyCode);
-                totalDisplay += `<div class="small text-danger mt-1 font-weight-bold" style="font-size: 0.85em;">(Kalan: ${remainingFormatted})</div>`;
+            // Kısmen ödeme bilgisi
+            if (inv.status === 'partially_paid') {
+                const remVal = parseAmount(inv.remainingAmount);
+                if (remVal > 0) {
+                    const remainingFormatted = window.currencyFormatter(remVal, currencyCode);
+                    totalDisplay += `<div class="small text-danger mt-1 font-weight-bold" style="font-size: 0.85em;">(Kalan: ${remainingFormatted})</div>`;
+                }
             }
 
             const row = `<tr>
                 <td class="font-weight-bold">${invoiceNoDisplay}</td>
-                <td>${appNoDisplay}</td>
+                <td>${taskIdDisplay}</td> <td>${appNoDisplay}</td>
                 <td>${window.formatDateTR(inv.createdAt)}</td>
                 <td>${inv.taskTitle || inv.description || 'Hizmet Bedeli'}</td>
                 
@@ -2704,16 +2727,20 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
             
             getValueFn = (item) => {
                 if (columnIndex === 0) return (item.invoiceNo || '').toLowerCase();
-                if (columnIndex === 1) return (item.applicationNumber || '').toLowerCase();
-                if (columnIndex === 2) return item.createdAt; 
-                if (columnIndex === 3) return (item.taskTitle || item.description || '').toLowerCase();
                 
-                // YENİ SIRALAMA İNDEKSLERİ
-                if (columnIndex === 4) return item.officialFee || 0; // Resmi Ücret
-                if (columnIndex === 5) return item.serviceFee || 0;  // Hizmet Ücreti
-                if (columnIndex === 6) return item.totalAmount || 0; // Toplam Tutar
+                // YENİ: İş No (Task ID)
+                if (columnIndex === 1) return (item.taskId || '').toLowerCase();
                 
-                if (columnIndex === 7) return (item.status || '').toLowerCase(); // Durum
+                if (columnIndex === 2) return (item.applicationNumber || '').toLowerCase(); // Kaydı
+                if (columnIndex === 3) return item.createdAt; // Kaydı
+                if (columnIndex === 4) return (item.taskTitle || item.description || '').toLowerCase(); // Kaydı
+                
+                // TUTARLAR (Sayısal sıralama için parseAmount mantığı burada da geçerli olmalı ama şimdilik doğrudan alıyoruz)
+                if (columnIndex === 5) return item.officialFee || 0; 
+                if (columnIndex === 6) return item.serviceFee || 0;  
+                if (columnIndex === 7) return item.totalAmount || 0; 
+                
+                if (columnIndex === 8) return (item.status || '').toLowerCase();
                 return '';
             };
         }
