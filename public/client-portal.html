@@ -2965,11 +2965,6 @@ window.applyMasterFilter = function() {
         targetDataObj = window.davaItirazPaginationData;
         renderFunction = window.renderDavaItirazTable;
         tableId = 'dava-itiraz-list';
-
-        console.log('🔍 İtiraz filtresi aktif');
-        console.log('🔍 allDataUnfiltered:', targetDataObj.allDataUnfiltered?.length);
-        console.log('🔍 selectedClient:', selectedClient);
-        
     } else if (activeTabId === '#dava-list') {
         targetDataObj = window.davaPaginationData;
         renderFunction = window.renderDavaTable;
@@ -2985,7 +2980,12 @@ window.applyMasterFilter = function() {
     const searchVal = $("#portfolioSearchText").val().toLowerCase().trim();
     const statusVal = $("#portfolioDurumFilter").val();
     const selectedClient = window.selectedClientId; // Global Müşteri Seçimi
-
+    
+    console.log('🔍 applyMasterFilter çalışıyor');
+    console.log('🔍 Aktif sekme:', tableId);
+    console.log('🔍 selectedClient:', selectedClient);
+    console.log('🔍 allDataUnfiltered:', targetDataObj?.allDataUnfiltered?.length);
+    
     const allData = targetDataObj.allDataUnfiltered;
 
     // 2. FİLTRELEME MANTIĞI
