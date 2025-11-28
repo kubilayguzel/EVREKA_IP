@@ -2099,8 +2099,7 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
         });
     };
 
-// --- 5. İTİRAZ MODÜLÜ (GÜNCELLENMİŞ FİLTRE & STATÜ) ---
-
+// --- 5. İTİRAZ MODÜLÜ (FİLTRE SORUNU DÜZELTİLDİ) ---
     window.fetchAndDisplayObjections = async function() {
         const tbody = document.getElementById('dava-itiraz-tbody');
         if(!tbody) return;
@@ -2115,7 +2114,7 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
         };
 
         try {
-            // [GÜNCELLEME 1] Hem String ('20') hem Number (20) tiplerini destekle
+            // [GÜNCELLEME 1] Hem String hem Number tiplerini destekle
             const PARENT_TYPES = ['7', '19', '20', 7, 19, 20];
             const q = query(collection(db, 'tasks'), where('taskType', 'in', PARENT_TYPES));
             const snap = await getDocs(q);
@@ -2127,10 +2126,10 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
                 const t = docSnap.data();
                 const statusRaw = (t.status || '').trim();
                 
-                // Sadece tamamen kapatılmış/iptal edilmişleri gizle
+                // Kapalı olanları gizle
                 if (statusRaw.includes('kapatıldı') || statusRaw === 'cancelled') continue; 
                 
-                // Yetki kontrolü (Garenta ID'si linkedPersonIds içindeyse geçer)
+                // Yetki kontrolü
                 if (await window.checkTaskClientRelation(t, clientSet)) {
                     relevantTasks.push({id: docSnap.id, ...t});
                 }
@@ -2165,18 +2164,17 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
                 }
                 
                 if (!parentTx) {
-                    // Tip eşleşmesiyle bulmaya çalış (String/Number dönüşümüne dikkat ederek)
+                    // Tip eşleşmesiyle bulmaya çalış
                     parentTx = allTx.filter(x => String(x.type) === String(task.taskType))
                                     .sort((a,b) => (b.timestamp?.seconds||0) - (a.timestamp?.seconds||0))[0];
                 }
 
-                // [KRİTİK DÜZELTME] Transaction Yoksa BİLE Sanal Kayıt Oluştur
-                // Bu sayede veritabanındaki kopukluklar listeyi etkilemez.
+                // [GÜNCELLEME 2] Transaction Yoksa SANAL OLUŞTUR
                 if (!parentTx) {
                     parentTx = {
                         id: 'virtual-tx-' + task.id,
                         type: task.taskType,
-                        timestamp: task.createdAt || task.startDate || new Date(), // Task tarihini kullan
+                        timestamp: task.createdAt || task.startDate || new Date(),
                         requestResult: null,
                         documents: [],
                         isVirtual: true
@@ -2199,11 +2197,10 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
                     badgeColor = 'warning';
                 }
                 
-                // Alt işlemleri bul (Virtual değilse)
                 const children = parentTx.isVirtual ? [] : allTx.filter(x => x.transactionHierarchy==='child' && x.parentId===parentTx.id);
                 const typeMeta = window.transactionTypesMap.get(String(task.taskType));
                 
-                // Evrakları Birleştir (Task üzerindeki evrakları da al)
+                // Evrakları Birleştir
                 const docs = [];
                 if (parentTx.documents) docs.push(...parentTx.documents.map(d=>({...d, isTransactionDoc:true})));
                 if (task.documents) docs.push(...task.documents.map(d=>({...d, isTaskDoc:true})));
@@ -2214,11 +2211,16 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
                     recordId: task.relatedIpRecordId, 
                     hasChildren: children.length > 0, 
                     origin: rec.origin || '-', 
-                    brandImageUrl: rec.brandImageUrl, // Görsel URL
+                    brandImageUrl: rec.brandImageUrl, 
                     title: rec.title || rec.brandText || 'İsimsiz Marka', 
-                    transactionTypeName: typeMeta?.alias || 'Yayına İtiraz', // Varsayılan isim
+                    transactionTypeName: typeMeta?.alias || 'İtiraz İşlemi', 
                     applicationNumber: rec.applicationNumber || '-', 
                     applicantName: rec.applicants?.[0]?.name || '-', 
+                    
+                    // [!!! KRİTİK DÜZELTME BURADA !!!]
+                    // Filtreleme fonksiyonunun çalışması için bu dizi şarttır.
+                    applicants: rec.applicants || [], 
+
                     bulletinDate: window.formatDateTR(rec.details?.brandInfo?.opposedMarkBulletinDate), 
                     bulletinNo: rec.details?.brandInfo?.opposedMarkBulletinNo || '-',
                     epatsDate: window.formatDateTR(parentTx.timestamp), 
@@ -2229,10 +2231,9 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
                 });
             }
 
-            // Global Veriyi Kaydet
             window.davaItirazPaginationData.allDataUnfiltered = rows;
             
-            // Eğer İtiraz sekmesi açıksa hemen güncelle, değilse arka planda hazırla
+            // Eğer İtiraz sekmesi açıksa hemen güncelle
             if($('#portfolioTopTabs a.nav-link.active').attr('href') === '#dava-itiraz-list') {
                 window.applyMasterFilter();
             } else {
@@ -2253,10 +2254,10 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
 
         } catch(e) {
             console.error("Objection Error", e);
-            tbody.innerHTML = '<tr><td colspan="12" class="text-danger text-center">Veriler yüklenirken bir hata oluştu.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="12" class="text-danger text-center">Hata oluştu.</td></tr>';
         }
     };
-
+    
     // --- PDF & LOAD TRANSACTIONS ---
     window.fetchPdfsForTransactions = async function(transactionIds) {
         if (!transactionIds || transactionIds.length === 0) return {};
