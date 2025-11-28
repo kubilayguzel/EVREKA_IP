@@ -1404,8 +1404,28 @@ window.fetchCountries = async function() {
             }
             isMatch = true;
         }
+
+        // 2. İtiraz Task'larında Opponent Kontrolü
+        if (taskData.opponent && taskData.opponent.id && clientPersonIdSet.has(taskData.opponent.id)) {
+            if (!taskData._relatedClientIds.includes(taskData.opponent.id)) {
+                taskData._relatedClientIds.push(taskData.opponent.id);
+            }
+            isMatch = true;
+        }
         
-        // 2. İlişkili IP Kaydı (Marka/Patent) Üzerinden Kontrol
+        // 3. Alternatif: taskOwner array olabilir (Task 232'de array olarak görünüyor)
+        if (Array.isArray(taskData.taskOwner)) {
+            taskData.taskOwner.forEach(ownerId => {
+                if (clientPersonIdSet.has(ownerId)) {
+                    if (!taskData._relatedClientIds.includes(ownerId)) {
+                        taskData._relatedClientIds.push(ownerId);
+                    }
+                    isMatch = true;
+                }
+            });
+        }
+        
+        // 4. İlişkili IP Kaydı (Marka/Patent) Üzerinden Kontrol
         if (taskData.relatedIpRecordId) {
             try {
                 let applicants = [];
@@ -2135,6 +2155,7 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
                 // Yetki kontrolü
                 if (await window.checkTaskClientRelation(t, clientSet)) {
                     relevantTasks.push({id: docSnap.id, ...t});
+                    console.log('✅ Task eklendi:', docSnap.id, 'opponent:', t.opponent?.name || 'yok');
                 }
             }
                 
