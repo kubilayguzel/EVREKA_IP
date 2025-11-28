@@ -1386,72 +1386,56 @@ window.fetchCountries = async function() {
 
 // --- 2. İŞLERİM (TASKS) ---
     window.checkTaskClientRelation = async function(taskData, clientPersonIdSet) {
-        // Görev ile ilişkili müşteri ID'lerini tutacak dizi
         if (!taskData._relatedClientIds) taskData._relatedClientIds = [];
-        
         let isMatch = false;
         
-        // 1. Doğrudan Görev Üzerindeki ID'ler (Varsa)
+        // A) Doğrudan Görev Üzerindeki ID'ler (ClientId ve TaskOwner - String)
         if (taskData.clientId && clientPersonIdSet.has(taskData.clientId)) {
-            if (!taskData._relatedClientIds.includes(taskData.clientId)) {
-                taskData._relatedClientIds.push(taskData.clientId);
-            }
+            if (!taskData._relatedClientIds.includes(taskData.clientId)) taskData._relatedClientIds.push(taskData.clientId);
             isMatch = true;
         }
-        if (taskData.taskOwner && clientPersonIdSet.has(taskData.taskOwner)) {
-            if (!taskData._relatedClientIds.includes(taskData.taskOwner)) {
-                taskData._relatedClientIds.push(taskData.taskOwner);
-            }
+        if (taskData.taskOwner && typeof taskData.taskOwner === 'string' && clientPersonIdSet.has(taskData.taskOwner)) {
+            if (!taskData._relatedClientIds.includes(taskData.taskOwner)) taskData._relatedClientIds.push(taskData.taskOwner);
             isMatch = true;
         }
 
-        // 2. İtiraz Task'larında Opponent Kontrolü
-        if (taskData.opponent && taskData.opponent.id && clientPersonIdSet.has(taskData.opponent.id)) {
-            if (!taskData._relatedClientIds.includes(taskData.opponent.id)) {
-                taskData._relatedClientIds.push(taskData.opponent.id);
-            }
-            isMatch = true;
-        }
-        
-        // 3. Alternatif: taskOwner array olabilir (Task 232'de array olarak görünüyor)
+        // B) TaskOwner Array ise (Sizin eklediğiniz kısım)
         if (Array.isArray(taskData.taskOwner)) {
             taskData.taskOwner.forEach(ownerId => {
                 if (clientPersonIdSet.has(ownerId)) {
-                    if (!taskData._relatedClientIds.includes(ownerId)) {
-                        taskData._relatedClientIds.push(ownerId);
-                    }
+                    if (!taskData._relatedClientIds.includes(ownerId)) taskData._relatedClientIds.push(ownerId);
                     isMatch = true;
                 }
             });
         }
         
-        // 4. İlişkili IP Kaydı (Marka/Patent) Üzerinden Kontrol
-        if (taskData.relatedIpRecordId) {
+        // C) Opponent ID Kontrolü (Sizin eklediğiniz kısım + details kontrolü)
+        // Hem ana obje hem de details içindeki opponent.id kontrol edilir.
+        const opponentId = taskData.opponent?.id || taskData.details?.opponent?.id;
+        if (opponentId && clientPersonIdSet.has(opponentId)) {
+            if (!taskData._relatedClientIds.includes(opponentId)) taskData._relatedClientIds.push(opponentId);
+            isMatch = true;
+        }
+        
+        // D) İlişkili IP Kaydı (Marka/Patent) Üzerinden Kontrol
+        if (taskData.relatedIpRecordId && !isMatch) {
             try {
                 let applicants = [];
-                
-                // Önce hafızadaki portföy verisine bak (Hız için)
+                // Hafızadan kontrol
                 if (window.allPortfolioData) {
                     const localRec = window.allPortfolioData.find(r => r.id === taskData.relatedIpRecordId);
                     if (localRec && localRec.applicants) applicants = localRec.applicants;
                 }
-                
-                // Hafızada yoksa veritabanından çek
+                // Veritabanından kontrol
                 if (applicants.length === 0) {
                     const snap = await getDoc(doc(db, 'ipRecords', taskData.relatedIpRecordId));
-                    if (snap.exists()) {
-                        applicants = snap.data().applicants || [];
-                    }
+                    if (snap.exists()) applicants = snap.data().applicants || [];
                 }
                 
-                // Müşteri bu kaydın sahipleri arasında mı?
                 if (Array.isArray(applicants)) {
                     applicants.forEach(app => {
                         if (app.id && clientPersonIdSet.has(app.id)) {
-                            // Eşleşme bulundu, ID'yi kaydet
-                            if (!taskData._relatedClientIds.includes(app.id)) {
-                                taskData._relatedClientIds.push(app.id);
-                            }
+                            if (!taskData._relatedClientIds.includes(app.id)) taskData._relatedClientIds.push(app.id);
                             isMatch = true;
                         }
                     });
@@ -1461,8 +1445,6 @@ window.fetchCountries = async function() {
         
         return isMatch;
     };
-
-
 window.fetchAndDisplayTasks = async function(linkedIds) {
         const q = query(collection(db, 'tasks'), where('status', '==', 'awaiting_client_approval'));
         const snap = await runGetDocs(q);
@@ -2120,14 +2102,13 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
     };
 
 // --- 5. İTİRAZ MODÜLÜ (FİLTRE SORUNU KESİN ÇÖZÜM) ---
+
     window.fetchAndDisplayObjections = async function() {
         const tbody = document.getElementById('dava-itiraz-tbody');
         if(!tbody) return;
         
         tbody.innerHTML = '<tr><td colspan="12" class="text-center"><i class="fas fa-spinner fa-spin"></i> Yükleniyor...</td></tr>';
-        console.log('🔍 fetchAndDisplayObjections başlatıldı');
-        console.log('🔍 linkedPersonIds:', window.linkedPersonIds);
-        console.log('🔍 selectedClientId:', window.selectedClientId);
+        
         const REQUEST_RESULT_STATUS = {
             '24': 'Eksiklik Bildirimi', '28': 'Kabul', '29': 'Kısmi Kabul', '30': 'Ret',
             '31': 'B.S - Kabul', '32': 'B.S - Kısmi Kabul','33': 'B.S - Ret',
@@ -2136,7 +2117,6 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
         };
 
         try {
-            // [GÜNCELLEME 1] Hem String hem Number tiplerini destekle
             const PARENT_TYPES = ['7', '19', '20', 7, 19, 20];
             const q = query(collection(db, 'tasks'), where('taskType', 'in', PARENT_TYPES));
             const snap = await getDocs(q);
@@ -2144,34 +2124,31 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
             const relevantTasks = [];
             const clientSet = new Set(window.linkedPersonIds || []);
 
+            // 1. Taskleri Tara ve Yetki Kontrolü Yap
             for (const docSnap of snap.docs) {
                 const t = docSnap.data();
-                console.log('🔍 Raw task data:', docSnap.id, 't.opponent:', t.opponent);
                 const statusRaw = (t.status || '').trim();
-                
-                // Kapalı olanları gizle
                 if (statusRaw.includes('kapatıldı') || statusRaw === 'cancelled') continue; 
                 
-                // Yetki kontrolü
+                // Yukarıdaki yeni checkTaskClientRelation fonksiyonu burada çalışacak
                 if (await window.checkTaskClientRelation(t, clientSet)) {
                     relevantTasks.push({id: docSnap.id, ...t});
-                    console.log('✅ Task eklendi:', docSnap.id, 'opponent:', t.opponent?.name || 'yok');
                 }
             }
                 
             const rows = [];
             
             for (const task of relevantTasks) {
+                // IP Kaydı (Marka Bilgisi)
                 let rec = {};
-                // IP Kaydını çek
                 if (task.relatedIpRecordId) {
                     try {
                         const recSnap = await getDoc(doc(db, 'ipRecords', task.relatedIpRecordId));
                         if (recSnap.exists()) rec = recSnap.data();
-                    } catch (e) { console.warn("IP fetch error", e); }
+                    } catch (e) { }
                 }
                 
-                // Transactionları çek
+                // İşlem Geçmişi (Transaction)
                 let allTx = [];
                 if (task.relatedIpRecordId) {
                     try {
@@ -2186,14 +2163,12 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
                 if (task.triggeringTransactionId) {
                     parentTx = allTx.find(x => x.id === task.triggeringTransactionId);
                 }
-                
                 if (!parentTx) {
-                    // Tip eşleşmesiyle bulmaya çalış
                     parentTx = allTx.filter(x => String(x.type) === String(task.taskType))
                                     .sort((a,b) => (b.timestamp?.seconds||0) - (a.timestamp?.seconds||0))[0];
                 }
 
-                // [GÜNCELLEME 2] Transaction Yoksa SANAL OLUŞTUR
+                // Transaction Yoksa Sanal Oluştur
                 if (!parentTx) {
                     parentTx = {
                         id: 'virtual-tx-' + task.id,
@@ -2205,7 +2180,7 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
                     };
                 }
                 
-                // Statü Belirleme
+                // Statü Rengi
                 let computedStatus = 'Karar Bekleniyor';
                 let badgeColor = 'secondary'; 
                 const rr = parentTx.requestResult;
@@ -2224,33 +2199,41 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
                 const children = parentTx.isVirtual ? [] : allTx.filter(x => x.transactionHierarchy==='child' && x.parentId===parentTx.id);
                 const typeMeta = window.transactionTypesMap.get(String(task.taskType));
                 
-                // Evrakları Birleştir
                 const docs = [];
-                if (parentTx.documents) docs.push(...parentTx.documents.map(d=>({...d, isTransactionDoc:true})));
-                if (task.documents) docs.push(...task.documents.map(d=>({...d, isTaskDoc:true})));
+                if(parentTx.documents) docs.push(...parentTx.documents.map(d=>({...d, isTransactionDoc:true})));
+                if(task.documents) docs.push(...task.documents.map(d=>({...d, isTaskDoc:true})));
                 
-                // İtirazda MÜŞTERİ = itiraz EDEN kişi (opponent)
-                // rec.applicants = itiraz EDİLEN markının sahibi (bizim değil!)
-                // İtirazda MÜŞTERİ = itiraz EDEN kişi (opponent)
-                const itirazEden = task.opponent || task.details?.opponent || {};
-                console.log('🔍 Task:', task.id, 'itirazEden:', itirazEden);
-                const itirazEdenApplicants = itirazEden.id ? [{ id: itirazEden.id, name: itirazEden.name }] : [];
-                console.log('🔍 itirazEdenApplicants:', itirazEdenApplicants);
+                // [KRİTİK BÖLÜM: SAHİPLİK BELİRLEME]
+                // Filtreleme fonksiyonunun çalışması için 'applicants' dizisi dolu olmalı.
+                let filterApplicants = [];
                 
+                if (task._relatedClientIds && task._relatedClientIds.length > 0) {
+                    // checkTaskClientRelation fonksiyonunun bulduğu ID'leri kullan
+                    filterApplicants = task._relatedClientIds.map(id => ({ id: id, name: 'Müvekkil' }));
+                } else if (task.clientId) {
+                    filterApplicants = [{ id: task.clientId, name: 'Müvekkil' }];
+                } else {
+                    // Fallback olarak IP kaydının sahibini kullan
+                    filterApplicants = rec.applicants || [];
+                }
+
                 rows.push({ 
                     isParent: true, 
                     id: task.id, 
                     recordId: task.relatedIpRecordId, 
                     hasChildren: children.length > 0, 
-                    origin: rec.origin || '-', 
+                    
+                    // Menşe filtresine takılmaması için varsayılan değer
+                    origin: rec.origin || 'TÜRKPATENT', 
+                    
                     brandImageUrl: rec.brandImageUrl, 
                     title: rec.title || rec.brandText || 'İsimsiz Marka', 
                     transactionTypeName: typeMeta?.alias || 'İtiraz İşlemi', 
                     applicationNumber: rec.applicationNumber || '-', 
-                    applicantName: itirazEden.name || 'İsimsiz', 
+                    applicantName: rec.applicants?.[0]?.name || '-', // Görünen isim (Rakip Marka Sahibi)
                     
-                    // İTİRAZ EDEN kişinin bilgisi (opponent)
-                    applicants: itirazEdenApplicants,
+                    // [İŞTE BU SATIR EKSİKTİ]
+                    applicants: filterApplicants, 
 
                     bulletinDate: window.formatDateTR(rec.details?.brandInfo?.opposedMarkBulletinDate), 
                     bulletinNo: rec.details?.brandInfo?.opposedMarkBulletinNo || '-',
@@ -2261,15 +2244,9 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
                     childrenData: children 
                 });
             }
-            
-            console.log('✅ Toplam itiraz sayısı:', rows.length);
-            if (rows.length > 0) {
-                console.log('✅ İlk itiraz örneği:', rows[0]);
-            }
 
             window.davaItirazPaginationData.allDataUnfiltered = rows;
             
-            // Eğer İtiraz sekmesi açıksa hemen güncelle
             if($('#portfolioTopTabs a.nav-link.active').attr('href') === '#dava-itiraz-list') {
                 window.applyMasterFilter();
             } else {
