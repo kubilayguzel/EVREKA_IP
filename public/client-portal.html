@@ -1023,44 +1023,86 @@
 
     // --- INIT ---
 async function initPortal() {
-        const user = authService.getCurrentUser();
-        if (!user) return;
-        $('#userName').text(user.displayName || user.email);
-        $('#userAvatar').text((user.displayName||'U').charAt(0).toUpperCase());
-        $('#welcomeUserName').text(user.displayName || user.email);
+    const user = authService.getCurrentUser();
+    if (!user) return;
+    $('#userName').text(user.displayName || user.email);
+    $('#userAvatar').text((user.displayName||'U').charAt(0).toUpperCase());
+    $('#welcomeUserName').text(user.displayName || user.email);
+    
+    try {
+        await Promise.all([
+            window.fetchCountries(),
+            (async () => {
+                const typesSnap = await getDocs(collection(db, 'transactionTypes'));
+                typesSnap.forEach(d => window.transactionTypesMap.set(d.id, d.data()));
+            })()
+        ]);
+
+        // 1. Kullanıcı Verisini (User) Çek
+        const userSnap = await getDoc(doc(db, 'users', user.uid));
+        if (!userSnap.exists()) return;
         
-        try {
-            await Promise.all([
-                window.fetchCountries(),
-                (async () => {
-                    const typesSnap = await getDocs(collection(db, 'transactionTypes'));
-                    typesSnap.forEach(d => window.transactionTypesMap.set(d.id, d.data()));
-                })()
-            ]);
+        const userData = userSnap.data();
+        const linkedIds = userData.linkedPersonIds || [];
+        
+        window.linkedPersonIds = linkedIds; 
 
-            const userSnap = await getDoc(doc(db, 'users', user.uid));
-            if (!userSnap.exists()) return;
-            
-            const linkedIds = userSnap.data().linkedPersonIds || [];
-            if (!linkedIds.length) return;
-            
-            window.linkedPersonIds = linkedIds; 
+        // --- YENİ: MÜŞTERİ İSİMLERİNİ ÇEKME VE SEÇİCİ ---
+        await window.fetchClientNames(linkedIds);
+        window.renderClientSelectorUI();
 
-            // --- YENİ: MÜŞTERİ İSİMLERİNİ ÇEKME VE SEÇİCİ ---
-            await window.fetchClientNames(linkedIds);
-            window.renderClientSelectorUI();
-            window.currentUserData = userSnap.data(); // <--- BU SATIRI EKLE
-            // Verileri çek (Tüm linkedID'ler için çeker)
-            fetchAndDisplayPortfolio();
-            fetchAndDisplayTasks(linkedIds);
-            fetchAndDisplayInvoices(linkedIds);
-            fetchAndDisplaySuits();
-            fetchAndDisplayObjections();
+        // ========================================================================
+        // [DÜZELTME] BAĞLI KİŞİLERİN (MÜVEKKİLLERİN) EVRAKLARINI ÇEKME MANTIĞI
+        // ========================================================================
+        let allDocuments = [];
 
-        } catch (e) {
-            console.error("Init Error:", e);
+        // A) Önce Kullanıcı kartındaki evrakları al (varsa)
+        if (userData.documents && Array.isArray(userData.documents)) {
+            allDocuments = [...userData.documents];
         }
+
+        // B) Bağlı olduğu Kişiler (Persons) tablosundaki evrakları topla
+        if (linkedIds.length > 0) {
+            const chunks = [];
+            // Firestore 'in' sorgusu en fazla 10 eleman kabul eder, bu yüzden bölüyoruz
+            for (let i = 0; i < linkedIds.length; i += 10) {
+                const chunk = linkedIds.slice(i, i + 10);
+                const q = query(collection(db, 'persons'), where('__name__', 'in', chunk));
+                chunks.push(getDocs(q));
+            }
+            
+            // Tüm sorguları paralel çalıştır
+            const snapshots = await Promise.all(chunks);
+            
+            snapshots.forEach(snap => {
+                snap.forEach(doc => {
+                    const personData = doc.data();
+                    // Eğer bu kişinin evrakları varsa listeye ekle
+                    if (personData.documents && Array.isArray(personData.documents)) {
+                        allDocuments = [...allDocuments, ...personData.documents];
+                    }
+                });
+            });
+        }
+
+        // Toplanan tüm evrakları ana veri objesine koy
+        window.currentUserData = {
+            ...userData,
+            documents: allDocuments
+        };
+        // ========================================================================
+
+        // Diğer verileri çek
+        fetchAndDisplayPortfolio();
+        fetchAndDisplayTasks(linkedIds);
+        fetchAndDisplayInvoices(linkedIds);
+        fetchAndDisplaySuits();
+        fetchAndDisplayObjections();
+
+    } catch (e) {
+        console.error("Init Error:", e);
     }
+}
 
 // --- 1. PORTFÖY ---
     async function fetchAndDisplayPortfolio() {
