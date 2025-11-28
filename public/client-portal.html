@@ -2211,16 +2211,12 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
                     recordId: task.relatedIpRecordId, 
                     hasChildren: children.length > 0, 
                     origin: rec.origin || '-', 
-                    brandImageUrl: rec.brandImageUrl, 
+                    brandImageUrl: rec.brandImageUrl, // Görsel URL
                     title: rec.title || rec.brandText || 'İsimsiz Marka', 
-                    transactionTypeName: typeMeta?.alias || 'İtiraz İşlemi', 
+                    transactionTypeName: typeMeta?.alias || 'Yayına İtiraz', // Varsayılan isim
                     applicationNumber: rec.applicationNumber || '-', 
+                    applicants: rec.applicants || [], // Müşteri filtresi için ekledik
                     applicantName: rec.applicants?.[0]?.name || '-', 
-                    
-                    // [!!! KRİTİK DÜZELTME BURADA !!!]
-                    // Filtreleme fonksiyonunun çalışması için bu dizi şarttır.
-                    applicants: rec.applicants || [], 
-
                     bulletinDate: window.formatDateTR(rec.details?.brandInfo?.opposedMarkBulletinDate), 
                     bulletinNo: rec.details?.brandInfo?.opposedMarkBulletinNo || '-',
                     epatsDate: window.formatDateTR(parentTx.timestamp), 
