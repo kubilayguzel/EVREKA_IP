@@ -362,7 +362,7 @@
         <li class="nav-item"><a aria-controls="portfolio-content" class="nav-link" data-toggle="tab" href="#portfolio-content" role="tab"><i class="fas fa-folder-open mr-2"></i>Portföyüm</a></li>
         <li class="nav-item"><a aria-controls="tasks" class="nav-link" data-toggle="tab" href="#tasks" role="tab"><i class="fas fa-tasks mr-2"></i>İşlerim</a></li>
         <li class="nav-item"><a aria-controls="invoices" class="nav-link" data-toggle="tab" href="#invoices" role="tab"><i class="fas fa-file-invoice-dollar mr-2"></i>Faturalarım</a></li>
-        <li class="nav-item"><a class="nav-link" href="#" id="nav-contracts" data-target="contracts-section"><i class="fas fa-file-contract"></i><span>Vekalet/Sözleşme</span></a></li>
+        <li class="nav-item"><a aria-controls="contracts" class="nav-link" data-toggle="tab" href="#contracts" role="tab"><i class="fas fa-file-contract mr-2"></i>Vekalet/Sözleşme</a></li>
         <li class="nav-item"><a aria-controls="reports" class="nav-link" data-toggle="tab" href="#reports" role="tab"><i class="fas fa-chart-bar mr-2"></i>Raporlar</a></li>
     </ul>
 </div>
@@ -604,6 +604,32 @@
             </div>
             <div id="invoices-pagination-container"></div>
         </div>
+            <div class="tab-pane fade" id="contracts" role="tabpanel">
+                <h1 class="header-title">Vekalet ve Sözleşmeler</h1>
+                <div class="card p-4 shadow-sm">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="thead-light">
+                                <tr>
+                                    <th style="width: 25%;">Belge Türü</th>
+                                    <th style="width: 25%;">Ülke</th>
+                                    <th style="width: 25%;">Geçerlilik Tarihi</th>
+                                    <th style="width: 25%; text-align: center;">İşlem</th>
+                                </tr>
+                            </thead>
+                            <tbody id="contractsTableBody">
+                                </tbody>
+                        </table>
+                        
+                        <div id="noContractsMessage" class="text-center p-5 text-muted" style="display:none;">
+                            <div class="mb-3">
+                                <i class="fas fa-folder-open fa-3x" style="opacity: 0.3;"></i>
+                            </div>
+                            <p>Henüz tanımlanmış vekaletname veya sözleşme bulunmamaktadır.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
             <div class="tab-pane fade" id="reports" role="tabpanel" aria-labelledby="reports-tab">
                 <div class="d-flex justify-content-between align-items-center mb-4">
                     <h1 class="header-title">Yönetim ve Performans Raporları</h1>
@@ -868,37 +894,6 @@
         </div>
     </div>
 </div>
-<div id="contracts-section" class="container-fluid content-section" style="display: none; padding: 20px;">
-        <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-            <h1 class="h2">Vekalet ve Sözleşmeler</h1>
-        </div>
-
-        <div class="card shadow-sm">
-            <div class="card-body p-0">
-                <div class="table-responsive">
-                    <table class="table table-hover mb-0">
-                        <thead class="thead-light">
-                            <tr>
-                                <th style="width: 25%;">Belge Türü</th>
-                                <th style="width: 25%;">Ülke</th>
-                                <th style="width: 25%;">Geçerlilik Tarihi</th>
-                                <th style="width: 25%; text-align: center;">İşlem</th>
-                            </tr>
-                        </thead>
-                        <tbody id="contractsTableBody">
-                            </tbody>
-                    </table>
-                    
-                    <div id="noContractsMessage" class="text-center p-5 text-muted" style="display:none;">
-                        <div class="mb-3">
-                            <i class="fas fa-folder-open fa-3x" style="opacity: 0.3;"></i>
-                        </div>
-                        <p>Henüz tanımlanmış vekaletname veya sözleşme bulunmamaktadır.</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
 <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.2/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
@@ -1054,7 +1049,7 @@ async function initPortal() {
             // --- YENİ: MÜŞTERİ İSİMLERİNİ ÇEKME VE SEÇİCİ ---
             await window.fetchClientNames(linkedIds);
             window.renderClientSelectorUI();
-
+            window.currentUserData = userSnap.data(); // <--- BU SATIRI EKLE
             // Verileri çek (Tüm linkedID'ler için çeker)
             fetchAndDisplayPortfolio();
             fetchAndDisplayTasks(linkedIds);
@@ -4014,39 +4009,27 @@ window.initReports = function() {
         });
     });
 
-/* --- VEKALET/SÖZLEŞME MODÜLÜ BAŞLANGIÇ --- */
-    // 1. Menü Tıklama Olayı
-    $(document).on('click', '#nav-contracts', function(e) {
-        e.preventDefault();
-        
-        // Aktif menü stilini güncelle
-        $('#sidebar .nav-link').removeClass('active'); // Diğerlerinden active sınıfını sil
-        $(this).addClass('active'); // Tıklananı aktif yap
-
-        // Sayfadaki diğer ana bölümleri gizle
-        // NOT: Eğer diğer bölümlerinizde ortak bir class yoksa, ID'lerini buraya ekleyerek gizleyin.
-        // Örnek: $('#dashboard-section, #files-section').hide();
-        $('div[id$="-section"]').hide(); // Sonu "-section" ile biten tüm divleri gizle (Pratik Yöntem)
-        
-        // Sadece Vekalet bölümünü göster
-        $('#contracts-section').fadeIn();
-
-        // Veriyi Tabloya Dök
-        // window.currentUserData değişkeni, kullanıcının veritabanından çekilen bilgisidir.
-        // Eğer kodunuzda bu değişken farklıysa (örn: userDoc), burayı güncelleyin.
+/* --- VEKALET/SÖZLEŞME MODÜLÜ (GÜNCELLENMİŞ) --- */
+    
+    // Sekmeye tıklandığında veriyi yükle
+    $('a[data-toggle="tab"][href="#contracts"]').on('shown.bs.tab', function (e) {
         if (window.currentUserData) {
             renderContractsTable(window.currentUserData);
         } else {
-            console.log("Kullanıcı verisi henüz yüklenmedi veya değişken adı farklı.");
+            // Veri henüz hazır değilse, auth servisinden verinin gelmesini bekle
+            // (Bu durum genellikle sayfa ilk açıldığında yaşanmaz ama önlem olarak)
+            $('#contractsTableBody').html('<tr><td colspan="4" class="text-center text-muted">Kullanıcı verisi yükleniyor...</td></tr>');
         }
     });
 
-    // 2. Tabloyu Dolduran Fonksiyon
+    // Kullanıcı verisi yüklendiğinde (initPortal fonksiyonu içinde) bu değişkeni set ediyoruz.
+    // Eğer veritabanından veri geç geliyorsa burası veriyi global değişkenden okur.
+    
     function renderContractsTable(personData) {
         const $tbody = $('#contractsTableBody');
         const $noMsg = $('#noContractsMessage');
         
-        $tbody.empty(); // Tabloyu temizle
+        $tbody.empty();
 
         // 'documents' dizisi var mı kontrol et
         if (personData.documents && Array.isArray(personData.documents) && personData.documents.length > 0) {
