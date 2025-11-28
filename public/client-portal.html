@@ -2105,7 +2105,9 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
         if(!tbody) return;
         
         tbody.innerHTML = '<tr><td colspan="12" class="text-center"><i class="fas fa-spinner fa-spin"></i> Yükleniyor...</td></tr>';
-        
+        console.log('🔍 fetchAndDisplayObjections başlatıldı');
+        console.log('🔍 linkedPersonIds:', window.linkedPersonIds);
+        console.log('🔍 selectedClientId:', window.selectedClientId);
         const REQUEST_RESULT_STATUS = {
             '24': 'Eksiklik Bildirimi', '28': 'Kabul', '29': 'Kısmi Kabul', '30': 'Ret',
             '31': 'B.S - Kabul', '32': 'B.S - Kısmi Kabul','33': 'B.S - Ret',
@@ -2230,7 +2232,12 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
                     childrenData: children 
                 });
             }
-
+            
+            console.log('✅ Toplam itiraz sayısı:', rows.length);
+            if (rows.length > 0) {
+                console.log('✅ İlk itiraz örneği:', rows[0]);
+            }
+            
             window.davaItirazPaginationData.allDataUnfiltered = rows;
             
             // Eğer İtiraz sekmesi açıksa hemen güncelle
