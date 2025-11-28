@@ -2126,6 +2126,7 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
 
             for (const docSnap of snap.docs) {
                 const t = docSnap.data();
+                console.log('🔍 Raw task data:', docSnap.id, 't.opponent:', t.opponent);
                 const statusRaw = (t.status || '').trim();
                 
                 // Kapalı olanları gizle
