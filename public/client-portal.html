@@ -3048,7 +3048,7 @@ window.applyMasterFilter = function() {
             
             if (!hasAccess) return false;
         }
-
+if (itemDebug) console.log('✅ 221 müşteri kontrolünü geçti');
         // C) Menşe Kontrolü
         if (item.origin) {
             const origin = (item.origin || 'TÜRKPATENT').toString().toUpperCase();
@@ -3056,7 +3056,7 @@ window.applyMasterFilter = function() {
             if (menseVal === 'TÜRKPATENT' && !isTurk) return false;
             if (menseVal === 'YURTDISI' && isTurk) return false;
         }
-
+if (itemDebug) console.log('✅ 221 menşe kontrolünü geçti');
         // D) Metin Arama
         if (searchVal) {
             let searchableText = Object.values(item).map(v => 
@@ -3083,13 +3083,13 @@ window.applyMasterFilter = function() {
 
             if (!searchableText.includes(searchVal)) return false;
         }
-
+if (itemDebug) console.log('✅ 221 metin aramasını geçti');
         // E) Durum Filtresi
         if (statusVal && statusVal !== 'TÜMÜ') {
             const st = item.status || item.statusText || item.suitStatus || '';
             if (!st.toLowerCase().includes(statusVal.toLowerCase())) return false;
         }
-
+if (itemDebug) console.log('✅ 221 durum filtresini geçti');
         // F) Kolon Bazlı Filtreler
         for (const [key, selectedValues] of Object.entries(window.activeColumnFilters)) {
             if (!key.startsWith(tableId + '-')) continue;
@@ -3116,7 +3116,7 @@ window.applyMasterFilter = function() {
 
             if (!selectedValues.includes(cellValue.trim())) return false;
         }
-
+if (itemDebug) console.log('✅ 221 kolon filtresini geçti');
     // DEBUG: Kayıt filtreyi geçti
         if (tableId === 'dava-itiraz-list') {
             console.log('✅ Kayıt geçti:', item.id);
