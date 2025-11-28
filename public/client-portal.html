@@ -606,15 +606,26 @@
         </div>
             <div class="tab-pane fade" id="contracts" role="tabpanel">
                 <h1 class="header-title">Vekalet ve Sözleşmeler</h1>
+                
+                <div class="card p-4 mb-4 shadow-sm">
+                    <h5 class="card-title">Filtreleme</h5>
+                    <div class="form-row">
+                        <div class="form-group col-md-12">
+                            <input class="form-control" id="contractsSearchText" placeholder="Belge türü veya ülke ara..." type="text"/>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="card p-4 shadow-sm">
                     <div class="table-responsive">
                         <table class="table table-hover mb-0">
-                            <thead>
+                            <thead class="thead-light">
                                 <tr>
-                                    <th style="width: 25%;">Belge Türü</th>
-                                    <th style="width: 25%;">Ülke</th>
-                                    <th style="width: 25%;">Geçerlilik Tarihi</th>
-                                    <th style="width: 25%; text-align: center;">İşlem</th>
+                                    <th class="sortable" data-sort="index" style="width: 5%;"># <i class="fas fa-sort"></i></th>
+                                    <th class="sortable" data-sort="text" style="width: 30%;">Belge Türü <i class="fas fa-sort"></i></th>
+                                    <th class="sortable" data-sort="text" style="width: 25%;">Ülke <i class="fas fa-sort"></i></th>
+                                    <th class="sortable" data-sort="date" style="width: 20%;">Geçerlilik Tarihi <i class="fas fa-sort"></i></th>
+                                    <th class="text-center" style="width: 20%;">İşlem</th>
                                 </tr>
                             </thead>
                             <tbody id="contractsTableBody">
@@ -625,8 +636,10 @@
                             <div class="mb-3">
                                 <i class="fas fa-folder-open fa-3x" style="opacity: 0.3;"></i>
                             </div>
-                            <p>Henüz tanımlanmış vekaletname veya sözleşme bulunmamaktadır.</p>
+                            <p>Kayıt bulunamadı.</p>
                         </div>
+
+                        <div id="contractsPagination" class="mt-3"></div>
                     </div>
                 </div>
             </div>
@@ -955,11 +968,20 @@
         itemsPerPage: 10, 
         pagination: null 
     };
+    
+    // 6. Vekalet Verisi (YENİ)
+    window.contractsPaginationData = { 
+        allDataUnfiltered: [], 
+        allData: [], 
+        pagination: null, 
+        itemsPerPage: 10,
+        currentPage: 1
+    };
 
-    // 6. Filtre Durumu (YENİ EKLENDİ)
+    // 7. Filtre Durumu (YENİ EKLENDİ)
     window.activeColumnFilters = {}; 
 
-    // 7. Diğerleri
+    // 8. Diğerleri
     window.transactionTypesMap = new Map();
     window.linkedPersonIds = [];
     window.linkedClientsMap = []; // [{id: '123', name: 'ABC Ltd.'}, ...]
@@ -1090,6 +1112,10 @@ async function initPortal() {
             ...userData,
             documents: allDocuments
         };
+
+        // [YENİ] Vekalet Verilerini Global State'e Yükle ve Başlat
+            window.contractsPaginationData.allDataUnfiltered = allDocuments || [];
+            window.applyContractsFilter(); // Tabloyu ilk kez oluşturur
         // ========================================================================
 
         // Diğer verileri çek
@@ -2804,6 +2830,15 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
                 if (columnIndex === 7) return (item.suitStatus || '').toLowerCase();
                 return '';
             };
+        } else if (listId === 'contracts') {
+            dataObj = window.contractsPaginationData;
+            renderFn = (slice, start) => window.renderContractsTable(slice, start);
+            getValueFn = (item) => {
+                if (columnIndex === 1) return (item.type || '').toLowerCase();
+                if (columnIndex === 2) return (item.countryName || '').toLowerCase();
+                if (columnIndex === 3) return item.validityDate; 
+                return '';
+            };
         } else if (listId === 'invoices') {
             dataObj = window.invoicesPaginationData;
             renderFn = (slice) => window.renderInvoicesTable(slice);
@@ -3873,7 +3908,9 @@ window.initReports = function() {
         $('#taskSearchText').off('keyup').on('keyup', function() {window.applyTaskFilter(); });
         $('#taskStatusFilter').off('change').on('change', function() {window.applyTaskFilter(); });
         $('#applyTaskFilters').off('click').on('click', function() {window.applyTaskFilter();});
-
+        $('#contractsSearchText').off('keyup').on('keyup', function() { 
+            window.applyContractsFilter(); 
+        });
         // --- FATURA FİLTRELEME EVENTLERİ ---
         $('#invoiceSearchText').off('keyup').on('keyup', function() { 
             window.applyInvoiceFilter(); 
@@ -4064,50 +4101,89 @@ window.initReports = function() {
         }
     });
 
-    // Kullanıcı verisi yüklendiğinde (initPortal fonksiyonu içinde) bu değişkeni set ediyoruz.
-    // Eğer veritabanından veri geç geliyorsa burası veriyi global değişkenden okur.
+// Kullanıcı verisi yüklendiğinde (initPortal fonksiyonu içinde) bu değişkeni set ediyoruz.
+// Eğer veritabanından veri geç geliyorsa burası veriyi global değişkenden okur.
     
-    function renderContractsTable(personData) {
-        const $tbody = $('#contractsTableBody');
-        const $noMsg = $('#noContractsMessage');
-        
-        $tbody.empty();
+// A) VEKALET FİLTRELEME VE YÖNETİM
+    window.applyContractsFilter = function() {
+        const searchText = $('#contractsSearchText').val().toLowerCase().trim();
+        const rawData = window.contractsPaginationData.allDataUnfiltered || [];
 
-        // 'documents' dizisi var mı kontrol et
-        if (personData.documents && Array.isArray(personData.documents) && personData.documents.length > 0) {
-            $noMsg.hide();
-            
-            personData.documents.forEach(doc => {
-                // Tarih formatla (YYYY-MM-DD -> GG.AA.YYYY)
-                let dateDisplay = '-';
-                if (doc.validityDate) {
-                    let parts = doc.validityDate.split('-');
-                    if(parts.length === 3) dateDisplay = `${parts[2]}.${parts[1]}.${parts[0]}`;
+        // Filtreleme
+        const filtered = rawData.filter(doc => {
+            if (!searchText) return true;
+            const searchSource = [
+                doc.type || 'Diğer',
+                doc.countryName || '-'
+            ].join(' ').toLowerCase();
+            return searchSource.includes(searchText);
+        });
+
+        window.contractsPaginationData.allData = filtered;
+
+        // Sayfalama ve Render
+        if (!window.contractsPaginationData.pagination && window.Pagination) {
+            window.contractsPaginationData.pagination = new window.Pagination({
+                itemsPerPage: 10,
+                containerId: 'contractsPagination',
+                onPageChange: (page, perPage) => {
+                    const start = (page - 1) * perPage;
+                    const slice = window.contractsPaginationData.allData.slice(start, start + perPage);
+                    window.renderContractsTable(slice, start);
                 }
-                
-                // Dosya Linki
-                let actionHtml = doc.url 
-                    ? `<a href="${doc.url}" target="_blank" class="btn btn-sm btn-primary">
-                         <i class="fas fa-eye"></i> Görüntüle
-                       </a>`
-                    : `<span class="badge badge-secondary">Dosya Yok</span>`;
-
-                let rowHtml = `
-                    <tr>
-                        <td class="font-weight-bold text-primary pl-4">
-                            <i class="fas fa-file-alt mr-2 text-muted"></i>${doc.type || 'Diğer'}
-                        </td>
-                        <td>${doc.countryName || '-'}</td>
-                        <td>${dateDisplay}</td>
-                        <td class="text-center">${actionHtml}</td>
-                    </tr>
-                `;
-                $tbody.append(rowHtml);
             });
-        } else {
-            $noMsg.show(); // Kayıt yok mesajını göster
         }
-    }
+
+        if (window.contractsPaginationData.pagination) {
+            window.contractsPaginationData.pagination.update(filtered.length);
+            window.contractsPaginationData.pagination.currentPage = 1;
+            window.renderContractsTable(filtered.slice(0, 10), 0);
+        } else {
+            // Fallback (Pagination scripti yoksa hepsi)
+            window.renderContractsTable(filtered, 0);
+        }
+    };
+
+    // B) VEKALET TABLOSU RENDER (GÜNCELLENMİŞ)
+    window.renderContractsTable = function(dataSlice, startIndex = 0) {
+        const tbody = $('#contractsTableBody');
+        const noMsg = $('#noContractsMessage');
+        
+        tbody.empty();
+
+        if (!dataSlice || dataSlice.length === 0) {
+            noMsg.show();
+            return;
+        }
+        noMsg.hide();
+
+        dataSlice.forEach((doc, index) => {
+            // Tarih formatla
+            let dateDisplay = '-';
+            if (doc.validityDate) {
+                let parts = doc.validityDate.split('-');
+                if(parts.length === 3) dateDisplay = `${parts[2]}.${parts[1]}.${parts[0]}`;
+            }
+            
+            // Link
+            let actionHtml = doc.url 
+                ? `<a href="${doc.url}" target="_blank" class="btn btn-sm btn-outline-primary"><i class="fas fa-eye"></i> Görüntüle</a>`
+                : `<span class="badge badge-secondary">Dosya Yok</span>`;
+
+            let rowHtml = `
+                <tr>
+                    <td>${startIndex + index + 1}</td>
+                    <td class="font-weight-bold text-primary">
+                        <i class="fas fa-file-alt mr-2 text-muted"></i>${doc.type || 'Diğer'}
+                    </td>
+                    <td>${doc.countryName || '-'}</td>
+                    <td>${dateDisplay}</td>
+                    <td class="text-center">${actionHtml}</td>
+                </tr>
+            `;
+            tbody.append(rowHtml);
+        });
+    };
 </script>
 </body>
 </html>
