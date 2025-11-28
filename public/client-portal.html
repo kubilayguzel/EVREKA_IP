@@ -4092,12 +4092,12 @@ window.initReports = function() {
     
     // Sekmeye tıklandığında veriyi yükle
     $('a[data-toggle="tab"][href="#contracts"]').on('shown.bs.tab', function (e) {
-        if (window.currentUserData) {
-            renderContractsTable(window.currentUserData);
+        // Veriler initPortal içinde zaten yüklendiği için
+        // doğrudan filtreleme fonksiyonunu çağırarak tabloyu tazeleyebiliriz.
+        if (typeof window.applyContractsFilter === 'function') {
+            window.applyContractsFilter();
         } else {
-            // Veri henüz hazır değilse, auth servisinden verinin gelmesini bekle
-            // (Bu durum genellikle sayfa ilk açıldığında yaşanmaz ama önlem olarak)
-            $('#contractsTableBody').html('<tr><td colspan="4" class="text-center text-muted">Kullanıcı verisi yükleniyor...</td></tr>');
+            console.warn("Filtreleme fonksiyonu henüz hazır değil.");
         }
     });
 
