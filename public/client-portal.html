@@ -2207,6 +2207,11 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
                 if (parentTx.documents) docs.push(...parentTx.documents.map(d=>({...d, isTransactionDoc:true})));
                 if (task.documents) docs.push(...task.documents.map(d=>({...d, isTaskDoc:true})));
                 
+                // İtirazda MÜŞTERİ = itiraz EDEN kişi (opponent)
+                // rec.applicants = itiraz EDİLEN markının sahibi (bizim değil!)
+                const itirazEden = task.opponent || task.details?.opponent || {};
+                const itirazEdenApplicants = itirazEden.id ? [{ id: itirazEden.id, name: itirazEden.name }] : [];
+                
                 rows.push({ 
                     isParent: true, 
                     id: task.id, 
@@ -2217,11 +2222,10 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
                     title: rec.title || rec.brandText || 'İsimsiz Marka', 
                     transactionTypeName: typeMeta?.alias || 'İtiraz İşlemi', 
                     applicationNumber: rec.applicationNumber || '-', 
-                    applicantName: rec.applicants?.[0]?.name || '-', 
+                    applicantName: itirazEden.name || 'İsimsiz', 
                     
-                    // [!!! İŞTE EKSİK OLAN SATIR BU !!!]
-                    // Bu satır olmadan filtreleme fonksiyonu kaydın kime ait olduğunu bilemez.
-                    applicants: rec.applicants || [], 
+                    // İTİRAZ EDEN kişinin bilgisi (opponent)
+                    applicants: itirazEdenApplicants,
 
                     bulletinDate: window.formatDateTR(rec.details?.brandInfo?.opposedMarkBulletinDate), 
                     bulletinNo: rec.details?.brandInfo?.opposedMarkBulletinNo || '-',
