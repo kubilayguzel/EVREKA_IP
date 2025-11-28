@@ -687,7 +687,8 @@
         import { showNotification } from './utils.js';
         import { loadSharedLayout } from './js/layout-loader.js';
         import Pagination from './js/pagination.js';
-        import { collection, addDoc, getDoc, getDocs, query, where, deleteDoc, doc, updateDoc, writeBatch, getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { collection, addDoc, getDoc, getDocs, query, where, deleteDoc, doc, updateDoc, writeBatch } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
 
         document.addEventListener('DOMContentLoaded', async () => {
             await loadSharedLayout({ activeMenuLink: 'persons.html' });
@@ -906,14 +907,13 @@
                     }
                 }
                 
-                // Evrak listesine ekleme işlemi (Henüz sunucuya yüklemez, listeye ekler)
                 addDocumentHandler() {
                     const docType = document.getElementById('docType').value;
                     const docDate = document.getElementById('docDate').value;
-                    const docCountrySel = document.getElementById('docCountry');
-                    if (docCountrySel) {
-                        docCountrySel.innerHTML = options; // persons.html'deki mevcut options değişkeni
-                    }
+                    
+                    // Değişken ismini düzelttik: docCountrySelect
+                    const docCountrySelect = document.getElementById('docCountry');
+                    
                     const docCountryCode = docCountrySelect.value;
                     const docCountryName = docCountrySelect.options[docCountrySelect.selectedIndex]?.text || '';
                     const fileInput = document.getElementById('docFile');
@@ -929,15 +929,15 @@
                         return;
                     }
 
-                    // Listeye ekle (new: true bayrağı ile henüz yüklenmediğini belirtiyoruz)
+                    // Listeye ekle
                     this.documentsList.push({
                         type: docType,
                         validityDate: docDate,
                         countryCode: docCountryCode,
                         countryName: docCountryName,
                         fileName: file.name,
-                        fileObj: file, // Dosya objesini sakla, kaydederken yükleyeceğiz
-                        url: null,     // Henüz URL yok
+                        fileObj: file,
+                        url: null,
                         isNew: true
                     });
 
@@ -1114,7 +1114,10 @@
 
                 async loadCountries() {
                     const countrySel = document.getElementById('countrySelect');
+                    const docCountrySel = document.getElementById('docCountry'); // Evraklar için olan select
+
                     countrySel.innerHTML = '<option value="">Yükleniyor...</option>';
+                    
                     try {
                         const snap = await getDoc(doc(db, 'common', 'countries'));
                         let list = [];
@@ -1130,7 +1133,14 @@
                                 return `<option value="${code}">${name}</option>`;
                             })
                         ).join('');
+                        
                         countrySel.innerHTML = options;
+                        
+                        // Evrak ekleme kısmındaki ülke listesini de burada dolduruyoruz
+                        if (docCountrySel) {
+                            docCountrySel.innerHTML = options;
+                        }
+
                         const opt = Array.from(countrySel.options).find(o =>
                             /^(TR|TUR)$/i.test(o.value) || /türkiye|turkiye/i.test(o.text)
                         );
@@ -1141,7 +1151,6 @@
                         countrySel.innerHTML = '<option value="">Seçiniz</option>';
                     }
                 }
-
                 async loadProvincesForSelectedCountry() {
                     const countrySel = document.getElementById('countrySelect');
                     const provinceSel = document.getElementById('provinceSelect');
