@@ -2209,8 +2209,11 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
                 
                 // İtirazda MÜŞTERİ = itiraz EDEN kişi (opponent)
                 // rec.applicants = itiraz EDİLEN markının sahibi (bizim değil!)
+                // İtirazda MÜŞTERİ = itiraz EDEN kişi (opponent)
                 const itirazEden = task.opponent || task.details?.opponent || {};
+                console.log('🔍 Task:', task.id, 'itirazEden:', itirazEden);
                 const itirazEdenApplicants = itirazEden.id ? [{ id: itirazEden.id, name: itirazEden.name }] : [];
+                console.log('🔍 itirazEdenApplicants:', itirazEdenApplicants);
                 
                 rows.push({ 
                     isParent: true, 
