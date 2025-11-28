@@ -628,6 +628,47 @@
                         </div>
                     </div>
                 </div>
+                <div class="form-group">
+                    <label class="form-label">Evraklar</label>
+                    <div class="related-form-container" style="background-color: #fff; border: 1px solid #e1e8ed; padding: 15px; border-radius: 8px;">
+                        
+                        <div class="row">
+                            <div class="col-md-3">
+                                <label class="form-label" style="font-size: 0.85em;">Evrak Türü</label>
+                                <select id="docType" class="form-select">
+                                    <option value="Vekaletname">Vekaletname</option>
+                                    <option value="Diğer">Diğer</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label" style="font-size: 0.85em;">Geçerlilik Tarihi</label>
+                                <input type="date" id="docDate" class="form-input">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label" style="font-size: 0.85em;">Ülke</label>
+                                <select id="docCountry" class="form-select">
+                                    <option value="">Seçiniz</option>
+                                    </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label" style="font-size: 0.85em;">PDF Dosyası</label>
+                                <input type="file" id="docFile" class="form-input" accept="application/pdf">
+                            </div>
+                        </div>
+                        <div class="row mt-2">
+                            <div class="col-12 text-right">
+                                <button type="button" id="addDocBtn" class="btn btn-sm btn-primary">➕ Evrak Listesine Ekle</button>
+                            </div>
+                        </div>
+
+                        <div class="related-list mt-3">
+                            <div class="related-list-title">Yüklenecek / Yüklü Evraklar</div>
+                            <div id="docListContainer">
+                                <div class="related-empty">Henüz evrak eklenmedi.</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-add-related" id="showRelatedBtn">
                         <span>&#x2795;</span> İlgilileri Yönet
@@ -646,7 +687,7 @@
         import { showNotification } from './utils.js';
         import { loadSharedLayout } from './js/layout-loader.js';
         import Pagination from './js/pagination.js';
-        import { collection, addDoc, getDoc, getDocs, query, where, deleteDoc, doc, updateDoc, writeBatch } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { collection, addDoc, getDoc, getDocs, query, where, deleteDoc, doc, updateDoc, writeBatch, getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
         document.addEventListener('DOMContentLoaded', async () => {
             await loadSharedLayout({ activeMenuLink: 'persons.html' });
@@ -730,6 +771,7 @@
                         },
                         containerId: 'paginationContainer'
                     });
+                    this.documentsList = []; // Evrakları tutacak dizi
                 }
 
                 init() {
@@ -738,6 +780,7 @@
                         await this.loadPersons();
                         this.setupEventListeners();
                     });
+                    window.removeDocument = (index) => personsModule.removeDocument(index);
                 }
 
                 setupEventListeners() {
@@ -804,6 +847,12 @@
                     if (cancelRelatedBtn) {
                         cancelRelatedBtn.addEventListener('click', () => this.resetRelatedForm());
                     }
+                    
+                    // Evrak Ekleme Butonu
+                    const addDocBtn = document.getElementById('addDocBtn');
+                    if (addDocBtn) {
+                        addDocBtn.addEventListener('click', () => this.addDocumentHandler());
+                    }
 
                     this.addPhoneInputListeners('personPhone');
                     // Sorumlu alan -> Mail_To/CC senkronizasyonu
@@ -855,6 +904,88 @@
                         relatedSection.classList.add('show');
                         showRelatedBtn.innerHTML = '<span>&#x2715;</span> İlgilileri Kapat';
                     }
+                }
+                
+                // Evrak listesine ekleme işlemi (Henüz sunucuya yüklemez, listeye ekler)
+                addDocumentHandler() {
+                    const docType = document.getElementById('docType').value;
+                    const docDate = document.getElementById('docDate').value;
+                    const docCountrySel = document.getElementById('docCountry');
+                    if (docCountrySel) {
+                        docCountrySel.innerHTML = options; // persons.html'deki mevcut options değişkeni
+                    }
+                    const docCountryCode = docCountrySelect.value;
+                    const docCountryName = docCountrySelect.options[docCountrySelect.selectedIndex]?.text || '';
+                    const fileInput = document.getElementById('docFile');
+                    const file = fileInput.files[0];
+
+                    if (!docType || !docDate || !docCountryCode || !file) {
+                        showNotification('Lütfen tüm evrak alanlarını doldurun ve bir dosya seçin.', 'warning');
+                        return;
+                    }
+
+                    if (file.type !== 'application/pdf') {
+                        showNotification('Sadece PDF dosyaları yüklenebilir.', 'warning');
+                        return;
+                    }
+
+                    // Listeye ekle (new: true bayrağı ile henüz yüklenmediğini belirtiyoruz)
+                    this.documentsList.push({
+                        type: docType,
+                        validityDate: docDate,
+                        countryCode: docCountryCode,
+                        countryName: docCountryName,
+                        fileName: file.name,
+                        fileObj: file, // Dosya objesini sakla, kaydederken yükleyeceğiz
+                        url: null,     // Henüz URL yok
+                        isNew: true
+                    });
+
+                    this.renderDocuments();
+                    
+                    // Formu temizle
+                    document.getElementById('docDate').value = '';
+                    document.getElementById('docCountry').value = '';
+                    fileInput.value = '';
+                }
+
+                // Evrakları Ekrana Basma
+                renderDocuments() {
+                    const container = document.getElementById('docListContainer');
+                    container.innerHTML = '';
+
+                    if (this.documentsList.length === 0) {
+                        container.innerHTML = '<div class="related-empty">Henüz evrak eklenmedi.</div>';
+                        return;
+                    }
+
+                    this.documentsList.forEach((doc, index) => {
+                        const item = document.createElement('div');
+                        item.className = 'related-item'; // Mevcut CSS stillerini kullanıyoruz
+                        item.style.display = 'flex';
+                        item.style.alignItems = 'center';
+                        
+                        // Link varsa (daha önce yüklenmişse) linki göster, yoksa dosya adını göster
+                        const fileDisplay = doc.url 
+                            ? `<a href="${doc.url}" target="_blank" style="color:#007bff; font-weight:bold;">📄 ${doc.fileName}</a>` 
+                            : `<span style="color:#666;">📄 ${doc.fileName} (Kaydedilince Yüklenecek)</span>`;
+
+                        item.innerHTML = `
+                            <div class="related-info">
+                                <div class="related-name">${doc.type} - ${doc.countryName}</div>
+                                <div class="related-details">Geçerlilik: ${doc.validityDate}</div>
+                                <div class="related-details">${fileDisplay}</div>
+                            </div>
+                            <button type="button" class="remove-related-btn" style="background:#dc3545; color:white; border:none; padding:5px 10px; border-radius:4px;" onclick="window.removeDocument(${index})">🗑️</button>
+                        `;
+                        container.appendChild(item);
+                    });
+                }
+
+                // Evrak Silme
+                removeDocument(index) {
+                    this.documentsList.splice(index, 1);
+                    this.renderDocuments();
                 }
 
                 async loadPersons() {
@@ -1077,6 +1208,8 @@
                     this.relatedLoaded = [];
                     this.renderRelatedList();
                     this.resetRelatedForm();
+                    this.documentsList = [];
+                    this.renderDocuments();
 
                     setAllScopesChecked(true);
                     setMailPrefsToForm(defaultMailPrefs());
@@ -1148,6 +1281,10 @@
                     }
                     this.renderRelatedList();
                     this.resetRelatedForm();
+                    // Person objesinden evrakları al
+                    this.documentsList = person.documents || [];
+                    // Eski kayıtlarda fileObj ve isNew olmayacaktır, bunlar zaten yüklüdür.
+                    this.renderDocuments();
 
                     document.getElementById('relatedSection').classList.add('show');
                     document.getElementById('showRelatedBtn').innerHTML = '<span>&#x2715;</span> İlgilileri Kapat';
@@ -1161,99 +1298,143 @@
 
                 async handlePersonFormSubmit(event) {
                     event.preventDefault();
-                    const personIdInput = document.getElementById('personId').value;
-                    const countrySel = document.getElementById('countrySelect');
-                    const provinceSel = document.getElementById('provinceSelect');
-                    const provinceText = document.getElementById('provinceText');
-                    const countryCode = countrySel?.value || '';
-                    const countryName = countrySel?.options[countrySel.selectedIndex]?.text || '';
-                    const isTR = /^(TR|TUR)$/i.test(countryCode) || /türkiye|turkiye/i.test(countryName);
-                    const provinceCode = isTR ? (provinceSel ? (provinceSel.value || '') : '') : '';
-                    const provinceName = isTR ? (provinceSel ? (provinceSel.options[provinceSel.selectedIndex]?.text || '') : '') : (provinceText ? (provinceText.value || '') : '');
-                    const typeVal = document.getElementById('personType').value;
-                    const tckn = (document.getElementById('personTckn')?.value || '').trim();
-                    const vkn = (document.getElementById('personVkn')?.value || '').trim();
-                    const bdate = (document.getElementById('personBirthDate')?.value || '');
+                    
+                    // Butonu kilitle ve kullanıcıya işlem yapıldığını göster
+                    const saveBtn = document.getElementById('savePersonBtn');
+                    const originalBtnText = saveBtn.textContent;
+                    saveBtn.disabled = true;
+                    saveBtn.textContent = 'Yükleniyor...';
 
-                    if (!typeVal) {
-                        showNotification('Kişi Tipi zorunludur.', 'error');
-                        return;
-                    }
-                    if (typeVal === 'gercek') {
-                        if (tckn && tckn.length !== 11) {
-                            showNotification('TC Kimlik No 11 hane olmalı', 'warning');
-                            return;
-                        }
-                    }
-                    if (typeVal === 'tuzel') {
-                        if (vkn && vkn.length !== 10) {
-                            showNotification('Vergi No 10 hane olmalı', 'warning');
-                            return;
-                        }
-                    }
-                    const personData = {
-                        name: document.getElementById('personName').value,
-                        tpeNo: document.getElementById('personTpeNo').value,
-                        email: document.getElementById('personEmail').value,
-                        phone: document.getElementById('personPhone').value,
-                        type: typeVal,
-                        address: document.getElementById('personAddress').value,
-                        countryCode,
-                        countryName,
-                        provinceCode,
-                        province: provinceName
-                    };
-                    if (!personData.name) {
-                        showNotification('Ad Soyad / Firma Adı zorunludur.', 'error');
-                        return;
-                    }
-                    if (typeVal === 'gercek') {
-                        personData.tckn = tckn;
-                        if (bdate) personData.birthDate = bdate;
-                    } else if (typeVal === 'tuzel') {
-                        personData.taxNo = vkn;
-                    }
-
-                    let savedPersonId = personIdInput || null;
                     try {
+                        const personIdInput = document.getElementById('personId').value;
+                        const countrySel = document.getElementById('countrySelect');
+                        const provinceSel = document.getElementById('provinceSelect');
+                        const provinceText = document.getElementById('provinceText');
+                        
+                        // Ülke ve İl/Eyalet bilgisini al
+                        const countryCode = countrySel?.value || '';
+                        const countryName = countrySel?.options[countrySel.selectedIndex]?.text || '';
+                        const isTR = /^(TR|TUR)$/i.test(countryCode) || /türkiye|turkiye/i.test(countryName);
+                        const provinceCode = isTR ? (provinceSel ? (provinceSel.value || '') : '') : '';
+                        const provinceName = isTR ? (provinceSel ? (provinceSel.options[provinceSel.selectedIndex]?.text || '') : '') : (provinceText ? (provinceText.value || '') : '');
+                        
+                        const typeVal = document.getElementById('personType').value;
+                        const tckn = (document.getElementById('personTckn')?.value || '').trim();
+                        const vkn = (document.getElementById('personVkn')?.value || '').trim();
+                        const bdate = (document.getElementById('personBirthDate')?.value || '');
+
+                        // --- Validasyonlar ---
+                        if (!typeVal) {
+                            throw new Error('Kişi Tipi zorunludur.');
+                        }
+                        if (typeVal === 'gercek') {
+                            if (tckn && tckn.length !== 11) {
+                                throw new Error('TC Kimlik No 11 hane olmalı');
+                            }
+                        }
+                        if (typeVal === 'tuzel') {
+                            if (vkn && vkn.length !== 10) {
+                                throw new Error('Vergi No 10 hane olmalı');
+                            }
+                        }
+                        const nameVal = document.getElementById('personName').value;
+                        if (!nameVal) {
+                            throw new Error('Ad Soyad / Firma Adı zorunludur.');
+                        }
+
+                        // --- Dosya Yükleme İşlemi ---
+                        // Storage instance'ını al (import { getStorage } ... yaptığınızdan emin olun)
+                        const storage = getStorage();
+                        const processedDocuments = [];
+
+                        // documentsList dizisini kontrol et (tanımlı değilse boş dizi yap)
+                        const currentDocs = this.documentsList || [];
+
+                        for (const docItem of currentDocs) {
+                            // Eğer yeni bir dosya seçilmişse ve dosya objesi varsa Storage'a yükle
+                            if (docItem.isNew && docItem.fileObj) {
+                                // Dosya isminin başına timestamp ekleyerek benzersiz yapıyoruz
+                                const uniqueName = `${Date.now()}_${docItem.fileName}`;
+                                const storageRef = ref(storage, `person_documents/${uniqueName}`);
+                                
+                                // Yüklemeyi başlat
+                                const snapshot = await uploadBytes(storageRef, docItem.fileObj);
+                                const downloadURL = await getDownloadURL(snapshot.ref);
+
+                                // Veritabanına kaydedilecek temiz objeyi oluştur
+                                processedDocuments.push({
+                                    type: docItem.type,
+                                    validityDate: docItem.validityDate,
+                                    countryCode: docItem.countryCode,
+                                    countryName: docItem.countryName,
+                                    fileName: docItem.fileName,
+                                    url: downloadURL // Firebase Storage'dan alınan URL
+                                });
+                            } else {
+                                // Zaten yüklü olan (URL'si var olan) dosyaları olduğu gibi koru
+                                // fileObj ve isNew alanlarını DB'ye kaydetmemize gerek yok
+                                processedDocuments.push({
+                                    type: docItem.type,
+                                    validityDate: docItem.validityDate,
+                                    countryCode: docItem.countryCode,
+                                    countryName: docItem.countryName,
+                                    fileName: docItem.fileName,
+                                    url: docItem.url
+                                });
+                            }
+                        }
+
+                        // --- Kişi Verisini Hazırla ---
+                        const personData = {
+                            name: nameVal,
+                            tpeNo: document.getElementById('personTpeNo').value,
+                            email: document.getElementById('personEmail').value,
+                            phone: document.getElementById('personPhone').value,
+                            type: typeVal,
+                            address: document.getElementById('personAddress').value,
+                            countryCode,
+                            countryName,
+                            provinceCode,
+                            province: provinceName,
+                            // Yüklenen/Mevcut evrakları ekle
+                            documents: processedDocuments 
+                        };
+
+                        if (typeVal === 'gercek') {
+                            personData.tckn = tckn;
+                            if (bdate) personData.birthDate = bdate;
+                        } else if (typeVal === 'tuzel') {
+                            personData.taxNo = vkn;
+                        }
+
+                        let savedPersonId = personIdInput || null;
+
+                        // --- Veritabanı Kayıt İşlemi ---
                         if (savedPersonId) {
+                            // GÜNCELLEME
                             const result = await personService.updatePerson(savedPersonId, personData);
                             if (!result?.success) {
-                                showNotification('Kişi güncellenirken hata oluştu' + (result?.error ? `: ${result.error}` : ''), 'error');
-                                return;
+                                throw new Error(result?.error || 'Güncelleme başarısız');
                             }
-                            showNotification('Kişi başarıyla güncellendi!', 'success');
+                            showNotification('Kişi ve evraklar başarıyla güncellendi!', 'success');
                         } else {
-                        const result = await personService.addPerson(personData);
+                            // YENİ KAYIT
+                            const result = await personService.addPerson(personData);
+                            
+                            // Dönen ID'yi normalize et (farklı servis yapılarına karşı önlem)
+                            const normalizedId = result?.id ?? result?.data?.id ?? result?.docId ?? result?.docRef?.id ?? result?.ref?.id ?? null;
+                            const isOk = (result?.success !== false) && !!normalizedId;
 
-                        // Servis farklı şekillerde id döndürebilir; hepsini normalize et
-                        const normalizedId =
-                            result?.id ??
-                            result?.data?.id ??
-                            result?.docId ??
-                            result?.docRef?.id ??
-                            result?.ref?.id ??
-                            null;
+                            if (!isOk) {
+                                throw new Error(result?.error || 'Kayıt başarısız');
+                            }
 
-                        // success alanı yoksa bile, id geldiyse başarı say
-                        const isOk = (result?.success !== false) && !!normalizedId;
-
-                        if (!isOk) {
-                            // Gerçekten başarısızsa hata göster
-                            showNotification('Kişi eklenirken hata oluştu' + (result?.error ? `: ${result.error}` : ''), 'error');
-                            return;
+                            savedPersonId = normalizedId;
+                            showNotification('Yeni kişi ve evraklar başarıyla eklendi!', 'success');
                         }
 
-                        savedPersonId = normalizedId;
-                        showNotification('Yeni kişi başarıyla eklendi!', 'success');
-                        }
-                    } catch (err) {
-                        console.error('Kişi kaydı hatası:', err);
-                        showNotification('Kişi kaydı sırasında hata oluştu', 'error');
-                        return;
-                    }
-
-                    try {
+                        // --- İlgili Kişiler (Related Persons) Kaydı ---
+                        // Eğer taslakta bekleyen ilgili kişiler varsa onları da kaydet
                         if (savedPersonId && this.relatedDraft && this.relatedDraft.length) {
                             const batch = writeBatch(db);
                             this.relatedDraft.forEach(r => {
@@ -1277,14 +1458,21 @@
                             await batch.commit();
                             this.relatedDraft = [];
                         }
-                    } catch (e) {
-                        console.error('personsRelated yazım hatası:', e);
-                        showNotification('İlgililer kaydedilirken hata oluştu', 'error');
-                    }
-                    this.closePersonModal();
-                    await this.loadPersons();
-                }
 
+                        // İşlem başarılı ise modalı kapat ve listeyi yenile
+                        this.closePersonModal();
+                        await this.loadPersons();
+
+                    } catch (err) {
+                        console.error('Kişi kaydı hatası:', err);
+                        // Hata mesajını göster (err.message validasyondan gelen mesaj olabilir)
+                        showNotification(err.message || 'Kişi kaydı sırasında hata oluştu', 'error');
+                    } finally {
+                        // Butonu tekrar aktif et
+                        saveBtn.disabled = false;
+                        saveBtn.textContent = originalBtnText;
+                    }
+                }
                 renderRelatedList() {
                     const relatedList = document.getElementById('relatedList');
                     if (!relatedList) return;
