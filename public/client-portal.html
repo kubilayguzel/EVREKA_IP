@@ -2100,43 +2100,37 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
     };
 
 // --- 5. İTİRAZ MODÜLÜ (GÜNCELLENMİŞ FİLTRE & STATÜ) ---
+
     window.fetchAndDisplayObjections = async function() {
         const tbody = document.getElementById('dava-itiraz-tbody');
         if(!tbody) return;
         
-        // Yükleniyor animasyonu
         tbody.innerHTML = '<tr><td colspan="12" class="text-center"><i class="fas fa-spinner fa-spin"></i> Yükleniyor...</td></tr>';
         
-        // Durum Kodları Haritası
         const REQUEST_RESULT_STATUS = {
-            '24': 'Eksiklik Bildirimi',
-            '28': 'Kabul',            '29': 'Kısmi Kabul',     '30': 'Ret',
-            '31': 'B.S - Kabul',      '32': 'B.S - Kısmi Kabul','33': 'B.S - Ret',
-            '34': 'İ.S - Kabul',      '35': 'İ.S - Kısmi Kabul','36': 'İ.S - Ret',
-            '50': 'Kabul',            '51': 'Kısmi Kabul',     '52': 'Ret'
+            '24': 'Eksiklik Bildirimi', '28': 'Kabul', '29': 'Kısmi Kabul', '30': 'Ret',
+            '31': 'B.S - Kabul', '32': 'B.S - Kısmi Kabul','33': 'B.S - Ret',
+            '34': 'İ.S - Kabul', '35': 'İ.S - Kısmi Kabul','36': 'İ.S - Ret',
+            '50': 'Kabul', '51': 'Kısmi Kabul', '52': 'Ret'
         };
 
         try {
-            const PARENT_TYPES = ['7', '19', '20'];
+            // [GÜNCELLEME 1] Hem String ('20') hem Number (20) tiplerini destekle
+            const PARENT_TYPES = ['7', '19', '20', 7, 19, 20];
             const q = query(collection(db, 'tasks'), where('taskType', 'in', PARENT_TYPES));
             const snap = await getDocs(q);
             
-            // Yetki kontrolü ve task listesi oluşturma
             const relevantTasks = [];
-            const clientSet = new Set(window.linkedPersonIds);
+            const clientSet = new Set(window.linkedPersonIds || []);
 
             for (const docSnap of snap.docs) {
                 const t = docSnap.data();
-                // İlgisiz statüleri ele
                 const statusRaw = (t.status || '').trim();
-                if (statusRaw === 'client_approval_closed' || 
-                    statusRaw === 'client_no_response_closed' ||
-                    statusRaw === 'müvekkil onayı - kapatıldı' || 
-                    statusRaw === 'müvekkil cevaplamadı - kapatıldı') {
-                    continue; 
-                }
                 
-                // Yetki kontrolü
+                // Sadece tamamen kapatılmış/iptal edilmişleri gizle
+                if (statusRaw.includes('kapatıldı') || statusRaw === 'cancelled') continue; 
+                
+                // Yetki kontrolü (Garenta ID'si linkedPersonIds içindeyse geçer)
                 if (await window.checkTaskClientRelation(t, clientSet)) {
                     relevantTasks.push({id: docSnap.id, ...t});
                 }
@@ -2144,85 +2138,105 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
                 
             const rows = [];
             
-            // Her task için detay verileri çek
             for (const task of relevantTasks) {
-                if (!task.relatedIpRecordId) continue;
-                
-                const recSnap = await getDoc(doc(db, 'ipRecords', task.relatedIpRecordId));
-                if (!recSnap.exists()) continue;
-                const rec = recSnap.data();
-                
-                // Transaction'ları çek
-                const txQ = query(collection(db, 'ipRecords', task.relatedIpRecordId, 'transactions'));
-                const txSnap = await getDocs(txQ);
-                const allTx = txSnap.docs.map(d=>({id:d.id, ...d.data()}));
-                
-                // Parent Transaction Bulma
-                let parentTx = task.triggeringTransactionId ? allTx.find(x=>x.id === task.triggeringTransactionId) : null;
-                if(!parentTx) {
-                    // Timestamp'e göre en uygun parent'ı bul
-                    parentTx = allTx.filter(x=> String(x.type)===String(task.taskType))
-                                    .sort((a,b)=> (b.timestamp?.seconds||0) - (a.timestamp?.seconds||0))[0];
+                let rec = {};
+                // IP Kaydını çek
+                if (task.relatedIpRecordId) {
+                    try {
+                        const recSnap = await getDoc(doc(db, 'ipRecords', task.relatedIpRecordId));
+                        if (recSnap.exists()) rec = recSnap.data();
+                    } catch (e) { console.warn("IP fetch error", e); }
                 }
                 
-                if(parentTx) {
-                    // --- Durum Mantığı ---
-                    let computedStatus = 'Karar Bekleniyor';
-                    let badgeColor = 'secondary'; 
-                    const rr = parentTx.requestResult;
-                    const statusRaw = (task.status || '').trim();
+                // Transactionları çek
+                let allTx = [];
+                if (task.relatedIpRecordId) {
+                    try {
+                        const txQ = query(collection(db, 'ipRecords', task.relatedIpRecordId, 'transactions'));
+                        const txSnap = await getDocs(txQ);
+                        allTx = txSnap.docs.map(d=>({id:d.id, ...d.data()}));
+                    } catch (e) { }
+                }
+                
+                // Parent Transaction Eşleştirme
+                let parentTx = null;
+                if (task.triggeringTransactionId) {
+                    parentTx = allTx.find(x => x.id === task.triggeringTransactionId);
+                }
+                
+                if (!parentTx) {
+                    // Tip eşleşmesiyle bulmaya çalış (String/Number dönüşümüne dikkat ederek)
+                    parentTx = allTx.filter(x => String(x.type) === String(task.taskType))
+                                    .sort((a,b) => (b.timestamp?.seconds||0) - (a.timestamp?.seconds||0))[0];
+                }
 
-                    if (rr !== null && rr !== undefined && rr !== '' && REQUEST_RESULT_STATUS[String(rr)]) {
-                        computedStatus = REQUEST_RESULT_STATUS[String(rr)];
-                        if (computedStatus.includes('Ret')) badgeColor = 'danger';
-                        else if (computedStatus.includes('Kabul')) badgeColor = 'success';
-                        else badgeColor = 'info';
-                    } else if (statusRaw === 'awaiting_client_approval' || statusRaw === 'Müvekkil Onayı Bekliyor') {
-                        computedStatus = 'Onay Bekliyor';
-                        badgeColor = 'warning';
-                    }
-                    
-                    const children = allTx.filter(x => x.transactionHierarchy==='child' && x.parentId===parentTx.id);
-                    const typeMeta = window.transactionTypesMap.get(String(task.taskType));
-                    
-                    // Evrakları Topla
-                    const docs = [];
-                    if(parentTx.documents) docs.push(...parentTx.documents.map(d=>({...d, isTransactionDoc:true})));
-                    if(task.documents) docs.push(...task.documents.map(d=>({...d, isTaskDoc:true})));
-                    
-                    // Satır objesini oluştur (Filtreleme için tüm alanlar önemli)
-                    rows.push({ 
-                        isParent: true, 
-                        id: task.id, 
-                        recordId: task.relatedIpRecordId, 
-                        hasChildren: children.length > 0, 
-                        origin: rec.origin, // Menşe filtresi için
-                        brandImageUrl: rec.brandImageUrl,
-                        title: rec.title || rec.brandText, // Marka Adı filtresi için
-                        transactionTypeName: typeMeta?.alias || 'İşlem', 
-                        applicationNumber: rec.applicationNumber, 
-                        applicantName: rec.applicants?.[0]?.name || '-', 
-                        bulletinDate: window.formatDateTR(rec.details?.brandInfo?.opposedMarkBulletinDate), 
-                        bulletinNo: rec.details?.brandInfo?.opposedMarkBulletinNo || '-',
-                        epatsDate: window.formatDateTR(parentTx.timestamp), 
-                        statusText: computedStatus, // Durum filtresi için
-                        statusBadge: badgeColor,      
-                        allParentDocs: docs, 
-                        childrenData: children 
-                    });
+                // [KRİTİK DÜZELTME] Transaction Yoksa BİLE Sanal Kayıt Oluştur
+                // Bu sayede veritabanındaki kopukluklar listeyi etkilemez.
+                if (!parentTx) {
+                    parentTx = {
+                        id: 'virtual-tx-' + task.id,
+                        type: task.taskType,
+                        timestamp: task.createdAt || task.startDate || new Date(), // Task tarihini kullan
+                        requestResult: null,
+                        documents: [],
+                        isVirtual: true
+                    };
                 }
+                
+                // Statü Belirleme
+                let computedStatus = 'Karar Bekleniyor';
+                let badgeColor = 'secondary'; 
+                const rr = parentTx.requestResult;
+                const statusRaw = (task.status || '').trim();
+
+                if (rr && REQUEST_RESULT_STATUS[String(rr)]) {
+                    computedStatus = REQUEST_RESULT_STATUS[String(rr)];
+                    if (computedStatus.includes('Ret')) badgeColor = 'danger';
+                    else if (computedStatus.includes('Kabul')) badgeColor = 'success';
+                    else badgeColor = 'info';
+                } else if (statusRaw.includes('awaiting') || statusRaw.includes('Bekliyor')) {
+                    computedStatus = 'Onay Bekliyor';
+                    badgeColor = 'warning';
+                }
+                
+                // Alt işlemleri bul (Virtual değilse)
+                const children = parentTx.isVirtual ? [] : allTx.filter(x => x.transactionHierarchy==='child' && x.parentId===parentTx.id);
+                const typeMeta = window.transactionTypesMap.get(String(task.taskType));
+                
+                // Evrakları Birleştir (Task üzerindeki evrakları da al)
+                const docs = [];
+                if (parentTx.documents) docs.push(...parentTx.documents.map(d=>({...d, isTransactionDoc:true})));
+                if (task.documents) docs.push(...task.documents.map(d=>({...d, isTaskDoc:true})));
+                
+                rows.push({ 
+                    isParent: true, 
+                    id: task.id, 
+                    recordId: task.relatedIpRecordId, 
+                    hasChildren: children.length > 0, 
+                    origin: rec.origin || '-', 
+                    brandImageUrl: rec.brandImageUrl, // Görsel URL
+                    title: rec.title || rec.brandText || 'İsimsiz Marka', 
+                    transactionTypeName: typeMeta?.alias || 'Yayına İtiraz', // Varsayılan isim
+                    applicationNumber: rec.applicationNumber || '-', 
+                    applicantName: rec.applicants?.[0]?.name || '-', 
+                    bulletinDate: window.formatDateTR(rec.details?.brandInfo?.opposedMarkBulletinDate), 
+                    bulletinNo: rec.details?.brandInfo?.opposedMarkBulletinNo || '-',
+                    epatsDate: window.formatDateTR(parentTx.timestamp), 
+                    statusText: computedStatus, 
+                    statusBadge: badgeColor,      
+                    allParentDocs: docs, 
+                    childrenData: children 
+                });
             }
 
-            // --- KRİTİK GÜNCELLEME: Global Veriyi Kaydet ---
+            // Global Veriyi Kaydet
             window.davaItirazPaginationData.allDataUnfiltered = rows;
             
-            // Eğer şu an "İtiraz" sekmesi açıksa filtrelemeyi tetikle
+            // Eğer İtiraz sekmesi açıksa hemen güncelle, değilse arka planda hazırla
             if($('#portfolioTopTabs a.nav-link.active').attr('href') === '#dava-itiraz-list') {
                 window.applyMasterFilter();
             } else {
-                // Sekme kapalıysa, açıldığında hazır olması için manuel init yap
                 window.davaItirazPaginationData.allData = rows;
-                
                 if (!window.davaItirazPaginationData.pagination && window.Pagination) {
                      window.davaItirazPaginationData.pagination = new window.Pagination({
                         itemsPerPage: 10,
@@ -2233,21 +2247,15 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
                         }
                      });
                 }
-                
-                if(window.davaItirazPaginationData.pagination) {
-                    window.davaItirazPaginationData.pagination.update(rows.length);
-                }
-                
-                // İlk sayfayı çiz (DOM'da görünmese bile hazır olsun)
+                if(window.davaItirazPaginationData.pagination) window.davaItirazPaginationData.pagination.update(rows.length);
                 window.renderDavaItirazTable(rows.slice(0,10));
             }
 
         } catch(e) {
             console.error("Objection Error", e);
-            tbody.innerHTML = '<tr><td colspan="12" class="text-danger text-center">Veriler yüklenirken hata oluştu.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="12" class="text-danger text-center">Veriler yüklenirken bir hata oluştu.</td></tr>';
         }
     };
-
 
     // --- PDF & LOAD TRANSACTIONS ---
     window.fetchPdfsForTransactions = async function(transactionIds) {
