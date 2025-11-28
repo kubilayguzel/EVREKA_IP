@@ -2237,7 +2237,7 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
             if (rows.length > 0) {
                 console.log('✅ İlk itiraz örneği:', rows[0]);
             }
-            
+
             window.davaItirazPaginationData.allDataUnfiltered = rows;
             
             // Eğer İtiraz sekmesi açıksa hemen güncelle
@@ -2965,6 +2965,11 @@ window.applyMasterFilter = function() {
         targetDataObj = window.davaItirazPaginationData;
         renderFunction = window.renderDavaItirazTable;
         tableId = 'dava-itiraz-list';
+
+        console.log('🔍 İtiraz filtresi aktif');
+        console.log('🔍 allDataUnfiltered:', targetDataObj.allDataUnfiltered?.length);
+        console.log('🔍 selectedClient:', selectedClient);
+        
     } else if (activeTabId === '#dava-list') {
         targetDataObj = window.davaPaginationData;
         renderFunction = window.renderDavaTable;
