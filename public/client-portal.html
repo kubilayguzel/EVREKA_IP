@@ -3019,8 +3019,15 @@ window.applyMasterFilter = function() {
 
     // 2. FİLTRELEME MANTIĞI
     let filteredData = allData.filter(item => {
+        // DEBUG
+        const itemDebug = tableId === 'dava-itiraz-list' && item.id === '221';
+        if (itemDebug) console.log('🔍 221 filtreleme başlangıcı');
+        
         // A) Child Kayıtları Gizle (Sadece Parentlar)
-        if (item.transactionHierarchy === 'child' || item.isChild) return false;
+        if (item.transactionHierarchy === 'child' || item.isChild) {
+            if (itemDebug) console.log('❌ 221 child olduğu için elendi');
+            return false;
+        }
 
         // B) MÜŞTERİ SEÇİMİ KONTROLÜ (YENİ)
         if (selectedClient && selectedClient !== 'ALL') {
@@ -3110,8 +3117,18 @@ window.applyMasterFilter = function() {
             if (!selectedValues.includes(cellValue.trim())) return false;
         }
 
+    // DEBUG: Kayıt filtreyi geçti
+        if (tableId === 'dava-itiraz-list') {
+            console.log('✅ Kayıt geçti:', item.id);
+        }
         return true;
     });
+    
+    // DEBUG: Hangi kayıtlar elendi?
+    if (tableId === 'dava-itiraz-list' && filteredData.length === 0) {
+        console.log('❌ HİÇBİR KAYIT GEÇMEDİ!');
+        console.log('İlk kayıt detayı:', allData[0]);
+    }
     
     console.log('🔍 Filtreleme öncesi:', allData.length);
     console.log('🔍 Filtreleme sonrası:', filteredData.length);
