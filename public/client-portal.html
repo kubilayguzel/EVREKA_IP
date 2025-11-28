@@ -3083,7 +3083,15 @@ window.applyMasterFilter = function() {
 
         return true;
     });
-
+    
+    console.log('🔍 Filtreleme öncesi:', allData.length);
+    console.log('🔍 Filtreleme sonrası:', filteredData.length);
+    if (filteredData.length === 0 && allData.length > 0) {
+        console.log('⚠️ TÜM KAYITLAR FİLTRELENDİ!');
+        console.log('⚠️ İlk kayıt örneği:', allData[0]);
+        console.log('⚠️ Kayıtta applicants var mı?', allData[0].applicants);
+    }
+    
     // 3. Render ve Sayfalama
     targetDataObj.allData = filteredData;
     
