@@ -107,18 +107,26 @@ export class DocumentReviewManager {
     async selectRecord(recordId) {
         try {
             const result = await ipRecordsService.getRecordById(recordId);
+            
             if (result.success) {
                 this.matchedRecord = result.data;
                 this.renderHeader();
                 await this.loadParentTransactions(recordId);
                 showNotification('Kayıt seçildi: ' + this.matchedRecord.title, 'success');
+
+                // ✅ DOĞRU YER: Sadece işlem başarılıysa haber ver
+                console.log('📤 Event gönderiliyor: record-selected', recordId);
+                document.dispatchEvent(new CustomEvent('record-selected', { 
+                    detail: { recordId: recordId } 
+                })); 
+            } else {
+                // Hata durumunda kullanıcıyı uyarabilirsiniz
+                console.error('Kayıt bulunamadı');
             }
-            // --- EVENT TETİKLEME ---
-            console.log('📤 Event gönderiliyor: record-selected', recordId);
-            document.dispatchEvent(new CustomEvent('record-selected', { 
-            detail: { recordId: recordId } 
-        }));           
-        } catch (error) { console.error('Kayıt seçim hatası:', error); }
+
+        } catch (error) { 
+            console.error('Kayıt seçim hatası:', error); 
+        }
     }
 
     async loadParentTransactions(recordId) {
