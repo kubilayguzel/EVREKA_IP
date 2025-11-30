@@ -1011,6 +1011,35 @@
         } catch { return (amount ?? 0) + ' ' + (currency || 'TRY'); }
     };
 
+    // === TÜRKPATENT SORGULAMA FONKSİYONU (EKLENTİ DESTEKLİ) ===
+    window.triggerTpQuery = function(applicationNo) {
+        const appNo = (applicationNo || '').toString().trim();
+        // Yeni Portal Linki (Fallback)
+        const cleanAppNo = appNo.replace(/[^a-zA-Z0-9]/g, '');
+        const fallbackUrl = `https://portal.turkpatent.gov.tr/anonim/arastirma/marka/sonuc?dosyaNo=${cleanAppNo}`;
+        
+        // Eklenti ID'si
+        const EXT_ID = 'gkhmldkbjmnipikgjabmlilibllikapk';
+
+        try {
+            if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
+                chrome.runtime.sendMessage(EXT_ID, { type: 'SORGULA', data: appNo }, (response) => {
+                    // Eklenti yanıt vermezse veya hata olursa
+                    if (chrome.runtime.lastError || !response) {
+                        console.warn("Eklenti bulunamadı, web sitesine yönlendiriliyor.");
+                        window.open(fallbackUrl, '_blank');
+                    }
+                });
+            } else {
+                // Chrome runtime yoksa
+                window.open(fallbackUrl, '_blank');
+            }
+        } catch (e) {
+            // Herhangi bir çökme durumunda
+            window.open(fallbackUrl, '_blank');
+        }
+    };
+
     window._createDocLinkHtml = function(pdf) {
         let iconClass = 'fas fa-file-pdf';
         let titleText = pdf.fileName || 'Belge';
@@ -1611,11 +1640,8 @@ window._renderTaskCardsToContainer = async function(tasksToRender, containerSele
                 const displayScore = formatScore(competitor.bs);
                 const note = competitor.note;
 
-                // --- GÜNCELLEME: TÜRKPATENT BUTONU İÇİN HAZIRLIK ---
-                // Başvuru numarasını temizle (boşlukları sil)
+                // --- DEĞİŞİKLİK BURADA: Başvuru No Temizleme ve Buton ---
                 const cleanCompNo = String(compNo).replace(/[^a-zA-Z0-9]/g, '');
-                // Türkpatent Portal linki
-                const tpLink = `https://portal.turkpatent.gov.tr/anonim/arastirma/marka/sonuc?dosyaNo=${cleanCompNo}`;
 
                 let extraInfoHtml = '';
                 if (displayScore || note) {
@@ -1629,7 +1655,6 @@ window._renderTaskCardsToContainer = async function(tasksToRender, containerSele
                 const labelStyle = 'color: rgba(255, 255, 255, 0.7); font-weight: 600;';
                 const valStyle = 'color: #fff; font-weight: 400;';
 
-                // --- GÜNCELLEME: BUTON HTML'E EKLENDİ ---
                 comparisonRow = `
                 <div class="row mt-3 pt-3 border-top border-secondary">
                     <div class="col-md-6 border-right border-secondary mb-3 mb-md-0">
@@ -1653,10 +1678,11 @@ window._renderTaskCardsToContainer = async function(tasksToRender, containerSele
                                 <div style="font-size:1rem; margin-bottom:4px;"><span style="${labelStyle}">Sahip:</span> <span style="${valStyle}">${compOwner}</span></div>
                                 <div style="font-size:1rem;"><span style="${labelStyle}">Sınıf:</span> <span style="${valStyle}">${compClasses}</span></div>
                                 
+                                <!-- GÜNCELLENEN BUTON (EKLENTİ DESTEKLİ) -->
                                 <div class="mt-2">
-                                    <a href="${tpLink}" target="_blank" class="btn btn-sm btn-outline-light py-0 px-2" style="font-size: 0.85rem; border-color: rgba(255,255,255,0.3);">
+                                    <button onclick="window.triggerTpQuery('${cleanCompNo}')" class="btn btn-sm btn-outline-light py-0 px-2" style="font-size: 0.85rem; border-color: rgba(255,255,255,0.3);">
                                         <i class="fas fa-search mr-1"></i> TÜRKPATENT'ten Sorgula
-                                    </a>
+                                    </button>
                                 </div>
 
                             </div>
