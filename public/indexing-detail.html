@@ -9,6 +9,8 @@
     <link rel="stylesheet" href="./css/shared-styles.css"/>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
     
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
 
     <style>
@@ -20,14 +22,12 @@
             background-color: #f8f9fa;
         }
 
-        /* --- LAYOUT FIX (Top Bar Sorunu Çözümü) --- */
         .main-content {
             width: 100%;
             min-height: 100vh;
-            /* Top bar yüksekliği kadar boşluk bırakıyoruz */
             padding-top: 80px; 
             transition: margin-left 0.3s;
-            padding-bottom: 100px; /* Alt kısım için ekstra boşluk */
+            padding-bottom: 100px;
         }
 
         .container-fluid {
@@ -42,7 +42,6 @@
             box-shadow: 0 4px 12px rgba(0,0,0,0.05);
         }
 
-        /* PDF Görüntüleyici Alanı */
         .pdf-card-body {
             height: 75vh; 
             min-height: 600px;
@@ -58,7 +57,6 @@
             display: block;
         }
         
-        /* Sağ Panel */
         .analysis-panel {
             height: 75vh; 
             min-height: 600px;
@@ -66,7 +64,6 @@
             background-color: #fff;
         }
 
-        /* Arama Sonuçları Stili */
         .search-results-dropdown {
             position: absolute;
             top: 100%;
@@ -89,17 +86,10 @@
         .search-result-item:hover { background-color: #f8f9fa; }
 
         .shadow-sm { box-shadow: 0 10px 24px rgba(0,0,0,0.08) !important; }
-
-        /* Yeni Tescil Formu Stilleri */
-        .registry-form-card {
-            border-top: 4px solid #28a745;
-        }
-        .registry-form-header {
-            background-color: #f1f8f3;
-            color: #155724;
-            padding: 15px 20px;
-            border-bottom: 1px solid #c3e6cb;
-            border-radius: var(--card-radius) var(--card-radius) 0 0;
+        
+        /* Accordion Ok Animasyonu */
+        .nice-accordion-btn i {
+            transition: transform 0.2s ease;
         }
     </style>
 </head>
@@ -129,8 +119,7 @@
 
             <div class="card mb-3 shadow-sm">
                 <div class="card-body p-3 d-flex justify-content-between align-items-center">
-                    <div id="matchInfoDisplay" class="d-flex align-items-center flex-grow-1">
-                        </div>
+                    <div id="matchInfoDisplay" class="d-flex align-items-center flex-grow-1"></div>
                     
                     <div class="position-relative ml-3" style="min-width: 300px;">
                         <div class="input-group">
@@ -169,7 +158,6 @@
                             </div>
                             
                             <div id="analysisResults" style="display: none;">
-                                
                                 <div class="alert alert-light border small mb-3 rounded bg-light">
                                     <strong>Analiz Özeti:</strong> <span id="analysisSummary" class="text-muted">...</span>
                                 </div>
@@ -218,83 +206,84 @@
                                 <button id="saveTransactionBtn" class="btn btn-primary btn-block py-2 mt-4 shadow-sm font-weight-bold">
                                     <i class="fas fa-check-circle mr-2"></i> Onayla ve Kaydet
                                 </button>
-                                
-                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
-                <div id="registry-editor-section" style="display: none; margin-top: 30px; margin-bottom: 80px;">
-                    
-                    <div class="card shadow-sm border-top-success mb-4">
-                        <div class="card-header bg-white py-3">
-                            <h6 class="m-0 font-weight-bold text-success">
-                                <i class="fas fa-info-circle mr-2"></i>Tescil Bilgileri
-                            </h6>
-                        </div>
-                        <div class="card-body">
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <div class="form-group">
-                                        <label class="small font-weight-bold text-secondary">Tescil Numarası</label>
-                                        <input type="text" id="registry-registration-no" class="form-control" placeholder="Tescil no giriniz...">
-                                    </div>
-                                    <div class="form-group">
-                                        <label class="small font-weight-bold text-secondary">Tescil Tarihi</label>
-                                        <div class="input-group">
-                                            <input type="text" id="registry-registration-date" class="form-control datepicker" placeholder="GG.AA.YYYY">
-                                            <div class="input-group-append">
-                                                <span class="input-group-text"><i class="far fa-calendar-alt"></i></span>
-                                            </div>
+            </div>
+
+            <div id="registry-editor-section" style="display: none; margin-top: 30px; margin-bottom: 80px;">
+                
+                <div class="card shadow-sm border-top-success mb-4">
+                    <div class="card-header bg-white py-3">
+                        <h6 class="m-0 font-weight-bold text-success">
+                            <i class="fas fa-info-circle mr-2"></i>Tescil Bilgileri
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label class="small font-weight-bold text-secondary">Tescil Numarası</label>
+                                    <input type="text" id="registry-registration-no" class="form-control" placeholder="Tescil no giriniz...">
+                                </div>
+                                <div class="form-group">
+                                    <label class="small font-weight-bold text-secondary">Tescil Tarihi</label>
+                                    <div class="input-group">
+                                        <input type="text" id="registry-registration-date" class="form-control datepicker" placeholder="GG.AA.YYYY">
+                                        <div class="input-group-append">
+                                            <span class="input-group-text"><i class="far fa-calendar-alt"></i></span>
                                         </div>
                                     </div>
                                 </div>
-                                <div class="col-md-6">
-                                    <div class="form-group">
-                                        <label class="small font-weight-bold text-secondary">Koruma (Yenileme) Tarihi</label>
-                                        <div class="input-group">
-                                            <input type="text" id="registry-renewal-date" class="form-control datepicker" placeholder="GG.AA.YYYY">
-                                            <div class="input-group-append">
-                                                <span class="input-group-text"><i class="far fa-calendar-alt"></i></span>
-                                            </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label class="small font-weight-bold text-secondary">Koruma (Yenileme) Tarihi</label>
+                                    <div class="input-group">
+                                        <input type="text" id="registry-renewal-date" class="form-control datepicker" placeholder="GG.AA.YYYY">
+                                        <div class="input-group-append">
+                                            <span class="input-group-text"><i class="far fa-calendar-alt"></i></span>
                                         </div>
                                     </div>
-                                    <div class="form-group">
-                                        <label class="small font-weight-bold text-secondary">Marka Durumu</label>
-                                        <select id="registry-status" class="form-control"></select>
-                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label class="small font-weight-bold text-secondary">Marka Durumu</label>
+                                    <select id="registry-status" class="form-control"></select>
                                 </div>
                             </div>
                         </div>
                     </div>
-
-                    <div class="card shadow-sm border-top-primary mb-4">
-                        <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
-                            <h6 class="m-0 font-weight-bold text-primary">
-                                <i class="fas fa-layer-group mr-2"></i>Sınıf Düzenleme (Nice)
-                            </h6>
-                            <button class="btn btn-sm btn-outline-primary" id="btn-add-nice-modal" type="button">
-                                <i class="fas fa-plus mr-1"></i>Sınıf Ekle
-                            </button>
-                        </div>
-                        <div class="card-body">
-                            <div id="nice-classes-chips" class="mb-3 border-bottom pb-2"></div>
-                            
-                            <div id="nice-classes-accordion" class="accordion">
-                                </div>
-                        </div>
-                    </div>
-
-                    <div class="row">
-                        <div class="col-12">
-                            <button type="button" id="btn-save-all" class="btn btn-success btn-lg btn-block shadow font-weight-bold">
-                                <i class="fas fa-save mr-2"></i>Tüm Değişiklikleri Kaydet ve Tamamla
-                            </button>
-                        </div>
-                    </div>
-
                 </div>
+
+                <div class="card shadow-sm border-top-primary mb-4">
+                    <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                        <h6 class="m-0 font-weight-bold text-primary">
+                            <i class="fas fa-layer-group mr-2"></i>Sınıf Düzenleme (Nice)
+                        </h6>
+                        <button class="btn btn-sm btn-outline-primary" id="btn-add-nice-modal" type="button">
+                            <i class="fas fa-plus mr-1"></i>Sınıf Ekle
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        <div id="nice-classes-chips" class="mb-3 border-bottom pb-2"></div>
+                        <div id="nice-classes-accordion" class="accordion"></div>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-12">
+                        <button type="button" id="btn-save-all" class="btn btn-success btn-lg btn-block shadow font-weight-bold">
+                            <i class="fas fa-save mr-2"></i>Tüm Değişiklikleri Kaydet ve Tamamla
+                        </button>
+                    </div>
+                </div>
+
             </div>
     </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/tr.js"></script>
 
     <div class="modal fade" id="nice-class-modal" tabindex="-1" role="dialog">
         <div class="modal-dialog" role="document">
