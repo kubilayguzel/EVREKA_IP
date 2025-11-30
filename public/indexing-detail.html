@@ -223,72 +223,74 @@
                         </div>
                     </div>
                 </div>
-            </div> <div id="registry-editor-section" style="display: none; margin-top: 20px;">
-                <div class="card shadow-lg registry-form-card">
-                    <div class="registry-form-header">
-                        <h5 class="mb-0 font-weight-bold">
-                            <i class="fas fa-file-signature mr-2"></i>Tescil Belgesi & Portföy Güncelleme Formu
-                        </h5>
-                        <small class="text-muted">Bu işlem seçildiğinde aşağıdaki bilgileri güncellemeniz önerilir.</small>
-                    </div>
-                    <div class="card-body p-4">
-                        <div class="row">
-                            <div class="col-md-6">
-                                <h6 class="text-secondary border-bottom pb-2 mb-3">Tescil Bilgileri</h6>
-                                <div class="form-row">
-                                    <div class="col-md-6 form-group">
-                                        <label class="small font-weight-bold">Tescil No</label>
-                                        <input type="text" id="registry-registration-no" class="form-control">
+                <div id="registry-editor-section" style="display: none; margin-top: 30px; margin-bottom: 50px;">
+                    
+                    <div class="row">
+                        <div class="col-lg-5 mb-4">
+                            <div class="card shadow-sm h-100 border-top-success">
+                                <div class="card-header bg-white py-3">
+                                    <h6 class="m-0 font-weight-bold text-success">
+                                        <i class="fas fa-info-circle mr-2"></i>Tescil Bilgileri
+                                    </h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="form-group">
+                                        <label class="small font-weight-bold text-secondary">Tescil Numarası</label>
+                                        <input type="text" id="registry-registration-no" class="form-control" placeholder="Tescil no giriniz...">
                                     </div>
-                                    <div class="col-md-6 form-group">
-                                        <label class="small font-weight-bold">Tescil Tarihi</label>
+                                    
+                                    <div class="form-group">
+                                        <label class="small font-weight-bold text-secondary">Tescil Tarihi</label>
                                         <input type="date" id="registry-registration-date" class="form-control">
                                     </div>
-                                </div>
-                                
-                                <div class="form-row">
-                                    <div class="col-md-6 form-group">
-                                        <label class="small font-weight-bold">Koruma Tarihi (Yenileme)</label>
+
+                                    <div class="form-group">
+                                        <label class="small font-weight-bold text-secondary">Koruma (Yenileme) Tarihi</label>
                                         <input type="date" id="registry-renewal-date" class="form-control">
                                     </div>
-                                    <div class="col-md-6 form-group">
-                                        <label class="small font-weight-bold">Durum</label>
+
+                                    <div class="form-group">
+                                        <label class="small font-weight-bold text-secondary">Marka Durumu</label>
                                         <select id="registry-status" class="form-control">
-                                             <option value="Registered">Tescilli</option>
-                                             <option value="Pending">Beklemede</option>
-                                             <option value="Published">Yayınlandı</option>
+                                                <option value="Registered">Tescilli</option>
+                                                <option value="Pending">Beklemede</option>
+                                                <option value="Published">Yayınlandı</option>
+                                                <option value="Invalid">Geçersiz</option>
                                         </select>
                                     </div>
                                 </div>
                             </div>
+                        </div>
 
-                            <div class="col-md-6">
-                                <div class="nice-editor-area">
-                                    <div class="d-flex justify-content-between align-items-center border-bottom pb-2 mb-3">
-                                        <h6 class="text-secondary mb-0">Mal ve Hizmetler (Nice Sınıfları)</h6>
-                                        <button class="btn btn-sm btn-outline-success" id="btn-add-nice-modal" type="button">
-                                            <i class="fas fa-plus mr-1"></i>Sınıf Ekle
-                                        </button>
-                                    </div>
+                        <div class="col-lg-7 mb-4">
+                            <div class="card shadow-sm h-100 border-top-primary">
+                                <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                                    <h6 class="m-0 font-weight-bold text-primary">
+                                        <i class="fas fa-layer-group mr-2"></i>Sınıf Düzenleme (Nice)
+                                    </h6>
+                                    <button class="btn btn-sm btn-outline-primary" id="btn-add-nice-modal" type="button">
+                                        <i class="fas fa-plus mr-1"></i>Sınıf Ekle
+                                    </button>
+                                </div>
+                                <div class="card-body">
+                                    <div id="nice-classes-chips" class="mb-3 border-bottom pb-2"></div>
                                     
-                                    <div id="nice-classes-chips" class="mb-3"></div>
-                                    
-                                    <div id="nice-classes-accordion" class="accordion" style="max-height: 400px; overflow-y: auto;">
+                                    <div id="nice-classes-accordion" class="accordion" style="max-height: 500px; overflow-y: auto;">
                                         </div>
                                 </div>
                             </div>
                         </div>
+                    </div>
 
-                        <div class="row mt-4 pt-3 border-top">
-                            <div class="col-12 text-right">
-                                <button type="button" id="btn-save-all" class="btn btn-success btn-lg px-5 font-weight-bold">
-                                    <i class="fas fa-save mr-2"></i>Tüm Değişiklikleri ve İşlemi Kaydet
-                                </button>
-                            </div>
+                    <div class="row">
+                        <div class="col-12">
+                            <button type="button" id="btn-save-all" class="btn btn-success btn-lg btn-block shadow font-weight-bold">
+                                <i class="fas fa-save mr-2"></i>Tüm Değişiklikleri Kaydet ve Tamamla
+                            </button>
                         </div>
                     </div>
+
                 </div>
-            </div>
             </div>
     </div>
 
