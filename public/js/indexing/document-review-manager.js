@@ -33,7 +33,7 @@ import { PdfExtractor } from './pdf-extractor.js';
 import { PdfAnalyzer } from './pdf-analyzer.js';
 
 const UNINDEXED_PDFS_COLLECTION = 'unindexed_pdfs';
-const SELCAN_UID = 'Mkmq2sc0T6XTIg1weZyp5AGZ0YG3'; 
+const SELCAN_UID = '8A9HHfdKKNR3WKl6tCtJH5Khjkx1'; 
 const SELCAN_EMAIL = 'selcanakoglu@evrekapatent.com';
 
 export class DocumentReviewManager {
