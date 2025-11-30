@@ -22,14 +22,15 @@ export class PortfolioUpdateManager {
     cacheElements() {
         const $ = (id) => document.getElementById(id);
         return {
-            // Hibrid Yapı: Hem 'bulk-indexing' hem 'indexing-detail' sayfalarını destekle
-            searchInput: $('recordSearchInput') || $('manualSearchInput'),
-            searchResults: $('searchResultsContainer') || $('manualSearchResults'),
+            // DÜZELTME: Sadece 'bulk' sayfasındaki arama kutusunu hedefle.
+            // 'indexing-detail' sayfasındaki 'manualSearchInput' ile ÇAKIŞMAMASI için onu buraya eklemiyoruz.
+            searchInput: $('recordSearchInput'),
+            searchResults: $('searchResultsContainer'),
             
-            // Bu element sadece bulk-indexing sayfasında var, detay sayfasında NULL olabilir
+            // Bu element sadece bulk-indexing sayfasında var
             selectedDisplay: $('selectedRecordDisplay'), 
             
-            // İşlem Tipi Seçimi (Tetikleyici)
+            // İşlem Tipi Seçimi (Tetikleyici - Hem eski hem yeni ID'yi destekle)
             childTransactionType: $('detectedType') || $('childTransactionType'),
             
             // Form Alanları (Wrapper)
@@ -152,8 +153,8 @@ export class PortfolioUpdateManager {
     }
 
     handleTransactionTypeChange(typeValue) {
-        // Tescil Belgesi veya ID kontrolü
-        const isRegistration = typeValue && (typeValue.includes('registration') || typeValue === 'tescil_belgesi' || typeValue === '26'); // 26 genelde tescil ID'si olabilir, kontrol edin
+        // Tescil Belgesi veya ID kontrolü (ID '26' veya 'registration' içeriyorsa)
+        const isRegistration = typeValue && (typeValue.includes('registration') || typeValue === 'tescil_belgesi' || typeValue === '26');
 
         if (this.elements.registryEditorSection) {
             this.elements.registryEditorSection.style.display = isRegistration ? 'block' : 'none';
@@ -196,6 +197,7 @@ export class PortfolioUpdateManager {
 
     async selectRecord(id) {
         // --- DÜZELTME: Null Kontrolleri Eklendi ---
+        // Bu sayede arama kutusu olmayan sayfada hata vermez
         if (this.elements.searchInput) {
             this.elements.searchInput.value = '';
         }
@@ -203,9 +205,6 @@ export class PortfolioUpdateManager {
             this.elements.searchResults.style.display = 'none';
         }
         // ------------------------------------------
-
-        // Not: Burada 'showNotification' çağırmıyoruz çünkü DocumentReviewManager zaten "Kayıt seçildi" diyor.
-        // Çakışmayı önlemek için sessizce yüklüyoruz.
 
         try {
             const result = await ipRecordsService.getRecordById(id);
@@ -218,7 +217,7 @@ export class PortfolioUpdateManager {
             
             this.parseNiceClassesFromData(data);
 
-            // Eğer selectedDisplay varsa (Eski sayfa) UI render et
+            // Eğer selectedDisplay varsa (Bulk sayfasında) UI render et
             if (this.elements.selectedDisplay) {
                 this.renderSelectedRecordUI();
             }
@@ -229,7 +228,7 @@ export class PortfolioUpdateManager {
                 this.elements.detailsContainer.style.display = 'block';
             }
             
-            // Halihazırda seçili bir işlem tipi varsa formu kontrol et
+            // Halihazırda seçili bir işlem tipi varsa formu kontrol et (ör. Tescil Belgesi seçiliyse formu aç)
             if (this.elements.childTransactionType && this.elements.childTransactionType.value) {
                 this.handleTransactionTypeChange(this.elements.childTransactionType.value);
             }
