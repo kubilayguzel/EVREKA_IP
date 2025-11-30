@@ -27,6 +27,7 @@
             /* Top bar yüksekliği kadar boşluk bırakıyoruz */
             padding-top: 80px; 
             transition: margin-left 0.3s;
+            padding-bottom: 100px; /* Alt kısım için ekstra boşluk */
         }
 
         .container-fluid {
@@ -43,7 +44,7 @@
 
         /* PDF Görüntüleyici Alanı */
         .pdf-card-body {
-            height: 80vh; 
+            height: 75vh; 
             min-height: 600px;
             background-color: #525659;
             overflow: hidden;
@@ -59,7 +60,7 @@
         
         /* Sağ Panel */
         .analysis-panel {
-            height: 80vh; 
+            height: 75vh; 
             min-height: 600px;
             overflow-y: auto;
             background-color: #fff;
@@ -88,6 +89,18 @@
         .search-result-item:hover { background-color: #f8f9fa; }
 
         .shadow-sm { box-shadow: 0 10px 24px rgba(0,0,0,0.08) !important; }
+
+        /* Yeni Tescil Formu Stilleri */
+        .registry-form-card {
+            border-top: 4px solid #28a745;
+        }
+        .registry-form-header {
+            background-color: #f1f8f3;
+            color: #155724;
+            padding: 15px 20px;
+            border-bottom: 1px solid #c3e6cb;
+            border-radius: var(--card-radius) var(--card-radius) 0 0;
+        }
     </style>
 </head>
 <body>
@@ -154,126 +167,142 @@
                                 <div class="spinner-border text-primary mb-3" role="status"></div>
                                 <p class="text-muted">Analiz ediliyor...</p>
                             </div>
-                                <div id="analysisResults" style="display: none;">
-                                    
-                                    <div class="alert alert-light border small mb-3 rounded bg-light">
-                                        <strong>Analiz Özeti:</strong> <span id="analysisSummary" class="text-muted">...</span>
-                                    </div>
-
-                                    <div class="form-group">
-                                        <label class="font-weight-bold small text-muted mb-1">Tespit Edilen Tarih (Tebliğ Tarihi)</label>
-                                        <input type="date" id="detectedDate" class="form-control">
-                                    </div>
-
-                                    <div class="form-group">
-                                        <label class="font-weight-bold small text-muted mb-1">
-                                            Bağlı Olduğu İşlem (Parent)
-                                            <i class="fas fa-info-circle text-info" title="Bu evrak hangi ana işlemin devamı?"></i>
-                                        </label>
-                                        <select id="parentTransactionSelect" class="form-control">
-                                            <option value="">-- Önce Kayıt Seçiniz --</option>
-                                        </select>
-                                    </div>
-
-                                    <div class="form-group">
-                                        <label class="font-weight-bold small text-muted mb-1">İşlem Türü (Evrak Tipi)</label>
-                                        <select id="detectedType" class="form-control" disabled>
-                                            <option value="">-- Önce Bağlı İşlem Seçiniz --</option>
-                                        </select>
-                                    </div>
-
-                                    <div id="oppositionSection" style="display: none; background: #fff3cd; padding: 10px; border-radius: 8px; margin-bottom: 15px;">
-                                        <h6 class="text-warning font-weight-bold small"><i class="fas fa-exclamation-triangle mr-1"></i>İtiraz Detayları</h6>
-                                        
-                                        <div class="form-group mb-2">
-                                            <label class="small font-weight-bold">İtiraz Sahibi</label>
-                                            <input type="text" id="oppositionOwnerInput" class="form-control form-control-sm" placeholder="İtiraz eden kişi/kurum...">
-                                        </div>
-
-                                        <div class="form-group mb-0">
-                                            <label class="small font-weight-bold">Karşı Taraf İtiraz Dilekçesi (PDF)</label>
-                                            <input type="file" id="oppositionPetitionFile" class="form-control-file small" accept="application/pdf">
-                                        </div>
-                                    </div>
-
-                                    <div class="form-group">
-                                        <label class="font-weight-bold small text-muted mb-1">Açıklama / Notlar</label>
-                                        <textarea id="transactionNotes" class="form-control" rows="4"></textarea>
-                                    </div>
-
-                                    <button id="saveTransactionBtn" class="btn btn-primary btn-block py-2 mt-4 shadow-sm font-weight-bold">
-                                        <i class="fas fa-check-circle mr-2"></i> Onayla ve Kaydet
-                                    </button>
-                                    <div id="registry-editor-section" style="display: none; border-top: 2px dashed #ddd; margin-top: 20px; padding-top: 20px;">
-                                        <h6 class="text-success font-weight-bold mb-3"><i class="fas fa-edit"></i> Tescil & Portföy Düzenle</h6>
-
-                                        <div class="form-row">
-                                            <div class="col-md-6 form-group">
-                                                <label class="small font-weight-bold">Tescil No</label>
-                                                <input type="text" id="registry-registration-no" class="form-control form-control-sm">
-                                            </div>
-                                            <div class="col-md-6 form-group">
-                                                <label class="small font-weight-bold">Tescil Tarihi</label>
-                                                <input type="date" id="registry-registration-date" class="form-control form-control-sm">
-                                            </div>
-                                        </div>
-                                        
-                                        <div class="form-row">
-                                            <div class="col-md-6 form-group">
-                                                <label class="small font-weight-bold">Koruma Tarihi (Yenileme)</label>
-                                                <input type="date" id="registry-renewal-date" class="form-control form-control-sm">
-                                            </div>
-                                            <div class="col-md-6 form-group">
-                                                <label class="small font-weight-bold">Durum</label>
-                                                <select id="registry-status" class="form-control form-control-sm">
-                                                    <option value="Registered">Tescilli</option>
-                                                    <option value="Pending">Beklemede</option>
-                                                </select>
-                                            </div>
-                                        </div>
-
-                                        <div class="nice-editor-area mt-3">
-                                            <div class="d-flex justify-content-between align-items-center mb-2">
-                                                <label class="small font-weight-bold mb-0">Mal ve Hizmetler (Nice)</label>
-                                                <button class="btn btn-xs btn-outline-primary" id="btn-add-nice-modal" type="button">+ Sınıf Ekle</button>
-                                            </div>
-                                            <div id="nice-classes-chips" class="mb-2"></div>
-                                            <div id="nice-classes-accordion" class="accordion"></div>
-                                        </div>
-                                    </div>
-                                    <div class="modal fade" id="nice-class-modal" tabindex="-1" role="dialog">
-                                        <div class="modal-dialog" role="document">
-                                            <div class="modal-content">
-                                                <div class="modal-header">
-                                                    <h5 class="modal-title">Sınıf Ekle</h5>
-                                                    <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
-                                                </div>
-                                                <div class="modal-body">
-                                                    <div id="available-nice-classes" class="list-group" style="max-height: 400px; overflow-y: auto;"></div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div> 
+                            
+                            <div id="analysisResults" style="display: none;">
+                                
+                                <div class="alert alert-light border small mb-3 rounded bg-light">
+                                    <strong>Analiz Özeti:</strong> <span id="analysisSummary" class="text-muted">...</span>
                                 </div>
-                                <div class="modal fade" id="nice-class-modal" tabindex="-1" role="dialog">
-                                    <div class="modal-dialog" role="document">
-                                        <div class="modal-content">
-                                            <div class="modal-header">
-                                                <h5 class="modal-title">Sınıf Ekle</h5>
-                                                <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
-                                            </div>
-                                            <div class="modal-body">
-                                                <div id="available-nice-classes" class="list-group" style="max-height: 400px; overflow-y: auto;">
-                                                    </div>
-                                            </div>
-                                        </div>
+
+                                <div class="form-group">
+                                    <label class="font-weight-bold small text-muted mb-1">Tespit Edilen Tarih (Tebliğ Tarihi)</label>
+                                    <input type="date" id="detectedDate" class="form-control">
+                                </div>
+
+                                <div class="form-group">
+                                    <label class="font-weight-bold small text-muted mb-1">
+                                        Bağlı Olduğu İşlem (Parent)
+                                        <i class="fas fa-info-circle text-info" title="Bu evrak hangi ana işlemin devamı?"></i>
+                                    </label>
+                                    <select id="parentTransactionSelect" class="form-control">
+                                        <option value="">-- Önce Kayıt Seçiniz --</option>
+                                    </select>
+                                </div>
+
+                                <div class="form-group">
+                                    <label class="font-weight-bold small text-muted mb-1">İşlem Türü (Evrak Tipi)</label>
+                                    <select id="detectedType" class="form-control" disabled>
+                                        <option value="">-- Önce Bağlı İşlem Seçiniz --</option>
+                                    </select>
+                                </div>
+
+                                <div id="oppositionSection" style="display: none; background: #fff3cd; padding: 10px; border-radius: 8px; margin-bottom: 15px;">
+                                    <h6 class="text-warning font-weight-bold small"><i class="fas fa-exclamation-triangle mr-1"></i>İtiraz Detayları</h6>
+                                    
+                                    <div class="form-group mb-2">
+                                        <label class="small font-weight-bold">İtiraz Sahibi</label>
+                                        <input type="text" id="oppositionOwnerInput" class="form-control form-control-sm" placeholder="İtiraz eden kişi/kurum...">
                                     </div>
+
+                                    <div class="form-group mb-0">
+                                        <label class="small font-weight-bold">Karşı Taraf İtiraz Dilekçesi (PDF)</label>
+                                        <input type="file" id="oppositionPetitionFile" class="form-control-file small" accept="application/pdf">
+                                    </div>
+                                </div>
+
+                                <div class="form-group">
+                                    <label class="font-weight-bold small text-muted mb-1">Açıklama / Notlar</label>
+                                    <textarea id="transactionNotes" class="form-control" rows="4"></textarea>
+                                </div>
+
+                                <button id="saveTransactionBtn" class="btn btn-primary btn-block py-2 mt-4 shadow-sm font-weight-bold">
+                                    <i class="fas fa-check-circle mr-2"></i> Onayla ve Kaydet
+                                </button>
+                                
                                 </div>
                         </div>
                     </div>
                 </div>
-            </div>
+            </div> <div id="registry-editor-section" style="display: none; margin-top: 20px;">
+                <div class="card shadow-lg registry-form-card">
+                    <div class="registry-form-header">
+                        <h5 class="mb-0 font-weight-bold">
+                            <i class="fas fa-file-signature mr-2"></i>Tescil Belgesi & Portföy Güncelleme Formu
+                        </h5>
+                        <small class="text-muted">Bu işlem seçildiğinde aşağıdaki bilgileri güncellemeniz önerilir.</small>
+                    </div>
+                    <div class="card-body p-4">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h6 class="text-secondary border-bottom pb-2 mb-3">Tescil Bilgileri</h6>
+                                <div class="form-row">
+                                    <div class="col-md-6 form-group">
+                                        <label class="small font-weight-bold">Tescil No</label>
+                                        <input type="text" id="registry-registration-no" class="form-control">
+                                    </div>
+                                    <div class="col-md-6 form-group">
+                                        <label class="small font-weight-bold">Tescil Tarihi</label>
+                                        <input type="date" id="registry-registration-date" class="form-control">
+                                    </div>
+                                </div>
+                                
+                                <div class="form-row">
+                                    <div class="col-md-6 form-group">
+                                        <label class="small font-weight-bold">Koruma Tarihi (Yenileme)</label>
+                                        <input type="date" id="registry-renewal-date" class="form-control">
+                                    </div>
+                                    <div class="col-md-6 form-group">
+                                        <label class="small font-weight-bold">Durum</label>
+                                        <select id="registry-status" class="form-control">
+                                             <option value="Registered">Tescilli</option>
+                                             <option value="Pending">Beklemede</option>
+                                             <option value="Published">Yayınlandı</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
 
+                            <div class="col-md-6">
+                                <div class="nice-editor-area">
+                                    <div class="d-flex justify-content-between align-items-center border-bottom pb-2 mb-3">
+                                        <h6 class="text-secondary mb-0">Mal ve Hizmetler (Nice Sınıfları)</h6>
+                                        <button class="btn btn-sm btn-outline-success" id="btn-add-nice-modal" type="button">
+                                            <i class="fas fa-plus mr-1"></i>Sınıf Ekle
+                                        </button>
+                                    </div>
+                                    
+                                    <div id="nice-classes-chips" class="mb-3"></div>
+                                    
+                                    <div id="nice-classes-accordion" class="accordion" style="max-height: 400px; overflow-y: auto;">
+                                        </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row mt-4 pt-3 border-top">
+                            <div class="col-12 text-right">
+                                <button type="button" id="btn-save-all" class="btn btn-success btn-lg px-5 font-weight-bold">
+                                    <i class="fas fa-save mr-2"></i>Tüm Değişiklikleri ve İşlemi Kaydet
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            </div>
+    </div>
+
+    <div class="modal fade" id="nice-class-modal" tabindex="-1" role="dialog">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header bg-light">
+                    <h5 class="modal-title font-weight-bold">Sınıf Ekle</h5>
+                    <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+                </div>
+                <div class="modal-body p-0">
+                    <div id="available-nice-classes" class="list-group list-group-flush" style="max-height: 400px; overflow-y: auto;"></div>
+                </div>
+            </div>
         </div>
     </div>
 
