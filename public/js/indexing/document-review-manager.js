@@ -135,7 +135,7 @@ export class DocumentReviewManager {
                 console.error('Kayıt seçim hatası:', error);
             }
         }
-        
+
     async loadParentTransactions(recordId) {
         const parentSelect = document.getElementById('parentTransactionSelect');
         if (!parentSelect) return;
@@ -194,7 +194,14 @@ export class DocumentReviewManager {
         const detectedName = this.analysisResult.detectedType.name.toLowerCase();
         const options = Array.from(selectElement.options);
         const matchedOption = options.find(opt => opt.text.toLowerCase().includes(detectedName));
-        if (matchedOption) { matchedOption.selected = true; this.checkSpecialFields(); }
+        if (matchedOption) { 
+            matchedOption.selected = true; 
+            this.checkSpecialFields();
+            
+            // --- EKLENEN KISIM: Diğer yöneticiyi (PortfolioManager) uyandırmak için event fırlat ---
+            selectElement.dispatchEvent(new Event('change'));
+            // --------------------------------------------------------------------------------------
+        }
     }
 
     checkSpecialFields() {
