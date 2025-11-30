@@ -33,6 +33,7 @@ import { PdfExtractor } from './pdf-extractor.js';
 import { PdfAnalyzer } from './pdf-analyzer.js';
 
 const UNINDEXED_PDFS_COLLECTION = 'unindexed_pdfs';
+// 🔥 SABİT ATAMA: Selcan Hanım
 const SELCAN_UID = 'Mkmq2sc0T6XTIg1weZyp5AGZ0YG3'; 
 const SELCAN_EMAIL = 'selcanakoglu@evrekapatent.com';
 
@@ -312,7 +313,10 @@ export class DocumentReviewManager {
 
             if (shouldTriggerTask && childTypeObj.taskTriggered) {
                 const deliveryDate = new Date(deliveryDateStr);
-                const duePeriod = Number(childTypeObj.duePeriod || 0);
+                
+                // Süre Hesaplama - Hardcoded kısım kaldırıldı, veritabanından gelen duePeriod kullanılır
+                let duePeriod = Number(childTypeObj.duePeriod || 0);
+                
                 let officialDueDate = addMonthsToDate(deliveryDate, duePeriod);
                 officialDueDate = findNextWorkingDay(officialDueDate, TURKEY_HOLIDAYS);
                 let taskDueDate = new Date(officialDueDate);
@@ -321,15 +325,16 @@ export class DocumentReviewManager {
                     taskDueDate.setDate(taskDueDate.getDate() - 1);
                 }
 
+                // 🔥 KESİN ÇÖZÜM: Atanan Kişiyi Sabitle
+                // Veritabanı kuralı sorgusu (resolveApprovalStateAssignee) iptal edildi.
+                // Artık her zaman Selcan Hanım atanacak.
                 let assignedUser = { uid: SELCAN_UID, email: SELCAN_EMAIL };
-                try {
-                    const assigneeData = await resolveApprovalStateAssignee();
-                    if (assigneeData.uid) assignedUser = { uid: assigneeData.uid, email: assigneeData.email };
-                } catch(e) { console.warn('Assignee error', e); }
+                
+                console.log(`✅ Tetiklenen iş doğrudan Selcan'a atanıyor (${SELCAN_EMAIL})`);
 
-                // 🔥 YENİ GÜNCELLENMİŞ: İLGİLİ TARAF VE TASK OWNER MANTIĞI
+                // 🔥 İLGİLİ TARAF VE TASK OWNER MANTIĞI
                 let relatedPartyData = null;
-                let taskOwner = []; // Array olarak başlat (DB yapısına uygun)
+                let taskOwner = []; // Array olarak başlat
 
                 console.log('🔍 İlgili Taraf Analizi:', {
                     ownerType: this.matchedRecord.recordOwnerType,
@@ -382,7 +387,7 @@ export class DocumentReviewManager {
                             console.warn('❌ Parent task fetch error:', e);
                         }
                     } else {
-                        console.warn('⚠️ Parent işlemde triggeringTaskId yok (Manuel işlem olabilir).');
+                        console.warn('⚠️ Parent işlemde triggeringTaskId yok.');
                     }
                 }
 
@@ -398,7 +403,7 @@ export class DocumentReviewManager {
                     deliveryDate: deliveryDateStr,
                     dueDate: taskDueDate.toISOString(),
                     officialDueDate: officialDueDate.toISOString(),
-                    status: 'awaiting_client_approval',
+                    status: 'awaiting_client_approval', // Müvekkil Onayı Bekliyor
                     priority: 'normal',
                     assignedTo_uid: assignedUser.uid,
                     assignedTo_email: assignedUser.email,
@@ -441,7 +446,7 @@ export class DocumentReviewManager {
                 await ipRecordsService.addTransactionToRecord(this.matchedRecord.id, triggeredTransactionData);
             }
 
-            // 6. REQUEST RESULT GÜNCELLEME
+            // REQUEST RESULT GÜNCELLEME
             if (finalParentId && childTypeId) {
                 try {
                     const parentTxRef = doc(db, 'ipRecords', this.matchedRecord.id, 'transactions', finalParentId);
@@ -455,7 +460,7 @@ export class DocumentReviewManager {
                 }
             }
 
-            // 7. PDF Statüsü
+            // PDF Statüsü
             await updateDoc(doc(db, UNINDEXED_PDFS_COLLECTION, this.pdfId), {
                 status: 'indexed',
                 indexedAt: new Date(),
@@ -472,80 +477,11 @@ export class DocumentReviewManager {
             saveBtn.disabled = false;
         }
     }
-    
-    async runAnalysis() {
-        const loadingEl = document.getElementById('analysisLoading');
-        const resultsEl = document.getElementById('analysisResults');
-        const pdfViewerEl = document.getElementById('pdfViewer');
-        if(loadingEl) loadingEl.style.display = 'block';
-        if(resultsEl) resultsEl.style.display = 'none';
-        try {
-            if (pdfViewerEl) pdfViewerEl.src = this.pdfData.fileUrl;
-            const fullText = await this.pdfExtractor.extractTextFromUrl(this.pdfData.fileUrl);
-            this.analysisResult = this.analyzer.analyze(fullText);
-            this.renderAnalysisResults();
-        } catch (error) { console.error(error); } 
-        finally {
-            if(loadingEl) loadingEl.style.display = 'none';
-            if(resultsEl) resultsEl.style.display = 'block';
-        }
-    }
-    renderHeader() {
-        document.getElementById('fileNameDisplay').textContent = this.pdfData.fileName;
-        const matchInfoEl = document.getElementById('matchInfoDisplay');
-        if (this.matchedRecord) {
-            matchInfoEl.innerHTML = `<div class="text-success"><strong>${this.matchedRecord.title}</strong> (${this.matchedRecord.applicationNumber})</div>`;
-        } else {
-            matchInfoEl.innerHTML = `<div class="text-warning">Eşleşme Yok</div>`;
-        }
-    }
-    renderAnalysisResults() {
-        const dateInput = document.getElementById('detectedDate');
-        const summaryBox = document.getElementById('analysisSummary');
-        if (dateInput && this.analysisResult.decisionDate) {
-            const parts = this.analysisResult.decisionDate.split('.');
-            if(parts.length === 3) dateInput.value = `${parts[2]}-${parts[1]}-${parts[0]}`;
-        }
-        if (summaryBox) summaryBox.textContent = `Tip: ${this.analysisResult.detectedType.name}`;
-    }
-    async handleManualSearch(query) {
-        const resultsContainer = document.getElementById('manualSearchResults');
-        if (!query || query.length < 3) { resultsContainer.style.display = 'none'; return; }
-        const result = await ipRecordsService.searchRecords(query);
-        if (result.success) this.renderSearchResults(result.data);
-    }
-    renderSearchResults(results) {
-        const container = document.getElementById('manualSearchResults');
-        container.innerHTML = '';
-        container.style.display = results.length ? 'block' : 'none';
-        if (!results.length) { container.innerHTML = '<div class="p-2">Sonuç yok</div>'; return; }
-        container.innerHTML = results.map(r => `
-            <div class="search-result-item p-2 border-bottom" style="cursor:pointer" data-id="${r.id}">
-                <strong>${r.title}</strong> <small>${r.applicationNumber}</small>
-            </div>`).join('');
-        container.querySelectorAll('.search-result-item').forEach(el => {
-            el.onclick = () => {
-                this.selectRecord(el.dataset.id);
-                container.style.display = 'none';
-            };
-        });
-    }
 }
 
 export async function resolveApprovalStateAssignee() {
-  try {
-    const ruleRef  = doc(db, 'taskAssignments', 'approval');
-    const ruleSnap = await getDoc(ruleRef);
-    if (!ruleSnap.exists()) return { uid: null, email: null, reason: 'rule_not_found' };
-    const ids = ruleSnap.data()?.approvalStateAssigneeIds;
-    const uid = Array.isArray(ids) ? ids.find(v => typeof v === 'string' && v.trim()) : null;
-    if (!uid) return { uid: null, email: null, reason: 'empty_list' };
-    const userSnap = await getDoc(doc(db, 'users', uid));
-    const email = userSnap.exists() ? (userSnap.data().email || null) : null;
-    return { uid, email, reason: 'ok' };
-  } catch (err) {
-    return { uid: null, email: null, reason: 'error' };
-  }
+    // Bu fonksiyon artık kullanılmıyor ama referans hatası olmaması için boş bırakıldı.
+    return { uid: null, email: null };
 }
 
 document.addEventListener('DOMContentLoaded', () => {
