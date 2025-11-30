@@ -104,30 +104,49 @@ export class DocumentReviewManager {
         }
     }
 
-    async selectRecord(recordId) {
-        try {
-            const result = await ipRecordsService.getRecordById(recordId);
-            
-            if (result.success) {
-                this.matchedRecord = result.data;
-                this.renderHeader();
-                await this.loadParentTransactions(recordId);
-                showNotification('Kayıt seçildi: ' + this.matchedRecord.title, 'success');
-
-                // ✅ DOĞRU YER: Sadece işlem başarılıysa haber ver
-                console.log('📤 Event gönderiliyor: record-selected', recordId);
-                document.dispatchEvent(new CustomEvent('record-selected', { 
-                    detail: { recordId: recordId } 
-                })); 
-            } else {
-                // Hata durumunda kullanıcıyı uyarabilirsiniz
-                console.error('Kayıt bulunamadı');
+    async selectRecord(id) {
+            // DÜZELTME: Elementlerin varlığını kontrol et
+            if (this.elements.searchInput) {
+                this.elements.searchInput.value = '';
             }
+            if (this.elements.searchResults) {
+                this.elements.searchResults.style.display = 'none';
+            }
+            
+            showNotification('Kayıt yükleniyor...', 'info');
 
-        } catch (error) { 
-            console.error('Kayıt seçim hatası:', error); 
+            try {
+                const result = await ipRecordsService.getRecordById(id);
+                if (!result.success) throw new Error(result.error);
+
+                this.state.recordData = result.data;
+                this.state.selectedRecordId = id;
+                this.state.bulletins = result.data.bulletins || [];
+                
+                // Nice sınıflarını güvenli şekilde al
+                // Eski format veya yeni format kontrolü
+                if (result.data.goodsAndServicesByClass) {
+                    this.state.niceClasses = result.data.goodsAndServicesByClass;
+                } else {
+                    this.state.niceClasses = [];
+                }
+
+                // UI Güncellemeleri
+                if (this.elements.selectedDisplay) {
+                    this.renderSelectedRecordUI();
+                }
+                
+                this.populateFormFields();
+                
+                if (this.elements.detailsContainer) {
+                    this.elements.detailsContainer.style.display = 'block';
+                }
+
+            } catch (error) {
+                console.error(error);
+                showNotification('Kayıt yüklenemedi', 'error');
+            }
         }
-    }
 
     async loadParentTransactions(recordId) {
         const parentSelect = document.getElementById('parentTransactionSelect');
