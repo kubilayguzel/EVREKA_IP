@@ -113,6 +113,11 @@ export class DocumentReviewManager {
                 await this.loadParentTransactions(recordId);
                 showNotification('Kayıt seçildi: ' + this.matchedRecord.title, 'success');
             }
+            // --- EVENT TETİKLEME ---
+            console.log('📤 Event gönderiliyor: record-selected', recordId);
+            document.dispatchEvent(new CustomEvent('record-selected', { 
+            detail: { recordId: recordId } 
+        }));           
         } catch (error) { console.error('Kayıt seçim hatası:', error); }
     }
 
