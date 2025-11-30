@@ -33,7 +33,6 @@ import { PdfExtractor } from './pdf-extractor.js';
 import { PdfAnalyzer } from './pdf-analyzer.js';
 
 const UNINDEXED_PDFS_COLLECTION = 'unindexed_pdfs';
-// 🔥 SABİT ATAMA: Selcan Hanım
 const SELCAN_UID = 'Mkmq2sc0T6XTIg1weZyp5AGZ0YG3'; 
 const SELCAN_EMAIL = 'selcanakoglu@evrekapatent.com';
 
@@ -114,7 +113,6 @@ export class DocumentReviewManager {
                 await this.loadParentTransactions(recordId);
                 showNotification('Kayıt seçildi: ' + this.matchedRecord.title, 'success');
 
-                // Diğer yöneticiye (PortfolioManager) haber ver
                 console.log('📤 Event gönderiliyor: record-selected', recordId);
                 document.dispatchEvent(new CustomEvent('record-selected', { 
                     detail: { recordId: recordId } 
@@ -184,7 +182,6 @@ export class DocumentReviewManager {
         if (matchedOption) { 
             matchedOption.selected = true; 
             this.checkSpecialFields();
-            // Otomatik seçimde diğer modülü (Portfolio) tetikle
             selectElement.dispatchEvent(new Event('change'));
         }
     }
@@ -217,12 +214,12 @@ export class DocumentReviewManager {
             const parentTx = this.currentTransactions.find(t => t.id === parentTxId);
             const parentTypeObj = this.allTransactionTypes.find(t => t.id === parentTx?.type);
 
-            // 1. İtiraz Bildirimi Özel Mantığı (Yeni Parent Oluşturma)
+            // 1. İtiraz Bildirimi Özel Mantığı
             let newParentTxId = null;
             let oppositionFileUrl = null;
             let oppositionFileName = null;
 
-            if (childTypeId === '27') { // Yayına İtiraz
+            if (childTypeId === '27') { 
                 const ownerInput = document.getElementById('oppositionOwnerInput').value;
                 const fileInput = document.getElementById('oppositionPetitionFile').files[0];
                 if (!ownerInput || !fileInput) throw new Error('İtiraz Sahibi ve PDF zorunludur.');
@@ -299,7 +296,6 @@ export class DocumentReviewManager {
             const recordType = (this.matchedRecord.recordOwnerType === 'self') ? 'Portföy' : '3. Taraf';
             const parentTypeId = parentTx.type;
             
-            // Task Matrix Kontrolü
             const taskTriggerMatrix = {
                 "20": { "Portföy": ["50", "51"], "3. Taraf": ["51", "52"] },
                 "19": { "Portföy": ["32", "33", "34", "35"], "3. Taraf": ["31", "32", "35", "36"] }
@@ -314,7 +310,7 @@ export class DocumentReviewManager {
             if (shouldTriggerTask && childTypeObj.taskTriggered) {
                 const deliveryDate = new Date(deliveryDateStr);
                 
-                // Süre Hesaplama - Hardcoded kısım kaldırıldı, veritabanından gelen duePeriod kullanılır
+                // Süre Hesaplama (Dinamik)
                 let duePeriod = Number(childTypeObj.duePeriod || 0);
                 
                 let officialDueDate = addMonthsToDate(deliveryDate, duePeriod);
@@ -325,69 +321,39 @@ export class DocumentReviewManager {
                     taskDueDate.setDate(taskDueDate.getDate() - 1);
                 }
 
-                // 🔥 KESİN ÇÖZÜM: Atanan Kişiyi Sabitle
-                // Veritabanı kuralı sorgusu (resolveApprovalStateAssignee) iptal edildi.
-                // Artık her zaman Selcan Hanım atanacak.
+                // 🔥 KESİN ÇÖZÜM: Her zaman Selcan'a ata
                 let assignedUser = { uid: SELCAN_UID, email: SELCAN_EMAIL };
                 
                 console.log(`✅ Tetiklenen iş doğrudan Selcan'a atanıyor (${SELCAN_EMAIL})`);
 
                 // 🔥 İLGİLİ TARAF VE TASK OWNER MANTIĞI
                 let relatedPartyData = null;
-                let taskOwner = []; // Array olarak başlat
+                let taskOwner = []; 
 
-                console.log('🔍 İlgili Taraf Analizi:', {
-                    ownerType: this.matchedRecord.recordOwnerType,
-                    applicants: this.matchedRecord.applicants,
-                    parentTxId: parentTxId,
-                    triggeringTaskId: parentTx?.triggeringTaskId
-                });
-
-                // KURAL 1: Kayıt tipi 'self' ise -> applicants listesi
                 if (this.matchedRecord.recordOwnerType === 'self') {
                     if (Array.isArray(this.matchedRecord.applicants) && this.matchedRecord.applicants.length > 0) {
-                        // 1. taskOwner için tüm ID'leri al
-                        taskOwner = this.matchedRecord.applicants
-                            .map(app => app.id)
-                            .filter(id => id); // Boş olanları temizle
-
-                        // 2. relatedParty (Detaylarda görünen tekil kişi) için ilkini al
+                        taskOwner = this.matchedRecord.applicants.map(app => app.id).filter(id => id);
                         const app = this.matchedRecord.applicants[0];
                         if (app && app.id) {
                             relatedPartyData = { id: app.id, name: app.name || 'İsimsiz' };
-                            console.log('✅ Self kayıt için ilgili taraf ayarlandı:', relatedPartyData);
                         }
                     }
                 } 
-                // KURAL 2: Kayıt tipi 'third_party' ise -> Parent Task'tan kopyala
                 else if (this.matchedRecord.recordOwnerType === 'third_party') {
                     const triggeringTaskId = parentTx?.triggeringTaskId;
-                    
                     if (triggeringTaskId) {
                         try {
                             const prevTaskResult = await taskService.getTaskById(triggeringTaskId);
                             if (prevTaskResult.success && prevTaskResult.data) {
                                 const prevTask = prevTaskResult.data;
-                                
-                                // 1. Task Owner'ı Kopyala (Array olmalı)
                                 if (prevTask.taskOwner) {
                                     taskOwner = Array.isArray(prevTask.taskOwner) ? prevTask.taskOwner : [prevTask.taskOwner];
-                                    console.log('✅ Parent görevden taskOwner kopyalandı:', taskOwner);
-                                } else {
-                                    console.warn('⚠️ Parent görevde taskOwner bulunamadı.');
                                 }
-
-                                // 2. Related Party'yi Kopyala
                                 if (prevTask.details && prevTask.details.relatedParty) {
                                     relatedPartyData = prevTask.details.relatedParty;
-                                    console.log('✅ Parent görevden relatedParty kopyalandı:', relatedPartyData);
                                 }
                             }
-                        } catch (e) {
-                            console.warn('❌ Parent task fetch error:', e);
-                        }
-                    } else {
-                        console.warn('⚠️ Parent işlemde triggeringTaskId yok.');
+                        } catch (e) { console.warn('Parent task fetch error:', e); }
                     }
                 }
 
@@ -403,17 +369,15 @@ export class DocumentReviewManager {
                     deliveryDate: deliveryDateStr,
                     dueDate: taskDueDate.toISOString(),
                     officialDueDate: officialDueDate.toISOString(),
-                    status: 'awaiting_client_approval', // Müvekkil Onayı Bekliyor
+                    status: 'awaiting_client_approval',
                     priority: 'normal',
                     assignedTo_uid: assignedUser.uid,
                     assignedTo_email: assignedUser.email,
                     createdBy: this.currentUser.uid,
                     createdAt: new Date().toISOString(),
-                    
-                    // 🔥 Düzeltilmiş Alanlar
-                    taskOwner: taskOwner.length > 0 ? taskOwner : null, // Array olarak gönder
+                    taskOwner: taskOwner.length > 0 ? taskOwner : null,
                     details: {
-                        relatedParty: relatedPartyData // Obje olarak gönder {id, name}
+                        relatedParty: relatedPartyData 
                     }
                 };
 
@@ -454,10 +418,7 @@ export class DocumentReviewManager {
                         requestResult: childTypeId, 
                         requestResultUpdatedAt: new Date().toISOString() 
                     });
-                    console.log('✅ Parent requestResult güncellendi:', finalParentId, childTypeId);
-                } catch (err) {
-                    console.error('requestResult güncellenemedi:', err);
-                }
+                } catch (err) { console.error('requestResult error:', err); }
             }
 
             // PDF Statüsü
@@ -477,11 +438,75 @@ export class DocumentReviewManager {
             saveBtn.disabled = false;
         }
     }
+
+    // --- EKSİK OLAN FONKSİYONLAR BURAYA EKLENDİ ---
+    
+    async runAnalysis() {
+        const loadingEl = document.getElementById('analysisLoading');
+        const resultsEl = document.getElementById('analysisResults');
+        const pdfViewerEl = document.getElementById('pdfViewer');
+        if(loadingEl) loadingEl.style.display = 'block';
+        if(resultsEl) resultsEl.style.display = 'none';
+        try {
+            if (pdfViewerEl) pdfViewerEl.src = this.pdfData.fileUrl;
+            const fullText = await this.pdfExtractor.extractTextFromUrl(this.pdfData.fileUrl);
+            this.analysisResult = this.analyzer.analyze(fullText);
+            this.renderAnalysisResults();
+        } catch (error) { console.error(error); } 
+        finally {
+            if(loadingEl) loadingEl.style.display = 'none';
+            if(resultsEl) resultsEl.style.display = 'block';
+        }
+    }
+
+    renderHeader() {
+        document.getElementById('fileNameDisplay').textContent = this.pdfData.fileName;
+        const matchInfoEl = document.getElementById('matchInfoDisplay');
+        if (this.matchedRecord) {
+            matchInfoEl.innerHTML = `<div class="text-success"><strong>${this.matchedRecord.title}</strong> (${this.matchedRecord.applicationNumber})</div>`;
+        } else {
+            matchInfoEl.innerHTML = `<div class="text-warning">Eşleşme Yok</div>`;
+        }
+    }
+
+    renderAnalysisResults() {
+        const dateInput = document.getElementById('detectedDate');
+        const summaryBox = document.getElementById('analysisSummary');
+        if (dateInput && this.analysisResult.decisionDate) {
+            const parts = this.analysisResult.decisionDate.split('.');
+            if(parts.length === 3) dateInput.value = `${parts[2]}-${parts[1]}-${parts[0]}`;
+        }
+        if (summaryBox) summaryBox.textContent = `Tip: ${this.analysisResult.detectedType.name}`;
+    }
+
+    async handleManualSearch(query) {
+        const resultsContainer = document.getElementById('manualSearchResults');
+        if (!query || query.length < 3) { resultsContainer.style.display = 'none'; return; }
+        const result = await ipRecordsService.searchRecords(query);
+        if (result.success) this.renderSearchResults(result.data);
+    }
+
+    renderSearchResults(results) {
+        const container = document.getElementById('manualSearchResults');
+        container.innerHTML = '';
+        container.style.display = results.length ? 'block' : 'none';
+        if (!results.length) { container.innerHTML = '<div class="p-2">Sonuç yok</div>'; return; }
+        container.innerHTML = results.map(r => `
+            <div class="search-result-item p-2 border-bottom" style="cursor:pointer" data-id="${r.id}">
+                <strong>${r.title}</strong> <small>${r.applicationNumber}</small>
+            </div>`).join('');
+        container.querySelectorAll('.search-result-item').forEach(el => {
+            el.onclick = () => {
+                this.selectRecord(el.dataset.id);
+                container.style.display = 'none';
+            };
+        });
+    }
 }
 
 export async function resolveApprovalStateAssignee() {
-    // Bu fonksiyon artık kullanılmıyor ama referans hatası olmaması için boş bırakıldı.
-    return { uid: null, email: null };
+  // Fonksiyon artık kullanılmıyor ama hata vermemesi için boş bırakıldı.
+  return { uid: null, email: null };
 }
 
 document.addEventListener('DOMContentLoaded', () => {
