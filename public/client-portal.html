@@ -1542,7 +1542,7 @@ window.fetchAndDisplayTasks = async function(linkedIds) {
         window.applyTaskFilter();
     };
 
-window._renderTaskCardsToContainer = async function(tasksToRender, containerSelector, formatDate, taskType) {
+    window._renderTaskCardsToContainer = async function(tasksToRender, containerSelector, formatDate, taskType) {
         const container = document.querySelector(containerSelector);
         if (!container) return;
         container.innerHTML = '<div class="col-12 text-center py-5"><i class="fas fa-spinner fa-spin fa-2x text-muted"></i></div>';
@@ -1614,8 +1614,11 @@ window._renderTaskCardsToContainer = async function(tasksToRender, containerSele
                 let competitor = null;
 
                 if (monitoringRecord && Array.isArray(monitoringRecord.results) && targetAppNo) {
-                    const cleanTarget = String(targetAppNo).replace(/[^a-zA-Z0-9]/g, '');
-                    competitor = monitoringRecord.results.find(r => String(r.applicationNo || '').replace(/[^a-zA-Z0-9]/g, '') === cleanTarget);
+                    // Burada '/' karakterini silmiyoruz çünkü veritabanı eşleştirmesi için gerekebilir
+                    // Ancak temiz bir eşleştirme için genelde slashsız tutulur.
+                    // Monitoring kaydı bulurken slashsız aramak daha güvenlidir:
+                    const cleanTargetForMatch = String(targetAppNo).replace(/[^a-zA-Z0-9]/g, '');
+                    competitor = monitoringRecord.results.find(r => String(r.applicationNo || '').replace(/[^a-zA-Z0-9]/g, '') === cleanTargetForMatch);
                 }
 
                 if (!competitor) {
@@ -1641,8 +1644,9 @@ window._renderTaskCardsToContainer = async function(tasksToRender, containerSele
                 const displayScore = formatScore(competitor.bs);
                 const note = competitor.note;
 
-                // --- DEĞİŞİKLİK BURADA: Başvuru No Temizleme ve Buton ---
-                const cleanCompNo = String(compNo).replace(/[^a-zA-Z0-9]/g, '');
+                // --- [DÜZELTME BURADA] ---
+                // Buton için ID temizliği: Slash (/) karakterine İZİN VER
+                const cleanCompNo = String(compNo).replace(/[^a-zA-Z0-9/]/g, '');
 
                 let extraInfoHtml = '';
                 if (displayScore || note) {
@@ -1679,7 +1683,6 @@ window._renderTaskCardsToContainer = async function(tasksToRender, containerSele
                                 <div style="font-size:1rem; margin-bottom:4px;"><span style="${labelStyle}">Sahip:</span> <span style="${valStyle}">${compOwner}</span></div>
                                 <div style="font-size:1rem;"><span style="${labelStyle}">Sınıf:</span> <span style="${valStyle}">${compClasses}</span></div>
                                 
-                                <!-- GÜNCELLENEN BUTON (EKLENTİ DESTEKLİ) -->
                                 <div class="mt-2">
                                     <button onclick="window.triggerTpQuery('${cleanCompNo}')" class="btn btn-sm btn-outline-light py-0 px-2" style="font-size: 0.85rem; border-color: rgba(255,255,255,0.3);">
                                         <i class="fas fa-search mr-1"></i> TÜRKPATENT'ten Sorgula
@@ -1728,6 +1731,7 @@ window._renderTaskCardsToContainer = async function(tasksToRender, containerSele
         container.innerHTML = cardsHTML.join('');
     };
     
+
 // --- 3. FATURA ---
 window.fetchAndDisplayInvoices = async function(linkedIds) {
         console.log("🔵 Fatura yükleme başladı. Bağlı ID'ler:", linkedIds);
