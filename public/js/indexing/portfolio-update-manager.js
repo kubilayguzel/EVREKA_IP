@@ -66,7 +66,15 @@ export class PortfolioUpdateManager {
     init() {
         this.setupEventListeners();
         this.renderInitialState();
-        console.log('✅ PortfolioUpdateManager initialized (Editor Mode)');
+
+        // DocumentReviewManager bir kayıt seçtiğinde burası tetiklenecek
+        document.addEventListener('record-selected', (e) => {
+            if (e.detail && e.detail.recordId) {
+                console.log('⚡ PortfolioManager: Kayıt seçimi algılandı:', e.detail.recordId);
+                this.selectRecord(e.detail.recordId);
+            }
+        });
+        console.log('✅ PortfolioUpdateManager initialized');
     }
 
     renderInitialState() {
@@ -473,7 +481,8 @@ export class PortfolioUpdateManager {
 
 // Global başlatma
 document.addEventListener('DOMContentLoaded', () => {
-    if (document.getElementById('recordSearchInput')) {
+    // Hem eski input'u (recordSearchInput) hem de yeni sayfadaki select'i (detectedType) kontrol et
+    if (document.getElementById('recordSearchInput') || document.getElementById('detectedType')) {
         window.portfolioUpdateManager = new PortfolioUpdateManager();
     }
 });
