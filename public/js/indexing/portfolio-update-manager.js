@@ -27,11 +27,11 @@ export class PortfolioUpdateManager {
             selectedDisplay: $('selectedRecordDisplay'),
             
             // İşlem Tipi Seçimi (Tetikleyici)
-            childTransactionType: $('childTransactionType'), // HTML'de bu ID'nin olduğundan emin olun
+            childTransactionType: $('detectedType'),
             
             // Form Alanları (Wrapper)
             detailsContainer: $('record-details-wrapper'), 
-            registryEditorSection: $('registry-editor-section'), // Tescil bilgilerini içeren div
+            registryEditorSection: $('registry-editor-section'),
             
             // Tescil Bilgileri Inputları
             registryStatus: $('registry-status'),
@@ -51,7 +51,7 @@ export class PortfolioUpdateManager {
             
             // Nice Sınıfları (Eski yapıdan port edildi)
             niceChips: $('nice-classes-chips'),         // Chip'lerin duracağı yer
-            niceAccordion: $('nice-classes-accordion'), // Textarea'ların duracağı yer
+            niceAccordion: $('nice-classes-accordion'),
             btnNiceAddModal: $('btn-add-nice-modal'),   // Modal açma butonu
             
             // Modal Elementleri
