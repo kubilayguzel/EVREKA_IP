@@ -2,7 +2,7 @@
 
 import { db, ipRecordsService } from '../../firebase-config.js';
 import { doc, updateDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
-import { showNotification, debounce, STATUSES } from '../../utils.js'; // STATUSES eklendi
+import { showNotification, debounce, STATUSES } from '../../utils.js';
 
 export class PortfolioUpdateManager {
     constructor() {
@@ -112,7 +112,6 @@ export class PortfolioUpdateManager {
 
             // Açma/Kapama mantığı
             this.elements.niceAccordion.addEventListener('click', (e) => {
-                // Tıklanan eleman buton veya içindeki ikon/yazı mı?
                 const headerBtn = e.target.closest('.nice-accordion-btn');
                 if (!headerBtn) return;
 
@@ -130,24 +129,33 @@ export class PortfolioUpdateManager {
                     if (el.id !== targetId) {
                         el.style.display = 'none';
                         el.classList.remove('show');
-                        // İkonu düzelt (opsiyonel)
+                        // İkonu düzelt
                         const btn = document.querySelector(`[data-target-id="${el.id}"] i`);
-                        if(btn) btn.className = 'fas fa-chevron-right mr-2 text-primary';
+                        if(btn) {
+                            btn.classList.remove('fa-chevron-down');
+                            btn.classList.add('fa-chevron-right');
+                        }
                     }
                 });
 
                 // Tıklananı toggle et
-                const isVisible = targetContent.style.display === 'block';
+                const isVisible = targetContent.classList.contains('show');
                 const icon = headerBtn.querySelector('i');
 
                 if (isVisible) {
                     targetContent.style.display = 'none';
                     targetContent.classList.remove('show');
-                    if(icon) icon.className = 'fas fa-chevron-right mr-2 text-primary';
+                    if(icon) {
+                        icon.classList.remove('fa-chevron-down');
+                        icon.classList.add('fa-chevron-right');
+                    }
                 } else {
                     targetContent.style.display = 'block';
                     targetContent.classList.add('show');
-                    if(icon) icon.className = 'fas fa-chevron-down mr-2 text-primary';
+                    if(icon) {
+                        icon.classList.remove('fa-chevron-right');
+                        icon.classList.add('fa-chevron-down');
+                    }
                 }
             });
         }
@@ -168,17 +176,10 @@ export class PortfolioUpdateManager {
         if (this.elements.registryEditorSection) {
             if (isRegistration) {
                 this.elements.registryEditorSection.style.display = 'block';
-                
-                // Tarih seçicileri başlat (Eğer flatpickr yüklüyse)
                 this.initDatePickers();
-
                 setTimeout(() => {
-                    window.scrollTo({
-                        top: document.body.scrollHeight,
-                        behavior: 'smooth'
-                    });
+                    this.elements.registryEditorSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
                 }, 100);
-                
                 showNotification('📝 Tescil ve Sınıf düzenleme alanı açıldı.', 'info');
             } else {
                 this.elements.registryEditorSection.style.display = 'none';
@@ -189,9 +190,9 @@ export class PortfolioUpdateManager {
     initDatePickers() {
         if (typeof flatpickr !== 'undefined') {
             flatpickr(".datepicker", {
-                dateFormat: "Y-m-d", // Veritabanı formatı (YYYY-MM-DD)
+                dateFormat: "Y-m-d",
                 altInput: true,
-                altFormat: "d.m.Y", // Görünen format (GG.AA.YYYY)
+                altFormat: "d.m.Y",
                 locale: "tr",
                 allowInput: true
             });
@@ -214,17 +215,20 @@ export class PortfolioUpdateManager {
             this.parseNiceClassesFromData(data);
 
             if (this.elements.selectedDisplay) this.renderSelectedRecordUI();
+            
+            // Verileri doldur
             this.populateFormFields();
 
             if (this.elements.detailsContainer) this.elements.detailsContainer.style.display = 'block';
             
-            // Eğer işlem tipi zaten seçiliyse formu hemen kontrol et (Otomatik tetikleme için)
+            // Eğer işlem tipi zaten seçiliyse formu kontrol et
             if (this.elements.childTransactionType && this.elements.childTransactionType.value) {
                 this.handleTransactionTypeChange();
             }
 
         } catch (error) {
             console.error('PortfolioManager Kayıt Yükleme Hatası:', error);
+            showNotification('Kayıt verileri yüklenirken hata oluştu', 'error');
         }
     }
 
@@ -239,6 +243,7 @@ export class PortfolioUpdateManager {
         if(this.elements.regDate) this.elements.regDate.value = r.registrationDate || '';
         if(this.elements.renewalDate) this.elements.renewalDate.value = r.renewalDate || '';
 
+        // HATA KAYNAĞI: Fonksiyonların doğru çağrılması
         this.renderBulletins();
         this.renderNiceEditor(); 
     }
@@ -247,31 +252,38 @@ export class PortfolioUpdateManager {
         const select = this.elements.registryStatus;
         if (!select) return;
 
-        select.innerHTML = '';
-        const statuses = STATUSES.trademark || []; // Utils'den gelen statüler
+        select.innerHTML = '<option value="">Seçiniz...</option>';
+        const statuses = STATUSES.trademark || [];
 
+        // Mevcut statüyü normalize et (küçük harfe çevir)
+        const normalizedCurrent = currentStatus ? currentStatus.toLowerCase() : '';
+
+        let found = false;
         statuses.forEach(st => {
             const option = document.createElement('option');
             option.value = st.value;
             option.textContent = st.text;
-            if (st.value === currentStatus) option.selected = true;
+            
+            // Eşleşme kontrolü (küçük harf duyarsız)
+            if (st.value.toLowerCase() === normalizedCurrent) {
+                option.selected = true;
+                found = true;
+            }
             select.appendChild(option);
         });
 
-        // Eğer listede olmayan bir statü geldiyse ekle
-        if (currentStatus && !statuses.find(s => s.value === currentStatus)) {
+        // Eğer listede yoksa ve bir değer varsa, onu da ekle (ama listedekiyle çakışmadığından emin ol)
+        if (currentStatus && !found) {
+            // Eğer listede 'registered' var ama gelen 'Registered' ise yukarıda eşleşmiş olmalıydı.
+            // Buraya düştüyse tamamen farklı bir statüdür.
             const option = document.createElement('option');
             option.value = currentStatus;
-            option.textContent = currentStatus;
+            option.textContent = currentStatus; // Olduğu gibi göster
             option.selected = true;
             select.appendChild(option);
         }
     }
 
-    // --- Diğer Fonksiyonlar (Aynı kalıyor, kısaltıldı) ---
-    async handleSearch(query) { /* ... */ }
-    renderSearchResults(results) { /* ... */ }
-    
     parseNiceClassesFromData(data) {
         const gsList = data.goodsAndServicesByClass || [];
         this.state.goodsAndServicesMap = gsList.reduce((acc, curr) => {
@@ -284,9 +296,6 @@ export class PortfolioUpdateManager {
         if (!nClasses.length && data.niceClass) nClasses = Array.isArray(data.niceClass) ? data.niceClass.map(String) : [String(data.niceClass)];
         this.state.niceClasses = nClasses.map(String);
     }
-
-    clearSelection() { /* ... */ }
-    renderSelectedRecordUI() { /* ... */ }
 
     renderNiceEditor() {
         if (!this.elements.niceChips) return;
@@ -315,11 +324,7 @@ export class PortfolioUpdateManager {
             .map((c, idx) => {
                 const content = this.state.goodsAndServicesMap[String(c)] || '';
                 const panelId = `nice-panel-${c}`;
-                // İlk elemanı açık getirmek istersek:
-                const displayStyle = idx === 0 ? 'block' : 'none';
-                const showClass = idx === 0 ? 'show' : '';
-                const iconClass = idx === 0 ? 'fa-chevron-down' : 'fa-chevron-right';
-
+                // Hepsi kapalı başlasın, kullanıcı tıklayınca açsın
                 return `
                     <div class="card mb-2 border">
                         <div class="card-header p-0 bg-light" id="heading-${c}">
@@ -327,13 +332,13 @@ export class PortfolioUpdateManager {
                                 <button class="btn btn-link btn-block text-left py-3 px-3 text-dark font-weight-bold nice-accordion-btn" 
                                         type="button" 
                                         data-target-id="${panelId}"
-                                        style="text-decoration: none;">
-                                    <i class="fas ${iconClass} mr-2 text-primary" style="font-size:0.8em"></i>
+                                        style="text-decoration: none; display: flex; align-items: center;">
+                                    <i class="fas fa-chevron-right mr-2 text-primary" style="font-size:0.8em; transition: transform 0.2s;"></i>
                                     Nice ${c} — Mal & Hizmet Listesi
                                 </button>
                             </h6>
                         </div>
-                        <div id="${panelId}" class="nice-collapse-content ${showClass}" style="display:${displayStyle};">
+                        <div id="${panelId}" class="nice-collapse-content" style="display:none;">
                             <div class="card-body p-2">
                                 <textarea class="form-control gs-textarea border-0 bg-light" 
                                     data-class="${c}" 
@@ -347,7 +352,13 @@ export class PortfolioUpdateManager {
             }).join('');
     }
 
-    // ... Diğer metodlar (removeNiceClass, openNiceModal, saveAllChanges vb.) aynı ...
+    // --- Helper Metodlar ---
+    
+    async handleSearch(query) { /* ... */ }
+    renderSearchResults(results) { /* ... */ }
+    clearSelection() { /* ... */ }
+    renderSelectedRecordUI() { /* ... */ }
+
     removeNiceClass(classNo) {
         if(!confirm(`Nice ${classNo} sınıfını silmek istiyor musunuz?`)) return;
         this.state.niceClasses = this.state.niceClasses.filter(x => x !== classNo);
@@ -389,6 +400,30 @@ export class PortfolioUpdateManager {
             if (window.$ && window.$.fn.modal) $(this.elements.niceClassModal).modal('hide');
             else this.elements.niceClassModal.style.display = 'none';
         }
+    }
+
+    addBulletin() {
+        const no = this.elements.bulletinNoInput.value.trim();
+        const date = this.elements.bulletinDateInput.value;
+        if (!no || !date) { showNotification('Eksik bilgi', 'warning'); return; }
+        this.state.bulletins.push({ bulletinNo: no, bulletinDate: date });
+        this.renderBulletins();
+        this.elements.bulletinNoInput.value = '';
+    }
+
+    removeBulletin(index) {
+        this.state.bulletins.splice(index, 1);
+        this.renderBulletins();
+    }
+
+    renderBulletins() {
+        if (!this.elements.bulletinList) return;
+        this.elements.bulletinList.innerHTML = this.state.bulletins.map((b, i) => `
+            <div class="d-flex justify-content-between border-bottom p-2">
+                <span>No: ${b.bulletinNo} (${b.bulletinDate})</span>
+                <button class="btn btn-sm btn-danger delete-bulletin-btn" data-index="${i}">Sil</button>
+            </div>
+        `).join('');
     }
 
     async saveAllChanges() {
