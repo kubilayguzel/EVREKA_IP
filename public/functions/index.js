@@ -37,7 +37,7 @@ const adminAuth = admin.auth();
 const adminDb = admin.firestore();
 const db        = adminDb;
 const secretClient = new SecretManagerServiceClient();
-const selcanUserId = "Mkmq2sc0T6XTIg1weZyp5AGZ0YG3"; // <<< BURAYA SELCAN'IN GERÇEK ID'SİNİ YAPIŞTIRIN
+const selcanUserId = "8A9HHfdKKNR3WKl6tCtJH5Khjkx1"; // <<< BURAYA SELCAN'IN GERÇEK ID'SİNİ YAPIŞTIRIN
 const selcanUserEmail = "selcanakoglu@evrekapatent.com"; // <<< BURAYA SELCAN'IN E-POSTA ADRESİNİ YAZIN
 
 // 🔐 SA_MAILER_KEY'i Secret Manager'dan çek
