@@ -1512,7 +1512,7 @@ window.fetchAndDisplayTasks = async function(linkedIds) {
         window.applyTaskFilter();
     };
 
-    window._renderTaskCardsToContainer = async function(tasksToRender, containerSelector, formatDate, taskType) {
+window._renderTaskCardsToContainer = async function(tasksToRender, containerSelector, formatDate, taskType) {
         const container = document.querySelector(containerSelector);
         if (!container) return;
         container.innerHTML = '<div class="col-12 text-center py-5"><i class="fas fa-spinner fa-spin fa-2x text-muted"></i></div>';
@@ -1611,6 +1611,12 @@ window.fetchAndDisplayTasks = async function(linkedIds) {
                 const displayScore = formatScore(competitor.bs);
                 const note = competitor.note;
 
+                // --- GÜNCELLEME: TÜRKPATENT BUTONU İÇİN HAZIRLIK ---
+                // Başvuru numarasını temizle (boşlukları sil)
+                const cleanCompNo = String(compNo).replace(/[^a-zA-Z0-9]/g, '');
+                // Türkpatent Portal linki
+                const tpLink = `https://portal.turkpatent.gov.tr/anonim/arastirma/marka/sonuc?dosyaNo=${cleanCompNo}`;
+
                 let extraInfoHtml = '';
                 if (displayScore || note) {
                     extraInfoHtml = `
@@ -1623,6 +1629,7 @@ window.fetchAndDisplayTasks = async function(linkedIds) {
                 const labelStyle = 'color: rgba(255, 255, 255, 0.7); font-weight: 600;';
                 const valStyle = 'color: #fff; font-weight: 400;';
 
+                // --- GÜNCELLEME: BUTON HTML'E EKLENDİ ---
                 comparisonRow = `
                 <div class="row mt-3 pt-3 border-top border-secondary">
                     <div class="col-md-6 border-right border-secondary mb-3 mb-md-0">
@@ -1645,6 +1652,13 @@ window.fetchAndDisplayTasks = async function(linkedIds) {
                                 <div style="font-size:1rem; margin-bottom:4px;"><span style="${labelStyle}">No:</span> <span style="${valStyle}">${compNo}</span></div>
                                 <div style="font-size:1rem; margin-bottom:4px;"><span style="${labelStyle}">Sahip:</span> <span style="${valStyle}">${compOwner}</span></div>
                                 <div style="font-size:1rem;"><span style="${labelStyle}">Sınıf:</span> <span style="${valStyle}">${compClasses}</span></div>
+                                
+                                <div class="mt-2">
+                                    <a href="${tpLink}" target="_blank" class="btn btn-sm btn-outline-light py-0 px-2" style="font-size: 0.85rem; border-color: rgba(255,255,255,0.3);">
+                                        <i class="fas fa-search mr-1"></i> TÜRKPATENT'ten Sorgula
+                                    </a>
+                                </div>
+
                             </div>
                         </div>
                         ${extraInfoHtml}
@@ -1686,7 +1700,7 @@ window.fetchAndDisplayTasks = async function(linkedIds) {
 
         container.innerHTML = cardsHTML.join('');
     };
-
+    
 // --- 3. FATURA ---
 window.fetchAndDisplayInvoices = async function(linkedIds) {
         console.log("🔵 Fatura yükleme başladı. Bağlı ID'ler:", linkedIds);
