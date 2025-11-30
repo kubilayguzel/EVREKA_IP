@@ -211,6 +211,8 @@ export class DocumentReviewManager {
         else oppositionSection.style.display = 'none';
     }
 
+    // public/js/indexing/document-review-manager.js içindeki handleSave fonksiyonu
+
     async handleSave() {
         if (!this.matchedRecord) { alert('Lütfen önce bir kayıt ile eşleştirin.'); return; }
         const parentTxId = document.getElementById('parentTransactionSelect').value;
@@ -237,7 +239,7 @@ export class DocumentReviewManager {
             let oppositionFileUrl = null;
             let oppositionFileName = null;
 
-            if (childTypeId === '27') {
+            if (childTypeId === '27') { // Yayına İtiraz Bildirimi ID'si
                 const ownerInput = document.getElementById('oppositionOwnerInput').value;
                 const fileInput = document.getElementById('oppositionPetitionFile').files[0];
                 if (!ownerInput || !fileInput) throw new Error('İtiraz Sahibi ve PDF zorunludur.');
@@ -247,11 +249,11 @@ export class DocumentReviewManager {
                 oppositionFileUrl = await getDownloadURL(storageRef);
                 oppositionFileName = fileInput.name;
 
-                let newParentTypeId = '20'; 
+                let newParentTypeId = '20'; // Yayına İtiraz
                 let newParentDesc = 'Yayına İtiraz (Otomatik)';
                 const parentAlias = parentTypeObj?.alias || parentTypeObj?.name || '';
                 if (parentAlias.includes('İtiraz') || parentTypeObj?.id === '20') {
-                    newParentTypeId = '19'; 
+                    newParentTypeId = '19'; // Yayına İtirazın Yeniden İncelenmesi
                     newParentDesc = 'Yayına İtirazın Yeniden İncelenmesi (Otomatik)';
                 }
 
@@ -281,7 +283,7 @@ export class DocumentReviewManager {
             const txResult = await ipRecordsService.addTransactionToRecord(this.matchedRecord.id, transactionData);
             const childTransactionId = txResult.id;
 
-            // Dosyaları Belge Olarak Ekle (De-duplication için önemli)
+            // Dosyaları Belge Olarak Ekle
             if (this.pdfData.fileUrl && txResult.success) {
                 const mainDocPayload = {
                     id: generateUUID(),
@@ -308,11 +310,13 @@ export class DocumentReviewManager {
                 await updateDoc(txRef, { documents: arrayUnion(oppDocPayload) });
             }
 
-            // 3. İş Tetikleme (Task)
+            // 3. İş Tetikleme (Task) Mantığı
             let createdTaskId = null;
             let shouldTriggerTask = false;
             const recordType = (this.matchedRecord.recordOwnerType === 'self') ? 'Portföy' : '3. Taraf';
             const parentTypeId = parentTx.type;
+            
+            // Matrix ve trigger kontrolü
             const taskTriggerMatrix = {
                 "20": { "Portföy": ["50", "51"], "3. Taraf": ["51", "52"] },
                 "19": { "Portföy": ["32", "33", "34", "35"], "3. Taraf": ["31", "32", "35", "36"] }
@@ -341,6 +345,41 @@ export class DocumentReviewManager {
                     if (assigneeData.uid) assignedUser = { uid: assigneeData.uid, email: assigneeData.email };
                 } catch(e) { console.warn('Assignee error', e); }
 
+                // --- 🔥 YENİ EKLENEN: İLGİLİ TARAF (RELATED PARTY) MANTIĞI BAŞLANGIÇ ---
+                let relatedPartyData = null;
+
+                // KURAL 1: Kayıt tipi 'self' ise -> applicants listesinin ilk elemanı
+                if (this.matchedRecord.recordOwnerType === 'self') {
+                    if (this.matchedRecord.applicants && this.matchedRecord.applicants.length > 0) {
+                        const app = this.matchedRecord.applicants[0];
+                        // İhtiyaç duyulan minimum veriyi alıyoruz (id, name)
+                        relatedPartyData = { id: app.id, name: app.name || 'İsimsiz' };
+                    }
+                } 
+                // KURAL 2: Kayıt tipi 'third_party' ise -> Parent Transaction'ın tetiklediği Task'a git
+                else if (this.matchedRecord.recordOwnerType === 'third_party') {
+                    // Ana işlemden (parentTx) triggeringTaskId'yi al
+                    const triggeringTaskId = parentTx?.triggeringTaskId;
+                    
+                    if (triggeringTaskId) {
+                        try {
+                            // Orijinal görevi bul
+                            const prevTaskResult = await taskService.getTaskById(triggeringTaskId);
+                            if (prevTaskResult.success && prevTaskResult.data) {
+                                const prevTask = prevTaskResult.data;
+                                // O görevin 'relatedParty' bilgisini kopyala
+                                if (prevTask.details && prevTask.details.relatedParty) {
+                                    relatedPartyData = prevTask.details.relatedParty;
+                                    console.log('📋 Parent görevden ilgili taraf alındı:', relatedPartyData);
+                                }
+                            }
+                        } catch (e) {
+                            console.warn('Parent task fetch error for related party:', e);
+                        }
+                    }
+                }
+                // --- İLGİLİ TARAF MANTIĞI BİTİŞ ---
+
                 const taskData = {
                     title: `${childTypeObj.alias || childTypeObj.name} - ${this.matchedRecord.title}`,
                     description: notes || `Otomatik oluşturulan görev.`,
@@ -358,7 +397,11 @@ export class DocumentReviewManager {
                     assignedTo_uid: assignedUser.uid,
                     assignedTo_email: assignedUser.email,
                     createdBy: this.currentUser.uid,
-                    createdAt: new Date().toISOString()
+                    createdAt: new Date().toISOString(),
+                    // 🔥 Detaylara ilgili tarafı ekliyoruz
+                    details: {
+                        relatedParty: relatedPartyData 
+                    }
                 };
 
                 const taskResult = await taskService.createTask(taskData);
@@ -390,8 +433,7 @@ export class DocumentReviewManager {
                 await ipRecordsService.addTransactionToRecord(this.matchedRecord.id, triggeredTransactionData);
             }
 
-            // 🔥 6. REQUEST RESULT GÜNCELLEME (Ana İşleme Sonucu Yaz)
-            // Bu kısım, indeksleme kararının (childTypeId) ana işleme (parent) yazılmasını sağlar.
+            // 6. REQUEST RESULT GÜNCELLEME
             if (finalParentId && childTypeId) {
                 try {
                     const parentTxRef = doc(db, 'ipRecords', this.matchedRecord.id, 'transactions', finalParentId);
