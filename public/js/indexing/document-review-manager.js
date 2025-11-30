@@ -103,51 +103,39 @@ export class DocumentReviewManager {
             showNotification('Veri yükleme hatası: ' + error.message, 'error');
         }
     }
+    async selectRecord(recordId) {
+            // 1. Arama kutusunu ve listeyi güvenli şekilde temizle
+            const searchInput = document.getElementById('manualSearchInput');
+            const searchResults = document.getElementById('manualSearchResults');
 
-    async selectRecord(id) {
-            // DÜZELTME: Elementlerin varlığını kontrol et
-            if (this.elements.searchInput) {
-                this.elements.searchInput.value = '';
-            }
-            if (this.elements.searchResults) {
-                this.elements.searchResults.style.display = 'none';
-            }
-            
-            showNotification('Kayıt yükleniyor...', 'info');
+            if (searchInput) searchInput.value = '';
+            if (searchResults) searchResults.style.display = 'none';
 
             try {
-                const result = await ipRecordsService.getRecordById(id);
-                if (!result.success) throw new Error(result.error);
-
-                this.state.recordData = result.data;
-                this.state.selectedRecordId = id;
-                this.state.bulletins = result.data.bulletins || [];
+                const result = await ipRecordsService.getRecordById(recordId);
                 
-                // Nice sınıflarını güvenli şekilde al
-                // Eski format veya yeni format kontrolü
-                if (result.data.goodsAndServicesByClass) {
-                    this.state.niceClasses = result.data.goodsAndServicesByClass;
+                if (result.success) {
+                    this.matchedRecord = result.data;
+                    // Eğer header render fonksiyonunuz varsa çağırın
+                    if (this.renderHeader) this.renderHeader();
+                    // Eğer parent transactions yükleme fonksiyonunuz varsa çağırın
+                    if (this.loadParentTransactions) await this.loadParentTransactions(recordId);
+                    
+                    showNotification('Kayıt seçildi: ' + this.matchedRecord.title, 'success');
+
+                    // ✅ ETKİLEŞİM: Diğer yöneticiye (PortfolioManager) haber ver
+                    console.log('📤 Event gönderiliyor: record-selected', recordId);
+                    document.dispatchEvent(new CustomEvent('record-selected', { 
+                        detail: { recordId: recordId } 
+                    })); 
                 } else {
-                    this.state.niceClasses = [];
+                    console.error('Kayıt verisi alınamadı');
                 }
-
-                // UI Güncellemeleri
-                if (this.elements.selectedDisplay) {
-                    this.renderSelectedRecordUI();
-                }
-                
-                this.populateFormFields();
-                
-                if (this.elements.detailsContainer) {
-                    this.elements.detailsContainer.style.display = 'block';
-                }
-
             } catch (error) {
-                console.error(error);
-                showNotification('Kayıt yüklenemedi', 'error');
+                console.error('Kayıt seçim hatası:', error);
             }
         }
-
+        
     async loadParentTransactions(recordId) {
         const parentSelect = document.getElementById('parentTransactionSelect');
         if (!parentSelect) return;
