@@ -327,8 +327,10 @@ export class DocumentReviewManager {
                     if (assigneeData.uid) assignedUser = { uid: assigneeData.uid, email: assigneeData.email };
                 } catch(e) { console.warn('Assignee error', e); }
 
-                // 🔥 YENİ GÜNCELLENMİŞ İLGİLİ TARAF (RELATED PARTY) MANTIĞI
+                // 🔥 YENİ GÜNCELLENMİŞ: İLGİLİ TARAF VE TASK OWNER MANTIĞI
                 let relatedPartyData = null;
+                let taskOwner = []; // Array olarak başlat (DB yapısına uygun)
+
                 console.log('🔍 İlgili Taraf Analizi:', {
                     ownerType: this.matchedRecord.recordOwnerType,
                     applicants: this.matchedRecord.applicants,
@@ -336,42 +338,51 @@ export class DocumentReviewManager {
                     triggeringTaskId: parentTx?.triggeringTaskId
                 });
 
-                // KURAL 1: Kayıt tipi 'self' ise -> applicants listesinin ilk elemanı
+                // KURAL 1: Kayıt tipi 'self' ise -> applicants listesi
                 if (this.matchedRecord.recordOwnerType === 'self') {
                     if (Array.isArray(this.matchedRecord.applicants) && this.matchedRecord.applicants.length > 0) {
+                        // 1. taskOwner için tüm ID'leri al
+                        taskOwner = this.matchedRecord.applicants
+                            .map(app => app.id)
+                            .filter(id => id); // Boş olanları temizle
+
+                        // 2. relatedParty (Detaylarda görünen tekil kişi) için ilkini al
                         const app = this.matchedRecord.applicants[0];
-                        // ID ve İsim kontrolü
                         if (app && app.id) {
                             relatedPartyData = { id: app.id, name: app.name || 'İsimsiz' };
-                            console.log('✅ Self kayıt için ilgili taraf bulundu:', relatedPartyData);
-                        } else {
-                            console.warn('⚠️ Applicant verisi eksik veya ID yok:', app);
+                            console.log('✅ Self kayıt için ilgili taraf ayarlandı:', relatedPartyData);
                         }
                     }
                 } 
-                // KURAL 2: Kayıt tipi 'third_party' ise -> Parent Transaction'ın tetiklediği Task'a git
+                // KURAL 2: Kayıt tipi 'third_party' ise -> Parent Task'tan kopyala
                 else if (this.matchedRecord.recordOwnerType === 'third_party') {
                     const triggeringTaskId = parentTx?.triggeringTaskId;
                     
                     if (triggeringTaskId) {
                         try {
-                            // Orijinal görevi bul
                             const prevTaskResult = await taskService.getTaskById(triggeringTaskId);
                             if (prevTaskResult.success && prevTaskResult.data) {
                                 const prevTask = prevTaskResult.data;
-                                // O görevin 'relatedParty' bilgisini kopyala
+                                
+                                // 1. Task Owner'ı Kopyala (Array olmalı)
+                                if (prevTask.taskOwner) {
+                                    taskOwner = Array.isArray(prevTask.taskOwner) ? prevTask.taskOwner : [prevTask.taskOwner];
+                                    console.log('✅ Parent görevden taskOwner kopyalandı:', taskOwner);
+                                } else {
+                                    console.warn('⚠️ Parent görevde taskOwner bulunamadı.');
+                                }
+
+                                // 2. Related Party'yi Kopyala
                                 if (prevTask.details && prevTask.details.relatedParty) {
                                     relatedPartyData = prevTask.details.relatedParty;
-                                    console.log('✅ Parent görevden ilgili taraf alındı:', relatedPartyData);
-                                } else {
-                                    console.warn('⚠️ Parent görevde relatedParty bilgisi yok:', prevTask.id);
+                                    console.log('✅ Parent görevden relatedParty kopyalandı:', relatedPartyData);
                                 }
                             }
                         } catch (e) {
-                            console.warn('❌ Parent task fetch error for related party:', e);
+                            console.warn('❌ Parent task fetch error:', e);
                         }
                     } else {
-                        console.warn('⚠️ Parent işlemde triggeringTaskId yok.');
+                        console.warn('⚠️ Parent işlemde triggeringTaskId yok (Manuel işlem olabilir).');
                     }
                 }
 
@@ -394,10 +405,10 @@ export class DocumentReviewManager {
                     createdBy: this.currentUser.uid,
                     createdAt: new Date().toISOString(),
                     
-                    // 🔥 Düzeltilmiş: İlgili Tarafı Hem 'taskOwner' hem de 'details.relatedParty' olarak ekle
-                    taskOwner: relatedPartyData ? relatedPartyData.id : null, // Ana seviyede ID
+                    // 🔥 Düzeltilmiş Alanlar
+                    taskOwner: taskOwner.length > 0 ? taskOwner : null, // Array olarak gönder
                     details: {
-                        relatedParty: relatedPartyData // Detaylarda obje {id, name}
+                        relatedParty: relatedPartyData // Obje olarak gönder {id, name}
                     }
                 };
 
