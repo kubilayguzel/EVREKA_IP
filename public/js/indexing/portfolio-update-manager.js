@@ -10,8 +10,8 @@ export class PortfolioUpdateManager {
         this.state = {
             selectedRecordId: null,
             recordData: null,
-            niceClasses: [],           // Örn: ['1', '35']
-            goodsAndServicesMap: {},   // Örn: { '1': 'Kimyasallar...', '35': 'Mağazacılık...' }
+            niceClasses: [],           
+            goodsAndServicesMap: {},   
             bulletins: []
         };
 
@@ -22,12 +22,15 @@ export class PortfolioUpdateManager {
     cacheElements() {
         const $ = (id) => document.getElementById(id);
         return {
-            searchInput: $('recordSearchInput'),
-            searchResults: $('searchResultsContainer'),
-            selectedDisplay: $('selectedRecordDisplay'),
+            // Hibrid Yapı: Hem 'bulk-indexing' hem 'indexing-detail' sayfalarını destekle
+            searchInput: $('recordSearchInput') || $('manualSearchInput'),
+            searchResults: $('searchResultsContainer') || $('manualSearchResults'),
+            
+            // Bu element sadece bulk-indexing sayfasında var, detay sayfasında NULL olabilir
+            selectedDisplay: $('selectedRecordDisplay'), 
             
             // İşlem Tipi Seçimi (Tetikleyici)
-            childTransactionType: $('detectedType'),
+            childTransactionType: $('detectedType') || $('childTransactionType'),
             
             // Form Alanları (Wrapper)
             detailsContainer: $('record-details-wrapper'), 
@@ -49,10 +52,10 @@ export class PortfolioUpdateManager {
             bulletinNoInput: $('bulletin-no-input'),
             bulletinDateInput: $('bulletin-date-input'),
             
-            // Nice Sınıfları (Eski yapıdan port edildi)
-            niceChips: $('nice-classes-chips'),         // Chip'lerin duracağı yer
+            // Nice Sınıfları
+            niceChips: $('nice-classes-chips'),         
             niceAccordion: $('nice-classes-accordion'),
-            btnNiceAddModal: $('btn-add-nice-modal'),   // Modal açma butonu
+            btnNiceAddModal: $('btn-add-nice-modal'),   
             
             // Modal Elementleri
             niceClassModal: $('nice-class-modal'),
@@ -79,12 +82,11 @@ export class PortfolioUpdateManager {
 
     renderInitialState() {
         if (this.elements.detailsContainer) this.elements.detailsContainer.style.display = 'none';
-        // Başlangıçta tescil editörü gizli olsun (İşlem tipi seçilene kadar)
         if (this.elements.registryEditorSection) this.elements.registryEditorSection.style.display = 'none';
     }
 
     setupEventListeners() {
-        // --- Arama ve Seçim ---
+        // --- Arama ve Seçim (Sadece element varsa dinle) ---
         if (this.elements.searchInput) {
             this.elements.searchInput.addEventListener('input', debounce((e) => this.handleSearch(e.target.value), 300));
         }
@@ -124,14 +126,13 @@ export class PortfolioUpdateManager {
         if (this.elements.btnAddBulletin) {
             this.elements.btnAddBulletin.addEventListener('click', () => this.addBulletin());
         }
-        // Dinamik elemanlar için global click listener (Delegation)
+
+        // Dinamik elemanlar için global click listener
         document.addEventListener('click', (e) => {
-            // Bülten Silme
             if (e.target.matches('.delete-bulletin-btn')) {
                 const idx = e.target.dataset.index;
                 this.removeBulletin(idx);
             }
-            // Nice Sınıfı Silme (Chip üzerindeki X)
             if (e.target.matches('[data-remove-class]') || e.target.closest('[data-remove-class]')) {
                 const btn = e.target.closest('[data-remove-class]');
                 const cls = btn.getAttribute('data-remove-class');
@@ -139,7 +140,7 @@ export class PortfolioUpdateManager {
             }
         });
         
-        // Textarea değişikliklerini anlık yakala (Nice Accordion içindeki)
+        // Textarea değişikliklerini anlık yakala
         if (this.elements.niceAccordion) {
             this.elements.niceAccordion.addEventListener('input', (e) => {
                 if (e.target.classList.contains('gs-textarea')) {
@@ -150,30 +151,22 @@ export class PortfolioUpdateManager {
         }
     }
 
-    // --- TETİKLEYİCİ MANTIK ---
-
     handleTransactionTypeChange(typeValue) {
-        // Tescil Belgesi kodunu kontrol et (Genelde 'registration' veya ID'si)
-        // Eğer seçilen işlem tipi Tescil Belgesi ise editörü aç
-        
-        // Not: typeValue değerinin ne olduğunu transactionTypes.json'dan veya console.log'dan teyit edin.
-        // Örnek olarak 'registration' veya 'tescil' içeriyorsa:
-        const isRegistration = typeValue && (typeValue.includes('registration') || typeValue === 'tescil_belgesi');
+        // Tescil Belgesi veya ID kontrolü
+        const isRegistration = typeValue && (typeValue.includes('registration') || typeValue === 'tescil_belgesi' || typeValue === '26'); // 26 genelde tescil ID'si olabilir, kontrol edin
 
         if (this.elements.registryEditorSection) {
             this.elements.registryEditorSection.style.display = isRegistration ? 'block' : 'none';
         }
         
         if (isRegistration) {
-            showNotification('Tescil bilgileri düzenleme modu aktif.', 'info');
+            console.log('📂 Tescil editörü açıldı.');
         }
     }
 
-    // --- ARAMA & SEÇİM ---
-
     async handleSearch(query) {
         if (!query || query.length < 3) {
-            this.elements.searchResults.style.display = 'none';
+            if(this.elements.searchResults) this.elements.searchResults.style.display = 'none';
             return;
         }
         const results = await ipRecordsService.searchRecords(query);
@@ -181,6 +174,8 @@ export class PortfolioUpdateManager {
     }
 
     renderSearchResults(results) {
+        if (!this.elements.searchResults) return;
+        
         const container = this.elements.searchResults;
         container.innerHTML = '';
         container.style.display = results.length ? 'block' : 'none';
@@ -200,9 +195,17 @@ export class PortfolioUpdateManager {
     }
 
     async selectRecord(id) {
-        this.elements.searchInput.value = '';
-        this.elements.searchResults.style.display = 'none';
-        showNotification('Kayıt verileri getiriliyor...', 'info');
+        // --- DÜZELTME: Null Kontrolleri Eklendi ---
+        if (this.elements.searchInput) {
+            this.elements.searchInput.value = '';
+        }
+        if (this.elements.searchResults) {
+            this.elements.searchResults.style.display = 'none';
+        }
+        // ------------------------------------------
+
+        // Not: Burada 'showNotification' çağırmıyoruz çünkü DocumentReviewManager zaten "Kayıt seçildi" diyor.
+        // Çakışmayı önlemek için sessizce yüklüyoruz.
 
         try {
             const result = await ipRecordsService.getRecordById(id);
@@ -213,59 +216,67 @@ export class PortfolioUpdateManager {
             this.state.selectedRecordId = id;
             this.state.bulletins = data.bulletins || [];
             
-            // Nice Sınıflarını Parse Et (Eski koddaki mantık)
             this.parseNiceClassesFromData(data);
 
-            this.renderSelectedRecordUI();
+            // Eğer selectedDisplay varsa (Eski sayfa) UI render et
+            if (this.elements.selectedDisplay) {
+                this.renderSelectedRecordUI();
+            }
+            
             this.populateFormFields();
 
             if (this.elements.detailsContainer) {
                 this.elements.detailsContainer.style.display = 'block';
             }
             
-            // Eğer dropdown önceden seçiliyse kontrolü tekrar çalıştır
+            // Halihazırda seçili bir işlem tipi varsa formu kontrol et
             if (this.elements.childTransactionType && this.elements.childTransactionType.value) {
                 this.handleTransactionTypeChange(this.elements.childTransactionType.value);
             }
 
         } catch (error) {
-            console.error(error);
-            showNotification('Kayıt yüklenemedi', 'error');
+            console.error('PortfolioManager Kayıt Yükleme Hatası:', error);
         }
     }
 
     parseNiceClassesFromData(data) {
-        // 1. goodsAndServicesByClass array'ini Map'e çevir
         const gsList = data.goodsAndServicesByClass || [];
         this.state.goodsAndServicesMap = gsList.reduce((acc, curr) => {
             acc[curr.classNo] = (curr.items || []).join('\n');
             return acc;
         }, {});
 
-        // 2. Sınıf numaralarını çıkar
         let nClasses = data.niceClasses || [];
         if (!nClasses.length && gsList.length > 0) {
             nClasses = gsList.map(item => String(item.classNo));
         }
-        // Fallback: eski tip veri varsa
         if (!nClasses.length && data.niceClass) {
             nClasses = Array.isArray(data.niceClass) ? data.niceClass.map(String) : [String(data.niceClass)];
         }
-
         this.state.niceClasses = nClasses.map(String);
     }
 
     clearSelection() {
         this.state = { selectedRecordId: null, recordData: null, niceClasses: [], goodsAndServicesMap: {}, bulletins: [] };
-        this.elements.selectedDisplay.innerHTML = '';
-        this.elements.selectedDisplay.style.display = 'none';
-        this.elements.searchInput.style.display = 'block';
-        if (this.elements.detailsContainer) this.elements.detailsContainer.style.display = 'none';
+        
+        if (this.elements.selectedDisplay) {
+            this.elements.selectedDisplay.innerHTML = '';
+            this.elements.selectedDisplay.style.display = 'none';
+        }
+        if (this.elements.searchInput) {
+            this.elements.searchInput.style.display = 'block';
+        }
+        if (this.elements.detailsContainer) {
+            this.elements.detailsContainer.style.display = 'none';
+        }
     }
 
     renderSelectedRecordUI() {
+        if (!this.elements.selectedDisplay) return;
+
         const r = this.state.recordData;
-        this.elements.searchInput.style.display = 'none';
+        if (this.elements.searchInput) this.elements.searchInput.style.display = 'none';
+        
         this.elements.selectedDisplay.style.display = 'block';
         this.elements.selectedDisplay.innerHTML = `
             <div class="selected-record-card p-3 border rounded bg-white">
@@ -292,18 +303,15 @@ export class PortfolioUpdateManager {
         if(this.elements.renewalDate) this.elements.renewalDate.value = r.renewalDate || '';
 
         this.renderBulletins();
-        this.renderNiceEditor(); // Artık Read-only değil, Editör render ediyoruz
+        this.renderNiceEditor(); 
     }
 
-    // --- NICE EDITOR (ESKİ KODDAN PORT EDİLEN KISIM) ---
-
     renderNiceEditor() {
-        // 1. Chips (Üstteki etiketler)
         if (!this.elements.niceChips) return;
         
         if (this.state.niceClasses.length === 0) {
             this.elements.niceChips.innerHTML = '<div class="text-muted small">Sınıf eklenmemiş. "Sınıf Ekle" butonunu kullanın.</div>';
-            this.elements.niceAccordion.innerHTML = '';
+            if (this.elements.niceAccordion) this.elements.niceAccordion.innerHTML = '';
             return;
         }
 
@@ -316,7 +324,6 @@ export class PortfolioUpdateManager {
                 </span>
             `).join('');
 
-        // 2. Accordion (Düzenlenebilir Textarea'lar)
         if (!this.elements.niceAccordion) return;
 
         this.elements.niceAccordion.innerHTML = this.state.niceClasses
@@ -346,20 +353,15 @@ export class PortfolioUpdateManager {
 
     removeNiceClass(classNo) {
         if(!confirm(`Nice ${classNo} sınıfını ve içeriğini silmek istediğinize emin misiniz?`)) return;
-        
         this.state.niceClasses = this.state.niceClasses.filter(x => x !== classNo);
         delete this.state.goodsAndServicesMap[classNo];
         this.renderNiceEditor();
     }
 
-    // --- MODAL YÖNETİMİ ---
-
     async openNiceModal() {
         const allNiceClasses = Array.from({length: 45}, (_, i) => String(i + 1));
         const existing = new Set(this.state.niceClasses);
         
-        // Modal içeriğini oluştur
-        // Sol taraf: Mevcut olmayan sınıflar
         const availableHtml = allNiceClasses
             .filter(c => !existing.has(c))
             .map(c => `<button class="list-group-item list-group-item-action add-modal-class" data-class="${c}">Nice ${c}</button>`)
@@ -369,10 +371,8 @@ export class PortfolioUpdateManager {
             this.elements.niceModalAvailableClasses.innerHTML = availableHtml || '<div class="p-2">Tüm sınıflar ekli.</div>';
         }
 
-        // Event delegation for modal buttons
         this.setupModalDynamicEvents();
 
-        // Modalı göster (Bootstrap varsa)
         if (window.$ && window.$.fn.modal) {
             $(this.elements.niceClassModal).modal('show');
         } else {
@@ -382,25 +382,22 @@ export class PortfolioUpdateManager {
     }
 
     setupModalDynamicEvents() {
-        // Modal içindeki butonlara listener (Sadece bir kez eklenmeli veya temizlenmeli, burada basitleştirildi)
         const availableContainer = this.elements.niceModalAvailableClasses;
-        
-        // Önceki listenerları temizlemek zor olduğu için cloneNode yapabiliriz veya delegation kullanabiliriz.
-        // Basit delegation:
-        availableContainer.onclick = (e) => {
-            if (e.target.classList.contains('add-modal-class')) {
-                const cls = e.target.dataset.class;
-                this.addClassFromModal(cls);
-            }
-        };
+        if (availableContainer) {
+            availableContainer.onclick = (e) => {
+                if (e.target.classList.contains('add-modal-class')) {
+                    const cls = e.target.dataset.class;
+                    this.addClassFromModal(cls);
+                }
+            };
+        }
     }
 
     addClassFromModal(cls) {
         if (!this.state.niceClasses.includes(cls)) {
             this.state.niceClasses.push(cls);
-            this.state.goodsAndServicesMap[cls] = ''; // Boş içerik başlat
+            this.state.goodsAndServicesMap[cls] = '';
             
-            // UI Güncelle ve Modalı Kapat
             this.renderNiceEditor();
             
             if (window.$ && window.$.fn.modal) {
@@ -411,7 +408,6 @@ export class PortfolioUpdateManager {
         }
     }
 
-    // --- BÜLTENLER ---
     addBulletin() {
         const no = this.elements.bulletinNoInput.value.trim();
         const date = this.elements.bulletinDateInput.value;
@@ -436,16 +432,15 @@ export class PortfolioUpdateManager {
         `).join('');
     }
 
-    // --- KAYDETME ---
-
     async saveAllChanges() {
         if (!this.state.selectedRecordId) return;
 
-        this.elements.btnSaveAll.disabled = true;
-        this.elements.btnSaveAll.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Kaydediliyor...';
+        if (this.elements.btnSaveAll) {
+            this.elements.btnSaveAll.disabled = true;
+            this.elements.btnSaveAll.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Kaydediliyor...';
+        }
 
         try {
-            // Nice sınıfları formatını hazırla
             const sortedClasses = [...this.state.niceClasses].sort((a, b) => Number(a) - Number(b));
             const goodsAndServicesByClass = sortedClasses.map(classNo => ({
                 classNo: Number(classNo),
@@ -459,29 +454,29 @@ export class PortfolioUpdateManager {
                 registrationDate: this.elements.regDate ? this.elements.regDate.value : '',
                 renewalDate: this.elements.renewalDate ? this.elements.renewalDate.value : '',
                 bulletins: this.state.bulletins,
-                niceClasses: sortedClasses, // Sadece sınıf numaraları dizisi
-                goodsAndServicesByClass: goodsAndServicesByClass, // Detaylı içerik
+                niceClasses: sortedClasses,
+                goodsAndServicesByClass: goodsAndServicesByClass,
                 updatedAt: new Date().toISOString()
             };
 
             await updateDoc(doc(db, 'ipRecords', this.state.selectedRecordId), updates);
-            showNotification('Kayıt ve portföy başarıyla güncellendi!', 'success');
-            
-            // UI Temizliği yapmaya gerek yok, kullanıcı değişikliği görsün.
+            showNotification('Portföy bilgileri güncellendi!', 'success');
 
         } catch (error) {
             console.error('Save Error:', error);
             showNotification('Hata: ' + error.message, 'error');
         } finally {
-            this.elements.btnSaveAll.disabled = false;
-            this.elements.btnSaveAll.textContent = 'Tüm Değişiklikleri Kaydet';
+            if (this.elements.btnSaveAll) {
+                this.elements.btnSaveAll.disabled = false;
+                this.elements.btnSaveAll.textContent = 'Tüm Değişiklikleri Kaydet';
+            }
         }
     }
 }
 
-// Global başlatma
+// Global başlatma (Hibrid)
 document.addEventListener('DOMContentLoaded', () => {
-    // Hem eski input'u (recordSearchInput) hem de yeni sayfadaki select'i (detectedType) kontrol et
+    // Hem eski input'u hem de yeni sayfadaki select'i kontrol et
     if (document.getElementById('recordSearchInput') || document.getElementById('detectedType')) {
         window.portfolioUpdateManager = new PortfolioUpdateManager();
     }
