@@ -39,6 +39,7 @@ class DataEntryModule {
         this.editingRecordId = null;
         this.uploadedBrandImage = null;
         this.isNiceInitialized = false;
+        this.currentTransactionHierarchy = 'parent'; // Varsayılan
         
         // Veri Listeleri
         this.allPersons = [];
@@ -246,7 +247,6 @@ class DataEntryModule {
         }
     }
 
-    // ✅ YENİ FONKSİYON: Arayüzde Tescil No alanını IR No olarak değiştirir
     updateRegistrationInputUI(origin) {
         const regLabel = document.getElementById('registrationNumberLabel');
         const regInput = document.getElementById('registrationNumber');
@@ -481,24 +481,22 @@ class DataEntryModule {
                     await updateDoc(suitRef, recordData);
                     alert('Dava kaydı başarıyla güncellendi.');
                 } else {
-                    // ⚠️ WIPO/ARIPO İÇİN EKSİK PARÇA BURADAYDI:
-                    // updateRecord yapmadan önce 'wipoIR' veya 'aripoIR' alanını doldurmalıyız.
+                    
                     if (recordData.origin === 'WIPO') {
                         recordData.wipoIR = recordData.internationalRegNumber || recordData.registrationNumber;
                     } else if (recordData.origin === 'ARIPO') {
                         recordData.aripoIR = recordData.internationalRegNumber || recordData.registrationNumber;
                     }
 
-                    // ⚠️ WIPO/ARIPO Kontrolü: Parent'ın ülke listesini güncelle
-                    // Eğer ekrandan yeni ülke seçildiyse, bunu Parent verisine işle.
-                    if (recordData.origin === 'WIPO' || recordData.origin === 'ARIPO') {
+                    // WIPO/ARIPO Kontrolü: Parent'ın ülke listesini güncelle
+                    if ((recordData.origin === 'WIPO' || recordData.origin === 'ARIPO') && this.currentTransactionHierarchy === 'parent') {
                         if (this.selectedCountries && this.selectedCountries.length > 0) {
                             recordData.countries = this.selectedCountries.map(c => c.code);
                             console.log('🌍 Parent ülke listesi güncelleniyor:', recordData.countries);
                         }
                     }
 
-                    // 1. Parent Kaydı Güncelle
+                    // 1. Mevcut Kaydı Güncelle
                     const result = await ipRecordsService.updateRecord(this.editingRecordId, recordData);
                     
                     if (!result.success) {
@@ -506,7 +504,9 @@ class DataEntryModule {
                     }
                     
                     // 2. WIPO/ARIPO Child İşlemleri (Senkronizasyon)
-                    if (recordData.origin === 'WIPO' || recordData.origin === 'ARIPO') {
+                    // 🔥 DÜZELTME: Sadece eğer bu bir PARENT kayıtsa child senkronizasyonu yap!
+                    // Child kayıtlarda bu işlemi yaparsak kendisini kopyalar.
+                    if ((recordData.origin === 'WIPO' || recordData.origin === 'ARIPO') && this.currentTransactionHierarchy === 'parent') {
                         console.log('🔄 Child Senkronizasyonu başlatılıyor...');
                         
                         // A) Eksik olan (yeni eklenen) ülkeleri yarat
@@ -514,9 +514,11 @@ class DataEntryModule {
 
                         // B) Mevcut Child kayıtlarına değişiklikleri yay (İsim, tarih, IR No vb.)
                         await this.propagateUpdatesToChildren(this.editingRecordId, recordData);
+                    } else {
+                        console.log('ℹ️ Bu bir Child kayıt veya WIPO değil, senkronizasyon atlandı.');
                     }
 
-                    alert('Kayıt ve bağlı tüm dosyalar başarıyla güncellendi.');
+                    alert('Kayıt başarıyla güncellendi.');
                 }
 
             } else {
@@ -540,7 +542,6 @@ class DataEntryModule {
         } catch (error) {
             console.error('Kaydetme hatası:', error);
             
-            // Mükerrer kayıt hatası kontrolü
             if (error.message && error.message.includes('duplikasyon')) {
                 alert('HATA: Bu kayıt zaten mevcut (Aynı numara ile).');
             } else {
@@ -620,9 +621,6 @@ class DataEntryModule {
             console.log('🔄 Child Senkronizasyonu Başladı. ParentID:', parentId);
             const db = getFirestore();
             
-            // 1. ADIM: Mevcut Child Kayıtları Bul
-            // NOT: İndeks hatasından kaçınmak için sadece parentId ile çekiyoruz.
-            // Filtrelemeyi aşağıda JavaScript ile yapacağız.
             const q = query(
                 collection(db, 'ipRecords'),
                 where('parentId', '==', parentId)
@@ -633,9 +631,7 @@ class DataEntryModule {
 
             querySnapshot.forEach((doc) => {
                 const data = doc.data();
-                // Sadece 'child' olanları ve ülke kodu dolu olanları listeye al
                 if (data.transactionHierarchy === 'child' && data.country) {
-                    // Kodlardaki olası boşlukları temizle (trim)
                     existingCountryCodes.push(String(data.country).trim());
                 }
             });
@@ -646,13 +642,12 @@ class DataEntryModule {
             // 2. ADIM: Sadece LİSTEDE OLMAYAN yeni ülkeleri belirle
             const countriesToCreate = this.selectedCountries.filter(c => {
                 const formCountryCode = String(c.code).trim();
-                // Eğer veritabanındaki listede BU KOD YOKSA, listeye ekle
                 return !existingCountryCodes.includes(formCountryCode);
             });
 
             if (countriesToCreate.length === 0) {
                 console.log('✅ Yeni eklenecek ülke yok. Mevcut kayıtlar korunuyor.');
-                return; // Fonksiyondan çık, hiçbir şey yaratma.
+                return; // Fonksiyondan çık
             }
 
             console.log('🚀 Oluşturulacak Yeni Ülkeler:', countriesToCreate.map(c => c.code));
@@ -660,17 +655,15 @@ class DataEntryModule {
             // 3. ADIM: Eksik Olanları Yarat
             const promises = countriesToCreate.map(async (country) => {
                 try {
-                    // Parent verisini kopyala
                     const childData = { ...parentData };
 
-                    // 🧹 TEMİZLİK: Parent'a ait veya gereksiz alanları sil
                     delete childData.applicationNumber; 
                     delete childData.registrationNumber; 
                     delete childData.internationalRegNumber; 
                     delete childData.countries; 
                     delete childData.wipoIR;
                     delete childData.aripoIR;
-                    delete childData.id; // Kopyalanan ID'yi sil, yeni ID oluşsun
+                    delete childData.id; 
 
                     // ✅ CHILD VERİSİ
                     childData.transactionHierarchy = 'child';
@@ -688,7 +681,6 @@ class DataEntryModule {
                     const res = await ipRecordsService.createRecordFromDataEntry(childData);
                     
                     if (res.success) {
-                        // Yeni kayıt için transaction ekle
                         await this.addTransactionForNewRecord(res.id, parentData.ipType, 'child');
                     }
                 } catch (err) {
@@ -710,7 +702,6 @@ class DataEntryModule {
         try {
             const db = getFirestore();
             
-            // 1. Bu Parent'a bağlı tüm child'ları bul
             const q = query(
                 collection(db, 'ipRecords'),
                 where('parentId', '==', parentId),
@@ -724,39 +715,32 @@ class DataEntryModule {
                 return;
             }
 
-            // 2. Güncellenecek alanları hazırla
             const updates = {
                 title: parentData.title || parentData.brandText || null,
                 brandText: parentData.brandText || null,
                 description: parentData.description || null,
                 status: parentData.status || null,
                 
-                // Tarihler
                 applicationDate: parentData.applicationDate || null,
                 registrationDate: parentData.registrationDate || null,
                 renewalDate: parentData.renewalDate || null,
                 
-                // Görsel
                 brandImageUrl: parentData.brandImageUrl || null,
                 
-                // Listeler
                 applicants: parentData.applicants,
                 goodsAndServicesByClass: parentData.goodsAndServicesByClass,
                 
                 updatedAt: new Date().toISOString()
             };
 
-            // IR Numarası (Varsa güncelle)
             const irNumber = parentData.internationalRegNumber || parentData.registrationNumber;
             if (parentData.origin === 'WIPO') updates.wipoIR = irNumber || null;
             if (parentData.origin === 'ARIPO') updates.aripoIR = irNumber || null;
 
-            // 🧹 TEMİZLİK: Değeri 'undefined' olanları sil
             Object.keys(updates).forEach(key => {
                 if (updates[key] === undefined) delete updates[key];
             });
 
-            // 3. Tüm child'ları güncelle
             const updatePromises = snapshot.docs.map(doc => updateDoc(doc.ref, updates));
             
             await Promise.all(updatePromises);
@@ -764,16 +748,13 @@ class DataEntryModule {
 
         } catch (error) {
             console.error('❌ Child güncelleme hatası:', error);
-            // Hatayı fırlatmıyoruz ki ana işlem durmasın, sadece logluyoruz
         }
     }
 
-    // Bu fonksiyonun böyle olduğundan emin ol (Sınıfın altında)
     async addTransactionForNewRecord(recordId, ipType, hierarchy = 'parent') {
         const TX_IDS = { trademark: '2', patent: '5', design: '8' };
         const txTypeId = TX_IDS[ipType] || '2';
         
-        // Açıklama
         const description = hierarchy === 'child' ? 'Ülke başvurusu işlemi.' : 'Başvuru işlemi.';
 
         try {
@@ -781,7 +762,7 @@ class DataEntryModule {
                 type: String(txTypeId),
                 transactionTypeId: String(txTypeId),
                 description: description,
-                transactionHierarchy: hierarchy // <-- Bu satır çok önemli
+                transactionHierarchy: hierarchy 
             });
             console.log(`✅ Transaction eklendi (${hierarchy}): ${recordId}`);
         } catch (error) {
@@ -790,7 +771,7 @@ class DataEntryModule {
     }
 
     // ============================================================
-    // 5. YARDIMCI FONKSİYONLAR (DROPDOWNS, SEARCH, ETC.)
+    // 5. YARDIMCI FONKSİYONLAR
     // ============================================================
 
     populateOriginDropdown(dropdownId, selectedValue = 'TÜRKPATENT', ipType) {
@@ -936,7 +917,6 @@ class DataEntryModule {
         
         this.renderSelectedCountries();
         
-        // Listener temizliği yapmıyorum, basitlik için overwrite ediyorum
         input.oninput = (e) => {
             const query = e.target.value.toLowerCase();
             if (query.length < 2) { resultsContainer.style.display = 'none'; return; }
@@ -997,7 +977,6 @@ class DataEntryModule {
         area.onclick = () => input.click();
         input.onchange = (e) => { if (e.target.files.length) this.handleBrandExampleFile(e.target.files[0]); };
         
-        // Remove butonu mantığı
         const removeBtn = document.getElementById('removeBrandExampleBtn');
         if (removeBtn) {
             removeBtn.onclick = () => {
@@ -1046,7 +1025,6 @@ class DataEntryModule {
         card.insertAdjacentHTML('beforebegin', FormTemplates.getClientSection());
         this.renderSuitSubjectAssetSection();
         
-        // Müvekkil Modal Tetikleyici
         document.getElementById('addNewPersonBtn')?.addEventListener('click', () => {
             openPersonModal((newPerson) => {
                 this.allPersons.push(newPerson);
@@ -1054,7 +1032,6 @@ class DataEntryModule {
             });
         });
         
-        // Müvekkil Arama Dinleyicileri
         this.setupSuitPersonSearchSelectors();
     }
     
@@ -1081,8 +1058,7 @@ class DataEntryModule {
     }
 
     setupSuitSubjectAssetSearchSelectors() {
-        // ... (Bu fonksiyon senin kodunda zaten vardı, olduğu gibi kalabilir veya asset arama mantığını buraya taşıyabilirsin)
-        // Kısaltmak için detayları buraya yazmadım ama Asset Search logic buraya gelecek.
+        // Search logic here
     }
 
     addPriority() {
@@ -1114,21 +1090,18 @@ class DataEntryModule {
     }
 
     updateSaveButtonState() {
-        // Kaydet butonu aktiflik kontrolü (Basitleştirilmiş)
         const ipType = this.ipTypeSelect?.value;
         let isComplete = false;
         
         if (ipType === 'trademark') {
             const txt = document.getElementById('brandExampleText')?.value;
             const hasApp = this.selectedApplicants.length > 0;
-            // WIPO ise ülke de lazım
             const origin = document.getElementById('originSelect')?.value;
             const isInt = (origin === 'WIPO' || origin === 'ARIPO');
             isComplete = txt && hasApp && (!isInt || this.selectedCountries.length > 0);
         } else if (ipType === 'suit') {
             isComplete = !!this.suitClientPerson && !!this.suitSpecificTaskType;
         } else {
-            // Patent/Design için başlık yeterli
             isComplete = !!document.getElementById(`${ipType}Title`)?.value;
         }
         
@@ -1142,20 +1115,19 @@ class DataEntryModule {
         if (!recordData) return;
         console.log('🔄 Edit Modu: Veriler dolduruluyor...');
 
-        // 1. Temel Seçimler
+        // 🔥 Hiyerarşiyi Kaydet (Düzeltmenin kalbi burası)
+        this.currentTransactionHierarchy = recordData.transactionHierarchy || 'parent';
+
         const ipType = recordData.type || recordData.ipType || 'trademark';
         this.ipTypeSelect.value = ipType;
         this.handleIPTypeChange(ipType);
         
         if (this.recordOwnerTypeSelect) this.recordOwnerTypeSelect.value = recordData.recordOwnerType || 'self';
 
-        // 2. Form Render Beklemesi (Timeout)
         setTimeout(() => {
-            // Başlık
             const titleEl = document.getElementById('formTitle');
             if(titleEl) titleEl.textContent = 'Kayıt Düzenle';
 
-            // Ortak Alanlar
             const setVal = (id, val) => { const el = document.getElementById(id); if(el) el.value = val || ''; };
             
             setVal('applicationNumber', recordData.applicationNumber);
@@ -1164,7 +1136,6 @@ class DataEntryModule {
             setVal('registrationDate', recordData.registrationDate);
             setVal('renewalDate', recordData.renewalDate);
             
-            // Menşe
             const originSelect = document.getElementById('originSelect');
             if (originSelect && recordData.origin) {
                 this.populateOriginDropdown('originSelect', recordData.origin, ipType);
@@ -1172,16 +1143,14 @@ class DataEntryModule {
                 
                 // Child Kayıt Kontrolü (Read-Only Ülke)
                 if ((recordData.origin === 'WIPO' || recordData.origin === 'ARIPO') && recordData.transactionHierarchy === 'child') {
-                    // Child kayıtlarda ülke değiştirilemez, sadece gösterilir
                     this.selectedCountries = recordData.country 
                         ? [{code: recordData.country, name: recordData.country}] 
                         : [];
                     this.renderSelectedCountries();
-                    // UI Kitleme
                     const container = document.getElementById('multiCountrySelectWrapper');
                     if(container) {
                         container.style.display = 'block';
-                        document.getElementById('countriesMultiSelectInput').style.display = 'none'; // Aramayı gizle
+                        document.getElementById('countriesMultiSelectInput').style.display = 'none';
                         document.getElementById('countrySelectionTitle').textContent = 'Ülke (Değiştirilemez)';
                     }
                 } 
@@ -1200,7 +1169,6 @@ class DataEntryModule {
                 }
             }
 
-            // Marka Alanları
             if (ipType === 'trademark') {
                 setVal('brandType', recordData.brandType);
                 setVal('brandCategory', recordData.brandCategory);
@@ -1208,49 +1176,40 @@ class DataEntryModule {
                 setVal('brandDescription', recordData.description);
                 setVal('trademarkStatus', recordData.status);
                 
-                // Görsel
                 if (recordData.brandImageUrl) {
                     this.uploadedBrandImage = recordData.brandImageUrl;
                     document.getElementById('brandExamplePreview').src = recordData.brandImageUrl;
                     document.getElementById('brandExamplePreviewContainer').style.display = 'block';
                 }
 
-                // Nice Sınıfları
                 if (recordData.goodsAndServicesByClass && typeof setSelectedNiceClasses === 'function') {
                      const formatted = recordData.goodsAndServicesByClass.map(g => `(${g.classNo}-1) ${g.items ? g.items.join('\n') : ''}`);
                      this.storedNiceClasses = formatted;
                      setSelectedNiceClasses(formatted);
                 }
             }
-            // Patent/Tasarım Alanları
             else {
                 setVal(`${ipType}Title`, recordData.title);
                 setVal(`${ipType}ApplicationNumber`, recordData.applicationNumber);
                 setVal(`${ipType}Description`, recordData.description);
             }
 
-            // ✅ Başvuru sahipleri - İsim Eşleştirme Düzeltmesi
             if (recordData.applicants && recordData.applicants.length > 0) {
                 this.selectedApplicants = recordData.applicants.map(applicant => {
-                    // Veritabanında isim yoksa, ID ile sistemdeki kişi listesinden (this.allPersons) bul
                     const personFromList = this.allPersons.find(p => p.id === applicant.id);
-                    
                     return {
                         id: applicant.id,
-                        // İsim önceliği: Kayıttaki isim -> Listeden bulunan isim -> 'İsimsiz Kişi'
                         name: applicant.name || (personFromList ? personFromList.name : 'İsimsiz Kişi'),
                         email: applicant.email || (personFromList ? personFromList.email : '')
                     };
                 });
                 this.renderSelectedApplicants();
-                console.log('👥 Başvuru sahipleri isimleriyle yüklendi:', this.selectedApplicants);
             }
             if (recordData.priorities) {
                 this.priorities = recordData.priorities;
                 this.renderPriorities();
             }
 
-            // Edit modunda kilitli alanlar
             if (this.ipTypeSelect) this.ipTypeSelect.disabled = true;
             if (originSelect) originSelect.disabled = true;
 
@@ -1262,7 +1221,6 @@ class DataEntryModule {
 
 export default DataEntryModule;
 
-// Boot Logic
 document.addEventListener('DOMContentLoaded', () => {
   loadSharedLayout({ activeMenuLink: 'data-entry.html' }).catch(console.error);
   if (typeof ensurePersonModal === 'function') ensurePersonModal();
