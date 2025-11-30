@@ -103,38 +103,24 @@ export class DocumentReviewManager {
             showNotification('Veri yükleme hatası: ' + error.message, 'error');
         }
     }
+
     async selectRecord(recordId) {
-            // 1. Arama kutusunu ve listeyi güvenli şekilde temizle
-            const searchInput = document.getElementById('manualSearchInput');
-            const searchResults = document.getElementById('manualSearchResults');
+        try {
+            const result = await ipRecordsService.getRecordById(recordId);
+            if (result.success) {
+                this.matchedRecord = result.data;
+                this.renderHeader();
+                await this.loadParentTransactions(recordId);
+                showNotification('Kayıt seçildi: ' + this.matchedRecord.title, 'success');
 
-            if (searchInput) searchInput.value = '';
-            if (searchResults) searchResults.style.display = 'none';
-
-            try {
-                const result = await ipRecordsService.getRecordById(recordId);
-                
-                if (result.success) {
-                    this.matchedRecord = result.data;
-                    // Eğer header render fonksiyonunuz varsa çağırın
-                    if (this.renderHeader) this.renderHeader();
-                    // Eğer parent transactions yükleme fonksiyonunuz varsa çağırın
-                    if (this.loadParentTransactions) await this.loadParentTransactions(recordId);
-                    
-                    showNotification('Kayıt seçildi: ' + this.matchedRecord.title, 'success');
-
-                    // ✅ ETKİLEŞİM: Diğer yöneticiye (PortfolioManager) haber ver
-                    console.log('📤 Event gönderiliyor: record-selected', recordId);
-                    document.dispatchEvent(new CustomEvent('record-selected', { 
-                        detail: { recordId: recordId } 
-                    })); 
-                } else {
-                    console.error('Kayıt verisi alınamadı');
-                }
-            } catch (error) {
-                console.error('Kayıt seçim hatası:', error);
+                // Diğer yöneticiye (PortfolioManager) haber ver
+                console.log('📤 Event gönderiliyor: record-selected', recordId);
+                document.dispatchEvent(new CustomEvent('record-selected', { 
+                    detail: { recordId: recordId } 
+                }));
             }
-        }
+        } catch (error) { console.error('Kayıt seçim hatası:', error); }
+    }
 
     async loadParentTransactions(recordId) {
         const parentSelect = document.getElementById('parentTransactionSelect');
@@ -197,10 +183,8 @@ export class DocumentReviewManager {
         if (matchedOption) { 
             matchedOption.selected = true; 
             this.checkSpecialFields();
-            
-            // --- EKLENEN KISIM: Diğer yöneticiyi (PortfolioManager) uyandırmak için event fırlat ---
+            // Otomatik seçimde diğer modülü (Portfolio) tetikle
             selectElement.dispatchEvent(new Event('change'));
-            // --------------------------------------------------------------------------------------
         }
     }
 
@@ -210,8 +194,6 @@ export class DocumentReviewManager {
         if (childTypeId === '27') oppositionSection.style.display = 'block';
         else oppositionSection.style.display = 'none';
     }
-
-    // public/js/indexing/document-review-manager.js içindeki handleSave fonksiyonu
 
     async handleSave() {
         if (!this.matchedRecord) { alert('Lütfen önce bir kayıt ile eşleştirin.'); return; }
@@ -234,12 +216,12 @@ export class DocumentReviewManager {
             const parentTx = this.currentTransactions.find(t => t.id === parentTxId);
             const parentTypeObj = this.allTransactionTypes.find(t => t.id === parentTx?.type);
 
-            // 1. İtiraz Bildirimi Özel Mantığı
+            // 1. İtiraz Bildirimi Özel Mantığı (Yeni Parent Oluşturma)
             let newParentTxId = null;
             let oppositionFileUrl = null;
             let oppositionFileName = null;
 
-            if (childTypeId === '27') { // Yayına İtiraz Bildirimi ID'si
+            if (childTypeId === '27') { // Yayına İtiraz
                 const ownerInput = document.getElementById('oppositionOwnerInput').value;
                 const fileInput = document.getElementById('oppositionPetitionFile').files[0];
                 if (!ownerInput || !fileInput) throw new Error('İtiraz Sahibi ve PDF zorunludur.');
@@ -249,11 +231,11 @@ export class DocumentReviewManager {
                 oppositionFileUrl = await getDownloadURL(storageRef);
                 oppositionFileName = fileInput.name;
 
-                let newParentTypeId = '20'; // Yayına İtiraz
+                let newParentTypeId = '20'; 
                 let newParentDesc = 'Yayına İtiraz (Otomatik)';
                 const parentAlias = parentTypeObj?.alias || parentTypeObj?.name || '';
                 if (parentAlias.includes('İtiraz') || parentTypeObj?.id === '20') {
-                    newParentTypeId = '19'; // Yayına İtirazın Yeniden İncelenmesi
+                    newParentTypeId = '19'; 
                     newParentDesc = 'Yayına İtirazın Yeniden İncelenmesi (Otomatik)';
                 }
 
@@ -310,13 +292,13 @@ export class DocumentReviewManager {
                 await updateDoc(txRef, { documents: arrayUnion(oppDocPayload) });
             }
 
-            // 3. İş Tetikleme (Task) Mantığı
+            // 3. İş Tetikleme (Task)
             let createdTaskId = null;
             let shouldTriggerTask = false;
             const recordType = (this.matchedRecord.recordOwnerType === 'self') ? 'Portföy' : '3. Taraf';
             const parentTypeId = parentTx.type;
             
-            // Matrix ve trigger kontrolü
+            // Task Matrix Kontrolü
             const taskTriggerMatrix = {
                 "20": { "Portföy": ["50", "51"], "3. Taraf": ["51", "52"] },
                 "19": { "Portföy": ["32", "33", "34", "35"], "3. Taraf": ["31", "32", "35", "36"] }
@@ -345,20 +327,30 @@ export class DocumentReviewManager {
                     if (assigneeData.uid) assignedUser = { uid: assigneeData.uid, email: assigneeData.email };
                 } catch(e) { console.warn('Assignee error', e); }
 
-                // --- 🔥 YENİ EKLENEN: İLGİLİ TARAF (RELATED PARTY) MANTIĞI BAŞLANGIÇ ---
+                // 🔥 YENİ GÜNCELLENMİŞ İLGİLİ TARAF (RELATED PARTY) MANTIĞI
                 let relatedPartyData = null;
+                console.log('🔍 İlgili Taraf Analizi:', {
+                    ownerType: this.matchedRecord.recordOwnerType,
+                    applicants: this.matchedRecord.applicants,
+                    parentTxId: parentTxId,
+                    triggeringTaskId: parentTx?.triggeringTaskId
+                });
 
                 // KURAL 1: Kayıt tipi 'self' ise -> applicants listesinin ilk elemanı
                 if (this.matchedRecord.recordOwnerType === 'self') {
-                    if (this.matchedRecord.applicants && this.matchedRecord.applicants.length > 0) {
+                    if (Array.isArray(this.matchedRecord.applicants) && this.matchedRecord.applicants.length > 0) {
                         const app = this.matchedRecord.applicants[0];
-                        // İhtiyaç duyulan minimum veriyi alıyoruz (id, name)
-                        relatedPartyData = { id: app.id, name: app.name || 'İsimsiz' };
+                        // ID ve İsim kontrolü
+                        if (app && app.id) {
+                            relatedPartyData = { id: app.id, name: app.name || 'İsimsiz' };
+                            console.log('✅ Self kayıt için ilgili taraf bulundu:', relatedPartyData);
+                        } else {
+                            console.warn('⚠️ Applicant verisi eksik veya ID yok:', app);
+                        }
                     }
                 } 
                 // KURAL 2: Kayıt tipi 'third_party' ise -> Parent Transaction'ın tetiklediği Task'a git
                 else if (this.matchedRecord.recordOwnerType === 'third_party') {
-                    // Ana işlemden (parentTx) triggeringTaskId'yi al
                     const triggeringTaskId = parentTx?.triggeringTaskId;
                     
                     if (triggeringTaskId) {
@@ -370,15 +362,18 @@ export class DocumentReviewManager {
                                 // O görevin 'relatedParty' bilgisini kopyala
                                 if (prevTask.details && prevTask.details.relatedParty) {
                                     relatedPartyData = prevTask.details.relatedParty;
-                                    console.log('📋 Parent görevden ilgili taraf alındı:', relatedPartyData);
+                                    console.log('✅ Parent görevden ilgili taraf alındı:', relatedPartyData);
+                                } else {
+                                    console.warn('⚠️ Parent görevde relatedParty bilgisi yok:', prevTask.id);
                                 }
                             }
                         } catch (e) {
-                            console.warn('Parent task fetch error for related party:', e);
+                            console.warn('❌ Parent task fetch error for related party:', e);
                         }
+                    } else {
+                        console.warn('⚠️ Parent işlemde triggeringTaskId yok.');
                     }
                 }
-                // --- İLGİLİ TARAF MANTIĞI BİTİŞ ---
 
                 const taskData = {
                     title: `${childTypeObj.alias || childTypeObj.name} - ${this.matchedRecord.title}`,
@@ -398,9 +393,11 @@ export class DocumentReviewManager {
                     assignedTo_email: assignedUser.email,
                     createdBy: this.currentUser.uid,
                     createdAt: new Date().toISOString(),
-                    // 🔥 Detaylara ilgili tarafı ekliyoruz
+                    
+                    // 🔥 Düzeltilmiş: İlgili Tarafı Hem 'taskOwner' hem de 'details.relatedParty' olarak ekle
+                    taskOwner: relatedPartyData ? relatedPartyData.id : null, // Ana seviyede ID
                     details: {
-                        relatedParty: relatedPartyData 
+                        relatedParty: relatedPartyData // Detaylarda obje {id, name}
                     }
                 };
 
