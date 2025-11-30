@@ -1011,31 +1011,32 @@
         } catch { return (amount ?? 0) + ' ' + (currency || 'TRY'); }
     };
 
-    // === TÜRKPATENT SORGULAMA FONKSİYONU (EKLENTİ DESTEKLİ) ===
+// === TÜRKPATENT SORGULAMA FONKSİYONU (GÜNCELLENMİŞ) ===
     window.triggerTpQuery = function(applicationNo) {
         const appNo = (applicationNo || '').toString().trim();
-        // Yeni Portal Linki (Fallback)
-        const cleanAppNo = appNo.replace(/[^a-zA-Z0-9]/g, '');
-        const fallbackUrl = `https://portal.turkpatent.gov.tr/anonim/arastirma/marka/sonuc?dosyaNo=${cleanAppNo}`;
         
-        // Eklenti ID'si
+        // [DÜZELTME]: Sadece harf, rakam VE SLASH (/) karakterine izin ver
+        // Eski kod: /[^a-zA-Z0-9]/g (Slash'ı siliyordu)
+        const cleanAppNo = appNo.replace(/[^a-zA-Z0-9/]/g, '');
+        
+        // URL'de / işareti sorun çıkarmasın diye encodeURIComponent kullanıyoruz
+        // Bu, 2024/12345'i 2024%2F12345 yapar, portal bunu doğru okur.
+        const fallbackUrl = `https://portal.turkpatent.gov.tr/anonim/arastirma/marka/sonuc?dosyaNo=${encodeURIComponent(cleanAppNo)}`;
+        
         const EXT_ID = 'gkhmldkbjmnipikgjabmlilibllikapk';
 
         try {
             if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
-                chrome.runtime.sendMessage(EXT_ID, { type: 'SORGULA', data: appNo }, (response) => {
-                    // Eklenti yanıt vermezse veya hata olursa
+                chrome.runtime.sendMessage(EXT_ID, { type: 'SORGULA', data: cleanAppNo }, (response) => {
                     if (chrome.runtime.lastError || !response) {
                         console.warn("Eklenti bulunamadı, web sitesine yönlendiriliyor.");
                         window.open(fallbackUrl, '_blank');
                     }
                 });
             } else {
-                // Chrome runtime yoksa
                 window.open(fallbackUrl, '_blank');
             }
         } catch (e) {
-            // Herhangi bir çökme durumunda
             window.open(fallbackUrl, '_blank');
         }
     };
