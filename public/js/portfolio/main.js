@@ -1,7 +1,7 @@
 // public/js/portfolio/main.js
 import { PortfolioDataManager } from './PortfolioDataManager.js';
 import { PortfolioRenderer } from './PortfolioRenderer.js';
-import { auth, onAuthStateChanged, monitoringService, ipRecordsService } from '../../firebase-config.js';
+import { auth, onAuthStateChanged, monitoringService } from '../../firebase-config.js';
 import { loadSharedLayout } from '../layout-loader.js';
 import { showNotification } from '../../utils.js';
 import Pagination from '../pagination.js';
@@ -18,7 +18,7 @@ class PortfolioController {
             columnFilters: {},
             sort: { column: 'applicationDate', direction: 'desc' },
             currentPage: 1,
-            selectedRecords: new Set() // Seçili kayıtları tutar
+            selectedRecords: new Set()
         };
 
         this.init();
@@ -68,7 +68,7 @@ class PortfolioController {
                 this.state.activeTab = e.target.dataset.type;
                 this.state.currentPage = 1;
                 this.state.searchQuery = '';
-                this.state.selectedRecords.clear(); // Tab değişince seçimleri sıfırla
+                this.state.selectedRecords.clear();
                 this.updateBulkActionButtons();
                 
                 document.getElementById('searchBar').value = '';
@@ -84,7 +84,7 @@ class PortfolioController {
             });
         });
 
-        // --- ARAMA VE FİLTRELEME ---
+        // --- ARAMA ---
         document.getElementById('searchBar').addEventListener('input', (e) => {
             this.state.searchQuery = e.target.value;
             this.state.currentPage = 1;
@@ -118,9 +118,7 @@ class PortfolioController {
             }
         });
 
-        // --- SEÇİM VE TOPLU İŞLEMLER ---
-        
-        // Tümünü Seç
+        // --- SEÇİM & TOPLU İŞLEMLER ---
         const selectAllCb = document.getElementById('selectAllCheckbox');
         if (selectAllCb) {
             selectAllCb.addEventListener('change', (e) => {
@@ -130,12 +128,11 @@ class PortfolioController {
                     if (isChecked) this.state.selectedRecords.add(r.id);
                     else this.state.selectedRecords.delete(r.id);
                 });
-                this.render(); // Checkboxları güncellemek için
+                this.render();
                 this.updateBulkActionButtons();
             });
         }
 
-        // Satır Seçimi (Delegation)
         document.getElementById('portfolioTableBody').addEventListener('change', (e) => {
             if (e.target.classList.contains('record-checkbox')) {
                 const id = e.target.dataset.id;
@@ -145,21 +142,18 @@ class PortfolioController {
             }
         });
 
-        // Butonlar: Aktif/Pasif, İzleme
         document.getElementById('toggleRecordStatusBtn')?.addEventListener('click', () => this.handleBulkStatusChange());
         document.getElementById('addToMonitoringBtn')?.addEventListener('click', () => this.handleBulkMonitoring());
 
-        // --- DIŞA AKTARMA (EXPORT) ---
         document.getElementById('exportExcelBtn')?.addEventListener('click', () => this.handleExport('excel'));
         document.getElementById('exportPdfBtn')?.addEventListener('click', () => this.handleExport('pdf'));
 
-        // --- TABLO İÇİ AKSİYONLAR ---
+        // --- TABLO AKSİYONLARI (Accordion, View, Delete) ---
         document.getElementById('portfolioTableBody').addEventListener('click', (e) => {
-            // Accordion (Caret)
+            // Accordion Toggle
             const caret = e.target.closest('.row-caret') || (e.target.closest('tr.group-header') && !e.target.closest('button, a, input'));
             if (caret) this.toggleAccordion(caret);
 
-            // Butonlar (Görüntüle, Sil)
             const btn = e.target.closest('.action-btn');
             if (btn) {
                 const id = btn.dataset.id;
@@ -169,17 +163,14 @@ class PortfolioController {
                 } else if (btn.classList.contains('delete-btn')) {
                     this.handleDelete(id);
                 } else if (btn.classList.contains('edit-btn')) {
-                     if (this.state.activeTab === 'litigation') window.location.href = `suit-detail.html?id=${id}`; // Düzenleme detay sayfasında
+                     if (this.state.activeTab === 'litigation') window.location.href = `suit-detail.html?id=${id}`;
                      else window.location.href = `data-entry.html?id=${id}`;
                 }
             }
         });
     }
 
-    // --- MANTIK VE YARDIMCILAR ---
-
     getCurrentPageRecords() {
-        // O anki filtre ve sayfalama durumuna göre ekrandaki kayıtları döndürür
         let filtered = this.dataManager.filterRecords(this.state.activeTab, this.state.searchQuery, this.state.columnFilters);
         filtered = this.dataManager.sortRecords(filtered, this.state.sort.column, this.state.sort.direction);
         return this.pagination.getCurrentPageData(filtered);
@@ -188,22 +179,15 @@ class PortfolioController {
     updateSelectAllCheckbox() {
         const selectAllCb = document.getElementById('selectAllCheckbox');
         if (!selectAllCb) return;
-        
         const pageRecords = this.getCurrentPageRecords();
-        if (pageRecords.length === 0) {
-            selectAllCb.checked = false;
-            return;
-        }
-        // Sayfadaki herkes seçili mi?
-        const allSelected = pageRecords.every(r => this.state.selectedRecords.has(r.id));
-        selectAllCb.checked = allSelected;
+        if (pageRecords.length === 0) { selectAllCb.checked = false; return; }
+        selectAllCb.checked = pageRecords.every(r => this.state.selectedRecords.has(r.id));
     }
 
     updateBulkActionButtons() {
         const count = this.state.selectedRecords.size;
         const statusBtn = document.getElementById('toggleRecordStatusBtn');
         const monitorBtn = document.getElementById('addToMonitoringBtn');
-
         if (statusBtn) {
             statusBtn.disabled = count === 0;
             statusBtn.textContent = count > 0 ? `Durum Değiştir (${count})` : 'Aktif/Pasif';
@@ -211,100 +195,6 @@ class PortfolioController {
         if (monitorBtn) {
             monitorBtn.disabled = count === 0;
             monitorBtn.textContent = count > 0 ? `İzlemeye Ekle (${count})` : 'İzlemeye Ekle';
-        }
-    }
-
-    async handleBulkStatusChange() {
-        if (this.state.selectedRecords.size === 0) return;
-        if (!confirm(`${this.state.selectedRecords.size} kaydın durumu değiştirilecek. Emin misiniz?`)) return;
-
-        const ids = Array.from(this.state.selectedRecords);
-        // Basitlik için hepsini toggle ediyoruz (veya seçilenlerin durumuna göre karar verilebilir)
-        // Burada dataManager üzerinden servise gidiyoruz
-        try {
-            this.renderer.showLoading(true);
-            await this.dataManager.toggleRecordsStatus(ids);
-            showNotification('Kayıtların durumu güncellendi.', 'success');
-            this.state.selectedRecords.clear();
-            this.updateBulkActionButtons();
-            // Veriyi yenile
-            await this.dataManager.loadRecords(); 
-            this.render();
-        } catch (e) {
-            showNotification('Hata oluştu: ' + e.message, 'error');
-        } finally {
-            this.renderer.showLoading(false);
-        }
-    }
-
-    async handleBulkMonitoring() {
-        const ids = Array.from(this.state.selectedRecords);
-        if (ids.length === 0) return;
-
-        try {
-            this.renderer.showLoading(true);
-            let successCount = 0;
-            
-            for (const id of ids) {
-                const record = this.dataManager.getRecordById(id);
-                if (!record || record.type !== 'trademark') continue;
-
-                const monitoringData = this.dataManager.prepareMonitoringData(record);
-                const res = await monitoringService.addMonitoringItem(monitoringData);
-                if (res.success) successCount++;
-            }
-            
-            showNotification(`${successCount} kayıt izlemeye eklendi.`, 'success');
-            this.state.selectedRecords.clear();
-            this.updateBulkActionButtons();
-            this.render();
-        } catch (e) {
-            showNotification('İzlemeye eklerken hata: ' + e.message, 'error');
-        } finally {
-            this.renderer.showLoading(false);
-        }
-    }
-
-    async handleDelete(id) {
-        if (!confirm('Bu kaydı ve tüm verilerini silmek istediğinize emin misiniz?')) return;
-        try {
-            this.renderer.showLoading(true);
-            await this.dataManager.deleteRecord(id);
-            showNotification('Kayıt silindi.', 'success');
-            await this.dataManager.loadRecords(); // Listeyi yenile
-            this.render();
-        } catch (e) {
-            showNotification('Silme hatası: ' + e.message, 'error');
-        } finally {
-            this.renderer.showLoading(false);
-        }
-    }
-
-    async handleExport(type) {
-        // Şu anki filtrelenmiş veriyi al
-        let filtered = this.dataManager.filterRecords(this.state.activeTab, this.state.searchQuery, this.state.columnFilters);
-        filtered = this.dataManager.sortRecords(filtered, this.state.sort.column, this.state.sort.direction);
-
-        if (filtered.length === 0) {
-            showNotification('Dışa aktarılacak veri yok.', 'warning');
-            return;
-        }
-
-        this.renderer.showLoading(true);
-        try {
-            if (type === 'excel') {
-                const { default: ExcelJS } = await import('../libs/exceljs.min.js');
-                const { saveAs } = await import('../libs/FileSaver.min.js');
-                await this.dataManager.exportToExcel(filtered, ExcelJS, saveAs);
-            } else if (type === 'pdf') {
-                const { default: html2pdf } = await import('../libs/html2pdf.bundle.min.js');
-                await this.dataManager.exportToPdf(filtered, html2pdf);
-            }
-        } catch (e) {
-            console.error(e);
-            showNotification('Dışa aktarma hatası.', 'error');
-        } finally {
-            this.renderer.showLoading(false);
         }
     }
 
@@ -316,24 +206,85 @@ class PortfolioController {
             tr.setAttribute('aria-expanded', !isExpanded);
             
             const icon = tr.querySelector('.row-caret');
-            if(icon) {
-                icon.className = !isExpanded ? 'fas fa-chevron-down row-caret' : 'fas fa-chevron-right row-caret';
-            }
-            // Child satırları bul ve aç/kapa
+            if(icon) icon.className = !isExpanded ? 'fas fa-chevron-down row-caret' : 'fas fa-chevron-right row-caret';
+            
             const children = document.querySelectorAll(`tr.child-row[data-parent-id="${groupId}"]`);
             children.forEach(child => child.style.display = !isExpanded ? 'table-row' : 'none');
         }
+    }
+
+    async handleBulkStatusChange() {
+        if (this.state.selectedRecords.size === 0) return;
+        if (!confirm(`${this.state.selectedRecords.size} kaydın durumu değiştirilecek. Emin misiniz?`)) return;
+        try {
+            this.renderer.showLoading(true);
+            await this.dataManager.toggleRecordsStatus(Array.from(this.state.selectedRecords));
+            showNotification('Kayıtların durumu güncellendi.', 'success');
+            this.state.selectedRecords.clear();
+            this.updateBulkActionButtons();
+            await this.dataManager.loadRecords(); 
+            this.render();
+        } catch (e) { showNotification('Hata: ' + e.message, 'error'); } 
+        finally { this.renderer.showLoading(false); }
+    }
+
+    async handleBulkMonitoring() {
+        const ids = Array.from(this.state.selectedRecords);
+        if (ids.length === 0) return;
+        try {
+            this.renderer.showLoading(true);
+            let successCount = 0;
+            for (const id of ids) {
+                const record = this.dataManager.getRecordById(id);
+                if (!record || record.type !== 'trademark') continue;
+                const monitoringData = this.dataManager.prepareMonitoringData(record);
+                const res = await monitoringService.addMonitoringItem(monitoringData);
+                if (res.success) successCount++;
+            }
+            showNotification(`${successCount} kayıt izlemeye eklendi.`, 'success');
+            this.state.selectedRecords.clear();
+            this.updateBulkActionButtons();
+            this.render();
+        } catch (e) { showNotification('Hata: ' + e.message, 'error'); }
+        finally { this.renderer.showLoading(false); }
+    }
+
+    async handleDelete(id) {
+        if (!confirm('Bu kaydı silmek istediğinize emin misiniz?')) return;
+        try {
+            this.renderer.showLoading(true);
+            await this.dataManager.deleteRecord(id);
+            showNotification('Kayıt silindi.', 'success');
+            await this.dataManager.loadRecords();
+            this.render();
+        } catch (e) { showNotification('Silme hatası: ' + e.message, 'error'); }
+        finally { this.renderer.showLoading(false); }
+    }
+
+    async handleExport(type) {
+        let filtered = this.dataManager.filterRecords(this.state.activeTab, this.state.searchQuery, this.state.columnFilters);
+        filtered = this.dataManager.sortRecords(filtered, this.state.sort.column, this.state.sort.direction);
+        if (filtered.length === 0) { showNotification('Dışa aktarılacak veri yok.', 'warning'); return; }
+
+        this.renderer.showLoading(true);
+        try {
+            if (type === 'excel') {
+                const { default: ExcelJS } = await import('../libs/exceljs.min.js');
+                const { saveAs } = await import('../libs/FileSaver.min.js');
+                await this.dataManager.exportToExcel(filtered, ExcelJS, saveAs);
+            } else if (type === 'pdf') {
+                const { default: html2pdf } = await import('../libs/html2pdf.bundle.min.js');
+                await this.dataManager.exportToPdf(filtered, html2pdf);
+            }
+        } catch (e) { console.error(e); showNotification('Dışa aktarma hatası.', 'error'); }
+        finally { this.renderer.showLoading(false); }
     }
 
     render() {
         const cols = this.getColumnsForTab(this.state.activeTab);
         this.renderer.renderHeaders(cols);
 
-        let filtered = this.dataManager.filterRecords(
-            this.state.activeTab, 
-            this.state.searchQuery, 
-            this.state.columnFilters
-        );
+        let filtered = this.dataManager.filterRecords(this.state.activeTab, this.state.searchQuery, this.state.columnFilters);
         filtered = this.dataManager.sortRecords(filtered, this.state.sort.column, this.state.sort.direction);
 
         this.pagination.update(filtered.length);
@@ -350,9 +301,24 @@ class PortfolioController {
             } else if (this.state.activeTab === 'litigation') {
                  frag.appendChild(this.renderer.renderLitigationRow(item));
             } else {
-                // Standart satıra seçili olma durumunu da gönderiyoruz
                 const isSelected = this.state.selectedRecords.has(item.id);
-                frag.appendChild(this.renderer.renderStandardRow(item, this.state.activeTab === 'trademark', isSelected));
+                const tr = this.renderer.renderStandardRow(item, this.state.activeTab === 'trademark', isSelected);
+                frag.appendChild(tr);
+
+                // WIPO/ARIPO Child Kayıtlarını Gizli Olarak Ekle (Parent altında)
+                if ((item.origin === 'WIPO' || item.origin === 'ARIPO') && item.transactionHierarchy === 'parent') {
+                    const irNo = item.wipoIR || item.aripoIR;
+                    const children = this.dataManager.getWipoChildren(irNo);
+                    children.forEach(child => {
+                        const childTr = this.renderer.renderStandardRow(child, this.state.activeTab === 'trademark', false);
+                        childTr.classList.add('child-row');
+                        childTr.dataset.parentId = irNo;
+                        childTr.style.display = 'none';
+                        childTr.style.backgroundColor = '#f9f9f9';
+                        childTr.querySelector('.toggle-cell').innerHTML = ''; // Child'da ok yok
+                        frag.appendChild(childTr);
+                    });
+                }
             }
         });
         
@@ -362,9 +328,9 @@ class PortfolioController {
     }
 
     getColumnsForTab(tab) {
-        // ... (Eski koddaki gibi kolon tanımları) ...
         const base = [
             { key: 'selection', isCheckbox: true, width: '40px' },
+            { key: 'toggle', width: '40px' },
             { key: 'status', label: 'Durum', sortable: true },
             { key: 'title', label: 'Başlık', sortable: true },
             { key: 'applicationNumber', label: 'Başvuru No', sortable: true },
@@ -380,6 +346,9 @@ class PortfolioController {
                 { key: 'transactionTypeName', label: 'İşlem', sortable: true },
                 { key: 'title', label: 'Konu', sortable: true },
                 { key: 'opponent', label: 'Karşı Taraf', sortable: true },
+                { key: 'bulletinDate', label: 'Bülten Tar.', sortable: true },
+                { key: 'bulletinNo', label: 'Bülten No', sortable: true },
+                { key: 'epatsDate', label: 'İşlem Tar.', sortable: true },
                 { key: 'statusText', label: 'Durum', sortable: true },
                 { key: 'documents', label: 'Evraklar' }
             ];
