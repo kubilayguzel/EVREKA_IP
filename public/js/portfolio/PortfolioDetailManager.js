@@ -22,7 +22,8 @@ export class PortfolioDetailManager {
             docsTbody: document.getElementById('documentsTbody'),
             addDocForm: document.getElementById('addDocForm'),
             applicantName: document.getElementById('applicantName'),
-            applicantAddress: document.getElementById('applicantAddress')
+            applicantAddress: document.getElementById('applicantAddress'),
+            tpQueryBtn: document.getElementById('tpQueryBtn')
         };
 
         this.init();
@@ -76,8 +77,6 @@ export class PortfolioDetailManager {
         }
     }
 
-    // --- RENDER BÖLÜMÜ ---
-
     renderHero() {
         const r = this.currentRecord;
         this.elements.heroTitle.textContent = r.title || r.brandText || '-';
@@ -99,14 +98,14 @@ export class PortfolioDetailManager {
         `;
         this.elements.heroKv.innerHTML = kvHtml;
 
-        // TürkPatent butonu kontrolü
+        // TürkPatent Sorgula Butonu Göster/Gizle
         const isTP = this.checkIfTurkPatentOrigin(r);
-        const btn = document.getElementById('tpQueryBtn');
-        if (btn) btn.style.display = isTP ? 'inline-block' : 'none';
+        if (this.elements.tpQueryBtn) {
+            this.elements.tpQueryBtn.style.display = isTP ? 'inline-block' : 'none';
+        }
     }
 
     async renderApplicants() {
-        // Başvuru sahiplerini çözümle
         let text = '';
         if (Array.isArray(this.currentRecord.applicants)) {
             const names = await Promise.all(this.currentRecord.applicants.map(async (app) => {
@@ -125,7 +124,6 @@ export class PortfolioDetailManager {
         
         if (this.elements.applicantName) this.elements.applicantName.value = text;
         
-        // Adres (İlk kişinin adresi)
         if (this.elements.applicantAddress && this.currentRecord.applicants?.[0]?.id) {
              const snap = await getDoc(doc(db, 'persons', this.currentRecord.applicants[0].id));
              if(snap.exists()) {
@@ -148,14 +146,58 @@ export class PortfolioDetailManager {
         }
 
         container.innerHTML = arr.sort((a,b) => Number(a.classNo) - Number(b.classNo))
-            .map(entry => `
+            .map(entry => {
+                const listHtml = this.formatNiceClassContent(entry.classNo, entry.items);
+                return `
                 <div class="goods-group border rounded p-3 mb-2 bg-white">
                     <div class="font-weight-bold text-primary mb-2">Nice ${entry.classNo}</div>
-                    <ul class="pl-3 mb-0">
-                        ${(entry.items || []).map(item => `<li>${item}</li>`).join('')}
+                    <ul class="pl-3 mb-0 goods-items">
+                        ${listHtml}
                     </ul>
                 </div>
-            `).join('');
+            `}).join('');
+    }
+
+    // --- SINIF 35 FORMATLAMA MANTIĞI ---
+    formatNiceClassContent(classNo, items) {
+        if (!items || !items.length) return '';
+        
+        if (String(classNo) === '35') {
+            let html = '';
+            let isIndentedSection = false;
+            const triggerPhrase = "satın alması için";
+            const startPhrase = "müşterilerin malları";
+
+            items.forEach(t => {
+                const text = t || '';
+                const lowerText = text.toLowerCase();
+                
+                if (!isIndentedSection && lowerText.includes(startPhrase) && lowerText.includes(triggerPhrase)) {
+                    const regex = new RegExp(`(${triggerPhrase})`, 'i');
+                    const match = text.match(regex);
+                    if (match) {
+                        const splitIndex = match.index + match[1].length;
+                        const preText = text.substring(0, splitIndex);
+                        const postText = text.substring(splitIndex);
+                        
+                        html += `<li class="font-weight-bold list-unstyled mt-2" style="list-style:none;">${preText}</li>`;
+                        if (postText.trim().length > 0) {
+                            html += `<li class="ml-4" style="list-style-type:circle;">${postText}</li>`;
+                        }
+                        isIndentedSection = true;
+                        return;
+                    }
+                }
+                
+                if (isIndentedSection) {
+                    html += `<li class="ml-4" style="list-style-type:circle;">${text}</li>`;
+                } else {
+                    html += `<li>${text}</li>`;
+                }
+            });
+            return html;
+        }
+        return items.map(item => `<li>${item}</li>`).join('');
     }
 
     async renderTransactions() {
@@ -178,10 +220,8 @@ export class PortfolioDetailManager {
             const docs = await TransactionHelper.getDocuments(parent);
             const children = childrenMap[parent.id] || [];
             
-            // Parent Doküman İkonları
             const docIcons = docs.map((d, i) => this.createDocIcon(d, i === 0)).join(' ');
             
-            // Children Render (Recursive-like logic inside loop)
             let childrenHtml = '';
             if (children.length > 0) {
                 const childItems = await Promise.all(children.map(async child => {
@@ -254,17 +294,8 @@ export class PortfolioDetailManager {
         `).join('');
     }
 
-    // --- HELPERLAR ---
-
     createDocIcon(doc, isFirst) {
-        // Mavi (Task) veya Turuncu (Direct) mantığı veya ilk belge mantığı
-        // TransactionHelper 'source' bilgisini veriyor ('direct' veya 'task')
-        // CSS classları: doc-color-blue (mavi), doc-color-orange (turuncu)
-        
         const colorClass = (doc.source === 'task') ? 'text-info' : 'text-danger'; 
-        // Veya eski koda sadık kalmak istersek index'e göre: 
-        // const colorClass = isFirst ? 'text-primary' : 'text-warning'; 
-        
         return `
             <a href="${doc.url}" target="_blank" class="doc-link-item ${colorClass} mx-1" title="${doc.name} (${doc.type})">
                 <i class="fas fa-file-pdf fa-lg"></i>
@@ -292,47 +323,43 @@ export class PortfolioDetailManager {
         return candidates.some(s => s.includes('TURKPATENT') || s.includes('TÜRKPATENT'));
     }
 
-    // --- EVENTS ---
-
     setupEventListeners() {
-        // Accordion Aç/Kapa
         this.setupAccordionEvents();
 
-        // Belge Ekleme Paneli Toggle
         document.getElementById('addDocToggleBtn')?.addEventListener('click', () => {
             this.elements.addDocForm.classList.toggle('d-none');
         });
 
-        // Belge İptal
         document.getElementById('docCancelBtn')?.addEventListener('click', () => {
             this.elements.addDocForm.classList.add('d-none');
         });
 
-        // Belge Kaydet
         document.getElementById('docSaveBtn')?.addEventListener('click', () => this.handleDocUpload());
 
-        // Belge Silme (Delegation)
         this.elements.docsTbody.addEventListener('click', (e) => {
             const btn = e.target.closest('.btn-doc-remove');
             if (btn) this.handleDocDelete(btn.dataset.index);
         });
 
-        // TP Sorgula
-        document.getElementById('tpQueryBtn')?.addEventListener('click', () => {
+        this.elements.tpQueryBtn?.addEventListener('click', () => {
              const appNo = this.currentRecord.applicationNumber;
-             if(appNo) window.open(`https://opts.turkpatent.gov.tr/trademark#bn=${encodeURIComponent(appNo)}`, '_blank');
+             // Varsa Chrome Extension'ı tetiklemek için özel event veya direkt link
+             if(window.triggerTpQuery) {
+                 window.triggerTpQuery(appNo);
+             } else {
+                 window.open(`https://opts.turkpatent.gov.tr/trademark#bn=${encodeURIComponent(appNo)}`, '_blank');
+             }
         });
     }
 
     setupAccordionEvents() {
         const headers = this.elements.txAccordion.querySelectorAll('.accordion-transaction-header');
         headers.forEach(header => {
-            // Event listener tekrarını önlemek için kontrol
             if (header.dataset.bound) return;
             header.dataset.bound = true;
 
             header.addEventListener('click', (e) => {
-                if (e.target.closest('a')) return; // Linklere tıklayınca açılmasın
+                if (e.target.closest('a')) return;
                 
                 const item = header.parentElement;
                 const childrenContainer = item.querySelector('.accordion-transaction-children');
@@ -384,7 +411,6 @@ export class PortfolioDetailManager {
             this.currentRecord.documents = docs;
             this.renderDocuments();
             
-            // Reset Form
             fileInput.value = '';
             nameInput.value = '';
             this.elements.addDocForm.classList.add('d-none');
@@ -417,5 +443,4 @@ export class PortfolioDetailManager {
     }
 }
 
-// Başlat
 new PortfolioDetailManager();
