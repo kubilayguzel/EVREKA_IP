@@ -311,7 +311,6 @@ class PortfolioController {
                 const tr = this.renderer.renderStandardRow(item, this.state.activeTab === 'trademark', isSelected);
                 frag.appendChild(tr);
 
-                // WIPO/ARIPO Child Kayıtlarını Gizli Olarak Ekle
                 if ((item.origin === 'WIPO' || item.origin === 'ARIPO') && item.transactionHierarchy === 'parent') {
                     const irNo = item.wipoIR || item.aripoIR;
                     const children = this.dataManager.getWipoChildren(irNo);
@@ -333,8 +332,9 @@ class PortfolioController {
         this.updateBulkActionButtons();
     }
 
-    // --- KOLON AYARLARI (GÜNCELLENDİ) ---
+    // --- GÜNCELLENMİŞ KOLON AYARLARI ---
     getColumnsForTab(tab) {
+        // İtirazlar
         if(tab === 'objections') {
              return [
                 { key: 'toggle', width: '40px' },
@@ -349,6 +349,8 @@ class PortfolioController {
                 { key: 'documents', label: 'Evraklar', width: '100px' }
             ];
         } 
+        
+        // Davalar
         if(tab === 'litigation') {
              return [
                 { key: 'title', label: 'Konu Varlık', sortable: true, width: '250px' },
@@ -362,37 +364,38 @@ class PortfolioController {
             ];
         }
 
-        // STANDART KOLONLAR
+        // --- STANDART KAYITLAR ---
         const columns = [
             { key: 'selection', isCheckbox: true, width: '40px' }, // 1
             { key: 'toggle', width: '40px' }, // 2
-            { key: 'portfolioStatus', label: 'Durum', sortable: true, width: '90px' } // 3
+            { key: 'portfoyStatus', label: 'Durum', sortable: true, width: '80px' } // 3
         ];
 
+        // "Türü" kolonu (Genişletildi)
         if (tab !== 'trademark') {
-            columns.push({ key: 'type', label: 'Tür', sortable: true, width: '90px' }); // 4
+            columns.push({ key: 'type', label: 'Tür', sortable: true, width: '110px' }); // 4
         }
 
-        // --- DEĞİŞİKLİK BURADA ---
-        // Başlık kolonunu sabitledik (daralttık)
+        // Başlık (Daraltıldı ve Sabitlendi)
         columns.push({ key: 'title', label: 'Başlık', sortable: true, width: '200px' }); // 5
 
         if (tab === 'trademark') {
-            columns.push({ key: 'brandImage', label: 'Görsel', width: '60px' }); // 6
-            columns.push({ key: 'origin', label: 'Menşe', sortable: true, width: '90px' }); // 7
-            columns.push({ key: 'country', label: 'Ülke', sortable: true, width: '90px' }); // 8
+            columns.push({ key: 'brandImage', label: 'Görsel', width: '70px' }); // 6
+            columns.push({ key: 'origin', label: 'Menşe', sortable: true, width: '100px' }); // 7 (Genişletildi)
+            columns.push({ key: 'country', label: 'Ülke', sortable: true, width: '100px' }); // 8 (Genişletildi)
         }
 
+        // Diğer kolonlar
         columns.push(
             { key: 'applicationNumber', label: 'Başvuru No', sortable: true, width: '130px' }, // 9
             { key: 'applicationDate', label: 'Başvuru Tar.', sortable: true, width: '110px' }, // 10
             { key: 'status', label: 'Başvuru Durumu', sortable: true, width: '130px' }, // 11
             
-            // --- DEĞİŞİKLİK BURADA ---
-            // Başvuru Sahibi için width belirtmedik -> Kalan tüm boş alanı kaplar
-            { key: 'applicantName', label: 'Başvuru Sahibi', sortable: true }, // 12 (ESNEK KOLON)
+            // Başvuru Sahibi: Daraltıldı ve sabitlendi (170px)
+            { key: 'formattedApplicantName', label: 'Başvuru Sahibi', sortable: true, width: '170px' }, // 12
             
-            { key: 'actions', label: 'İşlemler', width: '180px' } // 13 (Genişletildi)
+            // İşlemler: Genişletildi
+            { key: 'actions', label: 'İşlemler', width: '220px' } // 13
         );
 
         return columns;
