@@ -1,0 +1,421 @@
+// public/js/portfolio/PortfolioDetailManager.js
+import { TransactionHelper } from './TransactionHelper.js';
+import { loadSharedLayout } from '../layout-loader.js';
+import { ipRecordsService, transactionTypeService, db, storage, waitForAuthUser, redirectOnLogout } from '../../firebase-config.js';
+import { doc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
+import { STATUSES } from '../../utils.js';
+
+export class PortfolioDetailManager {
+    constructor() {
+        this.recordId = new URLSearchParams(location.search).get('id');
+        this.currentRecord = null;
+        this.transactionTypesMap = new Map();
+        
+        this.elements = {
+            heroTitle: document.getElementById('heroTitle'),
+            brandImage: document.getElementById('brandImage'),
+            heroCard: document.getElementById('heroCard'),
+            heroKv: document.getElementById('heroKv'),
+            goodsContainer: document.getElementById('goodsContainer'),
+            txAccordion: document.getElementById('txAccordion'),
+            docsTbody: document.getElementById('documentsTbody'),
+            addDocForm: document.getElementById('addDocForm'),
+            applicantName: document.getElementById('applicantName'),
+            applicantAddress: document.getElementById('applicantAddress')
+        };
+
+        this.init();
+    }
+
+    async init() {
+        await loadSharedLayout({ activeMenuLink: 'portfolio.html' });
+        const user = await waitForAuthUser();
+        if (!user) return redirectOnLogout();
+
+        if (!this.recordId) {
+            this.showError('Kayıt ID parametresi eksik.');
+            return;
+        }
+
+        await this.loadLookups();
+        await this.loadRecord();
+        this.setupEventListeners();
+    }
+
+    async loadLookups() {
+        const res = await transactionTypeService.getTransactionTypes();
+        if (res.success && Array.isArray(res.data)) {
+            res.data.forEach(t => {
+                this.transactionTypesMap.set(String(t.id), t.alias || t.name);
+                if (t.code) this.transactionTypesMap.set(String(t.code), t.alias || t.name);
+            });
+        }
+    }
+
+    async loadRecord() {
+        try {
+            const res = await ipRecordsService.getRecordById(this.recordId);
+            if (!res.success) throw new Error('Kayıt verisi alınamadı.');
+            
+            this.currentRecord = res.data;
+            
+            // Render fonksiyonlarını çağır
+            this.renderHero();
+            this.renderApplicants();
+            this.renderGoodsList();
+            await this.renderTransactions(); // Async işlem (Task belgeleri için)
+            this.renderDocuments();
+
+            document.getElementById('loading').classList.add('d-none');
+            document.getElementById('detail-root').classList.remove('d-none');
+
+        } catch (e) {
+            console.error(e);
+            this.showError('Kayıt yüklenirken hata oluştu: ' + e.message);
+        }
+    }
+
+    // --- RENDER BÖLÜMÜ ---
+
+    renderHero() {
+        const r = this.currentRecord;
+        this.elements.heroTitle.textContent = r.title || r.brandText || '-';
+
+        const imgSrc = (r.type === 'trademark') ? (r.brandImageUrl || r.details?.brandInfo?.brandImage) : null;
+        if (imgSrc) {
+            this.elements.brandImage.src = imgSrc;
+            this.elements.heroCard.classList.remove('d-none');
+        } else {
+            this.elements.heroCard.classList.add('d-none');
+        }
+
+        const kvHtml = `
+            <div class="kv-item"><div class="label">Başvuru No</div><div class="value">${r.applicationNumber || '-'}</div></div>
+            <div class="kv-item"><div class="label">Tür</div><div class="value">${r.type || '-'}</div></div>
+            <div class="kv-item"><div class="label">Durum</div><div class="value">${this.getStatusText(r.type, r.status)}</div></div>
+            <div class="kv-item"><div class="label">Başvuru Tarihi</div><div class="value">${this.formatDate(r.applicationDate)}</div></div>
+            <div class="kv-item"><div class="label">Tescil Tarihi</div><div class="value">${this.formatDate(r.registrationDate)}</div></div>
+        `;
+        this.elements.heroKv.innerHTML = kvHtml;
+
+        // TürkPatent butonu kontrolü
+        const isTP = this.checkIfTurkPatentOrigin(r);
+        const btn = document.getElementById('tpQueryBtn');
+        if (btn) btn.style.display = isTP ? 'inline-block' : 'none';
+    }
+
+    async renderApplicants() {
+        // Başvuru sahiplerini çözümle
+        let text = '';
+        if (Array.isArray(this.currentRecord.applicants)) {
+            const names = await Promise.all(this.currentRecord.applicants.map(async (app) => {
+                if (app.id) {
+                    try {
+                        const snap = await getDoc(doc(db, 'persons', app.id));
+                        if (snap.exists()) return snap.data().name;
+                    } catch (e) {}
+                }
+                return app.name;
+            }));
+            text = names.filter(Boolean).join(', ');
+        } else {
+            text = this.currentRecord.applicantName || '-';
+        }
+        
+        if (this.elements.applicantName) this.elements.applicantName.value = text;
+        
+        // Adres (İlk kişinin adresi)
+        if (this.elements.applicantAddress && this.currentRecord.applicants?.[0]?.id) {
+             const snap = await getDoc(doc(db, 'persons', this.currentRecord.applicants[0].id));
+             if(snap.exists()) {
+                 const d = snap.data();
+                 this.elements.applicantAddress.value = [d.address, d.province, d.countryName].filter(Boolean).join(' - ');
+             }
+        }
+    }
+
+    renderGoodsList() {
+        const container = this.elements.goodsContainer;
+        if (!container) return;
+
+        const gsbc = this.currentRecord.goodsAndServicesByClass;
+        let arr = Array.isArray(gsbc) ? gsbc : (gsbc ? Object.values(gsbc) : []);
+
+        if (arr.length === 0) {
+            container.innerHTML = '<div class="text-muted">Eşya listesi yok.</div>';
+            return;
+        }
+
+        container.innerHTML = arr.sort((a,b) => Number(a.classNo) - Number(b.classNo))
+            .map(entry => `
+                <div class="goods-group border rounded p-3 mb-2 bg-white">
+                    <div class="font-weight-bold text-primary mb-2">Nice ${entry.classNo}</div>
+                    <ul class="pl-3 mb-0">
+                        ${(entry.items || []).map(item => `<li>${item}</li>`).join('')}
+                    </ul>
+                </div>
+            `).join('');
+    }
+
+    async renderTransactions() {
+        const accordion = this.elements.txAccordion;
+        accordion.innerHTML = '<div class="p-3 text-center text-muted"><span class="spinner-border spinner-border-sm"></span> İşlemler analiz ediliyor...</div>';
+
+        const res = await ipRecordsService.getTransactionsForRecord(this.recordId);
+        const transactions = res.success ? res.transactions : [];
+
+        if (transactions.length === 0) {
+            accordion.innerHTML = '<div class="p-3 text-muted">İşlem geçmişi bulunamadı.</div>';
+            return;
+        }
+
+        const { parents, childrenMap } = TransactionHelper.organizeTransactions(transactions);
+
+        let html = '';
+        for (const parent of parents) {
+            const typeName = this.transactionTypesMap.get(String(parent.type)) || `İşlem ${parent.type}`;
+            const docs = await TransactionHelper.getDocuments(parent);
+            const children = childrenMap[parent.id] || [];
+            
+            // Parent Doküman İkonları
+            const docIcons = docs.map((d, i) => this.createDocIcon(d, i === 0)).join(' ');
+            
+            // Children Render (Recursive-like logic inside loop)
+            let childrenHtml = '';
+            if (children.length > 0) {
+                const childItems = await Promise.all(children.map(async child => {
+                    const cTypeName = this.transactionTypesMap.get(String(child.type)) || `İşlem ${child.type}`;
+                    const cDocs = await TransactionHelper.getDocuments(child);
+                    const cDocIcons = cDocs.map((d, i) => this.createDocIcon(d, i === 0)).join(' ');
+                    
+                    return `
+                        <div class="child-transaction-item d-flex justify-content-between align-items-center p-2 border-top bg-light ml-4" style="border-left: 3px solid #f39c12;">
+                            <div>
+                                <small class="text-muted">↳ ${cTypeName}</small>
+                                <span class="text-muted ml-2 small">${this.formatDate(child.timestamp, true)}</span>
+                            </div>
+                            <div>${cDocIcons}</div>
+                        </div>
+                    `;
+                }));
+                childrenHtml = `<div class="accordion-transaction-children" style="display:none;">${childItems.join('')}</div>`;
+            }
+
+            html += `
+                <div class="accordion-transaction-item border-bottom">
+                    <div class="accordion-transaction-header d-flex justify-content-between align-items-center p-3" style="cursor:pointer; background: #fff;">
+                        <div class="d-flex align-items-center">
+                            <i class="fas fa-chevron-right mr-2 text-muted transition-icon ${children.length ? 'has-child-indicator' : ''}"></i>
+                            <div class="d-flex flex-column">
+                                <span class="font-weight-bold">${typeName}</span>
+                                <small class="text-muted">${this.formatDate(parent.timestamp, true)}</small>
+                            </div>
+                        </div>
+                        <div class="d-flex align-items-center">
+                            ${docIcons}
+                            ${children.length ? `<span class="badge badge-light border ml-2">${children.length} alt</span>` : ''}
+                        </div>
+                    </div>
+                    ${childrenHtml}
+                </div>
+            `;
+        }
+        
+        accordion.innerHTML = html;
+        this.setupAccordionEvents();
+    }
+
+    renderDocuments() {
+        const tbody = this.elements.docsTbody;
+        const docs = this.currentRecord.documents || [];
+        
+        document.getElementById('docCount').textContent = docs.length;
+
+        if (docs.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-3">Ekli belge yok.</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = docs.map((d, i) => `
+            <tr>
+                <td>${d.name}</td>
+                <td>${d.documentDesignation || d.type || '-'}</td>
+                <td><small class="text-muted text-truncate d-inline-block" style="max-width: 200px;">${d.path || 'URL'}</small></td>
+                <td class="text-right">
+                    <a href="${d.url || d.content}" target="_blank" class="btn btn-sm btn-outline-primary mr-1">
+                        <i class="fas fa-download"></i>
+                    </a>
+                    <button class="btn btn-sm btn-outline-danger btn-doc-remove" data-index="${i}">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </td>
+            </tr>
+        `).join('');
+    }
+
+    // --- HELPERLAR ---
+
+    createDocIcon(doc, isFirst) {
+        // Mavi (Task) veya Turuncu (Direct) mantığı veya ilk belge mantığı
+        // TransactionHelper 'source' bilgisini veriyor ('direct' veya 'task')
+        // CSS classları: doc-color-blue (mavi), doc-color-orange (turuncu)
+        
+        const colorClass = (doc.source === 'task') ? 'text-info' : 'text-danger'; 
+        // Veya eski koda sadık kalmak istersek index'e göre: 
+        // const colorClass = isFirst ? 'text-primary' : 'text-warning'; 
+        
+        return `
+            <a href="${doc.url}" target="_blank" class="doc-link-item ${colorClass} mx-1" title="${doc.name} (${doc.type})">
+                <i class="fas fa-file-pdf fa-lg"></i>
+            </a>
+        `;
+    }
+
+    formatDate(d, withTime = false) {
+        if (!d) return '-';
+        const date = new Date(d);
+        if (isNaN(date)) return String(d);
+        let str = date.toLocaleDateString('tr-TR');
+        if (withTime) str += ` ${date.toLocaleTimeString('tr-TR', {hour: '2-digit', minute:'2-digit'})}`;
+        return str;
+    }
+
+    getStatusText(ipType, status) {
+        const list = STATUSES[ipType] || [];
+        const found = list.find(s => s.value === status);
+        return found ? found.text : status;
+    }
+
+    checkIfTurkPatentOrigin(rec) {
+        const candidates = [rec?.origin, rec?.source, rec?.details?.origin].map(s => (s||'').toUpperCase());
+        return candidates.some(s => s.includes('TURKPATENT') || s.includes('TÜRKPATENT'));
+    }
+
+    // --- EVENTS ---
+
+    setupEventListeners() {
+        // Accordion Aç/Kapa
+        this.setupAccordionEvents();
+
+        // Belge Ekleme Paneli Toggle
+        document.getElementById('addDocToggleBtn')?.addEventListener('click', () => {
+            this.elements.addDocForm.classList.toggle('d-none');
+        });
+
+        // Belge İptal
+        document.getElementById('docCancelBtn')?.addEventListener('click', () => {
+            this.elements.addDocForm.classList.add('d-none');
+        });
+
+        // Belge Kaydet
+        document.getElementById('docSaveBtn')?.addEventListener('click', () => this.handleDocUpload());
+
+        // Belge Silme (Delegation)
+        this.elements.docsTbody.addEventListener('click', (e) => {
+            const btn = e.target.closest('.btn-doc-remove');
+            if (btn) this.handleDocDelete(btn.dataset.index);
+        });
+
+        // TP Sorgula
+        document.getElementById('tpQueryBtn')?.addEventListener('click', () => {
+             const appNo = this.currentRecord.applicationNumber;
+             if(appNo) window.open(`https://opts.turkpatent.gov.tr/trademark#bn=${encodeURIComponent(appNo)}`, '_blank');
+        });
+    }
+
+    setupAccordionEvents() {
+        const headers = this.elements.txAccordion.querySelectorAll('.accordion-transaction-header');
+        headers.forEach(header => {
+            // Event listener tekrarını önlemek için kontrol
+            if (header.dataset.bound) return;
+            header.dataset.bound = true;
+
+            header.addEventListener('click', (e) => {
+                if (e.target.closest('a')) return; // Linklere tıklayınca açılmasın
+                
+                const item = header.parentElement;
+                const childrenContainer = item.querySelector('.accordion-transaction-children');
+                const icon = header.querySelector('.fa-chevron-right');
+
+                if (childrenContainer) {
+                    const isVisible = childrenContainer.style.display !== 'none';
+                    childrenContainer.style.display = isVisible ? 'none' : 'block';
+                    if (icon) icon.style.transform = isVisible ? 'rotate(0deg)' : 'rotate(90deg)';
+                }
+            });
+        });
+    }
+
+    async handleDocUpload() {
+        const fileInput = document.getElementById('docFile');
+        const nameInput = document.getElementById('docName');
+        const typeInput = document.getElementById('docType');
+        
+        if (!fileInput.files[0] || !nameInput.value) {
+            alert('Lütfen dosya ve ad giriniz.');
+            return;
+        }
+
+        const btn = document.getElementById('docSaveBtn');
+        btn.disabled = true;
+        btn.textContent = 'Yükleniyor...';
+
+        try {
+            const file = fileInput.files[0];
+            const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+            const path = `ipRecordDocs/${this.recordId}/${Date.now()}_${safeName}`;
+            
+            const storageRef = ref(storage, path);
+            await uploadBytes(storageRef, file);
+            const url = await getDownloadURL(storageRef);
+
+            const newDoc = {
+                name: nameInput.value,
+                documentDesignation: typeInput.value,
+                path: path,
+                url: url,
+                uploadedAt: new Date().toISOString()
+            };
+
+            const docs = [...(this.currentRecord.documents || []), newDoc];
+            await ipRecordsService.updateRecord(this.recordId, { documents: docs });
+            
+            this.currentRecord.documents = docs;
+            this.renderDocuments();
+            
+            // Reset Form
+            fileInput.value = '';
+            nameInput.value = '';
+            this.elements.addDocForm.classList.add('d-none');
+            alert('Belge başarıyla yüklendi.');
+
+        } catch (e) {
+            console.error(e);
+            alert('Yükleme hatası: ' + e.message);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Ekle ve Kaydet';
+        }
+    }
+
+    async handleDocDelete(index) {
+        if (!confirm('Bu belgeyi silmek istediğinize emin misiniz?')) return;
+        
+        try {
+            const docs = this.currentRecord.documents.filter((_, i) => i !== Number(index));
+            await ipRecordsService.updateRecord(this.recordId, { documents: docs });
+            this.currentRecord.documents = docs;
+            this.renderDocuments();
+        } catch (e) {
+            alert('Silme hatası: ' + e.message);
+        }
+    }
+
+    showError(msg) {
+        document.getElementById('loading').innerHTML = `<div class="alert alert-danger">${msg}</div>`;
+    }
+}
+
+// Başlat
+new PortfolioDetailManager();
