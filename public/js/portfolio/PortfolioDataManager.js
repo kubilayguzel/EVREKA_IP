@@ -33,14 +33,11 @@ export class PortfolioDataManager {
     }
 
     async loadInitialData() {
-        // 1. Önce referans verilerini (Kişiler, Ülkeler vb.) tam olarak yükle
         await Promise.all([
             this.loadTransactionTypes(),
             this.loadPersons(),
             this.loadCountries()
         ]);
-        
-        // 2. Sonra kayıtları çek (Kişiler yüklendiği için isimler eşleştirilebilir)
         return await this.loadRecords();
     }
 
@@ -72,12 +69,12 @@ export class PortfolioDataManager {
     async loadRecords() {
         const result = await ipRecordsService.getRecords();
         if (result.success) {
-            let rawData = Array.isArray(result.data) ? result.data : [];
+            const rawData = Array.isArray(result.data) ? result.data : [];
             
-            // Zenginleştirme: İsimleri ve hesaplanan alanları ekle
+            // --- DÜZELTME: Veri Zenginleştirme Eklendi ---
             this.allRecords = rawData.map(record => ({
                 ...record,
-                formattedApplicantName: this._resolveApplicantName(record) // İsim burada çözülüyor
+                formattedApplicantName: this._resolveApplicantName(record) // İsimleri burada oluşturuyoruz
             }));
 
             this._buildWipoGroups();
@@ -85,20 +82,17 @@ export class PortfolioDataManager {
         return this.allRecords;
     }
 
-    // Başvuru sahibi ismini bulma (ID -> İsim dönüşümü)
+    // --- HELPER: Başvuru Sahibi İsmi Bulma ---
     _resolveApplicantName(record) {
         if (Array.isArray(record.applicants) && record.applicants.length > 0) {
             return record.applicants.map(app => {
-                // Eğer ID varsa person listesinden bul
                 if (app.id) {
                     const person = this.allPersons.find(p => p.id === app.id);
                     if (person) return person.name;
                 }
-                // Yoksa kayıttaki ismi kullan
-                return app.name || '-';
-            }).join(', ');
+                return app.name || '';
+            }).filter(Boolean).join(', ');
         }
-        // Eski kayıtlar için fallback
         return record.applicantName || '-';
     }
 
@@ -106,6 +100,7 @@ export class PortfolioDataManager {
         return this.allRecords.find(r => r.id === id);
     }
 
+    // --- WIPO MANTIĞI ---
     _buildWipoGroups() {
         this.wipoGroups = { parents: new Map(), children: new Map() };
         this.allRecords.forEach(r => {
@@ -122,6 +117,10 @@ export class PortfolioDataManager {
         });
     }
 
+    getWipoChildren(irNo) {
+        return this.wipoGroups.children.get(irNo) || [];
+    }
+
     // --- LITIGATION ---
     async loadLitigationData() {
         try {
@@ -132,7 +131,7 @@ export class PortfolioDataManager {
                 return {
                     id: d.id,
                     ...data,
-                    suitType: data.transactionType?.alias || data.transactionType?.name || data.transactionType || '-',
+                    suitType: data.transactionType?.alias || data.transactionType?.name || '-',
                     caseNo: data.suitDetails?.caseNo || '-',
                     court: data.suitDetails?.court || '-',
                     client: data.client?.name || '-',
@@ -210,7 +209,7 @@ export class PortfolioDataManager {
             title: record.title || record.brandText || '',
             transactionTypeName: typeInfo?.alias || typeInfo?.name || `İşlem ${tx.type}`,
             applicationNumber: record.applicationNumber || '-',
-            applicantName: record.formattedApplicantName || '-', // Zenginleştirilmiş isim
+            applicantName: record.formattedApplicantName || '-', // Burada kullanılıyor
             opponent: tx.oppositionOwner || (tx.objectionOwners || []).map(o=>o.name).join(', ') || '-',
             bulletinNo: tx.bulletinNo || record.details?.brandInfo?.opposedMarkBulletinNo || '-',
             bulletinDate: this._fmtDate(record.details?.brandInfo?.opposedMarkBulletinDate || tx.bulletinDate),
@@ -310,7 +309,6 @@ export class PortfolioDataManager {
         return this.allCountries.find(c => c.code === code)?.name || code || '-';
     }
 
-    // --- FILTERS ---
     filterRecords(typeFilter, searchTerm, columnFilters = {}) {
         let sourceData = [];
         if (typeFilter === 'litigation') sourceData = this.litigationRows;
