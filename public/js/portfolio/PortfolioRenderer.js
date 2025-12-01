@@ -55,7 +55,7 @@ export class PortfolioRenderer {
 
         const countryName = this.dataManager.getCountryName(record.country);
         const imgHtml = isTrademarkTab ? 
-            `<td><div class="trademark-image-wrapper">${record.brandImageUrl ? `<img class="trademark-image-thumbnail" src="${record.brandImageUrl}" loading="lazy">` : ''}</div></td>` : '';
+            `<td style="width: 60px;"><div class="trademark-image-wrapper">${record.brandImageUrl ? `<img class="trademark-image-thumbnail" src="${record.brandImageUrl}" loading="lazy">` : ''}</div></td>` : '';
 
         const actions = `
             <button class="action-btn view-btn" data-id="${record.id}" title="Görüntüle"><i class="fas fa-eye"></i></button>
@@ -67,23 +67,23 @@ export class PortfolioRenderer {
         const caret = isWipoParent ? `<i class="fas fa-chevron-right row-caret" style="cursor:pointer;"></i>` : '';
 
         let html = `
-            <td><input type="checkbox" class="record-checkbox" data-id="${record.id}" ${isSelected ? 'checked' : ''}></td>
-            <td class="toggle-cell">${caret}</td>
-            <td><div class="badge badge-${record.portfoyStatus === 'active' ? 'success' : 'secondary'}">${record.portfoyStatus === 'active' ? 'Aktif' : 'Pasif'}</div></td>
+            <td style="width: 40px;"><input type="checkbox" class="record-checkbox" data-id="${record.id}" ${isSelected ? 'checked' : ''}></td>
+            <td class="toggle-cell" style="width: 40px;">${caret}</td>
+            <td style="width: 90px;"><div class="badge badge-${record.portfoyStatus === 'active' ? 'success' : 'secondary'}">${record.portfoyStatus === 'active' ? 'Aktif' : 'Pasif'}</div></td>
         `;
 
-        if (!isTrademarkTab) html += `<td>${record.type || '-'}</td>`;
+        if (!isTrademarkTab) html += `<td style="width: 90px;">${record.type || '-'}</td>`;
 
         html += `
             <td><strong>${record.title || record.brandText || '-'}</strong></td>
             ${imgHtml}
-            ${isTrademarkTab ? `<td>${record.origin || '-'}</td>` : ''}
-            ${isTrademarkTab ? `<td>${countryName}</td>` : ''}
-            <td>${record.applicationNumber || (isWipoParent ? irNo : '-')}</td>
-            <td>${this.formatDate(record.applicationDate)}</td>
-            <td>${this.getStatusBadge(record)}</td>
-            <td>${this.formatApplicants(record.applicants)}</td>
-            <td><div class="d-flex gap-2">${actions}</div></td>
+            ${isTrademarkTab ? `<td style="width: 80px;">${record.origin || '-'}</td>` : ''}
+            ${isTrademarkTab ? `<td style="width: 80px;">${countryName}</td>` : ''}
+            <td style="width: 120px;">${record.applicationNumber || (isWipoParent ? irNo : '-')}</td>
+            <td style="width: 105px;">${this.formatDate(record.applicationDate)}</td>
+            <td style="width: 115px;">${this.getStatusBadge(record)}</td>
+            <td style="width: 200px;">${record.applicantName || this.formatApplicants(record.applicants)}</td>
+            <td style="width: 160px;"><div class="d-flex gap-2">${actions}</div></td>
         `;
 
         tr.innerHTML = html;
