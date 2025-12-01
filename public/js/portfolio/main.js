@@ -1,9 +1,8 @@
 // public/js/portfolio/main.js
 import { PortfolioDataManager } from './PortfolioDataManager.js';
 import { PortfolioRenderer } from './PortfolioRenderer.js';
-// DÜZELTME: onAuthStateChanged buradan kaldırıldı
+// DÜZELTME: Doğru importlar
 import { auth, monitoringService } from '../../firebase-config.js'; 
-// DÜZELTME: Doğru SDK'dan import edildi
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js"; 
 import { loadSharedLayout } from '../layout-loader.js';
 import { showNotification } from '../../utils.js';
@@ -71,10 +70,13 @@ class PortfolioController {
                 this.state.activeTab = e.target.dataset.type;
                 this.state.currentPage = 1;
                 this.state.searchQuery = '';
+                this.state.columnFilters = {}; // Filtreleri sıfırla
                 this.state.selectedRecords.clear();
                 this.updateBulkActionButtons();
                 
+                // Inputları temizle
                 document.getElementById('searchBar').value = '';
+                document.querySelectorAll('.column-filter').forEach(i => i.value = '');
 
                 this.renderer.showLoading(true);
                 try {
@@ -151,9 +153,8 @@ class PortfolioController {
         document.getElementById('exportExcelBtn')?.addEventListener('click', () => this.handleExport('excel'));
         document.getElementById('exportPdfBtn')?.addEventListener('click', () => this.handleExport('pdf'));
 
-        // --- TABLO AKSİYONLARI (Accordion, View, Delete) ---
+        // --- TABLO AKSİYONLARI ---
         document.getElementById('portfolioTableBody').addEventListener('click', (e) => {
-            // Accordion Toggle
             const caret = e.target.closest('.row-caret') || (e.target.closest('tr.group-header') && !e.target.closest('button, a, input'));
             if (caret) this.toggleAccordion(caret);
 
@@ -284,15 +285,23 @@ class PortfolioController {
     }
 
     render() {
+        // Headers'ı render et
         const cols = this.getColumnsForTab(this.state.activeTab);
         this.renderer.renderHeaders(cols);
 
-        let filtered = this.dataManager.filterRecords(this.state.activeTab, this.state.searchQuery, this.state.columnFilters);
+        // Veriyi filtrele ve sırala
+        let filtered = this.dataManager.filterRecords(
+            this.state.activeTab, 
+            this.state.searchQuery, 
+            this.state.columnFilters
+        );
         filtered = this.dataManager.sortRecords(filtered, this.state.sort.column, this.state.sort.direction);
 
+        // Pagination güncelle
         this.pagination.update(filtered.length);
         const pageData = this.pagination.getCurrentPageData(filtered);
 
+        // Tabloyu temizle ve satırları ekle
         this.renderer.clear();
         const frag = document.createDocumentFragment();
         
@@ -308,7 +317,7 @@ class PortfolioController {
                 const tr = this.renderer.renderStandardRow(item, this.state.activeTab === 'trademark', isSelected);
                 frag.appendChild(tr);
 
-                // WIPO/ARIPO Child Kayıtlarını Gizli Olarak Ekle (Parent altında)
+                // WIPO/ARIPO Child Kayıtlarını ekle (Gizli olarak)
                 if ((item.origin === 'WIPO' || item.origin === 'ARIPO') && item.transactionHierarchy === 'parent') {
                     const irNo = item.wipoIR || item.aripoIR;
                     const children = this.dataManager.getWipoChildren(irNo);
@@ -318,7 +327,7 @@ class PortfolioController {
                         childTr.dataset.parentId = irNo;
                         childTr.style.display = 'none';
                         childTr.style.backgroundColor = '#f9f9f9';
-                        childTr.querySelector('.toggle-cell').innerHTML = ''; // Child'da ok yok
+                        childTr.querySelector('.toggle-cell').innerHTML = ''; 
                         frag.appendChild(childTr);
                     });
                 }
@@ -330,6 +339,7 @@ class PortfolioController {
         this.updateBulkActionButtons();
     }
 
+    // --- KOLON TANIMLARI (RENDERER İLE EŞLEŞTİRİLDİ) ---
     getColumnsForTab(tab) {
         const base = [
             { key: 'selection', isCheckbox: true, width: '40px' },
@@ -340,14 +350,21 @@ class PortfolioController {
             { key: 'applicationDate', label: 'Başvuru Tar.', sortable: true },
             { key: 'actions', label: 'İşlemler', width: '150px' }
         ];
+
         if (tab === 'trademark') {
-            base.splice(2, 0, { key: 'brandImage', label: 'Görsel' });
-            base.splice(4, 0, { key: 'country', label: 'Ülke', sortable: true });
-        } else if(tab === 'objections') {
+            // Marka için özel kolonlar: Görsel, Menşe, Ülke
+            base.splice(3, 0, { key: 'brandImage', label: 'Görsel', width: '60px' });
+            base.splice(5, 0, { key: 'origin', label: 'Menşe', sortable: true });
+            base.splice(6, 0, { key: 'country', label: 'Ülke', sortable: true });
+        } 
+        
+        else if(tab === 'objections') {
+             // İtirazlar için özel kolonlar (Renderer ile 10 kolon eşleşmeli)
              return [
                 { key: 'toggle', width: '40px' },
-                { key: 'transactionTypeName', label: 'İşlem', sortable: true },
-                { key: 'title', label: 'Konu', sortable: true },
+                { key: 'transactionTypeName', label: 'İşlem & Konu', sortable: true }, // Renderer'da 2. kolonda birleşik
+                { key: 'applicationNumber', label: 'Başvuru No', sortable: true },
+                { key: 'applicantName', label: 'Başvuru Sahibi', sortable: true },
                 { key: 'opponent', label: 'Karşı Taraf', sortable: true },
                 { key: 'bulletinDate', label: 'Bülten Tar.', sortable: true },
                 { key: 'bulletinNo', label: 'Bülten No', sortable: true },
@@ -355,16 +372,22 @@ class PortfolioController {
                 { key: 'statusText', label: 'Durum', sortable: true },
                 { key: 'documents', label: 'Evraklar' }
             ];
-        } else if(tab === 'litigation') {
+        } 
+        
+        else if(tab === 'litigation') {
+             // Davalar için özel kolonlar (Renderer ile 8 kolon eşleşmeli)
              return [
-                { key: 'title', label: 'Konu', sortable: true },
-                { key: 'suitType', label: 'Tür', sortable: true },
+                { key: 'title', label: 'Konu Varlık', sortable: true },
+                { key: 'suitType', label: 'Dava Türü', sortable: true },
                 { key: 'caseNo', label: 'Dosya No', sortable: true },
                 { key: 'court', label: 'Mahkeme', sortable: true },
-                { key: 'status', label: 'Durum', sortable: true },
+                { key: 'client', label: 'Müvekkil', sortable: true },
+                { key: 'opposingParty', label: 'Karşı Taraf', sortable: true },
+                { key: 'openedDate', label: 'Açılış Tarihi', sortable: true },
                 { key: 'actions', label: 'İşlemler' }
             ];
         }
+        
         return base;
     }
 }
