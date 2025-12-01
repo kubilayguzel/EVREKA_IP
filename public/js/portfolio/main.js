@@ -2,6 +2,7 @@
 import { PortfolioDataManager } from './PortfolioDataManager.js';
 import { PortfolioRenderer } from './PortfolioRenderer.js';
 import { auth, monitoringService } from '../../firebase-config.js';
+// DÜZELTME: Firebase Auth importu güncellendi
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js"; 
 import { loadSharedLayout } from '../layout-loader.js';
 import { showNotification } from '../../utils.js';
@@ -73,6 +74,7 @@ class PortfolioController {
                 this.state.selectedRecords.clear();
                 this.updateBulkActionButtons();
                 
+                // Inputları temizle
                 document.getElementById('searchBar').value = '';
                 document.querySelectorAll('.column-filter').forEach(el => el.value = '');
 
@@ -311,6 +313,7 @@ class PortfolioController {
                 const tr = this.renderer.renderStandardRow(item, this.state.activeTab === 'trademark', isSelected);
                 frag.appendChild(tr);
 
+                // WIPO/ARIPO Child Kayıtlarını Gizli Olarak Ekle
                 if ((item.origin === 'WIPO' || item.origin === 'ARIPO') && item.transactionHierarchy === 'parent') {
                     const irNo = item.wipoIR || item.aripoIR;
                     const children = this.dataManager.getWipoChildren(irNo);
@@ -367,12 +370,12 @@ class PortfolioController {
         const columns = [
             { key: 'selection', isCheckbox: true, width: '40px' },
             { key: 'toggle', width: '40px' },
-            { key: 'status', label: 'Durum', sortable: true, width: '80px' } // Portföy Durumu (Daraltıldı)
+            { key: 'portfoyStatus', label: 'P. Durumu', sortable: true, width: '80px' } // Daraltıldı ve key düzeltildi
         ];
 
         // "Türü" kolonu sadece Marka değilse gösterilir
         if (tab !== 'trademark') {
-            columns.push({ key: 'type', label: 'Tür', sortable: true, width: '80px' });
+            columns.push({ key: 'type', label: 'Tür', sortable: true, width: '80px' }); // Daraltıldı
         }
 
         columns.push({ key: 'title', label: 'Başlık', sortable: true });
@@ -384,13 +387,13 @@ class PortfolioController {
             columns.push({ key: 'country', label: 'Ülke', sortable: true, width: '80px' }); // Daraltıldı
         }
 
-        // Ortak diğer kolonlar (DÜZENLENDİ)
+        // Ortak diğer kolonlar
         columns.push(
             { key: 'applicationNumber', label: 'Başvuru No', sortable: true, width: '110px' }, // Daraltıldı
             { key: 'applicationDate', label: 'Başvuru Tar.', sortable: true, width: '100px' }, // Daraltıldı
-            { key: 'appStatus', label: 'Başvuru Durumu', sortable: true, width: '110px' }, // Daraltıldı
-            { key: 'applicants', label: 'Başvuru Sahibi', sortable: true, width: '220px' }, // GENİŞLETİLDİ
-            { key: 'actions', label: 'İşlemler', width: '160px' } // Hafif genişletildi
+            { key: 'status', label: 'Başvuru Durumu', sortable: true, width: '110px' }, // Key düzeltildi: status
+            { key: 'applicants', label: 'Başvuru Sahibi', sortable: true, width: '220px' }, // Genişletildi
+            { key: 'actions', label: 'İşlemler', width: '160px' }
         );
 
         return columns;
