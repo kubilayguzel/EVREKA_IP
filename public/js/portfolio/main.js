@@ -1,8 +1,7 @@
 // public/js/portfolio/main.js
 import { PortfolioDataManager } from './PortfolioDataManager.js';
 import { PortfolioRenderer } from './PortfolioRenderer.js';
-// DÜZELTME: Doğru importlar
-import { auth, monitoringService } from '../../firebase-config.js'; 
+import { auth, monitoringService } from '../../firebase-config.js';
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js"; 
 import { loadSharedLayout } from '../layout-loader.js';
 import { showNotification } from '../../utils.js';
@@ -70,13 +69,13 @@ class PortfolioController {
                 this.state.activeTab = e.target.dataset.type;
                 this.state.currentPage = 1;
                 this.state.searchQuery = '';
-                this.state.columnFilters = {}; // Filtreleri sıfırla
+                this.state.columnFilters = {};
                 this.state.selectedRecords.clear();
                 this.updateBulkActionButtons();
                 
-                // Inputları temizle
                 document.getElementById('searchBar').value = '';
-                document.querySelectorAll('.column-filter').forEach(i => i.value = '');
+                // Kolon filtrelerini temizle
+                document.querySelectorAll('.column-filter').forEach(el => el.value = '');
 
                 this.renderer.showLoading(true);
                 try {
@@ -285,23 +284,15 @@ class PortfolioController {
     }
 
     render() {
-        // Headers'ı render et
         const cols = this.getColumnsForTab(this.state.activeTab);
         this.renderer.renderHeaders(cols);
 
-        // Veriyi filtrele ve sırala
-        let filtered = this.dataManager.filterRecords(
-            this.state.activeTab, 
-            this.state.searchQuery, 
-            this.state.columnFilters
-        );
+        let filtered = this.dataManager.filterRecords(this.state.activeTab, this.state.searchQuery, this.state.columnFilters);
         filtered = this.dataManager.sortRecords(filtered, this.state.sort.column, this.state.sort.direction);
 
-        // Pagination güncelle
         this.pagination.update(filtered.length);
         const pageData = this.pagination.getCurrentPageData(filtered);
 
-        // Tabloyu temizle ve satırları ekle
         this.renderer.clear();
         const frag = document.createDocumentFragment();
         
@@ -317,7 +308,6 @@ class PortfolioController {
                 const tr = this.renderer.renderStandardRow(item, this.state.activeTab === 'trademark', isSelected);
                 frag.appendChild(tr);
 
-                // WIPO/ARIPO Child Kayıtlarını ekle (Gizli olarak)
                 if ((item.origin === 'WIPO' || item.origin === 'ARIPO') && item.transactionHierarchy === 'parent') {
                     const irNo = item.wipoIR || item.aripoIR;
                     const children = this.dataManager.getWipoChildren(irNo);
@@ -339,30 +329,12 @@ class PortfolioController {
         this.updateBulkActionButtons();
     }
 
-    // --- KOLON TANIMLARI (RENDERER İLE EŞLEŞTİRİLDİ) ---
     getColumnsForTab(tab) {
-        const base = [
-            { key: 'selection', isCheckbox: true, width: '40px' },
-            { key: 'toggle', width: '40px' },
-            { key: 'status', label: 'Durum', sortable: true },
-            { key: 'title', label: 'Başlık', sortable: true },
-            { key: 'applicationNumber', label: 'Başvuru No', sortable: true },
-            { key: 'applicationDate', label: 'Başvuru Tar.', sortable: true },
-            { key: 'actions', label: 'İşlemler', width: '150px' }
-        ];
-
-        if (tab === 'trademark') {
-            // Marka için özel kolonlar: Görsel, Menşe, Ülke
-            base.splice(3, 0, { key: 'brandImage', label: 'Görsel', width: '60px' });
-            base.splice(5, 0, { key: 'origin', label: 'Menşe', sortable: true });
-            base.splice(6, 0, { key: 'country', label: 'Ülke', sortable: true });
-        } 
-        
-        else if(tab === 'objections') {
-             // İtirazlar için özel kolonlar (Renderer ile 10 kolon eşleşmeli)
+        // --- İTİRAZLAR ---
+        if(tab === 'objections') {
              return [
                 { key: 'toggle', width: '40px' },
-                { key: 'transactionTypeName', label: 'İşlem & Konu', sortable: true }, // Renderer'da 2. kolonda birleşik
+                { key: 'transactionTypeName', label: 'İşlem & Konu', sortable: true },
                 { key: 'applicationNumber', label: 'Başvuru No', sortable: true },
                 { key: 'applicantName', label: 'Başvuru Sahibi', sortable: true },
                 { key: 'opponent', label: 'Karşı Taraf', sortable: true },
@@ -374,8 +346,8 @@ class PortfolioController {
             ];
         } 
         
-        else if(tab === 'litigation') {
-             // Davalar için özel kolonlar (Renderer ile 8 kolon eşleşmeli)
+        // --- DAVALAR ---
+        if(tab === 'litigation') {
              return [
                 { key: 'title', label: 'Konu Varlık', sortable: true },
                 { key: 'suitType', label: 'Dava Türü', sortable: true },
@@ -387,8 +359,38 @@ class PortfolioController {
                 { key: 'actions', label: 'İşlemler' }
             ];
         }
-        
-        return base;
+
+        // --- STANDART KAYITLAR (TÜMÜ / MARKA / PATENT / TASARIM) ---
+        const columns = [
+            { key: 'selection', isCheckbox: true, width: '40px' },
+            { key: 'toggle', width: '40px' },
+            { key: 'status', label: 'Durum', sortable: true, width: '100px' }
+        ];
+
+        // "Türü" kolonu sadece Marka değilse gösterilir
+        if (tab !== 'trademark') {
+            columns.push({ key: 'type', label: 'Tür', sortable: true, width: '100px' });
+        }
+
+        columns.push({ key: 'title', label: 'Başlık', sortable: true });
+
+        // Marka ise Görsel, Menşe, Ülke ekle
+        if (tab === 'trademark') {
+            columns.push({ key: 'brandImage', label: 'Görsel', width: '60px' });
+            columns.push({ key: 'origin', label: 'Menşe', sortable: true });
+            columns.push({ key: 'country', label: 'Ülke', sortable: true });
+        }
+
+        // Ortak diğer kolonlar
+        columns.push(
+            { key: 'applicationNumber', label: 'Başvuru No', sortable: true },
+            { key: 'applicationDate', label: 'Başvuru Tar.', sortable: true },
+            { key: 'appStatus', label: 'Başvuru Durumu', sortable: true }, // EKSİK OLAN KOLON
+            { key: 'applicants', label: 'Başvuru Sahibi', sortable: true },
+            { key: 'actions', label: 'İşlemler', width: '150px' }
+        );
+
+        return columns;
     }
 }
 
