@@ -1,7 +1,10 @@
 // public/js/portfolio/main.js
 import { PortfolioDataManager } from './PortfolioDataManager.js';
 import { PortfolioRenderer } from './PortfolioRenderer.js';
-import { auth, onAuthStateChanged, monitoringService } from '../../firebase-config.js';
+// DÜZELTME: onAuthStateChanged buradan kaldırıldı
+import { auth, monitoringService } from '../../firebase-config.js'; 
+// DÜZELTME: Doğru SDK'dan import edildi
+import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js"; 
 import { loadSharedLayout } from '../layout-loader.js';
 import { showNotification } from '../../utils.js';
 import Pagination from '../pagination.js';
