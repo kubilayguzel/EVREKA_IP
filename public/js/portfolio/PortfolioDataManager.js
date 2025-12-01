@@ -2,7 +2,7 @@
 import { ipRecordsService, transactionTypeService, personService, db } from '../../firebase-config.js';
 import { doc, getDoc, collection, getDocs, query, where } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-// Basit concurrency helper
+// Basit concurrency helper (Aynı anda çok fazla istek atmamak için)
 async function pLimit(items, concurrency, fn) {
     const results = [];
     const queue = [...items];
@@ -40,6 +40,7 @@ export class PortfolioDataManager {
         return await this.loadRecords();
     }
 
+    // --- LOOKUPS ---
     async loadTransactionTypes() {
         const result = await transactionTypeService.getTransactionTypes();
         if (result.success) {
@@ -63,6 +64,7 @@ export class PortfolioDataManager {
         } catch (e) { console.error("Ülke listesi hatası:", e); }
     }
 
+    // --- MAIN RECORDS ---
     async loadRecords() {
         const result = await ipRecordsService.getRecords();
         if (result.success) {
@@ -71,6 +73,11 @@ export class PortfolioDataManager {
         return this.allRecords;
     }
 
+    getRecordById(id) {
+        return this.allRecords.find(r => r.id === id);
+    }
+
+    // --- LITIGATION (DAVALAR) ---
     async loadLitigationData() {
         try {
             const suitsRef = collection(db, 'suits');
@@ -98,7 +105,7 @@ export class PortfolioDataManager {
         }
     }
 
-    // --- KRİTİK: İTİRAZ VERİLERİNİ YÜKLEME ---
+    // --- OBJECTIONS (İTİRAZLAR) ---
     async loadObjectionRows() {
         // Eğer zaten yüklendiyse tekrar yükleme (Cache)
         if (this.objectionRows.length > 0) return this.objectionRows;
@@ -157,7 +164,7 @@ export class PortfolioDataManager {
     }
 
     _createObjectionRowData(record, tx, typeInfo, isParent, hasChildren, parentId = null) {
-        // Belge toplama (Basit versiyon, detaylısı TransactionHelper'da)
+        // Belge toplama
         const docs = (tx.documents || []).map(d => ({
             fileName: d.name || 'Belge',
             fileUrl: d.url || d.downloadURL || d.path,
@@ -166,8 +173,7 @@ export class PortfolioDataManager {
         
         if (tx.relatedPdfUrl) docs.push({ fileName: 'Resmi Yazı', fileUrl: tx.relatedPdfUrl, type: 'official_document' });
         if (tx.oppositionPetitionFileUrl) docs.push({ fileName: 'İtiraz Dilekçesi', fileUrl: tx.oppositionPetitionFileUrl, type: 'opposition_petition' });
-        if (tx.triggeringTaskId) { /* Task docs can be lazy loaded or handled in renderer if needed */ }
-
+       
         return {
             id: tx.id,
             recordId: record.id,
@@ -180,7 +186,7 @@ export class PortfolioDataManager {
             transactionTypeName: typeInfo?.alias || typeInfo?.name || `İşlem ${tx.type}`,
             applicationNumber: record.applicationNumber || '-',
             applicantName: this._getApplicantName(record),
-            opponent: tx.oppositionOwner || tx.objectionOwners?.map(o=>o.name).join(', ') || '-',
+            opponent: tx.oppositionOwner || (tx.objectionOwners || []).map(o=>o.name).join(', ') || '-',
             bulletinNo: tx.bulletinNo || record.details?.brandInfo?.opposedMarkBulletinNo || '-',
             statusText: this._formatObjectionStatus(tx.requestResult),
             timestamp: tx.timestamp,
@@ -188,7 +194,120 @@ export class PortfolioDataManager {
         };
     }
 
-    // --- Helperlar ---
+    // --- ACTIONS (SİLME, GÜNCELLEME, İZLEME) ---
+    async deleteRecord(id) {
+        return await ipRecordsService.deleteParentWithChildren(id);
+    }
+
+    async toggleRecordsStatus(ids) {
+        const records = ids.map(id => this.getRecordById(id)).filter(Boolean);
+        if(!records.length) return;
+
+        // İlk kaydın tersini baz alarak hepsini aynı duruma getir
+        const targetStatus = records[0].portfoyStatus === 'active' ? 'inactive' : 'active';
+        
+        await Promise.all(records.map(r => 
+            ipRecordsService.updateRecord(r.id, { portfoyStatus: targetStatus })
+        ));
+    }
+
+    prepareMonitoringData(record) {
+        // Nice sınıflarını güvenli bir şekilde ayıkla
+        const niceClasses = new Set();
+        if (Array.isArray(record.goodsAndServicesByClass)) {
+            record.goodsAndServicesByClass.forEach(c => niceClasses.add(Number(c.classNo)));
+        }
+        if (Array.isArray(record.niceClasses)) {
+            record.niceClasses.forEach(n => niceClasses.add(Number(n)));
+        }
+        
+        const classes = Array.from(niceClasses).sort((a,b)=>a-b);
+        
+        // Otomatik 35. sınıf ekleme mantığı
+        if (classes.some(n => n >= 1 && n <= 34) && !classes.includes(35)) {
+            classes.push(35);
+        }
+
+        return {
+            id: record.id,
+            ipRecordId: record.id,
+            applicationNumber: record.applicationNumber,
+            markName: record.title || record.brandText,
+            niceClassSearch: classes,
+            createdAt: new Date().toISOString()
+        };
+    }
+
+    // --- EXPORT (DIŞA AKTARMA) ---
+    async exportToExcel(data, ExcelJS, saveAs) {
+        const workbook = new ExcelJS.Workbook();
+        const worksheet = workbook.addWorksheet('Portföy');
+        
+        worksheet.columns = [
+            { header: 'Başvuru No', key: 'appNo', width: 20 },
+            { header: 'Başlık/Marka', key: 'title', width: 30 },
+            { header: 'Tür', key: 'type', width: 15 },
+            { header: 'Durum', key: 'status', width: 20 },
+            { header: 'Başvuru Tarihi', key: 'date', width: 15 },
+            { header: 'Başvuru Sahibi', key: 'applicant', width: 30 }
+        ];
+
+        data.forEach(r => {
+            worksheet.addRow({
+                appNo: r.applicationNumber || '-',
+                title: r.title || r.brandText || '-',
+                type: r.type || '-',
+                status: r.status || '-',
+                date: this._fmtDate(r.applicationDate),
+                applicant: this._getApplicantName(r)
+            });
+        });
+
+        const buffer = await workbook.xlsx.writeBuffer();
+        const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        saveAs(blob, `portfoy_export_${new Date().toISOString().slice(0,10)}.xlsx`);
+    }
+
+    async exportToPdf(data, html2pdf) {
+        const content = document.createElement('div');
+        content.innerHTML = `
+            <h2 style="text-align:center; font-family:sans-serif;">Portföy Listesi</h2>
+            <table border="1" style="width:100%; border-collapse:collapse; font-size:10px; font-family:sans-serif;">
+                <thead>
+                    <tr style="background:#eee;">
+                        <th style="padding:4px;">No</th>
+                        <th style="padding:4px;">Başlık</th>
+                        <th style="padding:4px;">Tür</th>
+                        <th style="padding:4px;">Durum</th>
+                        <th style="padding:4px;">Tarih</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${data.map(r => `
+                        <tr>
+                            <td style="padding:4px;">${r.applicationNumber || '-'}</td>
+                            <td style="padding:4px;">${r.title || r.brandText || '-'}</td>
+                            <td style="padding:4px;">${r.type || '-'}</td>
+                            <td style="padding:4px;">${r.status || '-'}</td>
+                            <td style="padding:4px;">${this._fmtDate(r.applicationDate)}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        `;
+        
+        const opt = {
+            margin: 10,
+            filename: 'portfoy_listesi.pdf',
+            image: { type: 'jpeg', quality: 0.98 },
+            html2canvas: { scale: 2 },
+            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+        };
+        
+        html2pdf().set(opt).from(content).save();
+    }
+
+    // --- HELPER METODLAR ---
     _getApplicantName(r) {
         if (Array.isArray(r.applicants)) {
             return r.applicants.map(a => {
@@ -201,8 +320,7 @@ export class PortfolioDataManager {
 
     _formatObjectionStatus(code) {
         if (!code) return 'Karar Bekleniyor';
-        // Basit map, utils'den de alınabilir
-        const map = { '28': 'Kabul', '30': 'Ret', '29': 'Kısmi Kabul' }; 
+        const map = { '28': 'Kabul', '30': 'Ret', '29': 'Kısmi Kabul', '24': 'Eksiklik' }; 
         return map[String(code)] || 'Karar Bekleniyor';
     }
 
@@ -210,18 +328,24 @@ export class PortfolioDataManager {
         try {
             if(!val) return '-';
             const d = val.toDate ? val.toDate() : new Date(val);
+            if(isNaN(d.getTime())) return '-';
             return d.toLocaleDateString('tr-TR');
         } catch { return '-'; }
     }
     
     _parseDate(str) {
         if(!str || str === '-') return 0;
+        // DD.MM.YYYY formatı için
         const parts = str.split('.');
         if(parts.length === 3) return new Date(parts[2], parts[1]-1, parts[0]).getTime();
-        return 0;
+        return new Date(str).getTime() || 0;
     }
 
-    // --- Filtreleme ---
+    getCountryName(code) {
+        return this.allCountries.find(c => c.code === code)?.name || code || '-';
+    }
+
+    // --- FİLTRELEME & SIRALAMA ---
     filterRecords(typeFilter, searchTerm, columnFilters = {}) {
         let sourceData = [];
 
@@ -238,9 +362,6 @@ export class PortfolioDataManager {
         }
 
         return sourceData.filter(item => {
-            // İtirazlarda child satırları aramadan bağımsız olarak (parent'ı eşleşiyorsa) göstermek isteyebiliriz
-            // Ancak şimdilik basit filtreleme yapıyoruz.
-            
             // Global Arama
             if (searchTerm) {
                 const searchStr = Object.values(item).join(' ').toLowerCase();
@@ -262,7 +383,7 @@ export class PortfolioDataManager {
             let valB = b[column] || '';
             
             // Tarih kontrolü
-            if (String(column).toLowerCase().includes('date') || String(column).includes('tarih')) {
+            if (String(column).toLowerCase().includes('date') || String(column).toLowerCase().includes('tarih')) {
                valA = this._parseDate(valA) || new Date(valA).getTime();
                valB = this._parseDate(valB) || new Date(valB).getTime();
             } else {
@@ -274,9 +395,5 @@ export class PortfolioDataManager {
             if (valA > valB) return direction === 'asc' ? 1 : -1;
             return 0;
         });
-    }
-
-    getCountryName(code) {
-        return this.allCountries.find(c => c.code === code)?.name || code || '-';
     }
 }
