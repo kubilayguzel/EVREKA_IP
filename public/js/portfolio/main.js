@@ -110,7 +110,6 @@ class PortfolioController {
             }
         });
 
-        // Checkbox events
         const selectAllCb = document.getElementById('selectAllCheckbox');
         if (selectAllCb) {
             selectAllCb.addEventListener('change', (e) => {
@@ -218,10 +217,19 @@ class PortfolioController {
         if (this.state.selectedRecords.size === 0) return;
         try {
             this.renderer.showLoading(true);
-            await this.dataManager.handleBulkMonitoring(Array.from(this.state.selectedRecords)); // DataManager'a taşınmalı veya burada kalmalı
+            const ids = Array.from(this.state.selectedRecords);
+            let successCount = 0;
+            for (const id of ids) {
+                const record = this.dataManager.getRecordById(id);
+                if (!record || record.type !== 'trademark') continue;
+                const monitoringData = this.dataManager.prepareMonitoringData(record);
+                const res = await monitoringService.addMonitoringItem(monitoringData);
+                if (res.success) successCount++;
+            }
+            showNotification(`${successCount} kayıt izlemeye eklendi.`, 'success');
             this.state.selectedRecords.clear();
             this.updateBulkActionButtons();
-            showNotification('İzlemeye eklendi.', 'success');
+            this.render();
         } catch (e) { showNotification('Hata: ' + e.message, 'error'); }
         finally { this.renderer.showLoading(false); }
     }
@@ -301,15 +309,15 @@ class PortfolioController {
         this.updateBulkActionButtons();
     }
 
-    // --- KOLON AYARLARI (Genişlikler Optimize Edildi) ---
+    // --- KOLON AYARLARI (REVİZE EDİLDİ) ---
     getColumnsForTab(tab) {
         if(tab === 'objections') {
              return [
                 { key: 'toggle', width: '40px' },
                 { key: 'transactionTypeName', label: 'İşlem & Konu', sortable: true },
                 { key: 'applicationNumber', label: 'Başvuru No', sortable: true, width: '130px' },
-                { key: 'applicantName', label: 'Başvuru Sahibi', sortable: true, width: '200px' },
-                { key: 'opponent', label: 'Karşı Taraf', sortable: true, width: '200px' },
+                { key: 'applicantName', label: 'Başvuru Sahibi', sortable: true, width: '220px' },
+                { key: 'opponent', label: 'Karşı Taraf', sortable: true, width: '220px' },
                 { key: 'bulletinDate', label: 'Bülten Tar.', sortable: true, width: '110px' },
                 { key: 'bulletinNo', label: 'Bülten No', sortable: true, width: '90px' },
                 { key: 'epatsDate', label: 'İşlem Tar.', sortable: true, width: '110px' },
@@ -317,7 +325,6 @@ class PortfolioController {
                 { key: 'documents', label: 'Evraklar', width: '100px' }
             ];
         } 
-        
         if(tab === 'litigation') {
              return [
                 { key: 'title', label: 'Konu Varlık', sortable: true },
@@ -331,33 +338,33 @@ class PortfolioController {
             ];
         }
 
-        // --- STANDART KOLONLAR ---
+        // STANDART KOLONLAR
         const columns = [
             { key: 'selection', isCheckbox: true, width: '40px' },
             { key: 'toggle', width: '40px' },
-            { key: 'status', label: 'Durum', sortable: true, width: '100px' }
+            { key: 'portfoyStatus', label: 'Durum', sortable: true, width: '100px' } // Genişletildi
         ];
 
         if (tab !== 'trademark') {
             columns.push({ key: 'type', label: 'Tür', sortable: true, width: '100px' });
         }
 
-        // Başlık kolonuna genişlik vermiyoruz, esnek kalıyor
+        // Başlık serbest (auto)
         columns.push({ key: 'title', label: 'Başlık', sortable: true });
 
         if (tab === 'trademark') {
             columns.push({ key: 'brandImage', label: 'Görsel', width: '70px' });
-            columns.push({ key: 'origin', label: 'Menşe', sortable: true, width: '100px' });
-            columns.push({ key: 'country', label: 'Ülke', sortable: true, width: '100px' });
+            columns.push({ key: 'origin', label: 'Menşe', sortable: true, width: '90px' }); // Genişletildi
+            columns.push({ key: 'country', label: 'Ülke', sortable: true, width: '90px' }); // Genişletildi
         }
 
-        // Diğer kolonları genişlettim
+        // Diğer kolonlar daha da genişletildi
         columns.push(
             { key: 'applicationNumber', label: 'Başvuru No', sortable: true, width: '140px' },
-            { key: 'applicationDate', label: 'Başvuru Tar.', sortable: true, width: '110px' },
-            { key: 'appStatus', label: 'Başvuru Durumu', sortable: true, width: '140px' },
-            { key: 'formattedApplicantName', label: 'Başvuru Sahibi', sortable: true, width: '250px' }, // Zenginleştirilmiş isim
-            { key: 'actions', label: 'İşlemler', width: '140px' }
+            { key: 'applicationDate', label: 'Başvuru Tar.', sortable: true, width: '120px' },
+            { key: 'status', label: 'Başvuru Durumu', sortable: true, width: '140px' },
+            { key: 'formattedApplicantName', label: 'Başvuru Sahibi', sortable: true, width: '250px' }, // Zenginleştirilmiş veri anahtarı kullanıldı
+            { key: 'actions', label: 'İşlemler', width: '170px' }
         );
 
         return columns;
