@@ -2,7 +2,7 @@
 import { ipRecordsService, transactionTypeService, personService, db } from '../../firebase-config.js';
 import { doc, getDoc, collection, getDocs, query, where } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-// Basit concurrency helper (Aynı anda çok fazla istek atmamak için)
+// Basit concurrency helper
 async function pLimit(items, concurrency, fn) {
     const results = [];
     const queue = [...items];
@@ -22,21 +22,25 @@ async function pLimit(items, concurrency, fn) {
 export class PortfolioDataManager {
     constructor() {
         this.allRecords = [];
-        this.objectionRows = []; // İşlenmiş itiraz satırları
+        this.objectionRows = [];
         this.litigationRows = [];
         this.transactionTypesMap = new Map();
         this.allPersons = [];
         this.allCountries = [];
-        this.txCache = new Map(); // Transaction cache
-        this.wipoGroups = { parents: new Map(), children: new Map() }; // WIPO Gruplama Cache
+        this.taskCache = new Map();
+        this.txCache = new Map();
+        this.wipoGroups = { parents: new Map(), children: new Map() };
     }
 
     async loadInitialData() {
+        // 1. Önce referans verilerini (Kişiler, Ülkeler vb.) tam olarak yükle
         await Promise.all([
             this.loadTransactionTypes(),
             this.loadPersons(),
             this.loadCountries()
         ]);
+        
+        // 2. Sonra kayıtları çek (Kişiler yüklendiği için isimler eşleştirilebilir)
         return await this.loadRecords();
     }
 
@@ -53,7 +57,7 @@ export class PortfolioDataManager {
 
     async loadPersons() {
         const result = await personService.getPersons();
-        if (result.success) this.allPersons = result.data;
+        if (result.success) this.allPersons = result.data || [];
     }
 
     async loadCountries() {
@@ -68,42 +72,57 @@ export class PortfolioDataManager {
     async loadRecords() {
         const result = await ipRecordsService.getRecords();
         if (result.success) {
-            this.allRecords = Array.isArray(result.data) ? result.data : [];
-            this._buildWipoGroups(); // WIPO Gruplarını oluştur
+            let rawData = Array.isArray(result.data) ? result.data : [];
+            
+            // Zenginleştirme: İsimleri ve hesaplanan alanları ekle
+            this.allRecords = rawData.map(record => ({
+                ...record,
+                formattedApplicantName: this._resolveApplicantName(record) // İsim burada çözülüyor
+            }));
+
+            this._buildWipoGroups();
         }
         return this.allRecords;
+    }
+
+    // Başvuru sahibi ismini bulma (ID -> İsim dönüşümü)
+    _resolveApplicantName(record) {
+        if (Array.isArray(record.applicants) && record.applicants.length > 0) {
+            return record.applicants.map(app => {
+                // Eğer ID varsa person listesinden bul
+                if (app.id) {
+                    const person = this.allPersons.find(p => p.id === app.id);
+                    if (person) return person.name;
+                }
+                // Yoksa kayıttaki ismi kullan
+                return app.name || '-';
+            }).join(', ');
+        }
+        // Eski kayıtlar için fallback
+        return record.applicantName || '-';
     }
 
     getRecordById(id) {
         return this.allRecords.find(r => r.id === id);
     }
 
-    // --- WIPO GRUPLAMA MANTIĞI ---
     _buildWipoGroups() {
         this.wipoGroups = { parents: new Map(), children: new Map() };
-        
         this.allRecords.forEach(r => {
             if (r.origin === 'WIPO' || r.origin === 'ARIPO') {
                 const irNo = r.wipoIR || r.aripoIR;
                 if (!irNo) return;
-
                 if (r.transactionHierarchy === 'parent') {
                     this.wipoGroups.parents.set(irNo, r);
                 } else if (r.transactionHierarchy === 'child') {
-                    if (!this.wipoGroups.children.has(irNo)) {
-                        this.wipoGroups.children.set(irNo, []);
-                    }
+                    if (!this.wipoGroups.children.has(irNo)) this.wipoGroups.children.set(irNo, []);
                     this.wipoGroups.children.get(irNo).push(r);
                 }
             }
         });
     }
 
-    getWipoChildren(irNo) {
-        return this.wipoGroups.children.get(irNo) || [];
-    }
-
-    // --- LITIGATION (DAVALAR) ---
+    // --- LITIGATION ---
     async loadLitigationData() {
         try {
             const suitsRef = collection(db, 'suits');
@@ -124,15 +143,14 @@ export class PortfolioDataManager {
             this.litigationRows.sort((a, b) => this._parseDate(b.openedDate) - this._parseDate(a.openedDate));
             return this.litigationRows;
         } catch (e) {
-            console.error("Davalar yüklenirken hata:", e);
+            console.error("Davalar hatası:", e);
             return [];
         }
     }
 
-    // --- OBJECTIONS (İTİRAZLAR) ---
+    // --- OBJECTIONS ---
     async loadObjectionRows() {
         if (this.objectionRows.length > 0) return this.objectionRows;
-
         const PARENT_TYPES = ['7', '19', '20'];
         const processedRows = [];
 
@@ -147,7 +165,6 @@ export class PortfolioDataManager {
                     this.txCache.set(record.id, transactions);
                 }
             }
-
             if (!transactions.length) return;
 
             const parents = transactions.filter(t => PARENT_TYPES.includes(String(t.type)) && (t.transactionHierarchy === 'parent' || !t.parentId));
@@ -171,7 +188,6 @@ export class PortfolioDataManager {
                 }
             }
         });
-
         this.objectionRows = processedRows;
         return this.objectionRows;
     }
@@ -182,7 +198,6 @@ export class PortfolioDataManager {
             fileUrl: d.url || d.downloadURL || d.path,
             type: d.type
         }));
-        
         if (tx.relatedPdfUrl) docs.push({ fileName: 'Resmi Yazı', fileUrl: tx.relatedPdfUrl, type: 'official_document' });
         if (tx.oppositionPetitionFileUrl) docs.push({ fileName: 'İtiraz Dilekçesi', fileUrl: tx.oppositionPetitionFileUrl, type: 'opposition_petition' });
        
@@ -195,7 +210,7 @@ export class PortfolioDataManager {
             title: record.title || record.brandText || '',
             transactionTypeName: typeInfo?.alias || typeInfo?.name || `İşlem ${tx.type}`,
             applicationNumber: record.applicationNumber || '-',
-            applicantName: this._getApplicantName(record),
+            applicantName: record.formattedApplicantName || '-', // Zenginleştirilmiş isim
             opponent: tx.oppositionOwner || (tx.objectionOwners || []).map(o=>o.name).join(', ') || '-',
             bulletinNo: tx.bulletinNo || record.details?.brandInfo?.opposedMarkBulletinNo || '-',
             bulletinDate: this._fmtDate(record.details?.brandInfo?.opposedMarkBulletinDate || tx.bulletinDate),
@@ -207,9 +222,7 @@ export class PortfolioDataManager {
     }
 
     // --- ACTIONS ---
-    async deleteRecord(id) {
-        return await ipRecordsService.deleteParentWithChildren(id);
-    }
+    async deleteRecord(id) { return await ipRecordsService.deleteParentWithChildren(id); }
 
     async toggleRecordsStatus(ids) {
         const records = ids.map(id => this.getRecordById(id)).filter(Boolean);
@@ -220,23 +233,13 @@ export class PortfolioDataManager {
 
     prepareMonitoringData(record) {
         const niceClasses = new Set();
-        if (Array.isArray(record.goodsAndServicesByClass)) {
-            record.goodsAndServicesByClass.forEach(c => niceClasses.add(Number(c.classNo)));
-        }
-        if (Array.isArray(record.niceClasses)) {
-            record.niceClasses.forEach(n => niceClasses.add(Number(n)));
-        }
+        if (Array.isArray(record.goodsAndServicesByClass)) record.goodsAndServicesByClass.forEach(c => niceClasses.add(Number(c.classNo)));
+        if (Array.isArray(record.niceClasses)) record.niceClasses.forEach(n => niceClasses.add(Number(n)));
         const classes = Array.from(niceClasses).sort((a,b)=>a-b);
-        if (classes.some(n => n >= 1 && n <= 34) && !classes.includes(35)) {
-            classes.push(35);
-        }
+        if (classes.some(n => n >= 1 && n <= 34) && !classes.includes(35)) classes.push(35);
         return {
-            id: record.id,
-            ipRecordId: record.id,
-            applicationNumber: record.applicationNumber,
-            markName: record.title || record.brandText,
-            niceClassSearch: classes,
-            createdAt: new Date().toISOString()
+            id: record.id, ipRecordId: record.id, applicationNumber: record.applicationNumber,
+            markName: record.title || record.brandText, niceClassSearch: classes, createdAt: new Date().toISOString()
         };
     }
 
@@ -245,12 +248,12 @@ export class PortfolioDataManager {
         const workbook = new ExcelJS.Workbook();
         const worksheet = workbook.addWorksheet('Portföy');
         worksheet.columns = [
-            { header: 'Başvuru No', key: 'appNo', width: 20 },
-            { header: 'Başlık/Marka', key: 'title', width: 30 },
+            { header: 'Başvuru No', key: 'appNo', width: 25 },
+            { header: 'Başlık/Marka', key: 'title', width: 40 },
             { header: 'Tür', key: 'type', width: 15 },
             { header: 'Durum', key: 'status', width: 20 },
             { header: 'Başvuru Tarihi', key: 'date', width: 15 },
-            { header: 'Başvuru Sahibi', key: 'applicant', width: 30 }
+            { header: 'Başvuru Sahibi', key: 'applicant', width: 40 }
         ];
         data.forEach(r => {
             worksheet.addRow({
@@ -259,7 +262,7 @@ export class PortfolioDataManager {
                 type: r.type || '-',
                 status: r.status || '-',
                 date: this._fmtDate(r.applicationDate),
-                applicant: this._getApplicantName(r)
+                applicant: r.formattedApplicantName || '-'
             });
         });
         const buffer = await workbook.xlsx.writeBuffer();
@@ -274,28 +277,21 @@ export class PortfolioDataManager {
             <table border="1" style="width:100%; border-collapse:collapse; font-size:10px; font-family:sans-serif;">
                 <thead>
                     <tr style="background:#eee;">
-                        <th style="padding:4px;">No</th><th style="padding:4px;">Başlık</th><th style="padding:4px;">Tür</th><th style="padding:4px;">Durum</th><th style="padding:4px;">Tarih</th>
+                        <th style="padding:4px;">No</th><th style="padding:4px;">Başlık</th><th style="padding:4px;">Tür</th><th style="padding:4px;">Durum</th><th style="padding:4px;">Sahibi</th>
                     </tr>
                 </thead>
                 <tbody>
-                    ${data.map(r => `<tr><td style="padding:4px;">${r.applicationNumber||'-'}</td><td style="padding:4px;">${r.title||'-'}</td><td style="padding:4px;">${r.type||'-'}</td><td style="padding:4px;">${r.status||'-'}</td><td style="padding:4px;">${this._fmtDate(r.applicationDate)}</td></tr>`).join('')}
+                    ${data.map(r => `<tr><td style="padding:4px;">${r.applicationNumber||'-'}</td><td style="padding:4px;">${r.title||'-'}</td><td style="padding:4px;">${r.type||'-'}</td><td style="padding:4px;">${r.status||'-'}</td><td style="padding:4px;">${r.formattedApplicantName||'-'}</td></tr>`).join('')}
                 </tbody>
             </table>`;
         html2pdf().set({ margin: 10, filename: 'portfoy_listesi.pdf', image: { type: 'jpeg', quality: 0.98 }, html2canvas: { scale: 2 }, jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' } }).from(content).save();
     }
 
-    // --- HELPER METODLAR ---
-    _getApplicantName(r) {
-        if (Array.isArray(r.applicants)) return r.applicants.map(a => { const p = this.allPersons.find(x => x.id === a.id); return p ? p.name : a.name; }).join(', ');
-        return r.applicantName || '';
-    }
-
+    // --- HELPERS ---
     _formatObjectionStatus(code) {
-        if (!code) return 'Karar Bekleniyor';
         const map = { '28': 'Kabul', '30': 'Ret', '29': 'Kısmi Kabul', '24': 'Eksiklik' }; 
         return map[String(code)] || 'Karar Bekleniyor';
     }
-
     _fmtDate(val) {
         try {
             if(!val) return '-';
@@ -304,36 +300,29 @@ export class PortfolioDataManager {
             return d.toLocaleDateString('tr-TR');
         } catch { return '-'; }
     }
-    
     _parseDate(str) {
         if(!str || str === '-') return 0;
         const parts = str.split('.');
         if(parts.length === 3) return new Date(parts[2], parts[1]-1, parts[0]).getTime();
         return new Date(str).getTime() || 0;
     }
-
     getCountryName(code) {
         return this.allCountries.find(c => c.code === code)?.name || code || '-';
     }
 
-    // --- FİLTRELEME & SIRALAMA ---
+    // --- FILTERS ---
     filterRecords(typeFilter, searchTerm, columnFilters = {}) {
         let sourceData = [];
-        if (typeFilter === 'litigation') {
-            sourceData = this.litigationRows;
-        } else if (typeFilter === 'objections') {
-            sourceData = this.objectionRows;
-        } else {
+        if (typeFilter === 'litigation') sourceData = this.litigationRows;
+        else if (typeFilter === 'objections') sourceData = this.objectionRows;
+        else {
             sourceData = this.allRecords.filter(r => {
-                // WIPO Child kayıtlarını ana listede gösterme
                 if ((r.origin === 'WIPO' || r.origin === 'ARIPO') && r.transactionHierarchy === 'child') return false;
-
                 if (typeFilter === 'all') return r.recordOwnerType !== 'third_party';
                 if (typeFilter === 'trademark') return r.type === 'trademark' && r.recordOwnerType !== 'third_party';
                 return r.type === typeFilter;
             });
         }
-
         return sourceData.filter(item => {
             if (searchTerm) {
                 const searchStr = Object.values(item).join(' ').toLowerCase();
