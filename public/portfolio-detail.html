@@ -16,248 +16,30 @@
 
     /* HERO */
     .hero{ display:flex; gap:24px; align-items:flex-start; }
-    .hero-img-wrap{ flex:0 0 auto; max-width:360px; }
-    .hero-img{ width:100%; height:auto; border-radius:12px; border:1px solid #eee; background:#fff; }
+    .hero-img-wrap{ flex:0 0 auto; width:180px; height:180px; }
+    .hero-img{ width:100%; height:100%; object-fit:contain; border-radius:12px; border:1px solid #eee; background:#fff; }
     .hero-meta{ flex:1; min-width:300px; }
-    .hero-meta h4{ color:#1e3c72; }
-    .kv-grid{ display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:12px 20px; }
+    .kv-grid{ display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:10px 20px; }
+    .kv-item .label { font-size: 0.85em; color: #666; }
+    .kv-item .value { font-weight: 600; font-size: 1.05em; }
 
-    /* İşlem geçmişi (akordeon) */
-    .accordion-transaction-history{ border:1px solid #e0e0e0; border-radius:12px; background:#fafafa; overflow:hidden; }
-    .accordion-transaction-item{ border-bottom:1px solid #e0e0e0; background:#fff; }
-    .accordion-transaction-item:last-child{ border-bottom:none; }
-    .accordion-transaction-header{ display:flex; justify-content:space-between; align-items:center; padding:14px 16px; cursor:pointer; transition:all .2s ease; border-left:4px solid #3498db; background:#fff; }
-    .accordion-transaction-header:hover{ background:#f8f9fa; }
-    .accordion-transaction-header.has-children:hover{ background:#eaf4ff; }
-    .transaction-main-info{ display:flex; align-items:center; gap:12px; flex:1; }
-    .accordion-icon{ font-size:12px; color:#666; transition:transform .2s ease; min-width:16px; }
-    .accordion-icon.expanded{ transform:rotate(90deg); }
-    .accordion-icon-empty{ min-width:16px; }
-    .transaction-name-date{ font-weight:600; color:#2c3e50; font-size:1em; }
-    .transaction-meta{ display:flex; flex-direction:column; align-items:flex-end; gap:4px; text-align:right; }
-    .child-count{ font-size:.75em; background:#e3f2fd; color:#1976d2; padding:2px 6px; border-radius:8px; font-weight:500; }
-    .accordion-transaction-children{ border-top:1px solid #f0f0f0; background:#f8f9fa; display:none; }
-    .child-transaction-item{ display:flex; justify-content:space-between; align-items:center; padding:8px 16px 8px 44px; border-bottom:1px solid #e8e8e8; border-left:4px solid #f39c12; background:#fff; margin:0 8px 2px; border-radius:4px; }
-    .child-transaction-item:last-child{ border-bottom:none; margin-bottom:8px; }
-    .child-transaction-name-date{ font-weight:500; color:#34495e; font-size:.95em; }
-
-    /* Eşya listesi */
-    .goods-group{ border:1px solid #e8ecf1; border-radius:12px; padding:12px 14px; margin-bottom:12px; background:#fff; }
-    .goods-class{ font-weight:700; color:#1e3c72; margin-bottom:6px; }
-    .goods-items{ margin:0; padding-left:18px; }
-    .goods-items li{ margin-bottom:4px; }
-
-    .document-form-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 10px;
-    margin-top: 15px;
+    /* İşlem Geçmişi */
+    .accordion-transaction-history { border-radius: 12px; overflow: hidden; }
+    .transition-icon { transition: transform 0.2s; }
+    
+    /* Belge İkonları */
+    .doc-link-item { font-size: 1.2em; text-decoration: none !important; transition: transform 0.2s; display: inline-block; }
+    .doc-link-item:hover { transform: scale(1.2); }
+    
+    #heroCard { position: relative; }
+    #tpQueryBtn {
+        position: absolute; bottom: 16px; right: 16px;
+        background-color: #b388ff; color: white; border: none;
+        padding: 8px 16px; border-radius: 8px;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.15);
     }
-
-    /* Dosya seç butonu standart buton stilinde */
-    .file-select-button {
-        background: #6c757d;
-        color: white;
-        border: none;
-        padding: 8px 16px;
-        border-radius: 6px;
-        cursor: pointer;
-        font-size: 0.9em;
-        transition: all 0.3s ease;
-        display: inline-block;
-    }
-
-    .file-select-button:hover {
-        background: #5a6268;
-        transform: translateY(-1px);
-    }
-
-    /* İndir/Kaldır butonları aynı kolonda düzenli */
-    .file-actions {
-        display: flex;
-        flex-direction: column;
-        gap: 5px;
-        align-items: flex-end;
-        min-width: 80px;
-    }
-
-    .file-actions .btn {
-        width: 70px;
-        height: 28px;
-        font-size: 0.8em;
-        padding: 4px 8px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
-
-    /* === Overrides (2025-08-20) === */
-    .hero-img-wrap{
-      flex:0 0 auto !important;
-      width:180px !important;
-      height:180px !important;
-    }
-    .hero-img{
-      width:100% !important;
-      height:100% !important;
-      object-fit:contain !important;
-    }
-
-
-    /* Butonların yan yana olması için flex düzeni */
-    .docs-actions{
-        display: flex;
-        gap: 8px;
-        justify-content: flex-end;
-        align-items: center;
-    }
-    .docs-actions .btn{
-        margin-left: 0;
-    }
-
-
-    /* Custom file input için görsel düzenleme */
-    .custom-file {
-      position: relative;
-      display: inline-block;
-      width: 100%;
-      height: calc(1.5em + 0.75rem + 2px);
-      margin-bottom: 0;
-    }
-    .custom-file-input {
-      position: relative;
-      z-index: 2;
-      width: 100%;
-      height: calc(1.5em + 0.75rem + 2px);
-      margin: 0;
-      opacity: 0;
-    }
-    .custom-file-label {
-      position: absolute;
-      top: 0;
-      right: 0;
-      left: 0;
-      z-index: 1;
-      height: calc(1.5em + 0.75rem + 2px);
-      padding: 0.375rem 0.75rem;
-      font-weight: 400;
-      line-height: 1.5;
-      color: #495057;
-      background-color: #fff;
-      border: 1px solid #ced4da;
-      border-radius: 0.25rem;
-      box-shadow: inset 0 0.2rem 0.4rem rgba(0, 0, 0, 0.05);
-      display: flex;
-      align-items: center;
-    }
-    .custom-file-label::after {
-      content: "Gözat";
-      position: absolute;
-      top: 0;
-      right: 0;
-      bottom: 0;
-      z-index: 3;
-      display: block;
-      padding: 0.375rem 0.75rem;
-      line-height: 1.5;
-      color: #fff;
-      background-color: #007bff;
-      border-left: inherit;
-      border-radius: 0 0.25rem 0.25rem 0;
-    }
-
-    /* Tablo görünümü iyileştirmeleri */
-    .table thead th {
-      background-color: #f8f9fa;
-      border-bottom: 2px solid #dee2e6;
-      font-weight: 600;
-      color: #555;
-    }
-    .table-hover tbody tr:hover {
-      background-color: #f1f5f9;
-    }
-    .docs-actions {
-      min-width: 120px;
-    }
-/* TURKPATENT Sorgula butonu hero kartının sağ altına */
-#heroCard {
-  position: relative;
-}
-
-#tpQueryBtn {
-  position: absolute;
-  bottom: 16px;
-  right: 16px;
-  background-color: #b388ff;   /* açık mor */
-  color: white;
-  border: none;
-  padding: 8px 16px;
-  border-radius: 8px;
-  font-size: 0.9em;
-  font-weight: 600;
-  box-shadow: 0 4px 10px rgba(0,0,0,0.15);
-  transition: background 0.3s ease, transform 0.2s ease;
-}
-
-#tpQueryBtn:hover {
-  background-color: #9c6bff;
-  transform: translateY(-2px);
-}
-
-/* Transaction belgeler için ikonlar */
-.pdf-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 8px;
-  margin: 0 2px;
-  border-radius: 4px;
-  color: #dc3545;
-  text-decoration: none;
-  transition: all 0.2s ease;
-  font-size: 1.1em;
-}
-
-.pdf-link:hover {
-  background-color: #f8f9fa;
-  color: #c82333;
-  transform: scale(1.1);
-}
-
-.pdf-link.epats-doc {
-  color: #007bff;
-}
-
-.pdf-link.epats-doc:hover {
-  color: #0056b3;
-}
-
-.pdf-link.tx-doc {
-  color: #6c757d;
-}
-
-.pdf-link.tx-doc:hover {
-  color: #5a6268;
-}
-
-.epats-badge {
-  font-size: 0.65em;
-  background: #e3f2fd;
-  color: #1976d2;
-  padding: 2px 4px;
-  border-radius: 3px;
-  font-weight: 600;
-}
-
-.fa-gavel {
-  color: #dc3545;
-}
-
-.fa-file-signature {
-  color: #28a745;
-}
-
-</style>
+    #tpQueryBtn:hover { background-color: #9c6bff; }
+  </style>
 </head>
 <body>
   <div id="notification-container" class="notification-container"></div>
@@ -266,7 +48,7 @@
   <div class="page-wrapper">
     <main class="main-container container">
 
-      <div id="loading" class="alert alert-info">Yükleniyor…</div>
+      <div id="loading" class="alert alert-info text-center mt-5">Yükleniyor...</div>
 
       <div id="detail-root" class="d-none">
 
@@ -276,15 +58,12 @@
               <img id="brandImage" class="hero-img" alt="Marka Görseli" />
             </div>
             <div class="hero-meta">
-              <h4 id="heroTitle" class="mb-3"></h4>
+              <h4 id="heroTitle" class="mb-3 font-weight-bold"></h4>
               <div id="heroKv" class="kv-grid"></div>
-              </div>
-              <div class="mt-2">
-                <button id="tpQueryBtn" class="btn btn-sm btn-outline-secondary" style="display:none">
-                  TÜRKPATENT’te Sorgula
-                </button>
-              </div>
             </div>
+            <button id="tpQueryBtn" class="btn btn-sm" style="display:none">
+              TÜRKPATENT’te Sorgula
+            </button>
           </div>
         </div>
 
@@ -292,11 +71,11 @@
           <div class="card-body">
             <div class="form-row">
               <div class="form-group col-md-6">
-                <label>Başvuru Sahibi</label>
+                <label class="text-muted small">Başvuru Sahibi</label>
                 <input id="applicantName" class="form-control" disabled>
               </div>
               <div class="form-group col-md-6">
-                <label>Başvuru Sahibi Adresi</label>
+                <label class="text-muted small">Başvuru Sahibi Adresi</label>
                 <input id="applicantAddress" class="form-control" disabled>
               </div>
             </div>
@@ -304,61 +83,53 @@
         </div>
 
         <div class="card shadow-sm mb-4">
-          <div class="card-header"><strong>Eşya Listesi</strong></div>
-          <div class="card-body" id="goodsContainer">
-            <div class="text-muted">Eşya listesi yükleniyor…</div>
+          <div class="card-header bg-white font-weight-bold">Eşya Listesi</div>
+          <div class="card-body" id="goodsContainer"></div>
+        </div>
+
+        <div class="card shadow-sm mb-4">
+          <div class="card-header bg-white d-flex justify-content-between align-items-center">
+            <strong class="text-primary">İşlem Geçmişi</strong>
+            </div>
+          <div class="card-body p-0">
+             <div id="txAccordion" class="accordion-transaction-history"></div>
           </div>
         </div>
 
         <div class="card shadow-sm mb-4">
-          <div class="card-header d-flex justify-content-between align-items-center">
-            <strong>İşlem Geçmişi</strong>
-            <div class="d-flex align-items-center">
-              <input id="txFilter" class="form-control form-control-sm mr-2" placeholder="Ara...">
-              <span id="txCount" class="badge badge-soft">0</span>
-            </div>
-          </div>
-            <div class="card-body p-0">
-              <div id="txAccordion" class="accordion-transaction-history"></div>
-            </div>
-          </div>
-        <div class="card shadow-sm mb-4">
-          <div class="card-header d-flex justify-content-between align-items-center">
-            <strong class="card-title">Ekli Belgeler</strong>
-            <div class="d-flex align-items-center">
+          <div class="card-header bg-white d-flex justify-content-between align-items-center">
+            <strong>Ekli Belgeler</strong>
+            <div>
               <button id="addDocToggleBtn" class="btn btn-sm btn-outline-primary">Belge Ekle</button>
-              <span id="docCount" class="badge badge-soft ml-2">0</span>
+              <span id="docCount" class="badge badge-secondary ml-2">0</span>
             </div>
           </div>
-          <div id="addDocForm" class="p-4 d-none">
+          
+          <div id="addDocForm" class="p-4 bg-light border-bottom d-none">
             <div class="form-row">
               <div class="form-group col-md-4">
-                <label for="docName">Ad</label>
-                <input id="docName" class="form-control" placeholder="Belge adı">
+                <label>Belge Adı</label>
+                <input id="docName" class="form-control" placeholder="Örn: Vekaletname">
               </div>
               <div class="form-group col-md-4">
-                <label for="docFile" class="d-block">Dosya</label>
-                <div class="input-group">
-                  <div class="custom-file">
-                    <input id="docFile" type="file" class="custom-file-input">
-                    <label id="docFileName" class="custom-file-label" for="docFile">Dosya seçin...</label>
-                  </div>
-                </div>
+                <label>Dosya Seç</label>
+                <input id="docFile" type="file" class="form-control-file">
               </div>
               <div class="form-group col-md-4">
-                <label for="docType">Tür</label>
+                <label>Tür</label>
                 <select id="docType" class="form-control">
                   <option value="evidence">Kullanım Delili</option>
                   <option value="other">Diğer</option>
+                  <option value="official">Resmi Yazı</option>
                 </select>
-                <input id="docTypeOther" class="form-control mt-2 d-none" placeholder="Türü yazın">
               </div>
             </div>
-            <div class="document-form-actions">
-              <button id="docSaveBtn" class="btn btn-sm btn-success">Ekle ve Kaydet</button>
-              <button id="docCancelBtn" class="btn btn-sm btn-outline-secondary">Vazgeç</button>
+            <div class="text-right">
+              <button id="docSaveBtn" class="btn btn-success btn-sm">Kaydet</button>
+              <button id="docCancelBtn" class="btn btn-secondary btn-sm">İptal</button>
             </div>
           </div>
+
           <div class="card-body p-0">
             <div class="table-responsive">
               <table class="table table-hover mb-0">
@@ -366,25 +137,20 @@
                   <tr>
                     <th>Ad</th>
                     <th>Tür</th>
-                    <th>Yol</th>
+                    <th>Yol/URL</th>
                     <th class="text-right">İşlemler</th>
                   </tr>
                 </thead>
-                <tbody id="documentsTbody">
-                  <tr>
-                    <td colspan="4" class="text-muted text-center py-4">Henüz belge yok.</td>
-                  </tr>
-                </tbody>
+                <tbody id="documentsTbody"></tbody>
               </table>
             </div>
           </div>
         </div>
-        </div>
+
       </div>
     </main>
   </div>
-  <script type="module" src="./js/layout-loader.js"></script>
-  <script type="module" src="./firebase-config.js"></script>
-  <script type="module" src="./js/portfolio-detail.js"></script>
+
+  <script type="module" src="./js/portfolio/PortfolioDetailManager.js"></script>
 </body>
 </html>
