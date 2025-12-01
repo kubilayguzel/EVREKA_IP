@@ -75,14 +75,14 @@ export class PortfolioRenderer {
         if (!isTrademarkTab) html += `<td style="width: 90px;">${record.type || '-'}</td>`;
 
         html += `
-            <td><strong>${record.title || record.brandText || '-'}</strong></td>
+            <td style="width: 220px;"><strong>${record.title || record.brandText || '-'}</strong></td>
             ${imgHtml}
             ${isTrademarkTab ? `<td style="width: 80px;">${record.origin || '-'}</td>` : ''}
             ${isTrademarkTab ? `<td style="width: 80px;">${countryName}</td>` : ''}
             <td style="width: 120px;">${record.applicationNumber || (isWipoParent ? irNo : '-')}</td>
             <td style="width: 105px;">${this.formatDate(record.applicationDate)}</td>
             <td style="width: 115px;">${this.getStatusBadge(record)}</td>
-            <td style="width: 200px;">${record.applicantName || this.formatApplicants(record.applicants)}</td>
+            <td style="width: 200px;">${this.formatApplicants(record)}</td>
             <td style="width: 160px;"><div class="d-flex gap-2">${actions}</div></td>
         `;
 
@@ -163,9 +163,18 @@ export class PortfolioRenderer {
         try { return new Date(d).toLocaleDateString('tr-TR'); } catch { return String(d); }
     }
 
-    formatApplicants(applicants) {
-        if (!Array.isArray(applicants)) return '-';
-        return applicants.map(a => a.name).join(', ');
+    formatApplicants(record) {
+        // Önce applicantName string field'ını kontrol et
+        if (record.applicantName && typeof record.applicantName === 'string') {
+            return record.applicantName;
+        }
+        
+        // Sonra applicants array'ini kontrol et
+        if (Array.isArray(record.applicants) && record.applicants.length > 0) {
+            return record.applicants.map(a => a.name || '-').filter(n => n !== '-').join(', ') || '-';
+        }
+        
+        return '-';
     }
 
     getStatusBadge(record) {
