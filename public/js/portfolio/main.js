@@ -74,7 +74,6 @@ class PortfolioController {
                 this.updateBulkActionButtons();
                 
                 document.getElementById('searchBar').value = '';
-                // Kolon filtrelerini temizle
                 document.querySelectorAll('.column-filter').forEach(el => el.value = '');
 
                 this.renderer.showLoading(true);
@@ -287,7 +286,11 @@ class PortfolioController {
         const cols = this.getColumnsForTab(this.state.activeTab);
         this.renderer.renderHeaders(cols);
 
-        let filtered = this.dataManager.filterRecords(this.state.activeTab, this.state.searchQuery, this.state.columnFilters);
+        let filtered = this.dataManager.filterRecords(
+            this.state.activeTab, 
+            this.state.searchQuery, 
+            this.state.columnFilters
+        );
         filtered = this.dataManager.sortRecords(filtered, this.state.sort.column, this.state.sort.direction);
 
         this.pagination.update(filtered.length);
@@ -364,12 +367,12 @@ class PortfolioController {
         const columns = [
             { key: 'selection', isCheckbox: true, width: '40px' },
             { key: 'toggle', width: '40px' },
-            { key: 'status', label: 'Durum', sortable: true, width: '100px' }
+            { key: 'status', label: 'Durum', sortable: true, width: '80px' } // Portföy Durumu (Daraltıldı)
         ];
 
         // "Türü" kolonu sadece Marka değilse gösterilir
         if (tab !== 'trademark') {
-            columns.push({ key: 'type', label: 'Tür', sortable: true, width: '100px' });
+            columns.push({ key: 'type', label: 'Tür', sortable: true, width: '80px' });
         }
 
         columns.push({ key: 'title', label: 'Başlık', sortable: true });
@@ -377,17 +380,17 @@ class PortfolioController {
         // Marka ise Görsel, Menşe, Ülke ekle
         if (tab === 'trademark') {
             columns.push({ key: 'brandImage', label: 'Görsel', width: '60px' });
-            columns.push({ key: 'origin', label: 'Menşe', sortable: true });
-            columns.push({ key: 'country', label: 'Ülke', sortable: true });
+            columns.push({ key: 'origin', label: 'Menşe', sortable: true, width: '80px' }); // Daraltıldı
+            columns.push({ key: 'country', label: 'Ülke', sortable: true, width: '80px' }); // Daraltıldı
         }
 
-        // Ortak diğer kolonlar
+        // Ortak diğer kolonlar (DÜZENLENDİ)
         columns.push(
-            { key: 'applicationNumber', label: 'Başvuru No', sortable: true },
-            { key: 'applicationDate', label: 'Başvuru Tar.', sortable: true },
-            { key: 'appStatus', label: 'Başvuru Durumu', sortable: true }, // EKSİK OLAN KOLON
-            { key: 'applicants', label: 'Başvuru Sahibi', sortable: true },
-            { key: 'actions', label: 'İşlemler', width: '150px' }
+            { key: 'applicationNumber', label: 'Başvuru No', sortable: true, width: '110px' }, // Daraltıldı
+            { key: 'applicationDate', label: 'Başvuru Tar.', sortable: true, width: '100px' }, // Daraltıldı
+            { key: 'appStatus', label: 'Başvuru Durumu', sortable: true, width: '110px' }, // Daraltıldı
+            { key: 'applicants', label: 'Başvuru Sahibi', sortable: true, width: '220px' }, // GENİŞLETİLDİ
+            { key: 'actions', label: 'İşlemler', width: '160px' } // Hafif genişletildi
         );
 
         return columns;
