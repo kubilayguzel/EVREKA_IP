@@ -370,12 +370,12 @@ class PortfolioController {
         const columns = [
             { key: 'selection', isCheckbox: true, width: '40px' },
             { key: 'toggle', width: '40px' },
-            { key: 'portfoyStatus', label: 'P. Durumu', sortable: true, width: '80px' } // Daraltıldı ve key düzeltildi
+            { key: 'portfolioStatus', label: 'Durum', sortable: true, width: '90px' }
         ];
 
         // "Türü" kolonu sadece Marka değilse gösterilir
         if (tab !== 'trademark') {
-            columns.push({ key: 'type', label: 'Tür', sortable: true, width: '80px' }); // Daraltıldı
+            columns.push({ key: 'type', label: 'Tür', sortable: true, width: '90px' });
         }
 
         columns.push({ key: 'title', label: 'Başlık', sortable: true });
@@ -383,16 +383,16 @@ class PortfolioController {
         // Marka ise Görsel, Menşe, Ülke ekle
         if (tab === 'trademark') {
             columns.push({ key: 'brandImage', label: 'Görsel', width: '60px' });
-            columns.push({ key: 'origin', label: 'Menşe', sortable: true, width: '80px' }); // Daraltıldı
-            columns.push({ key: 'country', label: 'Ülke', sortable: true, width: '80px' }); // Daraltıldı
+            columns.push({ key: 'origin', label: 'Menşe', sortable: true, width: '80px' });
+            columns.push({ key: 'country', label: 'Ülke', sortable: true, width: '80px' });
         }
 
         // Ortak diğer kolonlar
         columns.push(
-            { key: 'applicationNumber', label: 'Başvuru No', sortable: true, width: '110px' }, // Daraltıldı
-            { key: 'applicationDate', label: 'Başvuru Tar.', sortable: true, width: '100px' }, // Daraltıldı
-            { key: 'status', label: 'Başvuru Durumu', sortable: true, width: '110px' }, // Key düzeltildi: status
-            { key: 'applicants', label: 'Başvuru Sahibi', sortable: true, width: '220px' }, // Genişletildi
+            { key: 'applicationNumber', label: 'Başvuru No', sortable: true, width: '120px' },
+            { key: 'applicationDate', label: 'Başvuru Tar.', sortable: true, width: '105px' },
+            { key: 'status', label: 'Durum', sortable: true, width: '115px' },
+            { key: 'applicantName', label: 'Başvuru Sahibi', sortable: true, width: '200px' },
             { key: 'actions', label: 'İşlemler', width: '160px' }
         );
 
