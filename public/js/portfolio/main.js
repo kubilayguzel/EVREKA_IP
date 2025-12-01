@@ -2,7 +2,6 @@
 import { PortfolioDataManager } from './PortfolioDataManager.js';
 import { PortfolioRenderer } from './PortfolioRenderer.js';
 import { auth, monitoringService } from '../../firebase-config.js';
-// DÜZELTME: Firebase Auth importu güncellendi
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js"; 
 import { loadSharedLayout } from '../layout-loader.js';
 import { showNotification } from '../../utils.js';
@@ -31,17 +30,13 @@ class PortfolioController {
             if (user) {
                 await loadSharedLayout({ activeMenuLink: 'portfolio.html' });
                 this.renderer.showLoading(true);
-                
                 try {
                     await this.dataManager.loadInitialData();
                     this.setupPagination();
                     this.setupEventListeners();
                     this.render();
-                } catch (e) {
-                    console.error('Init hatası:', e);
-                } finally {
-                    this.renderer.showLoading(false);
-                }
+                } catch (e) { console.error(e); } 
+                finally { this.renderer.showLoading(false); }
             } else {
                 window.location.href = 'index.html';
             }
@@ -61,20 +56,16 @@ class PortfolioController {
     }
 
     setupEventListeners() {
-        // --- TAB DEĞİŞİMİ ---
         document.querySelectorAll('.tab-button').forEach(btn => {
             btn.addEventListener('click', async (e) => {
                 document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
                 e.target.classList.add('active');
-                
                 this.state.activeTab = e.target.dataset.type;
                 this.state.currentPage = 1;
                 this.state.searchQuery = '';
                 this.state.columnFilters = {};
                 this.state.selectedRecords.clear();
                 this.updateBulkActionButtons();
-                
-                // Inputları temizle
                 document.getElementById('searchBar').value = '';
                 document.querySelectorAll('.column-filter').forEach(el => el.value = '');
 
@@ -82,14 +73,11 @@ class PortfolioController {
                 try {
                     if (this.state.activeTab === 'litigation') await this.dataManager.loadLitigationData();
                     else if (this.state.activeTab === 'objections') await this.dataManager.loadObjectionRows();
-                } finally {
-                    this.renderer.showLoading(false);
-                }
+                } finally { this.renderer.showLoading(false); }
                 this.render();
             });
         });
 
-        // --- ARAMA ---
         document.getElementById('searchBar').addEventListener('input', (e) => {
             this.state.searchQuery = e.target.value;
             this.state.currentPage = 1;
@@ -104,7 +92,6 @@ class PortfolioController {
             }
         });
 
-        // --- SIRALAMA ---
         document.getElementById('portfolioTableHeaderRow').addEventListener('click', (e) => {
             const th = e.target.closest('.sortable-header');
             if (th) {
@@ -123,7 +110,7 @@ class PortfolioController {
             }
         });
 
-        // --- SEÇİM & TOPLU İŞLEMLER ---
+        // Checkbox events
         const selectAllCb = document.getElementById('selectAllCheckbox');
         if (selectAllCb) {
             selectAllCb.addEventListener('change', (e) => {
@@ -149,11 +136,9 @@ class PortfolioController {
 
         document.getElementById('toggleRecordStatusBtn')?.addEventListener('click', () => this.handleBulkStatusChange());
         document.getElementById('addToMonitoringBtn')?.addEventListener('click', () => this.handleBulkMonitoring());
-
         document.getElementById('exportExcelBtn')?.addEventListener('click', () => this.handleExport('excel'));
         document.getElementById('exportPdfBtn')?.addEventListener('click', () => this.handleExport('pdf'));
 
-        // --- TABLO AKSİYONLARI ---
         document.getElementById('portfolioTableBody').addEventListener('click', (e) => {
             const caret = e.target.closest('.row-caret') || (e.target.closest('tr.group-header') && !e.target.closest('button, a, input'));
             if (caret) this.toggleAccordion(caret);
@@ -208,10 +193,8 @@ class PortfolioController {
             const groupId = tr.dataset.groupId;
             const isExpanded = tr.getAttribute('aria-expanded') === 'true';
             tr.setAttribute('aria-expanded', !isExpanded);
-            
             const icon = tr.querySelector('.row-caret');
             if(icon) icon.className = !isExpanded ? 'fas fa-chevron-down row-caret' : 'fas fa-chevron-right row-caret';
-            
             const children = document.querySelectorAll(`tr.child-row[data-parent-id="${groupId}"]`);
             children.forEach(child => child.style.display = !isExpanded ? 'table-row' : 'none');
         }
@@ -219,11 +202,10 @@ class PortfolioController {
 
     async handleBulkStatusChange() {
         if (this.state.selectedRecords.size === 0) return;
-        if (!confirm(`${this.state.selectedRecords.size} kaydın durumu değiştirilecek. Emin misiniz?`)) return;
+        if (!confirm('Seçili kayıtların durumu değiştirilsin mi?')) return;
         try {
             this.renderer.showLoading(true);
             await this.dataManager.toggleRecordsStatus(Array.from(this.state.selectedRecords));
-            showNotification('Kayıtların durumu güncellendi.', 'success');
             this.state.selectedRecords.clear();
             this.updateBulkActionButtons();
             await this.dataManager.loadRecords(); 
@@ -233,43 +215,32 @@ class PortfolioController {
     }
 
     async handleBulkMonitoring() {
-        const ids = Array.from(this.state.selectedRecords);
-        if (ids.length === 0) return;
+        if (this.state.selectedRecords.size === 0) return;
         try {
             this.renderer.showLoading(true);
-            let successCount = 0;
-            for (const id of ids) {
-                const record = this.dataManager.getRecordById(id);
-                if (!record || record.type !== 'trademark') continue;
-                const monitoringData = this.dataManager.prepareMonitoringData(record);
-                const res = await monitoringService.addMonitoringItem(monitoringData);
-                if (res.success) successCount++;
-            }
-            showNotification(`${successCount} kayıt izlemeye eklendi.`, 'success');
+            await this.dataManager.handleBulkMonitoring(Array.from(this.state.selectedRecords)); // DataManager'a taşınmalı veya burada kalmalı
             this.state.selectedRecords.clear();
             this.updateBulkActionButtons();
-            this.render();
+            showNotification('İzlemeye eklendi.', 'success');
         } catch (e) { showNotification('Hata: ' + e.message, 'error'); }
         finally { this.renderer.showLoading(false); }
     }
 
     async handleDelete(id) {
-        if (!confirm('Bu kaydı silmek istediğinize emin misiniz?')) return;
+        if (!confirm('Silmek istediğinize emin misiniz?')) return;
         try {
             this.renderer.showLoading(true);
             await this.dataManager.deleteRecord(id);
-            showNotification('Kayıt silindi.', 'success');
             await this.dataManager.loadRecords();
             this.render();
-        } catch (e) { showNotification('Silme hatası: ' + e.message, 'error'); }
+        } catch (e) { showNotification('Hata: ' + e.message, 'error'); }
         finally { this.renderer.showLoading(false); }
     }
 
     async handleExport(type) {
         let filtered = this.dataManager.filterRecords(this.state.activeTab, this.state.searchQuery, this.state.columnFilters);
         filtered = this.dataManager.sortRecords(filtered, this.state.sort.column, this.state.sort.direction);
-        if (filtered.length === 0) { showNotification('Dışa aktarılacak veri yok.', 'warning'); return; }
-
+        if (filtered.length === 0) { showNotification('Veri yok.', 'warning'); return; }
         this.renderer.showLoading(true);
         try {
             if (type === 'excel') {
@@ -280,7 +251,7 @@ class PortfolioController {
                 const { default: html2pdf } = await import('../libs/html2pdf.bundle.min.js');
                 await this.dataManager.exportToPdf(filtered, html2pdf);
             }
-        } catch (e) { console.error(e); showNotification('Dışa aktarma hatası.', 'error'); }
+        } catch (e) { console.error(e); }
         finally { this.renderer.showLoading(false); }
     }
 
@@ -288,11 +259,7 @@ class PortfolioController {
         const cols = this.getColumnsForTab(this.state.activeTab);
         this.renderer.renderHeaders(cols);
 
-        let filtered = this.dataManager.filterRecords(
-            this.state.activeTab, 
-            this.state.searchQuery, 
-            this.state.columnFilters
-        );
+        let filtered = this.dataManager.filterRecords(this.state.activeTab, this.state.searchQuery, this.state.columnFilters);
         filtered = this.dataManager.sortRecords(filtered, this.state.sort.column, this.state.sort.direction);
 
         this.pagination.update(filtered.length);
@@ -313,7 +280,6 @@ class PortfolioController {
                 const tr = this.renderer.renderStandardRow(item, this.state.activeTab === 'trademark', isSelected);
                 frag.appendChild(tr);
 
-                // WIPO/ARIPO Child Kayıtlarını Gizli Olarak Ekle
                 if ((item.origin === 'WIPO' || item.origin === 'ARIPO') && item.transactionHierarchy === 'parent') {
                     const irNo = item.wipoIR || item.aripoIR;
                     const children = this.dataManager.getWipoChildren(irNo);
@@ -335,65 +301,63 @@ class PortfolioController {
         this.updateBulkActionButtons();
     }
 
+    // --- KOLON AYARLARI (Genişlikler Optimize Edildi) ---
     getColumnsForTab(tab) {
-        // --- İTİRAZLAR ---
         if(tab === 'objections') {
              return [
                 { key: 'toggle', width: '40px' },
                 { key: 'transactionTypeName', label: 'İşlem & Konu', sortable: true },
-                { key: 'applicationNumber', label: 'Başvuru No', sortable: true },
-                { key: 'applicantName', label: 'Başvuru Sahibi', sortable: true },
-                { key: 'opponent', label: 'Karşı Taraf', sortable: true },
-                { key: 'bulletinDate', label: 'Bülten Tar.', sortable: true },
-                { key: 'bulletinNo', label: 'Bülten No', sortable: true },
-                { key: 'epatsDate', label: 'İşlem Tar.', sortable: true },
-                { key: 'statusText', label: 'Durum', sortable: true },
-                { key: 'documents', label: 'Evraklar' }
+                { key: 'applicationNumber', label: 'Başvuru No', sortable: true, width: '130px' },
+                { key: 'applicantName', label: 'Başvuru Sahibi', sortable: true, width: '200px' },
+                { key: 'opponent', label: 'Karşı Taraf', sortable: true, width: '200px' },
+                { key: 'bulletinDate', label: 'Bülten Tar.', sortable: true, width: '110px' },
+                { key: 'bulletinNo', label: 'Bülten No', sortable: true, width: '90px' },
+                { key: 'epatsDate', label: 'İşlem Tar.', sortable: true, width: '110px' },
+                { key: 'statusText', label: 'Durum', sortable: true, width: '120px' },
+                { key: 'documents', label: 'Evraklar', width: '100px' }
             ];
         } 
         
-        // --- DAVALAR ---
         if(tab === 'litigation') {
              return [
                 { key: 'title', label: 'Konu Varlık', sortable: true },
-                { key: 'suitType', label: 'Dava Türü', sortable: true },
-                { key: 'caseNo', label: 'Dosya No', sortable: true },
-                { key: 'court', label: 'Mahkeme', sortable: true },
-                { key: 'client', label: 'Müvekkil', sortable: true },
-                { key: 'opposingParty', label: 'Karşı Taraf', sortable: true },
-                { key: 'openedDate', label: 'Açılış Tarihi', sortable: true },
-                { key: 'actions', label: 'İşlemler' }
+                { key: 'suitType', label: 'Dava Türü', sortable: true, width: '150px' },
+                { key: 'caseNo', label: 'Dosya No', sortable: true, width: '120px' },
+                { key: 'court', label: 'Mahkeme', sortable: true, width: '180px' },
+                { key: 'client', label: 'Müvekkil', sortable: true, width: '150px' },
+                { key: 'opposingParty', label: 'Karşı Taraf', sortable: true, width: '150px' },
+                { key: 'openedDate', label: 'Açılış Tarihi', sortable: true, width: '110px' },
+                { key: 'actions', label: 'İşlemler', width: '140px' }
             ];
         }
 
-        // --- STANDART KAYITLAR (TÜMÜ / MARKA / PATENT / TASARIM) ---
+        // --- STANDART KOLONLAR ---
         const columns = [
             { key: 'selection', isCheckbox: true, width: '40px' },
             { key: 'toggle', width: '40px' },
-            { key: 'portfolioStatus', label: 'Durum', sortable: true, width: '90px' }
+            { key: 'status', label: 'Durum', sortable: true, width: '100px' }
         ];
 
-        // "Türü" kolonu sadece Marka değilse gösterilir
         if (tab !== 'trademark') {
-            columns.push({ key: 'type', label: 'Tür', sortable: true, width: '90px' });
+            columns.push({ key: 'type', label: 'Tür', sortable: true, width: '100px' });
         }
 
+        // Başlık kolonuna genişlik vermiyoruz, esnek kalıyor
         columns.push({ key: 'title', label: 'Başlık', sortable: true });
 
-        // Marka ise Görsel, Menşe, Ülke ekle
         if (tab === 'trademark') {
-            columns.push({ key: 'brandImage', label: 'Görsel', width: '60px' });
-            columns.push({ key: 'origin', label: 'Menşe', sortable: true, width: '80px' });
-            columns.push({ key: 'country', label: 'Ülke', sortable: true, width: '80px' });
+            columns.push({ key: 'brandImage', label: 'Görsel', width: '70px' });
+            columns.push({ key: 'origin', label: 'Menşe', sortable: true, width: '100px' });
+            columns.push({ key: 'country', label: 'Ülke', sortable: true, width: '100px' });
         }
 
-        // Ortak diğer kolonlar
+        // Diğer kolonları genişlettim
         columns.push(
-            { key: 'applicationNumber', label: 'Başvuru No', sortable: true, width: '120px' },
-            { key: 'applicationDate', label: 'Başvuru Tar.', sortable: true, width: '105px' },
-            { key: 'status', label: 'Durum', sortable: true, width: '115px' },
-            { key: 'applicantName', label: 'Başvuru Sahibi', sortable: true, width: '200px' },
-            { key: 'actions', label: 'İşlemler', width: '160px' }
+            { key: 'applicationNumber', label: 'Başvuru No', sortable: true, width: '140px' },
+            { key: 'applicationDate', label: 'Başvuru Tar.', sortable: true, width: '110px' },
+            { key: 'appStatus', label: 'Başvuru Durumu', sortable: true, width: '140px' },
+            { key: 'formattedApplicantName', label: 'Başvuru Sahibi', sortable: true, width: '250px' }, // Zenginleştirilmiş isim
+            { key: 'actions', label: 'İşlemler', width: '140px' }
         );
 
         return columns;
