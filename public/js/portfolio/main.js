@@ -416,8 +416,8 @@ class PortfolioController {
 
         if (tab === 'trademark') {
             columns.push({ key: 'brandImage', label: 'Görsel', width: '90px' }); // Genişletildi: 90px
-            columns.push({ key: 'origin', label: 'Menşe', sortable: true, width: '120px' });
-            columns.push({ key: 'country', label: 'Ülke', sortable: true, width: '90px' });
+            columns.push({ key: 'origin', label: 'Menşe', sortable: true, width: '140px' });
+            columns.push({ key: 'country', label: 'Ülke', sortable: true, width: '130px' });
         }
 
         columns.push(
