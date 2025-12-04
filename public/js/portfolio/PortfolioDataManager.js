@@ -27,7 +27,7 @@ export class PortfolioDataManager {
         this.transactionTypesMap = new Map();
         this.allPersons = [];
         this.allCountries = [];
-        this.taskCache = new Map();
+        this.taskCache = new Map(); // Task belgeleri için cache
         this.txCache = new Map();
         this.wipoGroups = { parents: new Map(), children: new Map() };
     }
@@ -117,6 +117,50 @@ export class PortfolioDataManager {
         return this.wipoGroups.children.get(irNo) || [];
     }
 
+    // --- TASK DOCUMENT FETCHING (YENİ) ---
+    async _fetchTaskDocuments(taskId) {
+        if (!taskId) return [];
+        if (this.taskCache.has(taskId)) return this.taskCache.get(taskId);
+
+        try {
+            const taskDoc = await getDoc(doc(db, 'tasks', taskId));
+            if (!taskDoc.exists()) return [];
+            
+            const taskData = taskDoc.data();
+            const docs = [];
+
+            // 1. ePats Belgesi
+            if (taskData.details?.epatsDocument?.downloadURL) {
+                docs.push({
+                    fileName: taskData.details.epatsDocument.name || 'ePats Belgesi',
+                    fileUrl: taskData.details.epatsDocument.downloadURL,
+                    evrakNo: taskData.details.epatsDocument.turkpatentEvrakNo,
+                    type: 'epats_document'
+                });
+            }
+
+            // 2. Task Documents Array
+            if (Array.isArray(taskData.documents)) {
+                taskData.documents.forEach(d => {
+                    const url = d.downloadURL || d.url || d.path;
+                    if (url) {
+                        docs.push({
+                            fileName: d.name || 'Task Belgesi',
+                            fileUrl: url,
+                            type: d.type || 'task_document'
+                        });
+                    }
+                });
+            }
+            
+            this.taskCache.set(taskId, docs);
+            return docs;
+        } catch (e) {
+            console.warn('Task doc fetch error:', e);
+            return [];
+        }
+    }
+
     // --- LITIGATION ---
     async loadLitigationData() {
         try {
@@ -174,12 +218,17 @@ export class PortfolioDataManager {
             for (const parent of parents) {
                 const children = childrenMap[parent.id] || [];
                 const typeInfo = this.transactionTypesMap.get(String(parent.type));
-                processedRows.push(this._createObjectionRowData(record, parent, typeInfo, true, children.length > 0));
+                
+                // Parent Row (Async çağrı ile task belgelerini de al)
+                const parentRow = await this._createObjectionRowData(record, parent, typeInfo, true, children.length > 0);
+                processedRows.push(parentRow);
 
                 children.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
                 for (const child of children) {
                     const childTypeInfo = this.transactionTypesMap.get(String(child.type));
-                    processedRows.push(this._createObjectionRowData(record, child, childTypeInfo, false, false, parent.id));
+                    // Child Row
+                    const childRow = await this._createObjectionRowData(record, child, childTypeInfo, false, false, parent.id);
+                    processedRows.push(childRow);
                 }
             }
         });
@@ -187,15 +236,24 @@ export class PortfolioDataManager {
         return this.objectionRows;
     }
 
-    _createObjectionRowData(record, tx, typeInfo, isParent, hasChildren, parentId = null) {
+    // ASYNC yapıldı: Task belgelerini çekmek için
+    async _createObjectionRowData(record, tx, typeInfo, isParent, hasChildren, parentId = null) {
+        // 1. Transaction Belgeleri
         const docs = (tx.documents || []).map(d => ({
             fileName: d.name || 'Belge',
             fileUrl: d.url || d.downloadURL || d.path,
             type: d.type
         }));
+        
         if (tx.relatedPdfUrl) docs.push({ fileName: 'Resmi Yazı', fileUrl: tx.relatedPdfUrl, type: 'official_document' });
         if (tx.oppositionPetitionFileUrl) docs.push({ fileName: 'İtiraz Dilekçesi', fileUrl: tx.oppositionPetitionFileUrl, type: 'opposition_petition' });
        
+        // 2. Task Belgeleri (Eklendi)
+        if (tx.triggeringTaskId) {
+            const taskDocs = await this._fetchTaskDocuments(tx.triggeringTaskId);
+            docs.push(...taskDocs);
+        }
+
         return {
             id: tx.id,
             recordId: record.id,
@@ -210,7 +268,7 @@ export class PortfolioDataManager {
             bulletinNo: tx.bulletinNo || record.details?.brandInfo?.opposedMarkBulletinNo || '-',
             bulletinDate: this._fmtDate(record.details?.brandInfo?.opposedMarkBulletinDate || tx.bulletinDate),
             epatsDate: this._fmtDate(tx.epatsDocument?.documentDate),
-            statusText: this._formatObjectionStatus(tx.requestResult), // GÜNCELLENEN METODU KULLANIYOR
+            statusText: this._formatObjectionStatus(tx.requestResult),
             timestamp: tx.timestamp,
             documents: docs
         };
@@ -283,19 +341,11 @@ export class PortfolioDataManager {
     }
 
     // --- HELPERS ---
-    
-    // YENİLENEN METOD: İtiraz sonucunu dinamik olarak transactionTypes'tan bulur
     _formatObjectionStatus(code) {
         if (!code) return 'Karar Bekleniyor';
-        
-        // Önce bellekteki dinamik map'ten kontrol et
+        // Bellekten dinamik çek
         const typeInfo = this.transactionTypesMap.get(String(code));
-        if (typeInfo) {
-            return typeInfo.alias || typeInfo.name;
-        }
-
-        // Bulunamazsa 'Karar Bekleniyor' dön
-        return 'Karar Bekleniyor';
+        return typeInfo ? (typeInfo.alias || typeInfo.name) : 'Karar Bekleniyor';
     }
 
     _fmtDate(val) {
@@ -316,12 +366,15 @@ export class PortfolioDataManager {
         return this.allCountries.find(c => c.code === code)?.name || code || '-';
     }
 
-    // --- FILTERS ---
+    // --- FILTERS (GÜNCELLENDİ: İtirazlar için gelişmiş arama) ---
     filterRecords(typeFilter, searchTerm, columnFilters = {}) {
         let sourceData = [];
-        if (typeFilter === 'litigation') sourceData = this.litigationRows;
-        else if (typeFilter === 'objections') sourceData = this.objectionRows;
-        else {
+        
+        if (typeFilter === 'litigation') {
+            sourceData = this.litigationRows;
+        } else if (typeFilter === 'objections') {
+            sourceData = this.objectionRows;
+        } else {
             sourceData = this.allRecords.filter(r => {
                 if ((r.origin === 'WIPO' || r.origin === 'ARIPO') && r.transactionHierarchy === 'child') return false;
                 if (typeFilter === 'all') return r.recordOwnerType !== 'third_party';
@@ -329,11 +382,31 @@ export class PortfolioDataManager {
                 return r.type === typeFilter;
             });
         }
+
         return sourceData.filter(item => {
+            // Global Arama
             if (searchTerm) {
-                const searchStr = Object.values(item).join(' ').toLowerCase();
-                if (!searchStr.includes(searchTerm.toLowerCase())) return false;
+                const s = searchTerm.toLowerCase();
+                
+                // İTİRAZLAR İÇİN ÖZEL ARAMA
+                if (typeFilter === 'objections') {
+                    return (
+                        (item.transactionTypeName && item.transactionTypeName.toLowerCase().includes(s)) ||
+                        (item.title && item.title.toLowerCase().includes(s)) ||
+                        (item.opponent && item.opponent.toLowerCase().includes(s)) ||
+                        (item.bulletinNo && item.bulletinNo.toString().includes(s)) ||
+                        (item.applicantName && item.applicantName.toLowerCase().includes(s)) ||
+                        (item.applicationNumber && item.applicationNumber.toString().includes(s)) ||
+                        (item.statusText && item.statusText.toLowerCase().includes(s))
+                    );
+                } else {
+                    // Diğerleri için genel arama
+                    const searchStr = Object.values(item).join(' ').toLowerCase();
+                    if (!searchStr.includes(s)) return false;
+                }
             }
+            
+            // Kolon Filtreleri
             for (const [key, val] of Object.entries(columnFilters)) {
                 if (!val) continue;
                 const itemVal = String(item[key] || '').toLowerCase();
