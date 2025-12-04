@@ -1,8 +1,8 @@
 // public/js/portfolio/PortfolioDataManager.js
 import { ipRecordsService, transactionTypeService, personService, db } from '../../firebase-config.js';
-import { doc, getDoc, collection, getDocs, query, where } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { doc, getDoc, collection, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-// Basit concurrency helper
+// Concurrency Helper
 async function pLimit(items, concurrency, fn) {
     const results = [];
     const queue = [...items];
@@ -70,19 +70,15 @@ export class PortfolioDataManager {
         const result = await ipRecordsService.getRecords();
         if (result.success) {
             const rawData = Array.isArray(result.data) ? result.data : [];
-            
-            // --- DÜZELTME: Veri Zenginleştirme Eklendi ---
             this.allRecords = rawData.map(record => ({
                 ...record,
-                formattedApplicantName: this._resolveApplicantName(record) // İsimleri burada oluşturuyoruz
+                formattedApplicantName: this._resolveApplicantName(record)
             }));
-
             this._buildWipoGroups();
         }
         return this.allRecords;
     }
 
-    // --- HELPER: Başvuru Sahibi İsmi Bulma ---
     _resolveApplicantName(record) {
         if (Array.isArray(record.applicants) && record.applicants.length > 0) {
             return record.applicants.map(app => {
@@ -209,12 +205,12 @@ export class PortfolioDataManager {
             title: record.title || record.brandText || '',
             transactionTypeName: typeInfo?.alias || typeInfo?.name || `İşlem ${tx.type}`,
             applicationNumber: record.applicationNumber || '-',
-            applicantName: record.formattedApplicantName || '-', // Burada kullanılıyor
+            applicantName: record.formattedApplicantName || '-',
             opponent: tx.oppositionOwner || (tx.objectionOwners || []).map(o=>o.name).join(', ') || '-',
             bulletinNo: tx.bulletinNo || record.details?.brandInfo?.opposedMarkBulletinNo || '-',
             bulletinDate: this._fmtDate(record.details?.brandInfo?.opposedMarkBulletinDate || tx.bulletinDate),
             epatsDate: this._fmtDate(tx.epatsDocument?.documentDate),
-            statusText: this._formatObjectionStatus(tx.requestResult),
+            statusText: this._formatObjectionStatus(tx.requestResult), // GÜNCELLENEN METODU KULLANIYOR
             timestamp: tx.timestamp,
             documents: docs
         };
@@ -287,10 +283,21 @@ export class PortfolioDataManager {
     }
 
     // --- HELPERS ---
+    
+    // YENİLENEN METOD: İtiraz sonucunu dinamik olarak transactionTypes'tan bulur
     _formatObjectionStatus(code) {
-        const map = { '28': 'Kabul', '30': 'Ret', '29': 'Kısmi Kabul', '24': 'Eksiklik' }; 
-        return map[String(code)] || 'Karar Bekleniyor';
+        if (!code) return 'Karar Bekleniyor';
+        
+        // Önce bellekteki dinamik map'ten kontrol et
+        const typeInfo = this.transactionTypesMap.get(String(code));
+        if (typeInfo) {
+            return typeInfo.alias || typeInfo.name;
+        }
+
+        // Bulunamazsa 'Karar Bekleniyor' dön
+        return 'Karar Bekleniyor';
     }
+
     _fmtDate(val) {
         try {
             if(!val) return '-';
@@ -309,6 +316,7 @@ export class PortfolioDataManager {
         return this.allCountries.find(c => c.code === code)?.name || code || '-';
     }
 
+    // --- FILTERS ---
     filterRecords(typeFilter, searchTerm, columnFilters = {}) {
         let sourceData = [];
         if (typeFilter === 'litigation') sourceData = this.litigationRows;
