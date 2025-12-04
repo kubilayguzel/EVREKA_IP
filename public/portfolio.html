@@ -8,6 +8,8 @@
     <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
     <link rel="stylesheet" href="./css/shared-styles.css">
+    <link rel="stylesheet" href="./css/simple-loading.css">
+    
     <link rel="modulepreload" href="./firebase-config.js">
     <link rel="modulepreload" href="./js/layout-loader.js">
     
@@ -43,7 +45,7 @@
         .portfolio-table { 
             width: 100%; 
             border-collapse: collapse; 
-            table-layout: fixed; /* Sabit tablo düzeni */
+            table-layout: fixed; /* ÖNEMLİ: Kolon genişliklerinin çalışması için */
         }
         
         .portfolio-table th, .portfolio-table td { 
@@ -66,7 +68,7 @@
         
         .portfolio-table tr:hover { background-color: #f6f8fa; }
 
-        /* --- GÖRSEL STİLLERİ (GÜNCELLENDİ) --- */
+        /* Görseller ve İkonlar - BÜYÜTME EFEKTİ */
         .trademark-image-wrapper {
             position: relative;
             height: 50px;
@@ -82,25 +84,25 @@
             object-fit: contain; 
             border-radius: 4px; 
             cursor: pointer; 
+            transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
             background-color: white;
             border: 1px solid #eee;
-            /* Hover efekti JS ile yapılacak, buradaki transform kaldırıldı */
         }
-
-        /* JS ile oluşturulacak yüzen görselin stili */
+        
+        /* Floating preview stilleri (main.js ile kontrol ediliyor) */
         .floating-trademark-preview {
             position: fixed;
-            z-index: 10000; /* En üstte */
+            z-index: 10000;
             background: white;
             border: 2px solid #1e3c72;
             border-radius: 12px;
             box-shadow: 0 10px 40px rgba(0,0,0,0.4);
             padding: 5px;
-            pointer-events: none; /* Mouse olaylarını engelleme */
+            pointer-events: none;
             max-width: 300px;
             max-height: 300px;
             object-fit: contain;
-            display: none; /* Başlangıçta gizli */
+            display: none;
             animation: fadeIn 0.2s ease-out;
         }
 
@@ -110,7 +112,8 @@
         }
 
         /* Loading & Empty States */
-        .loading-overlay { position: absolute; inset: 0; background: rgba(255,255,255,0.8); display: flex; align-items: center; justify-content: center; z-index: 50; }
+        /* Eski spinner stillerini tutuyoruz ama JS'de SimpleLoading kullanacağız */
+        .loading-overlay { position: absolute; inset: 0; background: rgba(255,255,255,0.8); display: none; align-items: center; justify-content: center; z-index: 50; }
         .no-records { text-align: center; padding: 50px; color: #666; display: none; }
         
         /* Modal */
@@ -183,7 +186,7 @@
                     <thead>
                         <tr id="portfolioTableHeaderRow">
                             </tr>
-                        </thead>
+                    </thead>
                     <tbody id="portfolioTableBody">
                         </tbody>
                 </table>
