@@ -16,36 +16,27 @@ export class PortfolioRenderer {
 
     renderHeaders(columns) {
         const headerRow = document.getElementById('portfolioTableHeaderRow');
-        // Filtre satırı referansını kaldırdık çünkü artık kullanmayacağız
-        // const filterRow = document.getElementById('portfolioTableFilterRow'); 
+        const filterRow = document.getElementById('portfolioTableFilterRow'); // Opsiyonel
         
+        // DÜZELTME: Sadece headerRow zorunlu, filterRow yoksa durma.
         if (!headerRow) return;
 
         headerRow.innerHTML = '';
-        // filterRow.innerHTML = ''; // Buna gerek kalmadı
+        if (filterRow) filterRow.innerHTML = '';
 
         columns.forEach(col => {
-            // Sadece Başlık Satırı
             const th = document.createElement('th');
-            if (col.width) th.style.width = col.width; 
+            if (col.width) th.style.width = col.width;
             
             th.className = col.sortable ? 'sortable-header inactive' : '';
             if (col.sortable) th.dataset.column = col.key;
             
             th.textContent = col.label || '';
             
-            // Sıralama ikonu (CSS ile yapılmıyorsa manuel ekleme)
-            if (col.sortable) {
-                // İsteğe bağlı: Başlığın yanına küçük bir ikon placeholder'ı
-                // th.innerHTML += ' <i class="fas fa-sort text-muted small"></i>';
-            }
-
             if (col.isCheckbox) {
                 th.innerHTML = '<input type="checkbox" id="selectAllCheckbox">';
             }
             headerRow.appendChild(th);
-
-            // --- FİLTRE INPUT KODU TAMAMEN KALDIRILDI ---
         });
     }
 
@@ -55,6 +46,7 @@ export class PortfolioRenderer {
         tr.dataset.id = record.id;
         
         const isWipoParent = (record.origin === 'WIPO' || record.origin === 'ARIPO') && record.transactionHierarchy === 'parent';
+        // const isChild = record.transactionHierarchy === 'child'; // Kullanılmıyor
         const irNo = record.wipoIR || record.aripoIR;
         
         if (isWipoParent && irNo) {
@@ -79,10 +71,13 @@ export class PortfolioRenderer {
         let html = `
             <td><input type="checkbox" class="record-checkbox" data-id="${record.id}" ${isSelected ? 'checked' : ''}></td>
             <td class="toggle-cell text-center">${caret}</td>
+            
             <td><div class="badge badge-${record.portfoyStatus === 'active' ? 'success' : 'secondary'}">${record.portfoyStatus === 'active' ? 'Aktif' : 'Pasif'}</div></td>
         `;
 
-        if (!isTrademarkTab) html += `<td>${record.type || '-'}</td>`;
+        if (!isTrademarkTab) {
+            html += `<td>${record.type || '-'}</td>`;
+        }
 
         html += `
             <td><strong>${record.title || record.brandText || '-'}</strong></td>
@@ -121,12 +116,37 @@ export class PortfolioRenderer {
         const tr = document.createElement('tr');
         tr.className = isChild ? 'group-row child-row' : (hasChildren ? 'group-header' : '');
         if (isChild) tr.setAttribute('aria-hidden', 'true');
-        const docsHtml = (row.documents || []).map(doc => `<a href="${doc.fileUrl}" target="_blank" class="pdf-link ${doc.type === 'epats_document' ? 'text-info' : 'text-danger'}" title="${doc.fileName}"><i class="fas ${doc.type === 'epats_document' ? 'fa-file-invoice' : 'fa-file-pdf'}"></i></a>`).join('');
+        
+        const docsHtml = (row.documents || []).map(doc => `
+            <a href="${doc.fileUrl}" target="_blank" class="pdf-link ${doc.type === 'epats_document' ? 'text-info' : 'text-danger'}" title="${doc.fileName}">
+                <i class="fas ${doc.type === 'epats_document' ? 'fa-file-invoice' : 'fa-file-pdf'}"></i>
+            </a>
+        `).join('');
+
         const caret = hasChildren ? `<i class="fas fa-chevron-right row-caret" style="cursor:pointer;"></i>` : '';
         const indentation = isChild ? 'style="padding-left: 30px; border-left: 3px solid #f39c12;"' : '';
-        tr.innerHTML = `<td class="toggle-cell text-center">${caret}</td><td ${indentation}>${isChild ? '↳ ' : ''} <strong>${row.transactionTypeName}</strong><div class="small text-muted">${row.title}</div></td><td>${row.applicationNumber || '-'}</td><td>${row.applicantName || '-'}</td><td>${row.opponent || '-'}</td><td>${row.bulletinDate || '-'}</td><td>${row.bulletinNo || '-'}</td><td>${row.epatsDate || '-'}</td><td>${row.statusText || '-'}</td><td>${docsHtml || '-'}</td>`;
+
+        const statusDisplay = isChild ? '' : (row.statusText || '-');
+
+        tr.innerHTML = `
+            <td class="toggle-cell text-center">${caret}</td>
+            <td ${indentation}>
+                ${isChild ? '↳ ' : ''} <strong>${row.transactionTypeName}</strong>
+                <div class="small text-muted">${row.title}</div>
+            </td>
+            <td>${row.applicationNumber || '-'}</td>
+            <td>${row.applicantName || '-'}</td>
+            <td>${row.opponent || '-'}</td>
+            <td>${row.bulletinDate || '-'}</td>
+            <td>${row.bulletinNo || '-'}</td>
+            <td>${row.epatsDate || '-'}</td>
+            <td>${statusDisplay}</td>
+            <td>${docsHtml || '-'}</td>
+        `;
+        
         if (hasChildren) tr.dataset.groupId = row.id;
         if (isChild) tr.dataset.parentId = row.parentId;
+
         return tr;
     }
 
@@ -134,6 +154,7 @@ export class PortfolioRenderer {
         if (!d) return '-';
         try { return new Date(d).toLocaleDateString('tr-TR'); } catch { return String(d); }
     }
+    
     getStatusBadge(record) {
         const text = record.status || '-';
         let color = 'light';
