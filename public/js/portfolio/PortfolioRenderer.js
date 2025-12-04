@@ -1,5 +1,6 @@
 // public/js/portfolio/PortfolioRenderer.js
-import '../simple-loading.js'; // SimpleLoading scriptini çağır
+import { STATUSES } from '../../utils.js'; // Utils'den durumları al
+import '../simple-loading.js';
 
 export class PortfolioRenderer {
     constructor(containerId, dataManager) {
@@ -21,21 +22,17 @@ export class PortfolioRenderer {
         const defaultSpinner = document.getElementById('loadingIndicator');
         
         if (show) {
-            // Eski spinner'ı gizle (çakışma olmasın)
             if (defaultSpinner) defaultSpinner.style.display = 'none';
             
-            // SimpleLoading'i göster
             if (this.simpleLoader) {
                 this.simpleLoader.show({
                     text: 'Veriler Yükleniyor',
                     subtext: 'Lütfen bekleyiniz, kayıtlar taranıyor...'
                 });
             } else if (defaultSpinner) {
-                // Eğer SimpleLoading yüklenemedi ise eskisini göster (Fallback)
                 defaultSpinner.style.display = 'flex';
             }
         } else {
-            // Hepsini gizle
             if (this.simpleLoader) this.simpleLoader.hide();
             if (defaultSpinner) defaultSpinner.style.display = 'none';
         }
@@ -93,30 +90,40 @@ export class PortfolioRenderer {
 
         const caret = isWipoParent ? `<i class="fas fa-chevron-right row-caret" style="cursor:pointer;"></i>` : '';
 
+        // Güvenli Veri Erişimi (Null check ve String'e çevirme)
+        const titleText = record.title || record.brandText || '-';
+        const appNoText = record.applicationNumber || (isWipoParent ? irNo : '-');
+        const applicantText = record.formattedApplicantName || '-';
+
         let html = `
             <td><input type="checkbox" class="record-checkbox" data-id="${record.id}" ${isSelected ? 'checked' : ''}></td>
             <td class="toggle-cell text-center">${caret}</td>
             
-            <td><div class="badge badge-${record.portfoyStatus === 'active' ? 'success' : 'secondary'}">${record.portfoyStatus === 'active' ? 'Aktif' : 'Pasif'}</div></td>
+            <td>
+                ${isChild ? '' : `<div class="badge badge-${record.portfoyStatus === 'active' ? 'success' : 'secondary'}">${record.portfoyStatus === 'active' ? 'Aktif' : 'Pasif'}</div>`}
+            </td>
         `;
 
         if (!isTrademarkTab) {
             html += `<td>${record.type || '-'}</td>`;
         }
 
-        html += `
-            <td><strong>${record.title || record.brandText || '-'}</strong></td>
-            ${imgHtml}
-            ${isTrademarkTab ? `<td>${record.origin || '-'}</td>` : ''}
-            ${isTrademarkTab ? `<td>${countryName}</td>` : ''}
-            <td>${record.applicationNumber || (isWipoParent ? irNo : '-')}</td>
-            <td>${this.formatDate(record.applicationDate)}</td>
-            
-            <td>${this.getStatusBadge(record)}</td>
-            
-            <td><small>${record.formattedApplicantName || '-'}</small></td>
-            <td>${actions}</td>
-        `;
+        html += `<td title="${titleText}"><strong>${titleText}</strong></td>`;
+
+        if (isTrademarkTab) {
+            html += imgHtml;
+            html += `<td>${record.origin || '-'}</td>`;
+            html += `<td title="${countryName}">${countryName}</td>`;
+        }
+
+        html += `<td title="${appNoText}">${appNoText}</td>`;
+        html += `<td>${this.formatDate(record.applicationDate)}</td>`;
+        
+        // Başvuru Durumu (Child ise boş, değilse Utils'den çevrilmiş metin)
+        html += `<td>${isChild ? '' : this.getStatusBadge(record)}</td>`;
+        
+        html += `<td><small title="${applicantText}">${applicantText}</small></td>`;
+        html += `<td>${actions}</td>`;
 
         tr.innerHTML = html;
         return tr;
@@ -135,7 +142,15 @@ export class PortfolioRenderer {
                 <button class="action-btn edit-btn btn btn-sm btn-warning" data-id="${row.id}"><i class="fas fa-edit"></i></button>
             </div>`;
             
-        tr.innerHTML = `<td>${row.title || '-'}</td><td>${row.suitType || '-'}</td><td>${row.caseNo || '-'}</td><td>${row.court || '-'}</td><td>${row.client || '-'}</td><td>${row.opposingParty || '-'}</td><td>${row.openedDate || '-'}</td><td>${actions}</td>`;
+        tr.innerHTML = `
+            <td title="${row.title || ''}">${row.title || '-'}</td>
+            <td title="${row.suitType || ''}">${row.suitType || '-'}</td>
+            <td title="${row.caseNo || ''}">${row.caseNo || '-'}</td>
+            <td title="${row.court || ''}">${row.court || '-'}</td>
+            <td title="${row.client || ''}">${row.client || '-'}</td>
+            <td title="${row.opposingParty || ''}">${row.opposingParty || '-'}</td>
+            <td>${row.openedDate || '-'}</td>
+            <td>${actions}</td>`;
         return tr;
     }
 
@@ -158,13 +173,13 @@ export class PortfolioRenderer {
 
         tr.innerHTML = `
             <td class="toggle-cell text-center">${caret}</td>
-            <td ${indentation}>
+            <td ${indentation} title="${row.transactionTypeName} - ${row.title}">
                 ${isChild ? '↳ ' : ''} <strong>${row.transactionTypeName}</strong>
                 <div class="small text-muted">${row.title}</div>
             </td>
-            <td>${row.applicationNumber || '-'}</td>
-            <td>${row.applicantName || '-'}</td>
-            <td>${row.opponent || '-'}</td>
+            <td title="${row.applicationNumber}">${row.applicationNumber || '-'}</td>
+            <td title="${row.applicantName}">${row.applicantName || '-'}</td>
+            <td title="${row.opponent}">${row.opponent || '-'}</td>
             <td>${row.bulletinDate || '-'}</td>
             <td>${row.bulletinNo || '-'}</td>
             <td>${row.epatsDate || '-'}</td>
@@ -183,11 +198,37 @@ export class PortfolioRenderer {
         try { return new Date(d).toLocaleDateString('tr-TR'); } catch { return String(d); }
     }
     
+    // --- GÜNCELLENEN DURUM ROZETİ (Utils.js Entegrasyonu) ---
     getStatusBadge(record) {
-        const text = record.status || '-';
-        let color = 'light';
-        if (text === 'registered' || text === 'Tescilli') color = 'success';
-        if (text === 'application' || text === 'Başvuru') color = 'warning';
-        return `<span class="badge badge-${color} border">${text}</span>`;
+        const rawStatus = record.status;
+        let displayStatus = rawStatus || '-';
+        
+        // Utils dosyasındaki STATUSES'tan çeviri yap
+        if (record.type && STATUSES[record.type]) {
+            const statusObj = STATUSES[record.type].find(s => s.value === rawStatus);
+            if (statusObj) {
+                displayStatus = statusObj.text;
+            }
+        } else {
+            // Kayıt tipi eşleşmezse (örn. 'patent' tipi yoksa) genel arama yap
+            for (const type in STATUSES) {
+                const found = STATUSES[type].find(s => s.value === rawStatus);
+                if (found) {
+                    displayStatus = found.text;
+                    break;
+                }
+            }
+        }
+
+        // Renk belirleme
+        let color = 'secondary';
+        const s = String(rawStatus).toLowerCase();
+        
+        if (['registered', 'approved', 'active', 'tescilli'].includes(s)) color = 'success';
+        else if (['filed', 'application', 'pending', 'published', 'partial_refusal', 'basvuru', 'yayinlandi'].includes(s)) color = 'warning';
+        else if (['rejected', 'refused', 'expired', 'invalidated', 'invalid_not_renewed', 'withdrawn', 'reddedildi'].includes(s)) color = 'danger';
+        else if (['opposition_filed', 'itiraz'].includes(s)) color = 'info';
+
+        return `<span class="badge badge-${color} border">${displayStatus}</span>`;
     }
 }
