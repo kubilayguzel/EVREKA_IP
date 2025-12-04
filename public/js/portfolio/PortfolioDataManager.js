@@ -16,7 +16,7 @@ async function pLimit(items, concurrency, fn) {
         }
     });
     await Promise.all(workers);
-    return results.flat();
+    return results.flat(); // Sonuçları düz bir liste olarak döndürür
 }
 
 export class PortfolioDataManager {
@@ -27,7 +27,7 @@ export class PortfolioDataManager {
         this.transactionTypesMap = new Map();
         this.allPersons = [];
         this.allCountries = [];
-        this.taskCache = new Map(); // Task belgeleri için cache
+        this.taskCache = new Map();
         this.txCache = new Map();
         this.wipoGroups = { parents: new Map(), children: new Map() };
     }
@@ -117,7 +117,7 @@ export class PortfolioDataManager {
         return this.wipoGroups.children.get(irNo) || [];
     }
 
-    // --- TASK DOCUMENT FETCHING (YENİ) ---
+    // --- TASK DOCUMENT FETCHING ---
     async _fetchTaskDocuments(taskId) {
         if (!taskId) return [];
         if (this.taskCache.has(taskId)) return this.taskCache.get(taskId);
@@ -129,7 +129,6 @@ export class PortfolioDataManager {
             const taskData = taskDoc.data();
             const docs = [];
 
-            // 1. ePats Belgesi
             if (taskData.details?.epatsDocument?.downloadURL) {
                 docs.push({
                     fileName: taskData.details.epatsDocument.name || 'ePats Belgesi',
@@ -139,7 +138,6 @@ export class PortfolioDataManager {
                 });
             }
 
-            // 2. Task Documents Array
             if (Array.isArray(taskData.documents)) {
                 taskData.documents.forEach(d => {
                     const url = d.downloadURL || d.url || d.path;
@@ -187,13 +185,13 @@ export class PortfolioDataManager {
         }
     }
 
-    // --- OBJECTIONS ---
+    // --- OBJECTIONS (SIRALAMA HATASI DÜZELTİLDİ) ---
     async loadObjectionRows() {
         if (this.objectionRows.length > 0) return this.objectionRows;
         const PARENT_TYPES = ['7', '19', '20'];
-        const processedRows = [];
 
-        await pLimit(this.allRecords, 20, async (record) => {
+        // pLimit sonuçlarını bir değişkene atıyoruz (Flat array dönecek)
+        const flatResults = await pLimit(this.allRecords, 20, async (record) => {
             let transactions = [];
             if (this.txCache.has(record.id)) {
                 transactions = this.txCache.get(record.id);
@@ -204,7 +202,7 @@ export class PortfolioDataManager {
                     this.txCache.set(record.id, transactions);
                 }
             }
-            if (!transactions.length) return;
+            if (!transactions.length) return []; // Boş array dön
 
             const parents = transactions.filter(t => PARENT_TYPES.includes(String(t.type)) && (t.transactionHierarchy === 'parent' || !t.parentId));
             const childrenMap = {};
@@ -215,28 +213,35 @@ export class PortfolioDataManager {
                 }
             });
 
+            // BU KAYIT İÇİN YEREL LİSTE OLUŞTUR (Sıralamayı korumak için)
+            const localRows = [];
+
             for (const parent of parents) {
                 const children = childrenMap[parent.id] || [];
                 const typeInfo = this.transactionTypesMap.get(String(parent.type));
                 
-                // Parent Row (Async çağrı ile task belgelerini de al)
+                // Parent Row (Async)
                 const parentRow = await this._createObjectionRowData(record, parent, typeInfo, true, children.length > 0);
-                processedRows.push(parentRow);
+                localRows.push(parentRow);
 
+                // Child Rows
                 children.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
                 for (const child of children) {
                     const childTypeInfo = this.transactionTypesMap.get(String(child.type));
-                    // Child Row
+                    // Child Row (Async)
                     const childRow = await this._createObjectionRowData(record, child, childTypeInfo, false, false, parent.id);
-                    processedRows.push(childRow);
+                    localRows.push(childRow);
                 }
             }
+            
+            return localRows; // Bu kaydın sıralı satırlarını döndür
         });
-        this.objectionRows = processedRows;
+
+        // Tüm kayıtların sonuçlarını tek bir listeye at
+        this.objectionRows = flatResults; 
         return this.objectionRows;
     }
 
-    // ASYNC yapıldı: Task belgelerini çekmek için
     async _createObjectionRowData(record, tx, typeInfo, isParent, hasChildren, parentId = null) {
         // 1. Transaction Belgeleri
         const docs = (tx.documents || []).map(d => ({
@@ -248,7 +253,7 @@ export class PortfolioDataManager {
         if (tx.relatedPdfUrl) docs.push({ fileName: 'Resmi Yazı', fileUrl: tx.relatedPdfUrl, type: 'official_document' });
         if (tx.oppositionPetitionFileUrl) docs.push({ fileName: 'İtiraz Dilekçesi', fileUrl: tx.oppositionPetitionFileUrl, type: 'opposition_petition' });
        
-        // 2. Task Belgeleri (Eklendi)
+        // 2. Task Belgeleri
         if (tx.triggeringTaskId) {
             const taskDocs = await this._fetchTaskDocuments(tx.triggeringTaskId);
             docs.push(...taskDocs);
@@ -343,7 +348,6 @@ export class PortfolioDataManager {
     // --- HELPERS ---
     _formatObjectionStatus(code) {
         if (!code) return 'Karar Bekleniyor';
-        // Bellekten dinamik çek
         const typeInfo = this.transactionTypesMap.get(String(code));
         return typeInfo ? (typeInfo.alias || typeInfo.name) : 'Karar Bekleniyor';
     }
@@ -366,15 +370,11 @@ export class PortfolioDataManager {
         return this.allCountries.find(c => c.code === code)?.name || code || '-';
     }
 
-    // --- FILTERS (GÜNCELLENDİ: İtirazlar için gelişmiş arama) ---
     filterRecords(typeFilter, searchTerm, columnFilters = {}) {
         let sourceData = [];
-        
-        if (typeFilter === 'litigation') {
-            sourceData = this.litigationRows;
-        } else if (typeFilter === 'objections') {
-            sourceData = this.objectionRows;
-        } else {
+        if (typeFilter === 'litigation') sourceData = this.litigationRows;
+        else if (typeFilter === 'objections') sourceData = this.objectionRows;
+        else {
             sourceData = this.allRecords.filter(r => {
                 if ((r.origin === 'WIPO' || r.origin === 'ARIPO') && r.transactionHierarchy === 'child') return false;
                 if (typeFilter === 'all') return r.recordOwnerType !== 'third_party';
@@ -382,13 +382,9 @@ export class PortfolioDataManager {
                 return r.type === typeFilter;
             });
         }
-
         return sourceData.filter(item => {
-            // Global Arama
             if (searchTerm) {
                 const s = searchTerm.toLowerCase();
-                
-                // İTİRAZLAR İÇİN ÖZEL ARAMA
                 if (typeFilter === 'objections') {
                     return (
                         (item.transactionTypeName && item.transactionTypeName.toLowerCase().includes(s)) ||
@@ -400,13 +396,10 @@ export class PortfolioDataManager {
                         (item.statusText && item.statusText.toLowerCase().includes(s))
                     );
                 } else {
-                    // Diğerleri için genel arama
                     const searchStr = Object.values(item).join(' ').toLowerCase();
                     if (!searchStr.includes(s)) return false;
                 }
             }
-            
-            // Kolon Filtreleri
             for (const [key, val] of Object.entries(columnFilters)) {
                 if (!val) continue;
                 const itemVal = String(item[key] || '').toLowerCase();
