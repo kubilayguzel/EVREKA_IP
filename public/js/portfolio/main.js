@@ -377,13 +377,13 @@ class PortfolioController {
              return [
                 { key: 'toggle', width: '40px' },
                 { key: 'transactionTypeName', label: 'İşlem & Konu', sortable: true, width: '250px' },
-                { key: 'applicationNumber', label: 'Başvuru No', sortable: true, width: '130px' },
+                { key: 'applicationNumber', label: 'Başvuru No', sortable: true, width: '110px' },
                 { key: 'applicantName', label: 'Başvuru Sahibi', sortable: true, width: '200px' },
                 { key: 'opponent', label: 'Karşı Taraf', sortable: true, width: '200px' },
                 { key: 'bulletinDate', label: 'Bülten Tar.', sortable: true, width: '110px' },
-                { key: 'bulletinNo', label: 'Bülten No', sortable: true, width: '90px' },
+                { key: 'bulletinNo', label: 'Bülten No', sortable: true, width: '60px' },
                 { key: 'epatsDate', label: 'İşlem Tar.', sortable: true, width: '110px' },
-                { key: 'statusText', label: 'Durum', sortable: true, width: '120px' },
+                { key: 'statusText', label: 'Durum', sortable: true, width: '170px' },
                 { key: 'documents', label: 'Evraklar', width: '100px' }
             ];
         } 
