@@ -16,7 +16,7 @@ async function pLimit(items, concurrency, fn) {
         }
     });
     await Promise.all(workers);
-    return results.flat(); // Sonuçları düz bir liste olarak döndürür
+    return results.flat();
 }
 
 export class PortfolioDataManager {
@@ -27,7 +27,7 @@ export class PortfolioDataManager {
         this.transactionTypesMap = new Map();
         this.allPersons = [];
         this.allCountries = [];
-        this.taskCache = new Map();
+        this.taskCache = new Map(); // Task belgeleri için cache
         this.txCache = new Map();
         this.wipoGroups = { parents: new Map(), children: new Map() };
     }
@@ -129,6 +129,7 @@ export class PortfolioDataManager {
             const taskData = taskDoc.data();
             const docs = [];
 
+            // 1. ePats Belgesi
             if (taskData.details?.epatsDocument?.downloadURL) {
                 docs.push({
                     fileName: taskData.details.epatsDocument.name || 'ePats Belgesi',
@@ -138,6 +139,7 @@ export class PortfolioDataManager {
                 });
             }
 
+            // 2. Task Documents Array
             if (Array.isArray(taskData.documents)) {
                 taskData.documents.forEach(d => {
                     const url = d.downloadURL || d.url || d.path;
@@ -185,14 +187,15 @@ export class PortfolioDataManager {
         }
     }
 
-    // --- OBJECTIONS (SIRALAMA HATASI DÜZELTİLDİ) ---
+    // --- OBJECTIONS (HIZLANDIRILMIŞ) ---
     async loadObjectionRows() {
         if (this.objectionRows.length > 0) return this.objectionRows;
         const PARENT_TYPES = ['7', '19', '20'];
 
-        // pLimit sonuçlarını bir değişkene atıyoruz (Flat array dönecek)
         const flatResults = await pLimit(this.allRecords, 20, async (record) => {
             let transactions = [];
+            
+            // Transaction Cache Kontrolü
             if (this.txCache.has(record.id)) {
                 transactions = this.txCache.get(record.id);
             } else {
@@ -202,7 +205,7 @@ export class PortfolioDataManager {
                     this.txCache.set(record.id, transactions);
                 }
             }
-            if (!transactions.length) return []; // Boş array dön
+            if (!transactions.length) return [];
 
             const parents = transactions.filter(t => PARENT_TYPES.includes(String(t.type)) && (t.transactionHierarchy === 'parent' || !t.parentId));
             const childrenMap = {};
@@ -213,37 +216,51 @@ export class PortfolioDataManager {
                 }
             });
 
-            // BU KAYIT İÇİN YEREL LİSTE OLUŞTUR (Sıralamayı korumak için)
+            // --- PERFORMANS OPTİMİZASYONU: TASK BELGELERİNİ PARALEL ÇEK ---
+            const tasksToFetch = new Set();
+            
+            // Parent'ların Task ID'lerini topla
+            parents.forEach(p => {
+                if (p.triggeringTaskId && !this.taskCache.has(p.triggeringTaskId)) tasksToFetch.add(p.triggeringTaskId);
+            });
+            
+            // Child'ların Task ID'lerini topla
+            Object.values(childrenMap).flat().forEach(c => {
+                if (c.triggeringTaskId && !this.taskCache.has(c.triggeringTaskId)) tasksToFetch.add(c.triggeringTaskId);
+            });
+
+            // Hepsini aynı anda iste (Waterfall'ı engelle)
+            if (tasksToFetch.size > 0) {
+                await Promise.all(Array.from(tasksToFetch).map(id => this._fetchTaskDocuments(id)));
+            }
+            // -------------------------------------------------------------
+
             const localRows = [];
 
             for (const parent of parents) {
                 const children = childrenMap[parent.id] || [];
                 const typeInfo = this.transactionTypesMap.get(String(parent.type));
                 
-                // Parent Row (Async)
+                // Artık cache dolu olduğu için bu çağrılar beklemeden dönecek
                 const parentRow = await this._createObjectionRowData(record, parent, typeInfo, true, children.length > 0);
                 localRows.push(parentRow);
 
-                // Child Rows
                 children.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
                 for (const child of children) {
                     const childTypeInfo = this.transactionTypesMap.get(String(child.type));
-                    // Child Row (Async)
                     const childRow = await this._createObjectionRowData(record, child, childTypeInfo, false, false, parent.id);
                     localRows.push(childRow);
                 }
             }
             
-            return localRows; // Bu kaydın sıralı satırlarını döndür
+            return localRows;
         });
 
-        // Tüm kayıtların sonuçlarını tek bir listeye at
-        this.objectionRows = flatResults; 
+        this.objectionRows = flatResults;
         return this.objectionRows;
     }
 
     async _createObjectionRowData(record, tx, typeInfo, isParent, hasChildren, parentId = null) {
-        // 1. Transaction Belgeleri
         const docs = (tx.documents || []).map(d => ({
             fileName: d.name || 'Belge',
             fileUrl: d.url || d.downloadURL || d.path,
@@ -253,7 +270,7 @@ export class PortfolioDataManager {
         if (tx.relatedPdfUrl) docs.push({ fileName: 'Resmi Yazı', fileUrl: tx.relatedPdfUrl, type: 'official_document' });
         if (tx.oppositionPetitionFileUrl) docs.push({ fileName: 'İtiraz Dilekçesi', fileUrl: tx.oppositionPetitionFileUrl, type: 'opposition_petition' });
        
-        // 2. Task Belgeleri
+        // Task Belgeleri (Cache'den anında gelecek)
         if (tx.triggeringTaskId) {
             const taskDocs = await this._fetchTaskDocuments(tx.triggeringTaskId);
             docs.push(...taskDocs);
@@ -370,6 +387,7 @@ export class PortfolioDataManager {
         return this.allCountries.find(c => c.code === code)?.name || code || '-';
     }
 
+    // --- FILTERS (İTİRAZ ARAMA DAHİL) ---
     filterRecords(typeFilter, searchTerm, columnFilters = {}) {
         let sourceData = [];
         if (typeFilter === 'litigation') sourceData = this.litigationRows;
@@ -385,6 +403,8 @@ export class PortfolioDataManager {
         return sourceData.filter(item => {
             if (searchTerm) {
                 const s = searchTerm.toLowerCase();
+                
+                // İTİRAZ ÖZEL ARAMASI
                 if (typeFilter === 'objections') {
                     return (
                         (item.transactionTypeName && item.transactionTypeName.toLowerCase().includes(s)) ||
