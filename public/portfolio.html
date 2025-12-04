@@ -43,7 +43,7 @@
         .portfolio-table { 
             width: 100%; 
             border-collapse: collapse; 
-            table-layout: fixed; /* ÖNEMLİ: Kolon genişliklerinin çalışması için */
+            table-layout: fixed; /* Sabit tablo düzeni */
         }
         
         .portfolio-table th, .portfolio-table td { 
@@ -66,7 +66,7 @@
         
         .portfolio-table tr:hover { background-color: #f6f8fa; }
 
-        /* Görseller ve İkonlar - BÜYÜTME EFEKTİ */
+        /* --- GÖRSEL STİLLERİ (GÜNCELLENDİ) --- */
         .trademark-image-wrapper {
             position: relative;
             height: 50px;
@@ -82,19 +82,31 @@
             object-fit: contain; 
             border-radius: 4px; 
             cursor: pointer; 
-            transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
             background-color: white;
             border: 1px solid #eee;
+            /* Hover efekti JS ile yapılacak, buradaki transform kaldırıldı */
         }
-        
-        .trademark-image-thumbnail:hover { 
-            transform: scale(4.5); /* 4.5 kat büyüme */
-            z-index: 9999; 
-            position: absolute; 
-            left: 50%;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.3); 
-            border: 1px solid #ccc;
-            border-radius: 8px;
+
+        /* JS ile oluşturulacak yüzen görselin stili */
+        .floating-trademark-preview {
+            position: fixed;
+            z-index: 10000; /* En üstte */
+            background: white;
+            border: 2px solid #1e3c72;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.4);
+            padding: 5px;
+            pointer-events: none; /* Mouse olaylarını engelleme */
+            max-width: 300px;
+            max-height: 300px;
+            object-fit: contain;
+            display: none; /* Başlangıçta gizli */
+            animation: fadeIn 0.2s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.8); }
+            to { opacity: 1; transform: scale(1); }
         }
 
         /* Loading & Empty States */
@@ -171,9 +183,7 @@
                     <thead>
                         <tr id="portfolioTableHeaderRow">
                             </tr>
-                        <tr id="portfolioTableFilterRow">
-                            </tr>
-                    </thead>
+                        </thead>
                     <tbody id="portfolioTableBody">
                         </tbody>
                 </table>
