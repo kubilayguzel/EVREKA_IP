@@ -39,28 +39,61 @@
 
         /* Tablo */
         .portfolio-table-container { background: rgba(255, 255, 255, 0.95); border-radius: 20px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1); overflow: visible; position: relative; z-index: 1; min-height: 200px; }
-        .portfolio-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-        .portfolio-table th, .portfolio-table td { padding: 15px; text-align: left; border-bottom: 1px solid #f0f0f0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .portfolio-table th { background: #f8f9fa; font-weight: 600; position: sticky; top: 0; z-index: 10; }
+        
+        .portfolio-table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            table-layout: fixed; /* ÖNEMLİ: Kolon genişliklerinin çalışması için */
+        }
+        
+        .portfolio-table th, .portfolio-table td { 
+            padding: 12px 15px; 
+            text-align: left; 
+            border-bottom: 1px solid #f0f0f0; 
+            white-space: nowrap; 
+            overflow: hidden; 
+            text-overflow: ellipsis; 
+        }
+        
+        .portfolio-table th { 
+            background: #f8f9fa; 
+            font-weight: 600; 
+            position: sticky; 
+            top: 0; 
+            z-index: 10; 
+            border-bottom: 2px solid #dee2e6;
+        }
+        
         .portfolio-table tr:hover { background-color: #f6f8fa; }
 
-        /* Görseller ve İkonlar */
-       .trademark-image-thumbnail { 
-        width: 50px; 
-        height: 50px; 
-        object-fit: contain; 
-        border-radius: 5px; 
-        cursor: pointer; 
-        transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); /* Yumuşak geçiş */
-        background-color: white;
+        /* Görseller ve İkonlar - BÜYÜTME EFEKTİ */
+        .trademark-image-wrapper {
+            position: relative;
+            height: 50px;
+            width: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .trademark-image-thumbnail { 
+            max-width: 100%; 
+            max-height: 100%; 
+            object-fit: contain; 
+            border-radius: 4px; 
+            cursor: pointer; 
+            transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            background-color: white;
+            border: 1px solid #eee;
         }
         
         .trademark-image-thumbnail:hover { 
             transform: scale(4.5); /* 4.5 kat büyüme */
             z-index: 9999; 
-            position: relative; 
-            box-shadow: 0 10px 25px rgba(0,0,0,0.3); 
-            border: 1px solid #ddd;
+            position: absolute; /* Tablo hücresinden taşması için absolute */
+            left: 50%;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3); 
+            border: 1px solid #ccc;
             border-radius: 8px;
         }
 
@@ -121,12 +154,16 @@
                     <button class="btn-add-record" onclick="window.location.href='data-entry.html'">
                         <span>&#x2795;</span> Yeni Kayıt
                     </button>
-                    <button type="button" class="btn-secondary" id="exportExcelBtn" style="margin-right: 8px;">
-                        Excel'e Aktar
-                    </button>
-                    <button type="button" class="btn-secondary" id="exportPdfBtn">
-                        PDF'e Aktar
-                    </button>                  
+                    
+                    <div class="dropdown">
+                        <button class="btn-secondary dropdown-toggle" type="button" id="exportMenuButton" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                            Dışa Aktar
+                        </button>
+                        <div class="dropdown-menu" aria-labelledby="exportMenuButton">
+                            <a class="dropdown-item" href="#" id="exportExcelBtn">Excel'e Aktar</a>
+                            <a class="dropdown-item" href="#" id="exportPdfBtn">PDF'e Aktar</a>
+                        </div>
+                    </div>
                 </div>
             </div>
             
@@ -173,7 +210,6 @@
 
     <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.2/dist/js/bootstrap.bundle.min.js"></script>
-    
     <script type="module" src="./js/portfolio/main.js"></script>
 </body>
 </html>
