@@ -408,7 +408,7 @@ class PortfolioController {
         ];
 
         if (tab !== 'trademark') {
-            columns.push({ key: 'type', label: 'Tür', sortable: true, width: '100px' });
+            columns.push({ key: 'type', label: 'Tür', sortable: true, width: '130px' });
         }
 
         // Başlık (200px'e sabitlendi)
@@ -416,12 +416,12 @@ class PortfolioController {
 
         if (tab === 'trademark') {
             columns.push({ key: 'brandImage', label: 'Görsel', width: '90px' }); // Genişletildi: 90px
-            columns.push({ key: 'origin', label: 'Menşe', sortable: true, width: '130px' });
+            columns.push({ key: 'origin', label: 'Menşe', sortable: true, width: '120px' });
             columns.push({ key: 'country', label: 'Ülke', sortable: true, width: '90px' });
         }
 
         columns.push(
-            { key: 'applicationNumber', label: 'Başvuru No', sortable: true, width: '130px' },
+            { key: 'applicationNumber', label: 'Başvuru No', sortable: true, width: '140px' },
             { key: 'applicationDate', label: 'Başvuru Tar.', sortable: true, width: '110px' },
             { key: 'status', label: 'Başvuru Durumu', sortable: true, width: '130px' },
             
@@ -429,7 +429,7 @@ class PortfolioController {
             { key: 'formattedApplicantName', label: 'Başvuru Sahibi', sortable: true }, 
             
             // İşlemler: Genişletildi
-            { key: 'actions', label: 'İşlemler', width: '280px' } // 240px'e çıkarıldı
+            { key: 'actions', label: 'İşlemler', width: '280px' } // 280px'e çıkarıldı
         );
 
         return columns;
