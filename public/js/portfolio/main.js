@@ -35,6 +35,8 @@ class PortfolioController {
                     await this.dataManager.loadInitialData();
                     this.setupPagination();
                     this.setupEventListeners();
+                    // YENİ: Görsel Hover Efektini Başlat
+                    this.setupImageHover();
                     this.render();
                 } catch (e) {
                     console.error('Init hatası:', e);
@@ -45,6 +47,63 @@ class PortfolioController {
                 window.location.href = 'index.html';
             }
         });
+    }
+
+    // --- YENİ: GÖRSEL HOVER MANTIĞI (JS İLE POPUP) ---
+    setupImageHover() {
+        // Önizleme elementini oluştur (eğer yoksa)
+        let previewEl = document.getElementById('floating-preview');
+        if (!previewEl) {
+            previewEl = document.createElement('img');
+            previewEl.id = 'floating-preview';
+            previewEl.className = 'floating-trademark-preview';
+            document.body.appendChild(previewEl);
+        }
+
+        // Tablo üzerinde mouse hareketlerini dinle
+        const tableBody = document.getElementById('portfolioTableBody');
+        
+        tableBody.addEventListener('mouseover', (e) => {
+            if (e.target.classList.contains('trademark-image-thumbnail')) {
+                const src = e.target.src;
+                if (src) {
+                    previewEl.src = src;
+                    previewEl.style.display = 'block';
+                    this.positionPreview(e, previewEl);
+                }
+            }
+        });
+
+        tableBody.addEventListener('mousemove', (e) => {
+            if (previewEl.style.display === 'block') {
+                this.positionPreview(e, previewEl);
+            }
+        });
+
+        tableBody.addEventListener('mouseout', (e) => {
+            if (e.target.classList.contains('trademark-image-thumbnail')) {
+                previewEl.style.display = 'none';
+            }
+        });
+    }
+
+    positionPreview(e, element) {
+        // Mouse'un biraz sağına ve altına konumlandır
+        const offset = 20;
+        let left = e.clientX + offset;
+        let top = e.clientY + offset;
+
+        // Ekran dışına taşmayı engelle
+        const rect = element.getBoundingClientRect();
+        if (left + rect.width > window.innerWidth) {
+            left = e.clientX - rect.width - offset;
+        }
+        if (top + rect.height > window.innerHeight) {
+            top = e.clientY - rect.height - offset;
+        }
+
+        element.style.left = `${left}px`;
+        element.style.top = `${top}px`;
     }
 
     setupPagination() {
@@ -60,7 +119,6 @@ class PortfolioController {
     }
 
     setupEventListeners() {
-        // --- TAB DEĞİŞİMİ ---
         document.querySelectorAll('.tab-button').forEach(btn => {
             btn.addEventListener('click', async (e) => {
                 document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
@@ -74,7 +132,6 @@ class PortfolioController {
                 this.updateBulkActionButtons();
                 
                 document.getElementById('searchBar').value = '';
-                document.querySelectorAll('.column-filter').forEach(el => el.value = '');
 
                 this.renderer.showLoading(true);
                 try {
@@ -87,22 +144,12 @@ class PortfolioController {
             });
         });
 
-        // --- ARAMA ---
         document.getElementById('searchBar').addEventListener('input', (e) => {
             this.state.searchQuery = e.target.value;
             this.state.currentPage = 1;
             this.render();
         });
 
-        document.getElementById('portfolioTableFilterRow').addEventListener('input', (e) => {
-            if (e.target.classList.contains('column-filter')) {
-                this.state.columnFilters[e.target.dataset.column] = e.target.value;
-                this.state.currentPage = 1;
-                this.render();
-            }
-        });
-
-        // --- SIRALAMA ---
         document.getElementById('portfolioTableHeaderRow').addEventListener('click', (e) => {
             const th = e.target.closest('.sortable-header');
             if (th) {
@@ -121,7 +168,6 @@ class PortfolioController {
             }
         });
 
-        // --- SEÇİM & TOPLU İŞLEMLER ---
         const selectAllCb = document.getElementById('selectAllCheckbox');
         if (selectAllCb) {
             selectAllCb.addEventListener('change', (e) => {
@@ -151,7 +197,6 @@ class PortfolioController {
         document.getElementById('exportExcelBtn')?.addEventListener('click', () => this.handleExport('excel'));
         document.getElementById('exportPdfBtn')?.addEventListener('click', () => this.handleExport('pdf'));
 
-        // --- TABLO AKSİYONLARI ---
         document.getElementById('portfolioTableBody').addEventListener('click', (e) => {
             const caret = e.target.closest('.row-caret') || (e.target.closest('tr.group-header') && !e.target.closest('button, a, input'));
             if (caret) this.toggleAccordion(caret);
@@ -206,10 +251,8 @@ class PortfolioController {
             const groupId = tr.dataset.groupId;
             const isExpanded = tr.getAttribute('aria-expanded') === 'true';
             tr.setAttribute('aria-expanded', !isExpanded);
-            
             const icon = tr.querySelector('.row-caret');
             if(icon) icon.className = !isExpanded ? 'fas fa-chevron-down row-caret' : 'fas fa-chevron-right row-caret';
-            
             const children = document.querySelectorAll(`tr.child-row[data-parent-id="${groupId}"]`);
             children.forEach(child => child.style.display = !isExpanded ? 'table-row' : 'none');
         }
@@ -217,7 +260,7 @@ class PortfolioController {
 
     async handleBulkStatusChange() {
         if (this.state.selectedRecords.size === 0) return;
-        if (!confirm(`${this.state.selectedRecords.size} kaydın durumu değiştirilecek. Emin misiniz?`)) return;
+        if (!confirm('Seçili kayıtların durumu değiştirilsin mi?')) return;
         try {
             this.renderer.showLoading(true);
             await this.dataManager.toggleRecordsStatus(Array.from(this.state.selectedRecords));
@@ -266,7 +309,7 @@ class PortfolioController {
     async handleExport(type) {
         let filtered = this.dataManager.filterRecords(this.state.activeTab, this.state.searchQuery, this.state.columnFilters);
         filtered = this.dataManager.sortRecords(filtered, this.state.sort.column, this.state.sort.direction);
-        if (filtered.length === 0) { showNotification('Dışa aktarılacak veri yok.', 'warning'); return; }
+        if (filtered.length === 0) { showNotification('Veri yok.', 'warning'); return; }
 
         this.renderer.showLoading(true);
         try {
@@ -332,7 +375,7 @@ class PortfolioController {
         this.updateBulkActionButtons();
     }
 
-    // --- KOLON AYARLARI (GÜNCELLENDİ) ---
+    // --- KOLON AYARLARI (İSTENİLEN GENİŞLİKLER) ---
     getColumnsForTab(tab) {
         if(tab === 'objections') {
              return [
@@ -357,40 +400,40 @@ class PortfolioController {
                 { key: 'client', label: 'Müvekkil', sortable: true, width: '150px' },
                 { key: 'opposingParty', label: 'Karşı Taraf', sortable: true, width: '150px' },
                 { key: 'openedDate', label: 'Açılış Tarihi', sortable: true, width: '110px' },
-                { key: 'actions', label: 'İşlemler', width: '140px' }
+                { key: 'actions', label: 'İşlemler', width: '180px' }
             ];
         }
 
         // STANDART KOLONLAR
         const columns = [
-            { key: 'selection', isCheckbox: true, width: '40px' }, // 1
-            { key: 'toggle', width: '40px' }, // 2
-            { key: 'portfoyStatus', label: 'Durum', sortable: true, width: '80px' } // 3
+            { key: 'selection', isCheckbox: true, width: '40px' },
+            { key: 'toggle', width: '40px' },
+            { key: 'portfoyStatus', label: 'Durum', sortable: true, width: '80px' }
         ];
 
         if (tab !== 'trademark') {
-            columns.push({ key: 'type', label: 'Tür', sortable: true, width: '100px' }); // 4
+            columns.push({ key: 'type', label: 'Tür', sortable: true, width: '100px' });
         }
 
-        // Başlık sabitlendi (200px)
-        columns.push({ key: 'title', label: 'Başlık', sortable: true, width: '200px' }); // 5
+        // Başlık (200px'e sabitlendi)
+        columns.push({ key: 'title', label: 'Başlık', sortable: true, width: '200px' });
 
         if (tab === 'trademark') {
-            columns.push({ key: 'brandImage', label: 'Görsel', width: '90px' }); // 6 (Genişletildi)
-            columns.push({ key: 'origin', label: 'Menşe', sortable: true, width: '90px' }); // 7
-            columns.push({ key: 'country', label: 'Ülke', sortable: true, width: '90px' }); // 8
+            columns.push({ key: 'brandImage', label: 'Görsel', width: '90px' }); // Genişletildi
+            columns.push({ key: 'origin', label: 'Menşe', sortable: true, width: '90px' });
+            columns.push({ key: 'country', label: 'Ülke', sortable: true, width: '90px' });
         }
 
         columns.push(
-            { key: 'applicationNumber', label: 'Başvuru No', sortable: true, width: '130px' }, // 9
-            { key: 'applicationDate', label: 'Başvuru Tar.', sortable: true, width: '110px' }, // 10
-            { key: 'status', label: 'Başvuru Durumu', sortable: true, width: '130px' }, // 11
+            { key: 'applicationNumber', label: 'Başvuru No', sortable: true, width: '130px' },
+            { key: 'applicationDate', label: 'Başvuru Tar.', sortable: true, width: '110px' },
+            { key: 'status', label: 'Başvuru Durumu', sortable: true, width: '130px' },
             
-            // Başvuru Sahibi: ESNEK (Kalan boşluğu doldurur)
-            { key: 'formattedApplicantName', label: 'Başvuru Sahibi', sortable: true }, // 12
+            // Başvuru Sahibi: ESNEK (Genişlik yok)
+            { key: 'formattedApplicantName', label: 'Başvuru Sahibi', sortable: true }, 
             
             // İşlemler: Genişletildi
-            { key: 'actions', label: 'İşlemler', width: '240px' } // 13
+            { key: 'actions', label: 'İşlemler', width: '180px' }
         );
 
         return columns;
