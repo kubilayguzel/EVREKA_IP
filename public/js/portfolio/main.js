@@ -376,15 +376,15 @@ class PortfolioController {
         if(tab === 'objections') {
              return [
                 { key: 'toggle', width: '40px' },
-                { key: 'transactionTypeName', label: 'İşlem & Konu', sortable: true, width: '250px' },
+                { key: 'transactionTypeName', label: 'İşlem & Konu', sortable: true, width: '200px' },
                 { key: 'applicationNumber', label: 'Başvuru No', sortable: true, width: '110px' },
-                { key: 'applicantName', label: 'Başvuru Sahibi', sortable: true, width: '200px' },
-                { key: 'opponent', label: 'Karşı Taraf', sortable: true, width: '200px' },
+                { key: 'applicantName', label: 'Başvuru Sahibi', sortable: true, width: '210px' },
+                { key: 'opponent', label: 'Karşı Taraf', sortable: true, width: '210px' },
                 { key: 'bulletinDate', label: 'Bülten Tar.', sortable: true, width: '110px' },
-                { key: 'bulletinNo', label: 'Bülten No', sortable: true, width: '60px' },
+                { key: 'bulletinNo', label: 'Bülten No', sortable: true, width: '80px' },
                 { key: 'epatsDate', label: 'İşlem Tar.', sortable: true, width: '110px' },
-                { key: 'statusText', label: 'Durum', sortable: true, width: '170px' },
-                { key: 'documents', label: 'Evraklar', width: '100px' }
+                { key: 'statusText', label: 'Durum', sortable: true, width: '190px' },
+                { key: 'documents', label: 'Evraklar', width: '80px' }
             ];
         } 
         if(tab === 'litigation') {
