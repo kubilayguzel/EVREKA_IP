@@ -49,9 +49,8 @@ class PortfolioController {
         });
     }
 
-    // --- YENİ: GÖRSEL HOVER MANTIĞI (JS İLE POPUP) ---
+    // --- GÖRSEL HOVER MANTIĞI (BAĞIMSIZ POPUP) ---
     setupImageHover() {
-        // Önizleme elementini oluştur (eğer yoksa)
         let previewEl = document.getElementById('floating-preview');
         if (!previewEl) {
             previewEl = document.createElement('img');
@@ -60,7 +59,6 @@ class PortfolioController {
             document.body.appendChild(previewEl);
         }
 
-        // Tablo üzerinde mouse hareketlerini dinle
         const tableBody = document.getElementById('portfolioTableBody');
         
         tableBody.addEventListener('mouseover', (e) => {
@@ -88,12 +86,10 @@ class PortfolioController {
     }
 
     positionPreview(e, element) {
-        // Mouse'un biraz sağına ve altına konumlandır
         const offset = 20;
         let left = e.clientX + offset;
         let top = e.clientY + offset;
 
-        // Ekran dışına taşmayı engelle
         const rect = element.getBoundingClientRect();
         if (left + rect.width > window.innerWidth) {
             left = e.clientX - rect.width - offset;
@@ -260,7 +256,7 @@ class PortfolioController {
 
     async handleBulkStatusChange() {
         if (this.state.selectedRecords.size === 0) return;
-        if (!confirm('Seçili kayıtların durumu değiştirilsin mi?')) return;
+        if (!confirm(`${this.state.selectedRecords.size} kaydın durumu değiştirilecek. Emin misiniz?`)) return;
         try {
             this.renderer.showLoading(true);
             await this.dataManager.toggleRecordsStatus(Array.from(this.state.selectedRecords));
@@ -309,7 +305,7 @@ class PortfolioController {
     async handleExport(type) {
         let filtered = this.dataManager.filterRecords(this.state.activeTab, this.state.searchQuery, this.state.columnFilters);
         filtered = this.dataManager.sortRecords(filtered, this.state.sort.column, this.state.sort.direction);
-        if (filtered.length === 0) { showNotification('Veri yok.', 'warning'); return; }
+        if (filtered.length === 0) { showNotification('Dışa aktarılacak veri yok.', 'warning'); return; }
 
         this.renderer.showLoading(true);
         try {
@@ -400,14 +396,14 @@ class PortfolioController {
                 { key: 'client', label: 'Müvekkil', sortable: true, width: '150px' },
                 { key: 'opposingParty', label: 'Karşı Taraf', sortable: true, width: '150px' },
                 { key: 'openedDate', label: 'Açılış Tarihi', sortable: true, width: '110px' },
-                { key: 'actions', label: 'İşlemler', width: '180px' }
+                { key: 'actions', label: 'İşlemler', width: '140px' }
             ];
         }
 
         // STANDART KOLONLAR
         const columns = [
-            { key: 'selection', isCheckbox: true, width: '40px' },
-            { key: 'toggle', width: '40px' },
+            { key: 'selection', isCheckbox: true, width: '40px' }, // 1
+            { key: 'toggle', width: '40px' }, // 2
             { key: 'portfoyStatus', label: 'Durum', sortable: true, width: '80px' }
         ];
 
@@ -419,7 +415,7 @@ class PortfolioController {
         columns.push({ key: 'title', label: 'Başlık', sortable: true, width: '200px' });
 
         if (tab === 'trademark') {
-            columns.push({ key: 'brandImage', label: 'Görsel', width: '90px' }); // Genişletildi
+            columns.push({ key: 'brandImage', label: 'Görsel', width: '90px' }); // Genişletildi: 90px
             columns.push({ key: 'origin', label: 'Menşe', sortable: true, width: '90px' });
             columns.push({ key: 'country', label: 'Ülke', sortable: true, width: '90px' });
         }
@@ -429,11 +425,11 @@ class PortfolioController {
             { key: 'applicationDate', label: 'Başvuru Tar.', sortable: true, width: '110px' },
             { key: 'status', label: 'Başvuru Durumu', sortable: true, width: '130px' },
             
-            // Başvuru Sahibi: ESNEK (Genişlik yok)
+            // Başvuru Sahibi: ESNEK (Genişlik yok, kalan tüm alanı kaplayacak)
             { key: 'formattedApplicantName', label: 'Başvuru Sahibi', sortable: true }, 
             
             // İşlemler: Genişletildi
-            { key: 'actions', label: 'İşlemler', width: '180px' }
+            { key: 'actions', label: 'İşlemler', width: '240px' } // 240px'e çıkarıldı
         );
 
         return columns;
