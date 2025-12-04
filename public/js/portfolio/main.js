@@ -416,7 +416,7 @@ class PortfolioController {
 
         if (tab === 'trademark') {
             columns.push({ key: 'brandImage', label: 'Görsel', width: '90px' }); // Genişletildi: 90px
-            columns.push({ key: 'origin', label: 'Menşe', sortable: true, width: '90px' });
+            columns.push({ key: 'origin', label: 'Menşe', sortable: true, width: '130px' });
             columns.push({ key: 'country', label: 'Ülke', sortable: true, width: '90px' });
         }
 
@@ -429,7 +429,7 @@ class PortfolioController {
             { key: 'formattedApplicantName', label: 'Başvuru Sahibi', sortable: true }, 
             
             // İşlemler: Genişletildi
-            { key: 'actions', label: 'İşlemler', width: '240px' } // 240px'e çıkarıldı
+            { key: 'actions', label: 'İşlemler', width: '280px' } // 240px'e çıkarıldı
         );
 
         return columns;
