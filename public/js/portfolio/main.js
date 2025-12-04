@@ -16,7 +16,7 @@ class PortfolioController {
         this.state = {
             activeTab: 'all',
             searchQuery: '',
-            columnFilters: {}, // Artık sadece yapısal olarak duruyor, UI'dan gelmeyecek
+            columnFilters: {},
             sort: { column: 'applicationDate', direction: 'desc' },
             currentPage: 1,
             selectedRecords: new Set()
@@ -69,11 +69,12 @@ class PortfolioController {
                 this.state.activeTab = e.target.dataset.type;
                 this.state.currentPage = 1;
                 this.state.searchQuery = '';
+                this.state.columnFilters = {};
                 this.state.selectedRecords.clear();
                 this.updateBulkActionButtons();
                 
                 document.getElementById('searchBar').value = '';
-                // Kolon filtresi temizlemeye gerek kalmadı çünkü inputlar yok
+                document.querySelectorAll('.column-filter').forEach(el => el.value = '');
 
                 this.renderer.showLoading(true);
                 try {
@@ -86,15 +87,20 @@ class PortfolioController {
             });
         });
 
-        // --- GLOBAL ARAMA ---
+        // --- ARAMA ---
         document.getElementById('searchBar').addEventListener('input', (e) => {
             this.state.searchQuery = e.target.value;
             this.state.currentPage = 1;
             this.render();
         });
 
-        // --- KOLON FİLTRESİ EVENT'İ KALDIRILDI ---
-        // document.getElementById('portfolioTableFilterRow').addEventListener('input', ...) SİLİNDİ
+        document.getElementById('portfolioTableFilterRow').addEventListener('input', (e) => {
+            if (e.target.classList.contains('column-filter')) {
+                this.state.columnFilters[e.target.dataset.column] = e.target.value;
+                this.state.currentPage = 1;
+                this.render();
+            }
+        });
 
         // --- SIRALAMA ---
         document.getElementById('portfolioTableHeaderRow').addEventListener('click', (e) => {
@@ -118,14 +124,7 @@ class PortfolioController {
         // --- SEÇİM & TOPLU İŞLEMLER ---
         const selectAllCb = document.getElementById('selectAllCheckbox');
         if (selectAllCb) {
-            // Bu element dinamik yaratılıyor ama ilk yüklemede header render edilirse event bağlanır.
-            // Renderer içinden veya delegation ile yapılması daha sağlıklı ama mevcut yapıda kalsın.
-            // Daha güvenli yol: Delegation (aşağıda yapılıyor zaten)
-        }
-        
-        // Delegation for Header Checkbox (Renderer'ın sonradan eklediği checkbox için)
-        document.getElementById('portfolioTableHeaderRow').addEventListener('change', (e) => {
-            if (e.target.id === 'selectAllCheckbox') {
+            selectAllCb.addEventListener('change', (e) => {
                 const isChecked = e.target.checked;
                 const currentRecords = this.getCurrentPageRecords();
                 currentRecords.forEach(r => {
@@ -134,8 +133,8 @@ class PortfolioController {
                 });
                 this.render();
                 this.updateBulkActionButtons();
-            }
-        });
+            });
+        }
 
         document.getElementById('portfolioTableBody').addEventListener('change', (e) => {
             if (e.target.classList.contains('record-checkbox')) {
@@ -207,8 +206,10 @@ class PortfolioController {
             const groupId = tr.dataset.groupId;
             const isExpanded = tr.getAttribute('aria-expanded') === 'true';
             tr.setAttribute('aria-expanded', !isExpanded);
+            
             const icon = tr.querySelector('.row-caret');
             if(icon) icon.className = !isExpanded ? 'fas fa-chevron-down row-caret' : 'fas fa-chevron-right row-caret';
+            
             const children = document.querySelectorAll(`tr.child-row[data-parent-id="${groupId}"]`);
             children.forEach(child => child.style.display = !isExpanded ? 'table-row' : 'none');
         }
@@ -331,6 +332,7 @@ class PortfolioController {
         this.updateBulkActionButtons();
     }
 
+    // --- KOLON AYARLARI (GÜNCELLENDİ) ---
     getColumnsForTab(tab) {
         if(tab === 'objections') {
              return [
@@ -370,25 +372,25 @@ class PortfolioController {
             columns.push({ key: 'type', label: 'Tür', sortable: true, width: '100px' }); // 4
         }
 
-        // Başlık (Daraltıldı ve Sabitlendi)
+        // Başlık sabitlendi (200px)
         columns.push({ key: 'title', label: 'Başlık', sortable: true, width: '200px' }); // 5
 
         if (tab === 'trademark') {
-            columns.push({ key: 'brandImage', label: 'Görsel', width: '70px' }); // 6
-            columns.push({ key: 'origin', label: 'Menşe', sortable: true, width: '100px' }); // 7
-            columns.push({ key: 'country', label: 'Ülke', sortable: true, width: '100px' }); // 8
+            columns.push({ key: 'brandImage', label: 'Görsel', width: '90px' }); // 6 (Genişletildi)
+            columns.push({ key: 'origin', label: 'Menşe', sortable: true, width: '90px' }); // 7
+            columns.push({ key: 'country', label: 'Ülke', sortable: true, width: '90px' }); // 8
         }
 
         columns.push(
-            { key: 'applicationNumber', label: 'Başvuru No', sortable: true, width: '140px' }, // 9
-            { key: 'applicationDate', label: 'Başvuru Tar.', sortable: true, width: '120px' }, // 10
-            { key: 'status', label: 'Başvuru Durumu', sortable: true, width: '140px' }, // 11
+            { key: 'applicationNumber', label: 'Başvuru No', sortable: true, width: '130px' }, // 9
+            { key: 'applicationDate', label: 'Başvuru Tar.', sortable: true, width: '110px' }, // 10
+            { key: 'status', label: 'Başvuru Durumu', sortable: true, width: '130px' }, // 11
             
-            // Başvuru Sahibi: Genişlik kaldırıldı (ESNEK)
+            // Başvuru Sahibi: ESNEK (Kalan boşluğu doldurur)
             { key: 'formattedApplicantName', label: 'Başvuru Sahibi', sortable: true }, // 12
             
             // İşlemler: Genişletildi
-            { key: 'actions', label: 'İşlemler', width: '210px' } // 13
+            { key: 'actions', label: 'İşlemler', width: '240px' } // 13
         );
 
         return columns;
