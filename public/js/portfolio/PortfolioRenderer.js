@@ -1,8 +1,16 @@
 // public/js/portfolio/PortfolioRenderer.js
+import '../simple-loading.js'; // SimpleLoading scriptini çağır
+
 export class PortfolioRenderer {
     constructor(containerId, dataManager) {
         this.tbody = document.getElementById(containerId);
         this.dataManager = dataManager;
+        
+        // SimpleLoading örneğini hazırla
+        this.simpleLoader = null;
+        if (window.SimpleLoading) {
+            this.simpleLoader = new window.SimpleLoading();
+        }
     }
 
     clear() {
@@ -10,15 +18,32 @@ export class PortfolioRenderer {
     }
 
     showLoading(show) {
-        const el = document.getElementById('loadingIndicator');
-        if (el) el.style.display = show ? 'flex' : 'none';
+        const defaultSpinner = document.getElementById('loadingIndicator');
+        
+        if (show) {
+            // Eski spinner'ı gizle (çakışma olmasın)
+            if (defaultSpinner) defaultSpinner.style.display = 'none';
+            
+            // SimpleLoading'i göster
+            if (this.simpleLoader) {
+                this.simpleLoader.show({
+                    text: 'Veriler Yükleniyor',
+                    subtext: 'Lütfen bekleyiniz, kayıtlar taranıyor...'
+                });
+            } else if (defaultSpinner) {
+                // Eğer SimpleLoading yüklenemedi ise eskisini göster (Fallback)
+                defaultSpinner.style.display = 'flex';
+            }
+        } else {
+            // Hepsini gizle
+            if (this.simpleLoader) this.simpleLoader.hide();
+            if (defaultSpinner) defaultSpinner.style.display = 'none';
+        }
     }
 
     renderHeaders(columns) {
         const headerRow = document.getElementById('portfolioTableHeaderRow');
-        const filterRow = document.getElementById('portfolioTableFilterRow'); // Opsiyonel
-        
-        // DÜZELTME: Sadece headerRow zorunlu, filterRow yoksa durma.
+        const filterRow = document.getElementById('portfolioTableFilterRow');
         if (!headerRow) return;
 
         headerRow.innerHTML = '';
@@ -46,7 +71,7 @@ export class PortfolioRenderer {
         tr.dataset.id = record.id;
         
         const isWipoParent = (record.origin === 'WIPO' || record.origin === 'ARIPO') && record.transactionHierarchy === 'parent';
-        // const isChild = record.transactionHierarchy === 'child'; // Kullanılmıyor
+        const isChild = record.transactionHierarchy === 'child'; 
         const irNo = record.wipoIR || record.aripoIR;
         
         if (isWipoParent && irNo) {
@@ -86,7 +111,9 @@ export class PortfolioRenderer {
             ${isTrademarkTab ? `<td>${countryName}</td>` : ''}
             <td>${record.applicationNumber || (isWipoParent ? irNo : '-')}</td>
             <td>${this.formatDate(record.applicationDate)}</td>
+            
             <td>${this.getStatusBadge(record)}</td>
+            
             <td><small>${record.formattedApplicantName || '-'}</small></td>
             <td>${actions}</td>
         `;
@@ -126,6 +153,7 @@ export class PortfolioRenderer {
         const caret = hasChildren ? `<i class="fas fa-chevron-right row-caret" style="cursor:pointer;"></i>` : '';
         const indentation = isChild ? 'style="padding-left: 30px; border-left: 3px solid #f39c12;"' : '';
 
+        // Child ise durum metni BOŞ olsun
         const statusDisplay = isChild ? '' : (row.statusText || '-');
 
         tr.innerHTML = `
