@@ -555,7 +555,25 @@
                 <div class="col-md-3 mb-4 detail-card-link" data-task-type="bulletin-watch"><div class="card p-3 text-center h-100 justify-content-center"><i class="fas fa-eye stat-icon text-primary mb-3"></i><div class="stat-label">Bülten İzleme Bildirim Onayları</div><div class="stat-value" id="taskCount-bulletin-watch">0</div></div></div>
                 <div class="col-md-3 mb-4 detail-card-link" data-task-type="completed-tasks"><div class="card p-3 text-center h-100 justify-content-center"><i class="fas fa-check-circle stat-icon text-success mb-3"></i><div class="stat-label">Talimat Verilen/Tamamlanan İşler</div></div></div>
             </div>
-
+            <div class="row mt-5" id="dava-task-detail-cards" style="display: none;">
+                <div class="col-md-6 mb-4 detail-card-link" data-task-type="dava-pending">
+                    <div class="card p-4 text-center h-100 justify-content-center shadow-sm" style="cursor: pointer;">
+                        <i class="fas fa-gavel stat-icon text-warning mb-3"></i>
+                        <div class="stat-label font-weight-bold">Müvekkil Onayı Bekleyen İşler</div>
+                        <div class="stat-value text-dark" id="taskCount-dava-pending">0</div>
+                        <small class="text-muted">Dava süreciyle ilgili onayınızı bekleyen talimatlar</small>
+                    </div>
+                </div>
+                
+                <div class="col-md-6 mb-4 detail-card-link" data-task-type="dava-completed">
+                    <div class="card p-4 text-center h-100 justify-content-center shadow-sm" style="cursor: pointer;">
+                        <i class="fas fa-balance-scale stat-icon text-success mb-3"></i>
+                        <div class="stat-label font-weight-bold">Talimat Verilen / Tamamlanan İşler</div>
+                        <div class="stat-value text-dark" id="taskCount-dava-completed">-</div>
+                        <small class="text-muted">Devam eden veya sonuçlanan dava süreçleri</small>
+                    </div>
+                </div>
+            </div>
             <div class="row mt-4" id="task-list-filters" style="display: none;">
                 <div class="col-12"><div class="card p-3"><div class="form-row align-items-end"><div class="form-group col-md-5 mb-0"><label class="text-muted">Ara</label><input class="form-control form-control-sm" id="taskSearchText" type="text"/></div><div class="form-group col-md-4 mb-0"><label class="text-muted">Durum</label><select class="form-control form-control-sm" id="taskStatusFilter"><option value="TÜMÜ">Tümü</option></select></div><div class="form-group col-md-3 mb-0"><button class="btn btn-primary btn-sm btn-block" id="applyTaskFilters">Filtrele</button></div></div></div></div>
             </div>
@@ -1493,25 +1511,24 @@ window.fetchAndDisplayTasks = async function(linkedIds) {
         window.updateDashboardCounts();
     };
 
-    // Detaylı Task Listeleme (GÜNCELLENMİŞ)
+    // Detaylı Task Listeleme
     window.loadSampleTaskDetails = async function(taskType) {
         const container = document.getElementById('task-list-container');
         container.innerHTML = '<div class="text-center mt-5"><i class="fas fa-spinner fa-spin fa-3x"></i><p class="mt-2">Veriler yükleniyor...</p></div>';
         
-        // Aktif tipi kaydet (Filtreleme fonksiyonu bunu kullanacak)
         window.taskPaginationData.currentType = taskType;
-        
-        // Filtre inputlarını temizle
         $('#taskSearchText').val('');
         $('#taskStatusFilter').val('TÜMÜ');
 
         const tasksRef = collection(db, 'tasks');
         let q;
         
-        // Sorgu
-        if (taskType === 'completed-tasks') {
+        // Sorgu: Tamamlananlar vs Bekleyenler
+        if (taskType === 'completed-tasks' || taskType === 'dava-completed') {
+            // Açık, Tamamlanan vb. statüler
             q = query(tasksRef, where('status', '!=', 'awaiting_client_approval'));
         } else {
+            // Sadece onay bekleyenler
             q = query(tasksRef, where('status', '==', 'awaiting_client_approval'));
         }
             
@@ -1525,23 +1542,44 @@ window.fetchAndDisplayTasks = async function(linkedIds) {
             if (await window.checkTaskClientRelation(t, clientSet)) rawTasks.push({ id: d.id, ...t });
         }
 
-        // Task Tipine Göre Ön Filtreleme (Backend'den karışık gelebilir)
-        let finalTasks = rawTasks;
+        // --- FİLTRELEME MANTIĞI ---
+        let finalTasks = [];
+
+        // Helper: Dava İşi mi? 
+        // (Buraya Dava ile ilgili taskType ID'lerini veya mantığını ekleyebilirsiniz)
+        const isDavaTask = (t) => {
+            const title = (t.title || '').toLowerCase();
+            const typeId = String(t.taskType);
+            // Örnek: 30 ve 31 Dava işleriyse buraya ekleyin. 
+            // Veya başlığında 'dava', 'mahkeme' geçiyorsa dava say.
+            return title.includes('dava') || title.includes('mahkeme') || typeId === 'DAVA_TYPE_ID'; 
+        };
+
+        // MARKA İŞLERİ (Mevcut)
         if (taskType === 'pending-approval') {
-            finalTasks = rawTasks.filter(t => String(t.taskType) !== '22' && String(t.taskType) !== '20');
+            // Dava olmayan ve özel tipler (20, 22) olmayanlar
+            finalTasks = rawTasks.filter(t => !isDavaTask(t) && String(t.taskType) !== '22' && String(t.taskType) !== '20');
         } else if (taskType === 'renewal-approval') {
             finalTasks = rawTasks.filter(t => String(t.taskType) === '22');
         } else if (taskType === 'bulletin-watch') {
             finalTasks = rawTasks.filter(t => String(t.taskType) === '20');
+        } else if (taskType === 'completed-tasks') {
+            // Dava olmayan tamamlanmış işler
+            finalTasks = rawTasks.filter(t => !isDavaTask(t));
+        }
+        
+        // DAVA İŞLERİ (Yeni)
+        else if (taskType === 'dava-pending') {
+            // Statüsü 'awaiting_client_approval' olan VE Dava işi olanlar
+            finalTasks = rawTasks.filter(t => isDavaTask(t));
+        } else if (taskType === 'dava-completed') {
+            // Statüsü onay beklemeyen VE Dava işi olanlar
+            finalTasks = rawTasks.filter(t => isDavaTask(t));
         }
 
-        // VERİYİ GLOBAL STATE'E KAYDET
         window.taskPaginationData.allDataUnfiltered = finalTasks;
-        
-        // FİLTRELEMEYİ TETİKLE (Bu fonksiyon ekrana çizimi yapacak)
         window.applyTaskFilter();
     };
-
     window._renderTaskCardsToContainer = async function(tasksToRender, containerSelector, formatDate, taskType) {
         const container = document.querySelector(containerSelector);
         if (!container) return;
@@ -2607,34 +2645,55 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
             });
         }
 
-        let cPending = 0, cRenewal = 0, cBulletin = 0;
+        let cPending = 0, cRenewal = 0, cBulletin = 0, cDavaPending = 0;
         const today = new Date(); today.setHours(0,0,0,0);
 
         filteredTasks.forEach(t => {
             const type = String(t.taskType);
-            if (type === '22') {
-                cRenewal++;
-            } else if (type === '20') { 
-                const due = t.dueDate || t.officialDueDate;
-                let isExpired = false;
-                if (due) {
-                    const d = due.seconds ? new Date(due.seconds*1000) : new Date(due);
-                    d.setHours(0,0,0,0);
-                    if (d < today) isExpired = true;
+            const title = (t.title || '').toLowerCase();
+            
+            // 1. Önce Dava işi olup olmadığını kontrol et
+            // (Eğer sisteminizde Dava için özel bir taskType ID varsa buraya ekleyin: type === '99' gibi)
+            const isDava = title.includes('dava') || title.includes('mahkeme');
+
+            if (isDava) {
+                // Dava işleri için ayrı sayaç
+                cDavaPending++;
+            } else {
+                // 2. Dava değilse Marka/Patent mantığına devam et
+                if (type === '22') {
+                    cRenewal++;
+                } else if (type === '20') { 
+                    const due = t.dueDate || t.officialDueDate;
+                    let isExpired = false;
+                    if (due) {
+                        const d = due.seconds ? new Date(due.seconds*1000) : new Date(due);
+                        d.setHours(0,0,0,0);
+                        if (d < today) isExpired = true;
+                    }
+                    if (!isExpired) cBulletin++;
+                } else { 
+                    // Diğer marka işleri (Genel Onay Bekleyen)
+                    cPending++;
                 }
-                if (!isExpired) cBulletin++;
-            } else { 
-                cPending++;
             }
         });
 
+        // --- Marka Kartı Sayaçları ---
         $('#taskCount-pending-approval').text(cPending);
         $('#taskCount-renewal-approval').text(cRenewal);
         $('#taskCount-bulletin-watch').text(cBulletin);
         
-        const totalPending = cPending + cRenewal + cBulletin;
-        $('#taskCount-marka-total').text(totalPending);
-        $('#dashPendingApprovals').text(totalPending);
+        // Marka Ana Kartı Toplamı
+        const totalMarkaPending = cPending + cRenewal + cBulletin;
+        $('#taskCount-marka-total').text(totalMarkaPending);
+
+        // --- Dava Kartı Sayacı (YENİ) ---
+        $('#taskCount-dava-pending').text(cDavaPending);
+
+        // --- Dashboard Ana Kart Toplamı (Marka + Dava + Diğerleri) ---
+        const totalAllPending = totalMarkaPending + cDavaPending;
+        $('#dashPendingApprovals').text(totalAllPending);
 
         // 3. FATURA SAYACI
         const allInvoices = window.invoicesPaginationData?.allDataUnfiltered || [];
@@ -4070,22 +4129,27 @@ window.initReports = function() {
         });
 
         // Navigasyon & Modallar
-        // İşlerim Ana Kart Tıklaması (Marka, Patent vb.)
+        // İşlerim Ana Kart Tıklaması (Marka, Patent, Dava vb.)
         $('.task-card-link').click(function() { 
             $('.task-card-link').removeClass('active-task-area'); 
             $(this).addClass('active-task-area'); 
             const area = $(this).data('target-area'); 
             
+            // Tüm detay alanlarını ve listeleri önce gizle
+            $('#task-detail-cards').slideUp();
+            $('#dava-task-detail-cards').slideUp();
+            $('#task-list-filters').slideUp();
+            $('#task-list-details').slideUp();
+
+            // Seçilen alana göre ilgili detay kartlarını aç
             if(area === 'marka-tasks') {
                 $('#task-detail-cards').slideDown(); 
-            } else {
-                // Marka dışındakilere tıklanırsa alt detayları ve açık listeleri kapat
-                $('#task-detail-cards').slideUp();
-                $('#task-list-filters').slideUp(); // Filtreyi gizle
-                $('#task-list-details').slideUp(); // Listeyi gizle
-            }
+            } else if (area === 'dava-tasks') {
+                $('#dava-task-detail-cards').slideDown(); // Dava kartlarını aç
+            } 
+            
+            // Patent ve Tasarım için (İleride eklenebilir)
         });
-        
         // İşlerim Detay Kart Tıklaması (Onay Bekleyen, Yenileme vb.)
         $('.detail-card-link').click(function() { 
             const type = $(this).data('task-type'); 
