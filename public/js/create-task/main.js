@@ -9,395 +9,299 @@ import { TaskUIManager } from './TaskUIManager.js';
 import { TaskValidator } from './TaskValidator.js';
 import { TaskSubmitHandler } from './TaskSubmitHandler.js';
 
-// --- TARİH SEÇİCİLER (FLATPICKR) ---
 function initTaskDatePickers(root = document) {
     try {
         const IDS = ['taskDueDate', 'priorityDate', 'lawsuitDate', 'lawsuitDecisionDate'];
         const dateRegex = /^\d{2}\.\d{2}\.\d{4}$/;
-
         IDS.forEach(id => {
             const el = (root && root.querySelector) ? root.querySelector(`#${id}`) : document.getElementById(id);
             if (!el || el._flatpickr) return;
-            
-            // Tarih input tipini text'e çevir (çakışmayı önlemek için)
             try { if (el.type === 'date') el.type = 'text'; } catch (e) {}
-
             if (typeof flatpickr !== 'function') return;
-
             flatpickr(el, {
-                dateFormat: "Y-m-d",
-                altInput: true,
-                altFormat: "d.m.Y",
-                allowInput: true,
-                clickOpens: true,
+                dateFormat: "Y-m-d", altInput: true, altFormat: "d.m.Y", allowInput: true, clickOpens: true,
                 locale: (window.flatpickr && window.flatpickr.l10ns && window.flatpickr.l10ns.tr) ? window.flatpickr.l10ns.tr : "tr",
-                onClose: (selectedDates, dateStr, inst) => {
-                    const vis = inst.altInput.value;
-                    if (vis && !dateRegex.test(vis)) inst.clear();
-                }
+                onClose: (selectedDates, dateStr, inst) => { if (inst.altInput.value && !dateRegex.test(inst.altInput.value)) inst.clear(); }
             });
         });
-    } catch (err) {
-        console.warn('Date picker init error:', err);
-    }
+    } catch (err) { console.warn('Date picker init error:', err); }
 }
 
 class CreateTaskController {
     constructor() {
-        // Alt Modüller
         this.dataManager = new TaskDataManager();
         this.uiManager = new TaskUIManager();
         this.validator = new TaskValidator();
         this.submitHandler = new TaskSubmitHandler(this.dataManager, this.uiManager);
 
-        // Uygulama Durumu (State)
         this.state = {
-            currentUser: null,
-            allIpRecords: [],
-            allPersons: [],
-            allUsers: [],
-            allTransactionTypes: [],
-            allCountries: [],
-            
-            // Seçimler
-            selectedIpRecord: null,
-            selectedTaskType: null,
-            selectedRelatedParties: [],
-            selectedRelatedParty: null, // Tekil uyumluluk için
-            selectedTpInvoiceParty: null,
-            selectedServiceInvoiceParty: null,
-            selectedApplicants: [],
-            priorities: [],
-            selectedCountries: [],
-            uploadedFiles: [],
-            
-            // Flagler
-            isWithdrawalTask: false,
-            searchSource: 'portfolio',
-            isNiceClassificationInitialized: false,
-            selectedWipoAripoChildren: []
+            currentUser: null, allIpRecords: [], allPersons: [], allUsers: [], allTransactionTypes: [], allCountries: [],
+            selectedIpRecord: null, selectedTaskType: null, selectedRelatedParties: [], selectedRelatedParty: null,
+            selectedTpInvoiceParty: null, selectedServiceInvoiceParty: null, selectedApplicants: [], priorities: [],
+            selectedCountries: [], uploadedFiles: [],
+            isWithdrawalTask: false, searchSource: 'portfolio', isNiceClassificationInitialized: false, selectedWipoAripoChildren: []
         };
     }
 
     async init() {
-        // 1. Auth Kontrolü
         onAuthStateChanged(auth, async (user) => {
             if (user) {
                 this.state.currentUser = user;
                 await loadSharedLayout({ activeMenuLink: 'create-task.html' });
-                
                 try {
-                    // 2. Verileri Yükle
                     const initialData = await this.dataManager.loadInitialData();
                     Object.assign(this.state, initialData);
-                    console.log('✅ Veriler yüklendi:', this.state.allTransactionTypes.length, 'işlem tipi');
-
-                    // 3. Event Listener'ları Başlat
                     this.setupEventListeners();
                     this.setupIpRecordSearch();
-                    
-                } catch (e) {
-                    console.error('Init hatası:', e);
-                    alert('Veriler yüklenirken bir hata oluştu.');
-                }
-            } else {
-                window.location.href = 'index.html';
-            }
+                } catch (e) { console.error('Init hatası:', e); }
+            } else { window.location.href = 'index.html'; }
         });
     }
 
-    // --- EVENT LISTENERS ---
     setupEventListeners() {
-        // Ana İş Tipi Değişimi
         document.getElementById('mainIpType')?.addEventListener('change', (e) => this.handleMainTypeChange(e));
-        
-        // Spesifik İş Tipi Değişimi
         document.getElementById('specificTaskType')?.addEventListener('change', (e) => this.handleSpecificTypeChange(e));
-        
-        // Menşe Değişimi
         document.getElementById('originSelect')?.addEventListener('change', (e) => this.handleOriginChange(e.target.value));
-        
-        // Form Gönderimi
-        document.getElementById('saveTaskBtn')?.addEventListener('click', (e) => {
-            this.submitHandler.handleFormSubmit(e, this.state);
-        });
-
-        // İptal Butonu
+        document.getElementById('saveTaskBtn')?.addEventListener('click', (e) => this.submitHandler.handleFormSubmit(e, this.state));
         document.addEventListener('click', (e) => {
-            if (e.target.id === 'cancelBtn') {
-                if(confirm('İptal etmek istediğinize emin misiniz?')) window.location.href = 'task-management.html';
-            }
+            if (e.target.id === 'cancelBtn' && confirm('İptal etmek istediğinize emin misiniz?')) window.location.href = 'task-management.html';
         });
-
-        // Sekme Değişimleri (Tab Events)
         $(document).on('shown.bs.tab', '#myTaskTabs a', async (e) => {
             const targetTabId = e.target.getAttribute('href').substring(1);
-            
-            // Nice Sınıfları Lazy Load
             if (targetTabId === 'goods-services' && !this.state.isNiceClassificationInitialized) {
                 await initializeNiceClassification();
                 this.state.isNiceClassificationInitialized = true;
             }
-            
-            // Sekme değiştikçe buton durumunu güncelle
             this.uiManager.updateButtonsAndTabs(targetTabId === 'summary');
-            
-            if (targetTabId === 'summary') this.renderSummary();
+            if (targetTabId === 'summary') this.uiManager.renderSummaryTab(this.state);
         });
-
-        // Dinamik Form Alanları (Delegation)
         document.addEventListener('input', (e) => {
-            // Tahakkuk Hesaplama
-            if (['officialFee', 'serviceFee', 'vatRate'].includes(e.target.id)) {
-                this.calculateTotalAmount();
-            }
-            // Form Kontrolü
+            if (['officialFee', 'serviceFee', 'vatRate'].includes(e.target.id)) this.calculateTotalAmount();
             this.validator.checkCompleteness(this.state);
         });
-        
         document.addEventListener('change', (e) => {
             if (e.target.id === 'applyVatToOfficialFee') this.calculateTotalAmount();
-            if (['brandType', 'brandCategory', 'assignedTo', 'taskDueDate'].includes(e.target.id)) {
-                this.validator.checkCompleteness(this.state);
-            }
+            if (['brandType', 'brandCategory', 'assignedTo', 'taskDueDate'].includes(e.target.id)) this.validator.checkCompleteness(this.state);
         });
+        
+        // Parent Seçim Modalı Kapatma
+        const closeModalBtns = document.querySelectorAll('#selectParentModal .close, #selectParentModal .btn-secondary');
+        closeModalBtns.forEach(btn => btn.addEventListener('click', () => this.uiManager.hideParentSelectionModal()));
+
+        // Parent Seçim Listesi Tıklama (Delegation)
+        const parentListContainer = document.getElementById('parentListContainer');
+        if (parentListContainer) {
+            parentListContainer.addEventListener('click', (e) => {
+                const item = e.target.closest('.list-group-item');
+                if (item) {
+                    this.submitHandler.selectedParentTransactionId = item.dataset.id;
+                    this.uiManager.hideParentSelectionModal();
+                    // Seçim yapıldığını belirtmek için UI güncellemesi yapılabilir
+                    alert('İşlem seçildi.');
+                }
+            });
+        }
     }
 
-    // --- İŞ TİPİ YÖNETİMİ ---
     handleMainTypeChange(e) {
         const mainType = e.target.value;
         const specificSelect = document.getElementById('specificTaskType');
-        
         this.uiManager.clearContainer();
         this.resetSelections();
-        
         specificSelect.innerHTML = '<option value="">Seçiniz...</option>';
-        
         if (mainType) {
             const filtered = this.state.allTransactionTypes.filter(t => {
-                return (t.hierarchy === 'parent' && t.ipType === mainType) || 
-                       (t.hierarchy === 'child' && t.isTopLevelSelectable && (t.applicableToMainType?.includes(mainType) || t.applicableToMainType?.includes('all')));
+                return (t.hierarchy === 'parent' && t.ipType === mainType) || (t.hierarchy === 'child' && t.isTopLevelSelectable && (t.applicableToMainType?.includes(mainType) || t.applicableToMainType?.includes('all')));
             }).sort((a, b) => (a.order || 999) - (b.order || 999));
-
             filtered.forEach(t => {
                 const opt = document.createElement('option');
-                opt.value = t.id;
-                opt.textContent = t.alias || t.name;
-                specificSelect.appendChild(opt);
+                opt.value = t.id; opt.textContent = t.alias || t.name; specificSelect.appendChild(opt);
             });
             specificSelect.disabled = false;
-        } else {
-            specificSelect.disabled = true;
-        }
-        
-        // Menşe listesini güncelle
-        this.uiManager.populateDropdown('originSelect', 
-            (mainType === 'suit' ? [{value:'TURKEY', text:'Türkiye'}, {value:'FOREIGN_NATIONAL', text:'Yurtdışı'}] : 
-            [{value:'TÜRKPATENT', text:'TÜRKPATENT'}, {value:'WIPO', text:'WIPO'}, {value:'EUIPO', text:'EUIPO'}, {value:'ARIPO', text:'ARIPO'}, {value:'Yurtdışı Ulusal', text:'Yurtdışı Ulusal'}]), 
-            'value', 'text', 'Seçiniz...'
-        );
-        
-        // Varsayılan seçim
-        if (mainType === 'suit') {
-            document.getElementById('originSelect').value = 'TURKEY';
-            this.handleOriginChange('TURKEY');
-        } else {
-            document.getElementById('originSelect').value = 'TÜRKPATENT';
-            this.handleOriginChange('TÜRKPATENT');
-        }
+        } else { specificSelect.disabled = true; }
+        this.uiManager.populateDropdown('originSelect', (mainType === 'suit' ? [{value:'TURKEY', text:'Türkiye'}, {value:'FOREIGN_NATIONAL', text:'Yurtdışı'}] : [{value:'TÜRKPATENT', text:'TÜRKPATENT'}, {value:'WIPO', text:'WIPO'}, {value:'EUIPO', text:'EUIPO'}, {value:'ARIPO', text:'ARIPO'}, {value:'Yurtdışı Ulusal', text:'Yurtdışı Ulusal'}]), 'value', 'text', 'Seçiniz...');
+        if (mainType === 'suit') { document.getElementById('originSelect').value = 'TURKEY'; this.handleOriginChange('TURKEY'); }
+        else { document.getElementById('originSelect').value = 'TÜRKPATENT'; this.handleOriginChange('TÜRKPATENT'); }
     }
 
     async handleSpecificTypeChange(e) {
         const typeId = e.target.value;
         const selectedType = this.state.allTransactionTypes.find(t => t.id === typeId);
         this.state.selectedTaskType = selectedType;
-        
-        if (!selectedType) {
-            this.uiManager.clearContainer();
-            return;
-        }
+        if (!selectedType) { this.uiManager.clearContainer(); return; }
 
+        const tIdStr = String(typeId);
+        this.state.isWithdrawalTask = (tIdStr === '21' || tIdStr === '8');
+        
         const isMarkaBasvuru = selectedType.alias === 'Başvuru' && selectedType.ipType === 'trademark';
-        const isLawsuit = selectedType.ipType === 'suit';
-        const tIdStr = String(selectedType.id);
-
-        // Arayüzü Çiz
-        if (isMarkaBasvuru) {
-            this.uiManager.renderTrademarkApplicationForm();
-        } else {
-            this.uiManager.renderBaseForm(selectedType.alias || selectedType.name, selectedType.id, isLawsuit);
-        }
-
-        // Tarih Seçicileri Başlat
-        setTimeout(() => initTaskDatePickers(), 100);
-
-        // Varlık Arama Motorunu Başlat
-        this.setupIpRecordSearch();
+        if (isMarkaBasvuru) this.uiManager.renderTrademarkApplicationForm();
+        else this.uiManager.renderBaseForm(selectedType.alias || selectedType.name, selectedType.id, selectedType.ipType === 'suit');
         
-        // Kişi Arama Motorlarını Başlat (Base Form için)
-        if (!isMarkaBasvuru) {
-            this.setupPersonSearchListeners();
-        } else {
-            // Başvuru formu için özel listenerlar
-            this.setupApplicantListeners();
-        }
+        setTimeout(() => { initTaskDatePickers(); this.setupBrandExample(); }, 100);
+        this.setupIpRecordSearch();
+        if (!isMarkaBasvuru) this.setupPersonSearchListeners();
+        else this.setupApplicantListeners();
 
-        // Atama Kuralını Uygula
         const rule = await this.dataManager.getAssignmentRule(typeId);
         this.applyAssignmentRule(rule);
-
+        
+        // Buton temizliği (Dedupe)
+        this.dedupeActionButtons();
+        
         this.validator.checkCompleteness(this.state);
     }
 
-    // --- ARAMA VE SEÇİM (VARLIK / KİŞİ) ---
-    
+    // --- EKLENEN FONKSİYON: Buton Çoklamasını Önle ---
+    dedupeActionButtons() {
+        const saves = Array.from(document.querySelectorAll('#saveTaskBtn'));
+        if (saves.length > 1) saves.slice(0, -1).forEach(b => b.closest('.form-actions')?.remove());
+
+        const cancels = Array.from(document.querySelectorAll('#cancelBtn'));
+        if (cancels.length > 1) cancels.slice(0, -1).forEach(b => b.closest('.form-actions')?.remove());
+    }
+
+    // --- MARKA ÖRNEĞİ (DRAG & DROP) ---
+    setupBrandExample() {
+        const dropZone = document.getElementById('brand-example-drop-zone');
+        const input = document.getElementById('brandExample');
+        if(!dropZone || !input) return;
+
+        dropZone.addEventListener('click', () => input.click());
+        input.addEventListener('change', (e) => this.handleBrandFile(e.target.files[0]));
+        
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(e => {
+            dropZone.addEventListener(e, (ev) => { ev.preventDefault(); ev.stopPropagation(); });
+        });
+        dropZone.addEventListener('drop', (e) => this.handleBrandFile(e.dataTransfer.files[0]));
+        
+        document.getElementById('removeBrandExampleBtn')?.addEventListener('click', () => {
+            this.state.uploadedFiles = [];
+            document.getElementById('brandExamplePreviewContainer').style.display = 'none';
+            input.value = '';
+        });
+    }
+
+    handleBrandFile(file) {
+        if (!file || !file.type.startsWith('image/')) return alert('Geçerli bir resim dosyası seçin.');
+        this.state.uploadedFiles = [file];
+        const img = document.getElementById('brandExamplePreview');
+        if(img) { img.src = URL.createObjectURL(file); document.getElementById('brandExamplePreviewContainer').style.display = 'block'; }
+    }
+
+    // --- IP KAYIT SEÇİMİ & GERİ ÇEKME MANTIĞI ---
     setupIpRecordSearch() {
         const input = document.getElementById('ipRecordSearch');
         const results = document.getElementById('ipRecordSearchResults');
         if (!input || !results) return;
-
-        // Kaynak Belirle (Bülten mi Portföy mü?)
+        
         const typeId = this.state.selectedTaskType?.id;
-        const isOpposition = [TASK_IDS.ITIRAZ_YAYIN, '20', 'trademark_publication_objection'].includes(String(typeId));
-        this.state.searchSource = isOpposition ? 'bulletin' : 'portfolio';
-
-        let debounceTimer;
+        this.state.searchSource = [TASK_IDS.ITIRAZ_YAYIN, '20'].includes(String(typeId)) ? 'bulletin' : 'portfolio';
+        
+        let timer;
         input.addEventListener('input', (e) => {
             const term = e.target.value.trim();
-            clearTimeout(debounceTimer);
-            
-            if (term.length < 2) {
-                results.style.display = 'none';
-                return;
-            }
-
-            debounceTimer = setTimeout(async () => {
-                let foundItems = [];
-                
-                if (this.state.searchSource === 'bulletin') {
-                    // DataManager üzerinden ara
-                    foundItems = await this.dataManager.searchBulletinRecords(term);
-                } else {
-                    // Yerel listeden filtrele
-                    const lowerTerm = term.toLowerCase();
-                    foundItems = this.state.allIpRecords.filter(r => {
-                        const searchStr = (r.title + ' ' + r.applicationNumber + ' ' + r.brandText).toLowerCase();
-                        return searchStr.includes(lowerTerm);
-                    }).slice(0, 20);
-                }
-                
-                this.renderIpSearchResults(foundItems, results);
+            clearTimeout(timer);
+            if (term.length < 2) { results.style.display = 'none'; return; }
+            timer = setTimeout(async () => {
+                let items = [];
+                if (this.state.searchSource === 'bulletin') items = await this.dataManager.searchBulletinRecords(term);
+                else items = this.state.allIpRecords.filter(r => (r.title+r.applicationNumber).toLowerCase().includes(term.toLowerCase())).slice(0, 20);
+                this.renderIpSearchResults(items, results);
             }, 300);
         });
     }
 
     renderIpSearchResults(items, container) {
-        if (items.length === 0) {
-            container.innerHTML = '<div class="p-2 text-muted">Sonuç bulunamadı.</div>';
-        } else {
-            container.innerHTML = items.map(item => `
-                <div class="search-result-item p-2 border-bottom" style="cursor:pointer;" data-id="${item.id}">
-                    <strong>${item.title || item.markName || '-'}</strong>
-                    <br><small>${item.applicationNumber || item.applicationNo || '-'}</small>
-                </div>
-            `).join('');
-            
-            // Tıklama Olayı
-            container.querySelectorAll('.search-result-item').forEach(el => {
-                el.addEventListener('click', async () => {
-                    const id = el.dataset.id;
-                    // Seçilen kaydı bul (Hangi kaynaktan geldiyse)
-                    let record = items.find(i => i.id === id);
-                    
-                    // Eğer Bülten ise detayını çek
-                    if (this.state.searchSource === 'bulletin') {
-                         const details = await this.dataManager.fetchAndStoreBulletinData(record.id);
-                         if(details) record = {...record, ...details};
-                    }
-                    
-                    this.selectIpRecord(record);
-                    container.style.display = 'none';
-                    document.getElementById('ipRecordSearch').value = '';
-                });
-            });
-        }
+        container.innerHTML = items.length ? items.map(i => `<div class="search-result-item p-2 border-bottom" style="cursor:pointer;" data-id="${i.id}"><strong>${i.title||i.markName}</strong><br><small>${i.applicationNumber||i.applicationNo}</small></div>`).join('') : '<div class="p-2">Sonuç yok</div>';
         container.style.display = 'block';
+        container.querySelectorAll('.search-result-item').forEach(el => {
+            el.addEventListener('click', async () => {
+                const r = items.find(i => i.id === el.dataset.id);
+                // Bulletin ise detayını çek
+                if(this.state.searchSource === 'bulletin') {
+                    const details = await this.dataManager.fetchAndStoreBulletinData(r.id);
+                    if(details) Object.assign(r, details);
+                }
+                this.selectIpRecord(r);
+                container.style.display = 'none';
+            });
+        });
     }
 
-    selectIpRecord(record) {
+    async selectIpRecord(record) {
         this.state.selectedIpRecord = record;
+        document.getElementById('selectedIpRecordLabel').textContent = record.title || record.markName;
+        document.getElementById('selectedIpRecordContainer').style.display = 'block';
         
-        // UI Güncelle
-        const label = document.getElementById('selectedIpRecordLabel');
-        const container = document.getElementById('selectedIpRecordContainer');
-        if (label && container) {
-            label.textContent = `${record.title || record.markName} (${record.applicationNumber || record.applicationNo})`;
-            container.style.display = 'block';
+        // Geri Çekme Kontrolü
+        if (this.state.isWithdrawalTask) {
+            const txs = await this.dataManager.getRecordTransactions(record.id);
+            if (txs.success && txs.data) {
+                record.transactions = txs.data;
+                this.processParentTransactions(record);
+            }
         }
-
-        // WIPO/ARIPO Alt Kayıt Kontrolü
+        
+        // WIPO Child Kontrolü
         if (record.wipoIR || record.aripoIR) {
-            // DataManager'dan childları bulup state'e at
-            const children = this.dataManager.allIpRecords.filter(r => 
-                r.transactionHierarchy === 'child' && 
-                (record.wipoIR ? r.wipoIR === record.wipoIR : r.aripoIR === record.aripoIR)
-            );
-            this.state.selectedWipoAripoChildren = children;
-            // UI'da göster (TaskUIManager'a bir metod ekleyebiliriz veya burada manuel yapabiliriz)
-            // Basitlik adına burada geçiyorum, HTML'de wipoAripoChildList varsa doldur
+             const ir = record.wipoIR || record.aripoIR;
+             this.state.selectedWipoAripoChildren = this.state.allIpRecords.filter(c => c.transactionHierarchy === 'child' && (c.wipoIR === ir || c.aripoIR === ir));
+             this.uiManager.renderWipoAripoChildRecords(this.state.selectedWipoAripoChildren);
         }
 
         this.validator.checkCompleteness(this.state);
     }
 
+    processParentTransactions(record) {
+        const parentTypes = (String(this.state.selectedTaskType?.id) === '21') ? ['20'] : ['7'];
+        const parents = (record.transactions || []).filter(t => parentTypes.includes(String(t.type)) && t.transactionHierarchy === 'parent');
+        
+        if (parents.length > 1) {
+            // İşlem adlarını zenginleştir
+            const enrichedParents = parents.map(p => ({
+                ...p,
+                transactionTypeName: this.getTransactionTypeName(p.type)
+            }));
+            this.uiManager.showParentSelectionModal(enrichedParents, 'Geri Çekilecek İşlemi Seçin');
+        } else if (parents.length === 1) {
+            this.submitHandler.selectedParentTransactionId = parents[0].id;
+        } else {
+            alert('Uygun işlem bulunamadı.');
+            this.state.selectedIpRecord = null;
+            document.getElementById('selectedIpRecordContainer').style.display = 'none';
+        }
+    }
+    
+    // --- EKLENEN HELPER: İşlem Adı Getirme ---
+    getTransactionTypeName(typeId) {
+        const t = this.state.allTransactionTypes.find(x => String(x.id) === String(typeId));
+        return t ? (t.alias || t.name) : 'Bilinmeyen İşlem';
+    }
+
     // --- KİŞİ SEÇİMİ ---
     setupPersonSearchListeners() {
-        const inputs = {
-            'personSearchInput': 'relatedParty',
-            'tpInvoicePartySearch': 'tpInvoiceParty',
-            'serviceInvoicePartySearch': 'serviceInvoiceParty'
-        };
-
-        for (const [inputId, role] of Object.entries(inputs)) {
-            const input = document.getElementById(inputId);
-            if (!input) continue;
-
-            input.addEventListener('input', (e) => {
+        const inputs = {'personSearchInput':'relatedParty', 'tpInvoicePartySearch':'tpInvoiceParty', 'serviceInvoicePartySearch':'serviceInvoiceParty'};
+        for (const [iid, role] of Object.entries(inputs)) {
+            const inp = document.getElementById(iid);
+            if (!inp) continue;
+            inp.addEventListener('input', (e) => {
                 const term = e.target.value.toLowerCase();
-                const resultsId = role === 'relatedParty' ? 'personSearchResults' : (role === 'tpInvoiceParty' ? 'tpInvoicePartyResults' : 'serviceInvoicePartyResults');
-                const resultsContainer = document.getElementById(resultsId);
-                
-                if (term.length < 2) {
-                    resultsContainer.style.display = 'none';
-                    return;
-                }
-
-                const filtered = this.state.allPersons.filter(p => p.name.toLowerCase().includes(term)).slice(0, 10);
-                
-                resultsContainer.innerHTML = filtered.map(p => 
-                    `<div class="search-result-item p-2 border-bottom" data-id="${p.id}">${p.name}</div>`
-                ).join('');
-                
-                resultsContainer.style.display = 'block';
-
-                // Seçim
-                resultsContainer.querySelectorAll('.search-result-item').forEach(el => {
+                const resId = role === 'relatedParty' ? 'personSearchResults' : (role === 'tpInvoiceParty' ? 'tpInvoicePartyResults' : 'serviceInvoicePartyResults');
+                const resDiv = document.getElementById(resId);
+                if (term.length < 2) { resDiv.style.display = 'none'; return; }
+                const found = this.state.allPersons.filter(p => p.name.toLowerCase().includes(term)).slice(0,10);
+                resDiv.innerHTML = found.map(p => `<div class="search-result-item p-2" data-id="${p.id}">${p.name}</div>`).join('');
+                resDiv.style.display = 'block';
+                resDiv.querySelectorAll('.search-result-item').forEach(el => {
                     el.addEventListener('click', () => {
-                        const person = this.state.allPersons.find(p => p.id === el.dataset.id);
-                        this.handlePersonSelection(person, role);
-                        resultsContainer.style.display = 'none';
-                        input.value = '';
+                        this.handlePersonSelection(this.state.allPersons.find(p=>p.id===el.dataset.id), role);
+                        resDiv.style.display = 'none';
                     });
                 });
             });
         }
-        
-        // Yeni Kişi Ekle Butonu
         document.getElementById('addNewPersonBtn')?.addEventListener('click', () => {
-            openPersonModal((newPerson) => {
-                this.state.allPersons.push(newPerson);
-                this.handlePersonSelection(newPerson, 'relatedParty');
-            });
+            openPersonModal((p) => { this.state.allPersons.push(p); this.handlePersonSelection(p, 'relatedParty'); });
         });
     }
 
@@ -405,104 +309,103 @@ class CreateTaskController {
         if (role === 'relatedParty') {
             if (!this.state.selectedRelatedParties.some(p => p.id === person.id)) {
                 this.state.selectedRelatedParties.push(person);
-                this.state.selectedRelatedParty = person; // İlk seçilen
-                this._renderRelatedPartiesList();
+                this.state.selectedRelatedParty = person;
+                this.uiManager.renderSelectedRelatedParties(this.state.selectedRelatedParties);
             }
         } else if (role === 'tpInvoiceParty') {
             this.state.selectedTpInvoiceParty = person;
             document.getElementById('selectedTpInvoicePartyDisplay').textContent = person.name;
             document.getElementById('selectedTpInvoicePartyDisplay').style.display = 'block';
-        } else if (role === 'serviceInvoiceParty') {
+        } else {
             this.state.selectedServiceInvoiceParty = person;
             document.getElementById('selectedServiceInvoicePartyDisplay').textContent = person.name;
             document.getElementById('selectedServiceInvoicePartyDisplay').style.display = 'block';
         }
         this.validator.checkCompleteness(this.state);
     }
-
-    _renderRelatedPartiesList() {
-        const list = document.getElementById('relatedPartyList');
-        if (!list) return;
-        list.innerHTML = this.state.selectedRelatedParties.map(p => `
-            <div class="selected-item p-2 border rounded mb-2 d-flex justify-content-between">
-                <span>${p.name}</span>
-                <button class="btn btn-sm btn-danger remove-party" data-id="${p.id}">X</button>
-            </div>
-        `).join('');
-        
-        // Silme
-        list.querySelectorAll('.remove-party').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const id = e.target.dataset.id;
-                this.state.selectedRelatedParties = this.state.selectedRelatedParties.filter(p => p.id !== id);
-                this._renderRelatedPartiesList();
-                this.validator.checkCompleteness(this.state);
-            });
-        });
-        
-        document.getElementById('relatedPartyCount').textContent = this.state.selectedRelatedParties.length;
-    }
-
-    // --- DİĞER YARDIMCILAR ---
     
     setupApplicantListeners() {
-        // (Benzer mantıkla başvuru sahibi arama ve ekleme)
-        // Yer darlığından kısa kesiyorum, yukarıdaki setupPersonSearchListeners mantığı ile aynıdır.
-        // Sadece state.selectedApplicants dizisine ekleme yapar.
+        const inp = document.getElementById('applicantSearchInput');
+        if(inp) inp.addEventListener('input', (e) => {
+             const term = e.target.value.toLowerCase();
+             const resDiv = document.getElementById('applicantSearchResults');
+             if(term.length<2) { resDiv.style.display='none'; return; }
+             const found = this.state.allPersons.filter(p => p.name.toLowerCase().includes(term)).slice(0,10);
+             resDiv.innerHTML = found.map(p => `<div class="search-result-item p-2" data-id="${p.id}">${p.name}</div>`).join('');
+             resDiv.style.display='block';
+             resDiv.querySelectorAll('.search-result-item').forEach(el => {
+                 el.addEventListener('click', () => {
+                     const p = this.state.allPersons.find(x=>x.id===el.dataset.id);
+                     if(!this.state.selectedApplicants.some(a=>a.id===p.id)) this.state.selectedApplicants.push(p);
+                     this.uiManager.renderSelectedApplicants(this.state.selectedApplicants);
+                     resDiv.style.display='none';
+                     this.validator.checkCompleteness(this.state);
+                 });
+             });
+        });
+        
+        // Delegation for dynamic buttons
+        document.addEventListener('click', (e) => {
+            if(e.target.closest('.remove-selected-item-btn')) {
+                const id = e.target.closest('.remove-selected-item-btn').dataset.id;
+                this.state.selectedApplicants = this.state.selectedApplicants.filter(a=>a.id!==id);
+                this.uiManager.renderSelectedApplicants(this.state.selectedApplicants);
+            }
+            if(e.target.closest('.remove-party')) {
+                 const id = e.target.closest('.remove-party').dataset.id;
+                 this.state.selectedRelatedParties = this.state.selectedRelatedParties.filter(p=>p.id!==id);
+                 this.uiManager.renderSelectedRelatedParties(this.state.selectedRelatedParties);
+                 this.validator.checkCompleteness(this.state);
+            }
+            if(e.target.closest('.remove-priority-btn')) {
+                const id = e.target.closest('.remove-priority-btn').dataset.id;
+                this.state.priorities = this.state.priorities.filter(p=>p.id!==id);
+                this.uiManager.renderPriorities(this.state.priorities);
+            }
+        });
+
+        // Rüçhan Ekleme
+        const addPrioBtn = document.getElementById('addPriorityBtn');
+        if(addPrioBtn) addPrioBtn.addEventListener('click', () => {
+             const p = {
+                 id: Date.now().toString(),
+                 type: document.getElementById('priorityType').value,
+                 date: document.getElementById('priorityDate').value,
+                 country: document.getElementById('priorityCountry').value,
+                 number: document.getElementById('priorityNumber').value
+             };
+             if(p.date && p.country && p.number) {
+                 this.state.priorities.push(p);
+                 this.uiManager.renderPriorities(this.state.priorities);
+             }
+        });
     }
 
     handleOriginChange(val) {
-        this.uiManager.handleOriginChange(val); // Eğer UI manager'da varsa
-        // Yoksa basitçe ülke seçim alanını aç/kapa
-        const countryContainer = document.getElementById('countrySelectionContainer');
-        if (countryContainer) {
-            countryContainer.style.display = (val === 'Yurtdışı Ulusal' || val === 'WIPO' || val === 'ARIPO' || val === 'FOREIGN_NATIONAL') ? 'block' : 'none';
-        }
-        // Ülke listesini doldur (eğer boşsa)
-        if (val === 'Yurtdışı Ulusal' || val === 'FOREIGN_NATIONAL') {
-            this.uiManager.populateDropdown('countrySelect', this.state.allCountries, 'code', 'name');
-        }
+        const countryDiv = document.getElementById('countrySelectionContainer');
+        if (countryDiv) countryDiv.style.display = ['Yurtdışı Ulusal', 'WIPO', 'ARIPO', 'FOREIGN_NATIONAL'].includes(val) ? 'block' : 'none';
+        if (['Yurtdışı Ulusal', 'FOREIGN_NATIONAL'].includes(val)) this.uiManager.populateDropdown('countrySelect', this.state.allCountries, 'code', 'name');
     }
 
     applyAssignmentRule(rule) {
         const select = document.getElementById('assignedTo');
         if (!select) return;
-        
         select.innerHTML = '<option value="">Seçiniz...</option>';
-        let usersToShow = this.state.allUsers;
-
-        if (rule && rule.assigneeIds && rule.assigneeIds.length > 0) {
-            usersToShow = this.state.allUsers.filter(u => rule.assigneeIds.includes(u.id));
-            if (rule.allowManualOverride === false) select.disabled = true;
+        let users = this.state.allUsers;
+        if (rule?.assigneeIds?.length) {
+            users = this.state.allUsers.filter(u => rule.assigneeIds.includes(u.id));
+            if (!rule.allowManualOverride) select.disabled = true;
         }
-
-        usersToShow.forEach(u => {
-            const opt = document.createElement('option');
-            opt.value = u.id;
-            opt.textContent = u.displayName || u.email;
-            select.appendChild(opt);
-        });
-        
-        if (usersToShow.length === 1) {
-            select.value = usersToShow[0].id;
-            select.disabled = true;
-        }
+        users.forEach(u => { const o = document.createElement('option'); o.value = u.id; o.textContent = u.displayName; select.appendChild(o); });
+        if (users.length === 1) { select.value = users[0].id; select.disabled = true; }
     }
 
     calculateTotalAmount() {
         const off = parseFloat(document.getElementById('officialFee')?.value || 0);
         const srv = parseFloat(document.getElementById('serviceFee')?.value || 0);
         const vat = parseFloat(document.getElementById('vatRate')?.value || 20);
-        const apply = document.getElementById('applyVatToOfficialFee')?.checked;
-        
-        let total = apply ? (off + srv) * (1 + vat/100) : off + (srv * (1 + vat/100));
+        const total = document.getElementById('applyVatToOfficialFee')?.checked ? (off+srv)*(1+vat/100) : off+(srv*(1+vat/100));
         document.getElementById('totalAmountDisplay').textContent = total.toFixed(2) + ' TRY';
-    }
-
-    renderSummary() {
-        // (Özet sekmesi doldurma mantığı - TaskUIManager'a da taşınabilir ama burada veriye erişim daha kolay)
-        // Kısa tutuyorum, tüm input değerlerini okuyup #summaryContent'e basar.
-        this.uiManager.renderSummaryTab(); // UI Manager'daki template'i çağırır (içini doldurmak gerekebilir)
     }
 
     resetSelections() {
@@ -510,8 +413,8 @@ class CreateTaskController {
         this.state.selectedRelatedParties = [];
         this.state.selectedApplicants = [];
         this.state.uploadedFiles = [];
+        this.state.priorities = [];
     }
 }
 
-// Başlat
 new CreateTaskController().init();
