@@ -1023,6 +1023,14 @@
         } catch { return '-'; }
     };
 
+    // Yardımcı: Bir işin Dava olup olmadığını kontrol eder
+    window.isDavaTask = function(t) {
+        const type = String(t.taskType);
+        const title = (t.title || '').toLowerCase();
+        // Task Type 49 VEYA Başlıkta 'dava'/'mahkeme' geçiyorsa
+        return type === '49' || title.includes('dava') || title.includes('mahkeme');
+    };
+
     window.currencyFormatter = function(amount, currency) {
         try {
             return new Intl.NumberFormat('tr-TR', { style: 'currency', currency: currency || 'TRY' }).format(amount ?? 0);
@@ -1493,7 +1501,8 @@ window.fetchCountries = async function() {
         
         return isMatch;
     };
-window.fetchAndDisplayTasks = async function(linkedIds) {
+
+    window.fetchAndDisplayTasks = async function(linkedIds) {
         const q = query(collection(db, 'tasks'), where('status', '==', 'awaiting_client_approval'));
         const snap = await runGetDocs(q);
         const tasks = [];
@@ -1523,12 +1532,10 @@ window.fetchAndDisplayTasks = async function(linkedIds) {
         const tasksRef = collection(db, 'tasks');
         let q;
         
-        // Sorgu: Tamamlananlar vs Bekleyenler
+        // Sorgu: Tamamlananlar (veya açık) mı yoksa sadece onay bekleyenler mi?
         if (taskType === 'completed-tasks' || taskType === 'dava-completed') {
-            // Açık, Tamamlanan vb. statüler
             q = query(tasksRef, where('status', '!=', 'awaiting_client_approval'));
         } else {
-            // Sadece onay bekleyenler
             q = query(tasksRef, where('status', '==', 'awaiting_client_approval'));
         }
             
@@ -1536,7 +1543,6 @@ window.fetchAndDisplayTasks = async function(linkedIds) {
         let rawTasks = [];
         const clientSet = new Set(window.linkedPersonIds);
         
-        // Veri Çekme ve Yetki
         for (const d of snap.docs) {
             const t = d.data();
             if (await window.checkTaskClientRelation(t, clientSet)) rawTasks.push({ id: d.id, ...t });
@@ -1545,41 +1551,28 @@ window.fetchAndDisplayTasks = async function(linkedIds) {
         // --- FİLTRELEME MANTIĞI ---
         let finalTasks = [];
 
-        // Helper: Dava İşi mi? 
-        // (Buraya Dava ile ilgili taskType ID'lerini veya mantığını ekleyebilirsiniz)
-        const isDavaTask = (t) => {
-            const title = (t.title || '').toLowerCase();
-            const typeId = String(t.taskType);
-            // Örnek: 30 ve 31 Dava işleriyse buraya ekleyin. 
-            // Veya başlığında 'dava', 'mahkeme' geçiyorsa dava say.
-            return title.includes('dava') || title.includes('mahkeme') || typeId === 'DAVA_TYPE_ID'; 
-        };
-
-        // MARKA İŞLERİ (Mevcut)
+        // MARKA İŞLERİ (Dava Olmayanlar)
         if (taskType === 'pending-approval') {
-            // Dava olmayan ve özel tipler (20, 22) olmayanlar
-            finalTasks = rawTasks.filter(t => !isDavaTask(t) && String(t.taskType) !== '22' && String(t.taskType) !== '20');
+            finalTasks = rawTasks.filter(t => !window.isDavaTask(t) && String(t.taskType) !== '22' && String(t.taskType) !== '20');
         } else if (taskType === 'renewal-approval') {
             finalTasks = rawTasks.filter(t => String(t.taskType) === '22');
         } else if (taskType === 'bulletin-watch') {
             finalTasks = rawTasks.filter(t => String(t.taskType) === '20');
         } else if (taskType === 'completed-tasks') {
-            // Dava olmayan tamamlanmış işler
-            finalTasks = rawTasks.filter(t => !isDavaTask(t));
+            finalTasks = rawTasks.filter(t => !window.isDavaTask(t));
         }
         
-        // DAVA İŞLERİ (Yeni)
+        // DAVA İŞLERİ (Task Type 49)
         else if (taskType === 'dava-pending') {
-            // Statüsü 'awaiting_client_approval' olan VE Dava işi olanlar
-            finalTasks = rawTasks.filter(t => isDavaTask(t));
+            finalTasks = rawTasks.filter(t => window.isDavaTask(t));
         } else if (taskType === 'dava-completed') {
-            // Statüsü onay beklemeyen VE Dava işi olanlar
-            finalTasks = rawTasks.filter(t => isDavaTask(t));
+            finalTasks = rawTasks.filter(t => window.isDavaTask(t));
         }
 
         window.taskPaginationData.allDataUnfiltered = finalTasks;
         window.applyTaskFilter();
     };
+
     window._renderTaskCardsToContainer = async function(tasksToRender, containerSelector, formatDate, taskType) {
         const container = document.querySelector(containerSelector);
         if (!container) return;
@@ -2634,33 +2627,30 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
         }
         $('#dashPortfolio').text(filteredPortfolio.length);
 
-        // 2. GÖREV (TASK) SAYAÇLARI
+// 2. GÖREV (TASK) SAYAÇLARI
         const allTasks = window.dashboardTasksData || [];
         let filteredTasks = allTasks;
 
         if (selectedClient !== 'ALL') {
             filteredTasks = allTasks.filter(t => {
-                // YENİ: Zenginleştirilmiş veri üzerinden kontrol
                 return t._relatedClientIds && t._relatedClientIds.includes(selectedClient);
             });
         }
 
-        let cPending = 0, cRenewal = 0, cBulletin = 0, cDavaPending = 0;
+        let cPending = 0, cRenewal = 0, cBulletin = 0, cDavaPending = 0; // cDavaPending eklendi
         const today = new Date(); today.setHours(0,0,0,0);
 
         filteredTasks.forEach(t => {
             const type = String(t.taskType);
-            const title = (t.title || '').toLowerCase();
             
-            // 1. Önce Dava işi olup olmadığını kontrol et
-            // (Eğer sisteminizde Dava için özel bir taskType ID varsa buraya ekleyin: type === '99' gibi)
-            const isDava = title.includes('dava') || title.includes('mahkeme');
-
-            if (isDava) {
-                // Dava işleri için ayrı sayaç
-                cDavaPending++;
-            } else {
-                // 2. Dava değilse Marka/Patent mantığına devam et
+            // 1. Önce Dava Kontrolü
+            if (window.isDavaTask(t)) {
+                if (t.status === 'awaiting_client_approval') {
+                    cDavaPending++;
+                }
+            } 
+            // 2. Marka/Patent İşlemleri
+            else {
                 if (type === '22') {
                     cRenewal++;
                 } else if (type === '20') { 
@@ -2672,30 +2662,27 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
                         if (d < today) isExpired = true;
                     }
                     if (!isExpired) cBulletin++;
-                } else { 
-                    // Diğer marka işleri (Genel Onay Bekleyen)
+                } else if (t.status === 'awaiting_client_approval') { 
                     cPending++;
                 }
             }
         });
 
-        // --- Marka Kartı Sayaçları ---
+        // Marka Kartları
         $('#taskCount-pending-approval').text(cPending);
         $('#taskCount-renewal-approval').text(cRenewal);
         $('#taskCount-bulletin-watch').text(cBulletin);
         
-        // Marka Ana Kartı Toplamı
         const totalMarkaPending = cPending + cRenewal + cBulletin;
         $('#taskCount-marka-total').text(totalMarkaPending);
 
-        // --- Dava Kartı Sayacı (YENİ) ---
-        $('#taskCount-dava-pending').text(cDavaPending);
+        // Dava Kartı (YENİ)
+        $('#taskCount-dava-pending').text(cDavaPending); // HTML'e bu ID'yi ekleyeceğiz
 
-        // --- Dashboard Ana Kart Toplamı (Marka + Dava + Diğerleri) ---
-        const totalAllPending = totalMarkaPending + cDavaPending;
-        $('#dashPendingApprovals').text(totalAllPending);
+        // Ana Dashboard Toplamı
+        $('#dashPendingApprovals').text(totalMarkaPending + cDavaPending);
 
-        // 3. FATURA SAYACI
+// 3. FATURA SAYACI
         const allInvoices = window.invoicesPaginationData?.allDataUnfiltered || [];
         let filteredInvoices = allInvoices;
 
@@ -4129,27 +4116,26 @@ window.initReports = function() {
         });
 
         // Navigasyon & Modallar
-        // İşlerim Ana Kart Tıklaması (Marka, Patent, Dava vb.)
+        // İşlerim Ana Kart Tıklaması
         $('.task-card-link').click(function() { 
             $('.task-card-link').removeClass('active-task-area'); 
             $(this).addClass('active-task-area'); 
             const area = $(this).data('target-area'); 
             
-            // Tüm detay alanlarını ve listeleri önce gizle
+            // Hepsini kapat
             $('#task-detail-cards').slideUp();
-            $('#dava-task-detail-cards').slideUp();
+            $('#dava-task-detail-cards').slideUp(); // Bunu HTML'e ekleyeceğiz
             $('#task-list-filters').slideUp();
             $('#task-list-details').slideUp();
 
-            // Seçilen alana göre ilgili detay kartlarını aç
+            // İlgili olanı aç
             if(area === 'marka-tasks') {
                 $('#task-detail-cards').slideDown(); 
             } else if (area === 'dava-tasks') {
-                $('#dava-task-detail-cards').slideDown(); // Dava kartlarını aç
-            } 
-            
-            // Patent ve Tasarım için (İleride eklenebilir)
+                $('#dava-task-detail-cards').slideDown(); 
+            }
         });
+
         // İşlerim Detay Kart Tıklaması (Onay Bekleyen, Yenileme vb.)
         $('.detail-card-link').click(function() { 
             const type = $(this).data('task-type'); 
