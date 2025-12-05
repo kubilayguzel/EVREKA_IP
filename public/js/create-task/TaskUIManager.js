@@ -233,15 +233,38 @@ export class TaskUIManager {
                 <label class="form-label">Portföyden Ara</label>
                 <div class="position-relative">
                     <input type="text" id="ipRecordSearch" class="form-input" placeholder="Başlık, dosya no...">
-                    <div id="ipRecordSearchResults" style="position:absolute; top:100%; left:0; right:0; z-index:1000; background:#fff; border:1px solid #ddd; display:none; max-height:260px; overflow:auto;"></div>
+                    <div id="ipRecordSearchResults" style="position:absolute; top:100%; left:0; right:0; z-index:1000; background:#fff; border:1px solid #ddd; display:none; max-height:260px; overflow:auto; box-shadow: 0 4px 6px rgba(0,0,0,0.1);"></div>
                 </div>
-                <div id="selectedIpRecordContainer" class="mt-2" style="display:none;">
-                    <div class="p-2 border rounded d-flex justify-content-between align-items-center">
-                        <div><div class="text-muted" id="selectedIpRecordLabel"></div><small class="text-secondary" id="selectedIpRecordMeta"></small></div>
-                        <button type="button" class="btn btn-sm btn-outline-danger" id="clearSelectedIpRecord">Kaldır</button>
+                
+                <div id="selectedIpRecordContainer" class="mt-3" style="display:none;">
+                    <div class="d-flex justify-content-between align-items-center p-3 border rounded bg-white shadow-sm">
+                        <div class="d-flex align-items-center">
+                            <div class="mr-3">
+                                <img id="selectedIpRecordImage" src="" alt="Marka" 
+                                     style="width: 60px; height: 60px; object-fit: contain; border: 1px solid #eee; border-radius: 4px; display:none; background-color: #fff;">
+                                <div id="selectedIpRecordPlaceholder" 
+                                     style="width: 60px; height: 60px; background-color: #f8f9fa; border: 1px solid #eee; border-radius: 4px; display:flex; align-items:center; justify-content:center; color:#adb5bd;">
+                                    <i class="fas fa-image" style="font-size: 24px;"></i>
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <h5 class="mb-1 font-weight-bold" id="selectedIpRecordLabel" style="font-size: 1rem; color: #2c3e50;"></h5>
+                                <div class="text-muted small">
+                                    Başvuru No: <strong id="selectedIpRecordNumber" style="color: #333;"></strong>
+                                </div>
+                            </div>
+                        </div>
+
+                        <button type="button" class="btn btn-danger btn-sm d-flex align-items-center justify-content-center" 
+                                id="clearSelectedIpRecord" title="Kaldır" 
+                                style="width: 32px; height: 32px; border-radius: 4px;">
+                            <i class="fas fa-times"></i>
+                        </button>
                     </div>
                 </div>
             </div>
+            
             <div id="wipoAripoParentContainer" class="form-group full-width mt-4" style="display:none;">
                 <label class="form-label">Eklenen Ülkeler <span class="badge badge-light" id="wipoAripoChildCount">0</span></label>
                 <div id="wipoAripoChildList" class="selected-items-list"></div>
