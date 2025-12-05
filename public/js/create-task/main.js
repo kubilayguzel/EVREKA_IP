@@ -380,7 +380,28 @@ class CreateTaskController {
 
     async selectIpRecord(record) {
         this.state.selectedIpRecord = record;
-        document.getElementById('selectedIpRecordLabel').textContent = record.title || record.markName;
+        
+        // 1. İsim
+        document.getElementById('selectedIpRecordLabel').textContent = record.title || record.markName || 'İsimsiz Kayıt';
+        
+        // 2. Başvuru Numarası
+        document.getElementById('selectedIpRecordNumber').textContent = record.applicationNumber || record.applicationNo || '-';
+        
+        // 3. Görsel Kontrolü (imageUrl, logo veya image alanlarından hangisi varsa)
+        const imgEl = document.getElementById('selectedIpRecordImage');
+        const phEl = document.getElementById('selectedIpRecordPlaceholder');
+        const imgUrl = record.imageUrl || record.logo || record.image; 
+        
+        if (imgUrl) {
+            imgEl.src = imgUrl;
+            imgEl.style.display = 'block';
+            if(phEl) phEl.style.display = 'none';
+        } else {
+            imgEl.style.display = 'none';
+            if(phEl) phEl.style.display = 'flex';
+        }
+        
+        // Kutuyu görünür yap
         document.getElementById('selectedIpRecordContainer').style.display = 'block';
         
         // Geri Çekme Kontrolü
@@ -432,27 +453,57 @@ class CreateTaskController {
     // --- KİŞİ SEÇİMİ ---
     setupPersonSearchListeners() {
         const inputs = {'personSearchInput':'relatedParty', 'tpInvoicePartySearch':'tpInvoiceParty', 'serviceInvoicePartySearch':'serviceInvoiceParty'};
+        
         for (const [iid, role] of Object.entries(inputs)) {
             const inp = document.getElementById(iid);
             if (!inp) continue;
+
             inp.addEventListener('input', (e) => {
                 const term = e.target.value.toLowerCase();
                 const resId = role === 'relatedParty' ? 'personSearchResults' : (role === 'tpInvoiceParty' ? 'tpInvoicePartyResults' : 'serviceInvoicePartyResults');
                 const resDiv = document.getElementById(resId);
+                
                 if (term.length < 2) { resDiv.style.display = 'none'; return; }
+                
                 const found = this.state.allPersons.filter(p => p.name.toLowerCase().includes(term)).slice(0, 10);
-                resDiv.innerHTML = found.map(p => `<div class="search-result-item p-2" data-id="${p.id}">${p.name}</div>`).join('');
+                
+                resDiv.innerHTML = found.map(p => `
+                    <div class="search-result-item p-2 border-bottom" data-id="${p.id}" style="cursor:pointer;">
+                        ${p.name}
+                    </div>`).join('');
+                
                 resDiv.style.display = 'block';
+
+                // Tıklama Olayları
                 resDiv.querySelectorAll('.search-result-item').forEach(el => {
                     el.addEventListener('click', () => {
-                        this.handlePersonSelection(this.state.allPersons.find(p=>p.id===el.dataset.id), role);
-                        resDiv.style.display = 'none';
+                        // FIX: ID tür uyuşmazlığını önlemek için String() dönüşümü yapıyoruz
+                        const selectedPerson = this.state.allPersons.find(p => String(p.id) === String(el.dataset.id));
+                        
+                        if (selectedPerson) {
+                            this.handlePersonSelection(selectedPerson, role);
+                            inp.value = ''; // Seçim sonrası input temizlenir
+                            resDiv.style.display = 'none';
+                        } else {
+                            console.error('HATA: Seçilen kişi listede bulunamadı.', el.dataset.id);
+                        }
                     });
                 });
             });
+            
+            // Dışarı tıklayınca listeyi kapatmak için opsiyonel listener
+             document.addEventListener('click', (e) => {
+                if (e.target !== inp && !resDiv.contains(e.target)) {
+                    resDiv.style.display = 'none';
+                }
+            });
         }
+        
         document.getElementById('addNewPersonBtn')?.addEventListener('click', () => {
-            openPersonModal((p) => { this.state.allPersons.push(p); this.handlePersonSelection(p, 'relatedParty'); });
+            openPersonModal((p) => { 
+                this.state.allPersons.push(p); 
+                this.handlePersonSelection(p, 'relatedParty'); 
+            });
         });
     }
 
