@@ -2613,8 +2613,8 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
 
 // === DASHBOARD SAYAÇLARINI GÜNCELLE ===
     window.updateDashboardCounts = function() {
-        const selectedClient = window.selectedClientId; // 'ALL' veya ID
-        console.log("📊 Dashboard sayaçları güncelleniyor. Seçili Client:", selectedClient);
+        const selectedClient = window.selectedClientId;
+        console.log("📊 Dashboard sayaçları güncelleniyor...");
 
         // 1. PORTFÖY SAYACI
         const allPortfolios = window.allPortfolioData || [];
@@ -2627,7 +2627,7 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
         }
         $('#dashPortfolio').text(filteredPortfolio.length);
 
-// 2. GÖREV (TASK) SAYAÇLARI
+        // 2. GÖREV (TASK) SAYAÇLARI
         const allTasks = window.dashboardTasksData || [];
         let filteredTasks = allTasks;
 
@@ -2637,19 +2637,28 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
             });
         }
 
-        let cPending = 0, cRenewal = 0, cBulletin = 0, cDavaPending = 0; // cDavaPending eklendi
+        // Sayaç Değişkenleri
+        let cPending = 0;
+        let cRenewal = 0; 
+        let cBulletin = 0;
+        let cDavaPending = 0;     // Dava Onay Bekleyen
+        let cDavaCompleted = 0;   // Dava Tamamlanan/Diğer
+        
         const today = new Date(); today.setHours(0,0,0,0);
 
         filteredTasks.forEach(t => {
             const type = String(t.taskType);
             
-            // 1. Önce Dava Kontrolü
+            // 1. Önce Dava Kontrolü (isDavaTask helper'ı kullanılıyor)
             if (window.isDavaTask(t)) {
                 if (t.status === 'awaiting_client_approval') {
                     cDavaPending++;
+                } else {
+                    // Onay beklemiyorsa (Açık, Tamamlandı, Reddedildi vb.) -> Dava Tamamlanan/Diğer
+                    cDavaCompleted++;
                 }
             } 
-            // 2. Marka/Patent İşlemleri
+            // 2. Marka/Patent İşlemleri (Dava Değilse)
             else {
                 if (type === '22') {
                     cRenewal++;
@@ -2676,13 +2685,14 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
         const totalMarkaPending = cPending + cRenewal + cBulletin;
         $('#taskCount-marka-total').text(totalMarkaPending);
 
-        // Dava Kartı (YENİ)
-        $('#taskCount-dava-pending').text(cDavaPending); // HTML'e bu ID'yi ekleyeceğiz
+        // --- Dava Kartları (GÜNCELLENDİ) ---
+        $('#taskCount-dava-pending').text(cDavaPending);
+        $('#taskCount-dava-completed').text(cDavaCompleted);
 
-        // Ana Dashboard Toplamı
+        // Ana Dashboard Toplamı (Sadece onay bekleyenler)
         $('#dashPendingApprovals').text(totalMarkaPending + cDavaPending);
 
-// 3. FATURA SAYACI
+        // 3. FATURA SAYACI
         const allInvoices = window.invoicesPaginationData?.allDataUnfiltered || [];
         let filteredInvoices = allInvoices;
 
@@ -2693,7 +2703,6 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
         const unpaidCount = filteredInvoices.filter(a => a.status === 'unpaid').length;
         $('#dashUnpaidInvoices').text(unpaidCount);
     };
-
 
 // === GÖREV (TASK) FİLTRELEME FONKSİYONU ===
     window.applyTaskFilter = function() {
