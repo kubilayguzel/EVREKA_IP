@@ -30,7 +30,7 @@
     .card:hover { transform: translateY(-5px); }
     .card-header { font-weight: 600; border-bottom: 1px solid rgba(0,0,0,0.1); }
     .stat-value { font-size: 2.2em; font-weight: 700; line-height: 1; }
-    .stat-icon { font-size: 3rem !important; }
+    .stat-icon { font-size: 3rem !important; display: inline-block !important; } /* İkon görünürlüğü için önemli */
     
     /* Tablolar */
     .table-responsive { border-radius: 12px; padding: 20px; }
@@ -356,7 +356,7 @@
 </header>
 
 <div id="sidebar">
-    <img src="logo.png" alt="Evreka Portalı" class="d-block mx-auto mb-4" style="height: 180px;">
+    <img src="./logo.png" alt="Evreka Portalı" class="d-block mx-auto mb-4" style="height: 180px;">
     <ul class="nav flex-column">
         <li class="nav-item"><a aria-controls="dashboard" class="nav-link active" data-toggle="tab" href="#dashboard" role="tab"><i class="fas fa-tachometer-alt mr-2"></i>Dashboard</a></li>
         <li class="nav-item"><a aria-controls="portfolio-content" class="nav-link" data-toggle="tab" href="#portfolio-content" role="tab"><i class="fas fa-folder-open mr-2"></i>Portföyüm</a></li>
@@ -546,9 +546,13 @@
                 <div class="col-md-3 mb-4 task-card-link" data-target-area="marka-tasks"><div class="card p-4 text-center h-100 justify-content-center"><i class="fas fa-registered stat-icon text-info mb-3"></i><div class="stat-label">Marka İşlemleri</div><div class="stat-value" id="taskCount-marka-total">0</div></div></div>
                 <div class="col-md-3 mb-4 task-card-link" data-target-area="patent-tasks"><div class="card p-4 text-center h-100 justify-content-center"><i class="fas fa-microchip stat-icon text-warning mb-3"></i><div class="stat-label">Patent İşlemleri</div></div></div>
                 <div class="col-md-3 mb-4 task-card-link" data-target-area="tasarim-tasks"><div class="card p-4 text-center h-100 justify-content-center"><i class="fas fa-palette stat-icon text-success mb-3"></i><div class="stat-label">Tasarım İşlemleri</div></div></div>
-                <div class="col-md-3 mb-4 task-card-link" data-target-area="dava-tasks"><div class="card p-4 text-center h-100 justify-content-center"><i class="fas fa-gavel stat-icon text-danger mb-3"></i><div class="stat-label">Dava İşlemleri</div><div class="stat-value" id="taskCount-dava-total">0</div>
-    </div>
-</div>
+                <div class="col-md-3 mb-4 task-card-link" data-target-area="dava-tasks">
+                    <div class="card p-4 text-center h-100 justify-content-center">
+                        <i class="fas fa-gavel stat-icon text-danger mb-3"></i>
+                        <div class="stat-label">Dava İşlemleri</div>
+                        <div class="stat-value" id="taskCount-dava-total">0</div>
+                    </div>
+                </div>
             </div>
 
             <div class="row mt-5" id="task-detail-cards" style="display: none;">
@@ -557,6 +561,7 @@
                 <div class="col-md-3 mb-4 detail-card-link" data-task-type="bulletin-watch"><div class="card p-3 text-center h-100 justify-content-center"><i class="fas fa-eye stat-icon text-primary mb-3"></i><div class="stat-label">Bülten İzleme Bildirim Onayları</div><div class="stat-value" id="taskCount-bulletin-watch">0</div></div></div>
                 <div class="col-md-3 mb-4 detail-card-link" data-task-type="completed-tasks"><div class="card p-3 text-center h-100 justify-content-center"><i class="fas fa-check-circle stat-icon text-success mb-3"></i><div class="stat-label">Talimat Verilen/Tamamlanan İşler</div></div></div>
             </div>
+            
             <div class="row mt-5" id="dava-task-detail-cards" style="display: none;">
                 <div class="col-md-6 mb-4 detail-card-link" data-task-type="dava-pending">
                     <div class="card p-4 text-center h-100 justify-content-center shadow-sm" style="cursor: pointer;">
@@ -568,23 +573,23 @@
                 </div>
                 
                 <div class="col-md-6 mb-4 detail-card-link" data-task-type="dava-completed">
-                        <div class="card p-4 text-center h-100 justify-content-center shadow-sm" style="cursor: pointer;">
-                            <i class="fas fa-folder-open stat-icon text-success mb-3" style="font-size: 3rem; display: inline-block;"></i>
-                            <div class="stat-label font-weight-bold">Talimat Verilen / Tamamlanan İşler</div>
-                            <small class="text-muted">Devam eden veya sonuçlanan dava süreçleri</small>
-                        </div>
+                    <div class="card p-4 text-center h-100 justify-content-center shadow-sm" style="cursor: pointer;">
+                        <i class="fas fa-folder-open stat-icon text-success mb-3" style="font-size: 3rem; display: inline-block;"></i>
+                        <div class="stat-label font-weight-bold">Talimat Verilen / Tamamlanan İşler</div>
+                        <small class="text-muted">Devam eden veya sonuçlanan dava süreçleri</small>
                     </div>
                 </div>
-                <div class="row mt-4" id="task-list-filters" style="display: none;">
-                    <div class="col-12"><div class="card p-3"><div class="form-row align-items-end"><div class="form-group col-md-5 mb-0"><label class="text-muted">Ara</label><input class="form-control form-control-sm" id="taskSearchText" type="text"/></div><div class="form-group col-md-4 mb-0"><label class="text-muted">Durum</label><select class="form-control form-control-sm" id="taskStatusFilter"><option value="TÜMÜ">Tümü</option></select></div><div class="form-group col-md-3 mb-0"><button class="btn btn-primary btn-sm btn-block" id="applyTaskFilters">Filtrele</button></div></div></div></div>
-                </div>
-
-                <div class="row mt-4" id="task-list-details" style="display: none;">
-                    <div class="col-12" id="task-list-container"></div>
-                    <div class="col-12" id="taskPagination"></div>
-                </div>
             </div>
-        <div class="fade tab-pane" id="invoices">
+
+            <div class="row mt-4" id="task-list-filters" style="display: none;">
+                <div class="col-12"><div class="card p-3"><div class="form-row align-items-end"><div class="form-group col-md-5 mb-0"><label class="text-muted">Ara</label><input class="form-control form-control-sm" id="taskSearchText" type="text"/></div><div class="form-group col-md-4 mb-0"><label class="text-muted">Durum</label><select class="form-control form-control-sm" id="taskStatusFilter"><option value="TÜMÜ">Tümü</option></select></div><div class="form-group col-md-3 mb-0"><button class="btn btn-primary btn-sm btn-block" id="applyTaskFilters">Filtrele</button></div></div></div></div>
+            </div>
+
+            <div class="row mt-4" id="task-list-details" style="display: none;">
+                <div class="col-12" id="task-list-container"></div>
+                <div class="col-12" id="taskPagination"></div>
+            </div>
+        </div> <div class="fade tab-pane" id="invoices">
             <h1 class="header-title">Faturalarım</h1>
             <div class="card p-4 mb-4">
                 <h5 class="card-title">Filtreleme</h5>
@@ -682,7 +687,6 @@
                         </div>
                     </div>
                 </div>
-
                 <div class="row mb-4">
                     <div class="col-md-3">
                         <div class="card p-3 border-left-primary shadow-sm h-100">
@@ -729,7 +733,7 @@
                         </div>
                     </div>
                 </div>
-
+                
                 <h5 class="mb-3 text-gray-800 border-bottom pb-2">Hukuki ve Operasyonel Analiz</h5>
                 <div class="row">
                     <div class="col-lg-4 mb-4">
@@ -792,7 +796,6 @@
             </div>
     </div>
 </div>
-
 <div class="modal fade" id="portfolioDetailModal" tabindex="-1" role="dialog" aria-labelledby="portfolioDetailModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-xl" role="document">
         <div class="modal-content">
