@@ -546,7 +546,9 @@
                 <div class="col-md-3 mb-4 task-card-link" data-target-area="marka-tasks"><div class="card p-4 text-center h-100 justify-content-center"><i class="fas fa-registered stat-icon text-info mb-3"></i><div class="stat-label">Marka İşlemleri</div><div class="stat-value" id="taskCount-marka-total">0</div></div></div>
                 <div class="col-md-3 mb-4 task-card-link" data-target-area="patent-tasks"><div class="card p-4 text-center h-100 justify-content-center"><i class="fas fa-microchip stat-icon text-warning mb-3"></i><div class="stat-label">Patent İşlemleri</div></div></div>
                 <div class="col-md-3 mb-4 task-card-link" data-target-area="tasarim-tasks"><div class="card p-4 text-center h-100 justify-content-center"><i class="fas fa-palette stat-icon text-success mb-3"></i><div class="stat-label">Tasarım İşlemleri</div></div></div>
-                <div class="col-md-3 mb-4 task-card-link" data-target-area="dava-tasks"><div class="card p-4 text-center h-100 justify-content-center"><i class="fas fa-gavel stat-icon text-danger mb-3"></i><div class="stat-label">Dava</div></div></div>
+                <div class="col-md-3 mb-4 task-card-link" data-target-area="dava-tasks"><div class="card p-4 text-center h-100 justify-content-center"><i class="fas fa-gavel stat-icon text-danger mb-3"></i><div class="stat-label">Dava İşlemleri</div><div class="stat-value" id="taskCount-dava-total">0</div>
+    </div>
+</div>
             </div>
 
             <div class="row mt-5" id="task-detail-cards" style="display: none;">
@@ -558,7 +560,7 @@
             <div class="row mt-5" id="dava-task-detail-cards" style="display: none;">
                 <div class="col-md-6 mb-4 detail-card-link" data-task-type="dava-pending">
                     <div class="card p-4 text-center h-100 justify-content-center shadow-sm" style="cursor: pointer;">
-                        <i class="fas fa-gavel stat-icon text-warning mb-3"></i>
+                        <i class="fas fa-gavel stat-icon text-warning mb-3" style="font-size: 3rem; display: inline-block;"></i>
                         <div class="stat-label font-weight-bold">Müvekkil Onayı Bekleyen İşler</div>
                         <div class="stat-value text-dark" id="taskCount-dava-pending">0</div>
                         <small class="text-muted">Dava süreciyle ilgili onayınızı bekleyen talimatlar</small>
@@ -567,12 +569,13 @@
                 
                 <div class="col-md-6 mb-4 detail-card-link" data-task-type="dava-completed">
                     <div class="card p-4 text-center h-100 justify-content-center shadow-sm" style="cursor: pointer;">
-                        <i class="fas fa-balance-scale stat-icon text-success mb-3"></i>
+                        <i class="fas fa-folder-open stat-icon text-success mb-3" style="font-size: 3rem; display: inline-block;"></i>
                         <div class="stat-label font-weight-bold">Talimat Verilen / Tamamlanan İşler</div>
                         <div class="stat-value text-dark" id="taskCount-dava-completed">-</div>
                         <small class="text-muted">Devam eden veya sonuçlanan dava süreçleri</small>
                     </div>
                 </div>
+            </div>
             </div>
             <div class="row mt-4" id="task-list-filters" style="display: none;">
                 <div class="col-12"><div class="card p-3"><div class="form-row align-items-end"><div class="form-group col-md-5 mb-0"><label class="text-muted">Ara</label><input class="form-control form-control-sm" id="taskSearchText" type="text"/></div><div class="form-group col-md-4 mb-0"><label class="text-muted">Durum</label><select class="form-control form-control-sm" id="taskStatusFilter"><option value="TÜMÜ">Tümü</option></select></div><div class="form-group col-md-3 mb-0"><button class="btn btn-primary btn-sm btn-block" id="applyTaskFilters">Filtrele</button></div></div></div></div>
@@ -2611,7 +2614,7 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
 
 // === GLOBAL HELPER FONKSİYONLAR (READY DIŞINDA OLMALI) ===
 
-// === DASHBOARD SAYAÇLARINI GÜNCELLE ===
+// === DASHBOARD SAYAÇLARINI GÜNCELLE (DÜZELTİLMİŞ) ===
     window.updateDashboardCounts = function() {
         const selectedClient = window.selectedClientId;
         console.log("📊 Dashboard sayaçları güncelleniyor...");
@@ -2638,23 +2641,22 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
         }
 
         // Sayaç Değişkenleri
-        let cPending = 0;
-        let cRenewal = 0; 
-        let cBulletin = 0;
-        let cDavaPending = 0;     // Dava Onay Bekleyen
-        let cDavaCompleted = 0;   // Dava Tamamlanan/Diğer
+        let cPending = 0;       // Marka - Onay Bekleyen
+        let cRenewal = 0;       // Marka - Yenileme
+        let cBulletin = 0;      // Marka - Bülten
+        let cDavaPending = 0;   // Dava - Onay Bekleyen
+        let cDavaCompleted = 0; // Dava - Tamamlanan
         
         const today = new Date(); today.setHours(0,0,0,0);
 
         filteredTasks.forEach(t => {
             const type = String(t.taskType);
             
-            // 1. Önce Dava Kontrolü (isDavaTask helper'ı kullanılıyor)
+            // 1. Önce Dava Kontrolü
             if (window.isDavaTask(t)) {
                 if (t.status === 'awaiting_client_approval') {
                     cDavaPending++;
                 } else {
-                    // Onay beklemiyorsa (Açık, Tamamlandı, Reddedildi vb.) -> Dava Tamamlanan/Diğer
                     cDavaCompleted++;
                 }
             } 
@@ -2685,11 +2687,12 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
         const totalMarkaPending = cPending + cRenewal + cBulletin;
         $('#taskCount-marka-total').text(totalMarkaPending);
 
-        // --- Dava Kartları (GÜNCELLENDİ) ---
-        $('#taskCount-dava-pending').text(cDavaPending);
-        $('#taskCount-dava-completed').text(cDavaCompleted);
+        // --- DAVA KARTLARI (YENİ) ---
+        $('#taskCount-dava-pending').text(cDavaPending);     // Alt Kart
+        $('#taskCount-dava-completed').text(cDavaCompleted); // Alt Kart
+        $('#taskCount-dava-total').text(cDavaPending);       // Ana Kart (Sadece bekleyenleri gösterir)
 
-        // Ana Dashboard Toplamı (Sadece onay bekleyenler)
+        // Ana Dashboard Toplamı
         $('#dashPendingApprovals').text(totalMarkaPending + cDavaPending);
 
         // 3. FATURA SAYACI
@@ -2703,6 +2706,7 @@ window.renderDavaItirazTable = function(parentRowsSlice, startIndex = 0) {
         const unpaidCount = filteredInvoices.filter(a => a.status === 'unpaid').length;
         $('#dashUnpaidInvoices').text(unpaidCount);
     };
+
 
 // === GÖREV (TASK) FİLTRELEME FONKSİYONU ===
     window.applyTaskFilter = function() {
