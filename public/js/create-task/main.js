@@ -1,7 +1,8 @@
-import { auth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { loadSharedLayout, openPersonModal } from '../layout-loader.js';
 import { initializeNiceClassification, getSelectedNiceClasses } from '../nice-classification.js';
 import { TASK_IDS } from './TaskConstants.js';
+import { auth } from '../../firebase-config.js';
 
 // Modüller
 import { TaskDataManager } from './TaskDataManager.js';
