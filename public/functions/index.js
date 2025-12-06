@@ -5795,3 +5795,69 @@ export const handleBulletinDeletion = onMessagePublished(
     return null;
   }
 );
+// =========================================================
+//              TASK OTOMASYON TRIGGERLARI
+// =========================================================
+
+// Ana iş (Parent Task) tamamlandığında, ona bağlı "Tahakkuk Oluşturma" görevini aktifleştir.
+export const activateAccrualTaskOnCompletionV2 = onDocumentUpdated(
+  {
+    document: "tasks/{taskId}",
+    region: "europe-west1",
+  },
+  async (event) => {
+    const change = event.data;
+    if (!change || !change.before || !change.after) return null;
+
+    const before = change.before.data() || {};
+    const after = change.after.data() || {};
+    const taskId = event.params.taskId;
+
+    // Sadece statü "completed" olduğunda çalış
+    if (before.status === after.status || after.status !== "completed") {
+      return null;
+    }
+
+    console.log(`✅ Ana iş tamamlandı (${taskId}). Bağlı tahakkuk görevleri aranıyor...`);
+
+    try {
+      // Bu işe bağlı (relatedTaskId == taskId) ve tipi 'accrual_creation' olan görevleri bul
+      const snapshot = await adminDb
+        .collection("tasks")
+        .where("relatedTaskId", "==", taskId)
+        .where("taskType", "==", "accrual_creation")
+        .where("status", "==", "pending") // Sadece beklemede olanları al
+        .get();
+
+      if (snapshot.empty) {
+        console.log("ℹ️ Bağlı bekleyen tahakkuk görevi bulunamadı.");
+        return null;
+      }
+
+      const batch = adminDb.batch();
+      let count = 0;
+
+      snapshot.forEach((doc) => {
+        // Statüyü 'open' yap (Açık / Yapılacak)
+        batch.update(doc.ref, { 
+          status: "open",
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          history: admin.firestore.FieldValue.arrayUnion({
+            action: 'Ana iş tamamlandığı için statü "Açık" olarak güncellendi.',
+            timestamp: new Date().toISOString(),
+            user: 'system'
+          })
+        });
+        count++;
+      });
+
+      await batch.commit();
+      console.log(`🚀 ${count} adet tahakkuk görevi "Açık" statüsüne çekildi.`);
+
+    } catch (error) {
+      console.error("❌ Tahakkuk görevi güncellenirken hata:", error);
+    }
+
+    return null;
+  }
+);
