@@ -591,14 +591,38 @@ class CreateTaskController {
     // --- YENİ YARDIMCI METOT: Local Portföy Filtreleme ---
     _searchPortfolioLocal(term) {
         if (!this.state.allIpRecords) return [];
+        
+        const typeId = String(this.state.selectedTaskType?.id || '');
+        
+        // 3. Taraf kayıtlarının görünmesine izin verilen "İstisnai" iş tipleri
+        // Tip 19 (Yeniden İnceleme) ve Tip 20 (Yayına İtiraz)
+        const allowThirdParty = [
+            '19', 
+            '20', 
+            TASK_IDS.ITIRAZ_YAYIN, 
+            TASK_IDS.YAYIMA_ITIRAZIN_YENIDEN_INCELENMESI
+        ].includes(typeId);
+        
         const lowerTerm = term.toLowerCase();
         
-        return this.state.allIpRecords.filter(r => 
-            (r.title || '').toLowerCase().includes(lowerTerm) ||
-            (r.markName || '').toLowerCase().includes(lowerTerm) ||
-            (r.applicationNumber || '').includes(term) ||
-            (r.applicationNo || '').includes(term)
-        ).slice(0, 20);
+        return this.state.allIpRecords.filter(r => {
+            // 1. AŞAMA: Sahiplik Kontrolü
+            // Eğer "İzin verilen iş tiplerinden biri" DEĞİLSE, sadece 'self' kayıtları getir.
+            if (!allowThirdParty) {
+                // recordOwnerType boşsa varsayılan olarak 'self' kabul etmeyebiliriz,
+                // ama genelde 'self' veya 'third_party' dolu gelir.
+                const ownerType = String(r.recordOwnerType || 'self').toLowerCase();
+                if (ownerType === 'third_party') return false; 
+            }
+
+            // 2. AŞAMA: Metin Eşleşmesi
+            return (
+                (r.title || '').toLowerCase().includes(lowerTerm) ||
+                (r.markName || '').toLowerCase().includes(lowerTerm) ||
+                (r.applicationNumber || '').includes(term) ||
+                (r.applicationNo || '').includes(term)
+            );
+        }).slice(0, 20);
     }
 
     renderIpSearchResults(items, container) {
@@ -606,11 +630,22 @@ class CreateTaskController {
             container.innerHTML = '<div class="p-2 text-muted">Sonuç bulunamadı.</div>';
         } else {
             container.innerHTML = items.map(item => {
-                // Kaynak belirteci (ikon veya metin eklenebilir)
-                const isBulletin = item._source === 'bulletin';
-                const badge = isBulletin 
-                    ? '<span class="badge badge-warning float-right" style="font-size: 10px;">Bülten</span>' 
-                    : '<span class="badge badge-info float-right" style="font-size: 10px;">Portföy</span>';
+                // Etiket (Badge) Belirleme
+                let badge = '';
+                
+                if (item._source === 'bulletin') {
+                    // Bülten Kaydı
+                    badge = '<span class="badge badge-warning float-right" style="font-size: 10px;">Bülten</span>';
+                } else {
+                    // Portföy Kaydı (Self veya 3. Taraf Ayrımı)
+                    const isThirdParty = String(item.recordOwnerType || '').toLowerCase() === 'third_party';
+                    
+                    if (isThirdParty) {
+                        badge = '<span class="badge badge-dark float-right" style="font-size: 10px; background-color: #343a40;">3. Taraf</span>';
+                    } else {
+                        badge = '<span class="badge badge-info float-right" style="font-size: 10px;">Portföy</span>';
+                    }
+                }
 
                 return `
                 <div class="search-result-item p-2 border-bottom" style="cursor:pointer;" data-id="${item.id}" data-source="${item._source}">
@@ -620,23 +655,23 @@ class CreateTaskController {
                 </div>
             `}).join('');
             
-            // Tıklama Olayı
+            // Tıklama Olayı (Delegation)
             container.querySelectorAll('.search-result-item').forEach(el => {
                 el.addEventListener('click', async () => {
                     const id = el.dataset.id;
-                    const source = el.dataset.source; // Kaynağı elementten al
+                    const source = el.dataset.source;
                     
-                    // Seçilen kaydı listeden bul
+                    // Seçilen kaydı bul
                     let record = items.find(i => i.id === id);
                     
-                    // Eğer kaynak Bültens ise (Hibrit modda karışık gelebilir) detayını çek
+                    // Eğer Bülten ise detayını çek
                     if (source === 'bulletin') {
                          console.log('📥 Bülten detayı çekiliyor...');
                          const details = await this.dataManager.fetchAndStoreBulletinData(record.id);
                          if(details) record = {...record, ...details};
                     }
                     
-                    // Kaydın kaynağını objeye işle (selectIpRecord bunu kullanacak)
+                    // Kaynağı işle
                     record._source = source;
 
                     this.selectIpRecord(record);
