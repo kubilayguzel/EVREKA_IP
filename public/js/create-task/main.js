@@ -59,153 +59,167 @@ class CreateTaskController {
         });
     }
 
+// --- GÜNCELLENEN METOT: Tüm Butonlar İçin Global Dinleyici ---
     setupEventListeners() {
+        if (this._eventsBound) return;
+        this._eventsBound = true;
+        
+        // 1. Statik Alanlar (Değişmeyenler)
         document.getElementById('mainIpType')?.addEventListener('change', (e) => this.handleMainTypeChange(e));
         document.getElementById('specificTaskType')?.addEventListener('change', (e) => this.handleSpecificTypeChange(e));
-        document.getElementById('originSelect')?.addEventListener('change', (e) => this.handleOriginChange(e.target.value));
-        document.getElementById('saveTaskBtn')?.addEventListener('click', (e) => this.submitHandler.handleFormSubmit(e, this.state));
+        
+        const originSelect = document.getElementById('originSelect');
+        if (originSelect) {
+            originSelect.addEventListener('change', (e) => this.handleOriginChange(e.target.value));
+        }
+
+        // 2. GLOBAL TIKLAMA YÖNETİCİSİ (Dinamik Butonlar İçin)
         document.addEventListener('click', (e) => {
-            if (e.target.id === 'cancelBtn' && confirm('İptal etmek istediğinize emin misiniz?')) window.location.href = 'task-management.html';
+            
+            // --- A) FORM AKSİYONLARI (KAYDET / İPTAL / İLERLE) ---
+            
+            // 💾 KAYDET BUTONU (Bu kısım eklendiği için artık çalışacak)
+            if (e.target.id === 'saveTaskBtn' || e.target.closest('#saveTaskBtn')) {
+                const btn = e.target.closest('#saveTaskBtn') || e.target;
+                if (btn.disabled) return; // Disabled ise çalışma
+                
+                console.log('💾 Kaydet butonuna basıldı (Delegation)');
+                this.submitHandler.handleFormSubmit(e, this.state);
+            }
+
+            // ❌ İPTAL BUTONU
+            if (e.target.id === 'cancelBtn') {
+                if (confirm('İşlem iptal edilsin mi? Girilen veriler kaybolacak.')) {
+                    window.location.href = 'task-management.html';
+                }
+            }
+
+            // ⏩ İLERLE BUTONU (Tab Geçişi)
+            if (e.target.id === 'nextTabBtn') {
+                this.handleNextTab();
+            }
+
+            // --- B) SİLME VE TEMİZLEME İŞLEMLERİ ---
+
+            // Varlık (Asset) Kaldır
+            if (e.target.closest('#clearSelectedIpRecord')) {
+                this.state.selectedIpRecord = null;
+                document.getElementById('selectedIpRecordContainer').style.display = 'none';
+                document.getElementById('ipRecordSearch').value = '';
+                
+                // Görseli ve alt kayıtları temizle
+                const imgEl = document.getElementById('selectedIpRecordImage');
+                if(imgEl) imgEl.src = '';
+                
+                this.state.selectedWipoAripoChildren = [];
+                this.uiManager.renderWipoAripoChildRecords([]);
+                
+                this.validator.checkCompleteness(this.state);
+            }
+
+            // İlgili Taraf Sil
+            const removePartyBtn = e.target.closest('.remove-party');
+            if (removePartyBtn) {
+                const id = removePartyBtn.dataset.id;
+                this.state.selectedRelatedParties = this.state.selectedRelatedParties.filter(p => String(p.id) !== String(id));
+                this.uiManager.renderSelectedRelatedParties(this.state.selectedRelatedParties);
+                this.validator.checkCompleteness(this.state);
+            }
+
+            // Başvuru Sahibi Sil
+            const removeApplicantBtn = e.target.closest('.remove-selected-item-btn');
+            if (removeApplicantBtn) {
+                const id = removeApplicantBtn.dataset.id;
+                this.state.selectedApplicants = this.state.selectedApplicants.filter(p => String(p.id) !== String(id));
+                this.uiManager.renderSelectedApplicants(this.state.selectedApplicants);
+                this.validator.checkCompleteness(this.state);
+            }
+
+            // WIPO/ARIPO Alt Kayıt Sil
+            const removeWipoBtn = e.target.closest('.remove-wipo-child-btn');
+            if (removeWipoBtn) {
+                const id = removeWipoBtn.dataset.id;
+                this.state.selectedWipoAripoChildren = this.state.selectedWipoAripoChildren.filter(c => String(c.id) !== String(id));
+                this.uiManager.renderWipoAripoChildRecords(this.state.selectedWipoAripoChildren);
+                this.validator.checkCompleteness(this.state);
+            }
+
+            // --- C) MODAL VE EKLEME İŞLEMLERİ ---
+
+            // Yeni Kişi / Başvuru Sahibi Ekleme
+            if (e.target.closest('#addNewPersonBtn') || e.target.closest('#addNewApplicantBtn')) {
+                const isApplicant = e.target.closest('#addNewApplicantBtn'); 
+
+                openPersonModal((newPerson) => { 
+                    this.state.allPersons.push(newPerson); 
+                    
+                    if (isApplicant) {
+                        if(!this.state.selectedApplicants.some(a=>a.id===newPerson.id)) {
+                            this.state.selectedApplicants.push(newPerson);
+                            this.uiManager.renderSelectedApplicants(this.state.selectedApplicants);
+                        }
+                    } else {
+                        this.handlePersonSelection(newPerson, 'relatedParty'); 
+                    }
+                    this.validator.checkCompleteness(this.state);
+                });
+
+                // Modal açılınca şehir listesini tetikle (Türkiye seçiliyse)
+                setTimeout(() => {
+                    const countrySelect = document.getElementById('country') || document.getElementById('personCountry');
+                    if (countrySelect && (countrySelect.value === 'Turkey' || countrySelect.value === 'TR' || countrySelect.value === 'Türkiye')) {
+                        console.log('🌍 Şehir listesi tetikleniyor...');
+                        countrySelect.dispatchEvent(new Event('change'));
+                    }
+                }, 300);
+            }
+            
+            // Parent Transaction Seçim Listener (Modal İçin)
+            if (e.target.closest('.list-group-item') && document.getElementById('parentListContainer')?.contains(e.target)) {
+                 // Bu kısım TaskUIManager içindeki 'parentTransactionSelected' event'i ile de çalışıyor ama yedek olarak dursun
+            }
         });
+        
+        // 3. PARENT TRANSACTION MODAL SEÇİMİ (Custom Event Listener)
+        document.addEventListener('parentTransactionSelected', (e) => {
+            const selectedId = e.detail.id;
+            console.log('🎯 Modalden seçim geldi:', selectedId);
+            
+            this.submitHandler.selectedParentTransactionId = selectedId;
+            this.uiManager.hideParentSelectionModal();
+            alert('Geri çekilecek işlem seçildi.');
+        });
+        
+        // Modal Kapatma Butonları
+        const closeModalBtns = document.querySelectorAll('#selectParentModal .close, #selectParentModal .btn-secondary');
+        closeModalBtns.forEach(btn => btn.addEventListener('click', () => this.uiManager.hideParentSelectionModal()));
+
+        // 4. TAB DEĞİŞİMİ VE DİĞERLERİ
         $(document).on('shown.bs.tab', '#myTaskTabs a', async (e) => {
+            this.uiManager.updateButtonsAndTabs();
             const targetTabId = e.target.getAttribute('href').substring(1);
+            
             if (targetTabId === 'goods-services' && !this.state.isNiceClassificationInitialized) {
                 await initializeNiceClassification();
                 this.state.isNiceClassificationInitialized = true;
             }
-            this.uiManager.updateButtonsAndTabs(targetTabId === 'summary');
+            if (targetTabId === 'applicants') this.uiManager.renderSelectedApplicants(this.state.selectedApplicants);
+            if (targetTabId === 'priority') this.uiManager.renderPriorities(this.state.priorities);
             if (targetTabId === 'summary') this.uiManager.renderSummaryTab(this.state);
         });
+        
+        // Form Elemanlarını Dinle (Validation için)
         document.addEventListener('input', (e) => {
             if (['officialFee', 'serviceFee', 'vatRate'].includes(e.target.id)) this.calculateTotalAmount();
             this.validator.checkCompleteness(this.state);
         });
+        
         document.addEventListener('change', (e) => {
             if (e.target.id === 'applyVatToOfficialFee') this.calculateTotalAmount();
             if (['brandType', 'brandCategory', 'assignedTo', 'taskDueDate'].includes(e.target.id)) this.validator.checkCompleteness(this.state);
         });
-        document.addEventListener('parentTransactionSelected', (e) => {
-        const selectedId = e.detail.id;
-        console.log('🎯 Modalden seçim geldi:', selectedId);
-        
-        this.submitHandler.selectedParentTransactionId = selectedId;
-        this.uiManager.hideParentSelectionModal();
-        alert('Geri çekilecek işlem seçildi.');
-        });
-        
-        // Parent Seçim Modalı Kapatma
-        const closeModalBtns = document.querySelectorAll('#selectParentModal .close, #selectParentModal .btn-secondary');
-        closeModalBtns.forEach(btn => btn.addEventListener('click', () => this.uiManager.hideParentSelectionModal()));
 
-        // Parent Seçim Listesi Tıklama (Delegation)
-        const parentListContainer = document.getElementById('parentListContainer');
-        if (parentListContainer) {
-            parentListContainer.addEventListener('click', (e) => {
-                const item = e.target.closest('.list-group-item');
-                if (item) {
-                    this.submitHandler.selectedParentTransactionId = item.dataset.id;
-                    this.uiManager.hideParentSelectionModal();
-                    alert('İşlem seçildi.');
-                }
-            });
-        }
-
-        // Ülke Seçimi (Dışarı tıklandığında listeyi kapatma)
-        document.addEventListener('click', (e) => {
-            const results = document.getElementById('countriesMultiSelectResults');
-            const input = document.getElementById('countriesMultiSelectInput');
-            if (results && input && !results.contains(e.target) && e.target !== input) {
-                results.style.display = 'none';
-            }
-        });
-    
-    // GLOBAL CLICK LISTENER (Event Delegation)
-    // Tüm dinamik butonları (Silme, Ekleme vb.) tek bir yerden yönetir.
-    document.addEventListener('click', (e) => {
-        
-        // ---------------------------------------------------------
-        // A) SİLME İŞLEMLERİ (Listeden Kaldırma)
-        // ---------------------------------------------------------
-
-        // 1. Varlık (Asset) Silme
-        if (e.target.closest('#clearSelectedIpRecord')) {
-            this.state.selectedIpRecord = null;
-            document.getElementById('selectedIpRecordContainer').style.display = 'none';
-            document.getElementById('ipRecordSearch').value = '';
-            
-            // Görseli temizle
-            const imgEl = document.getElementById('selectedIpRecordImage');
-            if(imgEl) imgEl.src = '';
-
-            // WIPO/ARIPO alt kayıtları temizle
-            this.state.selectedWipoAripoChildren = [];
-            this.uiManager.renderWipoAripoChildRecords([]);
-
-            this.validator.checkCompleteness(this.state);
-        }
-
-        // 2. İlgili Taraf (Related Party) Silme
-        const removePartyBtn = e.target.closest('.remove-party');
-        if (removePartyBtn) {
-            const id = removePartyBtn.dataset.id;
-            this.state.selectedRelatedParties = this.state.selectedRelatedParties.filter(p => String(p.id) !== String(id));
-            this.uiManager.renderSelectedRelatedParties(this.state.selectedRelatedParties);
-            this.validator.checkCompleteness(this.state);
-        }
-
-        // 3. Başvuru Sahibi (Applicant) Silme
-        const removeApplicantBtn = e.target.closest('.remove-selected-item-btn');
-        if (removeApplicantBtn) {
-            const id = removeApplicantBtn.dataset.id;
-            this.state.selectedApplicants = this.state.selectedApplicants.filter(p => String(p.id) !== String(id));
-            this.uiManager.renderSelectedApplicants(this.state.selectedApplicants);
-            this.validator.checkCompleteness(this.state);
-        }
-
-        // 4. WIPO/ARIPO Alt Kayıt Silme
-        const removeWipoBtn = e.target.closest('.remove-wipo-child-btn');
-        if (removeWipoBtn) {
-            const id = removeWipoBtn.dataset.id;
-            this.state.selectedWipoAripoChildren = this.state.selectedWipoAripoChildren.filter(c => String(c.id) !== String(id));
-            this.uiManager.renderWipoAripoChildRecords(this.state.selectedWipoAripoChildren);
-        }
-
-        // ---------------------------------------------------------
-        // B) MODAL İŞLEMLERİ (Yeni Kişi Ekleme)
-        // ---------------------------------------------------------
-
-        // Hem "Yeni Kişi" (Related Party) hem de "Yeni Başvuru Sahibi" butonlarını yakalar
-        if (e.target.closest('#addNewPersonBtn') || e.target.closest('#addNewApplicantBtn')) {
-            const isApplicant = e.target.closest('#addNewApplicantBtn'); // Hangi buton?
-
-            // Modalı Aç
-            openPersonModal((newPerson) => { 
-                this.state.allPersons.push(newPerson); 
-                
-                if (isApplicant) {
-                    if(!this.state.selectedApplicants.some(a=>a.id===newPerson.id)) {
-                        this.state.selectedApplicants.push(newPerson);
-                        this.uiManager.renderSelectedApplicants(this.state.selectedApplicants);
-                    }
-                } else {
-                    this.handlePersonSelection(newPerson, 'relatedParty'); 
-                }
-            });
-
-            // FIX: Modal açıldıktan sonra şehir listesini tetikle
-            // 300ms bekliyoruz ki modal HTML'i render edilsin
-            setTimeout(() => {
-                // Modal içindeki ülke seçim elementini bul (ID: 'country' veya 'personCountry' olabilir, projenize göre kontrol edin)
-                const countrySelect = document.getElementById('country') || document.getElementById('personCountry');
-                
-                // Eğer Türkiye seçiliyse, change olayını tetikle ki şehirler gelsin
-                if (countrySelect && (countrySelect.value === 'Turkey' || countrySelect.value === 'TR' || countrySelect.value === 'Türkiye')) {
-                    console.log('🌍 Şehir listesi tetikleniyor...');
-                    countrySelect.dispatchEvent(new Event('change'));
-                }
-            }, 300);
-        }
-    });
+        this.setupBrandExample();
     }
 
     handleMainTypeChange(e) {
