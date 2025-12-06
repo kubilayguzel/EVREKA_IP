@@ -458,10 +458,16 @@ class CreateTaskController {
             const inp = document.getElementById(iid);
             if (!inp) continue;
 
+            // DÜZELTME: resDiv tanımı buraya, olayların dışına taşındı.
+            // Böylece hem 'input' hem de 'click' olayları bu değişkene erişebilir.
+            const resId = role === 'relatedParty' ? 'personSearchResults' : (role === 'tpInvoiceParty' ? 'tpInvoicePartyResults' : 'serviceInvoicePartyResults');
+            const resDiv = document.getElementById(resId);
+
+            // Eğer sonuç kutusu HTML'de yoksa devam etme
+            if (!resDiv) continue;
+
             inp.addEventListener('input', (e) => {
                 const term = e.target.value.toLowerCase();
-                const resId = role === 'relatedParty' ? 'personSearchResults' : (role === 'tpInvoiceParty' ? 'tpInvoicePartyResults' : 'serviceInvoicePartyResults');
-                const resDiv = document.getElementById(resId);
                 
                 if (term.length < 2) { resDiv.style.display = 'none'; return; }
                 
@@ -477,23 +483,21 @@ class CreateTaskController {
                 // Tıklama Olayları
                 resDiv.querySelectorAll('.search-result-item').forEach(el => {
                     el.addEventListener('click', () => {
-                        // FIX: ID tür uyuşmazlığını önlemek için String() dönüşümü yapıyoruz
                         const selectedPerson = this.state.allPersons.find(p => String(p.id) === String(el.dataset.id));
                         
                         if (selectedPerson) {
                             this.handlePersonSelection(selectedPerson, role);
-                            inp.value = ''; // Seçim sonrası input temizlenir
+                            inp.value = ''; 
                             resDiv.style.display = 'none';
-                        } else {
-                            console.error('HATA: Seçilen kişi listede bulunamadı.', el.dataset.id);
                         }
                     });
                 });
             });
             
-            // Dışarı tıklayınca listeyi kapatmak için opsiyonel listener
-             document.addEventListener('click', (e) => {
-                if (e.target !== inp && !resDiv.contains(e.target)) {
+            // Dışarı tıklayınca kapatma
+            document.addEventListener('click', (e) => {
+                // Artık resDiv burada tanımlı
+                if (resDiv.style.display === 'block' && e.target !== inp && !resDiv.contains(e.target)) {
                     resDiv.style.display = 'none';
                 }
             });
