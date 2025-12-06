@@ -327,15 +327,68 @@ export class TaskUIManager {
         const cls = isTab ? 'form-section' : 'section-card';
         return `
         <div class="${cls}">
-            <h3 class="section-title">Tahakkuk</h3>
-            <div class="form-grid">
-                <div class="form-group"><label class="form-label">Resmi Ücret</label><div class="input-with-currency"><input type="number" id="officialFee" class="form-input"><select id="officialFeeCurrency" class="currency-select"><option>TRY</option><option>USD</option><option>EUR</option></select></div></div>
-                <div class="form-group"><label class="form-label">Hizmet Bedeli</label><div class="input-with-currency"><input type="number" id="serviceFee" class="form-input"><select id="serviceFeeCurrency" class="currency-select"><option>TRY</option><option>USD</option><option>EUR</option></select></div></div>
-                <div class="form-group"><label class="form-label">KDV (%)</label><input type="number" id="vatRate" class="form-input" value="20"></div>
-                <div class="form-group"><label class="form-label">Toplam</label><div id="totalAmountDisplay" class="total-amount-display">0.00 TRY</div></div>
-                <div class="form-group full-width"><label class="checkbox-label"><input type="checkbox" id="applyVatToOfficialFee" checked> Resmi Ücrete KDV Uygula</label></div>
-                <div class="form-group full-width"><label class="form-label">TP Fatura Tarafı</label><input type="text" id="tpInvoicePartySearch" class="form-input"><div id="tpInvoicePartyResults" class="search-results-list"></div><div id="selectedTpInvoicePartyDisplay" style="display:none;"></div></div>
-                <div class="form-group full-width"><label class="form-label">Hizmet Fatura Tarafı</label><input type="text" id="serviceInvoicePartySearch" class="form-input"><div id="serviceInvoicePartyResults" class="search-results-list"></div><div id="selectedServiceInvoicePartyDisplay" style="display:none;"></div></div>
+            <h3 class="section-title">Tahakkuk / Finansal Bilgiler</h3>
+            
+            <div class="accrual-controls mb-4 p-3 bg-light border rounded">
+                <div class="d-flex align-items-center justify-content-between flex-wrap">
+                    <div class="form-check mr-3">
+                        <input class="form-check-input" type="checkbox" id="isFreeTransaction">
+                        <label class="form-check-label font-weight-bold user-select-none" for="isFreeTransaction" style="cursor:pointer;">
+                            Ücretsiz İşlem (Tahakkuk Oluşmayacak)
+                        </label>
+                    </div>
+
+                    <button type="button" id="toggleAccrualFormBtn" class="btn btn-outline-primary btn-sm">
+                        <i class="fas fa-chevron-down mr-1"></i> Tahakkuk Formu Aç
+                    </button>
+                </div>
+                <small class="text-muted mt-2 d-block">
+                    <i class="fas fa-info-circle"></i> Not: Formu açmazsanız veya "Ücretsiz" seçmezseniz, otomatik olarak <strong>"Tahakkuk Oluşturma"</strong> görevi atanacaktır.
+                </small>
+            </div>
+
+            <div id="accrualFormContainer" style="display:none;">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label class="form-label">Resmi Ücret</label>
+                        <div class="input-with-currency">
+                            <input type="number" id="officialFee" class="form-input">
+                            <select id="officialFeeCurrency" class="currency-select"><option>TRY</option><option>USD</option><option>EUR</option></select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Hizmet Bedeli</label>
+                        <div class="input-with-currency">
+                            <input type="number" id="serviceFee" class="form-input">
+                            <select id="serviceFeeCurrency" class="currency-select"><option>TRY</option><option>USD</option><option>EUR</option></select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">KDV (%)</label>
+                        <input type="number" id="vatRate" class="form-input" value="20">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Toplam</label>
+                        <div id="totalAmountDisplay" class="total-amount-display">0.00 TRY</div>
+                    </div>
+                    <div class="form-group full-width">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="applyVatToOfficialFee" checked> Resmi Ücrete KDV Uygula
+                        </label>
+                    </div>
+                    <div class="form-group full-width">
+                        <label class="form-label">TP Fatura Tarafı</label>
+                        <input type="text" id="tpInvoicePartySearch" class="form-input">
+                        <div id="tpInvoicePartyResults" class="search-results-list"></div>
+                        <div id="selectedTpInvoicePartyDisplay" style="display:none;"></div>
+                    </div>
+                    <div class="form-group full-width">
+                        <label class="form-label">Hizmet Fatura Tarafı</label>
+                        <input type="text" id="serviceInvoicePartySearch" class="form-input">
+                        <div id="serviceInvoicePartyResults" class="search-results-list"></div>
+                        <div id="selectedServiceInvoicePartyDisplay" style="display:none;"></div>
+                    </div>
+                </div>
             </div>
         </div>`;
     }
