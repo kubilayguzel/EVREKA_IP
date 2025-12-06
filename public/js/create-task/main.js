@@ -660,31 +660,26 @@ class CreateTaskController {
         document.getElementById('selectedIpRecordLabel').textContent = title;
         document.getElementById('selectedIpRecordNumber').textContent = appNo;
 
-        // --- YENİ EKLENEN KISIM: Menşe Güncelleme ve Kilitleme ---
+        // --- Menşe Güncelleme ve Kilitleme ---
         const originSelect = document.getElementById('originSelect');
         const mainIpTypeSelect = document.getElementById('mainIpType');
         
-        // Kaydın menşei varsa ve dropdown'da farklıysa güncelle
-        // (Eğer kayıtta menşe yoksa varsayılan 'TÜRKPATENT' kabul edelim)
         const recordOrigin = record.origin || 'TÜRKPATENT';
         
         if (originSelect) {
             if (originSelect.value !== recordOrigin) {
                 console.log(`🌍 Menşe güncelleniyor: ${originSelect.value} -> ${recordOrigin}`);
                 originSelect.value = recordOrigin;
-                // Tetikleyiciyi çağır (Ülke seçimlerini vs. açmak için)
                 this.handleOriginChange(recordOrigin);
             }
-            // Menşe alanını kilitle
             originSelect.disabled = true;
         }
 
-        // İş Tipini kilitle
         if (mainIpTypeSelect) {
             mainIpTypeSelect.disabled = true;
         }
         
-        // 2. GÖRSEL İŞLEMLERİ (GÜNCELLENDİ)
+        // 2. GÖRSEL İŞLEMLERİ (imagePath Desteği Eklendi)
         const imgEl = document.getElementById('selectedIpRecordImage');
         const phEl = document.getElementById('selectedIpRecordPlaceholder');
         
@@ -693,23 +688,20 @@ class CreateTaskController {
 
         let finalImageUrl = null;
         
-        // Hangi kaynaktan geldiğini kontrol et (Hibrit mod için kritik)
-        const source = record._source || this.state.searchSource;
+        // Tüm olası görsel alanlarını kontrol et (imagePath en öncelikli)
+        // Sırasıyla: imagePath (Bülten DB) -> brandImageUrl (Portföy) -> image -> logo -> imageUrl
+        const potentialPath = record.imagePath || record.brandImageUrl || record.image || record.logo || record.imageUrl;
 
         try {
-            // A) BÜLTEN KAYNAĞI
-            if (source === 'bulletin') {
-                finalImageUrl = record.image || record.logo || record.imageUrl;
-            } 
-            // B) PORTFÖY KAYNAĞI
-            else {
-                const storagePath = record.brandImageUrl || record.imageUrl || record.image;
-                if (storagePath) {
-                    if (storagePath.startsWith('http') || storagePath.startsWith('data:')) {
-                        finalImageUrl = storagePath;
-                    } else {
-                        finalImageUrl = await this.dataManager.resolveImageUrl(storagePath);
-                    }
+            if (potentialPath) {
+                // A) Eğer zaten http/https veya base64 ise direkt kullan
+                if (potentialPath.startsWith('http') || potentialPath.startsWith('data:')) {
+                    finalImageUrl = potentialPath;
+                } 
+                // B) Değilse (gs:// veya dosya yolu) Storage'dan çözümle
+                else {
+                    // Hem Bülten hem Portföy için Storage yolunu URL'e çevirir
+                    finalImageUrl = await this.dataManager.resolveImageUrl(potentialPath);
                 }
             }
         } catch (err) {
@@ -727,19 +719,39 @@ class CreateTaskController {
         
         document.getElementById('selectedIpRecordContainer').style.display = 'block';
         
-        // 3. GERİ ÇEKME İŞLEMİ İÇİN GEÇMİŞ KONTROLÜ
+        // 3. Geri Çekme İşlemi Kontrolü (Akıllı Tarama)
         if (this.state.isWithdrawalTask) {
-            const txs = await this.dataManager.getRecordTransactions(record.id);
-            if (txs.success && txs.data && txs.data.length > 0) {
-                record.transactions = txs.data;
+            console.log(`[Main] ${record.id} için işlemler sorgulanıyor...`);
+            
+            let txResult = await this.dataManager.getRecordTransactions(record.id);
+            let combinedTransactions = txResult.success ? txResult.data : [];
+
+            // Aile taraması (Parent/Child)
+            if (combinedTransactions.length === 0 && (record.wipoIR || record.aripoIR)) {
+                console.log('⚠️ Seçilen kayıtta işlem yok. Aile kayıtları taranıyor...');
+                const irNumber = record.wipoIR || record.aripoIR;
+                const relatives = this.state.allIpRecords.filter(r => 
+                    (r.wipoIR === irNumber || r.aripoIR === irNumber) && r.id !== record.id
+                );
+
+                for (const rel of relatives) {
+                    const relResult = await this.dataManager.getRecordTransactions(rel.id);
+                    if (relResult.success && relResult.data.length > 0) {
+                        combinedTransactions = [...combinedTransactions, ...relResult.data];
+                    }
+                }
+            }
+
+            if (combinedTransactions.length > 0) {
+                record.transactions = combinedTransactions;
                 this.processParentTransactions(record);
             } else {
-                console.warn('İşlem geçmişi bulunamadı.');
-                alert('Bu varlık üzerinde işlem geçmişi bulunamadı.');
+                console.warn('❌ İşlem bulunamadı.');
+                alert('Bu varlık üzerinde (veya bağlı olduğu WIPO/ARIPO dosyasında) geri çekilebilecek uygun bir işlem bulunamadı.');
             }
         }
 
-        // 4. WIPO/ARIPO Alt Kayıt Kontrolü
+        // 4. WIPO/ARIPO Alt Kayıt Listeleme
         if (record.wipoIR || record.aripoIR) {
             const ir = record.wipoIR || record.aripoIR;
             this.state.selectedWipoAripoChildren = this.state.allIpRecords.filter(c => 
