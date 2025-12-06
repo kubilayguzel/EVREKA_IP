@@ -315,11 +315,58 @@ class CreateTaskController {
         });
     }
 
-    handleBrandFile(file) {
-        if (!file || !file.type.startsWith('image/')) return alert('Geçerli bir resim dosyası seçin.');
-        this.state.uploadedFiles = [file];
-        const img = document.getElementById('brandExamplePreview');
-        if(img) { img.src = URL.createObjectURL(file); document.getElementById('brandExamplePreviewContainer').style.display = 'block'; }
+    async handleBrandFile(file) {
+        if (!file) return;
+        
+        // 1. Validasyon
+        if (!file.type.startsWith('image/')) {
+            alert('Lütfen geçerli bir resim dosyası seçin (PNG, JPG, JPEG)');
+            this.state.uploadedFiles = [];
+            return;
+        }
+
+        console.log('🖼️ Görsel işleniyor...');
+
+        // 2. Canvas ile Resize İşlemi (591x591)
+        const img = new Image();
+        img.src = URL.createObjectURL(file);
+        
+        img.onload = async () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = 591;
+            canvas.height = 591;
+            const ctx = canvas.getContext('2d');
+            
+            // Arka planı beyaz yap (Şeffaf PNG'lerin siyah çıkmasını önler)
+            ctx.fillStyle = "#FFFFFF";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Resmi canvas'a çiz (Stretch/Sığdırma)
+            ctx.drawImage(img, 0, 0, 591, 591);
+            
+            // Blob'a çevir (JPEG formatında, %92 kalite)
+            const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.92));
+            
+            // Yeni dosya objesi oluştur
+            const newFile = new File([blob], 'brand-example.jpg', { type: 'image/jpeg' });
+            
+            // 3. State'i Güncelle (SubmitHandler bu dosyayı kullanacak)
+            this.state.uploadedFiles = [newFile];
+            
+            // 4. Önizlemeyi Göster
+            const previewImg = document.getElementById('brandExamplePreview');
+            const container = document.getElementById('brandExamplePreviewContainer');
+            
+            if(previewImg) previewImg.src = URL.createObjectURL(blob);
+            if(container) container.style.display = 'block';
+            
+            console.log('✅ Görsel başarıyla dönüştürüldü (591x591):', newFile);
+        };
+        
+        img.onerror = (err) => {
+            console.error('Görsel yüklenirken hata:', err);
+            alert('Görsel işlenemedi.');
+        };
     }
 
     // --- IP KAYIT SEÇİMİ & GERİ ÇEKME MANTIĞI ---
