@@ -107,13 +107,19 @@ class CreateTaskController {
                 document.getElementById('selectedIpRecordContainer').style.display = 'none';
                 document.getElementById('ipRecordSearch').value = '';
                 
-                // Görseli ve alt kayıtları temizle
+                // Görseli temizle
                 const imgEl = document.getElementById('selectedIpRecordImage');
                 if(imgEl) imgEl.src = '';
-                
+
+                // WIPO/ARIPO alt kayıtları temizle
                 this.state.selectedWipoAripoChildren = [];
                 this.uiManager.renderWipoAripoChildRecords([]);
+
+                const originSelect = document.getElementById('originSelect');
+                const mainIpTypeSelect = document.getElementById('mainIpType');
                 
+                if (originSelect) originSelect.disabled = false;
+                if (mainIpTypeSelect) mainIpTypeSelect.disabled = false;
                 this.validator.checkCompleteness(this.state);
             }
 
@@ -535,7 +541,7 @@ class CreateTaskController {
         container.style.display = 'block';
     }
 
-// --- GÜNCELLENEN METOT: Görsel ve UI Yönetimi (Main.js) ---
+// --- GÜNCELLENEN METOT: Varlık Seçimi, Görsel Yönetimi ve Alan Kilitleme ---
     async selectIpRecord(record) {
         console.log('Seçilen Kayıt:', record);
         this.state.selectedIpRecord = record;
@@ -546,12 +552,36 @@ class CreateTaskController {
 
         document.getElementById('selectedIpRecordLabel').textContent = title;
         document.getElementById('selectedIpRecordNumber').textContent = appNo;
+
+        // --- YENİ EKLENEN KISIM: Menşe Güncelleme ve Kilitleme ---
+        const originSelect = document.getElementById('originSelect');
+        const mainIpTypeSelect = document.getElementById('mainIpType');
+        
+        // Kaydın menşei varsa ve dropdown'da farklıysa güncelle
+        // (Eğer kayıtta menşe yoksa varsayılan 'TÜRKPATENT' kabul edelim)
+        const recordOrigin = record.origin || 'TÜRKPATENT';
+        
+        if (originSelect) {
+            if (originSelect.value !== recordOrigin) {
+                console.log(`🌍 Menşe güncelleniyor: ${originSelect.value} -> ${recordOrigin}`);
+                originSelect.value = recordOrigin;
+                // Tetikleyiciyi çağır (Ülke seçimlerini vs. açmak için)
+                this.handleOriginChange(recordOrigin);
+            }
+            // Menşe alanını kilitle
+            originSelect.disabled = true;
+        }
+
+        // İş Tipini kilitle
+        if (mainIpTypeSelect) {
+            mainIpTypeSelect.disabled = true;
+        }
+        // --- YENİ KISIM SONU ---
         
         // 2. GÖRSEL İŞLEMLERİ (brandImageUrl Öncelikli)
         const imgEl = document.getElementById('selectedIpRecordImage');
         const phEl = document.getElementById('selectedIpRecordPlaceholder');
         
-        // UI'ı sıfırla (yükleniyor hissi ver)
         if(imgEl) { imgEl.style.display = 'none'; imgEl.src = ''; }
         if(phEl) phEl.style.display = 'flex';
 
@@ -562,16 +592,13 @@ class CreateTaskController {
             if (this.state.searchSource === 'bulletin') {
                 finalImageUrl = record.image || record.logo || record.imageUrl;
             } 
-            // B) PORTFÖY KAYNAĞI (İsteğiniz üzerine brandImageUrl öncelikli)
+            // B) PORTFÖY KAYNAĞI
             else {
-                // Öncelik sırası: brandImageUrl -> imageUrl -> image
                 const storagePath = record.brandImageUrl || record.imageUrl || record.image;
-                
                 if (storagePath) {
                     if (storagePath.startsWith('http') || storagePath.startsWith('data:')) {
                         finalImageUrl = storagePath;
                     } else {
-                        // Firebase Storage yolu ise resolve et
                         finalImageUrl = await this.dataManager.resolveImageUrl(storagePath);
                     }
                 }
