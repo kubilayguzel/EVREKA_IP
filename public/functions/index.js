@@ -5799,46 +5799,35 @@ export const handleBulletinDeletion = onMessagePublished(
 //              TASK OTOMASYON TRIGGERLARI
 // =========================================================
 
-// Ana iş (Parent Task) tamamlandığında, ona bağlı "Tahakkuk Oluşturma" görevini aktifleştir.
+// 1. FONKSİYON: Statüyü "Açık" Yap
 export const activateAccrualTaskOnCompletionV2 = onDocumentUpdated(
   {
     document: "tasks/{taskId}",
     region: "europe-west1",
   },
   async (event) => {
+    // ... (başlangıç aynı) ...
     const change = event.data;
     if (!change || !change.before || !change.after) return null;
-
     const before = change.before.data() || {};
     const after = change.after.data() || {};
     const taskId = event.params.taskId;
 
-    // Sadece statü "completed" olduğunda çalış
-    if (before.status === after.status || after.status !== "completed") {
-      return null;
-    }
-
-    console.log(`✅ Ana iş tamamlandı (${taskId}). Bağlı tahakkuk görevleri aranıyor...`);
+    if (before.status === after.status || after.status !== "completed") return null;
 
     try {
-      // Bu işe bağlı (relatedTaskId == taskId) ve tipi 'accrual_creation' olan görevleri bul
+      // DEĞİŞİKLİK BURADA: taskType '53' oldu
       const snapshot = await adminDb
         .collection("tasks")
         .where("relatedTaskId", "==", taskId)
-        .where("taskType", "==", "accrual_creation")
-        .where("status", "==", "pending") // Sadece beklemede olanları al
+        .where("taskType", "==", "53") 
+        .where("status", "==", "pending")
         .get();
 
-      if (snapshot.empty) {
-        console.log("ℹ️ Bağlı bekleyen tahakkuk görevi bulunamadı.");
-        return null;
-      }
+      if (snapshot.empty) return null;
 
       const batch = adminDb.batch();
-      let count = 0;
-
       snapshot.forEach((doc) => {
-        // Statüyü 'open' yap (Açık / Yapılacak)
         batch.update(doc.ref, { 
           status: "open",
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -5848,79 +5837,54 @@ export const activateAccrualTaskOnCompletionV2 = onDocumentUpdated(
             user: 'system'
           })
         });
-        count++;
       });
-
       await batch.commit();
-      console.log(`🚀 ${count} adet tahakkuk görevi "Açık" statüsüne çekildi.`);
-
-    } catch (error) {
-      console.error("❌ Tahakkuk görevi güncellenirken hata:", error);
-    }
-
+    } catch (error) { console.error("Error:", error); }
     return null;
   }
 );
-// Ana iş (Parent Task) "Tamamlandı" statüsünden geri alınırsa,
-// bağlı "Tahakkuk Oluşturma" görevini tekrar "Beklemede" (pending) yap.
+
+// 2. FONKSİYON: Statüyü "Beklemede" Yap (Geri Al)
 export const revertAccrualTaskOnReopeningV2 = onDocumentUpdated(
   {
     document: "tasks/{taskId}",
     region: "europe-west1",
   },
   async (event) => {
+    // ... (başlangıç aynı) ...
     const change = event.data;
     if (!change || !change.before || !change.after) return null;
-
     const before = change.before.data() || {};
     const after = change.after.data() || {};
     const taskId = event.params.taskId;
 
-    // KURAL: Statü eskiden "completed" İDİ, şimdi "completed" DEĞİL (Geri alındı)
     if (before.status === "completed" && after.status !== "completed") {
-      console.log(`↺ Ana iş yeniden açıldı (${taskId}). Tahakkuk görevleri geri alınıyor...`);
-
       try {
-        // Bu işe bağlı (relatedTaskId == taskId) ve tipi 'accrual_creation' olan
-        // VE şu an 'open' (Açık) olan görevleri bul.
-        // NOT: Eğer finansçı işi çoktan bitirdiyse (completed), ona dokunmuyoruz.
+        // DEĞİŞİKLİK BURADA: taskType '53' oldu
         const snapshot = await adminDb
           .collection("tasks")
           .where("relatedTaskId", "==", taskId)
-          .where("taskType", "==", "accrual_creation")
+          .where("taskType", "==", "53")
           .where("status", "==", "open") 
           .get();
 
-        if (snapshot.empty) {
-          console.log("ℹ️ Geri alınacak açık tahakkuk görevi bulunamadı.");
-          return null;
-        }
+        if (snapshot.empty) return null;
 
         const batch = adminDb.batch();
-        let count = 0;
-
         snapshot.forEach((doc) => {
-          // Statüyü tekrar 'pending' (Beklemede) yap
           batch.update(doc.ref, { 
             status: "pending",
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
             history: admin.firestore.FieldValue.arrayUnion({
-              action: 'Ana iş yeniden açıldığı (evrak silindiği) için statü "Beklemede" olarak geri alındı.',
+              action: 'Ana iş geri alındığı için statü "Beklemede" yapıldı.',
               timestamp: new Date().toISOString(),
               user: 'system'
             })
           });
-          count++;
         });
-
         await batch.commit();
-        console.log(`↺ ${count} adet tahakkuk görevi tekrar "Beklemede" statüsüne çekildi.`);
-
-      } catch (error) {
-        console.error("❌ Tahakkuk görevi geri alınırken hata:", error);
-      }
+      } catch (error) { console.error("Error:", error); }
     }
-
     return null;
   }
 );
