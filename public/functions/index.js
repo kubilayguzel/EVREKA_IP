@@ -5861,3 +5861,66 @@ export const activateAccrualTaskOnCompletionV2 = onDocumentUpdated(
     return null;
   }
 );
+// Ana iş (Parent Task) "Tamamlandı" statüsünden geri alınırsa,
+// bağlı "Tahakkuk Oluşturma" görevini tekrar "Beklemede" (pending) yap.
+export const revertAccrualTaskOnReopeningV2 = onDocumentUpdated(
+  {
+    document: "tasks/{taskId}",
+    region: "europe-west1",
+  },
+  async (event) => {
+    const change = event.data;
+    if (!change || !change.before || !change.after) return null;
+
+    const before = change.before.data() || {};
+    const after = change.after.data() || {};
+    const taskId = event.params.taskId;
+
+    // KURAL: Statü eskiden "completed" İDİ, şimdi "completed" DEĞİL (Geri alındı)
+    if (before.status === "completed" && after.status !== "completed") {
+      console.log(`↺ Ana iş yeniden açıldı (${taskId}). Tahakkuk görevleri geri alınıyor...`);
+
+      try {
+        // Bu işe bağlı (relatedTaskId == taskId) ve tipi 'accrual_creation' olan
+        // VE şu an 'open' (Açık) olan görevleri bul.
+        // NOT: Eğer finansçı işi çoktan bitirdiyse (completed), ona dokunmuyoruz.
+        const snapshot = await adminDb
+          .collection("tasks")
+          .where("relatedTaskId", "==", taskId)
+          .where("taskType", "==", "accrual_creation")
+          .where("status", "==", "open") 
+          .get();
+
+        if (snapshot.empty) {
+          console.log("ℹ️ Geri alınacak açık tahakkuk görevi bulunamadı.");
+          return null;
+        }
+
+        const batch = adminDb.batch();
+        let count = 0;
+
+        snapshot.forEach((doc) => {
+          // Statüyü tekrar 'pending' (Beklemede) yap
+          batch.update(doc.ref, { 
+            status: "pending",
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            history: admin.firestore.FieldValue.arrayUnion({
+              action: 'Ana iş yeniden açıldığı (evrak silindiği) için statü "Beklemede" olarak geri alındı.',
+              timestamp: new Date().toISOString(),
+              user: 'system'
+            })
+          });
+          count++;
+        });
+
+        await batch.commit();
+        console.log(`↺ ${count} adet tahakkuk görevi tekrar "Beklemede" statüsüne çekildi.`);
+
+      } catch (error) {
+        console.error("❌ Tahakkuk görevi geri alınırken hata:", error);
+      }
+    }
+
+    return null;
+  }
+);
