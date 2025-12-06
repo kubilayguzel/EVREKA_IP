@@ -346,8 +346,10 @@
                     this.createTaskSelectedTpInvoiceParty = null;
                     this.createTaskSelectedServiceInvoiceParty = null;
                     
+                    // --- YENİ EKLENENLER ---
                     this.compSelectedTpInvoiceParty = null;
                     this.compSelectedServiceInvoiceParty = null;
+                    // -----------------------
                     
                     this.allTransactionTypes = []; 
                     
@@ -413,11 +415,14 @@
                             const taskId = e.target.dataset.id;
 
                             if (e.target.classList.contains('edit-btn')) {
+                                // --- GÜNCELLENEN KISIM: Düzenle Butonu Mantığı ---
                                 const task = this.allTasks.find(t => t.id === taskId);
                                 
+                                // Eğer iş tipi "53" (Tahakkuk Oluşturma) veya "accrual_creation" ise ÖZEL MODAL AÇ
                                 if (task && (String(task.taskType) === '53' || task.taskType === 'accrual_creation')) {
                                     this.openCompleteAccrualModal(taskId);
                                 } else {
+                                    // Değilse standart detay sayfasına git
                                     window.location.href = `task-detail.html?id=${taskId}`;
                                 }
                             } else if (e.target.classList.contains('delete-btn')) {
@@ -451,15 +456,21 @@
                     document.getElementById('createTaskServiceInvoicePartySearch').addEventListener('input', e => this.searchPersonsForCreateTaskAccrual(e.target.value, 'createTaskServiceInvoiceParty'));
 
                     // --- YENİ EKLENEN: Tahakkuk Tamamlama Modalı Listenerları ---
+                    
+                    // Kapatma ve İptal
                     document.getElementById('closeCompleteAccrualModal').addEventListener('click', () => this.closeModal('completeAccrualTaskModal'));
                     document.getElementById('cancelCompleteAccrualBtn').addEventListener('click', () => this.closeModal('completeAccrualTaskModal'));
+                    
+                    // Kaydet ve Bitir
                     document.getElementById('submitCompleteAccrualBtn').addEventListener('click', () => this.handleCompleteAccrualSubmission());
 
+                    // Hesaplama Listenerları (Yeni Modal İçin)
                     ['compOfficialFee', 'compServiceFee', 'compVatRate', 'compApplyVatToOfficial'].forEach(id => {
                         const el = document.getElementById(id);
                         if (el) el.addEventListener('input', () => this.calculateCompTotal());
                     });
 
+                    // Kişi Arama Listenerları (Yeni Modal İçin)
                     const compTpSearch = document.getElementById('compTpInvoicePartySearch');
                     if(compTpSearch) compTpSearch.addEventListener('input', e => this.searchPersonsForComp(e.target.value, 'compTpInvoiceParty'));
                     
@@ -539,21 +550,29 @@
                         const officialISO = officialDateObj ? officialDateObj.toISOString().slice(0, 10) : '';
                         const officialDisplay = officialDateObj ? officialDateObj.toLocaleDateString('tr-TR') : 'Belirtilmemiş';
 
-                        // --- BUTON MANTIĞI ---
+                        // --- BUTON MANTIĞI (DÜZELTİLMİŞ KISIM) ---
                         const isCompleted = safeStatus === 'completed';
                         const isAccrualTask = (String(task.taskType) === '53' || task.taskType === 'accrual_creation');
 
                         let actionButtonsHtml = `<button class="action-btn view-btn" data-id="${task.id}">Görüntüle</button>`;
 
-                        if (!isCompleted) {
+                        // Kural: "Tamamlandı" ise butonları gizle - AMA SADECE TAHAKKUK İŞİNDE
+                        // Diğer işler tamamlanmış olsa bile butonlar kalsın (kullanıcının isteği)
+                        const hideModificationButtons = isAccrualTask && isCompleted;
+
+                        if (!hideModificationButtons) {
                             actionButtonsHtml += `
                                 <button class="action-btn edit-btn" data-id="${task.id}">Düzenle</button>
                                 <button class="action-btn delete-btn" data-id="${task.id}">Sil</button>
                             `;
                         }
-                        if (safeStatus !== 'completed' && safeStatus !== 'cancelled') {
+                        
+                        // Ata butonu: Tamamlanmış normal işler için açık kalabilir, iptal edilenler için kapalı
+                        if (safeStatus !== 'cancelled' && !hideModificationButtons) {
                             actionButtonsHtml += `<button class="action-btn assign-btn" data-id="${task.id}">Ata</button>`;
                         }
+                        
+                        // Ek Tahakkuk butonu: Tahakkuk işinde asla görünmesin
                         if (!isAccrualTask) {
                             actionButtonsHtml += `<button class="action-btn add-accrual-btn" data-id="${task.id}">Ek Tahakkuk Oluştur</button>`;
                         }
