@@ -1,5 +1,6 @@
 import { ipRecordsService, personService, taskService, transactionTypeService, db, storage } from '../../firebase-config.js';
-import { doc, getDoc, collection, getDocs, query, where, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+// DÜZELTME: 'limit' fonksiyonu import listesine eklendi
+import { doc, getDoc, collection, getDocs, query, where, limit, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
 
 export class TaskDataManager {
@@ -64,6 +65,7 @@ export class TaskDataManager {
         const searchLower = term.toLowerCase();
         const searchUpper = term.toUpperCase();
 
+        // Buradaki 'limit' kullanımı için yukarıya import ekledik
         const queries = [
             query(bulletinRef, where('markName', '>=', searchLower), where('markName', '<=', searchLower + '\uf8ff'), limit(50)),
             query(bulletinRef, where('markName', '>=', searchUpper), where('markName', '<=', searchUpper + '\uf8ff'), limit(50)),
@@ -149,7 +151,7 @@ export class TaskDataManager {
                (Array.isArray(result) ? result : []);
     }
 
-    // --- GÜNCELLENEN TRANSAKSIYON METODU (DÜZELTME BURADA) ---
+    // --- TRANSAKSİYONLARI ÇEKME ---
     async getRecordTransactions(recordId) {
         if (!recordId) return { success: false, message: 'Kayıt ID yok.' };
 
@@ -158,9 +160,7 @@ export class TaskDataManager {
         try {
             const transactionsRef = collection(db, 'ipRecords', recordId, 'transactions');
             
-            // DÜZELTME: orderBy kullanmıyoruz. 
-            // Çünkü creationDate alanı eksik olan eski kayıtlar (örn: type 20) varsa
-            // Firestore orderBy sorgusu o kayıtları filtreler ve getirmez.
+            // Sıralamayı JS tarafında yapıyoruz (Data güvenliği için)
             const snapshot = await getDocs(transactionsRef);
             
             let data = snapshot.docs.map(doc => ({
@@ -168,11 +168,11 @@ export class TaskDataManager {
                 ...doc.data()
             }));
 
-            // Veriyi JavaScript tarafında sıralıyoruz (En garantisi)
+            // Yeniden eskiye sırala
             data.sort((a, b) => {
                 const dateA = a.creationDate ? new Date(a.creationDate).getTime() : 0;
                 const dateB = b.creationDate ? new Date(b.creationDate).getTime() : 0;
-                return dateB - dateA; // Yeniden eskiye
+                return dateB - dateA; 
             });
 
             // Veri Tipi Garantisi (type alanını string'e çevir)
