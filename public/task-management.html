@@ -506,6 +506,79 @@
             </form>
         </div>
     </div>
+    <div class="modal" id="completeAccrualTaskModal">
+        <div class="modal-content">
+            <span class="close-modal-btn" id="closeCompleteAccrualModal">&times;</span>
+            <h3 class="modal-title">Tahakkuk Girişi ve Tamamlama</h3>
+            <div class="alert alert-info">
+                <i class="fas fa-info-circle"></i> Bu formu doldurup kaydettiğinizde, tahakkuk kaydı oluşturulacak ve bu görev <strong>"Tamamlandı"</strong> statüsüne geçecektir.
+            </div>
+            <form id="completeAccrualForm" onsubmit="return false;">
+                <div class="modal-body-content">
+                    <input type="hidden" id="targetTaskIdForCompletion">
+                    
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label class="form-label">Resmi Ücret</label>
+                            <div class="input-with-currency">
+                                <input type="number" id="compOfficialFee" class="form-input" placeholder="0.00" step="0.01">
+                                <select id="compOfficialFeeCurrency" class="currency-select">
+                                    <option value="TRY">TL</option>
+                                    <option value="EUR">EUR</option>
+                                    <option value="USD">USD</option>
+                                    <option value="CHF">CHF</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Hizmet Bedeli</label>
+                            <div class="input-with-currency">
+                                <input type="number" id="compServiceFee" class="form-input" placeholder="0.00" step="0.01">
+                                <select id="compServiceFeeCurrency" class="currency-select">
+                                    <option value="TRY">TL</option>
+                                    <option value="EUR">EUR</option>
+                                    <option value="USD">USD</option>
+                                    <option value="CHF">CHF</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">KDV Oranı (%)</label>
+                        <input type="number" id="compVatRate" class="form-input" value="20">
+                    </div>
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="compApplyVatToOfficial" checked>
+                            Resmi Ücrete KDV Uygula
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Toplam Tutar</label>
+                        <div id="compTotalAmountDisplay" class="total-amount-display">0.00 TRY</div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Türk Patent Faturası Tarafı</label>
+                        <input type="text" id="compTpInvoicePartySearch" class="form-input" placeholder="Kişi ara...">
+                        <div id="compTpInvoicePartyResults" class="search-results-list"></div>
+                        <div id="compSelectedTpInvoicePartyDisplay" class="search-result-display" style="display:none;"></div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Hizmet Faturası Tarafı</label>
+                        <input type="text" id="compServiceInvoicePartySearch" class="form-input" placeholder="Kişi ara...">
+                        <div id="compServiceInvoicePartyResults" class="search-results-list"></div>
+                        <div id="compSelectedServiceInvoicePartyDisplay" class="search-result-display" style="display:none;"></div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" id="cancelCompleteAccrualBtn">İptal</button>
+                    <button type="button" class="btn btn-success" id="submitCompleteAccrualBtn">Tahakkuk Oluştur ve Bitir</button>
+                </div>
+            </form>
+        </div>
+    </div>
     <script src="./js/deadline-highlighter.js"></script>
     <script type="module">
         import { authService, taskService, ipRecordsService, accrualService, personService, auth, transactionTypeService } from './firebase-config.js';
@@ -527,6 +600,8 @@
                     this.currentTaskForAccrual = null; // Yeni: Üzerinde tahakkuk oluşturulacak görev
                     this.createTaskSelectedTpInvoiceParty = null; // Yeni: Yeni tahakkuk modalı için TP Fatura Tarafı
                     this.createTaskSelectedServiceInvoiceParty = null; // Yeni: Yeni tahakkuk modalı için Hizmet Fatura Tarafı
+                    this.compSelectedTpInvoiceParty = null;
+                    this.compSelectedServiceInvoiceParty = null;
                     this.allTransactionTypes = []; // Yeni: İşlem tiplerini tutacak
                     
                     // Yeni görev durumları için harita
@@ -584,43 +659,84 @@
                 }
 
                 setupEventListeners() {
+                    // 1. Genel Arama Inputu
                     document.getElementById('taskSearchInput').addEventListener('input', () => this.renderTasks());
+
+                    // 2. Tablo Butonları (Delegation)
                     document.getElementById('tasksTableBody').addEventListener('click', (e) => {
                         if (e.target.classList.contains('action-btn')) {
                             e.preventDefault();
                             const taskId = e.target.dataset.id;
+
                             if (e.target.classList.contains('edit-btn')) {
-                                window.location.href = `task-detail.html?id=${taskId}`;
+                                // --- GÜNCELLENEN KISIM: Düzenle Butonu Mantığı ---
+                                const task = this.allTasks.find(t => t.id === taskId);
+                                
+                                // Eğer iş tipi "53" (Tahakkuk Oluşturma) veya "accrual_creation" ise ÖZEL MODAL AÇ
+                                if (task && (String(task.taskType) === '53' || task.taskType === 'accrual_creation')) {
+                                    this.openCompleteAccrualModal(taskId);
+                                } else {
+                                    // Değilse standart detay sayfasına git
+                                    window.location.href = `task-detail.html?id=${taskId}`;
+                                }
                             } else if (e.target.classList.contains('delete-btn')) {
                                 this.deleteTask(taskId);
-                            } else if (e.target.classList.contains('view-btn')) { // View button added for consistency
+                            } else if (e.target.classList.contains('view-btn')) {
                                 this.showTaskDetailModal(taskId);
-                            } else if (e.target.classList.contains('assign-btn')) { // İşi Ata butonu
+                            } else if (e.target.classList.contains('assign-btn')) {
                                 this.openAssignTaskModal(taskId);
-                            } else if (e.target.classList.contains('add-accrual-btn')) { // Yeni Ek Tahakkuk Oluştur butonu
+                            } else if (e.target.classList.contains('add-accrual-btn')) {
                                 this.showCreateTaskAccrualModal(taskId);
                             }
                         }
                     });
 
+                    // 3. İş Detay Modalı Listenerları
                     document.getElementById('closeTaskDetailModal').addEventListener('click', () => this.closeModal('taskDetailModal'));
-                    // İşi Başkasına Ata modalı butonları için event listener'lar
+
+                    // 4. İşi Başkasına Ata Modalı Listenerları
                     document.getElementById('closeAssignTaskModal').addEventListener('click', () => this.closeModal('assignTaskModal'));
                     document.getElementById('cancelAssignmentBtn').addEventListener('click', () => this.closeModal('assignTaskModal'));
                     document.getElementById('saveNewAssignmentBtn').addEventListener('click', () => this.saveNewAssignment());
 
-                    // Yeni Ek Tahakkuk Oluştur modalı event listener'ları
+                    // 5. Ek Tahakkuk Oluştur Modalı Listenerları
                     document.getElementById('closeCreateTaskAccrualModal').addEventListener('click', () => this.closeModal('createTaskAccrualModal'));
                     document.getElementById('cancelCreateTaskAccrualBtn').addEventListener('click', () => this.closeModal('createTaskAccrualModal'));
                     document.getElementById('saveNewAccrualBtn').addEventListener('click', () => this.handleSaveNewAccrual());
 
+                    // Ek Tahakkuk Hesaplama Listenerları
                     ['createTaskOfficialFee', 'createTaskServiceFee', 'createTaskVatRate', 'createTaskApplyVatToOfficialFee'].forEach(id => {
                         const el = document.getElementById(id);
                         if (el) el.addEventListener('input', () => this.calculateCreateTaskTotalAmount());
                     });
+                    
+                    // Ek Tahakkuk Kişi Arama
                     document.getElementById('createTaskTpInvoicePartySearch').addEventListener('input', e => this.searchPersonsForCreateTaskAccrual(e.target.value, 'createTaskTpInvoiceParty'));
                     document.getElementById('createTaskServiceInvoicePartySearch').addEventListener('input', e => this.searchPersonsForCreateTaskAccrual(e.target.value, 'createTaskServiceInvoiceParty'));
+
+                    // --- 6. YENİ EKLENEN: Tahakkuk Tamamlama Modalı Listenerları ---
+                    
+                    // Kapatma ve İptal
+                    document.getElementById('closeCompleteAccrualModal').addEventListener('click', () => this.closeModal('completeAccrualTaskModal'));
+                    document.getElementById('cancelCompleteAccrualBtn').addEventListener('click', () => this.closeModal('completeAccrualTaskModal'));
+                    
+                    // Kaydet ve Bitir
+                    document.getElementById('submitCompleteAccrualBtn').addEventListener('click', () => this.handleCompleteAccrualSubmission());
+
+                    // Hesaplama Listenerları (Yeni Modal İçin)
+                    ['compOfficialFee', 'compServiceFee', 'compVatRate', 'compApplyVatToOfficial'].forEach(id => {
+                        const el = document.getElementById(id);
+                        if (el) el.addEventListener('input', () => this.calculateCompTotal());
+                    });
+
+                    // Kişi Arama Listenerları (Yeni Modal İçin)
+                    const compTpSearch = document.getElementById('compTpInvoicePartySearch');
+                    if(compTpSearch) compTpSearch.addEventListener('input', e => this.searchPersonsForComp(e.target.value, 'compTpInvoiceParty'));
+                    
+                    const compServiceSearch = document.getElementById('compServiceInvoicePartySearch');
+                    if(compServiceSearch) compServiceSearch.addEventListener('input', e => this.searchPersonsForComp(e.target.value, 'compServiceInvoiceParty'));
                 }
+
                 // Atama modalını açar ve kullanıcıları doldurur
                 openAssignTaskModal(taskId) {
                     this.selectedTaskForAssignment = this.allTasks.find(t => t.id === taskId);
@@ -1093,25 +1209,203 @@
                         console.error('Ek tahakkuk kaydetme hatası:', error);
                     }
                 }
+
+                // --- YENİ: Tahakkuk Tamamlama Modalı Fonksiyonları ---
+
+                openCompleteAccrualModal(taskId) {
+                    const task = this.allTasks.find(t => t.id === taskId);
+                    if (!task) return;
+
+                    // Formu sıfırla
+                    document.getElementById('completeAccrualForm').reset();
+                    document.getElementById('targetTaskIdForCompletion').value = taskId;
+                    document.getElementById('compOfficialFeeCurrency').value = 'TRY';
+                    document.getElementById('compServiceFeeCurrency').value = 'TRY';
+                    
+                    // Kişi seçimlerini sıfırla
+                    this.compSelectedTpInvoiceParty = null;
+                    this.compSelectedServiceInvoiceParty = null;
+                    document.getElementById('compSelectedTpInvoicePartyDisplay').style.display = 'none';
+                    document.getElementById('compSelectedServiceInvoicePartyDisplay').style.display = 'none';
+                    document.getElementById('compTpInvoicePartyResults').innerHTML = '';
+                    document.getElementById('compServiceInvoicePartyResults').innerHTML = '';
+
+                    // Modalı göster
+                    document.getElementById('completeAccrualTaskModal').classList.add('show');
+                }
+
+                calculateCompTotal() {
+                    const official = parseFloat(document.getElementById('compOfficialFee').value) || 0;
+                    const service = parseFloat(document.getElementById('compServiceFee').value) || 0;
+                    const vatRate = parseFloat(document.getElementById('compVatRate').value) || 0;
+                    const applyVat = document.getElementById('compApplyVatToOfficial').checked;
+
+                    let total;
+                    if (applyVat) {
+                        total = (official + service) * (1 + vatRate / 100);
+                    } else {
+                        total = official + (service * (1 + vatRate / 100));
+                    }
+                    document.getElementById('compTotalAmountDisplay').textContent = new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY' }).format(total);
+                }
+
+                searchPersonsForComp(query, target) {
+                    const resultsId = target === 'compTpInvoiceParty' ? 'compTpInvoicePartyResults' : 'compServiceInvoicePartyResults';
+                    const container = document.getElementById(resultsId);
+                    
+                    if (!query || query.length < 2) { container.innerHTML = ''; return; }
+                    
+                    const filtered = this.allPersons.filter(p => (p.name || '').toLowerCase().includes(query.toLowerCase()));
+                    
+                    container.innerHTML = '';
+                    if (filtered.length === 0) { container.innerHTML = '<p class="no-results-message">Kişi bulunamadı.</p>'; return; }
+
+                    filtered.forEach(p => {
+                        const item = document.createElement('div');
+                        item.className = 'search-result-item';
+                        item.innerHTML = `<div><b>${p.name}</b></div>`;
+                        item.addEventListener('click', () => {
+                            if (target === 'compTpInvoiceParty') {
+                                this.compSelectedTpInvoiceParty = p;
+                                document.getElementById('compSelectedTpInvoicePartyDisplay').innerHTML = `<b>Seçilen:</b> ${p.name}`;
+                                document.getElementById('compSelectedTpInvoicePartyDisplay').style.display = 'block';
+                                document.getElementById('compTpInvoicePartySearch').value = p.name;
+                            } else {
+                                this.compSelectedServiceInvoiceParty = p;
+                                document.getElementById('compSelectedServiceInvoicePartyDisplay').innerHTML = `<b>Seçilen:</b> ${p.name}`;
+                                document.getElementById('compSelectedServiceInvoicePartyDisplay').style.display = 'block';
+                                document.getElementById('compServiceInvoicePartySearch').value = p.name;
+                            }
+                            container.innerHTML = '';
+                        });
+                        container.appendChild(item);
+                    });
+                }
+
+                async handleCompleteAccrualSubmission() {
+                    const taskId = document.getElementById('targetTaskIdForCompletion').value;
+                    const task = this.allTasks.find(t => t.id === taskId);
+                    
+                    const officialFee = parseFloat(document.getElementById('compOfficialFee').value) || 0;
+                    const serviceFee = parseFloat(document.getElementById('compServiceFee').value) || 0;
+
+                    if (officialFee <= 0 && serviceFee <= 0) {
+                        showNotification("Lütfen en az bir ücret girin.", 'error');
+                        return;
+                    }
+
+                    const vatRate = parseFloat(document.getElementById('compVatRate').value) || 0;
+                    const applyVat = document.getElementById('compApplyVatToOfficial').checked;
+                    
+                    let totalAmount;
+                    if (applyVat) {
+                        totalAmount = (officialFee + serviceFee) * (1 + vatRate / 100);
+                    } else {
+                        totalAmount = officialFee + (serviceFee * (1 + vatRate / 100));
+                    }
+
+                    // 1. Tahakkuk Verisi Hazırla
+                    // Görevin başlığını (ör: "Tahakkuk Oluşturma: Marka X Başvurusu") temizleyip kaydedebiliriz
+                    const cleanTitle = task.title.replace('Tahakkuk Oluşturma: ', '');
+
+                    const accrualData = {
+                        taskId: task.relatedTaskId || taskId, // Ana işin ID'sine bağla (varsa) yoksa kendine
+                        taskTitle: cleanTitle,
+                        officialFee: { amount: officialFee, currency: document.getElementById('compOfficialFeeCurrency').value },
+                        serviceFee: { amount: serviceFee, currency: document.getElementById('compServiceFeeCurrency').value },
+                        vatRate: vatRate,
+                        applyVatToOfficialFee: applyVat,
+                        totalAmount: totalAmount,
+                        totalAmountCurrency: 'TRY',
+                        status: 'unpaid',
+                        remainingAmount: totalAmount,
+                        tpInvoiceParty: this.compSelectedTpInvoiceParty ? { id: this.compSelectedTpInvoiceParty.id, name: this.compSelectedTpInvoiceParty.name } : null,
+                        serviceInvoiceParty: this.compSelectedServiceInvoiceParty ? { id: this.compSelectedServiceInvoiceParty.id, name: this.compSelectedServiceInvoiceParty.name } : null,
+                        createdAt: new Date().toISOString()
+                    };
+
+                    try {
+                        // 2. Tahakkuku Kaydet
+                        const accResult = await accrualService.addAccrual(accrualData);
+                        if (!accResult.success) throw new Error(accResult.error);
+
+                        // 3. Görevi "Tamamlandı" Yap
+                        const updateData = {
+                            status: 'completed',
+                            updatedAt: new Date().toISOString(), // Timestamp yerine string gönderiyoruz (service hallediyor)
+                            history: [...(task.history || []), {
+                                action: 'Tahakkuk oluşturularak görev tamamlandı.',
+                                timestamp: new Date().toISOString(),
+                                userEmail: this.currentUser.email
+                            }]
+                        };
+
+                        const taskResult = await taskService.updateTask(taskId, updateData);
+                        
+                        if (taskResult.success) {
+                            showNotification('Tahakkuk oluşturuldu ve görev tamamlandı!', 'success');
+                            this.closeModal('completeAccrualTaskModal');
+                            await this.loadAllData(); // Tabloyu yenile
+                        } else {
+                            throw new Error('Görev güncellenemedi.');
+                        }
+
+                    } catch (error) {
+                        console.error(error);
+                        showNotification('İşlem hatası: ' + error.message, 'error');
+                    }
+                }
+                
                 // Genel Modal Kapatma Fonksiyonu
                 closeModal(modalId) {
-                    document.getElementById(modalId).classList.remove('show');
-                    if (modalId === 'taskDetailModal') { /* mevcut modal'ı resetle */ }
+                    const modal = document.getElementById(modalId);
+                    if (modal) modal.classList.remove('show');
+
+                    if (modalId === 'taskDetailModal') { 
+                        /* Mevcut modal'ı resetle (gerekirse) */ 
+                    }
+
                     if (modalId === 'assignTaskModal') { 
                         // Atama modalı kapatıldığında gerekli temizlikler
                         document.getElementById('newAssignedTo').value = '';
                         this.selectedTaskForAssignment = null;
                     }
+
                     if (modalId === 'createTaskAccrualModal') {
                         document.getElementById('createTaskAccrualForm').reset();
                         this.currentTaskForAccrual = null;
                         this.createTaskSelectedTpInvoiceParty = null;
                         this.createTaskSelectedServiceInvoiceParty = null;
+                        
                         document.getElementById('createTaskSelectedTpInvoicePartyDisplay').style.display = 'none';
                         document.getElementById('createTaskSelectedServiceInvoicePartyDisplay').style.display = 'none';
                         document.getElementById('createTaskTpInvoicePartySearch').value = '';
                         document.getElementById('createTaskServiceInvoicePartySearch').value = '';
-                        document.getElementById('createTaskTotalAmountDisplay').textContent = '0.00 TRY'; // Toplam tutarı sıfırla
+                        document.getElementById('createTaskTotalAmountDisplay').textContent = '0.00 TRY'; 
+                    }
+
+                    // --- YENİ EKLENEN: Tahakkuk Tamamlama Modalı Temizliği ---
+                    if (modalId === 'completeAccrualTaskModal') {
+                        document.getElementById('completeAccrualForm').reset();
+                        
+                        // Seçili kişi state'lerini sıfırla
+                        this.compSelectedTpInvoiceParty = null;
+                        this.compSelectedServiceInvoiceParty = null;
+                        
+                        // Ekran yazılarını ve gizli alanları sıfırla
+                        document.getElementById('compTotalAmountDisplay').textContent = '0.00 TRY';
+                        
+                        const tpDisplay = document.getElementById('compSelectedTpInvoicePartyDisplay');
+                        if (tpDisplay) tpDisplay.style.display = 'none';
+                        
+                        const srvDisplay = document.getElementById('compSelectedServiceInvoicePartyDisplay');
+                        if (srvDisplay) srvDisplay.style.display = 'none';
+                        
+                        const tpResults = document.getElementById('compTpInvoicePartyResults');
+                        if (tpResults) tpResults.innerHTML = '';
+                        
+                        const srvResults = document.getElementById('compServiceInvoicePartyResults');
+                        if (srvResults) srvResults.innerHTML = '';
                     }
                 }
             }
