@@ -5799,47 +5799,79 @@ export const handleBulletinDeletion = onMessagePublished(
 //              TASK OTOMASYON TRIGGERLARI
 // =========================================================
 
-// 1. FONKSİYON: Statüyü "Açık" Yap
+// 1. FONKSİYON: Statüyü "Açık" Yap (GÜÇLENDİRİLMİŞ VERSİYON)
 export const activateAccrualTaskOnCompletionV2 = onDocumentUpdated(
   {
     document: "tasks/{taskId}",
     region: "europe-west1",
   },
   async (event) => {
-    // ... (başlangıç aynı) ...
     const change = event.data;
     if (!change || !change.before || !change.after) return null;
+
     const before = change.before.data() || {};
     const after = change.after.data() || {};
     const taskId = event.params.taskId;
 
-    if (before.status === after.status || after.status !== "completed") return null;
+    // Sadece statü "completed" (Bitti) olduğunda çalış
+    if (before.status === after.status || after.status !== "completed") {
+      return null;
+    }
+
+    console.log(`✅ Ana iş tamamlandı (${taskId}). Bağlı tahakkuk görevleri esnek sorguyla aranıyor...`);
 
     try {
-      // DEĞİŞİKLİK BURADA: taskType '53' oldu
+      // SADECE 'relatedTaskId' ile sorgula (En güvenli yöntem)
+      // taskType veya status sorgusunu kod içinde yapacağız (Data Type hatasını önlemek için)
       const snapshot = await adminDb
         .collection("tasks")
         .where("relatedTaskId", "==", taskId)
-        .where("taskType", "==", "53") 
-        .where("status", "==", "pending")
         .get();
 
-      if (snapshot.empty) return null;
+      if (snapshot.empty) {
+        console.log("ℹ️ Bu işe bağlı hiçbir alt görev bulunamadı.");
+        return null;
+      }
 
       const batch = adminDb.batch();
+      let count = 0;
+
       snapshot.forEach((doc) => {
-        batch.update(doc.ref, { 
-          status: "open",
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-          history: admin.firestore.FieldValue.arrayUnion({
-            action: 'Ana iş tamamlandığı için statü "Açık" olarak güncellendi.',
-            timestamp: new Date().toISOString(),
-            user: 'system'
-          })
-        });
+        const data = doc.data();
+        
+        // KONTROLLERİ BURADA YAPIYORUZ:
+        // 1. taskType '53' mü? (Hem string "53" hem sayı 53 kabul et)
+        // 2. Statü 'pending' (Beklemede) mi?
+        const isAccrualTask = String(data.taskType) === "53";
+        const isPending = data.status === "pending";
+
+        if (isAccrualTask && isPending) {
+          console.log(`🎯 Hedef tahakkuk görevi bulundu: ${doc.id}`);
+          
+          batch.update(doc.ref, { 
+            status: "open",
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            history: admin.firestore.FieldValue.arrayUnion({
+              action: 'Ana iş tamamlandığı için statü "Açık" olarak güncellendi.',
+              timestamp: new Date().toISOString(),
+              user: 'system'
+            })
+          });
+          count++;
+        }
       });
-      await batch.commit();
-    } catch (error) { console.error("Error:", error); }
+
+      if (count > 0) {
+        await batch.commit();
+        console.log(`🚀 ${count} adet tahakkuk görevi başarıyla "Açık" statüsüne çekildi.`);
+      } else {
+        console.log("ℹ️ Bağlı görevler var ama 'Beklemede' olan bir 'Tahakkuk Oluşturma' işi yok.");
+      }
+
+    } catch (error) {
+      console.error("❌ Tahakkuk görevi güncellenirken hata:", error);
+    }
+
     return null;
   }
 );
