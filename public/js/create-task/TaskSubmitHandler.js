@@ -285,7 +285,7 @@ export class TaskSubmitHandler {
             // Eğer bir Parent Transaction seçilmişse (Main.js tarafından set edilir)
             if (this.selectedParentTransactionId) {
                 hierarchy = 'child';
-                extraData.parentTransactionId = this.selectedParentTransactionId;
+                extraData.parentId = this.selectedParentTransactionId;
                 console.log(`🔗 Geri çekme işlemi child olarak bağlanıyor. Parent ID: ${this.selectedParentTransactionId}`);
             } else {
                 console.warn('⚠️ Geri çekme işlemi parent ID olmadan kaydediliyor!');
@@ -297,9 +297,10 @@ export class TaskSubmitHandler {
             description: `${taskType.name} işlemi.`,
             transactionHierarchy: hierarchy,
             triggeringTaskId: String(taskId),
-            createdAt: new Date().toISOString(),
-            ...extraData // Parent ID varsa buraya eklenir
+            createdAt: Timestamp.now(), // Timestamp nesnesi (Date yerine) daha güvenli
+            ...extraData // parentId buraya eklenir
         };
+        
         await ipRecordsService.addTransactionToRecord(recordId, transactionData);
     }
 
