@@ -1,5 +1,5 @@
 import { ipRecordsService, personService, taskService, transactionTypeService, db, storage } from '../../firebase-config.js';
-import { doc, getDoc, collection, getDocs, query, where, limit, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { doc, getDoc, collection, getDocs, query, where, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
 
 export class TaskDataManager {
@@ -9,7 +9,6 @@ export class TaskDataManager {
 
     // --- BAŞLANGIÇ VERİLERİNİ ÇEKME ---
     async loadInitialData() {
-        // Promise.all ile tüm gerekli verileri paralel ve hızlıca çekiyoruz
         try {
             const [ipRecords, persons, users, transactionTypes, countries] = await Promise.all([
                 this.fetchAllIpRecords(),
@@ -58,7 +57,6 @@ export class TaskDataManager {
 
     // --- ARAMA İŞLEMLERİ ---
     
-    // Bülten Araması (Firestore üzerinde gelişmiş sorgu)
     async searchBulletinRecords(term) {
         if (!term || term.length < 2) return [];
         
@@ -66,7 +64,6 @@ export class TaskDataManager {
         const searchLower = term.toLowerCase();
         const searchUpper = term.toUpperCase();
 
-        // Firestore kısıtlamaları nedeniyle paralel sorgular atıyoruz (Büyük/Küçük harf duyarlılığı için)
         const queries = [
             query(bulletinRef, where('markName', '>=', searchLower), where('markName', '<=', searchLower + '\uf8ff'), limit(50)),
             query(bulletinRef, where('markName', '>=', searchUpper), where('markName', '<=', searchUpper + '\uf8ff'), limit(50)),
@@ -77,12 +74,9 @@ export class TaskDataManager {
         try {
             const snapshots = await Promise.all(queries.map(q => getDocs(q)));
             const resultsMap = new Map();
-            
-            // Sonuçları birleştir (ID bazlı unique yaparak tekrarları önle)
             snapshots.forEach(snap => {
                 snap.forEach(d => resultsMap.set(d.id, { id: d.id, ...d.data() }));
             });
-
             return Array.from(resultsMap.values());
         } catch (err) {
             console.error('Bulletin arama hatası:', err);
@@ -90,10 +84,8 @@ export class TaskDataManager {
         }
     }
 
-    // Bülten Detayını Çekme ve Cache'leme (Performans için)
     async fetchAndStoreBulletinData(bulletinId) {
         if (!bulletinId) return null;
-        // Eğer hafızada varsa direkt oradan dön (Network tasarrufu)
         if (this.bulletinDataCache[bulletinId]) return this.bulletinDataCache[bulletinId];
 
         try {
@@ -108,7 +100,6 @@ export class TaskDataManager {
                 bulletinDate: data.bulletinDate,
                 type: data.type
             };
-            // Cache'e kaydet
             this.bulletinDataCache[bulletinId] = cacheObj;
             return cacheObj;
         } catch (e) {
@@ -117,7 +108,6 @@ export class TaskDataManager {
         }
     }
 
-    // Görev Atama Kuralını Çekme
     async getAssignmentRule(taskTypeId) {
         if (!taskTypeId) return null;
         try {
@@ -152,7 +142,6 @@ export class TaskDataManager {
         }
     }
 
-    // Helper: Farklı servislerden dönen veri yapılarını (array/data/items) standart diziye çevirir
     _normalizeData(result) {
         if (!result) return [];
         return Array.isArray(result.data) ? result.data :
@@ -160,38 +149,44 @@ export class TaskDataManager {
                (Array.isArray(result) ? result : []);
     }
 
+    // --- GÜNCELLENEN TRANSAKSIYON METODU (DÜZELTME BURADA) ---
     async getRecordTransactions(recordId) {
         if (!recordId) return { success: false, message: 'Kayıt ID yok.' };
 
+        console.log(`[TaskDataManager] ${recordId} için transactions çekiliyor...`);
+
         try {
-            // "transactions" alt koleksiyonuna erişiyoruz
             const transactionsRef = collection(db, 'ipRecords', recordId, 'transactions');
             
-            // Tarihe göre yeniden eskiye sırala (creationDate veya timestamp)
-            // Eğer creationDate yoksa hata almamak için try-catch bloğu koruyacaktır.
-            const q = query(transactionsRef, orderBy('creationDate', 'desc'));
+            // DÜZELTME: orderBy kullanmıyoruz. 
+            // Çünkü creationDate alanı eksik olan eski kayıtlar (örn: type 20) varsa
+            // Firestore orderBy sorgusu o kayıtları filtreler ve getirmez.
+            const snapshot = await getDocs(transactionsRef);
             
-            const snapshot = await getDocs(q);
-            
-            const data = snapshot.docs.map(doc => ({
+            let data = snapshot.docs.map(doc => ({
                 id: doc.id,
                 ...doc.data()
             }));
 
+            // Veriyi JavaScript tarafında sıralıyoruz (En garantisi)
+            data.sort((a, b) => {
+                const dateA = a.creationDate ? new Date(a.creationDate).getTime() : 0;
+                const dateB = b.creationDate ? new Date(b.creationDate).getTime() : 0;
+                return dateB - dateA; // Yeniden eskiye
+            });
+
+            // Veri Tipi Garantisi (type alanını string'e çevir)
+            data = data.map(t => ({
+                ...t,
+                type: String(t.type || t.transactionType || '') 
+            }));
+
+            console.log(`[TaskDataManager] ${data.length} adet işlem bulundu.`);
             return { success: true, data: data };
+
         } catch (error) {
-            console.warn("Transaksiyonlar çekilirken hata (sıralama veya yetki sorunu olabilir):", error);
-            
-            // Sıralama hatası (index yoksa) olursa sıralamasız çekmeyi dene (Fallback)
-            try {
-                const transactionsRef = collection(db, 'ipRecords', recordId, 'transactions');
-                const snapshot = await getDocs(transactionsRef);
-                const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                return { success: true, data: data };
-            } catch (err2) {
-                console.error("Transaksiyonlar çekilemedi:", err2);
-                return { success: false, error: err2 };
-            }
+            console.error("[TaskDataManager] Transaksiyonlar çekilemedi:", error);
+            return { success: false, error: error };
         }
     }
 }
