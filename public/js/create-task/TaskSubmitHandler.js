@@ -350,4 +350,27 @@ export class TaskSubmitHandler {
         const result = await ipRecordsService.createRecord(newRecordData);
         return result.success ? result.id : null;
     }
+
+    async _handleOppositionAutomation(taskId, taskType, ipRecord) {
+        // Global script yüklü mü kontrol et
+        if (window.portfolioByOppositionCreator && typeof window.portfolioByOppositionCreator.handleTransactionCreated === 'function') {
+            console.log('🤖 Yayına itiraz otomasyonu tetikleniyor...');
+            try {
+                const result = await window.portfolioByOppositionCreator.handleTransactionCreated({
+                    id: taskId,
+                    specificTaskType: taskType.id,
+                    selectedIpRecord: ipRecord
+                });
+
+                if (result?.success) {
+                    const msg = result.isExistingRecord 
+                        ? `Mevcut 3. taraf kaydı ilişkilendirildi (ID: ${result.recordId}).`
+                        : `Otomatik 3. taraf portföy kaydı oluşturuldu (ID: ${result.recordId}).`;
+                    alert(msg);
+                }
+            } catch (e) {
+                console.warn('Otomasyon hatası:', e);
+            }
+        }
+    }
 }
