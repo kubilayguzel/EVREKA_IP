@@ -378,69 +378,94 @@ class CreateTaskController {
         container.style.display = 'block';
     }
 
+// --- GÜNCELLENEN METOT: Görsel ve UI Yönetimi (Main.js) ---
     async selectIpRecord(record) {
         this.state.selectedIpRecord = record;
         
-        // 1. İsim ve Numara Alanlarını Doldur
-        document.getElementById('selectedIpRecordLabel').textContent = record.title || record.markName || 'İsimsiz Kayıt';
-        document.getElementById('selectedIpRecordNumber').textContent = record.applicationNumber || record.applicationNo || '-';
+        // 1. İsim ve Numara Alanları
+        // Bülten verisinde isim bazen 'markName', portföyde 'title' olabilir. Hepsini deniyoruz.
+        const title = record.title || record.markName || record.name || 'İsimsiz Kayıt';
+        const appNo = record.applicationNumber || record.applicationNo || '-';
+
+        document.getElementById('selectedIpRecordLabel').textContent = title;
+        document.getElementById('selectedIpRecordNumber').textContent = appNo;
         
-        // 2. GÖRSEL İŞLEME MANTIĞI (Düzeltilen Kısım)
+        // 2. GÖRSEL ÇÖZÜMLEME (FIXED)
         const imgEl = document.getElementById('selectedIpRecordImage');
         const phEl = document.getElementById('selectedIpRecordPlaceholder');
         
-        // Yükleniyor durumuna getir (Opsiyonel)
-        if(imgEl) imgEl.style.opacity = '0.5';
+        if(imgEl) {
+            imgEl.style.display = 'none'; // Önce gizle
+            imgEl.src = '';
+        }
 
         let finalImageUrl = null;
 
         try {
-            // A) Bülten Kaydı mı? (Genelde 'logo' veya 'image' alanında direkt URL veya Base64 olur)
+            // A) BÜLTEN KAYNAKLI MI? (searchSource: 'bulletin')
             if (this.state.searchSource === 'bulletin') {
-                finalImageUrl = record.logo || record.image || record.imageUrl;
+                // Bülten verisinde görsel genelde 'image' veya 'logo' alanında direkt URL olarak gelir.
+                // Eski create-task.js'de öncelik: record.image -> record.logo
+                if (record.image && record.image.length > 10) {
+                    finalImageUrl = record.image;
+                } else if (record.logo && record.logo.length > 10) {
+                    finalImageUrl = record.logo;
+                } else if (record.imageUrl) {
+                    finalImageUrl = record.imageUrl;
+                }
             } 
-            // B) Portföy Kaydı mı? (Firebase Storage yolu olabilir, resolve edilmeli)
+            // B) PORTFÖY KAYNAKLI MI?
             else {
-                if (record.imageUrl) {
-                    // Eğer http ile başlıyorsa direkt linktir, değilse Storage yoludur
-                    if (record.imageUrl.startsWith('http') || record.imageUrl.startsWith('data:')) {
-                        finalImageUrl = record.imageUrl;
+                // Portföyde görsel yolu 'imageUrl' alanında tutulur (Örn: brand-images/xyz.jpg)
+                const storagePath = record.imageUrl || record.image; 
+                
+                if (storagePath) {
+                    // Zaten http ile başlıyorsa direkt linktir
+                    if (storagePath.startsWith('http') || storagePath.startsWith('data:')) {
+                        finalImageUrl = storagePath;
                     } else {
-                        // DataManager üzerinden Storage URL'ini al
-                        finalImageUrl = await this.dataManager.resolveImageUrl(record.imageUrl);
+                        // Firebase Storage yolu ise resolve et
+                        finalImageUrl = await this.dataManager.resolveImageUrl(storagePath);
                     }
-                } else if (record.image) {
-                     // Eski kayıtlardan 'image' alanı kalmış olabilir
-                     finalImageUrl = record.image.startsWith('http') ? record.image : await this.dataManager.resolveImageUrl(record.image);
                 }
             }
         } catch (err) {
-            console.warn('Görsel yüklenirken hata oluştu:', err);
+            console.warn('Görsel resolve edilirken hata:', err);
         }
 
-        // 3. Görseli Arayüze Bas
+        // 3. Görseli Bas veya Placeholder Göster
         if (finalImageUrl) {
-            imgEl.src = finalImageUrl;
-            imgEl.style.display = 'block';
-            imgEl.style.opacity = '1'; // Yükleme bitince netleştir
+            if(imgEl) {
+                imgEl.src = finalImageUrl;
+                imgEl.style.display = 'block';
+            }
             if(phEl) phEl.style.display = 'none';
         } else {
-            imgEl.style.display = 'none';
-            if(phEl) phEl.style.display = 'flex';
+            if(imgEl) imgEl.style.display = 'none';
+            if(phEl) phEl.style.display = 'flex'; // Placeholder'ı aç
         }
         
         // Kutuyu görünür yap
         document.getElementById('selectedIpRecordContainer').style.display = 'block';
         
-        // 4. Diğer Alt İşlemler (Geri Çekme & WIPO)
+        // 4. İtiraz Geri Çekme Kontrolü (TRANSACTIONS)
         if (this.state.isWithdrawalTask) {
+            // İşlemleri çek
             const txs = await this.dataManager.getRecordTransactions(record.id);
             if (txs.success && txs.data) {
+                // Record üzerine işlemleri yaz ki processParentTransactions okuyabilsin
                 record.transactions = txs.data;
                 this.processParentTransactions(record);
+            } else {
+                // İşlem çekilemediyse veya yoksa
+                console.warn('Transaksiyonlar alınamadı veya boş.');
+                // Hata vermiyoruz, belki işlem yoktur ama kullanıcı yine de görmek ister
+                // Ancak logic gereği processParentTransactions çağrılmazsa parent seçilmemiş olur.
+                alert('Bu kayda ait geçmiş işlem bilgisi alınamadı.');
             }
         }
 
+        // 5. WIPO/ARIPO Alt Kayıt Kontrolü
         if (record.wipoIR || record.aripoIR) {
             const ir = record.wipoIR || record.aripoIR;
             this.state.selectedWipoAripoChildren = this.state.allIpRecords.filter(c => 
