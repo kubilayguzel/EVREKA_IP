@@ -502,53 +502,143 @@ class CreateTaskController {
         };
     }
 
-    // --- IP KAYIT SEÇİMİ & GERİ ÇEKME MANTIĞI ---
+// --- IP KAYIT SEÇİMİ & GERİ ÇEKME MANTIĞI ---
     setupIpRecordSearch() {
         const input = document.getElementById('ipRecordSearch');
         const results = document.getElementById('ipRecordSearchResults');
         if (!input || !results) return;
         
-        const typeId = this.state.selectedTaskType?.id;
-        this.state.searchSource = [TASK_IDS.ITIRAZ_YAYIN, '20'].includes(String(typeId)) ? 'bulletin' : 'portfolio';
+        // 1. İşlem Tipini Al ve Modu Belirle
+        const typeId = String(this.state.selectedTaskType?.id || '');
         
+        // Tip 20: Yayına İtiraz -> Sadece Bülten
+        const isType20 = ['20', 'trademark_publication_objection', TASK_IDS.ITIRAZ_YAYIN].includes(typeId);
+        
+        // Tip 19: Yeniden İnceleme -> Hibrit (Bülten + Portföy)
+        const isType19 = ['19', 'trademark_reconsideration_of_publication_objection', TASK_IDS.YAYIMA_ITIRAZIN_YENIDEN_INCELENMESI].includes(typeId);
+
+        // Search Source State'ini Güncelle
+        if (isType20) this.state.searchSource = 'bulletin';
+        else if (isType19) this.state.searchSource = 'hybrid'; // ✨ YENİ MOD
+        else this.state.searchSource = 'portfolio';
+        
+        console.log(`🔍 Arama Modu Ayarlandı: ${this.state.searchSource.toUpperCase()} (Task ID: ${typeId})`);
+
+        // 2. Input Elementini Yenile (Eski listener'ları temizle)
+        const newInput = input.cloneNode(true);
+        input.parentNode.replaceChild(newInput, input);
+
         let timer;
-        input.addEventListener('input', (e) => {
+        
+        // 3. Yeni Arama Dinleyicisi
+        newInput.addEventListener('input', (e) => {
             const term = e.target.value.trim();
             clearTimeout(timer);
-            if (term.length < 2) { results.style.display = 'none'; return; }
+            
+            if (term.length < 2) { 
+                results.style.display = 'none'; 
+                return; 
+            }
+            
             timer = setTimeout(async () => {
                 let items = [];
-                if (this.state.searchSource === 'bulletin') items = await this.dataManager.searchBulletinRecords(term);
-                else items = this.state.allIpRecords.filter(r => (r.title+r.applicationNumber).toLowerCase().includes(term.toLowerCase())).slice(0, 20);
-                this.renderIpSearchResults(items, results);
+                console.log(`🔎 Aranıyor (${this.state.searchSource}): "${term}"`);
+
+                try {
+                    // A) Sadece Bülten (Tip 20)
+                    if (this.state.searchSource === 'bulletin') {
+                        const res = await this.dataManager.searchBulletinRecords(term);
+                        // Sonuçları etiketle
+                        items = res.map(x => ({ ...x, _source: 'bulletin' }));
+                    } 
+                    // B) Hibrit: Bülten + Portföy (Tip 19)
+                    else if (this.state.searchSource === 'hybrid') {
+                        // İki aramayı paralel yap
+                        const [bulletinRes, portfolioRes] = await Promise.all([
+                            this.dataManager.searchBulletinRecords(term),
+                            this._searchPortfolioLocal(term)
+                        ]);
+                        
+                        // Sonuçları birleştir (Portföydekiler üste gelsin)
+                        const bItems = bulletinRes.map(x => ({ ...x, _source: 'bulletin' }));
+                        const pItems = portfolioRes.map(x => ({ ...x, _source: 'portfolio' }));
+                        items = [...pItems, ...bItems];
+                    }
+                    // C) Sadece Portföy (Diğerleri)
+                    else {
+                        const res = this._searchPortfolioLocal(term);
+                        items = res.map(x => ({ ...x, _source: 'portfolio' }));
+                    }
+                    
+                    this.renderIpSearchResults(items, results);
+
+                } catch (err) {
+                    console.error('Arama hatası:', err);
+                    results.innerHTML = '<div class="p-2 text-danger">Arama sırasında hata oluştu.</div>';
+                    results.style.display = 'block';
+                }
             }, 300);
         });
+        
+        // Dışarı tıklama ile kapat
+        document.addEventListener('click', (e) => {
+            if (!results.contains(e.target) && e.target !== newInput) {
+                results.style.display = 'none';
+            }
+        });
+    }
+
+    // --- YENİ YARDIMCI METOT: Local Portföy Filtreleme ---
+    _searchPortfolioLocal(term) {
+        if (!this.state.allIpRecords) return [];
+        const lowerTerm = term.toLowerCase();
+        
+        return this.state.allIpRecords.filter(r => 
+            (r.title || '').toLowerCase().includes(lowerTerm) ||
+            (r.markName || '').toLowerCase().includes(lowerTerm) ||
+            (r.applicationNumber || '').includes(term) ||
+            (r.applicationNo || '').includes(term)
+        ).slice(0, 20);
     }
 
     renderIpSearchResults(items, container) {
         if (items.length === 0) {
             container.innerHTML = '<div class="p-2 text-muted">Sonuç bulunamadı.</div>';
         } else {
-            container.innerHTML = items.map(item => `
-                <div class="search-result-item p-2 border-bottom" style="cursor:pointer;" data-id="${item.id}">
+            container.innerHTML = items.map(item => {
+                // Kaynak belirteci (ikon veya metin eklenebilir)
+                const isBulletin = item._source === 'bulletin';
+                const badge = isBulletin 
+                    ? '<span class="badge badge-warning float-right" style="font-size: 10px;">Bülten</span>' 
+                    : '<span class="badge badge-info float-right" style="font-size: 10px;">Portföy</span>';
+
+                return `
+                <div class="search-result-item p-2 border-bottom" style="cursor:pointer;" data-id="${item.id}" data-source="${item._source}">
+                    ${badge}
                     <strong>${item.title || item.markName || '-'}</strong>
                     <br><small>${item.applicationNumber || item.applicationNo || '-'}</small>
                 </div>
-            `).join('');
+            `}).join('');
             
             // Tıklama Olayı
             container.querySelectorAll('.search-result-item').forEach(el => {
                 el.addEventListener('click', async () => {
                     const id = el.dataset.id;
-                    // Seçilen kaydı bul
+                    const source = el.dataset.source; // Kaynağı elementten al
+                    
+                    // Seçilen kaydı listeden bul
                     let record = items.find(i => i.id === id);
                     
-                    // Eğer Bülten ise detayını çek
-                    if (this.state.searchSource === 'bulletin') {
+                    // Eğer kaynak Bültens ise (Hibrit modda karışık gelebilir) detayını çek
+                    if (source === 'bulletin') {
+                         console.log('📥 Bülten detayı çekiliyor...');
                          const details = await this.dataManager.fetchAndStoreBulletinData(record.id);
                          if(details) record = {...record, ...details};
                     }
                     
+                    // Kaydın kaynağını objeye işle (selectIpRecord bunu kullanacak)
+                    record._source = source;
+
                     this.selectIpRecord(record);
                     container.style.display = 'none';
                     document.getElementById('ipRecordSearch').value = '';
@@ -593,9 +683,8 @@ class CreateTaskController {
         if (mainIpTypeSelect) {
             mainIpTypeSelect.disabled = true;
         }
-        // --- YENİ KISIM SONU ---
         
-        // 2. GÖRSEL İŞLEMLERİ (brandImageUrl Öncelikli)
+        // 2. GÖRSEL İŞLEMLERİ (GÜNCELLENDİ)
         const imgEl = document.getElementById('selectedIpRecordImage');
         const phEl = document.getElementById('selectedIpRecordPlaceholder');
         
@@ -603,10 +692,13 @@ class CreateTaskController {
         if(phEl) phEl.style.display = 'flex';
 
         let finalImageUrl = null;
+        
+        // Hangi kaynaktan geldiğini kontrol et (Hibrit mod için kritik)
+        const source = record._source || this.state.searchSource;
 
         try {
             // A) BÜLTEN KAYNAĞI
-            if (this.state.searchSource === 'bulletin') {
+            if (source === 'bulletin') {
                 finalImageUrl = record.image || record.logo || record.imageUrl;
             } 
             // B) PORTFÖY KAYNAĞI
