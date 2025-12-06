@@ -304,28 +304,23 @@ export class TaskSubmitHandler {
         await ipRecordsService.addTransactionToRecord(recordId, transactionData);
     }
 
-// E) TAHAKKUK VE FİNANSAL İŞLEMLER (YENİLENMİŞ MANTIK)
+// E) TAHAKKUK VE FİNANSAL İŞLEMLER
     async _handleAccrual(taskId, taskTitle, taskType, state) {
-        // 1. Arayüzdeki Seçimlerin Durumunu Al
         const isFree = document.getElementById('isFreeTransaction')?.checked;
         const formContainer = document.getElementById('accrualFormContainer');
-        
-        // Form görünür mü? (display: none değilse görünürdür)
         const isFormOpen = formContainer && formContainer.style.display !== 'none';
 
-        // --- SENARYO A: Ücretsiz İşlem ---
+        // SENARYO A: Ücretsiz
         if (isFree) {
-            console.log('🆓 "Ücretsiz İşlem" seçildi. Tahakkuk kaydı oluşturulmuyor.');
-            return; // Hiçbir şey yapma ve çık
+            console.log('🆓 "Ücretsiz İşlem" seçildi.');
+            return;
         }
 
-        // --- SENARYO B: Form Açık (Anlık Tahakkuk) ---
+        // SENARYO B: Anlık Tahakkuk (Form Açık)
         if (isFormOpen) {
             const officialFee = parseFloat(document.getElementById('officialFee')?.value || 0);
             const serviceFee = parseFloat(document.getElementById('serviceFee')?.value || 0);
 
-            // Eğer form açık ama değer girilmediyse, kullanıcıya güvenip yine de işlem yapmıyoruz
-            // veya boş bir tahakkuk oluşturabiliriz. Burada sadece doluysa oluşturuyoruz:
             if (officialFee > 0 || serviceFee > 0) {
                 const vatRate = parseFloat(document.getElementById('vatRate')?.value || 0);
                 const applyVat = document.getElementById('applyVatToOfficialFee')?.checked;
@@ -347,30 +342,31 @@ export class TaskSubmitHandler {
                 
                 await accrualService.addAccrual(accrualData);
                 console.log('💰 Anlık tahakkuk oluşturuldu.');
-            } else {
-                console.warn('⚠️ Tahakkuk formu açık ama tutarlar 0 girildiği için tahakkuk oluşturulmadı.');
             }
             return;
         }
 
-        // --- SENARYO C: Ertelenmiş Tahakkuk (Form Kapalı ve Ücretsiz Değil) ---
-        console.log('⏳ Ertelenmiş tahakkuk senaryosu: Finans sorumlusuna yeni görev atanıyor...');
+        // SENARYO C: Ertelenmiş Tahakkuk Görevi
+        console.log('⏳ Ertelenmiş tahakkuk: Görev atanıyor...');
 
-        // NOT: Bu ID'yi değiştirebilirsiniz. Şimdilik kodlarınızda sık geçen Selcan Hanım'ın ID'sini örnek olarak ekledim.
+        // Sabit Finans Kullanıcısı (Örn: Selcan Hanım)
         const FINANCE_USER_ID = "8A9HHfdKKNR3WKl6tCtJH5Khjkx1"; 
         const FINANCE_USER_EMAIL = "selcanakoglu@evrekapatent.com"; 
 
         const accrualTaskData = {
-            taskType: 'accrual_creation', // Özel bir tip ID'si veya string
-            title: `Tahakkuk Girişi: ${taskTitle}`,
-            description: `"${taskTitle}" işi oluşturuldu ancak finansal verileri girilmedi. Lütfen tahakkuk kaydını oluşturun.`,
+            taskType: 'accrual_creation',
+            // DÜZELTME 1: Başlık Türkçe
+            title: `Tahakkuk Oluşturma: ${taskTitle}`,
+            // DÜZELTME 2: Açıklama Türkçe
+            description: `"${taskTitle}" işi oluşturuldu. İşlem tamamlandığında bu görevin statüsü "Açık" olacaktır. Lütfen tahakkuk kaydını oluşturun.`,
             priority: 'high',
-            status: 'open', // İş oluşturuldu, yapılmayı bekliyor
+            
+            // DÜZELTME 3: Statü "pending" (Beklemede)
+            status: 'pending', 
             
             assignedTo_uid: FINANCE_USER_ID,
             assignedTo_email: FINANCE_USER_EMAIL,
             
-            // Ana işle ilişkilendirme
             relatedTaskId: taskId, 
             relatedIpRecordId: state.selectedIpRecord ? state.selectedIpRecord.id : null,
             relatedIpRecordTitle: state.selectedIpRecord ? (state.selectedIpRecord.title || state.selectedIpRecord.markName) : taskTitle,
@@ -384,9 +380,8 @@ export class TaskSubmitHandler {
             updatedAt: Timestamp.now()
         };
 
-        // Yeni görevi oluştur
         await taskService.createTask(accrualTaskData);
-        console.log('✅ Finans sorumlusuna "Tahakkuk Oluşturma" görevi atandı.');
+        console.log('✅ "Tahakkuk Oluşturma" görevi (pending) atandı.');
     }
     
     // F) MARKA BAŞVURUSU
