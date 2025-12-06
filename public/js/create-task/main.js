@@ -508,29 +508,36 @@ class CreateTaskController {
         const results = document.getElementById('ipRecordSearchResults');
         if (!input || !results) return;
         
-        // 1. İşlem Tipini Al ve Modu Belirle
+        // 1. İşlem Tipini Al
         const typeId = String(this.state.selectedTaskType?.id || '');
         
         // Tip 20: Yayına İtiraz -> Sadece Bülten
         const isType20 = ['20', 'trademark_publication_objection', TASK_IDS.ITIRAZ_YAYIN].includes(typeId);
         
-        // Tip 19: Yeniden İnceleme -> Hibrit (Bülten + Portföy)
-        const isType19 = ['19', 'trademark_reconsideration_of_publication_objection', TASK_IDS.YAYIMA_ITIRAZIN_YENIDEN_INCELENMESI].includes(typeId);
+        // HİBRİT ARAMA (Bülten + Portföy) Yapılacak İşlemler:
+        // - Tip 19: Yayıma İtirazın Yeniden İncelenmesi
+        // - Tip 8: Karara İtirazı Geri Çekme
+        // - Tip 21: Yayına İtirazı Geri Çekme
+        const isHybrid = [
+            '19', 'trademark_reconsideration_of_publication_objection', TASK_IDS.YAYIMA_ITIRAZIN_YENIDEN_INCELENMESI,
+            '8', TASK_IDS.KARARA_ITIRAZ_GERI_CEKME,
+            '21', TASK_IDS.YAYINA_ITIRAZI_GERI_CEKME
+        ].includes(typeId);
 
         // Search Source State'ini Güncelle
         if (isType20) this.state.searchSource = 'bulletin';
-        else if (isType19) this.state.searchSource = 'hybrid'; // ✨ YENİ MOD
+        else if (isHybrid) this.state.searchSource = 'hybrid'; 
         else this.state.searchSource = 'portfolio';
         
         console.log(`🔍 Arama Modu Ayarlandı: ${this.state.searchSource.toUpperCase()} (Task ID: ${typeId})`);
 
-        // 2. Input Elementini Yenile (Eski listener'ları temizle)
+        // 2. Input Elementini Yenile
         const newInput = input.cloneNode(true);
         input.parentNode.replaceChild(newInput, input);
 
         let timer;
         
-        // 3. Yeni Arama Dinleyicisi
+        // 3. Arama Dinleyicisi
         newInput.addEventListener('input', (e) => {
             const term = e.target.value.trim();
             clearTimeout(timer);
@@ -548,18 +555,15 @@ class CreateTaskController {
                     // A) Sadece Bülten (Tip 20)
                     if (this.state.searchSource === 'bulletin') {
                         const res = await this.dataManager.searchBulletinRecords(term);
-                        // Sonuçları etiketle
                         items = res.map(x => ({ ...x, _source: 'bulletin' }));
                     } 
-                    // B) Hibrit: Bülten + Portföy (Tip 19)
+                    // B) Hibrit: Bülten + Portföy (Tip 19, 8, 21)
                     else if (this.state.searchSource === 'hybrid') {
-                        // İki aramayı paralel yap
                         const [bulletinRes, portfolioRes] = await Promise.all([
                             this.dataManager.searchBulletinRecords(term),
                             this._searchPortfolioLocal(term)
                         ]);
                         
-                        // Sonuçları birleştir (Portföydekiler üste gelsin)
                         const bItems = bulletinRes.map(x => ({ ...x, _source: 'bulletin' }));
                         const pItems = portfolioRes.map(x => ({ ...x, _source: 'portfolio' }));
                         items = [...pItems, ...bItems];
@@ -580,7 +584,6 @@ class CreateTaskController {
             }, 300);
         });
         
-        // Dışarı tıklama ile kapat
         document.addEventListener('click', (e) => {
             if (!results.contains(e.target) && e.target !== newInput) {
                 results.style.display = 'none';
@@ -588,34 +591,33 @@ class CreateTaskController {
         });
     }
 
-    // --- YENİ YARDIMCI METOT: Local Portföy Filtreleme ---
+// --- YENİ YARDIMCI METOT: Local Portföy Filtreleme ---
     _searchPortfolioLocal(term) {
         if (!this.state.allIpRecords) return [];
         
         const typeId = String(this.state.selectedTaskType?.id || '');
         
-        // 3. Taraf kayıtlarının görünmesine izin verilen "İstisnai" iş tipleri
-        // Tip 19 (Yeniden İnceleme) ve Tip 20 (Yayına İtiraz)
+        // 3. Taraf kayıtlarının görünmesine izin verilen işlem tipleri
+        // 19: Yeniden İnceleme, 20: Yayına İtiraz, 8: Karara İtirazı G.Ç., 21: Yayına İtirazı G.Ç.
         const allowThirdParty = [
-            '19', 
-            '20', 
+            '19', '20', '8', '21',
             TASK_IDS.ITIRAZ_YAYIN, 
-            TASK_IDS.YAYIMA_ITIRAZIN_YENIDEN_INCELENMESI
+            TASK_IDS.YAYIMA_ITIRAZIN_YENIDEN_INCELENMESI,
+            TASK_IDS.KARARA_ITIRAZ_GERI_CEKME,
+            TASK_IDS.YAYINA_ITIRAZI_GERI_CEKME
         ].includes(typeId);
         
         const lowerTerm = term.toLowerCase();
         
         return this.state.allIpRecords.filter(r => {
-            // 1. AŞAMA: Sahiplik Kontrolü
-            // Eğer "İzin verilen iş tiplerinden biri" DEĞİLSE, sadece 'self' kayıtları getir.
+            // 1. Sahiplik Kontrolü
             if (!allowThirdParty) {
-                // recordOwnerType boşsa varsayılan olarak 'self' kabul etmeyebiliriz,
-                // ama genelde 'self' veya 'third_party' dolu gelir.
+                // Sadece 'self' olanları getir
                 const ownerType = String(r.recordOwnerType || 'self').toLowerCase();
                 if (ownerType === 'third_party') return false; 
             }
 
-            // 2. AŞAMA: Metin Eşleşmesi
+            // 2. Metin Eşleşmesi
             return (
                 (r.title || '').toLowerCase().includes(lowerTerm) ||
                 (r.markName || '').toLowerCase().includes(lowerTerm) ||
