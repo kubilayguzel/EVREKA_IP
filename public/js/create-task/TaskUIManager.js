@@ -456,55 +456,76 @@ export class TaskUIManager {
         const list = document.getElementById('parentListContainer');
         const modalTitle = document.getElementById('selectParentModalLabel');
         
-        if (!modal || !list) {
-            console.error('❌ Modal elementleri bulunamadı (selectParentModal veya parentListContainer eksik).');
-            return;
-        }
+        if (!modal || !list) return;
 
-        // 1. KRİTİK DÜZELTME: Modalı body'ye taşı (Z-Index/Gölgeleme sorununu çözer)
+        // 1. Modalı body'ye taşı (Z-Index sorunu için)
         if (modal.parentElement !== document.body) {
             document.body.appendChild(modal);
         }
 
-        // 2. BOYUT AYARI: Daha geniş yap
+        // 2. Boyut Ayarı
         const dialog = modal.querySelector('.modal-dialog');
         if (dialog) {
-            dialog.classList.add('modal-lg'); // Bootstrap geniş modal sınıfı
-            dialog.style.maxWidth = '900px';  // Mobilde taşmaz, masaüstünde geniş durur
+            dialog.classList.add('modal-lg'); 
+            dialog.style.maxWidth = '800px';
         }
         
-        // 3. Z-INDEX GARANTİSİ: Modalı en üste al
+        // 3. Z-Index
         modal.style.zIndex = '1055'; 
 
-        // Başlık
         if(modalTitle) modalTitle.textContent = title || 'İşlem Seçimi';
         
-        // Listeyi Temizle ve Doldur
+        // Listeyi Temizle
         list.innerHTML = '';
+        
         transactions.forEach(tx => {
             const li = document.createElement('li');
-            li.className = 'list-group-item list-group-item-action';
+            li.className = 'list-group-item list-group-item-action d-flex justify-content-between align-items-center p-3';
             li.style.cursor = 'pointer';
             
-            // Tarih formatı
-            const dateStr = tx.creationDate ? new Date(tx.creationDate).toLocaleDateString('tr-TR') : '-';
+            // --- TARİH HESAPLAMA (GÜÇLENDİRİLMİŞ) ---
+            let dateDisplay = '-';
+            // Hem creationDate hem timestamp alanlarını kontrol et
+            const rawDate = tx.creationDate || tx.timestamp; 
             
+            if (rawDate) {
+                try {
+                    // Firebase Timestamp objesi mi? (.toDate fonksiyonu var mı?)
+                    if (rawDate.toDate && typeof rawDate.toDate === 'function') {
+                        dateDisplay = rawDate.toDate().toLocaleDateString('tr-TR');
+                    } 
+                    // String veya Date objesi mi?
+                    else {
+                        const d = new Date(rawDate);
+                        if (!isNaN(d)) {
+                            dateDisplay = d.toLocaleDateString('tr-TR');
+                        }
+                    }
+                } catch (e) { 
+                    console.warn('Tarih formatlanamadı:', rawDate); 
+                }
+            }
+            
+            // --- HTML İÇERİĞİ (SADELEŞTİRİLMİŞ) ---
+            // Tekrar eden açıklama satırı kaldırıldı. Sadece Tip ve Tarih var.
             li.innerHTML = `
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <h6 class="mb-1 font-weight-bold text-primary">${tx.transactionTypeName || 'İşlem'}</h6>
-                        <p class="mb-1 text-muted small">${tx.description || 'Açıklama yok'}</p>
-                        <small class="text-secondary"><i class="far fa-calendar-alt"></i> ${dateStr}</small>
-                    </div>
-                    <i class="fas fa-chevron-right text-muted"></i>
+                <div>
+                    <h6 class="mb-0 font-weight-bold text-dark" style="font-size: 1.1rem;">
+                        ${tx.transactionTypeName || tx.type || 'İşlem'}
+                    </h6>
+                    <small class="text-muted" style="font-size: 0.8rem;">Ref: ${tx.id.substring(0,6)}...</small>
+                </div>
+                
+                <div class="text-right">
+                    <span class="badge badge-primary p-2 px-3" style="font-size: 0.95rem; border-radius: 6px;">
+                        <i class="far fa-calendar-alt mr-1"></i> ${dateDisplay}
+                    </span>
+                    <i class="fas fa-chevron-right text-muted ml-3"></i>
                 </div>
             `;
             
-            // Tıklama Olayı (Main.js'deki listener yakalayacak)
-            li.dataset.id = tx.id; // Dataset'e ID ekle (Event delegation için)
+            // Tıklama Olayı
             li.onclick = () => {
-                // Eğer global controller varsa oraya haber ver, yoksa event delegation bekle
-                // Not: Main.js'de delegation setupParentListListener varsa buraya gerek kalmaz ama garanti olsun.
                 const evt = new CustomEvent('parentTransactionSelected', { detail: { id: tx.id } });
                 document.dispatchEvent(evt);
             };
@@ -512,35 +533,22 @@ export class TaskUIManager {
             list.appendChild(li);
         });
         
-        // 4. MODALI AÇ (jQuery veya Vanilla JS)
+        // 4. Modalı Aç
         if (window.$) {
-            $(modal).modal({ backdrop: 'static', keyboard: false }); // Dışarı tıklayınca kapanmasın
+            $(modal).modal({ backdrop: 'static', keyboard: false });
             $(modal).modal('show');
-            
-            // Backdrop (Arka plan karartması) ayarı
+            // Backdrop ayarı
             setTimeout(() => {
                 const backdrops = document.querySelectorAll('.modal-backdrop');
                 backdrops.forEach(bd => {
-                    bd.style.zIndex = '1050'; // Modal (1055) altında kalsın
-                    document.body.appendChild(bd); // Backdrop'u da body sonuna taşı
+                    bd.style.zIndex = '1050';
+                    document.body.appendChild(bd);
                 });
             }, 100);
         } else {
-            // Vanilla JS Fallback
             modal.style.display = 'block';
             modal.classList.add('show');
             document.body.classList.add('modal-open');
-            
-            // Manuel Backdrop
-            let backdrop = document.getElementById('custom-backdrop');
-            if (!backdrop) {
-                backdrop = document.createElement('div');
-                backdrop.id = 'custom-backdrop';
-                backdrop.className = 'modal-backdrop fade show';
-                document.body.appendChild(backdrop);
-            }
-            backdrop.style.zIndex = '1050';
-            backdrop.style.display = 'block';
         }
     }
 
