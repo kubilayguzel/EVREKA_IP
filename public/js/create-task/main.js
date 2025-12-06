@@ -118,6 +118,94 @@ class CreateTaskController {
                 results.style.display = 'none';
             }
         });
+    
+    // GLOBAL CLICK LISTENER (Event Delegation)
+    // Tüm dinamik butonları (Silme, Ekleme vb.) tek bir yerden yönetir.
+    document.addEventListener('click', (e) => {
+        
+        // ---------------------------------------------------------
+        // A) SİLME İŞLEMLERİ (Listeden Kaldırma)
+        // ---------------------------------------------------------
+
+        // 1. Varlık (Asset) Silme
+        if (e.target.closest('#clearSelectedIpRecord')) {
+            this.state.selectedIpRecord = null;
+            document.getElementById('selectedIpRecordContainer').style.display = 'none';
+            document.getElementById('ipRecordSearch').value = '';
+            
+            // Görseli temizle
+            const imgEl = document.getElementById('selectedIpRecordImage');
+            if(imgEl) imgEl.src = '';
+
+            // WIPO/ARIPO alt kayıtları temizle
+            this.state.selectedWipoAripoChildren = [];
+            this.uiManager.renderWipoAripoChildRecords([]);
+
+            this.validator.checkCompleteness(this.state);
+        }
+
+        // 2. İlgili Taraf (Related Party) Silme
+        const removePartyBtn = e.target.closest('.remove-party');
+        if (removePartyBtn) {
+            const id = removePartyBtn.dataset.id;
+            this.state.selectedRelatedParties = this.state.selectedRelatedParties.filter(p => String(p.id) !== String(id));
+            this.uiManager.renderSelectedRelatedParties(this.state.selectedRelatedParties);
+            this.validator.checkCompleteness(this.state);
+        }
+
+        // 3. Başvuru Sahibi (Applicant) Silme
+        const removeApplicantBtn = e.target.closest('.remove-selected-item-btn');
+        if (removeApplicantBtn) {
+            const id = removeApplicantBtn.dataset.id;
+            this.state.selectedApplicants = this.state.selectedApplicants.filter(p => String(p.id) !== String(id));
+            this.uiManager.renderSelectedApplicants(this.state.selectedApplicants);
+            this.validator.checkCompleteness(this.state);
+        }
+
+        // 4. WIPO/ARIPO Alt Kayıt Silme
+        const removeWipoBtn = e.target.closest('.remove-wipo-child-btn');
+        if (removeWipoBtn) {
+            const id = removeWipoBtn.dataset.id;
+            this.state.selectedWipoAripoChildren = this.state.selectedWipoAripoChildren.filter(c => String(c.id) !== String(id));
+            this.uiManager.renderWipoAripoChildRecords(this.state.selectedWipoAripoChildren);
+        }
+
+        // ---------------------------------------------------------
+        // B) MODAL İŞLEMLERİ (Yeni Kişi Ekleme)
+        // ---------------------------------------------------------
+
+        // Hem "Yeni Kişi" (Related Party) hem de "Yeni Başvuru Sahibi" butonlarını yakalar
+        if (e.target.closest('#addNewPersonBtn') || e.target.closest('#addNewApplicantBtn')) {
+            const isApplicant = e.target.closest('#addNewApplicantBtn'); // Hangi buton?
+
+            // Modalı Aç
+            openPersonModal((newPerson) => { 
+                this.state.allPersons.push(newPerson); 
+                
+                if (isApplicant) {
+                    if(!this.state.selectedApplicants.some(a=>a.id===newPerson.id)) {
+                        this.state.selectedApplicants.push(newPerson);
+                        this.uiManager.renderSelectedApplicants(this.state.selectedApplicants);
+                    }
+                } else {
+                    this.handlePersonSelection(newPerson, 'relatedParty'); 
+                }
+            });
+
+            // FIX: Modal açıldıktan sonra şehir listesini tetikle
+            // 300ms bekliyoruz ki modal HTML'i render edilsin
+            setTimeout(() => {
+                // Modal içindeki ülke seçim elementini bul (ID: 'country' veya 'personCountry' olabilir, projenize göre kontrol edin)
+                const countrySelect = document.getElementById('country') || document.getElementById('personCountry');
+                
+                // Eğer Türkiye seçiliyse, change olayını tetikle ki şehirler gelsin
+                if (countrySelect && (countrySelect.value === 'Turkey' || countrySelect.value === 'TR' || countrySelect.value === 'Türkiye')) {
+                    console.log('🌍 Şehir listesi tetikleniyor...');
+                    countrySelect.dispatchEvent(new Event('change'));
+                }
+            }, 300);
+        }
+    });
     }
 
     handleMainTypeChange(e) {
