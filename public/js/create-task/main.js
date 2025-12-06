@@ -635,18 +635,16 @@ class CreateTaskController {
                 // Etiket (Badge) Belirleme
                 let badge = '';
                 
-                if (item._source === 'bulletin') {
-                    // Bülten Kaydı
+                // Kayıt "third_party" (Rakip/Karşı Taraf) mı?
+                const isThirdParty = String(item.recordOwnerType || '').toLowerCase() === 'third_party';
+                
+                // KURAL: Eğer kaynak "Bülten" ise VEYA Portföyden gelen "3. Taraf" ise -> "Bülten" etiketi bas.
+                // Böylece kullanıcı rakip kayıtlarını "Bülten" mantığında görür.
+                if (item._source === 'bulletin' || isThirdParty) {
                     badge = '<span class="badge badge-warning float-right" style="font-size: 10px;">Bülten</span>';
                 } else {
-                    // Portföy Kaydı (Self veya 3. Taraf Ayrımı)
-                    const isThirdParty = String(item.recordOwnerType || '').toLowerCase() === 'third_party';
-                    
-                    if (isThirdParty) {
-                        badge = '<span class="badge badge-dark float-right" style="font-size: 10px; background-color: #343a40;">3. Taraf</span>';
-                    } else {
-                        badge = '<span class="badge badge-info float-right" style="font-size: 10px;">Portföy</span>';
-                    }
+                    // Sadece "self" (kendi) kayıtlarımız "Portföy" olarak görünür.
+                    badge = '<span class="badge badge-info float-right" style="font-size: 10px;">Portföy</span>';
                 }
 
                 return `
@@ -657,16 +655,16 @@ class CreateTaskController {
                 </div>
             `}).join('');
             
-            // Tıklama Olayı (Delegation)
+            // Tıklama Olayı
             container.querySelectorAll('.search-result-item').forEach(el => {
                 el.addEventListener('click', async () => {
                     const id = el.dataset.id;
                     const source = el.dataset.source;
                     
-                    // Seçilen kaydı bul
+                    // Seçilen kaydı listeden bul
                     let record = items.find(i => i.id === id);
                     
-                    // Eğer Bülten ise detayını çek
+                    // Eğer kaynak gerçekten Bülten ise (API'den gelmişse) detayını çek
                     if (source === 'bulletin') {
                          console.log('📥 Bülten detayı çekiliyor...');
                          const details = await this.dataManager.fetchAndStoreBulletinData(record.id);
