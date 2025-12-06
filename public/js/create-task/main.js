@@ -84,6 +84,14 @@ class CreateTaskController {
             if (e.target.id === 'applyVatToOfficialFee') this.calculateTotalAmount();
             if (['brandType', 'brandCategory', 'assignedTo', 'taskDueDate'].includes(e.target.id)) this.validator.checkCompleteness(this.state);
         });
+        document.addEventListener('parentTransactionSelected', (e) => {
+        const selectedId = e.detail.id;
+        console.log('🎯 Modalden seçim geldi:', selectedId);
+        
+        this.submitHandler.selectedParentTransactionId = selectedId;
+        this.uiManager.hideParentSelectionModal();
+        alert('Geri çekilecek işlem seçildi.');
+        });
         
         // Parent Seçim Modalı Kapatma
         const closeModalBtns = document.querySelectorAll('#selectParentModal .close, #selectParentModal .btn-secondary');
