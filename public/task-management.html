@@ -748,20 +748,33 @@
                     const task = this.allTasks.find(t => t.id === taskId);
                     if (!task) return;
 
+                    // Formu sıfırla
                     document.getElementById('completeAccrualForm').reset();
                     document.getElementById('targetTaskIdForCompletion').value = taskId;
                     document.getElementById('compOfficialFeeCurrency').value = 'TRY';
                     document.getElementById('compServiceFeeCurrency').value = 'TRY';
                     
-                    // --- YENİ: EPATS Belgesini Kontrol Et ve Göster ---
+                    // --- GÜNCELLENDİ: EPATS Belgesini Parent Task'tan da Kontrol Et ---
                     const docContainer = document.getElementById('accrualEpatsDocumentContainer');
                     const docNameEl = document.getElementById('accrualEpatsDocName');
                     const docLinkEl = document.getElementById('accrualEpatsDocLink');
-                    const epatsDoc = task.details && task.details.epatsDocument;
+                    
+                    // 1. Önce bu görevin kendi detaylarına bak
+                    let epatsDoc = task.details && task.details.epatsDocument;
 
-                    if (epatsDoc && epatsDoc.downloadURL) {
+                    // 2. Yoksa ve bu bir alt görevse (relatedTaskId varsa), Ana Göreve (Parent Task) bak
+                    if (!epatsDoc && task.relatedTaskId) {
+                        const parentTask = this.allTasks.find(t => t.id === task.relatedTaskId);
+                        if (parentTask && parentTask.details && parentTask.details.epatsDocument) {
+                            epatsDoc = parentTask.details.epatsDocument;
+                            console.log('📄 Belge ana görevden bulundu:', epatsDoc.name);
+                        }
+                    }
+
+                    // Belge varsa göster (downloadURL veya fileUrl kontrolü ile)
+                    if (epatsDoc && (epatsDoc.downloadURL || epatsDoc.fileUrl)) {
                         docNameEl.textContent = epatsDoc.name || epatsDoc.fileName || 'EPATS Belgesi';
-                        docLinkEl.href = epatsDoc.downloadURL;
+                        docLinkEl.href = epatsDoc.downloadURL || epatsDoc.fileUrl;
                         docContainer.className = "alert alert-secondary d-flex align-items-center justify-content-between mb-4"; 
                         docContainer.style.display = 'flex';
                     } else {
@@ -778,7 +791,6 @@
                     document.getElementById('compServiceInvoicePartyResults').innerHTML = '';
                     document.getElementById('completeAccrualTaskModal').classList.add('show');
                 }
-
                 calculateCompTotal() {
                     const official = parseFloat(document.getElementById('compOfficialFee').value) || 0;
                     const service = parseFloat(document.getElementById('compServiceFee').value) || 0;
