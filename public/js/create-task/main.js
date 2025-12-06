@@ -286,7 +286,7 @@ class CreateTaskController {
         this.validator.checkCompleteness(this.state);
     }
 
-    // --- MENŞE VE ÜLKE SEÇİMİ (DÜZELTİLDİ) ---
+// --- MENŞE VE ÜLKE SEÇİMİ (DÜZELTİLDİ) ---
     handleOriginChange(val) {
         const container = document.getElementById('countrySelectionContainer');
         const singleWrapper = document.getElementById('singleCountrySelectWrapper');
@@ -295,11 +295,28 @@ class CreateTaskController {
         
         if (!container || !singleWrapper || !multiWrapper) return;
 
-        // Varsayılan: Gizle
+        // 1. Önce Hepsini Gizle (Varsayılan Durum)
         container.style.display = 'none';
         singleWrapper.style.display = 'none';
         multiWrapper.style.display = 'none';
 
+        // 2. KONTROL: İşlem Tipi Nedir?
+        const t = this.state.selectedTaskType;
+        
+        // "Ülke Seçimi" alanı SADECE şu durumlarda açılmalı:
+        // A) Marka Başvurusu (Yeni Kayıt)
+        // B) Dava İşlemi (Suit)
+        const isApplication = (t && (t.alias === 'Başvuru' || t.name === 'Başvuru'));
+        const isSuit = (t && t.ipType === 'suit') || (document.getElementById('mainIpType')?.value === 'suit');
+
+        // Eğer bu bir Yenileme, Devir, İtiraz vb. ise (yani Başvuru veya Dava değilse),
+        // menşe WIPO/ARIPO olsa bile ülke seçim kutusunu AÇMA.
+        if (!isApplication && !isSuit) {
+            return; 
+        }
+
+        // 3. Menşeye Göre Alanı Aç (Sadece yukarıdaki koşul sağlandıysa buraya gelir)
+        
         // Yurtdışı Ulusal (Tekli Seçim)
         if (['Yurtdışı Ulusal', 'FOREIGN_NATIONAL'].includes(val)) {
             container.style.display = 'block';
@@ -312,7 +329,7 @@ class CreateTaskController {
             container.style.display = 'block';
             multiWrapper.style.display = 'block';
             if(title) title.textContent = `Seçim Yapılacak Ülkeler (${val})`;
-            this.setupMultiCountrySelect(); // Çoklu seçim dinleyicilerini başlat
+            this.setupMultiCountrySelect(); 
         }
     }
 
