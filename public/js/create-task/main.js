@@ -508,56 +508,49 @@ class CreateTaskController {
         const results = document.getElementById('ipRecordSearchResults');
         if (!input || !results) return;
         
-        // 1. İşlem Tipini Al
         const typeId = String(this.state.selectedTaskType?.id || '');
         
-        // Tip 20: Yayına İtiraz -> Sadece Bülten
+        // Modları Belirle
         const isType20 = ['20', 'trademark_publication_objection', TASK_IDS.ITIRAZ_YAYIN].includes(typeId);
-        
-        // HİBRİT ARAMA (Bülten + Portföy) Yapılacak İşlemler:
-        // - Tip 19: Yayıma İtirazın Yeniden İncelenmesi
-        // - Tip 8: Karara İtirazı Geri Çekme
-        // - Tip 21: Yayına İtirazı Geri Çekme
         const isHybrid = [
             '19', 'trademark_reconsideration_of_publication_objection', TASK_IDS.YAYIMA_ITIRAZIN_YENIDEN_INCELENMESI,
             '8', TASK_IDS.KARARA_ITIRAZ_GERI_CEKME,
             '21', TASK_IDS.YAYINA_ITIRAZI_GERI_CEKME
         ].includes(typeId);
 
-        // Search Source State'ini Güncelle
         if (isType20) this.state.searchSource = 'bulletin';
         else if (isHybrid) this.state.searchSource = 'hybrid'; 
         else this.state.searchSource = 'portfolio';
         
-        console.log(`🔍 Arama Modu Ayarlandı: ${this.state.searchSource.toUpperCase()} (Task ID: ${typeId})`);
+        console.log(`🔍 Arama Modu: ${this.state.searchSource.toUpperCase()}`);
 
-        // 2. Input Elementini Yenile
+        // Input Yenileme
         const newInput = input.cloneNode(true);
         input.parentNode.replaceChild(newInput, input);
 
         let timer;
         
-        // 3. Arama Dinleyicisi
+        // --- NORMALİZASYON FONKSİYONU ---
+        // Numaraları (2023/123 -> 2023123) saf hale getirir. Eşleşme başarısını artırır.
+        const normalize = (val) => String(val || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+
         newInput.addEventListener('input', (e) => {
             const term = e.target.value.trim();
             clearTimeout(timer);
             
-            if (term.length < 2) { 
-                results.style.display = 'none'; 
-                return; 
-            }
+            if (term.length < 2) { results.style.display = 'none'; return; }
             
             timer = setTimeout(async () => {
                 let items = [];
-                console.log(`🔎 Aranıyor (${this.state.searchSource}): "${term}"`);
+                console.log(`🔎 Aranıyor: "${term}"`);
 
                 try {
-                    // A) Sadece Bülten (Tip 20)
+                    // A) SADECE BÜLTEN
                     if (this.state.searchSource === 'bulletin') {
                         const res = await this.dataManager.searchBulletinRecords(term);
                         items = res.map(x => ({ ...x, _source: 'bulletin' }));
                     } 
-                    // B) Hibrit: Bülten + Portföy (Tip 19, 8, 21)
+                    // B) HİBRİT (Bülten + Portföy)
                     else if (this.state.searchSource === 'hybrid') {
                         const [bulletinRes, portfolioRes] = await Promise.all([
                             this.dataManager.searchBulletinRecords(term),
@@ -566,9 +559,26 @@ class CreateTaskController {
                         
                         const bItems = bulletinRes.map(x => ({ ...x, _source: 'bulletin' }));
                         const pItems = portfolioRes.map(x => ({ ...x, _source: 'portfolio' }));
-                        items = [...pItems, ...bItems];
+                        
+                        // --- DEDUPLICATION (Çift Kayıt Engelleme) ---
+                        
+                        // 1. Portföydeki numaraları normalize edip listele
+                        const existingAppNos = new Set(pItems.map(p => 
+                            normalize(p.applicationNumber || p.applicationNo)
+                        ));
+
+                        // 2. Bültenden gelenleri filtrele
+                        // Eğer numarası (normalize edilmiş hali) zaten portföyde varsa, Bültenden geleni ALMA.
+                        // (Böylece kullanıcı sadece Portföydeki kaydı görür, çift görmez)
+                        const uniqueBItems = bItems.filter(b => {
+                            const bNo = normalize(b.applicationNo || b.applicationNumber);
+                            // Numarası yoksa veya portföyde yoksa listeye al
+                            return !bNo || !existingAppNos.has(bNo);
+                        });
+
+                        items = [...pItems, ...uniqueBItems];
                     }
-                    // C) Sadece Portföy (Diğerleri)
+                    // C) SADECE PORTFÖY
                     else {
                         const res = this._searchPortfolioLocal(term);
                         items = res.map(x => ({ ...x, _source: 'portfolio' }));
@@ -578,17 +588,66 @@ class CreateTaskController {
 
                 } catch (err) {
                     console.error('Arama hatası:', err);
-                    results.innerHTML = '<div class="p-2 text-danger">Arama sırasında hata oluştu.</div>';
-                    results.style.display = 'block';
                 }
             }, 300);
         });
         
         document.addEventListener('click', (e) => {
-            if (!results.contains(e.target) && e.target !== newInput) {
-                results.style.display = 'none';
-            }
+            if (!results.contains(e.target) && e.target !== newInput) results.style.display = 'none';
         });
+    }
+
+    // --- GÜNCELLENEN METOT 2: Sonuç Gösterimi ve Etiketleme ---
+    renderIpSearchResults(items, container) {
+        if (items.length === 0) {
+            container.innerHTML = '<div class="p-2 text-muted">Sonuç bulunamadı.</div>';
+        } else {
+            container.innerHTML = items.map(item => {
+                // ETİKET MANTIĞI:
+                // 1. Kaynak Bülten ise -> "Bülten"
+                // 2. Kaynak Portföy ama Tipi 'third_party' ise -> "Bülten" (Kullanıcı için bülten gibi görünsün)
+                // 3. Sadece 'self' olanlar -> "Portföy"
+                
+                let badge = '';
+                const isThirdParty = String(item.recordOwnerType || '').toLowerCase() === 'third_party';
+                
+                if (item._source === 'bulletin' || isThirdParty) {
+                    badge = '<span class="badge badge-warning float-right" style="font-size: 10px;">Bülten</span>';
+                } else {
+                    badge = '<span class="badge badge-info float-right" style="font-size: 10px;">Portföy</span>';
+                }
+
+                return `
+                <div class="search-result-item p-2 border-bottom" style="cursor:pointer;" data-id="${item.id}" data-source="${item._source}">
+                    ${badge}
+                    <strong>${item.title || item.markName || '-'}</strong>
+                    <br><small>${item.applicationNumber || item.applicationNo || '-'}</small>
+                </div>
+            `}).join('');
+            
+            // Seçim Olayı
+            container.querySelectorAll('.search-result-item').forEach(el => {
+                el.addEventListener('click', async () => {
+                    const id = el.dataset.id;
+                    const source = el.dataset.source;
+                    
+                    let record = items.find(i => i.id === id);
+                    
+                    // Sadece gerçek bülten kaynağından geliyorsa detay çek
+                    if (source === 'bulletin') {
+                         console.log('📥 Bülten detayı çekiliyor...');
+                         const details = await this.dataManager.fetchAndStoreBulletinData(record.id);
+                         if(details) record = {...record, ...details};
+                    }
+                    
+                    record._source = source;
+                    this.selectIpRecord(record);
+                    container.style.display = 'none';
+                    document.getElementById('ipRecordSearch').value = '';
+                });
+            });
+        }
+        container.style.display = 'block';
     }
 
 // --- YENİ YARDIMCI METOT: Local Portföy Filtreleme ---
