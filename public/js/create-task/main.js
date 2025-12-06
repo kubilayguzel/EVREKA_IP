@@ -427,47 +427,37 @@ class CreateTaskController {
 
 // --- GÜNCELLENEN METOT: Görsel ve UI Yönetimi (Main.js) ---
     async selectIpRecord(record) {
+        console.log('Seçilen Kayıt:', record);
         this.state.selectedIpRecord = record;
         
-        // 1. İsim ve Numara Alanları
-        // Bülten verisinde isim bazen 'markName', portföyde 'title' olabilir. Hepsini deniyoruz.
+        // 1. Metin Alanlarını Doldur
         const title = record.title || record.markName || record.name || 'İsimsiz Kayıt';
         const appNo = record.applicationNumber || record.applicationNo || '-';
 
         document.getElementById('selectedIpRecordLabel').textContent = title;
         document.getElementById('selectedIpRecordNumber').textContent = appNo;
         
-        // 2. GÖRSEL ÇÖZÜMLEME (FIXED)
+        // 2. GÖRSEL İŞLEMLERİ (brandImageUrl Öncelikli)
         const imgEl = document.getElementById('selectedIpRecordImage');
         const phEl = document.getElementById('selectedIpRecordPlaceholder');
         
-        if(imgEl) {
-            imgEl.style.display = 'none'; // Önce gizle
-            imgEl.src = '';
-        }
+        // UI'ı sıfırla (yükleniyor hissi ver)
+        if(imgEl) { imgEl.style.display = 'none'; imgEl.src = ''; }
+        if(phEl) phEl.style.display = 'flex';
 
         let finalImageUrl = null;
 
         try {
-            // A) BÜLTEN KAYNAKLI MI? (searchSource: 'bulletin')
+            // A) BÜLTEN KAYNAĞI
             if (this.state.searchSource === 'bulletin') {
-                // Bülten verisinde görsel genelde 'image' veya 'logo' alanında direkt URL olarak gelir.
-                // Eski create-task.js'de öncelik: record.image -> record.logo
-                if (record.image && record.image.length > 10) {
-                    finalImageUrl = record.image;
-                } else if (record.logo && record.logo.length > 10) {
-                    finalImageUrl = record.logo;
-                } else if (record.imageUrl) {
-                    finalImageUrl = record.imageUrl;
-                }
+                finalImageUrl = record.image || record.logo || record.imageUrl;
             } 
-            // B) PORTFÖY KAYNAKLI MI?
+            // B) PORTFÖY KAYNAĞI (İsteğiniz üzerine brandImageUrl öncelikli)
             else {
-                // Portföyde görsel yolu 'imageUrl' alanında tutulur (Örn: brand-images/xyz.jpg)
-                const storagePath = record.imageUrl || record.image; 
+                // Öncelik sırası: brandImageUrl -> imageUrl -> image
+                const storagePath = record.brandImageUrl || record.imageUrl || record.image;
                 
                 if (storagePath) {
-                    // Zaten http ile başlıyorsa direkt linktir
                     if (storagePath.startsWith('http') || storagePath.startsWith('data:')) {
                         finalImageUrl = storagePath;
                     } else {
@@ -477,42 +467,33 @@ class CreateTaskController {
                 }
             }
         } catch (err) {
-            console.warn('Görsel resolve edilirken hata:', err);
+            console.warn('Görsel çözümlenirken hata:', err);
         }
 
-        // 3. Görseli Bas veya Placeholder Göster
+        // Görseli Bas
         if (finalImageUrl) {
             if(imgEl) {
                 imgEl.src = finalImageUrl;
                 imgEl.style.display = 'block';
             }
             if(phEl) phEl.style.display = 'none';
-        } else {
-            if(imgEl) imgEl.style.display = 'none';
-            if(phEl) phEl.style.display = 'flex'; // Placeholder'ı aç
         }
         
-        // Kutuyu görünür yap
         document.getElementById('selectedIpRecordContainer').style.display = 'block';
         
-        // 4. İtiraz Geri Çekme Kontrolü (TRANSACTIONS)
+        // 3. GERİ ÇEKME İŞLEMİ İÇİN GEÇMİŞ KONTROLÜ
         if (this.state.isWithdrawalTask) {
-            // İşlemleri çek
             const txs = await this.dataManager.getRecordTransactions(record.id);
-            if (txs.success && txs.data) {
-                // Record üzerine işlemleri yaz ki processParentTransactions okuyabilsin
+            if (txs.success && txs.data && txs.data.length > 0) {
                 record.transactions = txs.data;
                 this.processParentTransactions(record);
             } else {
-                // İşlem çekilemediyse veya yoksa
-                console.warn('Transaksiyonlar alınamadı veya boş.');
-                // Hata vermiyoruz, belki işlem yoktur ama kullanıcı yine de görmek ister
-                // Ancak logic gereği processParentTransactions çağrılmazsa parent seçilmemiş olur.
-                alert('Bu kayda ait geçmiş işlem bilgisi alınamadı.');
+                console.warn('İşlem geçmişi bulunamadı.');
+                alert('Bu varlık üzerinde işlem geçmişi bulunamadı.');
             }
         }
 
-        // 5. WIPO/ARIPO Alt Kayıt Kontrolü
+        // 4. WIPO/ARIPO Alt Kayıt Kontrolü
         if (record.wipoIR || record.aripoIR) {
             const ir = record.wipoIR || record.aripoIR;
             this.state.selectedWipoAripoChildren = this.state.allIpRecords.filter(c => 
@@ -524,22 +505,46 @@ class CreateTaskController {
         this.validator.checkCompleteness(this.state);
     }
 
+// --- GÜNCELLENEN METOT 1: Geri Çekme İşlemleri ve Modal Mantığı ---
     processParentTransactions(record) {
-        const parentTypes = (String(this.state.selectedTaskType?.id) === '21') ? ['20'] : ['7'];
-        const parents = (record.transactions || []).filter(t => parentTypes.includes(String(t.type)) && t.transactionHierarchy === 'parent');
+        console.log('Geri çekme işlemi için uygun itirazlar aranıyor...');
         
+        const currentTaskTypeId = String(this.state.selectedTaskType?.id);
+        let parentTypes = [];
+
+        // 1. Yayına İtirazı Geri Çekme (Tip 21) -> Aranan: Yayına İtiraz (Tip 20)
+        if (currentTaskTypeId === '21') {
+            parentTypes = ['20', 'trademark_publication_objection'];
+        } 
+        // 2. Karara İtirazı Geri Çekme (Tip 8) -> Aranan: Karara İtiraz (Tip 7) VEYA Y.İ.Y.İ (Tip 19)
+        else if (currentTaskTypeId === '8') {
+            parentTypes = ['7', '19', 'trademark_decision_objection', 'trademark_reconsideration_of_publication_objection'];
+        }
+
+        // Transactions içinde tipi eşleşenleri bul
+        // Not: transactionHierarchy kontrolünü kaldırdık, çünkü eski kayıtlarda bu alan olmayabilir.
+        // Sadece işlem tipi (type) üzerinden eşleştirme yapıyoruz.
+        const parents = (record.transactions || []).filter(t => 
+            parentTypes.includes(String(t.type))
+        );
+        
+        console.log(`Bulunan İşlem Sayısı: ${parents.length}`, parents);
+
         if (parents.length > 1) {
-            // İşlem adlarını zenginleştir
+            // Birden fazla uygun işlem varsa kullanıcıya seçtir (Modal Aç)
             const enrichedParents = parents.map(p => ({
                 ...p,
                 transactionTypeName: this.getTransactionTypeName(p.type)
             }));
             this.uiManager.showParentSelectionModal(enrichedParents, 'Geri Çekilecek İşlemi Seçin');
         } else if (parents.length === 1) {
+            // Tek bir işlem varsa otomatik seç
             this.submitHandler.selectedParentTransactionId = parents[0].id;
+            console.log('Tek işlem bulundu, otomatik seçildi:', parents[0].id);
         } else {
-            alert('Uygun işlem bulunamadı.');
-            this.state.selectedIpRecord = null;
+            // Hiç işlem bulunamadıysa uyar
+            alert('Bu varlık üzerinde geri çekilebilecek uygun bir işlem (İtiraz vb.) bulunamadı.');
+            this.state.selectedIpRecord = null; // Seçimi iptal et
             document.getElementById('selectedIpRecordContainer').style.display = 'none';
         }
     }
