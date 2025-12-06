@@ -304,31 +304,89 @@ export class TaskSubmitHandler {
         await ipRecordsService.addTransactionToRecord(recordId, transactionData);
     }
 
-    // E) TAHAKKUK
+// E) TAHAKKUK VE FİNANSAL İŞLEMLER (YENİLENMİŞ MANTIK)
     async _handleAccrual(taskId, taskTitle, taskType, state) {
-        const officialFee = parseFloat(document.getElementById('officialFee')?.value || 0);
-        const serviceFee = parseFloat(document.getElementById('serviceFee')?.value || 0);
+        // 1. Arayüzdeki Seçimlerin Durumunu Al
+        const isFree = document.getElementById('isFreeTransaction')?.checked;
+        const formContainer = document.getElementById('accrualFormContainer');
+        
+        // Form görünür mü? (display: none değilse görünürdür)
+        const isFormOpen = formContainer && formContainer.style.display !== 'none';
 
-        if (officialFee > 0 || serviceFee > 0) {
-            const vatRate = parseFloat(document.getElementById('vatRate')?.value || 0);
-            const applyVat = document.getElementById('applyVatToOfficialFee')?.checked;
-            const total = applyVat ? (officialFee + serviceFee) * (1 + vatRate/100) : officialFee + (serviceFee * (1 + vatRate/100));
-
-            const accrualData = {
-                taskId: taskId,
-                taskTitle: taskTitle,
-                officialFee: { amount: officialFee, currency: 'TRY' },
-                serviceFee: { amount: serviceFee, currency: 'TRY' },
-                vatRate: vatRate,
-                applyVatToOfficialFee: applyVat,
-                totalAmount: total,
-                status: 'unpaid',
-                createdAt: new Date().toISOString(),
-                tpInvoiceParty: state.selectedTpInvoiceParty ? { id: state.selectedTpInvoiceParty.id, name: state.selectedTpInvoiceParty.name } : null,
-                serviceInvoiceParty: state.selectedServiceInvoiceParty ? { id: state.selectedServiceInvoiceParty.id, name: state.selectedServiceInvoiceParty.name } : null
-            };
-            await accrualService.addAccrual(accrualData);
+        // --- SENARYO A: Ücretsiz İşlem ---
+        if (isFree) {
+            console.log('🆓 "Ücretsiz İşlem" seçildi. Tahakkuk kaydı oluşturulmuyor.');
+            return; // Hiçbir şey yapma ve çık
         }
+
+        // --- SENARYO B: Form Açık (Anlık Tahakkuk) ---
+        if (isFormOpen) {
+            const officialFee = parseFloat(document.getElementById('officialFee')?.value || 0);
+            const serviceFee = parseFloat(document.getElementById('serviceFee')?.value || 0);
+
+            // Eğer form açık ama değer girilmediyse, kullanıcıya güvenip yine de işlem yapmıyoruz
+            // veya boş bir tahakkuk oluşturabiliriz. Burada sadece doluysa oluşturuyoruz:
+            if (officialFee > 0 || serviceFee > 0) {
+                const vatRate = parseFloat(document.getElementById('vatRate')?.value || 0);
+                const applyVat = document.getElementById('applyVatToOfficialFee')?.checked;
+                const total = applyVat ? (officialFee + serviceFee) * (1 + vatRate/100) : officialFee + (serviceFee * (1 + vatRate/100));
+
+                const accrualData = {
+                    taskId: taskId,
+                    taskTitle: taskTitle,
+                    officialFee: { amount: officialFee, currency: document.getElementById('officialFeeCurrency')?.value || 'TRY' },
+                    serviceFee: { amount: serviceFee, currency: document.getElementById('serviceFeeCurrency')?.value || 'TRY' },
+                    vatRate: vatRate,
+                    applyVatToOfficialFee: applyVat,
+                    totalAmount: total,
+                    status: 'unpaid',
+                    createdAt: new Date().toISOString(),
+                    tpInvoiceParty: state.selectedTpInvoiceParty ? { id: state.selectedTpInvoiceParty.id, name: state.selectedTpInvoiceParty.name } : null,
+                    serviceInvoiceParty: state.selectedServiceInvoiceParty ? { id: state.selectedServiceInvoiceParty.id, name: state.selectedServiceInvoiceParty.name } : null
+                };
+                
+                await accrualService.addAccrual(accrualData);
+                console.log('💰 Anlık tahakkuk oluşturuldu.');
+            } else {
+                console.warn('⚠️ Tahakkuk formu açık ama tutarlar 0 girildiği için tahakkuk oluşturulmadı.');
+            }
+            return;
+        }
+
+        // --- SENARYO C: Ertelenmiş Tahakkuk (Form Kapalı ve Ücretsiz Değil) ---
+        console.log('⏳ Ertelenmiş tahakkuk senaryosu: Finans sorumlusuna yeni görev atanıyor...');
+
+        // NOT: Bu ID'yi değiştirebilirsiniz. Şimdilik kodlarınızda sık geçen Selcan Hanım'ın ID'sini örnek olarak ekledim.
+        const FINANCE_USER_ID = "8A9HHfdKKNR3WKl6tCtJH5Khjkx1"; 
+        const FINANCE_USER_EMAIL = "selcanakoglu@evrekapatent.com"; 
+
+        const accrualTaskData = {
+            taskType: 'accrual_creation', // Özel bir tip ID'si veya string
+            title: `Tahakkuk Girişi: ${taskTitle}`,
+            description: `"${taskTitle}" işi oluşturuldu ancak finansal verileri girilmedi. Lütfen tahakkuk kaydını oluşturun.`,
+            priority: 'high',
+            status: 'open', // İş oluşturuldu, yapılmayı bekliyor
+            
+            assignedTo_uid: FINANCE_USER_ID,
+            assignedTo_email: FINANCE_USER_EMAIL,
+            
+            // Ana işle ilişkilendirme
+            relatedTaskId: taskId, 
+            relatedIpRecordId: state.selectedIpRecord ? state.selectedIpRecord.id : null,
+            relatedIpRecordTitle: state.selectedIpRecord ? (state.selectedIpRecord.title || state.selectedIpRecord.markName) : taskTitle,
+            
+            details: {
+                source: 'automatic_accrual_assignment',
+                originalTaskType: taskType.alias || taskType.name
+            },
+
+            createdAt: Timestamp.now(),
+            updatedAt: Timestamp.now()
+        };
+
+        // Yeni görevi oluştur
+        await taskService.createTask(accrualTaskData);
+        console.log('✅ Finans sorumlusuna "Tahakkuk Oluşturma" görevi atandı.');
     }
     
     // F) MARKA BAŞVURUSU
