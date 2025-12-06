@@ -304,19 +304,20 @@ export class TaskSubmitHandler {
         await ipRecordsService.addTransactionToRecord(recordId, transactionData);
     }
 
-// E) TAHAKKUK VE FİNANSAL İŞLEMLER
+// E) TAHAKKUK VE FİNANSAL İŞLEMLER (DÜZELTİLMİŞ)
     async _handleAccrual(taskId, taskTitle, taskType, state) {
+        // Arayüz kontrolleri
         const isFree = document.getElementById('isFreeTransaction')?.checked;
         const formContainer = document.getElementById('accrualFormContainer');
         const isFormOpen = formContainer && formContainer.style.display !== 'none';
 
-        // SENARYO A: Ücretsiz
+        // --- SENARYO A: Ücretsiz İşlem ---
         if (isFree) {
-            console.log('🆓 "Ücretsiz İşlem" seçildi.');
+            console.log('🆓 "Ücretsiz İşlem" seçildi. Tahakkuk atlanıyor.');
             return;
         }
 
-        // SENARYO B: Anlık Tahakkuk (Form Açık)
+        // --- SENARYO B: Anlık Tahakkuk (Form Açık ve Dolu) ---
         if (isFormOpen) {
             const officialFee = parseFloat(document.getElementById('officialFee')?.value || 0);
             const serviceFee = parseFloat(document.getElementById('serviceFee')?.value || 0);
@@ -341,32 +342,46 @@ export class TaskSubmitHandler {
                 };
                 
                 await accrualService.addAccrual(accrualData);
-                console.log('💰 Anlık tahakkuk oluşturuldu.');
+                console.log('💰 Anlık tahakkuk oluşturuldu (DB\'ye yazıldı).');
             }
             return;
         }
 
-        // SENARYO C: Ertelenmiş Tahakkuk Görevi
-        console.log('⏳ Ertelenmiş tahakkuk: Görev atanıyor...');
+        // --- SENARYO C: Ertelenmiş Tahakkuk Görevi (ID "53" ile) ---
+        console.log('⏳ Ertelenmiş tahakkuk senaryosu: "Tahakkuk Oluşturma" görevi hazırlanıyor...');
 
-        // Sabit Finans Kullanıcısı (Örn: Selcan Hanım)
-        const FINANCE_USER_ID = "8A9HHfdKKNR3WKl6tCtJH5Khjkx1"; 
-        const FINANCE_USER_EMAIL = "selcanakoglu@evrekapatent.com"; 
+        // 1. Atanacak kişiyi belirle (Önce DB kuralı, yoksa Fallback)
+        let assignedUid = "8A9HHfdKKNR3WKl6tCtJH5Khjkx1"; // Fallback (Selcan Hanım)
+        let assignedEmail = "selcanakoglu@evrekapatent.com";
 
+        try {
+            // "53" ID'li kuralı veritabanından çekmeye çalış
+            const rule = await this.dataManager.getAssignmentRule("53");
+            if (rule && rule.assigneeIds && rule.assigneeIds.length > 0) {
+                const targetUid = rule.assigneeIds[0];
+                const user = state.allUsers.find(u => u.id === targetUid);
+                if (user) {
+                    assignedUid = user.id;
+                    assignedEmail = user.email;
+                    console.log(`👤 Atama kuraldan alındı: ${assignedEmail}`);
+                }
+            }
+        } catch (e) {
+            console.warn('⚠️ Atama kuralı çekilemedi, varsayılan (Selcan Hn.) kullanılıyor.');
+        }
+
+        // 2. Görev Verisini Hazırla
         const accrualTaskData = {
-            taskType: 'accrual_creation',
-            // DÜZELTME 1: Başlık Türkçe
+            taskType: "53", // <--- KRİTİK DÜZELTME: Artık veritabanı ID'si (String olarak)
             title: `Tahakkuk Oluşturma: ${taskTitle}`,
-            // DÜZELTME 2: Açıklama Türkçe
-            description: `"${taskTitle}" işi oluşturuldu. İşlem tamamlandığında bu görevin statüsü "Açık" olacaktır. Lütfen tahakkuk kaydını oluşturun.`,
+            description: `"${taskTitle}" işi oluşturuldu. İşlem tamamlandığında bu görevin statüsü otomatik olarak "Açık" olacaktır. Lütfen tahakkuk kaydını oluşturun.`,
             priority: 'high',
+            status: 'pending', // Beklemede statüsü
             
-            // DÜZELTME 3: Statü "pending" (Beklemede)
-            status: 'pending', 
+            assignedTo_uid: assignedUid,
+            assignedTo_email: assignedEmail,
             
-            assignedTo_uid: FINANCE_USER_ID,
-            assignedTo_email: FINANCE_USER_EMAIL,
-            
+            // İlişkiler
             relatedTaskId: taskId, 
             relatedIpRecordId: state.selectedIpRecord ? state.selectedIpRecord.id : null,
             relatedIpRecordTitle: state.selectedIpRecord ? (state.selectedIpRecord.title || state.selectedIpRecord.markName) : taskTitle,
@@ -380,8 +395,13 @@ export class TaskSubmitHandler {
             updatedAt: Timestamp.now()
         };
 
-        await taskService.createTask(accrualTaskData);
-        console.log('✅ "Tahakkuk Oluşturma" görevi (pending) atandı.');
+        // 3. Görevi Oluştur
+        const result = await taskService.createTask(accrualTaskData);
+        if (result && result.success) {
+            console.log(`✅ "Tahakkuk Oluşturma" görevi başarıyla atandı. Task ID: ${result.id}, Type: 53`);
+        } else {
+            console.error('❌ Tahakkuk görevi oluşturulurken hata oluştu.');
+        }
     }
     
     // F) MARKA BAŞVURUSU
