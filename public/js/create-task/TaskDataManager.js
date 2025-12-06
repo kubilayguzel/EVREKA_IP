@@ -1,5 +1,5 @@
 import { ipRecordsService, personService, taskService, transactionTypeService, db, storage } from '../../firebase-config.js';
-import { doc, getDoc, collection, getDocs, query, where, limit } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { doc, getDoc, collection, getDocs, query, where, limit, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
 
 export class TaskDataManager {
@@ -158,5 +158,40 @@ export class TaskDataManager {
         return Array.isArray(result.data) ? result.data :
                Array.isArray(result.items) ? result.items :
                (Array.isArray(result) ? result : []);
+    }
+
+    async getRecordTransactions(recordId) {
+        if (!recordId) return { success: false, message: 'Kayıt ID yok.' };
+
+        try {
+            // "transactions" alt koleksiyonuna erişiyoruz
+            const transactionsRef = collection(db, 'ipRecords', recordId, 'transactions');
+            
+            // Tarihe göre yeniden eskiye sırala (creationDate veya timestamp)
+            // Eğer creationDate yoksa hata almamak için try-catch bloğu koruyacaktır.
+            const q = query(transactionsRef, orderBy('creationDate', 'desc'));
+            
+            const snapshot = await getDocs(q);
+            
+            const data = snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            }));
+
+            return { success: true, data: data };
+        } catch (error) {
+            console.warn("Transaksiyonlar çekilirken hata (sıralama veya yetki sorunu olabilir):", error);
+            
+            // Sıralama hatası (index yoksa) olursa sıralamasız çekmeyi dene (Fallback)
+            try {
+                const transactionsRef = collection(db, 'ipRecords', recordId, 'transactions');
+                const snapshot = await getDocs(transactionsRef);
+                const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                return { success: true, data: data };
+            } catch (err2) {
+                console.error("Transaksiyonlar çekilemedi:", err2);
+                return { success: false, error: err2 };
+            }
+        }
     }
 }
