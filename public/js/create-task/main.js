@@ -381,20 +381,48 @@ class CreateTaskController {
     async selectIpRecord(record) {
         this.state.selectedIpRecord = record;
         
-        // 1. İsim
+        // 1. İsim ve Numara Alanlarını Doldur
         document.getElementById('selectedIpRecordLabel').textContent = record.title || record.markName || 'İsimsiz Kayıt';
-        
-        // 2. Başvuru Numarası
         document.getElementById('selectedIpRecordNumber').textContent = record.applicationNumber || record.applicationNo || '-';
         
-        // 3. Görsel Kontrolü (imageUrl, logo veya image alanlarından hangisi varsa)
+        // 2. GÖRSEL İŞLEME MANTIĞI (Düzeltilen Kısım)
         const imgEl = document.getElementById('selectedIpRecordImage');
         const phEl = document.getElementById('selectedIpRecordPlaceholder');
-        const imgUrl = record.imageUrl || record.logo || record.image; 
         
-        if (imgUrl) {
-            imgEl.src = imgUrl;
+        // Yükleniyor durumuna getir (Opsiyonel)
+        if(imgEl) imgEl.style.opacity = '0.5';
+
+        let finalImageUrl = null;
+
+        try {
+            // A) Bülten Kaydı mı? (Genelde 'logo' veya 'image' alanında direkt URL veya Base64 olur)
+            if (this.state.searchSource === 'bulletin') {
+                finalImageUrl = record.logo || record.image || record.imageUrl;
+            } 
+            // B) Portföy Kaydı mı? (Firebase Storage yolu olabilir, resolve edilmeli)
+            else {
+                if (record.imageUrl) {
+                    // Eğer http ile başlıyorsa direkt linktir, değilse Storage yoludur
+                    if (record.imageUrl.startsWith('http') || record.imageUrl.startsWith('data:')) {
+                        finalImageUrl = record.imageUrl;
+                    } else {
+                        // DataManager üzerinden Storage URL'ini al
+                        finalImageUrl = await this.dataManager.resolveImageUrl(record.imageUrl);
+                    }
+                } else if (record.image) {
+                     // Eski kayıtlardan 'image' alanı kalmış olabilir
+                     finalImageUrl = record.image.startsWith('http') ? record.image : await this.dataManager.resolveImageUrl(record.image);
+                }
+            }
+        } catch (err) {
+            console.warn('Görsel yüklenirken hata oluştu:', err);
+        }
+
+        // 3. Görseli Arayüze Bas
+        if (finalImageUrl) {
+            imgEl.src = finalImageUrl;
             imgEl.style.display = 'block';
+            imgEl.style.opacity = '1'; // Yükleme bitince netleştir
             if(phEl) phEl.style.display = 'none';
         } else {
             imgEl.style.display = 'none';
@@ -404,7 +432,7 @@ class CreateTaskController {
         // Kutuyu görünür yap
         document.getElementById('selectedIpRecordContainer').style.display = 'block';
         
-        // Geri Çekme Kontrolü
+        // 4. Diğer Alt İşlemler (Geri Çekme & WIPO)
         if (this.state.isWithdrawalTask) {
             const txs = await this.dataManager.getRecordTransactions(record.id);
             if (txs.success && txs.data) {
@@ -413,7 +441,6 @@ class CreateTaskController {
             }
         }
 
-        // WIPO/ARIPO Alt Kayıt Kontrolü
         if (record.wipoIR || record.aripoIR) {
             const ir = record.wipoIR || record.aripoIR;
             this.state.selectedWipoAripoChildren = this.state.allIpRecords.filter(c => 
