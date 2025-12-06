@@ -450,33 +450,114 @@ export class TaskUIManager {
 
     // 6. Parent Seçim Modalı (Withdrawal için)
     showParentSelectionModal(transactions, title) {
-        const modalTitle = document.getElementById('selectParentModalLabel');
-        const list = document.getElementById('parentListContainer');
-        if(modalTitle) modalTitle.textContent = title;
+        console.log('🔄 Modal açılıyor...', { transactions, title });
         
-        if(list) {
-            list.innerHTML = transactions.map(tx => `
-                <li class="list-group-item list-group-item-action" data-id="${tx.id}">
-                    <div class="d-flex justify-content-between">
-                        <div><strong>${tx.transactionTypeName || 'İşlem'}</strong> <small>${new Date(tx.timestamp).toLocaleDateString('tr-TR')}</small></div>
-                        <i class="fas fa-chevron-right"></i>
-                    </div>
-                </li>`).join('');
+        const modal = document.getElementById('selectParentModal');
+        const list = document.getElementById('parentListContainer');
+        const modalTitle = document.getElementById('selectParentModalLabel');
+        
+        if (!modal || !list) {
+            console.error('❌ Modal elementleri bulunamadı (selectParentModal veya parentListContainer eksik).');
+            return;
+        }
+
+        // 1. KRİTİK DÜZELTME: Modalı body'ye taşı (Z-Index/Gölgeleme sorununu çözer)
+        if (modal.parentElement !== document.body) {
+            document.body.appendChild(modal);
+        }
+
+        // 2. BOYUT AYARI: Daha geniş yap
+        const dialog = modal.querySelector('.modal-dialog');
+        if (dialog) {
+            dialog.classList.add('modal-lg'); // Bootstrap geniş modal sınıfı
+            dialog.style.maxWidth = '900px';  // Mobilde taşmaz, masaüstünde geniş durur
         }
         
-        // jQuery veya Vanilla JS ile aç
-        if(window.$) $('#selectParentModal').modal('show');
-        else {
-            const m = document.getElementById('selectParentModal');
-            if(m) { m.style.display='block'; m.classList.add('show'); }
+        // 3. Z-INDEX GARANTİSİ: Modalı en üste al
+        modal.style.zIndex = '1055'; 
+
+        // Başlık
+        if(modalTitle) modalTitle.textContent = title || 'İşlem Seçimi';
+        
+        // Listeyi Temizle ve Doldur
+        list.innerHTML = '';
+        transactions.forEach(tx => {
+            const li = document.createElement('li');
+            li.className = 'list-group-item list-group-item-action';
+            li.style.cursor = 'pointer';
+            
+            // Tarih formatı
+            const dateStr = tx.creationDate ? new Date(tx.creationDate).toLocaleDateString('tr-TR') : '-';
+            
+            li.innerHTML = `
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="mb-1 font-weight-bold text-primary">${tx.transactionTypeName || 'İşlem'}</h6>
+                        <p class="mb-1 text-muted small">${tx.description || 'Açıklama yok'}</p>
+                        <small class="text-secondary"><i class="far fa-calendar-alt"></i> ${dateStr}</small>
+                    </div>
+                    <i class="fas fa-chevron-right text-muted"></i>
+                </div>
+            `;
+            
+            // Tıklama Olayı (Main.js'deki listener yakalayacak)
+            li.dataset.id = tx.id; // Dataset'e ID ekle (Event delegation için)
+            li.onclick = () => {
+                // Eğer global controller varsa oraya haber ver, yoksa event delegation bekle
+                // Not: Main.js'de delegation setupParentListListener varsa buraya gerek kalmaz ama garanti olsun.
+                const evt = new CustomEvent('parentTransactionSelected', { detail: { id: tx.id } });
+                document.dispatchEvent(evt);
+            };
+            
+            list.appendChild(li);
+        });
+        
+        // 4. MODALI AÇ (jQuery veya Vanilla JS)
+        if (window.$) {
+            $(modal).modal({ backdrop: 'static', keyboard: false }); // Dışarı tıklayınca kapanmasın
+            $(modal).modal('show');
+            
+            // Backdrop (Arka plan karartması) ayarı
+            setTimeout(() => {
+                const backdrops = document.querySelectorAll('.modal-backdrop');
+                backdrops.forEach(bd => {
+                    bd.style.zIndex = '1050'; // Modal (1055) altında kalsın
+                    document.body.appendChild(bd); // Backdrop'u da body sonuna taşı
+                });
+            }, 100);
+        } else {
+            // Vanilla JS Fallback
+            modal.style.display = 'block';
+            modal.classList.add('show');
+            document.body.classList.add('modal-open');
+            
+            // Manuel Backdrop
+            let backdrop = document.getElementById('custom-backdrop');
+            if (!backdrop) {
+                backdrop = document.createElement('div');
+                backdrop.id = 'custom-backdrop';
+                backdrop.className = 'modal-backdrop fade show';
+                document.body.appendChild(backdrop);
+            }
+            backdrop.style.zIndex = '1050';
+            backdrop.style.display = 'block';
         }
     }
 
     hideParentSelectionModal() {
-        if(window.$) $('#selectParentModal').modal('hide');
-        else {
-            const m = document.getElementById('selectParentModal');
-            if(m) { m.style.display='none'; m.classList.remove('show'); }
+        const modal = document.getElementById('selectParentModal');
+        
+        if (window.$) {
+            $(modal).modal('hide');
+        } else {
+            if (modal) {
+                modal.style.display = 'none';
+                modal.classList.remove('show');
+            }
+            document.body.classList.remove('modal-open');
+            
+            const backdrop = document.getElementById('custom-backdrop');
+            if (backdrop) backdrop.remove();
         }
     }
 
