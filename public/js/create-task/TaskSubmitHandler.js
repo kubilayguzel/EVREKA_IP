@@ -2,7 +2,6 @@ import { taskService, ipRecordsService, accrualService, db, authService } from '
 import { doc, getDoc, updateDoc, collection, addDoc, Timestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { TASK_IDS, RELATED_PARTY_REQUIRED, asId } from './TaskConstants.js';
 import { getSelectedNiceClasses } from '../nice-classification.js';
-// DÜZELTME: utils.js dosyasının doğru yolu (public/utils.js ise)
 import { addMonthsToDate, findNextWorkingDay, isWeekend, isHoliday, TURKEY_HOLIDAYS } from '../../utils.js';
 
 export class TaskSubmitHandler {
@@ -57,12 +56,6 @@ export class TaskSubmitHandler {
                 }
             }
 
-            // Statü (Yenileme ise özel statü)
-            let taskStatus = 'open';
-            if (String(selectedTaskType.id) === '22') {
-                taskStatus = 'awaiting_client_approval';
-            }
-
             // Task Data Objesi
             let taskData = {
                 taskType: selectedTaskType.id,
@@ -71,7 +64,7 @@ export class TaskSubmitHandler {
                 priority: document.getElementById('taskPriority')?.value || 'medium',
                 assignedTo_uid: assignedUser ? assignedUser.id : null,
                 assignedTo_email: assignedUser ? assignedUser.email : null,
-                status: taskStatus,
+                status: 'open', // DÜZELTME: Statü her zaman 'open' olacak
                 relatedIpRecordId: selectedIpRecord ? selectedIpRecord.id : null,
                 relatedIpRecordTitle: selectedIpRecord ? (selectedIpRecord.title || selectedIpRecord.markName) : taskTitle,
                 details: {},
@@ -88,14 +81,14 @@ export class TaskSubmitHandler {
             // 2. İlgili Taraflar
             this._enrichTaskWithParties(taskData, selectedTaskType, selectedRelatedParties, selectedRelatedParty);
 
-            // 3. Marka Başvurusu Kaydı
+            // 3. Marka Başvurusu ise Kayıt Oluştur
             if (selectedTaskType.alias === 'Başvuru' && selectedTaskType.ipType === 'trademark') {
                 const newRecordId = await this._handleTrademarkApplication(state, taskData);
                 if (!newRecordId) throw new Error("Marka kaydı oluşturulamadı.");
                 taskData.relatedIpRecordId = newRecordId;
             }
 
-            // 4. OTOMATİK TARİH VE DETAY HESAPLAMA (Yenileme ve İtiraz)
+            // 4. OTOMATİK TARİH VE DETAY HESAPLAMA
             await this._calculateTaskDates(taskData, selectedTaskType, selectedIpRecord);
 
             // 5. Task Oluştur
@@ -133,7 +126,7 @@ export class TaskSubmitHandler {
 
     // --- YARDIMCI METOTLAR ---
 
-    // A) TARİH HESAPLAMA (GÜNCELLENDİ)
+    // A) TARİH HESAPLAMA
     async _calculateTaskDates(taskData, taskType, ipRecord) {
         try {
             // 1. YENİLEME (ID: 22)
@@ -142,11 +135,9 @@ export class TaskSubmitHandler {
             if (isRenewal && ipRecord) {
                 console.log('📅 Yenileme tarihleri hesaplanıyor...');
                 let baseDate = null;
-                // Veritabanından gelen tarih alanları (öncelik sırası)
                 const rawDate = ipRecord.renewalDate || ipRecord.registrationDate || ipRecord.applicationDate;
 
                 if (rawDate) {
-                    // Timestamp -> Date dönüşümü
                     if (rawDate.toDate && typeof rawDate.toDate === 'function') {
                         baseDate = rawDate.toDate();
                     } else if (typeof rawDate === 'string') {
@@ -156,33 +147,29 @@ export class TaskSubmitHandler {
                     }
                 }
 
-                // Eğer tarih yoksa veya geçersizse bugünü baz al (Fallback)
                 if (!baseDate || isNaN(baseDate.getTime())) {
                     console.warn('⚠️ Geçerli bir tarih bulunamadı, bugün baz alınıyor.');
                     baseDate = new Date();
                 }
 
-                // Eğer tarih geçmişte kalmışsa (Örn: eski yenileme tarihi), +10 yıl ekle
                 if (baseDate < new Date()) {
                     baseDate.setFullYear(baseDate.getFullYear() + 10);
                 }
 
-                // Hesaplamalar
-                const official = findNextWorkingDay(baseDate, TURKEY_HOLIDAYS); // Resmi (Tatilse kaydır)
+                const official = findNextWorkingDay(baseDate, TURKEY_HOLIDAYS);
                 const operational = new Date(official);
-                operational.setDate(operational.getDate() - 3); // Operasyonel (Resmi - 3 gün)
+                operational.setDate(operational.getDate() - 3);
                 
-                // Operasyonel tarihi de tatilden kurtar (geriye doğru)
                 while (isWeekend(operational) || isHoliday(operational, TURKEY_HOLIDAYS)) {
                     operational.setDate(operational.getDate() - 1);
                 }
 
-                // Timestamp Olarak Kaydet (Veritabanı formatı)
+                // Tarihleri Timestamp olarak ata
                 taskData.officialDueDate = Timestamp.fromDate(official);
                 taskData.operationalDueDate = Timestamp.fromDate(operational);
-                taskData.dueDate = Timestamp.fromDate(operational); // Ana vade tarihi operasyoneldir
+                taskData.dueDate = Timestamp.fromDate(operational);
 
-                // Detay Objeleri (String Formatı)
+                // Detayları String olarak ata (Eksik olan kısım)
                 taskData.officialDueDateDetails = {
                     finalOfficialDueDate: official.toISOString().split('T')[0],
                     finalOperationalDueDate: operational.toISOString().split('T')[0],
@@ -191,7 +178,6 @@ export class TaskSubmitHandler {
                     adjustments: []
                 };
 
-                // Açıklama Güncelleme
                 const dateStr = baseDate.toLocaleDateString('tr-TR');
                 if (taskData.description && !taskData.description.includes('Yenileme tarihi:')) {
                     const separator = taskData.description.endsWith('.') ? ' ' : '. ';
@@ -358,7 +344,7 @@ export class TaskSubmitHandler {
         return result.success ? result.id : null;
     }
 
-    // G) OTOMASYON (3. Taraf Portföy)
+    // G) OTOMASYON
     async _handleOppositionAutomation(taskId, taskType, ipRecord) {
         if (window.portfolioByOppositionCreator && typeof window.portfolioByOppositionCreator.handleTransactionCreated === 'function') {
             try {
