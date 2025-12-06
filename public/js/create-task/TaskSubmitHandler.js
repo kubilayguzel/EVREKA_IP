@@ -8,6 +8,7 @@ export class TaskSubmitHandler {
     constructor(dataManager, uiManager) {
         this.dataManager = dataManager;
         this.uiManager = uiManager;
+        // Main.js tarafından set edilen seçili parent ID'si
         this.selectedParentTransactionId = null;
     }
 
@@ -43,7 +44,6 @@ export class TaskSubmitHandler {
                 taskTitle = brandText ? `${brandText} Marka Başvurusu` : selectedTaskType.alias;
                 taskDesc = taskDesc || `'${brandText || 'Yeni'}' markası için başvuru işlemi.`;
             } else {
-                // Diğer İşlemler
                 const recordTitle = selectedIpRecord ? (selectedIpRecord.title || selectedIpRecord.markName) : '';
                 taskTitle = taskTitle || (recordTitle ? `${recordTitle} ${selectedTaskType.alias || selectedTaskType.name}` : (selectedTaskType.alias || selectedTaskType.name));
                 
@@ -56,6 +56,8 @@ export class TaskSubmitHandler {
                 }
             }
 
+            let taskStatus = 'open'; // Varsayılan statü
+
             // Task Data Objesi
             let taskData = {
                 taskType: selectedTaskType.id,
@@ -64,7 +66,7 @@ export class TaskSubmitHandler {
                 priority: document.getElementById('taskPriority')?.value || 'medium',
                 assignedTo_uid: assignedUser ? assignedUser.id : null,
                 assignedTo_email: assignedUser ? assignedUser.email : null,
-                status: 'open', // DÜZELTME: Statü her zaman 'open' olacak
+                status: taskStatus,
                 relatedIpRecordId: selectedIpRecord ? selectedIpRecord.id : null,
                 relatedIpRecordTitle: selectedIpRecord ? (selectedIpRecord.title || selectedIpRecord.markName) : taskTitle,
                 details: {},
@@ -72,7 +74,6 @@ export class TaskSubmitHandler {
                 updatedAt: Timestamp.now()
             };
 
-            // Formdan gelen manuel tarih varsa ekle (hesaplama fonksiyonu bunu ezebilir)
             const manualDueDate = document.getElementById('taskDueDate')?.value;
             if (manualDueDate) {
                 taskData.dueDate = Timestamp.fromDate(new Date(manualDueDate));
@@ -81,14 +82,14 @@ export class TaskSubmitHandler {
             // 2. İlgili Taraflar
             this._enrichTaskWithParties(taskData, selectedTaskType, selectedRelatedParties, selectedRelatedParty);
 
-            // 3. Marka Başvurusu ise Kayıt Oluştur
+            // 3. Marka Başvurusu Kaydı
             if (selectedTaskType.alias === 'Başvuru' && selectedTaskType.ipType === 'trademark') {
                 const newRecordId = await this._handleTrademarkApplication(state, taskData);
                 if (!newRecordId) throw new Error("Marka kaydı oluşturulamadı.");
                 taskData.relatedIpRecordId = newRecordId;
             }
 
-            // 4. OTOMATİK TARİH VE DETAY HESAPLAMA
+            // 4. Otomatik Tarih Hesaplama
             await this._calculateTaskDates(taskData, selectedTaskType, selectedIpRecord);
 
             // 5. Task Oluştur
@@ -164,12 +165,10 @@ export class TaskSubmitHandler {
                     operational.setDate(operational.getDate() - 1);
                 }
 
-                // Tarihleri Timestamp olarak ata
                 taskData.officialDueDate = Timestamp.fromDate(official);
                 taskData.operationalDueDate = Timestamp.fromDate(operational);
                 taskData.dueDate = Timestamp.fromDate(operational);
 
-                // Detayları String olarak ata (Eksik olan kısım)
                 taskData.officialDueDateDetails = {
                     finalOfficialDueDate: official.toISOString().split('T')[0],
                     finalOperationalDueDate: operational.toISOString().split('T')[0],
@@ -183,12 +182,10 @@ export class TaskSubmitHandler {
                     const separator = taskData.description.endsWith('.') ? ' ' : '. ';
                     taskData.description += `${separator}Yenileme tarihi: ${dateStr}.`;
                 }
-                console.log('✅ Yenileme tarihleri set edildi:', taskData.officialDueDateDetails);
             }
 
             // 2. YAYINA İTİRAZ (ID: 20)
             const isOpposition = ['20', 'trademark_publication_objection'].includes(String(taskType.id));
-            
             if (isOpposition && ipRecord && ipRecord.source === 'bulletin' && ipRecord.bulletinId) {
                 const bulletinData = await this.dataManager.fetchAndStoreBulletinData(ipRecord.bulletinId);
                 
@@ -213,13 +210,10 @@ export class TaskSubmitHandler {
                     taskData.details.bulletinDate = bulletinData.bulletinDate;
                 }
             }
-
-        } catch (e) {
-            console.warn('❌ Tarih hesaplama hatası:', e);
-        }
+        } catch (e) { console.warn('Tarih hesaplama hatası:', e); }
     }
 
-    // B) DAVA (SUIT) KAYDI
+    // B) DAVA KAYDI
     async _handleSuitCreation(state, taskData, taskId) {
         const { selectedTaskType, selectedIpRecord, selectedRelatedParties } = state;
         try {
@@ -255,9 +249,7 @@ export class TaskSubmitHandler {
             };
             const suitsRef = collection(db, 'suits');
             await addDoc(suitsRef, newSuitData);
-        } catch (error) {
-            console.error('Suit oluşturma hatası:', error);
-        }
+        } catch (error) { console.error('Suit hatası:', error); }
     }
 
     // C) TARAFLAR
@@ -280,15 +272,33 @@ export class TaskSubmitHandler {
         }
     }
 
-    // D) TRANSACTION
+    // D) TRANSACTION (GÜNCELLENDİ: CHILD MANTIĞI EKLENDİ)
     async _addTransactionToPortfolio(recordId, taskType, taskId, state) {
         let hierarchy = 'parent';
+        let extraData = {};
+
+        // Geri Çekme Kontrolü: Tip 8 (Karara İtirazı Geri Çekme) veya Tip 21 (Yayına İtirazı Geri Çekme)
+        const tId = String(taskType.id);
+        const isWithdrawal = ['8', '21'].includes(tId);
+
+        if (isWithdrawal) {
+            // Eğer bir Parent Transaction seçilmişse (Main.js tarafından set edilir)
+            if (this.selectedParentTransactionId) {
+                hierarchy = 'child';
+                extraData.parentTransactionId = this.selectedParentTransactionId;
+                console.log(`🔗 Geri çekme işlemi child olarak bağlanıyor. Parent ID: ${this.selectedParentTransactionId}`);
+            } else {
+                console.warn('⚠️ Geri çekme işlemi parent ID olmadan kaydediliyor!');
+            }
+        }
+
         const transactionData = {
             type: taskType.id,
             description: `${taskType.name} işlemi.`,
             transactionHierarchy: hierarchy,
             triggeringTaskId: String(taskId),
-            createdAt: new Date().toISOString()
+            createdAt: new Date().toISOString(),
+            ...extraData // Parent ID varsa buraya eklenir
         };
         await ipRecordsService.addTransactionToRecord(recordId, transactionData);
     }
@@ -353,12 +363,8 @@ export class TaskSubmitHandler {
                     specificTaskType: taskType.id,
                     selectedIpRecord: ipRecord
                 });
-                if (result?.success) {
-                    console.log('Otomasyon sonucu:', result);
-                }
-            } catch (e) {
-                console.warn('Otomasyon hatası:', e);
-            }
+                if (result?.success) console.log('Otomasyon sonucu:', result);
+            } catch (e) { console.warn('Otomasyon hatası:', e); }
         }
     }
 }
