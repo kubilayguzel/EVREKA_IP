@@ -184,6 +184,47 @@ class CreateTaskController {
             if (e.target.closest('.list-group-item') && document.getElementById('parentListContainer')?.contains(e.target)) {
                  // Bu kısım TaskUIManager içindeki 'parentTransactionSelected' event'i ile de çalışıyor ama yedek olarak dursun
             }
+
+            // --- D) TAHAKKUK UI YÖNETİMİ ---           
+            // "Tahakkuk Formu Aç/Kapat" Butonu
+            if (e.target.id === 'toggleAccrualFormBtn' || e.target.closest('#toggleAccrualFormBtn')) {
+                const container = document.getElementById('accrualFormContainer');
+                const btn = document.getElementById('toggleAccrualFormBtn');
+                const icon = btn.querySelector('i');
+                
+                if (container.style.display === 'none') {
+                    // Aç
+                    $(container).slideDown(300); // jQuery varsa animasyonlu, yoksa container.style.display = 'block';
+                    btn.innerHTML = '<i class="fas fa-chevron-up mr-1"></i> Tahakkuk Formunu Gizle';
+                    btn.classList.replace('btn-outline-primary', 'btn-outline-secondary');
+                } else {
+                    // Kapat
+                    $(container).slideUp(300);
+                    btn.innerHTML = '<i class="fas fa-chevron-down mr-1"></i> Tahakkuk Formu Aç';
+                    btn.classList.replace('btn-outline-secondary', 'btn-outline-primary');
+                }
+            }
+
+            // "Ücretsiz İşlem" Checkbox'ı
+            if (e.target.id === 'isFreeTransaction') {
+                const isChecked = e.target.checked;
+                const btn = document.getElementById('toggleAccrualFormBtn');
+                const container = document.getElementById('accrualFormContainer');
+                
+                if (isChecked) {
+                    // Ücretsiz seçilirse formu zorla kapat ve butonu pasifleştir
+                    container.style.display = 'none';
+                    btn.disabled = true;
+                    // Opsiyonel: İçerdeki değerleri sıfırla
+                    document.getElementById('officialFee').value = '';
+                    document.getElementById('serviceFee').value = '';
+                    // Toplamı güncellemek için event tetikle
+                    document.getElementById('officialFee').dispatchEvent(new Event('input'));
+                } else {
+                    // Seçim kaldırılırsa butonu aktifleştir
+                    btn.disabled = false;
+                }
+            }
         });
         
         // 3. PARENT TRANSACTION MODAL SEÇİMİ (Custom Event Listener)
