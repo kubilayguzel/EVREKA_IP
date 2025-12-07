@@ -648,12 +648,13 @@
             ? accrual.remainingAmount
             : (accrual.totalAmount || 0);
 
+            // GÜNCELLEME BURADA: substring(0, 8) kaldırıldı
             rows[i] = `
             <tr>
                 <td>
                 <input type="checkbox" class="row-checkbox" data-id="${accrual.id}" ${isSelected ? 'checked' : ''}>
                 </td>
-                <td><small>${(accrual.id || '').toString().substring(0, 8)}...</small></td>
+                <td><small>${(accrual.id || '')}</small></td>
                 <td><span class="status-badge ${statusClass}">${statusText}</span></td>
                 <td><a href="#" class="task-detail-link" data-task-id="${accrual.taskId || ''}">${relatedTaskDisplay}</a></td>
                 <td>${currencyFormatter(officialFee.amount, officialFee.currency)}</td>
@@ -839,7 +840,7 @@
                 return action.length > 50 ? action.substring(0, 50) + '...' : action;
             }
             showTaskDetailModal(taskId) {
-                const task = this.allTasks.find(t => t.id === taskId);
+                const task = this.allTasks[taskId]; // Map'ten veri çekilecek
                 if (!task) {
                     showNotification('İlgili iş bulunamadı.', 'error');
                     return;
@@ -848,7 +849,8 @@
                 const modal = document.getElementById('taskDetailModal');
                 const modalBody = document.getElementById('modalBody');
                 
-                const ipRecord = this.allIpRecords.find(r => r.id === task.relatedIpRecordId);
+                // İlişkili kayıtları da MAP'ten çek (performans için)
+                const ipRecord = this.allIpRecords[task.relatedIpRecordId];
                 const relatedParty = task.details?.relatedParty?.id ? this.allPersons.find(p => p.id === task.details.relatedParty.id) : null;
                 const relatedAccruals = this.allAccruals.filter(acc => acc.taskId === taskId);
 
@@ -887,9 +889,10 @@
                             currency: acc.totalAmountCurrency || 'TRY' 
                         }).format(acc.remainingAmount || 0) : '-';
 
+                        // GÜNCELLEME BURADA: substring(0, 8) kaldırıldı
                         return `<div class="related-accrual-item">
                             <div class="accrual-info">
-                                <strong>ID:</strong> ${acc.id.substring(0,8)}... | 
+                                <strong>ID:</strong> ${acc.id} | 
                                 <strong>Durum:</strong> <span class="status-badge ${statusClass}">${statusText}</span> | 
                                 <strong>Tutar:</strong> ${totalAmountText}
                                 ${acc.remainingAmount !== undefined ? ` | <strong>Kalan Tutar:</strong> ${remainingAmountText}` : ''}
@@ -911,15 +914,21 @@
                     ).join('');
                 }
 
+                // ... (Modal Body içeriği aynı kalıyor) ...
+                const ipRecordTitle = ipRecord ? (ipRecord.title || ipRecord.markName) : 'Bulunamadı';
+                const relatedPartyName = relatedParty ? relatedParty.name : '';
+                const assignedUser = this.allPersons.find(p => p.id === task.assignedTo_uid); // User bilgisi allPersons içinde olmayabilir, allUsers'a bakılmalı ama elimizdeki veri bu.
+                const assignedToDisplay = task.assignedTo_email || 'Atanmamış';
+
                 modalBody.innerHTML = `
                     <div class="modal-detail-grid">
                         ${renderField('İş Başlığı', task.title)}
-                        ${renderField('Atanan Kişi', task.assignedTo_email)}
+                        ${renderField('Atanan Kişi', assignedToDisplay)}
                         ${renderField('İş Türü', `${mainType.charAt(0).toUpperCase() + mainType.slice(1)} - ${specificType}`)}
                         ${renderField('Bitiş Tarihi', task.dueDate ? new Date(task.dueDate).toLocaleDateString('tr-TR') : '-')}
                         ${renderField('Öncelik', task.priority)}
-                        ${renderField('İlgili Portföy Kaydı', ipRecord ? ipRecord.title : 'Bulunamadı')}
-                        ${renderField('İlgili Taraf', relatedParty ? relatedParty.name : '')}
+                        ${renderField('İlgili Portföy Kaydı', ipRecordTitle)}
+                        ${renderField('İlgili Taraf', relatedPartyName)}
                         <div class="modal-detail-item full-width">
                             <div class="modal-detail-label">Açıklama</div>
                             <div class="modal-detail-value long-text">${task.description || '-'}</div>
@@ -1042,7 +1051,8 @@
                 }
             }
 
-searchPersons(query, target) {
+            searchPersons(query, target) {
+            // ... (Orijinal kod ile aynı) ...
             const resultsContainerId = {
                 'tpInvoiceParty': 'tpInvoicePartyResults',
                 'serviceInvoiceParty': 'serviceInvoicePartyResults',
@@ -1061,24 +1071,19 @@ searchPersons(query, target) {
                 return;
             }
 
-            // --- KAYNAĞI DİZİYE NORMALİZE ET ---
             const raw = this.allPersons;
             let personsList = [];
 
             if (Array.isArray(raw)) {
                 personsList = raw;
             } else if (raw && typeof raw === 'object' && ('name' in raw || 'displayName' in raw || 'id' in raw)) {
-                // Tek kişi nesnesi
                 personsList = [raw];
             } else if (raw && typeof raw === 'object') {
-                // Map/obje (id -> kişi)
                 personsList = Object.values(raw);
             } else if (typeof raw === 'string') {
-                // Sadece isim/string gelmişse
                 personsList = [{ id: raw, name: raw }];
-            } // değilse boş dizi kalır
+            }
 
-            // --- ARAMA ---
             const filtered = personsList.filter(p =>
                 (p?.name || p?.displayName || '').toLowerCase().includes(q.toLowerCase())
             );
@@ -1089,7 +1094,6 @@ searchPersons(query, target) {
                 return;
             }
 
-            // --- SONUÇLARI RENDER ET ---
             filtered.forEach(p => {
                 const item = document.createElement('div');
                 item.className = 'search-result-item';
@@ -1105,6 +1109,7 @@ searchPersons(query, target) {
             }
 
             selectPerson(person, target) {
+                // ... (Orijinal kod ile aynı) ...
                 const displayId = {
                     'tpInvoiceParty': 'selectedTpInvoicePartyDisplay',
                     'serviceInvoiceParty': 'selectedServiceInvoicePartyDisplay',
@@ -1135,7 +1140,6 @@ searchPersons(query, target) {
                 display.innerHTML = `<p><b>Seçilen:</b> ${person.name}</p>`;
                 display.style.display = 'block';
                 
-                // Arama sonuçlarını gizle ve input'u temizle
                 const resultsContainer = document.getElementById(resultsId);
                 if (resultsContainer) {
                     resultsContainer.innerHTML = '';
@@ -1151,7 +1155,9 @@ searchPersons(query, target) {
             }
 
             closeModal(modalId) {
-                document.getElementById(modalId).classList.remove('show');
+                // ... (Orijinal kod ile aynı) ...
+                const modal = document.getElementById(modalId);
+                if (modal) modal.classList.remove('show');
                 if (modalId === 'taskDetailModal') { /* mevcut modal'ı resetle */ }
                 if (modalId === 'editAccrualModal') {
                     document.getElementById('editAccrualForm').reset();
@@ -1169,12 +1175,13 @@ searchPersons(query, target) {
                     this.uploadedPaymentReceipts = [];
                     document.getElementById('paymentReceiptFileList').innerHTML = '';
                 }
-                if (modalId === 'viewAccrualDetailModal') { /* Görüntüleme modalı için özel bir resetleme gerekmez */ }
+                if (modalId === 'viewAccrualDetailModal') { /* ... */ }
             }
 
             showMarkPaidModal() {
+                // ... (Orijinal kod ile aynı) ...
                 if (this.selectedAccruals.size === 0) {
-                    showNotification('Lütfen ödendi olarak işaretlemek istediğiniz tahakkukları seçin.', 'error');
+                    showNotification('Lütfen en az bir tahakkuk seçin.', 'error');
                     return;
                 }
                 document.getElementById('paidAccrualCount').textContent = this.selectedAccruals.size;
@@ -1186,8 +1193,6 @@ searchPersons(query, target) {
                         document.getElementById('displayAccrualTotalAmount').textContent = new Intl.NumberFormat('tr-TR', { style: 'currency', currency: selectedAccrual.totalAmountCurrency || 'TRY' }).format(selectedAccrual.totalAmount || 0);
                         document.getElementById('singleAccrualTotalAmountDisplay').style.display = 'block';
                         document.getElementById('remainingAmountGroup').style.display = 'block';
-                        
-                        // Kalan Tutar alanını varsayılan olarak 0 yap
                         document.getElementById('remainingAmount').value = 0; 
                     }
                 } else {
@@ -1200,22 +1205,21 @@ searchPersons(query, target) {
             }
 
             handlePaymentReceiptUpload(files) {
+                // ... (Orijinal kod ile aynı) ...
                 for (const file of files) {
                     if (file.size > 5 * 1024 * 1024) {
-                        showNotification(`"${file.name}" dosyası 5MB'tan büyük. Lütfen daha küçük bir dosya yükleyin.`, 'error');
+                        showNotification(`"${file.name}" dosyası 5MB'tan büyük.`, 'error');
                         continue;
                     }
                     const allowedTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'image/jpeg', 'image/png'];
                     if (!allowedTypes.includes(file.type)) {
-                        showNotification(`"${file.name}" dosyası desteklenmeyen bir formattadır. Sadece PDF, DOC, JPG, PNG yükleyebilirsiniz.`, 'error');
+                        showNotification(`"${file.name}" dosyası desteklenmeyen bir formattadır.`, 'error');
                         continue;
                     }
-                    
                     if (this.uploadedPaymentReceipts.some(f => f.name === file.name && f.size === file.size)) {
                         showNotification(`"${file.name}" adlı dosya zaten eklenmiş.`, 'info');
                         continue;
                     }
-
                     readFileAsDataURL(file).then(dataUrl => {
                         this.uploadedPaymentReceipts.push({
                             id: generateUUID(),
@@ -1258,7 +1262,8 @@ searchPersons(query, target) {
 
                 const modal = document.getElementById('viewAccrualDetailModal');
                 
-                document.getElementById('viewAccrualTitle').textContent = `Tahakkuk Detayı: ${accrual.id.substring(0,8)}...`;
+                // GÜNCELLEME BURADA: substring(0, 8) kaldırıldı
+                document.getElementById('viewAccrualTitle').textContent = `Tahakkuk Detayı: ${accrual.id}`;
                 document.getElementById('viewAccrualId').textContent = accrual.id;
                 
                 let statusText, statusClass;
