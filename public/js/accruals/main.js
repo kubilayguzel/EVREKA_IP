@@ -1,8 +1,10 @@
 // public/js/accruals/main.js
 
-import { authService, accrualService, taskService, personService } from '../../firebase-config.js';
+import { authService, accrualService } from '../../firebase-config.js';
 import { showNotification } from '../../utils.js';
 import { loadSharedLayout } from '../layout-loader.js';
+// Dosya yükleme için gerekli importlar
+import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
 
 class AccrualsModule {
     constructor() {
@@ -14,10 +16,11 @@ class AccrualsModule {
         this.addModal = document.getElementById('addAccrualModal');
         this.viewModal = document.getElementById('viewAccrualModal');
         this.paymentModal = document.getElementById('paymentModal');
+        
+        this.storage = getStorage(); // Storage servisi
     }
 
     async init() {
-        // Ortak layout yükle
         await loadSharedLayout({ activeMenuLink: 'accruals.html' });
 
         authService.auth.onAuthStateChanged(async (user) => {
@@ -40,7 +43,6 @@ class AccrualsModule {
             if (result.success) {
                 this.allAccruals = result.data.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
                 this.renderAccruals(this.allAccruals);
-                this.updateSummaryCards();
             } else {
                 tableBody.innerHTML = `<tr><td colspan="7" class="text-center text-danger">Hata: ${result.error}</td></tr>`;
             }
@@ -51,7 +53,6 @@ class AccrualsModule {
     }
 
     setupEventListeners() {
-        // Modal Açma/Kapama
         document.getElementById('btnAddAccrual').addEventListener('click', () => this.openAddModal());
         
         document.querySelectorAll('.close-modal, .btn-close-modal').forEach(btn => {
@@ -61,15 +62,12 @@ class AccrualsModule {
             });
         });
 
-        // Form Submit
         document.getElementById('saveAccrualBtn').addEventListener('click', () => this.saveAccrual());
         document.getElementById('savePaymentBtn').addEventListener('click', () => this.savePayment());
 
-        // Arama ve Filtreleme
         document.getElementById('searchInput').addEventListener('input', (e) => this.filterAccruals(e.target.value));
         document.getElementById('statusFilter').addEventListener('change', () => this.filterAccruals(document.getElementById('searchInput').value));
 
-        // Dinamik Hesaplama
         ['officialFeeAmount', 'serviceFeeAmount', 'vatRate', 'applyVatToOfficialFee'].forEach(id => {
             const el = document.getElementById(id);
             if(el) el.addEventListener('input', () => this.calculateTotal());
@@ -88,14 +86,12 @@ class AccrualsModule {
         accruals.forEach(acc => {
             const tr = document.createElement('tr');
             
-            // Durum Badge
             let statusBadge = '';
             let statusText = '';
             if (acc.status === 'paid') { statusBadge = 'status-paid'; statusText = 'Ödendi'; }
             else if (acc.status === 'partially_paid') { statusBadge = 'status-partially_paid'; statusText = 'Kısmen'; }
             else { statusBadge = 'status-unpaid'; statusText = 'Ödenmedi'; }
 
-            // Para Formatı
             const totalFormatted = this.formatCurrency(acc.totalAmount, acc.totalAmountCurrency || 'TRY');
             const remainingFormatted = this.formatCurrency(acc.remainingAmount !== undefined ? acc.remainingAmount : acc.totalAmount, acc.totalAmountCurrency || 'TRY');
 
@@ -116,12 +112,11 @@ class AccrualsModule {
         });
     }
 
-    // --- Modal ve Form İşlemleri ---
-
     openAddModal() {
         document.getElementById('addAccrualForm').reset();
         this.uploadedFiles = [];
         this.updateFileList();
+        document.getElementById('totalAmountDisplay').textContent = '0.00 TRY';
         this.addModal.classList.add('show');
     }
 
@@ -135,8 +130,8 @@ class AccrualsModule {
         document.getElementById('totalAmountDisplay').textContent = this.formatCurrency(total, 'TRY');
     }
 
+    // --- DOSYA YÜKLEME VE KAYDETME ---
     async saveAccrual() {
-        // Basit validasyon
         const offAmount = parseFloat(document.getElementById('officialFeeAmount').value) || 0;
         const srvAmount = parseFloat(document.getElementById('serviceFeeAmount').value) || 0;
 
@@ -147,14 +142,30 @@ class AccrualsModule {
 
         const btn = document.getElementById('saveAccrualBtn');
         btn.disabled = true;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Kaydediliyor...';
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Dosyalar Yükleniyor...';
 
         try {
-            // Dosya Yükleme (Varsa)
-            // Not: Dosya yükleme servisi TaskDataManager içinde olabilir veya utils'e taşınmış olabilir.
-            // Buraya basit bir placeholder koyuyorum, mevcut yapınızdaki dosya yükleme mantığını buraya entegre edebilirsiniz.
-            const uploadedDocs = []; // Dosya yükleme logic'i buraya gelecek
+            // 1. Dosyaları Storage'a Yükle
+            const uploadedDocs = [];
+            if (this.uploadedFiles.length > 0) {
+                for (const file of this.uploadedFiles) {
+                    const storageRef = ref(this.storage, `accruals/${Date.now()}_${file.name}`);
+                    const snapshot = await uploadBytes(storageRef, file);
+                    const downloadURL = await getDownloadURL(snapshot.ref);
+                    
+                    uploadedDocs.push({
+                        name: file.name,
+                        size: file.size,
+                        type: file.type,
+                        url: downloadURL,
+                        uploadedAt: new Date().toISOString()
+                    });
+                }
+            }
 
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Kaydediliyor...';
+
+            // 2. Veritabanına Kaydet
             const data = {
                 taskTitle: document.getElementById('taskTitleInput').value || 'Manuel Tahakkuk',
                 officialFee: { amount: offAmount, currency: document.getElementById('officialFeeCurrency').value },
@@ -166,7 +177,7 @@ class AccrualsModule {
                 status: 'unpaid',
                 remainingAmount: parseFloat(document.getElementById('totalAmountDisplay').textContent.replace(/[^0-9.,]/g, '').replace(',','.')) || 0,
                 createdAt: new Date().toISOString(),
-                files: uploadedDocs
+                files: uploadedDocs // Yüklenen dosya bilgileri
             };
 
             const result = await accrualService.addAccrual(data);
@@ -178,6 +189,7 @@ class AccrualsModule {
                 throw new Error(result.error);
             }
         } catch (error) {
+            console.error(error);
             showNotification('Hata: ' + error.message, 'error');
         } finally {
             btn.disabled = false;
@@ -197,6 +209,7 @@ class AccrualsModule {
         }
     }
 
+    // --- GÖRÜNTÜLEME VE DOSYA LİSTELEME ---
     viewAccrual(id) {
         const acc = this.allAccruals.find(a => a.id === id);
         if (!acc) return;
@@ -207,10 +220,28 @@ class AccrualsModule {
         document.getElementById('viewTotalAmount').textContent = this.formatCurrency(acc.totalAmount, acc.totalAmountCurrency);
         document.getElementById('viewRemainingAmount').textContent = this.formatCurrency(acc.remainingAmount, acc.totalAmountCurrency);
         
-        // Status
         const statusBadge = document.getElementById('viewStatusBadge');
         statusBadge.className = 'status-badge ' + (acc.status === 'paid' ? 'status-paid' : (acc.status === 'partially_paid' ? 'status-partially_paid' : 'status-unpaid'));
         statusBadge.innerHTML = `<span class="status-dot"></span>${acc.status === 'paid' ? 'Ödendi' : (acc.status === 'partially_paid' ? 'Kısmen Ödendi' : 'Ödenmedi')}`;
+
+        // Belgeleri Listele (Eksik Kısım Eklendi)
+        const docList = document.getElementById('viewAccrualDocumentList');
+        docList.innerHTML = '';
+        
+        if (acc.files && acc.files.length > 0) {
+            acc.files.forEach(file => {
+                const li = document.createElement('li');
+                li.style.padding = "5px 0";
+                li.innerHTML = `
+                    <a href="${file.url || file.downloadURL || '#'}" target="_blank" class="text-primary" style="text-decoration:none;">
+                        <i class="fas fa-file-alt mr-2"></i> ${file.name} 
+                        <span class="text-muted small">(${this.formatFileSize(file.size)})</span>
+                    </a>`;
+                docList.appendChild(li);
+            });
+        } else {
+            docList.innerHTML = '<li class="text-muted small">Bu tahakkuka ait belge bulunmuyor.</li>';
+        }
 
         this.viewModal.classList.add('show');
     }
@@ -247,8 +278,6 @@ class AccrualsModule {
         }
     }
 
-    // --- Yardımcı Fonksiyonlar ---
-
     filterAccruals(searchTerm) {
         const term = searchTerm.toLowerCase();
         const status = document.getElementById('statusFilter').value;
@@ -267,12 +296,19 @@ class AccrualsModule {
         return new Intl.NumberFormat('tr-TR', { style: 'currency', currency: currency }).format(amount || 0);
     }
 
-    updateSummaryCards() {
-        // Toplam tahakkuk, bekleyen ödeme vb. hesaplayıp kartlara basabilirsiniz.
-        // Şimdilik boş bıraktım, isteğe göre eklenebilir.
+    // YENİ: Dosya Boyutu Formatlama
+    formatFileSize(bytes) {
+        if (!bytes || bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
     }
 
-    // Dosya Yükleme (Drag & Drop)
+    updateSummaryCards() {
+        // İstatistikler buraya
+    }
+
     setupFileUpload() {
         const area = document.getElementById('fileUploadArea');
         const input = document.getElementById('fileInput');
@@ -322,6 +358,5 @@ class AccrualsModule {
     }
 }
 
-// Global Erişim (HTML'den çağırabilmek için)
 window.accrualsModule = new AccrualsModule();
 document.addEventListener('DOMContentLoaded', () => window.accrualsModule.init());
