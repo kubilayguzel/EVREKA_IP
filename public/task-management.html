@@ -23,6 +23,7 @@
                 <h1 class="page-title">İş Yönetimi</h1>
                 <p class="page-subtitle">Sistemdeki tüm görevleri görüntüleyin ve yönetin.</p>
             </section>
+            
             <div class="tasks-container">
                 <div class="tasks-header">
                     <input type="text" id="searchInput" class="search-input" placeholder="İşlerde ara (No, Konu, Kişi, Durum)...">
@@ -37,9 +38,9 @@
                             <tr id="tasksTableHeaderRow">
                                 <th data-sort="id">İş No. <i class="fas fa-sort"></i></th>
                                 <th data-sort="relatedRecord">İlgili Kayıt <i class="fas fa-sort"></i></th>
-                                <th data-sort="taskType">Tip <i class="fas fa-sort"></i></th>
+                                <th data-sort="taskTypeDisplay">Tip <i class="fas fa-sort"></i></th>
                                 <th data-sort="priority">Öncelik <i class="fas fa-sort"></i></th>
-                                <th data-sort="assignedTo">Atanan <i class="fas fa-sort"></i></th>
+                                <th data-sort="assignedToDisplay">Atanan <i class="fas fa-sort"></i></th>
                                 <th data-sort="operationalDue">Operasyonel Son Tarih <i class="fas fa-sort"></i></th>
                                 <th data-sort="officialDue">Resmi Son Tarih <i class="fas fa-sort"></i></th>
                                 <th data-sort="status">Durum <i class="fas fa-sort"></i></th>
@@ -59,7 +60,13 @@
         </main>
     </div>
 
-    <div id="taskDetailModal" class="modal"><div class="modal-content"><span class="close-modal-btn" id="closeTaskDetailModal">&times;</span><h3 class="modal-title" id="modalTaskTitle">İş Detayı</h3><div id="modalBody" class="modal-body-content"></div></div></div>
+    <div id="taskDetailModal" class="modal">
+        <div class="modal-content">
+            <span class="close-modal-btn" id="closeTaskDetailModal">&times;</span>
+            <h3 class="modal-title" id="modalTaskTitle">İş Detayı</h3>
+            <div id="modalBody" class="modal-body-content"></div>
+        </div>
+    </div>
     
     <div id="assignTaskModal" class="modal">
         <div class="modal-content">
@@ -77,11 +84,14 @@
             </div>
         </div>
     </div>
+
     <div class="modal" id="createTaskAccrualModal">
         <div class="modal-content">
             <span class="close-modal-btn" id="closeCreateTaskAccrualModal">&times;</span>
             <h3 class="modal-title">Ek Tahakkuk Oluştur</h3>
-            <div class="form-group mb-2"><input type="text" id="createTaskAccrualTaskTitleDisplay" class="form-control" readonly disabled></div>
+            <div class="form-group mb-2">
+                <input type="text" id="createTaskAccrualTaskTitleDisplay" class="form-control" readonly disabled>
+            </div>
             <form id="createTaskAccrualForm" onsubmit="return false;">
                 <div class="modal-body-content">
                     <div class="row">
@@ -148,6 +158,7 @@
             </form>
         </div>
     </div>
+
     <div class="modal" id="completeAccrualTaskModal">
         <div class="modal-content">
             <span class="close-modal-btn" id="closeCompleteAccrualModal">&times;</span>
@@ -157,7 +168,13 @@
                 <div class="modal-body-content">
                     <input type="hidden" id="targetTaskIdForCompletion">
                     <div id="accrualEpatsDocumentContainer" class="alert alert-secondary align-items-center justify-content-between mb-4" style="display:none; border-left: 4px solid #1e3c72;">
-                        <div class="d-flex align-items-center"><div class="icon-box mr-3 text-center" style="width: 40px;"><i class="fas fa-file-pdf text-danger fa-2x"></i></div><div><h6 class="mb-0 font-weight-bold text-dark" id="accrualEpatsDocName">Belge Adı</h6><small class="text-muted">İlgili EPATS Evrakı</small></div></div>
+                        <div class="d-flex align-items-center">
+                            <div class="icon-box mr-3 text-center" style="width: 40px;"><i class="fas fa-file-pdf text-danger fa-2x"></i></div>
+                            <div>
+                                <h6 class="mb-0 font-weight-bold text-dark" id="accrualEpatsDocName">Belge Adı</h6>
+                                <small class="text-muted">İlgili EPATS Evrakı</small>
+                            </div>
+                        </div>
                         <a id="accrualEpatsDocLink" href="#" target="_blank" class="btn btn-sm btn-outline-primary shadow-sm"><i class="fas fa-external-link-alt mr-1"></i> Belgeyi Aç</a>
                     </div>
 
