@@ -531,7 +531,96 @@ document.addEventListener('DOMContentLoaded', async () => {
         // --- Detay Modalı (Görüntüle) ---
         showTaskDetailModal(taskId) {
             const task = this.allTasks.find(t => t.id === taskId);
-            // ... (Orijinal detay modalı kodları buraya) ...
+            if (!task) return;
+
+            const modalBody = document.getElementById('modalBody');
+            const modalTitle = document.getElementById('modalTaskTitle');
+            
+            modalTitle.textContent = `${task.title || 'İş Detayı'} (${task.id})`;
+            
+            // Tarih Formatlama Yardımcısı
+            const formatDate = (dateVal) => {
+                if (!dateVal) return 'Belirtilmemiş';
+                const d = dateVal.toDate ? dateVal.toDate() : new Date(dateVal);
+                return d.toLocaleDateString('tr-TR');
+            };
+
+            // Kullanıcı Bulma
+            const assignedUser = this.allUsers.find(u => u.id === task.assignedTo_uid);
+            const assignedName = assignedUser ? (assignedUser.displayName || assignedUser.email) : 'Atanmamış';
+
+            // HTML İçeriğini Oluştur
+            let html = `
+                <div class="modal-detail-grid">
+                    <div class="modal-detail-item">
+                        <div class="modal-detail-label">İş Tipi</div>
+                        <div class="modal-detail-value">${task.taskType}</div>
+                    </div>
+                    <div class="modal-detail-item">
+                        <div class="modal-detail-label">Durum</div>
+                        <div class="modal-detail-value"><span class="status-badge status-${(task.status || '').toLowerCase()}">${this.statusDisplayMap[task.status] || task.status}</span></div>
+                    </div>
+                    <div class="modal-detail-item">
+                        <div class="modal-detail-label">Öncelik</div>
+                        <div class="modal-detail-value">${task.priority || 'Normal'}</div>
+                    </div>
+                    <div class="modal-detail-item">
+                        <div class="modal-detail-label">Atanan Kişi</div>
+                        <div class="modal-detail-value">${assignedName}</div>
+                    </div>
+                    <div class="modal-detail-item">
+                        <div class="modal-detail-label">Operasyonel Son Tarih</div>
+                        <div class="modal-detail-value">${formatDate(task.dueDate)}</div>
+                    </div>
+                    <div class="modal-detail-item">
+                        <div class="modal-detail-label">Resmi Son Tarih</div>
+                        <div class="modal-detail-value">${formatDate(task.officialDueDate)}</div>
+                    </div>
+                </div>
+
+                <div class="modal-detail-section-title">Açıklama & Notlar</div>
+                <div class="modal-detail-value long-text">${task.description || 'Açıklama girilmemiş.'}</div>
+            `;
+
+            // Varsa 'details' objesindeki ek alanları listele
+            if (task.details && Object.keys(task.details).length > 0) {
+                html += `<div class="modal-detail-section-title">Ek Detaylar</div><div class="modal-detail-grid">`;
+                for (const [key, value] of Object.entries(task.details)) {
+                    // Obje veya karmaşık yapıları string'e çevir, değilse direkt yaz
+                    const displayValue = (typeof value === 'object' && value !== null) ? JSON.stringify(value) : value;
+                    // Sadece anlamlı verileri göster (boş olmayan)
+                    if(displayValue) {
+                         html += `
+                            <div class="modal-detail-item">
+                                <div class="modal-detail-label">${key}</div>
+                                <div class="modal-detail-value" style="word-break: break-all;">${displayValue}</div>
+                            </div>`;
+                    }
+                }
+                html += `</div>`;
+            }
+
+            // Geçmiş (History)
+            if (task.history && task.history.length > 0) {
+                html += `<div class="task-history"><h5 style="color:#1e3c72; margin-bottom:15px;">İşlem Geçmişi</h5>`;
+                // Tarihe göre yeniden eskiye sırala
+                const sortedHistory = [...task.history].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+                
+                sortedHistory.forEach(h => {
+                    const hDate = new Date(h.timestamp).toLocaleString('tr-TR');
+                    html += `
+                        <div class="task-history-item">
+                            <div class="task-history-description">${h.action}</div>
+                            <div class="task-history-meta">
+                                <i class="far fa-clock"></i> ${hDate} - 
+                                <i class="far fa-user"></i> ${h.userEmail || 'Sistem'}
+                            </div>
+                        </div>`;
+                });
+                html += `</div>`;
+            }
+
+            modalBody.innerHTML = html;
             document.getElementById('taskDetailModal').classList.add('show');
         }
 
