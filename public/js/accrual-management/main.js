@@ -165,7 +165,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             // İlgili İşi Güvenli Bulma (String ID ile)
             let task = null;
             if (accrual.taskId) {
-                task = this.allTasks[String(accrual.taskId)];
+                // Eğer allTasks bir array ise find kullan, obje ise direkt erişim
+                if (Array.isArray(this.allTasks)) {
+                    task = this.allTasks.find(t => String(t.id) === String(accrual.taskId));
+                } else {
+                    task = this.allTasks[String(accrual.taskId)];
+                }
             }
             
             // --- DOKÜMANLAR ---
