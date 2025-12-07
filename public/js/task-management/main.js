@@ -4,8 +4,6 @@ import { authService, taskService, ipRecordsService, accrualService, personServi
 import { showNotification } from '../../utils.js';
 import { loadSharedLayout } from '../layout-loader.js';
 import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
-
-// TableManager Import (Dosya yolunun doğru olduğundan emin olun: public/js/table-manager.js)
 import { TableManager } from '../table-manager.js';
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -21,14 +19,17 @@ document.addEventListener('DOMContentLoaded', async () => {
             this.allTransactionTypes = [];
             this.storage = getStorage();
 
-            // Table Manager
             this.tableManager = null;
 
             // Seçim State'leri
             this.selectedTaskForAssignment = null;
             this.currentTaskForAccrual = null;
+            
+            // Ek Tahakkuk Modalı State
             this.createTaskSelectedTpInvoiceParty = null;
             this.createTaskSelectedServiceInvoiceParty = null;
+            
+            // Tahakkuk Tamamlama Modalı State
             this.compSelectedTpInvoiceParty = null;
             this.compSelectedServiceInvoiceParty = null;
 
@@ -48,7 +49,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         init() {
-            // Tablo Yöneticisini Başlat
             this.initializeTableManager();
 
             authService.auth.onAuthStateChanged(async (user) => {
@@ -62,20 +62,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
         }
 
-        // --- TableManager Yapılandırması ---
         initializeTableManager() {
             const columns = [
-                { key: 'id', label: 'İş No', sortable: true }, // 'title' yerine 'label' kullanıyor olabilir, TableManager.js'e göre 'label'
+                { key: 'id', label: 'İş No', sortable: true },
                 { key: 'relatedRecord', label: 'İlgili Kayıt', sortable: true },
                 { key: 'taskTypeDisplay', label: 'Tip', sortable: true },
-                { 
-                    key: 'priority', 
-                    label: 'Öncelik',
-                    sortable: true,
-                    // Custom render mantığı TableManager.js'de yoksa HTML içinde halledilecek. 
-                    // Ancak senin TableManager.js'in "customRecordHtml" desteği var mı kontrol etmeliyiz.
-                    // Gönderdiğin dosyada "customRecordHtml" var. O yüzden bu sütun tanımlarını sadece başlık için kullanacağız.
-                },
+                { key: 'priority', label: 'Öncelik', sortable: true },
                 { key: 'assignedToDisplay', label: 'Atanan', sortable: true },
                 { key: 'operationalDue', label: 'Operasyonel Son Tarih', sortable: true },
                 { key: 'officialDue', label: 'Resmi Son Tarih', sortable: true },
@@ -86,12 +78,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             this.tableManager = new TableManager({
                 tableId: 'taskManagementTable',
                 tableBodyId: 'tasksTableBody',
-                tableHeaderRowId: 'tasksTableHeaderRow', // HTML'e eklediğimiz yeni ID
+                tableHeaderRowId: 'tasksTableHeaderRow',
                 globalSearchInputId: 'searchInput',
-                noRecordsMessageId: 'noRecordsMessage',
+                noRecordsMessageId: 'noTasksMessage',
                 columnDefinitions: columns,
-                
-                // Satırın HTML'ini oluşturacak özel fonksiyon (TableManager.js yapına uygun)
                 customRecordHtml: (task) => {
                     const safeStatus = (task.status || '').toString();
                     const statusClass = `status-${safeStatus.replace(/ /g, '_').toLowerCase()}`;
@@ -133,10 +123,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 this.allIpRecords = ipRecordsResult.success ? ipRecordsResult.data : [];
                 this.allPersons = personsResult.success ? personsResult.data : [];
                 this.allUsers = usersResult.success ? usersResult.data : [];
-                this.allAccruals = accrualsResult.success ? accrualsResult.data : [];
                 this.allTransactionTypes = transactionTypesResult.success ? transactionTypesResult.data : [];
 
-                // Verileri TableManager için işle
                 this.processAndRenderTable();
 
             } catch (error) {
@@ -149,19 +137,15 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         processAndRenderTable() {
             const processedData = this.allTasks.map(task => {
-                // İlişkili Kayıt
                 const ipRecord = this.allIpRecords.find(r => r.id === task.relatedIpRecordId);
                 const relatedRecord = ipRecord ? (ipRecord.applicationNumber || ipRecord.title || 'Kayıt Bulunamadı') : 'N/A';
 
-                // İş Tipi
                 const transactionTypeObj = this.allTransactionTypes.find(t => t.id === task.taskType);
                 const taskTypeDisplay = transactionTypeObj ? (transactionTypeObj.alias || transactionTypeObj.name) : (task.taskType || 'Bilinmiyor');
 
-                // Atanan Kişi
                 const assignedUser = this.allUsers.find(user => user.id === task.assignedTo_uid);
                 const assignedToDisplay = assignedUser ? (assignedUser.displayName || assignedUser.email) : 'Atanmamış';
 
-                // Tarihler
                 const dueDateObj = task.dueDate ? (task.dueDate.toDate ? task.dueDate.toDate() : new Date(task.dueDate)) : null;
                 const operationalDueISO = dueDateObj ? dueDateObj.toISOString().slice(0, 10) : '';
                 const operationalDueDisplay = dueDateObj ? dueDateObj.toLocaleDateString('tr-TR') : 'Belirtilmemiş';
@@ -170,9 +154,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const officialDueISO = officialDateObj ? officialDateObj.toISOString().slice(0, 10) : '';
                 const officialDueDisplay = officialDateObj ? officialDateObj.toLocaleDateString('tr-TR') : 'Belirtilmemiş';
 
-                // TableManager'ın kullanacağı düz obje
                 return {
-                    ...task, // Orijinal task verilerini de tut
+                    ...task,
                     relatedRecord,
                     taskTypeDisplay,
                     assignedToDisplay,
@@ -183,12 +166,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                 };
             });
 
-            // TableManager'a veriyi ver
             if (this.tableManager) {
-                this.tableManager.setTableData(processedData); // DÜZELTME: Metodun adı setTableData
+                this.tableManager.setTableData(processedData);
             }
 
-            // Deadline Highlighter'ı tetikle (Tablo render edildikten sonra)
             if (window.DeadlineHighlighter && typeof window.DeadlineHighlighter.refresh === 'function') {
                 setTimeout(() => window.DeadlineHighlighter.refresh('taskManagement'), 100);
             }
@@ -223,9 +204,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         setupEventListeners() {
-            // TableManager arama inputunu kendi yönetir (initializeTableManager'da verdik).
-
-            // Buton Delegasyonu (Tablo içindeki tıklamalar)
+            // Tablo içi butonlar
             const tbody = document.getElementById('tasksTableBody');
             if (tbody) {
                 tbody.addEventListener('click', (e) => {
@@ -254,7 +233,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 });
             }
 
-            // Modal Kapatma Butonları
+            // Modal Kapatma
             document.querySelectorAll('.close-modal-btn').forEach(btn => {
                 btn.addEventListener('click', (e) => {
                     const modal = e.target.closest('.modal');
@@ -266,7 +245,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             document.getElementById('cancelAssignmentBtn')?.addEventListener('click', () => this.closeModal('assignTaskModal'));
             document.getElementById('saveNewAssignmentBtn')?.addEventListener('click', () => this.saveNewAssignment());
 
-            // Ek Tahakkuk Modalı
+            // Ek Tahakkuk Modalı (Create Task Accrual)
             document.getElementById('cancelCreateTaskAccrualBtn')?.addEventListener('click', () => this.closeModal('createTaskAccrualModal'));
             document.getElementById('saveNewAccrualBtn')?.addEventListener('click', () => this.handleSaveNewAccrual());
 
@@ -274,10 +253,20 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const el = document.getElementById(id);
                 if (el) el.addEventListener('input', () => this.calculateCreateTaskTotalAmount());
             });
-            document.getElementById('createTaskTpInvoicePartySearch')?.addEventListener('input', e => this.searchPersonsForCreateTaskAccrual(e.target.value, 'createTaskTpInvoiceParty'));
-            document.getElementById('createTaskServiceInvoicePartySearch')?.addEventListener('input', e => this.searchPersonsForCreateTaskAccrual(e.target.value, 'createTaskServiceInvoiceParty'));
 
-            // Tahakkuk Tamamlama Modalı
+            // Ek Tahakkuk Kişi Arama Listener'ları
+            document.getElementById('createTaskTpInvoicePartySearch')?.addEventListener('input', (e) => {
+                this.searchPersonsGeneric(e.target.value, 'createTaskTpInvoiceParty', (person) => {
+                    this.createTaskSelectedTpInvoiceParty = person;
+                });
+            });
+            document.getElementById('createTaskServiceInvoicePartySearch')?.addEventListener('input', (e) => {
+                this.searchPersonsGeneric(e.target.value, 'createTaskServiceInvoiceParty', (person) => {
+                    this.createTaskSelectedServiceInvoiceParty = person;
+                });
+            });
+
+            // Tahakkuk Tamamlama Modalı (Complete Accrual)
             document.getElementById('cancelCompleteAccrualBtn')?.addEventListener('click', () => this.closeModal('completeAccrualTaskModal'));
             document.getElementById('submitCompleteAccrualBtn')?.addEventListener('click', () => this.handleCompleteAccrualSubmission());
 
@@ -286,10 +275,19 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if (el) el.addEventListener('input', () => this.calculateCompTotal());
             });
 
-            document.getElementById('compTpInvoicePartySearch')?.addEventListener('input', e => this.searchPersonsForComp(e.target.value, 'compTpInvoiceParty'));
-            document.getElementById('compServiceInvoicePartySearch')?.addEventListener('input', e => this.searchPersonsForComp(e.target.value, 'compServiceInvoiceParty'));
+            // Tamamlama Modalı Kişi Arama Listener'ları
+            document.getElementById('compTpInvoicePartySearch')?.addEventListener('input', (e) => {
+                this.searchPersonsGeneric(e.target.value, 'compTpInvoiceParty', (person) => {
+                    this.compSelectedTpInvoiceParty = person;
+                });
+            });
+            document.getElementById('compServiceInvoicePartySearch')?.addEventListener('input', (e) => {
+                this.searchPersonsGeneric(e.target.value, 'compServiceInvoiceParty', (person) => {
+                    this.compSelectedServiceInvoiceParty = person;
+                });
+            });
 
-            // Dosya Inputları
+            // Dosya Input
             document.getElementById('createTaskForeignInvoiceFile')?.addEventListener('change', function() {
                 const nameEl = document.getElementById('createTaskForeignInvoiceFileName');
                 if (nameEl) nameEl.textContent = this.files[0] ? this.files[0].name : '';
@@ -298,6 +296,72 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const nameEl = document.getElementById('compForeignInvoiceFileName');
                 if (nameEl) nameEl.textContent = this.files[0] ? this.files[0].name : '';
             });
+        }
+
+        /**
+         * GENEL ARAMA VE SEÇME FONKSİYONU
+         * Tüm kişi arama alanları için ortak kullanılır.
+         * @param {string} query - Kullanıcının yazdığı metin
+         * @param {string} elementPrefix - HTML ID ön eki (örn: 'compTpInvoiceParty')
+         * @param {function} onSelectCallback - Seçim yapıldığında çalışacak callback (seçilen kişiyi state'e yazar)
+         */
+        searchPersonsGeneric(query, elementPrefix, onSelectCallback) {
+            const resultsList = document.getElementById(`${elementPrefix}Results`);
+            const searchInput = document.getElementById(`${elementPrefix}Search`);
+            
+            if (!query || query.length < 2) {
+                resultsList.style.display = 'none';
+                return;
+            }
+
+            const lowerQuery = query.toLowerCase();
+            const filteredPersons = this.allPersons.filter(person => {
+                const nameMatch = person.name && person.name.toLowerCase().includes(lowerQuery);
+                const emailMatch = person.email && person.email.toLowerCase().includes(lowerQuery);
+                return nameMatch || emailMatch;
+            }).slice(0, 10); // Maksimum 10 sonuç
+
+            if (filteredPersons.length === 0) {
+                resultsList.innerHTML = '<div class="search-result-item">Sonuç bulunamadı</div>';
+                resultsList.style.display = 'block';
+                return;
+            }
+
+            resultsList.innerHTML = '';
+            filteredPersons.forEach(person => {
+                const div = document.createElement('div');
+                div.className = 'search-result-item';
+                div.innerHTML = `<strong>${person.name || 'İsimsiz'}</strong><br><small>${person.email || ''}</small>`;
+                
+                div.addEventListener('click', () => {
+                    // Seçim yapıldı
+                    searchInput.value = '';
+                    resultsList.style.display = 'none';
+                    
+                    // Görsel Display'i güncelle
+                    const displayDiv = document.getElementById(`${elementPrefix}Display`); // Örn: compTpInvoicePartyDisplay
+                    if (displayDiv) {
+                        displayDiv.innerHTML = `
+                            <span>${person.name} (${person.email || '-'})</span>
+                            <span class="remove-result" style="cursor:pointer; color:red; margin-left:10px;">&times;</span>
+                        `;
+                        displayDiv.style.display = 'block';
+                        
+                        // Silme butonu
+                        displayDiv.querySelector('.remove-result').addEventListener('click', () => {
+                            displayDiv.style.display = 'none';
+                            displayDiv.innerHTML = '';
+                            onSelectCallback(null); // State'i temizle
+                        });
+                    }
+
+                    // Callback ile state'i güncelle
+                    onSelectCallback(person);
+                });
+                
+                resultsList.appendChild(div);
+            });
+            resultsList.style.display = 'block';
         }
 
         // --- Modallar ve İşlemler ---
@@ -400,7 +464,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             modalElement.classList.add('show');
         }
 
-        // --- Tahakkuk Tamamlama Modalı (GÜVENLİ VE DOLU VERSİYON) ---
+        // --- Tahakkuk Tamamlama Modalı ---
         openCompleteAccrualModal(taskId) {
             const task = this.allTasks.find(t => t.id === taskId);
             if (!task) return;
@@ -427,7 +491,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const totalDisplay = document.getElementById('compTotalAmountDisplay');
             if (totalDisplay) totalDisplay.textContent = '0.00 ₺';
 
-            // EPATS Belgesi
+            // EPATS Belgesi Kontrolü
             const docContainer = document.getElementById('accrualEpatsDocumentContainer');
             const docNameEl = document.getElementById('accrualEpatsDocName');
             const docLinkEl = document.getElementById('accrualEpatsDocLink');
@@ -451,17 +515,19 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
             }
 
-            // Sıfırla
+            // State'i sıfırla
             this.compSelectedTpInvoiceParty = null;
             this.compSelectedServiceInvoiceParty = null;
-            const tpDisplay = document.getElementById('compSelectedTpInvoicePartyDisplay');
-            if (tpDisplay) tpDisplay.style.display = 'none';
-            const srvDisplay = document.getElementById('compSelectedServiceInvoicePartyDisplay');
-            if (srvDisplay) srvDisplay.style.display = 'none';
-            const tpResults = document.getElementById('compTpInvoicePartyResults');
-            if (tpResults) tpResults.innerHTML = '';
-            const srvResults = document.getElementById('compServiceInvoicePartyResults');
-            if (srvResults) srvResults.innerHTML = '';
+            
+            // Görsel reset
+            ['compSelectedTpInvoicePartyDisplay', 'compSelectedServiceInvoicePartyDisplay'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) { el.style.display = 'none'; el.innerHTML = ''; }
+            });
+            ['compTpInvoicePartyResults', 'compServiceInvoicePartyResults'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.innerHTML = '';
+            });
 
             const modal = document.getElementById('completeAccrualTaskModal');
             if (modal) modal.classList.add('show');
@@ -493,7 +559,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                  } catch(err) { showNotification("Dosya yükleme hatası.", "error"); return; }
              }
 
-             const cleanTitle = task.title.replace('Tahakkuk Oluşturma: ', '');
+             const cleanTitle = task.title ? task.title.replace('Tahakkuk Oluşturma: ', '') : 'Tahakkuk';
              const accrualData = {
                  taskId: task.relatedTaskId || taskId, 
                  taskTitle: cleanTitle,
@@ -537,12 +603,18 @@ document.addEventListener('DOMContentLoaded', async () => {
             const fName = document.getElementById('createTaskForeignInvoiceFileName');
             if(fName) fName.textContent = '';
             
+            // Seçimleri sıfırla
             this.createTaskSelectedTpInvoiceParty = null;
             this.createTaskSelectedServiceInvoiceParty = null;
-            const d1 = document.getElementById('createTaskSelectedTpInvoicePartyDisplay');
-            if(d1) d1.style.display = 'none';
-            const d2 = document.getElementById('createTaskSelectedServiceInvoicePartyDisplay');
-            if(d2) d2.style.display = 'none';
+            
+            ['createTaskSelectedTpInvoicePartyDisplay', 'createTaskSelectedServiceInvoicePartyDisplay'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) { el.style.display = 'none'; el.innerHTML = ''; }
+            });
+            ['createTaskTpInvoicePartyResults', 'createTaskServiceInvoicePartyResults'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.innerHTML = '';
+            });
 
             const modal = document.getElementById('createTaskAccrualModal');
             if(modal) modal.classList.add('show');
@@ -577,8 +649,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 serviceFee: { amount: serviceFee, currency: document.getElementById('createTaskServiceFeeCurrency').value },
                 vatRate, applyVatToOfficialFee: applyVat,
                 totalAmount: total, totalAmountCurrency: 'TRY', remainingAmount: total, status: 'unpaid',
-                tpInvoiceParty: this.createTaskSelectedTpInvoiceParty,
-                serviceInvoiceParty: this.createTaskSelectedServiceInvoiceParty,
+                tpInvoiceParty: this.createTaskSelectedTpInvoiceParty ? { id: this.createTaskSelectedTpInvoiceParty.id, name: this.createTaskSelectedTpInvoiceParty.name } : null,
+                serviceInvoiceParty: this.createTaskSelectedServiceInvoiceParty ? { id: this.createTaskSelectedServiceInvoiceParty.id, name: this.createTaskSelectedServiceInvoiceParty.name } : null,
                 createdAt: new Date().toISOString(),
                 files: uploadedFiles
             };
@@ -608,12 +680,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             if(el) el.textContent = new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY' }).format(total);
         }
 
-        searchPersonsForComp(query, target) { /* ... Kişi arama mantığı (önceki kodunla aynı kalabilir) ... */ }
-        searchPersonsForCreateTaskAccrual(query, target) { /* ... Kişi arama mantığı (önceki kodunla aynı kalabilir) ... */ }
-        selectPersonForCreateTaskAccrual(person, target) { /* ... */ }
-
-        cleanHistoryAction(action) { return action; }
-
         closeModal(modalId) {
             const m = document.getElementById(modalId);
             if(m) m.classList.remove('show');
@@ -622,6 +688,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if(f) f.reset();
                 const fn = document.getElementById('createTaskForeignInvoiceFileName');
                 if(fn) fn.textContent = '';
+                // Listeleri temizle
+                document.getElementById('createTaskTpInvoicePartyResults').innerHTML = '';
             }
             if (modalId === 'completeAccrualTaskModal') {
                 const f = document.getElementById('completeAccrualForm');
@@ -630,6 +698,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if(fn) fn.textContent = '';
                 const dc = document.getElementById('accrualEpatsDocumentContainer');
                 if(dc) dc.style.display = 'none';
+                // Listeleri temizle
+                document.getElementById('compTpInvoicePartyResults').innerHTML = '';
             }
         }
     }
@@ -637,7 +707,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const module = new TaskManagementModule();
     module.init();
 
-    // DeadlineHighlighter - Main'in en altı
+    // DeadlineHighlighter Initializer
     if (window.DeadlineHighlighter) {
         window.DeadlineHighlighter.init();
         window.DeadlineHighlighter.registerList('taskManagement', {
