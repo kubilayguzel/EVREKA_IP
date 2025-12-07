@@ -513,8 +513,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             if (!modalBody || !modalTitle || !modalElement) return;
 
-            modalTitle.textContent = `${task.title || 'İş Detayı'} (${task.id})`;
+            // Modal Başlığı
+            modalTitle.textContent = `İş Detayı (${task.id})`;
             
+            // Veri Hazırlığı (Formatlama)
             const formatDate = (dateVal) => {
                 if (!dateVal) return 'Belirtilmemiş';
                 try {
@@ -526,20 +528,78 @@ document.addEventListener('DOMContentLoaded', async () => {
             const assignedUser = this.allUsers.find(u => u.id === task.assignedTo_uid);
             const assignedName = assignedUser ? (assignedUser.displayName || assignedUser.email) : 'Atanmamış';
 
+            const ipRecord = this.allIpRecords.find(r => r.id === task.relatedIpRecordId);
+            const relatedRecordTxt = ipRecord ? (ipRecord.applicationNumber || ipRecord.title) : 'İlgili kayıt bulunamadı';
+
+            const transactionTypeObj = this.allTransactionTypes.find(t => t.id === task.taskType);
+            const taskTypeDisplay = transactionTypeObj ? (transactionTypeObj.alias || transactionTypeObj.name) : (task.taskType || '-');
+
+            const statusText = this.statusDisplayMap[task.status] || task.status;
+
+            // HTML Oluşturma (Düzenle Formuna Benzer Yapı)
+            // Bootstrap form yapısı kullanılarak "read-only" görünüm sağlandı.
             let html = `
-                <div class="modal-detail-grid">
-                    <div class="modal-detail-item"><div class="modal-detail-label">İş Tipi</div><div class="modal-detail-value">${task.taskType || '-'}</div></div>
-                    <div class="modal-detail-item"><div class="modal-detail-label">Durum</div><div class="modal-detail-value">${this.statusDisplayMap[task.status] || task.status}</div></div>
-                    <div class="modal-detail-item"><div class="modal-detail-label">Öncelik</div><div class="modal-detail-value">${task.priority || '-'}</div></div>
-                    <div class="modal-detail-item"><div class="modal-detail-label">Atanan</div><div class="modal-detail-value">${assignedName}</div></div>
-                    <div class="modal-detail-item"><div class="modal-detail-label">Operasyonel Tarih</div><div class="modal-detail-value">${formatDate(task.dueDate)}</div></div>
-                    <div class="modal-detail-item"><div class="modal-detail-label">Resmi Tarih</div><div class="modal-detail-value">${formatDate(task.officialDueDate)}</div></div>
+                <div class="container-fluid p-0">
+                    <div class="form-group mb-3">
+                        <label class="text-muted font-weight-bold small text-uppercase" style="letter-spacing:0.5px;">İş Konusu</label>
+                        <div class="p-2 bg-light border rounded text-dark">${task.title || '-'}</div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="text-muted font-weight-bold small text-uppercase">İlgili Dosya</label>
+                            <div class="p-2 border rounded">${relatedRecordTxt}</div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="text-muted font-weight-bold small text-uppercase">İş Tipi</label>
+                            <div class="p-2 border rounded">${taskTypeDisplay}</div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="text-muted font-weight-bold small text-uppercase">Atanan Kişi</label>
+                            <div class="p-2 border rounded">${assignedName}</div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="text-muted font-weight-bold small text-uppercase">Öncelik</label>
+                            <div class="p-2 border rounded">
+                                <span class="badge badge-${task.priority === 'high' ? 'danger' : (task.priority === 'medium' ? 'warning' : 'success')} px-2 py-1">
+                                    ${task.priority ? task.priority.toUpperCase() : 'NORMAL'}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group mb-3">
+                        <label class="text-muted font-weight-bold small text-uppercase">Güncel Durum</label>
+                        <div class="p-2 border rounded bg-white">
+                             <span class="font-weight-bold text-primary">${statusText}</span>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="text-muted font-weight-bold small text-uppercase">Operasyonel Son Tarih</label>
+                            <div class="p-2 border rounded bg-light">
+                                <i class="far fa-calendar-alt text-secondary mr-2"></i>${formatDate(task.dueDate)}
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="text-muted font-weight-bold small text-uppercase">Resmi Son Tarih</label>
+                            <div class="p-2 border rounded bg-light">
+                                <i class="fas fa-calendar-check text-danger mr-2"></i>${formatDate(task.officialDueDate)}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group mt-2">
+                        <label class="text-muted font-weight-bold small text-uppercase">Açıklama & Notlar</label>
+                        <div class="p-3 border rounded bg-light text-break" style="min-height: 80px; white-space: pre-wrap;">${task.description || '<span class="text-muted font-italic">Açıklama girilmemiş.</span>'}</div>
+                    </div>
                 </div>
-                <div class="modal-detail-section-title">Açıklama & Notlar</div>
-                <div class="modal-detail-value long-text">${task.description || 'Açıklama girilmemiş.'}</div>
             `;
-            // İsteğiniz üzerine Geçmiş (History) kaldırıldı.
-            
+
             modalBody.innerHTML = html;
             modalElement.classList.add('show');
         }
