@@ -171,6 +171,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                 } else {
                     task = this.allTasks[String(accrual.taskId)];
                 }
+                
+                console.log('🔍 DEBUG - Task Arama:');
+                console.log('  - accrual.taskId:', accrual.taskId);
+                console.log('  - this.allTasks type:', Array.isArray(this.allTasks) ? 'Array' : 'Object');
+                console.log('  - Bulunan task:', task);
+                console.log('  - task.details:', task?.details);
+                console.log('  - task.details.epatsDocument:', task?.details?.epatsDocument);
             }
             
             // --- DOKÜMANLAR ---
@@ -183,6 +190,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             let epatsData = null;
             if (task && task.details && task.details.epatsDocument) {
                 epatsData = task.details.epatsDocument;
+                console.log('✅ EPATS Data bulundu:', epatsData);
+            } else {
+                console.log('❌ EPATS Data bulunamadı. Kontroller:');
+                console.log('  - task var mı?', !!task);
+                console.log('  - task.details var mı?', !!task?.details);
+                console.log('  - task.details.epatsDocument var mı?', !!task?.details?.epatsDocument);
             }
 
             // Hem downloadURL hem url kontrolü
