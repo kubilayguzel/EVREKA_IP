@@ -645,16 +645,31 @@ document.addEventListener('DOMContentLoaded', async () => {
     const module = new TaskManagementModule();
     module.init();
 
-    // DeadlineHighlighter
-    if(window.DeadlineHighlighter) {
-        DeadlineHighlighter.init();
-        
-        // HATA VEREN KISIM BURASIYDI, CONFIG OBJESINI DOLDURDUK:
-        DeadlineHighlighter.registerList('taskManagement', {
-            selector: '#tasksTableBody tr',  // Satırları nerede arayacak
-            dateAttribute: 'data-date',      // Tarih hangi attribute'da yazılı
-            warnThresholdDays: 3,            // Kaç gün kala uyarı versin
-            containerId: 'taskManagementTable' // Tablo ID'si
-        });
+    if (window.DeadlineHighlighter) {
+        try {
+            // 1. Kütüphaneyi Başlat
+            window.DeadlineHighlighter.init();
+            
+            // 2. Senin gönderdiğin dosya yapısına uygun konfigürasyon
+            const highlighterConfig = {
+                container: '#taskManagementTable',       // Tablo ID'si (Zorunlu)
+                rowSelector: '#tasksTableBody tr',       // Satır Seçicisi (Zorunlu)
+                dateFields: [                            // Tarih Alanları (Zorunlu)
+                    { name: 'operationalDue', selector: '[data-field="operationalDue"]' },
+                    { name: 'officialDue',    selector: '[data-field="officialDue"]' }
+                ],
+                strategy: 'earliest',                    // Strateji
+                showLegend: true,                        // Açıklama göster
+                applyTo: 'cell',                         // Hücreyi boya
+                addBadgeTo: '[data-field="operationalDue"]' // Rozeti buraya ekle
+            };
+
+            // 3. Listeyi Kaydet
+            window.DeadlineHighlighter.registerList('taskManagement', highlighterConfig);
+            console.log("DeadlineHighlighter başarıyla yapılandırıldı.");
+
+        } catch (e) {
+            console.error("DeadlineHighlighter hatası:", e);
+        }
     }
 });
