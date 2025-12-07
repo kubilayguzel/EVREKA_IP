@@ -144,153 +144,119 @@ document.addEventListener('DOMContentLoaded', async () => {
             const fmtMoney = (v, c) => new Intl.NumberFormat('tr-TR', { style: 'currency', currency: c || 'TRY' }).format(v || 0);
             const fmtDate = (d) => { try { return d ? new Date(d).toLocaleDateString('tr-TR') : '-'; } catch{return '-'} };
             
-            let statusText = 'Bilinmiyor';
-            if(accrual.status === 'paid') statusText = 'Ödendi';
-            if(accrual.status === 'unpaid') statusText = 'Ödenmedi';
-            if(accrual.status === 'partially_paid') statusText = 'Kısmen Ödendi';
+            let statusBadge = '';
+            if(accrual.status === 'paid') statusBadge = '<span class="badge badge-success px-3 w-100 py-2">Ödendi</span>';
+            else if(accrual.status === 'unpaid') statusBadge = '<span class="badge badge-danger px-3 w-100 py-2">Ödenmedi</span>';
+            else if(accrual.status === 'partially_paid') statusBadge = '<span class="badge badge-warning px-3 w-100 py-2 text-white">Kısmen Ödendi</span>';
+            else statusBadge = '<span class="badge badge-secondary px-3 w-100 py-2">Bilinmiyor</span>';
 
             let task = this.allTasks[accrual.taskId];
             
-            // --- DOKÜMAN AYRIŞTIRMA MANTIĞI ---
+            // --- DOKÜMANLARI OLUŞTUR ---
+            let docsHtml = '';
             
-            // 1. EPATS Dokümanı (Task'ten gelir)
-            let epatsHtml = '';
+            // 1. EPATS Belgesi (Varsa Göster)
             if(task?.details?.epatsDocument?.url) {
-                epatsHtml = `
-                <div class="file-item-modal d-flex justify-content-between align-items-center mb-2" style="background-color: #e3f2fd; border-left: 4px solid #2196f3;">
-                    <div class="d-flex align-items-center text-truncate">
-                        <i class="fas fa-file-pdf text-danger mr-2"></i>
-                        <span class="text-truncate"><strong>EPATS:</strong> ${task.details.epatsDocument.name}</span>
+                docsHtml += `
+                <div class="col-md-6 mb-3">
+                    <div class="doc-card doc-type-epats">
+                        <div class="doc-icon-box"><i class="fas fa-file-contract"></i></div>
+                        <div class="doc-content">
+                            <span class="doc-title">İŞİN EPATS DOKÜMANI</span>
+                            <span class="doc-filename" title="${task.details.epatsDocument.name}">${task.details.epatsDocument.name}</span>
+                        </div>
+                        <div class="doc-action">
+                            <a href="${task.details.epatsDocument.url}" target="_blank" class="btn btn-sm btn-outline-primary"><i class="fas fa-eye"></i></a>
+                        </div>
                     </div>
-                    <a href="${task.details.epatsDocument.url}" target="_blank" class="btn btn-sm btn-primary">Aç</a>
                 </div>`;
-            } else {
-                epatsHtml = `<div class="text-muted small font-italic mb-2 pl-2">Bağlı işe ait EPATS belgesi bulunamadı.</div>`;
             }
 
-            // 2. Yurtdışı Fatura / Debit (Tahakkuk dosyalarından süzülür)
-            let foreignInvoicesHtml = '';
-            // 3. Ödeme Dekontları (Tahakkuk dosyalarından süzülür)
-            let receiptsHtml = '';
-
+            // 2. Tahakkuk Dosyaları (Fatura, Dekont vb.)
             if(accrual.files && accrual.files.length > 0) {
                 accrual.files.forEach(f => {
-                    const label = f.documentDesignation || 'Belge';
-                    const isInvoice = label.includes('Fatura') || label.includes('Invoice') || label.includes('Debit');
-                    const isReceipt = label.includes('Dekont') || label.includes('Receipt');
+                    let label = f.documentDesignation || 'BELGE';
+                    let typeClass = 'doc-type-generic';
+                    let icon = 'fa-file-alt';
+
+                    if(label.includes('Fatura') || label.includes('Invoice') || label.includes('Debit')) {
+                        label = 'YURTDIŞI FATURA';
+                        typeClass = 'doc-type-invoice';
+                        icon = 'fa-file-invoice-dollar';
+                    }
+                    else if(label.includes('Dekont') || label.includes('Receipt')) {
+                        label = 'ÖDEME DEKONTU';
+                        typeClass = 'doc-type-receipt';
+                        icon = 'fa-receipt';
+                    }
+                    
                     const url = f.content || f.url;
 
-                    const fileItem = `
-                    <div class="file-item-modal d-flex justify-content-between align-items-center mb-1">
-                        <div class="d-flex align-items-center text-truncate">
-                            <i class="fas ${isInvoice ? 'fa-file-invoice-dollar text-info' : (isReceipt ? 'fa-receipt text-success' : 'fa-file-alt')} mr-2"></i>
-                            <span class="text-truncate" title="${f.name}">${f.name}</span>
+                    docsHtml += `
+                    <div class="col-md-6 mb-3">
+                        <div class="doc-card ${typeClass}">
+                            <div class="doc-icon-box"><i class="fas ${icon}"></i></div>
+                            <div class="doc-content">
+                                <span class="doc-title">${label}</span>
+                                <span class="doc-filename" title="${f.name}">${f.name}</span>
+                            </div>
+                            <div class="doc-action">
+                                <a href="${url}" target="_blank" class="btn btn-sm btn-outline-secondary"><i class="fas fa-download"></i></a>
+                            </div>
                         </div>
-                        <a href="${url}" target="_blank" class="btn btn-sm btn-outline-secondary">İndir</a>
                     </div>`;
-
-                    if (isReceipt) {
-                        receiptsHtml += fileItem;
-                    } else if (isInvoice) {
-                        foreignInvoicesHtml += fileItem;
-                    } else {
-                        // Tanımsızsa Fatura altına ekle (varsayılan)
-                        foreignInvoicesHtml += fileItem;
-                    }
                 });
             }
 
-            if(!foreignInvoicesHtml) foreignInvoicesHtml = '<div class="text-muted small font-italic pl-2">Ekli fatura/debit yok.</div>';
-            if(!receiptsHtml) receiptsHtml = '<div class="text-muted small font-italic pl-2">Ödeme dekontu yok.</div>';
+            // Eğer hiç belge yoksa
+            if(!docsHtml) {
+                docsHtml = `
+                <div class="col-12">
+                    <div class="p-3 border rounded bg-light text-center text-muted small">
+                        <i class="fas fa-folder-open mb-2" style="font-size:1.5em; opacity:0.5;"></i><br>
+                        Bu tahakkuk için görüntülenen belge bulunamadı.
+                    </div>
+                </div>`;
+            }
 
-
-            // HTML Yapısı
+            // --- HTML OLUŞTURMA ---
             body.innerHTML = `
-                <div class="form-group">
-                    <label class="form-label">İlgili İş</label>
-                    <input type="text" class="form-input" value="${accrual.taskTitle || '-'} (${accrual.taskId || ''})" readonly style="background-color: #f8f9fa;">
-                </div>
-
-                <div class="form-grid">
-                    <div class="form-group">
-                        <label class="form-label">Tahakkuk Durumu</label>
-                        <input type="text" class="form-input" value="${statusText}" readonly>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Oluşturulma Tarihi</label>
-                        <input type="text" class="form-input" value="${fmtDate(accrual.createdAt)}" readonly>
-                    </div>
-                </div>
-
-                <div class="form-grid">
-                    <div class="form-group">
-                        <label class="form-label">Resmi Ücret</label>
-                        <input type="text" class="form-input" value="${fmtMoney(accrual.officialFee?.amount, accrual.officialFee?.currency)}" readonly>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Hizmet Bedeli</label>
-                        <input type="text" class="form-input" value="${fmtMoney(accrual.serviceFee?.amount, accrual.serviceFee?.currency)}" readonly>
-                    </div>
-                </div>
-
-                <div class="form-grid">
-                    <div class="form-group">
-                        <label class="form-label">KDV Oranı</label>
-                        <input type="text" class="form-input" value="%${accrual.vatRate} (${accrual.applyVatToOfficialFee ? 'Tümü' : 'Hizmet'})" readonly>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Toplam Tutar</label>
-                        <div class="total-amount-display" style="margin-top:0; text-align:left; font-size:1rem;">
-                            ${fmtMoney(accrual.totalAmount, accrual.totalAmountCurrency)}
-                        </div>
-                    </div>
-                </div>
-
-                <div class="form-grid">
-                    <div class="form-group">
-                        <label class="form-label">Kalan Tutar</label>
-                        <input type="text" class="form-input" value="${fmtMoney(accrual.remainingAmount !== undefined ? accrual.remainingAmount : accrual.totalAmount, accrual.totalAmountCurrency)}" readonly style="color: ${accrual.remainingAmount > 0 ? '#dc3545' : '#28a745'}; font-weight:bold;">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Ödeme Tarihi</label>
-                        <input type="text" class="form-input" value="${accrual.paymentDate ? fmtDate(accrual.paymentDate) : 'Ödeme Bekleniyor'}" readonly>
-                    </div>
-                </div>
-
-                <div class="form-grid">
-                    <div class="form-group">
-                        <label class="form-label">Türk Patent Faturası Kime?</label>
-                        <input type="text" class="form-input" value="${accrual.tpInvoiceParty?.name || '-'}" readonly>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Hizmet Faturası Kime?</label>
-                        <input type="text" class="form-input" value="${accrual.serviceInvoiceParty?.name || '-'}" readonly>
-                    </div>
-                </div>
-
-                <div class="section-header mt-4"><i class="fas fa-folder-open mr-2"></i>BELGELER</div>
-                
+            <div class="container-fluid p-0">
+                <div class="section-header mt-0"><i class="fas fa-info-circle mr-2"></i>GENEL BİLGİLER</div>
                 <div class="row">
-                    <div class="col-12 mb-3">
-                        <label class="view-label text-primary">İŞİN EPATS DOKÜMANI</label>
-                        ${epatsHtml}
+                    <div class="col-md-8 mb-3">
+                        <label class="view-label">İlgili İş</label>
+                        <div class="view-box bg-light font-weight-bold text-dark">${accrual.taskTitle || '-'} <span class="text-muted ml-2 small">(${accrual.taskId || 'ID Yok'})</span></div>
                     </div>
-
-                    <div class="col-md-6 mb-3">
-                        <label class="view-label">YURTDIŞI FATURA / DEBIT</label>
-                        <div class="p-2 border rounded bg-white" style="min-height: 50px;">
-                            ${foreignInvoicesHtml}
-                        </div>
-                    </div>
-
-                    <div class="col-md-6 mb-3">
-                        <label class="view-label">ÖDEME DEKONTU</label>
-                        <div class="p-2 border rounded bg-white" style="min-height: 50px;">
-                            ${receiptsHtml}
-                        </div>
-                    </div>
+                    <div class="col-md-4 mb-3"><label class="view-label">Durum</label>${statusBadge}</div>
                 </div>
-            `;
+                <div class="row">
+                    <div class="col-md-6 mb-3"><label class="view-label">Oluşturulma</label><div class="view-box"><i class="far fa-calendar-plus mr-2 text-muted"></i>${fmtDate(accrual.createdAt)}</div></div>
+                    <div class="col-md-6 mb-3"><label class="view-label">Ödeme</label><div class="view-box"><i class="far fa-calendar-check mr-2 text-muted"></i>${accrual.paymentDate ? fmtDate(accrual.paymentDate) : 'Bekliyor'}</div></div>
+                </div>
+
+                <div class="section-header"><i class="fas fa-coins mr-2"></i>FİNANSAL DETAYLAR</div>
+                <div class="row">
+                    <div class="col-md-6 mb-3"><label class="view-label">Resmi Ücret</label><div class="view-box font-weight-bold">${fmtMoney(accrual.officialFee?.amount, accrual.officialFee?.currency)}</div></div>
+                    <div class="col-md-6 mb-3"><label class="view-label">Hizmet Bedeli</label><div class="view-box font-weight-bold">${fmtMoney(accrual.serviceFee?.amount, accrual.serviceFee?.currency)}</div></div>
+                </div>
+                <div class="row">
+                    <div class="col-md-4 mb-3"><label class="view-label">KDV</label><div class="view-box text-muted small">%${accrual.vatRate}</div></div>
+                    <div class="col-md-4 mb-3"><label class="view-label">Toplam</label><div class="view-box font-weight-bold text-primary bg-light" style="font-size:1.1em">${fmtMoney(accrual.totalAmount, accrual.totalAmountCurrency)}</div></div>
+                    <div class="col-md-4 mb-3"><label class="view-label">Kalan</label><div class="view-box font-weight-bold ${accrual.remainingAmount > 0 ? 'text-danger' : 'text-success'}">${fmtMoney(accrual.remainingAmount !== undefined ? accrual.remainingAmount : accrual.totalAmount, accrual.totalAmountCurrency)}</div></div>
+                </div>
+
+                <div class="section-header"><i class="fas fa-file-invoice mr-2"></i>FATURA BİLGİLERİ</div>
+                <div class="row">
+                    <div class="col-md-6 mb-3"><label class="view-label">TP Faturası</label><div class="view-box small text-truncate"><i class="fas fa-user-tie mr-2 text-secondary"></i>${accrual.tpInvoiceParty?.name || '-'}</div></div>
+                    <div class="col-md-6 mb-3"><label class="view-label">Hizmet Faturası</label><div class="view-box small text-truncate"><i class="fas fa-building mr-2 text-secondary"></i>${accrual.serviceInvoiceParty?.name || '-'}</div></div>
+                </div>
+
+                <div class="section-header"><i class="fas fa-folder-open mr-2"></i>BELGELER</div>
+                <div class="row">
+                    ${docsHtml}
+                </div>
+            </div>`;
 
             modal.classList.add('show');
         }
