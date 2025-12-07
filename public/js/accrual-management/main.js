@@ -1,7 +1,8 @@
-import { authService, accrualService, taskService, ipRecordsService, personService, generateUUID, db } from '../../firebase-config.js';
-import { showNotification, formatFileSize, readFileAsDataURL } from '../../utils.js';
+import { authService, accrualService, taskService, personService, generateUUID, db } from '../../firebase-config.js';
+import { showNotification, readFileAsDataURL } from '../../utils.js';
 import { loadSharedLayout } from '../layout-loader.js';
 import { doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+import PaginationManager from '../pagination.js'; // Pagination Manager
 
 document.addEventListener('DOMContentLoaded', async () => {
     await loadSharedLayout({ activeMenuLink: 'accruals.html' });
@@ -10,11 +11,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         constructor() {
             this.currentUser = null;
             this.allAccruals = [];
-            this.allTasks = {}; // Map: { "279": { ...taskData... } }
-            this.allIpRecords = {}; 
-            this.allPersons = []; 
+            this.allTasks = {}; // Bellekteki task önizlemeleri (başlık vb. için)
+            this.allPersons = [];
             this.selectedAccruals = new Set();
             
+            // --- Pagination & Sorting State ---
+            this.paginationManager = null;
+            this.itemsPerPage = 10;
+            this.currentSort = { column: 'createdAt', direction: 'desc' }; // Varsayılan: En yeni en üstte
+            this.currentFilterStatus = 'all';
+
             // Edit State
             this.currentEditAccrual = null;
             this.editSelectedTpInvoiceParty = null;
@@ -28,6 +34,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         async init() {
             this.currentUser = authService.getCurrentUser();
             if (!this.currentUser) return; 
+
+            // Pagination Manager Başlatılıyor
+            this.paginationManager = new PaginationManager(
+                [], 
+                this.itemsPerPage, 
+                'paginationControls', 
+                (pageData) => this.renderPageRows(pageData)
+            );
+
             await this.loadAllData();
             this.setupEventListeners();
         }
@@ -47,36 +62,35 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const accRes = await accrualService.getAccruals();
                 this.allAccruals = accRes?.success ? (accRes.data || []) : [];
 
-                if (!this.allAccruals.length) {
-                    this.renderTable();
-                    return;
-                }
-
-                // 2. ID'leri Topla
-                const taskIds = new Set();
-                const personIds = new Set();
-                this.allAccruals.forEach(a => {
-                    if (a.taskId) taskIds.add(String(a.taskId)); // ID'leri String olarak sakla
-                    if (a.personId) personIds.add(a.personId);
-                });
-
-                // 3. İlişkili İşleri (Tasks) Çek ve Map'e Çevir
-                if (taskIds.size && taskService.getTasksByIds) {
-                    const tRes = await taskService.getTasksByIds(Array.from(taskIds));
-                    const tasks = tRes?.success ? (tRes.data || []) : [];
-                    
-                    // Task'leri ID'lerine göre (String formatında) Map yap
-                    this.allTasks = {};
-                    tasks.forEach(t => {
-                        this.allTasks[String(t.id)] = t;
+                if (this.allAccruals.length > 0) {
+                    // Tarihleri Date objesine çevir (Sıralama için gerekli)
+                    this.allAccruals.forEach(a => {
+                        a.createdAt = a.createdAt ? new Date(a.createdAt) : new Date(0);
                     });
+
+                    // 2. ID'leri Topla
+                    const taskIds = new Set();
+                    this.allAccruals.forEach(a => {
+                        if (a.taskId) taskIds.add(String(a.taskId));
+                    });
+
+                    // 3. İlişkili İşleri (Tasks) Çek ve Map'e Çevir (Liste görünümü için)
+                    if (taskIds.size && taskService.getTasksByIds) {
+                        const tRes = await taskService.getTasksByIds(Array.from(taskIds));
+                        const tasks = tRes?.success ? (tRes.data || []) : [];
+                        this.allTasks = {};
+                        tasks.forEach(t => {
+                            this.allTasks[String(t.id)] = t;
+                        });
+                    }
+
+                    // 4. Kişileri Çek
+                    const pRes = await personService.getPersons();
+                    this.allPersons = pRes?.success ? (pRes.data || []) : [];
                 }
 
-                // 4. Kişileri Çek
-                const pRes = await personService.getPersons();
-                this.allPersons = pRes?.success ? (pRes.data || []) : [];
-
-                this.renderTable();
+                // Veriyi İşle ve Tabloyu Çiz
+                this.processAndRender();
 
             } catch (err) {
                 console.error(err);
@@ -87,27 +101,84 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         }
 
-        // --- UI LAYER: TABLE ---
-        renderTable(filter = 'all') {
-            const tbody = document.getElementById('accrualsTableBody');
-            const noMsg = document.getElementById('noRecordsMessage');
-            
-            const filtered = this.allAccruals.filter(a => filter === 'all' || a.status === filter);
+        // --- CORE LOGIC: FILTER & SORT & PAGINATE ---
+        
+        processAndRender() {
+            // 1. Filtreleme
+            let processedData = [...this.allAccruals];
+            if (this.currentFilterStatus !== 'all') {
+                processedData = processedData.filter(a => a.status === this.currentFilterStatus);
+            }
 
-            if (filtered.length === 0) {
-                tbody.innerHTML = '';
-                noMsg.style.display = 'block';
+            // 2. Sıralama
+            processedData = this.sortData(processedData);
+
+            // 3. Boş Durum Kontrolü
+            const noMsg = document.getElementById('noRecordsMessage');
+            if (processedData.length === 0) {
+                document.getElementById('accrualsTableBody').innerHTML = '';
+                document.getElementById('paginationControls').style.display = 'none';
+                if(noMsg) noMsg.style.display = 'block';
                 return;
             }
-            noMsg.style.display = 'none';
+            if(noMsg) noMsg.style.display = 'none';
+            document.getElementById('paginationControls').style.display = 'flex';
 
+            // 4. Pagination'ı Güncelle (renderPageRows'u tetikler)
+            this.paginationManager.setItems(processedData);
+        }
+
+        sortData(data) {
+            const { column, direction } = this.currentSort;
+            const dirMultiplier = direction === 'asc' ? 1 : -1;
+
+            return data.sort((a, b) => {
+                let valA, valB;
+
+                switch (column) {
+                    case 'id':
+                        valA = (a.id || '').toLowerCase(); valB = (b.id || '').toLowerCase(); break;
+                    case 'status':
+                        valA = (a.status || '').toLowerCase(); valB = (b.status || '').toLowerCase(); break;
+                    case 'taskTitle':
+                        // Task başlığı yoksa ID, o da yoksa boş
+                        const taskA = this.allTasks[String(a.taskId)];
+                        const taskB = this.allTasks[String(b.taskId)];
+                        valA = (taskA ? taskA.title : (a.taskTitle || '')).toLowerCase();
+                        valB = (taskB ? taskB.title : (b.taskTitle || '')).toLowerCase();
+                        break;
+                    case 'officialFee':
+                        valA = a.officialFee?.amount || 0; valB = b.officialFee?.amount || 0; break;
+                    case 'serviceFee':
+                        valA = a.serviceFee?.amount || 0; valB = b.serviceFee?.amount || 0; break;
+                    case 'totalAmount':
+                        valA = a.totalAmount || 0; valB = b.totalAmount || 0; break;
+                    case 'remainingAmount':
+                        valA = a.remainingAmount !== undefined ? a.remainingAmount : a.totalAmount;
+                        valB = b.remainingAmount !== undefined ? b.remainingAmount : b.totalAmount;
+                        break;
+                    case 'createdAt': // Date objesi
+                        valA = a.createdAt; valB = b.createdAt; break;
+                    default:
+                        valA = 0; valB = 0;
+                }
+
+                if (valA < valB) return -1 * dirMultiplier;
+                if (valA > valB) return 1 * dirMultiplier;
+                return 0;
+            });
+        }
+
+        // --- UI LAYER: ROW RENDER ---
+        renderPageRows(pageData) {
+            const tbody = document.getElementById('accrualsTableBody');
             const fmtMoney = (v, c) => new Intl.NumberFormat('tr-TR', { style: 'currency', currency: c || 'TRY' }).format(v || 0);
 
-            tbody.innerHTML = filtered.map(acc => {
+            tbody.innerHTML = pageData.map(acc => {
                 let sTxt = 'Bilinmiyor', sCls = '';
                 if(acc.status === 'paid') { sTxt = 'Ödendi'; sCls = 'status-paid'; }
-                if(acc.status === 'unpaid') { sTxt = 'Ödenmedi'; sCls = 'status-unpaid'; }
-                if(acc.status === 'partially_paid') { sTxt = 'Kısmen Ödendi'; sCls = 'status-partially-paid'; }
+                else if(acc.status === 'unpaid') { sTxt = 'Ödenmedi'; sCls = 'status-unpaid'; }
+                else if(acc.status === 'partially_paid') { sTxt = 'Kısmen Ödendi'; sCls = 'status-partially-paid'; }
 
                 const isSel = this.selectedAccruals.has(acc.id);
                 const isPaid = acc.status === 'paid';
@@ -115,7 +186,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                 // Task Title Fallback
                 let taskDisplay = acc.taskTitle || acc.taskId;
-                // Eğer Task yüklendiyse güncel başlığı al
                 if (this.allTasks[String(acc.taskId)]) {
                     taskDisplay = this.allTasks[String(acc.taskId)].title;
                 }
@@ -139,11 +209,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                     </td>
                 </tr>`;
             }).join('');
+            
+            this.updateBulkActionsVisibility();
         }
 
         // --- UI LAYER: MODALS ---
         
-        // 1. View Modal (GÜNCEL: Düzeltilmiş EPATS ve Form Yapısı)
+        // 1. View Modal (GÜNCEL: getDoc ile Güvenli Veri Çekme)
         async showViewAccrualDetailModal(accrualId) {
             const accrual = this.allAccruals.find(a => a.id === accrualId);
             if (!accrual) return;
@@ -182,13 +254,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             let foreignInvHtml = '';
             let receiptHtml = '';
 
-            // 1. EPATS Belgesi Kontrolü (Veritabanı yapınıza uygun: downloadURL)
+            // 1. EPATS Belgesi (task.details.epatsDocument)
             let epatsData = null;
             if (task && task.details && task.details.epatsDocument) {
                 epatsData = task.details.epatsDocument;
             }
 
-            // Hem downloadURL hem url kontrolü
             if (epatsData && (epatsData.downloadURL || epatsData.url)) {
                 const docUrl = epatsData.downloadURL || epatsData.url;
                 const docName = epatsData.name || 'EPATS Belgesi';
@@ -216,6 +287,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     const url = f.content || f.url;
                     let label = f.documentDesignation || 'BELGE';
                     
+                    // Helper for card HTML
                     const getCard = (typeClass, icon, title) => `
                     <div class="col-md-6 mb-3">
                         <div class="doc-card ${typeClass}">
@@ -243,12 +315,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             if(!foreignInvHtml) foreignInvHtml = '<div class="col-12 text-muted small font-italic mb-2 pl-3">Fatura/Debit yok.</div>';
             if(!receiptHtml) receiptHtml = '<div class="col-12 text-muted small font-italic mb-2 pl-3">Ödeme dekontu yok.</div>';
 
-
             // HTML YAPISI
             body.innerHTML = `
                 <div class="form-group">
                     <label class="form-label">İlgili İş</label>
-                    <input type="text" class="form-input" value="${accrual.taskTitle || '-'} (${accrual.taskId || ''})" readonly style="background-color: #f8f9fa; font-weight: 500;">
+                    <input type="text" class="form-input" value="${accrual.taskTitle || (task ? task.title : '-')} (${accrual.taskId || ''})" readonly style="background-color: #f8f9fa; font-weight: 500;">
                 </div>
 
                 <div class="form-grid">
@@ -447,7 +518,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         }
 
-        // --- EVENTS & HELPERS ---
         async handleBulkUpdate(newStatus) {
             if (this.selectedAccruals.size === 0) return;
             let loader = window.showSimpleLoading ? window.showSimpleLoading('Güncelleniyor...') : null;
@@ -496,30 +566,57 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         }
 
+        // --- EVENTS & HELPERS ---
         setupEventListeners() {
-            document.getElementById('statusFilter').addEventListener('change', e => this.renderTable(e.target.value));
+            // Filter Change
+            document.getElementById('statusFilter').addEventListener('change', e => {
+                this.currentFilterStatus = e.target.value;
+                this.processAndRender();
+            });
+
+            // Sorting Headers
+            document.querySelectorAll('th[data-sort]').forEach(th => {
+                th.style.cursor = 'pointer';
+                th.addEventListener('click', () => {
+                    const column = th.dataset.sort;
+                    if (this.currentSort.column === column) {
+                        this.currentSort.direction = this.currentSort.direction === 'asc' ? 'desc' : 'asc';
+                    } else {
+                        this.currentSort = { column: column, direction: 'asc' };
+                    }
+                    
+                    document.querySelectorAll('.sort-icon').forEach(icon => icon.className = 'fas fa-sort sort-icon text-muted');
+                    const currentIcon = th.querySelector('.sort-icon');
+                    if(currentIcon) currentIcon.className = `fas fa-sort-${this.currentSort.direction === 'asc' ? 'up' : 'down'} sort-icon`;
+
+                    this.processAndRender();
+                });
+            });
+
+            // Table Selection
             document.getElementById('selectAllCheckbox').addEventListener('change', e => this.toggleSelectAll(e.target.checked));
-            document.getElementById('accrualsTableBody').addEventListener('change', e => {
+            const tbody = document.getElementById('accrualsTableBody');
+            
+            tbody.addEventListener('change', e => {
                 if(e.target.classList.contains('row-checkbox')) this.updateSelection(e.target.dataset.id, e.target.checked);
             });
 
-            document.getElementById('accrualsTableBody').addEventListener('click', e => {
+            // Table Actions
+            tbody.addEventListener('click', e => {
                 const btn = e.target.closest('.action-btn');
-                if(!btn) return;
-                e.preventDefault();
-                const dataId = btn.dataset.id;
-                if(btn.classList.contains('view-btn')) this.showViewAccrualDetailModal(dataId);
-                if(btn.classList.contains('edit-btn')) this.showEditAccrualModal(dataId);
-                if(btn.classList.contains('delete-btn')) this.deleteAccrual(dataId);
-            });
-
-            document.getElementById('accrualsTableBody').addEventListener('click', e => {
-                if(e.target.classList.contains('task-detail-link')) {
+                if (btn) {
+                    e.preventDefault();
+                    const dataId = btn.dataset.id;
+                    if(btn.classList.contains('view-btn')) this.showViewAccrualDetailModal(dataId);
+                    if(btn.classList.contains('edit-btn')) this.showEditAccrualModal(dataId);
+                    if(btn.classList.contains('delete-btn')) this.deleteAccrual(dataId);
+                } else if(e.target.classList.contains('task-detail-link')) {
                     e.preventDefault();
                     this.showTaskDetailModal(e.target.dataset.taskId);
                 }
             });
 
+            // Modals
             document.getElementById('bulkMarkPaidBtn').addEventListener('click', () => this.showMarkPaidModal());
             document.getElementById('bulkMarkUnpaidBtn').addEventListener('click', () => this.handleBulkUpdate('unpaid'));
             
@@ -629,17 +726,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             };
         }
         showTaskDetailModal(taskId) {
-            // Task verisi allTasks içinde olmayabilir (eğer sadece ID'si varsa ama detay yüklenmediyse)
-            // Bu yüzden önce allTasks kontrol edilir, yoksa fetch edilebilir.
-            // Bu örnekte basitleştirilmiştir.
             let task = this.allTasks[String(taskId)];
-            
-            // Eğer task yoksa veya basit bir nesne ise ve detayları eksikse (örn: sadece ID'si var)
             if(!task) { 
                 showNotification('İş bulunamadı veya yüklenemedi', 'error'); 
                 return; 
             }
-
             document.getElementById('modalTaskTitle').textContent = `İş Detayı: ${task.title}`;
             document.getElementById('modalBody').innerHTML = `<p><b>Durum:</b> ${task.status}</p><p><b>Açıklama:</b> ${task.description || '-'}</p>`;
             document.getElementById('taskDetailModal').classList.add('show');
