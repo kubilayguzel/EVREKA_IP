@@ -23,34 +23,38 @@
                 <h1 class="page-title">İş Yönetimi</h1>
                 <p class="page-subtitle">Sistemdeki tüm görevleri görüntüleyin ve yönetin.</p>
             </section>
-    
             <div class="tasks-container">
                 <div class="tasks-header">
-                    <input type="text" id="taskSearchInput" class="search-input" placeholder="Başlık, numara, tip ara...">
+                    <input type="text" id="searchInput" class="search-input" placeholder="İşlerde ara (No, Konu, Kişi, Durum)...">
                     <button class="btn-add-task" onclick="window.location.href='create-task.html'">
                         <span>&#x2795;</span> Yeni İş Oluştur
                     </button>
                 </div>
+                
                 <div class="table-container">
                     <table class="tasks-table" id="taskManagementTable">
                         <thead>
                             <tr>
-                                <th>İş No.</th>
-                                <th>İlgili Kayıt</th>
-                                <th>Tip</th>
-                                <th>Öncelik</th>
-                                <th>Atanan</th>
-                                <th>Operasyonel Son Tarih</th>
-                                <th>Resmi Son Tarih</th>
-                                <th>Durum</th>
-                                <th>İşlemler</th>
+                                <th data-sort="id">İş No. <i class="fas fa-sort"></i></th>
+                                <th data-sort="relatedRecord">İlgili Kayıt <i class="fas fa-sort"></i></th>
+                                <th data-sort="taskType">Tip <i class="fas fa-sort"></i></th>
+                                <th data-sort="priority">Öncelik <i class="fas fa-sort"></i></th>
+                                <th data-sort="assignedTo">Atanan <i class="fas fa-sort"></i></th>
+                                <th data-sort="operationalDue">Operasyonel Son Tarih <i class="fas fa-sort"></i></th>
+                                <th data-sort="officialDue">Resmi Son Tarih <i class="fas fa-sort"></i></th>
+                                <th data-sort="status">Durum <i class="fas fa-sort"></i></th>
+                                <th class="no-sort">İşlemler</th>
                             </tr>
                         </thead>
-                        <tbody id="tasksTableBody"></tbody>
+                        <tbody id="tasksTableBody">
+                            </tbody>
                     </table>
                 </div>
-                <div id="loadingIndicator" class="loading">Yükleniyor...</div>
-                <div id="noTasksMessage" class="no-records">Henüz kayıtlı görev bulunmamaktadır.</div>
+                
+                <div id="loadingIndicator" class="loading" style="display:none;">Yükleniyor...</div>
+                <div id="noTasksMessage" class="no-records" style="display:none;">Kayıt bulunamadı.</div>
+                
+                <div id="paginationContainer" class="pagination-container"></div>
             </div>
         </main>
     </div>
