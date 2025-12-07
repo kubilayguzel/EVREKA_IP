@@ -173,11 +173,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
                 
                 console.log('🔍 DEBUG - Task Arama:');
-                console.log('  - accrual.taskId:', accrual.taskId);
+                console.log('  - accrual.taskId:', accrual.taskId, 'Type:', typeof accrual.taskId);
                 console.log('  - this.allTasks type:', Array.isArray(this.allTasks) ? 'Array' : 'Object');
+                console.log('  - this.allTasks keys:', Object.keys(this.allTasks).slice(0, 10)); // İlk 10 key
+                console.log('  - "279" key var mı?', '279' in this.allTasks);
+                console.log('  - 279 (number) key var mı?', 279 in this.allTasks);
                 console.log('  - Bulunan task:', task);
-                console.log('  - task.details:', task?.details);
-                console.log('  - task.details.epatsDocument:', task?.details?.epatsDocument);
             }
             
             // --- DOKÜMANLAR ---
