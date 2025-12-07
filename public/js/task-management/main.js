@@ -513,10 +513,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             if (!modalBody || !modalTitle || !modalElement) return;
 
-            // Modal Başlığı
+            // --- 1. Başlık ve Formatlayıcılar ---
             modalTitle.textContent = `İş Detayı (${task.id})`;
             
-            // Veri Hazırlığı (Formatlama)
             const formatDate = (dateVal) => {
                 if (!dateVal) return 'Belirtilmemiş';
                 try {
@@ -525,6 +524,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                 } catch(e) { return '-'; }
             };
 
+            const formatCurrency = (amount, currency) => {
+                return new Intl.NumberFormat('tr-TR', { style: 'currency', currency: currency || 'TRY' }).format(amount || 0);
+            };
+
+            // Temel Bilgiler
             const assignedUser = this.allUsers.find(u => u.id === task.assignedTo_uid);
             const assignedName = assignedUser ? (assignedUser.displayName || assignedUser.email) : 'Atanmamış';
 
@@ -536,8 +540,86 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             const statusText = this.statusDisplayMap[task.status] || task.status;
 
-            // HTML Oluşturma (Düzenle Formuna Benzer Yapı)
-            // Bootstrap form yapısı kullanılarak "read-only" görünüm sağlandı.
+            // --- 2. Tahakkuk (Finansal) Verilerini Hazırla ---
+            const relatedAccruals = (this.allAccruals || []).filter(acc => acc.taskId === task.id);
+            let accrualsHtml = '';
+            
+            if (relatedAccruals.length > 0) {
+                let rows = '';
+                relatedAccruals.forEach(acc => {
+                    const accStatusBadge = acc.status === 'paid' 
+                        ? '<span class="badge badge-success">Ödendi</span>' 
+                        : '<span class="badge badge-warning">Ödenmedi</span>';
+                    
+                    rows += `
+                        <tr>
+                            <td>#${acc.id || '-'}</td>
+                            <td class="font-weight-bold text-dark">${formatCurrency(acc.totalAmount, acc.totalAmountCurrency)}</td>
+                            <td>${accStatusBadge}</td>
+                            <td><small class="text-muted">${formatDate(acc.createdAt)}</small></td>
+                        </tr>`;
+                });
+
+                accrualsHtml = `
+                    <div class="table-responsive mt-1">
+                        <table class="table table-sm table-bordered mb-0 bg-white" style="font-size: 0.9rem;">
+                            <thead class="thead-light"><tr><th>No</th><th>Tutar</th><th>Durum</th><th>Tarih</th></tr></thead>
+                            <tbody>${rows}</tbody>
+                        </table>
+                    </div>`;
+            } else {
+                accrualsHtml = `<div class="p-2 border rounded bg-light text-muted font-italic small">Bu işe bağlı tahakkuk kaydı bulunmamaktadır.</div>`;
+            }
+
+            // --- 3. Belge (Doküman) Verilerini Hazırla ---
+            let epatsDocHtml = '';
+            let otherDocsHtml = '';
+
+            // 3.1 EPATS Belgesi Kontrolü
+            if (task.details && task.details.epatsDocument && (task.details.epatsDocument.url || task.details.epatsDocument.downloadURL)) {
+                const doc = task.details.epatsDocument;
+                const url = doc.url || doc.downloadURL;
+                epatsDocHtml = `
+                    <div class="alert alert-primary d-flex align-items-center justify-content-between p-2 mb-2" style="border-left: 4px solid #007bff;">
+                        <div class="d-flex align-items-center">
+                            <i class="fas fa-file-pdf text-danger fa-lg mr-2"></i>
+                            <div>
+                                <strong class="d-block" style="font-size:0.9rem;">EPATS Belgesi</strong>
+                                <small class="text-muted">${doc.name || 'Belge'}</small>
+                            </div>
+                        </div>
+                        <a href="${url}" target="_blank" class="btn btn-sm btn-outline-primary bg-white">Aç</a>
+                    </div>`;
+            }
+
+            // 3.2 Diğer Dokümanlar (Files array)
+            const files = task.files || (task.details ? task.details.files : []) || [];
+            if (files.length > 0) {
+                otherDocsHtml = '<ul class="list-group list-group-flush border rounded">';
+                files.forEach(file => {
+                     // Eğer EPATS belgesi files içinde de varsa tekrar gösterme (url kontrolü)
+                     const epatsUrl = (task.details && task.details.epatsDocument) ? (task.details.epatsDocument.url || task.details.epatsDocument.downloadURL) : null;
+                     if (epatsUrl && file.url === epatsUrl) return;
+
+                     otherDocsHtml += `
+                        <li class="list-group-item d-flex justify-content-between align-items-center p-2">
+                            <div class="d-flex align-items-center text-truncate">
+                                <i class="fas fa-paperclip text-secondary mr-2"></i>
+                                <span class="small text-dark" title="${file.name}">${file.name}</span>
+                            </div>
+                            <a href="${file.url}" target="_blank" class="btn btn-xs btn-light border"><i class="fas fa-download"></i></a>
+                        </li>`;
+                });
+                otherDocsHtml += '</ul>';
+            }
+            
+            // Eğer hiç belge yoksa
+            if (!epatsDocHtml && !otherDocsHtml) {
+                otherDocsHtml = `<div class="p-2 border rounded bg-light text-muted font-italic small">Ekli belge bulunmamaktadır.</div>`;
+            }
+
+
+            // --- 4. HTML Birleştirme ---
             let html = `
                 <div class="container-fluid p-0">
                     <div class="form-group mb-3">
@@ -562,19 +644,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                             <div class="p-2 border rounded">${assignedName}</div>
                         </div>
                         <div class="col-md-6 mb-3">
-                            <label class="text-muted font-weight-bold small text-uppercase">Öncelik</label>
-                            <div class="p-2 border rounded">
-                                <span class="badge badge-${task.priority === 'high' ? 'danger' : (task.priority === 'medium' ? 'warning' : 'success')} px-2 py-1">
-                                    ${task.priority ? task.priority.toUpperCase() : 'NORMAL'}
-                                </span>
+                            <label class="text-muted font-weight-bold small text-uppercase">Güncel Durum</label>
+                            <div class="p-2 border rounded bg-white">
+                                 <span class="font-weight-bold text-primary">${statusText}</span>
                             </div>
-                        </div>
-                    </div>
-
-                    <div class="form-group mb-3">
-                        <label class="text-muted font-weight-bold small text-uppercase">Güncel Durum</label>
-                        <div class="p-2 border rounded bg-white">
-                             <span class="font-weight-bold text-primary">${statusText}</span>
                         </div>
                     </div>
 
@@ -591,6 +664,21 @@ document.addEventListener('DOMContentLoaded', async () => {
                                 <i class="fas fa-calendar-check text-danger mr-2"></i>${formatDate(task.officialDueDate)}
                             </div>
                         </div>
+                    </div>
+
+                    <hr>
+
+                    <div class="form-group mb-3">
+                        <label class="text-muted font-weight-bold small text-uppercase"><i class="fas fa-folder-open mr-1"></i> Belgeler</label>
+                        <div class="p-1">
+                            ${epatsDocHtml}
+                            ${otherDocsHtml}
+                        </div>
+                    </div>
+
+                    <div class="form-group mb-3">
+                        <label class="text-muted font-weight-bold small text-uppercase"><i class="fas fa-coins mr-1"></i> Bağlı Tahakkuklar</label>
+                        ${accrualsHtml}
                     </div>
 
                     <div class="form-group mt-2">
