@@ -14,40 +14,43 @@
 </head>
 <body>
     <div id="layout-placeholder"></div>
-    <div id="notification-container" style="
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        z-index: 10000;
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
-        align-items: flex-end;"></div>
+    <div id="notification-container" style="position: fixed; top: 20px; right: 20px; z-index: 10000; display: flex; flex-direction: column; gap: 10px; align-items: flex-end;"></div>
 
     <div class="page-wrapper">
         <main class="main-container">
-            <div class="page-header">
+            <section class="page-header">
                 <div>
                     <h1 class="page-title">Tahakkuk Yönetimi</h1>
-                    <p class="text-muted mb-0">Tüm finansal işlemleri görüntüleyin ve yönetin.</p>
+                    <p class="page-subtitle">Tüm finansal işlemleri görüntüleyin ve yönetin.</p>
                 </div>
-                <button class="btn btn-primary btn-primary-custom" data-toggle="modal" data-target="#addAccrualModal">
-                    <i class="fas fa-plus mr-2"></i> Yeni Tahakkuk
+                <button class="btn btn-primary" id="btnAddAccrual">
+                    <i class="fas fa-plus"></i> Yeni Tahakkuk
                 </button>
-            </div>
+            </section>
 
-            <div class="accruals-table-container">
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <input type="text" id="searchInput" class="form-control" placeholder="İş, Kişi veya Tutar ara..." style="max-width: 300px;">
+            <div class="content-card">
+                <div class="filters-section">
+                    <div class="search-box">
+                        <i class="fas fa-search search-icon"></i>
+                        <input type="text" id="searchInput" class="search-input" placeholder="İş, Kişi veya Tutar ara...">
+                    </div>
+                    <div class="filter-group">
+                        <select id="statusFilter" class="form-control" style="width: auto;">
+                            <option value="all">Tüm Durumlar</option>
+                            <option value="unpaid">Ödenmedi</option>
+                            <option value="partially_paid">Kısmen Ödendi</option>
+                            <option value="paid">Ödendi</option>
+                        </select>
+                    </div>
                 </div>
+
                 <div class="table-responsive">
                     <table class="table" id="accrualsTable">
                         <thead>
                             <tr>
                                 <th>ID</th>
                                 <th>İlgili İş</th>
-                                <th>TP Fatura Tarafı</th>
-                                <th>Hizmet Fatura Tarafı</th>
+                                <th>Fatura Tarafları</th>
                                 <th>Toplam Tutar</th>
                                 <th>Kalan Tutar</th>
                                 <th>Durum</th>
@@ -62,12 +65,12 @@
         </main>
     </div>
 
-    <div class="modal fade" id="addAccrualModal" tabindex="-1">
-        <div class="modal-dialog modal-lg">
+    <div class="modal" id="addAccrualModal">
+        <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title">Yeni Tahakkuk Oluştur</h5>
-                    <button type="button" class="close" data-dismiss="modal">&times;</button>
+                    <button type="button" class="close-modal">&times;</button>
                 </div>
                 <div class="modal-body">
                     <form id="addAccrualForm" onsubmit="return false;">
@@ -81,7 +84,7 @@
                                     <label class="form-label">Resmi Ücret</label>
                                     <div class="input-group">
                                         <input type="number" id="officialFeeAmount" class="form-control" placeholder="0.00">
-                                        <select id="officialFeeCurrency" class="form-control" style="max-width: 80px;">
+                                        <select id="officialFeeCurrency" class="form-control currency-select">
                                             <option value="TRY">TRY</option>
                                             <option value="USD">USD</option>
                                             <option value="EUR">EUR</option>
@@ -94,7 +97,7 @@
                                     <label class="form-label">Hizmet Bedeli</label>
                                     <div class="input-group">
                                         <input type="number" id="serviceFeeAmount" class="form-control" placeholder="0.00">
-                                        <select id="serviceFeeCurrency" class="form-control" style="max-width: 80px;">
+                                        <select id="serviceFeeCurrency" class="form-control currency-select">
                                             <option value="TRY">TRY</option>
                                             <option value="USD">USD</option>
                                             <option value="EUR">EUR</option>
@@ -112,77 +115,83 @@
                             </div>
                             <div class="col-md-6 d-flex align-items-center">
                                 <div class="form-group mb-0">
-                                    <div class="custom-control custom-checkbox">
-                                        <input type="checkbox" class="custom-control-input" id="applyVatToOfficialFee" checked>
-                                        <label class="custom-control-label" for="applyVatToOfficialFee">Resmi Ücrete KDV Uygula</label>
-                                    </div>
+                                    <label class="d-flex align-items-center" style="cursor:pointer;">
+                                        <input type="checkbox" id="applyVatToOfficialFee" checked style="width:18px; height:18px; margin-right:8px;">
+                                        Resmi Ücrete KDV Uygula
+                                    </label>
                                 </div>
                             </div>
                         </div>
-                        <div class="form-group text-right mt-3">
-                            <label class="form-label mr-2">Toplam Tutar:</label>
-                            <span id="totalAmountDisplay" class="h4 text-primary font-weight-bold">0.00 TRY</span>
+                        <div class="form-group text-right">
+                            <label class="form-label">Toplam Tutar</label>
+                            <div id="totalAmountDisplay" class="h3 text-primary font-weight-bold">0.00 TRY</div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">Belge Yükle</label>
+                            <div id="fileUploadArea" class="file-upload-area">
+                                <i class="fas fa-cloud-upload-alt file-upload-icon"></i>
+                                <p>Dosyaları buraya sürükleyin veya seçmek için tıklayın</p>
+                                <input type="file" id="fileInput" multiple style="display: none;">
+                            </div>
+                            <ul id="fileList" class="file-list"></ul>
                         </div>
                     </form>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-dismiss="modal">İptal</button>
+                    <button type="button" class="btn btn-outline btn-close-modal">İptal</button>
                     <button type="button" class="btn btn-primary" id="saveAccrualBtn">Kaydet</button>
                 </div>
             </div>
         </div>
     </div>
 
-    <div class="modal fade" id="viewAccrualModal" tabindex="-1">
+    <div class="modal" id="viewAccrualModal">
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title">Tahakkuk Detayı</h5>
-                    <button type="button" class="close" data-dismiss="modal">&times;</button>
+                    <button type="button" class="close-modal">&times;</button>
                 </div>
                 <div class="modal-body">
                     <div class="detail-row">
                         <div class="detail-label">İş Başlığı:</div>
-                        <div class="detail-value" id="viewAccrualTaskTitle"></div>
+                        <div class="detail-value" id="viewTaskTitle"></div>
                     </div>
                     <div class="detail-row">
                         <div class="detail-label">Resmi Ücret:</div>
-                        <div class="detail-value font-weight-bold" id="viewAccrualOfficialFee"></div>
+                        <div class="detail-value font-weight-bold" id="viewOfficialFee"></div>
                     </div>
                     <div class="detail-row">
                         <div class="detail-label">Hizmet Bedeli:</div>
-                        <div class="detail-value font-weight-bold" id="viewAccrualServiceFee"></div>
-                    </div>
-                    <div class="detail-row">
-                        <div class="detail-label">KDV Oranı:</div>
-                        <div class="detail-value" id="viewAccrualVatRate"></div>
+                        <div class="detail-value font-weight-bold" id="viewServiceFee"></div>
                     </div>
                     <div class="detail-row">
                         <div class="detail-label">Toplam Tutar:</div>
-                        <div class="detail-value amount-text text-primary" id="viewAccrualTotalAmount"></div>
+                        <div class="detail-value amount" id="viewTotalAmount"></div>
                     </div>
                     <div class="detail-row">
                         <div class="detail-label">Kalan Tutar:</div>
-                        <div class="detail-value amount-text text-danger" id="viewAccrualRemainingAmount"></div>
+                        <div class="detail-value amount text-danger" id="viewRemainingAmount"></div>
                     </div>
                     <div class="detail-row">
                         <div class="detail-label">Durum:</div>
-                        <div class="detail-value"><span id="viewAccrualStatus"></span></div>
+                        <div class="detail-value" id="viewStatusBadge"></div>
                     </div>
                     <div class="detail-row">
-                        <div class="detail-label">TP Fatura Tarafı:</div>
+                        <div class="detail-label">TP Fatura:</div>
                         <div class="detail-value" id="viewAccrualTpInvoiceParty"></div>
                     </div>
                     <div class="detail-row">
-                        <div class="detail-label">Hizmet Fatura Tarafı:</div>
+                        <div class="detail-label">Hizmet Fatura:</div>
                         <div class="detail-value" id="viewAccrualServiceInvoiceParty"></div>
                     </div>
                     <div class="detail-row">
-                        <div class="detail-label">Oluşturma Tarihi:</div>
+                        <div class="detail-label">Oluşturma:</div>
                         <div class="detail-value" id="viewAccrualCreatedAt"></div>
                     </div>
                     <div class="detail-row">
-                        <div class="detail-label">Ödeme Tarihi:</div>
+                        <div class="detail-label">Son Ödeme:</div>
                         <div class="detail-value" id="viewAccrualPaymentDate"></div>
                     </div>
                     <div class="detail-row">
@@ -193,18 +202,18 @@
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Kapat</button>
+                    <button type="button" class="btn btn-secondary btn-close-modal">Kapat</button>
                 </div>
             </div>
         </div>
     </div>
 
-    <div class="modal fade" id="paymentModal" tabindex="-1">
+    <div class="modal" id="paymentModal">
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title">Ödeme Al</h5>
-                    <button type="button" class="close" data-dismiss="modal">&times;</button>
+                    <button type="button" class="close-modal">&times;</button>
                 </div>
                 <div class="modal-body">
                     <form id="paymentForm">
@@ -223,7 +232,7 @@
                     </form>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-dismiss="modal">İptal</button>
+                    <button type="button" class="btn btn-outline btn-close-modal">İptal</button>
                     <button type="button" class="btn btn-success" id="savePaymentBtn">Ödemeyi Kaydet</button>
                 </div>
             </div>
