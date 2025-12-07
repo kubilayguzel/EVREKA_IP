@@ -63,14 +63,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         initializeTableManager() {
+            // Sütun tanımları: key değerleri, processAndRenderTable içinde oluşturduğumuz veri objesindeki alanlarla EŞLEŞMELİDİR.
             const columns = [
                 { key: 'id', label: 'İş No', sortable: true },
                 { key: 'relatedRecord', label: 'İlgili Kayıt', sortable: true },
                 { key: 'taskTypeDisplay', label: 'Tip', sortable: true },
                 { key: 'priority', label: 'Öncelik', sortable: true },
                 { key: 'assignedToDisplay', label: 'Atanan', sortable: true },
-                { key: 'operationalDue', label: 'Operasyonel Son Tarih', sortable: true },
-                { key: 'officialDue', label: 'Resmi Son Tarih', sortable: true },
+                { key: 'operationalDue', label: 'Operasyonel Son Tarih', sortable: true }, // Veri objesinde 'operationalDue' alanı ISO formatında olmalı
+                { key: 'officialDue', label: 'Resmi Son Tarih', sortable: true },         // Veri objesinde 'officialDue' alanı ISO formatında olmalı
                 { key: 'status', label: 'Durum', sortable: true },
                 { key: 'actions', label: 'İşlemler', sortable: false }
             ];
@@ -90,14 +91,16 @@ document.addEventListener('DOMContentLoaded', async () => {
                     const safePriority = (task.priority || 'normal').toString();
                     const priorityClass = `priority-${safePriority.toLowerCase()}`;
                     
+                    // Not: data-date attribute'ları deadline highlighter için, tablo sıralaması için değil.
+                    // Tablo sıralaması setTableData'ya gönderilen ham veri üzerinden yapılır.
                     return `
                         <td>${task.id}</td>
                         <td>${task.relatedRecord}</td>
                         <td>${task.taskTypeDisplay}</td>
                         <td><span class="priority-badge ${priorityClass}">${safePriority}</span></td>
                         <td>${task.assignedToDisplay}</td>
-                        <td data-field="operationalDue" data-date="${task.operationalDueISO}">${task.operationalDueDisplay}</td>
-                        <td data-field="officialDue" data-date="${task.officialDueISO}">${task.officialDueDisplay}</td>
+                        <td data-field="operationalDue" data-date="${task.operationalDue}">${task.operationalDueDisplay}</td>
+                        <td data-field="officialDue" data-date="${task.officialDue}">${task.officialDueDisplay}</td>
                         <td><span class="status-badge ${statusClass}">${statusText}</span></td>
                         <td>${this.getActionButtonsHtml(task)}</td>
                     `;
@@ -146,22 +149,30 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const assignedUser = this.allUsers.find(user => user.id === task.assignedTo_uid);
                 const assignedToDisplay = assignedUser ? (assignedUser.displayName || assignedUser.email) : 'Atanmamış';
 
+                // Tarih İşlemleri: Sıralama için ISO string, Görüntüleme için Locale string
                 const dueDateObj = task.dueDate ? (task.dueDate.toDate ? task.dueDate.toDate() : new Date(task.dueDate)) : null;
-                const operationalDueISO = dueDateObj ? dueDateObj.toISOString().slice(0, 10) : '';
+                const operationalDueISO = dueDateObj ? dueDateObj.toISOString().slice(0, 10) : ''; 
                 const operationalDueDisplay = dueDateObj ? dueDateObj.toLocaleDateString('tr-TR') : 'Belirtilmemiş';
 
                 const officialDateObj = task.officialDueDate ? (task.officialDueDate.toDate ? task.officialDueDate.toDate() : (task.officialDueDate.seconds ? new Date(task.officialDueDate.seconds * 1000) : new Date(task.officialDueDate))) : null;
                 const officialDueISO = officialDateObj ? officialDateObj.toISOString().slice(0, 10) : '';
                 const officialDueDisplay = officialDateObj ? officialDateObj.toLocaleDateString('tr-TR') : 'Belirtilmemiş';
 
+                // TableManager'a gönderilecek obje.
+                // DİKKAT: Burada key'ler (operationalDue, officialDue) columnDefinitions ile aynı olmalı
+                // ve değerleri SIRALANABİLİR (String/Number) olmalıdır.
                 return {
-                    ...task,
+                    ...task, // Diğer tüm task verilerini koru
                     relatedRecord,
                     taskTypeDisplay,
                     assignedToDisplay,
-                    operationalDueISO,
+                    // SIRALAMA DÜZELTMESİ:
+                    // Sütun adı 'operationalDue' olduğu için, bu property'i ISO String (YYYY-MM-DD) olarak set ediyoruz.
+                    // Böylece alfabetik sıralama yapıldığında tarihler doğru sıralanır.
+                    operationalDue: operationalDueISO, 
+                    officialDue: officialDueISO,
+                    // Görüntüleme için ek propertyler:
                     operationalDueDisplay,
-                    officialDueISO,
                     officialDueDisplay
                 };
             });
@@ -298,13 +309,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
         }
 
-        /**
-         * GENEL ARAMA VE SEÇME FONKSİYONU
-         * Tüm kişi arama alanları için ortak kullanılır.
-         * @param {string} query - Kullanıcının yazdığı metin
-         * @param {string} elementPrefix - HTML ID ön eki (örn: 'compTpInvoiceParty')
-         * @param {function} onSelectCallback - Seçim yapıldığında çalışacak callback (seçilen kişiyi state'e yazar)
-         */
         searchPersonsGeneric(query, elementPrefix, onSelectCallback) {
             const resultsList = document.getElementById(`${elementPrefix}Results`);
             const searchInput = document.getElementById(`${elementPrefix}Search`);
@@ -319,7 +323,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const nameMatch = person.name && person.name.toLowerCase().includes(lowerQuery);
                 const emailMatch = person.email && person.email.toLowerCase().includes(lowerQuery);
                 return nameMatch || emailMatch;
-            }).slice(0, 10); // Maksimum 10 sonuç
+            }).slice(0, 10);
 
             if (filteredPersons.length === 0) {
                 resultsList.innerHTML = '<div class="search-result-item">Sonuç bulunamadı</div>';
@@ -334,12 +338,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                 div.innerHTML = `<strong>${person.name || 'İsimsiz'}</strong><br><small>${person.email || ''}</small>`;
                 
                 div.addEventListener('click', () => {
-                    // Seçim yapıldı
                     searchInput.value = '';
                     resultsList.style.display = 'none';
                     
-                    // Görsel Display'i güncelle
-                    const displayDiv = document.getElementById(`${elementPrefix}Display`); // Örn: compTpInvoicePartyDisplay
+                    const displayDiv = document.getElementById(`${elementPrefix}Display`);
                     if (displayDiv) {
                         displayDiv.innerHTML = `
                             <span>${person.name} (${person.email || '-'})</span>
@@ -347,15 +349,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                         `;
                         displayDiv.style.display = 'block';
                         
-                        // Silme butonu
                         displayDiv.querySelector('.remove-result').addEventListener('click', () => {
                             displayDiv.style.display = 'none';
                             displayDiv.innerHTML = '';
-                            onSelectCallback(null); // State'i temizle
+                            onSelectCallback(null);
                         });
                     }
-
-                    // Callback ile state'i güncelle
                     onSelectCallback(person);
                 });
                 
@@ -445,7 +444,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 <div class="modal-detail-value long-text">${task.description || 'Açıklama girilmemiş.'}</div>
             `;
 
-             // Geçmiş
+             // İşlem Geçmişi (History) Kısmı İPTAL EDİLDİ
+             /*
              if (task.history && task.history.length > 0) {
                 html += `<div class="task-history"><h5 style="color:#1e3c72; margin-bottom:15px;">İşlem Geçmişi</h5>`;
                 const sortedHistory = [...task.history].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
@@ -459,6 +459,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 });
                 html += `</div>`;
             }
+            */
 
             modalBody.innerHTML = html;
             modalElement.classList.add('show');
@@ -491,7 +492,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             const totalDisplay = document.getElementById('compTotalAmountDisplay');
             if (totalDisplay) totalDisplay.textContent = '0.00 ₺';
 
-            // EPATS Belgesi Kontrolü
             const docContainer = document.getElementById('accrualEpatsDocumentContainer');
             const docNameEl = document.getElementById('accrualEpatsDocName');
             const docLinkEl = document.getElementById('accrualEpatsDocLink');
@@ -515,11 +515,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
             }
 
-            // State'i sıfırla
             this.compSelectedTpInvoiceParty = null;
             this.compSelectedServiceInvoiceParty = null;
             
-            // Görsel reset
             ['compSelectedTpInvoicePartyDisplay', 'compSelectedServiceInvoicePartyDisplay'].forEach(id => {
                 const el = document.getElementById(id);
                 if (el) { el.style.display = 'none'; el.innerHTML = ''; }
@@ -546,7 +544,6 @@ document.addEventListener('DOMContentLoaded', async () => {
              const applyVat = document.getElementById('compApplyVatToOfficial').checked;
              let totalAmount = applyVat ? (officialFee + serviceFee) * (1 + vatRate / 100) : officialFee + (serviceFee * (1 + vatRate / 100));
 
-             // Dosya
              let uploadedFiles = [];
              const fileInput = document.getElementById('compForeignInvoiceFile');
              if (fileInput.files.length > 0) {
@@ -603,7 +600,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             const fName = document.getElementById('createTaskForeignInvoiceFileName');
             if(fName) fName.textContent = '';
             
-            // Seçimleri sıfırla
             this.createTaskSelectedTpInvoiceParty = null;
             this.createTaskSelectedServiceInvoiceParty = null;
             
@@ -688,7 +684,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if(f) f.reset();
                 const fn = document.getElementById('createTaskForeignInvoiceFileName');
                 if(fn) fn.textContent = '';
-                // Listeleri temizle
                 document.getElementById('createTaskTpInvoicePartyResults').innerHTML = '';
             }
             if (modalId === 'completeAccrualTaskModal') {
@@ -698,7 +693,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if(fn) fn.textContent = '';
                 const dc = document.getElementById('accrualEpatsDocumentContainer');
                 if(dc) dc.style.display = 'none';
-                // Listeleri temizle
                 document.getElementById('compTpInvoicePartyResults').innerHTML = '';
             }
         }
@@ -707,7 +701,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     const module = new TaskManagementModule();
     module.init();
 
-    // DeadlineHighlighter Initializer
     if (window.DeadlineHighlighter) {
         window.DeadlineHighlighter.init();
         window.DeadlineHighlighter.registerList('taskManagement', {
