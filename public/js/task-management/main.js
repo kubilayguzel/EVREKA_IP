@@ -281,47 +281,102 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // --- Tahakkuk Tamamlama Modalı (ÖZEL) ---
         openCompleteAccrualModal(taskId) {
+            // 1. Görevi Bul
             const task = this.allTasks.find(t => t.id === taskId);
-            if (!task) return;
+            if (!task) {
+                console.error("Hata: İş bulunamadı (ID: " + taskId + ")");
+                return;
+            }
 
-            document.getElementById('completeAccrualForm').reset();
-            document.getElementById('targetTaskIdForCompletion').value = taskId;
-            document.getElementById('compOfficialFeeCurrency').value = 'TRY';
-            document.getElementById('compServiceFeeCurrency').value = 'TRY';
+            // 2. Formu Sıfırla (Güvenli Yöntem)
+            const form = document.getElementById('completeAccrualForm');
+            if (form) form.reset();
+
+            // 3. Hedef Task ID'yi Hidden Input'a Yaz
+            const targetInput = document.getElementById('targetTaskIdForCompletion');
+            if (targetInput) targetInput.value = taskId;
+
+            // 4. Para Birimlerini ve Varsayılanları Ayarla
+            const offCurr = document.getElementById('compOfficialFeeCurrency');
+            if (offCurr) offCurr.value = 'TRY';
+
+            const srvCurr = document.getElementById('compServiceFeeCurrency');
+            if (srvCurr) srvCurr.value = 'TRY';
+
+            const vatRateInput = document.getElementById('compVatRate');
+            if (vatRateInput) vatRateInput.value = '20'; // Varsayılan KDV
+
+            const applyVatCheck = document.getElementById('compApplyVatToOfficial');
+            if (applyVatCheck) applyVatCheck.checked = false;
+
+            // 5. Dosya Inputlarını Temizle
+            const fileInput = document.getElementById('compForeignInvoiceFile');
+            if (fileInput) fileInput.value = '';
             
-            document.getElementById('compForeignInvoiceFile').value = '';
-            document.getElementById('compForeignInvoiceFileName').textContent = '';
+            const fileNameDisplay = document.getElementById('compForeignInvoiceFileName');
+            if (fileNameDisplay) fileNameDisplay.textContent = '';
             
-            // EPATS Belgesini Bul (Kendi içinde yoksa Parent'tan al)
+            // 6. Toplam Tutar Göstergesini Sıfırla
+            const totalDisplay = document.getElementById('compTotalAmountDisplay');
+            if (totalDisplay) totalDisplay.textContent = '0.00 ₺';
+
+            // 7. EPATS Belgesini Bul ve Göster (Varsa)
             const docContainer = document.getElementById('accrualEpatsDocumentContainer');
             const docNameEl = document.getElementById('accrualEpatsDocName');
             const docLinkEl = document.getElementById('accrualEpatsDocLink');
             
-            let epatsDoc = task.details && task.details.epatsDocument;
-            if (!epatsDoc && task.relatedTaskId) {
+            let epatsDoc = null;
+            
+            // Önce mevcut task'in detaylarında var mı?
+            if (task.details && task.details.epatsDocument) {
+                epatsDoc = task.details.epatsDocument;
+            } 
+            // Yoksa ve bu bir alt görevse, ana görevin (parent) detaylarına bak
+            else if (task.relatedTaskId) {
                 const parentTask = this.allTasks.find(t => t.id === task.relatedTaskId);
                 if (parentTask && parentTask.details && parentTask.details.epatsDocument) {
                     epatsDoc = parentTask.details.epatsDocument;
                 }
             }
 
-            if (epatsDoc && (epatsDoc.downloadURL || epatsDoc.fileUrl)) {
-                docNameEl.textContent = epatsDoc.name || epatsDoc.fileName || 'EPATS Belgesi';
-                docLinkEl.href = epatsDoc.downloadURL || epatsDoc.fileUrl;
-                docContainer.className = "alert alert-secondary d-flex align-items-center justify-content-between mb-4"; 
-                docContainer.style.display = 'flex';
-            } else {
-                docContainer.style.display = 'none';
-                docLinkEl.href = '#';
+            // HTML elementleri varsa ve belge bulunduysa göster
+            if (docContainer && docNameEl && docLinkEl) {
+                if (epatsDoc && (epatsDoc.downloadURL || epatsDoc.fileUrl)) {
+                    docNameEl.textContent = epatsDoc.name || epatsDoc.fileName || 'EPATS Belgesi';
+                    docLinkEl.href = epatsDoc.downloadURL || epatsDoc.fileUrl;
+                    
+                    // Container stilini güncelle ve göster
+                    docContainer.className = "alert alert-secondary d-flex align-items-center justify-content-between mb-4"; 
+                    docContainer.style.display = 'flex';
+                } else {
+                    docContainer.style.display = 'none';
+                    docLinkEl.href = '#';
+                }
             }
 
+            // 8. Kişi Seçim State'lerini ve Arayüzü Sıfırla
             this.compSelectedTpInvoiceParty = null;
             this.compSelectedServiceInvoiceParty = null;
-            document.getElementById('compSelectedTpInvoicePartyDisplay').style.display = 'none';
-            document.getElementById('compSelectedServiceInvoicePartyDisplay').style.display = 'none';
-            document.getElementById('compTpInvoicePartyResults').innerHTML = '';
-            document.getElementById('compServiceInvoicePartyResults').innerHTML = '';
-            document.getElementById('completeAccrualTaskModal').classList.add('show');
+
+            const tpDisplay = document.getElementById('compSelectedTpInvoicePartyDisplay');
+            if (tpDisplay) tpDisplay.style.display = 'none';
+            
+            const srvDisplay = document.getElementById('compSelectedServiceInvoicePartyDisplay');
+            if (srvDisplay) srvDisplay.style.display = 'none';
+            
+            const tpResults = document.getElementById('compTpInvoicePartyResults');
+            if (tpResults) tpResults.innerHTML = '';
+            
+            const srvResults = document.getElementById('compServiceInvoicePartyResults');
+            if (srvResults) srvResults.innerHTML = '';
+
+            // 9. Modalı Aç
+            const modal = document.getElementById('completeAccrualTaskModal');
+            if (modal) {
+                modal.classList.add('show');
+            } else {
+                console.error("Hata: 'completeAccrualTaskModal' ID'li modal HTML'de bulunamadı!");
+            }
         }
 
         async handleCompleteAccrualSubmission() {
