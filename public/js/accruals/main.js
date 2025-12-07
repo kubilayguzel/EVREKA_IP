@@ -1,29 +1,32 @@
 // public/js/accruals/main.js
 
-import { authService, accrualService } from '../../firebase-config.js';
+import { authService, accrualService, db } from '../../firebase-config.js';
 import { showNotification } from '../../utils.js';
 import { loadSharedLayout } from '../layout-loader.js';
+import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
+import { doc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 class AccrualsModule {
     constructor() {
         this.allAccruals = [];
-        // Ödeme işlemi için geçici ID
+        this.uploadedFiles = [];
         this.accrualIdToPay = null;
         
-        // Modal Referansları (Bootstrap jQuery bağımlılığı olduğu için jQuery kullanıyoruz)
-        this.addModal = $('#addAccrualModal');
-        this.viewModal = $('#viewAccrualModal');
-        this.paymentModal = $('#paymentModal');
+        this.addModal = document.getElementById('addAccrualModal');
+        this.viewModal = document.getElementById('viewAccrualModal');
+        this.paymentModal = document.getElementById('paymentModal');
+        
+        this.storage = getStorage();
     }
 
     async init() {
-        // Ortak layout yükle
         await loadSharedLayout({ activeMenuLink: 'accruals.html' });
 
         authService.auth.onAuthStateChanged(async (user) => {
             if (user) {
                 await this.loadAccruals();
                 this.setupEventListeners();
+                this.setupFileUpload();
             } else {
                 window.location.href = 'index.html';
             }
@@ -32,34 +35,38 @@ class AccrualsModule {
 
     async loadAccruals() {
         const tableBody = document.getElementById('accrualsTableBody');
-        tableBody.innerHTML = '<tr><td colspan="8" class="text-center"><div class="spinner-border text-primary" role="status"></div><p class="mt-2">Yükleniyor...</p></td></tr>';
+        tableBody.innerHTML = '<tr><td colspan="7"><div class="loading-spinner"><i class="fas fa-spinner fa-spin fa-2x"></i><br>Yükleniyor...</div></td></tr>';
 
         try {
             const result = await accrualService.getAccruals();
             if (result.success) {
-                // Tarihe göre sırala (Yeniden eskiye)
                 this.allAccruals = result.data.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
                 this.renderAccruals(this.allAccruals);
             } else {
-                tableBody.innerHTML = `<tr><td colspan="8" class="text-center text-danger">Hata: ${result.error}</td></tr>`;
+                tableBody.innerHTML = `<tr><td colspan="7" class="text-center text-danger">Hata: ${result.error}</td></tr>`;
             }
         } catch (error) {
             console.error(error);
-            tableBody.innerHTML = '<tr><td colspan="8" class="text-center text-danger">Beklenmeyen bir hata oluştu.</td></tr>';
+            tableBody.innerHTML = '<tr><td colspan="7" class="text-center text-danger">Beklenmeyen bir hata oluştu.</td></tr>';
         }
     }
 
     setupEventListeners() {
-        // Kaydet Butonu
-        document.getElementById('saveAccrualBtn').addEventListener('click', () => this.saveAccrual());
+        document.getElementById('btnAddAccrual').addEventListener('click', () => this.openAddModal());
         
-        // Ödeme Kaydet Butonu
+        document.querySelectorAll('.close-modal, .btn-close-modal').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const modal = e.target.closest('.modal');
+                if (modal) modal.classList.remove('show');
+            });
+        });
+
+        document.getElementById('saveAccrualBtn').addEventListener('click', () => this.saveAccrual());
         document.getElementById('savePaymentBtn').addEventListener('click', () => this.savePayment());
 
-        // Arama Input
         document.getElementById('searchInput').addEventListener('input', (e) => this.filterAccruals(e.target.value));
+        document.getElementById('statusFilter').addEventListener('change', () => this.filterAccruals(document.getElementById('searchInput').value));
 
-        // Dinamik Hesaplama (Yeni Ekle Modalı İçin)
         ['officialFeeAmount', 'serviceFeeAmount', 'vatRate', 'applyVatToOfficialFee'].forEach(id => {
             const el = document.getElementById(id);
             if(el) el.addEventListener('input', () => this.calculateTotal());
@@ -71,32 +78,29 @@ class AccrualsModule {
         tableBody.innerHTML = '';
 
         if (accruals.length === 0) {
-            tableBody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">Kayıt bulunamadı.</td></tr>';
+            tableBody.innerHTML = '<tr><td colspan="7"><div class="no-records">Kayıt bulunamadı.</div></td></tr>';
             return;
         }
 
         accruals.forEach(acc => {
             const tr = document.createElement('tr');
             
-            // Durum Badge
             let statusBadge = '';
             let statusText = '';
             if (acc.status === 'paid') { statusBadge = 'status-paid'; statusText = 'Ödendi'; }
-            else if (acc.status === 'partially_paid') { statusBadge = 'status-partially_paid'; statusText = 'Kısmen Ödendi'; }
+            else if (acc.status === 'partially_paid') { statusBadge = 'status-partially_paid'; statusText = 'Kısmen'; }
             else { statusBadge = 'status-unpaid'; statusText = 'Ödenmedi'; }
 
-            // Para Formatı
             const totalFormatted = this.formatCurrency(acc.totalAmount, acc.totalAmountCurrency || 'TRY');
             const remainingFormatted = this.formatCurrency(acc.remainingAmount !== undefined ? acc.remainingAmount : acc.totalAmount, acc.totalAmountCurrency || 'TRY');
 
             tr.innerHTML = `
                 <td><span class="font-weight-bold">#${acc.id.substring(0, 6)}</span></td>
                 <td>${acc.taskTitle || '-'}</td>
-                <td>${acc.tpInvoiceParty?.name || '-'}</td>
-                <td>${acc.serviceInvoiceParty?.name || '-'}</td>
-                <td><span class="amount-text">${totalFormatted}</span></td>
-                <td><span class="amount-text ${acc.status === 'paid' ? 'text-success' : 'text-danger'}">${remainingFormatted}</span></td>
-                <td><span class="badge-status ${statusBadge}">${statusText}</span></td>
+                <td>${acc.tpInvoiceParty?.name || '-'} / ${acc.serviceInvoiceParty?.name || '-'}</td>
+                <td><span class="amount">${totalFormatted}</span></td>
+                <td><span class="amount ${acc.status === 'paid' ? 'positive' : 'negative'}">${remainingFormatted}</span></td>
+                <td><span class="status-badge ${statusBadge}"><span class="status-dot"></span>${statusText}</span></td>
                 <td>
                     <button class="action-btn btn-view" title="Detay" onclick="window.accrualsModule.viewAccrual('${acc.id}')"><i class="fas fa-eye"></i></button>
                     ${acc.status !== 'paid' ? `<button class="action-btn btn-pay" title="Ödeme Al" onclick="window.accrualsModule.openPaymentModal('${acc.id}')"><i class="fas fa-money-bill-wave"></i></button>` : ''}
@@ -107,7 +111,13 @@ class AccrualsModule {
         });
     }
 
-    // --- Modal ve Form İşlemleri ---
+    openAddModal() {
+        document.getElementById('addAccrualForm').reset();
+        this.uploadedFiles = [];
+        this.updateFileList();
+        document.getElementById('totalAmountDisplay').textContent = '0.00 TRY';
+        this.addModal.classList.add('show');
+    }
 
     calculateTotal() {
         const off = parseFloat(document.getElementById('officialFeeAmount').value) || 0;
@@ -129,11 +139,29 @@ class AccrualsModule {
         }
 
         const btn = document.getElementById('saveAccrualBtn');
-        const originalText = btn.textContent;
         btn.disabled = true;
-        btn.textContent = 'Kaydediliyor...';
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Dosyalar Yükleniyor...';
 
         try {
+            const uploadedDocs = [];
+            if (this.uploadedFiles.length > 0) {
+                for (const file of this.uploadedFiles) {
+                    const storageRef = ref(this.storage, `accruals/${Date.now()}_${file.name}`);
+                    const snapshot = await uploadBytes(storageRef, file);
+                    const downloadURL = await getDownloadURL(snapshot.ref);
+                    
+                    uploadedDocs.push({
+                        name: file.name,
+                        size: file.size,
+                        type: file.type,
+                        url: downloadURL,
+                        uploadedAt: new Date().toISOString()
+                    });
+                }
+            }
+
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Kaydediliyor...';
+
             const data = {
                 taskTitle: document.getElementById('taskTitleInput').value || 'Manuel Tahakkuk',
                 officialFee: { amount: offAmount, currency: document.getElementById('officialFeeCurrency').value },
@@ -145,25 +173,23 @@ class AccrualsModule {
                 status: 'unpaid',
                 remainingAmount: parseFloat(document.getElementById('totalAmountDisplay').textContent.replace(/[^0-9.,]/g, '').replace(',','.')) || 0,
                 createdAt: new Date().toISOString(),
-                // Manuel eklemede taraf bilgileri şimdilik boş veya inputlardan alınabilir
-                // Orijinal kodda inputlar yoktu, burayı taskTitle gibi basit tutuyoruz
+                files: uploadedDocs
             };
 
             const result = await accrualService.addAccrual(data);
             if (result.success) {
                 showNotification('Tahakkuk başarıyla oluşturuldu.', 'success');
-                $('#addAccrualModal').modal('hide');
-                document.getElementById('addAccrualForm').reset();
-                document.getElementById('totalAmountDisplay').textContent = '0.00 TRY';
+                this.addModal.classList.remove('show');
                 this.loadAccruals();
             } else {
                 throw new Error(result.error);
             }
         } catch (error) {
+            console.error(error);
             showNotification('Hata: ' + error.message, 'error');
         } finally {
             btn.disabled = false;
-            btn.textContent = originalText;
+            btn.textContent = 'Kaydet';
         }
     }
 
@@ -179,42 +205,70 @@ class AccrualsModule {
         }
     }
 
-    // Detay Görüntüleme (Orijinal yapıya uygun)
-    viewAccrual(id) {
+    async viewAccrual(id) {
         const acc = this.allAccruals.find(a => a.id === id);
         if (!acc) return;
 
-        // Alanları Doldur
-        document.getElementById('viewAccrualTaskTitle').textContent = acc.taskTitle || '-';
-        document.getElementById('viewAccrualOfficialFee').textContent = this.formatCurrency(acc.officialFee?.amount, acc.officialFee?.currency);
-        document.getElementById('viewAccrualServiceFee').textContent = this.formatCurrency(acc.serviceFee?.amount, acc.serviceFee?.currency);
-        document.getElementById('viewAccrualVatRate').textContent = '%' + (acc.vatRate || 0);
-        document.getElementById('viewAccrualTotalAmount').textContent = this.formatCurrency(acc.totalAmount, acc.totalAmountCurrency);
-        document.getElementById('viewAccrualRemainingAmount').textContent = this.formatCurrency(acc.remainingAmount, acc.totalAmountCurrency);
+        document.getElementById('viewTaskTitle').textContent = acc.taskTitle || '-';
+        document.getElementById('viewOfficialFee').textContent = this.formatCurrency(acc.officialFee?.amount, acc.officialFee?.currency);
+        document.getElementById('viewServiceFee').textContent = this.formatCurrency(acc.serviceFee?.amount, acc.serviceFee?.currency);
+        document.getElementById('viewTotalAmount').textContent = this.formatCurrency(acc.totalAmount, acc.totalAmountCurrency);
+        document.getElementById('viewRemainingAmount').textContent = this.formatCurrency(acc.remainingAmount, acc.totalAmountCurrency);
         
-        const statusBadge = document.getElementById('viewAccrualStatus');
-        statusBadge.className = 'badge-status ' + (acc.status === 'paid' ? 'status-paid' : (acc.status === 'partially_paid' ? 'status-partially_paid' : 'status-unpaid'));
-        statusBadge.textContent = acc.status === 'paid' ? 'Ödendi' : (acc.status === 'partially_paid' ? 'Kısmen Ödendi' : 'Ödenmedi');
+        const statusBadge = document.getElementById('viewStatusBadge');
+        statusBadge.className = 'status-badge ' + (acc.status === 'paid' ? 'status-paid' : (acc.status === 'partially_paid' ? 'status-partially_paid' : 'status-unpaid'));
+        statusBadge.innerHTML = `<span class="status-dot"></span>${acc.status === 'paid' ? 'Ödendi' : (acc.status === 'partially_paid' ? 'Kısmen Ödendi' : 'Ödenmedi')}`;
 
         document.getElementById('viewAccrualTpInvoiceParty').textContent = acc.tpInvoiceParty?.name || '-';
         document.getElementById('viewAccrualServiceInvoiceParty').textContent = acc.serviceInvoiceParty?.name || '-';
         document.getElementById('viewAccrualCreatedAt').textContent = acc.createdAt ? new Date(acc.createdAt).toLocaleString('tr-TR') : '-';
         document.getElementById('viewAccrualPaymentDate').textContent = acc.paymentDate ? new Date(acc.paymentDate).toLocaleDateString('tr-TR') : '-';
 
-        // Belgeleri Listele
-        const documentListUl = document.getElementById('viewAccrualDocumentList');
-        documentListUl.innerHTML = '';
+        const docList = document.getElementById('viewAccrualDocumentList');
+        docList.innerHTML = '<li class="text-muted small"><i class="fas fa-spinner fa-spin"></i> Belgeler yükleniyor...</li>';
+        
+        const allDocs = [];
+
         if (acc.files && acc.files.length > 0) {
-            acc.files.forEach(file => {
-                const listItem = document.createElement('li');
-                listItem.innerHTML = `<a href="${file.url || file.downloadURL || file.content}" target="_blank">📄 ${file.name} (${this.formatFileSize(file.size)})</a>`;
-                documentListUl.appendChild(listItem);
-            });
-        } else {
-            documentListUl.innerHTML = '<li style="text-align: center; color: #666; padding: 10px;">Henüz belge yok.</li>';
+            acc.files.forEach(f => allDocs.push({ name: f.name, url: f.url || f.downloadURL, size: f.size, source: 'Tahakkuk Belgesi' }));
         }
 
-        $('#viewAccrualModal').modal('show');
+        if (acc.taskId) {
+            try {
+                const taskSnap = await getDoc(doc(db, 'tasks', acc.taskId));
+                if (taskSnap.exists()) {
+                    const taskData = taskSnap.data();
+                    const epatsDoc = taskData.details?.epatsDocument;
+                    if (epatsDoc && (epatsDoc.downloadURL || epatsDoc.fileUrl)) {
+                        allDocs.push({ name: epatsDoc.name || 'EPATS Evrakı', url: epatsDoc.downloadURL || epatsDoc.fileUrl, size: epatsDoc.size, source: 'EPATS', isImportant: true });
+                    }
+                    if (taskData.relatedTaskId) {
+                        const parentTaskSnap = await getDoc(doc(db, 'tasks', taskData.relatedTaskId));
+                        if (parentTaskSnap.exists()) {
+                            const pData = parentTaskSnap.data();
+                            const pEpats = pData.details?.epatsDocument;
+                            if (pEpats && (pEpats.downloadURL || pEpats.fileUrl)) {
+                                allDocs.push({ name: pEpats.name || 'Ana İş Evrakı', url: pEpats.downloadURL || pEpats.fileUrl, size: pEpats.size, source: 'EPATS', isImportant: true });
+                            }
+                        }
+                    }
+                }
+            } catch (err) { console.warn(err); }
+        }
+
+        docList.innerHTML = '';
+        if (allDocs.length > 0) {
+            const uniqueDocs = allDocs.filter((v,i,a)=>a.findIndex(t=>(t.url===v.url))===i);
+            uniqueDocs.forEach(file => {
+                const li = document.createElement('li');
+                li.innerHTML = `<a href="${file.url}" target="_blank">📄 ${file.name} (${this.formatFileSize(file.size)}) <span class="badge badge-light">${file.source}</span></a>`;
+                docList.appendChild(li);
+            });
+        } else {
+            docList.innerHTML = '<li class="text-muted small">Belge yok.</li>';
+        }
+
+        this.viewModal.classList.add('show');
     }
 
     openPaymentModal(id) {
@@ -224,7 +278,7 @@ class AccrualsModule {
 
         document.getElementById('paymentAmount').value = acc.remainingAmount || 0;
         document.getElementById('paymentDate').value = new Date().toISOString().split('T')[0];
-        $('#paymentModal').modal('show');
+        this.paymentModal.classList.add('show');
     }
 
     async savePayment() {
@@ -242,24 +296,24 @@ class AccrualsModule {
 
         if (result.success) {
             showNotification('Ödeme alındı.', 'success');
-            $('#paymentModal').modal('hide');
+            this.paymentModal.classList.remove('show');
             this.loadAccruals();
         } else {
             showNotification('Hata: ' + result.error, 'error');
         }
     }
 
-    // --- Yardımcılar ---
-
     filterAccruals(searchTerm) {
         const term = searchTerm.toLowerCase();
+        const status = document.getElementById('statusFilter').value;
+
         const filtered = this.allAccruals.filter(acc => {
             const matchesSearch = (acc.taskTitle || '').toLowerCase().includes(term) ||
-                                  (acc.id || '').toLowerCase().includes(term) ||
-                                  (acc.tpInvoiceParty?.name || '').toLowerCase().includes(term) ||
-                                  (acc.serviceInvoiceParty?.name || '').toLowerCase().includes(term);
-            return matchesSearch;
+                                  (acc.id || '').toLowerCase().includes(term);
+            const matchesStatus = status === 'all' || acc.status === status;
+            return matchesSearch && matchesStatus;
         });
+
         this.renderAccruals(filtered);
     }
 
@@ -268,14 +322,61 @@ class AccrualsModule {
     }
 
     formatFileSize(bytes) {
-        if (!bytes || bytes === 0) return '0 Bytes';
+        if (!bytes || bytes === 0) return '';
         const k = 1024;
-        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const sizes = ['B', 'KB', 'MB', 'GB'];
         const i = Math.floor(Math.log(bytes) / Math.log(k));
-        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+    }
+
+    setupFileUpload() {
+        const area = document.getElementById('fileUploadArea');
+        const input = document.getElementById('fileInput');
+
+        if (!area || !input) return;
+
+        area.addEventListener('click', () => input.click());
+        input.addEventListener('change', (e) => this.handleFiles(e.target.files));
+        
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            area.addEventListener(eventName, (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+            });
+        });
+
+        area.addEventListener('dragover', () => area.classList.add('dragover'));
+        area.addEventListener('dragleave', () => area.classList.remove('dragover'));
+        area.addEventListener('drop', (e) => {
+            area.classList.remove('dragover');
+            this.handleFiles(e.dataTransfer.files);
+        });
+    }
+
+    handleFiles(files) {
+        this.uploadedFiles = [...this.uploadedFiles, ...Array.from(files)];
+        this.updateFileList();
+    }
+
+    updateFileList() {
+        const list = document.getElementById('fileList');
+        list.innerHTML = '';
+        this.uploadedFiles.forEach((file, index) => {
+            const li = document.createElement('li');
+            li.className = 'file-item';
+            li.innerHTML = `
+                <span><i class="fas fa-file-alt mr-2"></i>${file.name}</span>
+                <span class="file-remove" onclick="window.accrualsModule.removeFile(${index})"><i class="fas fa-times"></i></span>
+            `;
+            list.appendChild(li);
+        });
+    }
+
+    removeFile(index) {
+        this.uploadedFiles.splice(index, 1);
+        this.updateFileList();
     }
 }
 
-// Global Erişim ve Başlatma
 window.accrualsModule = new AccrualsModule();
 document.addEventListener('DOMContentLoaded', () => window.accrualsModule.init());
