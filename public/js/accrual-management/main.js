@@ -720,15 +720,102 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if(elId.includes('Tp')) this.editSelectedTpInvoiceParty = null; else this.editSelectedServiceInvoiceParty = null;
             };
         }
-        showTaskDetailModal(taskId) {
-            let task = this.allTasks[String(taskId)];
-            if(!task) { 
-                showNotification('İş bulunamadı veya yüklenemedi', 'error'); 
-                return; 
+        async showTaskDetailModal(taskId) {
+            const modal = document.getElementById('taskDetailModal');
+            const body = document.getElementById('modalBody');
+            const title = document.getElementById('modalTaskTitle');
+            
+            // 1. Modalı aç ve yükleniyor göster
+            modal.classList.add('show');
+            title.textContent = 'İş Detayı Yükleniyor...';
+            body.innerHTML = '<div style="text-align:center; padding:30px; color:#666;"><i class="fas fa-circle-notch fa-spin fa-2x"></i><br><br>Veriler getiriliyor...</div>';
+
+            try {
+                // 2. Veritabanından en güncel veriyi çek (Task Service veya Direct DB)
+                const taskRef = doc(db, 'tasks', String(taskId));
+                const taskSnap = await getDoc(taskRef);
+
+                if (!taskSnap.exists()) {
+                    body.innerHTML = '<div style="padding:20px; text-align:center; color:red;">Bu iş kaydı veritabanında bulunamadı (Silinmiş olabilir).</div>';
+                    title.textContent = 'İş Bulunamadı';
+                    return;
+                }
+
+                const task = taskSnap.data();
+                title.textContent = `İş Detayı: ${task.title}`;
+
+                // 3. Yardımcı Formatlayıcılar
+                const fmtDate = (d) => d ? new Date(d).toLocaleDateString('tr-TR') : '-';
+                
+                // Durum Rengi Belirle
+                let statusBadge = '';
+                const s = (task.status || '').toLowerCase();
+                if(s === 'tamamlandı' || s === 'completed') statusBadge = '<span class="status-badge status-paid" style="font-size:1rem; width:100%; display:block; padding:10px;">Tamamlandı</span>';
+                else if(s === 'iptal' || s === 'cancelled') statusBadge = '<span class="status-badge status-unpaid" style="font-size:1rem; width:100%; display:block; padding:10px;">İptal</span>';
+                else statusBadge = `<span class="status-badge status-partially-paid" style="font-size:1rem; width:100%; display:block; padding:10px;">${task.status || 'Devam Ediyor'}</span>`;
+
+                // 4. HTML İçeriğini Oluştur
+                let epatsHtml = '';
+                // EPATS Belgesi Varsa Göster
+                if (task.details && task.details.epatsDocument && (task.details.epatsDocument.url || task.details.epatsDocument.downloadURL)) {
+                    const docUrl = task.details.epatsDocument.downloadURL || task.details.epatsDocument.url;
+                    epatsHtml = `
+                    <div class="section-header mt-4"><i class="fas fa-file-contract mr-2"></i>EPATS DOKÜMANI</div>
+                    <div class="row">
+                        <div class="col-md-12">
+                            <div class="doc-card doc-type-epats" style="display:flex; align-items:center; border:1px solid #ddd; padding:15px; border-radius:8px;">
+                                <div class="doc-icon-box" style="margin-right:15px; font-size:24px; color:#1976d2;"><i class="fas fa-file-pdf"></i></div>
+                                <div class="doc-content" style="flex-grow:1;">
+                                    <span class="doc-title" style="display:block; font-size:0.8rem; color:#888;">DOSYA ADI</span>
+                                    <span class="doc-filename" style="font-weight:bold;">${task.details.epatsDocument.name || 'Epats_Belgesi.pdf'}</span>
+                                </div>
+                                <div class="doc-action">
+                                    <a href="${docUrl}" target="_blank" class="btn btn-primary btn-sm"><i class="fas fa-eye"></i> Görüntüle</a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>`;
+                }
+
+                // Modal İçeriği
+                body.innerHTML = `
+                    <div class="form-grid" style="grid-template-columns: 2fr 1fr; gap: 20px;">
+                        <div class="form-group">
+                            <label class="form-label">İş Başlığı</label>
+                            <input type="text" class="form-input" value="${task.title}" readonly style="font-weight:bold;">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Durum</label>
+                            ${statusBadge}
+                        </div>
+                    </div>
+
+                    <div class="form-grid mt-3">
+                        <div class="form-group">
+                            <label class="form-label">Müvekkil / Marka</label>
+                            <input type="text" class="form-input" value="${task.clientName || task.brandName || '-'}" readonly>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Tarihler</label>
+                            <div style="display:flex; gap:10px;">
+                                <input type="text" class="form-input" value="Oluşturma: ${fmtDate(task.createdAt)}" readonly style="font-size:0.9em;">
+                                <input type="text" class="form-input" value="Bitiş: ${fmtDate(task.deadline)}" readonly style="font-size:0.9em;">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group mt-3">
+                        <label class="form-label">Açıklama</label>
+                        <textarea class="form-textarea" rows="4" readonly style="background:#f9f9f9;">${task.description || 'Açıklama girilmemiş.'}</textarea>
+                    </div>
+
+                    ${epatsHtml}
+                `;
+
+            } catch (error) {
+                console.error(error);
+                body.innerHTML = '<div style="color:red; text-align:center;">Bir hata oluştu: ' + error.message + '</div>';
             }
-            document.getElementById('modalTaskTitle').textContent = `İş Detayı: ${task.title}`;
-            document.getElementById('modalBody').innerHTML = `<p><b>Durum:</b> ${task.status}</p><p><b>Açıklama:</b> ${task.description || '-'}</p>`;
-            document.getElementById('taskDetailModal').classList.add('show');
         }
     }
 
