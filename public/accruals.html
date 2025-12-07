@@ -173,47 +173,67 @@
                 <div class="modal-body-content">
                     <div class="form-group">
                         <label for="editAccrualTaskTitleDisplay" class="form-label">İlgili İş</label>
-                        <input type="text" id="editAccrualTaskTitleDisplay" class="form-input" readonly>
+                        <input type="text" id="editAccrualTaskTitleDisplay" class="form-input" readonly style="background-color: #f8f9fa;">
                     </div>
+
                     <div class="form-grid">
                         <div class="form-group">
                             <label for="editOfficialFee" class="form-label">Resmi Ücret</label>
                             <div class="input-with-currency">
                                 <input type="number" id="editOfficialFee" class="form-input" placeholder="0.00" step="0.01">
-                                <select id="editOfficialFeeCurrency" class="currency-select"><option value="TRY">TL</option><option value="EUR">EUR</option><option value="USD">USD</option><option value="CHF">CHF</option></select>
+                                <select id="editOfficialFeeCurrency" class="currency-select">
+                                    <option value="TRY">TL</option><option value="EUR">EUR</option><option value="USD">USD</option><option value="CHF">CHF</option>
+                                </select>
                             </div>
                         </div>
                         <div class="form-group">
                             <label for="editServiceFee" class="form-label">Hizmet Bedeli</label>
                             <div class="input-with-currency">
                                 <input type="number" id="editServiceFee" class="form-input" placeholder="0.00" step="0.01">
-                                <select id="editServiceFeeCurrency" class="currency-select"><option value="TRY">TL</option><option value="EUR">EUR</option><option value="USD">USD</option><option value="CHF">CHF</option></select>
+                                <select id="editServiceFeeCurrency" class="currency-select">
+                                    <option value="TRY">TL</option><option value="EUR">EUR</option><option value="USD">USD</option><option value="CHF">CHF</option>
+                                </select>
                             </div>
                         </div>
                     </div>
+
                     <div class="form-group">
                         <label for="editVatRate" class="form-label">KDV Oranı (%)</label>
                         <input type="number" id="editVatRate" class="form-input" value="20">
                     </div>
                     <div class="form-group">
-                        <label class="checkbox-label"><input type="checkbox" id="editApplyVatToOfficialFee"> Resmi Ücrete KDV Uygula</label>
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="editApplyVatToOfficialFee"> Resmi Ücrete KDV Uygula
+                        </label>
                     </div>
                     <div class="form-group">
                         <label class="form-label">Toplam Tutar</label>
                         <div id="editTotalAmountDisplay" class="total-amount-display">0.00 TRY</div>
                     </div>
+
                     <div class="form-group">
                         <label for="editTpInvoicePartySearch" class="form-label">Türk Patent Faturası Tarafı</label>
-                        <input type="text" id="editTpInvoicePartySearch" class="form-input" placeholder="Fatura tarafı arayın...">
+                        <input type="text" id="editTpInvoicePartySearch" class="form-input" placeholder="Fatura tarafı ara...">
                         <div id="editTpInvoicePartyResults" class="search-results-list"></div>
                         <div id="editSelectedTpInvoicePartyDisplay" class="search-result-display" style="display:none;"></div>
                     </div>
                     <div class="form-group">
                         <label for="editServiceInvoicePartySearch" class="form-label">Hizmet Faturası Tarafı</label>
-                        <input type="text" id="editServiceInvoicePartySearch" class="form-input" placeholder="Fatura tarafı arayın...">
+                        <input type="text" id="editServiceInvoicePartySearch" class="form-input" placeholder="Fatura tarafı ara...">
                         <div id="editServiceInvoicePartyResults" class="search-results-list"></div>
                         <div id="editSelectedServiceInvoicePartyDisplay" class="search-result-display" style="display:none;"></div>
                     </div>
+
+                    <div class="form-group" style="margin-top: 20px; padding-top: 15px; border-top: 1px dashed #ccc;">
+                        <label class="form-label">Yurtdışı Fatura / Debit Dokümanı Ekle</label>
+                        <div class="file-upload-area-modal" id="editForeignInvoiceUploadArea">
+                            <div><i class="fas fa-cloud-upload-alt fa-2x text-muted mb-2"></i><br>Dosya seçmek için tıklayın</div>
+                            <input type="file" id="editForeignInvoiceFile" hidden accept=".pdf,.jpg,.png,.doc,.docx">
+                        </div>
+                        <div class="file-list-modal" id="editForeignInvoiceFileList"></div>
+                        <small class="text-muted d-block mt-1">* Yeni dosya yüklerseniz mevcudun üzerine eklenir.</small>
+                    </div>
+
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" id="cancelEditAccrualBtn">İptal</button>
