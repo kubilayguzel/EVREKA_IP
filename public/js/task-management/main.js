@@ -182,7 +182,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             // TableManager'a veriyi ver
             if (this.tableManager) {
-                this.tableManager.setData(processedData);
+                this.tableManager.setTableData(processedData); // DÜZELTME: Metodun adı setTableData
             }
 
             // Deadline Highlighter'ı tetikle (Tablo render edildikten sonra)
