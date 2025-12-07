@@ -1,10 +1,11 @@
 // public/js/accruals/main.js
 
-import { authService, accrualService } from '../../firebase-config.js';
+import { authService, accrualService, db } from '../../firebase-config.js';
 import { showNotification } from '../../utils.js';
 import { loadSharedLayout } from '../layout-loader.js';
-// Dosya yükleme için gerekli importlar
+// Firestore ve Storage importları
 import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
+import { doc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 class AccrualsModule {
     constructor() {
@@ -17,7 +18,7 @@ class AccrualsModule {
         this.viewModal = document.getElementById('viewAccrualModal');
         this.paymentModal = document.getElementById('paymentModal');
         
-        this.storage = getStorage(); // Storage servisi
+        this.storage = getStorage(); 
     }
 
     async init() {
@@ -95,8 +96,9 @@ class AccrualsModule {
             const totalFormatted = this.formatCurrency(acc.totalAmount, acc.totalAmountCurrency || 'TRY');
             const remainingFormatted = this.formatCurrency(acc.remainingAmount !== undefined ? acc.remainingAmount : acc.totalAmount, acc.totalAmountCurrency || 'TRY');
 
+            // GÜNCELLEME 1: ID'deki kısaltma kaldırıldı
             tr.innerHTML = `
-                <td><span class="font-weight-bold">#${acc.id.substring(0, 6)}</span></td>
+                <td><span class="font-weight-bold" style="font-size:0.9em; color:#555;">#${acc.id}</span></td>
                 <td>${acc.taskTitle || '-'}</td>
                 <td>${acc.tpInvoiceParty?.name || '-'} / ${acc.serviceInvoiceParty?.name || '-'}</td>
                 <td><span class="amount">${totalFormatted}</span></td>
@@ -130,7 +132,6 @@ class AccrualsModule {
         document.getElementById('totalAmountDisplay').textContent = this.formatCurrency(total, 'TRY');
     }
 
-    // --- DOSYA YÜKLEME VE KAYDETME ---
     async saveAccrual() {
         const offAmount = parseFloat(document.getElementById('officialFeeAmount').value) || 0;
         const srvAmount = parseFloat(document.getElementById('serviceFeeAmount').value) || 0;
@@ -145,7 +146,7 @@ class AccrualsModule {
         btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Dosyalar Yükleniyor...';
 
         try {
-            // 1. Dosyaları Storage'a Yükle
+            // Dosyaları Yükle
             const uploadedDocs = [];
             if (this.uploadedFiles.length > 0) {
                 for (const file of this.uploadedFiles) {
@@ -165,7 +166,6 @@ class AccrualsModule {
 
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Kaydediliyor...';
 
-            // 2. Veritabanına Kaydet
             const data = {
                 taskTitle: document.getElementById('taskTitleInput').value || 'Manuel Tahakkuk',
                 officialFee: { amount: offAmount, currency: document.getElementById('officialFeeCurrency').value },
@@ -177,7 +177,7 @@ class AccrualsModule {
                 status: 'unpaid',
                 remainingAmount: parseFloat(document.getElementById('totalAmountDisplay').textContent.replace(/[^0-9.,]/g, '').replace(',','.')) || 0,
                 createdAt: new Date().toISOString(),
-                files: uploadedDocs // Yüklenen dosya bilgileri
+                files: uploadedDocs
             };
 
             const result = await accrualService.addAccrual(data);
@@ -209,11 +209,12 @@ class AccrualsModule {
         }
     }
 
-    // --- GÖRÜNTÜLEME VE DOSYA LİSTELEME ---
-    viewAccrual(id) {
+    // GÜNCELLEME 2: View Modal'da Task ve Accrual Belgelerini Birleştirme
+    async viewAccrual(id) {
         const acc = this.allAccruals.find(a => a.id === id);
         if (!acc) return;
 
+        // Statik Alanlar
         document.getElementById('viewTaskTitle').textContent = acc.taskTitle || '-';
         document.getElementById('viewOfficialFee').textContent = this.formatCurrency(acc.officialFee?.amount, acc.officialFee?.currency);
         document.getElementById('viewServiceFee').textContent = this.formatCurrency(acc.serviceFee?.amount, acc.serviceFee?.currency);
@@ -224,23 +225,99 @@ class AccrualsModule {
         statusBadge.className = 'status-badge ' + (acc.status === 'paid' ? 'status-paid' : (acc.status === 'partially_paid' ? 'status-partially_paid' : 'status-unpaid'));
         statusBadge.innerHTML = `<span class="status-dot"></span>${acc.status === 'paid' ? 'Ödendi' : (acc.status === 'partially_paid' ? 'Kısmen Ödendi' : 'Ödenmedi')}`;
 
-        // Belgeleri Listele (Eksik Kısım Eklendi)
+        // --- BELGELERİ HAZIRLA ---
         const docList = document.getElementById('viewAccrualDocumentList');
-        docList.innerHTML = '';
+        docList.innerHTML = '<li class="text-muted small"><i class="fas fa-spinner fa-spin"></i> Belgeler yükleniyor...</li>';
         
+        const allDocs = [];
+
+        // 1. Tahakkukun Kendi Belgeleri (Varsa)
         if (acc.files && acc.files.length > 0) {
-            acc.files.forEach(file => {
+            acc.files.forEach(f => {
+                allDocs.push({
+                    name: f.name,
+                    url: f.url || f.downloadURL,
+                    size: f.size,
+                    source: 'Tahakkuk Belgesi'
+                });
+            });
+        }
+
+        // 2. İlgili İşin (Task) EPATS Belgesi (Varsa)
+        if (acc.taskId) {
+            try {
+                const taskSnap = await getDoc(doc(db, 'tasks', acc.taskId));
+                if (taskSnap.exists()) {
+                    const taskData = taskSnap.data();
+                    
+                    // Task'in kendi içindeki EPATS belgesi
+                    const epatsDoc = taskData.details?.epatsDocument;
+                    if (epatsDoc && (epatsDoc.downloadURL || epatsDoc.fileUrl)) {
+                        allDocs.push({
+                            name: epatsDoc.name || epatsDoc.fileName || 'EPATS Evrakı',
+                            url: epatsDoc.downloadURL || epatsDoc.fileUrl,
+                            size: epatsDoc.size || 0,
+                            source: 'İlgili İş Belgesi (EPATS)',
+                            isImportant: true
+                        });
+                    }
+
+                    // Eğer bu bir "Tahakkuk Oluşturma" işiyse, ANA İŞİN belgesine de bak
+                    // (Sizin task-management.html'de yaptığımız gibi)
+                    if (taskData.relatedTaskId) {
+                        const parentTaskSnap = await getDoc(doc(db, 'tasks', taskData.relatedTaskId));
+                        if (parentTaskSnap.exists()) {
+                            const parentData = parentTaskSnap.data();
+                            const parentEpatsDoc = parentData.details?.epatsDocument;
+                            if (parentEpatsDoc && (parentEpatsDoc.downloadURL || parentEpatsDoc.fileUrl)) {
+                                allDocs.push({
+                                    name: parentEpatsDoc.name || parentEpatsDoc.fileName || 'Ana İş Evrakı',
+                                    url: parentEpatsDoc.downloadURL || parentEpatsDoc.fileUrl,
+                                    size: parentEpatsDoc.size || 0,
+                                    source: 'Ana İş Belgesi (EPATS)',
+                                    isImportant: true
+                                });
+                            }
+                        }
+                    }
+                }
+            } catch (err) {
+                console.warn('Task belgesi çekilemedi:', err);
+            }
+        }
+
+        // --- LİSTEYİ RENDER ET ---
+        docList.innerHTML = '';
+        if (allDocs.length > 0) {
+            // Duplicate'leri (aynı URL'e sahip olanları) temizle
+            const uniqueDocs = allDocs.filter((v,i,a)=>a.findIndex(t=>(t.url===v.url))===i);
+
+            uniqueDocs.forEach(file => {
                 const li = document.createElement('li');
-                li.style.padding = "5px 0";
+                li.className = 'file-item p-2 mb-1 border-bottom';
+                li.style.display = 'flex';
+                li.style.justifyContent = 'space-between';
+                li.style.alignItems = 'center';
+                
+                const badgeHtml = file.isImportant 
+                    ? `<span class="badge badge-info ml-2">${file.source}</span>` 
+                    : `<span class="badge badge-light ml-2 text-muted">${file.source}</span>`;
+
                 li.innerHTML = `
-                    <a href="${file.url || file.downloadURL || '#'}" target="_blank" class="text-primary" style="text-decoration:none;">
-                        <i class="fas fa-file-alt mr-2"></i> ${file.name} 
-                        <span class="text-muted small">(${this.formatFileSize(file.size)})</span>
+                    <div>
+                        <i class="fas fa-file-pdf text-danger mr-2"></i>
+                        <a href="${file.url}" target="_blank" class="text-dark font-weight-bold" style="text-decoration:none;">
+                            ${file.name}
+                        </a>
+                        ${badgeHtml}
+                    </div>
+                    <a href="${file.url}" target="_blank" class="btn btn-sm btn-outline-primary">
+                        <i class="fas fa-download"></i>
                     </a>`;
                 docList.appendChild(li);
             });
         } else {
-            docList.innerHTML = '<li class="text-muted small">Bu tahakkuka ait belge bulunmuyor.</li>';
+            docList.innerHTML = '<li class="text-muted small text-center p-2">Bu işleme ait görüntülenecek belge bulunamadı.</li>';
         }
 
         this.viewModal.classList.add('show');
@@ -296,17 +373,12 @@ class AccrualsModule {
         return new Intl.NumberFormat('tr-TR', { style: 'currency', currency: currency }).format(amount || 0);
     }
 
-    // YENİ: Dosya Boyutu Formatlama
     formatFileSize(bytes) {
-        if (!bytes || bytes === 0) return '0 Bytes';
+        if (!bytes || bytes === 0) return '';
         const k = 1024;
-        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const sizes = ['B', 'KB', 'MB', 'GB'];
         const i = Math.floor(Math.log(bytes) / Math.log(k));
-        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-    }
-
-    updateSummaryCards() {
-        // İstatistikler buraya
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
     }
 
     setupFileUpload() {
