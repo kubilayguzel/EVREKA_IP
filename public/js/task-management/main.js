@@ -65,50 +65,53 @@ document.addEventListener('DOMContentLoaded', async () => {
         // --- TableManager Yapılandırması ---
         initializeTableManager() {
             const columns = [
-                { key: 'id', title: 'İş No', width: '80px' },
-                { key: 'relatedRecord', title: 'İlgili Kayıt' },
-                { key: 'taskTypeDisplay', title: 'Tip' },
-                {
-                    key: 'priority',
-                    title: 'Öncelik',
-                    render: (data) => {
-                        const p = (data.priority || 'normal').toString();
-                        return `<span class="priority-badge priority-${p.toLowerCase()}">${p}</span>`;
-                    }
+                { key: 'id', label: 'İş No', sortable: true }, // 'title' yerine 'label' kullanıyor olabilir, TableManager.js'e göre 'label'
+                { key: 'relatedRecord', label: 'İlgili Kayıt', sortable: true },
+                { key: 'taskTypeDisplay', label: 'Tip', sortable: true },
+                { 
+                    key: 'priority', 
+                    label: 'Öncelik',
+                    sortable: true,
+                    // Custom render mantığı TableManager.js'de yoksa HTML içinde halledilecek. 
+                    // Ancak senin TableManager.js'in "customRecordHtml" desteği var mı kontrol etmeliyiz.
+                    // Gönderdiğin dosyada "customRecordHtml" var. O yüzden bu sütun tanımlarını sadece başlık için kullanacağız.
                 },
-                { key: 'assignedToDisplay', title: 'Atanan' },
-                {
-                    key: 'operationalDueDisplay',
-                    title: 'Operasyonel Son Tarih',
-                    // DeadlineHighlighter için data-field ve data-date ekliyoruz
-                    render: (data) => `<span data-field="operationalDue" data-date="${data.operationalDueISO}">${data.operationalDueDisplay}</span>`
-                },
-                {
-                    key: 'officialDueDisplay',
-                    title: 'Resmi Son Tarih',
-                    render: (data) => `<span data-field="officialDue" data-date="${data.officialDueISO}">${data.officialDueDisplay}</span>`
-                },
-                {
-                    key: 'status',
-                    title: 'Durum',
-                    render: (data) => {
-                        const s = (data.status || '').toString();
-                        const text = this.statusDisplayMap[s] || s;
-                        return `<span class="status-badge status-${s.replace(/ /g, '_').toLowerCase()}">${text}</span>`;
-                    }
-                },
-                {
-                    key: 'actions',
-                    title: 'İşlemler',
-                    render: (data) => this.getActionButtonsHtml(data)
-                }
+                { key: 'assignedToDisplay', label: 'Atanan', sortable: true },
+                { key: 'operationalDue', label: 'Operasyonel Son Tarih', sortable: true },
+                { key: 'officialDue', label: 'Resmi Son Tarih', sortable: true },
+                { key: 'status', label: 'Durum', sortable: true },
+                { key: 'actions', label: 'İşlemler', sortable: false }
             ];
 
-            // TableManager'ı başlatıyoruz
-            // 'taskManagementTable': HTML'deki <table id="taskManagementTable">
-            this.tableManager = new TableManager('taskManagementTable', columns, {
-                itemsPerPage: 15,
-                searchInputId: 'searchInput' // HTML'deki arama kutusunun ID'si
+            this.tableManager = new TableManager({
+                tableId: 'taskManagementTable',
+                tableBodyId: 'tasksTableBody',
+                tableHeaderRowId: 'tasksTableHeaderRow', // HTML'e eklediğimiz yeni ID
+                globalSearchInputId: 'searchInput',
+                noRecordsMessageId: 'noRecordsMessage',
+                columnDefinitions: columns,
+                
+                // Satırın HTML'ini oluşturacak özel fonksiyon (TableManager.js yapına uygun)
+                customRecordHtml: (task) => {
+                    const safeStatus = (task.status || '').toString();
+                    const statusClass = `status-${safeStatus.replace(/ /g, '_').toLowerCase()}`;
+                    const statusText = this.statusDisplayMap[safeStatus] || safeStatus;
+                    
+                    const safePriority = (task.priority || 'normal').toString();
+                    const priorityClass = `priority-${safePriority.toLowerCase()}`;
+                    
+                    return `
+                        <td>${task.id}</td>
+                        <td>${task.relatedRecord}</td>
+                        <td>${task.taskTypeDisplay}</td>
+                        <td><span class="priority-badge ${priorityClass}">${safePriority}</span></td>
+                        <td>${task.assignedToDisplay}</td>
+                        <td data-field="operationalDue" data-date="${task.operationalDueISO}">${task.operationalDueDisplay}</td>
+                        <td data-field="officialDue" data-date="${task.officialDueISO}">${task.officialDueDisplay}</td>
+                        <td><span class="status-badge ${statusClass}">${statusText}</span></td>
+                        <td>${this.getActionButtonsHtml(task)}</td>
+                    `;
+                }
             });
         }
 
