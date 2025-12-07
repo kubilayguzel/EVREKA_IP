@@ -9,7 +9,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         constructor() {
             this.currentUser = null;
             this.allAccruals = [];
-            this.allTasks = {}; // Map yapısı: { "taskId": { taskData } }
+            this.allTasks = {}; // Map: { "279": { ...taskData... } }
             this.allIpRecords = {}; 
             this.allPersons = []; 
             this.selectedAccruals = new Set();
@@ -51,11 +51,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                     return;
                 }
 
-                // 2. Gerekli ID'leri Topla
+                // 2. ID'leri Topla
                 const taskIds = new Set();
                 const personIds = new Set();
                 this.allAccruals.forEach(a => {
-                    if (a.taskId) taskIds.add(a.taskId);
+                    if (a.taskId) taskIds.add(String(a.taskId)); // ID'leri String olarak sakla
                     if (a.personId) personIds.add(a.personId);
                 });
 
@@ -63,8 +63,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if (taskIds.size && taskService.getTasksByIds) {
                     const tRes = await taskService.getTasksByIds(Array.from(taskIds));
                     const tasks = tRes?.success ? (tRes.data || []) : [];
-                    // ID'ye göre hızlı erişim için Map yapıyoruz
-                    this.allTasks = Object.fromEntries(tasks.map(t => [t.id, t]));
+                    
+                    // Task'leri ID'lerine göre (String formatında) Map yap
+                    this.allTasks = {};
+                    tasks.forEach(t => {
+                        this.allTasks[String(t.id)] = t;
+                    });
                 }
 
                 // 4. Kişileri Çek
@@ -108,12 +112,19 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const isPaid = acc.status === 'paid';
                 const rem = acc.remainingAmount !== undefined ? acc.remainingAmount : acc.totalAmount;
 
+                // Task Title Fallback
+                let taskDisplay = acc.taskTitle || acc.taskId;
+                // Eğer Task yüklendiyse güncel başlığı al
+                if (this.allTasks[String(acc.taskId)]) {
+                    taskDisplay = this.allTasks[String(acc.taskId)].title;
+                }
+
                 return `
                 <tr>
                     <td><input type="checkbox" class="row-checkbox" data-id="${acc.id}" ${isSel ? 'checked' : ''}></td>
                     <td><small>${acc.id}</small></td>
                     <td><span class="status-badge ${sCls}">${sTxt}</span></td>
-                    <td><a href="#" class="task-detail-link" data-task-id="${acc.taskId}">${acc.taskTitle || acc.taskId}</a></td>
+                    <td><a href="#" class="task-detail-link" data-task-id="${acc.taskId}">${taskDisplay}</a></td>
                     <td>${fmtMoney(acc.officialFee?.amount, acc.officialFee?.currency)}</td>
                     <td>${fmtMoney(acc.serviceFee?.amount, acc.serviceFee?.currency)}</td>
                     <td>${fmtMoney(acc.totalAmount, acc.totalAmountCurrency)}</td>
@@ -131,7 +142,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // --- UI LAYER: MODALS ---
         
-        // 1. View Modal (Form Görünümü + Düzeltilmiş EPATS Kontrolü)
+        // 1. View Modal (GÜNCEL: Düzeltilmiş EPATS ve Form Yapısı)
         showViewAccrualDetailModal(accrualId) {
             const accrual = this.allAccruals.find(a => a.id === accrualId);
             if (!accrual) return;
@@ -151,35 +162,44 @@ document.addEventListener('DOMContentLoaded', async () => {
             if(accrual.status === 'unpaid') { statusText = 'Ödenmedi'; statusColor = '#dc3545'; }
             if(accrual.status === 'partially_paid') { statusText = 'Kısmen Ödendi'; statusColor = '#ffc107'; }
 
-            // Bağlı İş Bilgisi
-            let task = this.allTasks[accrual.taskId];
+            // İlgili İşi Güvenli Bulma (String ID ile)
+            let task = null;
+            if (accrual.taskId) {
+                task = this.allTasks[String(accrual.taskId)];
+            }
             
             // --- DOKÜMANLAR ---
             let epatsHtml = '';
             let foreignInvHtml = '';
             let receiptHtml = '';
 
-            // 1. EPATS Belgesi Kontrolü (DÜZELTİLDİ: downloadURL Desteği)
-            const epatsDoc = task?.details?.epatsDocument;
-            // Hem 'url' hem 'downloadURL' alanını kontrol ediyoruz
-            const epatsUrl = epatsDoc?.url || epatsDoc?.downloadURL;
+            // 1. EPATS Belgesi Kontrolü (Veritabanı yapınıza uygun: downloadURL)
+            // Task objesi var mı? details var mı? epatsDocument var mı?
+            let epatsData = null;
+            if (task && task.details && task.details.epatsDocument) {
+                epatsData = task.details.epatsDocument;
+            }
 
-            if(epatsUrl) {
+            // Hem downloadURL hem url kontrolü
+            if (epatsData && (epatsData.downloadURL || epatsData.url)) {
+                const docUrl = epatsData.downloadURL || epatsData.url;
+                const docName = epatsData.name || 'EPATS Belgesi';
+                
                 epatsHtml = `
                 <div class="col-md-6 mb-3">
                     <div class="doc-card doc-type-epats">
                         <div class="doc-icon-box"><i class="fas fa-file-contract"></i></div>
                         <div class="doc-content">
                             <span class="doc-title">İŞİN EPATS DOKÜMANI</span>
-                            <span class="doc-filename" title="${epatsDoc.name}">${epatsDoc.name}</span>
+                            <span class="doc-filename" title="${docName}">${docName}</span>
                         </div>
                         <div class="doc-action">
-                            <a href="${epatsUrl}" target="_blank" class="btn btn-sm btn-outline-primary"><i class="fas fa-eye"></i></a>
+                            <a href="${docUrl}" target="_blank" class="btn btn-sm btn-outline-primary"><i class="fas fa-eye"></i></a>
                         </div>
                     </div>
                 </div>`;
             } else {
-                epatsHtml = '<div class="col-12 text-muted small font-italic mb-2">Bu işe bağlı EPATS belgesi bulunamadı.</div>';
+                epatsHtml = '<div class="col-12 text-muted small font-italic mb-2 pl-3">Bu işe bağlı görüntülenecek EPATS belgesi bulunamadı.</div>';
             }
 
             // 2. Diğer Dosyalar (Tahakkuk üzerindeki dosyalar)
@@ -207,14 +227,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                     } else if(label.includes('Dekont') || label.includes('Receipt')) {
                         receiptHtml += getCard('doc-type-receipt', 'fa-receipt', 'ÖDEME DEKONTU');
                     } else {
-                        // Tanımsızsa varsayılan olarak faturaya ekle veya ayrı bir genel tip oluşturulabilir
                         foreignInvHtml += getCard('doc-type-generic', 'fa-file-alt', label.toUpperCase());
                     }
                 });
             }
             
-            if(!foreignInvHtml) foreignInvHtml = '<div class="col-12 text-muted small font-italic mb-2">Fatura/Debit yok.</div>';
-            if(!receiptHtml) receiptHtml = '<div class="col-12 text-muted small font-italic mb-2">Ödeme dekontu yok.</div>';
+            if(!foreignInvHtml) foreignInvHtml = '<div class="col-12 text-muted small font-italic mb-2 pl-3">Fatura/Debit yok.</div>';
+            if(!receiptHtml) receiptHtml = '<div class="col-12 text-muted small font-italic mb-2 pl-3">Ödeme dekontu yok.</div>';
 
 
             // HTML YAPISI
@@ -292,7 +311,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             modal.classList.add('show');
         }
 
-        // 2. Edit Modal (Dosya Yüklemeli)
+        // 2. Edit Modal (Dosya Yükleme Alanı ile)
         showEditAccrualModal(accrualId) {
             const accrual = this.allAccruals.find(a => a.id === accrualId);
             if (!accrual) return;
@@ -316,6 +335,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             const fileList = document.getElementById('editForeignInvoiceFileList');
             fileList.innerHTML = '';
+            // Mevcut dosyaları listele (Ödeme dekontu hariç)
             if (accrual.files && accrual.files.length > 0) {
                 accrual.files.filter(f => f.documentDesignation !== 'Ödeme Dekontu').forEach(f => {
                     fileList.innerHTML += `<div class="file-item-modal"><i class="fas fa-check text-success mr-2"></i> ${f.name} <small class="text-muted ml-2">(Mevcut)</small></div>`;
@@ -390,6 +410,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     totalAmount = officialFee + (serviceFee * (1 + vatRate / 100));
                 }
 
+                // Dosyaları Birleştir
                 let existingFiles = this.currentEditAccrual.files || [];
                 let finalFiles = [...existingFiles, ...this.editNewForeignInvoices];
 
@@ -600,8 +621,17 @@ document.addEventListener('DOMContentLoaded', async () => {
             };
         }
         showTaskDetailModal(taskId) {
-            const task = this.allTasks[taskId];
-            if(!task) { showNotification('İş bulunamadı', 'error'); return; }
+            // Task verisi allTasks içinde olmayabilir (eğer sadece ID'si varsa ama detay yüklenmediyse)
+            // Bu yüzden önce allTasks kontrol edilir, yoksa fetch edilebilir.
+            // Bu örnekte basitleştirilmiştir.
+            let task = this.allTasks[String(taskId)];
+            
+            // Eğer task yoksa veya basit bir nesne ise ve detayları eksikse (örn: sadece ID'si var)
+            if(!task) { 
+                showNotification('İş bulunamadı veya yüklenemedi', 'error'); 
+                return; 
+            }
+
             document.getElementById('modalTaskTitle').textContent = `İş Detayı: ${task.title}`;
             document.getElementById('modalBody').innerHTML = `<p><b>Durum:</b> ${task.status}</p><p><b>Açıklama:</b> ${task.description || '-'}</p>`;
             document.getElementById('taskDetailModal').classList.add('show');
