@@ -1,6 +1,7 @@
-import { authService, accrualService, taskService, ipRecordsService, personService, generateUUID } from '../../firebase-config.js';
+import { authService, accrualService, taskService, ipRecordsService, personService, generateUUID, db } from '../../firebase-config.js';
 import { showNotification, formatFileSize, readFileAsDataURL } from '../../utils.js';
 import { loadSharedLayout } from '../layout-loader.js';
+import { doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
 document.addEventListener('DOMContentLoaded', async () => {
     await loadSharedLayout({ activeMenuLink: 'accruals.html' });
@@ -166,11 +167,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             let task = null;
             if (accrual.taskId) {
                 try {
-                    // Firebase'den direkt çekelim
-                    const taskDoc = await db.collection('tasks').doc(String(accrual.taskId)).get();
-                    if (taskDoc.exists) {
+                    // Firebase'den direkt çekelim (Firestore v9+ modular syntax)
+                    const taskRef = doc(db, 'tasks', String(accrual.taskId));
+                    const taskDoc = await getDoc(taskRef);
+                    if (taskDoc.exists()) {
                         task = { id: taskDoc.id, ...taskDoc.data() };
                         console.log('✅ Task Firebase\'den çekildi:', task);
+                        console.log('  - task.details:', task.details);
+                        console.log('  - task.details.epatsDocument:', task.details?.epatsDocument);
                     } else {
                         console.log('❌ Firebase\'de task bulunamadı, ID:', accrual.taskId);
                     }
