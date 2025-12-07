@@ -18,9 +18,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             this.currentEditAccrual = null;
             this.editSelectedTpInvoiceParty = null;
             this.editSelectedServiceInvoiceParty = null;
-            this.editNewForeignInvoices = []; // Düzenleme ekranında yeni eklenen faturalar
+            this.editNewForeignInvoices = []; 
             
-            // Upload State (Toplu Ödeme)
+            // Upload State
             this.uploadedPaymentReceipts = [];
         }
 
@@ -130,7 +130,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // --- UI LAYER: MODALS ---
         
-        // 1. View Modal (GÜNCEL: 3 Belge Tipi Ayrımı)
+        // 1. View Modal (GÜNCELLENDİ: Edit Modalı ile aynı Form Yapısı + Gelişmiş Dokümanlar)
         showViewAccrualDetailModal(accrualId) {
             const accrual = this.allAccruals.find(a => a.id === accrualId);
             if (!accrual) return;
@@ -144,20 +144,22 @@ document.addEventListener('DOMContentLoaded', async () => {
             const fmtMoney = (v, c) => new Intl.NumberFormat('tr-TR', { style: 'currency', currency: c || 'TRY' }).format(v || 0);
             const fmtDate = (d) => { try { return d ? new Date(d).toLocaleDateString('tr-TR') : '-'; } catch{return '-'} };
             
-            let statusBadge = '';
-            if(accrual.status === 'paid') statusBadge = '<span class="badge badge-success px-3 w-100 py-2">Ödendi</span>';
-            else if(accrual.status === 'unpaid') statusBadge = '<span class="badge badge-danger px-3 w-100 py-2">Ödenmedi</span>';
-            else if(accrual.status === 'partially_paid') statusBadge = '<span class="badge badge-warning px-3 w-100 py-2 text-white">Kısmen Ödendi</span>';
-            else statusBadge = '<span class="badge badge-secondary px-3 w-100 py-2">Bilinmiyor</span>';
+            let statusText = 'Bilinmiyor';
+            let statusColor = '#6c757d';
+            if(accrual.status === 'paid') { statusText = 'Ödendi'; statusColor = '#28a745'; }
+            if(accrual.status === 'unpaid') { statusText = 'Ödenmedi'; statusColor = '#dc3545'; }
+            if(accrual.status === 'partially_paid') { statusText = 'Kısmen Ödendi'; statusColor = '#ffc107'; }
 
             let task = this.allTasks[accrual.taskId];
             
-            // --- DOKÜMANLARI OLUŞTUR ---
-            let docsHtml = '';
-            
-            // 1. EPATS Belgesi (Varsa Göster)
+            // --- DOKÜMANLAR ---
+            let epatsHtml = '';
+            let foreignInvHtml = '';
+            let receiptHtml = '';
+
+            // 1. EPATS
             if(task?.details?.epatsDocument?.url) {
-                docsHtml += `
+                epatsHtml = `
                 <div class="col-md-6 mb-3">
                     <div class="doc-card doc-type-epats">
                         <div class="doc-icon-box"><i class="fas fa-file-contract"></i></div>
@@ -170,34 +172,23 @@ document.addEventListener('DOMContentLoaded', async () => {
                         </div>
                     </div>
                 </div>`;
+            } else {
+                epatsHtml = '<div class="col-12 text-muted small font-italic mb-2">EPATS belgesi yok.</div>';
             }
 
-            // 2. Tahakkuk Dosyaları (Fatura, Dekont vb.)
+            // 2. Diğer Dosyalar (Ayrıştırma)
             if(accrual.files && accrual.files.length > 0) {
                 accrual.files.forEach(f => {
-                    let label = f.documentDesignation || 'BELGE';
-                    let typeClass = 'doc-type-generic';
-                    let icon = 'fa-file-alt';
-
-                    if(label.includes('Fatura') || label.includes('Invoice') || label.includes('Debit')) {
-                        label = 'YURTDIŞI FATURA';
-                        typeClass = 'doc-type-invoice';
-                        icon = 'fa-file-invoice-dollar';
-                    }
-                    else if(label.includes('Dekont') || label.includes('Receipt')) {
-                        label = 'ÖDEME DEKONTU';
-                        typeClass = 'doc-type-receipt';
-                        icon = 'fa-receipt';
-                    }
-                    
                     const url = f.content || f.url;
-
-                    docsHtml += `
+                    let label = f.documentDesignation || 'BELGE';
+                    
+                    // HTML Şablonu
+                    const getCard = (typeClass, icon, title) => `
                     <div class="col-md-6 mb-3">
                         <div class="doc-card ${typeClass}">
                             <div class="doc-icon-box"><i class="fas ${icon}"></i></div>
                             <div class="doc-content">
-                                <span class="doc-title">${label}</span>
+                                <span class="doc-title">${title}</span>
                                 <span class="doc-filename" title="${f.name}">${f.name}</span>
                             </div>
                             <div class="doc-action">
@@ -205,70 +196,100 @@ document.addEventListener('DOMContentLoaded', async () => {
                             </div>
                         </div>
                     </div>`;
+
+                    if(label.includes('Fatura') || label.includes('Invoice') || label.includes('Debit')) {
+                        foreignInvHtml += getCard('doc-type-invoice', 'fa-file-invoice-dollar', 'YURTDIŞI FATURA/DEBIT');
+                    } else if(label.includes('Dekont') || label.includes('Receipt')) {
+                        receiptHtml += getCard('doc-type-receipt', 'fa-receipt', 'ÖDEME DEKONTU');
+                    }
                 });
             }
+            if(!foreignInvHtml) foreignInvHtml = '<div class="col-12 text-muted small font-italic mb-2">Fatura/Debit yok.</div>';
+            if(!receiptHtml) receiptHtml = '<div class="col-12 text-muted small font-italic mb-2">Ödeme dekontu yok.</div>';
 
-            // Eğer hiç belge yoksa
-            if(!docsHtml) {
-                docsHtml = `
-                <div class="col-12">
-                    <div class="p-3 border rounded bg-light text-center text-muted small">
-                        <i class="fas fa-folder-open mb-2" style="font-size:1.5em; opacity:0.5;"></i><br>
-                        Bu tahakkuk için görüntülenen belge bulunamadı.
-                    </div>
-                </div>`;
-            }
 
-            // --- HTML OLUŞTURMA ---
+            // HTML YAPISI (Form Görünümü)
             body.innerHTML = `
-            <div class="container-fluid p-0">
-                <div class="section-header mt-0"><i class="fas fa-info-circle mr-2"></i>GENEL BİLGİLER</div>
-                <div class="row">
-                    <div class="col-md-8 mb-3">
-                        <label class="view-label">İlgili İş</label>
-                        <div class="view-box bg-light font-weight-bold text-dark">${accrual.taskTitle || '-'} <span class="text-muted ml-2 small">(${accrual.taskId || 'ID Yok'})</span></div>
+                <div class="form-group">
+                    <label class="form-label">İlgili İş</label>
+                    <input type="text" class="form-input" value="${accrual.taskTitle || '-'} (${accrual.taskId || ''})" readonly style="background-color: #f8f9fa; font-weight: 500;">
+                </div>
+
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label class="form-label">Tahakkuk Durumu</label>
+                        <input type="text" class="form-input" value="${statusText}" readonly style="color: ${statusColor}; font-weight: bold;">
                     </div>
-                    <div class="col-md-4 mb-3"><label class="view-label">Durum</label>${statusBadge}</div>
-                </div>
-                <div class="row">
-                    <div class="col-md-6 mb-3"><label class="view-label">Oluşturulma</label><div class="view-box"><i class="far fa-calendar-plus mr-2 text-muted"></i>${fmtDate(accrual.createdAt)}</div></div>
-                    <div class="col-md-6 mb-3"><label class="view-label">Ödeme</label><div class="view-box"><i class="far fa-calendar-check mr-2 text-muted"></i>${accrual.paymentDate ? fmtDate(accrual.paymentDate) : 'Bekliyor'}</div></div>
-                </div>
-
-                <div class="section-header"><i class="fas fa-coins mr-2"></i>FİNANSAL DETAYLAR</div>
-                <div class="row">
-                    <div class="col-md-6 mb-3"><label class="view-label">Resmi Ücret</label><div class="view-box font-weight-bold">${fmtMoney(accrual.officialFee?.amount, accrual.officialFee?.currency)}</div></div>
-                    <div class="col-md-6 mb-3"><label class="view-label">Hizmet Bedeli</label><div class="view-box font-weight-bold">${fmtMoney(accrual.serviceFee?.amount, accrual.serviceFee?.currency)}</div></div>
-                </div>
-                <div class="row">
-                    <div class="col-md-4 mb-3"><label class="view-label">KDV</label><div class="view-box text-muted small">%${accrual.vatRate}</div></div>
-                    <div class="col-md-4 mb-3"><label class="view-label">Toplam</label><div class="view-box font-weight-bold text-primary bg-light" style="font-size:1.1em">${fmtMoney(accrual.totalAmount, accrual.totalAmountCurrency)}</div></div>
-                    <div class="col-md-4 mb-3"><label class="view-label">Kalan</label><div class="view-box font-weight-bold ${accrual.remainingAmount > 0 ? 'text-danger' : 'text-success'}">${fmtMoney(accrual.remainingAmount !== undefined ? accrual.remainingAmount : accrual.totalAmount, accrual.totalAmountCurrency)}</div></div>
+                    <div class="form-group">
+                        <label class="form-label">Oluşturulma Tarihi</label>
+                        <input type="text" class="form-input" value="${fmtDate(accrual.createdAt)}" readonly>
+                    </div>
                 </div>
 
-                <div class="section-header"><i class="fas fa-file-invoice mr-2"></i>FATURA BİLGİLERİ</div>
-                <div class="row">
-                    <div class="col-md-6 mb-3"><label class="view-label">TP Faturası</label><div class="view-box small text-truncate"><i class="fas fa-user-tie mr-2 text-secondary"></i>${accrual.tpInvoiceParty?.name || '-'}</div></div>
-                    <div class="col-md-6 mb-3"><label class="view-label">Hizmet Faturası</label><div class="view-box small text-truncate"><i class="fas fa-building mr-2 text-secondary"></i>${accrual.serviceInvoiceParty?.name || '-'}</div></div>
+                <div class="section-header mt-4"><i class="fas fa-coins mr-2"></i>FİNANSAL DETAYLAR</div>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label class="form-label">Resmi Ücret</label>
+                        <input type="text" class="form-input" value="${fmtMoney(accrual.officialFee?.amount, accrual.officialFee?.currency)}" readonly>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Hizmet Bedeli</label>
+                        <input type="text" class="form-input" value="${fmtMoney(accrual.serviceFee?.amount, accrual.serviceFee?.currency)}" readonly>
+                    </div>
                 </div>
 
-                <div class="section-header"><i class="fas fa-folder-open mr-2"></i>BELGELER</div>
-                <div class="row">
-                    ${docsHtml}
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label class="form-label">KDV Oranı</label>
+                        <input type="text" class="form-input" value="%${accrual.vatRate} (${accrual.applyVatToOfficialFee ? 'Tümü' : 'Hizmet'})" readonly>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Toplam Tutar</label>
+                        <input type="text" class="form-input" value="${fmtMoney(accrual.totalAmount, accrual.totalAmountCurrency)}" readonly style="font-weight: bold; color: #1e3c72;">
+                    </div>
                 </div>
-            </div>`;
+                
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label class="form-label">Kalan Tutar</label>
+                        <input type="text" class="form-input" value="${fmtMoney(accrual.remainingAmount !== undefined ? accrual.remainingAmount : accrual.totalAmount, accrual.totalAmountCurrency)}" readonly style="color: ${accrual.remainingAmount > 0 ? '#dc3545' : '#28a745'}; font-weight: bold;">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Ödeme Tarihi</label>
+                        <input type="text" class="form-input" value="${accrual.paymentDate ? fmtDate(accrual.paymentDate) : 'Ödeme Bekleniyor'}" readonly>
+                    </div>
+                </div>
+
+                <div class="section-header mt-4"><i class="fas fa-file-invoice mr-2"></i>FATURA BİLGİLERİ</div>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label class="form-label">Türk Patent Faturası Kime?</label>
+                        <input type="text" class="form-input" value="${accrual.tpInvoiceParty?.name || '-'}" readonly>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Hizmet Faturası Kime?</label>
+                        <input type="text" class="form-input" value="${accrual.serviceInvoiceParty?.name || '-'}" readonly>
+                    </div>
+                </div>
+
+                <div class="section-header mt-4"><i class="fas fa-folder-open mr-2"></i>BELGELER</div>
+                <div class="row">
+                    ${epatsHtml}
+                    ${foreignInvHtml}
+                    ${receiptHtml}
+                </div>
+            `;
 
             modal.classList.add('show');
         }
 
-        // 2. Edit Modal (GÜNCEL: Dosya Yükleme Eklendi)
+        // 2. Edit Modal (YURTDIŞI FATURA YÜKLEME EKLENDİ)
         showEditAccrualModal(accrualId) {
             const accrual = this.allAccruals.find(a => a.id === accrualId);
             if (!accrual) return;
 
             this.currentEditAccrual = { ...accrual };
-            this.editNewForeignInvoices = []; // Reset new files
-            
+            this.editNewForeignInvoices = [];
             document.getElementById('editAccrualId').value = accrual.id;
             document.getElementById('editAccrualTaskTitleDisplay').value = accrual.taskTitle || '';
             
@@ -286,7 +307,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             this.updateEditSelectedPartyDisplay('editSelectedTpInvoicePartyDisplay', this.editSelectedTpInvoiceParty);
             this.updateEditSelectedPartyDisplay('editSelectedServiceInvoicePartyDisplay', this.editSelectedServiceInvoiceParty);
 
-            // Mevcut dosyaları göster (Sadece bilgi amaçlı)
+            // Mevcut Dosyalar
             const fileList = document.getElementById('editForeignInvoiceFileList');
             fileList.innerHTML = '';
             if (accrual.files && accrual.files.length > 0) {
@@ -299,7 +320,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             document.getElementById('editAccrualModal').classList.add('show');
         }
 
-        // 3. Mark Paid Modal (Bulk)
+        // 3. Mark Paid Modal
         showMarkPaidModal() {
             if (this.selectedAccruals.size === 0) { showNotification('Seçim yapınız', 'error'); return; }
             
@@ -330,11 +351,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                 readFileAsDataURL(file).then(url => {
                     const newFile = {
                         id: generateUUID(), name: file.name, size: file.size, type: file.type, content: url, 
-                        documentDesignation: 'Yurtdışı Fatura/Debit' // Sabit Tip
+                        documentDesignation: 'Yurtdışı Fatura/Debit' 
                     };
                     this.editNewForeignInvoices.push(newFile);
                     
-                    // Listeye Ekle
                     const list = document.getElementById('editForeignInvoiceFileList');
                     const div = document.createElement('div');
                     div.className = 'file-item-modal';
@@ -395,64 +415,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         // --- EVENTS & HELPERS ---
-        setupEventListeners() {
-            // ... (Orijinal listenerlar)
-            document.getElementById('statusFilter').addEventListener('change', e => this.renderTable(e.target.value));
-            document.getElementById('selectAllCheckbox').addEventListener('change', e => this.toggleSelectAll(e.target.checked));
-            document.getElementById('accrualsTableBody').addEventListener('change', e => {
-                if(e.target.classList.contains('row-checkbox')) this.updateSelection(e.target.dataset.id, e.target.checked);
-            });
-
-            document.getElementById('accrualsTableBody').addEventListener('click', e => {
-                const btn = e.target.closest('.action-btn');
-                if(!btn) return;
-                e.preventDefault();
-                const dataId = btn.dataset.id;
-                if(btn.classList.contains('view-btn')) this.showViewAccrualDetailModal(dataId);
-                if(btn.classList.contains('edit-btn')) this.showEditAccrualModal(dataId);
-                if(btn.classList.contains('delete-btn')) this.deleteAccrual(dataId);
-            });
-
-            document.getElementById('accrualsTableBody').addEventListener('click', e => {
-                if(e.target.classList.contains('task-detail-link')) {
-                    e.preventDefault();
-                    this.showTaskDetailModal(e.target.dataset.taskId);
-                }
-            });
-
-            document.getElementById('bulkMarkPaidBtn').addEventListener('click', () => this.showMarkPaidModal());
-            document.getElementById('bulkMarkUnpaidBtn').addEventListener('click', () => this.handleBulkUpdate('unpaid'));
-            
-            document.querySelectorAll('.close-modal-btn, #cancelEditAccrualBtn, #cancelMarkPaidBtn').forEach(b => {
-                b.addEventListener('click', e => {
-                    const m = e.target.closest('.modal');
-                    this.closeModal(m.id);
-                });
-            });
-
-            document.getElementById('saveAccrualChangesBtn').addEventListener('click', () => this.handleSaveAccrualChanges());
-            document.getElementById('confirmMarkPaidBtn').addEventListener('click', () => this.handleBulkUpdate('paid'));
-            
-            ['editOfficialFee', 'editServiceFee', 'editVatRate', 'editApplyVatToOfficialFee'].forEach(id => {
-                document.getElementById(id).addEventListener('input', () => this.calculateEditTotalAmount());
-            });
-
-            document.getElementById('editTpInvoicePartySearch').addEventListener('input', e => this.searchPersons(e.target.value, 'editTpInvoiceParty'));
-            document.getElementById('editServiceInvoicePartySearch').addEventListener('input', e => this.searchPersons(e.target.value, 'editServiceInvoiceParty'));
-
-            // Mark Paid File Upload
-            const area = document.getElementById('paymentReceiptFileUploadArea');
-            area.addEventListener('click', () => document.getElementById('paymentReceiptFile').click());
-            document.getElementById('paymentReceiptFile').addEventListener('change', e => this.handlePaymentReceiptUpload(e.target.files));
-
-            // Edit Modal Foreign Invoice Upload (YENİ)
-            const editArea = document.getElementById('editForeignInvoiceUploadArea');
-            editArea.addEventListener('click', () => document.getElementById('editForeignInvoiceFile').click());
-            document.getElementById('editForeignInvoiceFile').addEventListener('change', e => this.handleEditFileUpload(e.target.files));
-        }
-
-        // ... (Diğer yardımcı metodlar aynen kalıyor: toggleSelectAll, updateSelection, calculateEditTotalAmount vb.)
-        
         async handleBulkUpdate(newStatus) {
             if (this.selectedAccruals.size === 0) return;
             let loader = window.showSimpleLoading ? window.showSimpleLoading('Güncelleniyor...') : null;
@@ -501,6 +463,62 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         }
 
+        setupEventListeners() {
+            document.getElementById('statusFilter').addEventListener('change', e => this.renderTable(e.target.value));
+            document.getElementById('selectAllCheckbox').addEventListener('change', e => this.toggleSelectAll(e.target.checked));
+            document.getElementById('accrualsTableBody').addEventListener('change', e => {
+                if(e.target.classList.contains('row-checkbox')) this.updateSelection(e.target.dataset.id, e.target.checked);
+            });
+
+            document.getElementById('accrualsTableBody').addEventListener('click', e => {
+                const btn = e.target.closest('.action-btn');
+                if(!btn) return;
+                e.preventDefault();
+                const dataId = btn.dataset.id;
+                if(btn.classList.contains('view-btn')) this.showViewAccrualDetailModal(dataId);
+                if(btn.classList.contains('edit-btn')) this.showEditAccrualModal(dataId);
+                if(btn.classList.contains('delete-btn')) this.deleteAccrual(dataId);
+            });
+
+            document.getElementById('accrualsTableBody').addEventListener('click', e => {
+                if(e.target.classList.contains('task-detail-link')) {
+                    e.preventDefault();
+                    this.showTaskDetailModal(e.target.dataset.taskId);
+                }
+            });
+
+            document.getElementById('bulkMarkPaidBtn').addEventListener('click', () => this.showMarkPaidModal());
+            document.getElementById('bulkMarkUnpaidBtn').addEventListener('click', () => this.handleBulkUpdate('unpaid'));
+            
+            document.querySelectorAll('.close-modal-btn, #cancelEditAccrualBtn, #cancelMarkPaidBtn').forEach(b => {
+                b.addEventListener('click', e => {
+                    const m = e.target.closest('.modal');
+                    this.closeModal(m.id);
+                });
+            });
+
+            document.getElementById('saveAccrualChangesBtn').addEventListener('click', () => this.handleSaveAccrualChanges());
+            document.getElementById('confirmMarkPaidBtn').addEventListener('click', () => this.handleBulkUpdate('paid'));
+            
+            ['editOfficialFee', 'editServiceFee', 'editVatRate', 'editApplyVatToOfficialFee'].forEach(id => {
+                document.getElementById(id).addEventListener('input', () => this.calculateEditTotalAmount());
+            });
+
+            document.getElementById('editTpInvoicePartySearch').addEventListener('input', e => this.searchPersons(e.target.value, 'editTpInvoiceParty'));
+            document.getElementById('editServiceInvoicePartySearch').addEventListener('input', e => this.searchPersons(e.target.value, 'editServiceInvoiceParty'));
+
+            // File Uploads
+            const area = document.getElementById('paymentReceiptFileUploadArea');
+            area.addEventListener('click', () => document.getElementById('paymentReceiptFile').click());
+            document.getElementById('paymentReceiptFile').addEventListener('change', e => this.handlePaymentReceiptUpload(e.target.files));
+
+            const editArea = document.getElementById('editForeignInvoiceUploadArea');
+            if(editArea) {
+                editArea.addEventListener('click', () => document.getElementById('editForeignInvoiceFile').click());
+                document.getElementById('editForeignInvoiceFile').addEventListener('change', e => this.handleEditFileUpload(e.target.files));
+            }
+        }
+
         toggleSelectAll(checked) {
             document.querySelectorAll('.row-checkbox').forEach(cb => { cb.checked = checked; this.updateSelection(cb.dataset.id, checked); });
         }
@@ -538,7 +556,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             if(id === 'editAccrualModal') {
                 this.currentEditAccrual = null;
                 document.getElementById('editAccrualForm').reset();
-                document.getElementById('editForeignInvoiceFileList').innerHTML = ''; // Reset edit files
+                if(document.getElementById('editForeignInvoiceFileList')) document.getElementById('editForeignInvoiceFileList').innerHTML = '';
             }
             if(id === 'markPaidModal') {
                 this.uploadedPaymentReceipts = [];
