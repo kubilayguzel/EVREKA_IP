@@ -26,7 +26,9 @@
         
         .accruals-table { width: 100%; border-collapse: collapse; }
         .accruals-table th, .accruals-table td { padding: 15px; text-align: left; border-bottom: 1px solid #f0f0f0; }
-        .accruals-table th { background: #f8f9fa; font-weight: 600; }
+        .accruals-table th { background: #f8f9fa; font-weight: 600; cursor: pointer; user-select: none; }
+        .accruals-table th:hover { background-color: #e9ecef; }
+        .sort-icon { margin-left: 5px; font-size: 0.8em; color: #999; }
         
         /* --- Rozetler ve Butonlar --- */
         .status-badge { padding: 4px 10px; border-radius: 12px; font-size: 0.8em; font-weight: 500; color: white; text-align: center; }
@@ -55,20 +57,13 @@
         .close-modal-btn { color: #aaa; float: right; font-size: 28px; font-weight: bold; cursor: pointer; }
         .modal-title { font-size: 1.5em; color: #1e3c72; margin-bottom: 20px;}
         
-        /* --- Modal Detay Gridleri (Eski Task Detail için) --- */
+        /* --- Modal Detay Gridleri --- */
         .modal-detail-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px 25px; }
         .modal-detail-item { margin-bottom: 10px; }
         .modal-detail-label { font-weight: 600; color: #333; margin-bottom: 5px; font-size: 0.9em; }
         .modal-detail-value { color: #555; word-break: break-word; font-size: 0.95em; }
         .modal-detail-value.long-text { white-space: pre-wrap; background-color: #f8f9fa; padding: 8px; border-radius: 6px; }
         .modal-detail-section-title { grid-column: 1 / -1; font-size: 1.1em; color: #1e3c72; margin-top: 20px; margin-bottom: 15px; padding-bottom: 5px; border-bottom: 1px dashed #e1e8ed; }
-        
-        /* --- History --- */
-        .task-history { margin-top: 20px; padding-top: 20px; border-top: 1px solid #e1e8ed; max-height: 250px; overflow-y: auto; }
-        .task-history-item { padding: 8px 0; border-bottom: 1px dashed #eee; }
-        .task-history-item:last-child { border-bottom: none; }
-        .task-history-description { font-size: 0.9em; color: #333; font-weight: 600; }
-        .task-history-meta { font-size: 0.8em; color: #666; margin-top: 4px; }
         
         /* --- Form Elemanları --- */
         .form-input, .form-select, .form-textarea { width: 100%; padding: 12px 15px; border: 2px solid #e1e8ed; border-radius: 10px; font-size: 1em; transition: all 0.3s ease; background: white; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
@@ -108,73 +103,21 @@
         .view-box i { opacity: 0.6; margin-right: 8px; }
         
         /* --- Doküman Kartları Tasarımı --- */
-        .doc-card {
-            display: flex;
-            align-items: center;
-            background-color: #ffffff;
-            border: 1px solid #e1e8ed;
-            border-radius: 8px;
-            padding: 12px;
-            transition: all 0.2s ease-in-out;
-            height: 100%;
-        }
-
-        .doc-card:hover {
-            border-color: #1e3c72;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-        }
-
-        .doc-icon-box {
-            width: 42px;
-            height: 42px;
-            border-radius: 8px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.2rem;
-            margin-right: 12px;
-            flex-shrink: 0;
-        }
-
-        .doc-content {
-            flex-grow: 1;
-            overflow: hidden;
-        }
-
-        .doc-title {
-            font-size: 0.8rem;
-            font-weight: 700;
-            text-transform: uppercase;
-            color: #6c757d;
-            display: block;
-            margin-bottom: 2px;
-        }
-
-        .doc-filename {
-            font-size: 0.9rem;
-            font-weight: 600;
-            color: #333;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            display: block;
-        }
-
-        .doc-action {
-            margin-left: 10px;
-        }
-
+        .doc-card { display: flex; align-items: center; background-color: #ffffff; border: 1px solid #e1e8ed; border-radius: 8px; padding: 12px; transition: all 0.2s ease-in-out; height: 100%; }
+        .doc-card:hover { border-color: #1e3c72; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+        .doc-icon-box { width: 42px; height: 42px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; margin-right: 12px; flex-shrink: 0; }
+        .doc-content { flex-grow: 1; overflow: hidden; }
+        .doc-title { font-size: 0.8rem; font-weight: 700; text-transform: uppercase; color: #6c757d; display: block; margin-bottom: 2px; }
+        .doc-filename { font-size: 0.9rem; font-weight: 600; color: #333; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+        .doc-action { margin-left: 10px; }
+        
         /* Renk Varyasyonları */
         .doc-type-epats .doc-icon-box { background-color: #e3f2fd; color: #1976d2; }
         .doc-type-epats { border-left: 3px solid #1976d2; }
-
         .doc-type-invoice .doc-icon-box { background-color: #e0f2f1; color: #00695c; }
         .doc-type-invoice { border-left: 3px solid #00695c; }
-
         .doc-type-receipt .doc-icon-box { background-color: #f1f8e9; color: #558b2f; }
         .doc-type-receipt { border-left: 3px solid #558b2f; }
-
         .doc-type-generic .doc-icon-box { background-color: #f5f5f5; color: #616161; }
     </style>
 </head>
@@ -204,28 +147,33 @@
                         <button id="bulkMarkUnpaidBtn" class="action-btn unpaid">Seçilenleri Ödenmedi İşaretle</button>
                     </div>
                 </div>
+                
                 <div class="table-container">
                     <table class="accruals-table">
                         <thead>
                             <tr>
-                                <th><input type="checkbox" id="selectAllCheckbox"></th>
-                                <th>Tahakkuk ID</th>
-                                <th>Durum</th>
-                                <th>İlgili İş</th>
-                                <th>Resmi Ücret</th>
-                                <th>Hizmet Bedeli</th>
-                                <th>Toplam Tutar (KDV Dahil)</th>
-                                <th>Kalan Tutar</th> <th>İşlemler</th>
+                                <th style="width: 40px;"><input type="checkbox" id="selectAllCheckbox"></th>
+                                <th class="sortable" data-sort="id">Tahakkuk ID <i class="fas fa-sort sort-icon"></i></th>
+                                <th class="sortable" data-sort="status">Durum <i class="fas fa-sort sort-icon"></i></th>
+                                <th class="sortable" data-sort="taskTitle">İlgili İş <i class="fas fa-sort sort-icon"></i></th>
+                                <th class="sortable" data-sort="officialFee">Resmi Ücret <i class="fas fa-sort sort-icon"></i></th>
+                                <th class="sortable" data-sort="serviceFee">Hizmet Bedeli <i class="fas fa-sort sort-icon"></i></th>
+                                <th class="sortable" data-sort="totalAmount">Toplam Tutar <i class="fas fa-sort sort-icon"></i></th>
+                                <th class="sortable" data-sort="remainingAmount">Kalan Tutar <i class="fas fa-sort sort-icon"></i></th>
+                                <th>İşlemler</th>
                             </tr>
                         </thead>
                         <tbody id="accrualsTableBody"></tbody>
                     </table>
-                 <div id="loadingIndicator" class="loading">Yükleniyor...</div>
-                 <div id="noRecordsMessage" class="no-records">Henüz tahakkuk kaydı bulunmamaktadır.</div>
-                 <div id="paginationControls" class="pagination-container" style="display: flex; justify-content: center; align-items: center; margin-top: 20px; gap: 10px;"></div>
+                 
+                    <div id="loadingIndicator" class="loading">Yükleniyor...</div>
+                    <div id="noRecordsMessage" class="no-records">Henüz tahakkuk kaydı bulunmamaktadır.</div>
+                    
+                    <div id="paginationControls" class="pagination-container" style="display: flex; justify-content: center; align-items: center; margin-top: 20px; gap: 10px; padding-bottom: 20px;"></div>
+                </div>
             </div>
-        </div>
-    </main>
+        </main>
+    </div>
 
     <div id="taskDetailModal" class="modal">
         <div class="modal-content">
@@ -355,7 +303,8 @@
             <div class="modal-body-content"></div>
         </div>
     </div>
-
+    
+    <div id="notification-container"></div>
     <script src="./js/simple-loading.js"></script>
     <script type="module" src="./js/accrual-management/main.js"></script>
 </body>
