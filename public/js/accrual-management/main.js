@@ -9,7 +9,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         constructor() {
             this.currentUser = null;
             this.allAccruals = [];
-            this.allTasks = {}; // Map yapısı
+            this.allTasks = {}; // Map yapısı: { "taskId": { taskData } }
             this.allIpRecords = {}; 
             this.allPersons = []; 
             this.selectedAccruals = new Set();
@@ -42,7 +42,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             if(loadingIndicator) loadingIndicator.style.display = 'block';
 
             try {
-                // 1. Accruals
+                // 1. Tahakkukları Çek
                 const accRes = await accrualService.getAccruals();
                 this.allAccruals = accRes?.success ? (accRes.data || []) : [];
 
@@ -51,7 +51,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     return;
                 }
 
-                // 2. IDs
+                // 2. Gerekli ID'leri Topla
                 const taskIds = new Set();
                 const personIds = new Set();
                 this.allAccruals.forEach(a => {
@@ -59,14 +59,15 @@ document.addEventListener('DOMContentLoaded', async () => {
                     if (a.personId) personIds.add(a.personId);
                 });
 
-                // 3. Batch Fetch Tasks
+                // 3. İlişkili İşleri (Tasks) Çek ve Map'e Çevir
                 if (taskIds.size && taskService.getTasksByIds) {
                     const tRes = await taskService.getTasksByIds(Array.from(taskIds));
                     const tasks = tRes?.success ? (tRes.data || []) : [];
+                    // ID'ye göre hızlı erişim için Map yapıyoruz
                     this.allTasks = Object.fromEntries(tasks.map(t => [t.id, t]));
                 }
 
-                // 4. Fetch All Persons (Search için)
+                // 4. Kişileri Çek
                 const pRes = await personService.getPersons();
                 this.allPersons = pRes?.success ? (pRes.data || []) : [];
 
@@ -130,7 +131,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // --- UI LAYER: MODALS ---
         
-        // 1. View Modal (GÜNCELLENDİ: Edit Modalı ile aynı Form Yapısı + Gelişmiş Dokümanlar)
+        // 1. View Modal (Form Görünümü + Düzeltilmiş EPATS Kontrolü)
         showViewAccrualDetailModal(accrualId) {
             const accrual = this.allAccruals.find(a => a.id === accrualId);
             if (!accrual) return;
@@ -150,6 +151,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             if(accrual.status === 'unpaid') { statusText = 'Ödenmedi'; statusColor = '#dc3545'; }
             if(accrual.status === 'partially_paid') { statusText = 'Kısmen Ödendi'; statusColor = '#ffc107'; }
 
+            // Bağlı İş Bilgisi
             let task = this.allTasks[accrual.taskId];
             
             // --- DOKÜMANLAR ---
@@ -157,32 +159,35 @@ document.addEventListener('DOMContentLoaded', async () => {
             let foreignInvHtml = '';
             let receiptHtml = '';
 
-            // 1. EPATS
-            if(task?.details?.epatsDocument?.url) {
+            // 1. EPATS Belgesi Kontrolü (DÜZELTİLDİ: downloadURL Desteği)
+            const epatsDoc = task?.details?.epatsDocument;
+            // Hem 'url' hem 'downloadURL' alanını kontrol ediyoruz
+            const epatsUrl = epatsDoc?.url || epatsDoc?.downloadURL;
+
+            if(epatsUrl) {
                 epatsHtml = `
                 <div class="col-md-6 mb-3">
                     <div class="doc-card doc-type-epats">
                         <div class="doc-icon-box"><i class="fas fa-file-contract"></i></div>
                         <div class="doc-content">
                             <span class="doc-title">İŞİN EPATS DOKÜMANI</span>
-                            <span class="doc-filename" title="${task.details.epatsDocument.name}">${task.details.epatsDocument.name}</span>
+                            <span class="doc-filename" title="${epatsDoc.name}">${epatsDoc.name}</span>
                         </div>
                         <div class="doc-action">
-                            <a href="${task.details.epatsDocument.url}" target="_blank" class="btn btn-sm btn-outline-primary"><i class="fas fa-eye"></i></a>
+                            <a href="${epatsUrl}" target="_blank" class="btn btn-sm btn-outline-primary"><i class="fas fa-eye"></i></a>
                         </div>
                     </div>
                 </div>`;
             } else {
-                epatsHtml = '<div class="col-12 text-muted small font-italic mb-2">EPATS belgesi yok.</div>';
+                epatsHtml = '<div class="col-12 text-muted small font-italic mb-2">Bu işe bağlı EPATS belgesi bulunamadı.</div>';
             }
 
-            // 2. Diğer Dosyalar (Ayrıştırma)
+            // 2. Diğer Dosyalar (Tahakkuk üzerindeki dosyalar)
             if(accrual.files && accrual.files.length > 0) {
                 accrual.files.forEach(f => {
                     const url = f.content || f.url;
                     let label = f.documentDesignation || 'BELGE';
                     
-                    // HTML Şablonu
                     const getCard = (typeClass, icon, title) => `
                     <div class="col-md-6 mb-3">
                         <div class="doc-card ${typeClass}">
@@ -201,14 +206,18 @@ document.addEventListener('DOMContentLoaded', async () => {
                         foreignInvHtml += getCard('doc-type-invoice', 'fa-file-invoice-dollar', 'YURTDIŞI FATURA/DEBIT');
                     } else if(label.includes('Dekont') || label.includes('Receipt')) {
                         receiptHtml += getCard('doc-type-receipt', 'fa-receipt', 'ÖDEME DEKONTU');
+                    } else {
+                        // Tanımsızsa varsayılan olarak faturaya ekle veya ayrı bir genel tip oluşturulabilir
+                        foreignInvHtml += getCard('doc-type-generic', 'fa-file-alt', label.toUpperCase());
                     }
                 });
             }
+            
             if(!foreignInvHtml) foreignInvHtml = '<div class="col-12 text-muted small font-italic mb-2">Fatura/Debit yok.</div>';
             if(!receiptHtml) receiptHtml = '<div class="col-12 text-muted small font-italic mb-2">Ödeme dekontu yok.</div>';
 
 
-            // HTML YAPISI (Form Görünümü)
+            // HTML YAPISI
             body.innerHTML = `
                 <div class="form-group">
                     <label class="form-label">İlgili İş</label>
@@ -283,7 +292,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             modal.classList.add('show');
         }
 
-        // 2. Edit Modal (YURTDIŞI FATURA YÜKLEME EKLENDİ)
+        // 2. Edit Modal (Dosya Yüklemeli)
         showEditAccrualModal(accrualId) {
             const accrual = this.allAccruals.find(a => a.id === accrualId);
             if (!accrual) return;
@@ -293,7 +302,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             document.getElementById('editAccrualId').value = accrual.id;
             document.getElementById('editAccrualTaskTitleDisplay').value = accrual.taskTitle || '';
             
-            // Set Values
             document.getElementById('editOfficialFee').value = accrual.officialFee?.amount || 0;
             document.getElementById('editOfficialFeeCurrency').value = accrual.officialFee?.currency || 'TRY';
             document.getElementById('editServiceFee').value = accrual.serviceFee?.amount || 0;
@@ -301,13 +309,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             document.getElementById('editVatRate').value = accrual.vatRate || 20;
             document.getElementById('editApplyVatToOfficialFee').checked = accrual.applyVatToOfficialFee ?? true;
 
-            // Parties
             this.editSelectedTpInvoiceParty = accrual.tpInvoiceParty || null;
             this.editSelectedServiceInvoiceParty = accrual.serviceInvoiceParty || null;
             this.updateEditSelectedPartyDisplay('editSelectedTpInvoicePartyDisplay', this.editSelectedTpInvoiceParty);
             this.updateEditSelectedPartyDisplay('editSelectedServiceInvoicePartyDisplay', this.editSelectedServiceInvoiceParty);
 
-            // Mevcut Dosyalar
             const fileList = document.getElementById('editForeignInvoiceFileList');
             fileList.innerHTML = '';
             if (accrual.files && accrual.files.length > 0) {
@@ -345,7 +351,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // --- ACTIONS ---
         
-        // Yeni Dosya Yükleme (Edit Modal için)
         handleEditFileUpload(files) {
             Array.from(files).forEach(file => {
                 readFileAsDataURL(file).then(url => {
@@ -385,7 +390,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                     totalAmount = officialFee + (serviceFee * (1 + vatRate / 100));
                 }
 
-                // Dosyaları Birleştir
                 let existingFiles = this.currentEditAccrual.files || [];
                 let finalFiles = [...existingFiles, ...this.editNewForeignInvoices];
 
@@ -507,7 +511,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             document.getElementById('editTpInvoicePartySearch').addEventListener('input', e => this.searchPersons(e.target.value, 'editTpInvoiceParty'));
             document.getElementById('editServiceInvoicePartySearch').addEventListener('input', e => this.searchPersons(e.target.value, 'editServiceInvoiceParty'));
 
-            // File Uploads
             const area = document.getElementById('paymentReceiptFileUploadArea');
             area.addEventListener('click', () => document.getElementById('paymentReceiptFile').click());
             document.getElementById('paymentReceiptFile').addEventListener('change', e => this.handlePaymentReceiptUpload(e.target.files));
