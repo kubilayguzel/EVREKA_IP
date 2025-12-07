@@ -1264,7 +1264,7 @@
                 const modalTitle = document.getElementById('viewAccrualTitle');
                 const modalBody = modal.querySelector('.modal-body-content');
 
-                // --- 1. Başlık ve Yardımcılar ---
+                // --- 1. Başlık ve Formatlayıcılar ---
                 modalTitle.textContent = `Tahakkuk Detayı (#${accrual.id})`;
                 
                 const formatCurrency = (amount, currency) => {
@@ -1278,37 +1278,41 @@
                     } catch (e) { return '-'; }
                 };
 
-                // Durum Rozeti
+                // Durum Rozeti Ayarlaması
                 let statusBadge = '';
-                if (accrual.status === 'paid') statusBadge = '<span class="badge badge-success px-3 py-2" style="font-size:0.9rem">Ödendi</span>';
-                else if (accrual.status === 'unpaid') statusBadge = '<span class="badge badge-danger px-3 py-2" style="font-size:0.9rem">Ödenmedi</span>';
-                else if (accrual.status === 'partially_paid') statusBadge = '<span class="badge badge-warning text-white px-3 py-2" style="font-size:0.9rem">Kısmen Ödendi</span>';
-                else statusBadge = '<span class="badge badge-secondary px-3 py-2" style="font-size:0.9rem">Bilinmiyor</span>';
+                let statusColorClass = 'secondary';
+                let statusText = 'Bilinmiyor';
+
+                if (accrual.status === 'paid') {
+                    statusColorClass = 'success'; statusText = 'Ödendi';
+                } else if (accrual.status === 'unpaid') {
+                    statusColorClass = 'danger'; statusText = 'Ödenmedi';
+                } else if (accrual.status === 'partially_paid') {
+                    statusColorClass = 'warning'; statusText = 'Kısmen Ödendi';
+                }
+                
+                statusBadge = `<span class="badge badge-${statusColorClass} px-3 py-2" style="font-size: 1rem;">${statusText}</span>`;
 
                 // --- 2. Bağlı İş (Task) Verileri ve Dokümanları ---
-                // this.allTasks bir Map değilse (loadAllData içinde diziye çevrildiyse veya Map ise) kontrol etmeliyiz.
-                // Kodunuzda this.allTasks = tasksMap (Object) olarak atanmış görünüyor.
-                // Eğer tasksMap bir Object ise: this.allTasks[accrual.taskId]
-                
+                // allTasks yapınızın Object (Map) olduğunu varsayarak erişiyoruz:
                 let relatedTask = null;
-                if (accrual.taskId) {
-                    // allTasks yapınızın Object (Map) olduğunu varsayarak:
-                    relatedTask = this.allTasks[accrual.taskId];
-                    // Eğer allTasks bir Array ise: this.allTasks.find(t => t.id === accrual.taskId);
+                if (accrual.taskId && this.allTasks) {
+                    relatedTask = this.allTasks[accrual.taskId]; // Map erişimi
+                    // Eğer allTasks bir Array ise şu satırı kullanın: 
+                    // relatedTask = Array.isArray(this.allTasks) ? this.allTasks.find(t => t.id === accrual.taskId) : this.allTasks[accrual.taskId];
                 }
 
                 let taskDocsHtml = '';
                 if (relatedTask) {
                     const taskFiles = relatedTask.files || (relatedTask.details ? relatedTask.details.files : []) || [];
                     const epatsDoc = (relatedTask.details && relatedTask.details.epatsDocument) ? relatedTask.details.epatsDocument : null;
-
                     let docListItems = '';
                     
                     // EPATS Belgesi
                     if (epatsDoc && (epatsDoc.url || epatsDoc.downloadURL)) {
                         const url = epatsDoc.url || epatsDoc.downloadURL;
                         docListItems += `
-                            <li class="list-group-item d-flex justify-content-between align-items-center p-2 bg-light border-left-primary" style="border-left: 4px solid #007bff;">
+                            <li class="list-group-item d-flex justify-content-between align-items-center p-2 bg-light" style="border-left: 4px solid #007bff;">
                                 <div class="d-flex align-items-center">
                                     <i class="fas fa-file-pdf text-danger fa-lg mr-2"></i>
                                     <div>
@@ -1323,8 +1327,9 @@
                     // Diğer Dosyalar
                     if (taskFiles.length > 0) {
                         taskFiles.forEach(f => {
+                             const fUrl = f.url || f.content;
                              // EPATS ile aynıysa tekrar ekleme
-                             if (epatsDoc && (epatsDoc.url === f.url || epatsDoc.downloadURL === f.url)) return;
+                             if (epatsDoc && (epatsDoc.url === fUrl || epatsDoc.downloadURL === fUrl)) return;
                              
                              docListItems += `
                                 <li class="list-group-item d-flex justify-content-between align-items-center p-2">
@@ -1332,30 +1337,30 @@
                                         <i class="fas fa-paperclip text-secondary mr-2"></i>
                                         <span class="small text-dark" title="${f.name}">${f.name}</span>
                                     </div>
-                                    <a href="${f.url}" target="_blank" class="btn btn-xs btn-light border"><i class="fas fa-download"></i></a>
+                                    <a href="${fUrl}" target="_blank" class="btn btn-xs btn-light border"><i class="fas fa-download"></i></a>
                                 </li>`;
                         });
                     }
 
                     if (docListItems) {
                         taskDocsHtml = `
-                            <div class="form-group mb-3 mt-3">
-                                <label class="text-muted font-weight-bold small text-uppercase"><i class="fas fa-folder-open mr-1"></i> Bağlı İşin Dokümanları (${relatedTask.id})</label>
+                            <div class="mt-3">
+                                <label class="text-muted font-weight-bold small text-uppercase mb-2"><i class="fas fa-folder-open mr-1"></i> Bağlı İş Dokümanları (${relatedTask.id})</label>
                                 <ul class="list-group list-group-flush border rounded">${docListItems}</ul>
                             </div>`;
                     } else {
                         taskDocsHtml = `<div class="p-2 border rounded bg-light text-muted font-italic small mt-2">Bağlı işe ait doküman bulunamadı.</div>`;
                     }
                 } else {
-                     taskDocsHtml = `<div class="p-2 border rounded bg-light text-muted font-italic small mt-2">Bağlı bir iş bulunamadı.</div>`;
+                    taskDocsHtml = `<div class="p-2 border rounded bg-light text-muted font-italic small mt-2">Bağlı iş bilgisi yüklenemedi.</div>`;
                 }
 
-                // --- 3. Tahakkuk Kendi Dokümanları (Örn: Ödeme Dekontu) ---
+                // --- 3. Tahakkuk Kendi Dokümanları (Dekontlar) ---
                 let accrualDocsHtml = '';
                 if (accrual.files && accrual.files.length > 0) {
                      let accListItems = '';
                      accrual.files.forEach(f => {
-                        const url = f.content || f.url; // Sizin yapınızda 'content' base64 olabilir veya url
+                        const url = f.content || f.url;
                         accListItems += `
                             <li class="list-group-item d-flex justify-content-between align-items-center p-2">
                                 <div class="d-flex align-items-center text-truncate">
@@ -1369,88 +1374,106 @@
                             </li>`;
                      });
                      accrualDocsHtml = `
-                        <div class="form-group mb-3 mt-3">
-                            <label class="text-muted font-weight-bold small text-uppercase"><i class="fas fa-receipt mr-1"></i> Tahakkuk Belgeleri / Dekontlar</label>
+                        <div class="mt-3">
+                            <label class="text-muted font-weight-bold small text-uppercase mb-2"><i class="fas fa-receipt mr-1"></i> Tahakkuk Belgeleri / Dekontlar</label>
                             <ul class="list-group list-group-flush border rounded">${accListItems}</ul>
                         </div>`;
+                } else {
+                    accrualDocsHtml = `<div class="p-2 border rounded bg-light text-muted font-italic small mt-3">Tahakkuka ait belge (dekont vb.) yok.</div>`;
                 }
-
 
                 // --- 4. HTML Şablonu (Grid Yapısı) ---
                 const html = `
                     <div class="container-fluid p-0">
-                        <div class="row mb-3">
-                            <div class="col-md-6 d-flex align-items-center">
-                                ${statusBadge}
-                            </div>
-                            <div class="col-md-6 text-right">
-                                <small class="text-muted d-block">Oluşturulma: <b>${formatDate(accrual.createdAt)}</b></small>
-                                ${accrual.paymentDate ? `<small class="text-success d-block">Ödeme Tarihi: <b>${formatDate(accrual.paymentDate)}</b></small>` : ''}
+                        <div class="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom">
+                            <div>${statusBadge}</div>
+                            <div class="text-right">
+                                <div class="small text-muted">Oluşturulma: <span class="text-dark font-weight-bold">${formatDate(accrual.createdAt)}</span></div>
+                                ${accrual.paymentDate ? `<div class="small text-success">Ödeme Tarihi: <span class="font-weight-bold">${formatDate(accrual.paymentDate)}</span></div>` : ''}
                             </div>
                         </div>
 
-                        <div class="form-group mb-3">
+                        <div class="form-group mb-4">
                             <label class="text-muted font-weight-bold small text-uppercase" style="letter-spacing:0.5px;">İlgili İş (Task)</label>
-                            <div class="p-2 bg-light border rounded text-dark font-weight-bold">
-                                ${accrual.taskTitle || '-'} <span class="text-muted font-weight-normal ml-2">(${accrual.taskId || 'ID Yok'})</span>
+                            <div class="p-3 bg-light border rounded d-flex justify-content-between align-items-center">
+                                <span class="font-weight-bold text-dark" style="font-size: 1.1em;">${accrual.taskTitle || '-'}</span>
+                                <span class="badge badge-light border">${accrual.taskId || 'ID Yok'}</span>
                             </div>
                         </div>
 
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <div class="p-3 border rounded h-100">
-                                    <label class="text-muted font-weight-bold small text-uppercase d-block mb-2">Ücret Detayları</label>
-                                    <div class="d-flex justify-content-between mb-1">
-                                        <span>Resmi Ücret:</span>
-                                        <span class="font-weight-bold">${formatCurrency(accrual.officialFee?.amount, accrual.officialFee?.currency)}</span>
-                                    </div>
-                                    <div class="d-flex justify-content-between mb-1">
-                                        <span>Hizmet Bedeli:</span>
-                                        <span class="font-weight-bold">${formatCurrency(accrual.serviceFee?.amount, accrual.serviceFee?.currency)}</span>
-                                    </div>
-                                    <div class="dropdown-divider"></div>
-                                    <div class="d-flex justify-content-between align-items-center">
-                                        <span class="small text-muted">KDV (%${accrual.vatRate || 20}) ${accrual.applyVatToOfficialFee ? '(Tümü)' : '(Sadece Hizmet)'}</span>
+                        <div class="row mb-4">
+                            <div class="col-md-7">
+                                <div class="card h-100 border-0 shadow-sm" style="background-color: #f8f9fa;">
+                                    <div class="card-body">
+                                        <h6 class="card-title text-muted text-uppercase small font-weight-bold mb-3">Ücret Kırılımı</h6>
+                                        
+                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                            <span class="text-secondary">Resmi Ücret:</span>
+                                            <span class="font-weight-bold text-dark">${formatCurrency(accrual.officialFee?.amount, accrual.officialFee?.currency)}</span>
+                                        </div>
+                                        
+                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                            <span class="text-secondary">Hizmet Bedeli:</span>
+                                            <span class="font-weight-bold text-dark">${formatCurrency(accrual.serviceFee?.amount, accrual.serviceFee?.currency)}</span>
+                                        </div>
+
+                                        <div class="border-top my-2"></div>
+                                        
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <span class="text-muted small">KDV (%${accrual.vatRate || 20}) ${accrual.applyVatToOfficialFee ? '<i class="fas fa-info-circle" title="Tümüne Uygulandı"></i>' : '<i class="fas fa-info-circle" title="Sadece Hizmete"></i>'}</span>
+                                            </div>
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-md-6 mb-3">
-                                <div class="p-3 border rounded bg-light h-100 d-flex flex-column justify-content-center">
-                                    <label class="text-muted font-weight-bold small text-uppercase d-block mb-2 text-center">Toplam Tutar</label>
-                                    <div class="text-center text-primary" style="font-size: 1.5rem; font-weight: 700;">
-                                        ${formatCurrency(accrual.totalAmount, accrual.totalAmountCurrency)}
-                                    </div>
-                                    <div class="text-center mt-2">
-                                        <span class="badge ${accrual.remainingAmount > 0 ? 'badge-warning' : 'badge-success'}">
-                                            Kalan: ${formatCurrency(accrual.remainingAmount !== undefined ? accrual.remainingAmount : accrual.totalAmount, accrual.totalAmountCurrency)}
-                                        </span>
+
+                            <div class="col-md-5">
+                                <div class="card h-100 border-primary shadow-sm">
+                                    <div class="card-body text-center d-flex flex-column justify-content-center">
+                                        <small class="text-uppercase text-muted font-weight-bold mb-1">Toplam Tutar</small>
+                                        <div class="text-primary mb-3" style="font-size: 1.6rem; font-weight: 800;">
+                                            ${formatCurrency(accrual.totalAmount, accrual.totalAmountCurrency)}
+                                        </div>
+                                        
+                                        <div class="p-2 rounded ${accrual.remainingAmount > 0 ? 'bg-warning text-dark' : 'bg-success text-white'}">
+                                            <small class="d-block font-weight-bold" style="opacity:0.9">Kalan Tutar</small>
+                                            <span style="font-size: 1.1rem; font-weight: bold;">
+                                                ${formatCurrency(accrual.remainingAmount !== undefined ? accrual.remainingAmount : accrual.totalAmount, accrual.totalAmountCurrency)}
+                                            </span>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
 
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
+                        <div class="row mb-4">
+                            <div class="col-md-6 mb-2">
                                 <label class="text-muted font-weight-bold small text-uppercase">Türk Patent Faturası Kime?</label>
-                                <div class="p-2 border rounded">
-                                    <i class="fas fa-user-tie text-secondary mr-2"></i>
-                                    ${accrual.tpInvoiceParty?.name || '<span class="text-muted font-italic">Belirtilmemiş</span>'}
+                                <div class="p-2 border rounded bg-white d-flex align-items-center">
+                                    <div class="icon-box bg-light rounded-circle mr-2 d-flex align-items-center justify-content-center" style="width:32px; height:32px;">
+                                        <i class="fas fa-user-tie text-secondary"></i>
+                                    </div>
+                                    <span class="text-dark">${accrual.tpInvoiceParty?.name || '<span class="text-muted font-italic">Belirtilmemiş</span>'}</span>
                                 </div>
                             </div>
-                            <div class="col-md-6 mb-3">
+                            <div class="col-md-6 mb-2">
                                 <label class="text-muted font-weight-bold small text-uppercase">Hizmet Faturası Kime?</label>
-                                <div class="p-2 border rounded">
-                                    <i class="fas fa-building text-secondary mr-2"></i>
-                                    ${accrual.serviceInvoiceParty?.name || '<span class="text-muted font-italic">Belirtilmemiş</span>'}
+                                <div class="p-2 border rounded bg-white d-flex align-items-center">
+                                    <div class="icon-box bg-light rounded-circle mr-2 d-flex align-items-center justify-content-center" style="width:32px; height:32px;">
+                                        <i class="fas fa-building text-secondary"></i>
+                                    </div>
+                                    <span class="text-dark">${accrual.serviceInvoiceParty?.name || '<span class="text-muted font-italic">Belirtilmemiş</span>'}</span>
                                 </div>
                             </div>
                         </div>
 
-                        <hr>
+                        <div class="border-top my-3"></div>
                         
-                        ${taskDocsHtml}
-                        ${accrualDocsHtml}
-
+                        <div class="row">
+                            <div class="col-12">
+                                ${taskDocsHtml}
+                                ${accrualDocsHtml}
+                            </div>
+                        </div>
                     </div>
                 `;
 
