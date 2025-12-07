@@ -119,6 +119,26 @@
         .doc-type-receipt .doc-icon-box { background-color: #f1f8e9; color: #558b2f; }
         .doc-type-receipt { border-left: 3px solid #558b2f; }
         .doc-type-generic .doc-icon-box { background-color: #f5f5f5; color: #616161; }
+
+        /* --- BİLDİRİM KONTEYNERİ DÜZELTMESİ --- */
+        #notification-container {
+            position: fixed; /* Sayfa akışından çıkar, havada asılı dursun */
+            top: 20px;
+            right: 20px;
+            z-index: 9999; /* Modalların ve diğer her şeyin üzerinde dursun */
+            width: auto;
+            max-width: 350px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            pointer-events: none; /* Boşken tıklamaları engellemesin */
+        }
+
+        /* Bildirim kutularının kendisine tıklanabilsin */
+        #notification-container > div {
+            pointer-events: auto;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15); /* Biraz gölge ekleyelim */
+        }
     </style>
 </head>
 <body>
