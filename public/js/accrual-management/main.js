@@ -143,7 +143,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         // --- UI LAYER: MODALS ---
         
         // 1. View Modal (GÜNCEL: Düzeltilmiş EPATS ve Form Yapısı)
-        showViewAccrualDetailModal(accrualId) {
+        async showViewAccrualDetailModal(accrualId) {
             const accrual = this.allAccruals.find(a => a.id === accrualId);
             if (!accrual) return;
 
@@ -162,14 +162,20 @@ document.addEventListener('DOMContentLoaded', async () => {
             if(accrual.status === 'unpaid') { statusText = 'Ödenmedi'; statusColor = '#dc3545'; }
             if(accrual.status === 'partially_paid') { statusText = 'Kısmen Ödendi'; statusColor = '#ffc107'; }
 
-            // İlgili İşi Güvenli Bulma (String ID ile)
+            // İlgili İşi Güvenli Bulma - Firebase'den direkt çek
             let task = null;
             if (accrual.taskId) {
-                // Eğer allTasks bir array ise find kullan, obje ise direkt erişim
-                if (Array.isArray(this.allTasks)) {
-                    task = this.allTasks.find(t => String(t.id) === String(accrual.taskId));
-                } else {
-                    task = this.allTasks[String(accrual.taskId)];
+                try {
+                    // Firebase'den direkt çekelim
+                    const taskDoc = await db.collection('tasks').doc(String(accrual.taskId)).get();
+                    if (taskDoc.exists) {
+                        task = { id: taskDoc.id, ...taskDoc.data() };
+                        console.log('✅ Task Firebase\'den çekildi:', task);
+                    } else {
+                        console.log('❌ Firebase\'de task bulunamadı, ID:', accrual.taskId);
+                    }
+                } catch (error) {
+                    console.error('Task çekilirken hata:', error);
                 }
                 
                 console.log('🔍 DEBUG - Task Arama:');
