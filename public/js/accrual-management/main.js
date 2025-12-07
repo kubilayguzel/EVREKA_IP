@@ -32,7 +32,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // --- DATA LAYER ---
         async loadAllData() {
-            // Loading nesnesini değişkene atıyoruz (DÜZELTME BURADA)
             let simpleLoader = null;
             if(window.showSimpleLoading) {
                 simpleLoader = window.showSimpleLoading('Veriler Yükleniyor', 'Lütfen bekleyiniz...');
@@ -77,8 +76,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 showNotification('Veri yükleme hatası', 'error');
             } finally {
                 if(loadingIndicator) loadingIndicator.style.display = 'none';
-                
-                // Doğru loader'ı kapatıyoruz (DÜZELTME BURADA)
                 if(simpleLoader) simpleLoader.hide();
             }
         }
@@ -97,7 +94,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
             noMsg.style.display = 'none';
 
-            // Formatters
             const fmtMoney = (v, c) => new Intl.NumberFormat('tr-TR', { style: 'currency', currency: c || 'TRY' }).format(v || 0);
 
             tbody.innerHTML = filtered.map(acc => {
@@ -133,7 +129,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // --- UI LAYER: MODALS ---
         
-        // 1. View Modal (TASARIM GÜNCELLENDİ: GRID VE KUTUCUKLU YAPI)
+        // 1. View Modal (TASARIM GÜNCELLENDİ: Form/Input Görünümü)
         showViewAccrualDetailModal(accrualId) {
             const accrual = this.allAccruals.find(a => a.id === accrualId);
             if (!accrual) return;
@@ -147,92 +143,119 @@ document.addEventListener('DOMContentLoaded', async () => {
             const fmtMoney = (v, c) => new Intl.NumberFormat('tr-TR', { style: 'currency', currency: c || 'TRY' }).format(v || 0);
             const fmtDate = (d) => { try { return d ? new Date(d).toLocaleDateString('tr-TR') : '-'; } catch{return '-'} };
             
-            let sBadge = `<span class="badge badge-secondary px-3 w-100 py-2">Bilinmiyor</span>`;
-            if(accrual.status === 'paid') sBadge = `<span class="badge badge-success px-3 w-100 py-2">Ödendi</span>`;
-            if(accrual.status === 'unpaid') sBadge = `<span class="badge badge-danger px-3 w-100 py-2">Ödenmedi</span>`;
-            if(accrual.status === 'partially_paid') sBadge = `<span class="badge badge-warning px-3 w-100 py-2 text-white">Kısmen Ödendi</span>`;
+            let statusText = 'Bilinmiyor';
+            if(accrual.status === 'paid') statusText = 'Ödendi';
+            if(accrual.status === 'unpaid') statusText = 'Ödenmedi';
+            if(accrual.status === 'partially_paid') statusText = 'Kısmen Ödendi';
 
             let task = this.allTasks[accrual.taskId];
             
-            // --- Dokümanlar ---
+            // Dokümanlar
             let docsHtml = '';
             
             // EPATS Belgesi
             if(task?.details?.epatsDocument?.url) {
                 docsHtml += `
-                <div class="col-12 mb-3">
-                    <label class="view-label text-primary"><i class="fas fa-file-contract mr-1"></i> İŞİN EPATS DOKÜMANI</label>
-                    <div class="view-box bg-light d-flex justify-content-between align-items-center" style="border-left: 4px solid #007bff;">
-                        <div class="d-flex align-items-center overflow-hidden">
-                            <i class="fas fa-file-pdf text-danger fa-lg mr-3"></i>
-                            <div class="text-truncate">
-                                <strong class="d-block text-dark" style="font-size:0.9rem;">${task.details.epatsDocument.name}</strong>
-                            </div>
-                        </div>
-                        <a href="${task.details.epatsDocument.url}" target="_blank" class="btn btn-sm btn-outline-primary font-weight-bold ml-2">Görüntüle</a>
+                <div class="file-item-modal d-flex justify-content-between align-items-center" style="background-color: #e3f2fd; border-left: 4px solid #2196f3;">
+                    <div class="d-flex align-items-center">
+                        <i class="fas fa-file-pdf text-danger mr-2"></i>
+                        <span><strong>EPATS:</strong> ${task.details.epatsDocument.name}</span>
                     </div>
+                    <a href="${task.details.epatsDocument.url}" target="_blank" class="btn btn-sm btn-primary">Görüntüle</a>
                 </div>`;
             }
 
             // Diğer Dosyalar
             if(accrual.files?.length) {
                 accrual.files.forEach(f => {
-                    let lbl = f.documentDesignation || 'BELGE';
-                    let ico = 'fa-file-alt text-secondary';
-                    if(lbl.includes('Fatura')) { lbl = 'YURTDIŞI FATURA'; ico = 'fa-file-invoice-dollar text-info'; }
-                    else if(lbl.includes('Dekont')) { lbl = 'ÖDEME DEKONTU'; ico = 'fa-receipt text-success'; }
+                    let label = f.documentDesignation || 'Belge';
+                    let icon = 'fa-file-alt';
+                    if(label.includes('Fatura')) icon = 'fa-file-invoice-dollar';
+                    if(label.includes('Dekont')) icon = 'fa-receipt';
                     
                     docsHtml += `
-                    <div class="col-md-6 mb-3">
-                        <label class="view-label">${lbl.toUpperCase()}</label>
-                        <div class="view-box d-flex justify-content-between align-items-center">
-                            <div class="d-flex align-items-center text-truncate pr-2">
-                                <i class="fas ${ico} fa-lg mr-2"></i>
-                                <span class="text-truncate small" title="${f.name}">${f.name}</span>
-                            </div>
-                            <a href="${f.content || f.url}" target="_blank" class="btn btn-sm btn-light border ml-1"><i class="fas fa-download"></i></a>
+                    <div class="file-item-modal d-flex justify-content-between align-items-center">
+                        <div class="d-flex align-items-center">
+                            <i class="fas ${icon} text-secondary mr-2"></i>
+                            <span><strong>${label}:</strong> ${f.name}</span>
                         </div>
+                        <a href="${f.content || f.url}" target="_blank" class="btn btn-sm btn-outline-secondary">İndir</a>
                     </div>`;
                 });
             }
-            if(!docsHtml) docsHtml = `<div class="col-12"><div class="p-3 border rounded bg-light text-center text-muted small">Belge yok.</div></div>`;
+            if(!docsHtml) docsHtml = '<div class="text-muted font-italic p-2">Görüntülenecek belge yok.</div>';
 
-            // HTML Yapısı (Grid)
+            // HTML Yapısı (Edit Modalı ile Aynı Sınıflar Kullanıldı)
             body.innerHTML = `
-            <div class="container-fluid p-0">
-                <div class="section-header mt-0"><i class="fas fa-info-circle mr-2"></i>GENEL BİLGİLER</div>
-                <div class="row">
-                    <div class="col-md-8 mb-3">
-                        <label class="view-label">İlgili İş</label>
-                        <div class="view-box bg-light font-weight-bold text-dark">${accrual.taskTitle || '-'} <span class="text-muted ml-2 small">(${accrual.taskId || 'ID Yok'})</span></div>
+                <div class="form-group">
+                    <label class="form-label">İlgili İş</label>
+                    <input type="text" class="form-input" value="${accrual.taskTitle || '-'} (${accrual.taskId || ''})" readonly style="background-color: #f8f9fa;">
+                </div>
+
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label class="form-label">Tahakkuk Durumu</label>
+                        <input type="text" class="form-input" value="${statusText}" readonly>
                     </div>
-                    <div class="col-md-4 mb-3"><label class="view-label">Durum</label>${sBadge}</div>
-                </div>
-                <div class="row">
-                    <div class="col-md-6 mb-3"><label class="view-label">Oluşturulma</label><div class="view-box"><i class="far fa-calendar-plus mr-2 text-muted"></i>${fmtDate(accrual.createdAt)}</div></div>
-                    <div class="col-md-6 mb-3"><label class="view-label">Ödeme</label><div class="view-box"><i class="far fa-calendar-check mr-2 text-muted"></i>${accrual.paymentDate ? fmtDate(accrual.paymentDate) : 'Bekliyor'}</div></div>
-                </div>
-
-                <div class="section-header"><i class="fas fa-coins mr-2"></i>FİNANSAL DETAYLAR</div>
-                <div class="row">
-                    <div class="col-md-6 mb-3"><label class="view-label">Resmi Ücret</label><div class="view-box font-weight-bold">${fmtMoney(accrual.officialFee?.amount, accrual.officialFee?.currency)}</div></div>
-                    <div class="col-md-6 mb-3"><label class="view-label">Hizmet Bedeli</label><div class="view-box font-weight-bold">${fmtMoney(accrual.serviceFee?.amount, accrual.serviceFee?.currency)}</div></div>
-                </div>
-                <div class="row">
-                    <div class="col-md-4 mb-3"><label class="view-label">KDV</label><div class="view-box text-muted small">%${accrual.vatRate}</div></div>
-                    <div class="col-md-4 mb-3"><label class="view-label">Toplam</label><div class="view-box font-weight-bold text-primary bg-light" style="font-size:1.1em">${fmtMoney(accrual.totalAmount, accrual.totalAmountCurrency)}</div></div>
-                    <div class="col-md-4 mb-3"><label class="view-label">Kalan</label><div class="view-box font-weight-bold ${accrual.remainingAmount > 0 ? 'text-danger' : 'text-success'}">${fmtMoney(accrual.remainingAmount !== undefined ? accrual.remainingAmount : accrual.totalAmount, accrual.totalAmountCurrency)}</div></div>
+                    <div class="form-group">
+                        <label class="form-label">Oluşturulma Tarihi</label>
+                        <input type="text" class="form-input" value="${fmtDate(accrual.createdAt)}" readonly>
+                    </div>
                 </div>
 
-                <div class="section-header"><i class="fas fa-file-invoice mr-2"></i>FATURA BİLGİLERİ</div>
-                <div class="row">
-                    <div class="col-md-6 mb-3"><label class="view-label">TP Faturası</label><div class="view-box small text-truncate"><i class="fas fa-user-tie mr-2 text-secondary"></i>${accrual.tpInvoiceParty?.name || '-'}</div></div>
-                    <div class="col-md-6 mb-3"><label class="view-label">Hizmet Faturası</label><div class="view-box small text-truncate"><i class="fas fa-building mr-2 text-secondary"></i>${accrual.serviceInvoiceParty?.name || '-'}</div></div>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label class="form-label">Resmi Ücret</label>
+                        <input type="text" class="form-input" value="${fmtMoney(accrual.officialFee?.amount, accrual.officialFee?.currency)}" readonly>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Hizmet Bedeli</label>
+                        <input type="text" class="form-input" value="${fmtMoney(accrual.serviceFee?.amount, accrual.serviceFee?.currency)}" readonly>
+                    </div>
                 </div>
 
-                <div class="section-header"><i class="fas fa-folder-open mr-2"></i>BELGELER</div>
-                <div class="row">${docsHtml}</div>
-            </div>`;
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label class="form-label">KDV Oranı</label>
+                        <input type="text" class="form-input" value="%${accrual.vatRate} (${accrual.applyVatToOfficialFee ? 'Tümü' : 'Hizmet'})" readonly>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Toplam Tutar</label>
+                        <div class="total-amount-display" style="margin-top:0; text-align:left; font-size:1rem;">
+                            ${fmtMoney(accrual.totalAmount, accrual.totalAmountCurrency)}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label class="form-label">Kalan Tutar</label>
+                        <input type="text" class="form-input" value="${fmtMoney(accrual.remainingAmount !== undefined ? accrual.remainingAmount : accrual.totalAmount, accrual.totalAmountCurrency)}" readonly style="color: ${accrual.remainingAmount > 0 ? '#dc3545' : '#28a745'}; font-weight:bold;">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Ödeme Tarihi</label>
+                        <input type="text" class="form-input" value="${accrual.paymentDate ? fmtDate(accrual.paymentDate) : 'Ödeme Bekleniyor'}" readonly>
+                    </div>
+                </div>
+
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label class="form-label">Türk Patent Faturası Kime?</label>
+                        <input type="text" class="form-input" value="${accrual.tpInvoiceParty?.name || '-'}" readonly>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Hizmet Faturası Kime?</label>
+                        <input type="text" class="form-input" value="${accrual.serviceInvoiceParty?.name || '-'}" readonly>
+                    </div>
+                </div>
+
+                <div class="form-group" style="margin-top: 20px;">
+                    <label class="form-label">Belgeler</label>
+                    <div class="file-list-modal" style="border: 1px solid #e1e8ed; border-radius: 10px; padding: 10px;">
+                        ${docsHtml}
+                    </div>
+                </div>
+            `;
 
             modal.classList.add('show');
         }
@@ -292,7 +315,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         async handleBulkUpdate(newStatus) {
             if (this.selectedAccruals.size === 0) return;
             
-            // Loading nesnesini yakala
             let loader = null;
             if(window.showSimpleLoading) loader = window.showSimpleLoading('Güncelleniyor...');
 
@@ -333,14 +355,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             } catch(e) {
                 showNotification('Hata oluştu', 'error');
             } finally {
-                // Loader'ı kapat
                 if(loader) loader.hide();
             }
         }
 
         async deleteAccrual(id) {
             if(confirm('Silmek istiyor musunuz?')) {
-                // Silme işlemi için de loader ekleyelim
                 let loader = null;
                 if(window.showSimpleLoading) loader = window.showSimpleLoading('Siliniyor...');
                 
@@ -356,12 +376,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         async handleSaveAccrualChanges() {
-            // Edit işlemi için loader
             let loader = null;
             if(window.showSimpleLoading) loader = window.showSimpleLoading('Kaydediliyor...');
 
             try {
-                // ... (Orijinal form verilerini toplama mantığı)
                 const accrualId = document.getElementById('editAccrualId').value;
                 const officialFee = parseFloat(document.getElementById('editOfficialFee').value) || 0;
                 const serviceFee = parseFloat(document.getElementById('editServiceFee').value) || 0;
@@ -408,21 +426,16 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
 
             document.getElementById('accrualsTableBody').addEventListener('click', e => {
-                const id = e.target.dataset.id;
-                // Butonun içindeki ikona tıklanırsa parent butona eriş
                 const btn = e.target.closest('.action-btn');
                 if(!btn) return;
                 
-                // preventDefault ekleyerek sayfa zıplamasını engelle
                 e.preventDefault();
-                
                 const dataId = btn.dataset.id;
                 if(btn.classList.contains('view-btn')) this.showViewAccrualDetailModal(dataId);
                 if(btn.classList.contains('edit-btn')) this.showEditAccrualModal(dataId);
                 if(btn.classList.contains('delete-btn')) this.deleteAccrual(dataId);
             });
 
-            // Task Detay Linki (Tablodaki)
             document.getElementById('accrualsTableBody').addEventListener('click', e => {
                 if(e.target.classList.contains('task-detail-link')) {
                     e.preventDefault();
@@ -447,11 +460,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 document.getElementById(id).addEventListener('input', () => this.calculateEditTotalAmount());
             });
 
-            // Party Search Listeners
             document.getElementById('editTpInvoicePartySearch').addEventListener('input', e => this.searchPersons(e.target.value, 'editTpInvoiceParty'));
             document.getElementById('editServiceInvoicePartySearch').addEventListener('input', e => this.searchPersons(e.target.value, 'editServiceInvoiceParty'));
 
-            // File Upload
             const area = document.getElementById('paymentReceiptFileUploadArea');
             area.addEventListener('click', () => document.getElementById('paymentReceiptFile').click());
             document.getElementById('paymentReceiptFile').addEventListener('change', e => this.handlePaymentReceiptUpload(e.target.files));
@@ -553,7 +564,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             const el = document.getElementById(elId);
             el.innerHTML = party ? `<b>Seçilen:</b> ${party.name} <span style="cursor:pointer;color:red" onclick="this.parentElement.style.display='none'">[X]</span>` : '';
             el.style.display = party ? 'block' : 'none';
-            // Silme işlemi için event listener eklemek yerine basitçe gizliyoruz, null ataması save'de kontrol edilmeli.
             if(party) {
                 el.querySelector('span').onclick = () => {
                     el.style.display = 'none';
@@ -566,7 +576,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         showTaskDetailModal(taskId) {
             const task = this.allTasks[taskId];
             if(!task) { showNotification('İş bulunamadı', 'error'); return; }
-            // Basit task detail modal
             document.getElementById('modalTaskTitle').textContent = `İş Detayı: ${task.title}`;
             document.getElementById('modalBody').innerHTML = `<p><b>Durum:</b> ${task.status}</p><p><b>Açıklama:</b> ${task.description || '-'}</p>`;
             document.getElementById('taskDetailModal').classList.add('show');
