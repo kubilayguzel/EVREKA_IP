@@ -224,51 +224,6 @@
             text-transform: uppercase;
             display: block;
         }
-
-        /* Modal Bölüm Başlıkları - Mavi ve Çizgili */
-.section-header {
-    color: #1e3c72; 
-    font-size: 0.9rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    border-bottom: 2px solid #e9ecef;
-    padding-bottom: 8px;
-    margin-top: 25px;
-    margin-bottom: 15px;
-    display: flex;
-    align-items: center;
-}
-
-/* Veri Kutucukları - Input Görünümlü */
-.view-box {
-    background-color: #fff;
-    border: 1px solid #ced4da;
-    border-radius: 6px;
-    padding: 10px 12px;
-    min-height: 42px; /* Standart yükseklik */
-    display: flex;
-    align-items: center;
-    font-size: 0.95rem;
-    color: #495057;
-    width: 100%;
-}
-
-/* Etiketler */
-.view-label {
-    font-size: 0.75rem;
-    font-weight: 700;
-    color: #6c757d;
-    margin-bottom: 6px;
-    text-transform: uppercase;
-    display: block;
-}
-
-/* Kutucuk içi ikonlar */
-.view-box i {
-    opacity: 0.6;
-    margin-right: 8px;
-}
     </style>
 </head>
 <body>
@@ -1353,7 +1308,7 @@
                 });
             }
             
-showViewAccrualDetailModal(accrualId) {
+            showViewAccrualDetailModal(accrualId) {
                 const accrual = this.allAccruals.find(a => a.id === accrualId);
                 if (!accrual) {
                     showNotification('Tahakkuk bulunamadı.', 'error');
@@ -1364,10 +1319,9 @@ showViewAccrualDetailModal(accrualId) {
                 const modalTitle = document.getElementById('viewAccrualTitle');
                 const modalBody = modal.querySelector('.modal-body-content');
 
-                // --- Başlık ---
+                // --- 1. Başlık ve Formatlayıcılar ---
                 modalTitle.textContent = `Tahakkuk Detayı (#${accrual.id})`;
-
-                // --- Formatlayıcılar ---
+                
                 const formatCurrency = (amount, currency) => {
                     return new Intl.NumberFormat('tr-TR', { style: 'currency', currency: currency || 'TRY' }).format(amount || 0);
                 };
@@ -1376,49 +1330,56 @@ showViewAccrualDetailModal(accrualId) {
                     try { return new Date(dateVal).toLocaleDateString('tr-TR'); } catch (e) { return '-'; }
                 };
 
-                // --- Durum ---
+                // Durum Rengi
                 let statusBadge = '';
-                if(accrual.status === 'paid') statusBadge = '<span class="badge badge-success px-3 w-100 py-2">Ödendi</span>';
-                else if(accrual.status === 'unpaid') statusBadge = '<span class="badge badge-danger px-3 w-100 py-2">Ödenmedi</span>';
-                else if(accrual.status === 'partially_paid') statusBadge = '<span class="badge badge-warning px-3 w-100 py-2 text-white">Kısmen Ödendi</span>';
-                else statusBadge = '<span class="badge badge-secondary px-3 w-100 py-2">Bilinmiyor</span>';
+                if(accrual.status === 'paid') statusBadge = '<span class="badge badge-success px-3">Ödendi</span>';
+                else if(accrual.status === 'unpaid') statusBadge = '<span class="badge badge-danger px-3">Ödenmedi</span>';
+                else if(accrual.status === 'partially_paid') statusBadge = '<span class="badge badge-warning px-3">Kısmen Ödendi</span>';
+                else statusBadge = '<span class="badge badge-secondary px-3">Bilinmiyor</span>';
 
-                // --- Bağlı İş ---
+                // Bağlı İş
                 let relatedTask = null;
                 if (accrual.taskId && this.allTasks) {
                     relatedTask = this.allTasks[accrual.taskId] || (Array.isArray(this.allTasks) ? this.allTasks.find(t => t.id === accrual.taskId) : null);
                 }
 
-                // --- Dokümanlar ---
+                // --- Doküman Hazırlığı ---
                 let docsContent = '';
                 
-                // 1. EPATS
+                // 1. EPATS Belgesi
                 if (relatedTask && relatedTask.details && relatedTask.details.epatsDocument && (relatedTask.details.epatsDocument.url || relatedTask.details.epatsDocument.downloadURL)) {
                     const doc = relatedTask.details.epatsDocument;
                     const url = doc.url || doc.downloadURL;
                     docsContent += `
-                        <div class="col-md-6 mb-3">
-                            <div class="view-box bg-light d-flex justify-content-between" style="border-left: 4px solid #007bff;">
-                                <div class="d-flex align-items-center overflow-hidden">
-                                    <i class="fas fa-file-pdf text-danger fa-lg"></i>
-                                    <div class="text-truncate">
-                                        <strong class="d-block" style="font-size:0.85rem;">EPATS Belgesi</strong>
-                                        <small class="text-muted">${doc.name}</small>
+                        <div class="col-12 mb-2">
+                            <div class="alert alert-primary d-flex align-items-center justify-content-between p-2 m-0" style="border-left: 4px solid #007bff; background-color: #f0f7ff;">
+                                <div class="d-flex align-items-center">
+                                    <i class="fas fa-file-pdf text-danger fa-lg mr-3"></i>
+                                    <div>
+                                        <strong class="d-block" style="font-size:0.9rem; color:#0056b3;">EPATS Belgesi (İş Kaydı)</strong>
+                                        <small class="text-muted">${doc.name || 'Dosya'}</small>
                                     </div>
                                 </div>
-                                <a href="${url}" target="_blank" class="btn btn-sm btn-outline-primary ml-2">Aç</a>
+                                <a href="${url}" target="_blank" class="btn btn-sm btn-light border text-primary font-weight-bold">Aç</a>
                             </div>
                         </div>`;
                 }
 
                 // 2. Diğer Dosyalar
                 let allFiles = [];
-                if (relatedTask && relatedTask.files) allFiles = [...allFiles, ...relatedTask.files];
-                if (accrual.files) allFiles = [...allFiles, ...accrual.files];
+                if (relatedTask && relatedTask.files) allFiles = [...allFiles, ...relatedTask.files]; // İş dosyaları
+                if (relatedTask && relatedTask.details && relatedTask.details.files) allFiles = [...allFiles, ...relatedTask.details.files];
+                if (accrual.files) allFiles = [...allFiles, ...accrual.files]; // Tahakkuk dosyaları
 
+                // EPATS tekrarını engelle ve listele
                 const uniqueFiles = [];
                 const seenUrls = new Set();
-                if (relatedTask?.details?.epatsDocument?.url) seenUrls.add(relatedTask.details.epatsDocument.url);
+                
+                // EPATS URL'sini sete ekle ki tekrar listelenmesin
+                if (relatedTask?.details?.epatsDocument) {
+                    const eUrl = relatedTask.details.epatsDocument.url || relatedTask.details.epatsDocument.downloadURL;
+                    if(eUrl) seenUrls.add(eUrl);
+                }
 
                 allFiles.forEach(f => {
                     const fUrl = f.url || f.content;
@@ -1432,76 +1393,91 @@ showViewAccrualDetailModal(accrualId) {
                     uniqueFiles.forEach(f => {
                         const url = f.url || f.content;
                         let iconClass = 'fa-paperclip text-secondary';
-                        if (f.documentDesignation === 'Ödeme Dekontu') iconClass = 'fa-receipt text-success';
+                        let label = 'Doküman';
+                        if (f.documentDesignation === 'Ödeme Dekontu' || f.name.toLowerCase().includes('dekont')) {
+                            iconClass = 'fa-receipt text-success';
+                            label = 'Dekont / Belge';
+                        }
 
                         docsContent += `
-                            <div class="col-md-6 mb-3">
-                                <div class="view-box d-flex justify-content-between">
-                                    <div class="d-flex align-items-center text-truncate">
-                                        <i class="fas ${iconClass} fa-lg"></i>
-                                        <span class="text-truncate" title="${f.name}">${f.name}</span>
+                            <div class="col-md-6 mb-2">
+                                <div class="border rounded p-2 d-flex justify-content-between align-items-center bg-white h-100">
+                                    <div class="d-flex align-items-center text-truncate pr-2">
+                                        <i class="fas ${iconClass} mr-2"></i>
+                                        <div>
+                                            <span class="d-block small font-weight-bold text-dark">${label}</span>
+                                            <span class="small text-muted text-truncate d-block" style="max-width: 150px;">${f.name}</span>
+                                        </div>
                                     </div>
-                                    <a href="${url}" target="_blank" class="btn btn-sm btn-light border ml-2"><i class="fas fa-download"></i></a>
+                                    <a href="${url}" target="_blank" class="btn btn-xs btn-light border"><i class="fas fa-download"></i></a>
                                 </div>
                             </div>`;
                     });
                 } else if (docsContent === '') {
-                    docsContent = `<div class="col-12"><div class="p-2 bg-light border rounded text-center text-muted small">Dosya bulunamadı.</div></div>`;
+                    docsContent = `<div class="col-12"><div class="p-2 border rounded bg-light text-muted font-italic small text-center">Görüntülenecek belge bulunamadı.</div></div>`;
                 }
 
-                // --- HTML OLUŞTURMA (GRID YAPISI) ---
+
+                // --- HTML ŞABLONU OLUŞTURMA ---
                 const html = `
                     <div class="container-fluid p-0">
                         
-                        <div class="section-header mt-0"><i class="fas fa-info-circle mr-2"></i>GENEL BİLGİLER</div>
+                        <div class="section-header"><i class="fas fa-briefcase mr-2"></i>İLGİLİ İŞ & DURUM</div>
                         <div class="row">
                             <div class="col-md-8 mb-3">
-                                <label class="view-label">İlgili İş</label>
-                                <div class="view-box bg-light font-weight-bold text-dark">
-                                    ${accrual.taskTitle || '-'} 
-                                    <span class="text-muted ml-2 small font-weight-normal">(${accrual.taskId || 'ID Yok'})</span>
+                                <label class="view-label">İlgili İş (Task)</label>
+                                <div class="view-box bg-light text-dark font-weight-bold">
+                                    ${accrual.taskTitle || '-'}
+                                    <span class="text-muted ml-2 font-weight-normal small">(${accrual.taskId || 'ID Yok'})</span>
                                 </div>
                             </div>
                             <div class="col-md-4 mb-3">
-                                <label class="view-label">Durum</label>
-                                ${statusBadge}
+                                <label class="view-label">Tahakkuk Durumu</label>
+                                <div class="view-box justify-content-center">
+                                    ${statusBadge}
+                                </div>
                             </div>
                         </div>
-                        
                         <div class="row">
                             <div class="col-md-6 mb-3">
                                 <label class="view-label">Oluşturulma Tarihi</label>
-                                <div class="view-box"><i class="far fa-calendar-plus"></i> ${formatDate(accrual.createdAt)}</div>
+                                <div class="view-box">
+                                    <i class="far fa-calendar-alt text-muted mr-2"></i> ${formatDate(accrual.createdAt)}
+                                </div>
                             </div>
                             <div class="col-md-6 mb-3">
                                 <label class="view-label">Ödeme Tarihi</label>
-                                <div class="view-box"><i class="far fa-calendar-check"></i> ${accrual.paymentDate ? formatDate(accrual.paymentDate) : 'Bekliyor'}</div>
+                                <div class="view-box">
+                                    <i class="fas fa-calendar-check text-muted mr-2"></i> ${accrual.paymentDate ? formatDate(accrual.paymentDate) : 'Ödeme Bekleniyor'}
+                                </div>
                             </div>
                         </div>
 
-                        <div class="section-header"><i class="fas fa-coins mr-2"></i>FİNANSAL DETAYLAR</div>
-                        
+                        <div class="section-header"><i class="fas fa-coins mr-2"></i>FİNANS BİLGİLERİ</div>
                         <div class="row">
                             <div class="col-md-6 mb-3">
                                 <label class="view-label">Resmi Ücret</label>
-                                <div class="view-box font-weight-bold">${formatCurrency(accrual.officialFee?.amount, accrual.officialFee?.currency)}</div>
+                                <div class="view-box">
+                                    ${formatCurrency(accrual.officialFee?.amount, accrual.officialFee?.currency)}
+                                </div>
                             </div>
                             <div class="col-md-6 mb-3">
                                 <label class="view-label">Hizmet Bedeli</label>
-                                <div class="view-box font-weight-bold">${formatCurrency(accrual.serviceFee?.amount, accrual.serviceFee?.currency)}</div>
+                                <div class="view-box">
+                                    ${formatCurrency(accrual.serviceFee?.amount, accrual.serviceFee?.currency)}
+                                </div>
                             </div>
                         </div>
-
                         <div class="row">
                             <div class="col-md-4 mb-3">
-                                <label class="view-label">KDV</label>
-                                <div class="view-box text-muted small">
-                                    %${accrual.vatRate || 20} (${accrual.applyVatToOfficialFee ? 'Tümü' : 'Hizmet'})
+                                <label class="view-label">KDV Oranı</label>
+                                <div class="view-box text-muted">
+                                    %${accrual.vatRate || 20} <small class="ml-1">(${accrual.applyVatToOfficialFee ? 'Tümü' : 'Hizmet'})</small>
                                 </div>
                             </div>
                             <div class="col-md-4 mb-3">
                                 <label class="view-label">Toplam Tutar</label>
-                                <div class="view-box font-weight-bold text-primary bg-light" style="font-size: 1.1em;">
+                                <div class="view-box font-weight-bold text-primary" style="background-color: #f8f9fa;">
                                     ${formatCurrency(accrual.totalAmount, accrual.totalAmountCurrency)}
                                 </div>
                             </div>
@@ -1516,16 +1492,16 @@ showViewAccrualDetailModal(accrualId) {
                         <div class="section-header"><i class="fas fa-file-invoice mr-2"></i>FATURA BİLGİLERİ</div>
                         <div class="row">
                             <div class="col-md-6 mb-3">
-                                <label class="view-label">Türk Patent Faturası</label>
-                                <div class="view-box small">
-                                    <i class="fas fa-user-tie"></i>
+                                <label class="view-label">Türk Patent Faturası Kime?</label>
+                                <div class="view-box">
+                                    <i class="fas fa-user-tie text-secondary mr-2"></i>
                                     <span class="text-truncate">${accrual.tpInvoiceParty?.name || '-'}</span>
                                 </div>
                             </div>
                             <div class="col-md-6 mb-3">
-                                <label class="view-label">Hizmet Faturası</label>
-                                <div class="view-box small">
-                                    <i class="fas fa-building"></i>
+                                <label class="view-label">Hizmet Faturası Kime?</label>
+                                <div class="view-box">
+                                    <i class="fas fa-building text-secondary mr-2"></i>
                                     <span class="text-truncate">${accrual.serviceInvoiceParty?.name || '-'}</span>
                                 </div>
                             </div>
