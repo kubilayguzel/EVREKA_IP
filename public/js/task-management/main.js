@@ -129,12 +129,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const el = document.getElementById(id);
                 if (el) el.addEventListener('input', () => this.calculateCreateTaskTotalAmount());
             });
-            document.getElementById('createTaskTpInvoicePartySearch').addEventListener('input', e => this.searchPersonsForCreateTaskAccrual(e.target.value, 'createTaskTpInvoiceParty'));
-            document.getElementById('createTaskServiceInvoicePartySearch').addEventListener('input', e => this.searchPersonsForCreateTaskAccrual(e.target.value, 'createTaskServiceInvoiceParty'));
 
-            // Tahakkuk Tamamlama Modalı
-            document.getElementById('cancelCompleteAccrualBtn').addEventListener('click', () => this.closeModal('completeAccrualTaskModal'));
-            document.getElementById('submitCompleteAccrualBtn').addEventListener('click', () => this.handleCompleteAccrualSubmission());
+            document.getElementById('createTaskTpInvoicePartySearch')?.addEventListener('input', e => this.searchPersonsForCreateTaskAccrual(e.target.value, 'createTaskTpInvoiceParty'));
+            document.getElementById('createTaskServiceInvoicePartySearch')?.addEventListener('input', e => this.searchPersonsForCreateTaskAccrual(e.target.value, 'createTaskServiceInvoiceParty'));
+
+            document.getElementById('compTpInvoicePartySearch')?.addEventListener('input', e => this.searchPersonsForComp(e.target.value, 'compTpInvoiceParty'));
+            document.getElementById('compServiceInvoicePartySearch')?.addEventListener('input', e => this.searchPersonsForComp(e.target.value, 'compServiceInvoiceParty'));
 
             ['compOfficialFee', 'compServiceFee', 'compVatRate', 'compApplyVatToOfficial'].forEach(id => {
                 const el = document.getElementById(id);
@@ -504,6 +504,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     // DeadlineHighlighter
     if(window.DeadlineHighlighter) {
         DeadlineHighlighter.init();
-        DeadlineHighlighter.registerList('taskManagement', { /* ...config... */ });
+        
+        // HATA VEREN KISIM BURASIYDI, CONFIG OBJESINI DOLDURDUK:
+        DeadlineHighlighter.registerList('taskManagement', {
+            selector: '#tasksTableBody tr',  // Satırları nerede arayacak
+            dateAttribute: 'data-date',      // Tarih hangi attribute'da yazılı
+            warnThresholdDays: 3,            // Kaç gün kala uyarı versin
+            containerId: 'taskManagementTable' // Tablo ID'si
+        });
     }
 });
