@@ -94,6 +94,22 @@
         .search-result-item:hover { background-color: #f0f4f8; }
         .no-results-message { text-align: center; color: #999; padding: 15px; }
         .search-result-display { background: #e9f5ff; border: 1px solid #bde0fe; padding: 10px; border-radius: 8px; margin-top: 10px; }
+        
+        /* Özel Dosya Input Stili */
+        .custom-file-upload {
+            border: 2px dashed #ccc;
+            display: block;
+            padding: 10px;
+            cursor: pointer;
+            border-radius: 5px;
+            background-color: #f9f9f9;
+            text-align: center;
+            transition: all 0.3s;
+        }
+        .custom-file-upload:hover {
+            border-color: #1e3c72;
+            background-color: #eef2f7;
+        }
     </style>
 </head>
 <body>
@@ -215,6 +231,16 @@
                         <label class="form-label">Toplam Tutar</label>
                         <div id="createTaskTotalAmountDisplay" class="total-amount-display">0.00 TRY</div>
                     </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Yurtdışı Fatura/Debit (PDF)</label>
+                        <label for="createTaskForeignInvoiceFile" class="custom-file-upload">
+                            <i class="fas fa-cloud-upload-alt mr-2"></i> Dosya Seçin
+                        </label>
+                        <input type="file" id="createTaskForeignInvoiceFile" accept="application/pdf" style="display:none;">
+                        <small id="createTaskForeignInvoiceFileName" class="text-muted d-block mt-1"></small>
+                    </div>
+                    
                     <div class="form-group">
                         <label for="createTaskTpInvoicePartySearch" class="form-label">Türk Patent Faturası Tarafı</label>
                         <input type="text" id="createTaskTpInvoicePartySearch" class="form-input" placeholder="Fatura tarafı arayın...">
@@ -304,6 +330,15 @@
                     </div>
                     
                     <div class="form-group">
+                        <label class="form-label">Yurtdışı Fatura/Debit (PDF)</label>
+                        <label for="compForeignInvoiceFile" class="custom-file-upload">
+                            <i class="fas fa-cloud-upload-alt mr-2"></i> Dosya Seçin
+                        </label>
+                        <input type="file" id="compForeignInvoiceFile" accept="application/pdf" style="display:none;">
+                        <small id="compForeignInvoiceFileName" class="text-muted d-block mt-1"></small>
+                    </div>
+                    
+                    <div class="form-group">
                         <label class="form-label">Türk Patent Faturası Tarafı</label>
                         <input type="text" id="compTpInvoicePartySearch" class="form-input" placeholder="Kişi ara...">
                         <div id="compTpInvoicePartyResults" class="search-results-list"></div>
@@ -330,6 +365,7 @@
         import { authService, taskService, ipRecordsService, accrualService, personService, auth, transactionTypeService } from './firebase-config.js';
         import { showNotification } from './utils.js';
         import { loadSharedLayout } from './js/layout-loader.js';
+        import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
 
         document.addEventListener('DOMContentLoaded', async () => {
             await loadSharedLayout({ activeMenuLink: 'task-management.html' });
@@ -346,10 +382,8 @@
                     this.createTaskSelectedTpInvoiceParty = null;
                     this.createTaskSelectedServiceInvoiceParty = null;
                     
-                    // --- YENİ EKLENENLER ---
                     this.compSelectedTpInvoiceParty = null;
                     this.compSelectedServiceInvoiceParty = null;
-                    // -----------------------
                     
                     this.allTransactionTypes = []; 
                     
@@ -366,6 +400,8 @@
                         'client_approval_closed': 'Müvekkil Onayı - Kapatıldı',
                         'client_no_response_closed': 'Müvekkil Cevaplamadı - Kapatıldı'
                     };
+                    
+                    this.storage = getStorage();
                 }
 
                 init() {
@@ -415,14 +451,11 @@
                             const taskId = e.target.dataset.id;
 
                             if (e.target.classList.contains('edit-btn')) {
-                                // --- GÜNCELLENEN KISIM: Düzenle Butonu Mantığı ---
                                 const task = this.allTasks.find(t => t.id === taskId);
                                 
-                                // Eğer iş tipi "53" (Tahakkuk Oluşturma) veya "accrual_creation" ise ÖZEL MODAL AÇ
                                 if (task && (String(task.taskType) === '53' || task.taskType === 'accrual_creation')) {
                                     this.openCompleteAccrualModal(taskId);
                                 } else {
-                                    // Değilse standart detay sayfasına git
                                     window.location.href = `task-detail.html?id=${taskId}`;
                                 }
                             } else if (e.target.classList.contains('delete-btn')) {
@@ -455,30 +488,29 @@
                     document.getElementById('createTaskTpInvoicePartySearch').addEventListener('input', e => this.searchPersonsForCreateTaskAccrual(e.target.value, 'createTaskTpInvoiceParty'));
                     document.getElementById('createTaskServiceInvoicePartySearch').addEventListener('input', e => this.searchPersonsForCreateTaskAccrual(e.target.value, 'createTaskServiceInvoiceParty'));
 
-                    // --- YENİ EKLENEN: Tahakkuk Tamamlama Modalı Listenerları ---
-                    
-                    // Kapatma ve İptal
                     document.getElementById('closeCompleteAccrualModal').addEventListener('click', () => this.closeModal('completeAccrualTaskModal'));
                     document.getElementById('cancelCompleteAccrualBtn').addEventListener('click', () => this.closeModal('completeAccrualTaskModal'));
-                    
-                    // Kaydet ve Bitir
                     document.getElementById('submitCompleteAccrualBtn').addEventListener('click', () => this.handleCompleteAccrualSubmission());
 
-                    // Hesaplama Listenerları (Yeni Modal İçin)
                     ['compOfficialFee', 'compServiceFee', 'compVatRate', 'compApplyVatToOfficial'].forEach(id => {
                         const el = document.getElementById(id);
                         if (el) el.addEventListener('input', () => this.calculateCompTotal());
                     });
 
-                    // Kişi Arama Listenerları (Yeni Modal İçin)
-                    const compTpSearch = document.getElementById('compTpInvoicePartySearch');
-                    if(compTpSearch) compTpSearch.addEventListener('input', e => this.searchPersonsForComp(e.target.value, 'compTpInvoiceParty'));
-                    
-                    const compServiceSearch = document.getElementById('compServiceInvoicePartySearch');
-                    if(compServiceSearch) compServiceSearch.addEventListener('input', e => this.searchPersonsForComp(e.target.value, 'compServiceInvoiceParty'));
+                    document.getElementById('compTpInvoicePartySearch').addEventListener('input', e => this.searchPersonsForComp(e.target.value, 'compTpInvoiceParty'));
+                    document.getElementById('compServiceInvoicePartySearch').addEventListener('input', e => this.searchPersonsForComp(e.target.value, 'compServiceInvoiceParty'));
+
+                    // Dosya Input Listenerları
+                    document.getElementById('createTaskForeignInvoiceFile').addEventListener('change', function() {
+                        const fileName = this.files[0] ? this.files[0].name : '';
+                        document.getElementById('createTaskForeignInvoiceFileName').textContent = fileName;
+                    });
+                    document.getElementById('compForeignInvoiceFile').addEventListener('change', function() {
+                        const fileName = this.files[0] ? this.files[0].name : '';
+                        document.getElementById('compForeignInvoiceFileName').textContent = fileName;
+                    });
                 }
 
-                // ... (openAssignTaskModal, saveNewAssignment aynen kalıyor) ...
                 openAssignTaskModal(taskId) {
                     this.selectedTaskForAssignment = this.allTasks.find(t => t.id === taskId);
                     if (!this.selectedTaskForAssignment) { showNotification('Atanacak iş bulunamadı.', 'error'); return; }
@@ -550,14 +582,12 @@
                         const officialISO = officialDateObj ? officialDateObj.toISOString().slice(0, 10) : '';
                         const officialDisplay = officialDateObj ? officialDateObj.toLocaleDateString('tr-TR') : 'Belirtilmemiş';
 
-                        // --- BUTON MANTIĞI (DÜZELTİLMİŞ KISIM) ---
+                        // --- BUTON MANTIĞI ---
                         const isCompleted = safeStatus === 'completed';
                         const isAccrualTask = (String(task.taskType) === '53' || task.taskType === 'accrual_creation');
 
                         let actionButtonsHtml = `<button class="action-btn view-btn" data-id="${task.id}">Görüntüle</button>`;
 
-                        // Kural: "Tamamlandı" ise butonları gizle - AMA SADECE TAHAKKUK İŞİNDE
-                        // Diğer işler tamamlanmış olsa bile butonlar kalsın (kullanıcının isteği)
                         const hideModificationButtons = isAccrualTask && isCompleted;
 
                         if (!hideModificationButtons) {
@@ -567,12 +597,10 @@
                             `;
                         }
                         
-                        // Ata butonu: Tamamlanmış normal işler için açık kalabilir, iptal edilenler için kapalı
                         if (safeStatus !== 'cancelled' && !hideModificationButtons) {
                             actionButtonsHtml += `<button class="action-btn assign-btn" data-id="${task.id}">Ata</button>`;
                         }
                         
-                        // Ek Tahakkuk butonu: Tahakkuk işinde asla görünmesin
                         if (!isAccrualTask) {
                             actionButtonsHtml += `<button class="action-btn add-accrual-btn" data-id="${task.id}">Ek Tahakkuk Oluştur</button>`;
                         }
@@ -659,6 +687,10 @@
                     document.getElementById('createTaskServiceFeeCurrency').value = 'TRY';
                     document.getElementById('createTaskVatRate').value = '20';
                     document.getElementById('createTaskApplyVatToOfficialFee').checked = true;
+                    // Reset file input
+                    document.getElementById('createTaskForeignInvoiceFile').value = '';
+                    document.getElementById('createTaskForeignInvoiceFileName').textContent = '';
+                    
                     this.calculateCreateTaskTotalAmount();
                     this.createTaskSelectedTpInvoiceParty = null;
                     this.createTaskSelectedServiceInvoiceParty = null;
@@ -725,6 +757,29 @@
                         }
                     } catch(_e) { console.warn('alias lookup for extra accrual failed', _e); }
 
+                    // Dosya yükleme (YENİ)
+                    let uploadedFiles = [];
+                    const fileInput = document.getElementById('createTaskForeignInvoiceFile');
+                    if (fileInput.files.length > 0) {
+                        try {
+                            const file = fileInput.files[0];
+                            const storageRef = ref(this.storage, `accruals/foreign_invoices/${Date.now()}_${file.name}`);
+                            const snapshot = await uploadBytes(storageRef, file);
+                            const url = await getDownloadURL(snapshot.ref);
+                            uploadedFiles.push({
+                                name: file.name,
+                                url: url,
+                                type: 'foreign_invoice',
+                                documentDesignation: 'Yurtdışı Fatura/Debit',
+                                uploadedAt: new Date().toISOString()
+                            });
+                        } catch(err) {
+                            console.error("Dosya yükleme hatası:", err);
+                            showNotification("Dosya yüklenirken bir hata oluştu.", "error");
+                            return;
+                        }
+                    }
+
                     const newAccrualData = {
                         taskId: this.currentTaskForAccrual.id,
                         taskTitle: _extraAccrualTitle,
@@ -734,7 +789,9 @@
                         totalAmount, totalAmountCurrency: 'TRY', remainingAmount: totalAmount,
                         tpInvoiceParty: this.createTaskSelectedTpInvoiceParty ? { id: this.createTaskSelectedTpInvoiceParty.id, name: this.createTaskSelectedTpInvoiceParty.name } : null,
                         serviceInvoiceParty: this.createTaskSelectedServiceInvoiceParty ? { id: this.createTaskSelectedServiceInvoiceParty.id, name: this.createTaskSelectedServiceInvoiceParty.name } : null,
-                        status: 'unpaid', createdAt: new Date().toISOString()
+                        status: 'unpaid', 
+                        createdAt: new Date().toISOString(),
+                        files: uploadedFiles // Eklenen dosya
                     };
                     try {
                         const result = await accrualService.addAccrual(newAccrualData);
@@ -748,30 +805,27 @@
                     const task = this.allTasks.find(t => t.id === taskId);
                     if (!task) return;
 
-                    // Formu sıfırla
                     document.getElementById('completeAccrualForm').reset();
                     document.getElementById('targetTaskIdForCompletion').value = taskId;
                     document.getElementById('compOfficialFeeCurrency').value = 'TRY';
                     document.getElementById('compServiceFeeCurrency').value = 'TRY';
+                    // Reset file input
+                    document.getElementById('compForeignInvoiceFile').value = '';
+                    document.getElementById('compForeignInvoiceFileName').textContent = '';
                     
-                    // --- GÜNCELLENDİ: EPATS Belgesini Parent Task'tan da Kontrol Et ---
+                    // --- YENİ: EPATS Belgesini Kontrol Et ve Göster ---
                     const docContainer = document.getElementById('accrualEpatsDocumentContainer');
                     const docNameEl = document.getElementById('accrualEpatsDocName');
                     const docLinkEl = document.getElementById('accrualEpatsDocLink');
                     
-                    // 1. Önce bu görevin kendi detaylarına bak
                     let epatsDoc = task.details && task.details.epatsDocument;
-
-                    // 2. Yoksa ve bu bir alt görevse (relatedTaskId varsa), Ana Göreve (Parent Task) bak
                     if (!epatsDoc && task.relatedTaskId) {
                         const parentTask = this.allTasks.find(t => t.id === task.relatedTaskId);
                         if (parentTask && parentTask.details && parentTask.details.epatsDocument) {
                             epatsDoc = parentTask.details.epatsDocument;
-                            console.log('📄 Belge ana görevden bulundu:', epatsDoc.name);
                         }
                     }
 
-                    // Belge varsa göster (downloadURL veya fileUrl kontrolü ile)
                     if (epatsDoc && (epatsDoc.downloadURL || epatsDoc.fileUrl)) {
                         docNameEl.textContent = epatsDoc.name || epatsDoc.fileName || 'EPATS Belgesi';
                         docLinkEl.href = epatsDoc.downloadURL || epatsDoc.fileUrl;
@@ -791,6 +845,7 @@
                     document.getElementById('compServiceInvoicePartyResults').innerHTML = '';
                     document.getElementById('completeAccrualTaskModal').classList.add('show');
                 }
+
                 calculateCompTotal() {
                     const official = parseFloat(document.getElementById('compOfficialFee').value) || 0;
                     const service = parseFloat(document.getElementById('compServiceFee').value) || 0;
@@ -844,6 +899,29 @@
 
                     const cleanTitle = task.title.replace('Tahakkuk Oluşturma: ', '');
 
+                    // Dosya Yükleme (YENİ)
+                    let uploadedFiles = [];
+                    const fileInput = document.getElementById('compForeignInvoiceFile');
+                    if (fileInput.files.length > 0) {
+                        try {
+                            const file = fileInput.files[0];
+                            const storageRef = ref(this.storage, `accruals/foreign_invoices/${Date.now()}_${file.name}`);
+                            const snapshot = await uploadBytes(storageRef, file);
+                            const url = await getDownloadURL(snapshot.ref);
+                            uploadedFiles.push({
+                                name: file.name,
+                                url: url,
+                                type: 'foreign_invoice',
+                                documentDesignation: 'Yurtdışı Fatura/Debit',
+                                uploadedAt: new Date().toISOString()
+                            });
+                        } catch(err) {
+                            console.error("Dosya yükleme hatası:", err);
+                            showNotification("Dosya yüklenirken bir hata oluştu.", "error");
+                            return;
+                        }
+                    }
+
                     const accrualData = {
                         taskId: task.relatedTaskId || taskId, 
                         taskTitle: cleanTitle,
@@ -853,7 +931,8 @@
                         totalAmount, totalAmountCurrency: 'TRY', status: 'unpaid', remainingAmount: totalAmount,
                         tpInvoiceParty: this.compSelectedTpInvoiceParty ? { id: this.compSelectedTpInvoiceParty.id, name: this.compSelectedTpInvoiceParty.name } : null,
                         serviceInvoiceParty: this.compSelectedServiceInvoiceParty ? { id: this.compSelectedServiceInvoiceParty.id, name: this.compSelectedServiceInvoiceParty.name } : null,
-                        createdAt: new Date().toISOString()
+                        createdAt: new Date().toISOString(),
+                        files: uploadedFiles // Eklenen dosya
                     };
 
                     try {
@@ -889,6 +968,7 @@
                         document.getElementById('createTaskTpInvoicePartySearch').value = '';
                         document.getElementById('createTaskServiceInvoicePartySearch').value = '';
                         document.getElementById('createTaskTotalAmountDisplay').textContent = '0.00 TRY'; 
+                        document.getElementById('createTaskForeignInvoiceFileName').textContent = '';
                     }
                     if (modalId === 'completeAccrualTaskModal') {
                         document.getElementById('completeAccrualForm').reset();
@@ -901,6 +981,7 @@
                         if (document.getElementById('compSelectedServiceInvoicePartyDisplay')) document.getElementById('compSelectedServiceInvoicePartyDisplay').style.display = 'none';
                         if (document.getElementById('compTpInvoicePartyResults')) document.getElementById('compTpInvoicePartyResults').innerHTML = '';
                         if (document.getElementById('compServiceInvoicePartyResults')) document.getElementById('compServiceInvoicePartyResults').innerHTML = '';
+                        document.getElementById('compForeignInvoiceFileName').textContent = '';
                     }
                 }
             }
