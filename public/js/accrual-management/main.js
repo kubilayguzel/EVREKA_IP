@@ -167,28 +167,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             let task = null;
             if (accrual.taskId) {
                 try {
-                    // Firebase'den direkt çekelim (Firestore v9+ modular syntax)
                     const taskRef = doc(db, 'tasks', String(accrual.taskId));
                     const taskDoc = await getDoc(taskRef);
                     if (taskDoc.exists()) {
                         task = { id: taskDoc.id, ...taskDoc.data() };
-                        console.log('✅ Task Firebase\'den çekildi:', task);
-                        console.log('  - task.details:', task.details);
-                        console.log('  - task.details.epatsDocument:', task.details?.epatsDocument);
-                    } else {
-                        console.log('❌ Firebase\'de task bulunamadı, ID:', accrual.taskId);
                     }
                 } catch (error) {
                     console.error('Task çekilirken hata:', error);
                 }
-                
-                console.log('🔍 DEBUG - Task Arama:');
-                console.log('  - accrual.taskId:', accrual.taskId, 'Type:', typeof accrual.taskId);
-                console.log('  - this.allTasks type:', Array.isArray(this.allTasks) ? 'Array' : 'Object');
-                console.log('  - this.allTasks keys:', Object.keys(this.allTasks).slice(0, 10)); // İlk 10 key
-                console.log('  - "279" key var mı?', '279' in this.allTasks);
-                console.log('  - 279 (number) key var mı?', 279 in this.allTasks);
-                console.log('  - Bulunan task:', task);
             }
             
             // --- DOKÜMANLAR ---
@@ -197,16 +183,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             let receiptHtml = '';
 
             // 1. EPATS Belgesi Kontrolü (Veritabanı yapınıza uygun: downloadURL)
-            // Task objesi var mı? details var mı? epatsDocument var mı?
             let epatsData = null;
             if (task && task.details && task.details.epatsDocument) {
                 epatsData = task.details.epatsDocument;
-                console.log('✅ EPATS Data bulundu:', epatsData);
-            } else {
-                console.log('❌ EPATS Data bulunamadı. Kontroller:');
-                console.log('  - task var mı?', !!task);
-                console.log('  - task.details var mı?', !!task?.details);
-                console.log('  - task.details.epatsDocument var mı?', !!task?.details?.epatsDocument);
             }
 
             // Hem downloadURL hem url kontrolü
