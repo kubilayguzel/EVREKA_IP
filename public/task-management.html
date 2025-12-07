@@ -60,13 +60,42 @@
         /* Modal Styles */
         .modal { display: none; position: fixed; z-index: 1002; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.6); align-items: center; justify-content: center; }
         .modal.show { display: flex; }
-        .modal-content { background-color: #fefefe; margin: auto; padding: 30px; border: 1px solid #888; width: 90%; max-width: 1200px; border-radius: 20px; animation-name: animatetop; animation-duration: 0.4s; max-height: 90vh; overflow-y: auto; }
+        
+        /* GÜNCELLENDİ: position: relative eklendi */
+        .modal-content { 
+            background-color: #fefefe; 
+            margin: auto; 
+            padding: 30px; 
+            border: 1px solid #888; 
+            width: 90%; 
+            max-width: 1200px; 
+            border-radius: 20px; 
+            animation-name: animatetop; 
+            animation-duration: 0.4s; 
+            max-height: 90vh; 
+            overflow-y: auto; 
+            position: relative; /* Kapatma butonu için gerekli */
+        }
         
         #assignTaskModal .modal-content .form-actions { display: flex; justify-content: flex-end; gap: 15px; margin-top: 30px; padding-top: 15px; border-top: 1px solid #e1e8ed; flex-direction: row; flex-wrap: nowrap; }
         #assignTaskModal .modal-content .form-actions .btn { width: auto; margin-bottom: 0; flex-shrink: 0; }
 
         @keyframes animatetop { from {top: -300px; opacity: 0} to {top: 0; opacity: 1} }
-        .close-modal-btn { color: #aaa; float: right; font-size: 28px; font-weight: bold; cursor: pointer; }
+        
+        /* GÜNCELLENDİ: Kapatma butonu stili */
+        .close-modal-btn { 
+            color: #aaa; 
+            position: absolute; /* Mutlak konumlandırma */
+            top: 20px; 
+            right: 30px; 
+            font-size: 28px; 
+            font-weight: bold; 
+            cursor: pointer; 
+            z-index: 10; /* Diğer elementlerin üstünde kalsın */
+            transition: color 0.2s;
+        }
+        .close-modal-btn:hover { color: #333; }
+
         .modal-title { font-size: 1.5em; color: #1e3c72; margin-bottom: 20px; }
         .modal-detail-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px 25px; }
         .modal-detail-item { margin-bottom: 10px; }
@@ -687,10 +716,6 @@
                     document.getElementById('createTaskServiceFeeCurrency').value = 'TRY';
                     document.getElementById('createTaskVatRate').value = '20';
                     document.getElementById('createTaskApplyVatToOfficialFee').checked = true;
-                    // Reset file input
-                    document.getElementById('createTaskForeignInvoiceFile').value = '';
-                    document.getElementById('createTaskForeignInvoiceFileName').textContent = '';
-                    
                     this.calculateCreateTaskTotalAmount();
                     this.createTaskSelectedTpInvoiceParty = null;
                     this.createTaskSelectedServiceInvoiceParty = null;
