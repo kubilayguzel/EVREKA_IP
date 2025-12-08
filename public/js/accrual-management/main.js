@@ -282,18 +282,15 @@ document.addEventListener('DOMContentLoaded', async () => {
             if(accrual.status === 'unpaid') { statusText = 'Ödenmedi'; statusColor = '#dc3545'; }
             if(accrual.status === 'partially_paid') { statusText = 'Kısmen Ödendi'; statusColor = '#ffc107'; }
 
-            // Task başlığını bul
             let taskTitle = accrual.taskTitle;
             if(!taskTitle && this.allTasks[String(accrual.taskId)]) {
                 taskTitle = this.allTasks[String(accrual.taskId)].title;
             }
             
-            // Doküman HTML Hazırlığı
             let epatsHtml = '';
             let foreignInvHtml = '';
             let receiptHtml = '';
 
-            // EPATS Belgesi için Task'ı kontrol etmemiz gerekebilir
             let epatsData = null;
             if (this.allTasks[String(accrual.taskId)]) {
                  const t = this.allTasks[String(accrual.taskId)];
@@ -505,29 +502,33 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const task = { id: taskSnap.id, ...taskSnap.data() };
                 title.textContent = `İş Detayı (${task.id})`;
 
-                // 2. Yardımcı Verileri Anlık Çek (Task Management'ın ön yüklemesi burada yoksa)
+                // 2. Yardımcı Verileri Anlık Çek
                 
                 // IP Kaydı (Marka/Patent vb.)
                 let ipRecord = null;
                 if (task.relatedIpRecordId) {
-                    const ipRes = await ipRecordsService.getRecord(task.relatedIpRecordId);
-                    if (ipRes && ipRes.success) ipRecord = ipRes.data;
-                    else {
-                        // Fallback
-                        try {
-                            const ipSnap = await getDoc(doc(db, 'ipRecords', String(task.relatedIpRecordId)));
-                            if(ipSnap.exists()) ipRecord = ipSnap.data();
-                        } catch(e) {}
+                    // DÜZELTME: ipRecordsService.getRecord fonksiyonunun olmayabileceği duruma karşı 
+                    // doğrudan Firestore getDoc kullanıyoruz.
+                    try {
+                        const ipRef = doc(db, 'ipRecords', String(task.relatedIpRecordId));
+                        const ipSnap = await getDoc(ipRef);
+                        if(ipSnap.exists()) {
+                            ipRecord = { id: ipSnap.id, ...ipSnap.data() };
+                        }
+                    } catch(e) {
+                        console.warn("IP Record fetch error:", e);
                     }
                 }
 
                 // İş Tipi
                 let transactionTypeObj = null;
                 if (task.taskType) {
-                    const typesRes = await transactionTypeService.getTransactionTypes();
-                    if(typesRes.success) {
-                        transactionTypeObj = typesRes.data.find(t => t.id === task.taskType);
-                    }
+                    try {
+                        const typesRes = await transactionTypeService.getTransactionTypes();
+                        if(typesRes.success) {
+                            transactionTypeObj = typesRes.data.find(t => t.id === task.taskType);
+                        }
+                    } catch(e) { console.warn("Transaction type fetch error", e); }
                 }
 
                 // 3. Verileri Hazırla
@@ -866,7 +867,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                     if(btn.classList.contains('delete-btn')) this.deleteAccrual(dataId);
                 } else if(e.target.classList.contains('task-detail-link')) {
                     e.preventDefault();
-                    // Task Detail Modalı'nı çağır
                     this.showTaskDetailModal(e.target.dataset.taskId);
                 }
             });
