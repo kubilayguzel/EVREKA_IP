@@ -503,24 +503,17 @@ document.addEventListener('DOMContentLoaded', async () => {
                 title.textContent = `İş Detayı (${task.id})`;
 
                 // 2. Yardımcı Verileri Anlık Çek
-                
-                // IP Kaydı (Marka/Patent vb.)
                 let ipRecord = null;
                 if (task.relatedIpRecordId) {
-                    // DÜZELTME: ipRecordsService.getRecord fonksiyonunun olmayabileceği duruma karşı 
-                    // doğrudan Firestore getDoc kullanıyoruz.
                     try {
                         const ipRef = doc(db, 'ipRecords', String(task.relatedIpRecordId));
                         const ipSnap = await getDoc(ipRef);
                         if(ipSnap.exists()) {
                             ipRecord = { id: ipSnap.id, ...ipSnap.data() };
                         }
-                    } catch(e) {
-                        console.warn("IP Record fetch error:", e);
-                    }
+                    } catch(e) { console.warn("IP Record fetch error:", e); }
                 }
 
-                // İş Tipi
                 let transactionTypeObj = null;
                 if (task.taskType) {
                     try {
@@ -531,7 +524,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     } catch(e) { console.warn("Transaction type fetch error", e); }
                 }
 
-                // 3. Verileri Hazırla
+                // 3. Verileri Formatla
                 const statusDisplayMap = {
                     'open': 'Açık', 'in-progress': 'Devam Ediyor', 'completed': 'Tamamlandı',
                     'pending': 'Beklemede', 'cancelled': 'İptal Edildi', 'on-hold': 'Askıda',
@@ -541,7 +534,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 };
 
                 const formatDate = (dateVal) => {
-                    if (!dateVal) return 'Belirtilmemiş';
+                    if (!dateVal) return '-';
                     try {
                         const d = dateVal.toDate ? dateVal.toDate() : new Date(dateVal);
                         return isNaN(d.getTime()) ? '-' : d.toLocaleDateString('tr-TR');
@@ -552,156 +545,149 @@ document.addEventListener('DOMContentLoaded', async () => {
                     return new Intl.NumberFormat('tr-TR', { style: 'currency', currency: currency || 'TRY' }).format(amount || 0);
                 };
 
-                // Atanan Kişi (Listemiz yüklü)
                 const assignedUser = this.allUsers.find(u => u.id === task.assignedTo_uid);
                 const assignedName = assignedUser ? (assignedUser.displayName || assignedUser.email) : (task.assignedTo_email || 'Atanmamış');
-
-                // İlgili Dosya Başlığı
                 const relatedRecordTxt = ipRecord ? (ipRecord.applicationNumber || ipRecord.title) : 'İlgili kayıt bulunamadı';
-
-                // İş Tipi İsmi
                 const taskTypeDisplay = transactionTypeObj ? (transactionTypeObj.alias || transactionTypeObj.name) : (task.taskType || '-');
-
-                // Durum Metni
                 const statusText = statusDisplayMap[task.status] || task.status;
 
-                // Bağlı Tahakkuklar
+                // 4. Bağlı Tahakkuklar Tablosu (CSS Düzeltildi)
                 const relatedAccruals = this.allAccruals.filter(acc => String(acc.taskId) === String(task.id));
-                
                 let accrualsHtml = '';
                 if (relatedAccruals.length > 0) {
-                    let rows = '';
-                    relatedAccruals.forEach(acc => {
-                        const accStatusBadge = acc.status === 'paid' ? '<span class="badge badge-success">Ödendi</span>' : '<span class="badge badge-warning">Ödenmedi</span>';
-                        rows += `<tr>
-                                    <td>#${acc.id || '-'}</td>
-                                    <td class="font-weight-bold text-dark">${formatCurrency(acc.totalAmount, acc.totalAmountCurrency)}</td>
-                                    <td>${accStatusBadge}</td>
-                                    <td><small class="text-muted">${formatDate(acc.createdAt)}</small></td>
-                                 </tr>`;
-                    });
-                    accrualsHtml = `<div class="table-responsive mt-1">
-                                        <table class="table table-sm table-bordered mb-0 bg-white" style="font-size: 0.9rem;">
-                                            <thead class="thead-light"><tr><th>No</th><th>Tutar</th><th>Durum</th><th>Tarih</th></tr></thead>
-                                            <tbody>${rows}</tbody>
-                                        </table>
-                                    </div>`;
+                    let rows = relatedAccruals.map(acc => {
+                        const accStatusBadge = acc.status === 'paid' 
+                            ? '<span style="color:green; font-weight:bold;">Ödendi</span>' 
+                            : '<span style="color:orange; font-weight:bold;">Ödenmedi</span>';
+                        return `
+                            <tr style="border-bottom: 1px solid #eee;">
+                                <td style="padding:8px;">#${acc.id || '-'}</td>
+                                <td style="padding:8px; font-weight:bold;">${formatCurrency(acc.totalAmount, acc.totalAmountCurrency)}</td>
+                                <td style="padding:8px;">${accStatusBadge}</td>
+                                <td style="padding:8px; color:#666;">${formatDate(acc.createdAt)}</td>
+                            </tr>`;
+                    }).join('');
+                    
+                    accrualsHtml = `
+                        <div class="view-box" style="display:block; padding:0; overflow:hidden;">
+                            <table style="width:100%; border-collapse:collapse; font-size:0.9rem;">
+                                <thead style="background:#f8f9fa; border-bottom:2px solid #e9ecef;">
+                                    <tr>
+                                        <th style="padding:10px; text-align:left;">ID</th>
+                                        <th style="padding:10px; text-align:left;">Tutar</th>
+                                        <th style="padding:10px; text-align:left;">Durum</th>
+                                        <th style="padding:10px; text-align:left;">Tarih</th>
+                                    </tr>
+                                </thead>
+                                <tbody>${rows}</tbody>
+                            </table>
+                        </div>`;
                 } else {
-                    accrualsHtml = `<div class="p-2 border rounded bg-light text-muted font-italic small">Bu işe bağlı tahakkuk kaydı bulunmamaktadır.</div>`;
+                    accrualsHtml = `<div class="view-box text-muted font-italic small"><i class="fas fa-info-circle mr-2"></i>Bu işe bağlı tahakkuk kaydı bulunmamaktadır.</div>`;
                 }
 
-                // Belgeler
-                let epatsDocHtml = '';
-                let otherDocsHtml = '';
-
+                // 5. Belgeler (Tasarım Düzeltildi)
+                let docsContent = '';
+                
+                // EPATS
                 if (task.details && task.details.epatsDocument && (task.details.epatsDocument.url || task.details.epatsDocument.downloadURL)) {
                     const doc = task.details.epatsDocument;
                     const url = doc.url || doc.downloadURL;
-                    epatsDocHtml = `
-                    <div class="alert alert-primary d-flex align-items-center justify-content-between p-2 mb-2" style="border-left: 4px solid #007bff;">
-                        <div class="d-flex align-items-center">
-                            <i class="fas fa-file-pdf text-danger fa-lg mr-2"></i>
-                            <div>
-                                <strong class="d-block" style="font-size:0.9rem;">EPATS Belgesi</strong>
-                                <small class="text-muted">${doc.name || 'Belge'}</small>
+                    docsContent += `
+                    <div class="col-12 mb-2">
+                        <div class="view-box d-flex justify-content-between align-items-center" style="border-left: 4px solid #007bff; background:#f0f7ff;">
+                            <div class="d-flex align-items-center">
+                                <i class="fas fa-file-contract text-primary fa-lg mr-3" style="margin-right:10px;"></i>
+                                <div>
+                                    <strong class="d-block text-dark" style="font-size:0.9rem;">EPATS Belgesi</strong>
+                                    <small class="text-muted">${doc.name || 'Dosya'}</small>
+                                </div>
                             </div>
+                            <a href="${url}" target="_blank" class="btn btn-sm btn-primary">Aç</a>
                         </div>
-                        <a href="${url}" target="_blank" class="btn btn-sm btn-outline-primary bg-white">Aç</a>
                     </div>`;
                 }
 
+                // Diğer Dosyalar
                 const files = task.files || (task.details ? task.details.files : []) || [];
                 if (files.length > 0) {
-                    otherDocsHtml = '<ul class="list-group list-group-flush border rounded">';
                     files.forEach(file => {
                         const epatsUrl = (task.details && task.details.epatsDocument) ? (task.details.epatsDocument.url || task.details.epatsDocument.downloadURL) : null;
-                        if (epatsUrl && (file.url === epatsUrl || file.content === epatsUrl)) return;
-                        
                         const fileUrl = file.url || file.content;
-                        otherDocsHtml += `
-                        <li class="list-group-item d-flex justify-content-between align-items-center p-2">
-                            <div class="d-flex align-items-center text-truncate">
-                                <i class="fas fa-paperclip text-secondary mr-2"></i>
-                                <span class="small text-dark" title="${file.name}">${file.name}</span>
+                        if (epatsUrl && (fileUrl === epatsUrl)) return; // Tekrarı önle
+
+                        docsContent += `
+                        <div class="col-md-6 mb-2">
+                            <div class="view-box d-flex justify-content-between align-items-center">
+                                <div class="d-flex align-items-center text-truncate" style="max-width: 80%;">
+                                    <i class="fas fa-paperclip text-secondary mr-2" style="margin-right:8px;"></i>
+                                    <span class="text-truncate small" title="${file.name}">${file.name}</span>
+                                </div>
+                                <a href="${fileUrl}" target="_blank" class="btn btn-sm btn-light border"><i class="fas fa-download"></i></a>
                             </div>
-                            <a href="${fileUrl}" target="_blank" class="btn btn-xs btn-light border">
-                                <i class="fas fa-download"></i>
-                            </a>
-                        </li>`;
+                        </div>`;
                     });
-                    otherDocsHtml += '</ul>';
                 }
                 
-                if (!epatsDocHtml && (!otherDocsHtml || otherDocsHtml === '<ul class="list-group list-group-flush border rounded"></ul>')) {
-                    otherDocsHtml = `<div class="p-2 border rounded bg-light text-muted font-italic small">Ekli belge bulunmamaktadır.</div>`;
+                if (docsContent === '') {
+                    docsContent = `<div class="col-12"><div class="view-box text-muted font-italic small">Ekli belge bulunmamaktadır.</div></div>`;
+                } else {
+                    docsContent = `<div class="row" style="margin:0 -5px;">${docsContent}</div>`;
                 }
 
-                // HTML Şablonu (Task Management Modülünden)
+                // 6. HTML Şablonu (view-box ve section-header sınıfları kullanılarak)
+                // accruals.html'deki CSS sınıflarına sadık kalındı.
                 let html = `
                     <div class="container-fluid p-0">
-                        <div class="form-group mb-3">
-                            <label class="text-muted font-weight-bold small text-uppercase" style="letter-spacing:0.5px;">İş Konusu</label>
-                            <div class="p-2 bg-light border rounded text-dark">${task.title || '-'}</div>
-                        </div>
+                        <div class="section-header mt-0"><i class="fas fa-info-circle mr-2"></i> GENEL BİLGİLER</div>
                         
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label class="text-muted font-weight-bold small text-uppercase">İlgili Dosya</label>
-                                <div class="p-2 border rounded">${relatedRecordTxt}</div>
-                            </div>
-                            <div class="col-md-6 mb-3">
-                                <label class="text-muted font-weight-bold small text-uppercase">İş Tipi</label>
-                                <div class="p-2 border rounded">${taskTypeDisplay}</div>
-                            </div>
+                        <div class="mb-3">
+                            <label class="view-label">İş Konusu</label>
+                            <div class="view-box font-weight-bold text-dark" style="background-color: #f8f9fa;">${task.title || '-'}</div>
                         </div>
-                        
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label class="text-muted font-weight-bold small text-uppercase">Atanan Kişi</label>
-                                <div class="p-2 border rounded">${assignedName}</div>
+
+                        <div class="form-grid"> <div class="form-group">
+                                <label class="view-label">İlgili Dosya</label>
+                                <div class="view-box">${relatedRecordTxt}</div>
                             </div>
-                            <div class="col-md-6 mb-3">
-                                <label class="text-muted font-weight-bold small text-uppercase">Güncel Durum</label>
-                                <div class="p-2 border rounded bg-white">
-                                    <span class="font-weight-bold text-primary">${statusText}</span>
-                                </div>
+                            <div class="form-group">
+                                <label class="view-label">İş Tipi</label>
+                                <div class="view-box">${taskTypeDisplay}</div>
+                            </div>
+                            <div class="form-group">
+                                <label class="view-label">Atanan Kişi</label>
+                                <div class="view-box"><i class="fas fa-user-circle mr-2 text-muted" style="margin-right:5px;"></i> ${assignedName}</div>
+                            </div>
+                            <div class="form-group">
+                                <label class="view-label">Güncel Durum</label>
+                                <div class="view-box font-weight-bold" style="color:#1e3c72;">${statusText}</div>
                             </div>
                         </div>
-                        
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label class="text-muted font-weight-bold small text-uppercase">Operasyonel Son Tarih</label>
-                                <div class="p-2 border rounded bg-light">
-                                    <i class="far fa-calendar-alt text-secondary mr-2"></i>${formatDate(task.dueDate)}
-                                </div>
+
+                        <div class="section-header"><i class="far fa-calendar-alt mr-2"></i> TARİHLER</div>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label class="view-label">Operasyonel Son Tarih</label>
+                                <div class="view-box"><i class="far fa-clock mr-2 text-warning" style="margin-right:5px;"></i> ${formatDate(task.dueDate)}</div>
                             </div>
-                            <div class="col-md-6 mb-3">
-                                <label class="text-muted font-weight-bold small text-uppercase">Resmi Son Tarih</label>
-                                <div class="p-2 border rounded bg-light">
-                                    <i class="fas fa-calendar-check text-danger mr-2"></i>${formatDate(task.officialDueDate)}
-                                </div>
+                            <div class="form-group">
+                                <label class="view-label">Resmi Son Tarih</label>
+                                <div class="view-box"><i class="far fa-calendar-check mr-2 text-danger" style="margin-right:5px;"></i> ${formatDate(task.officialDueDate)}</div>
                             </div>
                         </div>
-                        
-                        <hr>
-                        
-                        <div class="form-group mb-3">
-                            <label class="text-muted font-weight-bold small text-uppercase"><i class="fas fa-folder-open mr-1"></i> Belgeler</label>
-                            <div class="p-1">
-                                ${epatsDocHtml}
-                                ${otherDocsHtml}
-                            </div>
+
+                        <div class="section-header"><i class="fas fa-folder-open mr-2"></i> BELGELER</div>
+                        <div class="mb-3">
+                            ${docsContent}
                         </div>
-                        
-                        <div class="form-group mb-3">
-                            <label class="text-muted font-weight-bold small text-uppercase"><i class="fas fa-coins mr-1"></i> Bağlı Tahakkuklar</label>
+
+                        <div class="section-header"><i class="fas fa-coins mr-2"></i> BAĞLI TAHAKKUKLAR</div>
+                        <div class="mb-3">
                             ${accrualsHtml}
                         </div>
-                        
-                        <div class="form-group mt-2">
-                            <label class="text-muted font-weight-bold small text-uppercase">Açıklama & Notlar</label>
-                            <div class="p-3 border rounded bg-light text-break" style="min-height: 80px; white-space: pre-wrap;">${task.description || '<span class="text-muted font-italic">Açıklama girilmemiş.</span>'}</div>
-                        </div>
+
+                        <div class="section-header"><i class="fas fa-align-left mr-2"></i> AÇIKLAMA & NOTLAR</div>
+                        <div class="view-box" style="min-height: 80px; white-space: pre-wrap; background:#fff;">${task.description || '<span class="text-muted font-italic">Açıklama girilmemiş.</span>'}</div>
                     </div>`;
 
                 body.innerHTML = html;
