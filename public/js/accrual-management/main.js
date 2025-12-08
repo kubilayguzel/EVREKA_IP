@@ -1,8 +1,9 @@
-import { authService, accrualService, taskService, personService, generateUUID, db } from '../../firebase-config.js';
+import { authService, accrualService, taskService, personService, generateUUID, db, ipRecordsService, transactionTypeService } from '../../firebase-config.js';
 import { showNotification, readFileAsDataURL } from '../../utils.js';
 import { loadSharedLayout } from '../layout-loader.js';
 import { doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
-import PaginationManager from '../pagination.js'; 
+// Pagination sınıfını import ediyoruz
+import Pagination from '../pagination.js'; 
 
 document.addEventListener('DOMContentLoaded', async () => {
     await loadSharedLayout({ activeMenuLink: 'accruals.html' });
@@ -11,13 +12,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         constructor() {
             this.currentUser = null;
             this.allAccruals = [];
-            this.processedData = []; // İşlenmiş (filtrelenmiş/sıralanmış) veriyi burada tutacağız
+            this.processedData = []; // İşlenmiş (filtrelenmiş/sıralanmış) veri
             this.allTasks = {}; 
             this.allPersons = [];
+            this.allUsers = []; // İş detayında 'Atanan Kişi'yi göstermek için gerekli
             this.selectedAccruals = new Set();
             
             // --- Pagination & Sorting State ---
-            this.paginationManager = null;
+            this.pagination = null;
             this.itemsPerPage = 10;
             this.currentSort = { column: 'createdAt', direction: 'desc' }; 
             this.currentFilterStatus = 'all';
@@ -34,20 +36,34 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         async init() {
             this.currentUser = authService.getCurrentUser();
-            if (!this.currentUser) return; 
+            if (!this.currentUser) {
+                // Auth kontrolü eklenebilir
+            }
 
-            // HATA ÇÖZÜMÜ 1: PaginationManager Obje olarak başlatılıyor
-            this.paginationManager = new PaginationManager({
-                containerId: 'paginationControls', // HTML'deki ID ile eşleşmeli
+            // Pagination'ı başlat
+            this.initializePagination();
+            
+            // Verileri yükle
+            await this.loadAllData();
+            
+            // Event listenerları kur
+            this.setupEventListeners();
+        }
+
+        initializePagination() {
+            if (typeof Pagination === 'undefined') {
+                console.error("Pagination sınıfı yüklenemedi. Import yolunu kontrol edin.");
+                return;
+            }
+
+            this.pagination = new Pagination({
+                containerId: 'paginationControls', // HTML'deki ID
                 itemsPerPage: this.itemsPerPage,
-                // Sayfa değiştiğinde bu fonksiyon çalışır
+                itemsPerPageOptions: [10, 25, 50, 100],
                 onPageChange: (page, itemsPerPage) => {
-                    this.renderCurrentPage();
+                    this.renderTable();
                 }
             });
-
-            await this.loadAllData();
-            this.setupEventListeners();
         }
 
         // --- DATA LAYER ---
@@ -61,14 +77,24 @@ document.addEventListener('DOMContentLoaded', async () => {
             if(loadingIndicator) loadingIndicator.style.display = 'block';
 
             try {
-                const accRes = await accrualService.getAccruals();
+                // Paralel veri çekme (Performans için)
+                const [accRes, personsRes, usersRes] = await Promise.all([
+                    accrualService.getAccruals(),
+                    personService.getPersons(),
+                    taskService.getAllUsers()
+                ]);
+
                 this.allAccruals = accRes?.success ? (accRes.data || []) : [];
+                this.allPersons = personsRes?.success ? (personsRes.data || []) : [];
+                this.allUsers = usersRes?.success ? (usersRes.data || []) : [];
 
                 if (this.allAccruals.length > 0) {
+                    // Tarih formatlarını düzelt
                     this.allAccruals.forEach(a => {
                         a.createdAt = a.createdAt ? new Date(a.createdAt) : new Date(0);
                     });
 
+                    // İlişkili Task verilerini çek (Tablo listesi için gerekli temel bilgiler)
                     const taskIds = new Set();
                     this.allAccruals.forEach(a => {
                         if (a.taskId) taskIds.add(String(a.taskId));
@@ -82,12 +108,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                             this.allTasks[String(t.id)] = t;
                         });
                     }
-
-                    const pRes = await personService.getPersons();
-                    this.allPersons = pRes?.success ? (pRes.data || []) : [];
                 }
 
-                this.processAndRender();
+                this.processData();
 
             } catch (err) {
                 console.error(err);
@@ -98,9 +121,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         }
 
-        // --- CORE LOGIC: FILTER & SORT & PAGINATE ---
+        // --- CORE LOGIC: FILTER & SORT ---
         
-        processAndRender() {
+        processData() {
             // 1. Filtreleme
             let data = [...this.allAccruals];
             if (this.currentFilterStatus !== 'all') {
@@ -110,35 +133,16 @@ document.addEventListener('DOMContentLoaded', async () => {
             // 2. Sıralama
             data = this.sortData(data);
 
-            // 3. İşlenmiş veriyi sınıfa kaydet (Pagination dilimleme yaparken bunu kullanacak)
+            // 3. İşlenmiş veriyi kaydet
             this.processedData = data;
 
-            // 4. Boş Durum Kontrolü
-            const noMsg = document.getElementById('noRecordsMessage');
-            if (this.processedData.length === 0) {
-                document.getElementById('accrualsTableBody').innerHTML = '';
-                document.getElementById('paginationControls').style.display = 'none';
-                if(noMsg) noMsg.style.display = 'block';
-                return;
+            // 4. Pagination güncelle (Toplam sayıyı bildir)
+            if (this.pagination) {
+                this.pagination.update(this.processedData.length);
             }
-            if(noMsg) noMsg.style.display = 'none';
-            document.getElementById('paginationControls').style.display = 'flex';
 
-            // 5. Pagination Güncelleme (HATA ÇÖZÜMÜ 2: setItems yerine update kullanıyoruz)
-            // Pagination sınıfına sadece toplam sayıyı bildiriyoruz.
-            this.paginationManager.update(this.processedData.length);
-            
-            // İlk sayfayı veya mevcut sayfayı render et
-            this.renderCurrentPage();
-        }
-
-        // Yeni Yardımcı Metod: Sayfayı kesip render eder
-        renderCurrentPage() {
-            if (!this.processedData || this.processedData.length === 0) return;
-            
-            // pagination.js içindeki getCurrentPageData metodu mevcut veriyi kesip bize verir
-            const pageData = this.paginationManager.getCurrentPageData(this.processedData);
-            this.renderPageRows(pageData);
+            // 5. Tabloyu çiz
+            this.renderTable();
         }
 
         sortData(data) {
@@ -181,9 +185,28 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
         }
 
-        // --- UI LAYER: ROW RENDER ---
-        renderPageRows(pageData) {
+        // --- UI LAYER: RENDER TABLE ---
+        renderTable() {
             const tbody = document.getElementById('accrualsTableBody');
+            const noMsg = document.getElementById('noRecordsMessage');
+            
+            if (!tbody) return;
+            tbody.innerHTML = '';
+
+            // Veri yoksa
+            if (!this.processedData || this.processedData.length === 0) {
+                if(noMsg) noMsg.style.display = 'block';
+                if(this.pagination) this.pagination.update(0);
+                return;
+            }
+            if(noMsg) noMsg.style.display = 'none';
+
+            // Mevcut sayfanın verisini al
+            let pageData = this.processedData;
+            if (this.pagination) {
+                pageData = this.pagination.getCurrentPageData(this.processedData);
+            }
+
             const fmtMoney = (v, c) => new Intl.NumberFormat('tr-TR', { style: 'currency', currency: c || 'TRY' }).format(v || 0);
 
             tbody.innerHTML = pageData.map(acc => {
@@ -222,6 +245,20 @@ document.addEventListener('DOMContentLoaded', async () => {
             }).join('');
             
             this.updateBulkActionsVisibility();
+            this.updateSortIcons();
+        }
+
+        updateSortIcons() {
+            document.querySelectorAll('th[data-sort] i').forEach(icon => {
+                icon.className = 'fas fa-sort sort-icon text-muted';
+            });
+            const activeHeader = document.querySelector(`th[data-sort="${this.currentSort.column}"]`);
+            if (activeHeader) {
+                const icon = activeHeader.querySelector('i');
+                if (icon) {
+                    icon.className = `fas fa-sort-${this.currentSort.direction === 'asc' ? 'up' : 'down'} sort-icon`;
+                }
+            }
         }
 
         // --- UI LAYER: MODALS ---
@@ -245,26 +282,22 @@ document.addEventListener('DOMContentLoaded', async () => {
             if(accrual.status === 'unpaid') { statusText = 'Ödenmedi'; statusColor = '#dc3545'; }
             if(accrual.status === 'partially_paid') { statusText = 'Kısmen Ödendi'; statusColor = '#ffc107'; }
 
-            let task = null;
-            if (accrual.taskId) {
-                try {
-                    const taskRef = doc(db, 'tasks', String(accrual.taskId));
-                    const taskDoc = await getDoc(taskRef);
-                    if (taskDoc.exists()) {
-                        task = { id: taskDoc.id, ...taskDoc.data() };
-                    }
-                } catch (error) {
-                    console.error('Task çekilirken hata:', error);
-                }
+            // Task başlığını bul
+            let taskTitle = accrual.taskTitle;
+            if(!taskTitle && this.allTasks[String(accrual.taskId)]) {
+                taskTitle = this.allTasks[String(accrual.taskId)].title;
             }
             
+            // Doküman HTML Hazırlığı
             let epatsHtml = '';
             let foreignInvHtml = '';
             let receiptHtml = '';
 
+            // EPATS Belgesi için Task'ı kontrol etmemiz gerekebilir
             let epatsData = null;
-            if (task && task.details && task.details.epatsDocument) {
-                epatsData = task.details.epatsDocument;
+            if (this.allTasks[String(accrual.taskId)]) {
+                 const t = this.allTasks[String(accrual.taskId)];
+                 if(t.details && t.details.epatsDocument) epatsData = t.details.epatsDocument;
             }
 
             if (epatsData && (epatsData.downloadURL || epatsData.url)) {
@@ -323,7 +356,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             body.innerHTML = `
                 <div class="form-group">
                     <label class="form-label">İlgili İş</label>
-                    <input type="text" class="form-input" value="${accrual.taskTitle || (task ? task.title : '-')} (${accrual.taskId || ''})" readonly style="background-color: #f8f9fa; font-weight: 500;">
+                    <input type="text" class="form-input" value="${taskTitle || '-'} (${accrual.taskId || ''})" readonly style="background-color: #f8f9fa; font-weight: 500;">
                 </div>
 
                 <div class="form-grid">
@@ -449,6 +482,236 @@ document.addEventListener('DOMContentLoaded', async () => {
             document.getElementById('markPaidModal').classList.add('show');
         }
 
+        // --- GÜNCELLENMİŞ TASK DETAIL MODAL (Task Management ile Aynı) ---
+        async showTaskDetailModal(taskId) {
+            const modal = document.getElementById('taskDetailModal');
+            const body = document.getElementById('modalBody');
+            const title = document.getElementById('modalTaskTitle');
+            
+            modal.classList.add('show');
+            title.textContent = 'İş Detayı Yükleniyor...';
+            body.innerHTML = '<div class="text-center p-4"><i class="fas fa-circle-notch fa-spin fa-2x text-primary"></i><br><br>Veriler getiriliyor...</div>';
+
+            try {
+                // 1. Task Verisini Çek
+                const taskRef = doc(db, 'tasks', String(taskId));
+                const taskSnap = await getDoc(taskRef);
+
+                if (!taskSnap.exists()) {
+                    body.innerHTML = '<div class="alert alert-danger">Bu iş kaydı bulunamadı.</div>';
+                    title.textContent = 'Hata';
+                    return;
+                }
+                const task = { id: taskSnap.id, ...taskSnap.data() };
+                title.textContent = `İş Detayı (${task.id})`;
+
+                // 2. Yardımcı Verileri Anlık Çek (Task Management'ın ön yüklemesi burada yoksa)
+                
+                // IP Kaydı (Marka/Patent vb.)
+                let ipRecord = null;
+                if (task.relatedIpRecordId) {
+                    const ipRes = await ipRecordsService.getRecord(task.relatedIpRecordId);
+                    if (ipRes && ipRes.success) ipRecord = ipRes.data;
+                    else {
+                        // Fallback
+                        try {
+                            const ipSnap = await getDoc(doc(db, 'ipRecords', String(task.relatedIpRecordId)));
+                            if(ipSnap.exists()) ipRecord = ipSnap.data();
+                        } catch(e) {}
+                    }
+                }
+
+                // İş Tipi
+                let transactionTypeObj = null;
+                if (task.taskType) {
+                    const typesRes = await transactionTypeService.getTransactionTypes();
+                    if(typesRes.success) {
+                        transactionTypeObj = typesRes.data.find(t => t.id === task.taskType);
+                    }
+                }
+
+                // 3. Verileri Hazırla
+                const statusDisplayMap = {
+                    'open': 'Açık', 'in-progress': 'Devam Ediyor', 'completed': 'Tamamlandı',
+                    'pending': 'Beklemede', 'cancelled': 'İptal Edildi', 'on-hold': 'Askıda',
+                    'awaiting-approval': 'Onay Bekliyor', 'awaiting_client_approval': 'Müvekkil Onayı Bekliyor',
+                    'client_approval_opened': 'Müvekkil Onayı - Açıldı', 'client_approval_closed': 'Müvekkil Onayı - Kapatıldı',
+                    'client_no_response_closed': 'Müvekkil Cevaplamadı - Kapatıldı'
+                };
+
+                const formatDate = (dateVal) => {
+                    if (!dateVal) return 'Belirtilmemiş';
+                    try {
+                        const d = dateVal.toDate ? dateVal.toDate() : new Date(dateVal);
+                        return isNaN(d.getTime()) ? '-' : d.toLocaleDateString('tr-TR');
+                    } catch(e) { return '-'; }
+                };
+
+                const formatCurrency = (amount, currency) => {
+                    return new Intl.NumberFormat('tr-TR', { style: 'currency', currency: currency || 'TRY' }).format(amount || 0);
+                };
+
+                // Atanan Kişi (Listemiz yüklü)
+                const assignedUser = this.allUsers.find(u => u.id === task.assignedTo_uid);
+                const assignedName = assignedUser ? (assignedUser.displayName || assignedUser.email) : (task.assignedTo_email || 'Atanmamış');
+
+                // İlgili Dosya Başlığı
+                const relatedRecordTxt = ipRecord ? (ipRecord.applicationNumber || ipRecord.title) : 'İlgili kayıt bulunamadı';
+
+                // İş Tipi İsmi
+                const taskTypeDisplay = transactionTypeObj ? (transactionTypeObj.alias || transactionTypeObj.name) : (task.taskType || '-');
+
+                // Durum Metni
+                const statusText = statusDisplayMap[task.status] || task.status;
+
+                // Bağlı Tahakkuklar
+                const relatedAccruals = this.allAccruals.filter(acc => String(acc.taskId) === String(task.id));
+                
+                let accrualsHtml = '';
+                if (relatedAccruals.length > 0) {
+                    let rows = '';
+                    relatedAccruals.forEach(acc => {
+                        const accStatusBadge = acc.status === 'paid' ? '<span class="badge badge-success">Ödendi</span>' : '<span class="badge badge-warning">Ödenmedi</span>';
+                        rows += `<tr>
+                                    <td>#${acc.id || '-'}</td>
+                                    <td class="font-weight-bold text-dark">${formatCurrency(acc.totalAmount, acc.totalAmountCurrency)}</td>
+                                    <td>${accStatusBadge}</td>
+                                    <td><small class="text-muted">${formatDate(acc.createdAt)}</small></td>
+                                 </tr>`;
+                    });
+                    accrualsHtml = `<div class="table-responsive mt-1">
+                                        <table class="table table-sm table-bordered mb-0 bg-white" style="font-size: 0.9rem;">
+                                            <thead class="thead-light"><tr><th>No</th><th>Tutar</th><th>Durum</th><th>Tarih</th></tr></thead>
+                                            <tbody>${rows}</tbody>
+                                        </table>
+                                    </div>`;
+                } else {
+                    accrualsHtml = `<div class="p-2 border rounded bg-light text-muted font-italic small">Bu işe bağlı tahakkuk kaydı bulunmamaktadır.</div>`;
+                }
+
+                // Belgeler
+                let epatsDocHtml = '';
+                let otherDocsHtml = '';
+
+                if (task.details && task.details.epatsDocument && (task.details.epatsDocument.url || task.details.epatsDocument.downloadURL)) {
+                    const doc = task.details.epatsDocument;
+                    const url = doc.url || doc.downloadURL;
+                    epatsDocHtml = `
+                    <div class="alert alert-primary d-flex align-items-center justify-content-between p-2 mb-2" style="border-left: 4px solid #007bff;">
+                        <div class="d-flex align-items-center">
+                            <i class="fas fa-file-pdf text-danger fa-lg mr-2"></i>
+                            <div>
+                                <strong class="d-block" style="font-size:0.9rem;">EPATS Belgesi</strong>
+                                <small class="text-muted">${doc.name || 'Belge'}</small>
+                            </div>
+                        </div>
+                        <a href="${url}" target="_blank" class="btn btn-sm btn-outline-primary bg-white">Aç</a>
+                    </div>`;
+                }
+
+                const files = task.files || (task.details ? task.details.files : []) || [];
+                if (files.length > 0) {
+                    otherDocsHtml = '<ul class="list-group list-group-flush border rounded">';
+                    files.forEach(file => {
+                        const epatsUrl = (task.details && task.details.epatsDocument) ? (task.details.epatsDocument.url || task.details.epatsDocument.downloadURL) : null;
+                        if (epatsUrl && (file.url === epatsUrl || file.content === epatsUrl)) return;
+                        
+                        const fileUrl = file.url || file.content;
+                        otherDocsHtml += `
+                        <li class="list-group-item d-flex justify-content-between align-items-center p-2">
+                            <div class="d-flex align-items-center text-truncate">
+                                <i class="fas fa-paperclip text-secondary mr-2"></i>
+                                <span class="small text-dark" title="${file.name}">${file.name}</span>
+                            </div>
+                            <a href="${fileUrl}" target="_blank" class="btn btn-xs btn-light border">
+                                <i class="fas fa-download"></i>
+                            </a>
+                        </li>`;
+                    });
+                    otherDocsHtml += '</ul>';
+                }
+                
+                if (!epatsDocHtml && (!otherDocsHtml || otherDocsHtml === '<ul class="list-group list-group-flush border rounded"></ul>')) {
+                    otherDocsHtml = `<div class="p-2 border rounded bg-light text-muted font-italic small">Ekli belge bulunmamaktadır.</div>`;
+                }
+
+                // HTML Şablonu (Task Management Modülünden)
+                let html = `
+                    <div class="container-fluid p-0">
+                        <div class="form-group mb-3">
+                            <label class="text-muted font-weight-bold small text-uppercase" style="letter-spacing:0.5px;">İş Konusu</label>
+                            <div class="p-2 bg-light border rounded text-dark">${task.title || '-'}</div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="text-muted font-weight-bold small text-uppercase">İlgili Dosya</label>
+                                <div class="p-2 border rounded">${relatedRecordTxt}</div>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="text-muted font-weight-bold small text-uppercase">İş Tipi</label>
+                                <div class="p-2 border rounded">${taskTypeDisplay}</div>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="text-muted font-weight-bold small text-uppercase">Atanan Kişi</label>
+                                <div class="p-2 border rounded">${assignedName}</div>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="text-muted font-weight-bold small text-uppercase">Güncel Durum</label>
+                                <div class="p-2 border rounded bg-white">
+                                    <span class="font-weight-bold text-primary">${statusText}</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="text-muted font-weight-bold small text-uppercase">Operasyonel Son Tarih</label>
+                                <div class="p-2 border rounded bg-light">
+                                    <i class="far fa-calendar-alt text-secondary mr-2"></i>${formatDate(task.dueDate)}
+                                </div>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="text-muted font-weight-bold small text-uppercase">Resmi Son Tarih</label>
+                                <div class="p-2 border rounded bg-light">
+                                    <i class="fas fa-calendar-check text-danger mr-2"></i>${formatDate(task.officialDueDate)}
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <hr>
+                        
+                        <div class="form-group mb-3">
+                            <label class="text-muted font-weight-bold small text-uppercase"><i class="fas fa-folder-open mr-1"></i> Belgeler</label>
+                            <div class="p-1">
+                                ${epatsDocHtml}
+                                ${otherDocsHtml}
+                            </div>
+                        </div>
+                        
+                        <div class="form-group mb-3">
+                            <label class="text-muted font-weight-bold small text-uppercase"><i class="fas fa-coins mr-1"></i> Bağlı Tahakkuklar</label>
+                            ${accrualsHtml}
+                        </div>
+                        
+                        <div class="form-group mt-2">
+                            <label class="text-muted font-weight-bold small text-uppercase">Açıklama & Notlar</label>
+                            <div class="p-3 border rounded bg-light text-break" style="min-height: 80px; white-space: pre-wrap;">${task.description || '<span class="text-muted font-italic">Açıklama girilmemiş.</span>'}</div>
+                        </div>
+                    </div>`;
+
+                body.innerHTML = html;
+
+            } catch (error) {
+                console.error(error);
+                body.innerHTML = '<div class="alert alert-danger">Veri yüklenirken hata oluştu: ' + error.message + '</div>';
+            }
+        }
+
+
         // --- ACTIONS ---
         
         handleEditFileUpload(files) {
@@ -570,7 +833,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         setupEventListeners() {
             document.getElementById('statusFilter').addEventListener('change', e => {
                 this.currentFilterStatus = e.target.value;
-                this.processAndRender();
+                this.processData();
             });
 
             document.querySelectorAll('th[data-sort]').forEach(th => {
@@ -582,12 +845,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     } else {
                         this.currentSort = { column: column, direction: 'asc' };
                     }
-                    
-                    document.querySelectorAll('.sort-icon').forEach(icon => icon.className = 'fas fa-sort sort-icon text-muted');
-                    const currentIcon = th.querySelector('.sort-icon');
-                    if(currentIcon) currentIcon.className = `fas fa-sort-${this.currentSort.direction === 'asc' ? 'up' : 'down'} sort-icon`;
-
-                    this.processAndRender();
+                    this.processData();
                 });
             });
 
@@ -608,6 +866,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     if(btn.classList.contains('delete-btn')) this.deleteAccrual(dataId);
                 } else if(e.target.classList.contains('task-detail-link')) {
                     e.preventDefault();
+                    // Task Detail Modalı'nı çağır
                     this.showTaskDetailModal(e.target.dataset.taskId);
                 }
             });
@@ -720,214 +979,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if(elId.includes('Tp')) this.editSelectedTpInvoiceParty = null; else this.editSelectedServiceInvoiceParty = null;
             };
         }
-        async showTaskDetailModal(taskId) {
-            const modal = document.getElementById('taskDetailModal');
-            const body = document.getElementById('modalBody');
-            const title = document.getElementById('modalTaskTitle');
-            
-            // Modalı aç ve yükleniyor göster
-            modal.classList.add('show');
-            title.textContent = 'İş Detayı Yükleniyor...';
-            body.innerHTML = '<div class="text-center p-4"><i class="fas fa-circle-notch fa-spin fa-2x text-primary"></i><br><br>Veriler getiriliyor...</div>';
-
-            try {
-                // 1. İş verisini veritabanından taze çek
-                const taskRef = doc(db, 'tasks', String(taskId));
-                const taskSnap = await getDoc(taskRef);
-
-                if (!taskSnap.exists()) {
-                    body.innerHTML = '<div class="alert alert-danger">Bu iş kaydı bulunamadı.</div>';
-                    title.textContent = 'Hata';
-                    return;
-                }
-
-                const task = { id: taskSnap.id, ...taskSnap.data() };
-                title.textContent = `İş Detayı (${task.id})`;
-
-                // 2. Yardımcılar ve Haritalamalar (Task Management dosyasından alındı)
-                const statusDisplayMap = {
-                    'open': 'Açık', 'in-progress': 'Devam Ediyor', 'completed': 'Tamamlandı',
-                    'pending': 'Beklemede', 'cancelled': 'İptal Edildi', 'on-hold': 'Askıda',
-                    'awaiting-approval': 'Onay Bekliyor', 'awaiting_client_approval': 'Müvekkil Onayı Bekliyor',
-                    'client_approval_opened': 'Müvekkil Onayı - Açıldı', 'client_approval_closed': 'Müvekkil Onayı - Kapatıldı',
-                    'client_no_response_closed': 'Müvekkil Cevaplamadı - Kapatıldı'
-                };
-
-                const formatDate = (dateVal) => {
-                    if (!dateVal) return 'Belirtilmemiş';
-                    try {
-                        // Timestamp kontrolü
-                        const d = dateVal.toDate ? dateVal.toDate() : new Date(dateVal);
-                        return isNaN(d.getTime()) ? '-' : d.toLocaleDateString('tr-TR');
-                    } catch(e) { return '-'; }
-                };
-
-                const formatCurrency = (amount, currency) => {
-                    return new Intl.NumberFormat('tr-TR', { style: 'currency', currency: currency || 'TRY' }).format(amount || 0);
-                };
-
-                // 3. Verileri Hazırla
-                const statusText = statusDisplayMap[task.status] || task.status;
-                const assignedName = task.assignedTo_email || task.assignedTo_uid || 'Atanmamış'; // User listesi burada yoksa email göster
-                
-                // İlgili kayıt ismini bulmaya çalış (IP record listesi tam yüklü olmayabilir, varsa kullan yoksa ID göster)
-                // Not: Task Management'ta ipRecordsService kullanılıyor, burada basitçe ID veya varsa başlık gösteriyoruz.
-                const relatedRecordTxt = task.relatedIpRecordId ? (task.relatedIpRecordId) : 'İlgili kayıt bulunamadı';
-
-                // İş Tipi (Cache'den veya ID'den)
-                let taskTypeDisplay = task.taskType || '-';
-                // Eğer elinizde transactionTypes varsa eşleştirebilirsiniz, yoksa ham veriyi gösterelim (görünümü bozmaz)
-
-                // 4. Bağlı Tahakkuklar (Bu sayfada zaten accruals listemiz var)
-                const relatedAccruals = this.allAccruals.filter(acc => String(acc.taskId) === String(task.id));
-                let accrualsHtml = '';
-                
-                if (relatedAccruals.length > 0) {
-                    let rows = '';
-                    relatedAccruals.forEach(acc => {
-                        const accStatusBadge = acc.status === 'paid' ? '<span class="badge badge-success">Ödendi</span>' : '<span class="badge badge-warning">Ödenmedi</span>';
-                        rows += `<tr>
-                                    <td>#${acc.id || '-'}</td>
-                                    <td class="font-weight-bold text-dark">${formatCurrency(acc.totalAmount, acc.totalAmountCurrency)}</td>
-                                    <td>${accStatusBadge}</td>
-                                    <td><small class="text-muted">${formatDate(acc.createdAt)}</small></td>
-                                 </tr>`;
-                    });
-                    accrualsHtml = `<div class="table-responsive mt-1">
-                                        <table class="table table-sm table-bordered mb-0 bg-white" style="font-size: 0.9rem;">
-                                            <thead class="thead-light"><tr><th>No</th><th>Tutar</th><th>Durum</th><th>Tarih</th></tr></thead>
-                                            <tbody>${rows}</tbody>
-                                        </table>
-                                    </div>`;
-                } else {
-                    accrualsHtml = `<div class="p-2 border rounded bg-light text-muted font-italic small">Bu işe bağlı tahakkuk kaydı bulunmamaktadır.</div>`;
-                }
-
-                // 5. Belgeler (EPATS ve Diğerleri)
-                let epatsDocHtml = '';
-                let otherDocsHtml = '';
-
-                // EPATS Belgesi
-                if (task.details && task.details.epatsDocument && (task.details.epatsDocument.url || task.details.epatsDocument.downloadURL)) {
-                    const doc = task.details.epatsDocument;
-                    const url = doc.url || doc.downloadURL;
-                    epatsDocHtml = `
-                    <div class="alert alert-primary d-flex align-items-center justify-content-between p-2 mb-2" style="border-left: 4px solid #007bff;">
-                        <div class="d-flex align-items-center">
-                            <i class="fas fa-file-pdf text-danger fa-lg mr-2"></i>
-                            <div>
-                                <strong class="d-block" style="font-size:0.9rem;">EPATS Belgesi</strong>
-                                <small class="text-muted">${doc.name || 'Belge'}</small>
-                            </div>
-                        </div>
-                        <a href="${url}" target="_blank" class="btn btn-sm btn-outline-primary bg-white">Aç</a>
-                    </div>`;
-                }
-
-                // Diğer Dosyalar
-                const files = task.files || (task.details ? task.details.files : []) || [];
-                if (files.length > 0) {
-                    otherDocsHtml = '<ul class="list-group list-group-flush border rounded">';
-                    files.forEach(file => {
-                        const epatsUrl = (task.details && task.details.epatsDocument) ? (task.details.epatsDocument.url || task.details.epatsDocument.downloadURL) : null;
-                        // EPATS dosyasını tekrar listede gösterme
-                        if (epatsUrl && (file.url === epatsUrl || file.content === epatsUrl)) return;
-                        
-                        const fileUrl = file.url || file.content;
-                        otherDocsHtml += `
-                        <li class="list-group-item d-flex justify-content-between align-items-center p-2">
-                            <div class="d-flex align-items-center text-truncate">
-                                <i class="fas fa-paperclip text-secondary mr-2"></i>
-                                <span class="small text-dark" title="${file.name}">${file.name}</span>
-                            </div>
-                            <a href="${fileUrl}" target="_blank" class="btn btn-xs btn-light border">
-                                <i class="fas fa-download"></i>
-                            </a>
-                        </li>`;
-                    });
-                    otherDocsHtml += '</ul>';
-                }
-                
-                if (!epatsDocHtml && (!otherDocsHtml || otherDocsHtml === '<ul class="list-group list-group-flush border rounded"></ul>')) {
-                    otherDocsHtml = `<div class="p-2 border rounded bg-light text-muted font-italic small">Ekli belge bulunmamaktadır.</div>`;
-                }
-
-                // 6. HTML Yapısı (Task Management ile Birebir Aynı)
-                let html = `
-                    <div class="container-fluid p-0">
-                        <div class="form-group mb-3">
-                            <label class="text-muted font-weight-bold small text-uppercase" style="letter-spacing:0.5px;">İş Konusu</label>
-                            <div class="p-2 bg-light border rounded text-dark">${task.title || '-'}</div>
-                        </div>
-                        
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label class="text-muted font-weight-bold small text-uppercase">İlgili Dosya</label>
-                                <div class="p-2 border rounded">${relatedRecordTxt}</div>
-                            </div>
-                            <div class="col-md-6 mb-3">
-                                <label class="text-muted font-weight-bold small text-uppercase">İş Tipi</label>
-                                <div class="p-2 border rounded">${taskTypeDisplay}</div>
-                            </div>
-                        </div>
-                        
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label class="text-muted font-weight-bold small text-uppercase">Atanan Kişi</label>
-                                <div class="p-2 border rounded">${assignedName}</div>
-                            </div>
-                            <div class="col-md-6 mb-3">
-                                <label class="text-muted font-weight-bold small text-uppercase">Güncel Durum</label>
-                                <div class="p-2 border rounded bg-white">
-                                    <span class="font-weight-bold text-primary">${statusText}</span>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label class="text-muted font-weight-bold small text-uppercase">Operasyonel Son Tarih</label>
-                                <div class="p-2 border rounded bg-light">
-                                    <i class="far fa-calendar-alt text-secondary mr-2"></i>${formatDate(task.dueDate)}
-                                </div>
-                            </div>
-                            <div class="col-md-6 mb-3">
-                                <label class="text-muted font-weight-bold small text-uppercase">Resmi Son Tarih</label>
-                                <div class="p-2 border rounded bg-light">
-                                    <i class="fas fa-calendar-check text-danger mr-2"></i>${formatDate(task.officialDueDate)}
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <hr>
-                        
-                        <div class="form-group mb-3">
-                            <label class="text-muted font-weight-bold small text-uppercase"><i class="fas fa-folder-open mr-1"></i> Belgeler</label>
-                            <div class="p-1">
-                                ${epatsDocHtml}
-                                ${otherDocsHtml}
-                            </div>
-                        </div>
-                        
-                        <div class="form-group mb-3">
-                            <label class="text-muted font-weight-bold small text-uppercase"><i class="fas fa-coins mr-1"></i> Bağlı Tahakkuklar</label>
-                            ${accrualsHtml}
-                        </div>
-                        
-                        <div class="form-group mt-2">
-                            <label class="text-muted font-weight-bold small text-uppercase">Açıklama & Notlar</label>
-                            <div class="p-3 border rounded bg-light text-break" style="min-height: 80px; white-space: pre-wrap;">${task.description || '<span class="text-muted font-italic">Açıklama girilmemiş.</span>'}</div>
-                        </div>
-                    </div>`;
-
-                body.innerHTML = html;
-
-            } catch (error) {
-                console.error(error);
-                body.innerHTML = '<div class="alert alert-danger">Veri yüklenirken hata oluştu: ' + error.message + '</div>';
-            }
-        }
-
     }
 
     new AccrualsManager().init();
