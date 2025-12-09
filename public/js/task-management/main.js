@@ -602,27 +602,22 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         openCompleteAccrualModal(taskId) {
-            // 1. İlgili Task'ı bul
             const task = this.allTasks.find(t => t.id === taskId);
             if (!task) return;
 
-            // 2. Formu Sıfırla
             const form = document.getElementById('completeAccrualForm');
             if (form) form.reset();
 
-            // 3. YENİ: Yurtdışı İşlem Checkbox'ını ve Arayüzü Sıfırla
-            // Modal her açıldığında varsayılan (Yurtdışı olmayan) görünüme dön
+            // Checkbox ve arayüz sıfırlama
             const chkForeign = document.getElementById('compIsForeignTransaction');
             if (chkForeign) {
                 chkForeign.checked = false;
-                this.handleForeignTransactionToggle(); // Yazıları ve görünürlüğü varsayılana çek
+                this.handleForeignTransactionToggle();
             }
 
-            // 4. Hedef Task ID'sini Gizli Input'a Ata
             const targetInput = document.getElementById('targetTaskIdForCompletion');
             if (targetInput) targetInput.value = taskId;
 
-            // 5. Varsayılan Değerleri Ata
             document.getElementById('compOfficialFeeCurrency').value = 'TRY';
             document.getElementById('compServiceFeeCurrency').value = 'TRY';
             document.getElementById('compVatRate').value = '20';
@@ -630,7 +625,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             document.getElementById('compForeignInvoiceFileName').textContent = '';
             document.getElementById('compTotalAmountDisplay').textContent = '0.00 ₺';
 
-            // 6. EPATS Belgesi Varsa Göster (Yoksa Gizle)
+            // EPATS Belgesi işlemleri (Aynı kalıyor)
             const docContainer = document.getElementById('accrualEpatsDocumentContainer');
             const docNameEl = document.getElementById('accrualEpatsDocName');
             const docLinkEl = document.getElementById('accrualEpatsDocLink');
@@ -639,7 +634,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (task.details && task.details.epatsDocument) {
                 epatsDoc = task.details.epatsDocument;
             } else if (task.relatedTaskId) {
-                // Eğer alt task ise ana task'a bak
                 const parentTask = this.allTasks.find(t => t.id === task.relatedTaskId);
                 if (parentTask && parentTask.details && parentTask.details.epatsDocument) {
                     epatsDoc = parentTask.details.epatsDocument;
@@ -658,20 +652,17 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
             }
 
-            // 7. Kişi Seçim Alanlarını Temizle
+            // Sadece TP Invoice Party alanını temizle (Servis alanı silindi)
             this.compSelectedTpInvoiceParty = null;
-            this.compSelectedServiceInvoiceParty = null;
+            // this.compSelectedServiceInvoiceParty = null; // SİLİNDİ
             
-            ['compSelectedTpInvoicePartyDisplay', 'compSelectedServiceInvoicePartyDisplay'].forEach(id => {
-                const el = document.getElementById(id);
-                if (el) { el.style.display = 'none'; el.innerHTML = ''; }
-            });
-            ['compTpInvoicePartyResults', 'compServiceInvoicePartyResults'].forEach(id => {
-                const el = document.getElementById(id);
-                if (el) el.innerHTML = '';
-            });
+            // Ekran temizliği (Sadece TP için)
+            const tpDisplay = document.getElementById('compSelectedTpInvoicePartyDisplay');
+            if(tpDisplay) { tpDisplay.style.display = 'none'; tpDisplay.innerHTML = ''; }
+            
+            const tpResults = document.getElementById('compTpInvoicePartyResults');
+            if(tpResults) tpResults.innerHTML = '';
 
-            // 8. Modalı Göster
             const modal = document.getElementById('completeAccrualTaskModal');
             if (modal) modal.classList.add('show');
         }
@@ -707,16 +698,31 @@ document.addEventListener('DOMContentLoaded', async () => {
                  }
              }
 
+             // Seçilen kişiyi bir değişkene alıyoruz
+             const selectedParty = this.compSelectedTpInvoiceParty 
+                ? { id: this.compSelectedTpInvoiceParty.id, name: this.compSelectedTpInvoiceParty.name } 
+                : null;
+
              const cleanTitle = task.title ? task.title.replace('Tahakkuk Oluşturma: ', '') : 'Tahakkuk';
+             
              const accrualData = {
                  taskId: task.relatedTaskId || taskId, 
                  taskTitle: cleanTitle,
                  officialFee: { amount: officialFee, currency: document.getElementById('compOfficialFeeCurrency').value },
                  serviceFee: { amount: serviceFee, currency: document.getElementById('compServiceFeeCurrency').value },
-                 vatRate, applyVatToOfficialFee: applyVat,
-                 totalAmount, totalAmountCurrency: 'TRY', status: 'unpaid', remainingAmount: totalAmount,
-                 tpInvoiceParty: this.compSelectedTpInvoiceParty ? { id: this.compSelectedTpInvoiceParty.id, name: this.compSelectedTpInvoiceParty.name } : null,
-                 serviceInvoiceParty: this.compSelectedServiceInvoiceParty ? { id: this.compSelectedServiceInvoiceParty.id, name: this.compSelectedServiceInvoiceParty.name } : null,
+                 vatRate, 
+                 applyVatToOfficialFee: applyVat,
+                 totalAmount, 
+                 totalAmountCurrency: 'TRY', 
+                 status: 'unpaid', 
+                 remainingAmount: totalAmount,
+                 
+                 // --- DEĞİŞİKLİK BURADA ---
+                 // Hem tpInvoiceParty hem de serviceInvoiceParty aynı kişiyi alıyor
+                 tpInvoiceParty: selectedParty,
+                 serviceInvoiceParty: selectedParty, 
+                 // -------------------------
+
                  createdAt: new Date().toISOString(),
                  files: uploadedFiles
              };
@@ -827,19 +833,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         handleForeignTransactionToggle() {
             const isForeign = document.getElementById('compIsForeignTransaction').checked;
             const lblTp = document.getElementById('lblCompTpInvoiceParty');
-            const lblService = document.getElementById('lblCompServiceInvoiceParty');
+            // lblService referansı silindi
             const fileContainer = document.getElementById('compForeignInvoiceContainer');
 
             if (isForeign) {
                 // Yurtdışı İşlem Seçiliyse
                 if(lblTp) lblTp.textContent = 'Yurtdışı Ödeme Yapılacak Taraf';
-                if(lblService) lblService.textContent = 'Hizmet Faturası';
-                if(fileContainer) fileContainer.style.display = 'block'; // Dosya alanını göster
+                if(fileContainer) fileContainer.style.display = 'block'; 
             } else {
                 // Seçili Değilse (Varsayılan)
                 if(lblTp) lblTp.textContent = 'Fatura Kesilecek Kişi (Müvekkil/TP)';
-                if(lblService) lblService.textContent = 'Servis Faturası Kime (Opsiyonel)';
-                if(fileContainer) fileContainer.style.display = 'none'; // Dosya alanını gizle
+                if(fileContainer) fileContainer.style.display = 'none';
             }
         }
 
