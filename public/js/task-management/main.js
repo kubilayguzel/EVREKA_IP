@@ -495,6 +495,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const nameEl = document.getElementById('compForeignInvoiceFileName');
                 if (nameEl) nameEl.textContent = this.files[0] ? this.files[0].name : '';
             });
+            document.getElementById('compIsForeignTransaction')?.addEventListener('change', () => {
+                this.handleForeignTransactionToggle();
+            });
         }
 
         searchPersonsGeneric(query, elementPrefix, onSelectCallback) {
@@ -599,12 +602,27 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         openCompleteAccrualModal(taskId) {
+            // 1. İlgili Task'ı bul
             const task = this.allTasks.find(t => t.id === taskId);
             if (!task) return;
+
+            // 2. Formu Sıfırla
             const form = document.getElementById('completeAccrualForm');
             if (form) form.reset();
+
+            // 3. YENİ: Yurtdışı İşlem Checkbox'ını ve Arayüzü Sıfırla
+            // Modal her açıldığında varsayılan (Yurtdışı olmayan) görünüme dön
+            const chkForeign = document.getElementById('compIsForeignTransaction');
+            if (chkForeign) {
+                chkForeign.checked = false;
+                this.handleForeignTransactionToggle(); // Yazıları ve görünürlüğü varsayılana çek
+            }
+
+            // 4. Hedef Task ID'sini Gizli Input'a Ata
             const targetInput = document.getElementById('targetTaskIdForCompletion');
             if (targetInput) targetInput.value = taskId;
+
+            // 5. Varsayılan Değerleri Ata
             document.getElementById('compOfficialFeeCurrency').value = 'TRY';
             document.getElementById('compServiceFeeCurrency').value = 'TRY';
             document.getElementById('compVatRate').value = '20';
@@ -612,15 +630,20 @@ document.addEventListener('DOMContentLoaded', async () => {
             document.getElementById('compForeignInvoiceFileName').textContent = '';
             document.getElementById('compTotalAmountDisplay').textContent = '0.00 ₺';
 
+            // 6. EPATS Belgesi Varsa Göster (Yoksa Gizle)
             const docContainer = document.getElementById('accrualEpatsDocumentContainer');
             const docNameEl = document.getElementById('accrualEpatsDocName');
             const docLinkEl = document.getElementById('accrualEpatsDocLink');
             
             let epatsDoc = null;
-            if (task.details && task.details.epatsDocument) epatsDoc = task.details.epatsDocument;
-            else if (task.relatedTaskId) {
+            if (task.details && task.details.epatsDocument) {
+                epatsDoc = task.details.epatsDocument;
+            } else if (task.relatedTaskId) {
+                // Eğer alt task ise ana task'a bak
                 const parentTask = this.allTasks.find(t => t.id === task.relatedTaskId);
-                if (parentTask && parentTask.details && parentTask.details.epatsDocument) epatsDoc = parentTask.details.epatsDocument;
+                if (parentTask && parentTask.details && parentTask.details.epatsDocument) {
+                    epatsDoc = parentTask.details.epatsDocument;
+                }
             }
 
             if (docContainer && docNameEl && docLinkEl) {
@@ -635,8 +658,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
             }
 
+            // 7. Kişi Seçim Alanlarını Temizle
             this.compSelectedTpInvoiceParty = null;
             this.compSelectedServiceInvoiceParty = null;
+            
             ['compSelectedTpInvoicePartyDisplay', 'compSelectedServiceInvoicePartyDisplay'].forEach(id => {
                 const el = document.getElementById(id);
                 if (el) { el.style.display = 'none'; el.innerHTML = ''; }
@@ -645,6 +670,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const el = document.getElementById(id);
                 if (el) el.innerHTML = '';
             });
+
+            // 8. Modalı Göster
             const modal = document.getElementById('completeAccrualTaskModal');
             if (modal) modal.classList.add('show');
         }
@@ -795,6 +822,25 @@ document.addEventListener('DOMContentLoaded', async () => {
             const apply = document.getElementById('compApplyVatToOfficial').checked;
             let total = apply ? (off + srv) * (1 + vat / 100) : off + (srv * (1 + vat / 100));
             document.getElementById('compTotalAmountDisplay').textContent = new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY' }).format(total);
+        }
+
+        handleForeignTransactionToggle() {
+            const isForeign = document.getElementById('compIsForeignTransaction').checked;
+            const lblTp = document.getElementById('lblCompTpInvoiceParty');
+            const lblService = document.getElementById('lblCompServiceInvoiceParty');
+            const fileContainer = document.getElementById('compForeignInvoiceContainer');
+
+            if (isForeign) {
+                // Yurtdışı İşlem Seçiliyse
+                if(lblTp) lblTp.textContent = 'Yurtdışı Ödeme Yapılacak Taraf';
+                if(lblService) lblService.textContent = 'Hizmet Faturası';
+                if(fileContainer) fileContainer.style.display = 'block'; // Dosya alanını göster
+            } else {
+                // Seçili Değilse (Varsayılan)
+                if(lblTp) lblTp.textContent = 'Fatura Kesilecek Kişi (Müvekkil/TP)';
+                if(lblService) lblService.textContent = 'Servis Faturası Kime (Opsiyonel)';
+                if(fileContainer) fileContainer.style.display = 'none'; // Dosya alanını gizle
+            }
         }
 
         calculateCreateTaskTotalAmount() {
