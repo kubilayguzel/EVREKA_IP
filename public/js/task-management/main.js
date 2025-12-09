@@ -37,10 +37,17 @@ document.addEventListener('DOMContentLoaded', async () => {
             // Seçim State'leri
             this.selectedTaskForAssignment = null;
             this.currentTaskForAccrual = null;
+            
+            // Create Task Accrual State
             this.createTaskSelectedTpInvoiceParty = null;
             this.createTaskSelectedServiceInvoiceParty = null;
+            
+            // Complete Task Accrual State
             this.compSelectedTpInvoiceParty = null;
-            this.compSelectedServiceInvoiceParty = null;
+            this.compSelectedServiceInvoiceParty = null; // (Artık kullanılmıyor ama yapı bozulmasın diye kalabilir)
+            
+            // YENİ: Yurtdışı taraf seçimi için değişken
+            this.compSelectedForeignPaymentParty = null;
 
             this.statusDisplayMap = {
                 'open': 'Açık',
@@ -345,7 +352,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             const statusText = this.statusDisplayMap[task.status] || task.status;
 
-            // Bug fix: String karşılaştırma
             const relatedAccruals = (this.allAccruals || []).filter(acc => String(acc.taskId) === String(task.id));
             
             let accrualsHtml = '';
@@ -476,14 +482,17 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if (el) el.addEventListener('input', () => this.calculateCompTotal());
             });
 
+            // Fatura Kesilecek Kişi (Müvekkil/TP) Arama
             document.getElementById('compTpInvoicePartySearch')?.addEventListener('input', (e) => {
                 this.searchPersonsGeneric(e.target.value, 'compTpInvoiceParty', (person) => {
                     this.compSelectedTpInvoiceParty = person;
                 });
             });
-            document.getElementById('compServiceInvoicePartySearch')?.addEventListener('input', (e) => {
-                this.searchPersonsGeneric(e.target.value, 'compServiceInvoiceParty', (person) => {
-                    this.compSelectedServiceInvoiceParty = person;
+
+            // YENİ: Yurtdışı Ödeme Yapılacak Taraf Arama
+            document.getElementById('compForeignPaymentPartySearch')?.addEventListener('input', (e) => {
+                this.searchPersonsGeneric(e.target.value, 'compForeignPaymentParty', (person) => {
+                    this.compSelectedForeignPaymentParty = person;
                 });
             });
 
@@ -608,11 +617,27 @@ document.addEventListener('DOMContentLoaded', async () => {
             const form = document.getElementById('completeAccrualForm');
             if (form) form.reset();
 
-            // Checkbox ve arayüz sıfırlama
+            // 1. Yeni ve Eski Alanların Seçimlerini Sıfırla
+            this.compSelectedTpInvoiceParty = null;
+            this.compSelectedForeignPaymentParty = null; // YENİ
+
+            // 2. Arayüz Temizliği (TP)
+            const tpDisplay = document.getElementById('compSelectedTpInvoicePartyDisplay');
+            if(tpDisplay) { tpDisplay.style.display = 'none'; tpDisplay.innerHTML = ''; }
+            const tpResults = document.getElementById('compTpInvoicePartyResults');
+            if(tpResults) tpResults.innerHTML = '';
+
+            // 3. Arayüz Temizliği (Foreign) - YENİ
+            const foreignDisplay = document.getElementById('compSelectedForeignPaymentPartyDisplay');
+            if(foreignDisplay) { foreignDisplay.style.display = 'none'; foreignDisplay.innerHTML = ''; }
+            const foreignResults = document.getElementById('compForeignPaymentPartyResults');
+            if(foreignResults) foreignResults.innerHTML = '';
+
+            // 4. Checkbox ve Toggle Durumunu Sıfırla
             const chkForeign = document.getElementById('compIsForeignTransaction');
             if (chkForeign) {
                 chkForeign.checked = false;
-                this.handleForeignTransactionToggle();
+                this.handleForeignTransactionToggle(); // Görünürlükleri varsayılana çek
             }
 
             const targetInput = document.getElementById('targetTaskIdForCompletion');
@@ -652,17 +677,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
             }
 
-            // Sadece TP Invoice Party alanını temizle (Servis alanı silindi)
-            this.compSelectedTpInvoiceParty = null;
-            // this.compSelectedServiceInvoiceParty = null; // SİLİNDİ
-            
-            // Ekran temizliği (Sadece TP için)
-            const tpDisplay = document.getElementById('compSelectedTpInvoicePartyDisplay');
-            if(tpDisplay) { tpDisplay.style.display = 'none'; tpDisplay.innerHTML = ''; }
-            
-            const tpResults = document.getElementById('compTpInvoicePartyResults');
-            if(tpResults) tpResults.innerHTML = '';
-
             const modal = document.getElementById('completeAccrualTaskModal');
             if (modal) modal.classList.add('show');
         }
@@ -698,10 +712,27 @@ document.addEventListener('DOMContentLoaded', async () => {
                  }
              }
 
-             // Seçilen kişiyi bir değişkene alıyoruz
-             const selectedParty = this.compSelectedTpInvoiceParty 
+             // 1. Fatura Kesilecek Kişi (Müvekkil/TP) - Her zaman bu alandan gelir
+             const tpParty = this.compSelectedTpInvoiceParty 
                 ? { id: this.compSelectedTpInvoiceParty.id, name: this.compSelectedTpInvoiceParty.name } 
                 : null;
+
+             // 2. Hizmet/Yurtdışı Tarafı
+             let serviceParty = null;
+             const isForeign = document.getElementById('compIsForeignTransaction').checked;
+
+             if (isForeign) {
+                 // Eğer yurtdışı işlemse, yeni eklediğimiz "Yurtdışı Taraf" alanından al
+                 if (this.compSelectedForeignPaymentParty) {
+                     serviceParty = { 
+                         id: this.compSelectedForeignPaymentParty.id, 
+                         name: this.compSelectedForeignPaymentParty.name 
+                     };
+                 }
+             } else {
+                 // Değilse, Fatura Kesilecek Kişi ile aynıdır
+                 serviceParty = tpParty;
+             }
 
              const cleanTitle = task.title ? task.title.replace('Tahakkuk Oluşturma: ', '') : 'Tahakkuk';
              
@@ -717,12 +748,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                  status: 'unpaid', 
                  remainingAmount: totalAmount,
                  
-                 // --- DEĞİŞİKLİK BURADA ---
-                 // Hem tpInvoiceParty hem de serviceInvoiceParty aynı kişiyi alıyor
-                 tpInvoiceParty: selectedParty,
-                 serviceInvoiceParty: selectedParty, 
-                 // -------------------------
-
+                 // Belirlenen tarafları ata
+                 tpInvoiceParty: tpParty,
+                 serviceInvoiceParty: serviceParty,
+                 
                  createdAt: new Date().toISOString(),
                  files: uploadedFiles
              };
@@ -832,17 +861,19 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         handleForeignTransactionToggle() {
             const isForeign = document.getElementById('compIsForeignTransaction').checked;
-            const lblTp = document.getElementById('lblCompTpInvoiceParty');
-            // lblService referansı silindi
+            
+            // Yeni oluşturduğumuz yurtdışı taraf container'ı
+            const foreignPartyContainer = document.getElementById('compForeignPaymentPartyContainer');
+            // Dosya yükleme alanı
             const fileContainer = document.getElementById('compForeignInvoiceContainer');
 
             if (isForeign) {
-                // Yurtdışı İşlem Seçiliyse
-                if(lblTp) lblTp.textContent = 'Yurtdışı Ödeme Yapılacak Taraf';
+                // Yurtdışı Seçili: Yeni alanı ve dosya alanını GÖSTER
+                if(foreignPartyContainer) foreignPartyContainer.style.display = 'block';
                 if(fileContainer) fileContainer.style.display = 'block'; 
             } else {
-                // Seçili Değilse (Varsayılan)
-                if(lblTp) lblTp.textContent = 'Fatura Kesilecek Kişi (Müvekkil/TP)';
+                // Seçili Değil: GİZLE
+                if(foreignPartyContainer) foreignPartyContainer.style.display = 'none';
                 if(fileContainer) fileContainer.style.display = 'none';
             }
         }
