@@ -165,7 +165,7 @@
             <h3 class="modal-title">Tahakkuk Girişi ve Tamamlama</h3>
             <div class="alert alert-info"><i class="fas fa-info-circle"></i> Bu formu doldurup kaydettiğinizde, tahakkuk kaydı oluşturulacak ve bu görev <strong>"Tamamlandı"</strong> statüsüne geçecektir.</div>
             <form id="completeAccrualForm" onsubmit="return false;">
-                <div class="modal-body-content">
+            <div class="modal-body-content">
                     <input type="hidden" id="targetTaskIdForCompletion">
                     
                     <div class="form-group mb-3 p-2 bg-light border rounded">
@@ -226,14 +226,14 @@
                         <label class="text-primary font-weight-bold"><i class="fas fa-globe-americas mr-2"></i>Yurtdışı Ödeme Yapılacak Taraf</label>
                         <input type="text" id="compForeignPaymentPartySearch" class="form-input" placeholder="Yurtdışı tarafı ara...">
                         <div id="compForeignPaymentPartyResults" class="search-results-list" style="display:none;"></div>
-                        <div id="compSelectedForeignPaymentPartyDisplay" class="search-result-display" style="display:none;"></div>
+                        <div id="compForeignPaymentPartyDisplay" class="search-result-display" style="display:none;"></div>
                     </div>
 
                     <div class="form-group mt-3">
                         <label id="lblCompTpInvoiceParty">Fatura Kesilecek Kişi (Müvekkil/TP)</label>
                         <input type="text" id="compTpInvoicePartySearch" class="form-input" placeholder="Kişi ara...">
                         <div id="compTpInvoicePartyResults" class="search-results-list" style="display:none;"></div>
-                        <div id="compSelectedTpInvoicePartyDisplay" class="search-result-display" style="display:none;"></div>
+                        <div id="compTpInvoicePartyDisplay" class="search-result-display" style="display:none;"></div>
                     </div>
                     
                     <div class="form-group mt-3" id="compForeignInvoiceContainer" style="display:none;">
