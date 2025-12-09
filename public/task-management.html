@@ -167,6 +167,13 @@
             <form id="completeAccrualForm" onsubmit="return false;">
                 <div class="modal-body-content">
                     <input type="hidden" id="targetTaskIdForCompletion">
+                    
+                    <div class="form-group mb-3 p-2 bg-light border rounded">
+                        <label class="checkbox-label mb-0 font-weight-bold text-primary">
+                            <input type="checkbox" id="compIsForeignTransaction"> Yurtdışı İşlem
+                        </label>
+                    </div>
+
                     <div id="accrualEpatsDocumentContainer" class="alert alert-secondary align-items-center justify-content-between mb-4" style="display:none; border-left: 4px solid #1e3c72;">
                         <div class="d-flex align-items-center">
                             <div class="icon-box mr-3 text-center" style="width: 40px;"><i class="fas fa-file-pdf text-danger fa-2x"></i></div>
@@ -216,19 +223,20 @@
                     <div class="total-amount-display" id="compTotalAmountDisplay">0.00 ₺</div>
 
                     <div class="form-group mt-3">
-                        <label>Fatura Kesilecek Kişi (Müvekkil/TP)</label>
+                        <label id="lblCompTpInvoiceParty">Fatura Kesilecek Kişi (Müvekkil/TP)</label>
                         <input type="text" id="compTpInvoicePartySearch" class="form-input" placeholder="Kişi ara...">
                         <div id="compTpInvoicePartyResults" class="search-results-list" style="display:none;"></div>
                         <div id="compSelectedTpInvoicePartyDisplay" class="search-result-display" style="display:none;"></div>
                     </div>
                     
                     <div class="form-group">
-                        <label>Servis Faturası Kime (Opsiyonel)</label>
+                        <label id="lblCompServiceInvoiceParty">Servis Faturası Kime (Opsiyonel)</label>
                         <input type="text" id="compServiceInvoicePartySearch" class="form-input" placeholder="Kişi ara...">
                         <div id="compServiceInvoicePartyResults" class="search-results-list" style="display:none;"></div>
                         <div id="compSelectedServiceInvoicePartyDisplay" class="search-result-display" style="display:none;"></div>
                     </div>
-                    <div class="form-group mt-3">
+
+                    <div class="form-group mt-3" id="compForeignInvoiceContainer" style="display:none;">
                         <label class="form-label">Yurtdışı Fatura/Debit (PDF)</label>
                         <label for="compForeignInvoiceFile" class="custom-file-upload"><i class="fas fa-cloud-upload-alt mr-2"></i> Dosya Seçin</label>
                         <input type="file" id="compForeignInvoiceFile" accept="application/pdf" style="display:none;">
