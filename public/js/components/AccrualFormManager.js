@@ -74,7 +74,6 @@ export class AccrualFormManager {
                 </div>
             </div>
             <div id="${p}TotalAmountDisplay" class="total-amount-display" style="font-size: 1.2em; font-weight: bold; color: #1e3c72; text-align: right; margin-top: 10px; padding: 12px 15px; background-color: #f0f4f8; border-radius: 10px;">0.00 ₺</div>
-
             <div class="form-group mt-3" id="${p}ForeignPaymentPartyContainer" style="display:none; background-color: #e3f2fd; padding: 10px; border-radius: 8px; border: 1px solid #90caf9;">
                 <label class="text-primary font-weight-bold"><i class="fas fa-globe-americas mr-2"></i>Yurtdışı Ödeme Yapılacak Taraf</label>
                 <input type="text" id="${p}ForeignPaymentPartySearch" class="form-input form-control" placeholder="Yurtdışı tarafı ara...">
