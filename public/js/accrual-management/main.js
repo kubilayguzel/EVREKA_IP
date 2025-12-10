@@ -208,8 +208,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         }
 
-        // --- GÜNCELLENEN EDIT MODAL ---
-        showEditAccrualModal(accrualId) {
+        // --- GÜNCELLENEN EDIT MODAL (Async Task Fetch Eklendi) ---
+        async showEditAccrualModal(accrualId) {
             const accrual = this.allAccruals.find(a => a.id === accrualId);
             if (!accrual) return;
 
@@ -221,9 +221,26 @@ document.addEventListener('DOMContentLoaded', async () => {
                 this.editFormManager.reset();
                 this.editFormManager.setData(accrual);
 
-                // --- EPATS Belgesini Bul ---
-                const task = this.allTasks[String(accrual.taskId)];
+                // --- EPATS Belgesi Bulma Mantığı (DÜZELTİLDİ) ---
                 let epatsDoc = null;
+                const taskId = accrual.taskId;
+
+                // 1. Önbelleği kontrol et
+                let task = this.allTasks[String(taskId)];
+                
+                // 2. Önbellekte yoksa veya detay eksikse veritabanından çek
+                if (!task || (!task.details && !task.relatedTaskId)) {
+                    try {
+                        const taskSnap = await getDoc(doc(db, 'tasks', String(taskId)));
+                        if (taskSnap.exists()) {
+                            task = { id: taskSnap.id, ...taskSnap.data() };
+                            // Cache'i güncelle
+                            this.allTasks[String(taskId)] = task;
+                        }
+                    } catch(e) { console.warn('Task fetch error:', e); }
+                }
+
+                // 3. Task verisinden belgeyi çıkar
                 if (task) {
                     if (task.details && task.details.epatsDocument) {
                         epatsDoc = task.details.epatsDocument;
@@ -232,6 +249,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                          if (parent && parent.details) epatsDoc = parent.details.epatsDocument;
                     }
                 }
+                
+                // 4. Belgeyi forma gönder
                 this.editFormManager.showEpatsDoc(epatsDoc);
             }
 
