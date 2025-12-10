@@ -1,3 +1,5 @@
+// public/js/accrual-management/main.js
+
 import { authService, accrualService, taskService, personService, generateUUID, db, ipRecordsService, transactionTypeService } from '../../firebase-config.js';
 import { showNotification, readFileAsDataURL } from '../../utils.js';
 import { loadSharedLayout } from '../layout-loader.js';
@@ -5,8 +7,6 @@ import { doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-
 import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
 
 import Pagination from '../pagination.js'; 
-
-// Ortak Form Yöneticisi
 import { AccrualFormManager } from '../components/AccrualFormManager.js';
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -22,7 +22,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             this.allTasks = {}; 
             this.allPersons = [];
             this.allUsers = [];
-            this.allTransactionTypes = []; // İş tiplerini tutmak için
+            this.allTransactionTypes = []; 
             this.selectedAccruals = new Set();
             
             this.pagination = null;
@@ -84,9 +84,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     }
                 }
 
-                // Form Yöneticisini Başlat
                 this.initEditForm();
-
                 this.processData();
 
             } catch (err) {
@@ -210,6 +208,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         }
 
+        // --- GÜNCELLENEN EDIT MODAL ---
         showEditAccrualModal(accrualId) {
             const accrual = this.allAccruals.find(a => a.id === accrualId);
             if (!accrual) return;
@@ -222,23 +221,18 @@ document.addEventListener('DOMContentLoaded', async () => {
                 this.editFormManager.reset();
                 this.editFormManager.setData(accrual);
 
-                // --- YENİ EKLENEN KISIM: EPATS Belgesini Bul ve Göster ---
+                // --- EPATS Belgesini Bul ---
                 const task = this.allTasks[String(accrual.taskId)];
                 let epatsDoc = null;
                 if (task) {
-                    // 1. Direkt task üzerinde var mı?
                     if (task.details && task.details.epatsDocument) {
                         epatsDoc = task.details.epatsDocument;
-                    } 
-                    // 2. Yoksa ve bu bir alt task ise, ana task'a bak
-                    else if (task.relatedTaskId) {
+                    } else if (task.relatedTaskId) {
                          const parent = this.allTasks[String(task.relatedTaskId)];
                          if (parent && parent.details) epatsDoc = parent.details.epatsDocument;
                     }
                 }
-                // Belgeyi Manager'a gönder
                 this.editFormManager.showEpatsDoc(epatsDoc);
-                // --------------------------------------------------------
             }
 
             document.getElementById('editAccrualModal').classList.add('show');
@@ -312,7 +306,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         }
 
-        // --- GÖRÜNTÜLEME MODALI (DÜZELTİLDİ - TAM İÇERİK) ---
         async showViewAccrualDetailModal(accrualId) {
             const accrual = this.allAccruals.find(a => a.id === accrualId);
             if (!accrual) return;
@@ -331,7 +324,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             else if(accrual.status === 'unpaid') { statusText = 'Ödenmedi'; statusColor = '#dc3545'; }
             else if(accrual.status === 'partially_paid') { statusText = 'Kısmen Ödendi'; statusColor = '#ffc107'; }
 
-            // Belgeler
             let docsHtml = '';
             if(accrual.files && accrual.files.length > 0) {
                 accrual.files.forEach(f => {
@@ -383,7 +375,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             modal.classList.add('show');
         }
 
-        // --- İŞ DETAYI MODALI (DÜZELTİLDİ - TAM İÇERİK) ---
         async showTaskDetailModal(taskId) {
             const modal = document.getElementById('taskDetailModal');
             const body = document.getElementById('modalBody');
@@ -405,7 +396,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const task = { id: taskSnap.id, ...taskSnap.data() };
                 title.textContent = `İş Detayı (${task.id})`;
 
-                // Yardımcı Veriler
                 let ipRecord = null;
                 if (task.relatedIpRecordId) {
                     try {
