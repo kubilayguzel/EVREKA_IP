@@ -221,6 +221,24 @@ document.addEventListener('DOMContentLoaded', async () => {
             if(this.editFormManager) {
                 this.editFormManager.reset();
                 this.editFormManager.setData(accrual);
+
+                // --- YENİ EKLENEN KISIM: EPATS Belgesini Bul ve Göster ---
+                const task = this.allTasks[String(accrual.taskId)];
+                let epatsDoc = null;
+                if (task) {
+                    // 1. Direkt task üzerinde var mı?
+                    if (task.details && task.details.epatsDocument) {
+                        epatsDoc = task.details.epatsDocument;
+                    } 
+                    // 2. Yoksa ve bu bir alt task ise, ana task'a bak
+                    else if (task.relatedTaskId) {
+                         const parent = this.allTasks[String(task.relatedTaskId)];
+                         if (parent && parent.details) epatsDoc = parent.details.epatsDocument;
+                    }
+                }
+                // Belgeyi Manager'a gönder
+                this.editFormManager.showEpatsDoc(epatsDoc);
+                // --------------------------------------------------------
             }
 
             document.getElementById('editAccrualModal').classList.add('show');
