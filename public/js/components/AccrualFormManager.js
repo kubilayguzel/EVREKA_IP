@@ -48,18 +48,19 @@ export class AccrualFormManager {
             <div class="form-group">
                 <label>Resmi Ücret</label>
                 <div style="display: flex; gap: 10px; align-items: center;">
-                    <input type="number" id="${p}OfficialFee" class="form-input form-control" step="0.01" placeholder="0.00" style="flex: 1; border-radius: 8px;">
-                    <select id="${p}OfficialFeeCurrency" class="currency-select form-control" style="width: 110px; min-width: 110px; flex-shrink: 0; border-radius: 8px; background-color: #f8f9fa;"><option value="TRY">TRY</option><option value="USD">USD</option><option value="EUR">EUR</option></select>
+                    <input type="number" id="${p}OfficialFee" class="form-input form-control" step="0.01" placeholder="0.00" style="flex: 1; min-width: 0; border-radius: 8px;">
+                    <select id="${p}OfficialFeeCurrency" class="currency-select form-control" style="width: 90px !important; min-width: 90px !important; max-width: 90px !important; flex-shrink: 0 !important; padding: 12px 8px !important; border-radius: 8px; background-color: #f8f9fa; font-size: 0.95em;"><option value="TRY">TRY</option><option value="USD">USD</option><option value="EUR">EUR</option></select>
                 </div>
             </div>
 
             <div class="form-group">
                 <label>Hizmet Ücreti</label>
                 <div style="display: flex; gap: 10px; align-items: center;">
-                    <input type="number" id="${p}ServiceFee" class="form-input form-control" step="0.01" placeholder="0.00" style="flex: 1; border-radius: 8px;">
-                    <select id="${p}ServiceFeeCurrency" class="currency-select form-control" style="width: 110px; min-width: 110px; flex-shrink: 0; border-radius: 8px; background-color: #f8f9fa;"><option value="TRY">TRY</option><option value="USD">USD</option><option value="EUR">EUR</option></select>
+                    <input type="number" id="${p}ServiceFee" class="form-input form-control" step="0.01" placeholder="0.00" style="flex: 1; min-width: 0; border-radius: 8px;">
+                    <select id="${p}ServiceFeeCurrency" class="currency-select form-control" style="width: 90px !important; min-width: 90px !important; max-width: 90px !important; flex-shrink: 0 !important; padding: 12px 8px !important; border-radius: 8px; background-color: #f8f9fa; font-size: 0.95em;"><option value="TRY">TRY</option><option value="USD">USD</option><option value="EUR">EUR</option></select>
                 </div>
             </div>
+            
             <div class="row">
                 <div class="col-md-6">
                     <div class="form-group">
