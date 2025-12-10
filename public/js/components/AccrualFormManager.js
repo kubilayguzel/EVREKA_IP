@@ -60,7 +60,6 @@ export class AccrualFormManager {
                     <select id="${p}ServiceFeeCurrency" class="currency-select form-control" style="width: 110px; min-width: 110px; flex-shrink: 0; border-radius: 8px; background-color: #f8f9fa;"><option value="TRY">TRY</option><option value="USD">USD</option><option value="EUR">EUR</option></select>
                 </div>
             </div>
-
             <div class="row">
                 <div class="col-md-6">
                     <div class="form-group">
