@@ -6,7 +6,7 @@ import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstati
 
 import Pagination from '../pagination.js'; 
 
-// YENİ: Form Yöneticisini Import Ediyoruz
+// Ortak Form Yöneticisi
 import { AccrualFormManager } from '../components/AccrualFormManager.js';
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -15,13 +15,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     class AccrualsManager {
         constructor() {
             this.currentUser = null;
-            this.storage = getStorage(); // Storage eklendi
+            this.storage = getStorage();
             
             this.allAccruals = [];
             this.processedData = [];
             this.allTasks = {}; 
             this.allPersons = [];
             this.allUsers = [];
+            this.allTransactionTypes = []; // İş tiplerini tutmak için
             this.selectedAccruals = new Set();
             
             this.pagination = null;
@@ -29,11 +30,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             this.currentSort = { column: 'createdAt', direction: 'desc' }; 
             this.currentFilterStatus = 'all';
 
-            // Edit State
             this.currentEditAccrual = null;
-            this.editFormManager = null; // Manager Eklendi
+            this.editFormManager = null;
             
-            // Upload State (Mark Paid Modal için)
             this.uploadedPaymentReceipts = [];
         }
 
@@ -60,15 +59,17 @@ document.addEventListener('DOMContentLoaded', async () => {
             if(loadingIndicator) loadingIndicator.style.display = 'block';
 
             try {
-                const [accRes, personsRes, usersRes] = await Promise.all([
+                const [accRes, personsRes, usersRes, typesRes] = await Promise.all([
                     accrualService.getAccruals(),
                     personService.getPersons(),
-                    taskService.getAllUsers()
+                    taskService.getAllUsers(),
+                    transactionTypeService.getTransactionTypes()
                 ]);
 
                 this.allAccruals = accRes?.success ? (accRes.data || []) : [];
                 this.allPersons = personsRes?.success ? (personsRes.data || []) : [];
                 this.allUsers = usersRes?.success ? (usersRes.data || []) : [];
+                this.allTransactionTypes = typesRes?.success ? (typesRes.data || []) : [];
 
                 if (this.allAccruals.length > 0) {
                     this.allAccruals.forEach(a => { a.createdAt = a.createdAt ? new Date(a.createdAt) : new Date(0); });
@@ -83,7 +84,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     }
                 }
 
-                // YENİ: Form Yöneticisini Başlat (Veriler geldikten sonra)
+                // Form Yöneticisini Başlat
                 this.initEditForm();
 
                 this.processData();
@@ -97,7 +98,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         }
 
-        // --- YENİ: Form Manager Başlatma ---
         initEditForm() {
             this.editFormManager = new AccrualFormManager(
                 'editAccrualFormContainer', 
@@ -210,7 +210,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         }
 
-        // --- YENİ: Edit Modal Fonksiyonu ---
         showEditAccrualModal(accrualId) {
             const accrual = this.allAccruals.find(a => a.id === accrualId);
             if (!accrual) return;
@@ -219,7 +218,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             document.getElementById('editAccrualId').value = accrual.id;
             document.getElementById('editAccrualTaskTitleDisplay').value = accrual.taskTitle || '';
             
-            // Manager ile verileri doldur
             if(this.editFormManager) {
                 this.editFormManager.reset();
                 this.editFormManager.setData(accrual);
@@ -228,12 +226,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             document.getElementById('editAccrualModal').classList.add('show');
         }
 
-        // --- YENİ: Edit Kaydetme Fonksiyonu ---
         async handleSaveAccrualChanges() {
             let loader = window.showSimpleLoading ? window.showSimpleLoading('Kaydediliyor...') : null;
 
             try {
-                // 1. Manager'dan verileri al
                 const result = this.editFormManager.getData();
                 if (!result.success) {
                     if(loader) loader.hide();
@@ -243,7 +239,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const formData = result.data;
                 const accrualId = document.getElementById('editAccrualId').value;
 
-                // 2. Dosya Yükleme (Yeni dosya varsa)
                 let newFiles = [];
                 if (formData.files && formData.files.length > 0) {
                     try {
@@ -257,11 +252,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                     }
                 }
 
-                // Mevcut dosyalar + Yeni dosya
                 const existingFiles = this.currentEditAccrual.files || [];
                 const finalFiles = [...existingFiles, ...newFiles];
 
-                // 3. Güncelleme Objesi
                 const updates = {
                     officialFee: formData.officialFee,
                     serviceFee: formData.serviceFee,
@@ -269,7 +262,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                     applyVatToOfficialFee: formData.applyVatToOfficialFee,
                     totalAmount: formData.totalAmount,
                     totalAmountCurrency: 'TRY',
-                    // Kalan tutarı güncelle (Eğer ödeme yapılmadıysa toplama eşitle, yapıldıysa mantığına göre bırak)
                     remainingAmount: this.currentEditAccrual.remainingAmount !== undefined ? this.currentEditAccrual.remainingAmount : formData.totalAmount,
                     tpInvoiceParty: formData.tpInvoiceParty,
                     serviceInvoiceParty: formData.serviceInvoiceParty,
@@ -290,7 +282,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         }
 
-        // --- Helper: Modal Kapatma ---
         closeModal(id) {
             document.getElementById(id).classList.remove('show');
             if(id === 'editAccrualModal') {
@@ -303,38 +294,145 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         }
 
-        // --- Diğer Fonksiyonlar (Aynı Kalıyor) ---
-        // (showViewAccrualDetailModal, showTaskDetailModal, showMarkPaidModal, handleBulkUpdate, deleteAccrual vb.)
-        
+        // --- GÖRÜNTÜLEME MODALI (DÜZELTİLDİ - TAM İÇERİK) ---
         async showViewAccrualDetailModal(accrualId) {
-            // ... (Aynı kalacak, yer kazanmak için yazmadım) ...
-            // Önceki main.js dosyasındaki showViewAccrualDetailModal kodunu buraya ekleyin.
             const accrual = this.allAccruals.find(a => a.id === accrualId);
             if (!accrual) return;
+
             const modal = document.getElementById('viewAccrualDetailModal');
             const title = document.getElementById('viewAccrualTitle');
             const body = modal.querySelector('.modal-body-content');
+
             title.textContent = `Tahakkuk Detayı (#${accrual.id})`;
+            
             const fmtMoney = (v, c) => new Intl.NumberFormat('tr-TR', { style: 'currency', currency: c || 'TRY' }).format(v || 0);
-            body.innerHTML = `<div>Tutar: ${fmtMoney(accrual.totalAmount, accrual.totalAmountCurrency)}</div>`; // Basit örnek
+            const fmtDate = (d) => { try { return d ? new Date(d).toLocaleDateString('tr-TR') : '-'; } catch{return '-'} };
+            
+            let statusText = 'Bilinmiyor', statusColor = '#6c757d';
+            if(accrual.status === 'paid') { statusText = 'Ödendi'; statusColor = '#28a745'; }
+            else if(accrual.status === 'unpaid') { statusText = 'Ödenmedi'; statusColor = '#dc3545'; }
+            else if(accrual.status === 'partially_paid') { statusText = 'Kısmen Ödendi'; statusColor = '#ffc107'; }
+
+            // Belgeler
+            let docsHtml = '';
+            if(accrual.files && accrual.files.length > 0) {
+                accrual.files.forEach(f => {
+                    const url = f.content || f.url;
+                    docsHtml += `
+                    <div class="col-md-6 mb-2">
+                        <div class="view-box d-flex justify-content-between align-items-center">
+                            <div class="text-truncate">
+                                <i class="fas fa-file-alt text-secondary mr-2"></i> ${f.name}
+                            </div>
+                            <a href="${url}" target="_blank" class="btn btn-sm btn-light border"><i class="fas fa-download"></i></a>
+                        </div>
+                    </div>`;
+                });
+            } else {
+                docsHtml = '<div class="col-12 text-muted small">Belge yok.</div>';
+            }
+
+            body.innerHTML = `
+                <div class="form-group">
+                    <label class="view-label">İlgili İş</label>
+                    <div class="view-box bg-light text-dark font-weight-bold">${accrual.taskTitle || '-'}</div>
+                </div>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label class="view-label">Durum</label>
+                        <div class="view-box" style="color:${statusColor}; font-weight:bold;">${statusText}</div>
+                    </div>
+                    <div class="form-group">
+                        <label class="view-label">Tarih</label>
+                        <div class="view-box">${fmtDate(accrual.createdAt)}</div>
+                    </div>
+                </div>
+                <div class="section-header"><i class="fas fa-coins mr-2"></i>FİNANSAL</div>
+                <div class="form-grid">
+                    <div class="form-group"><label class="view-label">Resmi</label><div class="view-box">${fmtMoney(accrual.officialFee?.amount, accrual.officialFee?.currency)}</div></div>
+                    <div class="form-group"><label class="view-label">Hizmet</label><div class="view-box">${fmtMoney(accrual.serviceFee?.amount, accrual.serviceFee?.currency)}</div></div>
+                    <div class="form-group"><label class="view-label">Toplam</label><div class="view-box font-weight-bold text-primary">${fmtMoney(accrual.totalAmount, accrual.totalAmountCurrency)}</div></div>
+                    <div class="form-group"><label class="view-label">Kalan</label><div class="view-box">${fmtMoney(accrual.remainingAmount, accrual.totalAmountCurrency)}</div></div>
+                </div>
+                <div class="section-header"><i class="fas fa-file-invoice mr-2"></i>TARAFLAR</div>
+                <div class="form-grid">
+                    <div class="form-group"><label class="view-label">Fatura (TP)</label><div class="view-box">${accrual.tpInvoiceParty?.name || '-'}</div></div>
+                    <div class="form-group"><label class="view-label">Hizmet/Yurtdışı</label><div class="view-box">${accrual.serviceInvoiceParty?.name || '-'}</div></div>
+                </div>
+                <div class="section-header"><i class="fas fa-folder-open mr-2"></i>BELGELER</div>
+                <div class="row">${docsHtml}</div>
+            `;
             modal.classList.add('show');
         }
 
+        // --- İŞ DETAYI MODALI (DÜZELTİLDİ - TAM İÇERİK) ---
         async showTaskDetailModal(taskId) {
-            // ... (Aynı kalacak) ...
             const modal = document.getElementById('taskDetailModal');
             const body = document.getElementById('modalBody');
             const title = document.getElementById('modalTaskTitle');
-            modal.classList.add('show');
-            title.textContent = `İş Detayı Yükleniyor...`;
-            body.innerHTML = '<div class="text-center">Yükleniyor...</div>';
             
-            const taskRef = doc(db, 'tasks', String(taskId));
-            const taskSnap = await getDoc(taskRef);
-            if (!taskSnap.exists()) { body.innerHTML = 'Bulunamadı'; return; }
-            const task = { id: taskSnap.id, ...taskSnap.data() };
-            title.textContent = `İş Detayı (${task.id})`;
-            body.innerHTML = `<div class="p-3"><b>${task.title}</b><br>${task.description||''}</div>`; // Basit örnek
+            modal.classList.add('show');
+            title.textContent = 'İş Detayı Yükleniyor...';
+            body.innerHTML = '<div class="text-center p-4"><i class="fas fa-circle-notch fa-spin fa-2x text-primary"></i><br>Veriler getiriliyor...</div>';
+
+            try {
+                const taskRef = doc(db, 'tasks', String(taskId));
+                const taskSnap = await getDoc(taskRef);
+
+                if (!taskSnap.exists()) {
+                    body.innerHTML = '<div class="alert alert-danger">Bu iş kaydı bulunamadı.</div>';
+                    title.textContent = 'Hata';
+                    return;
+                }
+                const task = { id: taskSnap.id, ...taskSnap.data() };
+                title.textContent = `İş Detayı (${task.id})`;
+
+                // Yardımcı Veriler
+                let ipRecord = null;
+                if (task.relatedIpRecordId) {
+                    try {
+                        const ipRef = doc(db, 'ipRecords', String(task.relatedIpRecordId));
+                        const ipSnap = await getDoc(ipRef);
+                        if(ipSnap.exists()) ipRecord = { id: ipSnap.id, ...ipSnap.data() };
+                    } catch(e) {}
+                }
+
+                let transactionTypeObj = null;
+                if (task.taskType) {
+                    transactionTypeObj = this.allTransactionTypes.find(t => t.id === task.taskType);
+                }
+
+                const formatDate = (d) => d ? new Date(d).toLocaleDateString('tr-TR') : '-';
+                const assignedUser = this.allUsers.find(u => u.id === task.assignedTo_uid);
+                const assignedName = assignedUser ? (assignedUser.displayName || assignedUser.email) : 'Atanmamış';
+                const relatedRecordTxt = ipRecord ? (ipRecord.applicationNumber || ipRecord.title) : 'Bulunamadı';
+                const taskTypeDisplay = transactionTypeObj ? (transactionTypeObj.alias || transactionTypeObj.name) : task.taskType;
+
+                let html = `
+                    <div class="container-fluid p-0">
+                        <div class="section-header mt-0"><i class="fas fa-info-circle mr-2"></i> GENEL BİLGİLER</div>
+                        <div class="mb-3"><label class="view-label">İş Konusu</label><div class="view-box font-weight-bold">${task.title || '-'}</div></div>
+                        <div class="form-grid">
+                            <div class="form-group"><label class="view-label">İlgili Dosya</label><div class="view-box">${relatedRecordTxt}</div></div>
+                            <div class="form-group"><label class="view-label">İş Tipi</label><div class="view-box">${taskTypeDisplay}</div></div>
+                            <div class="form-group"><label class="view-label">Atanan Kişi</label><div class="view-box">${assignedName}</div></div>
+                            <div class="form-group"><label class="view-label">Durum</label><div class="view-box font-weight-bold text-primary">${task.status}</div></div>
+                        </div>
+                        <div class="section-header"><i class="far fa-calendar-alt mr-2"></i> TARİHLER</div>
+                        <div class="form-grid">
+                            <div class="form-group"><label class="view-label">Operasyonel</label><div class="view-box">${formatDate(task.dueDate)}</div></div>
+                            <div class="form-group"><label class="view-label">Resmi</label><div class="view-box text-danger">${formatDate(task.officialDueDate)}</div></div>
+                        </div>
+                        <div class="section-header"><i class="fas fa-align-left mr-2"></i> AÇIKLAMA</div>
+                        <div class="view-box" style="min-height: 60px;">${task.description || '-'}</div>
+                    </div>`;
+
+                body.innerHTML = html;
+
+            } catch (error) {
+                console.error(error);
+                body.innerHTML = '<div class="alert alert-danger">Hata: ' + error.message + '</div>';
+            }
         }
 
         showMarkPaidModal() {
