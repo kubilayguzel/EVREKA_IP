@@ -214,12 +214,27 @@ export class AccrualFormManager {
         const vat = parseFloat(document.getElementById(`${p}VatRate`).value) || 0;
         const apply = document.getElementById(`${p}ApplyVatToOfficial`).checked;
         
-        let total = apply ? (off + srv) * (1 + vat / 100) : off + (srv * (1 + vat / 100));
+        const offCurrency = document.getElementById(`${p}OfficialFeeCurrency`)?.value || 'TRY';
+        const srvCurrency = document.getElementById(`${p}ServiceFeeCurrency`)?.value || 'TRY';
         
-        const fmt = new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY' }).format(total);
-        
-        document.getElementById(`${p}TotalAmountDisplay`).textContent = fmt;
-        return total;
+        // Para birimleri aynı mı kontrol et
+        if (offCurrency === srvCurrency) {
+            // Aynı para birimi - toplam hesapla
+            let total = apply ? (off + srv) * (1 + vat / 100) : off + (srv * (1 + vat / 100));
+            const fmt = new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(total);
+            document.getElementById(`${p}TotalAmountDisplay`).textContent = `${fmt} ${offCurrency}`;
+            return total;
+        } else {
+            // Farklı para birimleri - ayrı ayrı göster
+            const offTotal = apply ? off * (1 + vat / 100) : off;
+            const srvTotal = apply ? srv * (1 + vat / 100) : srv * (1 + vat / 100);
+            
+            const offFmt = new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(offTotal);
+            const srvFmt = new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(srvTotal);
+            
+            document.getElementById(`${p}TotalAmountDisplay`).textContent = `${offFmt} ${offCurrency} + ${srvFmt} ${srvCurrency}`;
+            return null; // Farklı para birimleri için toplam yok
+        }
     }
 
     /**
