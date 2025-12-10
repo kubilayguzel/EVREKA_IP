@@ -45,24 +45,19 @@ export class AccrualFormManager {
                 <a id="${p}EpatsDocLink" href="#" target="_blank" class="btn btn-sm btn-outline-primary shadow-sm"><i class="fas fa-external-link-alt mr-1"></i> Belgeyi Aç</a>
             </div>
 
-            <div class="row">
-                <div class="col-md-6">
-                    <div class="form-group">
-                        <label>Resmi Ücret</label>
-                        <div class="input-with-currency" style="display:flex; gap: 0;">
-                        <input type="number" id="${p}OfficialFee" class="form-input form-control" step="0.01" placeholder="0.00" style="flex: 1; min-width: 0; border-top-right-radius: 0; border-bottom-right-radius: 0;">
-                        <select id="${p}OfficialFeeCurrency" class="currency-select form-control" style="${selectStyle}"><option value="TRY">TRY</option><option value="USD">USD</option><option value="EUR">EUR</option></select>
-                        </div>
-                    </div>
+            <div class="form-group">
+                <label>Resmi Ücret</label>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <input type="number" id="${p}OfficialFee" class="form-input form-control" step="0.01" placeholder="0.00" style="flex: 1; border-radius: 8px;">
+                    <select id="${p}OfficialFeeCurrency" class="currency-select form-control" style="width: 110px; min-width: 110px; flex-shrink: 0; border-radius: 8px; background-color: #f8f9fa;"><option value="TRY">TRY</option><option value="USD">USD</option><option value="EUR">EUR</option></select>
                 </div>
-                <div class="col-md-6">
-                    <div class="form-group">
-                        <label>Hizmet Ücreti</label>
-                        <div class="input-with-currency" style="display:flex; gap: 0;">
-                        <input type="number" id="${p}ServiceFee" class="form-input form-control" step="0.01" placeholder="0.00" style="flex: 1; min-width: 0; border-top-right-radius: 0; border-bottom-right-radius: 0;">
-                        <select id="${p}ServiceFeeCurrency" class="currency-select form-control" style="${selectStyle}"><option value="TRY">TRY</option><option value="USD">USD</option><option value="EUR">EUR</option></select>
-                        </div>
-                    </div>
+            </div>
+
+            <div class="form-group">
+                <label>Hizmet Ücreti</label>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <input type="number" id="${p}ServiceFee" class="form-input form-control" step="0.01" placeholder="0.00" style="flex: 1; border-radius: 8px;">
+                    <select id="${p}ServiceFeeCurrency" class="currency-select form-control" style="width: 110px; min-width: 110px; flex-shrink: 0; border-radius: 8px; background-color: #f8f9fa;"><option value="TRY">TRY</option><option value="USD">USD</option><option value="EUR">EUR</option></select>
                 </div>
             </div>
 
