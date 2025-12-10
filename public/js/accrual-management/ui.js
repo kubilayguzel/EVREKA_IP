@@ -52,9 +52,9 @@ export default class AccrualsUI {
                 <td><span class="status-badge ${statusClass}">${statusText}</span></td>
                 <td><a href="#" class="task-detail-link" data-task-id="${accrual.taskId || ''}">${relatedTaskDisplay}</a></td>
                 <td>${currencyFormatter(officialFee.amount, officialFee.currency)}</td>
-                <td>${currencyFormatter(serviceFee.amount,  serviceFee.currency)}</td>
-                <td>${currencyFormatter(accrual.totalAmount || 0, accrual.totalAmountCurrency || 'TRY')}</td>
-                <td>${currencyFormatter(remainingAmount, accrual.totalAmountCurrency || 'TRY')}</td>
+                <td>${currencyFormatter(serviceFee.amount, serviceFee.currency)}</td>
+                <td>${this.formatTotalAmount(accrual)}</td>
+                <td>${this.formatRemainingAmount(accrual)}</td>
                 <td>
                     <div style="display:flex;">
                         <button class="action-btn view-btn" data-id="${accrual.id}">Görüntüle</button>
@@ -226,4 +226,44 @@ export default class AccrualsUI {
 
     // Edit, MarkPaid modalları için form doldurma işlemleri buraya (Kısalık için Main'de tuttum ama buraya taşınmalı)
     // Şimdilik Main.js içinde UI manipülasyonlarını da tutarak 2 dosya ile işi bitirelim, çok bölmeyelim.
+
+    formatTotalAmount(accrual) {
+    const offCurrency = accrual.officialFee?.currency || 'TRY';
+    const srvCurrency = accrual.serviceFee?.currency || 'TRY';
+    
+    // Para birimleri aynı mı?
+    if (offCurrency === srvCurrency) {
+        const total = accrual.totalAmount || 0;
+        return new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(total) + ' ' + offCurrency;
+    } else {
+        // Farklı para birimleri - ayrı ayrı göster
+        const off = accrual.officialFee?.amount || 0;
+        const srv = accrual.serviceFee?.amount || 0;
+        const vat = accrual.vatRate || 0;
+        const apply = accrual.applyVatToOfficialFee;
+        
+        const offTotal = apply ? off * (1 + vat / 100) : off;
+        const srvTotal = apply ? srv * (1 + vat / 100) : srv * (1 + vat / 100);
+        
+        const offFmt = new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(offTotal);
+        const srvFmt = new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(srvTotal);
+        
+        return `<small>${offFmt} ${offCurrency}<br>+ ${srvFmt} ${srvCurrency}</small>`;
+        }
+    }
+
+    formatRemainingAmount(accrual) {
+        const offCurrency = accrual.officialFee?.currency || 'TRY';
+        const srvCurrency = accrual.serviceFee?.currency || 'TRY';
+        const remaining = accrual.remainingAmount !== undefined ? accrual.remainingAmount : (accrual.totalAmount || 0);
+        
+        // Eğer farklı para birimleri varsa ve kalan tutar varsa
+        if (offCurrency !== srvCurrency && remaining > 0) {
+            return `<small>Karma para birimi</small>`;
+        }
+        
+        // Aynı para birimi
+        const currency = accrual.totalAmountCurrency || offCurrency;
+        return new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(remaining) + ' ' + currency;
+    }
 }
