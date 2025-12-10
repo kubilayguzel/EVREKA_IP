@@ -49,14 +49,13 @@ export class AccrualFormManager {
                 <label>Resmi Ücret</label>
                 <div style="display: flex; gap: 10px; align-items: center;">
                     <input type="number" id="${p}OfficialFee" class="form-input form-control" step="0.01" placeholder="0.00" style="flex: 1; min-width: 0; border-radius: 8px;">
-                    <select id="${p}OfficialFeeCurrency" class="currency-select" style="width: 85px !important; min-width: 85px !important; flex-shrink: 0 !important; padding: 8px 6px !important; border-radius: 8px; background-color: #f8f9fa; font-size: 14px !important; line-height: 1.2 !important;"
-            </div>
+                    <select id="${p}OfficialFeeCurrency" class="currency-select" style="width: 90px !important; min-width: 90px !important; flex-shrink: 0 !important; border-radius: 8px;">
 
             <div class="form-group">
                 <label>Hizmet Ücreti</label>
                 <div style="display: flex; gap: 10px; align-items: center;">
                     <input type="number" id="${p}ServiceFee" class="form-input form-control" step="0.01" placeholder="0.00" style="flex: 1; min-width: 0; border-radius: 8px;">
-                    <select id="${p}ServiceFeeCurrency" class="currency-select" style="width: 85px !important; min-width: 85px !important; flex-shrink: 0 !important; padding: 8px 6px !important; border-radius: 8px; background-color: #f8f9fa; font-size: 14px !important; line-height: 1.2 !important;"
+                    <select id="${p}ServiceFeeCurrency" class="currency-select" style="width: 90px !important; min-width: 90px !important; flex-shrink: 0 !important; border-radius: 8px;">
                 </div>
             </div>
 
