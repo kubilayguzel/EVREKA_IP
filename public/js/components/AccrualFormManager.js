@@ -1,4 +1,4 @@
-// public/js/AccrualFormManager.js
+// public/js/components/AccrualFormManager.js
 
 export class AccrualFormManager {
     /**
@@ -27,6 +27,7 @@ export class AccrualFormManager {
 
         const p = this.prefix; // Kısaltma
 
+        // DÜZELTME YAPILDI: Select genişlikleri 80px -> 110px yapıldı.
         const html = `
             <div class="form-group mb-3 p-2 bg-light border rounded">
                 <label class="checkbox-label mb-0 font-weight-bold text-primary" style="cursor:pointer; display:flex; align-items:center;">
@@ -51,7 +52,7 @@ export class AccrualFormManager {
                         <label>Resmi Ücret</label>
                         <div class="input-with-currency" style="display:flex;">
                             <input type="number" id="${p}OfficialFee" class="form-input form-control" step="0.01" placeholder="0.00" style="border-top-right-radius: 0; border-bottom-right-radius: 0;">
-                            <select id="${p}OfficialFeeCurrency" class="currency-select form-control" style="width: 80px; border-top-left-radius: 0; border-bottom-left-radius: 0; background-color: #f8f9fa;"><option value="TRY">TRY</option><option value="USD">USD</option><option value="EUR">EUR</option></select>
+                            <select id="${p}OfficialFeeCurrency" class="currency-select form-control" style="width: 110px; border-top-left-radius: 0; border-bottom-left-radius: 0; background-color: #f8f9fa;"><option value="TRY">TRY</option><option value="USD">USD</option><option value="EUR">EUR</option></select>
                         </div>
                     </div>
                 </div>
@@ -60,7 +61,7 @@ export class AccrualFormManager {
                         <label>Hizmet Ücreti</label>
                         <div class="input-with-currency" style="display:flex;">
                             <input type="number" id="${p}ServiceFee" class="form-input form-control" step="0.01" placeholder="0.00" style="border-top-right-radius: 0; border-bottom-right-radius: 0;">
-                            <select id="${p}ServiceFeeCurrency" class="currency-select form-control" style="width: 80px; border-top-left-radius: 0; border-bottom-left-radius: 0; background-color: #f8f9fa;"><option value="TRY">TRY</option><option value="USD">USD</option><option value="EUR">EUR</option></select>
+                            <select id="${p}ServiceFeeCurrency" class="currency-select form-control" style="width: 110px; border-top-left-radius: 0; border-bottom-left-radius: 0; background-color: #f8f9fa;"><option value="TRY">TRY</option><option value="USD">USD</option><option value="EUR">EUR</option></select>
                         </div>
                     </div>
                 </div>
@@ -119,7 +120,7 @@ export class AccrualFormManager {
             document.getElementById(id)?.addEventListener('input', () => this.calculateTotal());
         });
         document.getElementById(`${p}ApplyVatToOfficial`)?.addEventListener('change', () => this.calculateTotal());
-        document.getElementById(`${p}OfficialFeeCurrency`)?.addEventListener('change', () => this.calculateTotal()); // Para birimi değişince sembol değişsin diye
+        document.getElementById(`${p}OfficialFeeCurrency`)?.addEventListener('change', () => this.calculateTotal()); 
 
         // 2. Yurtdışı Toggle Listener
         document.getElementById(`${p}IsForeignTransaction`)?.addEventListener('change', () => this.handleForeignToggle());
@@ -214,13 +215,7 @@ export class AccrualFormManager {
         
         let total = apply ? (off + srv) * (1 + vat / 100) : off + (srv * (1 + vat / 100));
         
-        // Para birimi (Görsel amaçlı, genellikle ana para birimi TRY varsayılır ama select'ten de alınabilir)
-        const currency = document.getElementById(`${p}OfficialFeeCurrency`)?.value || 'TRY';
-
         const fmt = new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY' }).format(total);
-        // Eğer farklı para birimi seçildiyse yanına not düşebiliriz veya direkt TRY gösterebiliriz.
-        // Mevcut yapınızda toplam hep TRY üzerinden hesaplanıyor gibi duruyor.
-        
         document.getElementById(`${p}TotalAmountDisplay`).textContent = fmt;
         return total;
     }
@@ -240,7 +235,6 @@ export class AccrualFormManager {
         } else {
             foreignPartyDiv.style.display = 'none';
             fileDiv.style.display = 'none';
-            // Gizlenince seçimi sıfırlamak ister misiniz? Şimdilik hayır, veri kaybı olmasın.
         }
     }
 
@@ -302,31 +296,25 @@ export class AccrualFormManager {
         document.getElementById(`${p}VatRate`).value = data.vatRate || 20;
         document.getElementById(`${p}ApplyVatToOfficial`).checked = data.applyVatToOfficialFee ?? false;
 
-        // Taraflar (Sadece görseli güncellemek için, nesneleri state'e atıyoruz)
+        // Taraflar
         if (data.tpInvoiceParty) {
             this.selectedTpParty = data.tpInvoiceParty;
             this.manualSelectDisplay(`${p}TpInvoiceParty`, data.tpInvoiceParty);
         }
         
         // Yurtdışı Taraf Tespiti
-        // Eğer serviceInvoiceParty var VE tpInvoiceParty'den farklıysa (veya foreign flag varsa) yurtdışıdır.
-        // Ancak basitlik adına: Eğer serviceInvoiceParty varsa ve tp ile ID'si uyuşmuyorsa Foreign kutusuna koyabiliriz.
-        // Veya "Yurtdışı İşlem" flag'i veride tutuluyorsa ona bakarız.
-        // Veri yapınızda `isForeign` yoksa, serviceInvoiceParty ile tpInvoiceParty'i kıyaslarız.
-        
         let isForeign = false;
         if (data.serviceInvoiceParty && (!data.tpInvoiceParty || data.serviceInvoiceParty.id !== data.tpInvoiceParty.id)) {
             isForeign = true;
             this.selectedForeignParty = data.serviceInvoiceParty;
             this.manualSelectDisplay(`${p}ForeignPaymentParty`, data.serviceInvoiceParty);
+        } else if (data.isForeignTransaction) {
+            isForeign = true;
         }
 
         document.getElementById(`${p}IsForeignTransaction`).checked = isForeign;
         this.handleForeignToggle();
         this.calculateTotal();
-        
-        // Dosyalar (Mevcut dosyaları gösterme mantığı bu manager'ın dışında da yönetilebilir, 
-        // ama buraya basit bir liste ekleyebiliriz. Şimdilik sadece inputu boşaltıyoruz.)
     }
 
     manualSelectDisplay(baseId, person) {
@@ -358,7 +346,6 @@ export class AccrualFormManager {
         const officialFee = parseFloat(document.getElementById(`${p}OfficialFee`).value) || 0;
         const serviceFee = parseFloat(document.getElementById(`${p}ServiceFee`).value) || 0;
         
-        // Basit Validation
         if (officialFee <= 0 && serviceFee <= 0) {
             return { success: false, error: 'En az bir ücret (Resmi veya Hizmet) girmelisiniz.' };
         }
@@ -367,7 +354,6 @@ export class AccrualFormManager {
         const fileInput = document.getElementById(`${p}ForeignInvoiceFile`);
         const files = fileInput.files;
 
-        // Taraf Mantığı
         const tpParty = this.selectedTpParty ? { id: this.selectedTpParty.id, name: this.selectedTpParty.name } : null;
         let serviceParty = null;
 
@@ -386,11 +372,11 @@ export class AccrualFormManager {
                 serviceFee: { amount: serviceFee, currency: document.getElementById(`${p}ServiceFeeCurrency`).value },
                 vatRate: parseFloat(document.getElementById(`${p}VatRate`).value) || 0,
                 applyVatToOfficialFee: document.getElementById(`${p}ApplyVatToOfficial`).checked,
-                totalAmount: parseFloat(document.getElementById(`${p}TotalAmountDisplay`).textContent.replace(/[^0-9.,]/g, '').replace(',','.')) || 0, // Basit parse
+                totalAmount: parseFloat(document.getElementById(`${p}TotalAmountDisplay`).textContent.replace(/[^0-9.,]/g, '').replace(',','.')) || 0,
                 tpInvoiceParty: tpParty,
                 serviceInvoiceParty: serviceParty,
                 isForeignTransaction: isForeign,
-                files: files // Dosya objesi döner, upload çağıran yerde yapılır
+                files: files
             }
         };
     }
