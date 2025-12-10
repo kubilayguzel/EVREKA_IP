@@ -27,9 +27,7 @@ export class AccrualFormManager {
 
         const p = this.prefix; // Kısaltma
 
-        // DÜZELTME: 'flex: 0 0 130px' eklendi. Bu özellik kutunun sıkışmasını kesin olarak engeller.
-        const selectStyle = "width: 130px !important; min-width: 130px !important; flex: 0 0 130px !important; border-top-left-radius: 0; border-bottom-left-radius: 0; background-color: #f8f9fa;";
-
+        const selectStyle = "width: 110px; min-width: 110px; max-width: 110px; flex-shrink: 0; border-top-left-radius: 0; border-bottom-left-radius: 0; background-color: #f8f9fa;";
         const html = `
             <div class="form-group mb-3 p-2 bg-light border rounded">
                 <label class="checkbox-label mb-0 font-weight-bold text-primary" style="cursor:pointer; display:flex; align-items:center;">
