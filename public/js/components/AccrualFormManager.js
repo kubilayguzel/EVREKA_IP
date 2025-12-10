@@ -27,8 +27,8 @@ export class AccrualFormManager {
 
         const p = this.prefix; // Kısaltma
 
-        // DÜZELTME: Select genişlikleri 80px -> 130px !important yapıldı.
-        const selectStyle = "width: 130px !important; min-width: 130px !important; border-top-left-radius: 0; border-bottom-left-radius: 0; background-color: #f8f9fa;";
+        // DÜZELTME: 'flex: 0 0 130px' eklendi. Bu özellik kutunun sıkışmasını kesin olarak engeller.
+        const selectStyle = "width: 130px !important; min-width: 130px !important; flex: 0 0 130px !important; border-top-left-radius: 0; border-bottom-left-radius: 0; background-color: #f8f9fa;";
 
         const html = `
             <div class="form-group mb-3 p-2 bg-light border rounded">
@@ -122,7 +122,7 @@ export class AccrualFormManager {
             document.getElementById(id)?.addEventListener('input', () => this.calculateTotal());
         });
         document.getElementById(`${p}ApplyVatToOfficial`)?.addEventListener('change', () => this.calculateTotal());
-        document.getElementById(`${p}OfficialFeeCurrency`)?.addEventListener('change', () => this.calculateTotal()); // Para birimi değişince sembol değişsin diye
+        document.getElementById(`${p}OfficialFeeCurrency`)?.addEventListener('change', () => this.calculateTotal()); 
 
         // 2. Yurtdışı Toggle Listener
         document.getElementById(`${p}IsForeignTransaction`)?.addEventListener('change', () => this.handleForeignToggle());
@@ -302,7 +302,7 @@ export class AccrualFormManager {
         document.getElementById(`${p}VatRate`).value = data.vatRate || 20;
         document.getElementById(`${p}ApplyVatToOfficial`).checked = data.applyVatToOfficialFee ?? false;
 
-        // Taraflar (Sadece görseli güncellemek için, nesneleri state'e atıyoruz)
+        // Taraflar
         if (data.tpInvoiceParty) {
             this.selectedTpParty = data.tpInvoiceParty;
             this.manualSelectDisplay(`${p}TpInvoiceParty`, data.tpInvoiceParty);
