@@ -619,9 +619,23 @@ document.addEventListener('DOMContentLoaded', async () => {
             
             document.getElementById('createTaskAccrualTaskTitleDisplay').value = `${this.currentTaskForAccrual.title} (${this.currentTaskForAccrual.id})`;
             
-            // Manager'ı sıfırla ve render et (gerekirse)
             if(this.createTaskFormManager) {
                 this.createTaskFormManager.reset();
+
+                // --- YENİ EKLENEN KISIM: EPATS Belgesini Bul ve Göster ---
+                let epatsDoc = null;
+                // 1. Direkt task üzerinde var mı?
+                if (this.currentTaskForAccrual.details && this.currentTaskForAccrual.details.epatsDocument) {
+                    epatsDoc = this.currentTaskForAccrual.details.epatsDocument;
+                } 
+                // 2. Yoksa ve bu bir alt task ise, ana task'a bak
+                else if (this.currentTaskForAccrual.relatedTaskId) {
+                    const parent = this.allTasks.find(t => t.id === this.currentTaskForAccrual.relatedTaskId);
+                    if (parent && parent.details) epatsDoc = parent.details.epatsDocument;
+                }
+                // Belgeyi Manager'a gönder
+                this.createTaskFormManager.showEpatsDoc(epatsDoc);
+                // --------------------------------------------------------
             }
             
             document.getElementById('createTaskAccrualModal').classList.add('show');
