@@ -253,17 +253,51 @@ export default class AccrualsUI {
     }
 
     formatRemainingAmount(accrual) {
-        const offCurrency = accrual.officialFee?.currency || 'TRY';
-        const srvCurrency = accrual.serviceFee?.currency || 'TRY';
-        const remaining = accrual.remainingAmount !== undefined ? accrual.remainingAmount : (accrual.totalAmount || 0);
+        const offAmount = accrual.officialFee?.amount || 0;
+        const offCurr = accrual.officialFee?.currency || 'TRY';
         
-        // Eğer farklı para birimleri varsa ve kalan tutar varsa
-        if (offCurrency !== srvCurrency && remaining > 0) {
-            return `<small>Karma para birimi</small>`;
+        const srvAmount = accrual.serviceFee?.amount || 0;
+        const srvCurr = accrual.serviceFee?.currency || 'TRY';
+        
+        const vatRate = accrual.vatRate || 0;
+        
+        // Ödenmiş Tutarlar (Veritabanından gelen)
+        const paidOff = accrual.paidOfficialAmount || 0;
+        const paidSrv = accrual.paidServiceAmount || 0;
+
+        // Toplam Ödenmesi Gerekenler (KDV Dahil)
+        const totalOffNeeded = accrual.applyVatToOfficialFee ? offAmount * (1 + vatRate/100) : offAmount;
+        const totalSrvNeeded = srvAmount * (1 + vatRate/100); // Hizmet hep KDV'li kabul ettik
+
+        // Kalanlar
+        let remOff = totalOffNeeded - paidOff;
+        let remSrv = totalSrvNeeded - paidSrv;
+
+        // Eksiye düşerse 0 kabul et (fazla ödeme durumu)
+        if(remOff < 0) remOff = 0;
+        if(remSrv < 0) remSrv = 0;
+
+        // Toplam Kalan
+        const totalRem = remOff + remSrv;
+
+        // Eğer tamamen ödendiyse
+        if (totalRem < 0.01) { // Float toleransı
+            return '<span class="text-success font-weight-bold">0.00</span>';
         }
-        
-        // Aynı para birimi
-        const currency = accrual.totalAmountCurrency || offCurrency;
-        return new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(remaining) + ' ' + currency;
+
+        const fmt = (val) => new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(val);
+
+        // PARA BİRİMİ KONTROLÜ
+        if (offCurr === srvCurr) {
+            // Aynı para birimi, topla göster
+            return `<span class="text-danger font-weight-bold">${fmt(totalRem)} ${offCurr}</span>`;
+        } else {
+            // FARKLI PARA BİRİMİ: "100 EUR + 500 TRY" şeklinde göster
+            let parts = [];
+            if (remOff > 0.01) parts.push(`${fmt(remOff)} ${offCurr}`);
+            if (remSrv > 0.01) parts.push(`${fmt(remSrv)} ${srvCurr}`);
+            
+            return `<span class="text-danger small font-weight-bold">${parts.join(' + ')}</span>`;
+        }
     }
 }
