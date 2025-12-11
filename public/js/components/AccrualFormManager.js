@@ -26,6 +26,7 @@ export class AccrualFormManager {
         }
 
         const p = this.prefix;
+        // Select elementleri için stil (sabit genişlik)
         const selectStyle = "width: 130px !important; min-width: 130px !important; flex: 0 0 130px !important; border-top-left-radius: 0; border-bottom-left-radius: 0; background-color: #f8f9fa;";
 
         const html = `
@@ -115,7 +116,7 @@ export class AccrualFormManager {
     setupListeners() {
         const p = this.prefix;
 
-        // 1. Hesaplama Listenerları
+        // 1. Hesaplama Listenerları (Her değişiklikte tekrar hesapla)
         const calcElements = [
             `${p}OfficialFee`, `${p}ServiceFee`, `${p}VatRate`,
             `${p}ApplyVatToOfficial`, `${p}OfficialFeeCurrency`, `${p}ServiceFeeCurrency`
@@ -140,8 +141,10 @@ export class AccrualFormManager {
         this.setupSearch(`${p}ForeignPaymentParty`, (person) => { this.selectedForeignParty = person; });
     }
 
+    /**
+     * Kişi arama ve seçme mantığı
+     */
     setupSearch(baseId, onSelect) {
-        // ... (Bu kısım değişmedi, aynen kalabilir) ...
         const input = document.getElementById(`${baseId}Search`);
         const results = document.getElementById(`${baseId}Results`);
         const display = document.getElementById(`${baseId}Display`);
@@ -170,7 +173,9 @@ export class AccrualFormManager {
                     item.addEventListener('click', () => {
                         const pid = item.dataset.id;
                         const person = this.allPersons.find(p => String(p.id) === String(pid));
+                        
                         onSelect(person);
+                        
                         input.value = '';
                         results.style.display = 'none';
                         display.innerHTML = `
@@ -179,6 +184,7 @@ export class AccrualFormManager {
                                 <span class="remove-selection text-danger" style="cursor:pointer; font-weight:bold;">&times;</span>
                             </div>`;
                         display.style.display = 'block';
+
                         display.querySelector('.remove-selection').addEventListener('click', () => {
                             onSelect(null);
                             display.style.display = 'none';
@@ -199,7 +205,7 @@ export class AccrualFormManager {
 
     /**
      * Toplam tutarı hesaplar ve ekrana yazar.
-     * FARKLI PARA BİRİMLERİNİ AYRI GÖSTERİR.
+     * FARKLI PARA BİRİMLERİNİ BİRLEŞTİRMEDEN AYRI AYRI GÖSTERİR.
      */
     calculateTotal() {
         const p = this.prefix;
@@ -211,28 +217,29 @@ export class AccrualFormManager {
         const offCurr = document.getElementById(`${p}OfficialFeeCurrency`)?.value || 'TRY';
         const srvCurr = document.getElementById(`${p}ServiceFeeCurrency`)?.value || 'TRY';
 
-        // KDV Dahil Hesaplamaları
-        // Resmi Ücret: Eğer 'apply' seçiliyse KDV ekle, yoksa ham tutar.
+        // KDV Dahil Tutarlar
         const offTotal = applyToOfficial ? off * (1 + vat / 100) : off;
-        
-        // Hizmet Bedeli: Her zaman KDV eklenir (Hizmet bedeli doğası gereği KDV'lidir)
         const srvTotal = srv * (1 + vat / 100);
 
-        const fmt = (val, curr) => new Intl.NumberFormat('tr-TR', { style: 'currency', currency: curr }).format(val);
-        const displayEl = document.getElementById(`${p}TotalAmountDisplay`);
+        // Para birimine göre grupla
+        const totals = {};
+        if (offTotal > 0) totals[offCurr] = (totals[offCurr] || 0) + offTotal;
+        if (srvTotal > 0) totals[srvCurr] = (totals[srvCurr] || 0) + srvTotal;
 
-        if (offCurr === srvCurr) {
-            // Aynı para birimi: Topla göster
-            const grandTotal = offTotal + srvTotal;
-            displayEl.innerHTML = `<span class="text-primary">${fmt(grandTotal, offCurr)}</span>`;
+        const displayEl = document.getElementById(`${p}TotalAmountDisplay`);
+        const fmt = (val, curr) => new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(val) + ' ' + curr;
+
+        // Diziye çevirip formatla
+        const parts = Object.entries(totals).map(([curr, amount]) => fmt(amount, curr));
+
+        if (parts.length === 0) {
+            displayEl.innerHTML = '0.00 ₺';
+        } else if (parts.length === 1) {
+            // Tek para birimi
+            displayEl.innerHTML = `<span class="text-primary font-weight-bold">${parts[0]}</span>`;
         } else {
-            // Farklı para birimi: Ayrı ayrı göster
-            displayEl.innerHTML = `
-                <div style="font-size:0.9em;">
-                    <span class="text-dark">${fmt(offTotal, offCurr)}</span> 
-                    <span class="text-muted mx-1">+</span> 
-                    <span class="text-dark">${fmt(srvTotal, srvCurr)}</span>
-                </div>`;
+            // Çoklu para birimi (alt alta göster)
+            displayEl.innerHTML = parts.map(part => `<div class="text-dark small font-weight-bold">${part}</div>`).join('');
         }
     }
 
@@ -285,10 +292,14 @@ export class AccrualFormManager {
         this.handleForeignToggle();
     }
 
+    /**
+     * Düzenleme (Edit) modu için verileri forma doldurur.
+     */
     setData(data) {
         const p = this.prefix;
         if(!data) return;
 
+        // Ücretler
         if (data.officialFee) {
             document.getElementById(`${p}OfficialFee`).value = data.officialFee.amount || 0;
             document.getElementById(`${p}OfficialFeeCurrency`).value = data.officialFee.currency || 'TRY';
@@ -298,14 +309,17 @@ export class AccrualFormManager {
             document.getElementById(`${p}ServiceFeeCurrency`).value = data.serviceFee.currency || 'TRY';
         }
         
+        // KDV
         document.getElementById(`${p}VatRate`).value = data.vatRate || 20;
         document.getElementById(`${p}ApplyVatToOfficial`).checked = data.applyVatToOfficialFee ?? false;
 
+        // Taraflar
         if (data.tpInvoiceParty) {
             this.selectedTpParty = data.tpInvoiceParty;
             this.manualSelectDisplay(`${p}TpInvoiceParty`, data.tpInvoiceParty);
         }
         
+        // Yurtdışı Taraf Tespiti
         let isForeign = false;
         if (data.serviceInvoiceParty && (!data.tpInvoiceParty || data.serviceInvoiceParty.id !== data.tpInvoiceParty.id)) {
             isForeign = true;
@@ -317,6 +331,8 @@ export class AccrualFormManager {
 
         document.getElementById(`${p}IsForeignTransaction`).checked = isForeign;
         this.handleForeignToggle();
+        
+        // Hesaplamayı tetikle (Görseli güncelle)
         this.calculateTotal();
     }
 
@@ -341,21 +357,21 @@ export class AccrualFormManager {
         });
     }
 
-/**
+    /**
      * Formdaki verileri toplayıp döndürür.
-     * DÜZELTME: Para birimi kontrolü eklendi. Farklı birimler asla toplanmaz.
+     * DÜZELTME: totalAmount artık bir DİZİ (Array) olarak döner.
+     * Örnek: [{ amount: 100, currency: 'EUR' }, { amount: 500, currency: 'TRY' }]
      */
     getData() {
         const p = this.prefix;
         
-        // 1. Ham verileri al
         const officialFee = parseFloat(document.getElementById(`${p}OfficialFee`).value) || 0;
         const offCurr = document.getElementById(`${p}OfficialFeeCurrency`).value;
         
         const serviceFee = parseFloat(document.getElementById(`${p}ServiceFee`).value) || 0;
         const srvCurr = document.getElementById(`${p}ServiceFeeCurrency`).value;
 
-        // 2. Basit Validation
+        // Basit Validation
         if (officialFee <= 0 && serviceFee <= 0) {
             return { success: false, error: 'En az bir ücret (Resmi veya Hizmet) girmelisiniz.' };
         }
@@ -366,7 +382,7 @@ export class AccrualFormManager {
         const fileInput = document.getElementById(`${p}ForeignInvoiceFile`);
         const files = fileInput.files;
 
-        // 3. Taraf Seçimleri
+        // Taraf Mantığı
         const tpParty = this.selectedTpParty ? { id: this.selectedTpParty.id, name: this.selectedTpParty.name } : null;
         let serviceParty = null;
 
@@ -378,40 +394,20 @@ export class AccrualFormManager {
             serviceParty = tpParty;
         }
 
-        // 4. HESAPLAMA VE CURRENCY KONTROLÜ (KRİTİK DÜZELTME)
-        
-        // KDV Dahil Tutarları Hesapla
+        // --- HESAPLAMA (DİZİ OLUŞTURMA) ---
         const offTotal = applyVatToOfficial ? officialFee * (1 + vatRate / 100) : officialFee;
         const srvTotal = serviceFee * (1 + vatRate / 100);
         
-        let finalTotalAmount = 0;
-        let finalTotalCurrency = 'TRY'; // Varsayılan
+        // Para birimine göre topla
+        const totalsMap = {};
+        if (offTotal > 0) totalsMap[offCurr] = (totalsMap[offCurr] || 0) + offTotal;
+        if (srvTotal > 0) totalsMap[srvCurr] = (totalsMap[srvCurr] || 0) + srvTotal;
 
-        // Senaryo A: Sadece Resmi Ücret Var
-        if (officialFee > 0 && serviceFee === 0) {
-            finalTotalAmount = offTotal;
-            finalTotalCurrency = offCurr;
-        }
-        // Senaryo B: Sadece Hizmet Ücreti Var
-        else if (serviceFee > 0 && officialFee === 0) {
-            finalTotalAmount = srvTotal;
-            finalTotalCurrency = srvCurr;
-        }
-        // Senaryo C: İkisi de Var
-        else if (officialFee > 0 && serviceFee > 0) {
-            if (offCurr === srvCurr) {
-                // Para birimleri AYNI -> Topla ve o birimi kullan
-                finalTotalAmount = offTotal + srvTotal;
-                finalTotalCurrency = offCurr;
-            } else {
-                // Para birimleri FARKLI -> Toplama YAPMA!
-                // 100 EUR + 500 TRY matematiksel olarak anlamsızdır.
-                // Veritabanına 0 ve 'MULTI' yazıyoruz.
-                // UI (ui.js) zaten officialFee ve serviceFee alanlarını okuyarak "X EUR + Y TRY" gösterecek.
-                finalTotalAmount = 0; 
-                finalTotalCurrency = 'MULTI'; 
-            }
-        }
+        // Nesneyi Diziye Çevir: [{amount: 100, currency: 'EUR'}, {amount: 500, currency: 'TRY'}]
+        const totalAmountArray = Object.entries(totalsMap).map(([curr, amt]) => ({
+            amount: amt,
+            currency: curr
+        }));
 
         return {
             success: true,
@@ -421,9 +417,11 @@ export class AccrualFormManager {
                 vatRate: vatRate,
                 applyVatToOfficialFee: applyVatToOfficial,
                 
-                // Düzeltilmiş Alanlar
-                totalAmount: finalTotalAmount, 
-                totalAmountCurrency: finalTotalCurrency,
+                // ARTIK ARRAY DÖNÜYORUZ
+                totalAmount: totalAmountArray, 
+                
+                // Geriye uyumluluk (eski kodlar tek currency beklerse diye ilkini veya varsayılanı verelim)
+                totalAmountCurrency: totalAmountArray.length > 0 ? totalAmountArray[0].currency : 'TRY',
                 
                 tpInvoiceParty: tpParty,
                 serviceInvoiceParty: serviceParty,
@@ -433,6 +431,9 @@ export class AccrualFormManager {
         };
     }
     
+    /**
+     * EPATS Belgesini Gösterir
+     */
     showEpatsDoc(doc) {
         const p = this.prefix;
         const container = document.getElementById(`${p}EpatsDocumentContainer`);
