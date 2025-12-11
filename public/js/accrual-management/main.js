@@ -521,7 +521,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         // --- Ödeme Kaydetme (Görsel Düzeltme ile Uyumlu) ---
         async handlePaymentSubmission() {
             if (this.selectedAccruals.size === 0) return;
-            
             const paymentDate = document.getElementById('paymentDate').value;
             if(!paymentDate) { showNotification('Lütfen tarih seçiniz', 'error'); return; }
 
@@ -537,70 +536,76 @@ document.addEventListener('DOMContentLoaded', async () => {
                         files: [...(accrual.files || []), ...this.uploadedPaymentReceipts]
                     };
 
+                    // TEKİL SEÇİM (Detaylı Ödeme)
                     if (this.selectedAccruals.size === 1) {
                         const payFullOff = document.getElementById('payFullOfficial').checked;
                         const payFullSrv = document.getElementById('payFullService').checked;
                         
-                        // KDV Oranı
-                        const vatRate = accrual.vatRate || 0;
-                        const vatMultiplier = 1 + (vatRate / 100);
+                        const vatMultiplier = 1 + ((accrual.vatRate || 0) / 100);
 
-                        // 1. Resmi Ücret Hesapla
-                        let paidOff = 0;
-                        const rawOfficial = accrual.officialFee?.amount || 0;
-                        const officialWithVat = accrual.applyVatToOfficialFee ? rawOfficial * vatMultiplier : rawOfficial;
+                        // 1. Resmi Ücret Ödemesi
+                        let paidOffToAdd = 0;
+                        const offTarget = accrual.applyVatToOfficialFee 
+                            ? (accrual.officialFee?.amount || 0) * vatMultiplier 
+                            : (accrual.officialFee?.amount || 0);
 
                         if (payFullOff) {
-                            paidOff = officialWithVat; // Tamamını öde (KDV dahil gerekiyorsa dahil halini al)
+                            paidOffToAdd = Math.max(0, offTarget - (accrual.paidOfficialAmount || 0));
                         } else {
-                            paidOff = parseFloat(document.getElementById('manualOfficialAmount').value) || 0;
+                            paidOffToAdd = parseFloat(document.getElementById('manualOfficialAmount').value) || 0;
                         }
 
-                        // 2. Hizmet Bedeli Hesapla
-                        let paidSrv = 0;
-                        const rawService = accrual.serviceFee?.amount || 0;
-                        const serviceWithVat = rawService * vatMultiplier;
+                        // 2. Hizmet Bedeli Ödemesi
+                        let paidSrvToAdd = 0;
+                        const srvTarget = (accrual.serviceFee?.amount || 0) * vatMultiplier;
 
                         if (payFullSrv) {
-                            paidSrv = serviceWithVat;
+                            paidSrvToAdd = Math.max(0, srvTarget - (accrual.paidServiceAmount || 0));
                         } else {
-                            paidSrv = parseFloat(document.getElementById('manualServiceAmount').value) || 0;
+                            paidSrvToAdd = parseFloat(document.getElementById('manualServiceAmount').value) || 0;
                         }
 
-                        // Veritabanına Yazılacak Değerler (Mevcut ödenmişin üzerine ekle)
-                        updates.paidOfficialAmount = (accrual.paidOfficialAmount || 0) + paidOff;
-                        updates.paidServiceAmount = (accrual.paidServiceAmount || 0) + paidSrv;
-
-                        // Durum Kontrolü
-                        const totalPaidOff = updates.paidOfficialAmount;
-                        const totalPaidSrv = updates.paidServiceAmount;
+                        // Veritabanı Değerlerini Güncelle
+                        const newPaidOff = (accrual.paidOfficialAmount || 0) + paidOffToAdd;
+                        const newPaidSrv = (accrual.paidServiceAmount || 0) + paidSrvToAdd;
                         
-                        // Kalan Hesapla (Toleranslı)
-                        const remOff = Math.max(0, officialWithVat - totalPaidOff);
-                        const remSrv = Math.max(0, serviceWithVat - totalPaidSrv);
+                        updates.paidOfficialAmount = newPaidOff;
+                        updates.paidServiceAmount = newPaidSrv;
 
-                        if (remOff < 0.1 && remSrv < 0.1) {
+                        // KALAN TUTARI HESAPLA (ARRAY OLARAK)
+                        const remOff = Math.max(0, offTarget - newPaidOff);
+                        const remSrv = Math.max(0, srvTarget - newPaidSrv);
+                        
+                        const offCurr = accrual.officialFee?.currency || 'TRY';
+                        const srvCurr = accrual.serviceFee?.currency || 'TRY';
+
+                        const remMap = {};
+                        if (remOff > 0.01) remMap[offCurr] = (remMap[offCurr] || 0) + remOff;
+                        if (remSrv > 0.01) remMap[srvCurr] = (remMap[srvCurr] || 0) + remSrv;
+
+                        // Kalan tutarı diziye çevir
+                        const remainingArray = Object.entries(remMap).map(([c, a]) => ({ amount: a, currency: c }));
+                        
+                        updates.remainingAmount = remainingArray; // Veritabanına dizi olarak yaz
+
+                        // Status Kontrolü
+                        if (remainingArray.length === 0) {
                             updates.status = 'paid';
-                            updates.remainingAmount = 0;
                         } else {
                             updates.status = 'partially_paid';
-                            // Burada remainingAmount alanı "sıralama" için kullanıldığından
-                            // Farklı currency olsa bile matematiksel toplam yazıyoruz.
-                            // Ancak GÖSTERİM UI tarafında ayrıştırılıyor.
-                            updates.remainingAmount = remOff + remSrv;
                         }
 
                     } else {
-                        // Çoklu seçimde her şeyi ödendi yap
+                        // ÇOKLU SEÇİM (Hepsini kapat)
                         updates.status = 'paid';
-                        updates.remainingAmount = 0;
+                        updates.remainingAmount = []; // Boş dizi = borç yok
                     }
 
                     return accrualService.updateAccrual(id, updates);
                 });
 
                 await Promise.all(promises);
-                showNotification('İşlem Başarılı', 'success');
+                showNotification('Başarılı', 'success');
                 this.closeModal('markPaidModal');
                 this.selectedAccruals.clear();
                 this.updateBulkActionsVisibility();
