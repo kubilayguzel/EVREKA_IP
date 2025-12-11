@@ -145,106 +145,94 @@ export class TaskDetailManager {
     }
 
     _generateDocsHtml(task) {
-            let content = '';
-            let hasContent = false;
+        let content = '';
+        let hasContent = false;
 
-            // 1. EPATS Belgesi (Varsa en üstte özel kart olarak göster)
-            const epatsDoc = task.details?.epatsDocument;
-            const epatsUrl = epatsDoc?.downloadURL || epatsDoc?.url;
+        // 1. EPATS Belgesi
+        const epatsDoc = task.details?.epatsDocument;
+        const epatsUrl = epatsDoc?.downloadURL || epatsDoc?.url;
 
-            if (epatsDoc && epatsUrl) {
-                hasContent = true;
-                content += `
-                <div class="alert alert-secondary d-flex align-items-center justify-content-between mb-3 shadow-sm" style="border-left: 4px solid #1e3c72; background-color: #f8f9fa;">
-                    <div class="d-flex align-items-center">
-                        <div class="text-center mr-3" style="width: 40px;">
-                            <i class="fas fa-file-pdf text-danger fa-2x"></i>
-                        </div>
-                        <div>
-                            <h6 class="mb-0 font-weight-bold text-dark">EPATS Belgesi</h6>
-                            <small class="text-muted">${epatsDoc.name || 'İlgili Resmi Evrak'}</small>
-                        </div>
+        if (epatsDoc && epatsUrl) {
+            hasContent = true;
+            content += `
+            <div class="alert alert-secondary d-flex align-items-center justify-content-between mb-3 shadow-sm" style="border-left: 4px solid #1e3c72; background-color: #f8f9fa;">
+                <div class="d-flex align-items-center">
+                    <div class="text-center mr-3" style="width: 40px;">
+                        <i class="fas fa-file-pdf text-danger fa-2x"></i>
                     </div>
-                    <a href="${epatsUrl}" target="_blank" class="btn btn-sm btn-outline-primary shadow-sm rounded-pill px-3">
-                        <i class="fas fa-external-link-alt mr-1"></i> Görüntüle
-                    </a>
-                </div>`;
-            }
-
-            // 2. Diğer Dosyaları Topla (Kapsamlı Tarama)
-            let allFiles = [];
-
-            // Helper: Dosyaları güvenli bir şekilde listeye ekler (Array veya Map olsa bile)
-            const addFiles = (source) => {
-                if (!source) return;
-                if (Array.isArray(source)) {
-                    allFiles.push(...source);
-                } else if (typeof source === 'object') {
-                    // Eğer Firebase array yerine map/obje {0:..., 1:...} döndürürse değerleri al
-                    allFiles.push(...Object.values(source));
-                }
-            };
-
-            // Veritabanındaki olası tüm dosya yollarını kontrol et
-            if (task.details) {
-                addFiles(task.details.documents); // Sizin veri yapınızdaki ana yol
-                addFiles(task.details.files);     // Alternatif yol
-            }
-            addFiles(task.files);     // Eski yapı
-            addFiles(task.documents); // Olası kök yapı
-
-            // 3. Tekilleştirme (Aynı dosyanın tekrarını önle)
-            const uniqueFiles = [];
-            const seenUrls = new Set();
-
-            if (epatsUrl) seenUrls.add(epatsUrl); // EPATS belgesini tekrar listede gösterme
-
-            allFiles.forEach(file => {
-                // URL alan adı farklı olabilir (downloadURL, url veya content)
-                const fileUrl = file.downloadURL || file.url || file.content;
-                
-                // Eğer geçerli bir URL varsa ve daha önce eklenmediyse listeye al
-                if (fileUrl && !seenUrls.has(fileUrl)) {
-                    seenUrls.add(fileUrl);
-                    uniqueFiles.push(file);
-                }
-            });
-
-            // 4. Diğer Belgeleri Kart Olarak Listele
-            if (uniqueFiles.length > 0) {
-                hasContent = true;
-                content += '<div class="row">';
-                uniqueFiles.forEach(file => {
-                    const fUrl = file.downloadURL || file.url || file.content;
-                    const fName = file.name || 'Adsız Dosya';
-                    const fType = file.documentDesignation || 'Ek Belge'; // Doküman türü (Örn: Diğer, Fatura vb.)
-                    
-                    content += `
-                    <div class="col-md-6 mb-2">
-                        <div class="d-flex justify-content-between align-items-center p-2 border rounded bg-white shadow-sm h-100">
-                            <div class="d-flex align-items-center text-truncate overflow-hidden" style="max-width: 80%;">
-                                <i class="fas fa-paperclip text-secondary mr-2"></i>
-                                <div class="text-truncate">
-                                    <span class="d-block small font-weight-bold text-dark text-truncate" title="${fName}">${fName}</span>
-                                    <small class="text-muted" style="font-size: 0.75rem;">${fType}</small>
-                                </div>
-                            </div>
-                            <a href="${fUrl}" target="_blank" class="btn btn-sm btn-light border text-primary ml-2">
-                                <i class="fas fa-download"></i>
-                            </a>
-                        </div>
-                    </div>`;
-                });
-                content += '</div>';
-            }
-
-            // Eğer hiç belge yoksa
-            if (!hasContent) {
-                return `<div class="p-3 bg-light border rounded text-center text-muted font-italic small">Bu göreve ekli belge bulunmamaktadır.</div>`;
-            }
-            
-            return content;
+                    <div>
+                        <h6 class="mb-0 font-weight-bold text-dark">EPATS Belgesi</h6>
+                        <small class="text-muted">${epatsDoc.name || 'İlgili Resmi Evrak'}</small>
+                    </div>
+                </div>
+                <a href="${epatsUrl}" target="_blank" class="btn btn-sm btn-outline-primary shadow-sm rounded-pill px-3">
+                    <i class="fas fa-external-link-alt mr-1"></i> Görüntüle
+                </a>
+            </div>`;
         }
+
+        // 2. Diğer Dosyaları Topla
+        let allFiles = [];
+        const addFiles = (source) => {
+            if (!source) return;
+            if (Array.isArray(source)) allFiles.push(...source);
+            else if (typeof source === 'object') allFiles.push(...Object.values(source));
+        };
+
+        if (task.details) {
+            addFiles(task.details.documents);
+            addFiles(task.details.files);
+        }
+        addFiles(task.files);
+        addFiles(task.documents);
+
+        // 3. Tekilleştirme
+        const uniqueFiles = [];
+        const seenUrls = new Set();
+        if (epatsUrl) seenUrls.add(epatsUrl);
+
+        allFiles.forEach(file => {
+            const fileUrl = file.downloadURL || file.url || file.content;
+            if (fileUrl && !seenUrls.has(fileUrl)) {
+                seenUrls.add(fileUrl);
+                uniqueFiles.push(file);
+            }
+        });
+
+        // 4. Listeleme
+        if (uniqueFiles.length > 0) {
+            hasContent = true;
+            content += '<div class="row">';
+            uniqueFiles.forEach(file => {
+                const fUrl = file.downloadURL || file.url || file.content;
+                const fName = file.name || 'Adsız Dosya';
+                const fType = file.documentDesignation || 'Ek Belge';
+                
+                content += `
+                <div class="col-md-6 mb-2">
+                    <div class="d-flex justify-content-between align-items-center p-2 border rounded bg-white shadow-sm h-100">
+                        <div class="d-flex align-items-center text-truncate overflow-hidden" style="max-width: 80%;">
+                            <i class="fas fa-paperclip text-secondary mr-2"></i>
+                            <div class="text-truncate">
+                                <span class="d-block small font-weight-bold text-dark text-truncate" title="${fName}">${fName}</span>
+                                <small class="text-muted" style="font-size: 0.75rem;">${fType}</small>
+                            </div>
+                        </div>
+                        <a href="${fUrl}" target="_blank" class="btn btn-sm btn-light border text-primary ml-2">
+                            <i class="fas fa-download"></i>
+                        </a>
+                    </div>
+                </div>`;
+            });
+            content += '</div>';
+        }
+
+        if (!hasContent) {
+            return `<div class="p-3 bg-light border rounded text-center text-muted font-italic small">Bu göreve ekli belge bulunmamaktadır.</div>`;
+        }
+        
+        return content;
+    }
 
     _generateAccrualsHtml(accruals) {
         if (!accruals || accruals.length === 0) {
@@ -260,7 +248,9 @@ export class TaskDetailManager {
             return `
                 <tr style="background: white;">
                     <td class="align-middle py-2 pl-3 border-bottom"><small class="text-muted">#${acc.id || '-'}</small></td>
-                    <td class="align-middle py-2 border-bottom font-weight-bold text-dark">${this._formatCurrency(acc.totalAmount, acc.totalAmountCurrency)}</td>
+                    <td class="align-middle py-2 border-bottom font-weight-bold text-dark" style="line-height: 1.2;">
+                        ${this._formatCurrency(acc.totalAmount, acc.totalAmountCurrency)}
+                    </td>
                     <td class="align-middle py-2 border-bottom text-center">${statusBadge}</td>
                     <td class="align-middle py-2 border-bottom text-right pr-3 text-muted small">${this._formatDate(acc.createdAt)}</td>
                 </tr>`;
@@ -284,19 +274,29 @@ export class TaskDetailManager {
 
     _formatDate(dateVal) {
         if (!dateVal) return '-';
-        // "2024-12-20" gibi string gelirse doğrudan işle
         if (typeof dateVal === 'string' && dateVal.includes('-')) {
-             const parts = dateVal.split('T')[0].split('-'); // T varsa temizle
-             if(parts.length === 3) return `${parts[2]}.${parts[1]}.${parts[0]}`; // YYYY-MM-DD -> DD.MM.YYYY
+             const parts = dateVal.split('T')[0].split('-'); 
+             if(parts.length === 3) return `${parts[2]}.${parts[1]}.${parts[0]}`; 
         }
-        
         try {
             const d = dateVal.toDate ? dateVal.toDate() : new Date(dateVal);
             return isNaN(d.getTime()) ? '-' : d.toLocaleDateString('tr-TR');
         } catch(e) { return '-'; }
     }
 
+    /**
+     * Düzeltme: Hem sayı hem de Array tiplerini destekler.
+     */
     _formatCurrency(amount, currency) {
+        // 1. Yeni Yapı: Çoklu Para Birimi (Array)
+        // Örn: [{amount: 100, currency: 'USD'}, {amount: 250, currency: 'TRY'}]
+        if (Array.isArray(amount)) {
+            return amount.map(item => 
+                new Intl.NumberFormat('tr-TR', { style: 'currency', currency: item.currency || 'TRY' }).format(item.amount || 0)
+            ).join('<br>'); // Farklı para birimlerini alt alta göster
+        }
+
+        // 2. Eski Yapı: Tekil Sayı
         return new Intl.NumberFormat('tr-TR', { style: 'currency', currency: currency || 'TRY' }).format(amount || 0);
     }
 }
