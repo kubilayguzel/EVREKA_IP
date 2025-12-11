@@ -462,42 +462,42 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         }
 
+// --- Modal Gösterim (Currency Etiketlerini Ayarla) ---
         showMarkPaidModal() {
             if (this.selectedAccruals.size === 0) { showNotification('Seçim yapınız', 'error'); return; }
             
             const modal = document.getElementById('markPaidModal');
             document.getElementById('paidAccrualCount').textContent = this.selectedAccruals.size;
-            
-            // Tarihi bugüne ayarla
             document.getElementById('paymentDate').valueAsDate = new Date();
 
             const detailedArea = document.getElementById('detailedPaymentInputs');
             
-            // EĞER SADECE 1 TANE SEÇİLİYSE DETAYLI GÖSTER
+            // TEKİL SEÇİM MANTIĞI
             if (this.selectedAccruals.size === 1) {
                 detailedArea.style.display = 'block';
                 const accrualId = this.selectedAccruals.values().next().value;
                 const accrual = this.allAccruals.find(a => a.id === accrualId);
                 
-                // Resmi Ücret Bilgisi
+                // 1. Resmi Ücret Ayarları
                 const offAmount = accrual.officialFee?.amount || 0;
                 const offCurr = accrual.officialFee?.currency || 'TRY';
-                document.getElementById('officialFeeDisplay').textContent = `${offAmount} ${offCurr}`;
+                // KDV Varsa Gösterimde Belirt
+                const offVatText = accrual.applyVatToOfficialFee ? ' (+KDV)' : '';
+                
+                document.getElementById('officialFeeBadge').textContent = `${offAmount} ${offCurr}${offVatText}`;
+                document.getElementById('manualOfficialCurrencyLabel').textContent = offCurr; // Input Yanındaki Label
+                
                 document.getElementById('payFullOfficial').checked = true;
                 document.getElementById('officialAmountInputContainer').style.display = 'none';
                 document.getElementById('manualOfficialAmount').value = '';
 
-                // Hizmet Bedeli Bilgisi
+                // 2. Hizmet Bedeli Ayarları
                 const srvAmount = accrual.serviceFee?.amount || 0;
                 const srvCurr = accrual.serviceFee?.currency || 'TRY';
                 
-                // KDV Dahil mi hesaplaması (Gösterim için)
-                let finalSrvAmount = srvAmount;
-                // Not: KDV mantığını burada basit tutuyorum, asıl hesaplama zaten kayıtlı veride vardır
-                // Eğer totalAmount içinde KDV varsa kullanıcıya toplam ödenecek hizmeti göstermek daha doğru
-                // Ancak karmaşıklığı önlemek için saf tutarları gösterip currency'yi basıyoruz.
-                
-                document.getElementById('serviceFeeDisplay').textContent = `${srvAmount} ${srvCurr} (+KDV)`;
+                document.getElementById('serviceFeeBadge').textContent = `${srvAmount} ${srvCurr} (+KDV)`;
+                document.getElementById('manualServiceCurrencyLabel').textContent = srvCurr; // Input Yanındaki Label
+
                 document.getElementById('payFullService').checked = true;
                 document.getElementById('serviceAmountInputContainer').style.display = 'none';
                 document.getElementById('manualServiceAmount').value = '';
@@ -511,25 +511,23 @@ document.addEventListener('DOMContentLoaded', async () => {
                 };
 
             } else {
-                // ÇOKLU SEÇİM: Detayları gizle, sadece "Hepsini Tam Öde" mantığı çalışır
+                // ÇOKLU SEÇİM: Detayları gizle
                 detailedArea.style.display = 'none';
             }
 
             modal.classList.add('show');
         }
 
+        // --- Ödeme Kaydetme (Görsel Düzeltme ile Uyumlu) ---
         async handlePaymentSubmission() {
             if (this.selectedAccruals.size === 0) return;
             
             const paymentDate = document.getElementById('paymentDate').value;
             if(!paymentDate) { showNotification('Lütfen tarih seçiniz', 'error'); return; }
 
-            let loader = window.showSimpleLoading ? window.showSimpleLoading('Ödeme İşleniyor...') : null;
+            let loader = window.showSimpleLoading ? window.showSimpleLoading('İşleniyor...') : null;
 
             try {
-                // Yüklenen dosyaları (dekont vb.) hazırla
-                // this.uploadedPaymentReceipts dizisi showMarkPaidModal içinde veya event listener ile dolduruluyor olmalı
-                
                 const promises = Array.from(this.selectedAccruals).map(async (id) => {
                     const accrual = this.allAccruals.find(a => a.id === id);
                     if (!accrual) return;
@@ -539,79 +537,70 @@ document.addEventListener('DOMContentLoaded', async () => {
                         files: [...(accrual.files || []), ...this.uploadedPaymentReceipts]
                     };
 
-                    // --- TEKİL SEÇİM İSE DETAYLI HESAPLAMA YAP ---
                     if (this.selectedAccruals.size === 1) {
                         const payFullOff = document.getElementById('payFullOfficial').checked;
                         const payFullSrv = document.getElementById('payFullService').checked;
                         
-                        const totalOfficial = accrual.officialFee?.amount || 0;
-                        const totalService = accrual.serviceFee?.amount || 0;
-                        
-                        // 1. Ödenen Resmi Tutar Hesabı
+                        // KDV Oranı
+                        const vatRate = accrual.vatRate || 0;
+                        const vatMultiplier = 1 + (vatRate / 100);
+
+                        // 1. Resmi Ücret Hesapla
                         let paidOff = 0;
+                        const rawOfficial = accrual.officialFee?.amount || 0;
+                        const officialWithVat = accrual.applyVatToOfficialFee ? rawOfficial * vatMultiplier : rawOfficial;
+
                         if (payFullOff) {
-                            // KDV durumu
-                            if (accrual.applyVatToOfficialFee) {
-                                paidOff = totalOfficial * (1 + (accrual.vatRate||0)/100);
-                            } else {
-                                paidOff = totalOfficial;
-                            }
+                            paidOff = officialWithVat; // Tamamını öde (KDV dahil gerekiyorsa dahil halini al)
                         } else {
                             paidOff = parseFloat(document.getElementById('manualOfficialAmount').value) || 0;
                         }
 
-                        // 2. Ödenen Hizmet Tutar Hesabı
+                        // 2. Hizmet Bedeli Hesapla
                         let paidSrv = 0;
+                        const rawService = accrual.serviceFee?.amount || 0;
+                        const serviceWithVat = rawService * vatMultiplier;
+
                         if (payFullSrv) {
-                            // Hizmet bedeli genelde KDV'lidir
-                            paidSrv = totalService * (1 + (accrual.vatRate||0)/100);
+                            paidSrv = serviceWithVat;
                         } else {
                             paidSrv = parseFloat(document.getElementById('manualServiceAmount').value) || 0;
                         }
 
-                        // Veritabanına eklenecek değerler (Mevcut ödenmişin üzerine ekle)
+                        // Veritabanına Yazılacak Değerler (Mevcut ödenmişin üzerine ekle)
                         updates.paidOfficialAmount = (accrual.paidOfficialAmount || 0) + paidOff;
                         updates.paidServiceAmount = (accrual.paidServiceAmount || 0) + paidSrv;
 
-                        // --- Durum ve Kalan Tutar Kontrolü ---
-                        // Eğer kullanıcı ikisine de "Tamamını Öde" dediyse direkt kapat
-                        if (payFullOff && payFullSrv) {
+                        // Durum Kontrolü
+                        const totalPaidOff = updates.paidOfficialAmount;
+                        const totalPaidSrv = updates.paidServiceAmount;
+                        
+                        // Kalan Hesapla (Toleranslı)
+                        const remOff = Math.max(0, officialWithVat - totalPaidOff);
+                        const remSrv = Math.max(0, serviceWithVat - totalPaidSrv);
+
+                        if (remOff < 0.1 && remSrv < 0.1) {
                             updates.status = 'paid';
                             updates.remainingAmount = 0;
                         } else {
-                            // Kısmi ödeme kontrolü
-                            // Toplam gereken (KDV dahil)
-                            let calcTotalOff = accrual.applyVatToOfficialFee ? totalOfficial * (1 + (accrual.vatRate||0)/100) : totalOfficial;
-                            let calcTotalSrv = totalService * (1 + (accrual.vatRate||0)/100);
-
-                            // Kalanlar
-                            let remOff = calcTotalOff - updates.paidOfficialAmount;
-                            let remSrv = calcTotalSrv - updates.paidServiceAmount;
-
-                            // Toleranslı kontrol (kuruş hataları için 0.1)
-                            if (remOff <= 0.1 && remSrv <= 0.1) {
-                                updates.status = 'paid';
-                                updates.remainingAmount = 0;
-                            } else {
-                                updates.status = 'partially_paid';
-                                // Sorting için yaklaşık matematiksel kalan
-                                updates.remainingAmount = (remOff > 0 ? remOff : 0) + (remSrv > 0 ? remSrv : 0);
-                            }
+                            updates.status = 'partially_paid';
+                            // Burada remainingAmount alanı "sıralama" için kullanıldığından
+                            // Farklı currency olsa bile matematiksel toplam yazıyoruz.
+                            // Ancak GÖSTERİM UI tarafında ayrıştırılıyor.
+                            updates.remainingAmount = remOff + remSrv;
                         }
 
                     } else {
-                        // --- ÇOKLU SEÇİM: Varsayılan olarak hepsini "Ödendi" yap ---
+                        // Çoklu seçimde her şeyi ödendi yap
                         updates.status = 'paid';
                         updates.remainingAmount = 0;
-                        // Çoklu seçimde detay tutmuyoruz, eski mantık devam ediyor
                     }
 
                     return accrualService.updateAccrual(id, updates);
                 });
 
                 await Promise.all(promises);
-                
-                showNotification('Ödeme başarıyla kaydedildi', 'success');
+                showNotification('İşlem Başarılı', 'success');
                 this.closeModal('markPaidModal');
                 this.selectedAccruals.clear();
                 this.updateBulkActionsVisibility();
@@ -619,7 +608,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             } catch(e) {
                 console.error(e);
-                showNotification('Hata oluştu: ' + e.message, 'error');
+                showNotification('Hata: ' + e.message, 'error');
             } finally {
                 if(loader) loader.hide();
             }
