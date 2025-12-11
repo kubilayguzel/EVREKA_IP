@@ -16,8 +16,12 @@ export default class AccrualsUI {
         }
         if(noRecordsMessage) noRecordsMessage.style.display = 'none';
 
-        // Helper: Basit Para Formatlayıcı (Sütunlar için)
-        const fmtSimple = (val, curr) => new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(val || 0) + ' ' + (curr || 'TRY');
+        // Helper: Güvenli Formatlayıcı (NaN korumalı)
+        const fmtSimple = (val, curr) => {
+            const num = Number(val);
+            const safeVal = isNaN(num) ? 0 : num;
+            return new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(safeVal) + ' ' + (curr || 'TRY');
+        };
 
         const rows = filteredAccruals.map(accrual => {
             let statusText = 'Bilinmiyor', statusClass = 'badge-secondary';
@@ -27,11 +31,11 @@ export default class AccrualsUI {
                 case 'partially_paid': statusText = 'Kısmen Ödendi'; statusClass = 'status-partially-paid'; break;
             }
 
-            // Sütun Gösterimleri
+            // Resmi ve Hizmet Ücretleri (Güvenli Format)
             const officialDisplay = fmtSimple(accrual.officialFee?.amount, accrual.officialFee?.currency);
             const serviceDisplay = fmtSimple(accrual.serviceFee?.amount, accrual.serviceFee?.currency);
             
-            // --- YENİ FORMATLAMA FONKSİYONLARI ---
+            // Toplam ve Kalan Tutar (Array ve NaN Korumalı)
             const totalDisplay = this.formatTotalAmount(accrual);
             const remainingDisplay = this.formatRemainingAmount(accrual);
 
@@ -68,73 +72,69 @@ export default class AccrualsUI {
     }
 
     /**
-     * 1. Toplam Tutar Gösterimi
-     * Hem yeni DİZİ yapısını (Array) hem de eski SAYI (Number) yapısını destekler.
+     * 1. Toplam Tutar Gösterimi (NaN Korumalı)
      */
     formatTotalAmount(accrual) {
         const totalData = accrual.totalAmount;
-        const fmt = (v) => new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v);
+        const fmt = (v) => {
+            const num = Number(v);
+            return new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(isNaN(num) ? 0 : num);
+        };
 
-        // A) Veri Dizi (Array) ise (Yeni Sistem: [{amount:100, currency:'EUR'}, ...])
+        // A) Veri Dizi (Array) ise
         if (Array.isArray(totalData)) {
             if (totalData.length === 0) return '0.00 TRY';
-            
             const parts = totalData.map(t => `${fmt(t.amount)} ${t.currency}`);
-            
-            // Tek birimse düz yaz, çoksa alt alta birleştir
             if (parts.length === 1) return `<span class="font-weight-bold">${parts[0]}</span>`;
             return `<div class="font-weight-bold small" style="line-height:1.2;">${parts.join('<br>+ ')}</div>`;
         } 
         
-        // B) Veri Sayı (Number) ise (Eski Sistem / Geriye Uyumluluk)
+        // B) Veri Sayı veya Hatalı ise (Fallback)
         else {
-            const val = totalData || 0;
+            let val = Number(totalData);
+            if (isNaN(val)) val = 0;
             const curr = accrual.totalAmountCurrency || 'TRY';
             return `<span class="font-weight-bold">${fmt(val)} ${curr}</span>`;
         }
     }
 
     /**
-     * 2. Kalan Tutar Gösterimi
-     * Veritabanından gelen diziyi gösterir, yoksa anlık hesaplama yapar.
+     * 2. Kalan Tutar Gösterimi (NaN Korumalı)
      */
     formatRemainingAmount(accrual) {
-        const fmt = (v) => new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v);
+        const fmt = (v) => {
+             const num = Number(v);
+             return new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(isNaN(num) ? 0 : num);
+        };
 
-        // A) Veritabanında Hazır Dizi Varsa (Yeni Sistemle Kaydedilmiş)
+        // A) Veritabanında Hazır Dizi Varsa
         if (Array.isArray(accrual.remainingAmount)) {
             const arr = accrual.remainingAmount;
             if (arr.length === 0) return '<span class="text-success font-weight-bold">0.00</span>';
-            
             const parts = arr.map(t => `${fmt(t.amount)} ${t.currency}`);
             return `<div class="text-danger font-weight-bold small" style="line-height:1.2;">${parts.join('<br>+ ')}</div>`;
         }
 
-        // B) Veritabanında Hazır Veri Yoksa (Fallback: Anlık Hesaplama)
-        // Hedef Tutarlar (KDV Dahil)
-        const off = accrual.officialFee?.amount || 0;
+        // B) Fallback Hesaplama
+        const off = Number(accrual.officialFee?.amount) || 0;
         const offCurr = accrual.officialFee?.currency || 'TRY';
-        const srv = accrual.serviceFee?.amount || 0;
+        const srv = Number(accrual.serviceFee?.amount) || 0;
         const srvCurr = accrual.serviceFee?.currency || 'TRY';
-        const vat = accrual.vatRate || 0;
+        const vat = Number(accrual.vatRate) || 0;
         
         const offTarget = accrual.applyVatToOfficialFee ? off * (1 + vat/100) : off;
         const srvTarget = srv * (1 + vat/100);
 
-        // Ödenenler
-        const paidOff = accrual.paidOfficialAmount || 0;
-        const paidSrv = accrual.paidServiceAmount || 0;
+        const paidOff = Number(accrual.paidOfficialAmount) || 0;
+        const paidSrv = Number(accrual.paidServiceAmount) || 0;
 
-        // Kalanlar (Ayrı ayrı)
         const remOff = Math.max(0, offTarget - paidOff);
         const remSrv = Math.max(0, srvTarget - paidSrv);
 
-        // Eğer hepsi ödendiyse
         if (remOff < 0.01 && remSrv < 0.01) {
              return '<span class="text-success font-weight-bold">0.00</span>';
         }
 
-        // Para birimine göre grupla
         const remTotals = {};
         if (remOff > 0.01) remTotals[offCurr] = (remTotals[offCurr] || 0) + remOff;
         if (remSrv > 0.01) remTotals[srvCurr] = (remTotals[srvCurr] || 0) + remSrv;
@@ -142,23 +142,18 @@ export default class AccrualsUI {
         const parts = Object.entries(remTotals).map(([curr, amt]) => `${fmt(amt)} ${curr}`);
 
         if (parts.length === 0) return '<span class="text-success font-weight-bold">0.00</span>';
-        
         return `<div class="text-danger font-weight-bold small" style="line-height:1.2;">${parts.join('<br>+ ')}</div>`;
     }
 
-    /**
-     * 3. Detay Modal (View Modal)
-     */
+    // --- View Modal ---
     showViewAccrualDetailModal(accrual) {
         const modal = document.getElementById('viewAccrualDetailModal');
         const body = modal.querySelector('.modal-body-content');
         const title = document.getElementById('viewAccrualTitle');
         if(title) title.textContent = `Tahakkuk Detayı (#${accrual.id})`;
 
-        // Tarih Formatı
         const dFmt = (d) => d ? new Date(d).toLocaleDateString('tr-TR') : '-';
 
-        // Dosya Listesi HTML
         let filesHtml = '';
         if (accrual.files && accrual.files.length > 0) {
             filesHtml = accrual.files.map(f => {
@@ -189,7 +184,6 @@ export default class AccrualsUI {
             filesHtml = '<div class="col-12 text-center text-muted font-italic p-3">Ekli dosya bulunmamaktadır.</div>';
         }
 
-        // Modal İçeriği
         body.innerHTML = `
             <div class="container-fluid p-0">
                 <div class="row mb-3">
@@ -246,7 +240,7 @@ export default class AccrualsUI {
         `;
         modal.classList.add('show');
     }
-
+    
     showTaskDetailModal(taskId) {
         const modal = document.getElementById('taskDetailModal');
         if(modal) modal.classList.add('show');
