@@ -26,6 +26,10 @@ export class AccrualFormManager {
         }
 
         const p = this.prefix; // Kısaltma
+
+        // DÜZELTME: Select genişlikleri 130px yapıldı ve flex ile sabitlendi.
+        const selectStyle = "width: 130px !important; min-width: 130px !important; flex: 0 0 130px !important; border-top-left-radius: 0; border-bottom-left-radius: 0; background-color: #f8f9fa;";
+
         const html = `
             <div class="form-group mb-3 p-2 bg-light border rounded">
                 <label class="checkbox-label mb-0 font-weight-bold text-primary" style="cursor:pointer; display:flex; align-items:center;">
@@ -44,35 +48,32 @@ export class AccrualFormManager {
                 <a id="${p}EpatsDocLink" href="#" target="_blank" class="btn btn-sm btn-outline-primary shadow-sm"><i class="fas fa-external-link-alt mr-1"></i> Belgeyi Aç</a>
             </div>
 
-            <div class="form-group">
-                <label>Resmi Ücret</label>
-                <div class="input-with-currency">
-                    <input type="number" id="${p}OfficialFee" class="form-input" step="0.01" placeholder="0.00">
-                    <select id="${p}OfficialFeeCurrency" class="currency-select">
-                        <option value="TRY">TRY</option>
-                        <option value="USD">USD</option>
-                        <option value="EUR">EUR</option>
-                    </select>
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label>Resmi Ücret</label>
+                        <div class="input-with-currency" style="display:flex;">
+                            <input type="number" id="${p}OfficialFee" class="form-input form-control" step="0.01" placeholder="0.00" style="border-top-right-radius: 0; border-bottom-right-radius: 0;">
+                            <select id="${p}OfficialFeeCurrency" class="currency-select form-control" style="${selectStyle}"><option value="TRY">TRY</option><option value="USD">USD</option><option value="EUR">EUR</option></select>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label>Hizmet Ücreti</label>
+                        <div class="input-with-currency" style="display:flex;">
+                            <input type="number" id="${p}ServiceFee" class="form-input form-control" step="0.01" placeholder="0.00" style="border-top-right-radius: 0; border-bottom-right-radius: 0;">
+                            <select id="${p}ServiceFeeCurrency" class="currency-select form-control" style="${selectStyle}"><option value="TRY">TRY</option><option value="USD">USD</option><option value="EUR">EUR</option></select>
+                        </div>
+                    </div>
                 </div>
             </div>
 
-            <div class="form-group">
-                <label>Hizmet Ücreti</label>
-                <div class="input-with-currency">
-                    <input type="number" id="${p}ServiceFee" class="form-input" step="0.01" placeholder="0.00">
-                    <select id="${p}ServiceFeeCurrency" class="currency-select">
-                        <option value="TRY">TRY</option>
-                        <option value="USD">USD</option>
-                        <option value="EUR">EUR</option>
-                    </select>
-                </div>
-            </div>
-            
             <div class="row">
                 <div class="col-md-6">
                     <div class="form-group">
                         <label>KDV Oranı (%)</label>
-                        <input type="number" id="${p}VatRate" class="form-input" value="20">
+                        <input type="number" id="${p}VatRate" class="form-input form-control" value="20">
                     </div>
                 </div>
                 <div class="col-md-6 d-flex align-items-center">
@@ -86,14 +87,14 @@ export class AccrualFormManager {
 
             <div class="form-group mt-3" id="${p}ForeignPaymentPartyContainer" style="display:none; background-color: #e3f2fd; padding: 10px; border-radius: 8px; border: 1px solid #90caf9;">
                 <label class="text-primary font-weight-bold"><i class="fas fa-globe-americas mr-2"></i>Yurtdışı Ödeme Yapılacak Taraf</label>
-                <input type="text" id="${p}ForeignPaymentPartySearch" class="form-input" placeholder="Yurtdışı tarafı ara...">
+                <input type="text" id="${p}ForeignPaymentPartySearch" class="form-input form-control" placeholder="Yurtdışı tarafı ara...">
                 <div id="${p}ForeignPaymentPartyResults" class="search-results-list" style="display:none; max-height: 150px; overflow-y: auto; border: 1px solid #ccc; border-radius: 8px; margin-top: 5px; background:white; position:absolute; z-index:1000; width:90%;"></div>
                 <div id="${p}ForeignPaymentPartyDisplay" class="search-result-display" style="display:none; background: #e9f5ff; border: 1px solid #bde0fe; padding: 10px; border-radius: 8px; margin-top: 10px;"></div>
             </div>
 
             <div class="form-group mt-3">
                 <label>Fatura Kesilecek Kişi (Müvekkil/TP)</label>
-                <input type="text" id="${p}TpInvoicePartySearch" class="form-input" placeholder="Kişi ara...">
+                <input type="text" id="${p}TpInvoicePartySearch" class="form-input form-control" placeholder="Kişi ara...">
                 <div id="${p}TpInvoicePartyResults" class="search-results-list" style="display:none; max-height: 150px; overflow-y: auto; border: 1px solid #ccc; border-radius: 8px; margin-top: 5px; background:white; position:absolute; z-index:1000; width:90%;"></div>
                 <div id="${p}TpInvoicePartyDisplay" class="search-result-display" style="display:none; background: #e9f5ff; border: 1px solid #bde0fe; padding: 10px; border-radius: 8px; margin-top: 10px;"></div>
             </div>
@@ -214,27 +215,15 @@ export class AccrualFormManager {
         const vat = parseFloat(document.getElementById(`${p}VatRate`).value) || 0;
         const apply = document.getElementById(`${p}ApplyVatToOfficial`).checked;
         
-        const offCurrency = document.getElementById(`${p}OfficialFeeCurrency`)?.value || 'TRY';
-        const srvCurrency = document.getElementById(`${p}ServiceFeeCurrency`)?.value || 'TRY';
+        let total = apply ? (off + srv) * (1 + vat / 100) : off + (srv * (1 + vat / 100));
         
-        // Para birimleri aynı mı kontrol et
-        if (offCurrency === srvCurrency) {
-            // Aynı para birimi - toplam hesapla
-            let total = apply ? (off + srv) * (1 + vat / 100) : off + (srv * (1 + vat / 100));
-            const fmt = new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(total);
-            document.getElementById(`${p}TotalAmountDisplay`).textContent = `${fmt} ${offCurrency}`;
-            return total;
-        } else {
-            // Farklı para birimleri - ayrı ayrı göster
-            const offTotal = apply ? off * (1 + vat / 100) : off;
-            const srvTotal = apply ? srv * (1 + vat / 100) : srv * (1 + vat / 100);
-            
-            const offFmt = new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(offTotal);
-            const srvFmt = new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(srvTotal);
-            
-            document.getElementById(`${p}TotalAmountDisplay`).textContent = `${offFmt} ${offCurrency} + ${srvFmt} ${srvCurrency}`;
-            return null; // Farklı para birimleri için toplam yok
-        }
+        // Para birimi (Görsel amaçlı)
+        const currency = document.getElementById(`${p}OfficialFeeCurrency`)?.value || 'TRY';
+
+        // Türkçe formatında göster (Binlik ayraç nokta, ondalık virgül)
+        const fmt = new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY' }).format(total);
+        document.getElementById(`${p}TotalAmountDisplay`).textContent = fmt;
+        return total;
     }
 
     /**
@@ -362,6 +351,11 @@ export class AccrualFormManager {
         const p = this.prefix;
         const officialFee = parseFloat(document.getElementById(`${p}OfficialFee`).value) || 0;
         const serviceFee = parseFloat(document.getElementById(`${p}ServiceFee`).value) || 0;
+        
+        // Basit Validation
+        if (officialFee <= 0 && serviceFee <= 0) {
+            return { success: false, error: 'En az bir ücret (Resmi veya Hizmet) girmelisiniz.' };
+        }
 
         const isForeign = document.getElementById(`${p}IsForeignTransaction`).checked;
         const fileInput = document.getElementById(`${p}ForeignInvoiceFile`);
@@ -379,6 +373,20 @@ export class AccrualFormManager {
             serviceParty = tpParty;
         }
 
+        // --- DÜZELTME: Tutar Parsing Mantığı ---
+        // Türk Lirası formatında (14.750,00) gelen stringi doğru parse etmek için:
+        // 1. Noktaları (binlik ayracı) sil
+        // 2. Virgülü (ondalık ayracı) noktaya çevir
+        const rawTotalText = document.getElementById(`${p}TotalAmountDisplay`).textContent;
+        // Sadece rakam, nokta ve virgülü bırak
+        let cleanText = rawTotalText.replace(/[^0-9.,]/g, '');
+        // Noktaları sil (binlik)
+        cleanText = cleanText.replace(/\./g, '');
+        // Virgülü noktaya çevir (ondalık)
+        cleanText = cleanText.replace(',', '.');
+        
+        const totalAmount = parseFloat(cleanText) || 0;
+
         return {
             success: true,
             data: {
@@ -386,7 +394,7 @@ export class AccrualFormManager {
                 serviceFee: { amount: serviceFee, currency: document.getElementById(`${p}ServiceFeeCurrency`).value },
                 vatRate: parseFloat(document.getElementById(`${p}VatRate`).value) || 0,
                 applyVatToOfficialFee: document.getElementById(`${p}ApplyVatToOfficial`).checked,
-                totalAmount: parseFloat(document.getElementById(`${p}TotalAmountDisplay`).textContent.replace(/[^0-9.,]/g, '').replace(',','.')) || 0,
+                totalAmount: totalAmount, // Düzeltilmiş tutar
                 tpInvoiceParty: tpParty,
                 serviceInvoiceParty: serviceParty,
                 isForeignTransaction: isForeign,
