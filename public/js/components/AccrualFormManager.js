@@ -341,19 +341,21 @@ export class AccrualFormManager {
         });
     }
 
-    /**
+/**
      * Formdaki verileri toplayıp döndürür.
-     * DÜZELTME: Ekranı parse etmek yerine matematiksel hesaplamayı yeniden yapar.
+     * DÜZELTME: Para birimi kontrolü eklendi. Farklı birimler asla toplanmaz.
      */
     getData() {
         const p = this.prefix;
+        
+        // 1. Ham verileri al
         const officialFee = parseFloat(document.getElementById(`${p}OfficialFee`).value) || 0;
         const offCurr = document.getElementById(`${p}OfficialFeeCurrency`).value;
         
         const serviceFee = parseFloat(document.getElementById(`${p}ServiceFee`).value) || 0;
         const srvCurr = document.getElementById(`${p}ServiceFeeCurrency`).value;
 
-        // Basit Validation
+        // 2. Basit Validation
         if (officialFee <= 0 && serviceFee <= 0) {
             return { success: false, error: 'En az bir ücret (Resmi veya Hizmet) girmelisiniz.' };
         }
@@ -364,7 +366,7 @@ export class AccrualFormManager {
         const fileInput = document.getElementById(`${p}ForeignInvoiceFile`);
         const files = fileInput.files;
 
-        // Taraf Mantığı
+        // 3. Taraf Seçimleri
         const tpParty = this.selectedTpParty ? { id: this.selectedTpParty.id, name: this.selectedTpParty.name } : null;
         let serviceParty = null;
 
@@ -376,17 +378,40 @@ export class AccrualFormManager {
             serviceParty = tpParty;
         }
 
-        // --- HESAPLAMA (Düzeltildi) ---
-        // Veritabanı tek bir 'totalAmount' alanı beklediği için, 
-        // eğer para birimleri farklıysa bile matematiksel büyüklüğü (magnitude) topluyoruz.
-        // Ancak UI tarafı (ui.js) para birimlerine bakarak bunu zaten yok sayacak ve ayrı ayrı gösterecektir.
+        // 4. HESAPLAMA VE CURRENCY KONTROLÜ (KRİTİK DÜZELTME)
         
+        // KDV Dahil Tutarları Hesapla
         const offTotal = applyVatToOfficial ? officialFee * (1 + vatRate / 100) : officialFee;
         const srvTotal = serviceFee * (1 + vatRate / 100);
         
-        // Buradaki toplam sadece veritabanı alanı dolsun diye yapılan matematiksel toplamdır.
-        // Farklı currency varsa bile sayısal değer olarak saklanır.
-        const totalAmount = offTotal + srvTotal;
+        let finalTotalAmount = 0;
+        let finalTotalCurrency = 'TRY'; // Varsayılan
+
+        // Senaryo A: Sadece Resmi Ücret Var
+        if (officialFee > 0 && serviceFee === 0) {
+            finalTotalAmount = offTotal;
+            finalTotalCurrency = offCurr;
+        }
+        // Senaryo B: Sadece Hizmet Ücreti Var
+        else if (serviceFee > 0 && officialFee === 0) {
+            finalTotalAmount = srvTotal;
+            finalTotalCurrency = srvCurr;
+        }
+        // Senaryo C: İkisi de Var
+        else if (officialFee > 0 && serviceFee > 0) {
+            if (offCurr === srvCurr) {
+                // Para birimleri AYNI -> Topla ve o birimi kullan
+                finalTotalAmount = offTotal + srvTotal;
+                finalTotalCurrency = offCurr;
+            } else {
+                // Para birimleri FARKLI -> Toplama YAPMA!
+                // 100 EUR + 500 TRY matematiksel olarak anlamsızdır.
+                // Veritabanına 0 ve 'MULTI' yazıyoruz.
+                // UI (ui.js) zaten officialFee ve serviceFee alanlarını okuyarak "X EUR + Y TRY" gösterecek.
+                finalTotalAmount = 0; 
+                finalTotalCurrency = 'MULTI'; 
+            }
+        }
 
         return {
             success: true,
@@ -395,8 +420,11 @@ export class AccrualFormManager {
                 serviceFee: { amount: serviceFee, currency: srvCurr },
                 vatRate: vatRate,
                 applyVatToOfficialFee: applyVatToOfficial,
-                totalAmount: totalAmount, // Artık ekrandan parse edilmiyor, hesaplanıyor.
-                totalAmountCurrency: 'TRY', // Varsayılan değer (UI'da currency kontrolü yapılıyor)
+                
+                // Düzeltilmiş Alanlar
+                totalAmount: finalTotalAmount, 
+                totalAmountCurrency: finalTotalCurrency,
+                
                 tpInvoiceParty: tpParty,
                 serviceInvoiceParty: serviceParty,
                 isForeignTransaction: isForeign,
