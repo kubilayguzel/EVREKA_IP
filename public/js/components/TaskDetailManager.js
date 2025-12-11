@@ -2,7 +2,7 @@
 
 export class TaskDetailManager {
     /**
-     * @param {string} containerId - Detayların gösterileceği div'in ID'si (örn: 'modalBody')
+     * @param {string} containerId - Detayların gösterileceği div'in ID'si
      */
     constructor(containerId) {
         this.container = document.getElementById(containerId);
@@ -16,192 +16,213 @@ export class TaskDetailManager {
         };
     }
 
-    /**
-     * Yükleniyor animasyonunu gösterir.
-     */
     showLoading() {
         if (!this.container) return;
-        this.container.innerHTML = '<div class="text-center p-4"><i class="fas fa-circle-notch fa-spin fa-2x text-primary"></i><br><br>Veriler getiriliyor...</div>';
+        this.container.innerHTML = `
+            <div class="d-flex flex-column align-items-center justify-content-center py-5">
+                <i class="fas fa-circle-notch fa-spin fa-3x text-primary mb-3"></i>
+                <h6 class="text-muted">Veriler hazırlanıyor...</h6>
+            </div>`;
     }
 
-    /**
-     * Hata mesajı gösterir.
-     */
     showError(message) {
         if (!this.container) return;
-        this.container.innerHTML = `<div class="alert alert-danger">${message}</div>`;
+        this.container.innerHTML = `
+            <div class="alert alert-danger d-flex align-items-center m-3" role="alert">
+                <i class="fas fa-exclamation-triangle mr-3 fa-lg"></i>
+                <div>${message}</div>
+            </div>`;
     }
 
-    /**
-     * Task verilerini ve ilişkili verileri alıp HTML'i oluşturur.
-     * @param {Object} task - Ana Task objesi
-     * @param {Object} options - { ipRecord, transactionType, assignedUser, accruals }
-     */
     render(task, options = {}) {
         if (!this.container) return;
-        if (!task) {
-            this.showError('İş kaydı bulunamadı.');
-            return;
-        }
+        if (!task) { this.showError('İş kaydı bulunamadı.'); return; }
 
         const { ipRecord, transactionType, assignedUser, accruals = [] } = options;
 
-        // 1. Veri Hazırlığı
+        // --- Veri Hazırlığı ---
         const assignedName = assignedUser ? (assignedUser.displayName || assignedUser.email) : (task.assignedTo_email || 'Atanmamış');
         const relatedRecordTxt = ipRecord ? (ipRecord.applicationNumber || ipRecord.title) : 'İlgili kayıt bulunamadı';
         const taskTypeDisplay = transactionType ? (transactionType.alias || transactionType.name) : (task.taskType || '-');
         const statusText = this.statusDisplayMap[task.status] || task.status;
 
-        // 2. HTML Parçalarının Oluşturulması
+        // Statüye göre renk belirleme
+        const isCompleted = task.status === 'completed';
+        const statusColorClass = isCompleted ? 'text-success' : 'text-primary';
+        const statusBgClass = isCompleted ? 'bg-success-light' : 'bg-primary-light'; // Custom CSS gerekebilir veya style ile veririz
+
+        // HTML Parçaları
         const accrualsHtml = this._generateAccrualsHtml(accruals);
         const docsContent = this._generateDocsHtml(task);
 
-        // 3. Ana Şablon
+        // --- Ana Şablon (AccrualFormManager Stilinde) ---
         const html = `
-            <div class="container-fluid p-0">
-                <div class="section-header mt-0"><i class="fas fa-info-circle mr-2"></i> GENEL BİLGİLER</div>
+            <div class="container-fluid px-1 py-2">
                 
-                <div class="mb-3">
-                    <label class="view-label">İş Konusu</label>
-                    <div class="view-box font-weight-bold text-dark" style="background-color: #f8f9fa;">${task.title || '-'}</div>
-                </div>
-
-                <div class="form-grid">
-                    <div class="form-group">
-                        <label class="view-label">İlgili Dosya</label>
-                        <div class="view-box">${relatedRecordTxt}</div>
+                <div class="d-flex justify-content-between align-items-center p-3 mb-3 bg-light border rounded" style="border-left: 5px solid #1e3c72 !important;">
+                    <div>
+                        <h5 class="font-weight-bold text-dark mb-1">${task.title || 'Başlıksız Görev'}</h5>
+                        <small class="text-muted"><i class="fas fa-hashtag mr-1"></i>Task ID: ${task.id}</small>
                     </div>
-                    <div class="form-group">
-                        <label class="view-label">İş Tipi</label>
-                        <div class="view-box">${taskTypeDisplay}</div>
-                    </div>
-                    <div class="form-group">
-                        <label class="view-label">Atanan Kişi</label>
-                        <div class="view-box"><i class="fas fa-user-circle mr-2 text-muted"></i> ${assignedName}</div>
-                    </div>
-                    <div class="form-group">
-                        <label class="view-label">Güncel Durum</label>
-                        <div class="view-box font-weight-bold" style="color:#1e3c72;">${statusText}</div>
+                    <div class="text-right">
+                        <span class="badge badge-pill px-3 py-2 ${statusColorClass}" style="background-color: #e9ecef; font-size: 0.9rem;">
+                            ${statusText}
+                        </span>
                     </div>
                 </div>
 
-                <div class="section-header"><i class="far fa-calendar-alt mr-2"></i> TARİHLER</div>
-                <div class="form-grid">
-                    <div class="form-group">
-                        <label class="view-label">Operasyonel Son Tarih</label>
-                        <div class="view-box"><i class="far fa-clock mr-2 text-warning"></i> ${this._formatDate(task.dueDate)}</div>
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <div class="form-group mb-0">
+                            <label class="text-secondary small font-weight-bold mb-1">İLGİLİ DOSYA</label>
+                            <div class="d-flex align-items-center p-2 bg-white border rounded">
+                                <i class="fas fa-folder text-warning mr-3 fa-lg"></i>
+                                <span class="text-dark font-weight-bold">${relatedRecordTxt}</span>
+                            </div>
+                        </div>
                     </div>
-                    <div class="form-group">
-                        <label class="view-label">Resmi Son Tarih</label>
-                        <div class="view-box"><i class="far fa-calendar-check mr-2 text-danger"></i> ${this._formatDate(task.officialDueDate)}</div>
+                    <div class="col-md-6">
+                        <div class="form-group mb-0">
+                            <label class="text-secondary small font-weight-bold mb-1">İŞ TİPİ</label>
+                            <div class="d-flex align-items-center p-2 bg-white border rounded">
+                                <i class="fas fa-tasks text-info mr-3 fa-lg"></i>
+                                <span class="text-dark">${taskTypeDisplay}</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
-                <div class="section-header"><i class="fas fa-folder-open mr-2"></i> BELGELER</div>
-                <div class="mb-3">
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <div class="p-2 border rounded bg-light">
+                            <label class="text-secondary small font-weight-bold d-block mb-1">OPERASYONEL BİTİŞ</label>
+                            <div class="text-dark"><i class="far fa-clock text-warning mr-2"></i>${this._formatDate(task.dueDate)}</div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="p-2 border rounded bg-light">
+                            <label class="text-secondary small font-weight-bold d-block mb-1">RESMİ BİTİŞ</label>
+                            <div class="text-dark"><i class="far fa-calendar-check text-danger mr-2"></i>${this._formatDate(task.officialDueDate)}</div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                         <div class="p-2 border rounded bg-light">
+                            <label class="text-secondary small font-weight-bold d-block mb-1">ATANAN KİŞİ</label>
+                            <div class="text-dark text-truncate"><i class="fas fa-user-circle text-primary mr-2"></i>${assignedName}</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-4">
+                    <h6 class="border-bottom pb-2 text-primary font-weight-bold"><i class="fas fa-folder-open mr-2"></i>BELGELER</h6>
                     ${docsContent}
                 </div>
 
-                <div class="section-header"><i class="fas fa-coins mr-2"></i> BAĞLI TAHAKKUKLAR</div>
-                <div class="mb-3">
+                <div class="mb-4">
+                    <h6 class="border-bottom pb-2 text-primary font-weight-bold"><i class="fas fa-coins mr-2"></i>BAĞLI TAHAKKUKLAR</h6>
                     ${accrualsHtml}
                 </div>
 
-                <div class="section-header"><i class="fas fa-align-left mr-2"></i> AÇIKLAMA & NOTLAR</div>
-                <div class="view-box" style="min-height: 80px; white-space: pre-wrap; background:#fff;">${task.description || '<span class="text-muted font-italic">Açıklama girilmemiş.</span>'}</div>
+                <div class="form-group">
+                     <h6 class="text-secondary small font-weight-bold mb-2">AÇIKLAMA & NOTLAR</h6>
+                     <div class="p-3 bg-light border rounded text-dark" style="min-height: 80px; white-space: pre-wrap; font-size: 0.95rem;">${task.description || '<span class="text-muted font-italic">Herhangi bir açıklama girilmemiş.</span>'}</div>
+                </div>
+
             </div>`;
 
         this.container.innerHTML = html;
     }
 
-    /**
-     * Tahakkuk tablosunu oluşturur (Helper)
-     */
-    _generateAccrualsHtml(accruals) {
-        if (!accruals || accruals.length === 0) {
-            return `<div class="view-box text-muted font-italic small"><i class="fas fa-info-circle mr-2"></i>Bu işe bağlı tahakkuk kaydı bulunmamaktadır.</div>`;
-        }
-
-        const rows = accruals.map(acc => {
-            const accStatusBadge = acc.status === 'paid' 
-                ? '<span style="color:green; font-weight:bold;">Ödendi</span>' 
-                : '<span style="color:orange; font-weight:bold;">Ödenmedi</span>';
-            return `
-                <tr style="border-bottom: 1px solid #eee;">
-                    <td style="padding:8px;">#${acc.id || '-'}</td>
-                    <td style="padding:8px; font-weight:bold;">${this._formatCurrency(acc.totalAmount, acc.totalAmountCurrency)}</td>
-                    <td style="padding:8px;">${accStatusBadge}</td>
-                    <td style="padding:8px; color:#666;">${this._formatDate(acc.createdAt)}</td>
-                </tr>`;
-        }).join('');
-
-        return `
-            <div class="view-box" style="display:block; padding:0; overflow:hidden;">
-                <table style="width:100%; border-collapse:collapse; font-size:0.9rem;">
-                    <thead style="background:#f8f9fa; border-bottom:2px solid #e9ecef;">
-                        <tr>
-                            <th style="padding:10px; text-align:left;">ID</th>
-                            <th style="padding:10px; text-align:left;">Tutar</th>
-                            <th style="padding:10px; text-align:left;">Durum</th>
-                            <th style="padding:10px; text-align:left;">Tarih</th>
-                        </tr>
-                    </thead>
-                    <tbody>${rows}</tbody>
-                </table>
-            </div>`;
-    }
-
-    /**
-     * Belge listesini oluşturur (Helper)
-     */
     _generateDocsHtml(task) {
-        let docsContent = '';
-        
-        // EPATS Belgesi
+        let content = '';
+
+        // EPATS Belgesi (AccrualFormManager'daki Özel Alert Stili)
         if (task.details && task.details.epatsDocument && (task.details.epatsDocument.url || task.details.epatsDocument.downloadURL)) {
             const doc = task.details.epatsDocument;
             const url = doc.url || doc.downloadURL;
-            docsContent += `
-            <div class="col-12 mb-2">
-                <div class="view-box d-flex justify-content-between align-items-center" style="border-left: 4px solid #007bff; background:#f0f7ff;">
-                    <div class="d-flex align-items-center">
-                        <i class="fas fa-file-contract text-primary fa-lg mr-3"></i>
-                        <div>
-                            <strong class="d-block text-dark" style="font-size:0.9rem;">EPATS Belgesi</strong>
-                            <small class="text-muted">${doc.name || 'Dosya'}</small>
-                        </div>
+            content += `
+            <div class="alert alert-secondary d-flex align-items-center justify-content-between mb-3 shadow-sm" style="border-left: 4px solid #1e3c72; background-color: #f8f9fa;">
+                <div class="d-flex align-items-center">
+                    <div class="text-center mr-3" style="width: 40px;">
+                        <i class="fas fa-file-pdf text-danger fa-2x"></i>
                     </div>
-                    <a href="${url}" target="_blank" class="btn btn-sm btn-primary">Aç</a>
+                    <div>
+                        <h6 class="mb-0 font-weight-bold text-dark">EPATS Belgesi</h6>
+                        <small class="text-muted">${doc.name || 'İlgili Resmi Evrak'}</small>
+                    </div>
                 </div>
+                <a href="${url}" target="_blank" class="btn btn-sm btn-outline-primary shadow-sm rounded-pill px-3">
+                    <i class="fas fa-external-link-alt mr-1"></i> Aç
+                </a>
             </div>`;
         }
 
         // Diğer Dosyalar
         const files = task.files || (task.details ? task.details.files : []) || [];
-        if (files.length > 0) {
-            files.forEach(file => {
-                const epatsUrl = (task.details && task.details.epatsDocument) ? (task.details.epatsDocument.url || task.details.epatsDocument.downloadURL) : null;
-                const fileUrl = file.url || file.content;
-                // EPATS belgesi tekrar gösterilmesin
-                if (epatsUrl && (fileUrl === epatsUrl)) return;
+        const otherFiles = files.filter(f => {
+             const epatsUrl = (task.details && task.details.epatsDocument) ? (task.details.epatsDocument.url || task.details.epatsDocument.downloadURL) : null;
+             const fUrl = f.url || f.content;
+             return !(epatsUrl && fUrl === epatsUrl);
+        });
 
-                docsContent += `
+        if (otherFiles.length > 0) {
+            content += '<div class="row">';
+            otherFiles.forEach(file => {
+                content += `
                 <div class="col-md-6 mb-2">
-                    <div class="view-box d-flex justify-content-between align-items-center">
-                        <div class="d-flex align-items-center text-truncate" style="max-width: 80%;">
+                    <div class="d-flex justify-content-between align-items-center p-2 border rounded bg-white shadow-sm">
+                        <div class="d-flex align-items-center text-truncate overflow-hidden">
                             <i class="fas fa-paperclip text-secondary mr-2"></i>
-                            <span class="text-truncate small" title="${file.name}">${file.name}</span>
+                            <span class="text-truncate small text-dark" title="${file.name}">${file.name}</span>
                         </div>
-                        <a href="${fileUrl}" target="_blank" class="btn btn-sm btn-light border"><i class="fas fa-download"></i></a>
+                        <a href="${file.url || file.content}" target="_blank" class="btn btn-sm btn-light border text-primary">
+                            <i class="fas fa-download"></i>
+                        </a>
                     </div>
                 </div>`;
             });
+            content += '</div>';
+        } else if (content === '') {
+            content = `<div class="p-3 bg-light border rounded text-center text-muted font-italic small">Bu göreve ekli belge bulunmamaktadır.</div>`;
+        }
+        
+        return content;
+    }
+
+    _generateAccrualsHtml(accruals) {
+        if (!accruals || accruals.length === 0) {
+            return `<div class="p-3 bg-light border rounded text-center text-muted font-italic small">Bağlı tahakkuk bulunmamaktadır.</div>`;
         }
 
-        if (docsContent === '') {
-            return `<div class="col-12"><div class="view-box text-muted font-italic small">Ekli belge bulunmamaktadır.</div></div>`;
-        }
-        return `<div class="row" style="margin:0 -5px;">${docsContent}</div>`;
+        const rows = accruals.map(acc => {
+            const isPaid = acc.status === 'paid';
+            const statusBadge = isPaid 
+                ? `<span class="badge badge-success px-2">Ödendi</span>` 
+                : `<span class="badge badge-warning px-2 text-white">Ödenmedi</span>`;
+            
+            return `
+                <tr style="background: white;">
+                    <td class="align-middle py-2 pl-3 border-bottom"><small class="text-muted">#${acc.id || '-'}</small></td>
+                    <td class="align-middle py-2 border-bottom font-weight-bold text-dark">${this._formatCurrency(acc.totalAmount, acc.totalAmountCurrency)}</td>
+                    <td class="align-middle py-2 border-bottom text-center">${statusBadge}</td>
+                    <td class="align-middle py-2 border-bottom text-right pr-3 text-muted small">${this._formatDate(acc.createdAt)}</td>
+                </tr>`;
+        }).join('');
+
+        return `
+            <div class="border rounded overflow-hidden shadow-sm">
+                <table class="table table-sm table-hover mb-0" style="background-color: #f8f9fa;">
+                    <thead class="text-secondary small bg-light">
+                        <tr>
+                            <th class="pl-3 py-2 border-bottom border-top-0 border-0">ID</th>
+                            <th class="py-2 border-bottom border-top-0 border-0">TUTAR</th>
+                            <th class="py-2 border-bottom border-top-0 border-0 text-center">DURUM</th>
+                            <th class="pr-3 py-2 border-bottom border-top-0 border-0 text-right">TARİH</th>
+                        </tr>
+                    </thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            </div>`;
     }
 
     _formatDate(dateVal) {
