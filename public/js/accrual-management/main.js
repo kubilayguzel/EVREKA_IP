@@ -585,13 +585,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         }
 
-// --- Modal Gösterim (Currency Etiketlerini Ayarla) ---
+// --- Modal Gösterim (Currency Etiketlerini Ayarla) --
         showMarkPaidModal() {
             if (this.selectedAccruals.size === 0) { showNotification('Seçim yapınız', 'error'); return; }
             
             const modal = document.getElementById('markPaidModal');
             document.getElementById('paidAccrualCount').textContent = this.selectedAccruals.size;
-            document.getElementById('paymentDate').valueAsDate = new Date();
+            document.getElementById('paymentDate').valueAsDate = new Date(); // Bugünün tarihi
 
             const detailedArea = document.getElementById('detailedPaymentInputs');
             
@@ -604,28 +604,34 @@ document.addEventListener('DOMContentLoaded', async () => {
                 // 1. Resmi Ücret Ayarları
                 const offAmount = accrual.officialFee?.amount || 0;
                 const offCurr = accrual.officialFee?.currency || 'TRY';
-                // KDV Varsa Gösterimde Belirt
                 const offVatText = accrual.applyVatToOfficialFee ? ' (+KDV)' : '';
                 
                 document.getElementById('officialFeeBadge').textContent = `${offAmount} ${offCurr}${offVatText}`;
-                document.getElementById('manualOfficialCurrencyLabel').textContent = offCurr; // Input Yanındaki Label
+                document.getElementById('manualOfficialCurrencyLabel').textContent = offCurr;
                 
                 document.getElementById('payFullOfficial').checked = true;
                 document.getElementById('officialAmountInputContainer').style.display = 'none';
-                document.getElementById('manualOfficialAmount').value = '';
+                
+                // --- DEĞİŞİKLİK 1: MEVCUT ÖDENEN TUTARI INPUT'A YAZ ---
+                // Eskiden burası boşaltılıyordu (''), şimdi veritabanındaki değeri yazıyoruz.
+                document.getElementById('manualOfficialAmount').value = accrual.paidOfficialAmount || 0; 
+                // -------------------------------------------------------
 
                 // 2. Hizmet Bedeli Ayarları
                 const srvAmount = accrual.serviceFee?.amount || 0;
                 const srvCurr = accrual.serviceFee?.currency || 'TRY';
                 
                 document.getElementById('serviceFeeBadge').textContent = `${srvAmount} ${srvCurr} (+KDV)`;
-                document.getElementById('manualServiceCurrencyLabel').textContent = srvCurr; // Input Yanındaki Label
+                document.getElementById('manualServiceCurrencyLabel').textContent = srvCurr;
 
                 document.getElementById('payFullService').checked = true;
                 document.getElementById('serviceAmountInputContainer').style.display = 'none';
-                document.getElementById('manualServiceAmount').value = '';
+                
+                // --- DEĞİŞİKLİK 2: MEVCUT ÖDENEN TUTARI INPUT'A YAZ ---
+                document.getElementById('manualServiceAmount').value = accrual.paidServiceAmount || 0;
+                // -------------------------------------------------------
 
-                // Checkbox Eventleri
+                // Checkbox Eventleri (Değişmedi)
                 document.getElementById('payFullOfficial').onchange = (e) => {
                     document.getElementById('officialAmountInputContainer').style.display = e.target.checked ? 'none' : 'block';
                 };
@@ -642,6 +648,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         // --- Ödeme Kaydetme (Görsel Düzeltme ile Uyumlu) ---
+        
         async handlePaymentSubmission() {
             if (this.selectedAccruals.size === 0) return;
             const paymentDate = document.getElementById('paymentDate').value;
@@ -659,43 +666,46 @@ document.addEventListener('DOMContentLoaded', async () => {
                         files: [...(accrual.files || []), ...this.uploadedPaymentReceipts]
                     };
 
-                    // TEKİL SEÇİM (Detaylı Ödeme)
+                    // TEKİL SEÇİM (Detaylı Ödeme ve Update Mantığı)
                     if (this.selectedAccruals.size === 1) {
                         const payFullOff = document.getElementById('payFullOfficial').checked;
                         const payFullSrv = document.getElementById('payFullService').checked;
                         
                         const vatMultiplier = 1 + ((accrual.vatRate || 0) / 100);
 
-                        // 1. Resmi Ücret Ödemesi
-                        let paidOffToAdd = 0;
+                        // --- 1. Resmi Ücret Ödemesi ---
                         const offTarget = accrual.applyVatToOfficialFee 
                             ? (accrual.officialFee?.amount || 0) * vatMultiplier 
                             : (accrual.officialFee?.amount || 0);
 
+                        let newPaidOff = 0;
+
                         if (payFullOff) {
-                            paidOffToAdd = Math.max(0, offTarget - (accrual.paidOfficialAmount || 0));
+                            // Tamamını öde seçiliyse -> Hedef tutarı al
+                            newPaidOff = offTarget;
                         } else {
-                            paidOffToAdd = parseFloat(document.getElementById('manualOfficialAmount').value) || 0;
+                            // Seçili DEĞİLSE -> Inputtaki değeri DİREKT al (Ekleme yapma)
+                            newPaidOff = parseFloat(document.getElementById('manualOfficialAmount').value) || 0;
                         }
 
-                        // 2. Hizmet Bedeli Ödemesi
-                        let paidSrvToAdd = 0;
+                        // --- 2. Hizmet Bedeli Ödemesi ---
                         const srvTarget = (accrual.serviceFee?.amount || 0) * vatMultiplier;
+                        
+                        let newPaidSrv = 0;
 
                         if (payFullSrv) {
-                            paidSrvToAdd = Math.max(0, srvTarget - (accrual.paidServiceAmount || 0));
+                            // Tamamını öde seçiliyse -> Hedef tutarı al
+                            newPaidSrv = srvTarget;
                         } else {
-                            paidSrvToAdd = parseFloat(document.getElementById('manualServiceAmount').value) || 0;
+                            // Seçili DEĞİLSE -> Inputtaki değeri DİREKT al (Ekleme yapma)
+                            newPaidSrv = parseFloat(document.getElementById('manualServiceAmount').value) || 0;
                         }
 
-                        // Veritabanı Değerlerini Güncelle
-                        const newPaidOff = (accrual.paidOfficialAmount || 0) + paidOffToAdd;
-                        const newPaidSrv = (accrual.paidServiceAmount || 0) + paidSrvToAdd;
-                        
+                        // --- UPDATE İŞLEMİ (Kümülatif Değil, Override) ---
                         updates.paidOfficialAmount = newPaidOff;
                         updates.paidServiceAmount = newPaidSrv;
 
-                        // KALAN TUTARI HESAPLA (ARRAY OLARAK)
+                        // KALAN TUTARI HESAPLA (Hedef - Yeni Ödenen)
                         const remOff = Math.max(0, offTarget - newPaidOff);
                         const remSrv = Math.max(0, srvTarget - newPaidSrv);
                         
@@ -708,20 +718,31 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                         // Kalan tutarı diziye çevir
                         const remainingArray = Object.entries(remMap).map(([c, a]) => ({ amount: a, currency: c }));
-                        
-                        updates.remainingAmount = remainingArray; // Veritabanına dizi olarak yaz
+                        updates.remainingAmount = remainingArray;
 
                         // Status Kontrolü
                         if (remainingArray.length === 0) {
                             updates.status = 'paid';
-                        } else {
+                        } else if (newPaidOff > 0 || newPaidSrv > 0) {
                             updates.status = 'partially_paid';
+                        } else {
+                            updates.status = 'unpaid';
                         }
 
                     } else {
-                        // ÇOKLU SEÇİM (Hepsini kapat)
+                        // ÇOKLU SEÇİM (Hepsini kapat - değişmedi)
                         updates.status = 'paid';
-                        updates.remainingAmount = []; // Boş dizi = borç yok
+                        updates.remainingAmount = []; 
+                        
+                        // Çoklu seçimde ödendi yapınca tam tutarları paidAmount olarak işle
+                        const vatMultiplier = 1 + ((accrual.vatRate || 0) / 100);
+                        const offTarget = accrual.applyVatToOfficialFee 
+                            ? (accrual.officialFee?.amount || 0) * vatMultiplier 
+                            : (accrual.officialFee?.amount || 0);
+                        const srvTarget = (accrual.serviceFee?.amount || 0) * vatMultiplier;
+                        
+                        updates.paidOfficialAmount = offTarget;
+                        updates.paidServiceAmount = srvTarget;
                     }
 
                     return accrualService.updateAccrual(id, updates);
