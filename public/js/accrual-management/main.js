@@ -144,7 +144,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 return 0;
             });
         }
-
         renderTable() {
             const tbody = document.getElementById('accrualsTableBody');
             const noMsg = document.getElementById('noRecordsMessage');
@@ -172,7 +171,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                             maximumFractionDigits: 2
                         }).format(safeVal);
                         return `${formatted} ${item.currency}`;
-                    }).join(' + '); 
+                    }).join(' + ');
                 }
                 const val = parseFloat(data);
                 if (isNaN(val)) return '0,00 ' + defaultCurrency;
@@ -192,8 +191,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const isSel = this.selectedAccruals.has(acc.id);
                 const isPaid = acc.status === 'paid';
                 
-                // Kalan tutarı (rem) belirle
+                // Verileri hazırla
                 const rem = acc.remainingAmount !== undefined ? acc.remainingAmount : acc.totalAmount;
+                const total = acc.totalAmount;
                 
                 let taskDisplay = acc.taskTitle || acc.taskId;
                 if (this.allTasks[String(acc.taskId)]) taskDisplay = this.allTasks[String(acc.taskId)].title;
@@ -201,25 +201,38 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const officialStr = acc.officialFee ? formatMultiCurrency(acc.officialFee.amount, acc.officialFee.currency) : '-';
                 const serviceStr = acc.serviceFee ? formatMultiCurrency(acc.serviceFee.amount, acc.serviceFee.currency) : '-';
 
-                // --- KALAN TUTAR GÖRÜNTÜLEME MANTIĞI ---
-                let remainingHtml = ''; 
-                let isDebtZero = false;
-
-                // Kalan tutarın 0 olup olmadığını kontrol et
-                if (Array.isArray(rem)) {
-                    // Dizi ise içindeki tutarları topla, 0.01'den küçükse 0 say
-                    const totalVal = rem.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
-                    isDebtZero = totalVal < 0.01;
+                // --- KALAN TUTAR GÖRÜNTÜLEME MANTIĞI (YENİ) ---
+                
+                // 1. Toplam Tutarın Sayısal Değerini Hesapla
+                let totalNumeric = 0;
+                if (Array.isArray(total)) {
+                    totalNumeric = total.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
                 } else {
-                    // Sayı ise direkt kontrol et
-                    isDebtZero = (parseFloat(rem) || 0) < 0.01;
+                    totalNumeric = parseFloat(total) || 0;
                 }
 
-                if (!isDebtZero) {
-                    // Eğer borç VARSA: Siyah ve Kalın yazdır
+                // 2. Kalan Tutarın Sayısal Değerini Hesapla
+                let remNumeric = 0;
+                if (Array.isArray(rem)) {
+                    remNumeric = rem.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+                } else {
+                    remNumeric = parseFloat(rem) || 0;
+                }
+
+                let remainingHtml = ''; 
+                
+                // KOŞUL: 
+                // Kalan > 0 OLMALI  (Tamamen ödenmişse gösterme)
+                // VE
+                // Kalan != Toplam OLMALI (Hiç ödenmemişse gösterme - zaten toplamda yazıyor)
+                
+                const isZero = remNumeric < 0.01;
+                const isEqualTotal = Math.abs(totalNumeric - remNumeric) < 0.01;
+
+                if (!isZero && !isEqualTotal) {
+                    // Sadece Kısmi ödeme varsa SİYAH ve KALIN göster
                     remainingHtml = `<span style="color: black; font-weight: bold;">${formatMultiCurrency(rem, acc.totalAmountCurrency)}</span>`;
-                } 
-                // Eğer borç 0 İSE: 'remainingHtml' boş kalır, yani ekranda hiçbir şey görünmez.
+                }
 
                 return `
                 <tr>
