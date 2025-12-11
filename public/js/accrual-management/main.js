@@ -160,13 +160,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             let pageData = this.pagination ? this.pagination.getCurrentPageData(this.processedData) : this.processedData;
             
-            // --- YENİ EKLENEN FORMAT FONKSİYONU ---
-            // Bu fonksiyon hem eski (tek sayı) hem yeni (dizi/array) yapıyı destekler
+            // --- FORMAT FONKSİYONU ---
             const formatMultiCurrency = (data, defaultCurrency = 'TRY') => {
-                // 1. Veri bir Dizi (Array) ise: [{amount:100, currency:'EUR'}]
                 if (Array.isArray(data)) {
                     if (data.length === 0) return '0,00 ' + defaultCurrency;
-                    
                     return data.map(item => {
                         const val = parseFloat(item.amount);
                         const safeVal = isNaN(val) ? 0 : val;
@@ -174,22 +171,18 @@ document.addEventListener('DOMContentLoaded', async () => {
                             minimumFractionDigits: 2,
                             maximumFractionDigits: 2
                         }).format(safeVal);
-                        // Örn: "1.200,50 EUR"
                         return `${formatted} ${item.currency}`;
-                    }).join(' + '); // Birden fazla para birimi varsa araya + koy
+                    }).join(' + '); 
                 }
-
-                // 2. Veri tek bir sayı ise (Eski sistem): 1000
                 const val = parseFloat(data);
                 if (isNaN(val)) return '0,00 ' + defaultCurrency;
-                
                 return new Intl.NumberFormat('tr-TR', { 
                     style: 'currency', 
                     currency: defaultCurrency 
                 }).format(val);
             };
-            // ----------------------------------------
 
+            // --- TABLO SATIRLARI ---
             tbody.innerHTML = pageData.map(acc => {
                 let sTxt = 'Bilinmiyor', sCls = '';
                 if(acc.status === 'paid') { sTxt = 'Ödendi'; sCls = 'status-paid'; }
@@ -199,15 +192,34 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const isSel = this.selectedAccruals.has(acc.id);
                 const isPaid = acc.status === 'paid';
                 
-                // Kalan tutarı belirle
+                // Kalan tutarı (rem) belirle
                 const rem = acc.remainingAmount !== undefined ? acc.remainingAmount : acc.totalAmount;
                 
                 let taskDisplay = acc.taskTitle || acc.taskId;
                 if (this.allTasks[String(acc.taskId)]) taskDisplay = this.allTasks[String(acc.taskId)].title;
 
-                // Resmi ve Hizmet ücretleri genelde tekil obje gelir ama garanti olsun diye kontrol edelim
                 const officialStr = acc.officialFee ? formatMultiCurrency(acc.officialFee.amount, acc.officialFee.currency) : '-';
                 const serviceStr = acc.serviceFee ? formatMultiCurrency(acc.serviceFee.amount, acc.serviceFee.currency) : '-';
+
+                // --- KALAN TUTAR GÖRÜNTÜLEME MANTIĞI ---
+                let remainingHtml = ''; 
+                let isDebtZero = false;
+
+                // Kalan tutarın 0 olup olmadığını kontrol et
+                if (Array.isArray(rem)) {
+                    // Dizi ise içindeki tutarları topla, 0.01'den küçükse 0 say
+                    const totalVal = rem.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+                    isDebtZero = totalVal < 0.01;
+                } else {
+                    // Sayı ise direkt kontrol et
+                    isDebtZero = (parseFloat(rem) || 0) < 0.01;
+                }
+
+                if (!isDebtZero) {
+                    // Eğer borç VARSA: Siyah ve Kalın yazdır
+                    remainingHtml = `<span style="color: black; font-weight: bold;">${formatMultiCurrency(rem, acc.totalAmountCurrency)}</span>`;
+                } 
+                // Eğer borç 0 İSE: 'remainingHtml' boş kalır, yani ekranda hiçbir şey görünmez.
 
                 return `
                 <tr>
@@ -215,12 +227,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                     <td><small>${acc.id}</small></td>
                     <td><span class="status-badge ${sCls}">${sTxt}</span></td>
                     <td><a href="#" class="task-detail-link" data-task-id="${acc.taskId}">${taskDisplay}</a></td>
-                    
                     <td>${officialStr}</td>
                     <td>${serviceStr}</td>
-                    
                     <td>${formatMultiCurrency(acc.totalAmount, acc.totalAmountCurrency)}</td>
-                    <td><strong class="text-danger">${formatMultiCurrency(rem, acc.totalAmountCurrency)}</strong></td>
+                    
+                    <td>${remainingHtml}</td>
                     
                     <td>
                         <div style="display: flex; gap: 5px;">
