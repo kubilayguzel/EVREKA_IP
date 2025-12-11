@@ -235,41 +235,54 @@ export class TaskDetailManager {
     }
 
     _generateAccrualsHtml(accruals) {
-        if (!accruals || accruals.length === 0) {
-            return `<div class="p-3 bg-light border rounded text-center text-muted font-italic small">Bağlı tahakkuk bulunmamaktadır.</div>`;
-        }
+            if (!accruals || accruals.length === 0) {
+                return `<div class="p-3 bg-light border rounded text-center text-muted font-italic small">Bağlı tahakkuk bulunmamaktadır.</div>`;
+            }
 
-        const rows = accruals.map(acc => {
-            const isPaid = acc.status === 'paid';
-            const statusBadge = isPaid 
-                ? `<span class="badge badge-success px-2">Ödendi</span>` 
-                : `<span class="badge badge-warning px-2 text-white">Ödenmedi</span>`;
-            
+            const rows = accruals.map(acc => {
+                // --- GÜNCELLENEN STATÜ MANTIĞI ---
+                let statusBadge = '';
+                
+                switch (acc.status) {
+                    case 'paid':
+                        statusBadge = `<span class="badge badge-success px-2">Ödendi</span>`;
+                        break;
+                    case 'partially_paid':
+                        statusBadge = `<span class="badge badge-info px-2 text-white">Kısmi Ödendi</span>`;
+                        break;
+                    case 'cancelled':
+                        statusBadge = `<span class="badge badge-secondary px-2">İptal</span>`;
+                        break;
+                    default: // 'unpaid' veya tanımsız
+                        statusBadge = `<span class="badge badge-warning px-2 text-white">Ödenmedi</span>`;
+                }
+                // ----------------------------------
+                
+                return `
+                    <tr style="background: white;">
+                        <td class="align-middle py-2 pl-3 border-bottom"><small class="text-muted">#${acc.id || '-'}</small></td>
+                        <td class="align-middle py-2 border-bottom font-weight-bold text-dark" style="line-height: 1.2;">
+                            ${this._formatCurrency(acc.totalAmount, acc.totalAmountCurrency)}
+                        </td>
+                        <td class="align-middle py-2 border-bottom text-center">${statusBadge}</td>
+                        <td class="align-middle py-2 border-bottom text-right pr-3 text-muted small">${this._formatDate(acc.createdAt)}</td>
+                    </tr>`;
+            }).join('');
+
             return `
-                <tr style="background: white;">
-                    <td class="align-middle py-2 pl-3 border-bottom"><small class="text-muted">#${acc.id || '-'}</small></td>
-                    <td class="align-middle py-2 border-bottom font-weight-bold text-dark" style="line-height: 1.2;">
-                        ${this._formatCurrency(acc.totalAmount, acc.totalAmountCurrency)}
-                    </td>
-                    <td class="align-middle py-2 border-bottom text-center">${statusBadge}</td>
-                    <td class="align-middle py-2 border-bottom text-right pr-3 text-muted small">${this._formatDate(acc.createdAt)}</td>
-                </tr>`;
-        }).join('');
-
-        return `
-            <div class="border rounded overflow-hidden shadow-sm">
-                <table class="table table-sm table-hover mb-0" style="background-color: #f8f9fa;">
-                    <thead class="text-secondary small bg-light">
-                        <tr>
-                            <th class="pl-3 py-2 border-bottom border-top-0 border-0">ID</th>
-                            <th class="py-2 border-bottom border-top-0 border-0">TUTAR</th>
-                            <th class="py-2 border-bottom border-top-0 border-0 text-center">DURUM</th>
-                            <th class="pr-3 py-2 border-bottom border-top-0 border-0 text-right">TARİH</th>
-                        </tr>
-                    </thead>
-                    <tbody>${rows}</tbody>
-                </table>
-            </div>`;
+                <div class="border rounded overflow-hidden shadow-sm">
+                    <table class="table table-sm table-hover mb-0" style="background-color: #f8f9fa;">
+                        <thead class="text-secondary small bg-light">
+                            <tr>
+                                <th class="pl-3 py-2 border-bottom border-top-0 border-0">ID</th>
+                                <th class="py-2 border-bottom border-top-0 border-0">TUTAR</th>
+                                <th class="py-2 border-bottom border-top-0 border-0 text-center">DURUM</th>
+                                <th class="pr-3 py-2 border-bottom border-top-0 border-0 text-right">TARİH</th>
+                            </tr>
+                        </thead>
+                        <tbody>${rows}</tbody>
+                    </table>
+                </div>`;
     }
 
     _formatDate(dateVal) {
