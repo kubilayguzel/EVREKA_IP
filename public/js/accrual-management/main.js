@@ -159,7 +159,36 @@ document.addEventListener('DOMContentLoaded', async () => {
             if(noMsg) noMsg.style.display = 'none';
 
             let pageData = this.pagination ? this.pagination.getCurrentPageData(this.processedData) : this.processedData;
-            const fmtMoney = (v, c) => new Intl.NumberFormat('tr-TR', { style: 'currency', currency: c || 'TRY' }).format(v || 0);
+            
+            // --- YENİ EKLENEN FORMAT FONKSİYONU ---
+            // Bu fonksiyon hem eski (tek sayı) hem yeni (dizi/array) yapıyı destekler
+            const formatMultiCurrency = (data, defaultCurrency = 'TRY') => {
+                // 1. Veri bir Dizi (Array) ise: [{amount:100, currency:'EUR'}]
+                if (Array.isArray(data)) {
+                    if (data.length === 0) return '0,00 ' + defaultCurrency;
+                    
+                    return data.map(item => {
+                        const val = parseFloat(item.amount);
+                        const safeVal = isNaN(val) ? 0 : val;
+                        const formatted = new Intl.NumberFormat('tr-TR', {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2
+                        }).format(safeVal);
+                        // Örn: "1.200,50 EUR"
+                        return `${formatted} ${item.currency}`;
+                    }).join(' + '); // Birden fazla para birimi varsa araya + koy
+                }
+
+                // 2. Veri tek bir sayı ise (Eski sistem): 1000
+                const val = parseFloat(data);
+                if (isNaN(val)) return '0,00 ' + defaultCurrency;
+                
+                return new Intl.NumberFormat('tr-TR', { 
+                    style: 'currency', 
+                    currency: defaultCurrency 
+                }).format(val);
+            };
+            // ----------------------------------------
 
             tbody.innerHTML = pageData.map(acc => {
                 let sTxt = 'Bilinmiyor', sCls = '';
@@ -169,9 +198,16 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                 const isSel = this.selectedAccruals.has(acc.id);
                 const isPaid = acc.status === 'paid';
+                
+                // Kalan tutarı belirle
                 const rem = acc.remainingAmount !== undefined ? acc.remainingAmount : acc.totalAmount;
+                
                 let taskDisplay = acc.taskTitle || acc.taskId;
                 if (this.allTasks[String(acc.taskId)]) taskDisplay = this.allTasks[String(acc.taskId)].title;
+
+                // Resmi ve Hizmet ücretleri genelde tekil obje gelir ama garanti olsun diye kontrol edelim
+                const officialStr = acc.officialFee ? formatMultiCurrency(acc.officialFee.amount, acc.officialFee.currency) : '-';
+                const serviceStr = acc.serviceFee ? formatMultiCurrency(acc.serviceFee.amount, acc.serviceFee.currency) : '-';
 
                 return `
                 <tr>
@@ -179,10 +215,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                     <td><small>${acc.id}</small></td>
                     <td><span class="status-badge ${sCls}">${sTxt}</span></td>
                     <td><a href="#" class="task-detail-link" data-task-id="${acc.taskId}">${taskDisplay}</a></td>
-                    <td>${fmtMoney(acc.officialFee?.amount, acc.officialFee?.currency)}</td>
-                    <td>${fmtMoney(acc.serviceFee?.amount, acc.serviceFee?.currency)}</td>
-                    <td>${fmtMoney(acc.totalAmount, acc.totalAmountCurrency)}</td>
-                    <td>${fmtMoney(rem, acc.totalAmountCurrency)}</td>
+                    
+                    <td>${officialStr}</td>
+                    <td>${serviceStr}</td>
+                    
+                    <td>${formatMultiCurrency(acc.totalAmount, acc.totalAmountCurrency)}</td>
+                    <td><strong class="text-danger">${formatMultiCurrency(rem, acc.totalAmountCurrency)}</strong></td>
+                    
                     <td>
                         <div style="display: flex; gap: 5px;">
                             <button class="action-btn view-btn" data-id="${acc.id}">Görüntüle</button>
