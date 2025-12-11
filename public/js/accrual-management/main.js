@@ -320,10 +320,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             document.getElementById('editAccrualModal').classList.add('show');
         }
 
-        async handleSaveAccrualChanges() {
+    async handleSaveAccrualChanges() {
             let loader = window.showSimpleLoading ? window.showSimpleLoading('Kaydediliyor...') : null;
 
             try {
+                // 1. Formdaki verileri al
                 const result = this.editFormManager.getData();
                 if (!result.success) {
                     if(loader) loader.hide();
@@ -333,6 +334,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const formData = result.data;
                 const accrualId = document.getElementById('editAccrualId').value;
 
+                // 2. Yeni Dosyaları Yükle (Varsa)
                 let newFiles = [];
                 if (formData.files && formData.files.length > 0) {
                     try {
@@ -349,14 +351,72 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const existingFiles = this.currentEditAccrual.files || [];
                 const finalFiles = [...existingFiles, ...newFiles];
 
+                // --- 3. KALAN TUTARI YENİDEN HESAPLA (DÜZELTME BURADA) ---
+                
+                // A) KDV Çarpanını Bul
+                const vatMultiplier = 1 + (formData.vatRate / 100);
+
+                // B) Yeni Hedef Tutarları Hesapla (KDV Dahil)
+                const targetOff = formData.applyVatToOfficialFee 
+                    ? formData.officialFee.amount * vatMultiplier 
+                    : formData.officialFee.amount;
+                
+                const targetSrv = formData.serviceFee.amount * vatMultiplier;
+
+                // C) Daha Önce Ödenmiş Tutarları Çek (Veritabanından)
+                const paidOff = this.currentEditAccrual.paidOfficialAmount || 0;
+                const paidSrv = this.currentEditAccrual.paidServiceAmount || 0;
+
+                // D) Kalanları Hesapla (Hedef - Ödenen)
+                // Eksiye düşmemesi için Math.max(0, ...) kullanıyoruz
+                const remOff = Math.max(0, targetOff - paidOff);
+                const remSrv = Math.max(0, targetSrv - paidSrv);
+
+                // E) Para Birimine Göre Grupla (Multi-Currency Support)
+                const remMap = {};
+                
+                // Resmi Ücret Kalanı
+                if (remOff > 0.01) {
+                    const cur = formData.officialFee.currency;
+                    remMap[cur] = (remMap[cur] || 0) + remOff;
+                }
+                
+                // Hizmet Bedeli Kalanı
+                if (remSrv > 0.01) {
+                    const cur = formData.serviceFee.currency;
+                    remMap[cur] = (remMap[cur] || 0) + remSrv;
+                }
+
+                // F) Veritabanı Formatına (Array) Çevir
+                const newRemainingAmount = Object.entries(remMap).map(([curr, amt]) => ({
+                    amount: amt,
+                    currency: curr
+                }));
+
+                // G) Durumu (Status) Otomatik Güncelle
+                let newStatus = 'unpaid';
+                if (newRemainingAmount.length === 0) {
+                    // Hiç borç kalmadıysa
+                    newStatus = 'paid';
+                } else if (paidOff > 0 || paidSrv > 0) {
+                    // Borç var ama daha önce bir şeyler ödenmişse
+                    newStatus = 'partially_paid';
+                }
+                // Hiç ödeme yoksa 'unpaid' kalır.
+
+                // --- 4. GÜNCELLEME OBJESİ ---
                 const updates = {
                     officialFee: formData.officialFee,
                     serviceFee: formData.serviceFee,
                     vatRate: formData.vatRate,
                     applyVatToOfficialFee: formData.applyVatToOfficialFee,
-                    totalAmount: formData.totalAmount,
-                    totalAmountCurrency: 'TRY',
-                    remainingAmount: this.currentEditAccrual.remainingAmount !== undefined ? this.currentEditAccrual.remainingAmount : formData.totalAmount,
+                    
+                    totalAmount: formData.totalAmount,     // Formdan gelen yeni toplam
+                    remainingAmount: newRemainingAmount,   // YUKARIDA HESAPLANAN YENİ KALAN
+                    status: newStatus,                     // YUKARIDA HESAPLANAN YENİ DURUM
+                    
+                    totalAmountCurrency: 'TRY', // Bu alan array yapısına geçişte önemsizleşti ama tutuyoruz
+                    
                     tpInvoiceParty: formData.tpInvoiceParty,
                     serviceInvoiceParty: formData.serviceInvoiceParty,
                     isForeignTransaction: formData.isForeignTransaction,
@@ -366,11 +426,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                 await accrualService.updateAccrual(accrualId, updates);
                 this.closeModal('editAccrualModal');
                 await this.loadAllData();
-                showNotification('Kaydedildi', 'success');
+                showNotification('Kaydedildi ve Tutarlar Güncellendi', 'success');
 
             } catch(e) {
                 console.error(e);
-                showNotification('Hata', 'error');
+                showNotification('Hata: ' + e.message, 'error');
             } finally {
                 if(loader) loader.hide();
             }
