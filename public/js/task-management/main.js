@@ -12,6 +12,7 @@ import Pagination from '../pagination.js';
 
 // YENİ: Ortak Form Yöneticisi Modülü
 import { AccrualFormManager } from '../components/AccrualFormManager.js';
+import { TaskDetailManager } from '../components/TaskDetailManager.js';
 
 document.addEventListener('DOMContentLoaded', async () => {
     await loadSharedLayout({ activeMenuLink: 'task-management.html' });
@@ -46,6 +47,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             // Form Yöneticileri (Managers)
             this.createTaskFormManager = null;
             this.completeTaskFormManager = null;
+            this.taskDetailManager = null;
 
             this.statusDisplayMap = {
                 'open': 'Açık',
@@ -159,6 +161,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                 this.allPersons
             );
             this.completeTaskFormManager.render();
+            
+            // --- YENİ ---
+            // Modal içeriğini (body) yöneten instance
+            this.taskDetailManager = new TaskDetailManager('modalBody');
         }
 
         processData() {
@@ -339,22 +345,54 @@ document.addEventListener('DOMContentLoaded', async () => {
             return html;
         }
 
-        showTaskDetailModal(taskId) {
-            // Task Detail Modalı (Değişmedi)
-            const task = this.allTasks.find(t => t.id === taskId);
-            if (!task) return;
-
-            const modalBody = document.getElementById('modalBody');
-            const modalTitle = document.getElementById('modalTaskTitle');
+        async showTaskDetailModal(taskId) {
             const modalElement = document.getElementById('taskDetailModal');
-
-            if (!modalBody || !modalTitle || !modalElement) return;
+            const modalTitle = document.getElementById('modalTaskTitle');
+            
+            if (!modalElement || !this.taskDetailManager) return;
 
             modalTitle.textContent = `İş Detayı Yükleniyor...`;
             modalElement.classList.add('show');
-            modalBody.innerHTML = '<div class="text-center p-4"><i class="fas fa-circle-notch fa-spin fa-2x text-primary"></i><br><br>Veriler getiriliyor...</div>';
+            
+            // Manager ile yükleniyor göster
+            this.taskDetailManager.showLoading();
 
-            this.renderTaskDetailContent(taskId, modalBody, modalTitle);
+            try {
+                // Veriyi veritabanından taze çekiyoruz
+                const taskRef = doc(db, 'tasks', String(taskId));
+                const taskSnap = await getDoc(taskRef);
+
+                if (!taskSnap.exists()) {
+                    this.taskDetailManager.showError('Bu iş kaydı bulunamadı.');
+                    modalTitle.textContent = 'Hata';
+                    return;
+                }
+
+                const task = { id: taskSnap.id, ...taskSnap.data() };
+                modalTitle.textContent = `İş Detayı (${task.id})`;
+
+                // İlişkili kayıtları bul (Cache'den)
+                let ipRecord = null;
+                if (task.relatedIpRecordId) {
+                    ipRecord = this.allIpRecords.find(r => r.id === task.relatedIpRecordId);
+                }
+
+                const transactionType = this.allTransactionTypes.find(t => t.id === task.taskType);
+                const assignedUser = this.allUsers.find(u => u.id === task.assignedTo_uid);
+                const relatedAccruals = this.allAccruals.filter(acc => String(acc.taskId) === String(task.id));
+
+                // --- RENDER İŞLEMİ ARTIK TEK SATIR ---
+                this.taskDetailManager.render(task, {
+                    ipRecord: ipRecord,
+                    transactionType: transactionType,
+                    assignedUser: assignedUser,
+                    accruals: relatedAccruals
+                });
+
+            } catch (error) {
+                console.error(error);
+                this.taskDetailManager.showError('Veri yüklenirken hata oluştu: ' + error.message);
+            }
         }
 
         // Task Detail İçerik Render (Daha önce yaptığımız güncel hali)
