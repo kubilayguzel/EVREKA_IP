@@ -145,16 +145,14 @@ export class TaskDetailManager {
     }
 
     _generateDocsHtml(task) {
-        let content = '';
-        let hasContent = false;
+            let content = '';
+            let hasContent = false;
 
-        // 1. EPATS Belgesi (task.details.epatsDocument)
-        // Senin veritabanı yapına göre 'downloadURL' veya 'url' kontrol ediyoruz.
-        if (task.details && task.details.epatsDocument) {
-            const doc = task.details.epatsDocument;
-            const url = doc.downloadURL || doc.url;
-            
-            if (url) {
+            // 1. EPATS Belgesi (Varsa en üstte özel kart olarak göster)
+            const epatsDoc = task.details?.epatsDocument;
+            const epatsUrl = epatsDoc?.downloadURL || epatsDoc?.url;
+
+            if (epatsDoc && epatsUrl) {
                 hasContent = true;
                 content += `
                 <div class="alert alert-secondary d-flex align-items-center justify-content-between mb-3 shadow-sm" style="border-left: 4px solid #1e3c72; background-color: #f8f9fa;">
@@ -164,82 +162,89 @@ export class TaskDetailManager {
                         </div>
                         <div>
                             <h6 class="mb-0 font-weight-bold text-dark">EPATS Belgesi</h6>
-                            <small class="text-muted">${doc.name || 'İlgili Resmi Evrak'}</small>
+                            <small class="text-muted">${epatsDoc.name || 'İlgili Resmi Evrak'}</small>
                         </div>
                     </div>
-                    <a href="${url}" target="_blank" class="btn btn-sm btn-outline-primary shadow-sm rounded-pill px-3">
+                    <a href="${epatsUrl}" target="_blank" class="btn btn-sm btn-outline-primary shadow-sm rounded-pill px-3">
                         <i class="fas fa-external-link-alt mr-1"></i> Görüntüle
                     </a>
                 </div>`;
             }
-        }
 
-        // 2. Diğer Dosyalar Toplayıcı
-        // Veritabanındaki farklı yerlere bakıyoruz:
-        // - task.details.documents (Senin paylaştığın yeni yapı - ÖNEMLİ)
-        // - task.files (Eski yapı - yedek)
-        // - task.details.files (Ara yapı - yedek)
-        let allFiles = [];
-        
-        if (task.details && Array.isArray(task.details.documents)) {
-            allFiles = [...allFiles, ...task.details.documents];
-        }
-        if (Array.isArray(task.files)) {
-            allFiles = [...allFiles, ...task.files];
-        }
-        if (task.details && Array.isArray(task.details.files)) {
-            allFiles = [...allFiles, ...task.details.files];
-        }
+            // 2. Diğer Dosyaları Topla (Kapsamlı Tarama)
+            let allFiles = [];
 
-        // EPATS belgesini diğer dosyalardan hariç tut (URL karşılaştırması ile duplicate önleme)
-        const epatsUrl = (task.details?.epatsDocument?.downloadURL) || (task.details?.epatsDocument?.url);
-        
-        // Benzersiz dosyaları filtrele ve HTML oluştur
-        const uniqueFiles = [];
-        const seenUrls = new Set();
+            // Helper: Dosyaları güvenli bir şekilde listeye ekler (Array veya Map olsa bile)
+            const addFiles = (source) => {
+                if (!source) return;
+                if (Array.isArray(source)) {
+                    allFiles.push(...source);
+                } else if (typeof source === 'object') {
+                    // Eğer Firebase array yerine map/obje {0:..., 1:...} döndürürse değerleri al
+                    allFiles.push(...Object.values(source));
+                }
+            };
 
-        if (epatsUrl) seenUrls.add(epatsUrl); // EPATS zaten gösterildi
-
-        allFiles.forEach(file => {
-            const fileUrl = file.downloadURL || file.url || file.content;
-            if (fileUrl && !seenUrls.has(fileUrl)) {
-                seenUrls.add(fileUrl);
-                uniqueFiles.push(file);
+            // Veritabanındaki olası tüm dosya yollarını kontrol et
+            if (task.details) {
+                addFiles(task.details.documents); // Sizin veri yapınızdaki ana yol
+                addFiles(task.details.files);     // Alternatif yol
             }
-        });
+            addFiles(task.files);     // Eski yapı
+            addFiles(task.documents); // Olası kök yapı
 
-        if (uniqueFiles.length > 0) {
-            hasContent = true;
-            content += '<div class="row">';
-            uniqueFiles.forEach(file => {
-                const fUrl = file.downloadURL || file.url || file.content;
-                const fName = file.name || 'Adsız Dosya';
+            // 3. Tekilleştirme (Aynı dosyanın tekrarını önle)
+            const uniqueFiles = [];
+            const seenUrls = new Set();
+
+            if (epatsUrl) seenUrls.add(epatsUrl); // EPATS belgesini tekrar listede gösterme
+
+            allFiles.forEach(file => {
+                // URL alan adı farklı olabilir (downloadURL, url veya content)
+                const fileUrl = file.downloadURL || file.url || file.content;
                 
-                content += `
-                <div class="col-md-6 mb-2">
-                    <div class="d-flex justify-content-between align-items-center p-2 border rounded bg-white shadow-sm h-100">
-                        <div class="d-flex align-items-center text-truncate overflow-hidden" style="max-width: 80%;">
-                            <i class="fas fa-paperclip text-secondary mr-2"></i>
-                            <div class="text-truncate">
-                                <span class="d-block small font-weight-bold text-dark text-truncate" title="${fName}">${fName}</span>
-                                <small class="text-muted" style="font-size: 0.75rem;">${file.documentDesignation || 'Ek Belge'}</small>
-                            </div>
-                        </div>
-                        <a href="${fUrl}" target="_blank" class="btn btn-sm btn-light border text-primary ml-2">
-                            <i class="fas fa-download"></i>
-                        </a>
-                    </div>
-                </div>`;
+                // Eğer geçerli bir URL varsa ve daha önce eklenmediyse listeye al
+                if (fileUrl && !seenUrls.has(fileUrl)) {
+                    seenUrls.add(fileUrl);
+                    uniqueFiles.push(file);
+                }
             });
-            content += '</div>';
-        }
 
-        if (!hasContent) {
-            return `<div class="p-3 bg-light border rounded text-center text-muted font-italic small">Bu göreve ekli belge bulunmamaktadır.</div>`;
+            // 4. Diğer Belgeleri Kart Olarak Listele
+            if (uniqueFiles.length > 0) {
+                hasContent = true;
+                content += '<div class="row">';
+                uniqueFiles.forEach(file => {
+                    const fUrl = file.downloadURL || file.url || file.content;
+                    const fName = file.name || 'Adsız Dosya';
+                    const fType = file.documentDesignation || 'Ek Belge'; // Doküman türü (Örn: Diğer, Fatura vb.)
+                    
+                    content += `
+                    <div class="col-md-6 mb-2">
+                        <div class="d-flex justify-content-between align-items-center p-2 border rounded bg-white shadow-sm h-100">
+                            <div class="d-flex align-items-center text-truncate overflow-hidden" style="max-width: 80%;">
+                                <i class="fas fa-paperclip text-secondary mr-2"></i>
+                                <div class="text-truncate">
+                                    <span class="d-block small font-weight-bold text-dark text-truncate" title="${fName}">${fName}</span>
+                                    <small class="text-muted" style="font-size: 0.75rem;">${fType}</small>
+                                </div>
+                            </div>
+                            <a href="${fUrl}" target="_blank" class="btn btn-sm btn-light border text-primary ml-2">
+                                <i class="fas fa-download"></i>
+                            </a>
+                        </div>
+                    </div>`;
+                });
+                content += '</div>';
+            }
+
+            // Eğer hiç belge yoksa
+            if (!hasContent) {
+                return `<div class="p-3 bg-light border rounded text-center text-muted font-italic small">Bu göreve ekli belge bulunmamaktadır.</div>`;
+            }
+            
+            return content;
         }
-        
-        return content;
-    }
 
     _generateAccrualsHtml(accruals) {
         if (!accruals || accruals.length === 0) {
