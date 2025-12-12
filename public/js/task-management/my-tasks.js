@@ -1,16 +1,21 @@
 // public/js/task-management/my-tasks.js
 
-import { authService, taskService, ipRecordsService, accrualService, personService, transactionTypeService } from '../firebase-config.js';
-import { showNotification } from '../utils.js';
-import { loadSharedLayout } from '../layout-loader.js';
-import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
-import { doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+// DÜZELTME: Ana dizindeki dosyalara erişim için '../../' kullanıldı.
+import { authService, taskService, ipRecordsService, accrualService, personService, transactionTypeService } from '../../firebase-config.js';
+import { showNotification } from '../../utils.js';
 
-// Modüller
+// JS klasörü içindeki dosyalara erişim için '../' yeterli.
+import { loadSharedLayout } from '../layout-loader.js';
+import Pagination from '../pagination.js'; // Pagination importu
+
+// Bileşenler
 import { TaskDetailManager } from '../components/TaskDetailManager.js';
 import { AccrualFormManager } from '../components/AccrualFormManager.js';
-// YENİ: Pagination Importu
-import Pagination from '../pagination.js';
+
+// Firebase SDK (CDN)
+import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
+import { doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+import { db } from '../../firebase-config.js';
 
 document.addEventListener('DOMContentLoaded', async () => {
     await loadSharedLayout({ activeMenuLink: 'my-tasks.html' });
@@ -20,14 +25,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             this.currentUser = null;
             this.storage = getStorage();
 
-            // Ham Veriler
+            // Veri Havuzları
             this.allTasks = [];
             this.allIpRecords = [];
             this.allPersons = [];
             this.allAccruals = [];
             this.allTransactionTypes = [];
 
-            // İşlenmiş Veriler (Arama ve Filtreleme için)
+            // İşlenmiş Veriler
             this.processedData = [];
             this.filteredData = [];
 
@@ -53,6 +58,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         init() {
             // Managerları Başlat
             this.taskDetailManager = new TaskDetailManager('modalBody');
+            // 'myTaskAcc' prefixi ile form yöneticisini başlat
             this.accrualFormManager = new AccrualFormManager('createMyTaskAccrualFormContainer', 'myTaskAcc');
             
             // Pagination Başlat
@@ -107,11 +113,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                 this.allAccruals = accrualsResult.success ? accrualsResult.data : [];
                 this.allTransactionTypes = transactionTypesResult.success ? transactionTypesResult.data : [];
 
-                // Form Manager'ı güncelle
+                // Form Manager'ı güncelle (Kişi listesi geldiği için)
                 this.accrualFormManager.allPersons = this.allPersons;
                 this.accrualFormManager.render();
 
-                // Verileri işle (Search string oluştur vs.)
+                // Verileri işle
                 this.processData();
 
             } catch (error) {
@@ -122,7 +128,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         }
 
-        // YENİ: Verileri işleyip arama dizesi oluşturma
         processData() {
             // Helper: Tarih Güvenlik
             const safeDate = (val) => {
@@ -144,10 +149,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 
                 const statusText = this.statusDisplayMap[task.status] || task.status;
 
-                // Arama Dizesi (Search String) Oluştur
+                // Arama Dizesi
                 const searchString = `${task.id} ${task.title || ''} ${relatedRecordDisplay} ${taskTypeDisplay} ${statusText} ${task.priority}`.toLowerCase();
 
-                // Tarihleri önceden hazırla (Render performansını artırır)
                 return {
                     ...task,
                     relatedRecordDisplay,
@@ -160,10 +164,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                 };
             });
 
-            // Başlangıçta hepsi filtrelenmiş veridir
+            // Başlangıç filtresi (tümü)
             this.filteredData = [...this.processedData];
             
-            // Sıralama (Varsayılan: Son Eklenen En Üstte)
+            // Varsayılan Sıralama: Son Eklenen En Üstte
             this.filteredData.sort((a, b) => (b.createdAtObj || 0) - (a.createdAtObj || 0));
 
             // Pagination güncelle
@@ -174,39 +178,28 @@ document.addEventListener('DOMContentLoaded', async () => {
             this.renderTasks();
         }
 
-        // YENİ: Gelişmiş Arama
         handleSearch(query) {
             const statusFilter = document.getElementById('statusFilter').value;
             const lowerQuery = query.toLowerCase();
 
             this.filteredData = this.processedData.filter(item => {
-                // 1. Arama Metni Kontrolü
                 const matchesSearch = !lowerQuery || item.searchString.includes(lowerQuery);
-                
-                // 2. Statü Filtresi Kontrolü
                 const matchesStatus = (statusFilter === 'all' || item.status === statusFilter);
-
                 return matchesSearch && matchesStatus;
             });
 
-            // Pagination resetle ve güncelle
             if (this.pagination) {
-                this.pagination.reset(); // 1. sayfaya dön
+                this.pagination.reset();
                 this.pagination.update(this.filteredData.length);
             }
 
-            this.renderTasks(); // Pagination renderTasks'ı çağıracak ama biz yine de tetikleyelim (emin olmak için)
+            this.renderTasks();
         }
 
         setupEventListeners() {
-            // Arama Kutusu
-            document.getElementById('taskSearchInput').addEventListener('input', (e) => {
-                this.handleSearch(e.target.value);
-            });
-
-            // Statü Filtresi
+            // Arama ve Filtre
+            document.getElementById('taskSearchInput').addEventListener('input', (e) => this.handleSearch(e.target.value));
             document.getElementById('statusFilter').addEventListener('change', () => {
-                // Mevcut arama metnini de dikkate alarak filtrele
                 const query = document.getElementById('taskSearchInput').value;
                 this.handleSearch(query);
             });
@@ -246,7 +239,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
             if(noTasksMessage) noTasksMessage.style.display = 'none';
 
-            // YENİ: Pagination'dan o anki sayfanın verisini al
+            // Pagination verisi
             let displayData = this.filteredData;
             if (this.pagination) {
                 displayData = this.pagination.getCurrentPageData(this.filteredData);
@@ -259,12 +252,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const dueDateISO = task.dueDateObj ? task.dueDateObj.toISOString().slice(0,10) : '';
                 const officialDueISO = task.officialDueObj ? task.officialDueObj.toISOString().slice(0,10) : '';
 
-                // Atanma Tarihi (History'den bul)
+                // Atanma Tarihi (History'den)
                 let assignedAtText = '-';
                 if (Array.isArray(task.history)) {
                     const assignEntry = task.history.find(h => h?.action?.includes('atandı'));
                     if (assignEntry?.timestamp) {
-                        // Basit string tarih çevrimi (History timestampleri genelde ISO stringdir)
                         try { assignedAtText = new Date(assignEntry.timestamp).toLocaleString('tr-TR'); } catch {}
                     }
                 }
@@ -293,9 +285,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 tableBody.appendChild(row);
             });
 
-            // YENİ: Deadline Highlighter'ı her render'da tetikle
             if (window.DeadlineHighlighter) {
-                // Timeout, DOM'un tamamen güncellenmesini bekler
                 setTimeout(() => window.DeadlineHighlighter.refresh('islerim'), 50);
             }
         }
@@ -312,7 +302,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
         }
 
-        // --- MODAL & TAHAKKUK (Değişiklik yok) ---
         showTaskDetailModal(taskId) {
             const task = this.allTasks.find(t => t.id === taskId);
             if (!task || !this.taskDetailManager) return;
@@ -385,6 +374,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if (res.success) {
                     showNotification('Ek tahakkuk oluşturuldu!', 'success');
                     this.closeModal('createMyTaskAccrualModal');
+                    // Veri tazeleme gerekirse: await this.loadAllData();
                 } else { showNotification('Hata: ' + res.error, 'error'); }
             } catch(e) { if(loader) loader.hide(); showNotification('Beklenmeyen hata.', 'error'); }
         }
