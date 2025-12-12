@@ -8,6 +8,7 @@ import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstati
 
 import Pagination from '../pagination.js'; 
 import { AccrualFormManager } from '../components/AccrualFormManager.js';
+import { TaskDetailManager } from '../components/TaskDetailManager.js';
 
 document.addEventListener('DOMContentLoaded', async () => {
     await loadSharedLayout({ activeMenuLink: 'accruals.html' });
@@ -34,11 +35,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             this.editFormManager = null;
             
             this.uploadedPaymentReceipts = [];
+            this.taskDetailManager = null;
         }
 
         async init() {
             this.currentUser = authService.getCurrentUser();
             this.initializePagination();
+            this.taskDetailManager = new TaskDetailManager('modalBody');
             await this.loadAllData();
             this.setupEventListeners();
         }
@@ -519,69 +522,65 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         async showTaskDetailModal(taskId) {
             const modal = document.getElementById('taskDetailModal');
-            const body = document.getElementById('modalBody');
             const title = document.getElementById('modalTaskTitle');
             
+            if (!this.taskDetailManager) return;
+
             modal.classList.add('show');
             title.textContent = 'İş Detayı Yükleniyor...';
-            body.innerHTML = '<div class="text-center p-4"><i class="fas fa-circle-notch fa-spin fa-2x text-primary"></i><br>Veriler getiriliyor...</div>';
+            
+            this.taskDetailManager.showLoading();
 
             try {
+                // Task verisini veritabanından çek (Her zaman güncel olsun)
                 const taskRef = doc(db, 'tasks', String(taskId));
                 const taskSnap = await getDoc(taskRef);
 
                 if (!taskSnap.exists()) {
-                    body.innerHTML = '<div class="alert alert-danger">Bu iş kaydı bulunamadı.</div>';
+                    this.taskDetailManager.showError('Bu iş kaydı bulunamadı.');
                     title.textContent = 'Hata';
                     return;
                 }
                 const task = { id: taskSnap.id, ...taskSnap.data() };
                 title.textContent = `İş Detayı (${task.id})`;
 
+                // İlişkili kayıtları bul
                 let ipRecord = null;
                 if (task.relatedIpRecordId) {
-                    try {
-                        const ipRef = doc(db, 'ipRecords', String(task.relatedIpRecordId));
-                        const ipSnap = await getDoc(ipRef);
-                        if(ipSnap.exists()) ipRecord = { id: ipSnap.id, ...ipSnap.data() };
-                    } catch(e) {}
+                    // İlgili dosya servisi veya önbellekten
+                    if(this.allIpRecords) { // Eğer önbellekte varsa (loadAllData ile geldiyse)
+                         // Not: AccrualsManager içinde ipRecords servisini çağırmıyoruz ama import var.
+                         // Eğer ipRecords loadAllData içinde çekilmiyorsa burada fetch etmeliyiz.
+                         // Mevcut kodunuzda loadAllData içinde ipRecordsService YOK.
+                         // O yüzden burada tekil fetch yapmak daha güvenli.
+                         try {
+                            const ipRef = doc(db, 'ipRecords', String(task.relatedIpRecordId));
+                            const ipSnap = await getDoc(ipRef);
+                            if(ipSnap.exists()) ipRecord = { id: ipSnap.id, ...ipSnap.data() };
+                         } catch(e) { console.warn('IP Record fetch error', e); }
+                    }
                 }
 
-                let transactionTypeObj = null;
-                if (task.taskType) {
-                    transactionTypeObj = this.allTransactionTypes.find(t => t.id === task.taskType);
-                }
-
-                const formatDate = (d) => d ? new Date(d).toLocaleDateString('tr-TR') : '-';
+                // Transaction Type
+                const transactionType = this.allTransactionTypes.find(t => t.id === task.taskType);
+                
+                // Assigned User
                 const assignedUser = this.allUsers.find(u => u.id === task.assignedTo_uid);
-                const assignedName = assignedUser ? (assignedUser.displayName || assignedUser.email) : 'Atanmamış';
-                const relatedRecordTxt = ipRecord ? (ipRecord.applicationNumber || ipRecord.title) : 'Bulunamadı';
-                const taskTypeDisplay = transactionTypeObj ? (transactionTypeObj.alias || transactionTypeObj.name) : task.taskType;
 
-                let html = `
-                    <div class="container-fluid p-0">
-                        <div class="section-header mt-0"><i class="fas fa-info-circle mr-2"></i> GENEL BİLGİLER</div>
-                        <div class="mb-3"><label class="view-label">İş Konusu</label><div class="view-box font-weight-bold">${task.title || '-'}</div></div>
-                        <div class="form-grid">
-                            <div class="form-group"><label class="view-label">İlgili Dosya</label><div class="view-box">${relatedRecordTxt}</div></div>
-                            <div class="form-group"><label class="view-label">İş Tipi</label><div class="view-box">${taskTypeDisplay}</div></div>
-                            <div class="form-group"><label class="view-label">Atanan Kişi</label><div class="view-box">${assignedName}</div></div>
-                            <div class="form-group"><label class="view-label">Durum</label><div class="view-box font-weight-bold text-primary">${task.status}</div></div>
-                        </div>
-                        <div class="section-header"><i class="far fa-calendar-alt mr-2"></i> TARİHLER</div>
-                        <div class="form-grid">
-                            <div class="form-group"><label class="view-label">Operasyonel</label><div class="view-box">${formatDate(task.dueDate)}</div></div>
-                            <div class="form-group"><label class="view-label">Resmi</label><div class="view-box text-danger">${formatDate(task.officialDueDate)}</div></div>
-                        </div>
-                        <div class="section-header"><i class="fas fa-align-left mr-2"></i> AÇIKLAMA</div>
-                        <div class="view-box" style="min-height: 60px;">${task.description || '-'}</div>
-                    </div>`;
+                // Related Accruals (Bu sayfada zaten tüm tahakkuklar yüklü)
+                const relatedAccruals = this.allAccruals.filter(acc => String(acc.taskId) === String(task.id));
 
-                body.innerHTML = html;
+                // RENDER
+                this.taskDetailManager.render(task, {
+                    ipRecord: ipRecord,
+                    transactionType: transactionType,
+                    assignedUser: assignedUser,
+                    accruals: relatedAccruals
+                });
 
             } catch (error) {
                 console.error(error);
-                body.innerHTML = '<div class="alert alert-danger">Hata: ' + error.message + '</div>';
+                this.taskDetailManager.showError('Veri yüklenirken hata oluştu: ' + error.message);
             }
         }
 
