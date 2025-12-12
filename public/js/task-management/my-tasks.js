@@ -43,17 +43,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         init() {
-            // Managerları Başlat
+            // TaskDetailManager Başlat
             this.taskDetailManager = new TaskDetailManager('modalBody');
             
-            // "createMyTaskAccrualFormContainer" div'ini HTML'de oluşturacağız
-            // Prefix: 'myTaskAcc' -> ID çakışmalarını önler
+            // AccrualFormManager Başlat (Henüz kişi listesi boş, loadAllData'da güncellenecek)
+            // 'createMyTaskAccrualFormContainer' ID'li div HTML'de yer alacak.
             this.accrualFormManager = new AccrualFormManager('createMyTaskAccrualFormContainer', 'myTaskAcc');
             
             authService.auth.onAuthStateChanged(async (user) => {
                 if (user) {
                     this.currentUser = user;
-                    await this.loadAllData(); // Verileri çek (Kişiler gelince form render edilecek)
+                    await this.loadAllData(); 
                     this.setupEventListeners();
                     this.populateStatusFilterDropdown();
                 } else {
@@ -85,7 +85,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 this.allAccruals = accrualsResult.success ? accrualsResult.data : [];
                 this.allTransactionTypes = transactionTypesResult.success ? transactionTypesResult.data : [];
 
-                // Veriler (özellikle Kişiler) geldikten sonra formu render et
+                // Form Manager'a kişi listesini ver ve render et
                 this.accrualFormManager.allPersons = this.allPersons;
                 this.accrualFormManager.render();
 
@@ -103,7 +103,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             // Filtreleme
             document.getElementById('statusFilter').addEventListener('change', (e) => this.renderTasks(e.target.value));
             
-            // Tablo Butonları (Delegation)
+            // Tablo Butonları (Event Delegation)
             document.getElementById('myTasksTableBody').addEventListener('click', (e) => {
                 const btn = e.target.closest('.action-btn');
                 if (!btn) return;
@@ -111,9 +111,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 e.preventDefault();
                 const taskId = btn.dataset.id;
                 
-                if (btn.classList.contains('view-btn')) {
+                if (btn.classList.contains('view-btn') || btn.dataset.action === 'view') {
                     this.showTaskDetailModal(taskId);
-                } else if (btn.classList.contains('edit-btn')) {
+                } else if (btn.classList.contains('edit-btn') || btn.dataset.action === 'edit') {
                     window.location.href = `task-detail.html?id=${taskId}`;
                 } else if (btn.classList.contains('add-accrual-btn')) {
                     this.showCreateAccrualModal(taskId);
@@ -121,9 +121,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
 
             // Modal Kapatma Butonları
-            document.getElementById('closeTaskDetailModal')?.addEventListener('click', () => this.closeModal('taskDetailModal'));
-            document.getElementById('closeMyTaskAccrualModal')?.addEventListener('click', () => this.closeModal('createMyTaskAccrualModal'));
-            document.getElementById('cancelCreateMyTaskAccrualBtn')?.addEventListener('click', () => this.closeModal('createMyTaskAccrualModal'));
+            const closeModal = (id) => this.closeModal(id);
+            document.getElementById('closeTaskDetailModal')?.addEventListener('click', () => closeModal('taskDetailModal'));
+            document.getElementById('closeMyTaskAccrualModal')?.addEventListener('click', () => closeModal('createMyTaskAccrualModal'));
+            document.getElementById('cancelCreateMyTaskAccrualBtn')?.addEventListener('click', () => closeModal('createMyTaskAccrualModal'));
 
             // Tahakkuk Kaydet Butonu
             document.getElementById('saveNewMyTaskAccrualBtn')?.addEventListener('click', () => this.handleSaveNewAccrual());
@@ -142,7 +143,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
             if(noTasksMessage) noTasksMessage.style.display = 'none';
 
-            // Tarih Güvenlik Fonksiyonu (Hata önleyici)
+            // Tarih Güvenlik Fonksiyonu
             const safeDate = (val) => {
                 if (!val) return null;
                 try {
@@ -194,9 +195,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                     <td>${assignedAtText}</td>
                     <td><span class="status-badge ${statusClass}">${this.statusDisplayMap[task.status] || task.status}</span></td>
                     <td>
-                        <button class="action-btn view-btn" data-id="${task.id}"><i class="fas fa-eye"></i></button>
-                        <button class="action-btn edit-btn" data-id="${task.id}"><i class="fas fa-edit"></i></button>
-                        <button class="action-btn add-accrual-btn" data-id="${task.id}"><i class="fas fa-plus"></i> Ek Tahakkuk</button>
+                        <button class="action-btn view-btn" data-id="${task.id}" data-action="view">Görüntüle</button>
+                        <button class="action-btn edit-btn" data-id="${task.id}" data-action="edit">Düzenle</button>
+                        <button class="action-btn add-accrual-btn" data-id="${task.id}">Ek Tahakkuk Oluştur</button>
                     </td>
                 `;
                 tableBody.appendChild(row);
@@ -235,10 +236,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const ipRecord = this.allIpRecords.find(r => r.id === task.relatedIpRecordId);
             const transactionType = this.allTransactionTypes.find(t => t.id === task.taskType);
             const relatedAccruals = this.allAccruals.filter(acc => String(acc.taskId) === String(task.id));
-            const assignedUser = { email: task.assignedTo_email }; // MyTasks'te user listesi yok, task'tan alıyoruz
-
-            // EPATS Belgesi Gönderimi (TaskDetailManager bunu kendi içinde details'ten çözer ama manual vermek istersek)
-            // this.taskDetailManager.render fonksiyonu task objesini aldığı için gerek yok.
+            const assignedUser = { email: task.assignedTo_email, displayName: task.assignedTo_email }; 
 
             title.textContent = `İş Detayı (${task.id})`;
             this.taskDetailManager.render(task, {
@@ -309,8 +307,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 serviceFee: formData.serviceFee,
                 vatRate: formData.vatRate,
                 applyVatToOfficialFee: formData.applyVatToOfficialFee,
-                totalAmount: formData.totalAmount, // Array geliyor artık
-                totalAmountCurrency: 'TRY', // Backward compatibility
+                totalAmount: formData.totalAmount, // Array geliyor
+                totalAmountCurrency: 'TRY', // Geriye uyumluluk
                 remainingAmount: formData.totalAmount,
                 status: 'unpaid',
                 tpInvoiceParty: formData.tpInvoiceParty,
@@ -327,8 +325,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if (res.success) {
                     showNotification('Ek tahakkuk oluşturuldu!', 'success');
                     this.closeModal('createMyTaskAccrualModal');
-                    // Verileri tazelemek isterseniz:
-                    // this.loadAllData(); 
+                    await this.loadAllData(); // Tabloyu yenile
                 } else {
                     showNotification('Hata: ' + res.error, 'error');
                 }
