@@ -564,16 +564,35 @@
                     });
                 }
 
-                renderTasks(filterStatus = 'all') { /* ... (Değişiklik yok) ... */
+                renderTasks(filterStatus = 'all') {
                     const tableBody = document.getElementById('myTasksTableBody');
                     const noTasksMessage = document.getElementById('noTasksMessage');
                     tableBody.innerHTML = '';
-                    const filteredTasks = this.allTasks.filter(task => (filterStatus === 'all' || task.status === filterStatus));
+
+                    const filteredTasks = this.allTasks.filter(task => 
+                        (filterStatus === 'all' || task.status === filterStatus)
+                    );
+                    
                     if (filteredTasks.length === 0) {
                         noTasksMessage.style.display = 'block';
                         return;
                     }
                     noTasksMessage.style.display = 'none';
+
+                    // --- TARİH DÖNÜŞTÜRME YARDIMCISI ---
+                    const safeDate = (val) => {
+                        if (!val) return null;
+                        try {
+                            // 1. Firestore Timestamp (toDate fonksiyonu varsa)
+                            if (typeof val.toDate === 'function') return val.toDate();
+                            // 2. Firestore Timestamp (seconds objesi varsa)
+                            if (val.seconds) return new Date(val.seconds * 1000);
+                            // 3. String veya Date objesi
+                            const d = new Date(val);
+                            return isNaN(d.getTime()) ? null : d;
+                        } catch (e) { return null; }
+                    };
+                    // ------------------------------------
 
                     filteredTasks.forEach(task => {
                         const ipRecord = this.allIpRecords.find(r => r.id === task.relatedIpRecordId);
@@ -581,13 +600,33 @@
                         const row = document.createElement('tr');
                         const statusClass = `status-${task.status.replace(/ /g, '_').toLowerCase()}`;
                         const priorityClass = `priority-${task.priority.toLowerCase()}`;
-                        const createdAtText = task.createdAt ? new Date(task.createdAt).toLocaleString('tr-TR') : '-';
+
+                        // Tarihleri Güvenli Çevir
+                        const dueDateObj = safeDate(task.dueDate);
+                        const officialDueObj = safeDate(task.officialDueDate);
+                        const createdAtObj = safeDate(task.createdAt);
+
+                        // Ekrana Basılacak Formatlar
+                        const dueDateDisplay = dueDateObj ? dueDateObj.toLocaleDateString('tr-TR') : 'Belirtilmemiş';
+                        const dueDateISO = dueDateObj ? dueDateObj.toISOString().slice(0,10) : '';
+
+                        const officialDueDisplay = officialDueObj ? officialDueObj.toLocaleDateString('tr-TR') : 'Belirtilmemiş';
+                        const officialDueISO = officialDueObj ? officialDueObj.toISOString().slice(0,10) : '';
+
+                        const createdAtText = createdAtObj ? createdAtObj.toLocaleString('tr-TR') : '-';
+
+                        // Atanma Tarihi Hesabı
                         let assignedAtText = '-';
                         if (Array.isArray(task.history)) {
                             const assigns = task.history.filter(h => h && typeof h.action === 'string' && h.action.includes('atandı'));
                             const lastAssign = assigns.length ? assigns[assigns.length - 1] : null;
-                            if (lastAssign && lastAssign.timestamp) assignedAtText = new Date(lastAssign.timestamp).toLocaleString('tr-TR');
+                            if (lastAssign && lastAssign.timestamp) {
+                                const d = safeDate(lastAssign.timestamp);
+                                if(d) assignedAtText = d.toLocaleString('tr-TR');
+                            }
                         }
+
+                        // İşlem tipi adını bul
                         const transactionType = this.allTransactionTypes.find(type => type.id === task.taskType);
                         const taskTypeDisplayName = transactionType ? (transactionType.alias || transactionType.name) : 'Bilinmeyen Tip';
 
@@ -596,10 +635,18 @@
                             <td>${relatedRecordDisplay}</td>
                             <td>${taskTypeDisplayName}</td>
                             <td><span class="priority-badge ${priorityClass}">${task.priority}</span></td>
-                            <td data-field="operationalDue" data-date="${task.dueDate ? new Date(task.dueDate).toISOString().slice(0,10) : ''}">${task.dueDate ? new Date(task.dueDate).toLocaleDateString('tr-TR') : 'Belirtilmemiş'}</td>
-                            <td data-field="officialDue" data-date="${task.officialDueDate ? new Date(task.officialDueDate.seconds * 1000).toISOString().slice(0,10) : ''}">${task.officialDueDate ? new Date(task.officialDueDate.seconds * 1000).toLocaleDateString('tr-TR') : 'Belirtilmemiş'}</td>
+                            
+                            <td data-field="operationalDue" data-date="${dueDateISO}">
+                                ${dueDateDisplay}
+                            </td>
+                            
+                            <td data-field="officialDue" data-date="${officialDueISO}">
+                                ${officialDueDisplay}
+                            </td>
+
                             <td>${createdAtText}</td>
                             <td>${assignedAtText}</td>
+
                             <td><span class="status-badge ${statusClass}">${this.statusDisplayMap[task.status] || task.status}</span></td>
                             <td>
                                 <button class="action-btn" data-id="${task.id}" data-action="view">Görüntüle</button>
@@ -609,7 +656,11 @@
                         `;
                         tableBody.appendChild(row);
                     });
-                    if (window.DeadlineHighlighter) DeadlineHighlighter.refresh('islerim');
+                    
+                    // Renklendirme
+                    if(window.DeadlineHighlighter) {
+                        DeadlineHighlighter.refresh('islerim');
+                    }
                 }
 
                 // YENİLENMİŞ showTaskDetailModal (TaskDetailManager Kullanıyor)
