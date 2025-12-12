@@ -433,12 +433,14 @@
             </form>
         </div>
     </div>
-    <script src="./js/deadline-highlighter.js"></script>
-    <script type="module">
+<script src="./js/deadline-highlighter.js"></script>
+<script type="module">
         import { authService, taskService, ipRecordsService, accrualService, personService, auth, transactionTypeService } from './firebase-config.js';
         import { showNotification, TASK_STATUSES } from './utils.js';
         import { loadSharedLayout } from './js/layout-loader.js';
-    
+        
+        // YENİ: TaskDetailManager Importu
+        import { TaskDetailManager } from './js/components/TaskDetailManager.js'; 
 
         document.addEventListener('DOMContentLoaded', async () => {
             await loadSharedLayout({ activeMenuLink: 'my-tasks.html' });
@@ -450,27 +452,27 @@
                     this.allIpRecords = [];
                     this.allPersons = [];
                     this.allAccruals = [];
-                    this.allTransactionTypes = []; // transactionTypeService'den gelen tüm tipler
+                    this.allTransactionTypes = [];
                     this.currentTaskForAccrual = null;
                     this.createMyTaskSelectedTpInvoiceParty = null;
                     this.createMyTaskSelectedServiceInvoiceParty = null;
+                    
+                    // YENİ: TaskDetailManager referansı
+                    this.taskDetailManager = null;
 
                     this.statusDisplayMap = {
-                        'open': 'Açık',
-                        'in-progress': 'Devam Ediyor',
-                        'completed': 'Tamamlandı',
-                        'pending': 'Beklemede',
-                        'cancelled': 'İptal Edildi',
-                        'on-hold': 'Askıda',
-                        'awaiting-approval': 'Onay Bekliyor',
-                        'awaiting_client_approval': 'Müvekkil Onayı Bekliyor',
-                        'client_approval_opened': 'Müvekkil Onayı - Açıldı',
-                        'client_approval_closed': 'Müvekkil Onayı - Kapatıldı',
+                        'open': 'Açık', 'in-progress': 'Devam Ediyor', 'completed': 'Tamamlandı',
+                        'pending': 'Beklemede', 'cancelled': 'İptal Edildi', 'on-hold': 'Askıda',
+                        'awaiting-approval': 'Onay Bekliyor', 'awaiting_client_approval': 'Müvekkil Onayı Bekliyor',
+                        'client_approval_opened': 'Müvekkil Onayı - Açıldı', 'client_approval_closed': 'Müvekkil Onayı - Kapatıldı',
                         'client_no_response_closed': 'Müvekkil Cevaplamadı - Kapatıldı'
                     };
                 }
 
                 init() {
+                    // YENİ: Manager'ı başlat (HTML'deki modalBody ID'sini veriyoruz)
+                    this.taskDetailManager = new TaskDetailManager('modalBody');
+
                     authService.auth.onAuthStateChanged(async (user) => {
                         if (user) {
                             this.currentUser = user;
@@ -490,14 +492,9 @@
                         if (e.target.classList.contains('action-btn')) {
                             e.preventDefault();
                             const taskId = e.target.dataset.id || e.target.dataset.taskId; 
-                            
-                            if (!taskId) {
-                                showNotification('Görev ID\'si alınamadı. Lütfen sayfayı yenileyin veya yöneticiye başvurun.', 'error');
-                                return;
-                            }
+                            if (!taskId) return;
 
                             const action = e.target.dataset.action;
-
                             if (action === 'view') {
                                 this.showTaskDetailModal(taskId);
                             } else if (action === 'edit') {
@@ -508,26 +505,14 @@
                         }
                     });
 
-                    const closeTaskDetailModalBtn = document.getElementById('closeTaskDetailModal');
-                    if (closeTaskDetailModalBtn) {
-                        closeTaskDetailModalBtn.addEventListener('click', () => this.closeModal('taskDetailModal'));
-                    }
+                    // Modal Kapatma
+                    document.getElementById('closeTaskDetailModal')?.addEventListener('click', () => {
+                        document.getElementById('taskDetailModal').classList.remove('show');
+                    });
 
-                    const closeMyTaskAccrualModalBtn = document.getElementById('closeMyTaskAccrualModal');
-                    if (closeMyTaskAccrualModalBtn) {
-                        closeMyTaskAccrualModalBtn.addEventListener('click', () => this.closeModal('createMyTaskAccrualModal'));
-                    }
-                    
-                    const cancelCreateMyTaskAccrualBtn = document.getElementById('cancelCreateMyTaskAccrualBtn');
-                    if (cancelCreateMyTaskAccrualBtn) {
-                        cancelCreateMyTaskAccrualBtn.addEventListener('click', () => this.closeModal('createMyTaskAccrualModal'));
-                    }
-
-                    const saveNewMyTaskAccrualBtn = document.getElementById('saveNewMyTaskAccrualBtn');
-                    if (saveNewMyTaskAccrualBtn) {
-                        saveNewMyTaskAccrualBtn.addEventListener('click', () => this.handleSaveNewAccrual());
-                    }
-
+                    document.getElementById('closeMyTaskAccrualModal')?.addEventListener('click', () => this.closeModal('createMyTaskAccrualModal'));
+                    document.getElementById('cancelCreateMyTaskAccrualBtn')?.addEventListener('click', () => this.closeModal('createMyTaskAccrualModal'));
+                    document.getElementById('saveNewMyTaskAccrualBtn')?.addEventListener('click', () => this.handleSaveNewAccrual());
 
                     ['createMyTaskOfficialFee', 'createMyTaskServiceFee', 'createMyTaskVatRate', 'createMyTaskApplyVatToOfficialFee'].forEach(id => {
                         const el = document.getElementById(id);
@@ -545,7 +530,7 @@
                             ipRecordsService.getRecords(),
                             personService.getPersons(),
                             accrualService.getAccruals(),
-                            transactionTypeService.getTransactionTypes() // Tüm transaction tiplerini çek
+                            transactionTypeService.getTransactionTypes()
                         ]);
 
                         this.allTasks = tasksResult.success
@@ -553,12 +538,11 @@
                             task.status !== 'awaiting_client_approval' &&
                             task.status !== 'client_approval_closed' &&
                             task.status !== 'client_no_response_closed'
-                        )
-                        : [];
+                        ) : [];
                         this.allIpRecords = ipRecordsResult.success ? ipRecordsResult.data : [];
                         this.allPersons = personsResult.success ? personsResult.data : [];
                         this.allAccruals = accrualsResult.success ? accrualsResult.data : [];
-                        this.allTransactionTypes = transactionTypesResult.success ? transactionTypesResult.data : []; // Kaydet
+                        this.allTransactionTypes = transactionTypesResult.success ? transactionTypesResult.data : [];
                         
                         this.renderTasks();
                     } catch (error) {
@@ -568,15 +552,10 @@
                     }
                 }
 
-                populateStatusFilterDropdown() {
+                populateStatusFilterDropdown() { /* ... (Değişiklik yok) ... */
                     const statusFilterSelect = document.getElementById('statusFilter');
                     statusFilterSelect.innerHTML = '<option value="all">Tümü</option>';
-                    
-                const relevantStatuses = [
-                    'open', 'in-progress', 'completed', 'pending', 'cancelled', 'on-hold', 'awaiting-approval',
-                    'client_approval_opened'
-                ];
-
+                    const relevantStatuses = ['open', 'in-progress', 'completed', 'pending', 'cancelled', 'on-hold', 'awaiting-approval', 'client_approval_opened'];
                     relevantStatuses.forEach(statusValue => {
                         const option = document.createElement('option');
                         option.value = statusValue;
@@ -585,15 +564,11 @@
                     });
                 }
 
-                renderTasks(filterStatus = 'all') {
+                renderTasks(filterStatus = 'all') { /* ... (Değişiklik yok) ... */
                     const tableBody = document.getElementById('myTasksTableBody');
                     const noTasksMessage = document.getElementById('noTasksMessage');
                     tableBody.innerHTML = '';
-
-                    const filteredTasks = this.allTasks.filter(task => 
-                        (filterStatus === 'all' || task.status === filterStatus)
-                    );
-                    
+                    const filteredTasks = this.allTasks.filter(task => (filterStatus === 'all' || task.status === filterStatus));
                     if (filteredTasks.length === 0) {
                         noTasksMessage.style.display = 'block';
                         return;
@@ -606,18 +581,13 @@
                         const row = document.createElement('tr');
                         const statusClass = `status-${task.status.replace(/ /g, '_').toLowerCase()}`;
                         const priorityClass = `priority-${task.priority.toLowerCase()}`;
-
                         const createdAtText = task.createdAt ? new Date(task.createdAt).toLocaleString('tr-TR') : '-';
                         let assignedAtText = '-';
                         if (Array.isArray(task.history)) {
                             const assigns = task.history.filter(h => h && typeof h.action === 'string' && h.action.includes('atandı'));
                             const lastAssign = assigns.length ? assigns[assigns.length - 1] : null;
-                            if (lastAssign && lastAssign.timestamp) {
-                                assignedAtText = new Date(lastAssign.timestamp).toLocaleString('tr-TR');
-                            }
+                            if (lastAssign && lastAssign.timestamp) assignedAtText = new Date(lastAssign.timestamp).toLocaleString('tr-TR');
                         }
-
-                        // İşlem tipi adını bul
                         const transactionType = this.allTransactionTypes.find(type => type.id === task.taskType);
                         const taskTypeDisplayName = transactionType ? (transactionType.alias || transactionType.name) : 'Bilinmeyen Tip';
 
@@ -626,18 +596,10 @@
                             <td>${relatedRecordDisplay}</td>
                             <td>${taskTypeDisplayName}</td>
                             <td><span class="priority-badge ${priorityClass}">${task.priority}</span></td>
-                            <td data-field="operationalDue" 
-                                data-date="${task.dueDate ? new Date(task.dueDate).toISOString().slice(0,10) : ''}">
-                            ${task.dueDate ? new Date(task.dueDate).toLocaleDateString('tr-TR') : 'Belirtilmemiş'}
-                            </td>
-                            <td data-field="officialDue" 
-                                data-date="${task.officialDueDate ? new Date(task.officialDueDate.seconds * 1000).toISOString().slice(0,10) : ''}">
-                            ${task.officialDueDate ? new Date(task.officialDueDate.seconds * 1000).toLocaleDateString('tr-TR') : 'Belirtilmemiş'}
-                            </td>
-
+                            <td data-field="operationalDue" data-date="${task.dueDate ? new Date(task.dueDate).toISOString().slice(0,10) : ''}">${task.dueDate ? new Date(task.dueDate).toLocaleDateString('tr-TR') : 'Belirtilmemiş'}</td>
+                            <td data-field="officialDue" data-date="${task.officialDueDate ? new Date(task.officialDueDate.seconds * 1000).toISOString().slice(0,10) : ''}">${task.officialDueDate ? new Date(task.officialDueDate.seconds * 1000).toLocaleDateString('tr-TR') : 'Belirtilmemiş'}</td>
                             <td>${createdAtText}</td>
                             <td>${assignedAtText}</td>
-
                             <td><span class="status-badge ${statusClass}">${this.statusDisplayMap[task.status] || task.status}</span></td>
                             <td>
                                 <button class="action-btn" data-id="${task.id}" data-action="view">Görüntüle</button>
@@ -647,22 +609,10 @@
                         `;
                         tableBody.appendChild(row);
                     });
-                    // Satırlar basıldıktan sonra renklendirmeyi uygula
-                    DeadlineHighlighter.refresh('islerim');
+                    if (window.DeadlineHighlighter) DeadlineHighlighter.refresh('islerim');
                 }
 
-                cleanHistoryAction(action) {
-                    if (action.includes('İş güncellendi. Değişen alanlar:')) {
-                        return 'İş güncellendi';
-                    }
-                    if (action.includes('İş oluşturuldu')) return 'İş oluşturuldu';
-                    if (action.includes('İş silindi')) return 'İş silindi';
-                    if (action.includes('İş tamamlandı')) return 'İş tamamlandı';
-                    if (action.includes('İş yeniden atandı')) return 'İş yeniden atandı';
-                    if (action.includes('Durum değişti')) return 'Durum değiştirildi';
-                    
-                    return action.length > 50 ? action.substring(0, 50) + '...' : action;
-                }
+                // YENİLENMİŞ showTaskDetailModal (TaskDetailManager Kullanıyor)
                 showTaskDetailModal(taskId) {
                     const task = this.allTasks.find(t => t.id === taskId);
                     if (!task) {
@@ -671,104 +621,51 @@
                     }
 
                     const modal = document.getElementById('taskDetailModal');
-                    const modalBody = document.getElementById('modalBody');
+                    const modalTitle = document.getElementById('modalTaskTitle');
                     
-                    const ipRecord = this.allIpRecords.find(r => r.id === task.relatedIpRecordId);
-                    const relatedParty = task.details?.relatedParty?.id ? this.allPersons.find(p => p.id === task.details.relatedParty.id) : null;
-                    
-                    const renderField = (label, value) => value ? `<div class="modal-detail-item"><div class="modal-detail-label">${label}</div><div class="modal-detail-value">${value}</div></div>` : '';
-                    const relatedAccruals = this.allAccruals ? this.allAccruals.filter(acc => acc.taskId === taskId) : [];
+                    if (!this.taskDetailManager) return;
 
-                    let accrualsHtml = '';
-                    if(relatedAccruals.length > 0) {
-                        accrualsHtml = relatedAccruals.map(acc => {
-                            const statusText = acc.status === 'paid' ? 'Ödendi' : 'Ödenmedi';
-                            const statusClass = acc.status === 'paid' ? 'status-paid' : 'status-unpaid';
-                            const totalAmountText = new Intl.NumberFormat('tr-TR', { 
-                                style: 'currency', 
-                                currency: acc.totalAmountCurrency || 'TRY' 
-                            }).format(acc.totalAmount || 0);
-                            
-                            return `<div class="related-accrual-item">
-                                <div class="accrual-info">
-                                    <strong>ID:</strong> ${acc.id.substring(0,8)}... | 
-                                    <strong>Durum:</strong> <span class="status-badge ${statusClass}">${statusText}</span> | 
-                                    <strong>Tutar:</strong> ${totalAmountText}
-                                    ${acc.paymentDate ? ` | <strong>Ödeme Tarihi:</strong> ${new Date(acc.paymentDate).toLocaleDateString('tr-TR')}` : ''}
-                                </div>
-                            </div>`;
-                        }).join('');
-                    } else {
-                        accrualsHtml = '<p style="color: #666; font-style: italic;">Bu işe ait tahakkuk bulunmuyor.</p>';
-                    }
-                    
-                    let historyHtml = '<p>İşlem geçmişi bulunmuyor.</p>';
-                    if(task.history && task.history.length > 0) {
-                        historyHtml = [...task.history].sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp)).map(entry => 
-                            `<div class="task-history-item">
-                                <div class="task-history-description">${this.cleanHistoryAction(entry.action)}</div>
-                                <div class="task-history-meta">${new Date(entry.timestamp).toLocaleString('tr-TR')} by ${entry.userEmail}</div>
-                            </div>`
-                        ).join('');
-                    }
-                    // İşlem tipi adını modal içinde de göstermek için
-                    const transactionType = this.allTransactionTypes.find(type => type.id === task.taskType);
-                    const taskTypeDisplayName = transactionType ? (transactionType.alias || transactionType.name) : 'Bilinmeyen Tip';
-
-                    modalBody.innerHTML = `
-                        <div class="modal-detail-grid">
-                            ${renderField('İş No.', task.id)}
-                            ${renderField('Atanan Kişi', task.assignedTo_email)}
-                            ${renderField('İş Türü', taskTypeDisplayName)}
-                            ${renderField('Operasyonel Son Tarih', task.dueDate ? new Date(task.dueDate).toLocaleDateString('tr-TR') : '-')}
-                            ${renderField('Resmi Son Tarih', task.officialDueDate ? new Date(task.officialDueDate.seconds * 1000).toLocaleDateString('tr-TR') : '-')} ${task.officialDueDateDetails ? `
-                            <h4 class="modal-detail-section-title">Resmi Son Tarih Detayları</h4>
-                            ${renderField('Başlangıç Tebliğ Tarihi', task.officialDueDateDetails.initialDeliveryDate || '-')}
-                            ${renderField('Periyot (Ay)', task.officialDueDateDetails.periodMonths || '-')}
-                            ${renderField('Orijinal Hesaplanan Tarih', task.officialDueDateDetails.originalCalculatedDate || '-')}
-                            ${renderField('Nihai Resmi Son Tarih', task.officialDueDateDetails.finalOfficialDueDate || '-')}` : ''}
-                            ${renderField('Öncelik', task.priority)}
-                            ${renderField('İlgili Portföy Kaydı', ipRecord ? ipRecord.title : 'Bulunamadı')}
-                            ${renderField('İlgili Taraf', relatedParty ? relatedParty.name : '')}
-                            <div class="modal-detail-item full-width">
-                                <div class="modal-detail-label">Açıklama</div>
-                                <div class="modal-detail-value long-text">${task.description || '-'}</div>
-                            </div>
-                            
-                            <h4 class="modal-detail-section-title">İlişkili Tahakkuklar</h4>
-                            <div class="related-accruals-section">${accrualsHtml}</div>
-                            
-                            <h4 class="modal-detail-section-title">İşlem Geçmişi</h4>
-                            <div class="task-history">${historyHtml}</div>
-                        </div>
-                    `;
                     modal.classList.add('show');
+                    modalTitle.textContent = `İş Detayı Yükleniyor...`;
+                    
+                    // Yükleniyor animasyonu
+                    this.taskDetailManager.showLoading();
+
+                    // Gerekli ilişkili verileri hazırla
+                    const ipRecord = this.allIpRecords.find(r => r.id === task.relatedIpRecordId);
+                    const transactionType = this.allTransactionTypes.find(t => t.id === task.taskType);
+                    const relatedAccruals = this.allAccruals.filter(acc => String(acc.taskId) === String(task.id));
+                    
+                    // Kullanıcı bilgisini simüle et (Bu modülde allUsers yok ama task üzerinde email var)
+                    const assignedUser = { email: task.assignedTo_email, displayName: task.assignedTo_email };
+
+                    // Render Et
+                    modalTitle.textContent = `İş Detayı (${task.id})`;
+                    this.taskDetailManager.render(task, {
+                        ipRecord: ipRecord,
+                        transactionType: transactionType,
+                        assignedUser: assignedUser,
+                        accruals: relatedAccruals
+                    });
                 }
 
-                // Yeni Tahakkuk Oluşturma Modalı Fonksiyonları
+                // --- Tahakkuk Modalı Fonksiyonları (Değişmedi) ---
                 showCreateMyTaskAccrualModal = (taskId) => {
                     this.currentTaskForAccrual = this.allTasks.find(t => t.id === taskId);
-                    if (!this.currentTaskForAccrual) {
-                        showNotification('İlgili iş bulunamadı.', 'error');
-                        return;
-                    }
-
+                    if (!this.currentTaskForAccrual) { showNotification('İlgili iş bulunamadı.', 'error'); return; }
                     document.getElementById('createMyTaskAccrualTaskTitleDisplay').value = `${this.currentTaskForAccrual.title || 'Başlıksız İş'} (${this.currentTaskForAccrual.id.substring(0,8)}...)`;
-                    
                     document.getElementById('createMyTaskAccrualForm').reset();
                     document.getElementById('createMyTaskOfficialFeeCurrency').value = 'TRY';
                     document.getElementById('createMyTaskServiceFeeCurrency').value = 'TRY';
                     document.getElementById('createMyTaskVatRate').value = '20';
                     document.getElementById('createMyTaskApplyVatToOfficialFee').checked = true;
                     this.calculateCreateMyTaskTotalAmount();
-                    
                     this.createMyTaskSelectedTpInvoiceParty = null;
                     this.createMyTaskSelectedServiceInvoiceParty = null;
                     document.getElementById('createMyTaskSelectedTpInvoicePartyDisplay').style.display = 'none';
                     document.getElementById('createMyTaskSelectedServiceInvoicePartyDisplay').style.display = 'none';
                     document.getElementById('createMyTaskTpInvoicePartySearch').value = '';
                     document.getElementById('createMyTaskServiceInvoicePartySearch').value = '';
-
                     document.getElementById('createMyTaskAccrualModal').classList.add('show');
                 }
 
@@ -777,30 +674,20 @@
                     const serviceFee = parseFloat(document.getElementById('createMyTaskServiceFee').value) || 0;
                     const vatRate = parseFloat(document.getElementById('createMyTaskVatRate').value) || 0;
                     const applyVatToOfficial = document.getElementById('createMyTaskApplyVatToOfficialFee').checked;
-
                     let total;
-                    if (applyVatToOfficial) {
-                        total = (officialFee + serviceFee) * (1 + vatRate / 100);
-                    } else {
-                        total = officialFee + (serviceFee * (1 + vatRate / 100));
-                    }
+                    if (applyVatToOfficial) total = (officialFee + serviceFee) * (1 + vatRate / 100);
+                    else total = officialFee + (serviceFee * (1 + vatRate / 100));
                     document.getElementById('createMyTaskTotalAmountDisplay').textContent = new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY' }).format(total);
                 }
 
                 searchPersonsForCreateMyTaskAccrual(query, target) {
-                    const resultsContainerId = {
-                        'createMyTaskTpInvoiceParty': 'createMyTaskTpInvoicePartyResults',
-                        'createMyTaskServiceInvoiceParty': 'createMyTaskServiceInvoicePartyResults'
-                    }[target];
-
+                    const resultsContainerId = { 'createMyTaskTpInvoiceParty': 'createMyTaskTpInvoicePartyResults', 'createMyTaskServiceInvoiceParty': 'createMyTaskServiceInvoicePartyResults' }[target];
                     const container = document.getElementById(resultsContainerId);
                     if (!container) return;
                     container.innerHTML = '';
                     if (query.length < 2) { container.innerHTML = ''; return; }
-                    
                     const filtered = this.allPersons.filter(p => p.name.toLowerCase().includes(query.toLowerCase()));
                     if (filtered.length === 0) { container.innerHTML = '<p class="no-results-message">Kişi bulunamadı.</p>'; return; }
-
                     filtered.forEach(p => {
                         const item = document.createElement('div');
                         item.className = 'search-result-item';
@@ -812,89 +699,51 @@
                 }
 
                 selectPersonForCreateMyTaskAccrual(person, target) {
-                    const displayId = {
-                        'createMyTaskTpInvoiceParty': 'createMyTaskSelectedTpInvoicePartyDisplay',
-                        'createMyTaskServiceInvoiceParty': 'createMyTaskSelectedServiceInvoicePartyDisplay'
-                    }[target];
-
-                    const inputId = {
-                        'createMyTaskTpInvoiceParty': 'createMyTaskTpInvoicePartySearch',
-                        'createMyTaskServiceInvoiceParty': 'createMyTaskServiceInvoicePartySearch'
-                    }[target];
-
-                    const resultsId = {
-                        'createMyTaskTpInvoiceParty': 'createMyTaskTpInvoicePartyResults',
-                        'createMyTaskServiceInvoiceParty': 'createMyTaskServiceInvoicePartyResults'
-                    }[target];
-                    
+                    const displayId = { 'createMyTaskTpInvoiceParty': 'createMyTaskSelectedTpInvoicePartyDisplay', 'createMyTaskServiceInvoiceParty': 'createMyTaskSelectedServiceInvoicePartyDisplay' }[target];
+                    const inputId = { 'createMyTaskTpInvoiceParty': 'createMyTaskTpInvoicePartySearch', 'createMyTaskServiceInvoiceParty': 'createMyTaskServiceInvoicePartySearch' }[target];
+                    const resultsId = { 'createMyTaskTpInvoiceParty': 'createMyTaskTpInvoicePartyResults', 'createMyTaskServiceInvoiceParty': 'createMyTaskServiceInvoicePartyResults' }[target];
                     if(target === 'createMyTaskTpInvoiceParty') this.createMyTaskSelectedTpInvoiceParty = person;
                     else if(target === 'createMyTaskServiceInvoiceParty') this.createMyTaskSelectedServiceInvoiceParty = person;
-
                     const display = document.getElementById(displayId);
                     display.innerHTML = `<p><b>Seçilen:</b> ${person.name}</p>`;
                     display.style.display = 'block';
-
                     document.getElementById(resultsId).innerHTML = '';
                     document.getElementById(inputId).value = person.name;
                 }
 
                 async handleSaveNewAccrual() {
-                    if (!this.currentTaskForAccrual) {
-                        showNotification('İlgili görev bilgisi bulunamadı.', 'error');
-                        return;
-                    }
-
+                    if (!this.currentTaskForAccrual) { showNotification('İlgili görev bilgisi bulunamadı.', 'error'); return; }
                     const officialFee = parseFloat(document.getElementById('createMyTaskOfficialFee').value) || 0;
                     const serviceFee = parseFloat(document.getElementById('createMyTaskServiceFee').value) || 0;
-
-                    if (officialFee <= 0 && serviceFee <= 0) {
-                        showNotification("Lütfen en az bir ücret girin.", 'error');
-                        return;
-                    }
-
+                    if (officialFee <= 0 && serviceFee <= 0) { showNotification("Lütfen en az bir ücret girin.", 'error'); return; }
                     const vatRate = parseFloat(document.getElementById('createMyTaskVatRate').value) || 0;
                     const applyVatToOfficial = document.getElementById('createMyTaskApplyVatToOfficialFee').checked;
                     let totalAmount;
-                    if (applyVatToOfficial) {
-                        totalAmount = (officialFee + serviceFee) * (1 + vatRate / 100);
-                    } else {
-                        totalAmount = officialFee + (serviceFee * (1 + vatRate / 100));
-                    }
+                    if (applyVatToOfficial) totalAmount = (officialFee + serviceFee) * (1 + vatRate / 100);
+                    else totalAmount = officialFee + (serviceFee * (1 + vatRate / 100));
 
-                    // alias bul – yoksa mevcut başlık kalsın
                     let _extraAccrualTitle = this.currentTaskForAccrual?.title;
                     try {
-                    const _typeId = this.currentTaskForAccrual?.taskType
-
-                    if (_typeId) {
-                        const _typesRes = await transactionTypeService.getFilteredTransactionTypes({ ids: [String(_typeId)] });
-                        if (_typesRes?.success && _typesRes?.data?.length) {
-                        const _t = _typesRes.data[0];
-                        _extraAccrualTitle = _t?.alias || _t?.name || _extraAccrualTitle;
+                        const _typeId = this.currentTaskForAccrual?.taskType
+                        if (_typeId) {
+                            const _typesRes = await transactionTypeService.getFilteredTransactionTypes({ ids: [String(_typeId)] });
+                            if (_typesRes?.success && _typesRes?.data?.length) {
+                                const _t = _typesRes.data[0];
+                                _extraAccrualTitle = _t?.alias || _t?.name || _extraAccrualTitle;
+                            }
                         }
-                    }
-                    } catch(_e) { console.warn('alias lookup for extra accrual failed', _e); }
+                    } catch(_e) { console.warn('alias lookup failed', _e); }
 
                     const newAccrualData = {
                         taskId: this.currentTaskForAccrual.id,
                         taskTitle: _extraAccrualTitle,
-                        officialFee: {
-                            amount: officialFee,
-                            currency: document.getElementById('createMyTaskOfficialFeeCurrency').value
-                        },
-                        serviceFee: {
-                            amount: serviceFee,
-                            currency: document.getElementById('createMyTaskServiceFeeCurrency').value
-                        },
-                        vatRate,
-                        applyVatToOfficialFee: applyVatToOfficial,
-                        totalAmount,
-                        totalAmountCurrency: 'TRY',
-                        remainingAmount: totalAmount, // Yeni tahakkuk başlangıçta toplam tutar kadar kalan tutara sahip
+                        officialFee: { amount: officialFee, currency: document.getElementById('createMyTaskOfficialFeeCurrency').value },
+                        serviceFee: { amount: serviceFee, currency: document.getElementById('createMyTaskServiceFeeCurrency').value },
+                        vatRate, applyVatToOfficialFee: applyVatToOfficial,
+                        totalAmount, totalAmountCurrency: 'TRY', remainingAmount: totalAmount,
                         tpInvoiceParty: this.createMyTaskSelectedTpInvoiceParty ? { id: this.createMyTaskSelectedTpInvoiceParty.id, name: this.createMyTaskSelectedTpInvoiceParty.name } : null,
                         serviceInvoiceParty: this.createMyTaskSelectedServiceInvoiceParty ? { id: this.createMyTaskSelectedServiceInvoiceParty.id, name: this.createMyTaskSelectedServiceInvoiceParty.name } : null,
-                        status: 'unpaid', // Yeni tahakkuk başlangıçta ödenmedi durumunda
-                        createdAt: new Date().toISOString()
+                        status: 'unpaid', createdAt: new Date().toISOString()
                     };
 
                     try {
@@ -902,19 +751,13 @@
                         if (result.success) {
                             showNotification('Ek tahakkuk başarıyla oluşturuldu!', 'success');
                             this.closeModal('createMyTaskAccrualModal');
-                            await this.loadAllData(); // Tabloyu ve tüm verileri yenile
-                        } else {
-                            throw new Error(result.error);
-                        }
-                    } catch (error) {
-                        showNotification('Ek tahakkuk oluşturulurken hata oluştu: ' + error.message, 'error');
-                        console.error('Ek tahakkuk kaydetme hatası:', error);
-                    }
+                            await this.loadAllData(); 
+                        } else { throw new Error(result.error); }
+                    } catch (error) { showNotification('Hata: ' + error.message, 'error'); }
                 }
 
                 closeModal(modalId) {
                     document.getElementById(modalId).classList.remove('show');
-                    if (modalId === 'taskDetailModal') { /* mevcut modal'ı resetle */ }
                     if (modalId === 'createMyTaskAccrualModal') {
                         document.getElementById('createMyTaskAccrualForm').reset();
                         this.currentTaskForAccrual = null;
@@ -924,43 +767,32 @@
                         document.getElementById('createMyTaskSelectedServiceInvoicePartyDisplay').style.display = 'none';
                         document.getElementById('createMyTaskTpInvoicePartySearch').value = '';
                         document.getElementById('createMyTaskServiceInvoicePartySearch').value = '';
-                        document.getElementById('createMyTaskTotalAmountDisplay').textContent = '0.00 TRY'; // Toplam tutarı sıfırla
+                        document.getElementById('createMyTaskTotalAmountDisplay').textContent = '0.00 TRY';
                     }
                 }
             }
 
             const myTasksModule = new MyTasksModule();
             myTasksModule.init();
-            // Son tarih renklendirme: İşlerim
-            DeadlineHighlighter.init(); // TZ varsayılan Europe/Istanbul
 
-            DeadlineHighlighter.registerList('islerim', {
-            container: '#myTasksTable',
-            rowSelector: 'tbody tr',
-            dateFields: [
-                { name: 'operationalDue', selector: '[data-field="operationalDue"]' },
-                { name: 'officialDue',    selector: '[data-field="officialDue"]' }
-            ],
-            strategy: function(dates, row, fieldNames) {
-            const opIdx = fieldNames.indexOf('operationalDue');
-            const offIdx = fieldNames.indexOf('officialDue');
-            const op  = opIdx > -1 ? dates[opIdx] : null;
-            const off = offIdx > -1 ? dates[offIdx] : null;
-
-            // İkisi birden varsa OPERASYONEL tarih öncelikli
-            if (op instanceof Date && !isNaN(op)) return op;
-
-            // Sadece resmi tarih varsa onu kullan
-            if (off instanceof Date && !isNaN(off)) return off;
-
-            // Hiçbiri yoksa renklendirme uygulanmaz
-            return null;
-            },
-
-            applyTo: 'row',         // tüm satırı renklendir
-            showLegend: true        // üstte küçük açıklama şeridi
-            });
-
+            if (window.DeadlineHighlighter) {
+                DeadlineHighlighter.init();
+                DeadlineHighlighter.registerList('islerim', {
+                    container: '#myTasksTable',
+                    rowSelector: 'tbody tr',
+                    dateFields: [ { name: 'operationalDue', selector: '[data-field="operationalDue"]' }, { name: 'officialDue', selector: '[data-field="officialDue"]' } ],
+                    strategy: function(dates, row, fieldNames) {
+                        const opIdx = fieldNames.indexOf('operationalDue');
+                        const offIdx = fieldNames.indexOf('officialDue');
+                        const op  = opIdx > -1 ? dates[opIdx] : null;
+                        const off = offIdx > -1 ? dates[offIdx] : null;
+                        if (op instanceof Date && !isNaN(op)) return op;
+                        if (off instanceof Date && !isNaN(off)) return off;
+                        return null;
+                    },
+                    applyTo: 'row', showLegend: true
+                });
+            }
         });
     </script>
 </body>
