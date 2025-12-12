@@ -1,15 +1,16 @@
 // public/js/task-management/my-tasks.js
 
-import { authService, taskService, ipRecordsService, accrualService, personService, transactionTypeService } from '../firebase-config.js';
-import { showNotification } from '../utils.js';
-import { loadSharedLayout } from '../layout-loader.js';
-import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
-import { doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
-import { db } from '../firebase-config.js';
+import { authService, taskService, ipRecordsService, accrualService, personService, transactionTypeService, db } from '../../firebase-config.js';
+import { showNotification } from '../../utils.js';
 
-// Modüller
+// JS klasörü içindeki diğer modüllere erişmek için '../' yeterlidir.
+import { loadSharedLayout } from '../layout-loader.js';
 import { TaskDetailManager } from '../components/TaskDetailManager.js';
 import { AccrualFormManager } from '../components/AccrualFormManager.js';
+
+// Firebase SDK importları (CDN üzerinden olduğu için bunlar değişmez)
+import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
+import { doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
 document.addEventListener('DOMContentLoaded', async () => {
     await loadSharedLayout({ activeMenuLink: 'my-tasks.html' });
