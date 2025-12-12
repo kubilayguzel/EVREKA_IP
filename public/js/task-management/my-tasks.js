@@ -1,13 +1,18 @@
 // public/js/task-management/my-tasks.js
 
+// DÜZELTME: Ana dizindeki dosyalara erişim için '../../' kullanıldı.
 import { authService, taskService, ipRecordsService, accrualService, personService, transactionTypeService } from '../../firebase-config.js';
 import { showNotification } from '../../utils.js';
-import { loadSharedLayout } from '../layout-loader.js';
-import Pagination from '../pagination.js';
 
+// JS klasörü içindeki dosyalara erişim için '../' yeterli.
+import { loadSharedLayout } from '../layout-loader.js';
+import Pagination from '../pagination.js'; // Pagination importu
+
+// Bileşenler
 import { TaskDetailManager } from '../components/TaskDetailManager.js';
 import { AccrualFormManager } from '../components/AccrualFormManager.js';
 
+// Firebase SDK (CDN)
 import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
 import { doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 import { db } from '../../firebase-config.js';
