@@ -1,18 +1,13 @@
 // public/js/task-management/my-tasks.js
 
-// DÜZELTME: Ana dizindeki dosyalara erişim için '../../' kullanıldı.
 import { authService, taskService, ipRecordsService, accrualService, personService, transactionTypeService } from '../../firebase-config.js';
 import { showNotification } from '../../utils.js';
-
-// JS klasörü içindeki dosyalara erişim için '../' yeterli.
 import { loadSharedLayout } from '../layout-loader.js';
-import Pagination from '../pagination.js'; // Pagination importu
+import Pagination from '../pagination.js';
 
-// Bileşenler
 import { TaskDetailManager } from '../components/TaskDetailManager.js';
 import { AccrualFormManager } from '../components/AccrualFormManager.js';
 
-// Firebase SDK (CDN)
 import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
 import { doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 import { db } from '../../firebase-config.js';
@@ -25,24 +20,18 @@ document.addEventListener('DOMContentLoaded', async () => {
             this.currentUser = null;
             this.storage = getStorage();
 
-            // Veri Havuzları
             this.allTasks = [];
             this.allIpRecords = [];
             this.allPersons = [];
             this.allAccruals = [];
             this.allTransactionTypes = [];
 
-            // İşlenmiş Veriler
             this.processedData = [];
             this.filteredData = [];
 
-            // Pagination
             this.pagination = null;
-
-            // Yönetilen Task
             this.currentTaskForAccrual = null;
 
-            // Managerlar
             this.taskDetailManager = null;
             this.accrualFormManager = null;
 
@@ -56,12 +45,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         init() {
-            // Managerları Başlat
             this.taskDetailManager = new TaskDetailManager('modalBody');
-            // 'myTaskAcc' prefixi ile form yöneticisini başlat
             this.accrualFormManager = new AccrualFormManager('createMyTaskAccrualFormContainer', 'myTaskAcc');
             
-            // Pagination Başlat
             this.initializePagination();
 
             authService.auth.onAuthStateChanged(async (user) => {
@@ -86,7 +72,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 itemsPerPage: 10,
                 itemsPerPageOptions: [10, 25, 50, 100],
                 onPageChange: () => {
-                    this.renderTasks(); // Sayfa değişince tabloyu yeniden çiz
+                    this.renderTasks();
                 }
             });
         }
@@ -104,7 +90,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                     transactionTypeService.getTransactionTypes()
                 ]);
 
-                // Ham verileri ata
                 this.allTasks = tasksResult.success ? tasksResult.data.filter(t => 
                     !['awaiting_client_approval', 'client_approval_closed', 'client_no_response_closed'].includes(t.status)
                 ) : [];
@@ -113,11 +98,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 this.allAccruals = accrualsResult.success ? accrualsResult.data : [];
                 this.allTransactionTypes = transactionTypesResult.success ? transactionTypesResult.data : [];
 
-                // Form Manager'ı güncelle (Kişi listesi geldiği için)
                 this.accrualFormManager.allPersons = this.allPersons;
                 this.accrualFormManager.render();
 
-                // Verileri işle
                 this.processData();
 
             } catch (error) {
@@ -129,7 +112,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         processData() {
-            // Helper: Tarih Güvenlik
             const safeDate = (val) => {
                 if (!val) return null;
                 try {
@@ -149,7 +131,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 
                 const statusText = this.statusDisplayMap[task.status] || task.status;
 
-                // Arama Dizesi
                 const searchString = `${task.id} ${task.title || ''} ${relatedRecordDisplay} ${taskTypeDisplay} ${statusText} ${task.priority}`.toLowerCase();
 
                 return {
@@ -164,13 +145,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 };
             });
 
-            // Başlangıç filtresi (tümü)
             this.filteredData = [...this.processedData];
-            
-            // Varsayılan Sıralama: Son Eklenen En Üstte
             this.filteredData.sort((a, b) => (b.createdAtObj || 0) - (a.createdAtObj || 0));
 
-            // Pagination güncelle
             if (this.pagination) {
                 this.pagination.update(this.filteredData.length);
             }
@@ -197,14 +174,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         setupEventListeners() {
-            // Arama ve Filtre
             document.getElementById('taskSearchInput').addEventListener('input', (e) => this.handleSearch(e.target.value));
             document.getElementById('statusFilter').addEventListener('change', () => {
                 const query = document.getElementById('taskSearchInput').value;
                 this.handleSearch(query);
             });
             
-            // Tablo Butonları
             document.getElementById('myTasksTableBody').addEventListener('click', (e) => {
                 const btn = e.target.closest('.action-btn');
                 if (!btn) return;
@@ -220,7 +195,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
             });
 
-            // Modal Kapatma
             const closeModal = (id) => this.closeModal(id);
             document.getElementById('closeTaskDetailModal')?.addEventListener('click', () => closeModal('taskDetailModal'));
             document.getElementById('closeMyTaskAccrualModal')?.addEventListener('click', () => closeModal('createMyTaskAccrualModal'));
@@ -239,7 +213,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
             if(noTasksMessage) noTasksMessage.style.display = 'none';
 
-            // Pagination verisi
             let displayData = this.filteredData;
             if (this.pagination) {
                 displayData = this.pagination.getCurrentPageData(this.filteredData);
@@ -252,7 +225,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const dueDateISO = task.dueDateObj ? task.dueDateObj.toISOString().slice(0,10) : '';
                 const officialDueISO = task.officialDueObj ? task.officialDueObj.toISOString().slice(0,10) : '';
 
-                // Atanma Tarihi (History'den)
                 let assignedAtText = '-';
                 if (Array.isArray(task.history)) {
                     const assignEntry = task.history.find(h => h?.action?.includes('atandı'));
@@ -279,7 +251,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     <td>
                         <button class="action-btn view-btn" data-id="${task.id}" data-action="view"><i class="fas fa-eye"></i></button>
                         <button class="action-btn edit-btn" data-id="${task.id}" data-action="edit"><i class="fas fa-edit"></i></button>
-                        <button class="action-btn add-accrual-btn" data-id="${task.id}"><i class="fas fa-plus"></i></button>
+                        <button class="action-btn add-accrual-btn" data-id="${task.id}">Ek Tahakkuk</button>
                     </td>
                 `;
                 tableBody.appendChild(row);
@@ -374,7 +346,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if (res.success) {
                     showNotification('Ek tahakkuk oluşturuldu!', 'success');
                     this.closeModal('createMyTaskAccrualModal');
-                    // Veri tazeleme gerekirse: await this.loadAllData();
                 } else { showNotification('Hata: ' + res.error, 'error'); }
             } catch(e) { if(loader) loader.hide(); showNotification('Beklenmeyen hata.', 'error'); }
         }
@@ -390,7 +361,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     new MyTasksModule().init();
 
-    // Deadline Highlighter Init
     if (window.DeadlineHighlighter) {
         window.DeadlineHighlighter.init();
         window.DeadlineHighlighter.registerList('islerim', {
