@@ -388,10 +388,17 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // --- EVENT LISTENERS ---
         setupStaticEventListeners() {
-            // Arama Kutusu (Modern Yapı)
+        // Arama Kutusu Bağlantısı
             const searchInput = document.getElementById('searchInput');
+            
             if (searchInput) {
-                searchInput.addEventListener('input', (e) => this.handleSearch(e.target.value));
+                console.log("Arama kutusu bulundu, dinleniyor..."); // Kontrol için log
+                searchInput.addEventListener('input', (e) => {
+                    console.log("Aranıyor:", e.target.value); // Yazdığınızı konsolda görmek için
+                    this.handleSearch(e.target.value);
+                });
+            } else {
+                console.error("HATA: 'searchInput' ID'li element bulunamadı! HTML'i kontrol edin.");
             }
 
             // Sıralama Başlıkları
