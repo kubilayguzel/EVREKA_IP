@@ -6076,20 +6076,43 @@ export const onTaskDeleteCleanup = onDocumentDeleted(
       const notificationsSnapshot = await adminDb.collection('notifications').where('relatedTaskId', '==', taskId).get();
       notificationsSnapshot.forEach((doc) => batch.delete(doc.ref));
 
-      // 5. TRANSACTION GEÇMİŞİNİ SİL (ipRecords -> transactions)
+      // 5. TRANSACTION GEÇMİŞİNİ SİL (Parent & Child Transactions)
       if (taskData.relatedIpRecordId) {
         const ipRecordRef = adminDb.collection('ipRecords').doc(taskData.relatedIpRecordId);
         const ipDoc = await ipRecordRef.get();
 
         if (ipDoc.exists) {
           const ipData = ipDoc.data();
+          
           if (ipData.transactions && Array.isArray(ipData.transactions)) {
-            const originalLength = ipData.transactions.length;
-            const updatedTransactions = ipData.transactions.filter(t => t.triggeringTaskId !== taskId);
+            let updatedTransactions = [...ipData.transactions];
+            let deletedTransactionIds = [];
 
-            if (updatedTransactions.length !== originalLength) {
-              batch.update(ipRecordRef, { transactions: updatedTransactions });
-              console.log(`- IP Record (${taskData.relatedIpRecordId}) transaction geçmişi güncellenecek.`);
+            // A) SİLİNEN TASK'A AİT TRANSACTION'I BUL
+            // triggeringTaskId'si silinen task olan transaction'ı buluyoruz
+            const targetTransaction = updatedTransactions.find(t => String(t.triggeringTaskId) === taskId);
+
+            if (targetTransaction) {
+                console.log(`📌 Silinecek Parent Transaction Bulundu: ${targetTransaction.id}`);
+                deletedTransactionIds.push(targetTransaction.id);
+
+                // B) EĞER BU BİR PARENT İSE, CHILD'LARINI DA BUL
+                // Transaction array içinde parentId'si bu olanları da listeye ekle
+                const childTransactions = updatedTransactions.filter(t => t.parentId === targetTransaction.id);
+                childTransactions.forEach(child => {
+                    console.log(`-- 🔗 Bağlı Child Transaction da siliniyor: ${child.id} (${child.description})`);
+                    deletedTransactionIds.push(child.id);
+                });
+
+                // C) LİSTEDEN ÇIKAR (FİLTRELE)
+                // Hem ana transaction'ı hem de çocuklarını diziden atıyoruz
+                updatedTransactions = updatedTransactions.filter(t => !deletedTransactionIds.includes(t.id));
+
+                // D) GÜNCELLEMEYİ BATCH'E EKLE
+                if (updatedTransactions.length !== ipData.transactions.length) {
+                    batch.update(ipRecordRef, { transactions: updatedTransactions });
+                    console.log(`- IP Record (${taskData.relatedIpRecordId}) güncelleniyor. ${deletedTransactionIds.length} işlem silindi.`);
+                }
             }
           }
         }
