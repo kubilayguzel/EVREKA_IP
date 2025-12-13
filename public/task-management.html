@@ -26,7 +26,11 @@
             
             <div class="tasks-container">
                 <div class="tasks-header">
-                    <input type="text" id="searchInput" class="search-input" placeholder="İşlerde ara (No, Konu, Kişi, Durum)...">
+                    <div class="search-wrapper">
+                        <i class="fas fa-search search-icon"></i>
+                        <input type="text" id="searchInput" class="search-input" placeholder="İşlerde ara (No, Konu, Kişi, Durum)...">
+                    </div>
+                    
                     <button class="btn-add-task" onclick="window.location.href='create-task.html'">
                         <span>&#x2795;</span> Yeni İş Oluştur
                     </button>
