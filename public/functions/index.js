@@ -5921,7 +5921,7 @@ export const revertAccrualTaskOnReopeningV2 = onDocumentUpdated(
   }
 );
 
-export const createAccrualTaskOnClientApproval = onDocumentUpdated(
+exports.createAccrualTaskOnClientApproval = onDocumentUpdated(
   {
     document: "tasks/{taskId}",
     region: "europe-west1",
@@ -5934,55 +5934,65 @@ export const createAccrualTaskOnClientApproval = onDocumentUpdated(
     const after = change.after.data() || {};
     const taskId = event.params.taskId;
 
-    // KURAL: Statü "Müvekkil Onayı Bekliyor"dan "Açık"a döndü mü?
-    // Hem eski 'awaiting-approval' hem yeni 'awaiting_client_approval' formatını kontrol ediyoruz.
     const wasAwaiting = ['awaiting_client_approval', 'awaiting-approval'].includes(before.status);
     const isOpen = after.status === 'open';
 
-    // Sadece onaylama anında çalışsın
     if (wasAwaiting && isOpen) {
       try {
-        console.log(`🔔 Task ${taskId} müvekkil tarafından onaylandı. Tahakkuk görevi oluşturuluyor...`);
+        console.log(`🔔 Task ${taskId} onaylandı. ID üretiliyor ve görev açılıyor...`);
 
-        // Varsayılan Muhasebe Ataması (Selcan Hn.)
-        // İsterseniz burayı bir adminDb sorgusuyla dinamik de yapabilirsiniz.
         const assignedUid = "8A9HHfdKKNR3WKl6tCtJH5Khjkx1";
         const assignedEmail = "selcanakoglu@evrekapatent.com";
 
-        // Yeni Görev Verisini Hazırla
+        // --- 1. ID ÜRETİMİ (TRANSACTION İLE) ---
+        const counterRef = adminDb.collection('counters').doc('tasks_accruals');
+        
+        const newCustomId = await adminDb.runTransaction(async (t) => {
+            const doc = await t.get(counterRef);
+            // Eğer sayaç dökümanı yoksa 0'dan başlat, varsa count'u al
+            const currentCount = doc.exists ? (doc.data().count || 0) : 0;
+            const newCount = currentCount + 1;
+            
+            // Sayacı güncelle
+            t.set(counterRef, { count: newCount }, { merge: true });
+            
+            // Formatlı ID oluştur (Örn: T-11)
+            return `T-${newCount}`;
+        });
+
+        console.log(`🆔 Üretilen Yeni Task ID: ${newCustomId}`);
+
+        // --- 2. GÖREV VERİSİ ---
         const accrualTaskData = {
-          taskType: "53", // Tahakkuk Oluşturma ID
+          // ÖNEMLİ: Firestore'da doküman ID'si 'T-11' olacak, ama task verisinde de 'id' alanı tutuyorsanız buraya ekleyin.
+          id: newCustomId, 
+          taskType: "53",
           title: `Tahakkuk Oluşturma: ${after.title || 'Başlıksız İş'}`,
-          description: `"${after.title}" işi MÜVEKKİL ONAYINDAN döndü ve açığa alındı. Lütfen gerekli tahakkuk/fatura işlemlerini yapınız.`,
+          description: `"${after.title}" işi MÜVEKKİL ONAYINDAN döndü. Lütfen tahakkuk işlemini yapınız.`,
           priority: 'high',
-          status: 'pending', // Beklemede başlar, kullanıcı üstüne alır
-          
+          status: 'pending',
           assignedTo_uid: assignedUid,
           assignedTo_email: assignedEmail,
-          
-          // İlişkiler (Ana işe ve IP kaydına bağla)
           relatedTaskId: taskId,
           relatedIpRecordId: after.relatedIpRecordId || null,
           relatedIpRecordTitle: after.relatedIpRecordTitle || after.title,
-          
           details: {
             source: 'client_approval_trigger',
             originalStatus: 'awaiting_client_approval',
             triggerDate: new Date().toISOString()
           },
-
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
           updatedAt: admin.firestore.FieldValue.serverTimestamp()
         };
 
-        // Görevi Oluştur
-        await adminDb.collection('tasks').add(accrualTaskData);
+        // --- 3. GÖREVİ ÖZEL ID İLE OLUŞTUR ---
+        // .add() yerine .doc(ID).set() kullanıyoruz
+        await adminDb.collection('tasks').doc(newCustomId).set(accrualTaskData);
         
       } catch (error) {
-        console.error("Error creating accrual task:", error);
+        console.error("Error creating accrual task with custom ID:", error);
       }
     }
-
     return null;
   }
 );
