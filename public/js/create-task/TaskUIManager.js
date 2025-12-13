@@ -325,6 +325,9 @@ export class TaskUIManager {
 
     _getAccrualCardHtml(isTab = false) {
         const cls = isTab ? 'form-section' : 'section-card';
+        // 'accrualToggleWrapper' -> Açılıp kapanan dış kutu
+        // 'createTaskAccrualContainer' -> AccrualFormManager'ın içini dolduracağı yer
+        
         return `
         <div class="${cls}">
             <h3 class="section-title">Tahakkuk / Finansal Bilgiler</h3>
@@ -343,52 +346,12 @@ export class TaskUIManager {
                     </button>
                 </div>
                 <small class="text-muted mt-2 d-block">
-                    <i class="fas fa-info-circle"></i> Not: Formu açmazsanız veya "Ücretsiz" seçmezseniz, otomatik olarak <strong>"Tahakkuk Oluşturma"</strong> görevi atanacaktır.
+                    <i class="fas fa-info-circle"></i> Not: Formu açmazsanız veya "Ücretsiz" seçmezseniz, otomatik olarak "Tahakkuk Oluşturma" görevi atanacaktır.
                 </small>
             </div>
 
-            <div id="accrualFormContainer" style="display:none;">
-                <div class="form-grid">
-                    <div class="form-group">
-                        <label class="form-label">Resmi Ücret</label>
-                        <div class="input-with-currency">
-                            <input type="number" id="officialFee" class="form-input">
-                            <select id="officialFeeCurrency" class="currency-select"><option>TRY</option><option>USD</option><option>EUR</option></select>
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Hizmet Bedeli</label>
-                        <div class="input-with-currency">
-                            <input type="number" id="serviceFee" class="form-input">
-                            <select id="serviceFeeCurrency" class="currency-select"><option>TRY</option><option>USD</option><option>EUR</option></select>
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">KDV (%)</label>
-                        <input type="number" id="vatRate" class="form-input" value="20">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Toplam</label>
-                        <div id="totalAmountDisplay" class="total-amount-display">0.00 TRY</div>
-                    </div>
-                    <div class="form-group full-width">
-                        <label class="checkbox-label">
-                            <input type="checkbox" id="applyVatToOfficialFee" checked> Resmi Ücrete KDV Uygula
-                        </label>
-                    </div>
-                    <div class="form-group full-width">
-                        <label class="form-label">TP Fatura Tarafı</label>
-                        <input type="text" id="tpInvoicePartySearch" class="form-input">
-                        <div id="tpInvoicePartyResults" class="search-results-list"></div>
-                        <div id="selectedTpInvoicePartyDisplay" style="display:none;"></div>
-                    </div>
-                    <div class="form-group full-width">
-                        <label class="form-label">Hizmet Fatura Tarafı</label>
-                        <input type="text" id="serviceInvoicePartySearch" class="form-input">
-                        <div id="serviceInvoicePartyResults" class="search-results-list"></div>
-                        <div id="selectedServiceInvoicePartyDisplay" style="display:none;"></div>
-                    </div>
-                </div>
+            <div id="accrualToggleWrapper" style="display:none; border: 1px solid #e1e8ed; border-radius: 10px; padding: 15px; margin-top: 15px;">
+                <div id="createTaskAccrualContainer"></div>
             </div>
         </div>`;
     }
