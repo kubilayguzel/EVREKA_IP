@@ -1,6 +1,5 @@
 import { taskService, ipRecordsService, accrualService, db, authService } from '../../firebase-config.js';
-import { doc, getDoc, updateDoc, collection, addDoc, Timestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-import { TASK_IDS, RELATED_PARTY_REQUIRED, asId } from './TaskConstants.js';
+import { doc, getDoc, updateDoc, collection, addDoc, setDoc, runTransaction, Timestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";import { TASK_IDS, RELATED_PARTY_REQUIRED, asId } from './TaskConstants.js';
 // Importu koruyoruz:
 import { getSelectedNiceClasses } from '../nice-classification.js'; 
 import { addMonthsToDate, findNextWorkingDay, isWeekend, isHoliday, TURKEY_HOLIDAYS } from '../../utils.js';
@@ -176,9 +175,10 @@ export class TaskSubmitHandler {
         }
 
         // SENARYO 3: Ertelenmiş Tahakkuk (Veri Yok/Form Kapalı)
-        console.log('⏳ Tahakkuk verisi girilmedi. "Tahakkuk Oluşturma" görevi açılıyor...');
+        // Sayaçtan (counters/tasks_accruals) sıra numarası alıp T-XX id'si ile kayıt açacağız.
+        console.log('⏳ Tahakkuk verisi girilmedi. Özel ID (T-XX) ile "Tahakkuk Oluşturma" görevi açılıyor...');
 
-        // 1. Atanacak kişiyi belirle
+        // 1. Atanacak Kişiyi Belirle (Kural 53 veya Varsayılan)
         let assignedUid = "8A9HHfdKKNR3WKl6tCtJH5Khjkx1"; 
         let assignedEmail = "selcanakoglu@evrekapatent.com";
 
@@ -194,29 +194,62 @@ export class TaskSubmitHandler {
             }
         } catch (e) { console.warn('Atama kuralı hatası (Task 53)', e); }
 
-        // 2. Görevi Hazırla
-        const accrualTaskData = {
-            taskType: "53", // Tahakkuk Oluşturma ID
-            title: `Tahakkuk Oluşturma: ${taskTitle}`,
-            description: `"${taskTitle}" işi oluşturuldu ancak tahakkuk verisi girilmedi. Lütfen finansal kaydı oluşturun.`,
-            priority: 'high',
-            status: 'pending',
-            assignedTo_uid: assignedUid,
-            assignedTo_email: assignedEmail,
-            relatedTaskId: taskId, 
-            relatedIpRecordId: state.selectedIpRecord ? state.selectedIpRecord.id : null,
-            relatedIpRecordTitle: state.selectedIpRecord ? (state.selectedIpRecord.title || state.selectedIpRecord.markName) : taskTitle,
-            details: {
-                source: 'automatic_accrual_assignment',
-                originalTaskType: taskType.alias || taskType.name
-            },
-            createdAt: Timestamp.now(),
-            updatedAt: Timestamp.now()
-        };
+        try {
+            // 2. Transaction Başlat (ID Üretimi ve Kayıt)
+            // 'counters' koleksiyonunda 'tasks_accruals' dokümanını referans alıyoruz
+            const counterRef = doc(db, 'counters', 'tasks_accruals');
 
-        const result = await taskService.createTask(accrualTaskData);
-        if (result?.success) {
-            console.log(`✅ "Tahakkuk Oluşturma" görevi açıldı: ${result.id}`);
+            await runTransaction(db, async (transaction) => {
+                // A) Sayacı Oku
+                const counterDoc = await transaction.get(counterRef);
+                
+                // Eğer doküman yoksa 0 kabul et, varsa count değerini al
+                const currentCount = counterDoc.exists() ? (counterDoc.data().count || 0) : 0;
+                const newCount = currentCount + 1;
+                
+                // B) Yeni ID Formatını Oluştur (Örn: T-12)
+                const newCustomId = `T-${newCount}`;
+
+                // C) Sayacı Güncelle (Artırılmış değeri yaz)
+                transaction.set(counterRef, { count: newCount }, { merge: true });
+
+                // D) Görev Verisini Hazırla
+                const accrualTaskData = {
+                    id: newCustomId, // Doküman ID'sini veri içine de ekliyoruz
+                    taskType: "53", // Tahakkuk Oluşturma Tipi
+                    title: `Tahakkuk Oluşturma: ${taskTitle}`,
+                    description: `"${taskTitle}" işi oluşturuldu ancak tahakkuk girilmedi. Lütfen finansal kaydı oluşturun.`,
+                    priority: 'high',
+                    status: 'pending', // Beklemede
+                    
+                    assignedTo_uid: assignedUid,
+                    assignedTo_email: assignedEmail,
+                    
+                    // İlişkiler
+                    relatedTaskId: taskId, 
+                    relatedIpRecordId: state.selectedIpRecord ? state.selectedIpRecord.id : null,
+                    relatedIpRecordTitle: state.selectedIpRecord ? (state.selectedIpRecord.title || state.selectedIpRecord.markName) : taskTitle,
+                    
+                    details: {
+                        source: 'automatic_accrual_assignment',
+                        originalTaskType: taskType.alias || taskType.name
+                    },
+
+                    createdAt: Timestamp.now(),
+                    updatedAt: Timestamp.now()
+                };
+
+                // E) Görevi Özel ID ile Veritabanına Yaz
+                // addDoc yerine doc().set() kullanıyoruz çünkü ID'yi biz belirledik.
+                const newTaskRef = doc(db, 'tasks', newCustomId);
+                transaction.set(newTaskRef, accrualTaskData);
+            });
+
+            console.log('✅ Tahakkuk görevi özel ID ile başarıyla oluşturuldu.');
+
+        } catch (e) {
+            console.error('❌ Özel ID oluşturma hatası (Transaction):', e);
+            alert('Tahakkuk görevi oluşturulurken bir hata meydana geldi. Lütfen sistem yöneticisine bildirin.');
         }
     }
 
