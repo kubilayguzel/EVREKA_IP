@@ -23,13 +23,13 @@
             </section>
     
             <div class="tasks-container">
-                <div class="tasks-header">
-                    <div class="search-wrapper">
-                        <i class="fas fa-search search-icon"></i>
-                        <input type="text" id="taskSearchInput" class="search-input" placeholder="Başlık, numara, tip ara...">
-                    </div>
+                    <div class="tasks-header">
+                        <div class="search-wrapper">
+                            <i class="fas fa-search search-icon"></i>
+                            <input type="text" id="taskSearchInput" class="search-input" placeholder="Başlık, numara, tip ara...">
+                        </div>
                     <div class="filter-group">
-                        <label class="filter-label" for="statusFilter">Duruma Göre Filtrele:</label>
+                        <label class="filter-label" for="statusFilter">Durum:</label>
                         <select id="statusFilter" class="filter-select">
                             <option value="all">Tümü</option>
                             <option value="open">Açık</option>
@@ -39,6 +39,10 @@
                             <option value="cancelled">İptal Edildi</option>
                             <option value="on-hold">Askıda</option>
                             <option value="awaiting-approval">Onay Bekliyor</option>
+                            <option value="awaiting_client_approval">Müvekkil Onayı Bekliyor</option>
+                            <option value="client_approval_opened">Müvekkil Onayı - Açıldı</option>
+                            <option value="client_approval_closed">Müvekkil Onayı - Kapatıldı</option>
+                            <option value="client_no_response_closed">Müvekkil Cevaplamadı - Kapatıldı</option>
                         </select>
                     </div>
                 </div>
