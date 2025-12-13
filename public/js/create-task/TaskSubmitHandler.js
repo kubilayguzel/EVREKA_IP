@@ -152,6 +152,12 @@ export class TaskSubmitHandler {
         if (hasValidAccrualData) {
             console.log('💰 Veri girildiği için anlık tahakkuk oluşturuluyor...');
             
+            // DÜZELTME: Remaining Amount'u sayısal değer olarak al
+            const mainCurrency = accrualData.totalAmountCurrency || 'TRY';
+            // Array içinden ana para birimine ait tutarı bul
+            const mainAmountItem = (accrualData.totalAmount || []).find(x => x.currency === mainCurrency);
+            const mainAmountValue = mainAmountItem ? mainAmountItem.amount : 0;
+
             const finalAccrual = {
                 taskId: taskId,
                 taskTitle: taskTitle,
@@ -159,9 +165,12 @@ export class TaskSubmitHandler {
                 serviceFee: accrualData.serviceFee,
                 vatRate: accrualData.vatRate,
                 applyVatToOfficialFee: accrualData.applyVatToOfficialFee,
-                totalAmount: accrualData.totalAmount, // Array
-                totalAmountCurrency: accrualData.totalAmountCurrency || 'TRY',
-                remainingAmount: accrualData.totalAmount,
+                
+                // Firestore'a kaydedilecek veriler
+                totalAmount: accrualData.totalAmount, // Array olarak kalabilir (çoklu para birimi desteği için)
+                totalAmountCurrency: mainCurrency,
+                remainingAmount: mainAmountValue, // <--- KRİTİK DÜZELTME: Artık Sayı (Number)
+                
                 status: 'unpaid',
                 tpInvoiceParty: accrualData.tpInvoiceParty,
                 serviceInvoiceParty: accrualData.serviceInvoiceParty,
@@ -175,92 +184,62 @@ export class TaskSubmitHandler {
         }
 
         // SENARYO 3: Ertelenmiş Tahakkuk (Veri Yok/Form Kapalı)
-        // Sayaçtan (counters/tasks_accruals) sıra numarası alıp T-XX id'si ile kayıt açacağız.
         console.log('⏳ Tahakkuk verisi girilmedi. Özel ID (T-XX) ile görev açılıyor...');
 
-        // 1. Atanacak Kişiyi Belirle
-        // Varsayılan değerleri başta boş bırakıyoruz veya fallback olarak tanımlıyoruz
-        let assignedUid = "8A9HHfdKKNR3WKl6tCtJH5Khjkx1"; // Fallback
-        let assignedEmail = "selcanakoglu@evrekapatent.com"; // Fallback
+        let assignedUid = "8A9HHfdKKNR3WKl6tCtJH5Khjkx1"; 
+        let assignedEmail = "selcanakoglu@evrekapatent.com";
 
         try {
-            // Task Assignments tablosundan 53 nolu kuralı çek
             const rule = await this.dataManager.getAssignmentRule("53");
-            
-            // Eğer kural varsa ve içinde atanan kişi varsa, varsayılanı ez
             if (rule && rule.assigneeIds && rule.assigneeIds.length > 0) {
                 const targetUid = rule.assigneeIds[0];
-                
-                // Kullanıcı listesinden (allUsers) bu ID'ye sahip kişiyi bul
                 const user = state.allUsers.find(u => u.id === targetUid);
                 if (user) {
                     assignedUid = user.id;
                     assignedEmail = user.email;
-                    console.log(`✅ Atama kuraldan (DB) alındı: ${user.name}`);
                 }
-            } else {
-                console.warn('⚠️ Kural 53 bulundu ama atanan kişi (assigneeIds) boş. Varsayılan kullanılıyor.');
             }
-        } catch (e) { 
-            console.warn('⚠️ Atama kuralı çekilemedi, varsayılan kullanılıyor.', e); 
-        }
+        } catch (e) { console.warn('Atama kuralı hatası (Task 53)', e); }
 
         try {
-            // 2. Transaction Başlat (ID Üretimi ve Kayıt)
-            // 'counters' koleksiyonunda 'tasks_accruals' dokümanını referans alıyoruz
             const counterRef = doc(db, 'counters', 'tasks_accruals');
 
             await runTransaction(db, async (transaction) => {
-                // A) Sayacı Oku
                 const counterDoc = await transaction.get(counterRef);
-                
-                // Eğer doküman yoksa 0 kabul et, varsa count değerini al
                 const currentCount = counterDoc.exists() ? (counterDoc.data().count || 0) : 0;
                 const newCount = currentCount + 1;
-                
-                // B) Yeni ID Formatını Oluştur (Örn: T-12)
                 const newCustomId = `T-${newCount}`;
 
-                // C) Sayacı Güncelle (Artırılmış değeri yaz)
                 transaction.set(counterRef, { count: newCount }, { merge: true });
 
-                // D) Görev Verisini Hazırla
                 const accrualTaskData = {
-                    id: newCustomId, // Doküman ID'sini veri içine de ekliyoruz
-                    taskType: "53", // Tahakkuk Oluşturma Tipi
+                    id: newCustomId, 
+                    taskType: "53",
                     title: `Tahakkuk Oluşturma: ${taskTitle}`,
                     description: `"${taskTitle}" işi oluşturuldu ancak tahakkuk girilmedi. Lütfen finansal kaydı oluşturun.`,
                     priority: 'high',
-                    status: 'pending', // Beklemede
-                    
+                    status: 'pending',
                     assignedTo_uid: assignedUid,
                     assignedTo_email: assignedEmail,
-                    
-                    // İlişkiler
                     relatedTaskId: taskId, 
                     relatedIpRecordId: state.selectedIpRecord ? state.selectedIpRecord.id : null,
                     relatedIpRecordTitle: state.selectedIpRecord ? (state.selectedIpRecord.title || state.selectedIpRecord.markName) : taskTitle,
-                    
                     details: {
                         source: 'automatic_accrual_assignment',
                         originalTaskType: taskType.alias || taskType.name
                     },
-
                     createdAt: Timestamp.now(),
                     updatedAt: Timestamp.now()
                 };
 
-                // E) Görevi Özel ID ile Veritabanına Yaz
-                // addDoc yerine doc().set() kullanıyoruz çünkü ID'yi biz belirledik.
                 const newTaskRef = doc(db, 'tasks', newCustomId);
                 transaction.set(newTaskRef, accrualTaskData);
             });
-
-            console.log('✅ Tahakkuk görevi özel ID ile başarıyla oluşturuldu.');
+            console.log('✅ Tahakkuk görevi özel ID ile oluşturuldu.');
 
         } catch (e) {
-            console.error('❌ Özel ID oluşturma hatası (Transaction):', e);
-            alert('Tahakkuk görevi oluşturulurken bir hata meydana geldi. Lütfen sistem yöneticisine bildirin.');
+            console.error('❌ Özel ID oluşturma hatası:', e);
+            alert('Tahakkuk görevi oluşturulurken hata oluştu.');
         }
     }
 
