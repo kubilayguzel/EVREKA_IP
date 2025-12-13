@@ -176,23 +176,34 @@ export class TaskSubmitHandler {
 
         // SENARYO 3: Ertelenmiş Tahakkuk (Veri Yok/Form Kapalı)
         // Sayaçtan (counters/tasks_accruals) sıra numarası alıp T-XX id'si ile kayıt açacağız.
-        console.log('⏳ Tahakkuk verisi girilmedi. Özel ID (T-XX) ile "Tahakkuk Oluşturma" görevi açılıyor...');
+        console.log('⏳ Tahakkuk verisi girilmedi. Özel ID (T-XX) ile görev açılıyor...');
 
-        // 1. Atanacak Kişiyi Belirle (Kural 53 veya Varsayılan)
-        let assignedUid = "8A9HHfdKKNR3WKl6tCtJH5Khjkx1"; 
-        let assignedEmail = "selcanakoglu@evrekapatent.com";
+        // 1. Atanacak Kişiyi Belirle
+        // Varsayılan değerleri başta boş bırakıyoruz veya fallback olarak tanımlıyoruz
+        let assignedUid = "8A9HHfdKKNR3WKl6tCtJH5Khjkx1"; // Fallback
+        let assignedEmail = "selcanakoglu@evrekapatent.com"; // Fallback
 
         try {
+            // Task Assignments tablosundan 53 nolu kuralı çek
             const rule = await this.dataManager.getAssignmentRule("53");
+            
+            // Eğer kural varsa ve içinde atanan kişi varsa, varsayılanı ez
             if (rule && rule.assigneeIds && rule.assigneeIds.length > 0) {
                 const targetUid = rule.assigneeIds[0];
+                
+                // Kullanıcı listesinden (allUsers) bu ID'ye sahip kişiyi bul
                 const user = state.allUsers.find(u => u.id === targetUid);
                 if (user) {
                     assignedUid = user.id;
                     assignedEmail = user.email;
+                    console.log(`✅ Atama kuraldan (DB) alındı: ${user.name}`);
                 }
+            } else {
+                console.warn('⚠️ Kural 53 bulundu ama atanan kişi (assigneeIds) boş. Varsayılan kullanılıyor.');
             }
-        } catch (e) { console.warn('Atama kuralı hatası (Task 53)', e); }
+        } catch (e) { 
+            console.warn('⚠️ Atama kuralı çekilemedi, varsayılan kullanılıyor.', e); 
+        }
 
         try {
             // 2. Transaction Başlat (ID Üretimi ve Kayıt)
