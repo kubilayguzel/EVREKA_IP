@@ -168,3 +168,75 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333
 /* Özel Dosya Input Stili */
 .custom-file-upload { border: 2px dashed #ccc; display: block; padding: 10px; cursor: pointer; border-radius: 5px; background-color: #f9f9f9; text-align: center; transition: all 0.3s; }
 .custom-file-upload:hover { border-color: #1e3c72; background-color: #eef2f7; }
+
+/* ==========================================================================
+   Modern Filtre (Select) Tasarımı
+   ========================================================================== */
+
+.filter-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    /* Mobilde alt alta geçmesini önlemek için */
+    white-space: nowrap; 
+}
+
+.filter-label {
+    font-weight: 600;
+    color: #4a5568;
+    font-size: 0.95rem;
+}
+
+/* Select Kutusunu Arama Çubuğuna Benzetme */
+.filter-select {
+    appearance: none; /* Varsayılan tarayıcı okunu gizle */
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    
+    background-color: #ffffff;
+    border: 2px solid #e1e8ed;
+    border-radius: 50px; /* Arama çubuğu ile aynı yuvarlaklık */
+    padding: 10px 40px 10px 20px; /* Sağ tarafta ok için boşluk bırak */
+    font-size: 0.95rem;
+    color: #4a5568;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    min-width: 180px;
+    
+    /* Özel Aşağı Ok İkonu (SVG) */
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23a0aec0' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 15px center;
+    background-size: 16px;
+}
+
+/* Hover Durumu */
+.filter-select:hover {
+    border-color: #cbd5e0;
+}
+
+/* Focus (Odaklanma) Durumu - Arama çubuğu ile aynı efekt */
+.filter-select:focus {
+    outline: none;
+    border-color: #007bff;
+    background-color: #ffffff;
+    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+}
+
+/* Mobilde Düzenleme */
+@media (max-width: 768px) {
+    .tasks-header {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .filter-group {
+        width: 100%;
+        justify-content: space-between;
+        margin-top: 10px;
+    }
+    
+    .filter-select {
+        flex-grow: 1;
+    }
+}
