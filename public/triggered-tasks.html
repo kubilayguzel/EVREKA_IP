@@ -49,11 +49,11 @@
                 <div class="tasks-header">
                     <div class="search-wrapper">
                         <i class="fas fa-search search-icon"></i>
-                        <input type="text" id="searchInput" class="search-input" placeholder="Başlık, numara veya tip ile ara...">
+                        <input type="text" id="searchInput" class="search-input" placeholder="Başlık, numara, tip ara...">
                     </div>
 
                     <button id="manualRenewalTriggerBtn" class="action-btn" style="background-color: #28a745;">
-                        <i class="fas fa-sync-alt mr-2"></i> Yenilemeleri Kontrol Et
+                        <i class="fas fa-sync-alt mr-2"></i> Kontrol Et
                     </button>
 
                     <div class="filter-group">
@@ -61,9 +61,9 @@
                         <select id="statusFilter" class="filter-select">
                             <option value="all">Tümü</option>
                             <option value="awaiting_client_approval">Müvekkil Onayı Bekliyor</option>
-                            <option value="client_approval_opened">Müvekkil Onayladı</option>
-                            <option value="client_approval_closed">Müvekkil Reddetti</option>
-                            <option value="client_no_response_closed">Cevap Alınamadı</option>
+                            <option value="client_approval_opened">Müvekkil Onayladı (Açıldı)</option>
+                            <option value="client_approval_closed">Müvekkil Reddetti (Kapatıldı)</option>
+                            <option value="client_no_response_closed">Cevap Alınamadı (Kapatıldı)</option>
                         </select>
                     </div>
                 </div>
