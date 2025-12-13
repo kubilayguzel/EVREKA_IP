@@ -13,7 +13,7 @@
     <link rel="stylesheet" href="./css/task-management.css">
     
     <style>
-        /* Bu sayfaya özel stiller */
+        /* Sadece bu sayfaya özgü veya override edilmesi gereken stiller */
         .page-wrapper {
             display: flex; flex-direction: column; height: 100vh; overflow-y: hidden;
             background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
@@ -63,7 +63,7 @@
         .modal-content { background-color: #fefefe; margin: auto; padding: 30px; border: 1px solid #888; width: 90%; max-width: 1000px; border-radius: 20px; max-height: 90vh; overflow-y: auto; }
         .close-modal-btn { float: right; font-size: 28px; font-weight: bold; cursor: pointer; color: #aaa; }
         
-        /* Form Elemanları */
+        /* Form Elemanları (Eski CSS'ten taşındı) */
         .form-input, .form-select, .form-control { width: 100%; padding: 12px 15px; border: 2px solid #e1e8ed; border-radius: 10px; font-size: 1em; }
         .form-group { margin-bottom: 15px; }
         
@@ -123,9 +123,8 @@
                         <thead>
                             <tr>
                                 <th style="width: 40px;"><input type="checkbox" id="selectAllCheckbox"></th>
-                                <th class="sortable" data-sort="id">ID <i class="fas fa-sort sort-icon"></i></th>
+                                <th class="sortable" data-sort="id">Tahakkuk ID <i class="fas fa-sort sort-icon"></i></th>
                                 <th class="sortable" data-sort="status">Durum <i class="fas fa-sort sort-icon"></i></th>
-                                <th class="sortable" data-sort="relatedFile">İlgili Dosya <i class="fas fa-sort sort-icon"></i></th>
                                 <th class="sortable" data-sort="taskTitle">İlgili İş <i class="fas fa-sort sort-icon"></i></th>
                                 <th class="sortable" data-sort="officialFee">Resmi Ücret <i class="fas fa-sort sort-icon"></i></th>
                                 <th class="sortable" data-sort="serviceFee">Hizmet Bedeli <i class="fas fa-sort sort-icon"></i></th>
