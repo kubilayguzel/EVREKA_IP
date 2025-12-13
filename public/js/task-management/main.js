@@ -224,21 +224,23 @@ document.addEventListener('DOMContentLoaded', async () => {
                 this.filteredData = [...this.processedData];
             } else {
                 const lowerQuery = query.toLowerCase();
+                // Türkçe karakter duyarlı arama için iyileştirme
                 this.filteredData = this.processedData.filter(item => 
+                    item.searchString.toLocaleLowerCase('tr').includes(lowerQuery) || 
                     item.searchString.includes(lowerQuery)
                 );
             }
             
-            // Aramadan sonra sıralamayı tekrar uygula (sıra bozulmasın)
-            this.sortData();
+            this.sortData(); // Sıralamayı uygula
             
-            // Pagination'ı sıfırla ve güncelle
             if (this.pagination) {
-                this.pagination.reset();
-                this.pagination.update(this.filteredData.length);
-            } else {
-                this.renderTable();
+                this.pagination.reset(); // Sayfayı 1'e al
+                this.pagination.update(this.filteredData.length); // Sayacı güncelle
             }
+            
+            // DÜZELTME: renderTable() if/else bloğunun dışına alındı.
+            // Böylece her arama yapıldığında tablo mutlaka yenilenir.
+            this.renderTable();
         }
 
         // --- SIRALAMA (SORTING) ---
@@ -388,17 +390,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // --- EVENT LISTENERS ---
         setupStaticEventListeners() {
-        // Arama Kutusu Bağlantısı
+            // Arama Kutusu (Modern Yapı)
             const searchInput = document.getElementById('searchInput');
-            
             if (searchInput) {
-                console.log("Arama kutusu bulundu, dinleniyor..."); // Kontrol için log
-                searchInput.addEventListener('input', (e) => {
-                    console.log("Aranıyor:", e.target.value); // Yazdığınızı konsolda görmek için
-                    this.handleSearch(e.target.value);
-                });
-            } else {
-                console.error("HATA: 'searchInput' ID'li element bulunamadı! HTML'i kontrol edin.");
+                searchInput.addEventListener('input', (e) => this.handleSearch(e.target.value));
             }
 
             // Sıralama Başlıkları
