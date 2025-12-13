@@ -5921,7 +5921,7 @@ export const revertAccrualTaskOnReopeningV2 = onDocumentUpdated(
   }
 );
 
-exports.createAccrualTaskOnClientApproval = onDocumentUpdated(
+export const createAccrualTaskOnClientApprovalV2 = onDocumentUpdated(
   {
     document: "tasks/{taskId}",
     region: "europe-west1",
@@ -5942,7 +5942,7 @@ exports.createAccrualTaskOnClientApproval = onDocumentUpdated(
       try {
         console.log(`🔔 Task ${taskId} onaylandı. ID üretiliyor...`);
 
-        // --- 1. DİNAMİK ATAMA MANTIĞI ---
+        // --- 1. ATAMA MANTIĞI (DB'den veya Varsayılan) ---
         let assignedUid = "8A9HHfdKKNR3WKl6tCtJH5Khjkx1"; // Varsayılan (Selcan Hn.)
         let assignedEmail = "selcanakoglu@evrekapatent.com";
 
@@ -5952,7 +5952,7 @@ exports.createAccrualTaskOnClientApproval = onDocumentUpdated(
                 const data = assignmentDoc.data();
                 if (data.assigneeIds && data.assigneeIds.length > 0) {
                     assignedUid = data.assigneeIds[0];
-                    // Kullanıcı e-postasını bul
+                    // Kullanıcının güncel emailini çek
                     const userDoc = await adminDb.collection('users').doc(assignedUid).get();
                     if (userDoc.exists) assignedEmail = userDoc.data().email;
                 }
@@ -5970,9 +5970,9 @@ exports.createAccrualTaskOnClientApproval = onDocumentUpdated(
         });
 
         // --- 3. VERİ HAZIRLIĞI ---
-        const now = new Date().toISOString(); // "2025-12-13T09:07..." string formatı
+        const now = new Date().toISOString(); // String format: "2025-12-13T09:07..."
         
-        // İşlemi yapan kullanıcıyı bulmaya çalış (Frontend'in update sırasında gönderdiği veriden)
+        // İşlemi yapan kullanıcı bilgileri (Frontend update sırasında updatedBy gönderiyorsa oradan al)
         const creatorUid = after.updatedBy_uid || after.updatedBy || 'system'; 
         const creatorEmail = after.updatedBy_email || 'system@evrekapatent.com';
 
@@ -5987,7 +5987,7 @@ exports.createAccrualTaskOnClientApproval = onDocumentUpdated(
           priority: 'high',
           status: 'pending',
           
-          // Atanan Kişi
+          // Atama Bilgileri
           assignedTo_uid: assignedUid,
           assignedTo_email: assignedEmail,
           
@@ -5996,11 +5996,11 @@ exports.createAccrualTaskOnClientApproval = onDocumentUpdated(
           relatedIpRecordId: after.relatedIpRecordId || null,
           relatedIpRecordTitle: after.relatedIpRecordTitle || after.title,
 
-          // Zamanlar (String)
+          // Zamanlar (String Format)
           createdAt: now,
           updatedAt: now,
 
-          // Oluşturan (Map)
+          // Oluşturan Kişi (Map)
           createdBy: {
             uid: creatorUid,
             email: creatorEmail
@@ -6012,7 +6012,7 @@ exports.createAccrualTaskOnClientApproval = onDocumentUpdated(
             originalTaskType: originalType
           },
 
-          // Tarihçe (Array)
+          // Tarihçe (Array içinde Map)
           history: [
             {
               action: "İş oluşturuldu.",
@@ -6023,8 +6023,9 @@ exports.createAccrualTaskOnClientApproval = onDocumentUpdated(
         };
 
         // --- 4. KAYIT ---
+        // Özel ID ile set ediyoruz
         await adminDb.collection('tasks').doc(newCustomId).set(accrualTaskData);
-        console.log(`✅ Tahakkuk görevi oluşturuldu: ${newCustomId}`);
+        console.log(`✅ Tahakkuk görevi başarıyla oluşturuldu: ${newCustomId}`);
         
       } catch (error) {
         console.error("Error creating accrual task:", error);
