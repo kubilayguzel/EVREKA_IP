@@ -522,57 +522,43 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         async showTaskDetailModal(taskId) {
             const modal = document.getElementById('taskDetailModal');
-            const title = document.getElementById('modalTaskTitle');
-            
-            if (!this.taskDetailManager) return;
+            if(!modal || !this.taskDetailManager) return;
 
             modal.classList.add('show');
-            title.textContent = 'İş Detayı Yükleniyor...';
-            
+            document.getElementById('modalTaskTitle').textContent = 'İş Detayı Yükleniyor...';
             this.taskDetailManager.showLoading();
 
             try {
-                // Task verisini veritabanından çek (Her zaman güncel olsun)
+                // Task verisini çek
                 const taskRef = doc(db, 'tasks', String(taskId));
                 const taskSnap = await getDoc(taskRef);
 
                 if (!taskSnap.exists()) {
                     this.taskDetailManager.showError('Bu iş kaydı bulunamadı.');
-                    title.textContent = 'Hata';
                     return;
                 }
                 const task = { id: taskSnap.id, ...taskSnap.data() };
-                title.textContent = `İş Detayı (${task.id})`;
+                document.getElementById('modalTaskTitle').textContent = `İş Detayı (${task.id})`;
 
-                // İlişkili kayıtları bul
+                // DÜZELTME: İlişkili Kaydı (IP Record) Anlık Çek
                 let ipRecord = null;
                 if (task.relatedIpRecordId) {
-                    // İlgili dosya servisi veya önbellekten
-                    if(this.allIpRecords) { // Eğer önbellekte varsa (loadAllData ile geldiyse)
-                         // Not: AccrualsManager içinde ipRecords servisini çağırmıyoruz ama import var.
-                         // Eğer ipRecords loadAllData içinde çekilmiyorsa burada fetch etmeliyiz.
-                         // Mevcut kodunuzda loadAllData içinde ipRecordsService YOK.
-                         // O yüzden burada tekil fetch yapmak daha güvenli.
-                         try {
-                            const ipRef = doc(db, 'ipRecords', String(task.relatedIpRecordId));
-                            const ipSnap = await getDoc(ipRef);
-                            if(ipSnap.exists()) ipRecord = { id: ipSnap.id, ...ipSnap.data() };
-                         } catch(e) { console.warn('IP Record fetch error', e); }
-                    }
+                    try {
+                        const ipRef = doc(db, 'ipRecords', String(task.relatedIpRecordId));
+                        const ipSnap = await getDoc(ipRef);
+                        if(ipSnap.exists()) {
+                            ipRecord = { id: ipSnap.id, ...ipSnap.data() };
+                        }
+                    } catch(e) { console.warn('IP Record fetch error', e); }
                 }
 
-                // Transaction Type
+                // Diğer bilgiler
                 const transactionType = this.allTransactionTypes.find(t => t.id === task.taskType);
-                
-                // Assigned User
                 const assignedUser = this.allUsers.find(u => u.id === task.assignedTo_uid);
-
-                // Related Accruals (Bu sayfada zaten tüm tahakkuklar yüklü)
                 const relatedAccruals = this.allAccruals.filter(acc => String(acc.taskId) === String(task.id));
 
-                // RENDER
                 this.taskDetailManager.render(task, {
-                    ipRecord: ipRecord,
+                    ipRecord: ipRecord, // Artık dolu gelecek
                     transactionType: transactionType,
                     assignedUser: assignedUser,
                     accruals: relatedAccruals
@@ -580,7 +566,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             } catch (error) {
                 console.error(error);
-                this.taskDetailManager.showError('Veri yüklenirken hata oluştu: ' + error.message);
+                this.taskDetailManager.showError('Veri yüklenirken hata oluştu.');
             }
         }
 
