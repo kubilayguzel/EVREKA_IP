@@ -21,13 +21,13 @@ export class AccrualFormManager {
      */
     render() {
         if (!this.container) {
-            console.error(`Container not found: ${this.containerId}`);
+            console.error(`Container not found for ID: ${this.containerId}`);
             return;
         }
 
         const p = this.prefix;
-        // Select elementleri için stil (sabit genişlik)
-        const selectStyle = "width: 130px !important; min-width: 130px !important; flex: 0 0 130px !important; border-top-left-radius: 0; border-bottom-left-radius: 0; background-color: #f8f9fa;";
+        // Select elementleri için stil
+        const selectStyle = "width: 110px !important; min-width: 110px !important; flex: 0 0 110px !important; border-top-left-radius: 0; border-bottom-left-radius: 0; background-color: #f8f9fa; font-weight:600;";
 
         const html = `
             <div class="form-group mb-3 p-2 bg-light border rounded">
@@ -53,7 +53,7 @@ export class AccrualFormManager {
                         <label>Resmi Ücret</label>
                         <div class="input-with-currency" style="display:flex;">
                             <input type="number" id="${p}OfficialFee" class="form-input form-control" step="0.01" placeholder="0.00" style="border-top-right-radius: 0; border-bottom-right-radius: 0;">
-                            <select id="${p}OfficialFeeCurrency" class="currency-select form-control" style="${selectStyle}"><option value="TRY">TRY</option><option value="USD">USD</option><option value="EUR">EUR</option></select>
+                            <select id="${p}OfficialFeeCurrency" class="currency-select form-control" style="${selectStyle}"><option value="TRY">TRY</option><option value="USD">USD</option><option value="EUR">EUR</option><option value="CHF">CHF</option><option value="GBP">GBP</option></select>
                         </div>
                     </div>
                 </div>
@@ -62,7 +62,7 @@ export class AccrualFormManager {
                         <label>Hizmet Ücreti</label>
                         <div class="input-with-currency" style="display:flex;">
                             <input type="number" id="${p}ServiceFee" class="form-input form-control" step="0.01" placeholder="0.00" style="border-top-right-radius: 0; border-bottom-right-radius: 0;">
-                            <select id="${p}ServiceFeeCurrency" class="currency-select form-control" style="${selectStyle}"><option value="TRY">TRY</option><option value="USD">USD</option><option value="EUR">EUR</option></select>
+                            <select id="${p}ServiceFeeCurrency" class="currency-select form-control" style="${selectStyle}"><option value="TRY">TRY</option><option value="USD">USD</option><option value="EUR">EUR</option><option value="CHF">CHF</option><option value="GBP">GBP</option></select>
                         </div>
                     </div>
                 </div>
@@ -82,7 +82,11 @@ export class AccrualFormManager {
                 </div>
             </div>
 
-            <div id="${p}TotalAmountDisplay" class="total-amount-display" style="font-size: 1.2em; font-weight: bold; color: #1e3c72; text-align: right; margin-top: 10px; padding: 12px 15px; background-color: #f0f4f8; border-radius: 10px;">0.00 ₺</div>
+            <div id="${p}TotalAmountDisplay" class="total-amount-display d-flex justify-content-between align-items-center" 
+                 style="font-size: 1.1em; font-weight: bold; color: #1e3c72; margin-top: 15px; padding: 15px 20px; background-color: #e3f2fd; border: 1px solid #90caf9; border-radius: 10px;">
+                <span class="text-uppercase text-muted" style="font-size: 0.85em; letter-spacing: 1px;">TOPLAM</span>
+                <span id="${p}TotalValueContent">0.00 ₺</span>
+            </div>
 
             <div class="form-group mt-3" id="${p}ForeignPaymentPartyContainer" style="display:none; background-color: #e3f2fd; padding: 10px; border-radius: 8px; border: 1px solid #90caf9;">
                 <label class="text-primary font-weight-bold"><i class="fas fa-globe-americas mr-2"></i>Yurtdışı Ödeme Yapılacak Taraf</label>
@@ -205,7 +209,7 @@ export class AccrualFormManager {
 
     /**
      * Toplam tutarı hesaplar ve ekrana yazar.
-     * FARKLI PARA BİRİMLERİNİ BİRLEŞTİRMEDEN AYRI AYRI GÖSTERİR.
+     * GÜNCELLENDİ: "Toplam" yazısı solda, tutarlar sağda tek satırda ( + ile birleştirilmiş).
      */
     calculateTotal() {
         const p = this.prefix;
@@ -226,20 +230,29 @@ export class AccrualFormManager {
         if (offTotal > 0) totals[offCurr] = (totals[offCurr] || 0) + offTotal;
         if (srvTotal > 0) totals[srvCurr] = (totals[srvCurr] || 0) + srvTotal;
 
-        const displayEl = document.getElementById(`${p}TotalAmountDisplay`);
+        // Render'da oluşturduğumuz dış div'in içindeki değeri güncelleyeceğiz
+        // Dış div: TotalAmountDisplay -> İçindeki değer span'ı: TotalValueContent
+        const displayContainer = document.getElementById(`${p}TotalAmountDisplay`);
+        
+        // Eğer render'da eski HTML yapısı kaldıysa (hot reload durumları için) güvenlik
+        if(!document.getElementById(`${p}TotalValueContent`)) {
+             displayContainer.innerHTML = `
+                <span class="text-uppercase text-muted" style="font-size: 0.85em; letter-spacing: 1px;">TOPLAM</span>
+                <span id="${p}TotalValueContent">0.00 ₺</span>`;
+        }
+        
+        const valueSpan = document.getElementById(`${p}TotalValueContent`);
         const fmt = (val, curr) => new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(val) + ' ' + curr;
 
         // Diziye çevirip formatla
         const parts = Object.entries(totals).map(([curr, amount]) => fmt(amount, curr));
 
         if (parts.length === 0) {
-            displayEl.innerHTML = '0.00 ₺';
-        } else if (parts.length === 1) {
-            // Tek para birimi
-            displayEl.innerHTML = `<span class="text-primary font-weight-bold">${parts[0]}</span>`;
+            valueSpan.innerHTML = '0.00 ₺';
         } else {
-            // Çoklu para birimi (alt alta göster)
-            displayEl.innerHTML = parts.map(part => `<div class="text-dark small font-weight-bold">${part}</div>`).join('');
+            // Tek satırda "+" ile birleştir
+            // Örnek: "150,00 TRY + 200,00 USD"
+            valueSpan.innerHTML = `<span class="text-primary font-weight-bold">${parts.join(' + ')}</span>`;
         }
     }
 
@@ -275,7 +288,10 @@ export class AccrualFormManager {
         document.getElementById(`${p}OfficialFeeCurrency`).value = 'TRY';
         document.getElementById(`${p}ServiceFeeCurrency`).value = 'TRY';
         document.getElementById(`${p}VatRate`).value = '20';
-        document.getElementById(`${p}TotalAmountDisplay`).textContent = '0.00 ₺';
+        
+        // Toplamı sıfırla (Yeni yapıya göre)
+        const valSpan = document.getElementById(`${p}TotalValueContent`);
+        if(valSpan) valSpan.innerHTML = '0.00 ₺';
         
         this.selectedTpParty = null;
         this.selectedForeignParty = null;
@@ -332,7 +348,7 @@ export class AccrualFormManager {
         document.getElementById(`${p}IsForeignTransaction`).checked = isForeign;
         this.handleForeignToggle();
         
-        // Hesaplamayı tetikle (Görseli güncelle)
+        // Hesaplamayı tetikle
         this.calculateTotal();
     }
 
@@ -359,8 +375,6 @@ export class AccrualFormManager {
 
     /**
      * Formdaki verileri toplayıp döndürür.
-     * DÜZELTME: totalAmount artık bir DİZİ (Array) olarak döner.
-     * Örnek: [{ amount: 100, currency: 'EUR' }, { amount: 500, currency: 'TRY' }]
      */
     getData() {
         const p = this.prefix;
@@ -416,13 +430,8 @@ export class AccrualFormManager {
                 serviceFee: { amount: serviceFee, currency: srvCurr },
                 vatRate: vatRate,
                 applyVatToOfficialFee: applyVatToOfficial,
-                
-                // ARTIK ARRAY DÖNÜYORUZ
                 totalAmount: totalAmountArray, 
-                
-                // Geriye uyumluluk (eski kodlar tek currency beklerse diye ilkini veya varsayılanı verelim)
                 totalAmountCurrency: totalAmountArray.length > 0 ? totalAmountArray[0].currency : 'TRY',
-                
                 tpInvoiceParty: tpParty,
                 serviceInvoiceParty: serviceParty,
                 isForeignTransaction: isForeign,
