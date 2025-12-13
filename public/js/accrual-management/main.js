@@ -22,7 +22,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             this.processedData = [];
             this.allTasks = {}; 
             this.allPersons = [];
-            this.allIpRecords = [];
             this.allUsers = [];
             this.allTransactionTypes = []; 
             this.selectedAccruals = new Set();
@@ -63,19 +62,17 @@ document.addEventListener('DOMContentLoaded', async () => {
             if(loadingIndicator) loadingIndicator.style.display = 'block';
 
             try {
-                const [accRes, personsRes, usersRes, typesRes, ipRes] = await Promise.all([
+                const [accRes, personsRes, usersRes, typesRes] = await Promise.all([
                     accrualService.getAccruals(),
                     personService.getPersons(),
                     taskService.getAllUsers(),
-                    transactionTypeService.getTransactionTypes(),
-                    ipRecordsService.getRecords()
+                    transactionTypeService.getTransactionTypes()
                 ]);
 
                 this.allAccruals = accRes?.success ? (accRes.data || []) : [];
                 this.allPersons = personsRes?.success ? (personsRes.data || []) : [];
                 this.allUsers = usersRes?.success ? (usersRes.data || []) : [];
                 this.allTransactionTypes = typesRes?.success ? (typesRes.data || []) : [];
-                this.allIpRecords = ipRes?.success ? (ipRes.data || []) : [];
 
                 if (this.allAccruals.length > 0) {
                     this.allAccruals.forEach(a => { a.createdAt = a.createdAt ? new Date(a.createdAt) : new Date(0); });
@@ -189,7 +186,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             // --- TABLO SATIRLARI ---
             tbody.innerHTML = pageData.map(acc => {
-                // 1. Statü Belirleme
                 let sTxt = 'Bilinmiyor', sCls = '';
                 if(acc.status === 'paid') { sTxt = 'Ödendi'; sCls = 'status-paid'; }
                 else if(acc.status === 'unpaid') { sTxt = 'Ödenmedi'; sCls = 'status-unpaid'; }
@@ -198,70 +194,66 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const isSel = this.selectedAccruals.has(acc.id);
                 const isPaid = acc.status === 'paid';
                 
-                // 2. İLGİLİ İŞ ve DOSYA ADI MANTIĞI (Senin istediğin format)
-                let taskDisplay = acc.taskId; 
-                let relatedFileDisplay = '-';
+                // Verileri hazırla
+                const rem = acc.remainingAmount !== undefined ? acc.remainingAmount : acc.totalAmount;
+                const total = acc.totalAmount;
+                
+                let taskDisplay = acc.taskTitle || acc.taskId;
+                if (this.allTasks[String(acc.taskId)]) taskDisplay = this.allTasks[String(acc.taskId)].title;
 
-                const task = this.allTasks[String(acc.taskId)];
-                if (task) {
-                    // A) İş Tipi Adını Bul (Örn: Yenileme)
-                    const typeObj = this.allTransactionTypes.find(t => t.id === task.taskType);
-                    const typeName = typeObj ? (typeObj.alias || typeObj.name) : 'İşlem';
-                    
-                    // Format: "Yenileme (TASK-123)"
-                    taskDisplay = `${typeName} (${task.id})`;
-
-                    // B) İlgili Dosya Adını Bul (Örn: Marka Adı veya Başvuru No)
-                    if (task.relatedIpRecordId) {
-                        const ipRec = this.allIpRecords.find(r => r.id === task.relatedIpRecordId);
-                        if (ipRec) {
-                            // Varsa başvuru numarası, yoksa dosya başlığı
-                            relatedFileDisplay = ipRec.applicationNumber || ipRec.title || 'Dosya';
-                        }
-                    }
-                } else if (acc.taskTitle) {
-                    taskDisplay = acc.taskTitle; // Task silinmişse eski başlığı kullan
-                }
-
-                // 3. Ücretleri Formatla
                 const officialStr = acc.officialFee ? formatMultiCurrency(acc.officialFee.amount, acc.officialFee.currency) : '-';
                 const serviceStr = acc.serviceFee ? formatMultiCurrency(acc.serviceFee.amount, acc.serviceFee.currency) : '-';
 
-                // 4. Kalan Tutar Hesabı
-                const rem = acc.remainingAmount !== undefined ? acc.remainingAmount : acc.totalAmount;
-                let remNumeric = Array.isArray(rem) ? rem.reduce((s, i) => s + (parseFloat(i.amount)||0), 0) : (parseFloat(rem) || 0);
-                let totalNumeric = Array.isArray(acc.totalAmount) ? acc.totalAmount.reduce((s, i) => s + (parseFloat(i.amount)||0), 0) : (parseFloat(acc.totalAmount) || 0);
+                // --- KALAN TUTAR GÖRÜNTÜLEME MANTIĞI (YENİ) ---
+                
+                // 1. Toplam Tutarın Sayısal Değerini Hesapla
+                let totalNumeric = 0;
+                if (Array.isArray(total)) {
+                    totalNumeric = total.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+                } else {
+                    totalNumeric = parseFloat(total) || 0;
+                }
 
-                let remainingHtml = '';
+                // 2. Kalan Tutarın Sayısal Değerini Hesapla
+                let remNumeric = 0;
+                if (Array.isArray(rem)) {
+                    remNumeric = rem.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+                } else {
+                    remNumeric = parseFloat(rem) || 0;
+                }
+
+                let remainingHtml = ''; 
+                
+                // KOŞUL: 
+                // Kalan > 0 OLMALI  (Tamamen ödenmişse gösterme)
+                // VE
+                // Kalan != Toplam OLMALI (Hiç ödenmemişse gösterme - zaten toplamda yazıyor)
+                
                 const isZero = remNumeric < 0.01;
                 const isEqualTotal = Math.abs(totalNumeric - remNumeric) < 0.01;
 
-                if (!isZero && !isEqualTotal) remainingHtml = `<span style="color: black; font-weight: bold;">${formatMultiCurrency(rem, acc.totalAmountCurrency)}</span>`;
-                else if (!isZero) remainingHtml = `<span>${formatMultiCurrency(rem, acc.totalAmountCurrency)}</span>`;
-                else remainingHtml = `<span class="text-success"><i class="fas fa-check"></i> Tamamlandı</span>`;
+                if (!isZero && !isEqualTotal) {
+                    // Sadece Kısmi ödeme varsa SİYAH ve KALIN göster
+                    remainingHtml = `<span style="color: black; font-weight: bold;">${formatMultiCurrency(rem, acc.totalAmountCurrency)}</span>`;
+                }
 
-                // 5. Satır HTML'i (Sütun sırasına dikkat et: ID -> Durum -> Dosya -> İş -> Ücretler...)
                 return `
                 <tr>
                     <td><input type="checkbox" class="row-checkbox" data-id="${acc.id}" ${isSel ? 'checked' : ''}></td>
-                    
-                    <td><small>${acc.id.substring(0, 8)}...</small></td>
-                    
+                    <td><small>${acc.id}</small></td>
                     <td><span class="status-badge ${sCls}">${sTxt}</span></td>
-                    
-                    <td><span class="badge badge-light border" style="font-weight:normal;">${relatedFileDisplay}</span></td>
-                    
-                    <td><a href="#" class="task-detail-link font-weight-bold" data-task-id="${acc.taskId}">${taskDisplay}</a></td>
-                    
+                    <td><a href="#" class="task-detail-link" data-task-id="${acc.taskId}">${taskDisplay}</a></td>
                     <td>${officialStr}</td>
                     <td>${serviceStr}</td>
                     <td>${formatMultiCurrency(acc.totalAmount, acc.totalAmountCurrency)}</td>
+                    
                     <td>${remainingHtml}</td>
+                    
                     <td>
                         <div style="display: flex; gap: 5px;">
-                            <button class="action-btn view-btn" data-id="${acc.id}" title="Detay">Görüntüle</button>
-                            <button class="action-btn edit-btn" data-id="${acc.id}" title="Düzenle" ${isPaid ? 'disabled' : ''}>Düzenle</button>
-                            <button class="action-btn delete-btn" data-id="${acc.id}" title="Sil">Sil</button>
+                            <button class="action-btn view-btn" data-id="${acc.id}">Görüntüle</button>
+                            <button class="action-btn edit-btn" data-id="${acc.id}" ${isPaid ? 'disabled' : ''}>Düzenle</button>
+                            <button class="action-btn delete-btn" data-id="${acc.id}">Sil</button>
                         </div>
                     </td>
                 </tr>`;
@@ -528,7 +520,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             modal.classList.add('show');
         }
 
-        async showTaskDetailModal(taskId) {
+    async showTaskDetailModal(taskId) {
             const modal = document.getElementById('taskDetailModal');
             if(!modal || !this.taskDetailManager) return;
 
