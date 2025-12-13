@@ -1,6 +1,6 @@
 import { taskService, ipRecordsService, accrualService, db, authService } from '../../firebase-config.js';
-import { doc, getDoc, updateDoc, collection, addDoc, setDoc, runTransaction, Timestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";import { TASK_IDS, RELATED_PARTY_REQUIRED, asId } from './TaskConstants.js';
-// Importu koruyoruz:
+import { doc, getDoc, updateDoc, collection, addDoc, setDoc, runTransaction, Timestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { TASK_IDS, RELATED_PARTY_REQUIRED, asId } from './TaskConstants.js';
 import { getSelectedNiceClasses } from '../nice-classification.js'; 
 import { addMonthsToDate, findNextWorkingDay, isWeekend, isHoliday, TURKEY_HOLIDAYS } from '../../utils.js';
 
@@ -15,8 +15,6 @@ export class TaskSubmitHandler {
     async handleFormSubmit(e, state) {
         e.preventDefault();
         
-        // State'ten gelen verileri alıyoruz.
-        // DİKKAT: main.js üzerinden gelen accrualData ve isFreeTransaction burada alınıyor.
         const { 
             selectedTaskType, selectedIpRecord, selectedRelatedParties, selectedRelatedParty,
             selectedApplicants, priorities, selectedCountries, uploadedFiles,
@@ -36,7 +34,6 @@ export class TaskSubmitHandler {
             const assignedTo = document.getElementById('assignedTo')?.value;
             const assignedUser = state.allUsers.find(u => u.id === assignedTo);
             
-            // Başlık ve Açıklama
             let taskTitle = document.getElementById('taskTitle')?.value;
             let taskDesc = document.getElementById('taskDescription')?.value;
 
@@ -106,11 +103,10 @@ export class TaskSubmitHandler {
                 await this._addTransactionToPortfolio(taskData.relatedIpRecordId, selectedTaskType, taskResult.id, state);
             }
 
-            // 8. TAHAKKUK VE FİNANSAL İŞLEMLER (YENİ MANTIK)
-            // Parametreleri main.js'ten gelen state verisiyle besliyoruz
+            // 8. TAHAKKUK VE FİNANSAL İŞLEMLER (DÜZELTİLDİ)
             await this._handleAccrualLogic(taskResult.id, taskData.title, selectedTaskType, state, accrualData, isFreeTransaction);
 
-            // 9. Otomasyon (Yayına İtiraz)
+            // 9. Otomasyon
             if (['20', 'trademark_publication_objection'].includes(String(selectedTaskType.id))) {
                 await this._handleOppositionAutomation(taskResult.id, selectedTaskType, selectedIpRecord);
             }
@@ -130,11 +126,7 @@ export class TaskSubmitHandler {
     // ============================================================
 
     /**
-     * TAHAKKUK MANTIĞI (GÜNCELLENDİ)
-     * 3 Senaryo:
-     * 1. Ücretsiz -> Hiçbir şey yapma.
-     * 2. Veri Var -> Accrual oluştur.
-     * 3. Veri Yok -> Task 53 oluştur.
+     * TAHAKKUK MANTIĞI (DÜZELTİLDİ)
      */
     async _handleAccrualLogic(taskId, taskTitle, taskType, state, accrualData, isFree) {
         // SENARYO 1: Ücretsiz İşlem
@@ -152,11 +144,30 @@ export class TaskSubmitHandler {
         if (hasValidAccrualData) {
             console.log('💰 Veri girildiği için anlık tahakkuk oluşturuluyor...');
             
-            // DÜZELTME: Remaining Amount'u sayısal değer olarak al
-            const mainCurrency = accrualData.totalAmountCurrency || 'TRY';
-            // Array içinden ana para birimine ait tutarı bul
-            const mainAmountItem = (accrualData.totalAmount || []).find(x => x.currency === mainCurrency);
-            const mainAmountValue = mainAmountItem ? mainAmountItem.amount : 0;
+            // --- DOSYA YÜKLEME İŞLEMİ (FileList -> Array -> Upload) ---
+            let uploadedFileMetadata = [];
+            
+            // FileList'i Array'e çevir ve kontrol et
+            if (accrualData.files && accrualData.files.length > 0) {
+                const filesArray = Array.from(accrualData.files); // FileList'i diziye çevir
+                
+                for (const file of filesArray) {
+                    const path = `accrual-docs/${Date.now()}_${file.name}`;
+                    try {
+                        const url = await this.dataManager.uploadFileToStorage(file, path);
+                        uploadedFileMetadata.push({
+                            name: file.name,
+                            url: url,
+                            storagePath: path,
+                            type: file.type,
+                            id: Date.now().toString() // Geçici ID
+                        });
+                        console.log(`📎 Dosya yüklendi: ${file.name}`);
+                    } catch (uploadErr) {
+                        console.error('Dosya yükleme hatası:', uploadErr);
+                    }
+                }
+            }
 
             const finalAccrual = {
                 taskId: taskId,
@@ -167,19 +178,30 @@ export class TaskSubmitHandler {
                 applyVatToOfficialFee: accrualData.applyVatToOfficialFee,
                 
                 // Firestore'a kaydedilecek veriler
-                totalAmount: accrualData.totalAmount, // Array olarak kalabilir (çoklu para birimi desteği için)
-                totalAmountCurrency: mainCurrency,
-                remainingAmount: mainAmountValue, // <--- KRİTİK DÜZELTME: Artık Sayı (Number)
+                totalAmount: accrualData.totalAmount, // Array
+                totalAmountCurrency: accrualData.totalAmountCurrency || 'TRY',
+                
+                // DB yapısına uygun olarak Array (Dizi) olarak bırakıyoruz
+                remainingAmount: accrualData.totalAmount, 
                 
                 status: 'unpaid',
                 tpInvoiceParty: accrualData.tpInvoiceParty,
                 serviceInvoiceParty: accrualData.serviceInvoiceParty,
                 isForeignTransaction: accrualData.isForeignTransaction,
                 createdAt: new Date().toISOString(),
-                files: accrualData.files || [] 
+                
+                // Yüklenen dosyaların metadata'sını ekle (FileList DEĞİL, Array)
+                files: uploadedFileMetadata 
             };
 
-            await accrualService.addAccrual(finalAccrual);
+            // Hata yakalama ekliyoruz
+            const accrualResult = await accrualService.addAccrual(finalAccrual);
+            if (!accrualResult.success) {
+                console.error('❌ Tahakkuk ekleme hatası:', accrualResult.error);
+                alert('İş oluşturuldu ancak tahakkuk kaydedilemedi: ' + accrualResult.error);
+            } else {
+                console.log('✅ Tahakkuk başarıyla kaydedildi.');
+            }
             return; 
         }
 
@@ -239,7 +261,7 @@ export class TaskSubmitHandler {
 
         } catch (e) {
             console.error('❌ Özel ID oluşturma hatası:', e);
-            alert('Tahakkuk görevi oluşturulurken hata oluştu.');
+            alert('Tahakkuk görevi oluşturulurken bir hata meydana geldi.');
         }
     }
 
@@ -250,51 +272,33 @@ export class TaskSubmitHandler {
             if (isRenewal && ipRecord) {
                 let baseDate = null;
                 const rawDate = ipRecord.renewalDate || ipRecord.registrationDate || ipRecord.applicationDate;
-
                 if (rawDate) {
-                    if (rawDate.toDate && typeof rawDate.toDate === 'function') {
-                        baseDate = rawDate.toDate();
-                    } else if (typeof rawDate === 'string') {
-                        baseDate = new Date(rawDate);
-                    } else if (rawDate instanceof Date) {
-                        baseDate = rawDate;
-                    }
+                    if (rawDate.toDate) baseDate = rawDate.toDate();
+                    else if (typeof rawDate === 'string') baseDate = new Date(rawDate);
+                    else baseDate = rawDate;
                 }
-
-                if (!baseDate || isNaN(baseDate.getTime())) {
-                    baseDate = new Date();
-                }
-
-                if (baseDate < new Date()) {
-                    baseDate.setFullYear(baseDate.getFullYear() + 10);
-                }
+                if (!baseDate || isNaN(baseDate.getTime())) baseDate = new Date();
+                if (baseDate < new Date()) baseDate.setFullYear(baseDate.getFullYear() + 10);
 
                 const official = findNextWorkingDay(baseDate, TURKEY_HOLIDAYS);
                 const operational = new Date(official);
                 operational.setDate(operational.getDate() - 3);
-                
-                while (isWeekend(operational) || isHoliday(operational, TURKEY_HOLIDAYS)) {
-                    operational.setDate(operational.getDate() - 1);
-                }
+                while (isWeekend(operational) || isHoliday(operational, TURKEY_HOLIDAYS)) operational.setDate(operational.getDate() - 1);
 
                 taskData.officialDueDate = Timestamp.fromDate(official);
                 taskData.operationalDueDate = Timestamp.fromDate(operational);
                 taskData.dueDate = Timestamp.fromDate(operational);
-
                 taskData.officialDueDateDetails = {
                     finalOfficialDueDate: official.toISOString().split('T')[0],
                     renewalDate: baseDate.toISOString().split('T')[0],
                     adjustments: []
                 };
-
                 const dateStr = baseDate.toLocaleDateString('tr-TR');
                 if (taskData.description && !taskData.description.includes('Yenileme tarihi:')) {
                     const separator = taskData.description.endsWith('.') ? ' ' : '. ';
                     taskData.description += `${separator}Yenileme tarihi: ${dateStr}.`;
                 }
             }
-
-            // Yayına İtiraz
             const isOpposition = ['20', 'trademark_publication_objection'].includes(String(taskType.id));
             if (isOpposition && ipRecord && ipRecord.source === 'bulletin' && ipRecord.bulletinId) {
                 const bulletinData = await this.dataManager.fetchAndStoreBulletinData(ipRecord.bulletinId);
@@ -347,7 +351,6 @@ export class TaskSubmitHandler {
             const path = `brand-images/${Date.now()}_${file.name}`;
             brandImageUrl = await this.dataManager.uploadFileToStorage(file, path);
         }
-
         const newRecordData = {
             title: taskData.title,
             type: 'trademark',
@@ -356,7 +359,7 @@ export class TaskSubmitHandler {
             brandImageUrl: brandImageUrl,
             applicants: selectedApplicants.map(p => ({ id: p.id, name: p.name })),
             priorities: priorities,
-            goodsAndServices: getSelectedNiceClasses(), // Import ettiğimiz fonksiyonu kullanıyoruz
+            goodsAndServices: getSelectedNiceClasses(),
             createdAt: new Date().toISOString()
         };
         const result = await ipRecordsService.createRecord(newRecordData);
