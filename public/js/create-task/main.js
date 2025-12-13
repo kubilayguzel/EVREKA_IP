@@ -83,9 +83,36 @@ class CreateTaskController {
             // 💾 KAYDET BUTONU (Bu kısım eklendiği için artık çalışacak)
             if (e.target.id === 'saveTaskBtn' || e.target.closest('#saveTaskBtn')) {
                 const btn = e.target.closest('#saveTaskBtn') || e.target;
-                if (btn.disabled) return; // Disabled ise çalışma
+                if (btn.disabled) return;
                 
-                console.log('💾 Kaydet butonuna basıldı (Delegation)');
+                // 1. Tahakkuk Verisini Al
+                let accrualData = null;
+                const isFree = document.getElementById('isFreeTransaction')?.checked;
+                
+                // Eğer ücretsiz değilse ve manager varsa veriyi çek
+                if (!isFree && this.accrualFormManager) {
+                    const result = this.accrualFormManager.getData();
+                    
+                    // Eğer form görünürse (Wrapper açıksa) validasyon yap
+                    const isFormVisible = document.getElementById('accrualToggleWrapper')?.style.display !== 'none';
+                    
+                    if (isFormVisible && !result.success) {
+                        // Form açık ama veri eksik/hatalıysa durdur
+                        alert(result.error);
+                        return;
+                    }
+                    
+                    // Veri geçerliyse al (Form kapalı olsa bile dolu veriyi alabiliriz veya null geçebiliriz, ihtiyaca göre)
+                    if (result.success) {
+                        accrualData = result.data;
+                    }
+                }
+
+                // 2. Bu veriyi State'e ekle (SubmitHandler bunu kullanacak)
+                this.state.accrualData = accrualData; 
+                this.state.isFreeTransaction = isFree;
+
+                console.log('💾 Kaydediliyor...', this.state);
                 this.submitHandler.handleFormSubmit(e, this.state);
             }
 
