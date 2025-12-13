@@ -1,24 +1,27 @@
 import { taskService, ipRecordsService, accrualService, db, authService } from '../../firebase-config.js';
 import { doc, getDoc, updateDoc, collection, addDoc, Timestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { TASK_IDS, RELATED_PARTY_REQUIRED, asId } from './TaskConstants.js';
-import { getSelectedNiceClasses } from '../nice-classification.js';
+// Importu koruyoruz:
+import { getSelectedNiceClasses } from '../nice-classification.js'; 
 import { addMonthsToDate, findNextWorkingDay, isWeekend, isHoliday, TURKEY_HOLIDAYS } from '../../utils.js';
 
 export class TaskSubmitHandler {
     constructor(dataManager, uiManager) {
         this.dataManager = dataManager;
         this.uiManager = uiManager;
-        // Main.js tarafından set edilen seçili parent ID'si
         this.selectedParentTransactionId = null;
     }
 
     // --- ANA GÖNDERİM FONKSİYONU ---
     async handleFormSubmit(e, state) {
         e.preventDefault();
+        
+        // State'ten gelen verileri alıyoruz.
+        // DİKKAT: main.js üzerinden gelen accrualData ve isFreeTransaction burada alınıyor.
         const { 
             selectedTaskType, selectedIpRecord, selectedRelatedParties, selectedRelatedParty,
             selectedApplicants, priorities, selectedCountries, uploadedFiles,
-            selectedTpInvoiceParty, selectedServiceInvoiceParty
+            accrualData, isFreeTransaction 
         } = state;
 
         if (!selectedTaskType) {
@@ -56,9 +59,6 @@ export class TaskSubmitHandler {
                 }
             }
 
-            let taskStatus = 'open'; // Varsayılan statü
-
-            // Task Data Objesi
             let taskData = {
                 taskType: selectedTaskType.id,
                 title: taskTitle,
@@ -66,7 +66,7 @@ export class TaskSubmitHandler {
                 priority: document.getElementById('taskPriority')?.value || 'medium',
                 assignedTo_uid: assignedUser ? assignedUser.id : null,
                 assignedTo_email: assignedUser ? assignedUser.email : null,
-                status: taskStatus,
+                status: 'open',
                 relatedIpRecordId: selectedIpRecord ? selectedIpRecord.id : null,
                 relatedIpRecordTitle: selectedIpRecord ? (selectedIpRecord.title || selectedIpRecord.markName) : taskTitle,
                 details: {},
@@ -107,8 +107,9 @@ export class TaskSubmitHandler {
                 await this._addTransactionToPortfolio(taskData.relatedIpRecordId, selectedTaskType, taskResult.id, state);
             }
 
-            // 8. Tahakkuk
-            await this._handleAccrual(taskResult.id, taskData.title, selectedTaskType, state);
+            // 8. TAHAKKUK VE FİNANSAL İŞLEMLER (YENİ MANTIK)
+            // Parametreleri main.js'ten gelen state verisiyle besliyoruz
+            await this._handleAccrualLogic(taskResult.id, taskData.title, selectedTaskType, state, accrualData, isFreeTransaction);
 
             // 9. Otomasyon (Yayına İtiraz)
             if (['20', 'trademark_publication_objection'].includes(String(selectedTaskType.id))) {
@@ -125,16 +126,105 @@ export class TaskSubmitHandler {
         }
     }
 
-    // --- YARDIMCI METOTLAR ---
+    // ============================================================
+    // YARDIMCI METOTLAR
+    // ============================================================
+
+    /**
+     * TAHAKKUK MANTIĞI (GÜNCELLENDİ)
+     * 3 Senaryo:
+     * 1. Ücretsiz -> Hiçbir şey yapma.
+     * 2. Veri Var -> Accrual oluştur.
+     * 3. Veri Yok -> Task 53 oluştur.
+     */
+    async _handleAccrualLogic(taskId, taskTitle, taskType, state, accrualData, isFree) {
+        // SENARYO 1: Ücretsiz İşlem
+        if (isFree) {
+            console.log('🆓 "Ücretsiz İşlem" seçildi. Tahakkuk atlanıyor.');
+            return; 
+        }
+
+        // SENARYO 2: Anlık Tahakkuk (Veri Dolu)
+        const hasValidAccrualData = accrualData && (
+            (accrualData.officialFee?.amount > 0) || 
+            (accrualData.serviceFee?.amount > 0)
+        );
+
+        if (hasValidAccrualData) {
+            console.log('💰 Veri girildiği için anlık tahakkuk oluşturuluyor...');
+            
+            const finalAccrual = {
+                taskId: taskId,
+                taskTitle: taskTitle,
+                officialFee: accrualData.officialFee,
+                serviceFee: accrualData.serviceFee,
+                vatRate: accrualData.vatRate,
+                applyVatToOfficialFee: accrualData.applyVatToOfficialFee,
+                totalAmount: accrualData.totalAmount, // Array
+                totalAmountCurrency: accrualData.totalAmountCurrency || 'TRY',
+                remainingAmount: accrualData.totalAmount,
+                status: 'unpaid',
+                tpInvoiceParty: accrualData.tpInvoiceParty,
+                serviceInvoiceParty: accrualData.serviceInvoiceParty,
+                isForeignTransaction: accrualData.isForeignTransaction,
+                createdAt: new Date().toISOString(),
+                files: accrualData.files || [] 
+            };
+
+            await accrualService.addAccrual(finalAccrual);
+            return; 
+        }
+
+        // SENARYO 3: Ertelenmiş Tahakkuk (Veri Yok/Form Kapalı)
+        console.log('⏳ Tahakkuk verisi girilmedi. "Tahakkuk Oluşturma" görevi açılıyor...');
+
+        // 1. Atanacak kişiyi belirle
+        let assignedUid = "8A9HHfdKKNR3WKl6tCtJH5Khjkx1"; 
+        let assignedEmail = "selcanakoglu@evrekapatent.com";
+
+        try {
+            const rule = await this.dataManager.getAssignmentRule("53");
+            if (rule && rule.assigneeIds && rule.assigneeIds.length > 0) {
+                const targetUid = rule.assigneeIds[0];
+                const user = state.allUsers.find(u => u.id === targetUid);
+                if (user) {
+                    assignedUid = user.id;
+                    assignedEmail = user.email;
+                }
+            }
+        } catch (e) { console.warn('Atama kuralı hatası (Task 53)', e); }
+
+        // 2. Görevi Hazırla
+        const accrualTaskData = {
+            taskType: "53", // Tahakkuk Oluşturma ID
+            title: `Tahakkuk Oluşturma: ${taskTitle}`,
+            description: `"${taskTitle}" işi oluşturuldu ancak tahakkuk verisi girilmedi. Lütfen finansal kaydı oluşturun.`,
+            priority: 'high',
+            status: 'pending',
+            assignedTo_uid: assignedUid,
+            assignedTo_email: assignedEmail,
+            relatedTaskId: taskId, 
+            relatedIpRecordId: state.selectedIpRecord ? state.selectedIpRecord.id : null,
+            relatedIpRecordTitle: state.selectedIpRecord ? (state.selectedIpRecord.title || state.selectedIpRecord.markName) : taskTitle,
+            details: {
+                source: 'automatic_accrual_assignment',
+                originalTaskType: taskType.alias || taskType.name
+            },
+            createdAt: Timestamp.now(),
+            updatedAt: Timestamp.now()
+        };
+
+        const result = await taskService.createTask(accrualTaskData);
+        if (result?.success) {
+            console.log(`✅ "Tahakkuk Oluşturma" görevi açıldı: ${result.id}`);
+        }
+    }
 
     // A) TARİH HESAPLAMA
     async _calculateTaskDates(taskData, taskType, ipRecord) {
         try {
-            // 1. YENİLEME (ID: 22)
             const isRenewal = String(taskType.id) === '22' || /yenileme/i.test(taskType.name);
-            
             if (isRenewal && ipRecord) {
-                console.log('📅 Yenileme tarihleri hesaplanıyor...');
                 let baseDate = null;
                 const rawDate = ipRecord.renewalDate || ipRecord.registrationDate || ipRecord.applicationDate;
 
@@ -149,7 +239,6 @@ export class TaskSubmitHandler {
                 }
 
                 if (!baseDate || isNaN(baseDate.getTime())) {
-                    console.warn('⚠️ Geçerli bir tarih bulunamadı, bugün baz alınıyor.');
                     baseDate = new Date();
                 }
 
@@ -171,8 +260,6 @@ export class TaskSubmitHandler {
 
                 taskData.officialDueDateDetails = {
                     finalOfficialDueDate: official.toISOString().split('T')[0],
-                    finalOperationalDueDate: operational.toISOString().split('T')[0],
-                    originalCalculatedDate: baseDate.toISOString().split('T')[0],
                     renewalDate: baseDate.toISOString().split('T')[0],
                     adjustments: []
                 };
@@ -184,28 +271,23 @@ export class TaskSubmitHandler {
                 }
             }
 
-            // 2. YAYINA İTİRAZ (ID: 20)
+            // Yayına İtiraz
             const isOpposition = ['20', 'trademark_publication_objection'].includes(String(taskType.id));
             if (isOpposition && ipRecord && ipRecord.source === 'bulletin' && ipRecord.bulletinId) {
                 const bulletinData = await this.dataManager.fetchAndStoreBulletinData(ipRecord.bulletinId);
-                
                 if (bulletinData && bulletinData.bulletinDate) {
                     const [dd, mm, yyyy] = bulletinData.bulletinDate.split('/');
                     const bDate = new Date(parseInt(yyyy), parseInt(mm)-1, parseInt(dd));
-                    
                     const officialDate = addMonthsToDate(bDate, 2);
                     const adjustedOfficial = findNextWorkingDay(officialDate, TURKEY_HOLIDAYS);
-                    
                     const operationalDate = new Date(adjustedOfficial);
                     operationalDate.setDate(operationalDate.getDate() - 3);
                     while (isWeekend(operationalDate) || isHoliday(operationalDate, TURKEY_HOLIDAYS)) {
                         operationalDate.setDate(operationalDate.getDate() - 1);
                     }
-
                     taskData.dueDate = Timestamp.fromDate(operationalDate); 
                     taskData.officialDueDate = Timestamp.fromDate(adjustedOfficial);
                     taskData.operationalDueDate = Timestamp.fromDate(operationalDate);
-
                     taskData.details.bulletinNo = bulletinData.bulletinNo;
                     taskData.details.bulletinDate = bulletinData.bulletinDate;
                 }
@@ -213,7 +295,52 @@ export class TaskSubmitHandler {
         } catch (e) { console.warn('Tarih hesaplama hatası:', e); }
     }
 
-    // B) DAVA KAYDI
+    // B) TARAFLAR
+    _enrichTaskWithParties(taskData, taskType, relatedParties, singleParty) {
+        const tIdStr = String(taskType.id);
+        if (RELATED_PARTY_REQUIRED.has(tIdStr)) {
+            const owners = (Array.isArray(relatedParties) ? relatedParties : []).map(p => String(p.id)).filter(Boolean);
+            if (owners.length) taskData.taskOwner = owners;
+        }
+        const objectionIds = ['7', '19', '20'];
+        if (objectionIds.includes(tIdStr)) {
+            const opponent = (relatedParties && relatedParties.length) ? relatedParties[0] : singleParty;
+            if (opponent) {
+                taskData.opponent = { id: opponent.id, name: opponent.name, email: opponent.email };
+                taskData.details.opponent = taskData.opponent;
+            }
+        }
+        if (relatedParties && relatedParties.length) {
+            taskData.details.relatedParties = relatedParties.map(p => ({ id: p.id, name: p.name, email: p.email }));
+        }
+    }
+
+    // C) MARKA BAŞVURUSU
+    async _handleTrademarkApplication(state, taskData) {
+        const { selectedApplicants, priorities, uploadedFiles } = state;
+        let brandImageUrl = null;
+        if (uploadedFiles.length > 0) {
+            const file = uploadedFiles[0];
+            const path = `brand-images/${Date.now()}_${file.name}`;
+            brandImageUrl = await this.dataManager.uploadFileToStorage(file, path);
+        }
+
+        const newRecordData = {
+            title: taskData.title,
+            type: 'trademark',
+            status: 'filed',
+            applicationDate: new Date().toISOString().split('T')[0],
+            brandImageUrl: brandImageUrl,
+            applicants: selectedApplicants.map(p => ({ id: p.id, name: p.name })),
+            priorities: priorities,
+            goodsAndServices: getSelectedNiceClasses(), // Import ettiğimiz fonksiyonu kullanıyoruz
+            createdAt: new Date().toISOString()
+        };
+        const result = await ipRecordsService.createRecord(newRecordData);
+        return result.success ? result.id : null;
+    }
+
+    // D) DAVA KAYDI
     async _handleSuitCreation(state, taskData, taskId) {
         const { selectedTaskType, selectedIpRecord, selectedRelatedParties } = state;
         try {
@@ -252,43 +379,17 @@ export class TaskSubmitHandler {
         } catch (error) { console.error('Suit hatası:', error); }
     }
 
-    // C) TARAFLAR
-    _enrichTaskWithParties(taskData, taskType, relatedParties, singleParty) {
-        const tIdStr = String(taskType.id);
-        if (RELATED_PARTY_REQUIRED.has(tIdStr)) {
-            const owners = (Array.isArray(relatedParties) ? relatedParties : []).map(p => String(p.id)).filter(Boolean);
-            if (owners.length) taskData.taskOwner = owners;
-        }
-        const objectionIds = ['7', '19', '20'];
-        if (objectionIds.includes(tIdStr)) {
-            const opponent = (relatedParties && relatedParties.length) ? relatedParties[0] : singleParty;
-            if (opponent) {
-                taskData.opponent = { id: opponent.id, name: opponent.name, email: opponent.email };
-                taskData.details.opponent = taskData.opponent;
-            }
-        }
-        if (relatedParties && relatedParties.length) {
-            taskData.details.relatedParties = relatedParties.map(p => ({ id: p.id, name: p.name, email: p.email }));
-        }
-    }
-
-    // D) TRANSACTION (GÜNCELLENDİ: CHILD MANTIĞI EKLENDİ)
+    // E) PORTFOLYO GEÇMİŞİ
     async _addTransactionToPortfolio(recordId, taskType, taskId, state) {
         let hierarchy = 'parent';
         let extraData = {};
-
-        // Geri Çekme Kontrolü: Tip 8 (Karara İtirazı Geri Çekme) veya Tip 21 (Yayına İtirazı Geri Çekme)
         const tId = String(taskType.id);
         const isWithdrawal = ['8', '21'].includes(tId);
 
         if (isWithdrawal) {
-            // Eğer bir Parent Transaction seçilmişse (Main.js tarafından set edilir)
             if (this.selectedParentTransactionId) {
                 hierarchy = 'child';
                 extraData.parentId = this.selectedParentTransactionId;
-                console.log(`🔗 Geri çekme işlemi child olarak bağlanıyor. Parent ID: ${this.selectedParentTransactionId}`);
-            } else {
-                console.warn('⚠️ Geri çekme işlemi parent ID olmadan kaydediliyor!');
             }
         }
 
@@ -297,138 +398,14 @@ export class TaskSubmitHandler {
             description: `${taskType.name} işlemi.`,
             transactionHierarchy: hierarchy,
             triggeringTaskId: String(taskId),
-            createdAt: Timestamp.now(), // Timestamp nesnesi (Date yerine) daha güvenli
-            ...extraData // parentId buraya eklenir
+            createdAt: Timestamp.now(),
+            ...extraData
         };
         
         await ipRecordsService.addTransactionToRecord(recordId, transactionData);
     }
 
-// E) TAHAKKUK VE FİNANSAL İŞLEMLER (DÜZELTİLMİŞ)
-    async _handleAccrual(taskId, taskTitle, taskType, state) {
-        // Arayüz kontrolleri
-        const isFree = document.getElementById('isFreeTransaction')?.checked;
-        const formContainer = document.getElementById('accrualFormContainer');
-        const isFormOpen = formContainer && formContainer.style.display !== 'none';
-
-        // --- SENARYO A: Ücretsiz İşlem ---
-        if (isFree) {
-            console.log('🆓 "Ücretsiz İşlem" seçildi. Tahakkuk atlanıyor.');
-            return;
-        }
-
-        // --- SENARYO B: Anlık Tahakkuk (Form Açık ve Dolu) ---
-        if (isFormOpen) {
-            const officialFee = parseFloat(document.getElementById('officialFee')?.value || 0);
-            const serviceFee = parseFloat(document.getElementById('serviceFee')?.value || 0);
-
-            if (officialFee > 0 || serviceFee > 0) {
-                const vatRate = parseFloat(document.getElementById('vatRate')?.value || 0);
-                const applyVat = document.getElementById('applyVatToOfficialFee')?.checked;
-                const total = applyVat ? (officialFee + serviceFee) * (1 + vatRate/100) : officialFee + (serviceFee * (1 + vatRate/100));
-
-                const accrualData = {
-                    taskId: taskId,
-                    taskTitle: taskTitle,
-                    officialFee: { amount: officialFee, currency: document.getElementById('officialFeeCurrency')?.value || 'TRY' },
-                    serviceFee: { amount: serviceFee, currency: document.getElementById('serviceFeeCurrency')?.value || 'TRY' },
-                    vatRate: vatRate,
-                    applyVatToOfficialFee: applyVat,
-                    totalAmount: total,
-                    status: 'unpaid',
-                    createdAt: new Date().toISOString(),
-                    tpInvoiceParty: state.selectedTpInvoiceParty ? { id: state.selectedTpInvoiceParty.id, name: state.selectedTpInvoiceParty.name } : null,
-                    serviceInvoiceParty: state.selectedServiceInvoiceParty ? { id: state.selectedServiceInvoiceParty.id, name: state.selectedServiceInvoiceParty.name } : null
-                };
-                
-                await accrualService.addAccrual(accrualData);
-                console.log('💰 Anlık tahakkuk oluşturuldu (DB\'ye yazıldı).');
-            }
-            return;
-        }
-
-        // --- SENARYO C: Ertelenmiş Tahakkuk Görevi (ID "53" ile) ---
-        console.log('⏳ Ertelenmiş tahakkuk senaryosu: "Tahakkuk Oluşturma" görevi hazırlanıyor...');
-
-        // 1. Atanacak kişiyi belirle (Önce DB kuralı, yoksa Fallback)
-        let assignedUid = "8A9HHfdKKNR3WKl6tCtJH5Khjkx1"; // Fallback (Selcan Hanım)
-        let assignedEmail = "selcanakoglu@evrekapatent.com";
-
-        try {
-            // "53" ID'li kuralı veritabanından çekmeye çalış
-            const rule = await this.dataManager.getAssignmentRule("53");
-            if (rule && rule.assigneeIds && rule.assigneeIds.length > 0) {
-                const targetUid = rule.assigneeIds[0];
-                const user = state.allUsers.find(u => u.id === targetUid);
-                if (user) {
-                    assignedUid = user.id;
-                    assignedEmail = user.email;
-                    console.log(`👤 Atama kuraldan alındı: ${assignedEmail}`);
-                }
-            }
-        } catch (e) {
-            console.warn('⚠️ Atama kuralı çekilemedi, varsayılan (Selcan Hn.) kullanılıyor.');
-        }
-
-        // 2. Görev Verisini Hazırla
-        const accrualTaskData = {
-            taskType: "53", // <--- KRİTİK DÜZELTME: Artık veritabanı ID'si (String olarak)
-            title: `Tahakkuk Oluşturma: ${taskTitle}`,
-            description: `"${taskTitle}" işi oluşturuldu. İşlem tamamlandığında bu görevin statüsü otomatik olarak "Açık" olacaktır. Lütfen tahakkuk kaydını oluşturun.`,
-            priority: 'high',
-            status: 'pending', // Beklemede statüsü
-            
-            assignedTo_uid: assignedUid,
-            assignedTo_email: assignedEmail,
-            
-            // İlişkiler
-            relatedTaskId: taskId, 
-            relatedIpRecordId: state.selectedIpRecord ? state.selectedIpRecord.id : null,
-            relatedIpRecordTitle: state.selectedIpRecord ? (state.selectedIpRecord.title || state.selectedIpRecord.markName) : taskTitle,
-            
-            details: {
-                source: 'automatic_accrual_assignment',
-                originalTaskType: taskType.alias || taskType.name
-            },
-
-            createdAt: Timestamp.now(),
-            updatedAt: Timestamp.now()
-        };
-
-        // 3. Görevi Oluştur
-        const result = await taskService.createTask(accrualTaskData);
-        if (result && result.success) {
-            console.log(`✅ "Tahakkuk Oluşturma" görevi başarıyla atandı. Task ID: ${result.id}, Type: 53`);
-        } else {
-            console.error('❌ Tahakkuk görevi oluşturulurken hata oluştu.');
-        }
-    }
-    
-    // F) MARKA BAŞVURUSU
-    async _handleTrademarkApplication(state, taskData) {
-        const { selectedApplicants, priorities, uploadedFiles } = state;
-        let brandImageUrl = null;
-        if (uploadedFiles.length > 0) {
-            const file = uploadedFiles[0];
-            const path = `brand-images/${Date.now()}_${file.name}`;
-            brandImageUrl = await this.dataManager.uploadFileToStorage(file, path);
-        }
-        const newRecordData = {
-            title: taskData.title,
-            type: 'trademark',
-            status: 'filed',
-            applicationDate: new Date().toISOString().split('T')[0],
-            brandImageUrl: brandImageUrl,
-            applicants: selectedApplicants.map(p => ({ id: p.id, name: p.name })),
-            priorities: priorities,
-            goodsAndServices: getSelectedNiceClasses(),
-            createdAt: new Date().toISOString()
-        };
-        const result = await ipRecordsService.createRecord(newRecordData);
-        return result.success ? result.id : null;
-    }
-
-    // G) OTOMASYON
+    // F) OTOMASYON
     async _handleOppositionAutomation(taskId, taskType, ipRecord) {
         if (window.portfolioByOppositionCreator && typeof window.portfolioByOppositionCreator.handleTransactionCreated === 'function') {
             try {
