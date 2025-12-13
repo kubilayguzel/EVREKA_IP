@@ -15,18 +15,14 @@
     <link rel="stylesheet" href="./css/task-management.css">
     
     <style>
-        /* Sadece bu sayfaya özgü veya override edilmesi gereken stiller */
+        /* Sayfaya Özel Stiller */
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333; display: flex; }
-        
         .page-wrapper {
             flex-grow: 1; display: flex; flex-direction: column;
             height: 100vh; overflow-y: auto;
             background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
         }
-        
         .main-container { width: 100%; padding: 30px; padding-top: 120px; }
-        
-        /* Statü Rozetleri (Eğer CSS dosyasında yoksa burada kalabilir) */
         .status-badge { padding: 4px 10px; border-radius: 12px; font-size: 0.8em; font-weight: 500; color: white; text-align: center; }
         .status-awaiting_client_approval { background-color: #6f42c1; }
         .status-client_approval_opened { background-color: #28a745; }
@@ -34,15 +30,6 @@
         .status-client_no_response_closed { background-color: #fd7e14; }
         .status-open { background-color: #007bff; }
         .status-completed { background-color: #28a745; }
-
-        /* Modal ve Form Stilleri (task-management.css içindekiler yetersiz kalırsa) */
-        .modal { display: none; position: fixed; z-index: 1002; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.6); align-items: center; justify-content: center; }
-        .modal.show { display: flex; }
-        .modal-content { background-color: #fefefe; margin: auto; padding: 30px; border: 1px solid #888; width: 90%; max-width: 1000px; border-radius: 20px; max-height: 90vh; overflow-y: auto; }
-        .close-modal-btn { float: right; font-size: 28px; font-weight: bold; cursor: pointer; color: #aaa; }
-        .modal-title { font-size: 1.5em; color: #1e3c72; margin-bottom: 20px; border-bottom: 1px solid #eee; padding-bottom: 10px; }
-        
-        .form-group { margin-bottom: 15px; }
         .form-input, .form-select { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px; }
         .total-amount-display { font-size: 1.2em; font-weight: bold; color: #1e3c72; text-align: right; margin-top: 10px; padding: 12px 15px; background-color: #f0f4f8; border-radius: 10px; }
     </style>
@@ -91,6 +78,7 @@
                                 <th data-sort="applicantName">Sahip <i class="fas fa-sort"></i></th>
                                 <th data-sort="taskTypeDisplayName">Tip <i class="fas fa-sort"></i></th>
                                 <th data-sort="operationalDueObj">Son Tarih <i class="fas fa-sort"></i></th>
+                                <th data-sort="officialDueObj">Resmi Son Tarih <i class="fas fa-sort"></i></th>
                                 <th data-sort="status">Durum <i class="fas fa-sort"></i></th>
                                 <th class="no-sort">İşlemler</th>
                             </tr>
@@ -120,14 +108,11 @@
         <div class="modal-content">
             <span class="close-modal-btn" id="closeMyTaskAccrualModal">&times;</span>
             <h3 class="modal-title">Ek Tahakkuk Oluştur</h3>
-            
             <div class="form-group">
                 <label>İlgili İş</label>
                 <input type="text" id="accrualTaskTitleDisplay" class="form-input" readonly disabled style="background-color: #f8f9fa;">
             </div>
-
             <div id="accrualFormContainer"></div>
-
             <div class="modal-footer" style="border-top: 1px solid #eee; padding-top: 20px; margin-top: 20px; display: flex; justify-content: flex-end; gap: 10px;">
                 <button type="button" class="btn btn-secondary" id="cancelCreateMyTaskAccrualBtn">İptal</button>
                 <button type="button" class="btn btn-primary" id="saveNewMyTaskAccrualBtn">Tahakkuku Oluştur</button>
@@ -139,9 +124,7 @@
         <div class="modal-content" style="max-width: 500px;">
             <span class="close-modal-btn" id="closeChangeTriggeredTaskStatusModal">&times;</span>
             <h3 class="modal-title">Durum Değiştir</h3>
-            
             <p id="changeStatusModalTaskTitleDisplay" style="font-weight:bold; margin-bottom:20px; color:#1e3c72;"></p>
-            
             <div class="form-group">
                 <label for="newTriggeredTaskStatus">Yeni Durum Seçiniz:</label>
                 <select id="newTriggeredTaskStatus" class="form-select">
@@ -150,7 +133,6 @@
                     <option value="client_no_response_closed">Müvekkil Cevaplamadı - Kapatıldı</option>
                 </select>
             </div>
-            
             <div class="modal-footer" style="border-top: 1px solid #eee; padding-top: 15px; margin-top: 15px; text-align: right;">
                 <button type="button" class="btn btn-secondary" id="cancelChangeTriggeredTaskStatusBtn">İptal</button>
                 <button type="button" class="btn btn-primary" id="saveChangeTriggeredTaskStatusBtn">Kaydet</button>
