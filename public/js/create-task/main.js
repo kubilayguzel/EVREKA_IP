@@ -9,6 +9,7 @@ import { TaskDataManager } from './TaskDataManager.js';
 import { TaskUIManager } from './TaskUIManager.js';
 import { TaskValidator } from './TaskValidator.js';
 import { TaskSubmitHandler } from './TaskSubmitHandler.js';
+import { AccrualFormManager } from '../components/AccrualFormManager.js';
 
 function initTaskDatePickers(root = document) {
     try {
@@ -34,6 +35,7 @@ class CreateTaskController {
         this.uiManager = new TaskUIManager();
         this.validator = new TaskValidator();
         this.submitHandler = new TaskSubmitHandler(this.dataManager, this.uiManager);
+        this.accrualFormManager = null;
 
         this.state = {
             currentUser: null, allIpRecords: [], allPersons: [], allUsers: [], allTransactionTypes: [], allCountries: [],
@@ -188,41 +190,40 @@ class CreateTaskController {
             // --- D) TAHAKKUK UI YÖNETİMİ ---           
             // "Tahakkuk Formu Aç/Kapat" Butonu
             if (e.target.id === 'toggleAccrualFormBtn' || e.target.closest('#toggleAccrualFormBtn')) {
-                const container = document.getElementById('accrualFormContainer');
+                const wrapper = document.getElementById('accrualToggleWrapper'); // Yeni Wrapper ID
                 const btn = document.getElementById('toggleAccrualFormBtn');
-                const icon = btn.querySelector('i');
                 
-                if (container.style.display === 'none') {
-                    // Aç
-                    $(container).slideDown(300); // jQuery varsa animasyonlu, yoksa container.style.display = 'block';
+                if (wrapper && wrapper.style.display === 'none') {
+                    // AÇ
+                    $(wrapper).slideDown(300);
                     btn.innerHTML = '<i class="fas fa-chevron-up mr-1"></i> Tahakkuk Formunu Gizle';
                     btn.classList.replace('btn-outline-primary', 'btn-outline-secondary');
-                } else {
-                    // Kapat
-                    $(container).slideUp(300);
+                } else if (wrapper) {
+                    // KAPAT
+                    $(wrapper).slideUp(300);
                     btn.innerHTML = '<i class="fas fa-chevron-down mr-1"></i> Tahakkuk Formu Aç';
                     btn.classList.replace('btn-outline-secondary', 'btn-outline-primary');
                 }
             }
 
-            // "Ücretsiz İşlem" Checkbox'ı
+            // --- ÜCRETSİZ İŞLEM CHECKBOX ---
             if (e.target.id === 'isFreeTransaction') {
                 const isChecked = e.target.checked;
                 const btn = document.getElementById('toggleAccrualFormBtn');
-                const container = document.getElementById('accrualFormContainer');
+                const wrapper = document.getElementById('accrualToggleWrapper');
                 
                 if (isChecked) {
-                    // Ücretsiz seçilirse formu zorla kapat ve butonu pasifleştir
-                    container.style.display = 'none';
-                    btn.disabled = true;
-                    // Opsiyonel: İçerdeki değerleri sıfırla
-                    document.getElementById('officialFee').value = '';
-                    document.getElementById('serviceFee').value = '';
-                    // Toplamı güncellemek için event tetikle
-                    document.getElementById('officialFee').dispatchEvent(new Event('input'));
+                    // Ücretsiz seçilirse formu kapat, butonu pasifleştir ve veriyi temizle
+                    if(wrapper) wrapper.style.display = 'none';
+                    if(btn) {
+                        btn.disabled = true;
+                        btn.innerHTML = '<i class="fas fa-chevron-down mr-1"></i> Tahakkuk Formu Aç';
+                    }
+                    // Manager'ı sıfırla
+                    if (this.accrualFormManager) this.accrualFormManager.reset();
                 } else {
-                    // Seçim kaldırılırsa butonu aktifleştir
-                    btn.disabled = false;
+                    // Seçim kalkarsa butonu aktifleştir
+                    if(btn) btn.disabled = false;
                 }
             }
         });
@@ -301,22 +302,37 @@ class CreateTaskController {
         const typeId = e.target.value;
         const selectedType = this.state.allTransactionTypes.find(t => t.id === typeId);
         this.state.selectedTaskType = selectedType;
+        
         if (!selectedType) { this.uiManager.clearContainer(); return; }
 
         const tIdStr = String(typeId);
         this.state.isWithdrawalTask = (tIdStr === '21' || tIdStr === '8');
         
         const isMarkaBasvuru = selectedType.alias === 'Başvuru' && selectedType.ipType === 'trademark';
+        
+        // 1. UI'ı Çizdir (Bu işlem DOM'a HTML stringini basar)
         if (isMarkaBasvuru) this.uiManager.renderTrademarkApplicationForm();
         else this.uiManager.renderBaseForm(selectedType.alias || selectedType.name, selectedType.id, selectedType.ipType === 'suit');
         
+        // 2. DOM oluştuktan hemen sonra AccrualFormManager'ı başlat ve render et
+        // Container ID: 'createTaskAccrualContainer' (TaskUIManager'da verdiğimiz ID)
+        if (document.getElementById('createTaskAccrualContainer')) {
+            this.accrualFormManager = new AccrualFormManager(
+                'createTaskAccrualContainer', 
+                'createTaskAcc', // Prefix: ID çakışmasını önler
+                this.state.allPersons // Kişi listesini ver
+            );
+            this.accrualFormManager.render();
+        }
+
+        // ... (Diğer tarih seçici, olay dinleyicisi kodları aynen devam eder) ...
         setTimeout(() => { initTaskDatePickers(); this.setupBrandExample(); }, 100);
         this.setupIpRecordSearch();
+        
         if (!isMarkaBasvuru) {
             this.setupPersonSearchListeners();
         } else {
             this.setupApplicantListeners();
-            // Marka başvurusu ise ve menşe WIPO/ARIPO ise ülke seçimini hazırla
             this.handleOriginChange(document.getElementById('originSelect').value);
         }
 
