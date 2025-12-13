@@ -220,26 +220,36 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // --- ARAMA ve FİLTRELEME ---
         handleSearch(query) {
-            if (!query) {
-                this.filteredData = [...this.processedData];
-            } else {
-                const lowerQuery = query.toLowerCase();
-                // Türkçe karakter duyarlı arama için iyileştirme
-                this.filteredData = this.processedData.filter(item => 
-                    item.searchString.toLocaleLowerCase('tr').includes(lowerQuery) || 
-                    item.searchString.includes(lowerQuery)
-                );
-            }
-            
-            this.sortData(); // Sıralamayı uygula
-            
+            // 1. Arama Metnini Al (Parametre yoksa inputtan oku)
+            const searchInput = document.getElementById('searchInput');
+            const searchValue = (query !== undefined ? query : (searchInput?.value || '')).toLowerCase();
+
+            // 2. Seçili Filtreyi Al
+            const statusFilter = document.getElementById('statusFilter');
+            const selectedStatus = statusFilter ? statusFilter.value : 'all';
+
+            // 3. İki Kriteri Birlikte Filtrele (VE Mantığı)
+            this.filteredData = this.processedData.filter(item => {
+                // A) Metin Eşleşmesi
+                // Türkçe karakter duyarlı arama için toLocaleLowerCase kullanıyoruz
+                const itemSearchString = item.searchString.toLocaleLowerCase('tr'); 
+                const matchesSearch = !searchValue || itemSearchString.includes(searchValue);
+
+                // B) Statü Eşleşmesi
+                // Eğer 'all' seçiliyse her şeyi kabul et, değilse statü birebir tutmalı
+                const matchesStatus = (selectedStatus === 'all' || item.status === selectedStatus);
+
+                return matchesSearch && matchesStatus;
+            });
+
+            // 4. Sıralamayı Koru ve Tabloyu Çiz
+            this.sortData();
+
             if (this.pagination) {
-                this.pagination.reset(); // Sayfayı 1'e al
-                this.pagination.update(this.filteredData.length); // Sayacı güncelle
+                this.pagination.reset(); // Sayfayı başa al
+                this.pagination.update(this.filteredData.length);
             }
             
-            // DÜZELTME: renderTable() if/else bloğunun dışına alındı.
-            // Böylece her arama yapıldığında tablo mutlaka yenilenir.
             this.renderTable();
         }
 
