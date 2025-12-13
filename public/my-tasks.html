@@ -9,78 +9,8 @@
     <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
     <link rel="stylesheet" href="./css/shared-styles.css">
     <link rel="stylesheet" href="./css/deadline-highlighter.css">
-    <style>
-        /* Bu sayfaya özel stiller */
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333; display: flex; }
-        .page-wrapper {
-            flex-grow: 1; display: flex; flex-direction: column;
-            height: 100vh; overflow-y: auto;
-            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-        }
-        .main-container { width: 100%; padding: 30px; padding-top: 120px; }
-        .page-header { background: rgba(255, 255, 255, 0.95); padding: 30px; border-radius: 20px; margin-bottom: 30px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1); }
-        .page-title { font-size: 2em; color: #1e3c72; margin-bottom: 10px; }
-        .page-subtitle { color: #666; font-size: 1.1em; }
-        
-        .tasks-container {
-            background: rgba(255, 255, 255, 0.95);
-            border-radius: 20px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-            overflow: hidden;
-        }
+    <link rel="stylesheet" href="./css/task-management.css">
 
-        .tasks-header {
-            padding: 20px 30px;
-            border-bottom: 1px solid #e1e8ed;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 15px;
-        }
-
-        .filter-group { display: flex; gap: 10px; align-items: center; }
-        .filter-label { font-weight: 500; }
-        .filter-select { padding: 8px 12px; border-radius: 8px; border: 1px solid #ccc; }
-
-        .tasks-table { width: 100%; border-collapse: collapse; }
-        .tasks-table th, .tasks-table td { padding: 15px; text-align: left; border-bottom: 1px solid #f0f0f0; }
-        .tasks-table th { background: #f8f9fa; font-weight: 600; }
-
-        .status-badge { padding: 4px 10px; border-radius: 12px; font-size: 0.8em; font-weight: 500; color: white; text-align: center; }
-        .status-open { background-color: #007bff; }
-        .status-in-progress { background-color: #ffc107; color: #333;}
-        .status-pending { background-color: #6c757d; }
-        .status-completed { background-color: #28a745; }
-        .status-cancelled { background-color: #dc3545; }
-        .status-on-hold { background-color: #17a2b8; }
-        .status-awaiting-approval { background-color: #6f42c1; }
-
-        .priority-badge { padding: 4px 8px; border-radius: 10px; font-size: 0.8em; font-weight: 500; }
-        .priority-high { background-color: #ffe0e6; color: #dc3545; }
-        .priority-medium { background-color: #fff3cd; color: #ffc107; }
-        .priority-low { background-color: #e6ffed; color: #28a745; }
-
-        .action-btn { background: #007bff; color: white; border: none; padding: 8px 12px; border-radius: 6px; cursor: pointer; margin-left: 5px; transition: all 0.3s ease; }
-        .action-btn:hover { opacity: 0.9; }
-        .loading { text-align: center; padding: 50px; }
-        .no-records { text-align: center; padding: 50px; color: #666; }
-
-        /* Modal Styles */
-        .modal { display: none; position: fixed; z-index: 1002; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.6); align-items: center; justify-content: center; }
-        .modal.show { display: flex; }
-        .modal-content { background-color: #fefefe; margin: auto; padding: 30px; border: 1px solid #888; width: 90%; max-width: 1200px; border-radius: 20px; animation-name: animatetop; animation-duration: 0.4s; max-height: 90vh; overflow-y: auto; }
-        @keyframes animatetop { from {top: -300px; opacity: 0} to {top: 0; opacity: 1} }
-        .close-modal-btn { color: #aaa; float: right; font-size: 28px; font-weight: bold; cursor: pointer; }
-        .modal-title { font-size: 1.5em; color: #1e3c72; margin-bottom: 20px; }
-        
-        /* AccrualFormManager için gerekli stiller */
-        .checkbox-label { display: flex; align-items: center; gap: 10px; cursor: pointer; font-weight: 500; }
-        .search-results-list { max-height: 150px; overflow-y: auto; border: 1px solid #ccc; border-radius: 8px; margin-top: 5px; }
-        .search-result-item { padding: 10px; cursor: pointer; border-bottom: 1px solid #eee; }
-        .search-result-item:hover { background-color: #f0f4f8; }
-        .total-amount-display { font-size: 1.2em; font-weight: bold; color: #1e3c72; text-align: right; margin-top: 10px; padding: 12px 15px; background-color: #f0f4f8; border-radius: 10px; }
-    </style>
 </head>
 <body>
 <div id="notification-container" style="position: fixed; top: 20px; right: 20px; z-index: 9999;"></div>
