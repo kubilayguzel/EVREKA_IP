@@ -6148,3 +6148,87 @@ export const onTaskDeleteCleanup = onDocumentDeleted(
     }
   }
 );
+
+
+export const cleanupTransactionOnClientRejection = onDocumentUpdated(
+  {
+    document: "tasks/{taskId}",
+    region: "europe-west1",
+  },
+  async (event) => {
+    const change = event.data;
+    if (!change || !change.before || !change.after) return null;
+
+    const before = change.before.data();
+    const after = change.after.data();
+    const taskId = event.params.taskId;
+
+    // Statü geçişini kontrol et
+    // Eski Statü: "Müvekkil Onayı Bekliyor"
+    const wasAwaiting = before.status === 'awaiting_client_approval';
+    
+    // Yeni Statü: "Müvekkil Onayı Kapatıldı" VEYA "Müvekkil Cevaplamadı Kapatıldı"
+    const isClosedOrNoResponse = [
+        'client_approval_closed', 
+        'client_no_response_closed'
+    ].includes(after.status);
+
+    // Sadece bu geçişte çalış
+    if (wasAwaiting && isClosedOrNoResponse) {
+        console.log(`🚫 Task ${taskId} reddedildi/kapandı (${after.status}). İlişkili transaction'lar temizleniyor...`);
+
+        const batch = adminDb.batch();
+        
+        try {
+            // Eğer task bir IP kaydına bağlıysa
+            if (after.relatedIpRecordId) {
+                // Alt koleksiyona erişim (Subcollection)
+                const transactionsRef = adminDb
+                    .collection('ipRecords')
+                    .doc(after.relatedIpRecordId)
+                    .collection('transactions');
+
+                // 1. Bu Task tarafından oluşturulan Ana Transaction'ı bul
+                const transactionSnapshot = await transactionsRef
+                    .where('triggeringTaskId', '==', taskId)
+                    .get();
+
+                if (!transactionSnapshot.empty) {
+                    const deletedTransactionIds = [];
+
+                    // Ana transaction'ı silme listesine ekle
+                    transactionSnapshot.forEach((doc) => {
+                        console.log(`📌 Silinecek Transaction Bulundu (ID: ${doc.id})`);
+                        batch.delete(doc.ref);
+                        deletedTransactionIds.push(doc.id);
+                    });
+
+                    // 2. Eğer bu bir Parent ise, ona bağlı Child Transaction'ları da bul ve sil
+                    if (deletedTransactionIds.length > 0) {
+                        // parentId'si silinen ID'lerden biri olanları bul
+                        // (Not: 'in' sorgusu en fazla 10 eleman alır, batch işlemleri için genelde yeterlidir)
+                        const childTransactionsSnapshot = await transactionsRef
+                            .where('parentId', 'in', deletedTransactionIds)
+                            .get();
+
+                        childTransactionsSnapshot.forEach((childDoc) => {
+                            console.log(`-- 🔗 Bağlı Child Transaction da siliniyor (ID: ${childDoc.id})`);
+                            batch.delete(childDoc.ref);
+                        });
+                    }
+
+                    // İşlemi uygula
+                    await batch.commit();
+                    console.log(`✅ Temizlik Tamamlandı: Reddedilen işleme ait geçmiş kayıtları silindi.`);
+                } else {
+                    console.log(`ℹ️ Bu task (${taskId}) için silinecek bir transaction bulunamadı.`);
+                }
+            }
+        } catch (error) {
+            console.error("❌ Transaction temizliği sırasında hata:", error);
+        }
+    }
+    
+    return null;
+  }
+);
