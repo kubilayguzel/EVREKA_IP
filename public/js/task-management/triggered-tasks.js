@@ -130,7 +130,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         processData() {
-            // Sadece ilgili statüdeki görevleri al
             const relevantTasks = this.allTasks.filter(task => this.triggeredTaskStatuses.includes(task.status));
 
             this.processedData = relevantTasks.map(task => {
@@ -144,19 +143,17 @@ document.addEventListener('DOMContentLoaded', async () => {
                     ? ipRecord.applicants.map(a => a?.name || '').filter(Boolean).join(', ')
                     : 'N/A';
 
-                // Tarih İşlemleri
-                let officialDueObj = null;
-                let operationalDueObj = null;
-                let officialDisplay = '-';
-                let dueDisplay = '-';
-                
-                // ... (Tarih hesaplama mantığınız aynı kalıyor) ...
-                // Kısaltmak için burayı özet geçiyorum, eski kodunuzdaki tarih bloğunu buraya koyabilirsiniz.
-                // Basitçe renewalDate varsa:
-                if (ipRecord?.renewalDate) {
-                     // Tarih parse işlemleri...
-                     // officialDueObj ve operationalDueObj oluştur...
-                }
+                // --- TARİH DÜZELTMESİ ---
+                // Tarihleri direkt task objesinden alıyoruz (Daha güvenilir)
+                const parseDate = (d) => {
+                    if (!d) return null;
+                    if (d.toDate) return d.toDate();
+                    if (d.seconds) return new Date(d.seconds * 1000);
+                    return new Date(d);
+                };
+
+                const operationalDueObj = parseDate(task.dueDate); // Operasyonel
+                const officialDueObj = parseDate(task.officialDueDate); // Resmi
 
                 const statusText = this.statusDisplayMap[task.status] || task.status;
                 const searchString = `${task.id} ${applicationNumber} ${relatedRecordTitle} ${applicantName} ${taskTypeDisplayName} ${statusText}`.toLowerCase();
@@ -167,10 +164,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                     relatedRecordTitle,
                     applicantName,
                     taskTypeDisplayName,
-                    officialDueObj,
+                    // Tarih Objeleri (Sıralama ve Görüntüleme için)
                     operationalDueObj,
-                    officialDisplay,
-                    dueDisplay,
+                    officialDueObj,
                     statusText,
                     searchString
                 };
