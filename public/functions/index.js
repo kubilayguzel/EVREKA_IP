@@ -6034,11 +6034,7 @@ export const createAccrualTaskOnClientApprovalV2 = onDocumentUpdated(
     return null;
   }
 );
-
-const { onDocumentDeleted } = require("firebase-functions/v2/firestore");
-const admin = require("firebase-admin");
-
-exports.onTaskDeleteCleanup = onDocumentDeleted(
+export const onTaskDeleteCleanup = onDocumentDeleted(
   {
     document: "tasks/{taskId}",
     region: "europe-west1",
@@ -6053,11 +6049,11 @@ exports.onTaskDeleteCleanup = onDocumentDeleted(
     const taskId = event.params.taskId;
     const taskData = snap.data();
     
-    // Toplu silme işlemleri için Batch oluştur
+    // adminDb'yi dosyanızın genelinden alıyoruz
     const batch = adminDb.batch();
     const bucket = admin.storage().bucket();
 
-    console.log(`🗑️ Task ${taskId} silindi. İlişkili veriler ve Transaction geçmişi temizleniyor...`);
+    console.log(`🗑️ Task ${taskId} silindi. İlişkili veriler temizleniyor...`);
 
     try {
       // 1. TAHAKKUKLARI SİL (accruals)
@@ -6079,22 +6075,17 @@ exports.onTaskDeleteCleanup = onDocumentDeleted(
       const notificationsSnapshot = await adminDb.collection('notifications').where('relatedTaskId', '==', taskId).get();
       notificationsSnapshot.forEach((doc) => batch.delete(doc.ref));
 
-      // 5. TRANSACTION GEÇMİŞİNİ SİL (ipRecords -> transactions) [YENİ]
+      // 5. TRANSACTION GEÇMİŞİNİ SİL (ipRecords -> transactions)
       if (taskData.relatedIpRecordId) {
         const ipRecordRef = adminDb.collection('ipRecords').doc(taskData.relatedIpRecordId);
         const ipDoc = await ipRecordRef.get();
 
         if (ipDoc.exists) {
           const ipData = ipDoc.data();
-          
-          // Eğer transactions dizisi varsa ve doluysa
           if (ipData.transactions && Array.isArray(ipData.transactions)) {
             const originalLength = ipData.transactions.length;
-            
-            // Silinen task ID'sine sahip işlemi diziden çıkart
             const updatedTransactions = ipData.transactions.filter(t => t.triggeringTaskId !== taskId);
 
-            // Eğer bir şeyler silindiyse, güncellemeyi Batch'e ekle
             if (updatedTransactions.length !== originalLength) {
               batch.update(ipRecordRef, { transactions: updatedTransactions });
               console.log(`- IP Record (${taskData.relatedIpRecordId}) transaction geçmişi güncellenecek.`);
@@ -6103,12 +6094,11 @@ exports.onTaskDeleteCleanup = onDocumentDeleted(
         }
       }
 
-      // 6. FİZİKSEL DOSYALARI SİL (Storage) - Batch dışı çalışır
+      // 6. FİZİKSEL DOSYALARI SİL (Storage)
       if (taskData.files && Array.isArray(taskData.files) && taskData.files.length > 0) {
         const fileDeletions = taskData.files.map(async (file) => {
           let pathToDelete = file.storagePath;
 
-          // Eğer storagePath yoksa URL'den path çıkarmayı dene
           if (!pathToDelete && file.url) {
              try {
                  const decodedUrl = decodeURIComponent(file.url);
@@ -6125,22 +6115,19 @@ exports.onTaskDeleteCleanup = onDocumentDeleted(
                 await bucket.file(pathToDelete).delete();
                 console.log(`-- Dosya silindi: ${pathToDelete}`);
              } catch (error) {
-                // Dosya zaten yoksa (404) hata sayma
                 if (error.code !== 404) console.error(`Dosya silme hatası:`, error.message);
              }
           }
         });
-        
-        // Dosya silme işlemlerini arka planda başlat
         Promise.all(fileDeletions).catch(err => console.error("Dosya silme hatası:", err));
       }
 
-      // 7. BATCH İŞLEMİNİ UYGULA (Firestore)
+      // 7. BATCH İŞLEMİNİ UYGULA
       await batch.commit();
-      console.log(`✅ Temizlik Tamamlandı: Task ${taskId} ve tüm izleri silindi.`);
+      console.log(`✅ Temizlik Tamamlandı: Task ${taskId} verileri silindi.`);
 
     } catch (error) {
-      console.error(`❌ Task ${taskId} temizliği sırasında kritik hata:`, error);
+      console.error(`❌ Temizlik hatası:`, error);
     }
   }
 );
