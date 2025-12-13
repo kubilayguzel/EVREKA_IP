@@ -15,7 +15,59 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333
 .tasks-header { padding: 20px 30px; border-bottom: 1px solid #e1e8ed; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; }
 
 /* Arama ve Butonlar */
-.search-input { padding: 8px 12px; border-radius: 8px; border: 1px solid #ccc; flex-grow: 1; min-width: 150px; }
+/* --- Modern Arama Alanı Stilleri --- */
+
+/* Arama alanını saran kapsayıcı */
+.search-wrapper {
+    position: relative;
+    flex-grow: 1;
+    max-width: 400px; /* Çok genişlemesini engeller */
+    min-width: 250px;
+}
+
+/* Arama İkonu */
+.search-icon {
+    position: absolute;
+    left: 15px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #a0aec0; /* Gri ton */
+    pointer-events: none; /* Tıklanabilirliği kaldırır, arkadaki input'a odaklanmayı sağlar */
+    transition: color 0.3s ease;
+    font-size: 1rem;
+}
+
+/* Arama Inputu */
+.search-input {
+    width: 100%;
+    padding: 12px 15px 12px 45px; /* Soldan boşluk bırakarak ikona yer açıyoruz */
+    border: 2px solid #e1e8ed;
+    border-radius: 50px; /* Tam yuvarlak modern köşeler */
+    font-size: 0.95rem;
+    color: #4a5568;
+    background-color: #ffffff;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.02); /* Hafif gölge */
+}
+
+/* Placeholder (Yazı tutucu) rengi */
+.search-input::placeholder {
+    color: #cbd5e0;
+    font-weight: 400;
+}
+
+/* Input Odaklanma (Focus) Durumu */
+.search-input:focus {
+    outline: none;
+    border-color: #007bff; /* Evreka mavisi */
+    background-color: #ffffff;
+    box-shadow: 0 4px 12px rgba(0, 123, 255, 0.15); /* Mavi parıltılı gölge */
+}
+
+/* Input odaklandığında ikonu renklendir */
+.search-wrapper:focus-within .search-icon {
+    color: #007bff;
+}
 .btn-add-task { background: linear-gradient(45deg, #1e3c72, #2a5298); color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-size: 0.9em; font-weight: 600; transition: all 0.3s ease; display: flex; align-items: center; gap: 5px; }
 .btn-add-task:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(30, 60, 114, 0.2); }
 
@@ -99,56 +151,3 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333
 /* Özel Dosya Input Stili */
 .custom-file-upload { border: 2px dashed #ccc; display: block; padding: 10px; cursor: pointer; border-radius: 5px; background-color: #f9f9f9; text-align: center; transition: all 0.3s; }
 .custom-file-upload:hover { border-color: #1e3c72; background-color: #eef2f7; }
-/* --- Modern Arama Alanı Stilleri --- */
-
-/* Arama alanını saran kapsayıcı */
-.search-wrapper {
-    position: relative;
-    flex-grow: 1;
-    max-width: 400px; /* Çok genişlemesini engeller */
-    min-width: 250px;
-}
-
-/* Arama İkonu */
-.search-icon {
-    position: absolute;
-    left: 15px;
-    top: 50%;
-    transform: translateY(-50%);
-    color: #a0aec0; /* Gri ton */
-    pointer-events: none; /* Tıklanabilirliği kaldırır, arkadaki input'a odaklanmayı sağlar */
-    transition: color 0.3s ease;
-    font-size: 1rem;
-}
-
-/* Arama Inputu */
-.search-input {
-    width: 100%;
-    padding: 12px 15px 12px 45px; /* Soldan boşluk bırakarak ikona yer açıyoruz */
-    border: 2px solid #e1e8ed;
-    border-radius: 50px; /* Tam yuvarlak modern köşeler */
-    font-size: 0.95rem;
-    color: #4a5568;
-    background-color: #ffffff;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.02); /* Hafif gölge */
-}
-
-/* Placeholder (Yazı tutucu) rengi */
-.search-input::placeholder {
-    color: #cbd5e0;
-    font-weight: 400;
-}
-
-/* Input Odaklanma (Focus) Durumu */
-.search-input:focus {
-    outline: none;
-    border-color: #007bff; /* Evreka mavisi */
-    background-color: #ffffff;
-    box-shadow: 0 4px 12px rgba(0, 123, 255, 0.15); /* Mavi parıltılı gölge */
-}
-
-/* Input odaklandığında ikonu renklendir */
-.search-wrapper:focus-within .search-icon {
-    color: #007bff;
-}
