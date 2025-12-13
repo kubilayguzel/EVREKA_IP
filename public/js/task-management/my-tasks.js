@@ -1,21 +1,12 @@
 // public/js/task-management/my-tasks.js
 
-// DÜZELTME: Ana dizindeki dosyalara erişim için '../../' kullanıldı.
 import { authService, taskService, ipRecordsService, accrualService, personService, transactionTypeService } from '../../firebase-config.js';
 import { showNotification } from '../../utils.js';
-
-// JS klasörü içindeki dosyalara erişim için '../' yeterli.
 import { loadSharedLayout } from '../layout-loader.js';
-import Pagination from '../pagination.js'; // Pagination importu
-
-// Bileşenler
+import Pagination from '../pagination.js'; 
 import { TaskDetailManager } from '../components/TaskDetailManager.js';
 import { AccrualFormManager } from '../components/AccrualFormManager.js';
-
-// Firebase SDK (CDN)
 import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
-import { doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
-import { db } from '../../firebase-config.js';
 
 document.addEventListener('DOMContentLoaded', async () => {
     await loadSharedLayout({ activeMenuLink: 'my-tasks.html' });
@@ -33,6 +24,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             this.processedData = [];
             this.filteredData = [];
+
+            // Varsayılan Sıralama: Oluşturulma Tarihi (Yeniden eskiye)
+            this.sortState = { key: 'createdAtObj', direction: 'desc' };
 
             this.pagination = null;
             this.currentTaskForAccrual = null;
@@ -138,6 +132,17 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                 const searchString = `${task.id} ${task.title || ''} ${relatedRecordDisplay} ${taskTypeDisplay} ${statusText} ${task.priority}`.toLowerCase();
 
+                // Atama Tarihi Verisini Hazırla
+                let assignedDateObj = null;
+                let assignedAtText = '-';
+                if (Array.isArray(task.history)) {
+                    const assignEntry = task.history.find(h => h?.action?.includes('atandı'));
+                    if (assignEntry?.timestamp) {
+                        assignedDateObj = safeDate(assignEntry.timestamp);
+                        if (assignedDateObj) assignedAtText = assignedDateObj.toLocaleString('tr-TR');
+                    }
+                }
+
                 return {
                     ...task,
                     relatedRecordDisplay,
@@ -146,12 +151,16 @@ document.addEventListener('DOMContentLoaded', async () => {
                     searchString,
                     dueDateObj: safeDate(task.dueDate),
                     officialDueObj: safeDate(task.officialDueDate),
-                    createdAtObj: safeDate(task.createdAt)
+                    createdAtObj: safeDate(task.createdAt),
+                    assignedDateObj: assignedDateObj,
+                    assignedAtText: assignedAtText
                 };
             });
 
             this.filteredData = [...this.processedData];
-            this.filteredData.sort((a, b) => (b.createdAtObj || 0) - (a.createdAtObj || 0));
+            
+            // İlk açılışta sırala
+            this.sortData();
 
             if (this.pagination) {
                 this.pagination.update(this.filteredData.length);
@@ -159,6 +168,72 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             this.renderTasks();
         }
+
+        // --- SIRALAMA (SORTING) FONKSİYONLARI ---
+        handleSort(key) {
+            if (this.sortState.key === key) {
+                this.sortState.direction = this.sortState.direction === 'asc' ? 'desc' : 'asc';
+            } else {
+                this.sortState.key = key;
+                this.sortState.direction = 'asc';
+            }
+            this.sortData();
+            this.renderTasks();
+        }
+
+        sortData() {
+            const { key, direction } = this.sortState;
+            const multiplier = direction === 'asc' ? 1 : -1;
+
+            this.filteredData.sort((a, b) => {
+                let valA = a[key];
+                let valB = b[key];
+
+                // Null/Undefined kontrolü
+                if (valA == null) valA = '';
+                if (valB == null) valB = '';
+
+                // Tarih Sıralaması
+                if (valA instanceof Date && valB instanceof Date) {
+                    return (valA - valB) * multiplier;
+                }
+                // Boş tarihler en sona gitsin
+                if (valA instanceof Date) return -1 * multiplier; 
+                if (valB instanceof Date) return 1 * multiplier;
+
+                // Sayısal ID Sıralaması (Eğer 'id' ise)
+                if (key === 'id') {
+                    const numA = parseFloat(valA.replace(/[^0-9]/g, ''));
+                    const numB = parseFloat(valB.replace(/[^0-9]/g, ''));
+                    if (!isNaN(numA) && !isNaN(numB)) {
+                        return (numA - numB) * multiplier;
+                    }
+                }
+
+                // Metin Sıralaması (Türkçe karakter uyumlu)
+                valA = valA.toString().toLowerCase();
+                valB = valB.toString().toLowerCase();
+                return valA.localeCompare(valB, 'tr') * multiplier;
+            });
+        }
+
+        updateSortIcons() {
+            document.querySelectorAll('#myTasksTable thead th[data-sort]').forEach(th => {
+                const icon = th.querySelector('i');
+                if(!icon) return;
+                
+                // Hepsini varsayılan yap
+                icon.className = 'fas fa-sort';
+                icon.style.opacity = '0.3';
+                
+                // Aktif olanı güncelle
+                if (th.dataset.sort === this.sortState.key) {
+                    icon.className = this.sortState.direction === 'asc' ? 'fas fa-sort-up' : 'fas fa-sort-down';
+                    icon.style.opacity = '1';
+                }
+            });
+        }
+        // ----------------------------------------
 
         handleSearch(query) {
             const statusFilter = document.getElementById('statusFilter').value;
@@ -169,6 +244,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const matchesStatus = (statusFilter === 'all' || item.status === statusFilter);
                 return matchesSearch && matchesStatus;
             });
+
+            this.sortData(); // Aramadan sonra da sıralamayı koru
 
             if (this.pagination) {
                 this.pagination.reset();
@@ -185,6 +262,16 @@ document.addEventListener('DOMContentLoaded', async () => {
                 this.handleSearch(query);
             });
             
+            // --- TABLO BAŞLIKLARI İÇİN EVENT LISTENER (Sıralama) ---
+            const headers = document.querySelectorAll('#myTasksTable thead th[data-sort]');
+            headers.forEach(th => {
+                th.style.cursor = 'pointer'; // Tıklanabilir olduğunu göster
+                th.addEventListener('click', () => {
+                    this.handleSort(th.dataset.sort);
+                });
+            });
+            // -------------------------------------------------------
+
             document.getElementById('myTasksTableBody').addEventListener('click', (e) => {
                 const btn = e.target.closest('.action-btn');
                 if (!btn) return;
@@ -230,14 +317,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const dueDateISO = task.dueDateObj ? task.dueDateObj.toISOString().slice(0,10) : '';
                 const officialDueISO = task.officialDueObj ? task.officialDueObj.toISOString().slice(0,10) : '';
 
-                let assignedAtText = '-';
-                if (Array.isArray(task.history)) {
-                    const assignEntry = task.history.find(h => h?.action?.includes('atandı'));
-                    if (assignEntry?.timestamp) {
-                        try { assignedAtText = new Date(assignEntry.timestamp).toLocaleString('tr-TR'); } catch {}
-                    }
-                }
-
                 const row = document.createElement('tr');
                 row.innerHTML = `
                     <td>${task.id}</td>
@@ -251,7 +330,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         ${task.officialDueObj ? task.officialDueObj.toLocaleDateString('tr-TR') : 'Belirtilmemiş'}
                     </td>
                     <td>${task.createdAtObj ? task.createdAtObj.toLocaleString('tr-TR') : '-'}</td>
-                    <td>${assignedAtText}</td>
+                    <td>${task.assignedAtText}</td>
                     <td><span class="status-badge ${statusClass}">${task.statusText}</span></td>
                     <td>
                         <button class="action-btn view-btn" data-id="${task.id}" data-action="view"><i class="fas fa-eye"></i></button>
@@ -262,12 +341,14 @@ document.addEventListener('DOMContentLoaded', async () => {
                 tableBody.appendChild(row);
             });
 
+            this.updateSortIcons(); // İkonları güncelle
+
             if (window.DeadlineHighlighter) {
                 setTimeout(() => window.DeadlineHighlighter.refresh('islerim'), 50);
             }
         }
 
-        populateStatusFilterDropdown() {
+        populateStatusFilterDropdown() { /* ... aynı ... */
             const select = document.getElementById('statusFilter');
             if(!select) return;
             select.innerHTML = '<option value="all">Tümü</option>';
@@ -279,7 +360,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
         }
 
-        showTaskDetailModal(taskId) {
+        showTaskDetailModal(taskId) { /* ... aynı ... */
             const task = this.allTasks.find(t => t.id === taskId);
             if (!task || !this.taskDetailManager) return;
 
@@ -301,7 +382,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
         }
 
-        showCreateAccrualModal(taskId) {
+        showCreateAccrualModal(taskId) { /* ... aynı ... */
             this.currentTaskForAccrual = this.allTasks.find(t => t.id === taskId);
             if (!this.currentTaskForAccrual) return;
             this.accrualFormManager.reset();
@@ -313,7 +394,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             document.getElementById('createMyTaskAccrualModal').classList.add('show');
         }
 
-        async handleSaveNewAccrual() {
+        async handleSaveNewAccrual() { /* ... aynı ... */
             if (!this.currentTaskForAccrual) return;
             const result = this.accrualFormManager.getData();
             if (!result.success) { showNotification(result.error, 'error'); return; }
@@ -355,7 +436,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             } catch(e) { if(loader) loader.hide(); showNotification('Beklenmeyen hata.', 'error'); }
         }
 
-        closeModal(modalId) {
+        closeModal(modalId) { /* ... aynı ... */
             document.getElementById(modalId).classList.remove('show');
             if (modalId === 'createMyTaskAccrualModal') {
                 this.accrualFormManager.reset();
