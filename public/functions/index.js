@@ -10,7 +10,7 @@ import stream from 'stream';
 import { pipeline } from 'stream/promises';
 import { onRequest, onCall, HttpsError } from 'firebase-functions/v2/https';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
-import { onDocumentCreated, onDocumentUpdated, onDocumentWritten } from 'firebase-functions/v2/firestore';
+import { onDocumentCreated, onDocumentUpdated, onDocumentWritten, onDocumentDeleted} from 'firebase-functions/v2/firestore';
 import { onMessagePublished } from 'firebase-functions/v2/pubsub';
 import { onObjectFinalized } from 'firebase-functions/v2/storage';
 import logger from 'firebase-functions/logger';
@@ -6034,6 +6034,7 @@ export const createAccrualTaskOnClientApprovalV2 = onDocumentUpdated(
     return null;
   }
 );
+
 export const onTaskDeleteCleanup = onDocumentDeleted(
   {
     document: "tasks/{taskId}",
