@@ -406,6 +406,15 @@ document.addEventListener('DOMContentLoaded', async () => {
                 searchInput.addEventListener('input', (e) => this.handleSearch(e.target.value));
             }
 
+            const statusFilter = document.getElementById('statusFilter');
+            if (statusFilter) {
+                statusFilter.addEventListener('change', () => {
+                    // Filtre değişince, o an arama kutusunda ne yazıyorsa onunla birlikte arama yap
+                    const currentSearchValue = document.getElementById('searchInput')?.value || '';
+                    this.handleSearch(currentSearchValue);
+                });
+            }
+            
             // Sıralama Başlıkları
             const headers = document.querySelectorAll('#tasksTableHeaderRow th[data-sort]');
             headers.forEach(th => {
