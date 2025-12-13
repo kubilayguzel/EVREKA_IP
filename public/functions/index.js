@@ -5934,63 +5934,100 @@ exports.createAccrualTaskOnClientApproval = onDocumentUpdated(
     const after = change.after.data() || {};
     const taskId = event.params.taskId;
 
+    // KURAL: Statü "Müvekkil Onayı Bekliyor"dan "Açık"a döndü mü?
     const wasAwaiting = ['awaiting_client_approval', 'awaiting-approval'].includes(before.status);
     const isOpen = after.status === 'open';
 
     if (wasAwaiting && isOpen) {
       try {
-        console.log(`🔔 Task ${taskId} onaylandı. ID üretiliyor ve görev açılıyor...`);
+        console.log(`🔔 Task ${taskId} onaylandı. ID üretiliyor...`);
 
-        const assignedUid = "8A9HHfdKKNR3WKl6tCtJH5Khjkx1";
-        const assignedEmail = "selcanakoglu@evrekapatent.com";
+        // --- 1. DİNAMİK ATAMA MANTIĞI ---
+        let assignedUid = "8A9HHfdKKNR3WKl6tCtJH5Khjkx1"; // Varsayılan (Selcan Hn.)
+        let assignedEmail = "selcanakoglu@evrekapatent.com";
 
-        // --- 1. ID ÜRETİMİ (TRANSACTION İLE) ---
+        try {
+            const assignmentDoc = await adminDb.collection('taskAssignments').doc('53').get();
+            if (assignmentDoc.exists) {
+                const data = assignmentDoc.data();
+                if (data.assigneeIds && data.assigneeIds.length > 0) {
+                    assignedUid = data.assigneeIds[0];
+                    // Kullanıcı e-postasını bul
+                    const userDoc = await adminDb.collection('users').doc(assignedUid).get();
+                    if (userDoc.exists) assignedEmail = userDoc.data().email;
+                }
+            }
+        } catch (e) { console.error("Atama kuralı hatası:", e); }
+
+        // --- 2. ID ÜRETİMİ (T-XX) ---
         const counterRef = adminDb.collection('counters').doc('tasks_accruals');
-        
         const newCustomId = await adminDb.runTransaction(async (t) => {
             const doc = await t.get(counterRef);
-            // Eğer sayaç dökümanı yoksa 0'dan başlat, varsa count'u al
             const currentCount = doc.exists ? (doc.data().count || 0) : 0;
             const newCount = currentCount + 1;
-            
-            // Sayacı güncelle
             t.set(counterRef, { count: newCount }, { merge: true });
-            
-            // Formatlı ID oluştur (Örn: T-11)
             return `T-${newCount}`;
         });
 
-        console.log(`🆔 Üretilen Yeni Task ID: ${newCustomId}`);
+        // --- 3. VERİ HAZIRLIĞI ---
+        const now = new Date().toISOString(); // "2025-12-13T09:07..." string formatı
+        
+        // İşlemi yapan kullanıcıyı bulmaya çalış (Frontend'in update sırasında gönderdiği veriden)
+        const creatorUid = after.updatedBy_uid || after.updatedBy || 'system'; 
+        const creatorEmail = after.updatedBy_email || 'system@evrekapatent.com';
 
-        // --- 2. GÖREV VERİSİ ---
+        const recordTitle = after.relatedIpRecordTitle || after.title || '';
+        const originalType = after.taskTypeName || after.taskType || 'Bilinmiyor';
+
         const accrualTaskData = {
-          // ÖNEMLİ: Firestore'da doküman ID'si 'T-11' olacak, ama task verisinde de 'id' alanı tutuyorsanız buraya ekleyin.
           id: newCustomId, 
           taskType: "53",
-          title: `Tahakkuk Oluşturma: ${after.title || 'Başlıksız İş'}`,
-          description: `"${after.title}" işi MÜVEKKİL ONAYINDAN döndü. Lütfen tahakkuk işlemini yapınız.`,
+          title: `Tahakkuk Oluşturma: ${after.title || ''}`,
+          description: `"${after.title || ''}" işi oluşturuldu ancak tahakkuk verisi girilmedi. Lütfen finansal kaydı oluşturun.`,
           priority: 'high',
           status: 'pending',
+          
+          // Atanan Kişi
           assignedTo_uid: assignedUid,
           assignedTo_email: assignedEmail,
+          
+          // İlişkiler
           relatedTaskId: taskId,
           relatedIpRecordId: after.relatedIpRecordId || null,
           relatedIpRecordTitle: after.relatedIpRecordTitle || after.title,
-          details: {
-            source: 'client_approval_trigger',
-            originalStatus: 'awaiting_client_approval',
-            triggerDate: new Date().toISOString()
+
+          // Zamanlar (String)
+          createdAt: now,
+          updatedAt: now,
+
+          // Oluşturan (Map)
+          createdBy: {
+            uid: creatorUid,
+            email: creatorEmail
           },
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
-          updatedAt: admin.firestore.FieldValue.serverTimestamp()
+
+          // Detaylar (Map)
+          details: {
+            source: 'automatic_accrual_assignment',
+            originalTaskType: originalType
+          },
+
+          // Tarihçe (Array)
+          history: [
+            {
+              action: "İş oluşturuldu.",
+              timestamp: now,
+              userEmail: creatorEmail
+            }
+          ]
         };
 
-        // --- 3. GÖREVİ ÖZEL ID İLE OLUŞTUR ---
-        // .add() yerine .doc(ID).set() kullanıyoruz
+        // --- 4. KAYIT ---
         await adminDb.collection('tasks').doc(newCustomId).set(accrualTaskData);
+        console.log(`✅ Tahakkuk görevi oluşturuldu: ${newCustomId}`);
         
       } catch (error) {
-        console.error("Error creating accrual task with custom ID:", error);
+        console.error("Error creating accrual task:", error);
       }
     }
     return null;
