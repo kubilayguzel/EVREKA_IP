@@ -5921,68 +5921,68 @@ export const revertAccrualTaskOnReopeningV2 = onDocumentUpdated(
   }
 );
 
-/**
- * Task güncellendiğinde çalışır.
- * Eğer statü 'awaiting_client_approval' -> 'open' olursa
- * Otomatik olarak Tip 53 (Tahakkuk Oluşturma) görevi açar.
- */
-exports.onTaskStatusChange = functions.firestore
-    .document('tasks/{taskId}')
-    .onUpdate(async (change, context) => {
-        const newData = change.after.data();
-        const oldData = change.before.data();
-        const taskId = context.params.taskId;
+export const createAccrualTaskOnClientApproval = onDocumentUpdated(
+  {
+    document: "tasks/{taskId}",
+    region: "europe-west1",
+  },
+  async (event) => {
+    const change = event.data;
+    if (!change || !change.before || !change.after) return null;
 
-        // KURAL: Statü "Müvekkil Onayı Bekliyor"dan "Açık"a döndü mü?
-        // (awaiting_client_approval veya awaiting-approval durumlarını kontrol edelim)
-        const wasAwaiting = ['awaiting_client_approval', 'awaiting-approval'].includes(oldData.status);
-        const isOpen = newData.status === 'open';
+    const before = change.before.data() || {};
+    const after = change.after.data() || {};
+    const taskId = event.params.taskId;
 
-        if (wasAwaiting && isOpen) {
-            console.log(`🔔 Task ${taskId} onaylandı. Tahakkuk görevi oluşturuluyor...`);
+    // KURAL: Statü "Müvekkil Onayı Bekliyor"dan "Açık"a döndü mü?
+    // Hem eski 'awaiting-approval' hem yeni 'awaiting_client_approval' formatını kontrol ediyoruz.
+    const wasAwaiting = ['awaiting_client_approval', 'awaiting-approval'].includes(before.status);
+    const isOpen = after.status === 'open';
 
-            const db = admin.firestore();
-            
-            // 1. Atanacak Kişiyi Bul (Varsayılan veya Kuraldan)
-            // Buraya TaskSubmitHandler'daki gibi bir kural ekleyebiliriz veya
-            // direkt olarak "Muhasebe" kullanıcısına atayabiliriz.
-            // Şimdilik TaskSubmitHandler'daki varsayılan mantığı (Selcan Hn.) kullanıyoruz.
-            let assignedUid = "8A9HHfdKKNR3WKl6tCtJH5Khjkx1"; 
-            let assignedEmail = "selcanakoglu@evrekapatent.com";
+    // Sadece onaylama anında çalışsın
+    if (wasAwaiting && isOpen) {
+      try {
+        console.log(`🔔 Task ${taskId} müvekkil tarafından onaylandı. Tahakkuk görevi oluşturuluyor...`);
 
-            // 2. Yeni Görev Verisini Hazırla
-            const accrualTaskData = {
-                taskType: "53", // Tahakkuk Oluşturma ID'si
-                title: `Tahakkuk Oluşturma: ${newData.title}`,
-                description: `"${newData.title}" işi MÜVEKKİL ONAYINDAN döndü ve açığa alındı. Lütfen gerekli tahakkuk/fatura işlemlerini yapınız.`,
-                priority: 'high',
-                status: 'pending', // Beklemede başlasın, kullanıcı kendi üstüne alsın
-                
-                assignedTo_uid: assignedUid,
-                assignedTo_email: assignedEmail,
-                
-                // İlişkiler
-                relatedTaskId: taskId,
-                relatedIpRecordId: newData.relatedIpRecordId || null,
-                relatedIpRecordTitle: newData.relatedIpRecordTitle || newData.title,
-                
-                details: {
-                    source: 'client_approval_trigger',
-                    originalStatus: 'awaiting_client_approval'
-                },
+        // Varsayılan Muhasebe Ataması (Selcan Hn.)
+        // İsterseniz burayı bir adminDb sorgusuyla dinamik de yapabilirsiniz.
+        const assignedUid = "8A9HHfdKKNR3WKl6tCtJH5Khjkx1";
+        const assignedEmail = "selcanakoglu@evrekapatent.com";
 
-                createdAt: admin.firestore.FieldValue.serverTimestamp(),
-                updatedAt: admin.firestore.FieldValue.serverTimestamp()
-            };
+        // Yeni Görev Verisini Hazırla
+        const accrualTaskData = {
+          taskType: "53", // Tahakkuk Oluşturma ID
+          title: `Tahakkuk Oluşturma: ${after.title || 'Başlıksız İş'}`,
+          description: `"${after.title}" işi MÜVEKKİL ONAYINDAN döndü ve açığa alındı. Lütfen gerekli tahakkuk/fatura işlemlerini yapınız.`,
+          priority: 'high',
+          status: 'pending', // Beklemede başlar, kullanıcı üstüne alır
+          
+          assignedTo_uid: assignedUid,
+          assignedTo_email: assignedEmail,
+          
+          // İlişkiler (Ana işe ve IP kaydına bağla)
+          relatedTaskId: taskId,
+          relatedIpRecordId: after.relatedIpRecordId || null,
+          relatedIpRecordTitle: after.relatedIpRecordTitle || after.title,
+          
+          details: {
+            source: 'client_approval_trigger',
+            originalStatus: 'awaiting_client_approval',
+            triggerDate: new Date().toISOString()
+          },
 
-            try {
-                // 3. Görevi Oluştur
-                const docRef = await db.collection('tasks').add(accrualTaskData);
-                console.log(`✅ Otomatik Tahakkuk Görevi Oluşturuldu: ${docRef.id}`);
-            } catch (error) {
-                console.error("❌ Tahakkuk görevi oluşturulamadı:", error);
-            }
-        }
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        };
+
+        // Görevi Oluştur
+        await adminDb.collection('tasks').add(accrualTaskData);
         
-        return null;
-    });
+      } catch (error) {
+        console.error("Error creating accrual task:", error);
+      }
+    }
+
+    return null;
+  }
+);
