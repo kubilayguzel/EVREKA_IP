@@ -32,8 +32,26 @@
                     </div>
                     
                     <button class="btn-add-task" onclick="window.location.href='create-task.html'">
-                        <span>&#x2795;</span> Yeni İş Oluştur
+                        <span>&#x2795;</span> Yeni İş
                     </button>
+
+                    <div class="filter-group">
+                        <label class="filter-label" for="statusFilter">Filtre:</label>
+                        <select id="statusFilter" class="filter-select">
+                            <option value="all">Tümü</option>
+                            <option value="open">Açık</option>
+                            <option value="in-progress">Devam Ediyor</option>
+                            <option value="completed">Tamamlandı</option>
+                            <option value="pending">Beklemede</option>
+                            <option value="cancelled">İptal Edildi</option>
+                            <option value="on-hold">Askıda</option>
+                            <option value="awaiting-approval">Onay Bekliyor</option>
+                            <option value="awaiting_client_approval">Müvekkil Onayı Bekliyor</option>
+                            <option value="client_approval_opened">Müvekkil Onayı - Açıldı</option>
+                            <option value="client_approval_closed">Müvekkil Onayı - Kapatıldı</option>
+                            <option value="client_no_response_closed">Müvekkil Cevaplamadı - Kapatıldı</option>
+                        </select>
+                    </div>
                 </div>
                 
                 <div class="table-container">
