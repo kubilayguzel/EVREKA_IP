@@ -3,7 +3,7 @@
 import { authService, accrualService, taskService, personService, generateUUID, db, ipRecordsService, transactionTypeService } from '../../firebase-config.js';
 import { showNotification, readFileAsDataURL } from '../../utils.js';
 import { loadSharedLayout } from '../layout-loader.js';
-import { doc, getDoc, collection, getDocs } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+import { doc, getDoc, collection, getDocs, query, where } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
 
 import Pagination from '../pagination.js'; 
@@ -87,24 +87,39 @@ document.addEventListener('DOMContentLoaded', async () => {
                 this.allUsers = usersRes?.success ? (usersRes.data || []) : [];
                 this.allTransactionTypes = typesRes?.success ? (typesRes.data || []) : [];
 
-                // 3. TAHAKKUKLARA BAĞLI GÖREVLERİ (TASKS) ÇEKME
-                // Sadece listede olan tahakkukların Task ID'lerini toplar ve onları çeker.
+                // 3. TAHAKKUKLARA BAĞLI GÖREVLERİ (TASKS) DOĞRUDAN ÇEKME
                 if (this.allAccruals.length > 0) {
                     // Tarih formatlama
                     this.allAccruals.forEach(a => { a.createdAt = a.createdAt ? new Date(a.createdAt) : new Date(0); });
                     
                     // Task ID'leri topla
-                    const taskIds = new Set();
-                    this.allAccruals.forEach(a => { if (a.taskId) taskIds.add(String(a.taskId)); });
+                    const taskIds = [...new Set(this.allAccruals.map(a => String(a.taskId)).filter(Boolean))];
+                    console.log('📋 Toplanan Task ID\'leri:', taskIds);
 
-                    // Taskleri servisten iste
-                    if (taskIds.size && taskService.getTasksByIds) {
-                        const tRes = await taskService.getTasksByIds(Array.from(taskIds));
-                        const tasks = tRes?.success ? (tRes.data || []) : [];
+                    // Task'ları direkt Firestore'dan çek (Firestore 'in' operatörü max 30 öğe alır)
+                    this.allTasks = {};
+                    
+                    if (taskIds.length > 0) {
+                        // 30'luk gruplara böl (Firestore 'in' query limiti)
+                        for (let i = 0; i < taskIds.length; i += 30) {
+                            const chunk = taskIds.slice(i, i + 30);
+                            
+                            try {
+                                const tasksSnapshot = await getDocs(
+                                    query(collection(db, 'tasks'), where('__name__', 'in', chunk))
+                                );
+                                
+                                tasksSnapshot.forEach(doc => {
+                                    this.allTasks[doc.id] = { id: doc.id, ...doc.data() };
+                                });
+                                
+                                console.log(`✅ ${chunk.length} task yüklendi (batch ${Math.floor(i/30) + 1})`);
+                            } catch (err) {
+                                console.error('Task chunk yükleme hatası:', err);
+                            }
+                        }
                         
-                        // Taskleri ID bazlı objeye çevir (Erişim hızı için)
-                        this.allTasks = {};
-                        tasks.forEach(t => { this.allTasks[String(t.id)] = t; });
+                        console.log('✅ Toplam yüklenen task sayısı:', Object.keys(this.allTasks).length);
                     }
                 }
 
