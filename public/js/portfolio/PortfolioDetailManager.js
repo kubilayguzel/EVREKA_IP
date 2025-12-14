@@ -123,28 +123,52 @@ export class PortfolioDetailManager {
 
     async renderApplicants() {
         let text = '';
-        if (Array.isArray(this.currentRecord.applicants)) {
+
+        if (Array.isArray(this.currentRecord.applicants) && this.currentRecord.applicants.length > 0) {
+            // Tüm sahipler için asenkron isim çözme (Eğer applicant ID ise veritabanından çek)
             const names = await Promise.all(this.currentRecord.applicants.map(async (app) => {
+                // Eğer app bir string ID ise (bazen olabiliyor)
+                if (typeof app === 'string') {
+                     try {
+                        const snap = await getDoc(doc(db, 'persons', app));
+                        if (snap.exists()) return snap.data().name;
+                    } catch (e) {}
+                    return app; 
+                }
+                
+                // Eğer app bir obje ve ID'si varsa
                 if (app.id) {
                     try {
                         const snap = await getDoc(doc(db, 'persons', app.id));
                         if (snap.exists()) return snap.data().name;
                     } catch (e) {}
                 }
-                return app.name;
+                
+                // İsim zaten varsa veya ID çözülemediyse mevcut ismi kullan
+                return app.name || 'İsimsiz';
             }));
+            
+            // İsimleri virgülle birleştir
             text = names.filter(Boolean).join(', ');
         } else {
-            text = this.currentRecord.applicantName || '-';
+            // Array değilse, tekil alanı kontrol et
+            text = this.currentRecord.applicantName || this.currentRecord.ownerName || '-';
         }
         
         if (this.elements.applicantName) this.elements.applicantName.value = text;
         
-        if (this.elements.applicantAddress && this.currentRecord.applicants?.[0]?.id) {
-             const snap = await getDoc(doc(db, 'persons', this.currentRecord.applicants[0].id));
-             if(snap.exists()) {
-                 const d = snap.data();
-                 this.elements.applicantAddress.value = [d.address, d.province, d.countryName].filter(Boolean).join(' - ');
+        // Adres Kısmı (Genelde ilk sahibin adresi gösterilir, burası kalabilir veya isterseniz "Çoklu Adres" yazdırabiliriz)
+        if (this.elements.applicantAddress) {
+             if (this.currentRecord.applicants?.[0]?.id) {
+                 const snap = await getDoc(doc(db, 'persons', this.currentRecord.applicants[0].id));
+                 if(snap.exists()) {
+                     const d = snap.data();
+                     this.elements.applicantAddress.value = [d.address, d.province, d.countryName].filter(Boolean).join(' - ');
+                 } else {
+                     this.elements.applicantAddress.value = '-';
+                 }
+             } else {
+                 this.elements.applicantAddress.value = '-';
              }
         }
     }
