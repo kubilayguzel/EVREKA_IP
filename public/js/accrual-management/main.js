@@ -222,17 +222,17 @@ document.addEventListener('DOMContentLoaded', async () => {
             // Pagination uygula
             let pageData = this.pagination ? this.pagination.getCurrentPageData(this.processedData) : this.processedData;
             
-            // --- Helper: Para Birimi Formatla ---
+            // --- Helper: Para Birimi Formatla (Ondalıksız) ---
             const formatMultiCurrency = (data, defaultCurrency = 'TRY') => {
                 if (Array.isArray(data)) {
-                    if (data.length === 0) return '0,00 ' + defaultCurrency;
+                    if (data.length === 0) return '0 ' + defaultCurrency;
                     return data.map(item => {
                         const val = parseFloat(item.amount) || 0;
-                        return `${new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2 }).format(val)} ${item.currency}`;
+                        return `${new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(val)} ${item.currency}`;
                     }).join(' + ');
                 }
                 const val = parseFloat(data) || 0;
-                return new Intl.NumberFormat('tr-TR', { style: 'currency', currency: defaultCurrency }).format(val);
+                return `${new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(val)} ${defaultCurrency}`;
             };
 
             // --- TAB 1: GENEL TAHAKKUK LİSTESİ ---
@@ -295,10 +295,20 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                     const officialStr = acc.officialFee ? formatMultiCurrency(acc.officialFee.amount, acc.officialFee.currency) : '-';
                     const serviceStr = acc.serviceFee ? formatMultiCurrency(acc.serviceFee.amount, acc.serviceFee.currency) : '-';
-                    const rem = acc.remainingAmount !== undefined ? acc.remainingAmount : acc.totalAmount;
                     
-                    // Kalan Tutar HTML
-                    let remainingHtml = `<span>${formatMultiCurrency(rem, acc.totalAmountCurrency)}</span>`;
+                    // Kalan Tutar Hesaplama ve Gösterme
+                    let remainingHtml = '-';
+                    const rem = acc.remainingAmount !== undefined ? acc.remainingAmount : acc.totalAmount;
+                    const total = acc.totalAmount;
+                    
+                    // Eğer kalan = toplam veya kalan <= 0 ise gösterme
+                    const isFullyPaid = (Array.isArray(rem) && Array.isArray(total)) 
+                        ? JSON.stringify(rem) === JSON.stringify(total) || rem.every((r, i) => parseFloat(r.amount || 0) <= 0)
+                        : (parseFloat(rem) === parseFloat(total) || parseFloat(rem) <= 0);
+                    
+                    if (!isFullyPaid) {
+                        remainingHtml = `<span>${formatMultiCurrency(rem, acc.totalAmountCurrency)}</span>`;
+                    }
 
                     return `
                     <tr>
