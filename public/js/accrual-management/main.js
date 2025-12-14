@@ -229,26 +229,24 @@ document.addEventListener('DOMContentLoaded', async () => {
                     const isSel = this.selectedAccruals.has(acc.id);
                     const isPaid = acc.status === 'paid';
                     
-                    // --- DÜZELTME: İŞ TİPİ (ALIAS) ve İLGİLİ DOSYA ---
-                    let taskDisplay = acc.taskTitle || '-'; 
+                // --- DÜZELTME: İŞ TİPİ (SADECE ALIAS) ve İLGİLİ DOSYA (SADECE BAŞVURU NO) ---
+                    let taskDisplay = '-'; 
                     let relatedFileDisplay = '-';
 
                     const task = this.allTasks[String(acc.taskId)];
                     
                     if (task) {
-                        // 1. İş Tipini Bul ve Alias Göster
+                        // 1. İş Tipi - SADECE ALIAS Göster
                         const typeObj = this.allTransactionTypes.find(t => t.id === task.taskType);
-                        if (typeObj) {
-                            taskDisplay = typeObj.alias || typeObj.name; // Varsa Alias, yoksa Name
-                        } else {
-                            taskDisplay = task.title || '-'; // Tip yoksa başlık
+                        if (typeObj && typeObj.alias) {
+                            taskDisplay = typeObj.alias; // SADECE ALIAS
                         }
 
-                        // 2. İlgili Dosyayı Bul (loadAllData düzeltmesi sayesinde allIpRecords dolu)
+                        // 2. İlgili Dosya - SADECE Başvuru Numarası Göster
                         if (task.relatedIpRecordId && this.allIpRecords) {
                             const ipRec = this.allIpRecords.find(r => r.id === task.relatedIpRecordId);
-                            if (ipRec) {
-                                relatedFileDisplay = ipRec.applicationNumber || ipRec.title || 'Dosya';
+                            if (ipRec && ipRec.applicationNumber) {
+                                relatedFileDisplay = ipRec.applicationNumber;
                             }
                         }
                     }
