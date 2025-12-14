@@ -70,6 +70,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const ipRecordsRef = collection(db, 'ipRecords');
                 const ipSnapshot = await getDocs(ipRecordsRef);
                 this.allIpRecords = ipSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                console.log('✅ IP Records yüklendi:', this.allIpRecords.length);
+                console.log('📌 İlk 3 IP Record:', this.allIpRecords.slice(0, 3));
 
                 // 2. DİĞER SABİT VERİLERİ SERVİSLERDEN ÇEKME
                 // İş tipleri (Transaction Types), kişiler ve kullanıcılar
@@ -229,27 +231,51 @@ document.addEventListener('DOMContentLoaded', async () => {
                     const isSel = this.selectedAccruals.has(acc.id);
                     const isPaid = acc.status === 'paid';
                     
-                // --- DÜZELTME: İŞ TİPİ (SADECE ALIAS) ve İLGİLİ DOSYA (SADECE BAŞVURU NO) ---
+// --- DÜZELTME: İŞ TİPİ (SADECE ALIAS) ve İLGİLİ DOSYA (SADECE BAŞVURU NO) ---
                     let taskDisplay = '-'; 
                     let relatedFileDisplay = '-';
 
                     const task = this.allTasks[String(acc.taskId)];
                     
                     if (task) {
+                        console.log(`📋 Tahakkuk ${acc.id} - Task bulundu:`, task.id);
+                        
                         // 1. İş Tipi - SADECE ALIAS Göster
                         const typeObj = this.allTransactionTypes.find(t => t.id === task.taskType);
+                        console.log(`  🏷️ TaskType: ${task.taskType}, TypeObj:`, typeObj);
+                        
                         if (typeObj && typeObj.alias) {
-                            taskDisplay = typeObj.alias; // SADECE ALIAS
+                            taskDisplay = typeObj.alias;
+                            console.log(`  ✅ Alias bulundu: ${taskDisplay}`);
+                        } else {
+                            console.log(`  ⚠️ Alias bulunamadı!`);
                         }
 
                         // 2. İlgili Dosya - SADECE Başvuru Numarası Göster
-                        if (task.relatedIpRecordId && this.allIpRecords) {
+                        if (task.relatedIpRecordId) {
+                            console.log(`  📁 relatedIpRecordId: ${task.relatedIpRecordId}`);
+                            console.log(`  📚 allIpRecords sayısı: ${this.allIpRecords.length}`);
+                            
                             const ipRec = this.allIpRecords.find(r => r.id === task.relatedIpRecordId);
-                            if (ipRec && ipRec.applicationNumber) {
-                                relatedFileDisplay = ipRec.applicationNumber;
+                            console.log(`  🔍 İpRecord bulundu mu?:`, ipRec ? 'EVET' : 'HAYIR');
+                            
+                            if (ipRec) {
+                                console.log(`  📄 IpRecord verisi:`, ipRec);
+                                if (ipRec.applicationNumber) {
+                                    relatedFileDisplay = ipRec.applicationNumber;
+                                    console.log(`  ✅ Başvuru no: ${relatedFileDisplay}`);
+                                } else {
+                                    console.log(`  ⚠️ applicationNumber alanı yok!`);
+                                }
                             }
+                        } else {
+                            console.log(`  ⚠️ Task'ta relatedIpRecordId yok!`);
                         }
+                    } else {
+                        console.log(`❌ Tahakkuk ${acc.id} için Task bulunamadı! TaskId: ${acc.taskId}`);
                     }
+                    
+                    console.log(`  ➡️ Son Değerler - İş: ${taskDisplay}, Dosya: ${relatedFileDisplay}`);
                     // ------------------------------------------------
 
                     const officialStr = acc.officialFee ? formatMultiCurrency(acc.officialFee.amount, acc.officialFee.currency) : '-';
