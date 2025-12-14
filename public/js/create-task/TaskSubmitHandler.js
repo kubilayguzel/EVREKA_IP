@@ -321,26 +321,31 @@ export class TaskSubmitHandler {
         } catch (e) { console.warn('Tarih hesaplama hatası:', e); }
     }
 
-    // B) TARAFLAR
+    // B) TARAFLAR VE İŞ SAHİBİ (TASK OWNER) BELİRLEME
     _enrichTaskWithParties(taskData, taskType, relatedParties, singleParty, ipRecord) {
         const tIdStr = String(taskType.id);
 
-        // 1. SENARYO: İlgili Taraf Seçimi Varsa (Örn: Devir, Lisans)
+        // KURAL 1: İlgili Taraf Seçimi Zorunlu Olan İşler (Devir, Lisans vb.)
         if (RELATED_PARTY_REQUIRED.has(tIdStr)) {
+            // Seçilen ilgili tarafları iş sahibi yap
             const owners = (Array.isArray(relatedParties) ? relatedParties : []).map(p => String(p.id)).filter(Boolean);
             if (owners.length) taskData.taskOwner = owners;
+            
+            // Detaylara da ekle (Eski yapı uyumluluğu için)
+            if (relatedParties && relatedParties.length) {
+                taskData.details.relatedParties = relatedParties.map(p => ({ id: p.id, name: p.name, email: p.email }));
+            }
         } 
-        // 2. SENARYO: İlgili Taraf Seçimi YOKSA (YENİ GELİŞTİRME)
-        // Eğer ilgili taraf alanı yoksa, dosyanın kendi sahibini (applicant) Task Owner yap.
+        // KURAL 2: İlgili Taraf Seçimi OLMAYAN İşler (Yenileme, Tescil Ücreti vb.)
+        // Bu durumda işin sahibi, dosyanın (Marka/Patent) sahibidir.
         else {
             if (ipRecord && Array.isArray(ipRecord.applicants) && ipRecord.applicants.length > 0) {
-                // Applicant objesinden sadece ID'leri alıp string array olarak kaydediyoruz
                 taskData.taskOwner = ipRecord.applicants.map(a => String(a.id)).filter(Boolean);
-                console.log('✅ İlgili taraf olmadığı için dosya sahibi TaskOwner olarak atandı:', taskData.taskOwner);
+                console.log('✅ Otomatik Atama: Dosya sahipleri taskOwner olarak ayarlandı:', taskData.taskOwner);
             }
         }
 
-        // Diğer atamalar (İtiraz vb.)
+        // KURAL 3: Karşı Taraf / Rakip (İtiraz İşlemleri İçin)
         const objectionIds = ['7', '19', '20'];
         if (objectionIds.includes(tIdStr)) {
             const opponent = (relatedParties && relatedParties.length) ? relatedParties[0] : singleParty;
@@ -348,11 +353,6 @@ export class TaskSubmitHandler {
                 taskData.opponent = { id: opponent.id, name: opponent.name, email: opponent.email };
                 taskData.details.opponent = taskData.opponent;
             }
-        }
-        
-        // Detaylara da ekle
-        if (relatedParties && relatedParties.length) {
-            taskData.details.relatedParties = relatedParties.map(p => ({ id: p.id, name: p.name, email: p.email }));
         }
     }
 
