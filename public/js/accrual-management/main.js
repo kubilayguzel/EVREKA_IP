@@ -120,6 +120,39 @@ document.addEventListener('DOMContentLoaded', async () => {
                         }
                         
                         console.log('✅ Toplam yüklenen task sayısı:', Object.keys(this.allTasks).length);
+                        this.allAccruals.forEach(acc => {
+                            // 1. Temel Bilgiler
+                            let searchTerms = [
+                                acc.id,
+                                acc.status === 'paid' ? 'ödendi' : (acc.status === 'unpaid' ? 'ödenmedi' : 'kısmen'),
+                                acc.tpInvoiceParty?.name,
+                                acc.serviceInvoiceParty?.name,
+                                acc.officialFee?.amount,
+                                acc.totalAmount
+                            ];
+
+                            // 2. İlişkili İş ve Dosya Bilgileri
+                            const task = this.allTasks[String(acc.taskId)];
+                            if (task) {
+                                searchTerms.push(task.title); // İş Başlığı
+                                
+                                // İş Tipi (Alias)
+                                const typeObj = this.allTransactionTypes.find(t => t.id === task.taskType);
+                                if(typeObj) searchTerms.push(typeObj.alias || typeObj.name);
+
+                                // Dosya Numarası (App Number)
+                                if (task.relatedIpRecordId && this.allIpRecords) {
+                                    const ipRec = this.allIpRecords.find(r => r.id === task.relatedIpRecordId);
+                                    if(ipRec) searchTerms.push(ipRec.applicationNumber);
+                                }
+                            } else {
+                                searchTerms.push(acc.taskTitle);
+                            }
+
+                            // 3. Hepsini birleştir ve küçük harfe çevir (Arama performansı için)
+                            acc.searchString = searchTerms.filter(Boolean).join(' ').toLowerCase();
+                        });
+
                     }
                 }
 
@@ -1068,6 +1101,15 @@ document.addEventListener('DOMContentLoaded', async () => {
                 // Tab değişince tabloyu yeniden çiz (filtreleri uygulayarak)
                 this.processData();
             });
+
+            // --- ARAMA KUTUSU DİNLEYİCİSİ (YENİ EKLENECEK) ---
+            const searchInput = document.getElementById('searchInput');
+            if (searchInput) {
+                searchInput.addEventListener('input', (e) => {
+                    // Her harf girişinde tabloyu yeniden filtrele ve çiz
+                    this.processData();
+                });
+            }
 
             // YENİ: Kaydet Butonu
             document.getElementById('saveAccrualChangesBtn').addEventListener('click', () => this.handleSaveAccrualChanges());
