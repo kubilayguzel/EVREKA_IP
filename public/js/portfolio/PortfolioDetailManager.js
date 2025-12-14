@@ -88,14 +88,30 @@ export class PortfolioDetailManager {
         } else {
             this.elements.heroCard.classList.add('d-none');
         }
+        
+        // Tescil Numarası (Uluslararası veya Ulusal)
+        let regNo = r.registrationNumber;
+        if (!regNo) regNo = r.internationalRegNumber || r.wipoIrNumber || '-';
+
+        // Nice Sınıflarını Formatla
+        let classesStr = '-';
+        if (Array.isArray(r.goodsAndServicesByClass) && r.goodsAndServicesByClass.length > 0) {
+            classesStr = r.goodsAndServicesByClass.map(c => c.classNo).join(', ');
+        } else if (Array.isArray(r.classes)) {
+            classesStr = r.classes.join(', ');
+        } else if (r.classes) {
+            classesStr = r.classes;
+        }
 
         const kvHtml = `
             <div class="kv-item"><div class="label">Başvuru No</div><div class="value">${r.applicationNumber || '-'}</div></div>
-            <div class="kv-item"><div class="label">Tür</div><div class="value">${r.type || '-'}</div></div>
+            <div class="kv-item"><div class="label">Tescil No</div><div class="value">${regNo}</div></div>
+            <div class="kv-item"><div class="label">Sınıflar</div><div class="value">${classesStr}</div></div>
             <div class="kv-item"><div class="label">Durum</div><div class="value">${this.getStatusText(r.type, r.status)}</div></div>
             <div class="kv-item"><div class="label">Başvuru Tarihi</div><div class="value">${this.formatDate(r.applicationDate)}</div></div>
             <div class="kv-item"><div class="label">Tescil Tarihi</div><div class="value">${this.formatDate(r.registrationDate)}</div></div>
         `;
+        
         this.elements.heroKv.innerHTML = kvHtml;
 
         // TürkPatent Sorgula Butonu Göster/Gizle
