@@ -99,12 +99,11 @@
                 <div class="accruals-header">
                     <div class="search-wrapper" style="flex-grow: 1; max-width: 400px;">
                         <i class="fas fa-search search-icon"></i>
-                        <input type="text" id="searchInput" class="search-input" placeholder="Tahakkuk no, iş, fatura tarafı ara...">
+                        <input type="text" id="searchInput" class="search-input" placeholder="Ara...">
                     </div>
 
                     <div class="filter-group" id="bulkActions" style="display: none;">
                         <button id="bulkMarkPaidBtn" class="action-btn">Seçilenleri Ödendi İşaretle</button>
-                        <button id="bulkMarkUnpaidBtn" class="action-btn unpaid">Seçilenleri Ödenmedi İşaretle</button>
                     </div>
 
                     <div class="filter-group">
@@ -118,24 +117,61 @@
                     </div>
                 </div>
 
-                <div class="table-container">
-                    <table class="accruals-table">
-                        <thead>
-                            <tr>
-                                <th style="width: 40px;"><input type="checkbox" id="selectAllCheckbox"></th>
-                                <th class="sortable" data-sort="id">Tahakkuk ID <i class="fas fa-sort sort-icon"></i></th>
-                                <th class="sortable" data-sort="status">Durum <i class="fas fa-sort sort-icon"></i></th>
-                                <th class="sortable" data-sort="taskTitle">İlgili İş <i class="fas fa-sort sort-icon"></i></th>
-                                <th class="sortable" data-sort="officialFee">Resmi Ücret <i class="fas fa-sort sort-icon"></i></th>
-                                <th class="sortable" data-sort="serviceFee">Hizmet Bedeli <i class="fas fa-sort sort-icon"></i></th>
-                                <th class="sortable" data-sort="totalAmount">Toplam Tutar <i class="fas fa-sort sort-icon"></i></th>
-                                <th class="sortable" data-sort="remainingAmount">Kalan Tutar <i class="fas fa-sort sort-icon"></i></th>
-                                <th>İşlemler</th>
-                            </tr>
-                        </thead>
-                        <tbody id="accrualsTableBody">
-                            </tbody>
-                    </table>
+                <ul class="nav nav-tabs px-4 pt-3 border-bottom-0" id="accrualTabs" role="tablist" style="background: #f8f9fa;">
+                    <li class="nav-item">
+                        <a class="nav-link active font-weight-bold" id="tab-main" data-toggle="tab" href="#content-main" role="tab" style="color:#1e3c72;">
+                            <i class="fas fa-list mr-2"></i>Tüm Tahakkuklar
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link font-weight-bold" id="tab-foreign" data-toggle="tab" href="#content-foreign" role="tab" style="color:#dc3545;">
+                            <i class="fas fa-globe-americas mr-2"></i>Yurt Dışı Ödemeler
+                        </a>
+                    </li>
+                </ul>
+
+                <div class="tab-content">
+                    
+                    <div class="tab-pane fade show active" id="content-main" role="tabpanel">
+                        <div class="table-container">
+                            <table class="accruals-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 40px;"><input type="checkbox" id="selectAllCheckbox"></th>
+                                        <th class="sortable" data-sort="id">ID <i class="fas fa-sort sort-icon"></i></th>
+                                        <th class="sortable" data-sort="status">Durum <i class="fas fa-sort sort-icon"></i></th>
+                                        <th class="sortable" data-sort="relatedFile">İlgili Dosya <i class="fas fa-sort sort-icon"></i></th>
+                                        <th class="sortable" data-sort="taskTitle">İlgili İş <i class="fas fa-sort sort-icon"></i></th>
+                                        <th class="sortable" data-sort="officialFee">Resmi Ücret <i class="fas fa-sort sort-icon"></i></th>
+                                        <th class="sortable" data-sort="serviceFee">Hizmet Bedeli <i class="fas fa-sort sort-icon"></i></th>
+                                        <th class="sortable" data-sort="totalAmount">Toplam <i class="fas fa-sort sort-icon"></i></th>
+                                        <th class="sortable" data-sort="remainingAmount">Kalan <i class="fas fa-sort sort-icon"></i></th>
+                                        <th>İşlemler</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="accrualsTableBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="tab-pane fade" id="content-foreign" role="tabpanel">
+                        <div class="table-container">
+                            <table class="accruals-table">
+                                <thead style="background-color: #fff5f5;">
+                                    <tr>
+                                        <th style="width: 40px;">#</th>
+                                        <th>Durum</th>
+                                        <th>İlgili İş</th>
+                                        <th style="color:#d63384;">Ödeme Yapılacak Taraf</th>
+                                        <th style="color:#d63384;">Ödeme Tutarı (Official)</th>
+                                        <th>İşlemler</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="foreignTableBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
                 </div>
 
                 <div id="loadingIndicator" class="loading">Yükleniyor...</div>
