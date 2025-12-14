@@ -216,27 +216,33 @@ document.addEventListener('DOMContentLoaded', async () => {
                     
                     // --- DÜZELTME BAŞLANGICI ---
                     
-                    let taskDisplay = acc.taskTitle || '-'; 
-                    let relatedFileDisplay = '-';
+            let taskDisplay = acc.taskTitle || '-'; 
+            let relatedFileDisplay = '-';
 
-                    const task = this.allTasks[String(acc.taskId)];
-                    
-                    if (task) {
-                        // 1. İLGİLİ İŞ: Sadece Task Title (Varsa) göster
-                        taskDisplay = task.title || taskDisplay; 
+            const task = this.allTasks[String(acc.taskId)];
+            
+            if (task) {
+                // 1. İş Tipini (TransactionType) Bul
+                // allTransactionTypes dizisi loadAllData() fonksiyonunda zaten yüklenmişti
+                const typeObj = this.allTransactionTypes.find(t => t.id === task.taskType);
 
-                        // 2. İLGİLİ DOSYA: Artık allIpRecords dolu olduğu için çalışacak
-                        if (task.relatedIpRecordId) {
-                            // allIpRecords artık loadAllData'da dolduruluyor
-                            const ipRec = this.allIpRecords.find(r => r.id === task.relatedIpRecordId);
-                            if (ipRec) {
-                                // Dosya numarası varsa onu, yoksa başlığı göster
-                                relatedFileDisplay = ipRec.applicationNumber || ipRec.title || 'Dosya';
-                            }
-                        }
+                // 2. İLGİLİ İŞ GÖSTERİMİ: Alias değerini al
+                if (typeObj) {
+                    // Alias varsa onu, yoksa tipin adını (name) göster
+                    taskDisplay = typeObj.alias || typeObj.name;
+                } else {
+                    // İş tipi bulunamazsa işin kendi başlığını kullan (Fallback)
+                    taskDisplay = task.title || '-';
+                }
+
+                // 3. İLGİLİ DOSYA (Önceki adımda eklediğimiz kısım - aynen kalıyor)
+                if (task.relatedIpRecordId) {
+                    const ipRec = this.allIpRecords.find(r => r.id === task.relatedIpRecordId);
+                    if (ipRec) {
+                        relatedFileDisplay = ipRec.applicationNumber || ipRec.title || 'Dosya';
                     }
-                    
-                    // --- DÜZELTME BİTİŞİ ---
+                }
+            }
 
                     const officialStr = acc.officialFee ? formatMultiCurrency(acc.officialFee.amount, acc.officialFee.currency) : '-';
                     const serviceStr = acc.serviceFee ? formatMultiCurrency(acc.serviceFee.amount, acc.serviceFee.currency) : '-';
