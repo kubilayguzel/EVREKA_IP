@@ -1355,7 +1355,7 @@ window.populatePortfolioTable = function(tableId, portfolioData, startIndex = 0)
 
         tableBody.appendChild(mainRow);
 
-        // --- CHILD KAYITLAR (YENİ KOLON EKLENDİ) ---
+    // --- CHILD KAYITLAR (YENİ KOLON EKLENDİ) ---
         if (tableId === '#marka-list' && isInternational) {
             const detailRow = document.createElement('tr');
             detailRow.setAttribute('data-origin', originBucket);
@@ -1375,9 +1375,10 @@ window.populatePortfolioTable = function(tableId, portfolioData, startIndex = 0)
                 
                 const subStatusObj = getStatusDetails(sub.status);
 
+                // DEĞİŞİKLİK BURADA: originStr, tıklanabilir bir link haline getirildi
                 return `<tr>
                     <td>${actualIndex+1}.${idx+1}</td>
-                    <td>${originStr}</td>
+                    <td><a href="#" class="portfolio-detail-link" data-item-id="${sub.id}" data-toggle="modal" data-target="#portfolioDetailModal" style="font-weight:bold; text-decoration:underline;">${originStr}</a></td>
                     <td>${sub.applicationNumber||'-'}</td>
                     <td>${subAppDate}</td>
                     <td>${subRenDate}</td> <td><span class="badge badge-${subStatusObj.className}">${subStatusObj.text}</span></td>
