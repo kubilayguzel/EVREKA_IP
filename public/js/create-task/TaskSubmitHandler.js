@@ -76,8 +76,7 @@ export class TaskSubmitHandler {
             }
 
             // 2. İlgili Taraflar
-            this._enrichTaskWithParties(taskData, selectedTaskType, selectedRelatedParties, selectedRelatedParty);
-
+            this._enrichTaskWithParties(taskData, selectedTaskType, selectedRelatedParties, selectedRelatedParty, selectedIpRecord);
             // 3. Marka Başvurusu Kaydı
             if (selectedTaskType.alias === 'Başvuru' && selectedTaskType.ipType === 'trademark') {
                 const newRecordId = await this._handleTrademarkApplication(state, taskData);
@@ -323,12 +322,25 @@ export class TaskSubmitHandler {
     }
 
     // B) TARAFLAR
-    _enrichTaskWithParties(taskData, taskType, relatedParties, singleParty) {
+    _enrichTaskWithParties(taskData, taskType, relatedParties, singleParty, ipRecord) {
         const tIdStr = String(taskType.id);
+
+        // 1. SENARYO: İlgili Taraf Seçimi Varsa (Örn: Devir, Lisans)
         if (RELATED_PARTY_REQUIRED.has(tIdStr)) {
             const owners = (Array.isArray(relatedParties) ? relatedParties : []).map(p => String(p.id)).filter(Boolean);
             if (owners.length) taskData.taskOwner = owners;
+        } 
+        // 2. SENARYO: İlgili Taraf Seçimi YOKSA (YENİ GELİŞTİRME)
+        // Eğer ilgili taraf alanı yoksa, dosyanın kendi sahibini (applicant) Task Owner yap.
+        else {
+            if (ipRecord && Array.isArray(ipRecord.applicants) && ipRecord.applicants.length > 0) {
+                // Applicant objesinden sadece ID'leri alıp string array olarak kaydediyoruz
+                taskData.taskOwner = ipRecord.applicants.map(a => String(a.id)).filter(Boolean);
+                console.log('✅ İlgili taraf olmadığı için dosya sahibi TaskOwner olarak atandı:', taskData.taskOwner);
+            }
         }
+
+        // Diğer atamalar (İtiraz vb.)
         const objectionIds = ['7', '19', '20'];
         if (objectionIds.includes(tIdStr)) {
             const opponent = (relatedParties && relatedParties.length) ? relatedParties[0] : singleParty;
@@ -337,6 +349,8 @@ export class TaskSubmitHandler {
                 taskData.details.opponent = taskData.opponent;
             }
         }
+        
+        // Detaylara da ekle
         if (relatedParties && relatedParties.length) {
             taskData.details.relatedParties = relatedParties.map(p => ({ id: p.id, name: p.name, email: p.email }));
         }
