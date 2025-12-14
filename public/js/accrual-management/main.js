@@ -175,6 +175,23 @@ document.addEventListener('DOMContentLoaded', async () => {
                 });
             });
 
+            // --- ÖDEME MODALI ETKİLEŞİMLERİ (EKSİK OLAN KISIM) ---
+            const payFullOfficial = document.getElementById('payFullOfficial');
+            const officialInputContainer = document.getElementById('officialAmountInputContainer');
+            if (payFullOfficial && officialInputContainer) {
+                payFullOfficial.addEventListener('change', (e) => {
+                    officialInputContainer.style.display = e.target.checked ? 'none' : 'block';
+                });
+            }
+
+            const payFullService = document.getElementById('payFullService');
+            const serviceInputContainer = document.getElementById('serviceAmountInputContainer');
+            if (payFullService && serviceInputContainer) {
+                payFullService.addEventListener('change', (e) => {
+                    serviceInputContainer.style.display = e.target.checked ? 'none' : 'block';
+                });
+            }
+
             // --- AKSİYON BUTONLARI (Tablo İçi) ---
             const handleActionClick = async (e) => {
                 const btn = e.target.closest('.action-btn');
