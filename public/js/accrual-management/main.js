@@ -310,15 +310,25 @@ document.addEventListener('DOMContentLoaded', async () => {
                         remainingHtml = `<span>${formatMultiCurrency(rem, acc.totalAmountCurrency)}</span>`;
                     }
 
+                    // Taraf bilgisi (Resmi Ücret için TP, Hizmet Bedeli için Service/Foreign)
+                    let partyDisplay = '-';
+                    if (acc.officialFee && acc.officialFee.amount > 0 && acc.tpInvoiceParty) {
+                        partyDisplay = acc.tpInvoiceParty.name || acc.tpInvoiceParty.companyName || 'Türk Patent';
+                    } else if (acc.serviceFee && acc.serviceFee.amount > 0 && acc.serviceInvoiceParty) {
+                        partyDisplay = acc.serviceInvoiceParty.name || acc.serviceInvoiceParty.companyName || '-';
+                    }
+                    
                     return `
                     <tr>
                         <td><input type="checkbox" class="row-checkbox" data-id="${acc.id}" ${isSel ? 'checked' : ''}></td>
-                        <td><small>${acc.id.substring(0, 8)}...</small></td>
+                        <td><small>${acc.id}</small></td>
                         <td><span class="status-badge ${sCls}">${sTxt}</span></td>
                         
                         <td><span class="badge badge-light border" style="font-weight:normal; font-size: 0.9em;">${relatedFileDisplay}</span></td>
                         
                         <td><a href="#" class="task-detail-link font-weight-bold" data-task-id="${acc.taskId}">${taskDisplay}</a></td>
+                        
+                        <td><small>${partyDisplay}</small></td>
                         
                         <td>${officialStr}</td>
                         <td>${serviceStr}</td>
