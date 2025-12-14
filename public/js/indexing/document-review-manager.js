@@ -10,7 +10,7 @@ import {
 } from '../../firebase-config.js';
 
 import { 
-    doc, getDoc, updateDoc, collection, arrayUnion
+    doc, getDoc, updateDoc, collection, arrayUnion, Timestamp
 } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
 import { 
@@ -366,6 +366,7 @@ export class DocumentReviewManager {
                     }
                 }
 
+                // --- GÜNCELLENMİŞ TASK VERİ YAPISI ---
                 const taskData = {
                     title: `${childTypeObj.alias || childTypeObj.name} - ${this.matchedRecord.title}`,
                     description: notes || `Otomatik oluşturulan görev.`,
@@ -376,18 +377,27 @@ export class DocumentReviewManager {
                     transactionId: childTransactionId, 
                     triggeringTransactionType: childTypeId,
                     deliveryDate: deliveryDateStr,
-                    dueDate: taskDueDate.toISOString(),
-                    officialDueDate: officialDueDate.toISOString(),
+                    dueDate: Timestamp.fromDate(taskDueDate),
+                    officialDueDate: Timestamp.fromDate(officialDueDate),
+                    createdAt: Timestamp.now(),
+                    updatedAt: Timestamp.now(),
                     status: 'awaiting_client_approval',
-                    priority: 'normal',
+                    priority: 'medium',
                     assignedTo_uid: assignedUser.uid,
                     assignedTo_email: assignedUser.email,
-                    createdBy: this.currentUser.uid,
-                    createdAt: new Date().toISOString(),
+                    createdBy: {
+                        uid: this.currentUser.uid,
+                        email: this.currentUser.email
+                    },
                     taskOwner: taskOwner.length > 0 ? taskOwner : null,
                     details: {
                         relatedParty: relatedPartyData 
-                    }
+                    },
+                    history: [{
+                        action: 'İndeksleme işlemi ile otomatik oluşturuldu.',
+                        timestamp: new Date().toISOString(),
+                        userEmail: this.currentUser.email
+                    }]
                 };
 
                 const taskResult = await taskService.createTask(taskData);
