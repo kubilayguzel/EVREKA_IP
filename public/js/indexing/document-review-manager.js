@@ -326,19 +326,28 @@ export class DocumentReviewManager {
                 
                 console.log(`✅ Tetiklenen iş doğrudan Selcan'a atanıyor (${SELCAN_EMAIL})`);
 
-                // 🔥 İLGİLİ TARAF VE TASK OWNER MANTIĞI
+                // 🔥 İLGİLİ TARAF VE TASK OWNER MANTIĞI (GÜNCELLENDİ)
                 let relatedPartyData = null;
                 let taskOwner = []; 
 
+                // 1. Portföy (Self) Kaydıysa: Dosya Sahibi = İş Sahibi
                 if (this.matchedRecord.recordOwnerType === 'self') {
                     if (Array.isArray(this.matchedRecord.applicants) && this.matchedRecord.applicants.length > 0) {
-                        taskOwner = this.matchedRecord.applicants.map(app => app.id).filter(id => id);
+                        // Applicant ID'lerini güvenli şekilde String array olarak alıyoruz
+                        taskOwner = this.matchedRecord.applicants
+                            .map(app => String(app.id || app.personId))
+                            .filter(Boolean);
+                        
+                        // İlk başvuru sahibini 'relatedParty' olarak da ekleyelim (Opsiyonel ama faydalı)
                         const app = this.matchedRecord.applicants[0];
-                        if (app && app.id) {
-                            relatedPartyData = { id: app.id, name: app.name || 'İsimsiz' };
+                        if (app && (app.id || app.personId)) {
+                            relatedPartyData = { id: app.id || app.personId, name: app.name || 'İsimsiz' };
                         }
+                        
+                        console.log('✅ Indexing: Dosya sahipleri taskOwner olarak atandı:', taskOwner);
                     }
                 } 
+                // 2. Üçüncü Taraf (Third Party) Kaydıysa: Parent Task'tan Miras Al
                 else if (this.matchedRecord.recordOwnerType === 'third_party') {
                     const triggeringTaskId = parentTx?.triggeringTaskId;
                     if (triggeringTaskId) {
