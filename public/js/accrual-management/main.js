@@ -209,10 +209,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 return new Intl.NumberFormat('tr-TR', { style: 'currency', currency: defaultCurrency }).format(val);
             };
 
-            // --- TAB 1: GENEL TAHAKKUK LİSTESİ (Mevcut Kodunuz) ---
+            // --- TAB 1: GENEL TAHAKKUK LİSTESİ ---
             if (this.activeTab === 'main') {
                 tbody.innerHTML = pageData.map(acc => {
-                    // ... (Status class hesaplamaları aynen kalsın) ...
                     let sTxt = 'Bilinmiyor', sCls = '';
                     if(acc.status === 'paid') { sTxt = 'Ödendi'; sCls = 'status-paid'; }
                     else if(acc.status === 'unpaid') { sTxt = 'Ödenmedi'; sCls = 'status-unpaid'; }
@@ -221,40 +220,36 @@ document.addEventListener('DOMContentLoaded', async () => {
                     const isSel = this.selectedAccruals.has(acc.id);
                     const isPaid = acc.status === 'paid';
                     
-                    // --- DÜZELTME BAŞLANGICI ---
+                    // --- DÜZELTME: İŞ TİPİ (ALIAS) ve İLGİLİ DOSYA ---
+                    let taskDisplay = acc.taskTitle || '-'; 
+                    let relatedFileDisplay = '-';
+
+                    const task = this.allTasks[String(acc.taskId)];
                     
-            let taskDisplay = acc.taskTitle || '-'; 
-            let relatedFileDisplay = '-';
+                    if (task) {
+                        // 1. İş Tipini Bul ve Alias Göster
+                        const typeObj = this.allTransactionTypes.find(t => t.id === task.taskType);
+                        if (typeObj) {
+                            taskDisplay = typeObj.alias || typeObj.name; // Varsa Alias, yoksa Name
+                        } else {
+                            taskDisplay = task.title || '-'; // Tip yoksa başlık
+                        }
 
-            const task = this.allTasks[String(acc.taskId)];
-            
-            if (task) {
-                // 1. İş Tipini (TransactionType) Bul
-                // allTransactionTypes dizisi loadAllData() fonksiyonunda zaten yüklenmişti
-                const typeObj = this.allTransactionTypes.find(t => t.id === task.taskType);
-
-                // 2. İLGİLİ İŞ GÖSTERİMİ: Alias değerini al
-                if (typeObj) {
-                    // Alias varsa onu, yoksa tipin adını (name) göster
-                    taskDisplay = typeObj.alias || typeObj.name;
-                } else {
-                    // İş tipi bulunamazsa işin kendi başlığını kullan (Fallback)
-                    taskDisplay = task.title || '-';
-                }
-
-                // 3. İLGİLİ DOSYA (Önceki adımda eklediğimiz kısım - aynen kalıyor)
-                if (task.relatedIpRecordId) {
-                    const ipRec = this.allIpRecords.find(r => r.id === task.relatedIpRecordId);
-                    if (ipRec) {
-                        relatedFileDisplay = ipRec.applicationNumber || ipRec.title || 'Dosya';
+                        // 2. İlgili Dosyayı Bul (loadAllData düzeltmesi sayesinde allIpRecords dolu)
+                        if (task.relatedIpRecordId && this.allIpRecords) {
+                            const ipRec = this.allIpRecords.find(r => r.id === task.relatedIpRecordId);
+                            if (ipRec) {
+                                relatedFileDisplay = ipRec.applicationNumber || ipRec.title || 'Dosya';
+                            }
+                        }
                     }
-                }
-            }
+                    // ------------------------------------------------
 
                     const officialStr = acc.officialFee ? formatMultiCurrency(acc.officialFee.amount, acc.officialFee.currency) : '-';
                     const serviceStr = acc.serviceFee ? formatMultiCurrency(acc.serviceFee.amount, acc.serviceFee.currency) : '-';
                     const rem = acc.remainingAmount !== undefined ? acc.remainingAmount : acc.totalAmount;
                     
+                    // Kalan Tutar HTML
                     let remainingHtml = `<span>${formatMultiCurrency(rem, acc.totalAmountCurrency)}</span>`;
 
                     return `
@@ -276,6 +271,49 @@ document.addEventListener('DOMContentLoaded', async () => {
                                 <button class="action-btn view-btn" data-id="${acc.id}" title="Detay">Görüntüle</button>
                                 <button class="action-btn edit-btn" data-id="${acc.id}" title="Düzenle" ${isPaid ? 'disabled' : ''}>Düzenle</button>
                                 <button class="action-btn delete-btn" data-id="${acc.id}" title="Sil">Sil</button>
+                            </div>
+                        </td>
+                    </tr>`;
+                }).join('');
+            }
+            
+            // --- TAB 2: YURT DIŞI ÖDEMELER (GERİ GETİRİLDİ) ---
+            else if (this.activeTab === 'foreign') {
+                tbody.innerHTML = pageData.map((acc, index) => {
+                    // Durum Badge
+                    let sTxt = 'Bilinmiyor', sCls = 'secondary';
+                    if(acc.status === 'paid') { sTxt = 'Ödendi'; sCls = 'success'; }
+                    else if(acc.status === 'unpaid') { sTxt = 'Ödenmedi'; sCls = 'danger'; }
+                    else if(acc.status === 'partially_paid') { sTxt = 'Kısmen'; sCls = 'warning'; }
+
+                    // İlgili İş (Task)
+                    let taskDisplay = this.allTasks[String(acc.taskId)]?.title || acc.taskTitle || '-';
+
+                    // Ödeme Yapılacak Taraf
+                    let paymentParty = acc.tpInvoiceParty?.name || '<span class="text-muted">Belirtilmemiş</span>';
+
+                    // Ödeme Tutarı (Resmi Ücret)
+                    let amountDisplay = acc.officialFee 
+                        ? formatMultiCurrency(acc.officialFee.amount, acc.officialFee.currency) 
+                        : '-';
+
+                    return `
+                    <tr>
+                        <td>${index + 1}</td>
+                        <td><span class="badge badge-${sCls}">${sTxt}</span></td>
+                        <td><a href="#" class="task-detail-link font-weight-bold" data-task-id="${acc.taskId}">${taskDisplay}</a></td>
+                        
+                        <td style="font-weight:600; color:#495057;">
+                            <i class="fas fa-university mr-2 text-muted"></i>${paymentParty}
+                        </td>
+                        <td style="font-weight:bold; color:#1e3c72; font-size:1.1em;">
+                            ${amountDisplay}
+                        </td>
+
+                        <td>
+                            <div style="display: flex; gap: 5px;">
+                                <button class="action-btn view-btn" data-id="${acc.id}" title="Detay">Görüntüle</button>
+                                <button class="action-btn edit-btn" data-id="${acc.id}" title="Düzenle">Düzenle</button>
                             </div>
                         </td>
                     </tr>`;
