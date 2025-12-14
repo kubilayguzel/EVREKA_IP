@@ -241,12 +241,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                     let sTxt = 'Bilinmiyor', sCls = '';
                     if(acc.status === 'paid') { sTxt = 'Ödendi'; sCls = 'status-paid'; }
                     else if(acc.status === 'unpaid') { sTxt = 'Ödenmedi'; sCls = 'status-unpaid'; }
-                    else if(acc.status === 'partially_paid') { sTxt = 'Kısmen Ödendi'; sCls = 'status-partially-paid'; }
+                    else if(acc.status === 'partially_paid') { sTxt = 'K.Ödendi'; sCls = 'status-partially-paid'; }
 
                     const isSel = this.selectedAccruals.has(acc.id);
                     const isPaid = acc.status === 'paid';
                     
-// --- DÜZELTME: İŞ TİPİ (SADECE ALIAS) ve İLGİLİ DOSYA (SADECE BAŞVURU NO) ---
+            // --- DÜZELTME: İŞ TİPİ (SADECE ALIAS) ve İLGİLİ DOSYA (SADECE BAŞVURU NO) ---
                     let taskDisplay = '-'; 
                     let relatedFileDisplay = '-';
 
