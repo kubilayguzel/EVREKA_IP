@@ -3,7 +3,7 @@
 import { authService, accrualService, taskService, personService, generateUUID, db, ipRecordsService, transactionTypeService } from '../../firebase-config.js';
 import { showNotification, readFileAsDataURL } from '../../utils.js';
 import { loadSharedLayout } from '../layout-loader.js';
-import { doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+import { doc, getDoc, collection, getDocs } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
 
 import Pagination from '../pagination.js'; 
@@ -64,20 +64,27 @@ document.addEventListener('DOMContentLoaded', async () => {
             if(loadingIndicator) loadingIndicator.style.display = 'block';
 
             try {
-                    const [accRes, personsRes, usersRes, typesRes, ipRes] = await Promise.all([
-                        accrualService.getAccruals(),
-                        personService.getPersons(),
-                        taskService.getAllUsers(),
-                        transactionTypeService.getTransactionTypes(),
-                        ipRecordsService.getIpRecords() // <--- YENİ EKLENEN
-                    ]);
+                // 1. IP Kayıtlarını (Dosyaları) direkt Firestore'dan çekiyoruz (Servis hatasını bypass ediyoruz)
+                const ipRecordsRef = collection(db, 'ipRecords');
+                const ipSnapshot = await getDocs(ipRecordsRef);
+                
+                // Gelen veriyi diziye çeviriyoruz
+                this.allIpRecords = ipSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-                    this.allAccruals = accRes?.success ? (accRes.data || []) : [];
-                    this.allPersons = personsRes?.success ? (personsRes.data || []) : [];
-                    this.allUsers = usersRes?.success ? (usersRes.data || []) : [];
-                    this.allTransactionTypes = typesRes?.success ? (typesRes.data || []) : [];
-                    this.allIpRecords = ipRes?.success ? (ipRes.data || []) : [];
+                // 2. Diğer verileri çekiyoruz
+                const [accRes, personsRes, usersRes, typesRes] = await Promise.all([
+                    accrualService.getAccruals(),
+                    personService.getPersons(),
+                    taskService.getAllUsers(),
+                    transactionTypeService.getTransactionTypes()
+                ]);
 
+                this.allAccruals = accRes?.success ? (accRes.data || []) : [];
+                this.allPersons = personsRes?.success ? (personsRes.data || []) : [];
+                this.allUsers = usersRes?.success ? (usersRes.data || []) : [];
+                this.allTransactionTypes = typesRes?.success ? (typesRes.data || []) : [];
+
+                // 3. Task detaylarını ID'lere göre topluca çekiyoruz
                 if (this.allAccruals.length > 0) {
                     this.allAccruals.forEach(a => { a.createdAt = a.createdAt ? new Date(a.createdAt) : new Date(0); });
                     const taskIds = new Set();
@@ -92,11 +99,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
 
                 this.initEditForm();
-                this.processData();
+                this.processData(); // Tabloyu oluştur
 
             } catch (err) {
                 console.error(err);
-                showNotification('Veri yükleme hatası', 'error');
+                showNotification('Veri yükleme hatası: ' + err.message, 'error');
             } finally {
                 if(loadingIndicator) loadingIndicator.style.display = 'none';
                 if(loader) loader.hide();
