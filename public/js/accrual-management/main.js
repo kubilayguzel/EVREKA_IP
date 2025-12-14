@@ -336,9 +336,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                         <td>${remainingHtml}</td>
                         <td>
                             <div style="display: flex; gap: 5px;">
-                                <button class="action-btn view-btn" data-id="${acc.id}" title="Detay">Görüntüle</button>
-                                <button class="action-btn edit-btn" data-id="${acc.id}" title="Düzenle" ${isPaid ? 'disabled' : ''}>Düzenle</button>
-                                <button class="action-btn delete-btn" data-id="${acc.id}" title="Sil">Sil</button>
+                                <button class="action-btn view-btn" data-id="${acc.id}" title="Görüntüle"><i class="fas fa-eye"></i></button>
+                                <button class="action-btn edit-btn" data-id="${acc.id}" title="Düzenle" ${isPaid ? 'disabled' : ''}><i class="fas fa-edit"></i></button>
+                                <button class="action-btn delete-btn" data-id="${acc.id}" title="Sil"><i class="fas fa-trash"></i></button>
                             </div>
                         </td>
                     </tr>`;
