@@ -64,19 +64,20 @@ document.addEventListener('DOMContentLoaded', async () => {
             if(loadingIndicator) loadingIndicator.style.display = 'block';
 
             try {
-                // 1. IP Kayıtlarını (Dosyaları) direkt Firestore'dan çekiyoruz (Servis hatasını bypass ediyoruz)
+                // 1. IP KAYITLARINI (DOSYALAR) DOĞRUDAN ÇEKME
+                // ipRecordsService hatasını aşmak için veriyi direkt Firestore'dan alıyoruz.
+                // Bu dizi, "İlgili Dosya" sütunundaki Application Number eşleşmesi için kritik.
                 const ipRecordsRef = collection(db, 'ipRecords');
                 const ipSnapshot = await getDocs(ipRecordsRef);
-                
-                // Gelen veriyi diziye çeviriyoruz
                 this.allIpRecords = ipSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-                // 2. Diğer verileri çekiyoruz
+                // 2. DİĞER SABİT VERİLERİ SERVİSLERDEN ÇEKME
+                // İş tipleri (Transaction Types), kişiler ve kullanıcılar
                 const [accRes, personsRes, usersRes, typesRes] = await Promise.all([
                     accrualService.getAccruals(),
                     personService.getPersons(),
                     taskService.getAllUsers(),
-                    transactionTypeService.getTransactionTypes()
+                    transactionTypeService.getTransactionTypes() // "İlgili İş" Alias eşleşmesi için kritik.
                 ]);
 
                 this.allAccruals = accRes?.success ? (accRes.data || []) : [];
@@ -84,22 +85,30 @@ document.addEventListener('DOMContentLoaded', async () => {
                 this.allUsers = usersRes?.success ? (usersRes.data || []) : [];
                 this.allTransactionTypes = typesRes?.success ? (typesRes.data || []) : [];
 
-                // 3. Task detaylarını ID'lere göre topluca çekiyoruz
+                // 3. TAHAKKUKLARA BAĞLI GÖREVLERİ (TASKS) ÇEKME
+                // Sadece listede olan tahakkukların Task ID'lerini toplar ve onları çeker.
                 if (this.allAccruals.length > 0) {
+                    // Tarih formatlama
                     this.allAccruals.forEach(a => { a.createdAt = a.createdAt ? new Date(a.createdAt) : new Date(0); });
+                    
+                    // Task ID'leri topla
                     const taskIds = new Set();
                     this.allAccruals.forEach(a => { if (a.taskId) taskIds.add(String(a.taskId)); });
 
+                    // Taskleri servisten iste
                     if (taskIds.size && taskService.getTasksByIds) {
                         const tRes = await taskService.getTasksByIds(Array.from(taskIds));
                         const tasks = tRes?.success ? (tRes.data || []) : [];
+                        
+                        // Taskleri ID bazlı objeye çevir (Erişim hızı için)
                         this.allTasks = {};
                         tasks.forEach(t => { this.allTasks[String(t.id)] = t; });
                     }
                 }
 
+                // 4. SON İŞLEMLER
                 this.initEditForm();
-                this.processData(); // Tabloyu oluştur
+                this.processData(); // Tabloyu oluşturur
 
             } catch (err) {
                 console.error(err);
