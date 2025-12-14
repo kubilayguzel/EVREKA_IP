@@ -5508,18 +5508,28 @@ export const checkAndCreateRenewalTasks = onCall({ region: "europe-west1" }, asy
       const title = `${ipRecord.title} Marka Yenileme`;
       const description = `${ipRecord.title} adlı markanın yenileme süreci için müvekkil onayı bekleniyor. Yenileme tarihi: ${renewalDate.toLocaleDateString('tr-TR')}.`;
 
+      // --- YENİ EKLENEN KISIM: Task Owner Belirleme ---
+      // IP kaydındaki applicant (başvuru sahibi) bilgisini alıp taskOwner dizisine çeviriyoruz
+      const taskOwners = (Array.isArray(ipRecord.applicants) ? ipRecord.applicants : [])
+          .map(a => String(a.id || a.personId)) // ID'leri al
+          .filter(Boolean); // Boş olanları temizle
+      // -----------------------------------------------
+
       const data = {
         title,
         description,
         taskType: taskTypeId,
         relatedIpRecordId: ipRecordId,
         relatedIpRecordTitle: ipRecord.title,
+        
+        taskOwner: taskOwners, // <--- BURAYA EKLENDİ (Veritabanına kaydedilecek)
+        
         status: 'awaiting_client_approval',
         priority: 'medium',
         dueDate: admin.firestore.Timestamp.fromDate(operationalDate),
         officialDueDate: admin.firestore.Timestamp.fromDate(officialDate),
         operationalDueDate: admin.firestore.Timestamp.fromDate(operationalDate),
-        officialDueDateDetails: { /* ... detaylar ... */ }, // Kısaltıldı, eski mantık aynı
+        officialDueDateDetails: { /* ... detaylar ... */ }, 
         assignedTo_uid,
         assignedTo_email,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
