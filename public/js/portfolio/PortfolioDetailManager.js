@@ -129,55 +129,71 @@ export class PortfolioDetailManager {
         let text = '';
         const r = this.currentRecord;
 
-        // DEBUG: Konsoldan veriyi kontrol etmek isterseniz açabilirsiniz
-        // console.log("Applicants Verisi:", r.applicants);
+        // DEBUG: Hata ayıklama için konsola yazdırıyoruz
+        // console.log("Applicants Ham Veri:", r.applicants);
 
         if (Array.isArray(r.applicants) && r.applicants.length > 0) {
+            // Tüm sahiplerin isimlerini asenkron olarak bul
             const names = await Promise.all(r.applicants.map(async (app) => {
-                // 1. Durum: app sadece bir ID stringi ise ("person_123")
+                let personId = null;
+
+                // DURUM 1: Veri sadece String ID ise (Örn: "person_123")
                 if (typeof app === 'string') {
-                     try {
-                        const snap = await getDoc(doc(db, 'persons', app));
-                        if (snap.exists()) return snap.data().name;
-                    } catch (e) { console.warn('Kişi adı çekilemedi:', app); }
-                    return app; // İsim bulunamazsa ID'yi göster
+                    personId = app;
+                } 
+                // DURUM 2: Veri Obje ise (Örn: {id: "person_123", name: "..."})
+                else if (typeof app === 'object' && app && app.id) {
+                    personId = app.id;
                 }
-                
-                // 2. Durum: app bir obje ise ({id: "...", name: "..."})
-                if (typeof app === 'object' && app !== null) {
-                    // Eğer ID varsa, en güncel ismi veritabanından çekmeyi dene
-                    if (app.id) {
-                        try {
-                            const snap = await getDoc(doc(db, 'persons', app.id));
-                            if (snap.exists()) return snap.data().name;
-                        } catch (e) { console.warn('Kişi adı çekilemedi:', app.id); }
+
+                // ID bulduysak veritabanından en güncel ismi çekelim
+                if (personId) {
+                    try {
+                        const snap = await getDoc(doc(db, 'persons', personId));
+                        if (snap.exists()) {
+                            const data = snap.data();
+                            return data.name || data.displayName; // Güncel isim
+                        }
+                    } catch (e) {
+                        console.warn('Kişi bilgisi çekilemedi:', personId);
                     }
-                    // ID yoksa veya veritabanından çekilemezse, kayıtlı ismi kullan
-                    return app.name || 'İsimsiz';
                 }
-                return null;
+
+                // ID ile bulamazsak veya ID yoksa, obje içindeki ismi (varsa) kullanalım
+                if (typeof app === 'object' && app.name) return app.name;
+                
+                // Hiçbir şey bulamazsak ID'nin kendisini gösterelim (boş kalmasın)
+                return typeof app === 'string' ? app : 'İsimsiz';
             }));
             
-            // Boş değerleri filtrele ve virgülle birleştir
+            // İsimleri virgülle birleştir (Boş olanları temizle)
             text = names.filter(Boolean).join(', ');
         } 
         
-        // Eğer applicants dizisi boşsa, eski tekil alanlara bak (Fallback)
+        // Eğer applicants dizisi boşsa veya array değilse, eski tekil alanlara bak (Fallback)
         if (!text) {
             text = r.applicantName || r.ownerName || '-';
         }
         
+        // Input'a yaz
         if (this.elements.applicantName) {
             this.elements.applicantName.value = text;
-            // Uzun isimlerin tamamının görünmesi için title attribute ekle
+            // Uzun isimler kesilirse mouse üzerine gelince tamamı görünsün
             this.elements.applicantName.setAttribute('title', text);
         }
         
         // Adres Kısmı (İlk sahibin adresini gösterir)
         if (this.elements.applicantAddress) {
-             if (r.applicants?.[0]?.id) {
+             let firstId = null;
+             // İlk ID'yi güvenli şekilde al
+             if (Array.isArray(r.applicants) && r.applicants.length > 0) {
+                 const firstApp = r.applicants[0];
+                 firstId = (typeof firstApp === 'string') ? firstApp : firstApp?.id;
+             }
+
+             if (firstId) {
                  try {
-                     const snap = await getDoc(doc(db, 'persons', r.applicants[0].id));
+                     const snap = await getDoc(doc(db, 'persons', firstId));
                      if(snap.exists()) {
                          const d = snap.data();
                          this.elements.applicantAddress.value = [d.address, d.province, d.countryName].filter(Boolean).join(' - ');
