@@ -88,12 +88,12 @@ export class PortfolioDetailManager {
         } else {
             this.elements.heroCard.classList.add('d-none');
         }
-        
-        // Tescil Numarası (Uluslararası veya Ulusal)
+
+        // Tescil Numarası
         let regNo = r.registrationNumber;
         if (!regNo) regNo = r.internationalRegNumber || r.wipoIrNumber || '-';
 
-        // Nice Sınıflarını Formatla
+        // Nice Sınıfları
         let classesStr = '-';
         if (Array.isArray(r.goodsAndServicesByClass) && r.goodsAndServicesByClass.length > 0) {
             classesStr = r.goodsAndServicesByClass.map(c => c.classNo).join(', ');
@@ -103,18 +103,22 @@ export class PortfolioDetailManager {
             classesStr = r.classes;
         }
 
+        // --- GÜNCELLENEN HTML YAPISI ---
         const kvHtml = `
             <div class="kv-item"><div class="label">Başvuru No</div><div class="value">${r.applicationNumber || '-'}</div></div>
             <div class="kv-item"><div class="label">Tescil No</div><div class="value">${regNo}</div></div>
-            <div class="kv-item"><div class="label">Sınıflar</div><div class="value">${classesStr}</div></div>
             <div class="kv-item"><div class="label">Durum</div><div class="value">${this.getStatusText(r.type, r.status)}</div></div>
             <div class="kv-item"><div class="label">Başvuru Tarihi</div><div class="value">${this.formatDate(r.applicationDate)}</div></div>
             <div class="kv-item"><div class="label">Tescil Tarihi</div><div class="value">${this.formatDate(r.registrationDate)}</div></div>
+            
+            <div class="kv-item" style="grid-column: 1 / -1; margin-top: 8px; padding-top: 8px; border-top: 1px dashed #e0e0e0;">
+                <div class="label" style="margin-bottom: 4px;">Sınıflar (Nice)</div>
+                <div class="value text-primary" style="font-weight: 700; line-height: 1.4;">${classesStr}</div>
+            </div>
         `;
-        
+
         this.elements.heroKv.innerHTML = kvHtml;
 
-        // TürkPatent Sorgula Butonu Göster/Gizle
         const isTP = this.checkIfTurkPatentOrigin(r);
         if (this.elements.tpQueryBtn) {
             this.elements.tpQueryBtn.style.display = isTP ? 'inline-block' : 'none';
@@ -123,50 +127,64 @@ export class PortfolioDetailManager {
 
     async renderApplicants() {
         let text = '';
+        const r = this.currentRecord;
 
-        if (Array.isArray(this.currentRecord.applicants) && this.currentRecord.applicants.length > 0) {
-            // Tüm sahipler için asenkron isim çözme (Eğer applicant ID ise veritabanından çek)
-            const names = await Promise.all(this.currentRecord.applicants.map(async (app) => {
-                // Eğer app bir string ID ise (bazen olabiliyor)
+        // DEBUG: Konsoldan veriyi kontrol etmek isterseniz açabilirsiniz
+        // console.log("Applicants Verisi:", r.applicants);
+
+        if (Array.isArray(r.applicants) && r.applicants.length > 0) {
+            const names = await Promise.all(r.applicants.map(async (app) => {
+                // 1. Durum: app sadece bir ID stringi ise ("person_123")
                 if (typeof app === 'string') {
                      try {
                         const snap = await getDoc(doc(db, 'persons', app));
                         if (snap.exists()) return snap.data().name;
-                    } catch (e) {}
-                    return app; 
+                    } catch (e) { console.warn('Kişi adı çekilemedi:', app); }
+                    return app; // İsim bulunamazsa ID'yi göster
                 }
                 
-                // Eğer app bir obje ve ID'si varsa
-                if (app.id) {
-                    try {
-                        const snap = await getDoc(doc(db, 'persons', app.id));
-                        if (snap.exists()) return snap.data().name;
-                    } catch (e) {}
+                // 2. Durum: app bir obje ise ({id: "...", name: "..."})
+                if (typeof app === 'object' && app !== null) {
+                    // Eğer ID varsa, en güncel ismi veritabanından çekmeyi dene
+                    if (app.id) {
+                        try {
+                            const snap = await getDoc(doc(db, 'persons', app.id));
+                            if (snap.exists()) return snap.data().name;
+                        } catch (e) { console.warn('Kişi adı çekilemedi:', app.id); }
+                    }
+                    // ID yoksa veya veritabanından çekilemezse, kayıtlı ismi kullan
+                    return app.name || 'İsimsiz';
                 }
-                
-                // İsim zaten varsa veya ID çözülemediyse mevcut ismi kullan
-                return app.name || 'İsimsiz';
+                return null;
             }));
             
-            // İsimleri virgülle birleştir
+            // Boş değerleri filtrele ve virgülle birleştir
             text = names.filter(Boolean).join(', ');
-        } else {
-            // Array değilse, tekil alanı kontrol et
-            text = this.currentRecord.applicantName || this.currentRecord.ownerName || '-';
+        } 
+        
+        // Eğer applicants dizisi boşsa, eski tekil alanlara bak (Fallback)
+        if (!text) {
+            text = r.applicantName || r.ownerName || '-';
         }
         
-        if (this.elements.applicantName) this.elements.applicantName.value = text;
+        if (this.elements.applicantName) {
+            this.elements.applicantName.value = text;
+            // Uzun isimlerin tamamının görünmesi için title attribute ekle
+            this.elements.applicantName.setAttribute('title', text);
+        }
         
-        // Adres Kısmı (Genelde ilk sahibin adresi gösterilir, burası kalabilir veya isterseniz "Çoklu Adres" yazdırabiliriz)
+        // Adres Kısmı (İlk sahibin adresini gösterir)
         if (this.elements.applicantAddress) {
-             if (this.currentRecord.applicants?.[0]?.id) {
-                 const snap = await getDoc(doc(db, 'persons', this.currentRecord.applicants[0].id));
-                 if(snap.exists()) {
-                     const d = snap.data();
-                     this.elements.applicantAddress.value = [d.address, d.province, d.countryName].filter(Boolean).join(' - ');
-                 } else {
-                     this.elements.applicantAddress.value = '-';
-                 }
+             if (r.applicants?.[0]?.id) {
+                 try {
+                     const snap = await getDoc(doc(db, 'persons', r.applicants[0].id));
+                     if(snap.exists()) {
+                         const d = snap.data();
+                         this.elements.applicantAddress.value = [d.address, d.province, d.countryName].filter(Boolean).join(' - ');
+                     } else {
+                         this.elements.applicantAddress.value = '-';
+                     }
+                 } catch (e) { this.elements.applicantAddress.value = '-'; }
              } else {
                  this.elements.applicantAddress.value = '-';
              }
