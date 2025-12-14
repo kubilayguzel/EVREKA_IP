@@ -1236,6 +1236,17 @@ export const accrualService = {
         } catch (error) {
             return { success: false, error: error.message };
         }
+    },
+    
+    async deleteAccrual(accrualId) {
+        if (!isFirebaseAvailable) return { success: false, error: "Firebase kullanılamıyor. Tahakkuk silinemez." };
+        try {
+            await deleteDoc(doc(db, 'accruals', accrualId));
+            return { success: true };
+        } catch (error) {
+            console.error("Tahakkuk silme hatası:", error);
+            return { success: false, error: error.message };
+        }
     }
 };
 
