@@ -30,64 +30,45 @@ export class AccrualUIManager {
      * @param {Object} lookups - { tasks, transactionTypes, ipRecords, selectedIds } referans verileri
      * @param {String} activeTab - 'main' veya 'foreign'
      */
-    /**
-     * Tabloyu çizer.
-     */
     renderTable(data, lookups, activeTab = 'main') {
         const { tasks, transactionTypes, ipRecords, selectedIds } = lookups;
         const targetBody = activeTab === 'foreign' ? this.foreignTableBody : this.tableBody;
         
-        // Temizle
         if (targetBody) targetBody.innerHTML = '';
-
-        // Boş Kontrolü
         if (!data || data.length === 0) {
             if (this.noRecordsMessage) this.noRecordsMessage.style.display = 'block';
             return;
         }
         if (this.noRecordsMessage) this.noRecordsMessage.style.display = 'none';
 
-        // --- SATIR OLUŞTURMA ---
         const rowsHtml = data.map((acc, index) => {
-            // Ortak Hesaplamalar
             const isSelected = selectedIds.has(acc.id);
-            
-            // Durum Badge
             let sTxt = 'Bilinmiyor', sCls = 'badge-secondary';
             if (acc.status === 'paid') { sTxt = 'Ödendi'; sCls = 'status-paid'; }
             else if (acc.status === 'unpaid') { sTxt = 'Ödenmedi'; sCls = 'status-unpaid'; }
             else if (acc.status === 'partially_paid') { sTxt = 'K.Ödendi'; sCls = 'status-partially-paid'; }
 
-            // --- İLGİLİ İŞ VE DOSYA BULMA ---
-            let taskDisplay = '-';
-            let relatedFileDisplay = '-'; // Sadece Main tab için kullanılıyor ama hesaplayalım
-            
+            // İlgili İş / Dosya Bulma (Ortak Kod)
+            let taskDisplay = '-', relatedFileDisplay = '-';
             const task = tasks[String(acc.taskId)];
             if (task) {
                 const typeObj = transactionTypes.find(t => t.id === task.taskType);
-                if (typeObj && typeObj.alias) taskDisplay = typeObj.alias;
-                else if (typeObj && typeObj.name) taskDisplay = typeObj.name;
-                else taskDisplay = task.title || '-';
-                
-                // İlgili Dosya (Main Tab için)
+                taskDisplay = typeObj ? (typeObj.alias || typeObj.name) : (task.title || '-');
                 if (activeTab === 'main' && task.relatedIpRecordId) {
                     const ipRec = ipRecords.find(r => r.id === task.relatedIpRecordId);
                     if (ipRec) relatedFileDisplay = ipRec.applicationNumber || ipRec.title || 'Dosya';
                 }
-            } else {
-                taskDisplay = acc.taskTitle || '-';
-            }
+            } else { taskDisplay = acc.taskTitle || '-'; }
 
-            // Resmi Ücret Formatı
             const officialStr = acc.officialFee ? this._formatMoney(acc.officialFee.amount, acc.officialFee.currency) : '-';
-            
+
             // =========================================================
-            // TAB 1: ANA LİSTE (Yerel/Tümü)
+            // TAB 1: ANA LİSTE (TAHSİLAT GÖRÜNÜMÜ)
             // =========================================================
             if (activeTab === 'main') {
                 const serviceStr = acc.serviceFee ? this._formatMoney(acc.serviceFee.amount, acc.serviceFee.currency) : '-';
                 
-                // Kalan Tutar (Tüm Para Birimleri)
+                // Tahsilat Kalanı (Veritabanındaki remainingAmount alanı burası için tasarlanmıştı)
                 let remainingHtml = '-';
                 const rem = acc.remainingAmount !== undefined ? acc.remainingAmount : acc.totalAmount;
                 const isFullyPaid = (Array.isArray(rem)) 
@@ -98,13 +79,9 @@ export class AccrualUIManager {
                     remainingHtml = `<span>${this._formatMoney(rem, acc.totalAmountCurrency)}</span>`;
                 }
 
-                // Taraf Bilgisi
                 let partyDisplay = '-';
-                if (acc.officialFee?.amount > 0 && acc.tpInvoiceParty) {
-                    partyDisplay = acc.tpInvoiceParty.name || 'Türk Patent';
-                } else if (acc.serviceFee?.amount > 0 && acc.serviceInvoiceParty) {
-                    partyDisplay = acc.serviceInvoiceParty.name || '-';
-                }
+                if (acc.officialFee?.amount > 0 && acc.tpInvoiceParty) partyDisplay = acc.tpInvoiceParty.name || 'Türk Patent';
+                else if (acc.serviceFee?.amount > 0 && acc.serviceInvoiceParty) partyDisplay = acc.serviceInvoiceParty.name || '-';
 
                 return `
                 <tr>
@@ -129,30 +106,37 @@ export class AccrualUIManager {
             } 
             
             // =========================================================
-            // TAB 2: YURT DIŞI LİSTESİ (ÖZELLEŞTİRİLMİŞ)
+            // TAB 2: YURT DIŞI LİSTESİ (ÖDEME GÖRÜNÜMÜ)
             // =========================================================
             else {
                 let paymentParty = acc.serviceInvoiceParty?.name || '<span class="text-muted">Belirtilmemiş</span>';
                 
-                // Kalan Tutar Gösterimi
-                let remainingHtml = '-';
-                const rem = acc.remainingAmount !== undefined ? acc.remainingAmount : acc.totalAmount;
+                // --- KALAN BORÇ HESABI (Yurt Dışı İçin Özel) ---
+                // Mantık: Resmi Ücret (Borç) - (Ödenen Resmi + Ödenen Vekil)
+                // Not: Eğer "remainingAmount" veritabanında bu moda göre güncellendiyse (savePayment ile) direkt onu kullanırız.
+                // Ancak eski kayıtlarda veya tahsilat modunda güncellenmişse burada tekrar hesaplamak gerekebilir.
+                // Tutarlılık için, eğer status 'paid' ise 0, değilse remainingAmount'a bakarız.
                 
-                // Ödenmiş mi kontrolü (Kalan array boş veya 0 ise)
-                const isFullyPaid = (Array.isArray(rem)) 
-                    ? rem.length === 0 || rem.every(r => parseFloat(r.amount) <= 0.01)
-                    : parseFloat(rem) <= 0.01;
+                let remainingHtml = '-';
+                const rem = acc.remainingAmount !== undefined ? acc.remainingAmount : acc.officialFee?.amount; // Toplam borç default
+                const targetCurrency = acc.officialFee?.currency || 'EUR';
+
+                // Yurt dışı modunda sadece ilgili para birimini göster
+                let foreignRemaining = [];
+                if (Array.isArray(rem)) {
+                    foreignRemaining = rem.filter(r => r.currency === targetCurrency);
+                } else if(typeof rem === 'number') {
+                     foreignRemaining = [{amount: rem, currency: targetCurrency}];
+                }
+
+                const isFullyPaid = foreignRemaining.length === 0 || foreignRemaining.every(r => parseFloat(r.amount) <= 0.01);
 
                 if (!isFullyPaid) {
-                    // Kalan tutarı kırmızı göster
-                    remainingHtml = `<span class="text-danger font-weight-bold">${this._formatMoney(rem, acc.officialFee?.currency || 'EUR')}</span>`;
+                    remainingHtml = `<span class="text-danger font-weight-bold">${this._formatMoney(foreignRemaining, targetCurrency)}</span>`;
                 } else {
-                    // Tamamlandıysa yeşil tik
                     remainingHtml = `<span class="text-success"><i class="fas fa-check-circle"></i> Tamamlandı</span>`;
                 }
 
-                // Ödeme Belgesi (Dekont) Bulma
-                // Dosyalar içindeki son yüklenen dosyayı (varsa) dekont kabul ediyoruz
                 let documentHtml = '<span class="text-muted">-</span>';
                 if (acc.files && acc.files.length > 0) {
                     const lastFile = acc.files[acc.files.length - 1];
@@ -169,22 +153,10 @@ export class AccrualUIManager {
                     <td><small>${acc.id}</small></td>
                     <td><span class="status-badge ${sCls}">${sTxt}</span></td>
                     <td><a href="#" class="task-detail-link font-weight-bold" data-task-id="${acc.taskId}">${taskDisplay}</a></td>
-                    
-                    <td style="font-weight:600; color:#495057;">
-                        <i class="fas fa-university mr-2 text-muted"></i>${paymentParty}
-                    </td>
-                    
-                    <td style="font-weight:bold; color:#1e3c72;">
-                        ${officialStr}
-                    </td>
-
-                    <td>
-                        ${remainingHtml}
-                    </td>
-
-                    <td>
-                        ${documentHtml}
-                    </td>
+                    <td style="font-weight:600; color:#495057;"><i class="fas fa-university mr-2 text-muted"></i>${paymentParty}</td>
+                    <td style="font-weight:bold; color:#1e3c72;">${officialStr}</td>
+                    <td>${remainingHtml}</td>
+                    <td>${documentHtml}</td>
                 </tr>`;
             }
         }).join('');
