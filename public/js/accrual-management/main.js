@@ -208,6 +208,15 @@ document.addEventListener('DOMContentLoaded', async () => {
                 });
             }
 
+            // YURT DIŞI ÖDEME CHECKBOX DİNLEYİCİSİ (YENİ)
+            const payFullForeign = document.getElementById('payFullForeign');
+            const foreignSplitInputs = document.getElementById('foreignSplitInputs');
+            if (payFullForeign && foreignSplitInputs) {
+                payFullForeign.addEventListener('change', (e) => {
+                    foreignSplitInputs.style.display = e.target.checked ? 'none' : 'flex'; // Flex ile yan yana
+                });
+            }
+
             // --- AKSİYON BUTONLARI (Tablo İçi) ---
             const handleActionClick = async (e) => {
                 const btn = e.target.closest('.action-btn');
@@ -311,18 +320,44 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
             });
 
-            // 2. Ödeme Onayla
+            // 2. Ödeme Onayla (GÜNCELLENMİŞ)
             document.getElementById('confirmMarkPaidBtn').addEventListener('click', async () => {
                 const date = document.getElementById('paymentDate').value;
                 if(!date) { showNotification('Tarih seçiniz', 'error'); return; }
 
-                // Detaylı ödeme verilerini al (Sadece tekil seçimse doludur)
-                const singlePaymentDetails = {
-                    payFullOfficial: document.getElementById('payFullOfficial').checked,
-                    payFullService: document.getElementById('payFullService').checked,
-                    manualOfficial: document.getElementById('manualOfficialAmount').value,
-                    manualService: document.getElementById('manualServiceAmount').value
-                };
+                // Detaylı ödeme verilerini al
+                let singlePaymentDetails = null;
+
+                // Eğer tekil seçimse ve bir tab aktifse
+                if (this.state.selectedIds.size === 1) {
+                    if (this.state.activeTab === 'foreign') {
+                        // --- YURT DIŞI VERİLERİ ---
+                        const isFull = document.getElementById('payFullForeign').checked;
+                        
+                        // Tamamını öde ise inputları yoksay (DataManager hesaplasın),
+                        // Değilse input değerlerini al.
+                        // Not: Yurt dışı için "Tamamını öde" demek, Resmi Ücreti (ve varsa hizmeti) full ödemek demektir.
+                        // Ancak DataManager "payFullOfficial" ve "payFullService" flaglerine bakıyor.
+                        // Yurt dışı modunda tek tik olduğu için ikisini de true gönderiyoruz.
+                        
+                        singlePaymentDetails = {
+                            isForeignMode: true, // DataManager için işaret
+                            payFullOfficial: isFull,
+                            payFullService: isFull, // Yurt dışında tek tik ikisini de kapsar varsayıyoruz
+                            manualOfficial: document.getElementById('manualForeignOfficial').value,
+                            manualService: document.getElementById('manualForeignService').value
+                        };
+                    } else {
+                        // --- YEREL VERİLER (ESKİSİ GİBİ) ---
+                        singlePaymentDetails = {
+                            isForeignMode: false,
+                            payFullOfficial: document.getElementById('payFullOfficial').checked,
+                            payFullService: document.getElementById('payFullService').checked,
+                            manualOfficial: document.getElementById('manualOfficialAmount').value,
+                            manualService: document.getElementById('manualServiceAmount').value
+                        };
+                    }
+                }
 
                 const paymentData = {
                     date: date,
@@ -338,10 +373,19 @@ document.addEventListener('DOMContentLoaded', async () => {
                     this.renderPage();
                     showNotification('Ödeme işlendi', 'success');
                 } catch(e) {
+                    console.error(e);
                     showNotification('Hata: ' + e.message, 'error');
                 } finally {
                     this.uiManager.toggleLoading(false);
                 }
+            });
+
+            // "bulkMarkPaidBtn" butonuna tıklanınca activeTab'i göndermeyi unutmayın:
+            document.getElementById('bulkMarkPaidBtn').addEventListener('click', () => {
+                const selected = Array.from(this.state.selectedIds).map(id => this.dataManager.allAccruals.find(a => a.id === id)).filter(Boolean);
+                this.uploadedPaymentReceipts = []; 
+                // BURASI ÖNEMLİ: activeTab parametresi eklendi
+                this.uiManager.showPaymentModal(selected, this.state.activeTab); 
             });
 
             // 3. Modal Kapatma Butonları
