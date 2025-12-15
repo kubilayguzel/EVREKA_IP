@@ -214,8 +214,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             
             if (payFullForeign && foreignSplitInputs) {
                 payFullForeign.addEventListener('change', (e) => {
-                    // Tik varsa gizle, yoksa göster
-                    foreignSplitInputs.style.display = e.target.checked ? 'none' : 'flex'; 
+                    // DEĞİŞİKLİK: 'flex' yerine 'block' yapıyoruz ki kartlar alt alta gelsin
+                    foreignSplitInputs.style.display = e.target.checked ? 'none' : 'block'; 
                 });
             }
 
