@@ -105,38 +105,39 @@ export class AccrualUIManager {
                 </tr>`;
             } 
             
-            // =========================================================
-            // TAB 2: YURT DIŞI LİSTESİ (ÖDEME GÖRÜNÜMÜ)
-            // =========================================================
+            // TAB 2: YURT DIŞI LİSTESİ (YENİ ALANLARLA GÜNCELLENDİ)
             else {
                 let paymentParty = acc.serviceInvoiceParty?.name || '<span class="text-muted">Belirtilmemiş</span>';
                 
-                // --- KALAN BORÇ HESABI (Yurt Dışı İçin Özel) ---
-                // Mantık: Resmi Ücret (Borç) - (Ödenen Resmi + Ödenen Vekil)
-                // Not: Eğer "remainingAmount" veritabanında bu moda göre güncellendiyse (savePayment ile) direkt onu kullanırız.
-                // Ancak eski kayıtlarda veya tahsilat modunda güncellenmişse burada tekrar hesaplamak gerekebilir.
-                // Tutarlılık için, eğer status 'paid' ise 0, değilse remainingAmount'a bakarız.
+                // --- DURUM GÖSTERİMİ (Yurt dışı özel status varsa onu kullan, yoksa unpaid varsay) ---
+                // Eğer foreignStatus tanımlı değilse (eski kayıt), unpaid kabul et.
+                const fStatus = acc.foreignStatus || 'unpaid';
+                let sTxt = 'Ödenmedi', sCls = 'danger';
+                if (fStatus === 'paid') { sTxt = 'Ödendi'; sCls = 'success'; }
+                else if (fStatus === 'partially_paid') { sTxt = 'Kısmen'; sCls = 'warning'; }
                 
+                // --- KALAN TUTAR GÖSTERİMİ (Yeni foreignRemainingAmount alanından) ---
                 let remainingHtml = '-';
-                const rem = acc.remainingAmount !== undefined ? acc.remainingAmount : acc.officialFee?.amount; // Toplam borç default
-                const targetCurrency = acc.officialFee?.currency || 'EUR';
-
-                // Yurt dışı modunda sadece ilgili para birimini göster
-                let foreignRemaining = [];
-                if (Array.isArray(rem)) {
-                    foreignRemaining = rem.filter(r => r.currency === targetCurrency);
-                } else if(typeof rem === 'number') {
-                     foreignRemaining = [{amount: rem, currency: targetCurrency}];
+                
+                // Eğer foreignRemainingAmount tanımlıysa onu kullan, değilse Resmi Ücreti varsay (hiç ödenmemiş)
+                let foreignRem = acc.foreignRemainingAmount;
+                if (foreignRem === undefined) {
+                    // Veri yoksa ve status paid değilse, borç = resmi ücret
+                    if (fStatus !== 'paid') foreignRem = [{ amount: acc.officialFee?.amount || 0, currency: acc.officialFee?.currency || 'EUR' }];
+                    else foreignRem = []; // Ödenmişse borç yok
                 }
 
-                const isFullyPaid = foreignRemaining.length === 0 || foreignRemaining.every(r => parseFloat(r.amount) <= 0.01);
+                const isFullyPaid = (Array.isArray(foreignRem)) 
+                    ? foreignRem.length === 0 || foreignRem.every(r => parseFloat(r.amount) <= 0.01)
+                    : parseFloat(foreignRem) <= 0.01;
 
                 if (!isFullyPaid) {
-                    remainingHtml = `<span class="text-danger font-weight-bold">${this._formatMoney(foreignRemaining, targetCurrency)}</span>`;
+                    remainingHtml = `<span class="text-danger font-weight-bold">${this._formatMoney(foreignRem, acc.officialFee?.currency || 'EUR')}</span>`;
                 } else {
                     remainingHtml = `<span class="text-success"><i class="fas fa-check-circle"></i> Tamamlandı</span>`;
                 }
 
+                // Ödeme Belgesi
                 let documentHtml = '<span class="text-muted">-</span>';
                 if (acc.files && acc.files.length > 0) {
                     const lastFile = acc.files[acc.files.length - 1];
@@ -151,7 +152,7 @@ export class AccrualUIManager {
                 <tr>
                     <td><input type="checkbox" class="row-checkbox" data-id="${acc.id}" ${isSelected ? 'checked' : ''}></td>
                     <td><small>${acc.id}</small></td>
-                    <td><span class="status-badge ${sCls}">${sTxt}</span></td>
+                    <td><span class="badge badge-${sCls}">${sTxt}</span></td>
                     <td><a href="#" class="task-detail-link font-weight-bold" data-task-id="${acc.taskId}">${taskDisplay}</a></td>
                     <td style="font-weight:600; color:#495057;"><i class="fas fa-university mr-2 text-muted"></i>${paymentParty}</td>
                     <td style="font-weight:bold; color:#1e3c72;">${officialStr}</td>
@@ -306,20 +307,19 @@ export class AccrualUIManager {
 
             // --- SENARYO A: YURT DIŞI TABI ---
             if (activeTab === 'foreign') {
-                if(foreignArea) foreignArea.style.display = 'block'; // Yurt dışı alanını aç
+                if(foreignArea) foreignArea.style.display = 'block';
 
-                // 1. Badge: Toplam Resmi Ücret
                 const offAmt = acc.officialFee?.amount || 0;
                 const offCurr = acc.officialFee?.currency || 'EUR';
                 
                 document.getElementById('foreignTotalBadge').textContent = `${this._formatMoney(offAmt, offCurr)}`;
                 document.querySelectorAll('.foreign-currency-label').forEach(el => el.textContent = offCurr);
 
-                // 2. Inputları Doldur (Daha önce girilmişse)
-                document.getElementById('manualForeignOfficial').value = acc.paidOfficialAmount || 0;
-                document.getElementById('manualForeignService').value = acc.paidServiceAmount || 0;
+                // --- GÜNCELLEME BURADA: Yeni alanlardan veriyi çek ---
+                document.getElementById('manualForeignOfficial').value = acc.foreignPaidOfficialAmount || 0;
+                document.getElementById('manualForeignService').value = acc.foreignPaidServiceAmount || 0;
+                // ----------------------------------------------------
 
-                // 3. Varsayılan Durum (Tamamını Öde: Aktif)
                 const payFullCb = document.getElementById('payFullForeign');
                 const splitInputs = document.getElementById('foreignSplitInputs');
                 
