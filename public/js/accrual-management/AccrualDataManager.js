@@ -296,13 +296,9 @@ export class AccrualDataManager {
         const { date, receiptFiles, singlePaymentDetails } = paymentData;
         const ids = Array.from(selectedIds);
 
-        // Dekontları Yükle
+        // Dekontları Hazırla (Varsa)
         let uploadedReceipts = [];
         if (receiptFiles && receiptFiles.length > 0) {
-            // Not: Bu kısım UI'da DataURL'e çevrildiği için direkt veritabanına yazılabilir
-            // Ancak ideal olan Storage'a yüklemektir. Şimdilik main.js'deki yapı (Base64) korunuyor.
-            // DataManager içinde dosya upload mantığını generic hale getirebiliriz.
-            // Burada main.js'den gelen hazır objeleri kullanıyoruz.
             uploadedReceipts = receiptFiles; 
         }
 
@@ -317,45 +313,79 @@ export class AccrualDataManager {
 
             // A) TEKİL ÖDEME (Detaylı)
             if (ids.length === 1 && singlePaymentDetails) {
-                const { payFullOfficial, payFullService, manualOfficial, manualService } = singlePaymentDetails;
-                const vatMultiplier = 1 + ((acc.vatRate || 0) / 100);
-
-                // Resmi Ücret Hesabı
-                const offTarget = acc.applyVatToOfficialFee 
-                    ? (acc.officialFee?.amount || 0) * vatMultiplier 
-                    : (acc.officialFee?.amount || 0);
                 
-                const newPaidOff = payFullOfficial ? offTarget : (parseFloat(manualOfficial) || 0);
+                // --- SENARYO 1: YURT DIŞI ÖDEMESİ (ÖZEL HESAPLAMA) ---
+                if (singlePaymentDetails.isForeignMode) {
+                    // Kullanıcıdan gelen tutarlar
+                    const inputOfficial = parseFloat(singlePaymentDetails.manualOfficial) || 0;
+                    const inputService = parseFloat(singlePaymentDetails.manualService) || 0;
+                    
+                    // Toplam Ödenen (Resmi + Vekil)
+                    const totalPaidNow = inputOfficial + inputService;
 
-                // Hizmet Bedeli Hesabı
-                const srvTarget = (acc.serviceFee?.amount || 0) * vatMultiplier;
-                const newPaidSrv = payFullService ? srvTarget : (parseFloat(manualService) || 0);
+                    // Hedef Tutar: "Resmi Ücret" (Kullanıcı talebi: Toplam olarak Resmi Ücret baz alınsın)
+                    const targetTotal = acc.officialFee?.amount || 0;
+                    const currency = acc.officialFee?.currency || 'EUR';
 
-                // Override işlemi (Kümülatif değil)
-                updates.paidOfficialAmount = newPaidOff;
-                updates.paidServiceAmount = newPaidSrv;
+                    // Update için ödenenleri kaydet (Override)
+                    updates.paidOfficialAmount = inputOfficial;
+                    updates.paidServiceAmount = inputService;
 
-                // Kalan Hesapla
-                const remOff = Math.max(0, offTarget - newPaidOff);
-                const remSrv = Math.max(0, srvTarget - newPaidSrv);
+                    // Kalan Hesapla: Hedef - (ResmiÖdenen + VekilÖdenen)
+                    // Not: Önceki ödemeleri kümülatif eklemiyoruz, inputtaki değer son durumdur (Override).
+                    const remainingVal = Math.max(0, targetTotal - totalPaidNow);
 
-                const remMap = {};
-                if (remOff > 0.01) remMap[acc.officialFee?.currency || 'TRY'] = (remMap[acc.officialFee?.currency] || 0) + remOff;
-                if (remSrv > 0.01) remMap[acc.serviceFee?.currency || 'TRY'] = (remMap[acc.serviceFee?.currency] || 0) + remSrv;
+                    // Veritabanı formatı
+                    updates.remainingAmount = [{ amount: remainingVal, currency: currency }];
+
+                    // Durum
+                    if (remainingVal <= 0.01) updates.status = 'paid';
+                    else if (totalPaidNow > 0) updates.status = 'partially_paid';
+                    else updates.status = 'unpaid';
+                } 
                 
-                updates.remainingAmount = Object.entries(remMap).map(([c, a]) => ({ amount: a, currency: c }));
+                // --- SENARYO 2: YEREL ÖDEME (STANDART HESAPLAMA) ---
+                else {
+                    const { payFullOfficial, payFullService, manualOfficial, manualService } = singlePaymentDetails;
+                    const vatMultiplier = 1 + ((acc.vatRate || 0) / 100);
 
-                // Status
-                if (updates.remainingAmount.length === 0) updates.status = 'paid';
-                else if (newPaidOff > 0 || newPaidSrv > 0) updates.status = 'partially_paid';
-                else updates.status = 'unpaid';
+                    // Resmi Ücret Hesabı
+                    const offTarget = acc.applyVatToOfficialFee 
+                        ? (acc.officialFee?.amount || 0) * vatMultiplier 
+                        : (acc.officialFee?.amount || 0);
+                    
+                    const newPaidOff = payFullOfficial ? offTarget : (parseFloat(manualOfficial) || 0);
+
+                    // Hizmet Bedeli Hesabı
+                    const srvTarget = (acc.serviceFee?.amount || 0) * vatMultiplier;
+                    const newPaidSrv = payFullService ? srvTarget : (parseFloat(manualService) || 0);
+
+                    updates.paidOfficialAmount = newPaidOff;
+                    updates.paidServiceAmount = newPaidSrv;
+
+                    // Kalan Hesapla (Ayrı Ayrı)
+                    const remOff = Math.max(0, offTarget - newPaidOff);
+                    const remSrv = Math.max(0, srvTarget - newPaidSrv);
+
+                    const remMap = {};
+                    if (remOff > 0.01) remMap[acc.officialFee?.currency || 'TRY'] = (remMap[acc.officialFee?.currency] || 0) + remOff;
+                    if (remSrv > 0.01) remMap[acc.serviceFee?.currency || 'TRY'] = (remMap[acc.serviceFee?.currency] || 0) + remSrv;
+                    
+                    updates.remainingAmount = Object.entries(remMap).map(([c, a]) => ({ amount: a, currency: c }));
+
+                    // Status
+                    if (updates.remainingAmount.length === 0) updates.status = 'paid';
+                    else if (newPaidOff > 0 || newPaidSrv > 0) updates.status = 'partially_paid';
+                    else updates.status = 'unpaid';
+                }
+
             } 
             
             // B) ÇOKLU ÖDEME (Hepsini Kapat)
             else {
                 updates.status = 'paid';
                 updates.remainingAmount = [];
-                // Tüm tutarı ödendi göster (Muhasebe tutarlılığı için)
+                // Tüm tutarı ödendi göster
                 const vatMultiplier = 1 + ((acc.vatRate || 0) / 100);
                 updates.paidOfficialAmount = acc.applyVatToOfficialFee 
                     ? (acc.officialFee?.amount || 0) * vatMultiplier : (acc.officialFee?.amount || 0);
