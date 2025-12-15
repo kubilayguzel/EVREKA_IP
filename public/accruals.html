@@ -159,14 +159,16 @@
                     <div class="tab-pane fade" id="content-foreign" role="tabpanel">
                         <div class="table-container">
                             <table class="accruals-table">
-                                <thead style="background-color: #fff5f5;">
+                                <thead>
                                     <tr>
                                         <th style="width: 40px;"><input type="checkbox" id="selectAllCheckboxForeign"></th>
-                                        <th>Durum</th>
-                                        <th>İlgili İş</th>
-                                        <th style="color:#d63384;">Ödeme Yapılacak Taraf</th>
-                                        <th style="color:#d63384;">Ödeme Tutarı (Official)</th>
-                                        <th>İşlemler</th>
+                                        <th class="sortable" data-sort="id">ID <i class="fas fa-sort sort-icon"></i></th>
+                                        <th class="sortable" data-sort="status">Durum <i class="fas fa-sort sort-icon"></i></th>
+                                        <th class="sortable" data-sort="taskTitle">İlgili İş <i class="fas fa-sort sort-icon"></i></th>
+                                        <th>Ödeme Yapılacak Taraf</th>
+                                        <th class="sortable" data-sort="officialFee">Toplam Tutar <i class="fas fa-sort sort-icon"></i></th>
+                                        <th class="sortable" data-sort="remainingAmount">Kalan Tutar <i class="fas fa-sort sort-icon"></i></th>
+                                        <th>Ödeme Belgesi</th>
                                     </tr>
                                 </thead>
                                 <tbody id="foreignTableBody"></tbody>
