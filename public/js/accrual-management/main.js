@@ -392,26 +392,31 @@ document.addEventListener('DOMContentLoaded', async () => {
                 });
             });
 
-            // 4. Ödeme Dekont Yükleme (Helper)
+        // 4. Ödeme Dekont Yükleme (Helper)
             const area = document.getElementById('paymentReceiptFileUploadArea');
             if(area) {
                 area.addEventListener('click', () => document.getElementById('paymentReceiptFile').click());
+                
                 document.getElementById('paymentReceiptFile').addEventListener('change', e => {
                     Array.from(e.target.files).forEach(file => {
-                        readFileAsDataURL(file).then(url => {
-                            this.uploadedPaymentReceipts.push({
-                                id: Date.now().toString(), // Basit ID
-                                name: file.name,
-                                type: file.type,
-                                content: url,
-                                documentDesignation: 'Ödeme Dekontu'
-                            });
-                            // UI Listesini Güncelle (Basitçe manuel yapıyoruz burda)
-                            const list = document.getElementById('paymentReceiptFileList');
-                            list.innerHTML = this.uploadedPaymentReceipts.map(f => `
-                                <div class="file-item-modal"><span>${f.name}</span> <small class="text-success">(Hazır)</small></div>
-                            `).join('');
+                        // Dosyayı okumadan önce listeye "File Object" olarak ekliyoruz
+                        // DataManager bu 'file' objesini alıp Storage'a yükleyecek.
+                        this.uploadedPaymentReceipts.push({
+                            id: Date.now().toString(),
+                            name: file.name,
+                            type: file.type,
+                            file: file // <--- KRİTİK NOKTA: Ham dosyayı saklıyoruz
                         });
+
+                        // Sadece UI'da ismini göstermek için listeyi güncelle
+                        const list = document.getElementById('paymentReceiptFileList');
+                        list.innerHTML = this.uploadedPaymentReceipts.map(f => `
+                            <div class="file-item-modal">
+                                <i class="fas fa-paperclip mr-2 text-muted"></i>
+                                <span>${f.name}</span> 
+                                <small class="text-success ml-2">(Yüklenecek)</small>
+                            </div>
+                        `).join('');
                     });
                 });
             }
