@@ -134,43 +134,31 @@ export class AccrualUIManager {
             else {
                 let paymentParty = acc.serviceInvoiceParty?.name || '<span class="text-muted">Belirtilmemiş</span>';
                 
-                // --- KALAN TUTAR HESABI (SADECE RESMİ ÜCRET PARA BİRİMİ) ---
+                // Kalan Tutar Gösterimi
                 let remainingHtml = '-';
-                const targetCurrency = acc.officialFee?.currency || 'EUR'; // Filtre için hedef para birimi
+                const rem = acc.remainingAmount !== undefined ? acc.remainingAmount : acc.totalAmount;
                 
-                // Veritabanındaki kalan tutar dizisini al
-                let rawRemaining = acc.remainingAmount;
-                if (rawRemaining === undefined) rawRemaining = acc.totalAmount; // Fallback
-
-                let foreignRemaining = [];
-                
-                if (Array.isArray(rawRemaining)) {
-                    // SADECE hedef para birimine (örn: EUR) ait olanları al
-                    foreignRemaining = rawRemaining.filter(r => r.currency === targetCurrency);
-                } else {
-                    // Eski tip veri ise ve para birimi tutuyorsa al
-                    if (acc.totalAmountCurrency === targetCurrency) {
-                        foreignRemaining = [{ amount: rawRemaining, currency: targetCurrency }];
-                    }
-                }
-                
-                // Kalan var mı kontrolü (0.01 toleranslı)
-                const isFullyPaid = foreignRemaining.length === 0 || foreignRemaining.every(r => parseFloat(r.amount) <= 0.01);
+                // Ödenmiş mi kontrolü (Kalan array boş veya 0 ise)
+                const isFullyPaid = (Array.isArray(rem)) 
+                    ? rem.length === 0 || rem.every(r => parseFloat(r.amount) <= 0.01)
+                    : parseFloat(rem) <= 0.01;
 
                 if (!isFullyPaid) {
-                    remainingHtml = `<span class="text-danger font-weight-bold">${this._formatMoney(foreignRemaining, targetCurrency)}</span>`;
+                    // Kalan tutarı kırmızı göster
+                    remainingHtml = `<span class="text-danger font-weight-bold">${this._formatMoney(rem, acc.officialFee?.currency || 'EUR')}</span>`;
                 } else {
+                    // Tamamlandıysa yeşil tik
                     remainingHtml = `<span class="text-success"><i class="fas fa-check-circle"></i> Tamamlandı</span>`;
                 }
-                // -----------------------------------------------------------
 
-                // Ödeme Belgesi (Dekont)
+                // Ödeme Belgesi (Dekont) Bulma
+                // Dosyalar içindeki son yüklenen dosyayı (varsa) dekont kabul ediyoruz
                 let documentHtml = '<span class="text-muted">-</span>';
                 if (acc.files && acc.files.length > 0) {
                     const lastFile = acc.files[acc.files.length - 1];
                     documentHtml = `
-                        <a href="${lastFile.content || lastFile.url}" target="_blank" class="btn btn-sm btn-outline-primary" title="${lastFile.name}">
-                            <i class="fas fa-file-download mr-1"></i> Dekont
+                        <a href="${lastFile.content || lastFile.url}" target="_blank" class="btn btn-sm btn-outline-info" title="${lastFile.name}" style="border-radius: 20px;">
+                            <i class="fas fa-file-invoice-dollar mr-1"></i> Dekont
                         </a>
                     `;
                 }
