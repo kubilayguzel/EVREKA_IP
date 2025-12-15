@@ -208,12 +208,14 @@ document.addEventListener('DOMContentLoaded', async () => {
                 });
             }
 
-            // YURT DIŞI ÖDEME CHECKBOX DİNLEYİCİSİ (YENİ)
+            // YURT DIŞI "TAMAMINI ÖDE" CHECKBOX DİNLEYİCİSİ
             const payFullForeign = document.getElementById('payFullForeign');
             const foreignSplitInputs = document.getElementById('foreignSplitInputs');
+            
             if (payFullForeign && foreignSplitInputs) {
                 payFullForeign.addEventListener('change', (e) => {
-                    foreignSplitInputs.style.display = e.target.checked ? 'none' : 'flex'; // Flex ile yan yana
+                    // Tik varsa gizle, yoksa göster
+                    foreignSplitInputs.style.display = e.target.checked ? 'none' : 'flex'; 
                 });
             }
 
@@ -320,35 +322,29 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
             });
 
-            // 2. Ödeme Onayla (GÜNCELLENMİŞ)
+            // 2. Ödeme Onayla
             document.getElementById('confirmMarkPaidBtn').addEventListener('click', async () => {
                 const date = document.getElementById('paymentDate').value;
                 if(!date) { showNotification('Tarih seçiniz', 'error'); return; }
 
-                // Detaylı ödeme verilerini al
                 let singlePaymentDetails = null;
 
-                // Eğer tekil seçimse ve bir tab aktifse
+                // Tekil seçim varsa detayları al
                 if (this.state.selectedIds.size === 1) {
                     if (this.state.activeTab === 'foreign') {
-                        // --- YURT DIŞI VERİLERİ ---
+                        // --- YURT DIŞI MODU ---
                         const isFull = document.getElementById('payFullForeign').checked;
                         
-                        // Tamamını öde ise inputları yoksay (DataManager hesaplasın),
-                        // Değilse input değerlerini al.
-                        // Not: Yurt dışı için "Tamamını öde" demek, Resmi Ücreti (ve varsa hizmeti) full ödemek demektir.
-                        // Ancak DataManager "payFullOfficial" ve "payFullService" flaglerine bakıyor.
-                        // Yurt dışı modunda tek tik olduğu için ikisini de true gönderiyoruz.
-                        
                         singlePaymentDetails = {
-                            isForeignMode: true, // DataManager için işaret
-                            payFullOfficial: isFull,
-                            payFullService: isFull, // Yurt dışında tek tik ikisini de kapsar varsayıyoruz
+                            isForeignMode: true,
+                            payFullOfficial: isFull, // Tikliyse "Tamamını Öde" (Resmi + Hizmet)
+                            payFullService: isFull,
+                            // Tiksizse input değerlerini al
                             manualOfficial: document.getElementById('manualForeignOfficial').value,
                             manualService: document.getElementById('manualForeignService').value
                         };
                     } else {
-                        // --- YEREL VERİLER (ESKİSİ GİBİ) ---
+                        // --- YEREL MOD ---
                         singlePaymentDetails = {
                             isForeignMode: false,
                             payFullOfficial: document.getElementById('payFullOfficial').checked,
