@@ -138,14 +138,20 @@ export class AccrualUIManager {
                 }
 
                 // Ödeme Belgesi
-                let documentHtml = '<span class="text-muted">-</span>';
+                let documentHtml = '';
                 if (acc.files && acc.files.length > 0) {
+                    // Son yüklenen dosya
                     const lastFile = acc.files[acc.files.length - 1];
+                    // URL varsa url, yoksa content (eski kayıtlar için)
+                    const link = lastFile.url || lastFile.content;
+                    
                     documentHtml = `
-                        <a href="${lastFile.content || lastFile.url}" target="_blank" class="btn btn-sm btn-outline-info" title="${lastFile.name}" style="border-radius: 20px;">
-                            <i class="fas fa-file-invoice-dollar mr-1"></i> Dekont
+                        <a href="${link}" target="_blank" class="text-secondary" title="${lastFile.name || 'Dekont'}" style="text-decoration: none;">
+                            <i class="fas fa-file-contract fa-lg hover-primary"></i>
                         </a>
                     `;
+                } else {
+                    documentHtml = '<span class="text-muted small">-</span>';
                 }
 
                 return `
