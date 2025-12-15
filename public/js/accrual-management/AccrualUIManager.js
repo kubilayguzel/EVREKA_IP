@@ -283,6 +283,7 @@ export class AccrualUIManager {
      * @param {Array} selectedAccrualsList - Seçilen tahakkuk objeleri
      * @param {String} activeTab - 'main' veya 'foreign'
      */
+
     showPaymentModal(selectedAccrualsList, activeTab = 'main') {
         document.getElementById('paidAccrualCount').textContent = selectedAccrualsList.length;
         document.getElementById('paymentDate').valueAsDate = new Date();
@@ -291,9 +292,9 @@ export class AccrualUIManager {
         const localArea = document.getElementById('detailedPaymentInputs');
         const foreignArea = document.getElementById('foreignPaymentInputs');
 
-        // Alanları temizle/gizle
-        localArea.style.display = 'none';
-        foreignArea.style.display = 'none';
+        // Önce her iki alanı da gizle
+        if(localArea) localArea.style.display = 'none';
+        if(foreignArea) foreignArea.style.display = 'none';
 
         // SADECE TEKİL SEÇİMDE DETAY GÖSTERİLİR
         if (selectedAccrualsList.length === 1) {
@@ -301,32 +302,30 @@ export class AccrualUIManager {
 
             // --- SENARYO A: YURT DIŞI TABI ---
             if (activeTab === 'foreign') {
-                foreignArea.style.display = 'block';
+                if(foreignArea) foreignArea.style.display = 'block'; // Yurt dışı alanını aç
 
-                // 1. Badge: Sadece Resmi Ücreti "Toplam" olarak göster (İsteğiniz üzerine)
+                // 1. Badge: Toplam Resmi Ücret
                 const offAmt = acc.officialFee?.amount || 0;
-                const offCurr = acc.officialFee?.currency || 'EUR'; // Varsayılan EUR
+                const offCurr = acc.officialFee?.currency || 'EUR';
                 
                 document.getElementById('foreignTotalBadge').textContent = `${this._formatMoney(offAmt, offCurr)}`;
-                
-                // Para birimi etiketlerini güncelle
                 document.querySelectorAll('.foreign-currency-label').forEach(el => el.textContent = offCurr);
 
-                // 2. Inputları Doldur (Mevcut ödenen varsa getir)
+                // 2. Inputları Doldur (Daha önce girilmişse)
                 document.getElementById('manualForeignOfficial').value = acc.paidOfficialAmount || 0;
                 document.getElementById('manualForeignService').value = acc.paidServiceAmount || 0;
 
-                // 3. Checkbox Varsayılanı
+                // 3. Varsayılan Durum (Tamamını Öde: Aktif)
                 const payFullCb = document.getElementById('payFullForeign');
                 const splitInputs = document.getElementById('foreignSplitInputs');
                 
-                payFullCb.checked = true;
-                splitInputs.style.display = 'none'; // Kapalı başla
+                if(payFullCb) payFullCb.checked = true;
+                if(splitInputs) splitInputs.style.display = 'none';
             }
             
             // --- SENARYO B: ANA LİSTE (YEREL) ---
             else {
-                localArea.style.display = 'block';
+                if(localArea) localArea.style.display = 'block'; // Yerel alanı aç
 
                 // Resmi Ücret
                 const offAmt = acc.officialFee?.amount || 0;
@@ -348,11 +347,8 @@ export class AccrualUIManager {
                 document.getElementById('payFullService').checked = true;
                 document.getElementById('serviceAmountInputContainer').style.display = 'none';
             }
-
-        } else {
-            // ÇOKLU SEÇİM: Detay yok, sadece tarih ve dosya
         }
-
+        
         this.paymentModal.classList.add('show');
     }
 
