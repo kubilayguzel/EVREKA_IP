@@ -148,11 +148,27 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             // --- SEÇİM İŞLEMLERİ ---
 
-            // 5. Tümünü Seç
+            // 5.1 Tümünü Seç
             const selectAllCb = document.getElementById('selectAllCheckbox');
             if (selectAllCb) {
                 selectAllCb.addEventListener('change', (e) => {
                     const checked = e.target.checked;
+                    document.querySelectorAll('.row-checkbox').forEach(cb => {
+                        cb.checked = checked;
+                        const id = cb.dataset.id;
+                        if(checked) this.state.selectedIds.add(id); else this.state.selectedIds.delete(id);
+                    });
+                    this.uiManager.updateBulkActionsVisibility(this.state.selectedIds.size > 0);
+                });
+            }
+
+            // 5.2 Tümünü Seç (Yurt Dışı Tablosu İçin - YENİ)
+            const selectAllCbForeign = document.getElementById('selectAllCheckboxForeign');
+            if (selectAllCbForeign) {
+                selectAllCbForeign.addEventListener('change', (e) => {
+                    const checked = e.target.checked;
+                    // Sadece o an görünür olan tablodaki checkboxları seçmek daha güvenlidir ama 
+                    // basitlik adına tüm row-checkbox'ları tetikleyebiliriz çünkü ID'ler benzersizdir.
                     document.querySelectorAll('.row-checkbox').forEach(cb => {
                         cb.checked = checked;
                         const id = cb.dataset.id;
