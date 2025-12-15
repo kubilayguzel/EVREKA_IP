@@ -132,11 +132,13 @@ export class AccrualUIManager {
             
             // TAB 2: YURT DIŞI LİSTESİ
             else {
-                let paymentParty = acc.tpInvoiceParty?.name || '<span class="text-muted">Belirtilmemiş</span>';
+                // DÜZELTME 1: Ödeme Yapılacak Taraf -> serviceInvoiceParty olarak değiştirildi
+                let paymentParty = acc.serviceInvoiceParty?.name || '<span class="text-muted">Belirtilmemiş</span>';
                 
                 return `
                 <tr>
-                    <td>${index + 1}</td>
+                    <td><input type="checkbox" class="row-checkbox" data-id="${acc.id}" ${isSelected ? 'checked' : ''}></td>
+                    
                     <td><span class="badge badge-${acc.status === 'paid' ? 'success' : (acc.status === 'unpaid' ? 'danger' : 'warning')}">${sTxt}</span></td>
                     <td><a href="#" class="task-detail-link font-weight-bold" data-task-id="${acc.taskId}">${taskDisplay}</a></td>
                     <td style="font-weight:600; color:#495057;">
