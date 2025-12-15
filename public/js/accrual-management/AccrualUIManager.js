@@ -30,13 +30,15 @@ export class AccrualUIManager {
      * @param {Object} lookups - { tasks, transactionTypes, ipRecords, selectedIds } referans verileri
      * @param {String} activeTab - 'main' veya 'foreign'
      */
+    /**
+     * Tabloyu çizer.
+     */
     renderTable(data, lookups, activeTab = 'main') {
         const { tasks, transactionTypes, ipRecords, selectedIds } = lookups;
         const targetBody = activeTab === 'foreign' ? this.foreignTableBody : this.tableBody;
         
         // Temizle
-        if (this.tableBody) this.tableBody.innerHTML = '';
-        if (this.foreignTableBody) this.foreignTableBody.innerHTML = '';
+        if (targetBody) targetBody.innerHTML = '';
 
         // Boş Kontrolü
         if (!data || data.length === 0) {
@@ -49,7 +51,6 @@ export class AccrualUIManager {
         const rowsHtml = data.map((acc, index) => {
             // Ortak Hesaplamalar
             const isSelected = selectedIds.has(acc.id);
-            const isPaid = acc.status === 'paid';
             
             // Durum Badge
             let sTxt = 'Bilinmiyor', sCls = 'badge-secondary';
@@ -57,44 +58,41 @@ export class AccrualUIManager {
             else if (acc.status === 'unpaid') { sTxt = 'Ödenmedi'; sCls = 'status-unpaid'; }
             else if (acc.status === 'partially_paid') { sTxt = 'K.Ödendi'; sCls = 'status-partially-paid'; }
 
-            // --- İLGİLİ İŞ VE DOSYA BULMA MANTIĞI ---
+            // --- İLGİLİ İŞ VE DOSYA BULMA ---
             let taskDisplay = '-';
-            let relatedFileDisplay = '-';
+            let relatedFileDisplay = '-'; // Sadece Main tab için kullanılıyor ama hesaplayalım
             
             const task = tasks[String(acc.taskId)];
-            
             if (task) {
-                // 1. Alias (İş Tipi) Bulma
                 const typeObj = transactionTypes.find(t => t.id === task.taskType);
                 if (typeObj && typeObj.alias) taskDisplay = typeObj.alias;
                 else if (typeObj && typeObj.name) taskDisplay = typeObj.name;
                 else taskDisplay = task.title || '-';
-
-                // 2. Dosya (App Number) Bulma
-                if (task.relatedIpRecordId) {
+                
+                // İlgili Dosya (Main Tab için)
+                if (activeTab === 'main' && task.relatedIpRecordId) {
                     const ipRec = ipRecords.find(r => r.id === task.relatedIpRecordId);
                     if (ipRec) relatedFileDisplay = ipRec.applicationNumber || ipRec.title || 'Dosya';
                 }
             } else {
                 taskDisplay = acc.taskTitle || '-';
             }
-            // ----------------------------------------
 
-            // Para Birimi Formatları
+            // Resmi Ücret Formatı
             const officialStr = acc.officialFee ? this._formatMoney(acc.officialFee.amount, acc.officialFee.currency) : '-';
             
-            // TAB 1: ANA LİSTE
+            // =========================================================
+            // TAB 1: ANA LİSTE (Yerel/Tümü)
+            // =========================================================
             if (activeTab === 'main') {
                 const serviceStr = acc.serviceFee ? this._formatMoney(acc.serviceFee.amount, acc.serviceFee.currency) : '-';
                 
-                // Kalan Tutar Gösterimi (Eğer tam ödenmişse boş geç)
+                // Kalan Tutar (Tüm Para Birimleri)
                 let remainingHtml = '-';
                 const rem = acc.remainingAmount !== undefined ? acc.remainingAmount : acc.totalAmount;
-                const total = acc.totalAmount;
-                // Basit kontrol: Kalan array boşsa veya tutarlar <= 0 ise ödenmiştir
                 const isFullyPaid = (Array.isArray(rem)) 
-                    ? rem.length === 0 || rem.every(r => parseFloat(r.amount) <= 0)
-                    : parseFloat(rem) <= 0;
+                    ? rem.length === 0 || rem.every(r => parseFloat(r.amount) <= 0.01)
+                    : parseFloat(rem) <= 0.01;
 
                 if (!isFullyPaid) {
                     remainingHtml = `<span>${this._formatMoney(rem, acc.totalAmountCurrency)}</span>`;
@@ -123,37 +121,52 @@ export class AccrualUIManager {
                     <td>
                         <div style="display: flex; gap: 5px;">
                             <button class="action-btn view-btn" data-id="${acc.id}" title="Görüntüle"><i class="fas fa-eye"></i></button>
-                            <button class="action-btn edit-btn" data-id="${acc.id}" title="Düzenle" ${isPaid ? 'disabled' : ''}><i class="fas fa-edit"></i></button>
+                            <button class="action-btn edit-btn" data-id="${acc.id}" title="Düzenle" ${acc.status === 'paid' ? 'disabled' : ''}><i class="fas fa-edit"></i></button>
                             <button class="action-btn delete-btn" data-id="${acc.id}" title="Sil"><i class="fas fa-trash"></i></button>
                         </div>
                     </td>
                 </tr>`;
             } 
             
-            // TAB 2: YURT DIŞI LİSTESİ (GÜNCELLENDİ)
+            // =========================================================
+            // TAB 2: YURT DIŞI LİSTESİ (ÖZELLEŞTİRİLMİŞ)
+            // =========================================================
             else {
                 let paymentParty = acc.serviceInvoiceParty?.name || '<span class="text-muted">Belirtilmemiş</span>';
                 
-                // Kalan Tutar Hesabı
+                // --- KALAN TUTAR HESABI (SADECE RESMİ ÜCRET PARA BİRİMİ) ---
                 let remainingHtml = '-';
-                const rem = acc.remainingAmount !== undefined ? acc.remainingAmount : acc.totalAmount;
-                const total = acc.totalAmount;
+                const targetCurrency = acc.officialFee?.currency || 'EUR'; // Filtre için hedef para birimi
                 
-                // Ödenmiş mi kontrolü
-                const isFullyPaid = (Array.isArray(rem)) 
-                    ? rem.length === 0 || rem.every(r => parseFloat(r.amount) <= 0)
-                    : parseFloat(rem) <= 0;
+                // Veritabanındaki kalan tutar dizisini al
+                let rawRemaining = acc.remainingAmount;
+                if (rawRemaining === undefined) rawRemaining = acc.totalAmount; // Fallback
+
+                let foreignRemaining = [];
+                
+                if (Array.isArray(rawRemaining)) {
+                    // SADECE hedef para birimine (örn: EUR) ait olanları al
+                    foreignRemaining = rawRemaining.filter(r => r.currency === targetCurrency);
+                } else {
+                    // Eski tip veri ise ve para birimi tutuyorsa al
+                    if (acc.totalAmountCurrency === targetCurrency) {
+                        foreignRemaining = [{ amount: rawRemaining, currency: targetCurrency }];
+                    }
+                }
+                
+                // Kalan var mı kontrolü (0.01 toleranslı)
+                const isFullyPaid = foreignRemaining.length === 0 || foreignRemaining.every(r => parseFloat(r.amount) <= 0.01);
 
                 if (!isFullyPaid) {
-                    remainingHtml = `<span class="text-danger font-weight-bold">${this._formatMoney(rem, acc.totalAmountCurrency)}</span>`;
+                    remainingHtml = `<span class="text-danger font-weight-bold">${this._formatMoney(foreignRemaining, targetCurrency)}</span>`;
                 } else {
                     remainingHtml = `<span class="text-success"><i class="fas fa-check-circle"></i> Tamamlandı</span>`;
                 }
+                // -----------------------------------------------------------
 
-                // Ödeme Belgesi (Dekont) Bulma
+                // Ödeme Belgesi (Dekont)
                 let documentHtml = '<span class="text-muted">-</span>';
                 if (acc.files && acc.files.length > 0) {
-                    // En son yüklenen dosyayı al (Genelde en son işlem dekonttur)
                     const lastFile = acc.files[acc.files.length - 1];
                     documentHtml = `
                         <a href="${lastFile.content || lastFile.url}" target="_blank" class="btn btn-sm btn-outline-primary" title="${lastFile.name}">
