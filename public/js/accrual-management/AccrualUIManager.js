@@ -130,28 +130,59 @@ export class AccrualUIManager {
                 </tr>`;
             } 
             
-            // TAB 2: YURT DIŞI LİSTESİ
+            // TAB 2: YURT DIŞI LİSTESİ (GÜNCELLENDİ)
             else {
-                // DÜZELTME 1: Ödeme Yapılacak Taraf -> serviceInvoiceParty olarak değiştirildi
                 let paymentParty = acc.serviceInvoiceParty?.name || '<span class="text-muted">Belirtilmemiş</span>';
                 
+                // Kalan Tutar Hesabı
+                let remainingHtml = '-';
+                const rem = acc.remainingAmount !== undefined ? acc.remainingAmount : acc.totalAmount;
+                const total = acc.totalAmount;
+                
+                // Ödenmiş mi kontrolü
+                const isFullyPaid = (Array.isArray(rem)) 
+                    ? rem.length === 0 || rem.every(r => parseFloat(r.amount) <= 0)
+                    : parseFloat(rem) <= 0;
+
+                if (!isFullyPaid) {
+                    remainingHtml = `<span class="text-danger font-weight-bold">${this._formatMoney(rem, acc.totalAmountCurrency)}</span>`;
+                } else {
+                    remainingHtml = `<span class="text-success"><i class="fas fa-check-circle"></i> Tamamlandı</span>`;
+                }
+
+                // Ödeme Belgesi (Dekont) Bulma
+                let documentHtml = '<span class="text-muted">-</span>';
+                if (acc.files && acc.files.length > 0) {
+                    // En son yüklenen dosyayı al (Genelde en son işlem dekonttur)
+                    const lastFile = acc.files[acc.files.length - 1];
+                    documentHtml = `
+                        <a href="${lastFile.content || lastFile.url}" target="_blank" class="btn btn-sm btn-outline-primary" title="${lastFile.name}">
+                            <i class="fas fa-file-download mr-1"></i> Dekont
+                        </a>
+                    `;
+                }
+
                 return `
                 <tr>
                     <td><input type="checkbox" class="row-checkbox" data-id="${acc.id}" ${isSelected ? 'checked' : ''}></td>
-                    
-                    <td><span class="badge badge-${acc.status === 'paid' ? 'success' : (acc.status === 'unpaid' ? 'danger' : 'warning')}">${sTxt}</span></td>
+                    <td><small>${acc.id}</small></td>
+                    <td><span class="status-badge ${sCls}">${sTxt}</span></td>
                     <td><a href="#" class="task-detail-link font-weight-bold" data-task-id="${acc.taskId}">${taskDisplay}</a></td>
+                    
                     <td style="font-weight:600; color:#495057;">
                         <i class="fas fa-university mr-2 text-muted"></i>${paymentParty}
                     </td>
-                    <td style="font-weight:bold; color:#1e3c72; font-size:1.1em;">
+                    
+                    <td style="font-weight:bold; color:#1e3c72;">
                         ${officialStr}
                     </td>
+
                     <td>
-                        <div style="display: flex; gap: 5px;">
-                            <button class="action-btn view-btn" data-id="${acc.id}" title="Detay">Görüntüle</button>
-                            <button class="action-btn edit-btn" data-id="${acc.id}" title="Düzenle">Düzenle</button>
-                        </div>
+                        ${remainingHtml}
+                    </td>
+
+                    <td>
+                        ${documentHtml}
                     </td>
                 </tr>`;
             }
