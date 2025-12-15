@@ -289,14 +289,14 @@ export class AccrualDataManager {
         await this.fetchAllData(); 
     }
 
-    /**
+/**
      * Ödeme Kaydetme (Tekli veya Çoklu)
      */
     async savePayment(selectedIds, paymentData) {
         const { date, receiptFiles, singlePaymentDetails } = paymentData;
         const ids = Array.from(selectedIds);
 
-        // Dekontları Hazırla (Varsa)
+        // Dekontları Hazırla
         let uploadedReceipts = [];
         if (receiptFiles && receiptFiles.length > 0) {
             uploadedReceipts = receiptFiles; 
@@ -314,56 +314,57 @@ export class AccrualDataManager {
             // A) TEKİL ÖDEME (Detaylı)
             if (ids.length === 1 && singlePaymentDetails) {
                 
-                // --- SENARYO 1: YURT DIŞI ÖDEMESİ (ÖZEL HESAPLAMA) ---
+                // --- SENARYO 1: YURT DIŞI ÖDEMESİ (SİZİN BORCUNUZ) ---
                 if (singlePaymentDetails.isForeignMode) {
-                    // Kullanıcıdan gelen tutarlar
+                    // Kullanıcıdan gelen "Sizin Ödediğiniz" tutarlar
                     const inputOfficial = parseFloat(singlePaymentDetails.manualOfficial) || 0;
                     const inputService = parseFloat(singlePaymentDetails.manualService) || 0;
                     
-                    // Toplam Ödenen (Resmi + Vekil)
-                    const totalPaidNow = inputOfficial + inputService;
+                    // Toplam Cepten Çıkan (Resmi + Vekil)
+                    const totalPaidOut = inputOfficial + inputService;
 
-                    // Hedef Tutar: "Resmi Ücret" (Kullanıcı talebi: Toplam olarak Resmi Ücret baz alınsın)
-                    const targetTotal = acc.officialFee?.amount || 0;
+                    // Hedef Borç: Sadece Resmi Ücret (Yurt dışı ofisine ödenmesi gereken asıl tutar)
+                    const targetDebt = acc.officialFee?.amount || 0;
                     const currency = acc.officialFee?.currency || 'EUR';
 
-                    // Update için ödenenleri kaydet (Override)
-                    updates.paidOfficialAmount = inputOfficial;
-                    updates.paidServiceAmount = inputService;
+                    // Bu alanları Yurt Dışı Ödemesi için özelleştiriyoruz
+                    // Not: Veritabanında ayrı bir "foreignPaidAmount" alanı olmadığı için 
+                    // mevcut alanları kullanıyoruz ama mantığı farklı kuruyoruz.
+                    updates.paidOfficialAmount = inputOfficial; // Sizin ödediğiniz resmi
+                    updates.paidServiceAmount = inputService;   // Sizin ödediğiniz vekil ücreti
 
-                    // Kalan Hesapla: Hedef - (ResmiÖdenen + VekilÖdenen)
-                    // Not: Önceki ödemeleri kümülatif eklemiyoruz, inputtaki değer son durumdur (Override).
-                    const remainingVal = Math.max(0, targetTotal - totalPaidNow);
+                    // KALAN BORÇ HESABI: (Resmi Ücret) - (Toplam Ödenen)
+                    const remainingDebt = Math.max(0, targetDebt - totalPaidOut);
 
-                    // Veritabanı formatı
-                    updates.remainingAmount = [{ amount: remainingVal, currency: currency }];
+                    // Veritabanına yazılacak kalan tutar
+                    updates.remainingAmount = [{ amount: remainingDebt, currency: currency }];
 
-                    // Durum
-                    if (remainingVal <= 0.01) updates.status = 'paid';
-                    else if (totalPaidNow > 0) updates.status = 'partially_paid';
+                    // Durum (Sizin borcunuz bitti mi?)
+                    if (remainingDebt <= 0.01) updates.status = 'paid';
+                    else if (totalPaidOut > 0) updates.status = 'partially_paid';
                     else updates.status = 'unpaid';
                 } 
                 
-                // --- SENARYO 2: YEREL ÖDEME (STANDART HESAPLAMA) ---
+                // --- SENARYO 2: TAHAKKUK TAHSİLATI (SİZİN ALACAĞINIZ) - ESKİ HALİ ---
                 else {
                     const { payFullOfficial, payFullService, manualOfficial, manualService } = singlePaymentDetails;
                     const vatMultiplier = 1 + ((acc.vatRate || 0) / 100);
 
-                    // Resmi Ücret Hesabı
+                    // 1. Resmi Ücret Alacağı
                     const offTarget = acc.applyVatToOfficialFee 
                         ? (acc.officialFee?.amount || 0) * vatMultiplier 
                         : (acc.officialFee?.amount || 0);
                     
                     const newPaidOff = payFullOfficial ? offTarget : (parseFloat(manualOfficial) || 0);
 
-                    // Hizmet Bedeli Hesabı
+                    // 2. Hizmet Bedeli Alacağı
                     const srvTarget = (acc.serviceFee?.amount || 0) * vatMultiplier;
                     const newPaidSrv = payFullService ? srvTarget : (parseFloat(manualService) || 0);
 
                     updates.paidOfficialAmount = newPaidOff;
                     updates.paidServiceAmount = newPaidSrv;
 
-                    // Kalan Hesapla (Ayrı Ayrı)
+                    // Kalan Alacak Hesabı (Ayrı Ayrı)
                     const remOff = Math.max(0, offTarget - newPaidOff);
                     const remSrv = Math.max(0, srvTarget - newPaidSrv);
 
@@ -373,7 +374,7 @@ export class AccrualDataManager {
                     
                     updates.remainingAmount = Object.entries(remMap).map(([c, a]) => ({ amount: a, currency: c }));
 
-                    // Status
+                    // Durum (Alacak bitti mi?)
                     if (updates.remainingAmount.length === 0) updates.status = 'paid';
                     else if (newPaidOff > 0 || newPaidSrv > 0) updates.status = 'partially_paid';
                     else updates.status = 'unpaid';
@@ -385,7 +386,7 @@ export class AccrualDataManager {
             else {
                 updates.status = 'paid';
                 updates.remainingAmount = [];
-                // Tüm tutarı ödendi göster
+                // Muhasebesel tutarlılık için tam tutarları yaz
                 const vatMultiplier = 1 + ((acc.vatRate || 0) / 100);
                 updates.paidOfficialAmount = acc.applyVatToOfficialFee 
                     ? (acc.officialFee?.amount || 0) * vatMultiplier : (acc.officialFee?.amount || 0);
