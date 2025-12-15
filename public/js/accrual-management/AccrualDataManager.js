@@ -290,117 +290,110 @@ export class AccrualDataManager {
     }
 
 /**
-     * Ödeme Kaydetme (Tekli veya Çoklu)
+     * Ödeme Kaydetme (Dosya Yüklemeli Versiyon)
      */
     async savePayment(selectedIds, paymentData) {
         const { date, receiptFiles, singlePaymentDetails } = paymentData;
         const ids = Array.from(selectedIds);
 
-        // Dekontları Hazırla
-        let uploadedReceipts = [];
+        // 1. DOSYALARI FIREBASE STORAGE'A YÜKLE VE URL AL
+        let uploadedFileRecords = [];
+        
         if (receiptFiles && receiptFiles.length > 0) {
-            uploadedReceipts = receiptFiles; 
+            // Promise.all ile tüm dosyaları paralel yükle
+            const uploadPromises = receiptFiles.map(async (fileObj) => {
+                // Eğer dosya zaten bir URL ise (önceden yüklenmişse) pas geç
+                if (!fileObj.file) return fileObj;
+
+                try {
+                    const storage = getStorage();
+                    // Dosya yolu: receipts/timestamp_dosyaadi
+                    const storageRef = ref(storage, `receipts/${Date.now()}_${fileObj.file.name}`);
+                    
+                    // Yükleme işlemi
+                    const snapshot = await uploadBytes(storageRef, fileObj.file);
+                    const downloadURL = await getDownloadURL(snapshot.ref);
+
+                    // Veritabanına kaydedilecek temiz obje
+                    return {
+                        name: fileObj.name,
+                        url: downloadURL, // Artık URL kaydediyoruz
+                        type: fileObj.type || 'application/pdf',
+                        uploadedAt: new Date().toISOString()
+                    };
+                } catch (error) {
+                    console.error("Dosya yükleme hatası:", error);
+                    return null;
+                }
+            });
+
+            const results = await Promise.all(uploadPromises);
+            uploadedFileRecords = results.filter(f => f !== null);
         }
 
         const promises = ids.map(async (id) => {
             const acc = this.allAccruals.find(a => a.id === id);
             if (!acc) return;
 
+            // Dosyaları mevcutların üzerine ekle
             let updates = {
-                // Not: paymentDate ortak kullanılabilir veya ayrılabilir. 
-                // Karışıklığı önlemek için yurt dışı tarihini ayrıca tutalım.
-                files: [...(acc.files || []), ...uploadedReceipts]
+                files: [...(acc.files || []), ...uploadedFileRecords]
             };
 
-            // A) TEKİL ÖDEME (Detaylı)
-            if (ids.length === 1 && singlePaymentDetails) {
-                
-                // --- SENARYO 1: YURT DIŞI ÖDEMESİ (GİDER - YENİ ALANLAR) ---
-                if (singlePaymentDetails.isForeignMode) {
-                    updates.foreignPaymentDate = date; // Yurt dışı ödeme tarihi
+            // --- SENARYO 1: YURT DIŞI ÖDEMESİ ---
+            if (ids.length === 1 && singlePaymentDetails && singlePaymentDetails.isForeignMode) {
+                updates.foreignPaymentDate = date;
+                const inputOfficial = parseFloat(singlePaymentDetails.manualOfficial) || 0;
+                const inputService = parseFloat(singlePaymentDetails.manualService) || 0;
+                const totalPaidOut = inputOfficial + inputService;
+                const targetDebt = acc.officialFee?.amount || 0;
+                const currency = acc.officialFee?.currency || 'EUR';
 
-                    // Kullanıcıdan gelen "Bizim Ödediğimiz" tutarlar
-                    const inputOfficial = parseFloat(singlePaymentDetails.manualOfficial) || 0;
-                    const inputService = parseFloat(singlePaymentDetails.manualService) || 0;
-                    
-                    // Toplam Cepten Çıkan
-                    const totalPaidOut = inputOfficial + inputService;
+                updates.foreignPaidOfficialAmount = inputOfficial;
+                updates.foreignPaidServiceAmount = inputService;
 
-                    // Hedef Borç: Sadece Resmi Ücret (Yurt dışı ofisine ödenmesi gereken)
-                    const targetDebt = acc.officialFee?.amount || 0;
-                    const currency = acc.officialFee?.currency || 'EUR';
+                const remainingDebt = Math.max(0, targetDebt - totalPaidOut);
+                updates.foreignRemainingAmount = [{ amount: remainingDebt, currency: currency }];
 
-                    // YENİ ALANLAR: Ana bakiyeyi (remainingAmount) bozmuyoruz!
-                    updates.foreignPaidOfficialAmount = inputOfficial;
-                    updates.foreignPaidServiceAmount = inputService;
-
-                    // KALAN BORÇ HESABI: (Resmi Ücret) - (Toplam Ödenen)
-                    const remainingDebt = Math.max(0, targetDebt - totalPaidOut);
-
-                    // Yurt Dışı Kalan Tutar Alanı
-                    updates.foreignRemainingAmount = [{ amount: remainingDebt, currency: currency }];
-
-                    // Yurt Dışı Durum Alanı (Ana status'ü bozmuyoruz)
-                    if (remainingDebt <= 0.01) updates.foreignStatus = 'paid';
-                    else if (totalPaidOut > 0) updates.foreignStatus = 'partially_paid';
-                    else updates.foreignStatus = 'unpaid';
-                } 
-                
-                // --- SENARYO 2: TAHAKKUK TAHSİLATI (GELİR - ESKİ MANTIK) ---
-                else {
-                    updates.paymentDate = date; // Tahsilat tarihi
-
-                    const { payFullOfficial, payFullService, manualOfficial, manualService } = singlePaymentDetails;
-                    const vatMultiplier = 1 + ((acc.vatRate || 0) / 100);
-
-                    // 1. Resmi Ücret Alacağı (KDV Dahil)
-                    const offTarget = acc.applyVatToOfficialFee 
-                        ? (acc.officialFee?.amount || 0) * vatMultiplier 
-                        : (acc.officialFee?.amount || 0);
-                    
-                    const newPaidOff = payFullOfficial ? offTarget : (parseFloat(manualOfficial) || 0);
-
-                    // 2. Hizmet Bedeli Alacağı (KDV Dahil)
-                    const srvTarget = (acc.serviceFee?.amount || 0) * vatMultiplier;
-                    const newPaidSrv = payFullService ? srvTarget : (parseFloat(manualService) || 0);
-
-                    updates.paidOfficialAmount = newPaidOff;
-                    updates.paidServiceAmount = newPaidSrv;
-
-                    // Kalan Alacak Hesabı
-                    const remOff = Math.max(0, offTarget - newPaidOff);
-                    const remSrv = Math.max(0, srvTarget - newPaidSrv);
-
-                    const remMap = {};
-                    if (remOff > 0.01) remMap[acc.officialFee?.currency || 'TRY'] = (remMap[acc.officialFee?.currency] || 0) + remOff;
-                    if (remSrv > 0.01) remMap[acc.serviceFee?.currency || 'TRY'] = (remMap[acc.serviceFee?.currency] || 0) + remSrv;
-                    
-                    updates.remainingAmount = Object.entries(remMap).map(([c, a]) => ({ amount: a, currency: c }));
-
-                    // Ana Durum (Tahsilat Durumu)
-                    if (updates.remainingAmount.length === 0) updates.status = 'paid';
-                    else if (newPaidOff > 0 || newPaidSrv > 0) updates.status = 'partially_paid';
-                    else updates.status = 'unpaid';
-                }
-
+                if (remainingDebt <= 0.01) updates.foreignStatus = 'paid';
+                else if (totalPaidOut > 0) updates.foreignStatus = 'partially_paid';
+                else updates.foreignStatus = 'unpaid';
             } 
             
-            // B) ÇOKLU ÖDEME
+            // --- SENARYO 2: TAHAKKUK TAHSİLATI ---
+            else if (ids.length === 1 && singlePaymentDetails) {
+                updates.paymentDate = date;
+                const { payFullOfficial, payFullService, manualOfficial, manualService } = singlePaymentDetails;
+                const vatMultiplier = 1 + ((acc.vatRate || 0) / 100);
+
+                const offTarget = acc.applyVatToOfficialFee ? (acc.officialFee?.amount || 0) * vatMultiplier : (acc.officialFee?.amount || 0);
+                const newPaidOff = payFullOfficial ? offTarget : (parseFloat(manualOfficial) || 0);
+
+                const srvTarget = (acc.serviceFee?.amount || 0) * vatMultiplier;
+                const newPaidSrv = payFullService ? srvTarget : (parseFloat(manualService) || 0);
+
+                updates.paidOfficialAmount = newPaidOff;
+                updates.paidServiceAmount = newPaidSrv;
+
+                const remOff = Math.max(0, offTarget - newPaidOff);
+                const remSrv = Math.max(0, srvTarget - newPaidSrv);
+
+                const remMap = {};
+                if (remOff > 0.01) remMap[acc.officialFee?.currency || 'TRY'] = (remMap[acc.officialFee?.currency] || 0) + remOff;
+                if (remSrv > 0.01) remMap[acc.serviceFee?.currency || 'TRY'] = (remMap[acc.serviceFee?.currency] || 0) + remSrv;
+                updates.remainingAmount = Object.entries(remMap).map(([c, a]) => ({ amount: a, currency: c }));
+
+                if (updates.remainingAmount.length === 0) updates.status = 'paid';
+                else if (newPaidOff > 0 || newPaidSrv > 0) updates.status = 'partially_paid';
+                else updates.status = 'unpaid';
+            }
+            
+            // --- SENARYO 3: ÇOKLU İŞLEM ---
             else {
-                // Çoklu seçimde mantık biraz karmaşıklaşabilir, 
-                // şimdilik varsayılan olarak "Tahsilat" (Main Tab) veya "Ödeme" (Foreign Tab) olmasına göre ayıralım.
-                // Ancak mevcut yapıda "activeTab" bilgisi buraya gelmiyor, sadece ID'ler geliyor.
-                // Güvenli olması için: Çoklu seçimde sadece status'ü 'paid' yapıp tutarları sıfırlıyoruz.
-                // Hangi modda olduğumuzu anlamak için PaymentData içine bir flag eklenebilir ama
-                // şimdilik main.js tarafında tekil işlem önerilir.
-                
-                // NOT: Çoklu işlem şimdilik sadece ana statüyü (tahsilat) etkiler şekilde bırakıldı.
-                // Yurt dışı toplu ödeme gerekiyorsa buraya isForeignMode kontrolü eklenmeli.
                 updates.status = 'paid';
                 updates.remainingAmount = [];
                 const vatMultiplier = 1 + ((acc.vatRate || 0) / 100);
-                updates.paidOfficialAmount = acc.applyVatToOfficialFee 
-                    ? (acc.officialFee?.amount || 0) * vatMultiplier : (acc.officialFee?.amount || 0);
+                updates.paidOfficialAmount = acc.applyVatToOfficialFee ? (acc.officialFee?.amount || 0) * vatMultiplier : (acc.officialFee?.amount || 0);
                 updates.paidServiceAmount = (acc.serviceFee?.amount || 0) * vatMultiplier;
             }
 
