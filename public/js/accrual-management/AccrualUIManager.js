@@ -280,49 +280,77 @@ export class AccrualUIManager {
 
     /**
      * Ödeme Girişi Modalını Hazırlar
+     * @param {Array} selectedAccrualsList - Seçilen tahakkuk objeleri
+     * @param {String} activeTab - 'main' veya 'foreign'
      */
-    showPaymentModal(selectedAccrualsList) {
+    showPaymentModal(selectedAccrualsList, activeTab = 'main') {
         document.getElementById('paidAccrualCount').textContent = selectedAccrualsList.length;
         document.getElementById('paymentDate').valueAsDate = new Date();
-        document.getElementById('paymentReceiptFileList').innerHTML = ''; // Dosya listesini temizle
+        document.getElementById('paymentReceiptFileList').innerHTML = '';
 
-        const detailedArea = document.getElementById('detailedPaymentInputs');
+        const localArea = document.getElementById('detailedPaymentInputs');
+        const foreignArea = document.getElementById('foreignPaymentInputs');
 
-        // TEKİL SEÇİM: Detaylı giriş göster
+        // Alanları temizle/gizle
+        localArea.style.display = 'none';
+        foreignArea.style.display = 'none';
+
+        // SADECE TEKİL SEÇİMDE DETAY GÖSTERİLİR
         if (selectedAccrualsList.length === 1) {
-            detailedArea.style.display = 'block';
             const acc = selectedAccrualsList[0];
 
-            // Resmi Ücret Bilgisi
-            const offAmt = acc.officialFee?.amount || 0;
-            const offCurr = acc.officialFee?.currency || 'TRY';
-            const offPaid = acc.paidOfficialAmount || 0;
-            
-            document.getElementById('officialFeeBadge').textContent = `${offAmt} ${offCurr}`;
-            document.getElementById('manualOfficialCurrencyLabel').textContent = offCurr;
-            // Input'a mevcut ödeneni yaz (Düzeltme)
-            document.getElementById('manualOfficialAmount').value = offPaid;
+            // --- SENARYO A: YURT DIŞI TABI ---
+            if (activeTab === 'foreign') {
+                foreignArea.style.display = 'block';
 
-            // Hizmet Bedeli Bilgisi
-            const srvAmt = acc.serviceFee?.amount || 0;
-            const srvCurr = acc.serviceFee?.currency || 'TRY';
-            const srvPaid = acc.paidServiceAmount || 0;
+                // 1. Badge: Sadece Resmi Ücreti "Toplam" olarak göster (İsteğiniz üzerine)
+                const offAmt = acc.officialFee?.amount || 0;
+                const offCurr = acc.officialFee?.currency || 'EUR'; // Varsayılan EUR
+                
+                document.getElementById('foreignTotalBadge').textContent = `${this._formatMoney(offAmt, offCurr)}`;
+                
+                // Para birimi etiketlerini güncelle
+                document.querySelectorAll('.foreign-currency-label').forEach(el => el.textContent = offCurr);
 
-            document.getElementById('serviceFeeBadge').textContent = `${srvAmt} ${srvCurr}`;
-            document.getElementById('manualServiceCurrencyLabel').textContent = srvCurr;
-            // Input'a mevcut ödeneni yaz
-            document.getElementById('manualServiceAmount').value = srvPaid;
+                // 2. Inputları Doldur (Mevcut ödenen varsa getir)
+                document.getElementById('manualForeignOfficial').value = acc.paidOfficialAmount || 0;
+                document.getElementById('manualForeignService').value = acc.paidServiceAmount || 0;
+
+                // 3. Checkbox Varsayılanı
+                const payFullCb = document.getElementById('payFullForeign');
+                const splitInputs = document.getElementById('foreignSplitInputs');
+                
+                payFullCb.checked = true;
+                splitInputs.style.display = 'none'; // Kapalı başla
+            }
             
-            // Checkbox eventlerini main.js veya controller yönetecek ama UI buradan tetiklenebilir
-            // Varsayılan olarak full ödeme seçili gelsin
-            document.getElementById('payFullOfficial').checked = true;
-            document.getElementById('officialAmountInputContainer').style.display = 'none';
-            document.getElementById('payFullService').checked = true;
-            document.getElementById('serviceAmountInputContainer').style.display = 'none';
+            // --- SENARYO B: ANA LİSTE (YEREL) ---
+            else {
+                localArea.style.display = 'block';
+
+                // Resmi Ücret
+                const offAmt = acc.officialFee?.amount || 0;
+                const offCurr = acc.officialFee?.currency || 'TRY';
+                document.getElementById('officialFeeBadge').textContent = `${offAmt} ${offCurr}`;
+                document.getElementById('manualOfficialCurrencyLabel').textContent = offCurr;
+                document.getElementById('manualOfficialAmount').value = acc.paidOfficialAmount || 0;
+
+                // Hizmet Bedeli
+                const srvAmt = acc.serviceFee?.amount || 0;
+                const srvCurr = acc.serviceFee?.currency || 'TRY';
+                document.getElementById('serviceFeeBadge').textContent = `${srvAmt} ${srvCurr}`;
+                document.getElementById('manualServiceCurrencyLabel').textContent = srvCurr;
+                document.getElementById('manualServiceAmount').value = acc.paidServiceAmount || 0;
+
+                // Varsayılanlar
+                document.getElementById('payFullOfficial').checked = true;
+                document.getElementById('officialAmountInputContainer').style.display = 'none';
+                document.getElementById('payFullService').checked = true;
+                document.getElementById('serviceAmountInputContainer').style.display = 'none';
+            }
 
         } else {
-            // ÇOKLU SEÇİM: Detayları gizle
-            detailedArea.style.display = 'none';
+            // ÇOKLU SEÇİM: Detay yok, sadece tarih ve dosya
         }
 
         this.paymentModal.classList.add('show');
