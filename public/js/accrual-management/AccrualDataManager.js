@@ -307,64 +307,67 @@ export class AccrualDataManager {
             if (!acc) return;
 
             let updates = {
-                paymentDate: date,
+                // Not: paymentDate ortak kullanılabilir veya ayrılabilir. 
+                // Karışıklığı önlemek için yurt dışı tarihini ayrıca tutalım.
                 files: [...(acc.files || []), ...uploadedReceipts]
             };
 
             // A) TEKİL ÖDEME (Detaylı)
             if (ids.length === 1 && singlePaymentDetails) {
                 
-                // --- SENARYO 1: YURT DIŞI ÖDEMESİ (SİZİN BORCUNUZ) ---
+                // --- SENARYO 1: YURT DIŞI ÖDEMESİ (GİDER - YENİ ALANLAR) ---
                 if (singlePaymentDetails.isForeignMode) {
-                    // Kullanıcıdan gelen "Sizin Ödediğiniz" tutarlar
+                    updates.foreignPaymentDate = date; // Yurt dışı ödeme tarihi
+
+                    // Kullanıcıdan gelen "Bizim Ödediğimiz" tutarlar
                     const inputOfficial = parseFloat(singlePaymentDetails.manualOfficial) || 0;
                     const inputService = parseFloat(singlePaymentDetails.manualService) || 0;
                     
-                    // Toplam Cepten Çıkan (Resmi + Vekil)
+                    // Toplam Cepten Çıkan
                     const totalPaidOut = inputOfficial + inputService;
 
-                    // Hedef Borç: Sadece Resmi Ücret (Yurt dışı ofisine ödenmesi gereken asıl tutar)
+                    // Hedef Borç: Sadece Resmi Ücret (Yurt dışı ofisine ödenmesi gereken)
                     const targetDebt = acc.officialFee?.amount || 0;
                     const currency = acc.officialFee?.currency || 'EUR';
 
-                    // Bu alanları Yurt Dışı Ödemesi için özelleştiriyoruz
-                    // Not: Veritabanında ayrı bir "foreignPaidAmount" alanı olmadığı için 
-                    // mevcut alanları kullanıyoruz ama mantığı farklı kuruyoruz.
-                    updates.paidOfficialAmount = inputOfficial; // Sizin ödediğiniz resmi
-                    updates.paidServiceAmount = inputService;   // Sizin ödediğiniz vekil ücreti
+                    // YENİ ALANLAR: Ana bakiyeyi (remainingAmount) bozmuyoruz!
+                    updates.foreignPaidOfficialAmount = inputOfficial;
+                    updates.foreignPaidServiceAmount = inputService;
 
                     // KALAN BORÇ HESABI: (Resmi Ücret) - (Toplam Ödenen)
                     const remainingDebt = Math.max(0, targetDebt - totalPaidOut);
 
-                    // Veritabanına yazılacak kalan tutar
-                    updates.remainingAmount = [{ amount: remainingDebt, currency: currency }];
+                    // Yurt Dışı Kalan Tutar Alanı
+                    updates.foreignRemainingAmount = [{ amount: remainingDebt, currency: currency }];
 
-                    // Durum (Sizin borcunuz bitti mi?)
-                    if (remainingDebt <= 0.01) updates.status = 'paid';
-                    else if (totalPaidOut > 0) updates.status = 'partially_paid';
-                    else updates.status = 'unpaid';
+                    // Yurt Dışı Durum Alanı (Ana status'ü bozmuyoruz)
+                    if (remainingDebt <= 0.01) updates.foreignStatus = 'paid';
+                    else if (totalPaidOut > 0) updates.foreignStatus = 'partially_paid';
+                    else updates.foreignStatus = 'unpaid';
                 } 
                 
-                // --- SENARYO 2: TAHAKKUK TAHSİLATI (SİZİN ALACAĞINIZ) - ESKİ HALİ ---
+                // --- SENARYO 2: TAHAKKUK TAHSİLATI (GELİR - ESKİ MANTIK) ---
                 else {
+                    updates.paymentDate = date; // Tahsilat tarihi
+
                     const { payFullOfficial, payFullService, manualOfficial, manualService } = singlePaymentDetails;
                     const vatMultiplier = 1 + ((acc.vatRate || 0) / 100);
 
-                    // 1. Resmi Ücret Alacağı
+                    // 1. Resmi Ücret Alacağı (KDV Dahil)
                     const offTarget = acc.applyVatToOfficialFee 
                         ? (acc.officialFee?.amount || 0) * vatMultiplier 
                         : (acc.officialFee?.amount || 0);
                     
                     const newPaidOff = payFullOfficial ? offTarget : (parseFloat(manualOfficial) || 0);
 
-                    // 2. Hizmet Bedeli Alacağı
+                    // 2. Hizmet Bedeli Alacağı (KDV Dahil)
                     const srvTarget = (acc.serviceFee?.amount || 0) * vatMultiplier;
                     const newPaidSrv = payFullService ? srvTarget : (parseFloat(manualService) || 0);
 
                     updates.paidOfficialAmount = newPaidOff;
                     updates.paidServiceAmount = newPaidSrv;
 
-                    // Kalan Alacak Hesabı (Ayrı Ayrı)
+                    // Kalan Alacak Hesabı
                     const remOff = Math.max(0, offTarget - newPaidOff);
                     const remSrv = Math.max(0, srvTarget - newPaidSrv);
 
@@ -374,7 +377,7 @@ export class AccrualDataManager {
                     
                     updates.remainingAmount = Object.entries(remMap).map(([c, a]) => ({ amount: a, currency: c }));
 
-                    // Durum (Alacak bitti mi?)
+                    // Ana Durum (Tahsilat Durumu)
                     if (updates.remainingAmount.length === 0) updates.status = 'paid';
                     else if (newPaidOff > 0 || newPaidSrv > 0) updates.status = 'partially_paid';
                     else updates.status = 'unpaid';
@@ -382,11 +385,19 @@ export class AccrualDataManager {
 
             } 
             
-            // B) ÇOKLU ÖDEME (Hepsini Kapat)
+            // B) ÇOKLU ÖDEME
             else {
+                // Çoklu seçimde mantık biraz karmaşıklaşabilir, 
+                // şimdilik varsayılan olarak "Tahsilat" (Main Tab) veya "Ödeme" (Foreign Tab) olmasına göre ayıralım.
+                // Ancak mevcut yapıda "activeTab" bilgisi buraya gelmiyor, sadece ID'ler geliyor.
+                // Güvenli olması için: Çoklu seçimde sadece status'ü 'paid' yapıp tutarları sıfırlıyoruz.
+                // Hangi modda olduğumuzu anlamak için PaymentData içine bir flag eklenebilir ama
+                // şimdilik main.js tarafında tekil işlem önerilir.
+                
+                // NOT: Çoklu işlem şimdilik sadece ana statüyü (tahsilat) etkiler şekilde bırakıldı.
+                // Yurt dışı toplu ödeme gerekiyorsa buraya isForeignMode kontrolü eklenmeli.
                 updates.status = 'paid';
                 updates.remainingAmount = [];
-                // Muhasebesel tutarlılık için tam tutarları yaz
                 const vatMultiplier = 1 + ((acc.vatRate || 0) / 100);
                 updates.paidOfficialAmount = acc.applyVatToOfficialFee 
                     ? (acc.officialFee?.amount || 0) * vatMultiplier : (acc.officialFee?.amount || 0);
