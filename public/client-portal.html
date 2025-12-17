@@ -3804,19 +3804,45 @@ window.initReports = function() {
     console.log("Raporlar ve Analizler Hazırlanıyor...");
 
     // --- 1. VERİ KAYNAKLARINI TOPLA ---
-    // Portföy Verisi (Marka, Patent vb.)
-    const portfolioData = window.markaPaginationData?.allDataUnfiltered || [];
-    
-    // Hukuki Veri (Dava ve İtirazlar birleştiriliyor)
-    const legalData = (window.davaItirazPaginationData?.allDataUnfiltered || [])
+    let portfolioData = window.markaPaginationData?.allDataUnfiltered || [];
+    let legalData = (window.davaItirazPaginationData?.allDataUnfiltered || [])
                       .concat(window.davaPaginationData?.allDataUnfiltered || []);
-    
-    // Görev Verisi (Onay bekleyen işler için)
-    const taskData = window.taskPaginationData?.allDataUnfiltered || [];
+    let taskData = window.taskPaginationData?.allDataUnfiltered || [];
 
-    // Veri kontrolü
-    if (portfolioData.length === 0) {
-        $('#world-map-markers').html('<div class="d-flex justify-content-center align-items-center h-100 text-muted">Analiz edilecek veri bulunamadı.</div>');
+    // --- 2. VERİLERİ SEÇİLİ MÜŞTERİYE GÖRE FİLTRELE (YENİ) ---
+    const selectedClient = window.selectedClientId; // Global seçim
+
+    if (selectedClient && selectedClient !== 'ALL') {
+        console.log("📊 Raporlar filtreleniyor. Seçili Müşteri:", selectedClient);
+
+        // A) Portföy Filtresi (Marka/Patent Sahibi)
+        portfolioData = portfolioData.filter(item => 
+            item.applicants && Array.isArray(item.applicants) && item.applicants.some(a => a.id === selectedClient)
+        );
+
+        // B) Hukuki Veri Filtresi (Dava/İtiraz Tarafı)
+        legalData = legalData.filter(item => {
+            // Dava ise: client.id kontrolü
+            if (item.client && item.client.id === selectedClient) return true;
+            // İtiraz ise: applicants (Marka sahibi) kontrolü
+            if (item.applicants && Array.isArray(item.applicants) && item.applicants.some(a => a.id === selectedClient)) return true;
+            return false;
+        });
+
+        // C) Görev Filtresi (İlgili Müşteri)
+        taskData = taskData.filter(t => 
+            t._relatedClientIds && t._relatedClientIds.includes(selectedClient)
+        );
+    }
+
+    // Veri kontrolü (Filtreleme sonrası boş kaldıysa)
+    if (portfolioData.length === 0 && legalData.length === 0) {
+        $('#world-map-markers').html('<div class="d-flex justify-content-center align-items-center h-100 text-muted">Bu müşteri için analiz edilecek veri bulunamadı.</div>');
+        // Eski grafikleri temizle
+        $('#chart-portfolio-dist, #chart-legal-status, #chart-class-radar, #chart-budget-forecast').html('');
+        // Sayaçları sıfırla
+        $('#rep-total-assets, #rep-total-countries, #rep-pending-tasks, #rep-active-legal, #rep-budget-est').text('0');
+        $('#rep-stuck-list').html('');
         return;
     }
 
