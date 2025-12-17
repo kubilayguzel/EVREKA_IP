@@ -1853,14 +1853,17 @@ window.fetchAndDisplayInvoices = async function(linkedIds) {
 
             // State Güncelleme
             $('#dashUnpaidInvoices').text(unique.filter(a => a.status === 'unpaid').length);
-            window.invoicesPaginationData.allDataUnfiltered = unique; 
-            window.invoicesPaginationData.allData = unique;           
             
+            // 1. Ham veriyi sakla (Filtreleme için kaynak)
+            window.invoicesPaginationData.allDataUnfiltered = unique; 
+            
+            // 2. Pagination modülünü başlat (Eğer yoksa)
             if (!window.invoicesPaginationData.pagination && window.Pagination) {
                 window.invoicesPaginationData.pagination = new window.Pagination({
                     itemsPerPage: 10,
                     containerId: 'invoices-pagination-container',
                     onPageChange: (page, perPage) => {
+                        // Sayfa değiştiğinde filtrelenmiş veriden dilim al
                         const start = (page - 1) * perPage;
                         const slice = window.invoicesPaginationData.allData.slice(start, start + perPage);
                         window.renderInvoicesTable(slice);
@@ -1868,16 +1871,10 @@ window.fetchAndDisplayInvoices = async function(linkedIds) {
                 });
             }
 
-            if (window.invoicesPaginationData.pagination) window.invoicesPaginationData.pagination.update(unique.length);
-            
-            $('#invoiceSearchText').val('');
-            $('#invoiceDurumFilter').val('TÜMÜ');
-            
-            if (unique.length > 0) {
-                window.renderInvoicesTable(unique.slice(0, 10));
-            } else {
-                tbody.html('<tr><td colspan="7" class="text-center text-muted">Görüntülenecek fatura bulunamadı.</td></tr>');
-            }
+            // 3. FİLTRELE VE GÖSTER (ÇÖZÜM BURADA)
+            // Veriyi doğrudan basmak yerine filtre fonksiyonunu çağırıyoruz.
+            // Bu fonksiyon 'window.selectedClientId' değerini kontrol edip doğru faturaları gösterecek.
+            window.applyInvoiceFilter();
 
         } catch (error) {
             console.error("❌ Fatura yükleme hatası:", error);
