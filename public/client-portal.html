@@ -1160,7 +1160,13 @@ async function initPortal() {
                     const personData = doc.data();
                     // Eğer bu kişinin evrakları varsa listeye ekle
                     if (personData.documents && Array.isArray(personData.documents)) {
-                        allDocuments = [...allDocuments, ...personData.documents];
+                        // ÇÖZÜM: Her belgeye sahibinin ID'sini (ownerId) ekliyoruz
+                        const docsWithOwner = personData.documents.map(d => ({ 
+                            ...d, 
+                            ownerId: doc.id, // Müşteri ID'si (Filtreleme için şart)
+                            ownerName: personData.name // Müşteri Adı (Görselde göstermek isterseniz)
+                        }));
+                        allDocuments = [...allDocuments, ...docsWithOwner];
                     }
                 });
             });
@@ -4271,20 +4277,31 @@ window.initReports = function() {
     window.applyContractsFilter = function() {
         const searchText = $('#contractsSearchText').val().toLowerCase().trim();
         const rawData = window.contractsPaginationData.allDataUnfiltered || [];
+        const selectedClient = window.selectedClientId; // Global Müşteri Seçimi
 
         // Filtreleme
         const filtered = rawData.filter(doc => {
+            // 1. MÜŞTERİ FİLTRESİ (YENİ EKLENDİ)
+            // Eğer "Tümü" seçili değilse ve belgenin sahibi seçili müşteri değilse GİZLE.
+            if (selectedClient && selectedClient !== 'ALL') {
+                // ownerId yukarıdaki düzeltme ile artık belgenin içinde var
+                if (doc.ownerId && doc.ownerId !== selectedClient) return false;
+            }
+
+            // 2. Metin Araması (Mevcut kod)
             if (!searchText) return true;
             const searchSource = [
                 doc.type || 'Diğer',
-                doc.countryName || '-'
+                doc.countryName || '-',
+                doc.ownerName || '' // Müşteri adında da arama yapabilmesi için
             ].join(' ').toLowerCase();
             return searchSource.includes(searchText);
         });
 
+        // Veriyi güncelle ve tabloyu çiz
         window.contractsPaginationData.allData = filtered;
 
-        // Sayfalama ve Render
+        // Sayfalama (Pagination) Yönetimi
         if (!window.contractsPaginationData.pagination && window.Pagination) {
             window.contractsPaginationData.pagination = new window.Pagination({
                 itemsPerPage: 10,
@@ -4302,7 +4319,6 @@ window.initReports = function() {
             window.contractsPaginationData.pagination.currentPage = 1;
             window.renderContractsTable(filtered.slice(0, 10), 0);
         } else {
-            // Fallback (Pagination scripti yoksa hepsi)
             window.renderContractsTable(filtered, 0);
         }
     };
