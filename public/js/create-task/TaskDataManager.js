@@ -98,8 +98,7 @@ export class TaskDataManager {
             const suitsRef = collection(db, 'suits');
             let q = query(suitsRef);
 
-            // Eğer dava türü kısıtlaması varsa (örn: Sadece İstinaf dosyaları)
-            // Not: 'in' sorgusu en fazla 10 eleman alır.
+            // Filtreleme (İstinaf vb. için)
             if (allowedTypeIds && allowedTypeIds.length > 0 && allowedTypeIds.length <= 10) {
                 q = query(q, where('typeId', 'in', allowedTypeIds));
             }
@@ -110,16 +109,32 @@ export class TaskDataManager {
 
             snapshot.forEach(doc => {
                 const data = doc.data();
-                // Basit metin eşleşmesi (Dosya No, Mahkeme veya Karşı Taraf)
-                const fileNo = (data.fileNumber || '').toLocaleLowerCase('tr-TR');
-                const court = (data.court || '').toLocaleLowerCase('tr-TR');
-                const plaintiff = (data.clientRole === 'davaci' ? 'Müvekkil' : (data.opposingParty || '')).toLocaleLowerCase('tr-TR');
                 
-                if (fileNo.includes(lowerSearch) || court.includes(lowerSearch) || plaintiff.includes(lowerSearch)) {
+                // --- Veri Yapısı Haritalama ---
+                // Sizin yapınız: suitDetails: { caseNo: "...", court: "..." }
+                const details = data.suitDetails || {};
+                
+                const fileNo = (details.caseNo || data.fileNumber || data.caseNo || '').toLocaleLowerCase('tr-TR');
+                const court = (details.court || data.court || '').toLocaleLowerCase('tr-TR');
+                
+                // Taraf İsimleri (Opposing Party, Client vb.)
+                // Veritabanındaki alan adlarınıza göre burayı genişletiyoruz:
+                const opposing = (data.opposingParty || details.opposingParty || '').toLocaleLowerCase('tr-TR');
+                const client = (data.clientName || details.clientName || '').toLocaleLowerCase('tr-TR'); // Eğer clientName tutuyorsanız
+                
+                // Eşleşme Kontrolü
+                if (fileNo.includes(lowerSearch) || 
+                    court.includes(lowerSearch) || 
+                    opposing.includes(lowerSearch) ||
+                    client.includes(lowerSearch)) {
+                    
                     results.push({
                         id: doc.id,
                         ...data,
-                        _source: 'suit' // Kaynağı belirtiyoruz
+                        // UI'da göstermek için veriyi standartlaştırıyoruz
+                        displayFileNumber: details.caseNo || data.fileNumber || '-', 
+                        displayCourt: details.court || data.court || 'Mahkeme Yok',
+                        _source: 'suit' 
                     });
                 }
             });
@@ -130,7 +145,7 @@ export class TaskDataManager {
             return [];
         }
     }
-    
+
     async fetchAndStoreBulletinData(bulletinId) {
         if (!bulletinId) return null;
         if (this.bulletinDataCache[bulletinId]) return this.bulletinDataCache[bulletinId];
