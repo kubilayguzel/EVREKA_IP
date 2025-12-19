@@ -601,18 +601,26 @@ class CreateTaskController {
         if (!input || !results) return;
         
         const typeId = String(this.state.selectedTaskType?.id || '');
-        
-        // Modları Belirle
-        const isType20 = ['20', 'trademark_publication_objection', TASK_IDS.ITIRAZ_YAYIN].includes(typeId);
-        const isHybrid = [
-            '19', 'trademark_reconsideration_of_publication_objection', TASK_IDS.YAYIMA_ITIRAZIN_YENIDEN_INCELENMESI,
-            '8', TASK_IDS.KARARA_ITIRAZ_GERI_CEKME,
-            '21', TASK_IDS.YAYINA_ITIRAZI_GERI_CEKME
-        ].includes(typeId);
+        const selectedType = this.state.selectedTaskType;
 
-        if (isType20) this.state.searchSource = 'bulletin';
-        else if (isHybrid) this.state.searchSource = 'hybrid'; 
-        else this.state.searchSource = 'portfolio';
+        // 1. Önce Veritabanı Ayarına Bak (Suits mi?)
+        if (selectedType && selectedType.relatedAssetSource === 'suits') {
+            this.state.searchSource = 'suits';
+            this.state.targetSuitTypes = selectedType.targetSuitTypes || [];
+        } 
+        // 2. Yoksa Eski Mantık Devam Etsin
+        else {
+            const isType20 = ['20', 'trademark_publication_objection', TASK_IDS.ITIRAZ_YAYIN].includes(typeId);
+            const isHybrid = [
+                '19', 'trademark_reconsideration_of_publication_objection', TASK_IDS.YAYIMA_ITIRAZIN_YENIDEN_INCELENMESI,
+                '8', TASK_IDS.KARARA_ITIRAZ_GERI_CEKME,
+                '21', TASK_IDS.YAYINA_ITIRAZI_GERI_CEKME
+            ].includes(typeId);
+
+            if (isType20) this.state.searchSource = 'bulletin';
+            else if (isHybrid) this.state.searchSource = 'hybrid'; 
+            else this.state.searchSource = 'portfolio';
+        }
         
         console.log(`🔍 Arama Modu: ${this.state.searchSource.toUpperCase()}`);
 
