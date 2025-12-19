@@ -585,6 +585,83 @@ export class TaskUIManager {
         }
     }
 
+    /**
+     * Arama sonuçlarını (Dava veya Marka/Patent) ekrana basar
+     * @param {Array} items - Bulunan kayıtlar
+     * @param {Function} onSelect - Seçim yapıldığında çalışacak callback
+     * @param {string} sourceType - 'suits', 'ipRecords', 'bulletin' vb.
+     */
+    renderAssetSearchResults(items, onSelect, sourceType = 'ipRecords') {
+        // HTML'deki sonuç kutusunu bul
+        const container = document.getElementById('ipRecordSearchResults'); 
+        if (!container) return;
+
+        // Sonuç yoksa
+        if (!items || items.length === 0) {
+            container.innerHTML = '<div class="p-2 text-muted">Sonuç bulunamadı.</div>';
+            container.style.display = 'block';
+            return;
+        }
+
+        // HTML oluştur
+        container.innerHTML = items.map(item => {
+            let badge = '';
+            let title = '';
+            let subTitle = '';
+
+            // --- A) DAVA KARTI TASARIMI ---
+            if (sourceType === 'suits' || item._source === 'suit') {
+                badge = '<span class="badge badge-primary float-right" style="font-size: 10px;">Dava</span>';
+                
+                // Dava bilgilerini güvenli şekilde al
+                title = item.displayCourt || item.court || 'Mahkeme Bilgisi Yok';
+                subTitle = `Dosya: <b>${item.displayFileNumber || item.fileNumber || '-'}</b>`;
+                
+                // Varsa Karşı Tarafı ekle
+                if (item.opposingParty) {
+                    subTitle += `<br><small class="text-muted">Karşı: ${item.opposingParty}</small>`;
+                }
+            } 
+            // --- B) MARKA/PATENT KARTI TASARIMI ---
+            else {
+                const isThirdParty = String(item.recordOwnerType || '').toLowerCase() === 'third_party';
+                
+                if (item._source === 'bulletin' || isThirdParty) {
+                    badge = '<span class="badge badge-warning float-right" style="font-size: 10px;">Bülten</span>';
+                } else {
+                    badge = '<span class="badge badge-info float-right" style="font-size: 10px;">Portföy</span>';
+                }
+                
+                title = item.title || item.markName || '-';
+                subTitle = item.applicationNumber || item.applicationNo || '-';
+            }
+
+            return `
+            <div class="search-result-item p-2 border-bottom" style="cursor:pointer;" data-id="${item.id}" data-source="${item._source}">
+                ${badge}
+                <strong>${title}</strong>
+                <br><small>${subTitle}</small>
+            </div>
+            `;
+        }).join('');
+        
+        container.style.display = 'block';
+
+        // Tıklama Olaylarını Tanımla
+        container.querySelectorAll('.search-result-item').forEach(el => {
+            el.addEventListener('click', () => {
+                const id = el.dataset.id;
+                const source = el.dataset.source;
+                // Listeden ilgili objeyi bul
+                const record = items.find(i => i.id === id);
+                // Callback tetikle (Main.js'e geri döner)
+                onSelect(record, source);
+                // Kutuyu gizle
+                container.style.display = 'none';
+            });
+        });
+    }
+    
     // --- GENEL ---
     updateButtonsAndTabs(isLastTab) {
         const container = document.getElementById('formActionsContainer');
