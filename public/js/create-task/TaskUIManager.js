@@ -608,4 +608,22 @@ export class TaskUIManager {
         });
         el.disabled = false;
     }
+
+    // Yeni Metod: Arama başlığını ve placeholder'ı değiştirir
+    updateAssetSearchLabel(sourceType) {
+        const label = document.querySelector('#card-asset .section-title'); // "2. İşleme Konu Varlık" başlığı
+        const input = document.getElementById('ipRecordSearch');
+        const searchLabel = document.querySelector('#card-asset label.form-label'); // "Portföyden Ara" yazısı
+
+        if (sourceType === 'suits') {
+            if (label) label.textContent = '2. İşleme Konu Dava';
+            if (searchLabel) searchLabel.textContent = 'Dava Dosyası Ara';
+            if (input) input.placeholder = 'Dosya no, mahkeme adı...';
+        } else {
+            // Varsayılan
+            if (label) label.textContent = '2. İşleme Konu Varlık';
+            if (searchLabel) searchLabel.textContent = 'Portföyden Ara';
+            if (input) input.placeholder = 'Marka adı, başvuru no...';
+        }
+    }
 }
