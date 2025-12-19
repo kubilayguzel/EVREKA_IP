@@ -642,49 +642,59 @@ class CreateTaskController {
             
             timer = setTimeout(async () => {
                 let items = [];
-                // Hangi modda arama yapıldığını konsola yazalım
                 console.log(`🔎 Aranıyor (Mod: ${this.state.searchSource}): "${term}"`);
 
                 try {
-                    // --- 1. DAVA ARAMA MODU (YENİ) ---
+                    // --- 1. DAVA ARAMA MODU ---
                     if (this.state.searchSource === 'suits') {
-                        // TaskDataManager'a eklediğimiz searchSuits fonksiyonunu çağırıyoruz
-                        // targetSuitTypes: İşlem tipine göre filtrelenmiş dava türleri (örn: sadece İstinaf dosyaları)
+                        // TaskDataManager'daki searchSuits fonksiyonunu kullan
                         items = await this.dataManager.searchSuits(term, this.state.targetSuitTypes);
                     }
-                    // --- 2. BÜLTEN ARAMA MODU ---
+                    // --- 2. BÜLTEN MODU ---
                     else if (this.state.searchSource === 'bulletin') {
                         const res = await this.dataManager.searchBulletinRecords(term);
                         items = res.map(x => ({ ...x, _source: 'bulletin' }));
                     } 
-                    // --- 3. HİBRİT ARAMA MODU ---
+                    // --- 3. HİBRİT MODU ---
                     else if (this.state.searchSource === 'hybrid') {
                         const [bulletinRes, portfolioRes] = await Promise.all([
                             this.dataManager.searchBulletinRecords(term),
                             this._searchPortfolioLocal(term)
                         ]);
                         
-                        const bItems = bulletinRes.map(x => ({ ...x, _source: 'bulletin' }));
-                        const pItems = portfolioRes.map(x => ({ ...x, _source: 'portfolio' }));
-                        
                         // Deduplication (Çift kayıt engelleme)
+                        const pItems = portfolioRes.map(x => ({ ...x, _source: 'portfolio' }));
                         const normalize = (val) => String(val || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
                         const existingAppNos = new Set(pItems.map(p => normalize(p.applicationNumber || p.applicationNo)));
 
-                        const uniqueBItems = bItems.filter(b => {
-                            const bNo = normalize(b.applicationNo || b.applicationNumber);
-                            return !bNo || !existingAppNos.has(bNo);
-                        });
+                        const uniqueBItems = bulletinRes
+                            .map(x => ({ ...x, _source: 'bulletin' }))
+                            .filter(b => !existingAppNos.has(normalize(b.applicationNo || b.applicationNumber)));
 
                         items = [...pItems, ...uniqueBItems];
                     }
-                    // --- 4. PORTFÖY ARAMA MODU (Varsayılan) ---
+                    // --- 4. PORTFÖY MODU ---
                     else {
                         const res = this._searchPortfolioLocal(term);
                         items = res.map(x => ({ ...x, _source: 'portfolio' }));
                     }
                     
-                    this.renderIpSearchResults(items, results);
+                    // --- SONUÇLARI GÖSTER (TaskUIManager Kullanarak) ---
+                    // onSelect callback'i ile seçim yapıldığında ne olacağını belirliyoruz
+                    this.uiManager.renderAssetSearchResults(items, async (record, source) => {
+                        
+                        // Bülten ise detay çek
+                        if (source === 'bulletin') {
+                            console.log('📥 Bülten detayı çekiliyor...');
+                            const details = await this.dataManager.fetchAndStoreBulletinData(record.id);
+                            if(details) record = {...record, ...details};
+                        }
+                        
+                        record._source = source;
+                        this.selectIpRecord(record); // Seçim metodunu çağır
+                        document.getElementById('ipRecordSearch').value = ''; // Inputu temizle
+
+                    }, this.state.searchSource);
 
                 } catch (err) {
                     console.error('Arama hatası:', err);
@@ -804,10 +814,13 @@ class CreateTaskController {
         
         // --- DURUM 1: DAVA DOSYASI SEÇİLDİYSE ---
         if (record._source === 'suit') {
-            // Label ve Numara Alanlarını Güncelle
-            document.getElementById('selectedIpRecordLabel').textContent = record.court || 'Mahkeme Bilgisi Yok';
+            // Label ve Numara Alanlarını Güncelle (Veri yapısına uygun)
+            const displayCourt = record.displayCourt || record.suitDetails?.court || record.court || 'Mahkeme Yok';
+            const displayFile = record.displayFileNumber || record.suitDetails?.caseNo || record.fileNumber || '-';
+
+            document.getElementById('selectedIpRecordLabel').textContent = displayCourt;
             document.getElementById('selectedIpRecordNumber').innerHTML = 
-                `Dosya No: ${record.fileNumber || '-'} <br> <span class="badge badge-light">${record.typeId || 'Dava'}</span>`;
+                `Dosya No: ${displayFile} <br> <span class="badge badge-light">${record.typeId || 'Dava'}</span>`;
 
             // Görsel Alanlarını Ayarla (Resmi gizle, İkonu göster)
             const imgEl = document.getElementById('selectedIpRecordImage');
@@ -816,14 +829,14 @@ class CreateTaskController {
             if(imgEl) imgEl.style.display = 'none';
             if(phEl) {
                 phEl.style.display = 'flex';
-                // FontAwesome ikonu (Tokmak veya Klasör)
+                // FontAwesome ikonu (Tokmak)
                 phEl.innerHTML = '<i class="fas fa-gavel" style="font-size: 24px; color: #555;"></i>';
             }
 
             // Container'ı Aç
             document.getElementById('selectedIpRecordContainer').style.display = 'block';
 
-            // Dava seçiminde WIPO, Menşe veya Geri Çekme kontrollerine gerek yok.
+            // Dava seçiminde WIPO, Menşe vb. kontrollere gerek yok.
             // Sadece validasyonu çalıştır ve çık.
             this.validator.checkCompleteness(this.state);
             return;
