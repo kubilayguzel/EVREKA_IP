@@ -86,6 +86,51 @@ export class TaskDataManager {
         }
     }
 
+    /**
+     * Dava dosyalarını arar
+     * @param {string} searchText - Arama metni
+     * @param {Array} allowedTypeIds - Filtrelenecek dava türü ID'leri
+     */
+    async searchSuits(searchText, allowedTypeIds = []) {
+        if (!searchText || searchText.length < 2) return [];
+
+        try {
+            const suitsRef = collection(db, 'suits');
+            let q = query(suitsRef);
+
+            // Eğer dava türü kısıtlaması varsa (örn: Sadece İstinaf dosyaları)
+            // Not: 'in' sorgusu en fazla 10 eleman alır.
+            if (allowedTypeIds && allowedTypeIds.length > 0 && allowedTypeIds.length <= 10) {
+                q = query(q, where('typeId', 'in', allowedTypeIds));
+            }
+
+            const snapshot = await getDocs(q);
+            const results = [];
+            const lowerSearch = searchText.toLocaleLowerCase('tr-TR');
+
+            snapshot.forEach(doc => {
+                const data = doc.data();
+                // Basit metin eşleşmesi (Dosya No, Mahkeme veya Karşı Taraf)
+                const fileNo = (data.fileNumber || '').toLocaleLowerCase('tr-TR');
+                const court = (data.court || '').toLocaleLowerCase('tr-TR');
+                const plaintiff = (data.clientRole === 'davaci' ? 'Müvekkil' : (data.opposingParty || '')).toLocaleLowerCase('tr-TR');
+                
+                if (fileNo.includes(lowerSearch) || court.includes(lowerSearch) || plaintiff.includes(lowerSearch)) {
+                    results.push({
+                        id: doc.id,
+                        ...data,
+                        _source: 'suit' // Kaynağı belirtiyoruz
+                    });
+                }
+            });
+
+            return results;
+        } catch (error) {
+            console.error('Dava arama hatası:', error);
+            return [];
+        }
+    }
+    
     async fetchAndStoreBulletinData(bulletinId) {
         if (!bulletinId) return null;
         if (this.bulletinDataCache[bulletinId]) return this.bulletinDataCache[bulletinId];
