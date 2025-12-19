@@ -341,6 +341,14 @@ class CreateTaskController {
         if (isMarkaBasvuru) this.uiManager.renderTrademarkApplicationForm();
         else this.uiManager.renderBaseForm(selectedType.alias || selectedType.name, selectedType.id, selectedType.ipType === 'suit');
         
+        // 3. İlgili Varlık Kaynağını Belirle (Yeni Kod)
+        const assetSource = selectedType.relatedAssetSource || 'ipRecords';
+        this.state.searchSource = assetSource; // State'e kaydet (suits veya ipRecords)
+        this.state.targetSuitTypes = selectedType.targetSuitTypes || []; // Filtreleri kaydet
+        
+        // UI Başlığını Güncelle
+        this.uiManager.updateAssetSearchLabel(assetSource);
+
         // 2. DOM oluştuktan hemen sonra AccrualFormManager'ı başlat ve render et
         // Container ID: 'createTaskAccrualContainer' (TaskUIManager'da verdiğimiz ID)
         if (document.getElementById('createTaskAccrualContainer')) {
@@ -626,15 +634,22 @@ class CreateTaskController {
             
             timer = setTimeout(async () => {
                 let items = [];
-                console.log(`🔎 Aranıyor: "${term}"`);
+                // Hangi modda arama yapıldığını konsola yazalım
+                console.log(`🔎 Aranıyor (Mod: ${this.state.searchSource}): "${term}"`);
 
                 try {
-                    // A) SADECE BÜLTEN
-                    if (this.state.searchSource === 'bulletin') {
+                    // --- 1. DAVA ARAMA MODU (YENİ) ---
+                    if (this.state.searchSource === 'suits') {
+                        // TaskDataManager'a eklediğimiz searchSuits fonksiyonunu çağırıyoruz
+                        // targetSuitTypes: İşlem tipine göre filtrelenmiş dava türleri (örn: sadece İstinaf dosyaları)
+                        items = await this.dataManager.searchSuits(term, this.state.targetSuitTypes);
+                    }
+                    // --- 2. BÜLTEN ARAMA MODU ---
+                    else if (this.state.searchSource === 'bulletin') {
                         const res = await this.dataManager.searchBulletinRecords(term);
                         items = res.map(x => ({ ...x, _source: 'bulletin' }));
                     } 
-                    // B) HİBRİT (Bülten + Portföy)
+                    // --- 3. HİBRİT ARAMA MODU ---
                     else if (this.state.searchSource === 'hybrid') {
                         const [bulletinRes, portfolioRes] = await Promise.all([
                             this.dataManager.searchBulletinRecords(term),
@@ -644,25 +659,18 @@ class CreateTaskController {
                         const bItems = bulletinRes.map(x => ({ ...x, _source: 'bulletin' }));
                         const pItems = portfolioRes.map(x => ({ ...x, _source: 'portfolio' }));
                         
-                        // --- DEDUPLICATION (Çift Kayıt Engelleme) ---
-                        
-                        // 1. Portföydeki numaraları normalize edip listele
-                        const existingAppNos = new Set(pItems.map(p => 
-                            normalize(p.applicationNumber || p.applicationNo)
-                        ));
+                        // Deduplication (Çift kayıt engelleme)
+                        const normalize = (val) => String(val || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+                        const existingAppNos = new Set(pItems.map(p => normalize(p.applicationNumber || p.applicationNo)));
 
-                        // 2. Bültenden gelenleri filtrele
-                        // Eğer numarası (normalize edilmiş hali) zaten portföyde varsa, Bültenden geleni ALMA.
-                        // (Böylece kullanıcı sadece Portföydeki kaydı görür, çift görmez)
                         const uniqueBItems = bItems.filter(b => {
                             const bNo = normalize(b.applicationNo || b.applicationNumber);
-                            // Numarası yoksa veya portföyde yoksa listeye al
                             return !bNo || !existingAppNos.has(bNo);
                         });
 
                         items = [...pItems, ...uniqueBItems];
                     }
-                    // C) SADECE PORTFÖY
+                    // --- 4. PORTFÖY ARAMA MODU (Varsayılan) ---
                     else {
                         const res = this._searchPortfolioLocal(term);
                         items = res.map(x => ({ ...x, _source: 'portfolio' }));
@@ -681,35 +689,45 @@ class CreateTaskController {
         });
     }
 
-    // --- GÜNCELLENEN METOT 2: Sonuç Gösterimi ve Etiketleme ---
+// --- GÜNCELLENEN METOT 2: Sonuç Gösterimi ve Etiketleme ---
     renderIpSearchResults(items, container) {
         if (items.length === 0) {
             container.innerHTML = '<div class="p-2 text-muted">Sonuç bulunamadı.</div>';
         } else {
             container.innerHTML = items.map(item => {
-                // ETİKET MANTIĞI:
-                // 1. Kaynak Bülten ise -> "Bülten"
-                // 2. Kaynak Portföy ama Tipi 'third_party' ise -> "Bülten" (Kullanıcı için bülten gibi görünsün)
-                // 3. Sadece 'self' olanlar -> "Portföy"
-                
                 let badge = '';
-                const isThirdParty = String(item.recordOwnerType || '').toLowerCase() === 'third_party';
-                
-                if (item._source === 'bulletin' || isThirdParty) {
-                    badge = '<span class="badge badge-warning float-right" style="font-size: 10px;">Bülten</span>';
-                } else {
-                    badge = '<span class="badge badge-info float-right" style="font-size: 10px;">Portföy</span>';
+                let title = '';
+                let subTitle = '';
+
+                // --- A) DAVA KARTI TASARIMI ---
+                if (item._source === 'suit') {
+                    badge = '<span class="badge badge-primary float-right" style="font-size: 10px;">Dava</span>';
+                    title = item.court || 'Mahkeme Bilgisi Yok';
+                    subTitle = `Dosya: <b>${item.fileNumber || '-'}</b>`;
+                } 
+                // --- B) MARKA/PATENT KARTI TASARIMI ---
+                else {
+                    const isThirdParty = String(item.recordOwnerType || '').toLowerCase() === 'third_party';
+                    
+                    if (item._source === 'bulletin' || isThirdParty) {
+                        badge = '<span class="badge badge-warning float-right" style="font-size: 10px;">Bülten</span>';
+                    } else {
+                        badge = '<span class="badge badge-info float-right" style="font-size: 10px;">Portföy</span>';
+                    }
+                    
+                    title = item.title || item.markName || '-';
+                    subTitle = item.applicationNumber || item.applicationNo || '-';
                 }
 
                 return `
                 <div class="search-result-item p-2 border-bottom" style="cursor:pointer;" data-id="${item.id}" data-source="${item._source}">
                     ${badge}
-                    <strong>${item.title || item.markName || '-'}</strong>
-                    <br><small>${item.applicationNumber || item.applicationNo || '-'}</small>
+                    <strong>${title}</strong>
+                    <br><small>${subTitle}</small>
                 </div>
             `}).join('');
             
-            // Seçim Olayı
+            // Tıklama Olayları
             container.querySelectorAll('.search-result-item').forEach(el => {
                 el.addEventListener('click', async () => {
                     const id = el.dataset.id;
@@ -717,7 +735,7 @@ class CreateTaskController {
                     
                     let record = items.find(i => i.id === id);
                     
-                    // Sadece gerçek bülten kaynağından geliyorsa detay çek
+                    // Eğer Bülten ise detayını çek
                     if (source === 'bulletin') {
                          console.log('📥 Bülten detayı çekiliyor...');
                          const details = await this.dataManager.fetchAndStoreBulletinData(record.id);
@@ -726,6 +744,7 @@ class CreateTaskController {
                     
                     record._source = source;
                     this.selectIpRecord(record);
+                    
                     container.style.display = 'none';
                     document.getElementById('ipRecordSearch').value = '';
                 });
@@ -770,153 +789,101 @@ class CreateTaskController {
         }).slice(0, 20);
     }
 
-    renderIpSearchResults(items, container) {
-        if (items.length === 0) {
-            container.innerHTML = '<div class="p-2 text-muted">Sonuç bulunamadı.</div>';
-        } else {
-            container.innerHTML = items.map(item => {
-                // Etiket (Badge) Belirleme
-                let badge = '';
-                
-                // Kayıt "third_party" (Rakip/Karşı Taraf) mı?
-                const isThirdParty = String(item.recordOwnerType || '').toLowerCase() === 'third_party';
-                
-                // KURAL: Eğer kaynak "Bülten" ise VEYA Portföyden gelen "3. Taraf" ise -> "Bülten" etiketi bas.
-                // Böylece kullanıcı rakip kayıtlarını "Bülten" mantığında görür.
-                if (item._source === 'bulletin' || isThirdParty) {
-                    badge = '<span class="badge badge-warning float-right" style="font-size: 10px;">Bülten</span>';
-                } else {
-                    // Sadece "self" (kendi) kayıtlarımız "Portföy" olarak görünür.
-                    badge = '<span class="badge badge-info float-right" style="font-size: 10px;">Portföy</span>';
-                }
-
-                return `
-                <div class="search-result-item p-2 border-bottom" style="cursor:pointer;" data-id="${item.id}" data-source="${item._source}">
-                    ${badge}
-                    <strong>${item.title || item.markName || '-'}</strong>
-                    <br><small>${item.applicationNumber || item.applicationNo || '-'}</small>
-                </div>
-            `}).join('');
-            
-            // Tıklama Olayı
-            container.querySelectorAll('.search-result-item').forEach(el => {
-                el.addEventListener('click', async () => {
-                    const id = el.dataset.id;
-                    const source = el.dataset.source;
-                    
-                    // Seçilen kaydı listeden bul
-                    let record = items.find(i => i.id === id);
-                    
-                    // Eğer kaynak gerçekten Bülten ise (API'den gelmişse) detayını çek
-                    if (source === 'bulletin') {
-                         console.log('📥 Bülten detayı çekiliyor...');
-                         const details = await this.dataManager.fetchAndStoreBulletinData(record.id);
-                         if(details) record = {...record, ...details};
-                    }
-                    
-                    // Kaynağı işle
-                    record._source = source;
-
-                    this.selectIpRecord(record);
-                    container.style.display = 'none';
-                    document.getElementById('ipRecordSearch').value = '';
-                });
-            });
-        }
-        container.style.display = 'block';
-    }
-
 // --- GÜNCELLENEN METOT: Varlık Seçimi, Görsel Yönetimi ve Alan Kilitleme ---
     async selectIpRecord(record) {
         console.log('Seçilen Kayıt:', record);
         this.state.selectedIpRecord = record;
         
-        // 1. Metin Alanlarını Doldur
+        // --- DURUM 1: DAVA DOSYASI SEÇİLDİYSE ---
+        if (record._source === 'suit') {
+            // Label ve Numara Alanlarını Güncelle
+            document.getElementById('selectedIpRecordLabel').textContent = record.court || 'Mahkeme Bilgisi Yok';
+            document.getElementById('selectedIpRecordNumber').innerHTML = 
+                `Dosya No: ${record.fileNumber || '-'} <br> <span class="badge badge-light">${record.typeId || 'Dava'}</span>`;
+
+            // Görsel Alanlarını Ayarla (Resmi gizle, İkonu göster)
+            const imgEl = document.getElementById('selectedIpRecordImage');
+            const phEl = document.getElementById('selectedIpRecordPlaceholder');
+            
+            if(imgEl) imgEl.style.display = 'none';
+            if(phEl) {
+                phEl.style.display = 'flex';
+                // FontAwesome ikonu (Tokmak veya Klasör)
+                phEl.innerHTML = '<i class="fas fa-gavel" style="font-size: 24px; color: #555;"></i>';
+            }
+
+            // Container'ı Aç
+            document.getElementById('selectedIpRecordContainer').style.display = 'block';
+
+            // Dava seçiminde WIPO, Menşe veya Geri Çekme kontrollerine gerek yok.
+            // Sadece validasyonu çalıştır ve çık.
+            this.validator.checkCompleteness(this.state);
+            return;
+        }
+
+        // --- DURUM 2: MARKA/PATENT SEÇİLDİYSE (Standart Akış) ---
+        
+        // 1. Metin Alanları
         const title = record.title || record.markName || record.name || 'İsimsiz Kayıt';
         const appNo = record.applicationNumber || record.applicationNo || '-';
 
         document.getElementById('selectedIpRecordLabel').textContent = title;
         document.getElementById('selectedIpRecordNumber').textContent = appNo;
 
-        // --- Menşe Güncelleme ve Kilitleme ---
+        // 2. Menşe Kilitleme Mantığı
         const originSelect = document.getElementById('originSelect');
         const mainIpTypeSelect = document.getElementById('mainIpType');
-        
         const recordOrigin = record.origin || 'TÜRKPATENT';
         
         if (originSelect) {
             if (originSelect.value !== recordOrigin) {
-                console.log(`🌍 Menşe güncelleniyor: ${originSelect.value} -> ${recordOrigin}`);
                 originSelect.value = recordOrigin;
                 this.handleOriginChange(recordOrigin);
             }
             originSelect.disabled = true;
         }
+        if (mainIpTypeSelect) mainIpTypeSelect.disabled = true;
 
-        if (mainIpTypeSelect) {
-            mainIpTypeSelect.disabled = true;
-        }
-        
-        // 2. GÖRSEL İŞLEMLERİ (imagePath Desteği Eklendi)
+        // 3. Görsel İşlemleri
         const imgEl = document.getElementById('selectedIpRecordImage');
         const phEl = document.getElementById('selectedIpRecordPlaceholder');
         
         if(imgEl) { imgEl.style.display = 'none'; imgEl.src = ''; }
-        if(phEl) phEl.style.display = 'flex';
+        if(phEl) { phEl.style.display = 'flex'; phEl.innerHTML = '<i class="fas fa-image" style="font-size: 24px;"></i>'; }
 
         let finalImageUrl = null;
-        
-        // Tüm olası görsel alanlarını kontrol et (imagePath en öncelikli)
-        // Sırasıyla: imagePath (Bülten DB) -> brandImageUrl (Portföy) -> image -> logo -> imageUrl
         const potentialPath = record.imagePath || record.brandImageUrl || record.image || record.logo || record.imageUrl;
 
         try {
             if (potentialPath) {
-                // A) Eğer zaten http/https veya base64 ise direkt kullan
                 if (potentialPath.startsWith('http') || potentialPath.startsWith('data:')) {
                     finalImageUrl = potentialPath;
-                } 
-                // B) Değilse (gs:// veya dosya yolu) Storage'dan çözümle
-                else {
-                    // Hem Bülten hem Portföy için Storage yolunu URL'e çevirir
+                } else {
                     finalImageUrl = await this.dataManager.resolveImageUrl(potentialPath);
                 }
             }
-        } catch (err) {
-            console.warn('Görsel çözümlenirken hata:', err);
-        }
+        } catch (err) { console.warn('Görsel hatası:', err); }
 
-        // Görseli Bas
         if (finalImageUrl) {
-            if(imgEl) {
-                imgEl.src = finalImageUrl;
-                imgEl.style.display = 'block';
-            }
+            if(imgEl) { imgEl.src = finalImageUrl; imgEl.style.display = 'block'; }
             if(phEl) phEl.style.display = 'none';
         }
         
         document.getElementById('selectedIpRecordContainer').style.display = 'block';
-        
-        // 3. Geri Çekme İşlemi Kontrolü (Akıllı Tarama)
+
+        // 4. Geri Çekme Kontrolleri (Sadece Marka İşlemlerinde)
         if (this.state.isWithdrawalTask) {
-            console.log(`[Main] ${record.id} için işlemler sorgulanıyor...`);
-            
             let txResult = await this.dataManager.getRecordTransactions(record.id);
             let combinedTransactions = txResult.success ? txResult.data : [];
 
-            // Aile taraması (Parent/Child)
             if (combinedTransactions.length === 0 && (record.wipoIR || record.aripoIR)) {
-                console.log('⚠️ Seçilen kayıtta işlem yok. Aile kayıtları taranıyor...');
                 const irNumber = record.wipoIR || record.aripoIR;
                 const relatives = this.state.allIpRecords.filter(r => 
                     (r.wipoIR === irNumber || r.aripoIR === irNumber) && r.id !== record.id
                 );
-
                 for (const rel of relatives) {
                     const relResult = await this.dataManager.getRecordTransactions(rel.id);
-                    if (relResult.success && relResult.data.length > 0) {
-                        combinedTransactions = [...combinedTransactions, ...relResult.data];
-                    }
+                    if (relResult.success) combinedTransactions.push(...relResult.data);
                 }
             }
 
@@ -924,12 +891,11 @@ class CreateTaskController {
                 record.transactions = combinedTransactions;
                 this.processParentTransactions(record);
             } else {
-                console.warn('❌ İşlem bulunamadı.');
-                alert('Bu varlık üzerinde (veya bağlı olduğu WIPO/ARIPO dosyasında) geri çekilebilecek uygun bir işlem bulunamadı.');
+                alert('Geri çekilebilecek işlem bulunamadı.');
             }
         }
 
-        // 4. WIPO/ARIPO Alt Kayıt Listeleme
+        // 5. WIPO Alt Kayıtları
         if (record.wipoIR || record.aripoIR) {
             const ir = record.wipoIR || record.aripoIR;
             this.state.selectedWipoAripoChildren = this.state.allIpRecords.filter(c => 
