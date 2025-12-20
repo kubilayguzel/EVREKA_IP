@@ -172,8 +172,8 @@ export class PortfolioDataManager {
                 return {
                     id: d.id,
                     ...data,
-                    // YENİ: Status alanını garantiye alalım (eğer suitDetails içindeyse oradan, yoksa kökten)
-                    status: data.status || data.suitDetails?.status || 'Devam Ediyor', 
+                    type: 'litigation', // YENİ: Tipini açıkça belirtiyoruz
+                    status: data.status || data.suitDetails?.status || 'continue', // Varsayılan değer
                     suitType: data.transactionType?.alias || data.transactionType?.name || '-',
                     caseNo: data.suitDetails?.caseNo || '-',
                     court: data.suitDetails?.court || '-',
