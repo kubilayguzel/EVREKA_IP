@@ -380,7 +380,7 @@ export class TaskSubmitHandler {
         return result.success ? result.id : null;
     }
 
-// D) DAVA KAYDI VE İLK TRANSACTION (GÜNCELLENDİ)
+// D) DAVA KAYDI VE İLK TRANSACTION (GÜVENLİ VERSİYON)
     async _handleSuitCreation(state, taskData, taskId) {
         const { selectedTaskType, selectedIpRecord, selectedRelatedParties } = state;
         try {
@@ -399,10 +399,35 @@ export class TaskSubmitHandler {
                 }
             }
 
-            // 2. Dava Objesini Hazırla
+            // 2. İlgili Varlık Bilgilerini Güvenli Hazırla (HATA ÇÖZÜMÜ BURADA)
+            let assetId = null;
+            let assetTitle = '';
+            let assetNumber = '';
+
+            if (selectedIpRecord) {
+                assetId = selectedIpRecord.id;
+                
+                if (selectedIpRecord._source === 'suit') {
+                    // --- DAVA SEÇİLDİYSE ---
+                    // Başlık olarak Mahkeme Adı veya Title
+                    assetTitle = selectedIpRecord.displayCourt || selectedIpRecord.court || selectedIpRecord.title || '';
+                    
+                    // Numara olarak Dosya No (fileNumber, caseNo vb. hepsini kontrol et)
+                    assetNumber = selectedIpRecord.displayFileNumber || 
+                                  selectedIpRecord.fileNumber || 
+                                  (selectedIpRecord.suitDetails && selectedIpRecord.suitDetails.caseNo) || 
+                                  selectedIpRecord.caseNo || '';
+                } else {
+                    // --- MARKA/PATENT SEÇİLDİYSE ---
+                    assetTitle = selectedIpRecord.title || selectedIpRecord.markName || '';
+                    assetNumber = selectedIpRecord.applicationNumber || selectedIpRecord.applicationNo || '';
+                }
+            }
+
+            // 3. Dava Objesini Hazırla
             const newSuitData = {
                 title: taskData.title,
-                transactionTypeId: selectedTaskType.id, // Örn: 54 (Hükümsüzlük)
+                transactionTypeId: selectedTaskType.id,
                 transactionType: {
                     id: selectedTaskType.id,
                     name: selectedTaskType.name,
@@ -418,11 +443,14 @@ export class TaskSubmitHandler {
                 },
                 clientRole: document.getElementById('clientRole')?.value || '',
                 client: client ? { id: client.id, name: client.name, email: client.email } : null,
+                
+                // GÜNCELLENEN KISIM: Artık undefined olma riski yok, en kötü ihtimalle boş string '' gider.
                 subjectAsset: selectedIpRecord ? {
-                    id: selectedIpRecord.id,
-                    title: selectedIpRecord.title || selectedIpRecord.markName,
-                    number: selectedIpRecord.applicationNumber || selectedIpRecord.applicationNo
+                    id: assetId,
+                    title: assetTitle,
+                    number: assetNumber
                 } : null,
+                
                 suitStatus: 'continue',
                 portfolioStatus: 'active',
                 origin: document.getElementById('originSelect')?.value || 'TURKEY',
@@ -430,22 +458,21 @@ export class TaskSubmitHandler {
                 relatedTaskId: taskId
             };
 
-            // 3. Davayı 'suits' Koleksiyonuna Ekle
+            // 4. Davayı 'suits' Koleksiyonuna Ekle
             const suitsRef = collection(db, 'suits');
             const suitDocRef = await addDoc(suitsRef, newSuitData);
             const newSuitId = suitDocRef.id;
 
             console.log('✅ Yeni Dava Kartı Oluşturuldu ID:', newSuitId);
 
-            // 4. İLK TRANSACTION'I EKLE (YENİ EKLENEN KISIM)
-            // Dava kartının içine 'transactions' alt koleksiyonuna ilk kaydı atıyoruz.
+            // 5. İLK TRANSACTION'I EKLE
             const initialTransaction = {
-                type: selectedTaskType.id, // Örn: 54
-                description: `${selectedTaskType.alias || selectedTaskType.name} davası açıldı.`,
-                transactionHierarchy: 'parent', // Bu dava sürecinin "anası"
+                type: selectedTaskType.id,
+                description: `${selectedTaskType.alias || selectedTaskType.name} işlemi yapıldı.`,
+                transactionHierarchy: 'parent',
                 triggeringTaskId: String(taskId),
                 createdAt: Timestamp.now(),
-                creationDate: new Date().toISOString() // UI uyumluluğu için
+                creationDate: new Date().toISOString()
             };
 
             const transactionsRef = collection(db, 'suits', newSuitId, 'transactions');
