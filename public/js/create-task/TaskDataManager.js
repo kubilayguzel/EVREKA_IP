@@ -211,16 +211,20 @@ export class TaskDataManager {
                (Array.isArray(result) ? result : []);
     }
 
-    // --- TRANSAKSİYONLARI ÇEKME ---
-    async getRecordTransactions(recordId) {
+// --- TRANSAKSİYONLARI ÇEKME (GÜNCELLENDİ) ---
+    /**
+     * @param {string} recordId - Kayıt ID'si
+     * @param {string} collectionName - 'ipRecords' veya 'suits' (Varsayılan: ipRecords)
+     */
+    async getRecordTransactions(recordId, collectionName = 'ipRecords') {
         if (!recordId) return { success: false, message: 'Kayıt ID yok.' };
 
-        console.log(`[TaskDataManager] ${recordId} için transactions çekiliyor...`);
+        console.log(`[TaskDataManager] ${collectionName}/${recordId} için transactions çekiliyor...`);
 
         try {
-            const transactionsRef = collection(db, 'ipRecords', recordId, 'transactions');
+            // Dinamik koleksiyon adı
+            const transactionsRef = collection(db, collectionName, recordId, 'transactions');
             
-            // Sıralamayı JS tarafında yapıyoruz (Data güvenliği için)
             const snapshot = await getDocs(transactionsRef);
             
             let data = snapshot.docs.map(doc => ({
@@ -235,7 +239,7 @@ export class TaskDataManager {
                 return dateB - dateA; 
             });
 
-            // Veri Tipi Garantisi (type alanını string'e çevir)
+            // Veri Tipi Garantisi
             data = data.map(t => ({
                 ...t,
                 type: String(t.type || t.transactionType || '') 
