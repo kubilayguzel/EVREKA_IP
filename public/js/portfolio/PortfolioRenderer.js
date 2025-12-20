@@ -213,36 +213,38 @@ export class PortfolioRenderer {
         try { return new Date(d).toLocaleDateString('tr-TR'); } catch { return String(d); }
     }
     
-    // --- GÜNCELLENEN DURUM ROZETİ (Utils.js Entegrasyonu) ---
     getStatusBadge(record) {
         const rawStatus = record.status;
         let displayStatus = rawStatus || '-';
+        let color = 'secondary'; // Varsayılan renk (Gri)
         
-        // Utils dosyasındaki STATUSES'tan çeviri yap
+        // 1. Kayıt tipine göre utils.js'ten doğru listeyi bul (litigation, trademark vb.)
         if (record.type && STATUSES[record.type]) {
             const statusObj = STATUSES[record.type].find(s => s.value === rawStatus);
+            
             if (statusObj) {
-                displayStatus = statusObj.text;
+                displayStatus = statusObj.text; // Türkçe metni al
+                if (statusObj.color) color = statusObj.color; // Utils'deki rengi (danger, warning vb.) al
             }
         } else {
-            // Kayıt tipi eşleşmezse (örn. 'patent' tipi yoksa) genel arama yap
+            // Tipi bilinmiyorsa veya listede yoksa genel arama yap (Fallback)
             for (const type in STATUSES) {
                 const found = STATUSES[type].find(s => s.value === rawStatus);
                 if (found) {
                     displayStatus = found.text;
+                    if (found.color) color = found.color;
                     break;
                 }
             }
         }
 
-        // Renk belirleme
-        let color = 'secondary';
-        const s = String(rawStatus).toLowerCase();
-        
-        if (['registered', 'approved', 'active', 'tescilli'].includes(s)) color = 'success';
-        else if (['filed', 'application', 'pending', 'published', 'partial_refusal', 'basvuru', 'yayinlandi'].includes(s)) color = 'warning';
-        else if (['rejected', 'refused', 'expired', 'invalidated', 'invalid_not_renewed', 'withdrawn', 'reddedildi'].includes(s)) color = 'danger';
-        else if (['opposition_filed', 'itiraz'].includes(s)) color = 'info';
+        // Eğer hala renk atanmadıysa eski manuel kontrolü yap (Geriye dönük uyumluluk için)
+        if (color === 'secondary') {
+             const s = String(rawStatus).toLowerCase();
+             if (['registered', 'approved', 'active', 'tescilli', 'finalized', 'kesinleşti'].includes(s)) color = 'success';
+             else if (['filed', 'application', 'pending', 'published', 'decision_pending', 'karar bekleniyor'].includes(s)) color = 'warning';
+             else if (['rejected', 'refused', 'cancelled', 'reddedildi'].includes(s)) color = 'danger';
+        }
 
         return `<span class="badge badge-${color} border">${displayStatus}</span>`;
     }
