@@ -592,71 +592,65 @@ export class TaskUIManager {
      * @param {string} sourceType - 'suits', 'ipRecords', 'bulletin' vb.
      */
     renderAssetSearchResults(items, onSelect, sourceType = 'ipRecords') {
-        // HTML'deki sonuç kutusunu bul
         const container = document.getElementById('ipRecordSearchResults'); 
         if (!container) return;
 
-        // Sonuç yoksa
         if (!items || items.length === 0) {
             container.innerHTML = '<div class="p-2 text-muted">Sonuç bulunamadı.</div>';
             container.style.display = 'block';
             return;
         }
 
-        // HTML oluştur
         container.innerHTML = items.map(item => {
             let badge = '';
             let title = '';
             let subTitle = '';
+            let extraInfo = '';
 
-            // --- A) DAVA KARTI TASARIMI ---
+            // --- A) DAVA KARTI (GÜNCELLENDİ) ---
             if (sourceType === 'suits' || item._source === 'suit') {
                 badge = '<span class="badge badge-primary float-right" style="font-size: 10px;">Dava</span>';
+                title = item.displayCourt || 'Mahkeme Bilgisi Yok';
                 
-                // Dava bilgilerini güvenli şekilde al
-                title = item.displayCourt || item.court || 'Mahkeme Bilgisi Yok';
-                subTitle = `Dosya: <b>${item.displayFileNumber || item.fileNumber || '-'}</b>`;
+                // Dosya No
+                subTitle = `Dosya: <strong class="text-dark">${item.displayFileNumber}</strong>`;
                 
-                // Varsa Karşı Tarafı ekle
-                if (item.opposingParty) {
-                    subTitle += `<br><small class="text-muted">Karşı: ${item.opposingParty}</small>`;
+                // Müvekkil ve Karşı Taraf Bilgisi (YENİ)
+                if (item.displayClient) {
+                    extraInfo += `<div class="text-muted small mt-1"><i class="fas fa-user-tie mr-1"></i>Müvekkil: ${item.displayClient}</div>`;
+                }
+                if (item.opposingParty && item.opposingParty !== '-') {
+                    extraInfo += `<div class="text-muted small"><i class="fas fa-user-shield mr-1"></i>Karşı: ${item.opposingParty}</div>`;
                 }
             } 
-            // --- B) MARKA/PATENT KARTI TASARIMI ---
+            // --- B) MARKA/PATENT KARTI ---
             else {
+                // ... (Burası aynı kalıyor)
                 const isThirdParty = String(item.recordOwnerType || '').toLowerCase() === 'third_party';
-                
-                if (item._source === 'bulletin' || isThirdParty) {
-                    badge = '<span class="badge badge-warning float-right" style="font-size: 10px;">Bülten</span>';
-                } else {
-                    badge = '<span class="badge badge-info float-right" style="font-size: 10px;">Portföy</span>';
-                }
-                
+                badge = (item._source === 'bulletin' || isThirdParty) 
+                    ? '<span class="badge badge-warning float-right">Bülten</span>' 
+                    : '<span class="badge badge-info float-right">Portföy</span>';
                 title = item.title || item.markName || '-';
                 subTitle = item.applicationNumber || item.applicationNo || '-';
             }
 
             return `
-            <div class="search-result-item p-2 border-bottom" style="cursor:pointer;" data-id="${item.id}" data-source="${item._source}">
+            <div class="search-result-item p-3 border-bottom" style="cursor:pointer;" data-id="${item.id}" data-source="${item._source}">
                 ${badge}
-                <strong>${title}</strong>
-                <br><small>${subTitle}</small>
+                <div class="font-weight-bold text-primary" style="font-size: 1.05rem;">${title}</div>
+                <div class="mt-1">${subTitle}</div>
+                ${extraInfo}
             </div>
             `;
         }).join('');
         
         container.style.display = 'block';
 
-        // Tıklama Olaylarını Tanımla
+        // ... (Event listener kısmı aynı) ...
         container.querySelectorAll('.search-result-item').forEach(el => {
             el.addEventListener('click', () => {
-                const id = el.dataset.id;
-                const source = el.dataset.source;
-                // Listeden ilgili objeyi bul
-                const record = items.find(i => i.id === id);
-                // Callback tetikle (Main.js'e geri döner)
-                onSelect(record, source);
-                // Kutuyu gizle
+                const record = items.find(i => i.id === el.dataset.id);
+                onSelect(record, el.dataset.source);
                 container.style.display = 'none';
             });
         });
