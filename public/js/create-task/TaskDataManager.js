@@ -98,9 +98,9 @@ export class TaskDataManager {
             const suitsRef = collection(db, 'suits');
             let q = query(suitsRef);
 
-            // Filtreleme (İstinaf vb. için)
+            // DÜZELTME 1: Veritabanındaki alan adı 'transactionTypeId' olduğu için sorguyu güncelledik.
             if (allowedTypeIds && allowedTypeIds.length > 0 && allowedTypeIds.length <= 10) {
-                q = query(q, where('typeId', 'in', allowedTypeIds));
+                q = query(q, where('transactionTypeId', 'in', allowedTypeIds));
             }
 
             const snapshot = await getDocs(q);
@@ -110,30 +110,31 @@ export class TaskDataManager {
             snapshot.forEach(doc => {
                 const data = doc.data();
                 
-                // --- Veri Yapısı Haritalama ---
-                // Sizin yapınız: suitDetails: { caseNo: "...", court: "..." }
+                // DÜZELTME 2: Veri yapınıza göre alanları doğru yerden okuma
                 const details = data.suitDetails || {};
                 
-                const fileNo = (details.caseNo || data.fileNumber || data.caseNo || '').toLocaleLowerCase('tr-TR');
+                // Aranacak metinler
+                const fileNo = (details.caseNo || data.caseNo || data.fileNumber || '').toLocaleLowerCase('tr-TR');
                 const court = (details.court || data.court || '').toLocaleLowerCase('tr-TR');
+                const clientRole = (data.clientRole || '').toLocaleLowerCase('tr-TR');
                 
-                // Taraf İsimleri (Opposing Party, Client vb.)
-                // Veritabanındaki alan adlarınıza göre burayı genişletiyoruz:
-                const opposing = (data.opposingParty || details.opposingParty || '').toLocaleLowerCase('tr-TR');
-                const client = (data.clientName || details.clientName || '').toLocaleLowerCase('tr-TR'); // Eğer clientName tutuyorsanız
-                
-                // Eşleşme Kontrolü
+                // Taraf İsimleri (Davacı Müvekkil ise Client adı, yoksa Karşı Taraf)
+                const clientName = (data.client?.name || '').toLocaleLowerCase('tr-TR');
+                const opposingParty = (details.opposingParty || data.opposingParty || '').toLocaleLowerCase('tr-TR');
+
+                // Arama Mantığı: Dosya No, Mahkeme, Müvekkil Adı veya Karşı Taraf
                 if (fileNo.includes(lowerSearch) || 
                     court.includes(lowerSearch) || 
-                    opposing.includes(lowerSearch) ||
-                    client.includes(lowerSearch)) {
+                    clientName.includes(lowerSearch) || 
+                    opposingParty.includes(lowerSearch)) {
                     
                     results.push({
                         id: doc.id,
                         ...data,
-                        // UI'da göstermek için veriyi standartlaştırıyoruz
-                        displayFileNumber: details.caseNo || data.fileNumber || '-', 
+                        // UI için standart alanlar oluşturuyoruz
+                        displayFileNumber: details.caseNo || data.caseNo || '-', 
                         displayCourt: details.court || data.court || 'Mahkeme Yok',
+                        opposingParty: details.opposingParty || data.opposingParty || '-',
                         _source: 'suit' 
                     });
                 }
