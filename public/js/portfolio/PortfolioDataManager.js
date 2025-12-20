@@ -166,8 +166,34 @@ export class PortfolioDataManager {
         try {
             const suitsRef = collection(db, 'suits');
             const snapshot = await getDocs(suitsRef);
-            this.litigationRows = snapshot.docs.map(d => {
+            
+            // Davaları işle ve paralel olarak alt işlemleri (transactions) çek
+            const promises = snapshot.docs.map(async d => {
                 const data = d.data();
+                
+                // Alt işlemleri çek (transactions subcollection)
+                let children = [];
+                try {
+                    const transRef = collection(db, 'suits', d.id, 'transactions');
+                    const transSnap = await getDocs(transRef);
+                    children = transSnap.docs.map(t => {
+                        const tData = t.data();
+                        return {
+                            id: t.id,
+                            parentId: d.id,
+                            isChild: true, // Child olduğunu belirtiyoruz
+                            transactionTypeName: tData.transactionTypeName || 'İşlem',
+                            description: tData.description || '-',
+                            date: tData.creationDate || tData.createdAt || '-',
+                            type: tData.type
+                        };
+                    });
+                    // Tarihe göre sırala (Yeniden eskiye)
+                    children.sort((a, b) => new Date(b.date) - new Date(a.date));
+                } catch (err) {
+                    console.warn(`Dava (${d.id}) işlemleri çekilemedi:`, err);
+                }
+
                 return {
                     id: d.id,
                     ...data,
@@ -176,12 +202,19 @@ export class PortfolioDataManager {
                     court: data.suitDetails?.court || '-',
                     client: data.client?.name || '-',
                     opposingParty: data.suitDetails?.opposingParty || '-',
-                    suitStatus: data.suitDetails?.suitStatus || 'Devam Ediyor',
-                    openedDate: data.suitDetails?.openingDate ? this._fmtDate(data.suitDetails.openingDate) : '-'
+                    suitStatus: data.suitDetails?.suitStatus || 'Devam Ediyor', // Status eklendi
+                    openedDate: data.suitDetails?.openingDate ? this._fmtDate(data.suitDetails.openingDate) : '-',
+                    children: children, // Alt işlemleri ekle
+                    hasChildren: children.length > 0
                 };
             });
+
+            this.litigationRows = await Promise.all(promises);
+            
+            // Davaları açılış tarihine göre sırala
             this.litigationRows.sort((a, b) => this._parseDate(b.openedDate) - this._parseDate(a.openedDate));
             return this.litigationRows;
+
         } catch (e) {
             console.error("Davalar hatası:", e);
             return [];
