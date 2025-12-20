@@ -62,7 +62,7 @@ class CreateTaskController {
     }
 
 // --- GÜNCELLENEN METOT: Tüm Butonlar İçin Global Dinleyici ---
-    setupEventListeners() {
+setupEventListeners() {
         if (this._eventsBound) return;
         this._eventsBound = true;
         
@@ -80,7 +80,7 @@ class CreateTaskController {
             
             // --- A) FORM AKSİYONLARI (KAYDET / İPTAL / İLERLE) ---
             
-            // 💾 KAYDET BUTONU (Bu kısım eklendiği için artık çalışacak)
+            // 💾 KAYDET BUTONU
             if (e.target.id === 'saveTaskBtn' || e.target.closest('#saveTaskBtn')) {
                 const btn = e.target.closest('#saveTaskBtn') || e.target;
                 if (btn.disabled) return;
@@ -97,18 +97,16 @@ class CreateTaskController {
                     const isFormVisible = document.getElementById('accrualToggleWrapper')?.style.display !== 'none';
                     
                     if (isFormVisible && !result.success) {
-                        // Form açık ama veri eksik/hatalıysa durdur
                         alert(result.error);
                         return;
                     }
                     
-                    // Veri geçerliyse al (Form kapalı olsa bile dolu veriyi alabiliriz veya null geçebiliriz, ihtiyaca göre)
                     if (result.success) {
                         accrualData = result.data;
                     }
                 }
 
-                // 2. Bu veriyi State'e ekle (SubmitHandler bunu kullanacak)
+                // 2. Bu veriyi State'e ekle
                 this.state.accrualData = accrualData; 
                 this.state.isFreeTransaction = isFree;
 
@@ -123,14 +121,14 @@ class CreateTaskController {
                 }
             }
 
-            // ⏩ İLERLE BUTONU (Tab Geçişi)
+            // ⏩ İLERLE BUTONU
             if (e.target.id === 'nextTabBtn') {
                 this.handleNextTab();
             }
 
             // --- B) SİLME VE TEMİZLEME İŞLEMLERİ ---
 
-            // Varlık (Asset) Kaldır
+            // Varlık (Asset) Kaldır -- [GÜNCELLENDİ]
             if (e.target.closest('#clearSelectedIpRecord')) {
                 this.state.selectedIpRecord = null;
                 document.getElementById('selectedIpRecordContainer').style.display = 'none';
@@ -139,6 +137,11 @@ class CreateTaskController {
                 // Görseli temizle
                 const imgEl = document.getElementById('selectedIpRecordImage');
                 if(imgEl) imgEl.src = '';
+
+                // ---> YENİ: Kilitleri Aç ve Temizle <---
+                // Eğer bir dava seçiliydiyse ve kaldırıldıysa alanları serbest bırak
+                this.uiManager.unlockAndClearLawsuitFields();
+                this.state.selectedRelatedParties = []; // Otomatik seçilen müvekkili de temizle
 
                 // WIPO/ARIPO alt kayıtları temizle
                 this.state.selectedWipoAripoChildren = [];
@@ -199,7 +202,7 @@ class CreateTaskController {
                     this.validator.checkCompleteness(this.state);
                 });
 
-                // Modal açılınca şehir listesini tetikle (Türkiye seçiliyse)
+                // Modal açılınca şehir listesini tetikle
                 setTimeout(() => {
                     const countrySelect = document.getElementById('country') || document.getElementById('personCountry');
                     if (countrySelect && (countrySelect.value === 'Turkey' || countrySelect.value === 'TR' || countrySelect.value === 'Türkiye')) {
@@ -211,22 +214,20 @@ class CreateTaskController {
             
             // Parent Transaction Seçim Listener (Modal İçin)
             if (e.target.closest('.list-group-item') && document.getElementById('parentListContainer')?.contains(e.target)) {
-                 // Bu kısım TaskUIManager içindeki 'parentTransactionSelected' event'i ile de çalışıyor ama yedek olarak dursun
+                 // Yedek listener
             }
 
             // --- D) TAHAKKUK UI YÖNETİMİ ---           
             // "Tahakkuk Formu Aç/Kapat" Butonu
             if (e.target.id === 'toggleAccrualFormBtn' || e.target.closest('#toggleAccrualFormBtn')) {
-                const wrapper = document.getElementById('accrualToggleWrapper'); // Yeni Wrapper ID
+                const wrapper = document.getElementById('accrualToggleWrapper'); 
                 const btn = document.getElementById('toggleAccrualFormBtn');
                 
                 if (wrapper && wrapper.style.display === 'none') {
-                    // AÇ
                     $(wrapper).slideDown(300);
                     btn.innerHTML = '<i class="fas fa-chevron-up mr-1"></i> Tahakkuk Formunu Gizle';
                     btn.classList.replace('btn-outline-primary', 'btn-outline-secondary');
                 } else if (wrapper) {
-                    // KAPAT
                     $(wrapper).slideUp(300);
                     btn.innerHTML = '<i class="fas fa-chevron-down mr-1"></i> Tahakkuk Formu Aç';
                     btn.classList.replace('btn-outline-secondary', 'btn-outline-primary');
@@ -240,26 +241,22 @@ class CreateTaskController {
                 const wrapper = document.getElementById('accrualToggleWrapper');
                 
                 if (isChecked) {
-                    // Ücretsiz seçilirse formu kapat, butonu pasifleştir ve veriyi temizle
                     if(wrapper) wrapper.style.display = 'none';
                     if(btn) {
                         btn.disabled = true;
                         btn.innerHTML = '<i class="fas fa-chevron-down mr-1"></i> Tahakkuk Formu Aç';
                     }
-                    // Manager'ı sıfırla
                     if (this.accrualFormManager) this.accrualFormManager.reset();
                 } else {
-                    // Seçim kalkarsa butonu aktifleştir
                     if(btn) btn.disabled = false;
                 }
             }
         });
         
-        // 3. PARENT TRANSACTION MODAL SEÇİMİ (Custom Event Listener)
+        // 3. PARENT TRANSACTION MODAL SEÇİMİ
         document.addEventListener('parentTransactionSelected', (e) => {
             const selectedId = e.detail.id;
             console.log('🎯 Modalden seçim geldi:', selectedId);
-            
             this.submitHandler.selectedParentTransactionId = selectedId;
             this.uiManager.hideParentSelectionModal();
             alert('Geri çekilecek işlem seçildi.');
@@ -270,7 +267,6 @@ class CreateTaskController {
         closeModalBtns.forEach(btn => btn.addEventListener('click', () => this.uiManager.hideParentSelectionModal()));
 
         // --- MAHKEME SEÇİMİ DİNLEYİCİSİ (Diğer seçeneği için) ---
-        // Dinamik olarak DOM'a eklendiği için 'change' event'ini document üzerinden delegation ile yakalıyoruz.
         document.addEventListener('change', (e) => {
             if (e.target && e.target.id === 'courtName') {
                 const customInput = document.getElementById('customCourtInput');
@@ -278,10 +274,10 @@ class CreateTaskController {
                     if (e.target.value === 'other') {
                         customInput.style.display = 'block';
                         customInput.focus();
-                        customInput.setAttribute('required', 'true'); // Zorunlu yap
+                        customInput.setAttribute('required', 'true');
                     } else {
                         customInput.style.display = 'none';
-                        customInput.value = ''; // Gizlenince temizle
+                        customInput.value = ''; 
                         customInput.removeAttribute('required');
                     }
                 }
@@ -302,7 +298,7 @@ class CreateTaskController {
             if (targetTabId === 'summary') this.uiManager.renderSummaryTab(this.state);
         });
         
-        // Form Elemanlarını Dinle (Validation için)
+        // Form Elemanlarını Dinle
         document.addEventListener('input', (e) => {
             if (['officialFee', 'serviceFee', 'vatRate'].includes(e.target.id)) this.calculateTotalAmount();
             this.validator.checkCompleteness(this.state);
@@ -827,11 +823,11 @@ class CreateTaskController {
     }
 
 // --- GÜNCELLENEN METOT: Varlık Seçimi, Görsel Yönetimi ve Alan Kilitleme ---
-    async selectIpRecord(record) {
+async selectIpRecord(record) {
         console.log('Seçilen Kayıt:', record);
         this.state.selectedIpRecord = record;
         
-        // --- DURUM 1: DAVA DOSYASI SEÇİLDİYSE (GÜNCELLENDİ) ---
+        // --- DURUM 1: DAVA DOSYASI SEÇİLDİYSE ---
         if (record._source === 'suit') {
             const displayCourt = record.displayCourt || record.suitDetails?.court || record.court || 'Mahkeme Yok';
             const displayFile = record.displayFileNumber || record.suitDetails?.caseNo || record.fileNumber || '-';
@@ -839,23 +835,27 @@ class CreateTaskController {
 
             // 1. MAHKEME ADI (BÜYÜK BAŞLIK)
             const labelEl = document.getElementById('selectedIpRecordLabel');
-            labelEl.textContent = displayCourt;
-            labelEl.style.fontSize = '1.3rem'; // Yazı boyutunu büyüttük
-            labelEl.className = 'mb-1 font-weight-bold text-primary'; // Renk ve kalınlık
+            if (labelEl) {
+                labelEl.textContent = displayCourt;
+                labelEl.style.fontSize = '1.3rem'; // Yazı boyutunu büyüttük
+                labelEl.className = 'mb-1 font-weight-bold text-primary'; 
+            }
 
             // 2. DOSYA NO VE MÜVEKKİL (DETAYLAR)
             const numberEl = document.getElementById('selectedIpRecordNumber');
-            numberEl.innerHTML = `
-                <div style="font-size: 1.1rem; margin-bottom: 5px;">
-                    Dosya No: <span class="text-dark font-weight-bold">${displayFile}</span>
-                </div>
-                <div style="font-size: 1rem; color: #555;">
-                    <i class="fas fa-user-tie mr-1"></i> Müvekkil: <b>${clientName}</b>
-                </div>
-                <div class="mt-2">
-                    <span class="badge badge-secondary p-2" style="font-size: 0.9rem;">${record.typeId || 'Dava'}</span>
-                </div>
-            `;
+            if (numberEl) {
+                numberEl.innerHTML = `
+                    <div style="font-size: 1.1rem; margin-bottom: 5px;">
+                        Dosya No: <span class="text-dark font-weight-bold">${displayFile}</span>
+                    </div>
+                    <div style="font-size: 1rem; color: #555;">
+                        <i class="fas fa-user-tie mr-1"></i> Müvekkil: <b>${clientName}</b>
+                    </div>
+                    <div class="mt-2">
+                        <span class="badge badge-secondary p-2" style="font-size: 0.9rem;">${record.typeId || 'Dava'}</span>
+                    </div>
+                `;
+            }
 
             // 3. İKON AYARLARI (BÜYÜK İKON)
             const imgEl = document.getElementById('selectedIpRecordImage');
@@ -866,11 +866,22 @@ class CreateTaskController {
                 phEl.style.display = 'flex';
                 phEl.style.width = '80px';  // Kutuyu büyüttük
                 phEl.style.height = '80px'; // Kutuyu büyüttük
-                phEl.innerHTML = '<i class="fas fa-gavel" style="font-size: 32px; color: #555;"></i>'; // İkonu büyüttük
+                phEl.innerHTML = '<i class="fas fa-gavel" style="font-size: 32px; color: #555;"></i>'; 
             }
 
             // Container'ı Aç
             document.getElementById('selectedIpRecordContainer').style.display = 'block';
+
+            // ---> YENİ: Formu Doldur ve Kilitle <---
+            // Dava bilgilerini (mahkeme, konu, karşı taraf) forma doldurur ve kilitler.
+            this.uiManager.fillAndLockLawsuitFields(record);
+            
+            // State'i güncelle (Müvekkil için validator kontrolü)
+            if (record.client) {
+                 this.state.selectedRelatedParties = [record.client];
+            } else if (record.clientName) {
+                 this.state.selectedRelatedParties = [{ id: 'auto', name: record.clientName }];
+            }
 
             this.validator.checkCompleteness(this.state);
             return;
@@ -882,8 +893,16 @@ class CreateTaskController {
         const title = record.title || record.markName || record.name || 'İsimsiz Kayıt';
         const appNo = record.applicationNumber || record.applicationNo || '-';
 
-        document.getElementById('selectedIpRecordLabel').textContent = title;
-        document.getElementById('selectedIpRecordNumber').textContent = appNo;
+        const labelEl = document.getElementById('selectedIpRecordLabel');
+        const numEl = document.getElementById('selectedIpRecordNumber');
+        
+        // Stil Sıfırlama (Dava'dan kalma stilleri temizle)
+        if (labelEl) {
+            labelEl.textContent = title;
+            labelEl.style.fontSize = ''; 
+            labelEl.className = ''; 
+        }
+        if (numEl) numEl.textContent = appNo;
 
         // 2. Menşe Kilitleme Mantığı
         const originSelect = document.getElementById('originSelect');
@@ -903,6 +922,12 @@ class CreateTaskController {
         const imgEl = document.getElementById('selectedIpRecordImage');
         const phEl = document.getElementById('selectedIpRecordPlaceholder');
         
+        // Stil Sıfırlama
+        if(phEl) {
+             phEl.style.width = '60px'; 
+             phEl.style.height = '60px';
+        }
+
         if(imgEl) { imgEl.style.display = 'none'; imgEl.src = ''; }
         if(phEl) { phEl.style.display = 'flex'; phEl.innerHTML = '<i class="fas fa-image" style="font-size: 24px;"></i>'; }
 
@@ -931,25 +956,21 @@ class CreateTaskController {
             console.log(`[Main] ${record.id} için geri çekilecek işlemler sorgulanıyor...`);
 
             // A) Kaynağı belirle: Eğer dava ise 'suits', değilse 'ipRecords'
-            // Bu parametreyi TaskDataManager'a gönderiyoruz
             const sourceCollection = record._source === 'suit' ? 'suits' : 'ipRecords';
             
             let txResult = await this.dataManager.getRecordTransactions(record.id, sourceCollection);
             let combinedTransactions = txResult.success ? txResult.data : [];
 
             // B) Aile Taraması (Sadece Marka/Patent için ve WIPO/ARIPO varsa)
-            // Davalarda (suits) WIPO ailesi mantığı olmadığı için bu bloğu atlıyoruz.
             if (sourceCollection === 'ipRecords' && combinedTransactions.length === 0 && (record.wipoIR || record.aripoIR)) {
                 console.log('⚠️ Seçilen kayıtta işlem yok. Aile kayıtları taranıyor...');
                 const irNumber = record.wipoIR || record.aripoIR;
                 
-                // Aynı IR numarasına sahip diğer dosyaları bul
                 const relatives = this.state.allIpRecords.filter(r => 
                     (r.wipoIR === irNumber || r.aripoIR === irNumber) && r.id !== record.id
                 );
 
                 for (const rel of relatives) {
-                    // Aile bireyleri her zaman ipRecords tablosundadır
                     const relResult = await this.dataManager.getRecordTransactions(rel.id, 'ipRecords');
                     if (relResult.success && relResult.data.length > 0) {
                         combinedTransactions = [...combinedTransactions, ...relResult.data];
@@ -960,14 +981,10 @@ class CreateTaskController {
             // C) Sonuçları İşle
             if (combinedTransactions.length > 0) {
                 record.transactions = combinedTransactions;
-                // Bulunan işlemleri filtreleyip kullanıcıya modal açan fonksiyonu çağır
                 this.processParentTransactions(record);
             } else {
                 console.warn('❌ Geri çekilebilecek işlem bulunamadı.');
                 alert('Bu varlık üzerinde geri çekilebilecek uygun bir işlem (İtiraz vb.) bulunamadı.');
-                // İsteğe bağlı: Seçimi iptal etmek isterseniz aşağıdaki yorum satırlarını açabilirsiniz
-                // this.state.selectedIpRecord = null;
-                // document.getElementById('selectedIpRecordContainer').style.display = 'none';
             }
         }
 
