@@ -12,157 +12,43 @@
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333; display: flex; }
         .page-wrapper { flex-grow: 1; display: flex; flex-direction: column; height: 100vh; overflow-y: auto; background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%); }
         .main-container {width: 100%; padding: 30px; padding-top: 120px; margin: 0; }
-        
         .page-header { background: rgba(255, 255, 255, 0.95); padding: 30px; border-radius: 20px; margin-bottom: 30px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1); }
         .page-title { font-size: 2em; color: #1e3c72; margin-bottom: 10px; }
-        .page-subtitle { color: #666; font-size: 1.1em; }
-
-        .section-card {
-            background: rgba(255, 255, 255, 0.95);
-            padding: 30px;
-            border-radius: 20px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-            margin-bottom: 25px;
-        }
-        
-        .suit-detail-container {
-            padding: 0; 
-            background: none; 
-            box-shadow: none; 
-        }
-
-        .section-title {
-            font-size: 1.3em;
-            color: #1e3c72;
-            margin-bottom: 20px;
-            padding-bottom: 10px;
-            border-bottom: 1px solid #e1e8ed;
-        }
-        .form-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 25px;
-        }
+        .section-card { background: rgba(255, 255, 255, 0.95); padding: 30px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1); margin-bottom: 25px; }
+        .section-title { font-size: 1.3em; color: #1e3c72; margin-bottom: 20px; padding-bottom: 10px; border-bottom: 1px solid #e1e8ed; }
+        .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 25px; }
         .form-group { margin-bottom: 25px; display: flex; flex-direction: column; }
         .form-group.full-width { grid-column: 1 / -1; }
         .form-label { display: block; margin-bottom: 8px; color: #333; font-weight: 500; }
-        .form-input, .form-select, .form-textarea {
-            width: 100%; padding: 12px 15px; border: 2px solid #e1e8ed;
-            border-radius: 10px; font-size: 1em; transition: all 0.3s ease;
-            background: white;
-        }
-        .form-input:focus, .form-select:focus, .form-textarea:focus {
-            outline: none; border-color: #1e3c72;
-            box-shadow: 0 0 0 3px rgba(30, 60, 114, 0.1);
-        }
+        .form-input, .form-select, .form-textarea { width: 100%; padding: 12px 15px; border: 2px solid #e1e8ed; border-radius: 10px; font-size: 1em; transition: all 0.3s ease; background: white; }
         .form-textarea { min-height: 120px; resize: vertical; }
-
-        .form-actions {
-            display: flex; justify-content: flex-end; gap: 10px;
-            padding-top: 20px; border-top: 1px solid #e9ecef; margin-top: 20px;
-        }
+        .form-actions { display: flex; justify-content: flex-end; gap: 10px; padding-top: 20px; border-top: 1px solid #e9ecef; margin-top: 20px; }
         .btn { padding: 12px 25px; border: none; border-radius: 8px; font-size: 1em; font-weight: 600; cursor: pointer; transition: all 0.3s ease; }
         .btn-primary { background: linear-gradient(45deg, #1e3c72, #2a5298); color: white; }
-        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(30, 60, 114, 0.3); }
-        .btn-primary:disabled { background: #ccc; cursor: not-allowed; }
         .btn-secondary { background: #6c757d; color: white; }
-        .btn-secondary:hover { background: #5a6268; }
 
-        /* Dosya Yükleme Alanı */
-        .file-upload-area {
-            border: 2px dashed #a8dadc;
-            border-radius: 12px;
-            padding: 40px;
-            text-align: center;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            background: #f1faee;
-            margin-top: 15px;
-        }
-        .file-upload-area:hover {
-            border-color: #457b9d;
-            background: #e0f2f7;
-        }
-        .file-upload-area.dragover {
-            border-color: #1e3c72;
-            background: #d4e9f7;
-        }
-        .upload-icon {
-            font-size: 3.5em;
-            color: #457b9d;
-            margin-bottom: 15px;
-        }
-        .upload-text {
-            font-size: 1.2em;
-            font-weight: 600;
-            color: #333;
-        }
-        .upload-subtext {
-            font-size: 0.9em;
-            color: #666;
-            margin-top: 5px;
-        }
-        .file-list-container {
-            margin-top: 25px;
-            border: 1px solid #e1e8ed;
-            border-radius: 12px;
-            overflow: hidden;
-            max-height: 400px;
-            overflow-y: auto;
-        }
-        .file-item {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 12px 20px;
-            border-bottom: 1px solid #eee;
-            background: white;
-        }
+        /* Timeline Stilleri */
+        .timeline-container { position: relative; padding-left: 20px; border-left: 3px solid #e9ecef; margin-top: 10px; }
+        .timeline-item { position: relative; margin-bottom: 30px; }
+        .timeline-item::before { content: ''; position: absolute; left: -26px; top: 5px; width: 15px; height: 15px; border-radius: 50%; background: #1e3c72; border: 3px solid #fff; box-shadow: 0 0 0 2px #1e3c72; }
+        .timeline-date { font-size: 0.9em; color: #666; margin-bottom: 5px; font-weight: 600; }
+        .timeline-content { background: #f8f9fa; padding: 15px; border-radius: 10px; border: 1px solid #e9ecef; }
+        .timeline-title { font-weight: bold; color: #333; margin-bottom: 5px; font-size: 1.1em; }
+        .timeline-desc { color: #555; font-size: 0.95em; }
+        .timeline-badges { margin-top: 8px; }
+        .badge-type { background-color: #e3f2fd; color: #1e3c72; padding: 4px 8px; border-radius: 4px; font-size: 0.8em; font-weight: 600; }
+
+        /* Dosya Yükleme */
+        .file-list-container { margin-top: 15px; border: 1px solid #e1e8ed; border-radius: 12px; overflow: hidden; }
+        .file-item { display: flex; align-items: center; justify-content: space-between; padding: 12px 20px; border-bottom: 1px solid #eee; background: white; }
         .file-item:last-child { border-bottom: none; }
-        .file-info { flex-grow: 1; display: flex; align-items: center; gap: 15px; }
-        .file-icon { font-size: 1.5em; color: #6c757d; }
-        .file-name { font-weight: 500; color: #333; }
-        .file-name a { color: #1e3c72; text-decoration: none; }
-        .file-name a:hover { text-decoration: underline; }
-        .file-size { font-size: 0.85em; color: #666; margin-left: 10px; }
-        .file-actions { display: flex; gap: 10px; align-items: center; }
-        .btn-remove-file {
-            background: #ff6b6b; color: white; border: none; width: 30px; height: 30px; border-radius: 50%;
-            font-size: 1.2em; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: background 0.3s ease;
-        }
-        .btn-remove-file:hover { background: #ff5252; }
+        .file-name a { color: #1e3c72; font-weight: 500; }
+        .btn-remove-file { background: #ff6b6b; color: white; width: 25px; height: 25px; border-radius: 50%; border:none; cursor: pointer; }
 
-        .loading-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.7);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 9999;
-        }
-        .loading-content {
-            background: white;
-            padding: 30px;
-            border-radius: 15px;
-            text-align: center;
-        }
-        .spinner {
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #1e3c72;
-            border-radius: 50%;
-            width: 50px;
-            height: 50px;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 20px;
-        }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
+        /* Loading */
+        .loading-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 9999; }
+        .spinner { border: 4px solid #f3f3f3; border-top: 4px solid #1e3c72; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
 <body>
@@ -173,490 +59,350 @@
         <main class="main-container">
             <section class="page-header">
                 <h1 class="page-title" id="suitTitle">Dava Detayı</h1>
-                <p class="page-subtitle">Dava bilgilerini görüntüleyin ve düzenleyin</p>
+                <p class="page-subtitle">Dava sürecini ve geçmiş işlemleri yönetin</p>
             </section>
 
-            <div class="suit-detail-container">
-                <form id="suitForm">
-                    <!-- Dava Bilgileri -->
-                    <div class="section-card">
-                        <h3 class="section-title">Dava Bilgileri</h3>
-                        <div class="form-grid">
+            <form id="suitForm">
+                <div class="row">
+                    <div class="col-lg-7">
+                        <div class="section-card">
+                            <h3 class="section-title">Temel Bilgiler</h3>
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label class="form-label">Dava No *</label>
+                                    <input type="text" id="caseNo" class="form-input" required>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Dava Türü *</label>
+                                    <input type="text" id="suitType" class="form-input" required>
+                                </div>
+                                <div class="form-group full-width">
+                                    <label class="form-label">Mahkeme *</label>
+                                    <select id="court" class="form-select">
+                                        <option value="">Seçiniz...</option>
+                                        <optgroup label="Ankara">
+                                            <option value="Ankara 1. FSHHM">Ankara 1. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
+                                            <option value="Ankara 2. FSHHM">Ankara 2. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
+                                            <option value="Ankara 3. FSHHM">Ankara 3. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
+                                            <option value="Ankara 4. FSHHM">Ankara 4. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
+                                            <option value="Ankara 5. FSHHM">Ankara 5. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
+                                            <option value="Ankara FSHCM">Ankara Fikri ve Sınai Haklar Ceza Mahkemesi</option>
+                                        </optgroup>
+                                        <optgroup label="İstanbul">
+                                            <option value="İstanbul 1. FSHHM">İstanbul 1. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
+                                            <option value="İstanbul 2. FSHHM">İstanbul 2. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
+                                            <option value="İstanbul 3. FSHHM">İstanbul 3. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
+                                            <option value="İstanbul 4. FSHHM">İstanbul 4. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
+                                            <option value="İstanbul Anadolu 1. FSHHM">İstanbul Anadolu 1. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
+                                        </optgroup>
+                                        <optgroup label="Diğer İller">
+                                            <option value="İzmir FSHHM">İzmir Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
+                                            <option value="Bursa FSHHM">Bursa Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
+                                            <option value="Antalya FSHHM">Antalya Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
+                                        </optgroup>
+                                        <optgroup label="Yüksek Yargı / Diğer">
+                                            <option value="Yargıtay">Yargıtay</option>
+                                            <option value="other">Diğer (Elle Giriniz)</option>
+                                        </optgroup>
+                                    </select>
+                                    <input type="text" id="customCourtInput" class="form-input mt-2" style="display:none;" placeholder="Mahkeme adını yazınız...">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Açılış Tarihi</label>
+                                    <input type="date" id="openedDate" class="form-input">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Durum</label>
+                                    <select id="suitStatus" class="form-select">
+                                        <option value="Devam Ediyor">Devam Ediyor</option>
+                                        <option value="Sonuçlandı">Sonuçlandı</option>
+                                        <option value="Beklemede">Beklemede</option>
+                                        <option value="Kapatıldı">Kapatıldı</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="section-card">
+                            <h3 class="section-title">Taraf Bilgileri</h3>
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label class="form-label">Müvekkil</label>
+                                    <input type="text" id="clientName" class="form-input">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Rol</label>
+                                    <select id="clientRole" class="form-select">
+                                        <option value="Davacı">Davacı</option>
+                                        <option value="Davalı">Davalı</option>
+                                        <option value="Müdahil">Müdahil</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Karşı Taraf</label>
+                                    <input type="text" id="opposingParty" class="form-input">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Karşı Taraf Vekili</label>
+                                    <input type="text" id="opposingCounsel" class="form-input">
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="section-card">
+                            <h3 class="section-title">Konu Varlık & Açıklama</h3>
                             <div class="form-group">
-                                <label for="caseNo" class="form-label">Dava No *</label>
-                                <input type="text" id="caseNo" class="form-input" required>
+                                <label class="form-label">İlgili Varlık (Marka/Patent)</label>
+                                <input type="text" id="subjectAssetTitle" class="form-input" placeholder="Bağlı bir varlık yok">
                             </div>
                             <div class="form-group">
-                                <label for="suitType" class="form-label">Dava Türü *</label>
-                                <input type="text" id="suitType" class="form-input" required>
-                            </div>
-                            <div class="form-group">
-                                <label for="court" class="form-label">Mahkeme *</label>
-                                <input type="text" id="court" class="form-input" required>
-                            </div>
-                            <div class="form-group">
-                                <label for="openedDate" class="form-label">Açılış Tarihi</label>
-                                <input type="date" id="openedDate" class="form-input">
-                            </div>
-                            <div class="form-group full-width">
-                                <label for="suitStatus" class="form-label">Durum</label>
-                                <select id="suitStatus" class="form-select">
-                                    <option value="Devam Ediyor">Devam Ediyor</option>
-                                    <option value="Sonuçlandı">Sonuçlandı</option>
-                                    <option value="Beklemede">Beklemede</option>
-                                    <option value="Kapatıldı">Kapatıldı</option>
-                                </select>
+                                <label class="form-label">Açıklama</label>
+                                <textarea id="description" class="form-textarea"></textarea>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Taraflar -->
-                    <div class="section-card">
-                        <h3 class="section-title">Taraflar</h3>
-                        <div class="form-grid">
-                            <div class="form-group">
-                                <label for="clientName" class="form-label">Müvekkil *</label>
-                                <input type="text" id="clientName" class="form-input" required>
-                            </div>
-                            <div class="form-group">
-                                <label for="clientRole" class="form-label">Müvekkil Rolü</label>
-                                <select id="clientRole" class="form-select">
-                                    <option value="Davacı">Davacı</option>
-                                    <option value="Davalı">Davalı</option>
-                                    <option value="Müdahil">Müdahil</option>
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label for="opposingParty" class="form-label">Karşı Taraf</label>
-                                <input type="text" id="opposingParty" class="form-input">
-                            </div>
-                            <div class="form-group">
-                                <label for="opposingCounsel" class="form-label">Karşı Taraf Vekili</label>
-                                <input type="text" id="opposingCounsel" class="form-input">
+                    <div class="col-lg-5">
+                        <div class="section-card" style="background-color: #fcfcfc;">
+                            <h3 class="section-title"><i class="fas fa-history mr-2"></i> İşlem Geçmişi (Timeline)</h3>
+                            <div id="timelineContainer" class="timeline-container">
+                                <p class="text-muted text-center py-3">Yükleniyor...</p>
                             </div>
                         </div>
-                    </div>
 
-                    <!-- Konu Varlık -->
-                    <div class="section-card">
-                        <h3 class="section-title">Konu Varlık</h3>
-                        <div class="form-grid">
-                            <div class="form-group full-width">
-                                <label for="subjectAssetTitle" class="form-label">Varlık Adı</label>
-                                <input type="text" id="subjectAssetTitle" class="form-input">
-                            </div>
+                        <div class="section-card">
+                            <h3 class="section-title">Belgeler</h3>
+                            <button type="button" class="btn btn-secondary btn-sm btn-block mb-3" id="uploadBtn">
+                                <i class="fas fa-plus"></i> Belge Ekle
+                            </button>
+                            <input type="file" id="fileInput" hidden multiple>
+                            <div id="fileListContainer" class="file-list-container"></div>
+                        </div>
+                        
+                        <div class="mt-4">
+                            <button type="submit" class="btn btn-primary btn-block btn-lg">Değişiklikleri Kaydet</button>
+                            <button type="button" class="btn btn-secondary btn-block mt-2" id="cancelBtn">İptal</button>
                         </div>
                     </div>
-
-                    <!-- Açıklama -->
-                    <div class="section-card">
-                        <h3 class="section-title">Açıklama</h3>
-                        <div class="form-group full-width">
-                            <textarea id="description" class="form-textarea" placeholder="Dava ile ilgili detaylı açıklama..."></textarea>
-                        </div>
-                    </div>
-
-                    <!-- Belgeler -->
-                    <div class="section-card">
-                        <h3 class="section-title">Belgeler</h3>
-                        <div class="file-upload-area" id="fileUploadArea">
-                            <input type="file" id="fileInput" multiple hidden accept=".pdf,.doc,.docx,.jpg,.jpeg,.png">
-                            <div class="upload-icon">📄</div>
-                            <div class="upload-text">Dosyaları Buraya Sürükleyin veya Tıklayın</div>
-                            <div class="upload-subtext">PDF, DOCX, JPG, PNG dosyalarını destekler</div>
-                        </div>
-                        <div class="file-list-container" id="fileListContainer">
-                            <p style="text-align: center; color: #666; padding: 20px;">Bu davaya ait belge bulunmamaktadır.</p>
-                        </div>
-                    </div>
-
-                    <!-- Butonlar -->
-                    <div class="form-actions">
-                        <button type="button" class="btn btn-secondary" id="cancelBtn">İptal</button>
-                        <button type="submit" class="btn btn-primary" id="saveSuitBtn">Değişiklikleri Kaydet</button>
-                    </div>
-                </form>
-            </div>
+                </div>
+            </form>
         </main>
     </div>
 
     <script type="module">
         import { loadSharedLayout } from './js/layout-loader.js';
         import { db, auth, storage } from './firebase-config.js';
-        import { doc, getDoc, updateDoc, collection, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { doc, getDoc, updateDoc, collection, getDocs, orderBy, query } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
         import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
         import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
+        import { showNotification } from './utils.js';
 
-        // URL parametrelerinden dava ID'sini al
         const params = new URLSearchParams(window.location.search);
         const suitId = params.get('id');
-
-        let currentSuitData = null;
         let currentDocuments = [];
-
-        // Notification fonksiyonu
-        function showNotification(message, type = 'info') {
-            const container = document.getElementById('notification-container');
-            const notification = document.createElement('div');
-            notification.className = `notification ${type}`;
-            notification.textContent = message;
-            container.appendChild(notification);
-            
-            setTimeout(() => {
-                notification.classList.add('show');
-            }, 100);
-            
-            setTimeout(() => {
-                notification.classList.remove('show');
-                setTimeout(() => notification.remove(), 300);
-            }, 3000);
-        }
-
-        // Dosya boyutu formatlama
-        function formatFileSize(bytes) {
-            if (bytes === 0) return '0 Bytes';
-            const k = 1024;
-            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-            const i = Math.floor(Math.log(bytes) / Math.log(k));
-            return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
-        }
-
-        // Loading göster/gizle
-        function showLoading() {
-            const overlay = document.createElement('div');
-            overlay.id = 'loadingOverlay';
-            overlay.className = 'loading-overlay';
-            overlay.innerHTML = `
-                <div class="loading-content">
-                    <div class="spinner"></div>
-                    <p>Yükleniyor...</p>
-                </div>
-            `;
-            document.body.appendChild(overlay);
-        }
-
-        function hideLoading() {
-            const overlay = document.getElementById('loadingOverlay');
-            if (overlay) overlay.remove();
-        }
 
         // Başlangıç
         (async function() {
             await loadSharedLayout();
-            
             onAuthStateChanged(auth, async (user) => {
-                if (!user) {
-                    window.location.href = 'login.html';
-                    return;
-                }
-
-                if (!suitId) {
-                    showNotification('Dava ID bulunamadı!', 'error');
-                    setTimeout(() => window.location.href = 'portfolio.html', 2000);
-                    return;
-                }
-
+                if (!user) return window.location.href = 'index.html';
+                if (!suitId) return window.location.href = 'portfolio.html';
                 await loadSuitData();
+                await loadSuitTransactions(); // Timeline Yükle
                 setupEventListeners();
             });
         })();
 
-        // Dava verilerini yükle
+        // Dava Verilerini Yükle
         async function loadSuitData() {
             try {
-                showLoading();
-
-                // Suits koleksiyonundan davayı bul
-                const suitsRef = collection(db, 'suits');
-                const suitsSnapshot = await getDocs(suitsRef);
+                const docRef = doc(db, 'suits', suitId);
+                const snap = await getDoc(docRef);
                 
-                let suitData = null;
-                suitsSnapshot.forEach(docSnap => {
-                    if (docSnap.id === suitId) {
-                        suitData = { id: docSnap.id, ...docSnap.data() };
-                    }
-                });
+                if (!snap.exists()) {
+                    alert('Dava bulunamadı.');
+                    return window.location.href = 'portfolio.html';
+                }
 
-                if (!suitData) {
-                    hideLoading();
-                    showNotification('Dava kaydı bulunamadı!', 'error');
-                    setTimeout(() => window.location.href = 'portfolio.html', 2000);
+                const data = snap.data();
+                const details = data.suitDetails || {};
+                
+                document.getElementById('suitTitle').textContent = `Dava: ${details.caseNo || data.title}`;
+                
+                // Form Doldurma
+                setValue('caseNo', details.caseNo);
+                setValue('suitType', data.transactionType?.alias || data.transactionType?.name);
+                
+                // Mahkeme Seçimi Mantığı
+                const courtSelect = document.getElementById('court');
+                const courtVal = details.court || '';
+                let found = false;
+                for(let opt of courtSelect.options) {
+                    if(opt.value === courtVal) {
+                        courtSelect.value = courtVal;
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found && courtVal) {
+                    courtSelect.value = 'other';
+                    document.getElementById('customCourtInput').style.display = 'block';
+                    setValue('customCourtInput', courtVal);
+                } else {
+                    courtSelect.value = courtVal;
+                }
+
+                setValue('openedDate', formatDateForInput(details.openingDate));
+                setValue('suitStatus', details.suitStatus);
+                setValue('clientName', data.client?.name);
+                setValue('clientRole', data.client?.clientRole);
+                setValue('opposingParty', details.opposingParty);
+                setValue('opposingCounsel', details.opposingCounsel);
+                setValue('subjectAssetTitle', data.subjectAsset?.title);
+                setValue('description', details.description);
+
+                currentDocuments = data.documents || [];
+                renderDocuments();
+
+            } catch (e) {
+                console.error(e);
+                showNotification('Veri yüklenemedi.', 'error');
+            }
+        }
+
+        // Timeline (İşlem Geçmişi) Yükle
+        async function loadSuitTransactions() {
+            const container = document.getElementById('timelineContainer');
+            try {
+                const q = query(collection(db, 'suits', suitId, 'transactions'), orderBy('createdAt', 'desc'));
+                const snap = await getDocs(q);
+                
+                if (snap.empty) {
+                    container.innerHTML = '<p class="text-muted text-center">Henüz işlem geçmişi yok.</p>';
                     return;
                 }
 
-                currentSuitData = suitData;
-                currentDocuments = suitData.documents || [];
+                let html = '';
+                snap.forEach(doc => {
+                    const t = doc.data();
+                    const date = t.creationDate ? new Date(t.creationDate).toLocaleDateString('tr-TR') : '-';
+                    const desc = t.description || 'İşlem detay girilmemiş.';
+                    const typeName = t.transactionTypeName || 'İşlem'; // Task type ismi eklenebilir
 
-                // Sayfa başlığını güncelle
-                document.getElementById('suitTitle').textContent = `Dava Detayı: ${suitData.suitDetails?.caseNo || 'N/A'}`;
-
-                // Form alanlarını doldur
-                document.getElementById('caseNo').value = suitData.suitDetails?.caseNo || '';
-                document.getElementById('suitType').value = suitData.transactionType?.alias || '';
-                document.getElementById('court').value = suitData.suitDetails?.court || '';
-                
-                // Tarih formatını düzenle
-                if (suitData.suitDetails?.openingDate) {
-                    try {
-                        let date;
-                        if (suitData.suitDetails.openingDate.seconds) {
-                            date = new Date(suitData.suitDetails.openingDate.seconds * 1000);
-                        } else {
-                            date = new Date(suitData.suitDetails.openingDate);
-                        }
-                        
-                        if (!isNaN(date.getTime())) {
-                            document.getElementById('openedDate').value = date.toISOString().split('T')[0];
-                        }
-                    } catch (e) {
-                        console.warn('Tarih formatı hatası:', e);
-                    }
-                }
-                
-                document.getElementById('suitStatus').value = suitData.suitDetails?.suitStatus || 'Devam Ediyor';
-                document.getElementById('clientName').value = suitData.client?.name || '';
-                document.getElementById('clientRole').value = suitData.client?.clientRole || 'Davacı';
-                document.getElementById('opposingParty').value = suitData.suitDetails?.opposingParty || '';
-                document.getElementById('opposingCounsel').value = suitData.suitDetails?.opposingCounsel || '';
-                document.getElementById('subjectAssetTitle').value = suitData.subjectAsset?.title || '';
-                document.getElementById('description').value = suitData.suitDetails?.description || '';
-
-                // Belgeleri render et
-                renderDocuments();
-
-                hideLoading();
-
-            } catch (error) {
-                console.error('Dava verileri yüklenirken hata:', error);
-                hideLoading();
-                showNotification('Dava verileri yüklenirken bir hata oluştu.', 'error');
-            }
-        }
-
-        // Event listener'ları kur
-        function setupEventListeners() {
-            // Form submit
-            document.getElementById('suitForm').addEventListener('submit', handleFormSubmit);
-
-            // İptal butonu
-            document.getElementById('cancelBtn').addEventListener('click', () => {
-                if (confirm('Değişiklikler kaydedilmeyecek. Devam etmek istiyor musunuz?')) {
-                    window.location.href = 'portfolio.html';
-                }
-            });
-
-            // Dosya yükleme alanı
-            const fileUploadArea = document.getElementById('fileUploadArea');
-            const fileInput = document.getElementById('fileInput');
-
-            fileUploadArea.addEventListener('click', () => fileInput.click());
-            fileInput.addEventListener('change', (e) => handleFileUpload(e.target.files));
-
-            // Drag & Drop
-            fileUploadArea.addEventListener('dragover', (e) => {
-                e.preventDefault();
-                fileUploadArea.classList.add('dragover');
-            });
-
-            fileUploadArea.addEventListener('dragleave', () => {
-                fileUploadArea.classList.remove('dragover');
-            });
-
-            fileUploadArea.addEventListener('drop', (e) => {
-                e.preventDefault();
-                fileUploadArea.classList.remove('dragover');
-                if (e.dataTransfer.files.length > 0) {
-                    handleFileUpload(e.dataTransfer.files);
-                }
-            });
-        }
-
-        // Dosya yükleme
-        async function handleFileUpload(files) {
-            if (!files || files.length === 0) return;
-
-            showLoading();
-
-            try {
-                const uploadedFiles = [];
-
-                for (const file of files) {
-                    // Benzersiz ID oluştur
-                    const fileId = crypto?.randomUUID?.() || `${Date.now()}_${Math.random().toString(36).slice(2)}`;
-                    const storagePath = `suit_documents/${suitId}/${fileId}_${file.name}`;
-                    const fileStorageRef = storageRef(storage, storagePath);
-
-                    // Dosyayı storage'a yükle
-                    await uploadBytes(fileStorageRef, file);
-                    const downloadURL = await getDownloadURL(fileStorageRef);
-
-                    uploadedFiles.push({
-                        id: fileId,
-                        name: file.name,
-                        size: file.size,
-                        type: file.type,
-                        storagePath: storagePath,
-                        downloadURL: downloadURL,
-                        uploadedAt: new Date().toISOString()
-                    });
-                }
-
-                // Belgeleri listeye ekle
-                currentDocuments = [...currentDocuments, ...uploadedFiles];
-                
-                // Firestore'a kaydet
-                await saveDocumentsToFirestore();
-                
-                // Liste'yi güncelle
-                renderDocuments();
-
-                hideLoading();
-                showNotification('Belgeler başarıyla yüklendi!', 'success');
-
-            } catch (error) {
-                console.error('Dosya yükleme hatası:', error);
-                hideLoading();
-                showNotification('Dosya yüklenirken bir hata oluştu: ' + error.message, 'error');
-            }
-        }
-
-        // Belgeleri listele
-        function renderDocuments() {
-            const fileListContainer = document.getElementById('fileListContainer');
-            fileListContainer.innerHTML = '';
-
-            if (!currentDocuments || currentDocuments.length === 0) {
-                fileListContainer.innerHTML = '<p style="text-align: center; color: #666; padding: 20px;">Bu davaya ait belge bulunmamaktadır.</p>';
-                return;
-            }
-
-            currentDocuments.forEach(doc => {
-                const fileItem = document.createElement('div');
-                fileItem.classList.add('file-item');
-
-                const href = doc.downloadURL || doc.content || '#';
-
-                fileItem.innerHTML = `
-                    <div class="file-info">
-                        <span class="file-icon">📄</span>
-                        <div>
-                            <div class="file-name">
-                                <a href="${href}" ${doc.downloadURL ? 'target="_blank" rel="noopener"' : ''} download="${doc.name}">${doc.name}</a>
-                                <span class="file-size">${formatFileSize(doc.size)}</span>
+                    html += `
+                        <div class="timeline-item">
+                            <div class="timeline-date">${date}</div>
+                            <div class="timeline-content">
+                                <div class="timeline-title">${typeName}</div>
+                                <div class="timeline-desc">${desc}</div>
+                                ${t.triggeringTaskId ? `<div class="timeline-badges"><span class="badge-type">Ref: ${t.triggeringTaskId}</span></div>` : ''}
                             </div>
                         </div>
-                    </div>
-                    <div class="file-actions">
-                        <button class="btn-remove-file" data-doc-id="${doc.id}" type="button">&times;</button>
-                    </div>
-                `;
+                    `;
+                });
+                container.innerHTML = html;
 
-                // Silme butonu
-                fileItem.querySelector('.btn-remove-file').addEventListener('click', () => removeDocument(doc.id));
+            } catch (e) {
+                console.error("Timeline hatası:", e);
+                container.innerHTML = '<p class="text-danger">Geçmiş yüklenemedi.</p>';
+            }
+        }
 
-                fileListContainer.appendChild(fileItem);
+        function setupEventListeners() {
+            document.getElementById('suitForm').addEventListener('submit', handleSave);
+            document.getElementById('cancelBtn').addEventListener('click', () => window.location.href = 'portfolio.html');
+            
+            // Dosya Yükleme
+            document.getElementById('uploadBtn').addEventListener('click', () => document.getElementById('fileInput').click());
+            document.getElementById('fileInput').addEventListener('change', handleFileUpload);
+
+            // Mahkeme "Diğer" seçimi
+            document.getElementById('court').addEventListener('change', (e) => {
+                const custom = document.getElementById('customCourtInput');
+                if (e.target.value === 'other') custom.style.display = 'block';
+                else { custom.style.display = 'none'; custom.value = ''; }
             });
         }
 
-        // Belgeyi sil
-        async function removeDocument(docId) {
-            const doc = currentDocuments.find(d => d.id === docId);
-            if (!doc) return;
-
-            if (!confirm('Bu belgeyi kaldırmak istediğinizden emin misiniz?')) return;
-
-            showLoading();
-
-            try {
-                // Storage'dan sil
-                if (doc.storagePath) {
-                    try {
-                        const fileRef = storageRef(storage, doc.storagePath);
-                        await deleteObject(fileRef);
-                    } catch (err) {
-                        console.warn('Storage silme hatası:', err);
-                    }
-                }
-
-                // Listeden çıkar
-                currentDocuments = currentDocuments.filter(d => d.id !== docId);
-                
-                // Firestore'a kaydet
-                await saveDocumentsToFirestore();
-                
-                // Listeyi güncelle
-                renderDocuments();
-
-                hideLoading();
-                showNotification('Belge başarıyla silindi.', 'success');
-
-            } catch (error) {
-                console.error('Belge silme hatası:', error);
-                hideLoading();
-                showNotification('Belge silinirken bir hata oluştu: ' + error.message, 'error');
-            }
-        }
-
-        // Belgeleri Firestore'a kaydet
-        async function saveDocumentsToFirestore() {
-            try {
-                const suitRef = doc(db, 'suits', suitId);
-                await updateDoc(suitRef, {
-                    documents: currentDocuments
-                });
-            } catch (error) {
-                console.error('Belgeler kaydedilirken hata:', error);
-                throw error;
-            }
-        }
-
-        // Form submit
-        async function handleFormSubmit(e) {
+        async function handleSave(e) {
             e.preventDefault();
-            
-            if (!confirm('Değişiklikleri kaydetmek istediğinizden emin misiniz?')) {
-                return;
-            }
+            if (!confirm('Kaydetmek istiyor musunuz?')) return;
 
-            showLoading();
+            const courtSelect = document.getElementById('court');
+            const finalCourt = courtSelect.value === 'other' ? document.getElementById('customCourtInput').value : courtSelect.value;
+
+            const updateData = {
+                'suitDetails.caseNo': getValue('caseNo'),
+                'suitDetails.court': finalCourt,
+                'suitDetails.suitStatus': getValue('suitStatus'),
+                'suitDetails.openingDate': document.getElementById('openedDate').value ? new Date(document.getElementById('openedDate').value).toISOString() : null,
+                'suitDetails.opposingParty': getValue('opposingParty'),
+                'suitDetails.opposingCounsel': getValue('opposingCounsel'),
+                'suitDetails.description': getValue('description'),
+                'client.name': getValue('clientName'),
+                'client.clientRole': getValue('clientRole'),
+                'documents': currentDocuments
+            };
 
             try {
-                // Güncellenecek veriyi hazırla
-                const updatedData = {
-                    'suitDetails.caseNo': document.getElementById('caseNo').value,
-                    'transactionType.alias': document.getElementById('suitType').value,
-                    'suitDetails.court': document.getElementById('court').value,
-                    'suitDetails.openingDate': document.getElementById('openedDate').value ? new Date(document.getElementById('openedDate').value) : null,
-                    'suitDetails.suitStatus': document.getElementById('suitStatus').value,
-                    'client.name': document.getElementById('clientName').value,
-                    'client.clientRole': document.getElementById('clientRole').value,
-                    'suitDetails.opposingParty': document.getElementById('opposingParty').value,
-                    'suitDetails.opposingCounsel': document.getElementById('opposingCounsel').value,
-                    'subjectAsset.title': document.getElementById('subjectAssetTitle').value,
-                    'suitDetails.description': document.getElementById('description').value,
-                    'documents': currentDocuments
-                };
-
-                // Firestore'da güncelle
-                const suitRef = doc(db, 'suits', suitId);
-                await updateDoc(suitRef, updatedData);
-
-                hideLoading();
-                showNotification('Dava başarıyla güncellendi!', 'success');
-                
-                setTimeout(() => {
-                    window.location.href = 'portfolio.html';
-                }, 1500);
-
-            } catch (error) {
-                console.error('Kaydetme hatası:', error);
-                hideLoading();
-                showNotification('Dava kaydedilirken bir hata oluştu: ' + error.message, 'error');
+                await updateDoc(doc(db, 'suits', suitId), updateData);
+                showNotification('Güncellendi!', 'success');
+                setTimeout(() => window.location.reload(), 1000);
+            } catch (e) {
+                console.error(e);
+                showNotification('Hata oluştu.', 'error');
             }
+        }
+
+        async function handleFileUpload(e) {
+            const files = e.target.files;
+            if (!files.length) return;
+
+            for (const file of files) {
+                const path = `suit_docs/${suitId}/${Date.now()}_${file.name}`;
+                try {
+                    const res = await uploadBytes(storageRef(storage, path), file);
+                    const url = await getDownloadURL(res.ref);
+                    currentDocuments.push({ name: file.name, url: url, path: path, uploadedAt: new Date().toISOString() });
+                } catch (err) { console.error(err); }
+            }
+            // Firestore'a kaydetmeden önce UI güncelle (veya direkt kaydet)
+            await updateDoc(doc(db, 'suits', suitId), { documents: currentDocuments });
+            renderDocuments();
+            showNotification('Dosyalar yüklendi.', 'success');
+        }
+
+        function renderDocuments() {
+            const list = document.getElementById('fileListContainer');
+            if (!currentDocuments.length) { list.innerHTML = '<p class="text-center p-3 text-muted">Dosya yok.</p>'; return; }
+            
+            list.innerHTML = currentDocuments.map((d, i) => `
+                <div class="file-item">
+                    <div class="file-name"><a href="${d.url}" target="_blank">${d.name}</a></div>
+                    <button type="button" class="btn-remove-file" onclick="window.removeDoc(${i})">&times;</button>
+                </div>
+            `).join('');
+            
+            // Global fonksiyon atama (module scope dışına erişim için - basit çözüm)
+            window.removeDoc = async (index) => {
+                if(!confirm('Silinsin mi?')) return;
+                currentDocuments.splice(index, 1);
+                await updateDoc(doc(db, 'suits', suitId), { documents: currentDocuments });
+                renderDocuments();
+            };
+        }
+
+        // Helpers
+        function setValue(id, val) { const el = document.getElementById(id); if(el) el.value = val || ''; }
+        function getValue(id) { return document.getElementById(id)?.value || ''; }
+        function formatDateForInput(dateVal) {
+            if(!dateVal) return '';
+            try {
+                const d = dateVal.toDate ? dateVal.toDate() : new Date(dateVal);
+                return d.toISOString().split('T')[0];
+            } catch { return ''; }
         }
     </script>
-
     <script type="module" src="./js/layout-loader.js"></script>
-    <script type="module" src="./firebase-config.js"></script>
 </body>
 </html>
