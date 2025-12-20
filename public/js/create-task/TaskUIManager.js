@@ -293,8 +293,63 @@ export class TaskUIManager {
         <div class="section-card">
             <h3 class="section-title">4. Dava Bilgileri</h3>
             <div class="form-grid">
-                <div class="form-group full-width"><label class="form-label">Mahkeme</label><select id="courtName" class="form-select"><option value="">Seçiniz...</option><option value="ankara_1_fsm">Ankara 1. FSM</option><option value="istinaf">İstinaf</option></select></div>
-                <div class="form-group full-width"><label class="form-label">Konu</label><textarea id="subjectOfLawsuit" class="form-textarea" rows="3"></textarea></div>
+                <div class="form-group full-width">
+                    <label class="form-label">Mahkeme</label>
+                    <select id="courtName" class="form-select">
+                        <option value="">Seçiniz...</option>
+                        
+                        <optgroup label="Ankara">
+                            <option value="Ankara 1. FSHHM">Ankara 1. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
+                            <option value="Ankara 2. FSHHM">Ankara 2. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
+                            <option value="Ankara 3. FSHHM">Ankara 3. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
+                            <option value="Ankara 4. FSHHM">Ankara 4. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
+                            <option value="Ankara 5. FSHHM">Ankara 5. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
+                            <option value="Ankara FSHCM">Ankara Fikri ve Sınai Haklar Ceza Mahkemesi</option>
+                        </optgroup>
+
+                        <optgroup label="İstanbul (Çağlayan)">
+                            <option value="İstanbul 1. FSHHM">İstanbul 1. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
+                            <option value="İstanbul 2. FSHHM">İstanbul 2. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
+                            <option value="İstanbul 3. FSHHM">İstanbul 3. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
+                            <option value="İstanbul 4. FSHHM">İstanbul 4. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
+                            <option value="İstanbul FSHCM">İstanbul Fikri ve Sınai Haklar Ceza Mahkemesi</option>
+                        </optgroup>
+
+                        <optgroup label="İstanbul (Anadolu)">
+                            <option value="İstanbul Anadolu 1. FSHHM">İstanbul Anadolu 1. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
+                            <option value="İstanbul Anadolu 2. FSHHM">İstanbul Anadolu 2. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
+                            <option value="İstanbul Anadolu FSHCM">İstanbul Anadolu Fikri ve Sınai Haklar Ceza Mahkemesi</option>
+                        </optgroup>
+
+                        <optgroup label="İzmir">
+                            <option value="İzmir FSHHM">İzmir Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
+                            <option value="İzmir FSHCM">İzmir Fikri ve Sınai Haklar Ceza Mahkemesi</option>
+                        </optgroup>
+
+                        <optgroup label="Bursa">
+                            <option value="Bursa FSHHM">Bursa Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
+                        </optgroup>
+
+                        <optgroup label="Antalya">
+                            <option value="Antalya FSHHM">Antalya Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
+                        </optgroup>
+                        
+                        <optgroup label="Yüksek Yargı / Diğer">
+                            <option value="Bölge Adliye Mahkemesi (İstinaf)">Bölge Adliye Mahkemesi (İstinaf)</option>
+                            <option value="Yargıtay">Yargıtay</option>
+                            <option value="other">Diğer (Elle Giriniz)</option>
+                        </optgroup>
+                    </select>
+                    
+                    <input type="text" id="customCourtInput" class="form-input mt-2" 
+                           placeholder="Mahkeme adını tam olarak yazınız..." 
+                           style="display:none; border-color: #3498db;">
+                </div>
+
+                <div class="form-group full-width">
+                    <label class="form-label">Konu</label>
+                    <textarea id="subjectOfLawsuit" class="form-textarea" rows="3"></textarea>
+                </div>
             </div>
         </div>`;
     }
