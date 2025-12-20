@@ -129,19 +129,60 @@ export class PortfolioRenderer {
         return tr;
     }
 
+// Dava Statüleri İçin Renklendirme Yardımcısı (GÜNCELLENDİ)
+    _getLitigationStatusBadge(status) {
+        const s = String(status || '').trim();
+        let badgeClass = 'badge-light-secondary'; // Varsayılan gri
+
+        switch (s) {
+            case 'Devam Ediyor':
+                badgeClass = 'badge-light-primary'; // Mavi
+                break;
+            case 'Bilirkişi İncelemesinde':
+                badgeClass = 'badge-light-info'; // Açık Mavi/Cyan
+                break;
+            case 'Karar Aşamasında':
+                badgeClass = 'badge-light-warning'; // Turuncu (Bekleme)
+                break;
+            case 'Karar Verildi (Kısa Karar)':
+                badgeClass = 'badge-light-success'; // Yeşil (Sonuç var ama bitmedi)
+                break;
+            case 'Gerekçeli Karar Yazıldı':
+                badgeClass = 'badge-light-danger'; // Kırmızı (Dikkat! Süreler başlayacak/başladı)
+                break;
+            case 'İstinaf / Bölge Adliye':
+            case 'Temyiz / Yargıtay':
+                badgeClass = 'badge-light-dark'; // Koyu/Siyah (Yüksek Yargı)
+                break;
+            case 'Kesinleşti':
+                badgeClass = 'badge-success'; // Koyu Yeşil (Tamamen Bitti)
+                break;
+            case 'Beklemede':
+                badgeClass = 'badge-light-secondary'; // Gri
+                break;
+        }
+
+        return `<span class="badge ${badgeClass} border">${s}</span>`;
+    }
+
     renderLitigationRow(row) {
         const tr = document.createElement('tr');
         tr.dataset.id = row.id;
+        
+        // Satır renklendirme (İptal/Tecavüz)
         const suitTypeStr = String(row.suitType || '');
-        if (suitTypeStr.includes('İptal')) tr.style.backgroundColor = '#ffebee';
-        else if (suitTypeStr.includes('Tecavüz')) tr.style.backgroundColor = '#fff3e0';
+        if (suitTypeStr.includes('İptal')) tr.style.backgroundColor = '#fff5f8'; // Çok açık kırmızı
+        else if (suitTypeStr.includes('Tecavüz')) tr.style.backgroundColor = '#fff8f0'; // Çok açık turuncu
         
         const actions = `
             <div class="d-flex gap-1 justify-content-end">
-                <button class="action-btn view-btn btn btn-sm btn-info" data-id="${row.id}"><i class="fas fa-eye"></i></button>
-                <button class="action-btn edit-btn btn btn-sm btn-warning" data-id="${row.id}"><i class="fas fa-edit"></i></button>
+                <button class="action-btn view-btn btn btn-sm btn-info" data-id="${row.id}" title="Görüntüle"><i class="fas fa-eye"></i></button>
+                <button class="action-btn edit-btn btn btn-sm btn-warning" data-id="${row.id}" title="Düzenle"><i class="fas fa-edit"></i></button>
             </div>`;
             
+        // Statü Badge'ini oluştur
+        const statusBadge = this._getLitigationStatusBadge(row.suitStatus || 'Devam Ediyor');
+
         tr.innerHTML = `
             <td title="${row.title || ''}">${row.title || '-'}</td>
             <td title="${row.suitType || ''}">${row.suitType || '-'}</td>
@@ -149,8 +190,12 @@ export class PortfolioRenderer {
             <td title="${row.court || ''}">${row.court || '-'}</td>
             <td title="${row.client || ''}">${row.client || '-'}</td>
             <td title="${row.opposingParty || ''}">${row.opposingParty || '-'}</td>
+            
+            <td>${statusBadge}</td>
+            
             <td>${row.openedDate || '-'}</td>
             <td>${actions}</td>`;
+            
         return tr;
     }
 
