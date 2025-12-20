@@ -357,6 +357,11 @@ export class TaskUIManager {
                     <label class="form-label">Konu</label>
                     <textarea id="subjectOfLawsuit" class="form-textarea" rows="3"></textarea>
                 </div>
+
+                <div class="form-group">
+                    <label class="form-label">Dava Tarihi (Açılış)</label>
+                    <input type="text" id="suitOpeningDate" class="form-input" placeholder="gg.aa.yyyy">
+                </div>
             </div>
         </div>`;
     }
