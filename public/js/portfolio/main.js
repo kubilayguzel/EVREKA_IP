@@ -26,27 +26,64 @@ class PortfolioController {
     }
 
     async init() {
-        onAuthStateChanged(auth, async (user) => {
-            if (user) {
-                await loadSharedLayout({ activeMenuLink: 'portfolio.html' });
-                this.renderer.showLoading(true);
-                
-                try {
-                    await this.dataManager.loadInitialData();
-                    this.setupPagination();
-                    this.setupEventListeners();
-                    // YENİ: Görsel Hover Efektini Başlat
-                    this.setupImageHover();
-                    this.render();
-                } catch (e) {
-                    console.error('Init hatası:', e);
-                } finally {
-                    this.renderer.showLoading(false);
-                }
-            } else {
+        try {
+            // 1. Yetkilendirme Kontrolü
+            const user = await new Promise((resolve) => {
+                const unsubscribe = auth.onAuthStateChanged(u => {
+                    unsubscribe();
+                    resolve(u);
+                });
+            });
+
+            if (!user) {
                 window.location.href = 'index.html';
+                return;
             }
-        });
+
+            // 2. Kullanıcı Arayüzünü Başlat
+            this.updateAuthUI(user);
+            
+            // Tabloya "Yükleniyor" yazısı koy
+            if (this.renderer && this.renderer.tbody) {
+                this.renderer.tbody.innerHTML = '<tr><td colspan="10" class="text-center p-4"><div class="spinner-border text-primary" role="status"></div><br>Veriler yükleniyor...</td></tr>';
+            }
+
+            console.log("📥 Veriler çekiliyor...");
+            
+            // 3. VERİLERİ ÇEK VE DEĞİŞKENLERE ATA (Kritik Düzeltme)
+            // fetchAllItems: Marka/Patent/Tasarım verisini çeker
+            const allItems = await this.dataManager.fetchAllItems();
+            this.dataManager.rows = allItems; // <--- İşte eksik olan bağlantı bu!
+            
+            // loadLitigationData: Dava verilerini çeker
+            // (DataManager içinde litigationRows'a kendi atıyor ama yine de çağırmalıyız)
+            await this.dataManager.loadLitigationData();
+            
+            // loadObjectionsData: İtiraz verilerini çeker (Varsa)
+            if (this.dataManager.loadObjectionsData) {
+                await this.dataManager.loadObjectionsData();
+            }
+
+            console.log(`✅ Veriler yüklendi. IP: ${this.dataManager.rows.length}, Dava: ${this.dataManager.litigationRows?.length || 0}`);
+
+            // 4. URL'den Tab Seçimi (Link ile gelindiyse)
+            const urlParams = new URLSearchParams(window.location.search);
+            const tab = urlParams.get('tab');
+            if (tab && ['trademark', 'patent', 'design', 'litigation', 'objections'].includes(tab)) {
+                this.state.activeTab = tab;
+                // Bootstrap tab'ı aktifleştir
+                $(`#portfolioTabs a[href="#${tab}"]`).tab('show');
+            }
+
+            // 5. Tabloyu Çiz
+            this.render();
+
+        } catch (error) {
+            console.error("Başlangıç hatası:", error);
+            if (this.renderer && this.renderer.tbody) {
+                this.renderer.tbody.innerHTML = '<tr><td colspan="10" class="text-center text-danger p-4">Veri yüklenirken hata oluştu. Lütfen sayfayı yenileyin.</td></tr>';
+            }
+        }
     }
 
     // --- GÖRSEL HOVER MANTIĞI (BAĞIMSIZ POPUP) ---
@@ -320,7 +357,7 @@ class PortfolioController {
         } catch (e) { console.error(e); showNotification('Dışa aktarma hatası.', 'error'); }
         finally { this.renderer.showLoading(false); }
     }
-    
+
 // --- YARDIMCI METOD: Sayfalama ve Sıralama ---
     getPaginatedData() {
         // 1. Veri Kaynağını Belirle
