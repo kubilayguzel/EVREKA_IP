@@ -86,6 +86,31 @@ class PortfolioController {
         }
     }
 
+    // --- AUTH UI GÜNCELLEME (Eksik Olan Metod) ---
+    updateAuthUI(user) {
+        if (!user) return;
+
+        // Kullanıcı adını header'da göster (ID'ler projenize göre değişebilir, genel yazdım)
+        const userNameEl = document.getElementById('userNameDisplay') || document.querySelector('.user-name');
+        const userEmailEl = document.getElementById('userEmailDisplay');
+        const userAvatarEl = document.getElementById('userAvatar');
+
+        if (userNameEl) {
+            userNameEl.textContent = user.displayName || user.email || 'Kullanıcı';
+        }
+        
+        if (userEmailEl) {
+            userEmailEl.textContent = user.email;
+        }
+
+        // Varsa avatarı güncelle
+        if (userAvatarEl && user.photoURL) {
+            userAvatarEl.src = user.photoURL;
+        }
+
+        console.log('👤 Kullanıcı arayüzü güncellendi:', user.email);
+    }
+
     // --- GÖRSEL HOVER MANTIĞI (BAĞIMSIZ POPUP) ---
     setupImageHover() {
         let previewEl = document.getElementById('floating-preview');
