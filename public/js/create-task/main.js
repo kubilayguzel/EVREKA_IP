@@ -287,7 +287,7 @@ class CreateTaskController {
                 }
             }
         });
-        
+
         // 4. TAB DEĞİŞİMİ VE DİĞERLERİ
         $(document).on('shown.bs.tab', '#myTaskTabs a', async (e) => {
             this.uiManager.updateButtonsAndTabs();
@@ -926,27 +926,48 @@ class CreateTaskController {
         
         document.getElementById('selectedIpRecordContainer').style.display = 'block';
 
-        // 4. Geri Çekme Kontrolleri (Sadece Marka İşlemlerinde)
+        // 4. Geri Çekme Kontrolleri (Dava ve Marka/Patent Uyumlu)
         if (this.state.isWithdrawalTask) {
-            let txResult = await this.dataManager.getRecordTransactions(record.id);
+            console.log(`[Main] ${record.id} için geri çekilecek işlemler sorgulanıyor...`);
+
+            // A) Kaynağı belirle: Eğer dava ise 'suits', değilse 'ipRecords'
+            // Bu parametreyi TaskDataManager'a gönderiyoruz
+            const sourceCollection = record._source === 'suit' ? 'suits' : 'ipRecords';
+            
+            let txResult = await this.dataManager.getRecordTransactions(record.id, sourceCollection);
             let combinedTransactions = txResult.success ? txResult.data : [];
 
-            if (combinedTransactions.length === 0 && (record.wipoIR || record.aripoIR)) {
+            // B) Aile Taraması (Sadece Marka/Patent için ve WIPO/ARIPO varsa)
+            // Davalarda (suits) WIPO ailesi mantığı olmadığı için bu bloğu atlıyoruz.
+            if (sourceCollection === 'ipRecords' && combinedTransactions.length === 0 && (record.wipoIR || record.aripoIR)) {
+                console.log('⚠️ Seçilen kayıtta işlem yok. Aile kayıtları taranıyor...');
                 const irNumber = record.wipoIR || record.aripoIR;
+                
+                // Aynı IR numarasına sahip diğer dosyaları bul
                 const relatives = this.state.allIpRecords.filter(r => 
                     (r.wipoIR === irNumber || r.aripoIR === irNumber) && r.id !== record.id
                 );
+
                 for (const rel of relatives) {
-                    const relResult = await this.dataManager.getRecordTransactions(rel.id);
-                    if (relResult.success) combinedTransactions.push(...relResult.data);
+                    // Aile bireyleri her zaman ipRecords tablosundadır
+                    const relResult = await this.dataManager.getRecordTransactions(rel.id, 'ipRecords');
+                    if (relResult.success && relResult.data.length > 0) {
+                        combinedTransactions = [...combinedTransactions, ...relResult.data];
+                    }
                 }
             }
 
+            // C) Sonuçları İşle
             if (combinedTransactions.length > 0) {
                 record.transactions = combinedTransactions;
+                // Bulunan işlemleri filtreleyip kullanıcıya modal açan fonksiyonu çağır
                 this.processParentTransactions(record);
             } else {
-                alert('Geri çekilebilecek işlem bulunamadı.');
+                console.warn('❌ Geri çekilebilecek işlem bulunamadı.');
+                alert('Bu varlık üzerinde geri çekilebilecek uygun bir işlem (İtiraz vb.) bulunamadı.');
+                // İsteğe bağlı: Seçimi iptal etmek isterseniz aşağıdaki yorum satırlarını açabilirsiniz
+                // this.state.selectedIpRecord = null;
+                // document.getElementById('selectedIpRecordContainer').style.display = 'none';
             }
         }
 
