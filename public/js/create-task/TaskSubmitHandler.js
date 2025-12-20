@@ -380,11 +380,28 @@ export class TaskSubmitHandler {
         return result.success ? result.id : null;
     }
 
-    // D) DAVA KAYDI
+    // D) DAVA KAYDI (GÜNCELLENMİŞ VE DÜZELTİLMİŞ)
     async _handleSuitCreation(state, taskData, taskId) {
         const { selectedTaskType, selectedIpRecord, selectedRelatedParties } = state;
         try {
             const client = selectedRelatedParties && selectedRelatedParties.length > 0 ? selectedRelatedParties[0] : null;
+            
+            // --- MAHKEME İSMİ MANTIĞI (YENİ) ---
+            const courtSelect = document.getElementById('courtName');
+            const customInput = document.getElementById('customCourtInput');
+            let finalCourtName = '';
+
+            if (courtSelect) {
+                // Eğer "Diğer" seçildiyse gizli input'taki değeri al
+                if (courtSelect.value === 'other' && customInput) {
+                    finalCourtName = customInput.value.trim();
+                } else {
+                    // Yoksa listeden seçilen değeri al
+                    finalCourtName = courtSelect.value;
+                }
+            }
+            // ------------------------------------
+
             const newSuitData = {
                 title: taskData.title,
                 transactionTypeId: selectedTaskType.id,
@@ -395,7 +412,7 @@ export class TaskSubmitHandler {
                     type: 'suit'
                 },
                 suitDetails: {
-                    court: document.getElementById('courtName')?.value || '',
+                    court: finalCourtName, // <-- Artık hesapladığımız değişkeni kullanıyoruz
                     description: document.getElementById('subjectOfLawsuit')?.value || '',
                     opposingParty: document.getElementById('opposingParty')?.value || '',
                     opposingCounsel: document.getElementById('opposingCounsel')?.value || '',
