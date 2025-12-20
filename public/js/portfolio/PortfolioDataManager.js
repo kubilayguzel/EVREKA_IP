@@ -172,8 +172,12 @@ export class PortfolioDataManager {
                 return {
                     id: d.id,
                     ...data,
-                    type: 'litigation', // YENİ: Tipini açıkça belirtiyoruz
-                    status: data.status || data.suitDetails?.status || 'continue', // Varsayılan değer
+                    
+                    // --- BURAYI GÜNCELLEYİN ---
+                    type: 'litigation', // Bunu eklemezsek utils.js'teki listeyi bulamaz
+                    status: data.status || data.suitDetails?.status || 'continue', // Varsayılan statü
+                    // ---------------------------
+
                     suitType: data.transactionType?.alias || data.transactionType?.name || '-',
                     caseNo: data.suitDetails?.caseNo || '-',
                     court: data.suitDetails?.court || '-',
