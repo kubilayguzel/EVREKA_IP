@@ -160,12 +160,23 @@ export const STATUSES = {
         { value: 'expired', text: 'Süresi Doldu' }
     ],
     litigation: [
-        { value: 'continue', text: 'Devam Ediyor', color: 'primary' },
-        { value: 'appeal', text: 'İstinaf Aşamasında', color: 'warning' },
-        { value: 'cassation', text: 'Yargıtay Aşamasında', color: 'warning' },
-        { value: 'decision', text: 'Karar Verildi', color: 'info' },
-        { value: 'finalized', text: 'Kesinleşti', color: 'success' },
-        { value: 'cancelled', text: 'İşlemden Kaldırıldı', color: 'secondary' }
+            // --- BAŞLANGIÇ ---
+            { value: 'filed', text: 'Dava Açıldı', color: 'primary' },
+            { value: 'continue', text: 'Devam Ediyor', color: 'info' }, // Genel ara durumlar için
+
+            // --- KARAR SÜRECİ (İstediğiniz Eklemeler) ---
+            { value: 'decision_pending', text: 'Karar Bekleniyor', color: 'danger' },
+            { value: 'reasoned_judgment', text: 'Gerekçeli Karar Bekleniyor', color: 'warning' },
+
+            // --- KANUN YOLLARI ---
+            { value: 'appeal', text: 'İstinaf Aşamasında', color: 'primary' },
+            { value: 'cassation', text: 'Yargıtay Aşamasında', color: 'primary' },
+            { value: 'remission', text: 'Bozma - Dosya Döndü', color: 'danger' },
+
+            // --- SONUÇ ---
+            { value: 'decision', text: 'Karar Verildi', color: 'info' }, // Genel karar verildi statüsü
+            { value: 'finalized', text: 'Kesinleşti', color: 'success' },
+            { value: 'cancelled', text: 'İşlemden Kaldırıldı', color: 'secondary' }
     ]
 };
 
