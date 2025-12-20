@@ -162,6 +162,7 @@ export class PortfolioDataManager {
     }
 
     // --- LITIGATION ---
+
     async loadLitigationData() {
         try {
             const suitsRef = collection(db, 'suits');
@@ -171,6 +172,8 @@ export class PortfolioDataManager {
                 return {
                     id: d.id,
                     ...data,
+                    // YENİ: Status alanını garantiye alalım (eğer suitDetails içindeyse oradan, yoksa kökten)
+                    status: data.status || data.suitDetails?.status || 'Devam Ediyor', 
                     suitType: data.transactionType?.alias || data.transactionType?.name || '-',
                     caseNo: data.suitDetails?.caseNo || '-',
                     court: data.suitDetails?.court || '-',
