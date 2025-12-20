@@ -269,6 +269,25 @@ class CreateTaskController {
         const closeModalBtns = document.querySelectorAll('#selectParentModal .close, #selectParentModal .btn-secondary');
         closeModalBtns.forEach(btn => btn.addEventListener('click', () => this.uiManager.hideParentSelectionModal()));
 
+        // --- MAHKEME SEÇİMİ DİNLEYİCİSİ (Diğer seçeneği için) ---
+        // Dinamik olarak DOM'a eklendiği için 'change' event'ini document üzerinden delegation ile yakalıyoruz.
+        document.addEventListener('change', (e) => {
+            if (e.target && e.target.id === 'courtName') {
+                const customInput = document.getElementById('customCourtInput');
+                if (customInput) {
+                    if (e.target.value === 'other') {
+                        customInput.style.display = 'block';
+                        customInput.focus();
+                        customInput.setAttribute('required', 'true'); // Zorunlu yap
+                    } else {
+                        customInput.style.display = 'none';
+                        customInput.value = ''; // Gizlenince temizle
+                        customInput.removeAttribute('required');
+                    }
+                }
+            }
+        });
+        
         // 4. TAB DEĞİŞİMİ VE DİĞERLERİ
         $(document).on('shown.bs.tab', '#myTaskTabs a', async (e) => {
             this.uiManager.updateButtonsAndTabs();
