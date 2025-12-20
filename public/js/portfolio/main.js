@@ -320,6 +320,68 @@ class PortfolioController {
         } catch (e) { console.error(e); showNotification('Dışa aktarma hatası.', 'error'); }
         finally { this.renderer.showLoading(false); }
     }
+    
+// --- YARDIMCI METOD: Sayfalama ve Sıralama ---
+    getPaginatedData() {
+        // 1. Veri Kaynağını Belirle
+        // Eğer arama/filtreleme yapıldıysa 'filteredData' kullanılır.
+        // Yapılmadıysa aktif sekmeye göre ham veri seçilir.
+        let data = this.filteredData;
+
+        if (!data) {
+            if (this.state.activeTab === 'litigation') {
+                data = this.dataManager.litigationRows || [];
+            } else if (this.state.activeTab === 'objections') {
+                data = this.dataManager.objectionRows || []; 
+            } else {
+                data = this.dataManager.rows || [];
+            }
+        }
+
+        // Güvenlik önlemi: Veri yoksa boş dizi dön
+        if (!data || !Array.isArray(data)) return [];
+
+        // 2. Sıralama (Sorting)
+        const { sortColumn, sortDirection } = this.state;
+        
+        // Veriyi bozmamak için kopyasını alarak sırala
+        let sortedData = [...data];
+
+        if (sortColumn) {
+            sortedData.sort((a, b) => {
+                let valA = a[sortColumn];
+                let valB = b[sortColumn];
+
+                // Null/Undefined kontrolü
+                if (valA == null) valA = '';
+                if (valB == null) valB = '';
+
+                // String ise küçük harfe çevir (Case insensitive)
+                if (typeof valA === 'string') valA = valA.toLowerCase();
+                if (typeof valB === 'string') valB = valB.toLowerCase();
+
+                // Tarih Sıralaması (Özel kolonlar için)
+                if (['applicationDate', 'openedDate', 'bulletinDate'].includes(sortColumn)) {
+                    valA = new Date(a[sortColumn] || 0);
+                    valB = new Date(b[sortColumn] || 0);
+                }
+
+                if (valA < valB) return sortDirection === 'asc' ? -1 : 1;
+                if (valA > valB) return sortDirection === 'asc' ? 1 : -1;
+                return 0;
+            });
+        }
+
+        // 3. Sayfalama (Pagination)
+        // Sayfa numarası ve sayfa başı öğe sayısına göre dilimle
+        const perPage = this.pagination ? this.pagination.itemsPerPage : 10;
+        const currentPage = this.state.currentPage || 1;
+        
+        const startIndex = (currentPage - 1) * perPage;
+        const endIndex = startIndex + perPage;
+
+        return sortedData.slice(startIndex, endIndex);
+    }
 
     render() {
         if (!this.renderer || !this.renderer.tbody) return;
