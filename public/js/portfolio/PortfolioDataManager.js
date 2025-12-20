@@ -1,3 +1,4 @@
+// public/js/portfolio/PortfolioDataManager.js
 import { ipRecordsService, transactionTypeService, personService, db } from '../../firebase-config.js';
 import { doc, getDoc, collection, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
@@ -20,88 +21,24 @@ async function pLimit(items, concurrency, fn) {
 
 export class PortfolioDataManager {
     constructor() {
-        this.rows = [];            // TÜM KAYITLAR (Marka + Dava)
-        this.allRecords = [];      // Sadece IP Records (Eski uyumluluk için)
+        this.allRecords = [];
         this.objectionRows = [];
         this.litigationRows = [];
         this.transactionTypesMap = new Map();
         this.allPersons = [];
-        this.allCountries = []; // Veritabanından dolacak
-        this.taskCache = new Map(); 
+        this.allCountries = [];
+        this.taskCache = new Map(); // Task belgeleri için cache
         this.txCache = new Map();
         this.wipoGroups = { parents: new Map(), children: new Map() };
     }
 
-    // --- 1. TÜM VERİLERİ VE TANIMLARI ÇEK ---
-    async fetchAllItems() {
-        try {
-            console.log("DataManager: Tanımlar ve veriler çekiliyor...");
-
-            // 1. Önce Lookupları (Ülke, Kişi, İşlem Tipi) yükle
-            // Bu sayede getCountryName, _resolveApplicantName vb. düzgün çalışır.
-            await Promise.all([
-                this.loadTransactionTypes(),
-                this.loadPersons(),
-                this.loadCountries()
-            ]);
-
-            console.log("DataManager: Ana veriler çekiliyor (Marka + Dava)...");
-
-            // 2. Ana Verileri Çek (Paralel)
-            const [ipSnap, suitSnap] = await Promise.all([
-                getDocs(collection(db, 'ipRecords')),
-                getDocs(collection(db, 'suits'))
-            ]);
-
-            // A) Marka/Patent Verilerini İşle
-            const ipItems = ipSnap.docs.map(doc => {
-                const data = doc.data();
-                return {
-                    id: doc.id,
-                    ...data,
-                    _source: 'ipRecord',
-                    formattedApplicantName: this._resolveApplicantName(data),
-                    // Sıralama için tarih belirle
-                    _sortDate: data.applicationDate || data.createdAt || new Date().toISOString()
-                };
-            });
-            
-            // this.allRecords'u da güncelle (Diğer fonksiyonlar kullanıyor)
-            this.allRecords = ipItems; 
-            this._buildWipoGroups();
-
-            // B) Dava Verilerini İşle (Ana Tablo İçin Özet)
-            const suitItems = suitSnap.docs.map(doc => {
-                const data = doc.data();
-                return {
-                    id: doc.id,
-                    ...data,
-                    _source: 'suit',
-                    // Tablo uyumluluğu için alan eşleştirme
-                    title: data.suitDetails?.court || data.title || 'Dava',
-                    applicationNumber: data.suitDetails?.caseNo || data.fileNumber || '-',
-                    type: 'Dava', 
-                    portfoyStatus: data.portfolioStatus || 'active',
-                    formattedApplicantName: data.client?.name || '-',
-                    image: null, 
-                    _sortDate: data.suitDetails?.openingDate || data.createdAt || new Date().toISOString()
-                };
-            });
-
-            // C) Listeleri Birleştir ve Tarihe Göre Sırala (Yeniden Eskiye)
-            const combined = [...ipItems, ...suitItems].sort((a, b) => {
-                const dateA = new Date(a._sortDate || 0).getTime();
-                const dateB = new Date(b._sortDate || 0).getTime();
-                return dateB - dateA; 
-            });
-
-            this.rows = combined; // main.js burayı okuyacak
-            return combined;
-
-        } catch (error) {
-            console.error("DataManager - Veri çekme hatası:", error);
-            return [];
-        }
+    async loadInitialData() {
+        await Promise.all([
+            this.loadTransactionTypes(),
+            this.loadPersons(),
+            this.loadCountries()
+        ]);
+        return await this.loadRecords();
     }
 
     // --- LOOKUPS ---
@@ -128,7 +65,7 @@ export class PortfolioDataManager {
         } catch (e) { console.error("Ülke listesi hatası:", e); }
     }
 
-    // --- MAIN RECORDS (ESKİ METOD - KORUNDU) ---
+    // --- MAIN RECORDS ---
     async loadRecords() {
         const result = await ipRecordsService.getRecords();
         if (result.success) {
@@ -156,9 +93,6 @@ export class PortfolioDataManager {
     }
 
     getRecordById(id) {
-        // Hem ipRecords hem suitler içinde ara
-        const inRows = this.rows.find(r => r.id === id);
-        if(inRows) return inRows;
         return this.allRecords.find(r => r.id === id);
     }
 
@@ -195,6 +129,7 @@ export class PortfolioDataManager {
             const taskData = taskDoc.data();
             const docs = [];
 
+            // 1. ePats Belgesi
             if (taskData.details?.epatsDocument?.downloadURL) {
                 docs.push({
                     fileName: taskData.details.epatsDocument.name || 'ePats Belgesi',
@@ -204,6 +139,7 @@ export class PortfolioDataManager {
                 });
             }
 
+            // 2. Task Documents Array
             if (Array.isArray(taskData.documents)) {
                 taskData.documents.forEach(d => {
                     const url = d.downloadURL || d.url || d.path;
@@ -225,36 +161,13 @@ export class PortfolioDataManager {
         }
     }
 
-    // --- LITIGATION (DAVA DETAYLARI) ---
+    // --- LITIGATION ---
     async loadLitigationData() {
         try {
             const suitsRef = collection(db, 'suits');
             const snapshot = await getDocs(suitsRef);
-            
-            const promises = snapshot.docs.map(async d => {
+            this.litigationRows = snapshot.docs.map(d => {
                 const data = d.data();
-                
-                let children = [];
-                try {
-                    const transRef = collection(db, 'suits', d.id, 'transactions');
-                    const transSnap = await getDocs(transRef);
-                    children = transSnap.docs.map(t => {
-                        const tData = t.data();
-                        return {
-                            id: t.id,
-                            parentId: d.id,
-                            isChild: true,
-                            transactionTypeName: tData.transactionTypeName || 'İşlem',
-                            description: tData.description || '-',
-                            date: tData.creationDate || tData.createdAt || '-',
-                            type: tData.type
-                        };
-                    });
-                    children.sort((a, b) => new Date(b.date) - new Date(a.date));
-                } catch (err) {
-                    console.warn(`Dava (${d.id}) işlemleri çekilemedi:`, err);
-                }
-
                 return {
                     id: d.id,
                     ...data,
@@ -263,24 +176,18 @@ export class PortfolioDataManager {
                     court: data.suitDetails?.court || '-',
                     client: data.client?.name || '-',
                     opposingParty: data.suitDetails?.opposingParty || '-',
-                    suitStatus: data.suitDetails?.suitStatus || 'Devam Ediyor',
-                    openedDate: data.suitDetails?.openingDate ? this._fmtDate(data.suitDetails.openingDate) : '-',
-                    children: children,
-                    hasChildren: children.length > 0
+                    openedDate: data.suitDetails?.openingDate ? this._fmtDate(data.suitDetails.openingDate) : '-'
                 };
             });
-
-            this.litigationRows = await Promise.all(promises);
             this.litigationRows.sort((a, b) => this._parseDate(b.openedDate) - this._parseDate(a.openedDate));
             return this.litigationRows;
-
         } catch (e) {
             console.error("Davalar hatası:", e);
             return [];
         }
     }
 
-    // --- OBJECTIONS ---
+    // --- OBJECTIONS (HIZLANDIRILMIŞ) ---
     async loadObjectionRows() {
         if (this.objectionRows.length > 0) return this.objectionRows;
         const PARENT_TYPES = ['7', '19', '20'];
@@ -288,6 +195,7 @@ export class PortfolioDataManager {
         const flatResults = await pLimit(this.allRecords, 20, async (record) => {
             let transactions = [];
             
+            // Transaction Cache Kontrolü
             if (this.txCache.has(record.id)) {
                 transactions = this.txCache.get(record.id);
             } else {
@@ -308,23 +216,32 @@ export class PortfolioDataManager {
                 }
             });
 
+            // --- PERFORMANS OPTİMİZASYONU: TASK BELGELERİNİ PARALEL ÇEK ---
             const tasksToFetch = new Set();
+            
+            // Parent'ların Task ID'lerini topla
             parents.forEach(p => {
                 if (p.triggeringTaskId && !this.taskCache.has(p.triggeringTaskId)) tasksToFetch.add(p.triggeringTaskId);
             });
+            
+            // Child'ların Task ID'lerini topla
             Object.values(childrenMap).flat().forEach(c => {
                 if (c.triggeringTaskId && !this.taskCache.has(c.triggeringTaskId)) tasksToFetch.add(c.triggeringTaskId);
             });
 
+            // Hepsini aynı anda iste (Waterfall'ı engelle)
             if (tasksToFetch.size > 0) {
                 await Promise.all(Array.from(tasksToFetch).map(id => this._fetchTaskDocuments(id)));
             }
+            // -------------------------------------------------------------
 
             const localRows = [];
+
             for (const parent of parents) {
                 const children = childrenMap[parent.id] || [];
                 const typeInfo = this.transactionTypesMap.get(String(parent.type));
                 
+                // Artık cache dolu olduğu için bu çağrılar beklemeden dönecek
                 const parentRow = await this._createObjectionRowData(record, parent, typeInfo, true, children.length > 0);
                 localRows.push(parentRow);
 
@@ -335,6 +252,7 @@ export class PortfolioDataManager {
                     localRows.push(childRow);
                 }
             }
+            
             return localRows;
         });
 
@@ -352,6 +270,7 @@ export class PortfolioDataManager {
         if (tx.relatedPdfUrl) docs.push({ fileName: 'Resmi Yazı', fileUrl: tx.relatedPdfUrl, type: 'official_document' });
         if (tx.oppositionPetitionFileUrl) docs.push({ fileName: 'İtiraz Dilekçesi', fileUrl: tx.oppositionPetitionFileUrl, type: 'opposition_petition' });
        
+        // Task Belgeleri (Cache'den anında gelecek)
         if (tx.triggeringTaskId) {
             const taskDocs = await this._fetchTaskDocuments(tx.triggeringTaskId);
             docs.push(...taskDocs);
@@ -464,12 +383,8 @@ export class PortfolioDataManager {
         if(parts.length === 3) return new Date(parts[2], parts[1]-1, parts[0]).getTime();
         return new Date(str).getTime() || 0;
     }
-    
-    // YENİ COUNTRY NAME MANTIĞI: Sadece DB'den gelen listeyi kullan
     getCountryName(code) {
-        if (!code) return '-';
-        const found = this.allCountries.find(c => c.code === code);
-        return found ? found.name : code;
+        return this.allCountries.find(c => c.code === code)?.name || code || '-';
     }
 
     // --- FILTERS (İTİRAZ ARAMA DAHİL) ---
@@ -478,8 +393,7 @@ export class PortfolioDataManager {
         if (typeFilter === 'litigation') sourceData = this.litigationRows;
         else if (typeFilter === 'objections') sourceData = this.objectionRows;
         else {
-            sourceData = this.rows.filter(r => {
-                if(r._source === 'suit') return false; // Suitleri standart listeden çıkar
+            sourceData = this.allRecords.filter(r => {
                 if ((r.origin === 'WIPO' || r.origin === 'ARIPO') && r.transactionHierarchy === 'child') return false;
                 if (typeFilter === 'all') return r.recordOwnerType !== 'third_party';
                 if (typeFilter === 'trademark') return r.type === 'trademark' && r.recordOwnerType !== 'third_party';
