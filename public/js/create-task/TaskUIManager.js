@@ -38,7 +38,7 @@ export class TaskUIManager {
         </div>`;
     }
 
-    // --- 2. DİĞER İŞLEMLER (BASE FORM) ---
+// --- 2. DİĞER İŞLEMLER (BASE FORM) ---
     renderBaseForm(taskTypeName, taskTypeId, isLawsuitTask) {
         if (!this.container) return;
 
@@ -51,7 +51,8 @@ export class TaskUIManager {
 
         if (isLawsuitTask) {
             contentHtml += this._getLawsuitClientHtml();
-            contentHtml += this._getLawsuitDetailsHtml();
+            // DEĞİŞİKLİK BURADA: taskTypeId parametresini içeri gönderiyoruz
+            contentHtml += this._getLawsuitDetailsHtml(taskTypeId); 
             contentHtml += this._getLawsuitOpponentHtml();
         } else if (needsRelatedParty) {
             contentHtml += this._getGenericRelatedPartyHtml(partyLabel);
@@ -288,7 +289,13 @@ export class TaskUIManager {
         </div>`;
     }
 
-    _getLawsuitDetailsHtml() {
+// Parametre olarak taskTypeId alacak şekilde güncellendi
+    _getLawsuitDetailsHtml(taskTypeId) {
+        
+        // İşlem tipi 60 (Yargıtay) ise otomatik seçili gelsin
+        const isYargitayTask = String(taskTypeId) === '60';
+        const yargitaySelectedAttr = isYargitayTask ? 'selected' : '';
+
         return `
         <div class="section-card">
             <h3 class="section-title">4. Dava Bilgileri</h3>
@@ -335,14 +342,14 @@ export class TaskUIManager {
                         </optgroup>
                         
                         <optgroup label="Yüksek Yargı / Diğer">
-                            <option value="Bölge Adliye Mahkemesi (İstinaf)">Bölge Adliye Mahkemesi (İstinaf)</option>
-                            <option value="Yargıtay">Yargıtay</option>
+                            <option value="Yargıtay" ${yargitaySelectedAttr}>Yargıtay</option>
+                            
                             <option value="other">Diğer (Elle Giriniz)</option>
                         </optgroup>
                     </select>
                     
                     <input type="text" id="customCourtInput" class="form-input mt-2" 
-                           placeholder="Mahkeme adını tam olarak yazınız..." 
+                           placeholder="Mahkeme/Daire adını tam olarak yazınız..." 
                            style="display:none; border-color: #3498db;">
                 </div>
 
