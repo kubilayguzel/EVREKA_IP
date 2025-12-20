@@ -759,4 +759,122 @@ export class TaskUIManager {
             if (input) input.placeholder = 'Marka adı, başvuru no...';
         }
     }
+
+    // --- DAVA BİLGİLERİNİ DOLDURMA VE KİLİTLEME ---
+    fillAndLockLawsuitFields(suit) {
+        const details = suit.suitDetails || {};
+        const client = suit.client || {};
+        const clientName = client.name || suit.clientName || ''; // Obje veya string desteği
+
+        // 1. MAHKEME ALANI
+        const courtSelect = document.getElementById('courtName');
+        const customInput = document.getElementById('customCourtInput');
+        const courtVal = details.court || suit.court || '';
+
+        if (courtSelect) {
+            // Önce listede var mı diye bak
+            let optionFound = false;
+            for (let i = 0; i < courtSelect.options.length; i++) {
+                if (courtSelect.options[i].value === courtVal) {
+                    courtSelect.selectedIndex = i;
+                    optionFound = true;
+                    break;
+                }
+            }
+
+            // Listede yoksa "Diğer" moduna geç
+            if (!optionFound && courtVal) {
+                courtSelect.value = 'other';
+                if (customInput) {
+                    customInput.style.display = 'block';
+                    customInput.value = courtVal;
+                    customInput.disabled = true; // Kilitle
+                }
+            } else if (customInput) {
+                customInput.style.display = 'none';
+                customInput.value = '';
+            }
+            courtSelect.disabled = true; // Select'i Kilitle
+        }
+
+        // 2. METİN ALANLARI (Konu, Karşı Taraf vb.)
+        const fields = {
+            'subjectOfLawsuit': details.description || '',
+            'opposingParty': details.opposingParty || suit.opposingParty || '',
+            'opposingCounsel': details.opposingCounsel || '',
+            'clientRole': suit.clientRole || ''
+        };
+
+        for (const [id, val] of Object.entries(fields)) {
+            const el = document.getElementById(id);
+            if (el) {
+                el.value = val;
+                el.disabled = true; // Kilitle
+            }
+        }
+
+        // 3. MÜVEKKİL ALANI (Özel İşlem)
+        // Mevcut arama kutusunu gizle, seçili listesine ekle ve silme butonunu koyma
+        const searchInput = document.getElementById('personSearchInput');
+        const addBtn = document.getElementById('addNewPersonBtn');
+        const listDiv = document.getElementById('relatedPartyList'); // veya client list ID'si
+
+        if (searchInput) {
+            searchInput.value = '';
+            searchInput.disabled = true;
+            searchInput.placeholder = 'Dava dosyasından otomatik çekildi...';
+        }
+        if (addBtn) addBtn.disabled = true;
+
+        if (listDiv && clientName) {
+            // Silme butonu olmayan statik bir kart oluştur
+            listDiv.innerHTML = `
+                <div class="selected-item p-2 border rounded mb-2 d-flex justify-content-between align-items-center bg-light">
+                    <div>
+                        <i class="fas fa-user-lock mr-2 text-muted"></i>
+                        <strong>${clientName}</strong>
+                    </div>
+                    <span class="badge badge-secondary">Dava Müvekkili</span>
+                </div>`;
+        }
+    }
+
+    // --- KİLİTLERİ AÇMA VE TEMİZLEME (Seçim iptal edilirse) ---
+    unlockAndClearLawsuitFields() {
+        // 1. Mahkeme
+        const courtSelect = document.getElementById('courtName');
+        const customInput = document.getElementById('customCourtInput');
+        
+        if (courtSelect) {
+            courtSelect.disabled = false;
+            courtSelect.value = '';
+        }
+        if (customInput) {
+            customInput.value = '';
+            customInput.disabled = false;
+            customInput.style.display = 'none';
+        }
+
+        // 2. Metin Alanları
+        const ids = ['subjectOfLawsuit', 'opposingParty', 'opposingCounsel', 'clientRole'];
+        ids.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.value = '';
+                el.disabled = false;
+            }
+        });
+
+        // 3. Müvekkil Alanı
+        const searchInput = document.getElementById('personSearchInput');
+        const addBtn = document.getElementById('addNewPersonBtn');
+        const listDiv = document.getElementById('relatedPartyList');
+
+        if (searchInput) {
+            searchInput.disabled = false;
+            searchInput.placeholder = '';
+        }
+        if (addBtn) addBtn.disabled = false;
+        if (listDiv) listDiv.innerHTML = ''; // Listeyi temizle
+    }
 }
