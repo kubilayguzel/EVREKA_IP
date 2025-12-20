@@ -428,12 +428,7 @@ export class TaskSubmitHandler {
             const newSuitData = {
                 title: taskData.title,
                 transactionTypeId: selectedTaskType.id,
-                transactionType: {
-                    id: selectedTaskType.id,
-                    name: selectedTaskType.name,
-                    alias: selectedTaskType.alias,
-                    type: 'suit'
-                },
+                suitType: selectedTaskType.alias || selectedTaskType.name,
                 suitDetails: {
                     court: finalCourtName,
                     description: document.getElementById('subjectOfLawsuit')?.value || '',
