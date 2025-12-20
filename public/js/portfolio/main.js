@@ -338,13 +338,20 @@ class PortfolioController {
         this.renderer.clear();
         const frag = document.createDocumentFragment();
         
-        pageData.forEach(item => {
+        // itemsPerPage değerine erişim (Pagination sınıfından veya sabit)
+        const itemsPerPage = 20; 
+        
+        pageData.forEach((item, index) => {
+            // Global sıra numarasını hesapla: (SayfaSayısı - 1) * SayfaBaşınaKayıt + MevcutIndex + 1
+            const globalIndex = ((this.state.currentPage - 1) * itemsPerPage) + index + 1;
+
             if (this.state.activeTab === 'objections') {
                 const tr = this.renderer.renderObjectionRow(item, item.hasChildren, item.isChild);
                 if (item.isChild) tr.style.display = 'none';
                 frag.appendChild(tr);
             } else if (this.state.activeTab === 'litigation') {
-                 frag.appendChild(this.renderer.renderLitigationRow(item));
+                 // YENİ: globalIndex parametresini gönderiyoruz
+                 frag.appendChild(this.renderer.renderLitigationRow(item, globalIndex));
             } else {
                 const isSelected = this.state.selectedRecords.has(item.id);
                 const tr = this.renderer.renderStandardRow(item, this.state.activeTab === 'trademark', isSelected);
