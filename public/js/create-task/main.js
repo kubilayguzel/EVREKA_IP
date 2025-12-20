@@ -13,7 +13,7 @@ import { AccrualFormManager } from '../components/AccrualFormManager.js';
 
 function initTaskDatePickers(root = document) {
     try {
-        const IDS = ['taskDueDate', 'priorityDate', 'lawsuitDate', 'lawsuitDecisionDate'];
+        const IDS = ['taskDueDate', 'priorityDate', 'lawsuitDate', 'lawsuitDecisionDate', 'suitOpeningDate'];
         const dateRegex = /^\d{2}\.\d{2}\.\d{4}$/;
         IDS.forEach(id => {
             const el = (root && root.querySelector) ? root.querySelector(`#${id}`) : document.getElementById(id);
