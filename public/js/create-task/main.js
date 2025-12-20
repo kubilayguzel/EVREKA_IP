@@ -812,32 +812,47 @@ class CreateTaskController {
         console.log('Seçilen Kayıt:', record);
         this.state.selectedIpRecord = record;
         
-        // --- DURUM 1: DAVA DOSYASI SEÇİLDİYSE ---
+        // --- DURUM 1: DAVA DOSYASI SEÇİLDİYSE (GÜNCELLENDİ) ---
         if (record._source === 'suit') {
-            // Label ve Numara Alanlarını Güncelle (Veri yapısına uygun)
             const displayCourt = record.displayCourt || record.suitDetails?.court || record.court || 'Mahkeme Yok';
             const displayFile = record.displayFileNumber || record.suitDetails?.caseNo || record.fileNumber || '-';
+            const clientName = record.displayClient || record.client?.name || record.client || '-';
 
-            document.getElementById('selectedIpRecordLabel').textContent = displayCourt;
-            document.getElementById('selectedIpRecordNumber').innerHTML = 
-                `Dosya No: ${displayFile} <br> <span class="badge badge-light">${record.typeId || 'Dava'}</span>`;
+            // 1. MAHKEME ADI (BÜYÜK BAŞLIK)
+            const labelEl = document.getElementById('selectedIpRecordLabel');
+            labelEl.textContent = displayCourt;
+            labelEl.style.fontSize = '1.3rem'; // Yazı boyutunu büyüttük
+            labelEl.className = 'mb-1 font-weight-bold text-primary'; // Renk ve kalınlık
 
-            // Görsel Alanlarını Ayarla (Resmi gizle, İkonu göster)
+            // 2. DOSYA NO VE MÜVEKKİL (DETAYLAR)
+            const numberEl = document.getElementById('selectedIpRecordNumber');
+            numberEl.innerHTML = `
+                <div style="font-size: 1.1rem; margin-bottom: 5px;">
+                    Dosya No: <span class="text-dark font-weight-bold">${displayFile}</span>
+                </div>
+                <div style="font-size: 1rem; color: #555;">
+                    <i class="fas fa-user-tie mr-1"></i> Müvekkil: <b>${clientName}</b>
+                </div>
+                <div class="mt-2">
+                    <span class="badge badge-secondary p-2" style="font-size: 0.9rem;">${record.typeId || 'Dava'}</span>
+                </div>
+            `;
+
+            // 3. İKON AYARLARI (BÜYÜK İKON)
             const imgEl = document.getElementById('selectedIpRecordImage');
             const phEl = document.getElementById('selectedIpRecordPlaceholder');
             
             if(imgEl) imgEl.style.display = 'none';
             if(phEl) {
                 phEl.style.display = 'flex';
-                // FontAwesome ikonu (Tokmak)
-                phEl.innerHTML = '<i class="fas fa-gavel" style="font-size: 24px; color: #555;"></i>';
+                phEl.style.width = '80px';  // Kutuyu büyüttük
+                phEl.style.height = '80px'; // Kutuyu büyüttük
+                phEl.innerHTML = '<i class="fas fa-gavel" style="font-size: 32px; color: #555;"></i>'; // İkonu büyüttük
             }
 
             // Container'ı Aç
             document.getElementById('selectedIpRecordContainer').style.display = 'block';
 
-            // Dava seçiminde WIPO, Menşe vb. kontrollere gerek yok.
-            // Sadece validasyonu çalıştır ve çık.
             this.validator.checkCompleteness(this.state);
             return;
         }
