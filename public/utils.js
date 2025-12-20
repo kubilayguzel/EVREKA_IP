@@ -165,6 +165,7 @@ export const STATUSES = {
             { value: 'continue', text: 'Devam Ediyor', color: 'info' }, // Genel ara durumlar için
 
             // --- KARAR SÜRECİ (İstediğiniz Eklemeler) ---
+            { value: 'export_report_pending', text: 'Bilirkişi Raporu Bekleniyor', color: 'info' },
             { value: 'decision_pending', text: 'Karar Bekleniyor', color: 'danger' },
             { value: 'reasoned_judgment', text: 'Gerekçeli Karar Bekleniyor', color: 'warning' },
 
