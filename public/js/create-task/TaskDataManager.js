@@ -87,9 +87,7 @@ export class TaskDataManager {
     }
 
     /**
-     * Dava dosyalarını arar
-     * @param {string} searchText - Arama metni
-     * @param {Array} allowedTypeIds - Filtrelenecek dava türü ID'leri
+     * Dava dosyalarını arar (GÜNCELLENMİŞ VERSİYON 2)
      */
     async searchSuits(searchText, allowedTypeIds = []) {
         if (!searchText || searchText.length < 2) return [];
@@ -98,7 +96,7 @@ export class TaskDataManager {
             const suitsRef = collection(db, 'suits');
             let q = query(suitsRef);
 
-            // DÜZELTME 1: Veritabanındaki alan adı 'transactionTypeId' olduğu için sorguyu güncelledik.
+            // Filtreleme
             if (allowedTypeIds && allowedTypeIds.length > 0 && allowedTypeIds.length <= 10) {
                 q = query(q, where('transactionTypeId', 'in', allowedTypeIds));
             }
@@ -109,20 +107,20 @@ export class TaskDataManager {
 
             snapshot.forEach(doc => {
                 const data = doc.data();
-                
-                // DÜZELTME 2: Veri yapınıza göre alanları doğru yerden okuma
                 const details = data.suitDetails || {};
                 
                 // Aranacak metinler
                 const fileNo = (details.caseNo || data.caseNo || data.fileNumber || '').toLocaleLowerCase('tr-TR');
                 const court = (details.court || data.court || '').toLocaleLowerCase('tr-TR');
-                const clientRole = (data.clientRole || '').toLocaleLowerCase('tr-TR');
                 
-                // Taraf İsimleri (Davacı Müvekkil ise Client adı, yoksa Karşı Taraf)
-                const clientName = (data.client?.name || '').toLocaleLowerCase('tr-TR');
+                // Müvekkil İsmini Güvenli Alma
+                // data.client bir obje olabilir ({name: "..."}) veya direkt string olabilir.
+                const clientNameRaw = data.client?.name || data.client || ''; 
+                const clientName = String(clientNameRaw).toLocaleLowerCase('tr-TR');
+                
                 const opposingParty = (details.opposingParty || data.opposingParty || '').toLocaleLowerCase('tr-TR');
 
-                // Arama Mantığı: Dosya No, Mahkeme, Müvekkil Adı veya Karşı Taraf
+                // Arama Mantığı
                 if (fileNo.includes(lowerSearch) || 
                     court.includes(lowerSearch) || 
                     clientName.includes(lowerSearch) || 
@@ -131,9 +129,10 @@ export class TaskDataManager {
                     results.push({
                         id: doc.id,
                         ...data,
-                        // UI için standart alanlar oluşturuyoruz
-                        displayFileNumber: details.caseNo || data.caseNo || '-', 
+                        // UI için standart alanlar
+                        displayFileNumber: details.caseNo || data.caseNo || data.fileNumber || '-', 
                         displayCourt: details.court || data.court || 'Mahkeme Yok',
+                        displayClient: clientNameRaw, // <--- YENİ: Müvekkil ismini UI'a taşıyoruz
                         opposingParty: details.opposingParty || data.opposingParty || '-',
                         _source: 'suit' 
                     });
