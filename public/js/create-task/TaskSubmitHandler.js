@@ -434,8 +434,7 @@ export class TaskSubmitHandler {
                     description: document.getElementById('suitDescription')?.value || document.getElementById('subjectOfLawsuit')?.value || '',
                     opposingParty: document.getElementById('opposingParty')?.value || '',
                     opposingCounsel: document.getElementById('opposingCounsel')?.value || '',
-                    openingDate: document.getElementById('suitOpeningDate')?.value || new Date().toISOString() 
-                },
+                    openingDate: document.getElementById('suitOpeningDate')?.value || new Date().toISOString()                },
                 clientRole: document.getElementById('clientRole')?.value || '',
                 client: client ? { id: client.id, name: client.name, email: client.email } : null,
                 subjectAsset: selectedIpRecord ? {
