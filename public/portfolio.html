@@ -4,219 +4,136 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>IPGATE - Portföy Yönetimi</title>
-    <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
-    <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
-    <link rel="stylesheet" href="./css/shared-styles.css">
-    <link rel="stylesheet" href="./css/simple-loading.css">
-    <link rel="icon" href="data:,">
-    <link rel="modulepreload" href="./firebase-config.js">
-    <link rel="modulepreload" href="./js/layout-loader.js">
+    
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Poppins:300,400,500,600,700" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    
+    <link rel="stylesheet" href="css/shared-styles.css">
+    <link rel="stylesheet" href="css/simple-loading.css">
     
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333; display: flex; }
-        .page-wrapper { flex-grow: 1; display: flex; flex-direction: column; height: 100vh; overflow-y: auto; background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%); }
-        .main-container { width: 100%; padding: 30px; padding-top: 120px; margin: 0;}
-        .page-header { background: rgba(255, 255, 255, 0.95); padding: 30px; border-radius: 20px; margin-bottom: 30px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1); }
-        .page-title { font-size: 2em; color: #1e3c72; margin-bottom: 10px; }
-        .page-subtitle { color: #666; font-size: 1.1em; }
-
-        /* Kontrol Paneli */
-        .portfolio-controls { background: rgba(255, 255, 255, 0.95); padding: 20px 30px; border-radius: 20px; box-shadow: 0 5px 15px rgba(0,0,0,0.05); margin-bottom: 30px; display: flex; flex-direction: column; gap: 15px; }
-        .filter-row { display: flex; justify-content: flex-end; align-items: center; flex-wrap: wrap; gap: 15px; }
-        .search-input { margin-right: auto; flex-grow: 1; min-width: 180px; padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px; }
-
-        /* Tab Menu */
-        .tab-menu { display: flex; border-bottom: 2px solid #dee2e6; margin-bottom: 15px; flex-wrap: wrap; }
-        .tab-button { padding: 10px 18px; cursor: pointer; border: none; background: none; font-size: 1em; font-weight: 600; color: #6c757d; border-bottom: 2px solid transparent; margin-bottom: -2px; transition: all 0.3s ease; }
-        .tab-button:hover { color: #1e3c72; }
-        .tab-button.active { color: #1e3c72; border-bottom-color: #1e3c72; }
-
-        /* Butonlar */
-        .btn-add-record, .btn-primary, .btn-secondary, .btn-status-toggle { 
-            background: linear-gradient(45deg, #1e3c72, #2a5298); color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-size: 0.9em; font-weight: 600; transition: all 0.3s ease; display: flex; align-items: center; gap: 5px;
-        }
-        .btn-add-record:hover, .btn-primary:hover, .btn-secondary:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(30, 60, 114, 0.2); }
-        .btn-status-toggle:disabled { background-color: #cccccc; cursor: not-allowed; box-shadow: none; transform: none; background: #ccc; }
-
-        /* Tablo */
-        .portfolio-table-container { background: rgba(255, 255, 255, 0.95); border-radius: 20px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1); overflow: visible; position: relative; z-index: 1; min-height: 200px; }
+        /* Portföy Tablosu İçin Özel Stiller */
+        .table-row-dashed tr { border-bottom: 1px dashed #e4e6ef; }
+        .table-row-dashed tr:last-child { border-bottom: 0; }
+        .table td, .table th { vertical-align: middle; padding: 0.75rem; }
         
-        .portfolio-table { 
-            width: 100%; 
-            border-collapse: collapse; 
-            table-layout: fixed; /* ÖNEMLİ: Kolon genişliklerinin çalışması için */
-        }
+        /* Accordion Oku */
+        .row-caret { transition: transform 0.3s ease; }
+        .fa-rotate-90 { transform: rotate(90deg); }
+        .toggle-cell { cursor: pointer; }
         
-        .portfolio-table th, .portfolio-table td { 
-            padding: 12px 15px; 
-            text-align: left; 
-            border-bottom: 1px solid #f0f0f0; 
-            white-space: nowrap; 
-            overflow: hidden; 
-            text-overflow: ellipsis; 
-        }
+        /* Gruplama Başlığı (WIPO/Dava Parent) */
+        .group-header { background-color: #f8f9fa; font-weight: 500; }
+        .child-row { background-color: #fafafa; }
         
-        .portfolio-table th { 
-            background: #f8f9fa; 
-            font-weight: 600; 
-            position: sticky; 
-            top: 0; 
-            z-index: 10; 
-            border-bottom: 2px solid #dee2e6;
-        }
+        /* Sıralanabilir Başlık */
+        .sortable-header:hover { color: #009ef7 !important; }
         
-        .portfolio-table tr:hover { background-color: #f6f8fa; }
-
-        /* Görseller ve İkonlar - BÜYÜTME EFEKTİ */
-        .trademark-image-wrapper {
-            position: relative;
-            height: 50px;
-            width: 60px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .trademark-image-thumbnail { 
-            max-width: 100%; 
-            max-height: 100%; 
-            object-fit: contain; 
-            border-radius: 4px; 
-            cursor: pointer; 
-            transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-            background-color: white;
-            border: 1px solid #eee;
-        }
-        
-        /* Floating preview stilleri (main.js ile kontrol ediliyor) */
-        .floating-trademark-preview {
-            position: fixed;
-            z-index: 10000;
-            background: white;
-            border: 2px solid #1e3c72;
-            border-radius: 12px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.4);
-            padding: 5px;
-            pointer-events: none;
-            max-width: 300px;
-            max-height: 300px;
-            object-fit: contain;
-            display: none;
-            animation: fadeIn 0.2s ease-out;
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; transform: scale(0.8); }
-            to { opacity: 1; transform: scale(1); }
-        }
-
-        /* Loading & Empty States */
-        /* Eski spinner stillerini tutuyoruz ama JS'de SimpleLoading kullanacağız */
-        .loading-overlay { position: absolute; inset: 0; background: rgba(255,255,255,0.8); display: none; align-items: center; justify-content: center; z-index: 50; }
-        .no-records { text-align: center; padding: 50px; color: #666; display: none; }
-        
-        /* Modal */
-        .modal { display: none; align-items: center; justify-content: center; position: fixed; z-index: 1002; left: 0; top: 0; width: 100vw; height: 100vh; background-color: rgba(0, 0, 0, 0.6); }
-        .modal.show { display: flex; }
-        .modal-content { background-color: #fefefe; padding: 30px; border-radius: 20px; width: 90%; max-width: 1200px; max-height: 90vh; overflow-y: auto; position: relative; }
-        .close-modal-btn { position: absolute; right: 25px; top: 20px; font-size: 28px; cursor: pointer; color: #aaa; }
-        .close-modal-btn:hover { color: #333; }
-
-        /* Sort Header */
-        .sortable-header { cursor: pointer; user-select: none; }
-        .sortable-header::after { content: '↕'; margin-left: 5px; opacity: 0.3; font-size: 0.8em; }
-        .sortable-header.asc::after { content: '↑'; opacity: 1; }
-        .sortable-header.desc::after { content: '↓'; opacity: 1; }
-        
-        /* PDF Linkleri */
-        .pdf-link { color: #dc3545; font-size: 1.2em; text-decoration: none; margin-right: 5px; }
-        .pdf-link:hover { color: #c82333; transform: scale(1.1); display: inline-block; }
+        /* Avatar */
+        .symbol-45px { width: 45px; height: 45px; overflow: hidden; border-radius: 6px; background: #f5f8fa; }
+        .symbol-45px img { width: 100%; height: 100%; object-fit: contain; }
     </style>
 </head>
-<body>
-    <div id="notification-container" class="notification-container"></div>
+<body id="kt_body" class="header-fixed header-tablet-and-mobile-fixed toolbar-enabled toolbar-fixed">
+    
     <div id="layout-placeholder"></div>
-    
-    <div class="page-wrapper">
-        <main class="main-container">
-            <section class="page-header">
-                <h1 class="page-title">Portföy Yönetimi</h1>
-                <p class="page-subtitle">Tüm fikri mülkiyet kayıtlarınızı burada görüntüleyin ve yönetin.</p>
-            </section>
-            
-            <div class="portfolio-controls">
-                <div class="tab-menu" id="portfolioTabMenu">
-                    <button type="button" class="tab-button active" data-type="all">Tümü</button>
-                    <button type="button" class="tab-button" data-type="patent">Patent</button>
-                    <button type="button" class="tab-button" data-type="trademark">Marka</button>
-                    <button type="button" class="tab-button" data-type="design">Tasarım</button>
-                    <button type="button" class="tab-button" data-type="objections">İtirazlar</button>
-                    <button type="button" class="tab-button" data-type="litigation">Davalar</button>
-                </div>
-                
-                <div class="filter-row">
-                    <input type="text" id="searchBar" class="search-input" placeholder="Başlık, numara, durum, hak sahibi ara...">
-                    
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                        <input type="checkbox" id="selectAllCheckbox">
-                        <label for="selectAllCheckbox" style="margin:0; cursor:pointer;">Tümünü Seç</label>
-                    </div>
 
-                    <button type="button" class="btn-status-toggle" id="toggleRecordStatusBtn" disabled>Aktif/Pasif</button>
-                    <button type="button" class="btn-status-toggle" id="addToMonitoringBtn" disabled>İzlemeye Ekle</button>
-                    
-                    <button class="btn-add-record" onclick="window.location.href='data-entry.html'">
-                        <span>&#x2795;</span> Yeni Kayıt
-                    </button>
-                    
-                    <button id="exportExcelBtn" class="btn-secondary">Excel'e Aktar</button>
-                    <button id="exportPdfBtn" class="btn-secondary">PDF'e Aktar</button>
-                </div>
-            </div>
-            
-            <div class="portfolio-table-container">
-                <div id="loadingIndicator" class="loading-overlay">
-                    <div class="spinner-border text-primary" role="status">
-                        <span class="sr-only">Yükleniyor...</span>
+    <div class="d-flex flex-column flex-root">
+        <div class="page d-flex flex-row flex-column-fluid">
+            <div class="wrapper d-flex flex-column flex-row-fluid" id="kt_wrapper">
+                
+                <div class="header align-items-stretch">
+                    <div class="container-fluid d-flex align-items-stretch justify-content-between">
+                        <div class="d-flex align-items-center flex-wrap me-3">
+                            <h1 class="d-flex align-items-center text-dark fw-bolder fs-3 my-1">Portföy Yönetimi</h1>
+                        </div>
+                        
+                        <div class="d-flex align-items-center">
+                            <div class="d-flex align-items-center ms-1 ms-lg-3">
+                                <div class="cursor-pointer symbol symbol-30px symbol-md-40px">
+                                    <img id="userAvatar" src="assets/media/avatars/blank.png" alt="user" />
+                                </div>
+                                <div class="ms-2">
+                                    <span class="text-dark fw-bolder fs-6 user-name" id="userNameDisplay">Kullanıcı</span>
+                                    <span class="text-muted fw-bold d-block fs-7" id="userEmailDisplay"></span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
+
+                <div class="content fs-6 d-flex flex-column flex-column-fluid" id="kt_content">
+                    <div class="container-fluid">
+                        
+                        <ul class="nav nav-tabs nav-line-tabs mb-5 fs-6" id="portfolioTabs" role="tablist">
+                            <li class="nav-item">
+                                <a class="nav-link active" data-toggle="tab" href="#trademark">Markalar</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" data-toggle="tab" href="#patent">Patentler</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" data-toggle="tab" href="#design">Tasarımlar</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" data-toggle="tab" href="#litigation">Davalar</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" data-toggle="tab" href="#objections">İtirazlar</a>
+                            </li>
+                        </ul>
+
+                        <div class="card">
+                            <div class="card-header border-0 pt-6">
+                                <div class="card-title">
+                                    <div class="d-flex align-items-center position-relative my-1">
+                                        <i class="fas fa-search position-absolute ms-5 text-gray-500"></i>
+                                        <input type="text" id="searchInput" class="form-control form-control-solid w-250px ps-14" placeholder="Kayıt Ara..." />
+                                    </div>
+                                </div>
+                                <div class="card-toolbar">
+                                    <div class="d-flex justify-content-end" data-kt-user-table-toolbar="base">
+                                        <button type="button" class="btn btn-light-primary me-3" onclick="location.reload()">
+                                            <i class="fas fa-sync"></i> Yenile
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="card-body py-4">
+                                <div class="table-responsive">
+                                    <table class="table align-middle table-row-dashed fs-6 gy-5" id="portfolioTable">
+                                        <thead>
+                                            <tr class="text-start text-muted fw-bolder fs-7 text-uppercase gs-0">
+                                                </tr>
+                                        </thead>
+                                        <tbody class="text-gray-600 fw-bold" id="portfolioTableBody">
+                                            </tbody>
+                                    </table>
+                                </div>
+                                
+                                <div class="d-flex justify-content-between align-items-center flex-wrap mt-5">
+                                    <div id="paginationInfo" class="fs-6 fw-bold text-gray-700"></div>
+                                    <ul id="paginationContainer" class="pagination">
+                                        </ul>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
                 
-                <table class="portfolio-table" id="portfolio-table">
-                    <thead>
-                        <tr id="portfolioTableHeaderRow">
-                            </tr>
-                    </thead>
-                    <tbody id="portfolioTableBody">
-                        </tbody>
-                </table>
-                <div id="noRecordsMessage" class="no-records">Kayıt bulunamadı.</div>
             </div>
-
-            <div id="paginationContainer" class="mt-3"></div>
-
-        </main>
-    </div>
-
-    <div id="recordDetailModal" class="modal">
-        <div class="modal-content">
-            <span class="close-modal-btn" id="closeRecordDetailModal">&times;</span>
-            <h3 class="modal-title" id="modalRecordTitle">Kayıt Detayı</h3>
-            <div id="modalBody" class="modal-body-content"></div>
         </div>
     </div>
 
-    <div id="suitDetailModal" class="modal">
-        <div class="modal-content">
-            <span class="close-modal-btn" id="closeSuitDetailModal">&times;</span>
-            <h3 class="modal-title" id="modalSuitTitle">Dava Detayı</h3>
-            <div id="modalSuitBody" class="modal-body-content"></div>
-        </div>
-    </div>
-
-    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.bundle.min.js"></script>
     
-    <script type="module" src="./js/portfolio/main.js"></script>
+    <script type="module" src="js/layout-loader.js"></script>
+    
+    <script type="module" src="js/portfolio/main.js"></script>
+
 </body>
 </html>
