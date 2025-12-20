@@ -158,6 +158,14 @@ export const STATUSES = {
         { value: 'pending', text: 'Beklemede' },
         { value: 'active', text: 'Aktif' },
         { value: 'expired', text: 'Süresi Doldu' }
+    ],
+    litigation: [
+        { value: 'continue', text: 'Devam Ediyor', color: 'primary' },
+        { value: 'appeal', text: 'İstinaf Aşamasında', color: 'warning' },
+        { value: 'cassation', text: 'Yargıtay Aşamasında', color: 'warning' },
+        { value: 'decision', text: 'Karar Verildi', color: 'info' },
+        { value: 'finalized', text: 'Kesinleşti', color: 'success' },
+        { value: 'cancelled', text: 'İşlemden Kaldırıldı', color: 'secondary' }
     ]
 };
 
