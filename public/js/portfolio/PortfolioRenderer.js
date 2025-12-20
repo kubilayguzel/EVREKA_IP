@@ -63,10 +63,11 @@ export class PortfolioRenderer {
     }
 
     // --- STANDART ROW ---
-    renderStandardRow(record, isTrademarkTab, isSelected) {
+    renderStandardRow(record, isTrademarkTab, isSelected, index) {
         const tr = document.createElement('tr');
         tr.dataset.id = record.id;
         
+        // ... (Mevcut değişken tanımları aynı kalsın) ...
         const isWipoParent = (record.origin === 'WIPO' || record.origin === 'ARIPO') && record.transactionHierarchy === 'parent';
         const isChild = record.transactionHierarchy === 'child'; 
         const irNo = record.wipoIR || record.aripoIR;
@@ -89,39 +90,30 @@ export class PortfolioRenderer {
         `;
 
         const caret = isWipoParent ? `<i class="fas fa-chevron-right row-caret" style="cursor:pointer;"></i>` : '';
-
-        // Güvenli Veri Erişimi (Null check ve String'e çevirme)
         const titleText = record.title || record.brandText || '-';
         const appNoText = record.applicationNumber || (isWipoParent ? irNo : '-');
         const applicantText = record.formattedApplicantName || '-';
 
+        // --- HTML OLUŞTURMA (Sıra No Eklendi) ---
         let html = `
             <td><input type="checkbox" class="record-checkbox" data-id="${record.id}" ${isSelected ? 'checked' : ''}></td>
-            <td class="toggle-cell text-center">${caret}</td>
+            <td class="font-weight-bold text-muted">${isChild ? '' : index}</td> <td class="toggle-cell text-center">${caret}</td>
             
             <td>
                 ${isChild ? '' : `<div class="badge badge-${record.portfoyStatus === 'active' ? 'success' : 'secondary'}">${record.portfoyStatus === 'active' ? 'Aktif' : 'Pasif'}</div>`}
             </td>
         `;
-
-        if (!isTrademarkTab) {
-            html += `<td>${record.type || '-'}</td>`;
-        }
-
+        // ... (Kalan HTML kodları aynı devam eder) ...
+        if (!isTrademarkTab) { html += `<td>${record.type || '-'}</td>`; }
         html += `<td title="${titleText}"><strong>${titleText}</strong></td>`;
-
         if (isTrademarkTab) {
             html += imgHtml;
             html += `<td>${record.origin || '-'}</td>`;
             html += `<td title="${countryName}">${countryName}</td>`;
         }
-
         html += `<td title="${appNoText}">${appNoText}</td>`;
         html += `<td>${this.formatDate(record.applicationDate)}</td>`;
-        
-        // Başvuru Durumu (Child ise boş, değilse Utils'den çevrilmiş metin)
         html += `<td>${isChild ? '' : this.getStatusBadge(record)}</td>`;
-        
         html += `<td><small title="${applicantText}">${applicantText}</small></td>`;
         html += `<td>${actions}</td>`;
 
@@ -165,40 +157,74 @@ export class PortfolioRenderer {
         return `<span class="badge ${badgeClass} border">${s}</span>`;
     }
 
-    renderLitigationRow(row) {
+    renderLitigationRow(row, index) {
         const tr = document.createElement('tr');
         tr.dataset.id = row.id;
         
-        // Satır renklendirme (İptal/Tecavüz)
+        if (row.hasChildren) {
+            tr.dataset.groupId = row.id; // Accordion için ID
+            tr.className = 'group-header';
+        }
+
         const suitTypeStr = String(row.suitType || '');
-        if (suitTypeStr.includes('İptal')) tr.style.backgroundColor = '#fff5f8'; // Çok açık kırmızı
-        else if (suitTypeStr.includes('Tecavüz')) tr.style.backgroundColor = '#fff8f0'; // Çok açık turuncu
+        if (suitTypeStr.includes('İptal')) tr.style.backgroundColor = '#fff5f8';
+        else if (suitTypeStr.includes('Tecavüz')) tr.style.backgroundColor = '#fff8f0';
         
         const actions = `
             <div class="d-flex gap-1 justify-content-end">
-                <button class="action-btn view-btn btn btn-sm btn-info" data-id="${row.id}" title="Görüntüle"><i class="fas fa-eye"></i></button>
-                <button class="action-btn edit-btn btn btn-sm btn-warning" data-id="${row.id}" title="Düzenle"><i class="fas fa-edit"></i></button>
+                <button class="action-btn view-btn btn btn-sm btn-info" data-id="${row.id}"><i class="fas fa-eye"></i></button>
+                <button class="action-btn edit-btn btn btn-sm btn-warning" data-id="${row.id}"><i class="fas fa-edit"></i></button>
             </div>`;
             
-        // Statü Badge'ini oluştur
-        const statusBadge = this._getLitigationStatusBadge(row.suitStatus || 'Devam Ediyor');
+        const statusBadge = this._getLitigationStatusBadge(row.suitStatus);
+        
+        // Accordion Oku
+        const caret = row.hasChildren ? `<i class="fas fa-chevron-right row-caret text-primary" style="cursor:pointer;"></i>` : '';
 
         tr.innerHTML = `
-            <td title="${row.title || ''}">${row.title || '-'}</td>
+            <td class="font-weight-bold text-muted pl-4">${index}</td> <td class="text-center toggle-cell">${caret}</td> <td title="${row.title || ''}">${row.title || '-'}</td>
             <td title="${row.suitType || ''}">${row.suitType || '-'}</td>
-            <td title="${row.caseNo || ''}">${row.caseNo || '-'}</td>
+            <td title="${row.caseNo || ''}"><span class="badge badge-light border">${row.caseNo || '-'}</span></td>
             <td title="${row.court || ''}">${row.court || '-'}</td>
             <td title="${row.client || ''}">${row.client || '-'}</td>
             <td title="${row.opposingParty || ''}">${row.opposingParty || '-'}</td>
-            
             <td>${statusBadge}</td>
-            
             <td>${row.openedDate || '-'}</td>
             <td>${actions}</td>`;
             
         return tr;
     }
+    
+    renderLitigationChildRow(child) {
+        const tr = document.createElement('tr');
+        tr.className = 'child-row bg-light'; // Gri arka plan
+        tr.style.display = 'none'; // Başlangıçta gizli
+        tr.dataset.parentId = child.parentId;
 
+        // Tarih formatı
+        let dateDisplay = '-';
+        try {
+            if(child.date) {
+                const d = child.date.toDate ? child.date.toDate() : new Date(child.date);
+                dateDisplay = d.toLocaleDateString('tr-TR');
+            }
+        } catch(e){}
+
+        tr.innerHTML = `
+            <td></td> <td class="text-center"><i class="fas fa-level-up-alt fa-rotate-90 text-muted"></i></td>
+            
+            <td colspan="2">
+                <strong>${child.description}</strong> </td>
+            <td colspan="5">
+                <span class="text-muted small"><i class="far fa-clock mr-1"></i> ${dateDisplay}</span>
+            </td>
+            <td colspan="2">
+                <span class="badge badge-light-info">İşlem Kaydı</span>
+            </td>
+        `;
+        return tr;
+    }
+    
     renderObjectionRow(row, hasChildren, isChild = false) {
         const tr = document.createElement('tr');
         tr.className = isChild ? 'group-row child-row' : (hasChildren ? 'group-header' : '');
