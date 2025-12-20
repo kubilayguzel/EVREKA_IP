@@ -380,31 +380,29 @@ export class TaskSubmitHandler {
         return result.success ? result.id : null;
     }
 
-    // D) DAVA KAYDI (GÜNCELLENMİŞ VE DÜZELTİLMİŞ)
+// D) DAVA KAYDI VE İLK TRANSACTION (GÜNCELLENDİ)
     async _handleSuitCreation(state, taskData, taskId) {
         const { selectedTaskType, selectedIpRecord, selectedRelatedParties } = state;
         try {
             const client = selectedRelatedParties && selectedRelatedParties.length > 0 ? selectedRelatedParties[0] : null;
             
-            // --- MAHKEME İSMİ MANTIĞI (YENİ) ---
+            // 1. Mahkeme İsmini Belirle
             const courtSelect = document.getElementById('courtName');
             const customInput = document.getElementById('customCourtInput');
             let finalCourtName = '';
 
             if (courtSelect) {
-                // Eğer "Diğer" seçildiyse gizli input'taki değeri al
                 if (courtSelect.value === 'other' && customInput) {
                     finalCourtName = customInput.value.trim();
                 } else {
-                    // Yoksa listeden seçilen değeri al
                     finalCourtName = courtSelect.value;
                 }
             }
-            // ------------------------------------
 
+            // 2. Dava Objesini Hazırla
             const newSuitData = {
                 title: taskData.title,
-                transactionTypeId: selectedTaskType.id,
+                transactionTypeId: selectedTaskType.id, // Örn: 54 (Hükümsüzlük)
                 transactionType: {
                     id: selectedTaskType.id,
                     name: selectedTaskType.name,
@@ -412,7 +410,7 @@ export class TaskSubmitHandler {
                     type: 'suit'
                 },
                 suitDetails: {
-                    court: finalCourtName, // <-- Artık hesapladığımız değişkeni kullanıyoruz
+                    court: finalCourtName,
                     description: document.getElementById('subjectOfLawsuit')?.value || '',
                     opposingParty: document.getElementById('opposingParty')?.value || '',
                     opposingCounsel: document.getElementById('opposingCounsel')?.value || '',
@@ -431,9 +429,34 @@ export class TaskSubmitHandler {
                 createdAt: new Date().toISOString(),
                 relatedTaskId: taskId
             };
+
+            // 3. Davayı 'suits' Koleksiyonuna Ekle
             const suitsRef = collection(db, 'suits');
-            await addDoc(suitsRef, newSuitData);
-        } catch (error) { console.error('Suit hatası:', error); }
+            const suitDocRef = await addDoc(suitsRef, newSuitData);
+            const newSuitId = suitDocRef.id;
+
+            console.log('✅ Yeni Dava Kartı Oluşturuldu ID:', newSuitId);
+
+            // 4. İLK TRANSACTION'I EKLE (YENİ EKLENEN KISIM)
+            // Dava kartının içine 'transactions' alt koleksiyonuna ilk kaydı atıyoruz.
+            const initialTransaction = {
+                type: selectedTaskType.id, // Örn: 54
+                description: `${selectedTaskType.alias || selectedTaskType.name} davası açıldı.`,
+                transactionHierarchy: 'parent', // Bu dava sürecinin "anası"
+                triggeringTaskId: String(taskId),
+                createdAt: Timestamp.now(),
+                creationDate: new Date().toISOString() // UI uyumluluğu için
+            };
+
+            const transactionsRef = collection(db, 'suits', newSuitId, 'transactions');
+            await addDoc(transactionsRef, initialTransaction);
+
+            console.log('✅ Dava içine ilk transaction eklendi.');
+
+        } catch (error) { 
+            console.error('Suit oluşturma hatası:', error); 
+            alert('Dava kartı oluşturulurken hata meydana geldi: ' + error.message);
+        }
     }
 
 // E) PORTFOLYO GEÇMİŞİ (GÜNCELLENDİ: Hem Dava Hem Marka İçin)
