@@ -176,6 +176,7 @@ export class PortfolioDataManager {
                     court: data.suitDetails?.court || '-',
                     client: data.client?.name || '-',
                     opposingParty: data.suitDetails?.opposingParty || '-',
+                    suitStatus: data.suitDetails?.suitStatus || 'Devam Ediyor',
                     openedDate: data.suitDetails?.openingDate ? this._fmtDate(data.suitDetails.openingDate) : '-'
                 };
             });
