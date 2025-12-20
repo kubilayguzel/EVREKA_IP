@@ -129,9 +129,11 @@ export class PortfolioRenderer {
         return tr;
     }
 
-    renderLitigationRow(row) {
+    renderLitigationRow(row, index) { // YENİ: index parametresi eklendi
         const tr = document.createElement('tr');
         tr.dataset.id = row.id;
+        
+        // Arka plan rengi mantığı (Mevcut kodunuzu koruyoruz)
         const suitTypeStr = String(row.suitType || '');
         if (suitTypeStr.includes('İptal')) tr.style.backgroundColor = '#ffebee';
         else if (suitTypeStr.includes('Tecavüz')) tr.style.backgroundColor = '#fff3e0';
@@ -141,8 +143,11 @@ export class PortfolioRenderer {
                 <button class="action-btn view-btn btn btn-sm btn-info" data-id="${row.id}"><i class="fas fa-eye"></i></button>
                 <button class="action-btn edit-btn btn btn-sm btn-warning" data-id="${row.id}"><i class="fas fa-edit"></i></button>
             </div>`;
-            
+        
+        // YENİ: Index ve Status sütunları eklendi
         tr.innerHTML = `
+            <td><strong>${index}</strong></td>
+            <td><span class="badge badge-secondary">${row.status || '-'}</span></td>
             <td title="${row.title || ''}">${row.title || '-'}</td>
             <td title="${row.suitType || ''}">${row.suitType || '-'}</td>
             <td title="${row.caseNo || ''}">${row.caseNo || '-'}</td>
