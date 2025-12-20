@@ -133,18 +133,27 @@ export class PortfolioRenderer {
         const tr = document.createElement('tr');
         tr.dataset.id = row.id;
         
+        // Dava türüne göre arka plan rengi (Mevcut mantık)
         const suitTypeStr = String(row.suitType || '');
         if (suitTypeStr.includes('İptal')) tr.style.backgroundColor = '#ffebee';
         else if (suitTypeStr.includes('Tecavüz')) tr.style.backgroundColor = '#fff3e0';
         
+        // İşlem butonları
         const actions = `
             <div class="d-flex gap-1 justify-content-end">
-                <button class="action-btn view-btn btn btn-sm btn-info" data-id="${row.id}"><i class="fas fa-eye"></i></button>
-                <button class="action-btn edit-btn btn btn-sm btn-warning" data-id="${row.id}"><i class="fas fa-edit"></i></button>
+                <button class="action-btn view-btn btn btn-sm btn-info" data-id="${row.id}" title="Görüntüle"><i class="fas fa-eye"></i></button>
+                <button class="action-btn edit-btn btn btn-sm btn-warning" data-id="${row.id}" title="Düzenle"><i class="fas fa-edit"></i></button>
             </div>`;
             
-        // YENİ SIRALAMA:
-        // Index -> Title -> ... -> Date -> STATUS -> Actions
+        // Durum Rozeti (utils.js entegrasyonu)
+        // Not: DataManager'da row.type = 'litigation' ataması yaptığınızdan emin olun.
+        const statusBadge = this.getStatusBadge(row);
+
+        // HTML Yapısı:
+        // 1. Sıra No (index)
+        // 2-8. Standart Veriler
+        // 9. Durum (Status) - İşlemlerden hemen önce
+        // 10. İşlemler (Actions)
         tr.innerHTML = `
             <td><strong>${index}</strong></td>
             <td title="${row.title || ''}">${row.title || '-'}</td>
@@ -154,7 +163,7 @@ export class PortfolioRenderer {
             <td title="${row.client || ''}">${row.client || '-'}</td>
             <td title="${row.opposingParty || ''}">${row.opposingParty || '-'}</td>
             <td>${row.openedDate || '-'}</td>
-            <td><span class="badge badge-secondary">${row.status || '-'}</span></td>
+            <td>${statusBadge}</td>
             <td>${actions}</td>`;
             
         return tr;
