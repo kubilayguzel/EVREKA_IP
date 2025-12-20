@@ -389,14 +389,18 @@ class PortfolioController {
         } 
         if(tab === 'litigation') {
              return [
-                { key: 'title', label: 'Konu Varlık', sortable: true, width: '250px' },
-                { key: 'suitType', label: 'Dava Türü', sortable: true, width: '150px' },
-                { key: 'caseNo', label: 'Dosya No', sortable: true, width: '120px' },
-                { key: 'court', label: 'Mahkeme', sortable: true, width: '180px' },
-                { key: 'client', label: 'Müvekkil', sortable: true, width: '150px' },
-                { key: 'opposingParty', label: 'Karşı Taraf', sortable: true, width: '150px' },
-                { key: 'openedDate', label: 'Açılış Tarihi', sortable: true, width: '110px' },
-                { key: 'actions', label: 'İşlemler', width: '140px' }
+                { key: 'title', label: 'Konu Varlık', sortable: true, width: '220px' },
+                { key: 'suitType', label: 'Dava Türü', sortable: true, width: '140px' },
+                { key: 'caseNo', label: 'Dosya No', sortable: true, width: '110px' },
+                { key: 'court', label: 'Mahkeme', sortable: true, width: '160px' },
+                { key: 'client', label: 'Müvekkil', sortable: true, width: '140px' },
+                { key: 'opposingParty', label: 'Karşı Taraf', sortable: true, width: '140px' },
+                
+                // YENİ EKLENEN KOLON
+                { key: 'suitStatus', label: 'Durum', sortable: true, width: '130px' },
+                
+                { key: 'openedDate', label: 'Açılış Tar.', sortable: true, width: '100px' },
+                { key: 'actions', label: 'İşlemler', width: '100px' }
             ];
         }
 
