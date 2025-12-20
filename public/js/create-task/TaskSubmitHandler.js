@@ -436,7 +436,7 @@ export class TaskSubmitHandler {
         } catch (error) { console.error('Suit hatası:', error); }
     }
 
-    // E) PORTFOLYO GEÇMİŞİ
+// E) PORTFOLYO GEÇMİŞİ (GÜNCELLENDİ: Hem Dava Hem Marka İçin)
     async _addTransactionToPortfolio(recordId, taskType, taskId, state) {
         let hierarchy = 'parent';
         let extraData = {};
@@ -455,11 +455,24 @@ export class TaskSubmitHandler {
             description: `${taskType.name} işlemi.`,
             transactionHierarchy: hierarchy,
             triggeringTaskId: String(taskId),
-            createdAt: Timestamp.now(),
+            createdAt: Timestamp.now(), // Firestore Timestamp kullanıyoruz
             ...extraData
         };
-        
-        await ipRecordsService.addTransactionToRecord(recordId, transactionData);
+
+        // --- DEĞİŞİKLİK BURADA BAŞLIYOR ---
+        // Seçilen kaydın kaynağına bakıyoruz: 'suit' mi?
+        const isSuit = state.selectedIpRecord && state.selectedIpRecord._source === 'suit';
+        const collectionName = isSuit ? 'suits' : 'ipRecords';
+
+        try {
+            // Dinamik olarak doğru koleksiyonun altına ekliyoruz
+            const transactionsRef = collection(db, collectionName, recordId, 'transactions');
+            await addDoc(transactionsRef, transactionData);
+            
+            console.log(`✅ Transaction eklendi: ${collectionName}/${recordId}/transactions`);
+        } catch (error) {
+            console.error(`Transaction ekleme hatası (${collectionName}):`, error);
+        }
     }
 
     // F) OTOMASYON
