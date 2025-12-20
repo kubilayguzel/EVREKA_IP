@@ -389,6 +389,8 @@ class PortfolioController {
         } 
         if(tab === 'litigation') {
              return [
+                { key: 'index', label: '#', width: '50px' }, // YENİ: Sıra Numarası
+                { key: 'status', label: 'Durum', sortable: true, width: '120px' }, // YENİ: Durum
                 { key: 'title', label: 'Konu Varlık', sortable: true, width: '250px' },
                 { key: 'suitType', label: 'Dava Türü', sortable: true, width: '150px' },
                 { key: 'caseNo', label: 'Dosya No', sortable: true, width: '120px' },
