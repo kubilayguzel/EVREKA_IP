@@ -114,16 +114,8 @@
                                 <div class="form-group">
                                     <label class="form-label">Durum</label>
                                     <select id="suitStatus" class="form-select">
-                                        <option value="Devam Ediyor">Devam Ediyor</option>
-                                        <option value="Bilirkişi İncelemesinde">Bilirkişi İncelemesinde</option>
-                                        <option value="Karar Aşamasında">Karar Aşamasında</option>
-                                        <option value="Karar Verildi (Kısa Karar)">Karar Verildi (Kısa Karar)</option>
-                                        <option value="Gerekçeli Karar Yazıldı">Gerekçeli Karar Yazıldı</option>
-                                        <option value="İstinaf / Bölge Adliye">İstinaf / Bölge Adliye</option>
-                                        <option value="Temyiz / Yargıtay">Temyiz / Yargıtay</option>
-                                        <option value="Kesinleşti">Kesinleşti</option>
-                                        <option value="Beklemede">Beklemede</option>
-                                    </select>
+                                        <option value="">Seçiniz...</option>
+                                        </select>
                                 </div>
                             </div>
                         </div>
@@ -200,7 +192,7 @@
         import { doc, getDoc, updateDoc, collection, getDocs, orderBy, query } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
         import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
         import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
-        import { showNotification } from './utils.js';
+        import { showNotification, STATUSES } from './utils.js';
 
         const params = new URLSearchParams(window.location.search);
         const suitId = params.get('id');
@@ -219,61 +211,75 @@
         })();
 
         // Dava Verilerini Yükle
-        async function loadSuitData() {
-            try {
-                const docRef = doc(db, 'suits', suitId);
-                const snap = await getDoc(docRef);
+    async function loadSuitData() {
+        try {
+            // --- YENİ EKLENECEK KISIM BAŞLANGIÇ ---
+            // Dropdown'ı utils.js'ten doldur
+            const statusSelect = document.getElementById('suitStatus');
+            if (statusSelect && STATUSES.litigation) {
+                // Mevcut seçenekleri temizle (Seçiniz hariç)
+                statusSelect.innerHTML = '<option value="">Seçiniz...</option>';
                 
-                if (!snap.exists()) {
-                    alert('Dava bulunamadı.');
-                    return window.location.href = 'portfolio.html';
-                }
-
-                const data = snap.data();
-                const details = data.suitDetails || {};
-                
-                document.getElementById('suitTitle').textContent = `Dava: ${details.caseNo || data.title}`;
-                
-                // Form Doldurma
-                setValue('caseNo', details.caseNo);
-                setValue('suitType', data.transactionType?.alias || data.transactionType?.name);
-                
-                // Mahkeme Seçimi Mantığı
-                const courtSelect = document.getElementById('court');
-                const courtVal = details.court || '';
-                let found = false;
-                for(let opt of courtSelect.options) {
-                    if(opt.value === courtVal) {
-                        courtSelect.value = courtVal;
-                        found = true;
-                        break;
-                    }
-                }
-                if (!found && courtVal) {
-                    courtSelect.value = 'other';
-                    document.getElementById('customCourtInput').style.display = 'block';
-                    setValue('customCourtInput', courtVal);
-                } else {
-                    courtSelect.value = courtVal;
-                }
-
-                setValue('openedDate', formatDateForInput(details.openingDate));
-                setValue('suitStatus', details.suitStatus);
-                setValue('clientName', data.client?.name);
-                setValue('clientRole', data.client?.clientRole);
-                setValue('opposingParty', details.opposingParty);
-                setValue('opposingCounsel', details.opposingCounsel);
-                setValue('subjectAssetTitle', data.subjectAsset?.title);
-                setValue('description', details.description);
-
-                currentDocuments = data.documents || [];
-                renderDocuments();
-
-            } catch (e) {
-                console.error(e);
-                showNotification('Veri yüklenemedi.', 'error');
+                STATUSES.litigation.forEach(st => {
+                    const opt = document.createElement('option');
+                    opt.value = st.value; // Örn: 'expert_examination'
+                    opt.textContent = st.text; // Örn: 'Bilirkişi İncelemesinde'
+                    statusSelect.appendChild(opt);
+                });
             }
-        }
+                    const docRef = doc(db, 'suits', suitId);
+                    const snap = await getDoc(docRef);
+                    
+                    if (!snap.exists()) {
+                        alert('Dava bulunamadı.');
+                        return window.location.href = 'portfolio.html';
+                    }
+
+                    const data = snap.data();
+                    const details = data.suitDetails || {};
+                    
+                    document.getElementById('suitTitle').textContent = `Dava: ${details.caseNo || data.title}`;
+                    
+                    // Form Doldurma
+                    setValue('caseNo', details.caseNo);
+                    setValue('suitType', data.transactionType?.alias || data.transactionType?.name);
+                    
+                    // Mahkeme Seçimi Mantığı
+                    const courtSelect = document.getElementById('court');
+                    const courtVal = details.court || '';
+                    let found = false;
+                    for(let opt of courtSelect.options) {
+                        if(opt.value === courtVal) {
+                            courtSelect.value = courtVal;
+                            found = true;
+                            break;
+                        }
+                    }
+                    if (!found && courtVal) {
+                        courtSelect.value = 'other';
+                        document.getElementById('customCourtInput').style.display = 'block';
+                        setValue('customCourtInput', courtVal);
+                    } else {
+                        courtSelect.value = courtVal;
+                    }
+
+                    setValue('openedDate', formatDateForInput(details.openingDate));
+                    setValue('suitStatus', details.suitStatus);
+                    setValue('clientName', data.client?.name);
+                    setValue('clientRole', data.client?.clientRole);
+                    setValue('opposingParty', details.opposingParty);
+                    setValue('opposingCounsel', details.opposingCounsel);
+                    setValue('subjectAssetTitle', data.subjectAsset?.title);
+                    setValue('description', details.description);
+
+                    currentDocuments = data.documents || [];
+                    renderDocuments();
+
+                } catch (e) {
+                    console.error(e);
+                    showNotification('Veri yüklenemedi.', 'error');
+                }
+            }
 
         // Timeline (İşlem Geçmişi) Yükle
         async function loadSuitTransactions() {
