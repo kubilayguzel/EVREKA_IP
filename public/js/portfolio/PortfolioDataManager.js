@@ -162,7 +162,6 @@ export class PortfolioDataManager {
     }
 
     // --- LITIGATION ---
-
     async loadLitigationData() {
         try {
             const suitsRef = collection(db, 'suits');
@@ -172,12 +171,8 @@ export class PortfolioDataManager {
                 return {
                     id: d.id,
                     ...data,
-                    
-                    // --- BURAYI GÜNCELLEYİN ---
-                    type: 'litigation', // Bunu eklemezsek utils.js'teki listeyi bulamaz
-                    status: data.status || data.suitDetails?.status || 'continue', // Varsayılan statü
-                    // ---------------------------
-
+                    type: 'litigation',
+                    status: data.suitDetails?.suitStatus || 'continue', 
                     suitType: data.transactionType?.alias || data.transactionType?.name || '-',
                     caseNo: data.suitDetails?.caseNo || '-',
                     court: data.suitDetails?.court || '-',
