@@ -322,118 +322,169 @@ class PortfolioController {
     }
 
     render() {
-        const cols = this.getColumnsForTab(this.state.activeTab);
-        this.renderer.renderHeaders(cols);
+        if (!this.renderer || !this.renderer.tbody) return;
 
-        let filtered = this.dataManager.filterRecords(
-            this.state.activeTab, 
-            this.state.searchQuery, 
-            this.state.columnFilters
-        );
-        filtered = this.dataManager.sortRecords(filtered, this.state.sort.column, this.state.sort.direction);
-
-        this.pagination.update(filtered.length);
-        const pageData = this.pagination.getCurrentPageData(filtered);
-
+        // 1. Tabloyu Temizle
         this.renderer.clear();
         const frag = document.createDocumentFragment();
+
+        // 2. Veriyi Al (Sayfalama ve Filtreleme uygulanmış veri)
+        const pageData = this.getPaginatedData();
         
-        pageData.forEach(item => {
-            if (this.state.activeTab === 'objections') {
-                const tr = this.renderer.renderObjectionRow(item, item.hasChildren, item.isChild);
-                if (item.isChild) tr.style.display = 'none';
-                frag.appendChild(tr);
-            } else if (this.state.activeTab === 'litigation') {
-                 frag.appendChild(this.renderer.renderLitigationRow(item));
-            } else {
-                const isSelected = this.state.selectedRecords.has(item.id);
-                const tr = this.renderer.renderStandardRow(item, this.state.activeTab === 'trademark', isSelected);
+        // 3. Sıra Numarası Başlangıç Değeri (Örn: 2. sayfa ise 11'den başlar)
+        // (currentPage 1 tabanlıdır, bu yüzden 1 çıkarıyoruz)
+        const startIndex = (this.state.currentPage - 1) * this.pagination.itemsPerPage;
+
+        // 4. Satırları Oluştur
+        pageData.forEach((item, loopIndex) => {
+            // Gerçek sıra numarası: Sayfa Başı + Döngü İndeksi + 1
+            const rowIndex = startIndex + loopIndex + 1;
+
+            // --- A) DAVA (LITIGATION) SATIRLARI ---
+            if (this.state.activeTab === 'litigation') {
+                // Ana Satır (Parent)
+                const tr = this.renderer.renderLitigationRow(item, rowIndex);
                 frag.appendChild(tr);
 
+                // Alt Satırlar (Children - Transactions)
+                // Eğer davanın alt işlemleri varsa bunları gizli satır olarak ekle
+                if (item.hasChildren && item.children && item.children.length > 0) {
+                    item.children.forEach(child => {
+                        const childTr = this.renderer.renderLitigationChildRow(child);
+                        frag.appendChild(childTr);
+                    });
+                }
+            } 
+            // --- B) İTİRAZ (OBJECTIONS) SATIRLARI ---
+            else if (this.state.activeTab === 'objections') {
+                const tr = this.renderer.renderObjectionRow(item, item.hasChildren, item.isChild, rowIndex);
+                
+                // Child ise varsayılan gizli, Parent ise görünür
+                if (item.isChild) {
+                    tr.style.display = 'none';
+                    tr.classList.add('child-row');
+                    tr.dataset.parentId = item.parentId; // İlişkilendirme için önemli
+                }
+                frag.appendChild(tr);
+            } 
+            // --- C) STANDART (MARKA/PATENT) SATIRLARI ---
+            else {
+                const isSelected = this.state.selectedRecords.has(item.id);
+                
+                // Ana Satır
+                const tr = this.renderer.renderStandardRow(
+                    item, 
+                    this.state.activeTab === 'trademark', 
+                    isSelected, 
+                    rowIndex // Sıra numarasını gönderiyoruz
+                );
+                frag.appendChild(tr);
+
+                // WIPO/ARIPO Alt Kayıtları (Varsa)
+                // Parent kayıtsa ve WIPO ise, altındaki child kayıtları bulup ekle
                 if ((item.origin === 'WIPO' || item.origin === 'ARIPO') && item.transactionHierarchy === 'parent') {
                     const irNo = item.wipoIR || item.aripoIR;
                     const children = this.dataManager.getWipoChildren(irNo);
+                    
                     children.forEach(child => {
-                        const childTr = this.renderer.renderStandardRow(child, this.state.activeTab === 'trademark', false);
+                        // Child satırlar için checkbox seçili mi?
+                        const isChildSelected = this.state.selectedRecords.has(child.id);
+                        
+                        // Child satır render et (Sıra numarası boş gönderilebilir veya alt numara verilebilir)
+                        const childTr = this.renderer.renderStandardRow(
+                            child, 
+                            this.state.activeTab === 'trademark', 
+                            isChildSelected, 
+                            '' // Child satırda sıra numarası göstermiyoruz
+                        );
+                        
+                        // Child satır stil ayarları
                         childTr.classList.add('child-row');
-                        childTr.dataset.parentId = irNo;
-                        childTr.style.display = 'none';
-                        childTr.style.backgroundColor = '#f9f9f9';
-                        childTr.querySelector('.toggle-cell').innerHTML = ''; 
+                        childTr.dataset.parentId = item.id; // veya irNo
+                        childTr.style.display = 'none'; // Başlangıçta gizli
+                        childTr.style.backgroundColor = '#f8f9fa'; // Hafif gri
+                        
+                        // Child satırda accordion okunu temizle
+                        const toggleCell = childTr.querySelector('.toggle-cell');
+                        if(toggleCell) toggleCell.innerHTML = ''; 
+
                         frag.appendChild(childTr);
                     });
                 }
             }
         });
-        
+
+        // 5. DOM'a Ekle
         this.renderer.tbody.appendChild(frag);
+
+        // 6. Checkbox ve Buton Durumlarını Güncelle
         this.updateSelectAllCheckbox();
         this.updateBulkActionButtons();
     }
 
     // --- KOLON AYARLARI (İSTENİLEN GENİŞLİKLER) ---
     getColumnsForTab(tab) {
-        if(tab === 'objections') {
-             return [
-                { key: 'toggle', width: '40px' },
-                { key: 'transactionTypeName', label: 'İşlem & Konu', sortable: true, width: '200px' },
-                { key: 'applicationNumber', label: 'Başvuru No', sortable: true, width: '110px' },
-                { key: 'applicantName', label: 'Başvuru Sahibi', sortable: true, width: '210px' },
-                { key: 'opponent', label: 'Karşı Taraf', sortable: true, width: '210px' },
-                { key: 'bulletinDate', label: 'Bülten Tar.', sortable: true, width: '110px' },
-                { key: 'bulletinNo', label: 'Bülten No', sortable: true, width: '80px' },
-                { key: 'epatsDate', label: 'İşlem Tar.', sortable: true, width: '110px' },
-                { key: 'statusText', label: 'Durum', sortable: true, width: '190px' },
-                { key: 'documents', label: 'Evraklar', width: '80px' }
-            ];
-        } 
-        if(tab === 'litigation') {
-             return [
-                { key: 'title', label: 'Konu Varlık', sortable: true, width: '220px' },
-                { key: 'suitType', label: 'Dava Türü', sortable: true, width: '140px' },
-                { key: 'caseNo', label: 'Dosya No', sortable: true, width: '110px' },
-                { key: 'court', label: 'Mahkeme', sortable: true, width: '160px' },
-                { key: 'client', label: 'Müvekkil', sortable: true, width: '140px' },
-                { key: 'opposingParty', label: 'Karşı Taraf', sortable: true, width: '140px' },
-                
-                // YENİ EKLENEN KOLON
-                { key: 'suitStatus', label: 'Durum', sortable: true, width: '130px' },
-                
-                { key: 'openedDate', label: 'Açılış Tar.', sortable: true, width: '100px' },
-                { key: 'actions', label: 'İşlemler', width: '100px' }
+        // A) DAVA (LITIGATION) TABLO SÜTUNLARI
+        if (tab === 'litigation') {
+            return [
+                { key: 'rowNumber', label: '#', width: '40px' }, // Sıra Numarası
+                { key: 'toggle', label: '', width: '30px' },     // Accordion Oku
+                { key: 'title', label: 'Konu Varlık / Başlık', sortable: true, width: '200px' },
+                { key: 'suitType', label: 'Dava Türü', sortable: true, width: '130px' },
+                { key: 'caseNo', label: 'Dosya No', sortable: true, width: '100px' },
+                { key: 'court', label: 'Mahkeme', sortable: true, width: '150px' },
+                { key: 'client', label: 'Müvekkil', sortable: true, width: '130px' },
+                { key: 'opposingParty', label: 'Karşı Taraf', sortable: true, width: '130px' },
+                { key: 'suitStatus', label: 'Durum', sortable: true, width: '120px' }, // Yeni Statü Kolonu
+                { key: 'openedDate', label: 'Açılış Tar.', sortable: true, width: '90px' },
+                { key: 'actions', label: 'İşlemler', width: '90px', className: 'text-end' }
             ];
         }
 
-        // STANDART KOLONLAR
+        // B) İTİRAZ (OBJECTIONS) TABLO SÜTUNLARI
+        if (tab === 'objections') {
+            return [
+                { key: 'selection', isCheckbox: true, width: '40px' },
+                { key: 'rowNumber', label: '#', width: '40px' },
+                { key: 'toggle', label: '', width: '30px' },
+                { key: 'bulletinNo', label: 'Bülten No', sortable: true },
+                { key: 'bulletinDate', label: 'Bülten Tar.', sortable: true },
+                { key: 'objectionType', label: 'İtiraz Türü', sortable: true },
+                { key: 'markName', label: 'Marka Adı', sortable: true },
+                { key: 'opponentName', label: 'Karşı Taraf', sortable: true },
+                { key: 'status', label: 'Durum', sortable: true },
+                { key: 'actions', label: 'İşlemler', className: 'text-end' }
+            ];
+        }
+
+        // C) STANDART (MARKA/PATENT/TASARIM) TABLO SÜTUNLARI
         const columns = [
-            { key: 'selection', isCheckbox: true, width: '40px' }, // 1
-            { key: 'toggle', width: '40px' }, // 2
+            { key: 'selection', isCheckbox: true, width: '40px' },
+            { key: 'rowNumber', label: '#', width: '40px' }, // YENİ: Sıra No
+            { key: 'toggle', label: '', width: '30px' },     // YENİ: Accordion Oku
             { key: 'portfoyStatus', label: 'Durum', sortable: true, width: '80px' }
         ];
 
+        // Marka değilse 'Tür' kolonu ekle (Patent/Tasarım ayrımı için)
         if (tab !== 'trademark') {
-            columns.push({ key: 'type', label: 'Tür', sortable: true, width: '130px' });
+            columns.push({ key: 'type', label: 'Tür', sortable: true, width: '80px' });
         }
 
-        // Başlık (200px'e sabitlendi)
-        columns.push({ key: 'title', label: 'Başlık', sortable: true, width: '200px' });
+        columns.push({ key: 'title', label: 'Başlık / Marka Adı', sortable: true });
 
+        // Sadece Marka Tabında Görsel ve Menşe Göster
         if (tab === 'trademark') {
-            columns.push({ key: 'brandImage', label: 'Görsel', width: '90px' }); // Genişletildi: 90px
-            columns.push({ key: 'origin', label: 'Menşe', sortable: true, width: '140px' });
-            columns.push({ key: 'country', label: 'Ülke', sortable: true, width: '130px' });
+            columns.push({ key: 'image', label: 'Görsel', width: '60px' });
+            columns.push({ key: 'origin', label: 'Menşe', sortable: true, width: '80px' });
+            columns.push({ key: 'country', label: 'Ülke', sortable: true, width: '100px' });
         }
 
         columns.push(
-            { key: 'applicationNumber', label: 'Başvuru No', sortable: true, width: '140px' },
-            { key: 'applicationDate', label: 'Başvuru Tar.', sortable: true, width: '110px' },
-            { key: 'status', label: 'Başvuru Durumu', sortable: true, width: '130px' },
-            
-            // Başvuru Sahibi: ESNEK (Genişlik yok, kalan tüm alanı kaplayacak)
-            { key: 'formattedApplicantName', label: 'Başvuru Sahibi', sortable: true }, 
-            
-            // İşlemler: Genişletildi
-            { key: 'actions', label: 'İşlemler', width: '280px' } // 280px'e çıkarıldı
+            { key: 'applicationNumber', label: 'Başvuru No', sortable: true },
+            { key: 'applicationDate', label: 'Başvuru Tar.', sortable: true },
+            { key: 'classes', label: 'Sınıflar', sortable: false }, // Sınıf rozetleri için sortable kapalı
+            { key: 'applicant', label: 'Başvuru Sahibi', sortable: true },
+            { key: 'actions', label: 'İşlemler', width: '100px', className: 'text-end' }
         );
 
         return columns;
