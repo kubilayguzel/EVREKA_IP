@@ -330,8 +330,8 @@ export const FormTemplates = {
                     <input type="text" class="form-control" id="suitCaseNo" placeholder="Örn: 2023/123 Esas">
                 </div>
                 <div class="form-group">
-                    <label for="suitOpeningDate" class="form-label">Dava Tarihi</label>
-                    <input type="text" class="form-control" id="suitOpeningDate" placeholder="gg.aa.yyyy" required>
+                    <label for="suitOpeningDate" class="form-label">Dava Tarihi (Açılış)</label>
+                    <input type="date" class="form-control" id="suitOpeningDate" required>
                 </div>
             </div>
         </div>
