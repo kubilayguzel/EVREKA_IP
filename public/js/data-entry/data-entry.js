@@ -292,6 +292,7 @@ class DataEntryModule {
             container.innerHTML = this.renderSuitFields(this.suitSpecificTaskType.alias || this.suitSpecificTaskType.name);
             this.setupSuitPersonSearchSelectors(); 
             this.setupDynamicFormListeners(); // Datepicker ve eventleri tekrar bağla
+            this._populateSuitStatusDropdown();
         } else {
             container.innerHTML = '';
         }
@@ -326,6 +327,17 @@ class DataEntryModule {
 
     renderSuitFields(taskName) {
         return FormTemplates.getSuitFields(taskName);
+    }
+
+    _populateSuitStatusDropdown() {
+        const el = document.getElementById('suitStatusSelect');
+        // STATUSES.litigation listesini utils.js'ten kullanıyoruz
+        const list = STATUSES.litigation || []; 
+        
+        if (el) {
+            el.innerHTML = '<option value="">Seçiniz...</option>' + 
+                list.map(s => `<option value="${s.value}">${s.text}</option>`).join('');
+        }
     }
 
     _populateStatusDropdown(type) {
