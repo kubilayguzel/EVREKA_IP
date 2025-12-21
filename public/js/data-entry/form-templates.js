@@ -287,13 +287,13 @@ export const FormTemplates = {
 
     getSuitFields: (taskName) => `
         <div class="card-header bg-white border-bottom">
-            <h5 class="mb-0 text-primary">3. Dava Detayları</h5>
+            <h5 class="mb-0 text-dark">3. Dava Detayları</h5>
         </div>
         <div class="card-body">
             <div class="form-grid">
-                <div class="form-group full-width">
-                    <label for="suitCourt" class="form-label">Mahkeme</label>
-                    <select id="suitCourt" name="suitCourt" class="form-select" required>
+                <div class="form-group">
+                    <label for="suitStatusSelect" class="form-label">Dava Durumu</label>
+                    <select id="suitStatusSelect" class="form-select" required>
                         <option value="">Seçiniz...</option>
                         
                         <optgroup label="Ankara">
@@ -369,9 +369,9 @@ export const FormTemplates = {
 
 
     getClientSection: () => `
-        <div class="card mb-4" id="clientSection">
+            <div class="card mb-4" id="clientSection">
             <div class="card-header bg-white border-bottom">
-                <h5 class="mb-0 text-primary">1. Müvekkil Bilgileri</h5>
+                <h5 class="mb-0 text-dark">1. Müvekkil Bilgileri</h5>
             </div>
             <div class="card-body">
                 <div class="form-grid">
@@ -407,7 +407,7 @@ export const FormTemplates = {
     getSubjectAssetSection: () => `
         <div class="card mb-4" id="subjectAssetSection">
             <div class="card-header bg-white border-bottom">
-                <h5 class="mb-0 text-primary">2. Dava Konusu (Portföy Varlığı)</h5>
+                <h5 class="mb-0 text-dark">2. Dava Konusu (Portföy Varlığı)</h5>
             </div>
             <div class="card-body">
                 <div class="form-group full-width">
