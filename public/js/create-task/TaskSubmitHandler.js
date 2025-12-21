@@ -87,6 +87,36 @@ export class TaskSubmitHandler {
             // 4. Otomatik Tarih Hesaplama
             await this._calculateTaskDates(taskData, selectedTaskType, selectedIpRecord);
 
+            // ---------------------------------------------------------
+            // 4.5. DOSYA YÜKLEME İŞLEMİ (YENİ EKLENDİ)
+            // ---------------------------------------------------------
+            // Eğer Marka Başvurusu değilse (onun kendi yükleyicisi var) ve dosya seçildiyse:
+            if (!(selectedTaskType.alias === 'Başvuru' && selectedTaskType.ipType === 'trademark')) {
+                if (uploadedFiles && uploadedFiles.length > 0) {
+                    console.log('📤 Dokümanlar storage\'a yükleniyor...');
+                    const docs = [];
+                    
+                    for (const file of uploadedFiles) {
+                        const path = `task-documents/${Date.now()}_${file.name}`;
+                        try {
+                            // DataManager üzerinden yükle
+                            const url = await this.dataManager.uploadFileToStorage(file, path);
+                            docs.push({
+                                name: file.name,
+                                url: url,
+                                type: file.type,
+                                uploadedAt: new Date().toISOString()
+                            });
+                        } catch (err) {
+                            console.error('Dosya yüklenirken hata:', err);
+                        }
+                    }
+                    
+                    // İş (Task) verisine belgeleri ekle
+                    taskData.documents = docs;
+                }
+            }
+
             // 5. Task Oluştur
             console.log('📤 Task oluşturuluyor:', taskData);
             const taskResult = await taskService.createTask(taskData);
@@ -399,7 +429,7 @@ export class TaskSubmitHandler {
                 }
             }
 
-            // 2. İlgili Varlık Bilgilerini Güvenli Hazırla (HATA ÇÖZÜMÜ BURADA)
+            // 2. İlgili Varlık Bilgilerini Güvenli Hazırla
             let assetId = null;
             let assetTitle = '';
             let assetNumber = '';
@@ -409,10 +439,7 @@ export class TaskSubmitHandler {
                 
                 if (selectedIpRecord._source === 'suit') {
                     // --- DAVA SEÇİLDİYSE ---
-                    // Başlık olarak Mahkeme Adı veya Title
                     assetTitle = selectedIpRecord.displayCourt || selectedIpRecord.court || selectedIpRecord.title || '';
-                    
-                    // Numara olarak Dosya No (fileNumber, caseNo vb. hepsini kontrol et)
                     assetNumber = selectedIpRecord.displayFileNumber || 
                                   selectedIpRecord.fileNumber || 
                                   (selectedIpRecord.suitDetails && selectedIpRecord.suitDetails.caseNo) || 
@@ -424,17 +451,31 @@ export class TaskSubmitHandler {
                 }
             }
 
+            // --- YENİ EKLENEN KISIM: PARENT KONTROLÜ ---
+            // Sadece bu ID'lere sahip işlemler "Yeni Ana Dava" sayılır ve belgeleri Dava Kartına kopyalanır.
+            // Diğerleri (Cevap dilekçesi vb.) Child işlemdir, belgeler sadece Task içinde kalır.
+            const PARENT_SUIT_IDS = ['49', '54', '55', '56', '57', '58']; 
+            const isParentCreation = PARENT_SUIT_IDS.includes(String(selectedTaskType.id));
+            // -------------------------------------------
+
             // 3. Dava Objesini Hazırla
             const newSuitData = {
                 title: taskData.title,
                 transactionTypeId: selectedTaskType.id,
                 suitType: selectedTaskType.alias || selectedTaskType.name,
+                
+                // --- YENİ EKLENEN KISIM: DOKÜMANLAR ---
+                // Eğer Parent ise (Dava Açılış), yüklenen belgeleri buraya da ekle.
+                documents: isParentCreation ? (taskData.documents || []) : [],
+                // --------------------------------------
+
                 suitDetails: {
                     court: finalCourtName,
                     description: document.getElementById('suitDescription')?.value || document.getElementById('subjectOfLawsuit')?.value || '',
                     opposingParty: document.getElementById('opposingParty')?.value || '',
                     opposingCounsel: document.getElementById('opposingCounsel')?.value || '',
-                    openingDate: document.getElementById('suitOpeningDate')?.value || new Date().toISOString()                },
+                    openingDate: document.getElementById('suitOpeningDate')?.value || new Date().toISOString()
+                },
                 clientRole: document.getElementById('clientRole')?.value || '',
                 client: client ? { id: client.id, name: client.name, email: client.email } : null,
                 subjectAsset: selectedIpRecord ? {
