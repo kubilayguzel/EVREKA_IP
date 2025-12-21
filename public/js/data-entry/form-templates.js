@@ -291,11 +291,11 @@ export const FormTemplates = {
         </div>
         <div class="card-body">
             <div class="form-grid">
-                <div class="form-group">
-                    <label for="suitStatusSelect" class="form-label">Dava Durumu</label>
-                    <select id="suitStatusSelect" class="form-select" required>
+                
+                <div class="form-group full-width">
+                    <label for="suitCourt" class="form-label">Mahkeme</label>
+                    <select id="suitCourt" name="suitCourt" class="form-select" required>
                         <option value="">Seçiniz...</option>
-                        
                         <optgroup label="Ankara">
                             <option value="Ankara 1. FSHHM">Ankara 1. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
                             <option value="Ankara 2. FSHHM">Ankara 2. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
@@ -304,7 +304,6 @@ export const FormTemplates = {
                             <option value="Ankara 5. FSHHM">Ankara 5. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
                             <option value="Ankara FSHCM">Ankara Fikri ve Sınai Haklar Ceza Mahkemesi</option>
                         </optgroup>
-
                         <optgroup label="İstanbul">
                             <option value="İstanbul 1. FSHHM">İstanbul 1. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
                             <option value="İstanbul 2. FSHHM">İstanbul 2. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
@@ -312,7 +311,6 @@ export const FormTemplates = {
                             <option value="İstanbul 4. FSHHM">İstanbul 4. Fikri ve Sınai Haklar Hukuk Mahkemesi</option>
                             <option value="İstanbul FSHCM">İstanbul Fikri ve Sınai Haklar Ceza Mahkemesi</option>
                         </optgroup>
-                        
                         <optgroup label="Diğer">
                             <option value="istinaf">Bölge Adliye Mahkemesi (İstinaf)</option>
                             <option value="yargitay">Yargıtay</option>
@@ -339,17 +337,15 @@ export const FormTemplates = {
                 <div class="form-group">
                     <label for="suitStatusSelect" class="form-label">Dava Durumu</label>
                     <select id="suitStatusSelect" class="form-select" required>
-                        <option value="filed">Dava Açıldı</option>
-                        <option value="continue">Devam Ediyor</option>
-                        <option value="judgment_made">Karar Verildi</option>
-                        <option value="appeal">İstinaf/Temyiz Aşamasında</option>
-                        <option value="closed">Kapandı</option>
+                        <option value="">Seçiniz...</option>
                     </select>
                 </div>
+
                 <div class="form-group">
                     <label for="suitCaseNo" class="form-label">Esas No</label>
                     <input type="text" class="form-control" id="suitCaseNo" placeholder="Örn: 2024/123">
                 </div>
+
                 <div class="form-group">
                     <label for="suitOpeningDate" class="form-label">Dava Tarihi (Açılış)</label>
                     <input type="date" class="form-control" id="suitOpeningDate" required>
@@ -366,7 +362,6 @@ export const FormTemplates = {
             </div>
         </div>
     `,
-
 
     getClientSection: () => `
             <div class="card mb-4" id="clientSection">
