@@ -282,6 +282,20 @@ setupEventListeners() {
                     }
                 }
             }
+
+            // --- YENİ: DAVA DOKÜMANI SEÇİMİ ---
+            if (e.target.id === 'suitDocument') {
+                // Dosyaları state'e kaydet
+                this.state.uploadedFiles = Array.from(e.target.files);
+                
+                // Seçilen dosya isimlerini label'a yazdır (Görsel geri bildirim)
+                const label = e.target.nextElementSibling;
+                if (label) {
+                    const count = this.state.uploadedFiles.length;
+                    label.textContent = count > 0 ? `${count} dosya seçildi` : 'Dosya Seçiniz...';
+                }
+                console.log('📎 Dava evrakları yüklendi:', this.state.uploadedFiles);
+            }
         });
 
         // 4. TAB DEĞİŞİMİ VE DİĞERLERİ
