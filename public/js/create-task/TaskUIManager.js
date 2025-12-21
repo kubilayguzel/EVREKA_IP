@@ -362,6 +362,14 @@ export class TaskUIManager {
                     <label class="form-label">Dava Tarihi (Açılış)</label>
                     <input type="text" id="suitOpeningDate" class="form-input" placeholder="gg.aa.yyyy">
                 </div>
+                <div class="form-group full-width mt-3">
+                    <label class="form-label"><i class="fas fa-paperclip mr-2"></i>Dava Dokümanı / Ekler</label>
+                    <div class="custom-file">
+                        <input type="file" class="custom-file-input" id="suitDocument" multiple>
+                        <label class="custom-file-label" for="suitDocument" data-browse="Gözat">Dosya Seçiniz...</label>
+                    </div>
+                    <small class="form-text text-muted">Dava dilekçesi, tensip zaptı veya ilgili evrakları buraya yükleyebilirsiniz.</small>
+                </div>
             </div>
         </div>`;
     }
