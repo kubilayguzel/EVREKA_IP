@@ -180,16 +180,6 @@ export class DesignStrategy extends BaseStrategy {
     validate(data) { if (!data.title) return 'Tasarım başlığı zorunludur.'; return null; }
 }
 
-// public/js/data-entry/strategies.js
-
-// 1. IMPORTLARI EKLEYİN (Dosyanın en üstüne)
-import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
-import { collection, addDoc, Timestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-import { db } from '../../firebase-config.js'; // db import yolunu projenize göre kontrol edin
-
-// ... (Mevcut kodlar: FormTemplates, BaseStrategy vb.) ...
-
-// 2. SuitStrategy SINIFINI GÜNCELLEYİN
 export class SuitStrategy extends BaseStrategy {
     render(container) { 
         container.innerHTML = '<div id="suitSpecificFieldsContainer"></div>'; 
