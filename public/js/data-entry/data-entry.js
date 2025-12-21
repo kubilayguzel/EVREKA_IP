@@ -162,6 +162,23 @@ class DataEntryModule {
         if (this.recordOwnerTypeSelect) {
             this.recordOwnerTypeSelect.addEventListener('change', () => this.updateSaveButtonState());
         }
+        // Mahkeme "Diğer" seçimi için global dinleyici
+        document.addEventListener('change', (e) => {
+            if (e.target && e.target.id === 'suitCourt') {
+                const customInput = document.getElementById('customCourtInput');
+                if (customInput) {
+                    if (e.target.value === 'other') {
+                        customInput.style.display = 'block';
+                        customInput.required = true;
+                        customInput.focus();
+                    } else {
+                        customInput.style.display = 'none';
+                        customInput.value = '';
+                        customInput.required = false;
+                    }
+                }
+            }
+        });
     }
 
     handleIPTypeChange(ipType) {
