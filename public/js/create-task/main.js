@@ -285,20 +285,37 @@ setupEventListeners() {
 
             // --- YENİ: DAVA DOKÜMANI SEÇİMİ ---
             if (e.target.id === 'suitDocument') {
-                // Dosyaları state'e kaydet
-                this.state.uploadedFiles = Array.from(e.target.files);
+                // Yeni seçilenleri diziye çevir
+                const newFiles = Array.from(e.target.files);
                 
-                // Seçilen dosya isimlerini label'a yazdır (Görsel geri bildirim)
-                const label = e.target.nextElementSibling;
-                if (label) {
-                    const count = this.state.uploadedFiles.length;
-                    label.textContent = count > 0 ? `${count} dosya seçildi` : 'Dosya Seçiniz...';
+                // State'teki mevcut dosyaların üzerine ekle (Birikimli gitmesi için)
+                this.state.uploadedFiles = [...(this.state.uploadedFiles || []), ...newFiles];
+                
+                // Listeyi ekrana çiz
+                this.uiManager.renderUploadedFiles(this.state.uploadedFiles);
+                
+                // Input'u temizle (Böylece aynı dosyayı tekrar seçebilirsiniz)
+                e.target.value = ''; 
+                
+                console.log('📎 Güncel dosya listesi:', this.state.uploadedFiles);
+            }
+
+            // --- YENİ: DOSYA SİLME BUTONU ---
+            if (e.target.closest('.remove-file-btn')) {
+                const btn = e.target.closest('.remove-file-btn');
+                const index = parseInt(btn.dataset.index);
+                
+                if (this.state.uploadedFiles) {
+                    // Diziden ilgili dosyayı çıkar
+                    this.state.uploadedFiles.splice(index, 1);
+                    
+                    // Listeyi yeniden çiz
+                    this.uiManager.renderUploadedFiles(this.state.uploadedFiles);
                 }
-                console.log('📎 Dava evrakları yüklendi:', this.state.uploadedFiles);
             }
         });
 
-        // 4. TAB DEĞİŞİMİ VE DİĞERLERİ
+    // 4. TAB DEĞİŞİMİ VE DİĞERLERİ
         $(document).on('shown.bs.tab', '#myTaskTabs a', async (e) => {
             this.uiManager.updateButtonsAndTabs();
             const targetTabId = e.target.getAttribute('href').substring(1);
