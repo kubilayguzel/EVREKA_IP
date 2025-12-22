@@ -1090,6 +1090,7 @@ class DataEntryModule {
         const input = document.getElementById('subjectAssetSearch');
         const results = document.getElementById('subjectAssetSearchResults');
         const clearBtn = document.getElementById('clearSubjectAsset');
+        const displayDiv = document.getElementById('selectedSubjectAsset'); // Seçilen alan divi
         let debounceTimer;
 
         if (input) {
@@ -1108,13 +1109,12 @@ class DataEntryModule {
                         
                         // 1. SORGU: Portföy (Marka/Patent)
                         const ipRef = collection(db, 'ipRecords');
-                        const qIp = query(ipRef, where('portfoyStatus', '==', 'active')); // Sadece aktifler
+                        const qIp = query(ipRef, where('portfoyStatus', '==', 'active'));
 
                         // 2. SORGU: Davalar (Suits)
                         const suitsRef = collection(db, 'suits');
-                        const qSuits = query(suitsRef, where('suitStatus', '!=', 'closed')); // Kapanmamış davalar
+                        const qSuits = query(suitsRef, where('suitStatus', '!=', 'closed'));
 
-                        // Paralel çekim (Performans için)
                         const [ipSnapshot, suitSnapshot] = await Promise.all([
                             getDocs(qIp),
                             getDocs(qSuits)
@@ -1122,7 +1122,7 @@ class DataEntryModule {
 
                         let matches = [];
 
-                        // A) Marka/Patent Sonuçlarını İşle
+                        // A) Marka/Patent Sonuçları
                         ipSnapshot.forEach(doc => {
                             const d = doc.data();
                             const title = (d.title || d.markName || '').toLowerCase();
@@ -1133,29 +1133,42 @@ class DataEntryModule {
                                     id: doc.id, 
                                     ...d, 
                                     _source: 'ipRecord', 
-                                    displayType: 'Marka/Patent' 
+                                    displayType: 'Marka/Patent',
+                                    displayTitle: d.title || d.markName,
+                                    displayNumber: d.applicationNumber
                                 });
                             }
                         });
 
-                        // B) Dava Sonuçlarını İşle
+                        // B) Dava Sonuçları (DETAYLANDIRILDI)
                         suitSnapshot.forEach(doc => {
                             const d = doc.data();
-                            
-                            // Dava başlığı, mahkeme adı veya esas no içinde ara
                             const title = (d.title || '').toLowerCase();
                             const court = (d.suitDetails?.court || '').toLowerCase();
                             const caseNo = (d.suitDetails?.caseNo || '').toLowerCase();
+                            const partiesStr = (d.opposingParty || '').toLowerCase();
 
-                            if (title.includes(term) || court.includes(term) || caseNo.includes(term)) {
+                            // Arama: Başlık, Mahkeme, Dosya No veya Karşı Taraf içinde
+                            if (title.includes(term) || court.includes(term) || caseNo.includes(term) || partiesStr.includes(term)) {
+                                
+                                // Müvekkil adını bul (client objesi veya displayClient stringi)
+                                const clientName = d.client?.name || d.displayClient || 'Belirsiz';
+                                const opponentName = d.opposingParty || '-';
+
                                 matches.push({ 
                                     id: doc.id, 
                                     ...d,
-                                    // Dava için başlık ve numara formatı uyduruyoruz
                                     title: d.suitDetails?.court || d.title, 
                                     applicationNumber: d.suitDetails?.caseNo || '-', 
                                     _source: 'suit',
-                                    displayType: 'Dava Dosyası'
+                                    displayType: 'Dava Dosyası',
+                                    displayTitle: d.suitDetails?.court || d.title,
+                                    displayNumber: d.suitDetails?.caseNo,
+                                    // Ekstra Bilgiler
+                                    extraInfo: `<div class="d-flex justify-content-between mt-1" style="font-size:0.85em; color:#666;">
+                                        <span><i class="fas fa-user mr-1"></i>${clientName}</span>
+                                        <span><i class="fas fa-user-shield mr-1"></i>${opponentName}</span>
+                                    </div>`
                                 });
                             }
                         });
@@ -1165,22 +1178,21 @@ class DataEntryModule {
                             if (matches.length === 0) {
                                 results.innerHTML = '<div class="p-2 text-muted">Sonuç bulunamadı.</div>';
                             } else {
-                                // İlk 10 sonucu göster
                                 results.innerHTML = matches.slice(0, 10).map(rec => {
-                                    // Rozet rengi: Dava ise Mavi, Diğeri Yeşil
                                     const badgeClass = rec._source === 'suit' ? 'badge-primary' : 'badge-success';
                                     const icon = rec._source === 'suit' ? '<i class="fas fa-gavel mr-1"></i>' : '<i class="fas fa-certificate mr-1"></i>';
                                     
                                     return `
                                     <div class="search-result-item p-2 border-bottom" style="cursor:pointer;" data-id="${rec.id}" data-source="${rec._source}">
-                                        <div class="d-flex justify-content-between">
-                                            <span class="font-weight-bold">${rec.title || '-'}</span>
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <span class="font-weight-bold text-dark">${rec.displayTitle || '-'}</span>
                                             <span class="badge ${badgeClass}" style="font-size:10px;">${icon}${rec.displayType}</span>
                                         </div>
-                                        <div class="small text-muted mt-1">
-                                            ${rec.applicationNumber || 'No Yok'} 
+                                        <div class="small text-muted">
+                                            ${rec.displayNumber || 'No Yok'} 
                                             ${rec._source === 'suit' ? '' : `(${rec.type || 'Bilinmiyor'})`}
                                         </div>
+                                        ${rec.extraInfo || ''}
                                     </div>
                                     `;
                                 }).join('');
@@ -1209,10 +1221,18 @@ class DataEntryModule {
         if (clearBtn) {
             clearBtn.onclick = () => {
                 this.suitSubjectAsset = null;
-                document.getElementById('selectedSubjectAsset').style.display = 'none';
-                input.style.display = 'block'; 
-                input.value = '';
-                input.focus();
+                // Seçilen alanını gizle, inputu göster
+                if(displayDiv) {
+                    displayDiv.classList.remove('d-flex');
+                    displayDiv.classList.add('d-none');
+                }
+                
+                if(input) {
+                    input.style.display = 'block'; 
+                    input.value = '';
+                    input.focus();
+                }
+                
                 this.updateSaveButtonState();
             };
         }
@@ -1221,19 +1241,19 @@ class DataEntryModule {
     // Seçilen Varlığı UI'a Yansıtma Yardımcısı
     selectSuitSubjectAsset(asset) {
         this.suitSubjectAsset = asset;
-        const display = document.getElementById('selectedSubjectAsset');
-        const inputWrapper = document.getElementById('subjectAssetSearch').parentNode; // Input wrapper
+        const displayDiv = document.getElementById('selectedSubjectAsset');
+        const input = document.getElementById('subjectAssetSearch');
 
-        document.getElementById('selectedSubjectAssetName').textContent = asset.title || asset.markName;
-        document.getElementById('selectedSubjectAssetType').textContent = asset.type || 'Varlık';
-        document.getElementById('selectedSubjectAssetNumber').textContent = asset.applicationNumber || '-';
+        document.getElementById('selectedSubjectAssetName').textContent = asset.displayTitle || asset.title || asset.markName;
+        document.getElementById('selectedSubjectAssetType').textContent = asset.displayType || asset.type;
+        document.getElementById('selectedSubjectAssetNumber').textContent = asset.displayNumber || asset.applicationNumber || '-';
 
-        display.style.display = 'block';
-        
-        // Input'u gizle
-        // Not: search-input-wrapper içindeki input'u gizlemek yerine wrapper'ı gizlemek daha şık olabilir.
-        // Ama şimdilik sadece inputu gizleyip clear butonuna basınca açıyoruz.
-        document.getElementById('subjectAssetSearch').style.display = 'none'; 
+        // Görüntüleme ayarları (Flex aç, input kapat)
+        if(displayDiv) {
+            displayDiv.classList.remove('d-none');
+            displayDiv.classList.add('d-flex');
+        }
+        if(input) input.style.display = 'none';
 
         this.updateSaveButtonState();
     }
